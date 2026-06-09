@@ -78,4 +78,25 @@ describe('bandSignal', () => {
     expect(bandSignal({ price: 10, donchBot: 25, donchTop: 66 })).toBe('hold');
     expect(bandSignal({ price: 90, donchBot: 25, donchTop: 66 })).toBe('peak');
   });
+
+  it('suppresses a peak the live book contradicts (wash-traded median)', () => {
+    // Goopolla: 36 "trades" at 12p while 209 live asks sit at 1p — the peak
+    // price is unrealizable, so "list now" would be wrong twice over.
+    expect(bandSignal({ price: 12, donchBot: 1, donchTop: 12, lowSell: 1 })).toBe('neutral');
+  });
+
+  it('keeps a peak when the live ask corroborates it', () => {
+    expect(bandSignal({ price: 64, donchBot: 25, donchTop: 66, lowSell: 60 })).toBe('peak');
+    // a normal undercut spread is nowhere near the 2× gap threshold
+    expect(bandSignal({ price: 64, donchBot: 25, donchTop: 66, lowSell: 40 })).toBe('peak');
+  });
+
+  it('keeps a peak when there is no live ask to check against', () => {
+    expect(bandSignal({ price: 64, donchBot: 25, donchTop: 66, lowSell: 0 })).toBe('peak');
+    expect(bandSignal({ price: 64, donchBot: 25, donchTop: 66 })).toBe('peak');
+  });
+
+  it('does not let the ask gap interfere with hold', () => {
+    expect(bandSignal({ price: 28, donchBot: 25, donchTop: 66, lowSell: 1 })).toBe('hold');
+  });
 });

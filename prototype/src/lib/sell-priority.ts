@@ -55,18 +55,29 @@ export interface BandSignalInput {
   price: number;
   donchTop?: number | null;
   donchBot?: number | null;
+  lowSell?: number | null;
 }
 
 const HOLD_BELOW = 0.2;
 const PEAK_ABOVE = 0.8;
+// A peak must be corroborated by the live book: real trades clear near the
+// standing ask, so when the closed-trade median prints at more than ~2× the
+// lowest live ask, the "peak" price isn't realizable — either wash trades
+// (Goopolla: 36 "sales" at 12p over 209 live asks at 1p) or a price that
+// already crashed since those trades closed. Either way "list now" is wrong.
+const PEAK_MAX_ASK_GAP = 2;
 
-export function bandSignal({ price, donchTop, donchBot }: BandSignalInput): TimingState {
+export function bandSignal({ price, donchTop, donchBot, lowSell }: BandSignalInput): TimingState {
   const p = Number(price) || 0;
   const top = Number(donchTop) || 0;
   const bot = Number(donchBot) || 0;
   if (p <= 0 || top <= 0 || bot <= 0 || top <= bot) return 'neutral';
   const pos = (p - bot) / (top - bot); // 0 = at 90d low, 1 = at 90d high
   if (pos <= HOLD_BELOW) return 'hold';
-  if (pos >= PEAK_ABOVE) return 'peak';
+  if (pos >= PEAK_ABOVE) {
+    const ask = Number(lowSell) || 0;
+    if (ask > 0 && p > ask * PEAK_MAX_ASK_GAP) return 'neutral';
+    return 'peak';
+  }
   return 'neutral';
 }
