@@ -2,9 +2,14 @@
 Description=Run the WFM scrape every 2 hours
 
 [Timer]
-OnCalendar=*/2:00
-RandomizedDelaySec=600      # jitter so we're not a predictable load on WFM
-Persistent=true            # catch up one missed run after downtime/reboot
+# systemd calendar syntax (NOT cron): 0/2 = every 2h starting at 00. `*/2` is
+# cron and makes systemd refuse the whole unit. systemd also has no inline
+# comments, so each note is on its own line above its directive.
+OnCalendar=0/2:00
+# jitter so we're not a predictable load on WFM
+RandomizedDelaySec=600
+# catch up one missed run after downtime/reboot
+Persistent=true
 
 [Install]
 WantedBy=timers.target

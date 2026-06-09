@@ -38,10 +38,19 @@ install -m 0755 "$DEPLOY/run-scrape.sh" /srv/wfm/run-scrape.sh
 chown -R wfm:wfm /srv/wfm
 
 echo "==> Caddy config"
-install -m 0644 "$DEPLOY/Caddyfile" /etc/caddy/Caddyfile
-caddy validate --config /etc/caddy/Caddyfile
-systemctl enable --now caddy
-systemctl reload caddy
+if [ -s /etc/caddy/Caddyfile ] && ! grep -q 'prototype/dist' /etc/caddy/Caddyfile; then
+  # A non-empty Caddyfile that isn't ours = this box already serves other sites.
+  # Overwriting it would 502 every other hostname on reload. Skip + instruct.
+  cp -n /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak 2>/dev/null || true
+  echo "    Existing /etc/caddy/Caddyfile detected (backed up to .bak) — NOT overwriting."
+  echo "    Paste the site block from $DEPLOY/Caddyfile into your config, pick a free"
+  echo "    localhost port, point a tunnel hostname at it, then: systemctl reload caddy"
+else
+  install -m 0644 "$DEPLOY/Caddyfile" /etc/caddy/Caddyfile
+  caddy validate --config /etc/caddy/Caddyfile
+  systemctl enable --now caddy
+  systemctl reload caddy
+fi
 
 echo "==> Scrape timer"
 install -m 0644 "$DEPLOY/wfm-scrape.service" /etc/systemd/system/wfm-scrape.service
@@ -59,7 +68,7 @@ cat <<'NEXT'
 
 1. cloudflared (zero inbound ports). In the Cloudflare Zero Trust dashboard:
    Networks -> Tunnels -> Create tunnel "wfm-web" -> public hostname
-   wfm.yourdomain.com -> http://localhost:8080. Then here:
+   wfm.yourdomain.com -> http://localhost:8081 (match the Caddyfile port). Then here:
 
      curl -L -o cloudflared.deb \
        https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
