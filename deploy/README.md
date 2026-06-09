@@ -26,6 +26,27 @@ Most of steps 3–6 and the in-container install are automated by
 
 ---
 
+## Already run Caddy + a Cloudflare Tunnel? (start here)
+
+Then skip the install bits — you only need to *integrate*:
+
+1. **Caddy:** paste the [`Caddyfile`](Caddyfile) block into your existing config
+   (or `import` it). Pick a **free localhost port** — 8080 often collides, so the
+   block uses **8081**; change it to whatever's free. Don't replace your Caddyfile.
+2. **Tunnel:** add a **new public hostname** to your *existing* tunnel
+   (`wfm.yourdomain.com → http://localhost:8081`). No new tunnel needed.
+3. **Repo + scraper:** put the repo at `/srv/wfm/app`, create the venv +
+   `wfm` user + the scrape timer (the relevant half of
+   [`setup-container.sh`](setup-container.sh)), and deploy a CI-built `dist/`.
+
+**One honest caveat about isolation:** if you run this *alongside* your other
+services (shared Caddy/tunnel/container/host) rather than in a dedicated DMZ LXC,
+you **don't get the network isolation** described below — this app then shares a
+blast radius with everything else that box serves. This app's own surface is
+tiny (static files + a no-secrets cron), so it adds little risk to the shared
+box; the concern runs the other way — a vuln in a *neighbor* service can reach
+this one. If any neighbor is risky, give this its own unprivileged LXC per below.
+
 ## Host steps (on the Proxmox node)
 
 Edit the network bits (`tag=`, IPs, gateway) for your setup.
