@@ -123,6 +123,7 @@
     hint: string;
     columns?: string[];
     vaultOnly?: boolean;
+    minVol?: number; // hard per-preset liquidity floor (Trending uses it)
     defaultSort?: { key: string; dir: number };
   }
   const PRESETS: Record<string, Preset> = {
@@ -141,9 +142,10 @@
     },
     trending: {
       minPrice: 5, hideAtLvl: 5, typeFilter: 'all', activeTags: [],
-      label: 'Trending', hint: 'sort by Δ vs 90d median',
+      label: 'Trending', hint: 'movers vs 90d median · vol ≥ 10',
       columns: ['name', 'owned', 'sell_score', 'low_sell', 'medians_7d', 'delta_90d_pct', 'volume_48h', 'ratio'],
       defaultSort: { key: 'delta_90d_pct', dir: -1 },
+      minVol: 10,
     },
     sets: {
       minPrice: 0, hideAtLvl: 11, typeFilter: 'all', activeTags: ['set'],
@@ -313,6 +315,11 @@
         const status = market.vault_status?.[rec.slug];
         if (status !== 'vaulted' && status !== 'vaulting-soon') continue;
       }
+      // Trending's liquidity floor: drop thin-volume rows so the Δ-sort
+      // surfaces real movers, not median spikes (a fish whose 4p median
+      // ticked to 48p reads as +1100% on ~1 trade).
+      const presetMinVol = PRESETS[activePreset]?.minVol ?? 0;
+      if (presetMinVol > 0 && (m.vol || 0) < presetMinVol) continue;
       const { sell_score, patience } = scoreRow({ owned: rec.count, m });
       // ducats live on `m` because WFM is authoritative for the value —
       // warframestat's bulk /items/ endpoint doesn't carry it. Relics get
@@ -508,6 +515,7 @@
     // so "23 prime" would show but Vaulted preset + prime chip would
     // produce 6 rows.
     const vaultOnly = !!PRESETS[activePreset]?.vaultOnly;
+    const minVol = PRESETS[activePreset]?.minVol ?? 0;
     for (const rec of resolved.owned.values()) {
       const m = lookup(market, rec.slug);
       if (!m) continue;
@@ -519,6 +527,7 @@
         const status = market.vault_status?.[rec.slug];
         if (status !== 'vaulted' && status !== 'vaulting-soon') continue;
       }
+      if (minVol > 0 && (m.vol || 0) < minVol) continue;
       for (const t of (m.tags || [])) {
         counts.set(t, (counts.get(t) || 0) + 1);
       }
