@@ -5,7 +5,7 @@
   // every `catch (e: unknown)` and `dialog: HTMLDialogElement | undefined`
   // here would be busy-work that catches no real bugs. Revisit if a
   // refactor extracts state into a typed store.
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import DropZone from './components/DropZone.svelte';
   import ResultsTable from './components/ResultsTable.svelte';
   import InstallWidget from './components/InstallWidget.svelte';
@@ -123,35 +123,46 @@
     hint: string;
     columns?: string[];
     vaultOnly?: boolean;
+    defaultSort?: { key: string; dir: number };
   }
   const PRESETS: Record<string, Preset> = {
     default:  {
       minPrice: 5, hideAtLvl: 5, typeFilter: 'all', activeTags: [],
       label: 'Default', hint: 'sane defaults — score sort',
+      defaultSort: { key: 'sell_score', dir: -1 },
     },
     ducats: {
       minPrice: 0, hideAtLvl: 11, typeFilter: 'all', activeTags: ['prime'],
-      label: 'Ducats', hint: 'prime-tagged + ducat-rich',
+      label: 'Ducats', hint: 'best ducat value first',
       columns: ['name', 'owned', 'sell_score', 'low_sell', 'volume_48h', 'ducats', 'plat_per_100d'],
+      // Rank by plat-per-100-ducats ASCENDING: lowest plat value per ducat =
+      // worth more fed to Baro than sold on WFM. (Nulls — non-ducat rows — sink.)
+      defaultSort: { key: 'plat_per_100d', dir: 1 },
     },
     trending: {
       minPrice: 5, hideAtLvl: 5, typeFilter: 'all', activeTags: [],
       label: 'Trending', hint: 'sort by Δ vs 90d median',
       columns: ['name', 'owned', 'sell_score', 'low_sell', 'medians_7d', 'delta_90d_pct', 'volume_48h', 'ratio'],
+      defaultSort: { key: 'delta_90d_pct', dir: -1 },
     },
     sets: {
       minPrice: 0, hideAtLvl: 11, typeFilter: 'all', activeTags: ['set'],
       label: 'Sets', hint: 'only set-tagged rows',
       columns: ['name', 'owned', 'sell_score', 'low_sell', 'top_buy', 'potential_plat'],
+      defaultSort: { key: 'sell_score', dir: -1 },
     },
     vault: {
       minPrice: 0, hideAtLvl: 11, typeFilter: 'all', activeTags: [],
       label: 'Vaulted', hint: 'vaulted + vaulting-soon prime parts (sell before the cliff)',
       columns: ['name', 'owned', 'sell_score', 'low_sell', 'top_buy', 'volume_48h', 'potential_plat'],
       vaultOnly: true,
+      defaultSort: { key: 'sell_score', dir: -1 },
     },
   };
   let visibleColumns = $derived<string[] | null>(activePreset ? PRESETS[activePreset]?.columns ?? null : null);
+  // A preset's optional default sort, handed to ResultsTable. Stable object
+  // identity per preset → switching presets re-applies it; header clicks don't.
+  let presetSort = $derived(activePreset ? (PRESETS[activePreset]?.defaultSort ?? null) : null);
   function applyPreset(name: string): void {
     const p = PRESETS[name];
     if (!p) return;
@@ -162,18 +173,24 @@
     activePreset = name;
   }
   $effect(() => {
-    // Track every primitive that defines a preset
+    // Depend ONLY on the filter primitives that define a preset (the void reads
+    // below). Read/write activePreset inside untrack() so nulling the selection
+    // when the user hand-edits a filter can't re-trigger this effect — the old
+    // version read AND wrote activePreset in the same body, which re-fired it
+    // (flagged in the audit).
     void minPrice; void minOwned; void hideAtLvl; void typeFilter; void activeTags.size;
-    if (activePreset === null) return;
-    const p = PRESETS[activePreset];
-    if (!p) return;
-    const matches =
-      minPrice === p.minPrice &&
-      hideAtLvl === p.hideAtLvl &&
-      typeFilter === p.typeFilter &&
-      activeTags.size === p.activeTags.length &&
-      p.activeTags.every((t) => activeTags.has(t));
-    if (!matches) activePreset = null;
+    untrack(() => {
+      if (activePreset === null) return;
+      const p = PRESETS[activePreset];
+      if (!p) return;
+      const matches =
+        minPrice === p.minPrice &&
+        hideAtLvl === p.hideAtLvl &&
+        typeFilter === p.typeFilter &&
+        activeTags.size === p.activeTags.length &&
+        p.activeTags.every((t) => activeTags.has(t));
+      if (!matches) activePreset = null;
+    });
   });
 
   // Restore the last snapshot exactly once after mount. Using onMount (not
@@ -313,20 +330,25 @@
       // "now". Null when there's no series yet (CSV-only rebuilds
       // inherit zeros until the next full scrape).
       const medians = Array.isArray(m.medians_7d) ? m.medians_7d.filter(v => v > 0) : [];
-      const latest_median = medians.length ? medians[medians.length - 1] : null;
+      // "today" = latest daily median. Pre-split snapshots have no median_now,
+      // so fall back to median_90d (which on those WAS the latest day).
+      const median_now = (m.median_now ?? m.median_90d) || null;
+      // median_90d is now the 90-day BASELINE (median of the daily medians), so
+      // Δ-vs-90d = today vs the 90-day norm — a real signal at last. On old
+      // snapshots median_now === median_90d → Δ = 0 until the next scrape, which
+      // is honest rather than fake.
       const median_90d = m.median_90d > 0 ? m.median_90d : null;
-      const delta_90d_pct = latest_median != null && median_90d != null
-        ? ((latest_median - median_90d) / median_90d) * 100
+      const delta_90d_pct = median_now != null && median_90d != null && median_90d > 0
+        ? ((median_now - median_90d) / median_90d) * 100
         : null;
-      // Timing: where today's median sits in its 90-day band. Must use the
-      // median, not low_sell — the Donchian bands are built from the daily
-      // median series, so positioning low_sell (an order-book ask, which can
-      // be a thin-book outlier) against them mislabels (a lone 200p ask on a
-      // ~20p item read as "peak"). The median is always inside its own band.
+      // Timing: where today's median sits in its 90-day band. Uses median_now,
+      // not low_sell — the Donchian bands are built from the daily median
+      // series, so a thin-book ask outlier (a lone 200p listing on a ~20p item)
+      // would mislabel as "peak". median_now is always inside its own band.
       // "hold" = near the 90d low (don't dump into a trough — e.g. a mod Baro
       // just flooded), "peak" = near the 90d high (list now).
       const timing = bandSignal({
-        price: m.median_90d,
+        price: median_now,
         donchTop: m.donch_top_90d,
         donchBot: m.donch_bot_90d,
       });
@@ -1099,7 +1121,7 @@
       {/if}
 
       {#if results.length > 0}
-        <ResultsTable {results} {deltas} {visibleColumns} />
+        <ResultsTable {results} {deltas} {visibleColumns} {presetSort} />
       {:else if emptyReason}
         <div class="card empty">
           {#if emptyReason.kind === 'no-market'}

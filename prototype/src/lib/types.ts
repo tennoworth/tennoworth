@@ -22,7 +22,8 @@ export interface MarketItemEntry {
   // Extended fields. Older snapshots may omit them; consumers must guard.
   tags?: string[];
   ducats?: number | null;
-  median_90d?: number;
+  median_now?: number; // latest daily median ("today"); falls back to median_90d on pre-split snapshots
+  median_90d?: number; // median OF the 90-day daily medians (the baseline, not "today")
   medians_7d?: number[];
   donch_top_90d?: number;
   donch_bot_90d?: number;
