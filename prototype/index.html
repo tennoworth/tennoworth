@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!--
+      Defense-in-depth CSP. Allowed origins:
+        connect-src: warframestat.us (path resolution, has CORS)
+                     127.0.0.1 + localhost (companion's loopback HTTP server)
+        script-src:  self only — no inline, no remote scripts
+        style-src:   self + 'unsafe-inline' for Svelte's scoped style injection
+        img-src:     self + data: (Vite injects small assets as data: URIs)
+
+      `frame-ancestors`, `Strict-Transport-Security`, and `X-Frame-Options`
+      can only be set as real HTTP headers, not via <meta>. They live in
+      public/_headers for Cloudflare Pages / Netlify / Vercel deployments.
+      GitHub Pages silently drops that file, which is one reason we'll move
+      off it for production. The CSP below still gives us script/connect/
+      style protection on GH Pages.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="
+        default-src 'self';
+        connect-src 'self' https://api.warframestat.us http://127.0.0.1:* http://localhost:*;
+        script-src 'self';
+        style-src 'self' 'unsafe-inline';
+        img-src 'self' data:;
+        font-src 'self';
+        object-src 'none';
+        base-uri 'self';
+        form-action 'self';
+      "
+    />
+    <meta http-equiv="Referrer-Policy" content="no-referrer" />
+    <meta http-equiv="X-Content-Type-Options" content="nosniff" />
+    <title>WF Inventory Market — Prototype</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

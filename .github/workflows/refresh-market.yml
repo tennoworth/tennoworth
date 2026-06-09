@@ -1,0 +1,62 @@
+name: refresh-market
+
+# Scrape warframe.market on a schedule and commit the snapshot the web app
+# consumes. Public repo → unlimited Actions minutes. Each run takes ~30-45
+# minutes (~3800 items × 2 calls × 0.34 s pacing), well under the 6 h job
+# timeout.
+
+on:
+  schedule:
+    - cron: '15 */2 * * *'  # every 2 hours at :15 (off-the-hour, polite)
+  workflow_dispatch:        # also runnable manually from the Actions tab
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-market
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install deps
+        run: pip install requests
+
+      - name: Scrape warframe.market
+        run: |
+          python3 wfm_demand.py \
+            --filter "" \
+            --exclude "" \
+            --min-volume 1 \
+            --out wfm_results.csv
+
+      - name: Build market.json
+        # csv_to_market_json.py is the only generator that emits the
+        # set_to_parts / relic_rewards / vault_status keys the web app's
+        # Sets, Relics, and Vaulted surfaces depend on. Pointing
+        # wfm_demand.py --json-out straight at the public file omits them
+        # and blanks those cards on every cron tick.
+        run: python3 scripts/csv_to_market_json.py
+
+      - name: Commit if changed
+        run: |
+          git config user.name  "wfm-bot"
+          git config user.email "wfm-bot@users.noreply.github.com"
+          git add prototype/public/market.json wfm_results.csv
+          if git diff --cached --quiet; then
+            echo "No changes — nothing to commit."
+            exit 0
+          fi
+          ts=$(date -u +'%Y-%m-%dT%H:%MZ')
+          git commit -m "market refresh ${ts}"
+          git push

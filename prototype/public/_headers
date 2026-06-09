@@ -1,0 +1,16 @@
+# Headers applied by Cloudflare Pages, Netlify, and Vercel. GitHub Pages
+# ignores this file (one reason to move off it for production).
+#
+# Headers here augment — they don't replace — the <meta> CSP in index.html.
+# Anything that can't be set via <meta> (frame-ancestors, HSTS,
+# X-Frame-Options, Permissions-Policy) lives here.
+
+/*
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Permissions-Policy: accelerometer=(), camera=(), geolocation=(), gyroscope=(), microphone=(), payment=(), usb=()
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin
+  Content-Security-Policy: default-src 'self'; connect-src 'self' https://api.warframestat.us http://127.0.0.1:* http://localhost:*; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'

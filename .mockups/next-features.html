@@ -1,0 +1,1089 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>WF inventory · next-features mockup</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<!--
+  Single-file mockup of five proposed additions to the main app surface.
+  Pulls CSS variables and patterns straight from prototype/src/app.css and
+  App.svelte so the mockup reads as the same product, just with more on it.
+  Order on the page intentionally mirrors the brief:
+    stats strip → filters (+ tag chips) → set-completion → relic planner → main table.
+  Nothing is interactive beyond a couple of :hover transitions; this is
+  visual reference only.
+-->
+<style>
+  :root {
+    --bg: #0e0f12;
+    --panel: #16181d;
+    --panel-2: #1c1f26;
+    --border: #262a33;
+    --fg: #d8dde6;
+    --muted: #7a8089;
+    --accent: #5ec8ff;
+    --good: #6ed99a;
+    --warn: #e9c46a;
+    --bad: #e76f51;
+    --ducat: #c9a14a; /* Warm ducat-coin tone. Only used for the ducats column
+                         and the "ducat-deal" badge so it's clearly a domain
+                         signal and not a generic accent. */
+    color-scheme: dark;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-size: 14px;
+    line-height: 1.5;
+  }
+  a { color: var(--accent); }
+  code {
+    background: var(--panel-2);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.93em;
+  }
+  main {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 24px 48px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+  }
+  header .sub { color: var(--muted); margin: 6px 0 0 0; max-width: 64ch; font-size: 13px; }
+  h2 { margin: 0; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  h2 .accent { color: var(--accent); }
+
+  /* ---------- stats strip — same pattern as App.svelte .stats ---------- */
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .stat {
+    background: var(--panel);
+    padding: 14px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .stat .k {
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .stat .v {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+  }
+  .stat .v .unit { font-size: 13px; color: var(--muted); margin-left: 2px; }
+  .stat.right .k, .stat.right .v { justify-content: flex-end; text-align: right; }
+
+  /* ---------- card scaffolding ---------- */
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .card-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .card-head h2 { line-height: 1; }
+  .card-head .lede {
+    font-size: 12px;
+    color: var(--muted);
+    /* Dotted-underline help affordance copied from App.svelte. */
+    text-decoration: underline dotted var(--border);
+    text-underline-offset: 3px;
+    cursor: help;
+  }
+
+  /* ---------- filters row ---------- */
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .filters { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .filters label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    letter-spacing: 0.02em;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+  .filters input, .filters select {
+    text-transform: none;
+    letter-spacing: 0;
+    font: inherit;
+    color: var(--fg);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 8px;
+  }
+  .filters input { width: 56px; }
+
+  /* Tag chips. Stale (zero-match) chips are kept on-screen but desaturated +
+     strike-through so the user understands they're inert under current
+     filters, not missing. Active state uses accent ring; matches the
+     "accent-only for active state" rule from the existing app. */
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-top: 4px;
+    border-top: 1px dashed var(--border);
+    margin-top: 2px;
+  }
+  .chips-label {
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-right: 6px;
+    padding: 4px 0;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11.5px;
+    letter-spacing: 0.02em;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--fg);
+    border-radius: 999px;
+    padding: 3px 10px 3px 8px;
+    cursor: pointer;
+    transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+  }
+  .chip .count {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10.5px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .chip:hover { color: var(--accent); border-color: var(--accent); }
+  .chip.active {
+    color: var(--accent);
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, var(--panel-2));
+  }
+  .chip.active .count { color: color-mix(in srgb, var(--accent) 70%, var(--muted)); }
+  .chip.stale {
+    color: var(--muted);
+    text-decoration: line-through;
+    text-decoration-color: color-mix(in srgb, var(--muted) 60%, transparent);
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+  .chip.stale .count { opacity: 0.7; }
+
+  /* ---------- set-completion card ---------- */
+  /* Two-tier card: a header band, then a hairline-separated list of
+     recommendations. Each row is one "set" with a status pill, the gap, and
+     the recommended action. No big graphics — the recommendation IS the row. */
+  .reco-list {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  .reco {
+    display: grid;
+    grid-template-columns: 1.6fr 1.2fr 1.4fr auto;
+    gap: 14px;
+    align-items: center;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    background: var(--panel);
+  }
+  .reco:last-child { border-bottom: none; }
+  .reco:hover { background: rgba(255,255,255,0.02); }
+  .reco .item { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .reco .item .name { font-weight: 600; }
+  .reco .progress {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11.5px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  /* Tiny inline progress bar — 4px stripe, accent fill for complete parts,
+     no labels (the n/m number lives next to it as text). */
+  .bar {
+    width: 56px;
+    height: 4px;
+    background: var(--panel-2);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+  .bar > i {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+  }
+  .reco .missing { color: var(--muted); font-size: 12.5px; }
+  .reco .missing strong { color: var(--fg); font-weight: 500; }
+  .reco .strategy {
+    font-size: 12.5px;
+    color: var(--fg);
+    font-variant-numeric: tabular-nums;
+  }
+  .reco .strategy .num {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-weight: 600;
+  }
+  .reco .strategy .num.gain { color: var(--good); }
+  .reco .strategy .label {
+    color: var(--muted);
+    text-decoration: underline dotted var(--border);
+    text-underline-offset: 3px;
+    cursor: help;
+  }
+  .reco button.act {
+    font: inherit;
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: color 120ms ease, border-color 120ms ease;
+  }
+  .reco button.act:hover { color: var(--accent); border-color: var(--accent); }
+
+  .pill {
+    display: inline-block;
+    padding: 1px 7px;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    background: var(--panel-2);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .pill.gain { color: var(--good); border-color: color-mix(in srgb, var(--good) 30%, var(--border)); }
+  .pill.extras { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 30%, var(--border)); }
+  .pill.dupes { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 30%, var(--border)); }
+
+  /* ---------- relic planner ---------- */
+  /* Different shape from set-completion on purpose: a tight 3-column grid of
+     equally-weighted cards. This is a "pick one tonight" decision, and the
+     equal layout makes the comparison direct. Limit to 3 — the brief says
+     "what should I run tonight", not a full table. */
+  .relics {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+  }
+  .relic {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+  .relic .head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .relic .name {
+    font-weight: 600;
+    font-size: 13.5px;
+  }
+  .relic .refinement {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .relic .epp {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+  }
+  .relic .epp .unit { font-size: 12px; color: var(--muted); margin-left: 2px; }
+  .relic .epp .label { display: block; font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); font-weight: 500; font-family: inherit; }
+  .relic .signals {
+    display: flex;
+    gap: 10px;
+    font-size: 11.5px;
+    color: var(--muted);
+    font-variant-numeric: tabular-nums;
+    flex-wrap: wrap;
+  }
+  .relic .signals strong {
+    font-weight: 500;
+    color: var(--fg);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  /* Tiny inline "drop x value" rewards table. Two-column compact. */
+  .drops {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: 2px 10px;
+    font-size: 11.5px;
+    margin-top: 4px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+    font-variant-numeric: tabular-nums;
+  }
+  .drops .d-name { color: var(--fg); }
+  .drops .d-rate { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .drops .d-plat { color: var(--fg); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; text-align: right; }
+  .drops .d-plat.rare { color: var(--accent); }
+  .drops .d-plat.dim { color: var(--muted); }
+
+  /* ---------- main table — extends ResultsTable.svelte ---------- */
+  .table-wrap {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .toolbar {
+    display: flex;
+    gap: 12px;
+    padding: 12px 14px;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .toolbar input[type="text"] {
+    font: inherit;
+    color: var(--fg);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    min-width: 260px;
+  }
+  .muted { color: var(--muted); font-size: 12.5px; }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums;
+  }
+  th, td {
+    padding: 7px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  th {
+    background: var(--panel-2);
+    font-weight: 600;
+    cursor: pointer;
+    user-select: none;
+    font-size: 12.5px;
+  }
+  th .hcontent { display: inline-flex; align-items: center; gap: 5px; }
+  th .info {
+    font-size: 9.5px;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    width: 13px;
+    height: 13px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+  th.right, td.right { text-align: right; }
+  th.right .hcontent { justify-content: flex-end; }
+  th.center, td.center { text-align: center; }
+  th.active { color: var(--accent); }
+  tbody tr:hover { background: rgba(255,255,255,0.02); }
+  td a { color: var(--fg); text-decoration: none; }
+  td a:hover { color: var(--accent); text-decoration: underline; }
+  .arrow { color: var(--accent); }
+
+  /* Number cells in the body are always monospace so eyeballing columns
+     works; the name cell stays sans for readability. */
+  td.num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  /* Ducat column treatment. Plain numbers in --ducat tint; the "better as
+     ducats" hint is a quiet badge to the right, not a row-level highlight
+     (which would compete with sell_score sorting). */
+  td.ducat { color: var(--ducat); }
+  .ducat-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 0 5px;
+    font-size: 9.5px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border: 1px solid color-mix(in srgb, var(--ducat) 40%, var(--border));
+    color: var(--ducat);
+    border-radius: 3px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    vertical-align: 1px;
+  }
+
+  /* Δ vs 90d median badge. Up = bad-for-buyer / good-for-seller; we use
+     --good when current > 90d (you'd sell into a peak). Mirror of the
+     standard delta arrows in ResultsTable.svelte. */
+  .delta90 {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  .delta90 .pct { font-weight: 500; }
+  .delta90.up   { color: var(--good); }
+  .delta90.down { color: var(--bad); }
+  .delta90.flat { color: var(--muted); }
+
+  /* Sparkline cell. 60px wide, no axes/labels — line only. Container is
+     fixed-size so column width doesn't dance as values change. */
+  .spark { display: inline-block; vertical-align: middle; }
+  .spark svg { display: block; }
+
+  .tag {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 1px 6px;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--muted);
+    vertical-align: middle;
+  }
+  .tag.patience {
+    color: var(--warn);
+    border-color: color-mix(in srgb, var(--warn) 30%, var(--border));
+  }
+
+  /* Foot note under each card. Same muted style used throughout the app. */
+  .note { font-size: 11.5px; color: var(--muted); margin: 0; }
+
+  footer.legend {
+    color: var(--muted);
+    font-size: 11.5px;
+    text-align: center;
+    padding-top: 20px;
+    letter-spacing: 0.02em;
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>WF inventory · market check <span style="color:var(--muted);font-weight:400;font-size:13px;">— next-features mockup</span></h1>
+    <p class="sub">
+      Visual reference for the five candidate additions. Same surfaces as
+      the live app; everything below the filter row is new. Numbers are
+      illustrative.
+    </p>
+  </header>
+
+  <!-- ============ STATS STRIP ============
+       Identical pattern to App.svelte .stats. The 4th cell is replaced
+       (was "Market data" freshness, now "Avg ducats / part"). Freshness
+       moves into the table toolbar so the strip stays number-forward and
+       always has 4 equally-weighted numbers. -->
+  <section class="stats">
+    <div class="stat">
+      <span class="k">Owned</span>
+      <span class="v">1,284</span>
+    </div>
+    <div class="stat">
+      <span class="k">Sellable</span>
+      <span class="v">312</span>
+    </div>
+    <div class="stat">
+      <span class="k">Potential</span>
+      <span class="v">4,872 <span class="unit">p</span></span>
+    </div>
+    <div class="stat right">
+      <!-- New 4th stat. "Avg ducats / part" across rows currently visible —
+           gives a quick sense of whether this inventory leans plat-rich
+           (low ducat avg) or ducat-rich (lots of low-plat prime parts). -->
+      <span class="k">Avg ducats / part</span>
+      <span class="v" style="color:var(--ducat)">38 <span class="unit">d</span></span>
+    </div>
+  </section>
+
+  <!-- ============ FILTER CARD with TAG CHIPS ============ -->
+  <section class="card">
+    <div class="row">
+      <div class="filters">
+        <label>Min avg price <input type="number" value="5" /><span class="muted">p</span></label>
+        <label>Min owned <input type="number" value="1" style="width:50px" /></label>
+        <label>
+          Type
+          <select><option>All</option><option>Mods</option><option>Prime parts</option></select>
+        </label>
+        <label>Hide if ranked ≥ <input type="number" value="5" style="width:55px" /></label>
+      </div>
+      <div class="muted">312 rows match</div>
+    </div>
+    <!-- Tag chips. AND with the existing filters above. Live counts in
+         brackets so the user can see at a glance which chips would
+         actually narrow things; zero-match chips stay visible but stale
+         (strikethrough + muted) — disappearing them would hide the
+         vocabulary. Multi-select implied; "active" state is the accent
+         ring, matching the rest of the app. -->
+    <div class="chips">
+      <span class="chips-label">Tags</span>
+      <span class="chip active">prime <span class="count">218</span></span>
+      <span class="chip">mod <span class="count">71</span></span>
+      <span class="chip active">arcane <span class="count">14</span></span>
+      <span class="chip">relic <span class="count">52</span></span>
+      <span class="chip">weapon <span class="count">39</span></span>
+      <span class="chip">augment <span class="count">11</span></span>
+      <span class="chip">syndicate <span class="count">6</span></span>
+      <span class="chip">set <span class="count">9</span></span>
+      <span class="chip stale">riven <span class="count">0</span></span>
+      <span class="chip stale">imprint <span class="count">0</span></span>
+      <span class="chip stale">captura <span class="count">0</span></span>
+    </div>
+  </section>
+
+  <!-- ============ SET-COMPLETION CARD ============
+       Recommendation panel, not a table. Each row is one actionable
+       insight: a name, where the gap is, the math, and a one-button
+       action that wires into the existing companion-listing flow. -->
+  <section class="card">
+    <div class="card-head">
+      <h2><span class="accent">●</span>&nbsp; Set opportunities</h2>
+      <span class="lede" title="Sets you're close to completing or have extras for. Math assumes you sell at current low_sell, buy at current top_buy.">how is this scored?</span>
+    </div>
+    <div class="reco-list">
+
+      <div class="reco">
+        <div class="item">
+          <div class="bar" title="3 of 4 parts owned"><i style="width:75%"></i></div>
+          <div>
+            <div class="name">Mesa Prime</div>
+            <div class="progress">3 / 4 parts · own BP, Neuroptics, Chassis</div>
+          </div>
+        </div>
+        <div class="missing">missing <strong>Systems</strong> · top buy <strong>18 p</strong></div>
+        <div class="strategy">
+          <span class="num gain">+95 p</span> <span class="label" title="Buy Systems at 18p, list the full set at 130p (median). Beats listing the 3 parts you have as singles, which nets 42p.">buy &amp; flip set</span>
+        </div>
+        <button class="act">Plan</button>
+      </div>
+
+      <div class="reco">
+        <div class="item">
+          <div class="bar"><i style="width:100%"></i></div>
+          <div>
+            <div class="name">Loki Prime</div>
+            <div class="progress">complete · 5 extra <span class="pill extras">Chassis BP</span></div>
+          </div>
+        </div>
+        <div class="missing">duplicates worth more as singles than as sets</div>
+        <div class="strategy">
+          <span class="num gain">+30 p</span> <span class="label" title="5 × Chassis BP @ 6p low_sell. Listing the set wouldn't help — you'd need Neuroptics + Systems too.">list 5 singles</span>
+        </div>
+        <button class="act">List</button>
+      </div>
+
+      <div class="reco">
+        <div class="item">
+          <div class="bar"><i style="width:50%"></i></div>
+          <div>
+            <div class="name">Vauban Prime</div>
+            <div class="progress">2 / 4 parts · own BP, Chassis</div>
+          </div>
+        </div>
+        <div class="missing">missing <strong>Neuroptics</strong> 22 p · <strong>Systems</strong> 45 p</div>
+        <div class="strategy">
+          <span class="num" style="color:var(--muted)">−8 p</span> <span class="label" title="Set median is 60p. Parts cost 67p to buy + your two parts. Not worth completing right now; sell the parts you have as singles for 19p.">don't complete</span>
+        </div>
+        <button class="act">Dismiss</button>
+      </div>
+
+      <div class="reco">
+        <div class="item">
+          <div class="bar"><i style="width:100%"></i></div>
+          <div>
+            <div class="name">Saryn Prime</div>
+            <div class="progress">complete · 2 extra <span class="pill dupes">full sets</span></div>
+          </div>
+        </div>
+        <div class="missing">sets currently outpacing parts by ~22 %</div>
+        <div class="strategy">
+          <span class="num gain">+170 p</span> <span class="label" title="2 × set @ 85p median. Parts-only would clear ~140p across 8 listings.">list 2 sets</span>
+        </div>
+        <button class="act">Plan</button>
+      </div>
+
+    </div>
+    <p class="note">Sets the join already knows about — uses your owned parts and current WFM medians. No new data source.</p>
+  </section>
+
+  <!-- ============ RELIC PLANNER ============
+       Three-card grid: same shape repeated so the user compares like-for-
+       like. The big number is expected plat per crack (drop% × median).
+       Beneath: the volume signal (how many of the rewarded parts are
+       actually moving) and the rewards table itself so the math is
+       inspectable. -->
+  <section class="card">
+    <div class="card-head">
+      <h2><span class="accent">●</span>&nbsp; Best relics to crack tonight</h2>
+      <span class="lede" title="Expected plat per crack = Σ (drop_rate × median_plat) over the relic's six rewards. Volume signal = count of rewards with vol_48h ≥ 4, i.e. parts that are actually moving.">how is EPP computed?</span>
+    </div>
+    <div class="relics">
+
+      <div class="relic">
+        <div class="head">
+          <div class="name">Axi K2</div>
+          <div class="refinement">Radiant</div>
+        </div>
+        <div class="epp">
+          <span class="label">expected / crack</span>
+          47 <span class="unit">p</span>
+        </div>
+        <div class="signals">
+          <span>vol signal <strong>4 / 6</strong></span>
+          <span>own <strong>×12</strong></span>
+        </div>
+        <div class="drops">
+          <span class="d-name">Khora Prime Systems</span>
+          <span class="d-rate">10.0%</span>
+          <span class="d-plat rare">85p</span>
+          <span class="d-name">Magnus Prime Receiver</span>
+          <span class="d-rate">10.0%</span>
+          <span class="d-plat">42p</span>
+          <span class="d-name">Hystrix Prime Barrel</span>
+          <span class="d-rate">20.0%</span>
+          <span class="d-plat">18p</span>
+          <span class="d-name">Forma BP</span>
+          <span class="d-rate">60.0%</span>
+          <span class="d-plat dim">—</span>
+        </div>
+      </div>
+
+      <div class="relic">
+        <div class="head">
+          <div class="name">Neo Z5</div>
+          <div class="refinement">Intact</div>
+        </div>
+        <div class="epp">
+          <span class="label">expected / crack</span>
+          31 <span class="unit">p</span>
+        </div>
+        <div class="signals">
+          <span>vol signal <strong>5 / 6</strong></span>
+          <span>own <strong>×24</strong></span>
+        </div>
+        <div class="drops">
+          <span class="d-name">Mesa Prime Systems</span>
+          <span class="d-rate">2.0%</span>
+          <span class="d-plat rare">120p</span>
+          <span class="d-name">Akbolto Prime Link</span>
+          <span class="d-rate">11.0%</span>
+          <span class="d-plat">28p</span>
+          <span class="d-name">Tiberon Prime Stock</span>
+          <span class="d-rate">17.0%</span>
+          <span class="d-plat">14p</span>
+          <span class="d-name">Forma BP</span>
+          <span class="d-rate">70.0%</span>
+          <span class="d-plat dim">—</span>
+        </div>
+      </div>
+
+      <div class="relic">
+        <div class="head">
+          <div class="name">Meso N11</div>
+          <div class="refinement">Flawless</div>
+        </div>
+        <div class="epp">
+          <span class="label">expected / crack</span>
+          22 <span class="unit">p</span>
+        </div>
+        <div class="signals">
+          <span>vol signal <strong>3 / 6</strong></span>
+          <span>own <strong>×7</strong></span>
+        </div>
+        <div class="drops">
+          <span class="d-name">Nezha Prime BP</span>
+          <span class="d-rate">11.0%</span>
+          <span class="d-plat rare">55p</span>
+          <span class="d-name">Zakti Prime Receiver</span>
+          <span class="d-rate">17.0%</span>
+          <span class="d-plat">12p</span>
+          <span class="d-name">Velox Prime Barrel</span>
+          <span class="d-rate">25.5%</span>
+          <span class="d-plat">8p</span>
+          <span class="d-name">Forma BP</span>
+          <span class="d-rate">46.5%</span>
+          <span class="d-plat dim">—</span>
+        </div>
+      </div>
+
+    </div>
+    <p class="note">EPP uses 48 h median price × drop rate. "Vol signal" is how many of the six rewards are actually trading (≥ 4 sales / 48 h) — a high EPP with a 1/6 signal usually means one rare reward that nobody is moving.</p>
+  </section>
+
+  <!-- ============ MAIN TABLE — extended ============
+       Existing skeleton + three new columns: Trend (7-day sparkline),
+       Δ vs 90d median (badge), Ducats + per-100-ducat ratio. Headers
+       keep the dotted-affordance / sortable pattern from
+       ResultsTable.svelte. -->
+  <section class="table-wrap">
+    <div class="toolbar">
+      <input type="text" placeholder="Filter by name…" />
+      <div class="muted">
+        312 rows · sorted by <strong style="color:var(--accent)">Score</strong> <span class="arrow">↓</span>
+        &nbsp;·&nbsp;
+        <span style="display:inline-flex;align-items:center;gap:6px;">
+          <span style="width:7px;height:7px;border-radius:50%;background:var(--good);display:inline-block;"></span>
+          market 1 h ago
+        </span>
+      </div>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th class="right">Own</th>
+          <th class="right active">Score <span class="arrow">↓</span></th>
+          <th class="right">Avg</th>
+          <th class="center">Trend 7d</th>
+          <!-- New: Δ vs 90d. Sort sends ducat-rich + currently-spiking items
+               to the top, complementing Score (which favours volume). -->
+          <th class="right">Δ 90d</th>
+          <!-- New: ducats column + p/100d ratio. p/100d makes ducat-better
+               rows comparable across price tiers (a 6p / 100d part is
+               always a worse-than-ducats trade than a 30p / 100d part). -->
+          <th class="right">Ducats</th>
+          <th class="right">p / 100d</th>
+          <th class="right">Vol 48h</th>
+          <th class="right">Low sell</th>
+        </tr>
+      </thead>
+      <tbody>
+
+        <tr>
+          <td><a href="#">Mesa Prime Set</a></td>
+          <td class="right num">2</td>
+          <td class="right num">165</td>
+          <td class="right num">85</td>
+          <td class="center">
+            <!-- 60px × 18px sparkline. Path is hard-coded to a 7-point
+                 series; --accent stroke, 1.25px, no axes. -->
+            <span class="spark" title="median price last 7 days: 82, 80, 79, 81, 83, 84, 85">
+              <svg width="60" height="18" viewBox="0 0 60 18" aria-hidden="true">
+                <polyline fill="none" stroke="var(--accent)" stroke-width="1.25"
+                  points="0,9 10,11 20,12 30,10 40,8 50,7 60,5" />
+              </svg>
+            </span>
+          </td>
+          <td class="right"><span class="delta90 up">▲<span class="pct">7%</span></span></td>
+          <td class="right num ducat">—</td>
+          <td class="right num muted">—</td>
+          <td class="right num">14</td>
+          <td class="right num">82</td>
+        </tr>
+
+        <tr>
+          <td><a href="#">Khora Prime Systems</a></td>
+          <td class="right num">3</td>
+          <td class="right num">128</td>
+          <td class="right num">48</td>
+          <td class="center">
+            <span class="spark" title="median price last 7 days: 50, 49, 47, 47, 48, 48, 48">
+              <svg width="60" height="18" viewBox="0 0 60 18" aria-hidden="true">
+                <polyline fill="none" stroke="var(--accent)" stroke-width="1.25"
+                  points="0,6 10,7 20,9 30,9 40,8 50,8 60,8" />
+              </svg>
+            </span>
+          </td>
+          <td class="right"><span class="delta90 flat">·<span class="pct">0%</span></span></td>
+          <td class="right num ducat">65</td>
+          <td class="right num">74</td>
+          <td class="right num">22</td>
+          <td class="right num">46</td>
+        </tr>
+
+        <tr>
+          <td>
+            <a href="#">Galvanized Aptitude</a>
+            <span class="tag patience">patience</span>
+          </td>
+          <td class="right num">1</td>
+          <td class="right num">96</td>
+          <td class="right num">120</td>
+          <td class="center">
+            <span class="spark" title="median price last 7 days: 145, 140, 135, 128, 124, 122, 120">
+              <svg width="60" height="18" viewBox="0 0 60 18" aria-hidden="true">
+                <polyline fill="none" stroke="var(--accent)" stroke-width="1.25"
+                  points="0,2 10,4 20,6 30,9 40,11 50,12 60,13" />
+              </svg>
+            </span>
+          </td>
+          <td class="right"><span class="delta90 down">▼<span class="pct">14%</span></span></td>
+          <td class="right num ducat">—</td>
+          <td class="right num muted">—</td>
+          <td class="right num">1</td>
+          <td class="right num">118</td>
+        </tr>
+
+        <tr>
+          <td><a href="#">Loki Prime Chassis BP</a></td>
+          <td class="right num">5</td>
+          <td class="right num">28</td>
+          <td class="right num">7</td>
+          <td class="center">
+            <span class="spark" title="median price last 7 days: 6, 7, 7, 7, 6, 7, 7">
+              <svg width="60" height="18" viewBox="0 0 60 18" aria-hidden="true">
+                <polyline fill="none" stroke="var(--accent)" stroke-width="1.25"
+                  points="0,11 10,10 20,10 30,10 40,11 50,10 60,10" />
+              </svg>
+            </span>
+          </td>
+          <td class="right"><span class="delta90 flat">·<span class="pct">2%</span></span></td>
+          <!-- ducat-better row. The badge calls it out without changing the
+               row background — sorting by p/100d brings these to the top
+               on demand, which is the whole point. -->
+          <td class="right num ducat">45 <span class="ducat-badge">deal</span></td>
+          <td class="right num" style="color:var(--ducat)">15.5</td>
+          <td class="right num">34</td>
+          <td class="right num">7</td>
+        </tr>
+
+        <tr>
+          <td><a href="#">Vauban Prime BP</a></td>
+          <td class="right num">2</td>
+          <td class="right num">18</td>
+          <td class="right num">12</td>
+          <td class="center">
+            <span class="spark" title="median price last 7 days: 14, 13, 13, 12, 12, 12, 12">
+              <svg width="60" height="18" viewBox="0 0 60 18" aria-hidden="true">
+                <polyline fill="none" stroke="var(--accent)" stroke-width="1.25"
+                  points="0,7 10,8 20,8 30,9 40,9 50,9 60,9" />
+              </svg>
+            </span>
+          </td>
+          <td class="right"><span class="delta90 down">▼<span class="pct">8%</span></span></td>
+          <td class="right num ducat">15</td>
+          <td class="right num">80</td>
+          <td class="right num">9</td>
+          <td class="right num">11</td>
+        </tr>
+
+        <tr>
+          <td><a href="#">Magus Lockdown</a></td>
+          <td class="right num">1</td>
+          <td class="right num">62</td>
+          <td class="right num">75</td>
+          <td class="center">
+            <span class="spark" title="median price last 7 days: 70, 72, 74, 73, 74, 75, 76">
+              <svg width="60" height="18" viewBox="0 0 60 18" aria-hidden="true">
+                <polyline fill="none" stroke="var(--accent)" stroke-width="1.25"
+                  points="0,7 10,6 20,5 30,5 40,5 50,4 60,3" />
+              </svg>
+            </span>
+          </td>
+          <td class="right"><span class="delta90 up">▲<span class="pct">11%</span></span></td>
+          <td class="right num ducat">—</td>
+          <td class="right num muted">—</td>
+          <td class="right num">4</td>
+          <td class="right num">74</td>
+        </tr>
+
+        <tr>
+          <td><a href="#">Saryn Prime Set</a></td>
+          <td class="right num">2</td>
+          <td class="right num">158</td>
+          <td class="right num">85</td>
+          <td class="center">
+            <span class="spark" title="median price last 7 days: 88, 87, 85, 84, 85, 85, 85">
+              <svg width="60" height="18" viewBox="0 0 60 18" aria-hidden="true">
+                <polyline fill="none" stroke="var(--accent)" stroke-width="1.25"
+                  points="0,4 10,5 20,7 30,8 40,7 50,7 60,7" />
+              </svg>
+            </span>
+          </td>
+          <td class="right"><span class="delta90 flat">·<span class="pct">1%</span></span></td>
+          <td class="right num ducat">—</td>
+          <td class="right num muted">—</td>
+          <td class="right num">11</td>
+          <td class="right num">82</td>
+        </tr>
+
+        <tr>
+          <td><a href="#">Streamline</a></td>
+          <td class="right num">3</td>
+          <td class="right num">14</td>
+          <td class="right num">6</td>
+          <td class="center">
+            <span class="spark" title="median price last 7 days: 7, 7, 6, 6, 6, 6, 5">
+              <svg width="60" height="18" viewBox="0 0 60 18" aria-hidden="true">
+                <polyline fill="none" stroke="var(--accent)" stroke-width="1.25"
+                  points="0,10 10,10 20,11 30,11 40,11 50,11 60,13" />
+              </svg>
+            </span>
+          </td>
+          <td class="right"><span class="delta90 down">▼<span class="pct">17%</span></span></td>
+          <td class="right num ducat">—</td>
+          <td class="right num muted">—</td>
+          <td class="right num">29</td>
+          <td class="right num">5</td>
+        </tr>
+
+        <tr>
+          <td>
+            <a href="#">Vitality</a>
+            <span class="tag patience">patience</span>
+          </td>
+          <td class="right num">2</td>
+          <td class="right num">4</td>
+          <td class="right num">5</td>
+          <td class="center">
+            <span class="spark" title="median price last 7 days: 5, 5, 5, 5, 5, 5, 5">
+              <svg width="60" height="18" viewBox="0 0 60 18" aria-hidden="true">
+                <polyline fill="none" stroke="var(--accent)" stroke-width="1.25"
+                  points="0,12 10,12 20,12 30,12 40,12 50,12 60,12" />
+              </svg>
+            </span>
+          </td>
+          <td class="right"><span class="delta90 flat">·<span class="pct">0%</span></span></td>
+          <td class="right num ducat">—</td>
+          <td class="right num muted">—</td>
+          <td class="right num">1</td>
+          <td class="right num">5</td>
+        </tr>
+
+        <tr>
+          <td><a href="#">Akbolto Prime Receiver</a></td>
+          <td class="right num">4</td>
+          <td class="right num">36</td>
+          <td class="right num">9</td>
+          <td class="center">
+            <span class="spark" title="median price last 7 days: 8, 8, 8, 9, 9, 9, 9">
+              <svg width="60" height="18" viewBox="0 0 60 18" aria-hidden="true">
+                <polyline fill="none" stroke="var(--accent)" stroke-width="1.25"
+                  points="0,9 10,9 20,9 30,8 40,8 50,8 60,8" />
+              </svg>
+            </span>
+          </td>
+          <td class="right"><span class="delta90 up">▲<span class="pct">5%</span></span></td>
+          <td class="right num ducat">45 <span class="ducat-badge">deal</span></td>
+          <td class="right num" style="color:var(--ducat)">20.0</td>
+          <td class="right num">17</td>
+          <td class="right num">8</td>
+        </tr>
+
+        <tr>
+          <td><a href="#">Tiberon Prime Stock</a></td>
+          <td class="right num">2</td>
+          <td class="right num">22</td>
+          <td class="right num">14</td>
+          <td class="center">
+            <span class="spark" title="median price last 7 days: 18, 17, 16, 15, 14, 14, 14">
+              <svg width="60" height="18" viewBox="0 0 60 18" aria-hidden="true">
+                <polyline fill="none" stroke="var(--accent)" stroke-width="1.25"
+                  points="0,4 10,5 20,7 30,8 40,9 50,9 60,9" />
+              </svg>
+            </span>
+          </td>
+          <td class="right"><span class="delta90 down">▼<span class="pct">21%</span></span></td>
+          <td class="right num ducat">15</td>
+          <td class="right num">93</td>
+          <td class="right num">6</td>
+          <td class="right num">13</td>
+        </tr>
+
+        <tr>
+          <td><a href="#">Magnetize</a></td>
+          <td class="right num">1</td>
+          <td class="right num">42</td>
+          <td class="right num">52</td>
+          <td class="center">
+            <span class="spark" title="median price last 7 days: 48, 50, 51, 52, 53, 53, 54">
+              <svg width="60" height="18" viewBox="0 0 60 18" aria-hidden="true">
+                <polyline fill="none" stroke="var(--accent)" stroke-width="1.25"
+                  points="0,10 10,8 20,7 30,6 40,5 50,5 60,4" />
+              </svg>
+            </span>
+          </td>
+          <td class="right"><span class="delta90 up">▲<span class="pct">9%</span></span></td>
+          <td class="right num ducat">—</td>
+          <td class="right num muted">—</td>
+          <td class="right num">5</td>
+          <td class="right num">50</td>
+        </tr>
+
+        <tr>
+          <td><a href="#">Hystrix Prime Barrel</a></td>
+          <td class="right num">2</td>
+          <td class="right num">28</td>
+          <td class="right num">15</td>
+          <td class="center">
+            <span class="spark" title="median price last 7 days: 16, 15, 15, 14, 14, 15, 15">
+              <svg width="60" height="18" viewBox="0 0 60 18" aria-hidden="true">
+                <polyline fill="none" stroke="var(--accent)" stroke-width="1.25"
+                  points="0,6 10,7 20,7 30,8 40,8 50,7 60,7" />
+              </svg>
+            </span>
+          </td>
+          <td class="right"><span class="delta90 flat">·<span class="pct">1%</span></span></td>
+          <td class="right num ducat">45 <span class="ducat-badge">deal</span></td>
+          <td class="right num" style="color:var(--ducat)">33.3</td>
+          <td class="right num">12</td>
+          <td class="right num">14</td>
+        </tr>
+
+      </tbody>
+    </table>
+  </section>
+
+  <footer class="legend">
+    Mockup · all numbers illustrative · same colours and patterns as the live app
+  </footer>
+</main>
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Layout mockups · index</title>
+<style>
+:root {
+  --bg:#0e0f12; --panel:#16181d; --panel-2:#1c1f26; --border:#262a33;
+  --fg:#d8dde6; --muted:#7a8089; --accent:#5ec8ff;
+  --good:#6ed99a; --warn:#e9c46a; --bad:#e76f51; --ducat:#c9a14a;
+  color-scheme: dark;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-size: 14px; line-height: 1.6; }
+main { max-width: 900px; margin: 0 auto; padding: 40px 28px 80px; }
+h1 { margin: 0 0 6px; font-size: 22px; font-weight: 600; letter-spacing: -0.01em; }
+.sub { color: var(--muted); margin: 0 0 32px; max-width: 64ch; font-size: 13px; }
+h2 { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin: 28px 0 10px; }
+.cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+@media (max-width: 760px) { .cards { grid-template-columns: 1fr; } }
+a.card {
+  display: block;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  text-decoration: none;
+  color: var(--fg);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+a.card:hover { border-color: var(--accent); background: var(--panel-2); }
+a.card .num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--muted); }
+a.card .name { font-weight: 600; margin: 4px 0 2px; font-size: 13.5px; }
+a.card .note { font-size: 12px; color: var(--muted); line-height: 1.5; }
+a.card.recommended { border-color: color-mix(in srgb, var(--accent) 50%, var(--border)); }
+a.card.recommended::after {
+  content: 'recommended';
+  display: inline-block;
+  margin-left: 8px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+  border-radius: 3px;
+  padding: 1px 5px;
+  vertical-align: middle;
+}
+.callout {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.callout strong { color: var(--fg); }
+.callout p { margin: 0 0 6px; }
+.callout p:last-child { margin: 0; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Layout mockups</h1>
+  <p class="sub">
+    12 distinct organisational schemes for the inventory dashboard. Open each in a new
+    tab and flick between them. Same palette, same data, different ways of putting it
+    on screen. The UI agent recommends <strong>05 — dense dashboard</strong>; everything
+    else is here to argue against (or with) that.
+  </p>
+
+  <div class="callout">
+    <p><strong>The agent's recommendation:</strong> keep the layout flat, fix the
+    hierarchy. The page only <em>feels</em> heavy because everything competes at equal
+    weight — not because anything is genuinely buried.</p>
+    <p>Shrink the stats strip to a single line, compress set picks + relic planner to a
+    mini-card strip, let the results table become the centre of gravity. Reach for menus
+    only when a fifth or sixth panel arrives (riven grader, Baro tracker) — then a
+    sidebar earns its keep.</p>
+  </div>
+
+  <h2>Agent · 10 variants</h2>
+  <div class="cards">
+    <a class="card" href="agent-01-tabs.html"><span class="num">01</span><div class="name">Tabs</div><div class="note">Top tabs (Sell · Crack · Sets · Manage · Inventory). Clean but hides recs from default view.</div></a>
+    <a class="card" href="agent-02-sidebar.html"><span class="num">02</span><div class="name">Sidebar</div><div class="note">Vertical 220px nav rail. Scales to many sections, overweights navigation early.</div></a>
+    <a class="card" href="agent-03-accordion.html"><span class="num">03</span><div class="name">Accordion</div><div class="note">One panel expanded at a time, table always visible. Calm but adds clicks.</div></a>
+    <a class="card" href="agent-04-drawer.html"><span class="num">04</span><div class="name">Drawer</div><div class="note">Main table only; secondary panels slide out from a right-edge launcher with attention dots.</div></a>
+    <a class="card recommended" href="agent-05-dense-dashboard.html"><span class="num">05</span><div class="name">Dense dashboard</div><div class="note">One-line stats, sticky filters, mini-card strip for set/relic, table-dominant.</div></a>
+    <a class="card" href="agent-06-filter-rail.html"><span class="num">06</span><div class="name">Filter rail</div><div class="note">Left facet rail (sliders + tag checklist + ducat/trend toggles); table reacts as you narrow.</div></a>
+    <a class="card" href="agent-07-command-palette.html"><span class="num">07</span><div class="name">Command palette</div><div class="note">Minimal chrome, Cmd+K drives filter/sort/jump/actions. Power-user surface.</div></a>
+    <a class="card" href="agent-08-mobile-bottom-nav.html"><span class="num">08</span><div class="name">Mobile bottom nav</div><div class="note">390px phone shell, card-list rows, five-destination bottom bar.</div></a>
+    <a class="card" href="agent-09-split-detail.html"><span class="num">09</span><div class="name">Split detail</div><div class="note">Master/detail. Click a row — right pane shows pricing, set context, relic sources.</div></a>
+    <a class="card" href="agent-10-density-modes.html"><span class="num">10</span><div class="name">Density modes</div><div class="note">Compact / cosy / spacious toggle. Same content, three densities.</div></a>
+  </div>
+
+  <h2>Mine · 2 variants</h2>
+  <div class="cards">
+    <a class="card" href="me-01-briefing-inbox.html"><span class="num">11</span><div class="name">Briefing inbox</div><div class="note">Top of page is a prioritised action queue (SELL / FLIP / CRACK / BARO). Table folded into a &lt;details&gt; below.</div></a>
+    <a class="card" href="me-02-terminal-repl.html"><span class="num">12</span><div class="name">Terminal / REPL</div><div class="note">Slash commands, monospace output, sticky bottom shell for filter state. Plays to the CLI audience.</div></a>
+  </div>
+
+  <h2>Open questions</h2>
+  <div class="cards" style="grid-template-columns: 1fr;">
+    <div class="card" style="cursor: default">
+      <div class="note">
+        <strong>1.</strong> Set picks + relic planner: inline mini-cards (05) or behind Cmd+K / drawer (07/04)?
+        That's the only real menus-vs-not call.
+      </div>
+    </div>
+    <div class="card" style="cursor: default">
+      <div class="note">
+        <strong>2.</strong> Is a per-item detail view (relic sources, set membership) on the roadmap? If yes,
+        the split-detail variant (09) becomes much stronger.
+      </div>
+    </div>
+    <div class="card" style="cursor: default">
+      <div class="note">
+        <strong>3.</strong> Mobile worth designing for, or desktop-only? If desktop-only, drop the
+        bottom-nav variant (08).
+      </div>
+    </div>
+  </div>
+</main>
+</body>
+</html>

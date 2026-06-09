@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>WF inventory — briefing inbox</title>
+<!--
+  ME #1: BRIEFING INBOX
+
+  Mental model: "you logged in to find out what to do, not to browse a
+  table." So the top of the page becomes a single prioritised inbox of
+  actionable tickets — each is either a sell-now, a buy-and-flip
+  (near-complete set), or a crack-tonight (relic planner). The table
+  is deemphasized to a fold-out below.
+
+  Trade-off: people who actually like browsing the table have to scroll
+  past the inbox every time. Resolved with a "skip to table" pill in
+  the topbar.
+-->
+<style>
+:root {
+  --bg:#0e0f12; --panel:#16181d; --panel-2:#1c1f26; --border:#262a33;
+  --fg:#d8dde6; --muted:#7a8089; --accent:#5ec8ff;
+  --good:#6ed99a; --warn:#e9c46a; --bad:#e76f51; --ducat:#c9a14a;
+  color-scheme: dark;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font-size: 14px; line-height: 1.5; }
+main { max-width: 1100px; margin: 0 auto; padding: 28px 24px 64px; display: flex; flex-direction: column; gap: 20px; }
+
+/* Topbar — sticky, minimal. Title left, skip-to-table pill right. */
+.topbar {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--bg);
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+  margin: 0 -24px 8px; padding-left: 24px; padding-right: 24px;
+}
+.brand { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; }
+.brand .sub { color: var(--muted); font-weight: 400; margin-left: 6px; }
+.skip {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 4px 12px;
+  text-decoration: none;
+}
+.skip:hover { color: var(--accent); border-color: var(--accent); }
+
+/* Section header pattern */
+h2.section {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 10px;
+  display: flex; align-items: center; gap: 8px;
+}
+h2.section .count {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--fg);
+  font-size: 12px;
+}
+
+/* INBOX — the lead element. Each "ticket" is a single actionable line. */
+.inbox { display: flex; flex-direction: column; gap: 4px; }
+.ticket {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: grid;
+  grid-template-columns: 24px 1fr auto auto;
+  gap: 14px;
+  align-items: center;
+  transition: border-color 120ms ease;
+}
+.ticket:hover { border-color: var(--accent); }
+.ticket .kind {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+  color: var(--muted);
+}
+.ticket.sell  { border-left-color: color-mix(in srgb, var(--good) 60%, var(--border)); }
+.ticket.flip  { border-left-color: color-mix(in srgb, var(--accent) 60%, var(--border)); }
+.ticket.crack { border-left-color: color-mix(in srgb, var(--warn) 60%, var(--border)); }
+.ticket.ducat { border-left-color: color-mix(in srgb, var(--ducat) 60%, var(--border)); }
+.ticket.sell  .kind { color: var(--good); }
+.ticket.flip  .kind { color: var(--accent); }
+.ticket.crack .kind { color: var(--warn); }
+.ticket.ducat .kind { color: var(--ducat); }
+.ticket .body strong { font-weight: 600; font-size: 13.5px; }
+.ticket .body p { margin: 2px 0 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.ticket .net {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 18px;
+  font-weight: 600;
+}
+.ticket .net .unit { font-size: 11px; color: var(--muted); margin-left: 1px; }
+.ticket .act {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  background: transparent;
+}
+.ticket .act:hover { color: var(--accent); border-color: var(--accent); }
+
+/* Compact stats — a single line above the inbox, no oversized number-grid. */
+.stat-line {
+  display: flex; gap: 22px; flex-wrap: wrap;
+  padding: 10px 0 4px;
+  font-size: 12px; color: var(--muted);
+}
+.stat-line .v {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--fg);
+  font-weight: 600;
+}
+.stat-line .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--good); display: inline-block; margin-right: 5px; }
+
+/* Quick-controls strip below the inbox — filters tucked behind a single button */
+.qcontrols {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.qcontrols .summary strong { color: var(--fg); }
+.qcontrols .btn {
+  font-size: 11.5px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 12px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.qcontrols .btn:hover { color: var(--accent); border-color: var(--accent); }
+
+/* Table — deemphasized, lives inside a collapsible details for users who want
+   the full browseable view. Closed by default; the inbox covers most users. */
+details.table-wrap {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+details.table-wrap > summary {
+  cursor: pointer;
+  padding: 12px 16px;
+  list-style: none;
+  display: flex; align-items: center; gap: 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+details.table-wrap > summary::-webkit-details-marker { display: none; }
+details.table-wrap > summary::after {
+  content: '+';
+  margin-left: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--muted);
+}
+details.table-wrap[open] > summary::after { content: '−'; color: var(--accent); }
+details.table-wrap > summary strong { color: var(--fg); }
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+th, td { padding: 7px 12px; text-align: left; border-top: 1px solid var(--border); font-size: 12.5px; }
+th { background: var(--panel-2); color: var(--muted); font-weight: 600; font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; }
+td.right, th.right { text-align: right; }
+td a { color: var(--fg); text-decoration: none; }
+td a:hover { color: var(--accent); }
+.ducat-num { color: var(--ducat); }
+</style>
+</head>
+<body>
+<main>
+  <div class="topbar">
+    <div class="brand">WF Inventory <span class="sub">· briefing</span></div>
+    <a class="skip" href="#table">skip to table ↓</a>
+  </div>
+
+  <div class="stat-line">
+    <span><span class="dot"></span>Market 2 h ago</span>
+    <span>Owned <span class="v">2,153</span></span>
+    <span>Sellable <span class="v">643</span></span>
+    <span>Potential <span class="v">17,420p</span></span>
+    <span>Avg ducats / part <span class="v">38d</span></span>
+  </div>
+
+  <section>
+    <h2 class="section">Tonight's inbox <span class="count">7 items</span></h2>
+    <div class="inbox">
+      <!-- Tickets are recos with action verbs leading. Sorted by impact (net p).
+           Each carries a single-button action — the user does one thing per
+           ticket and moves on. -->
+      <div class="ticket flip">
+        <div class="kind">FLIP</div>
+        <div class="body">
+          <strong>Mesa Prime — complete the set</strong>
+          <p>Own 3/4 (missing Systems Blueprint · 18p). Buy → sell as set → net 72p vs. 30p selling parts individually.</p>
+        </div>
+        <div class="net">+72<span class="unit">p</span></div>
+        <button class="act">queue</button>
+      </div>
+      <div class="ticket sell">
+        <div class="kind">SELL</div>
+        <div class="body">
+          <strong>Neo B2 Relic (Intact) ×27</strong>
+          <p>50 trades / 48h, low_sell 8p. min(owned, vol/2) × low_sell → 200p over the next day.</p>
+        </div>
+        <div class="net">+200<span class="unit">p</span></div>
+        <button class="act">list 27</button>
+      </div>
+      <div class="ticket crack">
+        <div class="kind">CRACK</div>
+        <div class="body">
+          <strong>Meso O2 Relic (Intact) ×9</strong>
+          <p>7.8p / crack expected. 6/6 rewards moving — clean drop chart. Cracking all 9 ≈ 70p.</p>
+        </div>
+        <div class="net">+70<span class="unit">p</span></div>
+        <button class="act">plan</button>
+      </div>
+      <div class="ticket ducat">
+        <div class="kind">BARO</div>
+        <div class="body">
+          <strong>Sevagoth Prime Blueprint</strong>
+          <p>3p on WFM, 45 ducats at Baro (6.7p / 100d — a strong deal). Set aside for next Baro.</p>
+        </div>
+        <div class="net">45<span class="unit">d</span></div>
+        <button class="act">earmark</button>
+      </div>
+      <div class="ticket sell">
+        <div class="kind">SELL</div>
+        <div class="body">
+          <strong>Galvanized Aptitude ×4</strong>
+          <p>3 extras above your maxed copy. low_sell 38p × 3 = 114p.</p>
+        </div>
+        <div class="net">+114<span class="unit">p</span></div>
+        <button class="act">list 3</button>
+      </div>
+      <div class="ticket flip">
+        <div class="kind">FLIP</div>
+        <div class="body">
+          <strong>Loki Prime — complete the set</strong>
+          <p>Own 3/4 (missing Neuroptics Blueprint · 12p). Net 58p vs. 24p selling parts.</p>
+        </div>
+        <div class="net">+58<span class="unit">p</span></div>
+        <button class="act">queue</button>
+      </div>
+      <div class="ticket crack">
+        <div class="kind">CRACK</div>
+        <div class="body">
+          <strong>Lith S7 Relic (Intact) ×3</strong>
+          <p>7.4p / crack. Mirage Prime Chassis BP (25% / 14p) leads the chart.</p>
+        </div>
+        <div class="net">+22<span class="unit">p</span></div>
+        <button class="act">plan</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="qcontrols">
+    <div class="summary"><strong>Showing 7 of 12 candidates.</strong> Hiding mods you've ranked ≥ 5, prime junk under 5p.</div>
+    <button class="btn">filters & chips →</button>
+  </div>
+
+  <details class="table-wrap" id="table">
+    <summary><strong>Full inventory table</strong> · 643 sellable rows, sortable, filterable</summary>
+    <table>
+      <thead>
+        <tr>
+          <th>Item</th><th class="right">Own</th><th class="right">Score</th>
+          <th class="right">Low sell</th><th class="right">Vol</th>
+          <th class="right">Ducats</th><th class="right">p/100d</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><a>Biotic Rounds</a></td><td class="right">1</td><td class="right">240</td><td class="right">240</td><td class="right">77</td><td class="right">—</td><td class="right">—</td></tr>
+        <tr><td><a>Neo B2 Relic (Intact)</a></td><td class="right">27</td><td class="right">200</td><td class="right">8</td><td class="right">50</td><td class="right">—</td><td class="right">—</td></tr>
+        <tr><td><a>Arc Coil</a></td><td class="right">1</td><td class="right">150</td><td class="right">150</td><td class="right">3</td><td class="right">—</td><td class="right">—</td></tr>
+        <tr><td><a>Secura Lecta</a></td><td class="right">5</td><td class="right">150</td><td class="right">30</td><td class="right">48</td><td class="right">—</td><td class="right">—</td></tr>
+        <tr><td><a>Prisma Obex</a></td><td class="right">1</td><td class="right">148</td><td class="right">148</td><td class="right">7</td><td class="right">—</td><td class="right">—</td></tr>
+        <tr><td><a>Arcane Strike</a></td><td class="right">33</td><td class="right">132</td><td class="right">4</td><td class="right">162</td><td class="right">—</td><td class="right">—</td></tr>
+        <tr><td><a>Galvanized Aptitude</a></td><td class="right">4</td><td class="right">114</td><td class="right">38</td><td class="right">28</td><td class="right">—</td><td class="right">—</td></tr>
+        <tr><td><a>Mesa Prime Chassis Blueprint</a></td><td class="right">1</td><td class="right">15</td><td class="right">15</td><td class="right">22</td><td class="right ducat-num">15</td><td class="right ducat-num">100.0</td></tr>
+        <tr><td><a>Sevagoth Prime Blueprint</a></td><td class="right">1</td><td class="right">3</td><td class="right">3</td><td class="right">147</td><td class="right ducat-num">45</td><td class="right ducat-num">6.7</td></tr>
+        <tr><td><a>Daikyu Prime Grip</a></td><td class="right">1</td><td class="right">8</td><td class="right">8</td><td class="right">118</td><td class="right ducat-num">100</td><td class="right ducat-num">8.0</td></tr>
+      </tbody>
+    </table>
+  </details>
+</main>
+</body>
+</html>

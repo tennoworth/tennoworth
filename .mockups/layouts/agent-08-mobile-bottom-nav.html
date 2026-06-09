@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Layout · mobile bottom-nav</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<!--
+  Mobile-first / bottom-nav layout. Viewport-emulated at 390px wide (iPhone-
+  ish). Five bottom-bar destinations replace the desktop tabs: Sell, Sets,
+  Crack, Orders, Inventory. The main results table becomes a card-list (one
+  row = one card, key fields stacked) because horizontal scrolling on phones
+  is awful. Outer chrome stays the same colour palette as desktop. Active
+  destination: SELL.
+-->
+<style>
+  :root{
+    --bg:#0e0f12; --panel:#16181d; --panel-2:#1c1f26; --border:#262a33;
+    --fg:#d8dde6; --muted:#7a8089; --accent:#5ec8ff;
+    --good:#6ed99a; --warn:#e9c46a; --bad:#e76f51; --ducat:#c9a14a;
+    color-scheme:dark;
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:#000;color:var(--fg);font-size:13px;line-height:1.45;min-height:100vh;display:flex;justify-content:center;padding:30px 0}
+  /* Phone shell — visual frame to indicate this is mobile, even when viewed
+     on a desktop browser. Same colours, just constrained. */
+  .phone{width:390px;background:var(--bg);border:1px solid #2a2f38;border-radius:32px;overflow:hidden;display:flex;flex-direction:column;height:1480px;position:relative;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+  .status{display:flex;justify-content:space-between;align-items:center;padding:10px 22px 4px;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted)}
+
+  .head{padding:8px 16px 12px;display:flex;flex-direction:column;gap:8px}
+  .head h1{margin:0;font-size:17px;font-weight:600;letter-spacing:-0.01em}
+  .head .sub{color:var(--muted);font-size:11.5px}
+
+  /* Two-up stats row instead of four-up — three numbers on top, one full-width
+     freshness pill below. Phones can't comfortably show 4 stat tiles. */
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin:0 16px}
+  .stat{background:var(--panel);padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+  .stat .k{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .stat .v{font-family:ui-monospace,Menlo,monospace;font-size:18px;font-weight:600;line-height:1.1}
+  .stat .v .u{font-size:10px;color:var(--muted);margin-left:1px}
+
+  .freshpill{margin:0 16px;padding:7px 12px;background:var(--panel);border:1px solid var(--border);border-radius:8px;font-size:11.5px;color:var(--muted);display:flex;align-items:center;gap:8px}
+  .freshpill .dot{width:6px;height:6px;border-radius:50%;background:var(--good)}
+
+  /* Filter bar — horizontally scrollable chip row. Numeric filters go into
+     a "filters" sheet (would slide up from below on tap; not shown). */
+  .scrollbar{display:flex;gap:6px;overflow-x:auto;padding:6px 16px 4px;scrollbar-width:none}
+  .scrollbar::-webkit-scrollbar{display:none}
+  .chip{display:inline-flex;align-items:center;gap:5px;font-size:11px;border:1px solid var(--border);background:var(--panel-2);color:var(--fg);border-radius:999px;padding:3px 11px;white-space:nowrap}
+  .chip .c{font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--muted)}
+  .chip.active{color:var(--accent);border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--panel-2))}
+  .chip.icon{padding-left:9px}
+
+  /* Card list — one row per item. Three lines: name + own count; score +
+     numbers row; ducat/delta row. Tap target ≥ 44px tall. */
+  .list{flex:1;overflow-y:auto;padding:8px 16px 120px;display:flex;flex-direction:column;gap:8px}
+  .item{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;display:flex;flex-direction:column;gap:6px}
+  .item .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .item .name{font-size:13.5px;font-weight:600;letter-spacing:-0.005em;line-height:1.2}
+  .item .own{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted);background:var(--panel-2);border:1px solid var(--border);border-radius:4px;padding:1px 7px;flex-shrink:0}
+  .item .nums{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;font-family:ui-monospace,Menlo,monospace;font-variant-numeric:tabular-nums}
+  .item .n{display:flex;flex-direction:column;gap:1px}
+  .item .n .lbl{font-family:ui-sans-serif,system-ui,sans-serif;font-size:9px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .item .n .val{font-size:14px;font-weight:600}
+  .item .n .val.score{color:var(--accent)}
+  .item .n .val.ducat{color:var(--ducat)}
+  .item .n .val.up{color:var(--good)}
+  .item .n .val.down{color:var(--bad)}
+  .item .n .val.flat{color:var(--muted)}
+
+  /* Bottom nav — fixed inside the phone shell, 5 destinations. Accent pill
+     on active, monospace icon letter (no icon font in mockup). Safe area
+     padding mimicked. */
+  .bottom{position:absolute;left:0;right:0;bottom:0;border-top:1px solid var(--border);background:color-mix(in srgb,var(--panel) 92%,#000);backdrop-filter:blur(8px);padding:8px 8px 18px;display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+  .nav-btn{display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0;background:transparent;border:none;color:var(--muted);font:inherit;font-size:10.5px;cursor:pointer;border-radius:8px}
+  .nav-btn .ic{font-family:ui-monospace,Menlo,monospace;font-size:16px;font-weight:600;line-height:1}
+  .nav-btn.active{color:var(--accent)}
+  .nav-btn.active .ic{color:var(--accent)}
+  .nav-btn .pill{position:absolute;top:4px;right:50%;transform:translateX(22px);background:var(--accent);color:var(--bg);font-family:ui-monospace,Menlo,monospace;font-size:9px;font-weight:600;padding:1px 5px;border-radius:8px;letter-spacing:.02em}
+  .nav-btn{position:relative}
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <!-- Fake status bar so the mockup reads as a phone at-a-glance. -->
+  <div class="status">
+    <span>9:41</span>
+    <span>● ● ● ● ●</span>
+  </div>
+
+  <div class="head">
+    <h1>Sell</h1>
+    <p class="sub">312 items ranked by score · tap to list on WFM</p>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><span class="k">Sellable</span><span class="v">312</span></div>
+    <div class="stat"><span class="k">Potential</span><span class="v">4,872<span class="u">p</span></span></div>
+    <div class="stat"><span class="k">Ducats</span><span class="v" style="color:var(--ducat)">38<span class="u">/pt</span></span></div>
+  </div>
+
+  <div class="freshpill"><span class="dot"></span>market 1 h ago · inv saved 4 min ago</div>
+
+  <div class="scrollbar">
+    <span class="chip icon">⏷ filters</span>
+    <span class="chip active">prime <span class="c">218</span></span>
+    <span class="chip active">arcane <span class="c">14</span></span>
+    <span class="chip">mod <span class="c">71</span></span>
+    <span class="chip">relic <span class="c">52</span></span>
+    <span class="chip">weapon <span class="c">39</span></span>
+    <span class="chip">syndicate <span class="c">6</span></span>
+  </div>
+
+  <div class="list">
+    <div class="item">
+      <div class="top"><div class="name">Mesa Prime Set</div><span class="own">×2 owned</span></div>
+      <div class="nums">
+        <div class="n"><span class="lbl">Score</span><span class="val score">165</span></div>
+        <div class="n"><span class="lbl">Avg</span><span class="val">85p</span></div>
+        <div class="n"><span class="lbl">Δ 90d</span><span class="val up">▲7%</span></div>
+        <div class="n"><span class="lbl">Vol</span><span class="val">14</span></div>
+      </div>
+    </div>
+
+    <div class="item">
+      <div class="top"><div class="name">Sevagoth Prime Blueprint</div><span class="own">×3 owned</span></div>
+      <div class="nums">
+        <div class="n"><span class="lbl">Score</span><span class="val score">142</span></div>
+        <div class="n"><span class="lbl">Avg</span><span class="val">3p</span></div>
+        <div class="n"><span class="lbl">Ducats</span><span class="val ducat">15</span></div>
+        <div class="n"><span class="lbl">Vol</span><span class="val">45</span></div>
+      </div>
+    </div>
+
+    <div class="item">
+      <div class="top"><div class="name">Khora Prime Systems</div><span class="own">×3 owned</span></div>
+      <div class="nums">
+        <div class="n"><span class="lbl">Score</span><span class="val score">128</span></div>
+        <div class="n"><span class="lbl">Avg</span><span class="val">48p</span></div>
+        <div class="n"><span class="lbl">Δ 90d</span><span class="val flat">·0%</span></div>
+        <div class="n"><span class="lbl">Ducats</span><span class="val ducat">65</span></div>
+      </div>
+    </div>
+
+    <div class="item">
+      <div class="top"><div class="name">Galvanized Aptitude</div><span class="own">×1 owned</span></div>
+      <div class="nums">
+        <div class="n"><span class="lbl">Score</span><span class="val score">96</span></div>
+        <div class="n"><span class="lbl">Avg</span><span class="val">120p</span></div>
+        <div class="n"><span class="lbl">Δ 90d</span><span class="val down">▼14%</span></div>
+        <div class="n"><span class="lbl">Vol</span><span class="val">1</span></div>
+      </div>
+    </div>
+
+    <div class="item">
+      <div class="top"><div class="name">Volt Prime Chassis Blueprint</div><span class="own">×4 owned</span></div>
+      <div class="nums">
+        <div class="n"><span class="lbl">Score</span><span class="val score">88</span></div>
+        <div class="n"><span class="lbl">Avg</span><span class="val">12p</span></div>
+        <div class="n"><span class="lbl">Ducats</span><span class="val ducat">45</span></div>
+        <div class="n"><span class="lbl">Vol</span><span class="val">19</span></div>
+      </div>
+    </div>
+
+    <div class="item">
+      <div class="top"><div class="name">Magus Lockdown</div><span class="own">×1 owned</span></div>
+      <div class="nums">
+        <div class="n"><span class="lbl">Score</span><span class="val score">62</span></div>
+        <div class="n"><span class="lbl">Avg</span><span class="val">75p</span></div>
+        <div class="n"><span class="lbl">Δ 90d</span><span class="val up">▲11%</span></div>
+        <div class="n"><span class="lbl">Vol</span><span class="val">4</span></div>
+      </div>
+    </div>
+
+    <div class="item">
+      <div class="top"><div class="name">Saryn Prime Set</div><span class="own">×2 owned</span></div>
+      <div class="nums">
+        <div class="n"><span class="lbl">Score</span><span class="val score">58</span></div>
+        <div class="n"><span class="lbl">Avg</span><span class="val">85p</span></div>
+        <div class="n"><span class="lbl">Δ 90d</span><span class="val flat">·1%</span></div>
+        <div class="n"><span class="lbl">Vol</span><span class="val">11</span></div>
+      </div>
+    </div>
+
+    <div class="item">
+      <div class="top"><div class="name">Akbolto Prime Receiver</div><span class="own">×4 owned</span></div>
+      <div class="nums">
+        <div class="n"><span class="lbl">Score</span><span class="val score">36</span></div>
+        <div class="n"><span class="lbl">Avg</span><span class="val">9p</span></div>
+        <div class="n"><span class="lbl">Ducats</span><span class="val ducat">45</span></div>
+        <div class="n"><span class="lbl">p/100d</span><span class="val" style="color:var(--ducat)">20.0</span></div>
+      </div>
+    </div>
+
+    <div class="item">
+      <div class="top"><div class="name">Loki Prime Chassis Blueprint</div><span class="own">×5 owned</span></div>
+      <div class="nums">
+        <div class="n"><span class="lbl">Score</span><span class="val score">28</span></div>
+        <div class="n"><span class="lbl">Avg</span><span class="val">7p</span></div>
+        <div class="n"><span class="lbl">Ducats</span><span class="val ducat">45</span></div>
+        <div class="n"><span class="lbl">p/100d</span><span class="val" style="color:var(--ducat)">15.5</span></div>
+      </div>
+    </div>
+
+    <div class="item">
+      <div class="top"><div class="name">Hystrix Prime Barrel</div><span class="own">×2 owned</span></div>
+      <div class="nums">
+        <div class="n"><span class="lbl">Score</span><span class="val score">28</span></div>
+        <div class="n"><span class="lbl">Avg</span><span class="val">15p</span></div>
+        <div class="n"><span class="lbl">Ducats</span><span class="val ducat">45</span></div>
+        <div class="n"><span class="lbl">Vol</span><span class="val">12</span></div>
+      </div>
+    </div>
+
+    <div class="item">
+      <div class="top"><div class="name">Magnetize</div><span class="own">×1 owned</span></div>
+      <div class="nums">
+        <div class="n"><span class="lbl">Score</span><span class="val score">42</span></div>
+        <div class="n"><span class="lbl">Avg</span><span class="val">52p</span></div>
+        <div class="n"><span class="lbl">Δ 90d</span><span class="val up">▲9%</span></div>
+        <div class="n"><span class="lbl">Vol</span><span class="val">5</span></div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="bottom">
+    <button class="nav-btn active"><span class="ic">$</span>Sell</button>
+    <button class="nav-btn"><span class="ic">⌗</span>Sets<span class="pill">8</span></button>
+    <button class="nav-btn"><span class="ic">◊</span>Crack</button>
+    <button class="nav-btn"><span class="ic">⊠</span>Orders<span class="pill">14</span></button>
+    <button class="nav-btn"><span class="ic">≡</span>More</button>
+  </nav>
+
+</div>
+</body>
+</html>

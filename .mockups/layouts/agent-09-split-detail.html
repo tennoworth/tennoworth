@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Layout · split + detail</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<!--
+  Master/detail split. Left column: the sell-table list (compressed columns).
+  Right column: contextual detail pane that updates when you select a row —
+  full pricing history, related sets the part belongs to, related relics,
+  ducat math, and a one-click "list this" action. The persistent right
+  pane subsumes both Set picks and Relic planner: when nothing is selected,
+  it shows the top recommendations; when something is selected, it shows
+  that item's context. No tabs, no menus — context drives what you see.
+  Active row: Mesa Prime Set.
+-->
+<style>
+  :root{
+    --bg:#0e0f12; --panel:#16181d; --panel-2:#1c1f26; --border:#262a33;
+    --fg:#d8dde6; --muted:#7a8089; --accent:#5ec8ff;
+    --good:#6ed99a; --warn:#e9c46a; --bad:#e76f51; --ducat:#c9a14a;
+    color-scheme:dark;
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--fg);font-size:13px;line-height:1.5}
+  a{color:var(--accent);text-decoration:none}
+  main{max-width:1280px;margin:0 auto;padding:18px 18px 32px;display:flex;flex-direction:column;gap:12px}
+  h1{margin:0;font-size:18px;font-weight:600;letter-spacing:-0.015em}
+  .sub{color:var(--muted);font-size:12px;margin-top:2px}
+
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .stat{background:var(--panel);padding:10px 14px;display:flex;flex-direction:column;gap:3px}
+  .stat .k{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .stat .v{font-family:ui-monospace,Menlo,monospace;font-size:19px;font-weight:600;line-height:1.1}
+  .stat .v .u{font-size:11px;color:var(--muted);margin-left:1px}
+  .stat.right{text-align:right}
+  .dot{width:6px;height:6px;border-radius:50%;background:var(--good);display:inline-block;margin-right:5px}
+
+  .split{display:grid;grid-template-columns:1fr 380px;gap:12px;align-items:start}
+
+  .left{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .left .toolbar{padding:8px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;font-size:11.5px}
+  .left .filters{display:flex;gap:10px;align-items:center}
+  .left input,.left select{font:inherit;color:var(--fg);background:var(--panel-2);border:1px solid var(--border);border-radius:5px;padding:3px 7px}
+  .left input[type="text"]{width:160px}
+  .left input[type="number"]{width:46px}
+  .muted{color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th,td{padding:5px 10px;text-align:left;border-bottom:1px solid var(--border);font-size:12px}
+  th{background:var(--panel-2);font-weight:600;font-size:11px;cursor:pointer}
+  th.right,td.right{text-align:right}
+  td.num{font-family:ui-monospace,Menlo,monospace}
+  td.ducat{color:var(--ducat)}
+  td a{color:var(--fg)} td a:hover{color:var(--accent);text-decoration:underline}
+  .arrow{color:var(--accent)}
+  tbody tr{cursor:pointer}
+  tbody tr:hover{background:rgba(255,255,255,.02)}
+  tbody tr.selected{background:color-mix(in srgb,var(--accent) 9%,transparent)}
+  tbody tr.selected td:first-child{border-left:2px solid var(--accent);padding-left:8px}
+
+  /* Right detail panel. Sticky so it stays in view as the table scrolls.
+     Header has the item identity + a primary action. Body has multiple
+     sections, hairline-separated. */
+  .right{position:sticky;top:18px;background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden;display:flex;flex-direction:column;max-height:calc(100vh - 36px)}
+  .right .dhead{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;flex-direction:column;gap:6px}
+  .right .dhead .crumb{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .right .dhead h3{margin:0;font-size:15px;font-weight:600;letter-spacing:-0.005em}
+  .right .dhead .meta{display:flex;gap:14px;font-size:11.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .right .dhead .meta strong{color:var(--fg);font-family:ui-monospace,Menlo,monospace;font-weight:500}
+  .right .actions{display:flex;gap:6px;padding-top:4px}
+  .right .actions button{font:inherit;font-size:12px;border-radius:6px;border:1px solid var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent);padding:5px 12px;cursor:pointer}
+  .right .actions button.ghost{border-color:var(--border);background:transparent;color:var(--muted)}
+  .right .body{padding:12px 16px;overflow-y:auto;display:flex;flex-direction:column;gap:14px}
+  .section{display:flex;flex-direction:column;gap:6px}
+  .section h4{margin:0;font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .stat-pair{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .stat-pair .b{background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:7px 10px}
+  .stat-pair .b .k{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .stat-pair .b .v{font-family:ui-monospace,Menlo,monospace;font-size:16px;font-weight:600;line-height:1.15}
+  .stat-pair .b .v.up{color:var(--good)}
+  .stat-pair .b .v.down{color:var(--bad)}
+  .sparkbox{background:var(--panel-2);border:1px solid var(--border);border-radius:6px;padding:8px 10px}
+  .sparkbox .lbl{font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);display:flex;justify-content:space-between}
+  .sparkbox svg{display:block;width:100%;height:48px;margin-top:4px}
+  .related{display:flex;flex-direction:column;gap:4px;font-size:12px}
+  .related .r{display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border)}
+  .related .r:last-child{border-bottom:none}
+  .related .r strong{font-weight:500}
+  .related .r .v{font-family:ui-monospace,Menlo,monospace;color:var(--good)}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>WF inventory · market check</h1>
+    <p class="sub">Click a row to see its context.</p>
+  </header>
+
+  <section class="stats">
+    <div class="stat"><span class="k">Owned</span><span class="v">1,284</span></div>
+    <div class="stat"><span class="k">Sellable</span><span class="v">312</span></div>
+    <div class="stat"><span class="k">Potential</span><span class="v">4,872<span class="u">p</span></span></div>
+    <div class="stat right"><span class="k"><span class="dot"></span>Market</span><span class="v" style="font-size:13px;font-family:ui-sans-serif,system-ui,sans-serif;font-weight:500">1 h ago</span></div>
+  </section>
+
+  <div class="split">
+
+    <div class="left">
+      <div class="toolbar">
+        <div class="filters">
+          <input type="text" placeholder="filter by name…" />
+          <label class="muted">min <input type="number" value="5" /></label>
+          <label class="muted">owned <input type="number" value="1" /></label>
+          <select><option>All types</option><option>Prime parts</option></select>
+        </div>
+        <span class="muted">312 rows · Score <span class="arrow">↓</span></span>
+      </div>
+      <table>
+        <thead><tr>
+          <th>Item</th><th class="right">Own</th><th class="right" style="color:var(--accent)">Score</th>
+          <th class="right">Avg</th><th class="right">Δ 90d</th><th class="right">Vol</th>
+        </tr></thead>
+        <tbody>
+          <tr class="selected"><td><a>Mesa Prime Set</a></td><td class="right num">2</td><td class="right num">165</td><td class="right num">85</td><td class="right num" style="color:var(--good)">▲7%</td><td class="right num">14</td></tr>
+          <tr><td><a>Sevagoth Prime Blueprint</a></td><td class="right num">3</td><td class="right num">142</td><td class="right num">3</td><td class="right num" style="color:var(--good)">▲4%</td><td class="right num">45</td></tr>
+          <tr><td><a>Khora Prime Systems</a></td><td class="right num">3</td><td class="right num">128</td><td class="right num">48</td><td class="right num muted">·0%</td><td class="right num">22</td></tr>
+          <tr><td><a>Galvanized Aptitude</a></td><td class="right num">1</td><td class="right num">96</td><td class="right num">120</td><td class="right num" style="color:var(--bad)">▼14%</td><td class="right num">1</td></tr>
+          <tr><td><a>Volt Prime Chassis Blueprint</a></td><td class="right num">4</td><td class="right num">88</td><td class="right num">12</td><td class="right num muted">·1%</td><td class="right num">19</td></tr>
+          <tr><td><a>Magus Lockdown</a></td><td class="right num">1</td><td class="right num">62</td><td class="right num">75</td><td class="right num" style="color:var(--good)">▲11%</td><td class="right num">4</td></tr>
+          <tr><td><a>Saryn Prime Set</a></td><td class="right num">2</td><td class="right num">58</td><td class="right num">85</td><td class="right num muted">·1%</td><td class="right num">11</td></tr>
+          <tr><td><a>Biotic Rounds</a></td><td class="right num">2</td><td class="right num">54</td><td class="right num">42</td><td class="right num" style="color:var(--good)">▲18%</td><td class="right num">8</td></tr>
+          <tr><td><a>Magnetize</a></td><td class="right num">1</td><td class="right num">42</td><td class="right num">52</td><td class="right num" style="color:var(--good)">▲9%</td><td class="right num">5</td></tr>
+          <tr><td><a>Akbolto Prime Receiver</a></td><td class="right num">4</td><td class="right num">36</td><td class="right num">9</td><td class="right num" style="color:var(--good)">▲5%</td><td class="right num">17</td></tr>
+          <tr><td><a>Loki Prime Chassis Blueprint</a></td><td class="right num">5</td><td class="right num">28</td><td class="right num">7</td><td class="right num muted">·2%</td><td class="right num">34</td></tr>
+          <tr><td><a>Hystrix Prime Barrel</a></td><td class="right num">2</td><td class="right num">28</td><td class="right num">15</td><td class="right num muted">·1%</td><td class="right num">12</td></tr>
+          <tr><td><a>Tiberon Prime Stock</a></td><td class="right num">2</td><td class="right num">22</td><td class="right num">14</td><td class="right num" style="color:var(--bad)">▼21%</td><td class="right num">6</td></tr>
+          <tr><td><a>Vauban Prime Blueprint</a></td><td class="right num">2</td><td class="right num">18</td><td class="right num">12</td><td class="right num" style="color:var(--bad)">▼8%</td><td class="right num">9</td></tr>
+          <tr><td><a>Streamline</a></td><td class="right num">3</td><td class="right num">14</td><td class="right num">6</td><td class="right num" style="color:var(--bad)">▼17%</td><td class="right num">29</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="right">
+      <div class="dhead">
+        <span class="crumb">selected · prime · set</span>
+        <h3>Mesa Prime Set</h3>
+        <div class="meta">
+          <span>own <strong>×2</strong></span>
+          <span>score <strong>165</strong></span>
+          <span>top buy <strong>78p</strong></span>
+        </div>
+        <div class="actions">
+          <button>List 2 on WFM</button>
+          <button class="ghost">Mark patience</button>
+        </div>
+      </div>
+      <div class="body">
+        <div class="section">
+          <h4>Pricing now</h4>
+          <div class="stat-pair">
+            <div class="b"><div class="k">48h avg</div><div class="v">85p</div></div>
+            <div class="b"><div class="k">Low sell</div><div class="v">82p</div></div>
+            <div class="b"><div class="k">Top buy</div><div class="v">78p</div></div>
+            <div class="b"><div class="k">Δ vs 90d</div><div class="v up">▲ 7%</div></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h4>Trend · 7-day median</h4>
+          <div class="sparkbox">
+            <div class="lbl"><span>min 79p</span><span>max 85p</span></div>
+            <svg viewBox="0 0 200 48" preserveAspectRatio="none">
+              <polyline fill="none" stroke="var(--accent)" stroke-width="1.5"
+                points="0,32 33,38 66,40 100,30 133,22 166,18 200,8" />
+            </svg>
+          </div>
+        </div>
+
+        <div class="section">
+          <h4>Set parts you own</h4>
+          <div class="related">
+            <div class="r"><strong>Blueprint</strong><span>×3 · 12p low</span></div>
+            <div class="r"><strong>Neuroptics</strong><span>×2 · 18p low</span></div>
+            <div class="r"><strong>Chassis</strong><span>×1 · 14p low</span></div>
+            <div class="r"><strong>Systems</strong><span class="muted">missing · buy at 18p</span></div>
+            <div class="r"><strong>Net if completed &amp; sold as set</strong><span class="v">+95p</span></div>
+          </div>
+        </div>
+
+        <div class="section">
+          <h4>Relics that drop parts</h4>
+          <div class="related">
+            <div class="r"><strong>Axi K2</strong><span class="muted">10% · Systems · own ×12</span></div>
+            <div class="r"><strong>Neo Z5</strong><span class="muted">2% · Systems · own ×24</span></div>
+            <div class="r"><strong>Meso N11</strong><span class="muted">11% · BP · own ×7</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</main>
+</body>
+</html>
