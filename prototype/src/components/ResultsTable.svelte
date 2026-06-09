@@ -51,6 +51,46 @@
   let pageSize = $state(20);
   let page = $state(0);
 
+  // Pill filter — the badges rendered next to item names double as filterable
+  // facets. Multi-select is OR ("show me peaks and holds"); empty = no filter.
+  type PillKey = 'peak' | 'hold' | 'patience' | 'vaulted' | 'vaulting-soon' | 'aug';
+  const PILL_DEFS: { key: PillKey; label: string; cls: string }[] = [
+    { key: 'peak',          label: 'peak',          cls: 'peak' },
+    { key: 'hold',          label: 'hold',          cls: 'hold' },
+    { key: 'patience',      label: 'patience',      cls: 'patience' },
+    { key: 'vaulted',       label: 'vaulted',       cls: 'vaulted' },
+    { key: 'vaulting-soon', label: 'vaulting soon', cls: 'vaulting-soon' },
+    { key: 'aug',           label: 'aug',           cls: 'augment' },
+  ];
+  let activePills = $state<Set<PillKey>>(new Set());
+
+  function rowPills(r: Row): PillKey[] {
+    const out: PillKey[] = [];
+    if (r.timing === 'peak') out.push('peak');
+    if (r.timing === 'hold') out.push('hold');
+    if (r.patience) out.push('patience');
+    if (r.vault_status === 'vaulted') out.push('vaulted');
+    if (r.vault_status === 'vaulting-soon') out.push('vaulting-soon');
+    if (r.is_augment) out.push('aug');
+    return out;
+  }
+
+  function togglePill(key: PillKey): void {
+    const next = new Set(activePills);
+    if (next.has(key)) next.delete(key); else next.add(key);
+    activePills = next;
+  }
+
+  // Counts come from the un-pill-filtered rows so an active chip doesn't
+  // zero out its siblings; chips with no matching rows aren't rendered.
+  let pillCounts = $derived.by(() => {
+    const counts = new Map<PillKey, number>();
+    for (const r of results) {
+      for (const p of rowPills(r)) counts.set(p, (counts.get(p) ?? 0) + 1);
+    }
+    return counts;
+  });
+
   let openHelp = $state<string | null>(null);
   function toggleHelp(key: string, e: MouseEvent): void {
     e.stopPropagation();
@@ -191,9 +231,12 @@
 
   let sorted = $derived.by(() => {
     const f = filter.trim().toLowerCase();
-    const rows = f
+    let rows = f
       ? results.filter((r) => (r.name || r.slug).toLowerCase().includes(f))
       : results;
+    if (activePills.size > 0) {
+      rows = rows.filter((r) => rowPills(r).some((p) => activePills.has(p)));
+    }
     return [...rows].sort((a, b) => {
       const av = sortKey === 'delta' ? rowDelta(a) : (a as unknown as Record<string, unknown>)[sortKey];
       const bv = sortKey === 'delta' ? rowDelta(b) : (b as unknown as Record<string, unknown>)[sortKey];
@@ -238,6 +281,20 @@
       placeholder="Filter by name…"
       bind:value={filter}
     />
+    <div class="pill-filters">
+      {#each PILL_DEFS as p (p.key)}
+        {@const n = pillCounts.get(p.key) ?? 0}
+        {#if n > 0 || activePills.has(p.key)}
+          <button
+            type="button"
+            class="tag pill-chip {p.cls}"
+            class:on={activePills.has(p.key)}
+            onclick={() => togglePill(p.key)}
+            title={activePills.has(p.key) ? 'Click to stop filtering by this badge' : `Show only rows tagged "${p.label}"`}
+          >{p.label} <span class="pill-n">{n}</span></button>
+        {/if}
+      {/each}
+    </div>
     <div class="muted">
       {sorted.length.toLocaleString()} rows · sorted by
       <strong>{columns.find((c) => c.key === sortKey)?.label}</strong>
@@ -428,6 +485,31 @@
     flex-wrap: wrap;
   }
   .toolbar input { min-width: 260px; }
+  /* Pill-filter chips reuse the badge palette (.tag.peak etc.) so the chip
+     and the in-row pill it filters on read as the same object. */
+  .pill-filters {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-right: auto;
+  }
+  .pill-chip {
+    margin-left: 0;
+    cursor: pointer;
+    background: transparent;
+    font-family: inherit;
+    transition: background 120ms ease, border-color 120ms ease;
+  }
+  .pill-chip:hover { background: rgba(255,255,255,0.04); }
+  .pill-chip.on {
+    background: color-mix(in srgb, currentColor 14%, transparent);
+    border-color: currentColor;
+  }
+  .pill-n {
+    opacity: 0.65;
+    font-size: 9px;
+  }
   .muted { color: var(--muted); font-size: 12.5px; }
   table {
     width: 100%;
