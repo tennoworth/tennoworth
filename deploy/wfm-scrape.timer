@@ -1,0 +1,10 @@
+[Unit]
+Description=Run the WFM scrape every 2 hours
+
+[Timer]
+OnCalendar=*/2:00
+RandomizedDelaySec=600      # jitter so we're not a predictable load on WFM
+Persistent=true            # catch up one missed run after downtime/reboot
+
+[Install]
+WantedBy=timers.target
