@@ -8,7 +8,10 @@ import type { SlimItemInfo } from './types';
 const DB_NAME = 'wfminv';
 const DB_VERSION = 1;
 const STORE = 'catalogs';
-const KEY = 'wfstat-items-v2'; // v2: stores {name, category} instead of just name
+// v3: sourced from the baked same-origin wfstat-catalog.json (forced
+// English). v2 caches could hold Accept-Language-localized names that
+// never matched the WFM catalog — invalidate them.
+const KEY = 'wfstat-items-v3';
 const TTL_MS = 24 * 60 * 60 * 1000; // 24 h
 
 export type SlimCatalog = Array<[string, SlimItemInfo]>;

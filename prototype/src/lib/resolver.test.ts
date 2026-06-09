@@ -138,20 +138,20 @@ describe('loadCatalogs', () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it('fetches and writes cache when miss', async () => {
+  it('fetches the baked slim catalog and writes cache when miss', async () => {
     cacheModule.readCached.mockResolvedValue(null);
+    // wfstat-catalog.json ships pre-slimmed [uniqueName, info] pairs.
     globalThis.fetch.mockResolvedValue({
       ok: true,
       json: async () => ([
-        { uniqueName: '/Lotus/B', name: 'B', category: 'Misc' },
-        { uniqueName: '/Lotus/C', name: 'C' /* no category */ },
-        { name: 'Orphan with no uniqueName' },
+        ['/Lotus/B', { name: 'B', category: 'Misc' }],
+        ['/Lotus/C', { name: 'C', category: null }],
       ]),
     });
     const { uniqueToInfo } = await loadCatalogs();
+    expect(globalThis.fetch).toHaveBeenCalledWith('/wfstat-catalog.json');
     expect(uniqueToInfo.get('/Lotus/B')).toEqual({ name: 'B', category: 'Misc' });
     expect(uniqueToInfo.get('/Lotus/C')).toEqual({ name: 'C', category: null });
-    expect(uniqueToInfo.has(undefined)).toBe(false);
     expect(cacheModule.writeCached).toHaveBeenCalledOnce();
   });
 
@@ -159,5 +159,11 @@ describe('loadCatalogs', () => {
     cacheModule.readCached.mockResolvedValue(null);
     globalThis.fetch.mockResolvedValue({ ok: false, status: 503 });
     await expect(loadCatalogs()).rejects.toThrow(/503/);
+  });
+
+  it('rejects a non-array payload instead of resolving garbage', async () => {
+    cacheModule.readCached.mockResolvedValue(null);
+    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ error: 'nope' }) });
+    await expect(loadCatalogs()).rejects.toThrow(/not an array/);
   });
 });

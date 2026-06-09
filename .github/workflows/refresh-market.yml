@@ -52,7 +52,7 @@ jobs:
         run: |
           git config user.name  "wfm-bot"
           git config user.email "wfm-bot@users.noreply.github.com"
-          git add prototype/public/market.json wfm_results.csv
+          git add prototype/public/market.json prototype/public/wfstat-catalog.json wfm_results.csv
           if git diff --cached --quiet; then
             echo "No changes — nothing to commit."
             exit 0

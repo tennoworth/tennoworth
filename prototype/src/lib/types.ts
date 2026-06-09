@@ -115,16 +115,9 @@ export interface Inventory {
   [k: string]: unknown;
 }
 
-// -------- warframestat.us --------
+// -------- wfstat-catalog.json (baked from warframestat.us at build time) --------
 
-/** Single item entry from `https://api.warframestat.us/items/`. */
-export interface WfStatItem {
-  uniqueName?: string;
-  name?: string;
-  category?: string;
-}
-
-/** Slim per-item info we cache in IndexedDB (key `wfstat-items-v2`). */
+/** Slim per-item info we cache in IndexedDB (key `wfstat-items-v3`). */
 export interface SlimItemInfo {
   name: string;
   category: string | null;

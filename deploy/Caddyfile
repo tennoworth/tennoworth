@@ -27,13 +27,16 @@
 		Permissions-Policy "accelerometer=(), camera=(), geolocation=(), gyroscope=(), microphone=(), payment=(), usb=()"
 		Cross-Origin-Opener-Policy "same-origin"
 		Cross-Origin-Resource-Policy "same-origin"
-		Content-Security-Policy "default-src 'self'; connect-src 'self' https://api.warframestat.us http://127.0.0.1:* http://localhost:*; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+		Content-Security-Policy "default-src 'self'; connect-src 'self' http://127.0.0.1:* http://localhost:*; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 		-Server
 	}
 
-	# Live, cron-refreshed market.json from public/ (shadows the stale copy Vite
-	# bakes into dist/). Its own handle block so routing is unambiguous.
-	handle /market.json {
+	# Live, cron-refreshed data files from public/ (shadow the stale copies Vite
+	# bakes into dist/). wfstat-catalog.json backs the inventory resolver — the
+	# browser stopped fetching warframestat directly when upstream dropped CORS.
+	# Its own handle block so routing is unambiguous.
+	@livedata path /market.json /wfstat-catalog.json
+	handle @livedata {
 		root * /srv/wfm/app/prototype/public
 		header Cache-Control "public, max-age=300, must-revalidate"
 		file_server

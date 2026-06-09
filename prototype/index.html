@@ -5,8 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!--
       Defense-in-depth CSP. Allowed origins:
-        connect-src: warframestat.us (path resolution, has CORS)
-                     127.0.0.1 + localhost (companion's loopback HTTP server)
+        connect-src: 127.0.0.1 + localhost (companion's loopback HTTP server).
+                     No third-party origins — all vendor data (market.json,
+                     wfstat-catalog.json) is baked at build time and served
+                     same-origin. warframestat.us was dropped when upstream
+                     dropped CORS (2026-06-09); the resolver catalog is baked
+                     now.
         script-src:  self only — no inline, no remote scripts
         style-src:   self + 'unsafe-inline' for Svelte's scoped style injection
         img-src:     self + data: (Vite injects small assets as data: URIs)
@@ -22,7 +26,7 @@
       http-equiv="Content-Security-Policy"
       content="
         default-src 'self';
-        connect-src 'self' https://api.warframestat.us http://127.0.0.1:* http://localhost:*;
+        connect-src 'self' http://127.0.0.1:* http://localhost:*;
         script-src 'self';
         style-src 'self' 'unsafe-inline';
         img-src 'self' data:;
