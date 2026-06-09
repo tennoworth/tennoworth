@@ -405,6 +405,10 @@ def main():
                 # last full scrape (and 0 / [] when the CSV is older).
                 "tags": meta.get("tags", []),
                 "ducats": meta.get("ducats"),  # None when not ducat-purchasable
+                # median_now = today's median (band positioning); median_90d =
+                # the 90-day baseline (Δ-vs-90d). Pre-split CSVs lack median_now
+                # → fall back to median_90d so old rebuilds still position sanely.
+                "median_now": float(r.get("median_now") or r.get("median_90d") or 0),
                 "median_90d": float(r.get("median_90d") or 0),
                 "medians_7d": _parse_medians(r.get("medians_7d")),
                 "donch_top_90d": int(float(r.get("donch_top_90d") or 0)),

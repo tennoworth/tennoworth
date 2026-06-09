@@ -23,6 +23,7 @@ import argparse
 import csv
 import json
 import os
+import statistics
 import sys
 import time
 from datetime import datetime, timezone
@@ -94,8 +95,14 @@ def analyze_item(session, item):
     live_buys = [o for o in orders if live(o, "buy")]
     live_sells = [o for o in orders if live(o, "sell")]
 
-    # 48h closed stats = trades that actually completed
-    recent = stats_payload.get("statistics_closed", {}).get("48hours", [])
+    # 48h closed stats = trades that actually completed. Filter to rank 0 so
+    # avg_price_48h / volume_48h aren't contaminated by max-rank trades (the
+    # same (day, mod_rank) duality the 90day series has). Single-tier items
+    # (weapons/sets) have only rank-0 rows, so the filter is a no-op; fall back
+    # to the raw rows when rank metadata is entirely absent.
+    recent_all = [d for d in stats_payload.get("statistics_closed", {}).get("48hours", [])
+                  if isinstance(d, dict)]
+    recent = [d for d in recent_all if (d.get("mod_rank") or 0) == 0] or recent_all
     volume_48h = sum(d.get("volume", 0) for d in recent)
     if volume_48h > 0:
         avg_price_48h = (
@@ -105,29 +112,35 @@ def analyze_item(session, item):
         avg_price_48h = 0.0
 
     # 90d series — the WFM frontend prices against this, not 48h avg, because
-    # 48h is noisy on low-volume items. We capture the last 7 days' median
-    # for a sparkline and the latest day's median + donchian bands for a
-    # "trend vs 90d" signal.
+    # 48h is noisy on low-volume items. We emit two distinct numbers so the UI's
+    # two questions don't collapse into one (they used to, which made the "Δ 90d"
+    # trend column structurally ~0):
+    #   median_now = the latest day's median — "what it trades at today",
+    #   median_90d = the median OF the daily medians — the 90-day baseline.
+    # Δ vs 90d = (median_now - median_90d) / median_90d, and the timing band
+    # positions median_now inside [donch_bot, donch_top].
     #
     # WFM returns one row per (day, mod_rank): mods carry an unranked (rank 0)
-    # AND a max-rank tier. Taking the raw last row mixed the two — medians_7d
-    # alternated rank-0/max, and on a day a thin mod only had a maxed trade,
-    # median_90d silently grabbed the max-rank price (e.g. Primed Shotgun Ammo
-    # Mutation read 160p vs ~45p unranked). Baro sells mods unranked and that's
-    # the tier players resell, so filter to rank 0. Non-mod items expose a single
-    # rank-0 tier (filter is a no-op); fall back to the raw series only if rank
-    # metadata is entirely absent.
+    # AND a max-rank tier. The raw series mixes them — medians_7d alternated
+    # rank-0/max, and on a day a thin mod only had a maxed trade, the "latest"
+    # silently grabbed the max-rank price (Primed Shotgun Ammo Mutation read 160p
+    # vs ~45p unranked). Baro sells mods unranked and that's the tier players
+    # resell, so filter to rank 0. Single-tier items (weapons/sets) are a no-op;
+    # fall back to the raw series only if rank metadata is entirely absent.
     nineties_all = [d for d in stats_payload.get("statistics_closed", {}).get("90days", [])
                     if isinstance(d, dict)]
     nineties = [d for d in nineties_all if (d.get("mod_rank") or 0) == 0] or nineties_all
-    medians_7d = [d.get("median", 0) for d in nineties[-7:]]
+    daily_medians = [d.get("median", 0) or 0 for d in nineties]
+    medians_7d = daily_medians[-7:]
     if nineties:
         latest = nineties[-1]
-        median_90d = latest.get("median", 0) or 0
+        median_now = latest.get("median", 0) or 0
+        nonzero = [m for m in daily_medians if m > 0]
+        median_90d = statistics.median(nonzero) if nonzero else median_now
         donch_top_90d = latest.get("donch_top", 0) or 0
         donch_bot_90d = latest.get("donch_bot", 0) or 0
     else:
-        median_90d = donch_top_90d = donch_bot_90d = 0
+        median_now = median_90d = donch_top_90d = donch_bot_90d = 0
 
     top_buy = max((o["platinum"] for o in live_buys), default=0)
     low_sell = min((o["platinum"] for o in live_sells), default=0)
@@ -155,6 +168,7 @@ def analyze_item(session, item):
         "spread": (low_sell - top_buy) if (low_sell and top_buy) else 0,
         "volume_48h": volume_48h,
         "avg_price_48h": round(avg_price_48h, 1),
+        "median_now": round(median_now, 1),
         "median_90d": round(median_90d, 1),
         "medians_7d": medians_7d,
         "donch_top_90d": donch_top_90d,

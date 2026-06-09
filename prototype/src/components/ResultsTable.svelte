@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
+
   // Row shape passed in from App.svelte's computeResults. Mirrors the
   // fields actually rendered/sorted; keep this in sync.
   interface Row {
@@ -39,8 +41,9 @@
     results: Row[];
     deltas?: Map<string, number>;
     visibleColumns?: string[] | null;
+    presetSort?: { key: string; dir: number } | null;
   }
-  let { results, deltas = new Map(), visibleColumns = null }: Props = $props();
+  let { results, deltas = new Map(), visibleColumns = null, presetSort = null }: Props = $props();
 
   let sortKey = $state<string>('sell_score');
   let sortDir = $state(-1);
@@ -125,14 +128,29 @@
     return cols;
   });
 
-  // If the current sort column gets hidden by a preset switch, reset to
-  // the first numeric column in the new set so the table still feels
-  // sorted by *something* the user can see.
+  // A preset can carry a default sort (the Ducats preset ranks by plat-per-100-
+  // ducats ascending — best ducat trades first). presetSort changes identity
+  // each time the active preset changes; apply it then. Writes go inside
+  // untrack() so they don't re-trigger this effect, and a later user header
+  // click (changes sortKey, not presetSort) is preserved until the next switch.
   $effect(() => {
-    if (!columns.find((c) => c.key === sortKey)) {
-      const fallback = columns.find((c) => c.align === 'right' && !c.noSort);
-      if (fallback) sortKey = fallback.key;
-    }
+    const ps = presetSort;
+    if (!ps) return;
+    untrack(() => { sortKey = ps.key; sortDir = ps.dir; });
+  });
+
+  // If the current sort column gets hidden by a preset switch, fall back to the
+  // first visible sortable column. Tracks `columns`; reads/writes sortKey inside
+  // untrack() so the fallback can't re-fire the effect — the old version read
+  // AND wrote sortKey in one body, which the audit flagged as a loop risk.
+  $effect(() => {
+    const cols = columns;
+    untrack(() => {
+      if (!cols.find((c) => c.key === sortKey)) {
+        const fallback = cols.find((c) => c.align === 'right' && !c.noSort);
+        if (fallback) sortKey = fallback.key;
+      }
+    });
   });
 
   function setSort(key: string): void {
