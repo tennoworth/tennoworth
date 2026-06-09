@@ -14,7 +14,7 @@
   import { flattenInventory, extractKeptLvls } from './lib/inventory';
   import { loadCatalogs, resolvePath, type Catalogs } from './lib/resolver';
   import { loadMarket, lookup } from './lib/market';
-  import { scoreRow } from './lib/sell-priority';
+  import { scoreRow, bandSignal } from './lib/sell-priority';
   import { deriveSetRecos } from './lib/set-recos';
   import { deriveRelicPlan } from './lib/relic-planner';
   import {
@@ -318,6 +318,18 @@
       const delta_90d_pct = latest_median != null && median_90d != null
         ? ((latest_median - median_90d) / median_90d) * 100
         : null;
+      // Timing: where today's median sits in its 90-day band. Must use the
+      // median, not low_sell — the Donchian bands are built from the daily
+      // median series, so positioning low_sell (an order-book ask, which can
+      // be a thin-book outlier) against them mislabels (a lone 200p ask on a
+      // ~20p item read as "peak"). The median is always inside its own band.
+      // "hold" = near the 90d low (don't dump into a trough — e.g. a mod Baro
+      // just flooded), "peak" = near the 90d high (list now).
+      const timing = bandSignal({
+        price: m.median_90d,
+        donchTop: m.donch_top_90d,
+        donchBot: m.donch_bot_90d,
+      });
       const tags = Array.isArray(m.tags) ? m.tags : [];
       out.push({
         key,
@@ -337,6 +349,7 @@
         potential_plat: rec.count * m.avg,
         sell_score,
         patience,
+        timing,
         medians_7d: medians,
         median_90d,
         delta_90d_pct,

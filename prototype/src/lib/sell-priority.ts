@@ -42,3 +42,31 @@ export function scoreRow({ owned, m }: SellScoreInput): SellScoreOutput {
     patience: vol < 2,
   };
 }
+
+// Where the current price sits inside its 90-day Donchian band answers the
+// timing question the raw sell-score ignores: are you about to sell into a
+// trough or a peak? A price pinned near its 90-day low — e.g. a mod Baro just
+// flooded, which craters ~50% on arrival and recovers over weeks — is a "hold";
+// near its 90-day high is "peak", the moment to list. Neutral in between, or
+// whenever the band is missing/degenerate (CSV-only rebuilds inherit zeros).
+export type TimingState = 'hold' | 'peak' | 'neutral';
+
+export interface BandSignalInput {
+  price: number;
+  donchTop?: number | null;
+  donchBot?: number | null;
+}
+
+const HOLD_BELOW = 0.2;
+const PEAK_ABOVE = 0.8;
+
+export function bandSignal({ price, donchTop, donchBot }: BandSignalInput): TimingState {
+  const p = Number(price) || 0;
+  const top = Number(donchTop) || 0;
+  const bot = Number(donchBot) || 0;
+  if (p <= 0 || top <= 0 || bot <= 0 || top <= bot) return 'neutral';
+  const pos = (p - bot) / (top - bot); // 0 = at 90d low, 1 = at 90d high
+  if (pos <= HOLD_BELOW) return 'hold';
+  if (pos >= PEAK_ABOVE) return 'peak';
+  return 'neutral';
+}

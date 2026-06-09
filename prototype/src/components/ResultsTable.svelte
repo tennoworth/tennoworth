@@ -19,6 +19,7 @@
     potential_plat: number;
     sell_score: number;
     patience: boolean;
+    timing: 'hold' | 'peak' | 'neutral';
     medians_7d: number[];
     median_90d: number | null;
     delta_90d_pct: number | null;
@@ -289,6 +290,11 @@
                 {/if}
                 {#if r.patience}
                   <span class="tag patience" title="Volume under 2 trades/48h — listing will sit a while before clearing.">patience</span>
+                {/if}
+                {#if r.timing === 'hold'}
+                  <span class="tag hold" title="Price is near its 90-day low — you'd be selling into a trough. Common right after a Baro visit floods the mod; it typically recovers over weeks. Consider holding.">hold</span>
+                {:else if r.timing === 'peak'}
+                  <span class="tag peak" title="Price is near its 90-day high — a good moment to list this one.">peak</span>
                 {/if}
               {:else if col.key === 'delta'}
                 {#if d > 0}
@@ -569,6 +575,16 @@
   .tag.augment {
     color: var(--accent);
     border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  }
+  /* Timing: "hold" warns you're near the 90d low (don't dump into a trough —
+     e.g. a Baro-flooded mod); "peak" marks a price near its 90d high. */
+  .tag.hold {
+    color: var(--warn);
+    border-color: color-mix(in srgb, var(--warn) 30%, var(--border));
+  }
+  .tag.peak {
+    color: var(--good);
+    border-color: color-mix(in srgb, var(--good) 35%, var(--border));
   }
 
   .pager {
