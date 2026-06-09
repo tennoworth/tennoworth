@@ -375,6 +375,7 @@
         price: median_now,
         donchTop: m.donch_top_90d,
         donchBot: m.donch_bot_90d,
+        lowSell: m.low_sell,
       });
       const tags = Array.isArray(m.tags) ? m.tags : [];
       out.push({
