@@ -148,11 +148,11 @@ is reproducible from git. Optionally a periodic Proxmox `vzdump` of the containe
 
 | Risk | Containment |
 |---|---|
-| Exposing Proxmox host/admin | App in unprivileged LXC on a VLAN firewall-denied to 8006/SSH and the LAN; cloudflared exposes only `localhost:8080`. A container compromise is a powerless host UID with no route to pivot. |
+| Exposing Proxmox host/admin | App in unprivileged LXC on a VLAN firewall-denied to 8006/SSH and the LAN; cloudflared exposes only `localhost:8081`. A container compromise is a powerless host UID with no route to pivot. |
 | Open inbound ports | **Zero** — cloudflared dials out; router firewall stays closed; scanners see nothing. SSH is Tailscale-only. |
 | Proxy/TLS misconfig | TLS at Cloudflare's edge; Caddy serves loopback-only and re-applies the full header set (verifiable with `curl -I`). CSP is default-deny. |
 | Build supply-chain | node/bun never touch the exposed box; CI builds, box serves static output; lockfile frozen, Actions SHA-pinned. |
-| Half-written `market.json` | Both scripts write tmp + `os.replace` on the same FS → readers get whole-old or whole-new, never torn. |
+| Half-written / truncated `market.json` | Atomic `os.replace` prevents *torn* files (readers get whole-old or whole-new). But a sustained 429 makes the scraper skip items and flush a *complete-but-truncated* CSV — atomicity doesn't catch that. `run-scrape.sh` adds a row-count floor (≥800 and ≥75% of prior) and refuses to rebuild from a gutted scrape, keeping the old snapshot. |
 | WFM rate-limit (1015) | 3 req/s, 2h cadence + jitter, request timeouts. The scraper UA is now a real browser string (was a generic UA — fixed in-repo). |
 
 ## Two things to verify after deploy (couldn't be pre-confirmed)
