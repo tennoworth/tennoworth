@@ -255,8 +255,12 @@ def main():
     args = p.parse_args()
 
     session = requests.Session()
+    # WFM's Cloudflare layer 1015-rate-limits generic UAs (see scripts/CLAUDE.md);
+    # a real browser UA is required. The old "wfm-demand-analyzer/1.0" survived on
+    # GH Actions datacenter IPs but risks a 1015 block from a residential IP — and
+    # this scraper now runs on the user's home box. Match scripts/wfm_demand's rule.
     session.headers.update({
-        "User-Agent": "wfm-demand-analyzer/1.0",
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0",
         "Platform": args.platform,
         "Language": "en",
     })

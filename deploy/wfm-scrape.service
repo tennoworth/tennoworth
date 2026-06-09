@@ -1,0 +1,27 @@
+[Unit]
+Description=Refresh Warframe market.json from warframe.market + warframestat
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=wfm
+Group=wfm
+WorkingDirectory=/srv/wfm/app
+ExecStart=/srv/wfm/run-scrape.sh
+TimeoutStartSec=3600
+Nice=10
+
+# Sandboxing — the scraper only reads its repo and rewrites files under it.
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/srv/wfm/app
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+SystemCallFilter=@system-service
+
+# Ping a healthcheck on failure (optional — set the URL or delete this line).
+# OnFailure=
