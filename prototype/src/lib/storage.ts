@@ -3,12 +3,14 @@
 // real inventory), not the raw 2 MB inventory.json — small enough for
 // localStorage and avoids re-resolving on each page load.
 
-// v3: composite key per (slug, subtype) so each relic refinement is its own
-// row. rec now carries `slug` and `subtype` separately; the Map key is
-// `${slug}|${subtype ?? ''}`. Old v2 snapshots are silently invalidated.
+// v4: also persist kept_lvl. v3 dropped it, so on every page reload the restored
+// records had kept_lvl===undefined and the leveled-mod hide guard
+// (rec.kept_lvl !== null && rec.kept_lvl >= hideAtLvl) matched nothing — a mod
+// you've leveled into your build reappeared as "safe to sell". Old v2/v3
+// snapshots are silently invalidated.
 import type { OwnedRecord } from './types';
 
-const KEY = 'wfminv:last-owned-v3';
+const KEY = 'wfminv:last-owned-v4';
 
 export interface Snapshot {
   ts: number;
@@ -34,6 +36,7 @@ export function saveSnapshot({ invName, owned }: SaveSnapshotInput): void {
           type: rec.type,
           slug: rec.slug,
           subtype: rec.subtype ?? null,
+          kept_lvl: rec.kept_lvl ?? null,
         },
       ]),
     };

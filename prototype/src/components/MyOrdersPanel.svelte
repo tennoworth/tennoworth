@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
   import { fetchOrders, updateOrder, deleteOrder } from '../lib/companion';
   import type { CompanionConfig } from '../lib/types';
 
@@ -62,9 +61,9 @@
       });
   }
 
-  onMount(loadOrders);
-
-  // Reload when the config reference changes (reconnect → fresh fetch).
+  // Initial load + reload when the config reference changes (reconnect → fresh
+  // fetch). This $effect alone covers mount when config is already set; a
+  // separate onMount(loadOrders) just double-fired GET /orders on mount.
   $effect(() => {
     if (config) loadOrders();
   });
