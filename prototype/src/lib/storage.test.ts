@@ -13,16 +13,20 @@ describe('saveSnapshot / loadSnapshot', () => {
     const owned = new Map([
       ['axi_k2_relic|radiant', { count: 7, name: 'Axi K2 Relic (Radiant)', type: 'Relics', slug: 'axi_k2_relic', subtype: 'radiant' }],
       ['vitality|',            { count: 51, name: 'Vitality', type: 'Mods', slug: 'vitality', subtype: null }],
+      ['steel_charge|',        { count: 1, name: 'Steel Charge', type: 'Mods', slug: 'steel_charge', subtype: null, kept_lvl: 5 }],
     ]);
     saveSnapshot({ invName: 'inventory.json', owned });
     const got = loadSnapshot();
     expect(got.invName).toBe('inventory.json');
     expect(got.owned).toBeInstanceOf(Map);
-    expect(got.owned.size).toBe(2);
+    expect(got.owned.size).toBe(3);
     expect(got.owned.get('vitality|')).toEqual({
-      count: 51, name: 'Vitality', type: 'Mods', slug: 'vitality', subtype: null,
+      count: 51, name: 'Vitality', type: 'Mods', slug: 'vitality', subtype: null, kept_lvl: null,
     });
     expect(got.owned.get('axi_k2_relic|radiant').subtype).toBe('radiant');
+    // kept_lvl must survive the round-trip — losing it disabled the leveled-mod
+    // hide filter on every reload (the storage v3 bug).
+    expect(got.owned.get('steel_charge|').kept_lvl).toBe(5);
     expect(got.ts).toBeGreaterThan(0);
   });
 
@@ -31,7 +35,7 @@ describe('saveSnapshot / loadSnapshot', () => {
   });
 
   it('returns null on corrupted storage rather than throwing', () => {
-    localStorage.setItem('wfminv:last-owned-v3', '{garbage');
+    localStorage.setItem('wfminv:last-owned-v4', '{garbage');
     expect(loadSnapshot()).toBeNull();
   });
 

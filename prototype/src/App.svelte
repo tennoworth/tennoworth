@@ -164,7 +164,13 @@
   let visibleColumns = $derived<string[] | null>(activePreset ? PRESETS[activePreset]?.columns ?? null : null);
   // A preset's optional default sort, handed to ResultsTable. Stable object
   // identity per preset → switching presets re-applies it; header clicks don't.
-  let presetSort = $derived(activePreset ? (PRESETS[activePreset]?.defaultSort ?? null) : null);
+  // Spread a fresh object so the derived's identity changes whenever it
+  // recomputes — re-selecting a preset then re-applies its sort.
+  let presetSort = $derived(
+    activePreset && PRESETS[activePreset]?.defaultSort
+      ? { ...PRESETS[activePreset].defaultSort }
+      : null,
+  );
   function applyPreset(name: string): void {
     const p = PRESETS[name];
     if (!p) return;
@@ -339,7 +345,10 @@
       const medians = Array.isArray(m.medians_7d) ? m.medians_7d.filter(v => v > 0) : [];
       // "today" = latest daily median. Pre-split snapshots have no median_now,
       // so fall back to median_90d (which on those WAS the latest day).
-      const median_now = (m.median_now ?? m.median_90d) || null;
+      // `||` not `??`: a literal median_now of 0 is never a meaningful "today"
+      // price (it's a thin item with no recent trade), so fall back to the 90d
+      // baseline rather than null out the band + Δ signals entirely.
+      const median_now = m.median_now || m.median_90d || null;
       // median_90d is now the 90-day BASELINE (median of the daily medians), so
       // Δ-vs-90d = today vs the 90-day norm — a real signal at last. On old
       // snapshots median_now === median_90d → Δ = 0 until the next scrape, which
@@ -790,6 +799,7 @@
             type: rec.type,
             slug: rec.slug,
             subtype: rec.subtype ?? null,
+            kept_lvl: rec.kept_lvl ?? null,
           },
         ]),
       };
