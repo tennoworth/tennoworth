@@ -29,6 +29,18 @@ mkdir -p "$DEST"
 # require https on this var because a plaintext base URL would let a
 # MITM swap both the binary AND the matching SHA256SUMS, defeating the
 # verification below. Dev usage can override REPO instead.
+# Fail honestly while the project is pre-release: a placeholder REPO
+# would otherwise surface as a baffling GitHub 404 mid-install.
+if [ "$REPO" = "OWNER/REPO" ] && [ -z "${WFMINV_BASE_URL:-}" ]; then
+  echo "No public release exists yet — this project hasn't been published" >&2
+  echo "to GitHub, so there is no binary to download." >&2
+  echo >&2
+  echo "If you're the developer, build it locally instead:" >&2
+  echo "    cd companion && cargo build --release" >&2
+  echo "    sudo setcap cap_sys_ptrace=eip target/release/$BIN_NAME" >&2
+  exit 1
+fi
+
 if [ -n "${WFMINV_BASE_URL:-}" ]; then
   case "$WFMINV_BASE_URL" in
     https://*) ;;

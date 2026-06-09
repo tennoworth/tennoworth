@@ -19,6 +19,17 @@ if (-not [Environment]::Is64BitOperatingSystem) {
 New-Item -ItemType Directory -Force -Path $Dest | Out-Null
 $Tmp = New-TemporaryFile
 
+# Fail honestly while the project is pre-release: a placeholder repo
+# would otherwise surface as a baffling GitHub 404 mid-install.
+if ($Repo -eq 'OWNER/REPO' -and -not $env:WFMINV_BASE_URL) {
+    throw @'
+No public release exists yet — this project hasn't been published to
+GitHub, so there is no binary to download.
+If you're the developer, build it locally instead:
+    cd companion; cargo build --release
+'@
+}
+
 $BaseUrl = $env:WFMINV_BASE_URL
 if ($BaseUrl) {
     # Plain http would let a MITM swap both binary and SHA256SUMS,
