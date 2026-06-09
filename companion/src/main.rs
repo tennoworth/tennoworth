@@ -17,6 +17,7 @@ use regex::bytes::Regex;
 use reqwest::blocking::Client;
 use std::collections::HashMap;
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use sysinfo::System;
@@ -187,7 +188,9 @@ fn run_fetch(args: FetchArgs) -> Result<()> {
         Ok(value) => serde_json::to_vec_pretty(&value).unwrap_or_else(|_| bytes.to_vec()),
         Err(_) => bytes.to_vec(),
     };
-    fs::write(&out_path, &final_bytes).with_context(|| {
+    // 0600 on unix — inventory.json is the user's data; no reason to leave it
+    // world-readable under the default umask.
+    write_restricted(&out_path, &final_bytes).with_context(|| {
         format!("writing inventory to {}", out_path.display())
     })?;
     chown_to_real_user(&out_path);
@@ -461,8 +464,8 @@ fn run_login(args: LoginArgs) -> Result<()> {
     if passphrase != confirm {
         bail!("Passphrases don't match.");
     }
-    if passphrase.len() < 4 {
-        bail!("Passphrase must be at least 4 characters.");
+    if passphrase.len() < 12 {
+        bail!("Passphrase must be at least 12 characters — it guards your multi-month WFM token against offline brute force.");
     }
 
     let encrypted = encrypt_jwt(&jwt, &passphrase, &args.platform)?;
@@ -787,6 +790,7 @@ fn run_serve(args: ServeArgs) -> Result<()> {
         session_token,
         username,
         pending_path: default_pending_path(),
+        plan_running: std::sync::atomic::AtomicBool::new(false),
     });
     for request in server.incoming_requests() {
         let state = Arc::clone(&state);
@@ -801,6 +805,19 @@ fn run_serve(args: ServeArgs) -> Result<()> {
     Ok(())
 }
 
+// Cap request bodies so a malformed/hostile local client can't make us allocate
+// an unbounded String before parsing. 64 KB dwarfs any real plan (MAX_PLAN_ITEMS=50).
+const MAX_BODY_BYTES: u64 = 64 * 1024;
+
+// Resets the plan-in-flight flag on scope exit (incl. early return / panic) so a
+// rejected or crashed request can't leave plan execution wedged.
+struct PlanGuard<'a>(&'a std::sync::atomic::AtomicBool);
+impl Drop for PlanGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
 struct ServeState {
     jwt: String,
     platform: String,
@@ -811,6 +828,9 @@ struct ServeState {
     session_token: String,
     username: String,
     pending_path: PathBuf,
+    /// Serializes plan execution: a second concurrent POST /plan or /plan/resume
+    /// gets 409 instead of racing on pending_plan.json and clobbering recovery.
+    plan_running: std::sync::atomic::AtomicBool,
 }
 
 // Persisted between requests so a crash mid-batch doesn't lose work. The
@@ -950,6 +970,14 @@ fn handle_request(
             Some(p) => p,
             None => return respond_json(request, 404, &serde_json::json!({"error": "no pending plan"})),
         };
+        let _guard = match state.plan_running.compare_exchange(
+            false, true,
+            std::sync::atomic::Ordering::SeqCst,
+            std::sync::atomic::Ordering::SeqCst,
+        ) {
+            Ok(_) => PlanGuard(&state.plan_running),
+            Err(_) => return respond_json(request, 409, &serde_json::json!({"error": "a plan is already running; retry after it finishes"})),
+        };
         let response = run_pending(state, &mut pending);
         clear_pending(&state.pending_path);
         return respond_json(request, 200, &response);
@@ -957,7 +985,7 @@ fn handle_request(
 
     if path == "/plan" && matches!(method, tiny_http::Method::Post) {
         let mut body = String::new();
-        request.as_reader().read_to_string(&mut body).context("reading request body")?;
+        std::io::Read::take(request.as_reader(), MAX_BODY_BYTES).read_to_string(&mut body).context("reading request body")?;
         let plan: PlanRequest = match serde_json::from_str(&body) {
             Ok(p) => p,
             Err(e) => {
@@ -967,6 +995,16 @@ fn handle_request(
                     &serde_json::json!({ "error": format!("malformed plan: {e}") }),
                 );
             }
+        };
+        // Reject a concurrent plan instead of letting two threads race on
+        // pending_plan.json. The guard clears the flag on any return path.
+        let _guard = match state.plan_running.compare_exchange(
+            false, true,
+            std::sync::atomic::Ordering::SeqCst,
+            std::sync::atomic::Ordering::SeqCst,
+        ) {
+            Ok(_) => PlanGuard(&state.plan_running),
+            Err(_) => return respond_json(request, 409, &serde_json::json!({"error": "a plan is already running; retry after it finishes"})),
         };
         let response = execute_plan(state, plan);
         return respond_json(request, 200, &response);
@@ -981,7 +1019,7 @@ fn handle_request(
 
     if path == "/orders/visibility" && matches!(method, tiny_http::Method::Post) {
         let mut body = String::new();
-        request.as_reader().read_to_string(&mut body).ok();
+        std::io::Read::take(request.as_reader(), MAX_BODY_BYTES).read_to_string(&mut body).ok();
         let req: VisibilityRequest = match serde_json::from_str(&body) {
             Ok(v) => v,
             Err(e) => return respond_json(request, 400, &serde_json::json!({"error": format!("malformed: {e}")})),
@@ -1004,7 +1042,7 @@ fn handle_request(
             }
             tiny_http::Method::Patch => {
                 let mut body = String::new();
-                request.as_reader().read_to_string(&mut body).ok();
+                std::io::Read::take(request.as_reader(), MAX_BODY_BYTES).read_to_string(&mut body).ok();
                 let upd: UpdateRequest = match serde_json::from_str(&body) {
                     Ok(v) => v,
                     Err(e) => return respond_json(request, 400, &serde_json::json!({"error": format!("malformed: {e}")})),
