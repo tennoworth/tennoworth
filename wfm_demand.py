@@ -70,6 +70,33 @@ def _item_name(item):
     return (item.get("i18n") or {}).get("en", {}).get("name") or item.get("slug", "?")
 
 
+# warframe.market caps order prices, and low-attention junk items (fish, etc.)
+# get wash-traded at that cap to fake a high "last sold" value — e.g. Goopolla
+# showed 10 closed trades at 99,999p on a fish whose real price is 1p. One such
+# day poisons median / avg / donch for the whole item (it surfaced as a fake
+# +1100% in the Trending view). Drop daily closed-stat rows that are cap-pinned
+# or an extreme outlier vs the rest of the series before computing any aggregate.
+PLAT_CAP = 99_999
+OUTLIER_FACTOR = 50  # a day > 50x the cleaned baseline is almost certainly faked
+
+
+def drop_poisoned_rows(rows):
+    """Strip wash-trade / cap-pinned daily rows from a closed-stats list."""
+    clean = [
+        d for d in rows
+        if (d.get("median") or 0) < PLAT_CAP * 0.9
+        and (d.get("max_price") or 0) < PLAT_CAP * 0.9
+    ]
+    meds = sorted(m for d in clean if (m := d.get("median") or 0) > 0)
+    if meds:
+        baseline = meds[len(meds) // 2]
+        if baseline > 0:
+            clean = [d for d in clean if (d.get("median") or 0) <= baseline * OUTLIER_FACTOR]
+    # If filtering removed everything (a pure-manipulation item), keep the raw
+    # rows so downstream gets *a* number instead of an empty series.
+    return clean or rows
+
+
 def analyze_item(session, item):
     """Return a metrics dict for one item, or None on failure."""
     slug = item["slug"]
@@ -103,6 +130,7 @@ def analyze_item(session, item):
     recent_all = [d for d in stats_payload.get("statistics_closed", {}).get("48hours", [])
                   if isinstance(d, dict)]
     recent = [d for d in recent_all if (d.get("mod_rank") or 0) == 0] or recent_all
+    recent = drop_poisoned_rows(recent)
     volume_48h = sum(d.get("volume", 0) for d in recent)
     if volume_48h > 0:
         avg_price_48h = (
@@ -130,6 +158,7 @@ def analyze_item(session, item):
     nineties_all = [d for d in stats_payload.get("statistics_closed", {}).get("90days", [])
                     if isinstance(d, dict)]
     nineties = [d for d in nineties_all if (d.get("mod_rank") or 0) == 0] or nineties_all
+    nineties = drop_poisoned_rows(nineties)
     daily_medians = [d.get("median", 0) or 0 for d in nineties]
     medians_7d = daily_medians[-7:]
     if nineties:
@@ -137,8 +166,13 @@ def analyze_item(session, item):
         median_now = latest.get("median", 0) or 0
         nonzero = [m for m in daily_medians if m > 0]
         median_90d = statistics.median(nonzero) if nonzero else median_now
-        donch_top_90d = latest.get("donch_top", 0) or 0
-        donch_bot_90d = latest.get("donch_bot", 0) or 0
+        # Recompute the band from the poison-filtered daily medians, not WFM's
+        # precomputed donch_top/bot — those still reflect a cap-pinned day even
+        # after we drop it from the series. median_now is one of these medians,
+        # so it always sits inside [donch_bot, donch_top].
+        band = nonzero or [median_now]
+        donch_top_90d = max(band)
+        donch_bot_90d = min(band)
     else:
         median_now = median_90d = donch_top_90d = donch_bot_90d = 0
 
