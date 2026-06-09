@@ -124,6 +124,7 @@
     columns?: string[];
     vaultOnly?: boolean;
     minVol?: number; // hard per-preset liquidity floor (Trending uses it)
+    minMedian?: number; // 90d-baseline price floor — a +1100% Δ on a 1p fish is noise or wash-trading, not a mover
     defaultSort?: { key: string; dir: number };
   }
   const PRESETS: Record<string, Preset> = {
@@ -142,10 +143,11 @@
     },
     trending: {
       minPrice: 5, hideAtLvl: 5, typeFilter: 'all', activeTags: [],
-      label: 'Trending', hint: 'movers vs 90d median · vol ≥ 10',
+      label: 'Trending', hint: 'movers vs 90d median · vol ≥ 10 · baseline ≥ 5p',
       columns: ['name', 'owned', 'sell_score', 'low_sell', 'medians_7d', 'delta_90d_pct', 'volume_48h', 'ratio'],
       defaultSort: { key: 'delta_90d_pct', dir: -1 },
       minVol: 10,
+      minMedian: 5,
     },
     sets: {
       minPrice: 0, hideAtLvl: 11, typeFilter: 'all', activeTags: ['set'],
@@ -326,6 +328,12 @@
       // ticked to 48p reads as +1100% on ~1 trade).
       const presetMinVol = PRESETS[activePreset]?.minVol ?? 0;
       if (presetMinVol > 0 && (m.vol || 0) < presetMinVol) continue;
+      // Baseline-price floor: wash trades fake volume AND avg, so the two
+      // floors above don't catch penny-junk pumps (Goopolla: 1p fish pushed
+      // to "12p", vol 47). The 90d-baseline median is the hardest number to
+      // fake — it takes 45+ days of sustained manipulation to move it.
+      const presetMinMedian = PRESETS[activePreset]?.minMedian ?? 0;
+      if (presetMinMedian > 0 && (m.median_90d || 0) < presetMinMedian) continue;
       const { sell_score, patience } = scoreRow({ owned: rec.count, m });
       // ducats live on `m` because WFM is authoritative for the value —
       // warframestat's bulk /items/ endpoint doesn't carry it. Relics get
@@ -525,6 +533,7 @@
     // produce 6 rows.
     const vaultOnly = !!PRESETS[activePreset]?.vaultOnly;
     const minVol = PRESETS[activePreset]?.minVol ?? 0;
+    const minMedianFloor = PRESETS[activePreset]?.minMedian ?? 0;
     for (const rec of resolved.owned.values()) {
       const m = lookup(market, rec.slug);
       if (!m) continue;
@@ -537,6 +546,7 @@
         if (status !== 'vaulted' && status !== 'vaulting-soon') continue;
       }
       if (minVol > 0 && (m.vol || 0) < minVol) continue;
+      if (minMedianFloor > 0 && (m.median_90d || 0) < minMedianFloor) continue;
       for (const t of (m.tags || [])) {
         counts.set(t, (counts.get(t) || 0) + 1);
       }
