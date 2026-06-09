@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Layout · accordion</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<!--
+  Accordion layout. Every secondary panel (filters, sets, relics, orders,
+  inventory metadata) collapses by default; only one stays open at a time,
+  with the main results table always visible underneath. Single-column,
+  single-task focus — reduces the "everything competes" criticism by
+  literally only showing one decision at once. Trade-off: requires a click
+  to see the relic planner, but that planner is consulted once per session.
+-->
+<style>
+  :root{
+    --bg:#0e0f12; --panel:#16181d; --panel-2:#1c1f26; --border:#262a33;
+    --fg:#d8dde6; --muted:#7a8089; --accent:#5ec8ff;
+    --good:#6ed99a; --warn:#e9c46a; --bad:#e76f51; --ducat:#c9a14a;
+    color-scheme:dark;
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--fg);font-size:13px;line-height:1.5}
+  main{max-width:1100px;margin:0 auto;padding:28px 24px 48px;display:flex;flex-direction:column;gap:14px}
+  h1{margin:0;font-size:20px;font-weight:600;letter-spacing:-0.015em}
+  .sub{color:var(--muted);font-size:12.5px;margin:4px 0 0}
+  h2{margin:0;font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .stat{background:var(--panel);padding:12px 16px;display:flex;flex-direction:column;gap:4px}
+  .stat .k{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .stat .v{font-family:ui-monospace,Menlo,monospace;font-size:22px;font-weight:600;line-height:1.1}
+  .stat .v .unit{font-size:13px;color:var(--muted);margin-left:2px}
+  .stat.right .k,.stat.right .v{text-align:right}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--good);display:inline-block;margin-right:5px}
+
+  /* Accordion section. Header is always shown — clickable, shows a short
+     summary of what's inside (so you don't have to open it to find out
+     what's there). Only the active section is expanded. */
+  .acc{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .acc-head{display:flex;align-items:center;justify-content:space-between;padding:11px 16px;cursor:pointer;gap:16px;user-select:none}
+  .acc-head:hover{background:rgba(255,255,255,.02)}
+  .acc-head .left{display:flex;align-items:center;gap:12px;min-width:0}
+  .acc-head .left .marker{font-family:ui-monospace,Menlo,monospace;color:var(--muted);font-size:13px;width:12px}
+  .acc.open .marker{color:var(--accent);transform:none}
+  .acc-head .title{font-size:13px;font-weight:600}
+  .acc-head .summary{color:var(--muted);font-size:11.5px;font-weight:400}
+  .acc-head .badge{font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--muted);background:var(--panel-2);border:1px solid var(--border);border-radius:3px;padding:1px 6px}
+  .acc-body{display:none;padding:0 16px 14px;border-top:1px solid var(--border)}
+  .acc.open .acc-body{display:flex;flex-direction:column;gap:12px;padding-top:12px}
+
+  .row{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .muted{color:var(--muted);font-size:12px}
+  .filters{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  .filters label{display:inline-flex;align-items:center;gap:8px;font-size:11px;letter-spacing:.02em;color:var(--muted);text-transform:uppercase}
+  .filters input,.filters select{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:4px 8px;text-transform:none}
+  .filters input{width:52px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:11px;border:1px solid var(--border);background:var(--panel-2);color:var(--fg);border-radius:999px;padding:2px 9px;cursor:pointer}
+  .chip .c{font-family:ui-monospace,Menlo,monospace;font-size:10px;color:var(--muted)}
+  .chip.active{color:var(--accent);border-color:var(--accent);background:color-mix(in srgb,var(--accent) 12%,var(--panel-2))}
+
+  /* The main results table is NOT an accordion — it's the page's anchor,
+     always visible. Filters live in a collapsed accordion right above it
+     because once they're set, you don't look at them again. */
+  .table-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .table-card .toolbar{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th,td{padding:6px 12px;text-align:left;border-bottom:1px solid var(--border);font-size:12.5px}
+  th{background:var(--panel-2);font-weight:600;font-size:11.5px;cursor:pointer}
+  th.right,td.right{text-align:right}
+  td.num{font-family:ui-monospace,Menlo,monospace}
+  td.ducat{color:var(--ducat)}
+  td a{color:var(--fg)} td a:hover{color:var(--accent);text-decoration:underline}
+  .arrow{color:var(--accent)}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>WF inventory · market check</h1>
+    <p class="sub">One panel at a time. Click a header to expand.</p>
+  </header>
+
+  <section class="stats">
+    <div class="stat"><span class="k">Owned</span><span class="v">1,284</span></div>
+    <div class="stat"><span class="k">Sellable</span><span class="v">312</span></div>
+    <div class="stat"><span class="k">Potential</span><span class="v">4,872 <span class="unit">p</span></span></div>
+    <div class="stat right"><span class="k"><span class="dot"></span> Market</span><span class="v" style="font-size:13px;font-family:ui-sans-serif,system-ui,sans-serif;font-weight:500">1 h ago</span></div>
+  </section>
+
+  <!-- Six accordion sections. Two open (filters because it's the "current
+       task" by default; set picks because they're high-value). The rest
+       collapsed but discoverable. -->
+  <section class="acc">
+    <div class="acc-head">
+      <div class="left"><span class="marker">+</span><span class="title">Inventory source</span><span class="summary">inventory.json · saved 4 min ago · 1,284 items resolved</span></div>
+      <span class="badge">stable</span>
+    </div>
+  </section>
+
+  <section class="acc open">
+    <div class="acc-head">
+      <div class="left"><span class="marker">−</span><span class="title">Filters</span><span class="summary">5p min · 1 owned · all types · hide ranked ≥ 5 · 2 tag chips active</span></div>
+      <span class="badge">312 rows</span>
+    </div>
+    <div class="acc-body">
+      <div class="filters">
+        <label>Min price <input type="number" value="5" /><span class="muted">p</span></label>
+        <label>Min owned <input type="number" value="1" /></label>
+        <label>Type <select><option>All</option><option>Prime parts</option><option>Mods</option></select></label>
+        <label>Hide ranked ≥ <input type="number" value="5" /></label>
+      </div>
+      <div class="chips">
+        <span class="chip active">prime <span class="c">218</span></span>
+        <span class="chip">mod <span class="c">71</span></span>
+        <span class="chip active">arcane <span class="c">14</span></span>
+        <span class="chip">relic <span class="c">52</span></span>
+        <span class="chip">weapon <span class="c">39</span></span>
+        <span class="chip">augment <span class="c">11</span></span>
+        <span class="chip">syndicate <span class="c">6</span></span>
+        <span class="chip">set <span class="c">9</span></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="acc">
+    <div class="acc-head">
+      <div class="left"><span class="marker">+</span><span class="title">Companion</span><span class="summary">connected · pc · listing-ready · 14 active orders</span></div>
+      <span class="badge" style="color:var(--good);border-color:color-mix(in srgb,var(--good) 40%,var(--border))">online</span>
+    </div>
+  </section>
+
+  <section class="acc open">
+    <div class="acc-head">
+      <div class="left"><span class="marker">−</span><span class="title">Set picks</span><span class="summary">Mesa Prime is 3/4 — net +95p if you buy Systems</span></div>
+      <span class="badge">8</span>
+    </div>
+    <div class="acc-body">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div class="row" style="padding:6px 0;border-bottom:1px solid var(--border)">
+          <div><strong>Mesa Prime</strong> <span class="muted">· near-complete · own 3/4</span></div>
+          <div class="muted">missing Systems @ 18p · sell set @ 130p</div>
+          <div style="font-family:ui-monospace,Menlo,monospace;color:var(--good);font-weight:600">+95p</div>
+        </div>
+        <div class="row" style="padding:6px 0;border-bottom:1px solid var(--border)">
+          <div><strong>Saryn Prime</strong> <span class="muted">· complete · 2 extras</span></div>
+          <div class="muted">list 2 sets @ 85p median</div>
+          <div style="font-family:ui-monospace,Menlo,monospace;color:var(--good);font-weight:600">+170p</div>
+        </div>
+        <div class="row" style="padding:6px 0;border-bottom:1px solid var(--border)">
+          <div><strong>Loki Prime</strong> <span class="muted">· extras · 5× Chassis BP</span></div>
+          <div class="muted">list 5 singles @ 6p low_sell</div>
+          <div style="font-family:ui-monospace,Menlo,monospace;color:var(--good);font-weight:600">+30p</div>
+        </div>
+        <div class="row" style="padding:6px 0">
+          <div><strong>Volt Prime</strong> <span class="muted">· near-complete · own 3/4</span></div>
+          <div class="muted">missing Systems @ 28p · sell set @ 75p</div>
+          <div style="font-family:ui-monospace,Menlo,monospace;color:var(--good);font-weight:600">+34p</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="acc">
+    <div class="acc-head">
+      <div class="left"><span class="marker">+</span><span class="title">Relic planner</span><span class="summary">Axi K2 → 47p/crack (4/6 moving) · Neo Z5 → 31p · Meso N11 → 22p</span></div>
+      <span class="badge">3</span>
+    </div>
+  </section>
+
+  <section class="acc">
+    <div class="acc-head">
+      <div class="left"><span class="marker">+</span><span class="title">My WFM orders</span><span class="summary">14 active · 3 invisible · 2 stale (no edits in 14d)</span></div>
+      <span class="badge">14</span>
+    </div>
+  </section>
+
+  <!-- Main table — always visible, never accordioned. -->
+  <section class="table-card">
+    <div class="toolbar">
+      <strong style="font-size:13px">Sell · ranked by score</strong>
+      <span class="muted">312 rows · sorted by <span style="color:var(--accent)">Score</span> <span class="arrow">↓</span></span>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Item</th><th class="right">Own</th><th class="right"><span style="color:var(--accent)">Score</span> <span class="arrow">↓</span></th>
+        <th class="right">Avg</th><th class="right">Δ 90d</th><th class="right">Ducats</th><th class="right">Vol 48h</th><th class="right">Low sell</th>
+      </tr></thead>
+      <tbody>
+        <tr><td><a>Mesa Prime Set</a></td><td class="right num">2</td><td class="right num">165</td><td class="right num">85</td><td class="right num" style="color:var(--good)">▲7%</td><td class="right num ducat">—</td><td class="right num">14</td><td class="right num">82</td></tr>
+        <tr><td><a>Sevagoth Prime Blueprint</a></td><td class="right num">3</td><td class="right num">142</td><td class="right num">3</td><td class="right num" style="color:var(--good)">▲4%</td><td class="right num ducat">15</td><td class="right num">45</td><td class="right num">3</td></tr>
+        <tr><td><a>Khora Prime Systems</a></td><td class="right num">3</td><td class="right num">128</td><td class="right num">48</td><td class="right num muted">·0%</td><td class="right num ducat">65</td><td class="right num">22</td><td class="right num">46</td></tr>
+        <tr><td><a>Galvanized Aptitude</a></td><td class="right num">1</td><td class="right num">96</td><td class="right num">120</td><td class="right num" style="color:var(--bad)">▼14%</td><td class="right num ducat">—</td><td class="right num">1</td><td class="right num">118</td></tr>
+        <tr><td><a>Volt Prime Chassis Blueprint</a></td><td class="right num">4</td><td class="right num">88</td><td class="right num">12</td><td class="right num muted">·1%</td><td class="right num ducat">45</td><td class="right num">19</td><td class="right num">11</td></tr>
+        <tr><td><a>Magus Lockdown</a></td><td class="right num">1</td><td class="right num">62</td><td class="right num">75</td><td class="right num" style="color:var(--good)">▲11%</td><td class="right num ducat">—</td><td class="right num">4</td><td class="right num">74</td></tr>
+        <tr><td><a>Saryn Prime Set</a></td><td class="right num">2</td><td class="right num">58</td><td class="right num">85</td><td class="right num muted">·1%</td><td class="right num ducat">—</td><td class="right num">11</td><td class="right num">82</td></tr>
+        <tr><td><a>Magnetize</a></td><td class="right num">1</td><td class="right num">42</td><td class="right num">52</td><td class="right num" style="color:var(--good)">▲9%</td><td class="right num ducat">—</td><td class="right num">5</td><td class="right num">50</td></tr>
+        <tr><td><a>Akbolto Prime Receiver</a></td><td class="right num">4</td><td class="right num">36</td><td class="right num">9</td><td class="right num" style="color:var(--good)">▲5%</td><td class="right num ducat">45</td><td class="right num">17</td><td class="right num">8</td></tr>
+        <tr><td><a>Loki Prime Chassis Blueprint</a></td><td class="right num">5</td><td class="right num">28</td><td class="right num">7</td><td class="right num muted">·2%</td><td class="right num ducat">45</td><td class="right num">34</td><td class="right num">7</td></tr>
+        <tr><td><a>Hystrix Prime Barrel</a></td><td class="right num">2</td><td class="right num">28</td><td class="right num">15</td><td class="right num muted">·1%</td><td class="right num ducat">45</td><td class="right num">12</td><td class="right num">14</td></tr>
+        <tr><td><a>Tiberon Prime Stock</a></td><td class="right num">2</td><td class="right num">22</td><td class="right num">14</td><td class="right num" style="color:var(--bad)">▼21%</td><td class="right num ducat">15</td><td class="right num">6</td><td class="right num">13</td></tr>
+      </tbody>
+    </table>
+  </section>
+</main>
+</body>
+</html>

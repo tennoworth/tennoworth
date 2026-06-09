@@ -1,0 +1,83 @@
+name: release-companion
+
+# Build the Rust companion for Linux + Windows on tag push. Linux job runs
+# on ubuntu-22.04 specifically — its glibc 2.35 is old enough that the
+# binary works on every actively-supported distro. Windows job runs on
+# a native Windows runner, sidestepping mingw cross-compile entirely.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:        # manual trigger from the Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+            artifact: wfm-fetch-inventory
+            asset:    wfm-fetch-inventory-linux-x86_64
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            artifact: wfm-fetch-inventory.exe
+            asset:    wfm-fetch-inventory-windows-x86_64.exe
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: companion
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: companion
+
+      - name: Build
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Rename for upload
+        shell: bash
+        run: |
+          mkdir -p ../dist
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact }} ../dist/${{ matrix.asset }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate SHA256SUMS
+        run: |
+          cd dist
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Create / update GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*
+          draft: false
+          generate_release_notes: true

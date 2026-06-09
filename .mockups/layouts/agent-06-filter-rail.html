@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Layout · filter rail</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<!--
+  Filter-first layout. Treats the page as a faceted explorer: left rail is
+  a vertical filter panel (price slider, owned slider, type checklist, tag
+  list with live counts, rank filter, ducat-only toggle, trend filter).
+  Everything else (set picks, relic planner, orders) becomes optional cards
+  above a tall results table. The mental model is "narrow the inventory
+  until you see what matters" rather than "scroll past recommendations".
+-->
+<style>
+  :root{
+    --bg:#0e0f12; --panel:#16181d; --panel-2:#1c1f26; --border:#262a33;
+    --fg:#d8dde6; --muted:#7a8089; --accent:#5ec8ff;
+    --good:#6ed99a; --warn:#e9c46a; --bad:#e76f51; --ducat:#c9a14a;
+    color-scheme:dark;
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--fg);font-size:13px;line-height:1.5}
+  a{color:var(--accent);text-decoration:none}
+  .shell{display:grid;grid-template-columns:240px 1fr;gap:16px;max-width:1240px;margin:0 auto;padding:20px 18px 40px}
+  h1{margin:0;font-size:18px;font-weight:600;letter-spacing:-0.015em}
+  .sub{color:var(--muted);font-size:12px;margin-top:2px}
+
+  /* Filter rail — sticky, scrolls independently. Each facet is a labelled
+     block. Active state is shown next to each facet label so the user can
+     see at a glance what's currently filtering, without expanding. */
+  .rail{position:sticky;top:18px;align-self:start;background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:14px;max-height:calc(100vh - 36px);overflow-y:auto}
+  .rail h3{margin:0;font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;display:flex;justify-content:space-between;align-items:baseline}
+  .rail h3 .val{font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--accent);font-weight:500;letter-spacing:0;text-transform:none}
+  .facet{display:flex;flex-direction:column;gap:6px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+  .facet:last-child{border-bottom:none;padding-bottom:0}
+  /* Range row: input + visual range. Native input for the prototype. */
+  .facet input[type="number"]{width:100%;font:inherit;color:var(--fg);background:var(--panel-2);border:1px solid var(--border);border-radius:5px;padding:4px 7px;font-family:ui-monospace,Menlo,monospace}
+  .facet input[type="range"]{width:100%;accent-color:var(--accent)}
+  /* Tag list — vertical, with counts. Active = accent. Stale (0) = strike. */
+  .tags{display:flex;flex-direction:column;gap:3px}
+  .tags label{display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:2px 0}
+  .tags label input{accent-color:var(--accent)}
+  .tags label .c{margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted)}
+  .tags label.active{color:var(--accent)}
+  .tags label.active .c{color:var(--accent)}
+  .tags label.stale{color:var(--muted);text-decoration:line-through;opacity:.55}
+  .checklist label{display:flex;align-items:center;gap:8px;font-size:12px;padding:2px 0;cursor:pointer}
+  .checklist label input{accent-color:var(--accent)}
+  .checklist label.active{color:var(--accent)}
+  .toggle{display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer}
+  .toggle input{accent-color:var(--accent)}
+  .reset{font:inherit;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:5px;padding:4px 8px;font-size:11px;cursor:pointer}
+  .reset:hover{color:var(--bad);border-color:var(--bad)}
+
+  main{display:flex;flex-direction:column;gap:14px;min-width:0}
+
+  /* Reduced stats — three numbers across the top, no card chrome. */
+  .stats-row{display:flex;gap:24px;align-items:baseline;padding:4px 2px;border-bottom:1px solid var(--border)}
+  .stats-row .pair{display:flex;flex-direction:column}
+  .stats-row .k{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .stats-row .v{font-family:ui-monospace,Menlo,monospace;font-size:18px;font-weight:600}
+  .stats-row .v .u{font-size:11px;color:var(--muted);margin-left:1px}
+  .stats-row .freshness{margin-left:auto;font-size:11px;color:var(--muted)}
+  .stats-row .freshness .dot{width:7px;height:7px;border-radius:50%;background:var(--good);display:inline-block;margin-right:5px}
+
+  /* Recommendations get a hairline-separated strip. Two-up grid, low chrome. */
+  .recs{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .rec-card{background:var(--panel);border:1px solid var(--border);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+  .rec-card h4{margin:0;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600}
+  .rec-row{display:flex;align-items:center;justify-content:space-between;font-size:12.5px;padding:3px 0;border-top:1px solid var(--border)}
+  .rec-row:first-of-type{border-top:none}
+  .rec-row .v{font-family:ui-monospace,Menlo,monospace;color:var(--good);font-weight:600}
+
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;background:var(--panel)}
+  .table-card{background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  th,td{padding:6px 12px;text-align:left;border-bottom:1px solid var(--border);font-size:12.5px}
+  th{background:var(--panel-2);font-weight:600;font-size:11.5px;cursor:pointer}
+  th.right,td.right{text-align:right}
+  td.num{font-family:ui-monospace,Menlo,monospace}
+  td.ducat{color:var(--ducat)}
+  td a{color:var(--fg)} td a:hover{color:var(--accent);text-decoration:underline}
+  .arrow{color:var(--accent)}
+  .muted{color:var(--muted);font-size:11.5px}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<aside class="rail">
+  <div>
+    <h1>WF · filters</h1>
+    <p class="sub">312 of 1,284 owned items match</p>
+  </div>
+
+  <div class="facet">
+    <h3>Min price <span class="val">5p</span></h3>
+    <input type="range" min="0" max="50" value="5" />
+    <input type="number" value="5" />
+  </div>
+
+  <div class="facet">
+    <h3>Min owned <span class="val">≥1</span></h3>
+    <input type="range" min="1" max="10" value="1" />
+  </div>
+
+  <div class="facet">
+    <h3>Hide ranked ≥ <span class="val">5</span></h3>
+    <input type="range" min="0" max="11" value="5" />
+    <span class="muted" style="font-size:10.5px">11 = disabled</span>
+  </div>
+
+  <div class="facet">
+    <h3>Type</h3>
+    <div class="checklist">
+      <label><input type="checkbox" checked /> All</label>
+      <label class="active"><input type="checkbox" checked /> Prime parts <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--accent)">218</span></label>
+      <label><input type="checkbox" /> Mods <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted)">71</span></label>
+      <label class="active"><input type="checkbox" checked /> Arcanes <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--accent)">14</span></label>
+      <label><input type="checkbox" /> Relics <span style="margin-left:auto;font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted)">52</span></label>
+    </div>
+  </div>
+
+  <div class="facet">
+    <h3>Tags <span class="val">2 active</span></h3>
+    <div class="tags">
+      <label class="active"><input type="checkbox" checked /> prime <span class="c">218</span></label>
+      <label><input type="checkbox" /> mod <span class="c">71</span></label>
+      <label class="active"><input type="checkbox" checked /> arcane <span class="c">14</span></label>
+      <label><input type="checkbox" /> relic <span class="c">52</span></label>
+      <label><input type="checkbox" /> augment <span class="c">11</span></label>
+      <label><input type="checkbox" /> syndicate <span class="c">6</span></label>
+      <label><input type="checkbox" /> set <span class="c">9</span></label>
+      <label class="stale"><input type="checkbox" disabled /> riven <span class="c">0</span></label>
+    </div>
+  </div>
+
+  <!-- Advanced facets the live app doesn't yet expose as filters but which
+       the rail format makes cheap to add. Toggled OFF here so they're
+       discoverable but not active. -->
+  <div class="facet">
+    <h3>Advanced</h3>
+    <label class="toggle"><input type="checkbox" /> Ducat-deal only (p/100d ≤ 25)</label>
+    <label class="toggle"><input type="checkbox" /> Trending up (Δ 90d ≥ +5%)</label>
+    <label class="toggle"><input type="checkbox" /> Patience flagged</label>
+  </div>
+
+  <button class="reset">Reset all filters</button>
+</aside>
+
+<main>
+  <div class="stats-row">
+    <div class="pair"><span class="k">Sellable</span><span class="v">312</span></div>
+    <div class="pair"><span class="k">Potential</span><span class="v">4,872<span class="u">p</span></span></div>
+    <div class="pair"><span class="k">Avg ducats</span><span class="v" style="color:var(--ducat)">38<span class="u">d</span></span></div>
+    <div class="freshness"><span class="dot"></span>market 1 h ago · inventory.json saved 4 min ago</div>
+  </div>
+
+  <div class="recs">
+    <div class="rec-card">
+      <h4>Set picks · top 3</h4>
+      <div class="rec-row"><span><strong>Mesa Prime</strong> <span class="muted">near-complete 3/4</span></span><span class="v">+95p</span></div>
+      <div class="rec-row"><span><strong>Saryn Prime</strong> <span class="muted">2 extra sets</span></span><span class="v">+170p</span></div>
+      <div class="rec-row"><span><strong>Loki Prime CH BP</strong> <span class="muted">5 dupes</span></span><span class="v">+30p</span></div>
+    </div>
+    <div class="rec-card">
+      <h4>Crack tonight · top 3</h4>
+      <div class="rec-row"><span><strong>Axi K2</strong> <span class="muted">×12 · radiant</span></span><span class="v" style="color:var(--fg)">47p / crack</span></div>
+      <div class="rec-row"><span><strong>Neo Z5</strong> <span class="muted">×24 · intact</span></span><span class="v" style="color:var(--fg)">31p / crack</span></div>
+      <div class="rec-row"><span><strong>Meso N11</strong> <span class="muted">×7 · flawless</span></span><span class="v" style="color:var(--fg)">22p / crack</span></div>
+    </div>
+  </div>
+
+  <div class="table-card">
+    <div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <strong style="font-size:13px">Sellable</strong>
+      <span class="muted">312 rows · sorted by <span style="color:var(--accent)">Score</span> <span class="arrow">↓</span></span>
+    </div>
+    <table>
+      <thead><tr>
+        <th>Item</th><th class="right">Own</th><th class="right"><span style="color:var(--accent)">Score</span> <span class="arrow">↓</span></th>
+        <th class="right">Avg</th><th class="right">Δ 90d</th><th class="right">Ducats</th><th class="right">Vol 48h</th><th class="right">Low sell</th>
+      </tr></thead>
+      <tbody>
+        <tr><td><a>Mesa Prime Set</a></td><td class="right num">2</td><td class="right num">165</td><td class="right num">85</td><td class="right num" style="color:var(--good)">▲7%</td><td class="right num ducat">—</td><td class="right num">14</td><td class="right num">82</td></tr>
+        <tr><td><a>Sevagoth Prime Blueprint</a></td><td class="right num">3</td><td class="right num">142</td><td class="right num">3</td><td class="right num" style="color:var(--good)">▲4%</td><td class="right num ducat">15</td><td class="right num">45</td><td class="right num">3</td></tr>
+        <tr><td><a>Khora Prime Systems</a></td><td class="right num">3</td><td class="right num">128</td><td class="right num">48</td><td class="right num muted">·0%</td><td class="right num ducat">65</td><td class="right num">22</td><td class="right num">46</td></tr>
+        <tr><td><a>Galvanized Aptitude</a></td><td class="right num">1</td><td class="right num">96</td><td class="right num">120</td><td class="right num" style="color:var(--bad)">▼14%</td><td class="right num ducat">—</td><td class="right num">1</td><td class="right num">118</td></tr>
+        <tr><td><a>Volt Prime Chassis Blueprint</a></td><td class="right num">4</td><td class="right num">88</td><td class="right num">12</td><td class="right num muted">·1%</td><td class="right num ducat">45</td><td class="right num">19</td><td class="right num">11</td></tr>
+        <tr><td><a>Magus Lockdown</a></td><td class="right num">1</td><td class="right num">62</td><td class="right num">75</td><td class="right num" style="color:var(--good)">▲11%</td><td class="right num ducat">—</td><td class="right num">4</td><td class="right num">74</td></tr>
+        <tr><td><a>Saryn Prime Set</a></td><td class="right num">2</td><td class="right num">58</td><td class="right num">85</td><td class="right num muted">·1%</td><td class="right num ducat">—</td><td class="right num">11</td><td class="right num">82</td></tr>
+        <tr><td><a>Biotic Rounds</a></td><td class="right num">2</td><td class="right num">54</td><td class="right num">42</td><td class="right num" style="color:var(--good)">▲18%</td><td class="right num ducat">—</td><td class="right num">8</td><td class="right num">40</td></tr>
+        <tr><td><a>Magnetize</a></td><td class="right num">1</td><td class="right num">42</td><td class="right num">52</td><td class="right num" style="color:var(--good)">▲9%</td><td class="right num ducat">—</td><td class="right num">5</td><td class="right num">50</td></tr>
+        <tr><td><a>Akbolto Prime Receiver</a></td><td class="right num">4</td><td class="right num">36</td><td class="right num">9</td><td class="right num" style="color:var(--good)">▲5%</td><td class="right num ducat">45</td><td class="right num">17</td><td class="right num">8</td></tr>
+        <tr><td><a>Loki Prime Chassis Blueprint</a></td><td class="right num">5</td><td class="right num">28</td><td class="right num">7</td><td class="right num muted">·2%</td><td class="right num ducat">45</td><td class="right num">34</td><td class="right num">7</td></tr>
+        <tr><td><a>Hystrix Prime Barrel</a></td><td class="right num">2</td><td class="right num">28</td><td class="right num">15</td><td class="right num muted">·1%</td><td class="right num ducat">45</td><td class="right num">12</td><td class="right num">14</td></tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+</div>
+</body>
+</html>

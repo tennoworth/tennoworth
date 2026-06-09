@@ -1,0 +1,53 @@
+name: audit
+
+# Runs dependency advisories across both ecosystems on every push and on a
+# weekly schedule. Fails the workflow on anything moderate-or-higher so we
+# notice before users do.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 4 * * 1'  # every Monday at 04:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bun-audit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: prototype
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: bun audit (moderate+)
+        run: bun audit --prod --audit-level=moderate
+      - name: tests
+        run: bun run test
+      - name: type-check
+        run: bunx svelte-check --threshold error
+      - name: build
+        run: bun run build
+
+  cargo-audit:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: companion
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: companion
+      - name: Install cargo-audit
+        run: cargo install --locked cargo-audit
+      - name: cargo audit
+        run: cargo audit --deny warnings

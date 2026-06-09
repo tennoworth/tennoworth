@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Layout · right drawer</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<!--
+  Drawer overlay layout. The main page stays focused on the sell table.
+  Secondary panels (Set picks, Relic planner, My orders, Filters) become
+  slide-out drawers triggered from a thin right-edge launcher. Active drawer
+  shown: Relic planner. The launcher is always visible so they're one click
+  away; the drawer dims the main content behind it.
+-->
+<style>
+  :root{
+    --bg:#0e0f12; --panel:#16181d; --panel-2:#1c1f26; --border:#262a33;
+    --fg:#d8dde6; --muted:#7a8089; --accent:#5ec8ff;
+    --good:#6ed99a; --warn:#e9c46a; --bad:#e76f51; --ducat:#c9a14a;
+    color-scheme:dark;
+    font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--fg);font-size:13px;line-height:1.5;overflow-x:hidden}
+  a{color:var(--accent);text-decoration:none}
+  .shell{display:grid;grid-template-columns:1fr 44px;min-height:100vh;max-width:1300px;margin:0 auto;position:relative}
+
+  main{padding:24px 24px 48px;display:flex;flex-direction:column;gap:14px;min-width:0;transition:filter .2s}
+  /* The dim simulates the active-drawer state. In a real implementation
+     this would only apply when a drawer is open. */
+  main.dim{filter:brightness(.55) blur(1px)}
+  h1{margin:0;font-size:20px;font-weight:600;letter-spacing:-0.015em}
+  .sub{color:var(--muted);font-size:12.5px;margin:4px 0 0}
+
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+  .stat{background:var(--panel);padding:12px 16px;display:flex;flex-direction:column;gap:4px}
+  .stat .k{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .stat .v{font-family:ui-monospace,Menlo,monospace;font-size:22px;font-weight:600;line-height:1.1}
+  .stat .v .unit{font-size:13px;color:var(--muted);margin-left:2px}
+  .stat.right .k,.stat.right .v{text-align:right}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--good);display:inline-block;margin-right:5px}
+
+  table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+  th,td{padding:6px 12px;text-align:left;border-bottom:1px solid var(--border);font-size:12.5px}
+  th{background:var(--panel-2);font-weight:600;font-size:11.5px;cursor:pointer}
+  th.right,td.right{text-align:right}
+  td.num{font-family:ui-monospace,Menlo,monospace}
+  td.ducat{color:var(--ducat)}
+  td a{color:var(--fg)} td a:hover{color:var(--accent);text-decoration:underline}
+  .arrow{color:var(--accent)}
+
+  /* Drawer launcher — fixed right-edge column of icons. Always-on, doesn't
+     fight with content. Badge dots show "you have something to see". */
+  .launch{border-left:1px solid var(--border);background:var(--panel);display:flex;flex-direction:column;align-items:center;padding:24px 0;gap:14px;position:sticky;top:0;height:100vh}
+  .launch button{background:transparent;border:1px solid var(--border);color:var(--muted);width:30px;height:30px;border-radius:6px;cursor:pointer;font:inherit;font-size:11px;display:flex;align-items:center;justify-content:center;position:relative;font-family:ui-monospace,Menlo,monospace}
+  .launch button:hover{color:var(--accent);border-color:var(--accent)}
+  .launch button.on{color:var(--accent);border-color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+  .launch button .dot-attn{position:absolute;top:-3px;right:-3px;width:7px;height:7px;border-radius:50%;background:var(--accent)}
+  .launch .label{writing-mode:vertical-rl;transform:rotate(180deg);font-size:9.5px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-top:6px}
+
+  /* The drawer itself. 420px wide, slides over the right side. Header has
+     the panel title, body scrolls. Close affordance top-right. */
+  .drawer{position:fixed;top:0;right:44px;bottom:0;width:420px;background:var(--panel);border-left:1px solid var(--border);box-shadow:-12px 0 32px rgba(0,0,0,.4);display:flex;flex-direction:column;z-index:10}
+  .drawer .head{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+  .drawer .head h2{margin:0;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+  .drawer .head .close{font:inherit;background:transparent;border:1px solid var(--border);color:var(--muted);border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer;font-family:ui-monospace,Menlo,monospace}
+  .drawer .body{padding:14px 16px;overflow-y:auto;display:flex;flex-direction:column;gap:12px;flex:1}
+  .relic-card{background:var(--panel-2);border:1px solid var(--border);border-radius:8px;padding:11px 13px;display:flex;flex-direction:column;gap:6px}
+  .relic-title{display:flex;justify-content:space-between;font-weight:600;font-size:13px}
+  .epp{font-family:ui-monospace,Menlo,monospace;font-size:22px;font-weight:600}
+  .epp .unit{font-size:11px;color:var(--muted);margin-left:3px}
+  .signals{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+  .signals strong{color:var(--fg);font-family:ui-monospace,Menlo,monospace;font-weight:500}
+  .drops{font-size:11px;display:grid;grid-template-columns:1fr auto auto;gap:2px 10px;border-top:1px solid var(--border);padding-top:6px;font-variant-numeric:tabular-nums;font-family:ui-monospace,Menlo,monospace}
+  .drops .nm{font-family:ui-sans-serif,system-ui,sans-serif;color:var(--fg)}
+  .drops .rate{color:var(--muted)}
+  .drops .pl{text-align:right}
+  .drops .pl.rare{color:var(--accent)}
+  .drops .pl.dim{color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="shell">
+
+<main class="dim">
+  <header>
+    <h1>WF inventory · market check</h1>
+    <p class="sub">Main view stays focused on the sell table; everything else lives in a drawer.</p>
+  </header>
+
+  <section class="stats">
+    <div class="stat"><span class="k">Owned</span><span class="v">1,284</span></div>
+    <div class="stat"><span class="k">Sellable</span><span class="v">312</span></div>
+    <div class="stat"><span class="k">Potential</span><span class="v">4,872 <span class="unit">p</span></span></div>
+    <div class="stat right"><span class="k"><span class="dot"></span> Market</span><span class="v" style="font-size:13px;font-family:ui-sans-serif,system-ui,sans-serif;font-weight:500">1 h ago</span></div>
+  </section>
+
+  <div style="background:var(--panel);border:1px solid var(--border);border-radius:10px;overflow:hidden">
+    <table>
+      <thead><tr>
+        <th>Item</th><th class="right">Own</th><th class="right"><span style="color:var(--accent)">Score</span> <span class="arrow">↓</span></th>
+        <th class="right">Avg</th><th class="right">Δ 90d</th><th class="right">Ducats</th><th class="right">Vol 48h</th><th class="right">Low sell</th>
+      </tr></thead>
+      <tbody>
+        <tr><td><a>Mesa Prime Set</a></td><td class="right num">2</td><td class="right num">165</td><td class="right num">85</td><td class="right num" style="color:var(--good)">▲7%</td><td class="right num ducat">—</td><td class="right num">14</td><td class="right num">82</td></tr>
+        <tr><td><a>Sevagoth Prime Blueprint</a></td><td class="right num">3</td><td class="right num">142</td><td class="right num">3</td><td class="right num" style="color:var(--good)">▲4%</td><td class="right num ducat">15</td><td class="right num">45</td><td class="right num">3</td></tr>
+        <tr><td><a>Khora Prime Systems</a></td><td class="right num">3</td><td class="right num">128</td><td class="right num">48</td><td class="right num muted">·0%</td><td class="right num ducat">65</td><td class="right num">22</td><td class="right num">46</td></tr>
+        <tr><td><a>Galvanized Aptitude</a></td><td class="right num">1</td><td class="right num">96</td><td class="right num">120</td><td class="right num" style="color:var(--bad)">▼14%</td><td class="right num ducat">—</td><td class="right num">1</td><td class="right num">118</td></tr>
+        <tr><td><a>Volt Prime Chassis Blueprint</a></td><td class="right num">4</td><td class="right num">88</td><td class="right num">12</td><td class="right num muted">·1%</td><td class="right num ducat">45</td><td class="right num">19</td><td class="right num">11</td></tr>
+        <tr><td><a>Magus Lockdown</a></td><td class="right num">1</td><td class="right num">62</td><td class="right num">75</td><td class="right num" style="color:var(--good)">▲11%</td><td class="right num ducat">—</td><td class="right num">4</td><td class="right num">74</td></tr>
+        <tr><td><a>Saryn Prime Set</a></td><td class="right num">2</td><td class="right num">58</td><td class="right num">85</td><td class="right num muted">·1%</td><td class="right num ducat">—</td><td class="right num">11</td><td class="right num">82</td></tr>
+        <tr><td><a>Magnetize</a></td><td class="right num">1</td><td class="right num">42</td><td class="right num">52</td><td class="right num" style="color:var(--good)">▲9%</td><td class="right num ducat">—</td><td class="right num">5</td><td class="right num">50</td></tr>
+        <tr><td><a>Akbolto Prime Receiver</a></td><td class="right num">4</td><td class="right num">36</td><td class="right num">9</td><td class="right num" style="color:var(--good)">▲5%</td><td class="right num ducat">45</td><td class="right num">17</td><td class="right num">8</td></tr>
+        <tr><td><a>Loki Prime Chassis Blueprint</a></td><td class="right num">5</td><td class="right num">28</td><td class="right num">7</td><td class="right num muted">·2%</td><td class="right num ducat">45</td><td class="right num">34</td><td class="right num">7</td></tr>
+        <tr><td><a>Hystrix Prime Barrel</a></td><td class="right num">2</td><td class="right num">28</td><td class="right num">15</td><td class="right num muted">·1%</td><td class="right num ducat">45</td><td class="right num">12</td><td class="right num">14</td></tr>
+        <tr><td><a>Tiberon Prime Stock</a></td><td class="right num">2</td><td class="right num">22</td><td class="right num">14</td><td class="right num" style="color:var(--bad)">▼21%</td><td class="right num ducat">15</td><td class="right num">6</td><td class="right num">13</td></tr>
+        <tr><td><a>Vauban Prime Blueprint</a></td><td class="right num">2</td><td class="right num">18</td><td class="right num">12</td><td class="right num" style="color:var(--bad)">▼8%</td><td class="right num ducat">15</td><td class="right num">9</td><td class="right num">11</td></tr>
+        <tr><td><a>Streamline</a></td><td class="right num">3</td><td class="right num">14</td><td class="right num">6</td><td class="right num" style="color:var(--bad)">▼17%</td><td class="right num ducat">—</td><td class="right num">29</td><td class="right num">5</td></tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<aside class="launch">
+  <button title="Filters">F</button>
+  <button title="Set picks"><span class="dot-attn"></span>S</button>
+  <button class="on" title="Relic planner">R</button>
+  <button title="My WFM orders"><span class="dot-attn"></span>O</button>
+  <button title="Companion">C</button>
+  <button title="Inventory">I</button>
+  <span class="label">panels</span>
+</aside>
+
+<!-- Active drawer: Relic planner. In production, would slide in from the right.
+     Mocked as an absolutely-positioned panel covering the right side. -->
+<div class="drawer">
+  <div class="head">
+    <h2>● Relic planner</h2>
+    <button class="close">esc ✕</button>
+  </div>
+  <div class="body">
+    <p style="font-size:12px;color:var(--muted);margin:0">Top 3 owned relics by expected plat per crack. Vol signal = how many of the 6 rewards are actually moving.</p>
+
+    <div class="relic-card">
+      <div class="relic-title"><span>Axi K2</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted)">RADIANT</span></div>
+      <div class="epp">47<span class="unit">p / crack</span></div>
+      <div class="signals">vol signal <strong>4 / 6</strong> · own <strong>×12</strong> · total if all cracked <strong>564p</strong></div>
+      <div class="drops">
+        <span class="nm">Khora Prime Systems</span><span class="rate">10.0%</span><span class="pl rare">85p</span>
+        <span class="nm">Magnus Prime Receiver</span><span class="rate">10.0%</span><span class="pl">42p</span>
+        <span class="nm">Hystrix Prime Barrel</span><span class="rate">20.0%</span><span class="pl">18p</span>
+        <span class="nm">Forma BP</span><span class="rate">60.0%</span><span class="pl dim">—</span>
+      </div>
+    </div>
+
+    <div class="relic-card">
+      <div class="relic-title"><span>Neo Z5</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted)">INTACT</span></div>
+      <div class="epp">31<span class="unit">p / crack</span></div>
+      <div class="signals">vol signal <strong>5 / 6</strong> · own <strong>×24</strong> · total <strong>744p</strong></div>
+      <div class="drops">
+        <span class="nm">Mesa Prime Systems</span><span class="rate">2.0%</span><span class="pl rare">120p</span>
+        <span class="nm">Akbolto Prime Link</span><span class="rate">11.0%</span><span class="pl">28p</span>
+        <span class="nm">Tiberon Prime Stock</span><span class="rate">17.0%</span><span class="pl">14p</span>
+        <span class="nm">Forma BP</span><span class="rate">70.0%</span><span class="pl dim">—</span>
+      </div>
+    </div>
+
+    <div class="relic-card">
+      <div class="relic-title"><span>Meso N11</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:11px;color:var(--muted)">FLAWLESS</span></div>
+      <div class="epp">22<span class="unit">p / crack</span></div>
+      <div class="signals">vol signal <strong>3 / 6</strong> · own <strong>×7</strong> · total <strong>154p</strong></div>
+      <div class="drops">
+        <span class="nm">Nezha Prime BP</span><span class="rate">11.0%</span><span class="pl rare">55p</span>
+        <span class="nm">Zakti Prime Receiver</span><span class="rate">17.0%</span><span class="pl">12p</span>
+        <span class="nm">Velox Prime Barrel</span><span class="rate">25.5%</span><span class="pl">8p</span>
+        <span class="nm">Forma BP</span><span class="rate">46.5%</span><span class="pl dim">—</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>

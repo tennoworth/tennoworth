@@ -1,0 +1,46 @@
+:root {
+  --bg: #0e0f12;
+  --panel: #16181d;
+  --panel-2: #1c1f26;
+  --border: #262a33;
+  --fg: #d8dde6;
+  --muted: #7a8089;
+  --accent: #5ec8ff;
+  --good: #6ed99a;
+  --warn: #e9c46a;
+  --bad: #e76f51;
+  /* Warm ducat-coin tone — used only on the ducats column + ducat-deal
+     badge so the colour reads as a domain signal, not a generic accent. */
+  --ducat: #c9a14a;
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body, #app { height: 100%; margin: 0; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 14px;
+  line-height: 1.5;
+}
+a { color: var(--accent); }
+button {
+  font: inherit;
+  color: var(--fg);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { background: #232733; }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+input[type="text"], input[type="number"] {
+  font: inherit;
+  color: var(--fg);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
