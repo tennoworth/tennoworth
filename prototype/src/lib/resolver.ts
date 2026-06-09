@@ -1,14 +1,16 @@
 // Resolves /Lotus/... internal paths to a warframe.market slug.
 //
-// path -> display name comes from warframestat.us (has CORS, hit direct).
-// name -> WFM slug comes from the catalog baked into our market.json
-// snapshot (so the browser never has to call api.warframe.market, which
-// doesn't allow cross-origin fetches).
+// path -> display name comes from wfstat-catalog.json, baked at build
+// time by csv_to_market_json.py and served same-origin. It used to be a
+// direct warframestat.us fetch, but upstream dropped its CORS headers
+// (2026-06-09) — and the direct fetch also varied on Accept-Language,
+// so non-English browsers got localized names that matched nothing on
+// WFM. name -> WFM slug comes from the catalog baked into market.json.
 
 import { readCached, writeCached, type SlimCatalog } from './catalog-cache';
-import type { Market, ResolvedItem, SlimItemInfo, WfStatItem } from './types';
+import type { Market, ResolvedItem, SlimItemInfo } from './types';
 
-const WFSTAT_ITEMS_URL = 'https://api.warframestat.us/items/';
+const WFSTAT_CATALOG_URL = '/wfstat-catalog.json';
 
 export interface Catalogs {
   uniqueToInfo: Map<string, SlimItemInfo>;
@@ -23,16 +25,12 @@ export async function loadCatalogs(): Promise<Catalogs> {
     return { uniqueToInfo: new Map(cached) };
   }
 
-  const r = await fetch(WFSTAT_ITEMS_URL);
-  if (!r.ok) throw new Error(`warframestat.us responded ${r.status}`);
-  const wfstat = (await r.json()) as WfStatItem[];
+  const r = await fetch(WFSTAT_CATALOG_URL);
+  if (!r.ok) throw new Error(`wfstat-catalog.json responded ${r.status} — rebuild the snapshot (csv_to_market_json.py)`);
+  // Already in slim [uniqueName, {name, category}] form — baked that way.
+  const slim = (await r.json()) as SlimCatalog;
+  if (!Array.isArray(slim)) throw new Error('wfstat-catalog.json is not an array');
 
-  const slim: SlimCatalog = [];
-  for (const it of wfstat) {
-    if (it.uniqueName && it.name) {
-      slim.push([it.uniqueName, { name: it.name, category: it.category || null }]);
-    }
-  }
   // Fire-and-forget; we don't want to block first paint on the write.
   void writeCached(slim);
   return { uniqueToInfo: new Map(slim) };

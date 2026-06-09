@@ -14,19 +14,24 @@ Build: `bun run build`. Type-check: `bun run check`. Install: `bun install`.
 
 ## Architectural rules
 
-### Never call warframe.market from the browser
+### No third-party fetches from the browser. None.
 WFM serves no `Access-Control-Allow-Origin` header. Direct browser
 fetches will fail CORS. All WFM data must come from the static
 `market.json` snapshot under `public/`, produced by `wfm_demand.py`
 (locally) or the GH Actions cron (in production).
 
-`warframestat.us` *does* send CORS headers and can be hit direct —
-that's how `resolver.js` resolves `/Lotus/...` paths. But that's the
-**only** direct call: vendor/reference data (relic rewards, vault
-status, **Baro schedule** — `market.baro`) is baked into `market.json`
-at build time by `csv_to_market_json.py`. The Baro view reads
-`market.baro`, never warframestat — a runtime fetch there broke this
-rule and vanished during warframestat outages.
+`warframestat.us` used to be the one allowed direct call (it sent
+CORS headers; the resolver hit `/items/` for `/Lotus/...` paths) —
+**upstream dropped its CORS headers on 2026-06-09** and broke every
+inventory upload. The resolver catalog is now baked too:
+`csv_to_market_json.py` writes `public/wfstat-catalog.json` (slim
+`[uniqueName, {name, category}]` pairs, forced `Accept-Language: en` —
+localized names silently fail the WFM name join). All vendor data
+(relic rewards, vault status, **Baro schedule** — `market.baro`,
+resolver catalog) is baked at build time and served same-origin; the
+CSP `connect-src` has no third-party origins left. A runtime
+warframestat fetch broke this rule once before and vanished during
+outages — don't reintroduce one.
 
 For order management (create / edit / delete listings), the browser
 talks to the **companion's loopback HTTP server** on `127.0.0.1`,
@@ -34,11 +39,11 @@ which has the JWT in memory and relays. The browser never sees the
 JWT.
 
 ### One source of truth for owned-item resolution
-`src/lib/resolver.js` is the only place that maps a `/Lotus/...` path
-to a `{name, slug, category}`. All UI code joins through
+`src/lib/resolver.ts` is the only place that maps a `/Lotus/...` path
+to a `{name, slug, category}`, reading the baked
+`/wfstat-catalog.json`. All UI code joins through
 `market.items[slug]` (stats) and `market.catalog[name_lower]` (slug
-lookup). Don't reach into warframestat.us anywhere except
-`resolver.js`.
+lookup).
 
 ---
 
@@ -85,12 +90,13 @@ not `dispatch('inventory', detail)`.
 | HTTP request/response cache | Cache API (not used yet) |
 
 `localStorage` keys we use:
-- `wfminv:last-owned-v2` — saved owned-items snapshot.
+- `wfminv:last-owned-v4` — saved owned-items snapshot.
 - `wfminv:companion-v1` — companion URL + session token.
 
 IndexedDB DB:
-- `wfminv` / store `catalogs` / key `wfstat-items-v2` — slim
-  `[uniqueName, {name, category}]` pairs.
+- `wfminv` / store `catalogs` / key `wfstat-items-v3` — slim
+  `[uniqueName, {name, category}]` pairs from the baked
+  `/wfstat-catalog.json` (v2 caches could hold localized names).
 
 **Always bump the version suffix in the key when the stored shape
 changes** so old data is silently invalidated.
@@ -136,9 +142,11 @@ gap. The `<meta http-equiv="Content-Security-Policy">` in
 Pages; HSTS / frame-ancestors / X-Frame-Options need a real header
 host.
 
-Allowed `connect-src`: `self`, `https://api.warframestat.us`,
-`http://127.0.0.1:*`, `http://localhost:*`. The two loopback entries
-are for the companion.
+Allowed `connect-src`: `self`, `http://127.0.0.1:*`,
+`http://localhost:*`. The two loopback entries are for the companion;
+there are no third-party origins. The CSP lives in THREE places that
+must stay in sync: `index.html` (meta), `public/_headers`, and
+`deploy/Caddyfile`.
 
 ---
 

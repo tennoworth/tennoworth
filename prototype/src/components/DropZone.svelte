@@ -53,7 +53,7 @@
 >
   {#if loading}
     <strong>Loading item catalogs…</strong>
-    <p>(one-time per session — warframestat.us is ~5 MB)</p>
+    <p>(one-time per day — the item catalog is ~2 MB)</p>
   {:else}
     <strong>Drop your <code>inventory.json</code> here</strong>
     <p>or click to pick a file</p>

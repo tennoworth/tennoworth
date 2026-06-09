@@ -41,6 +41,13 @@ WFSTAT_RELICS_URL = "https://drops.warframestat.us/data/relics.json"
 # never fetches warframestat directly — that violated the resolver-only
 # rule and vanished during warframestat outages.
 WFSTAT_VOIDTRADER_URL = "https://api.warframestat.us/pc/voidTrader/"
+# Bulk item list backing the browser's /Lotus/... path resolver. The
+# browser used to fetch this directly (warframestat sent CORS headers);
+# upstream dropped Access-Control-Allow-Origin on 2026-06-09, so the slim
+# (uniqueName → name/category) pairs are baked here and served same-origin
+# like every other vendor dataset.
+WFSTAT_ITEMS_URL = "https://api.warframestat.us/items/"
+CATALOG_OUT = ROOT / "prototype" / "public" / "wfstat-catalog.json"
 # Vault status lives on WFCD's warframe-items dataset per-parent-prime
 # (Warframes.json + Weapons.json). Each parent has `vaulted: bool` and
 # `estimatedVaultDate: ISO`. We propagate from parent → all its
@@ -303,6 +310,24 @@ def fetch_parent_data(catalog):
     return path_to_info, set_to_parts
 
 
+def fetch_wfstat_slim():
+    """Slim [uniqueName, {name, category}] pairs for the browser resolver,
+    in the exact shape its IndexedDB cache stores. English is forced —
+    the endpoint varies on Accept-Language, and a localized catalog
+    silently breaks the name → WFM-slug join (a pt-PT browser produced
+    rows like "Liga Metálica" that matched nothing on WFM)."""
+    r = requests.get(WFSTAT_ITEMS_URL, timeout=60, headers={"Accept-Language": "en"})
+    r.raise_for_status()
+    arr = r.json()
+    if not isinstance(arr, list):
+        raise ValueError("warframestat /items/ returned non-list")
+    slim = []
+    for it in arr:
+        if isinstance(it, dict) and it.get("uniqueName") and it.get("name"):
+            slim.append([it["uniqueName"], {"name": it["name"], "category": it.get("category")}])
+    return slim
+
+
 def fetch_catalog():
     """Returns (catalog, meta_by_slug). `catalog` maps lowercased name → slug
     (used by the browser to resolve an inventory item to a WFM listing).
@@ -357,6 +382,23 @@ def main():
     print("Fetching Baro Ki'Teer schedule...")
     baro = fetch_void_trader()
     print(f"  baro: {baro.get('location') or 'unavailable'}")
+
+    print("Fetching warframestat bulk item catalog (resolver data)...")
+    try:
+        wfstat_slim = fetch_wfstat_slim()
+    except Exception as e:
+        print(f"  warning: could not fetch {WFSTAT_ITEMS_URL}: {e}")
+        wfstat_slim = []
+    # Preserve-on-empty, same policy as the market.json surfaces: an
+    # upstream outage must not blank a previously good catalog.
+    if not wfstat_slim and CATALOG_OUT.exists():
+        print(f"  fetch empty — keeping existing {CATALOG_OUT.name}", flush=True)
+    elif wfstat_slim:
+        tmp = CATALOG_OUT.with_name(CATALOG_OUT.name + ".tmp")
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(wfstat_slim, fh, separators=(",", ":"))
+        tmp.replace(CATALOG_OUT)
+        print(f"  {len(wfstat_slim):,} entries → {CATALOG_OUT.name}", flush=True)
 
     # Preserve-on-empty. warframestat 522s intermittently (caught
     # 2026-05-28: an outage left set_to_parts empty and blanked the Sets
