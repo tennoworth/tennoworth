@@ -76,10 +76,10 @@
   // reload lands the user back where they left off. Falls through to
   // 'sell' if the persisted view's data isn't available (Baro not
   // visiting, companion not connected).
-  type View = 'sell' | 'sets' | 'relics' | 'baro' | 'orders' | 'companion' | 'install';
+  type View = 'sell' | 'sets' | 'relics' | 'baro' | 'routines' | 'orders' | 'companion' | 'install';
   const VIEW_KEY = 'wfminv:view-v1';
   const VALID_VIEWS: ReadonlySet<View> = new Set([
-    'sell', 'sets', 'relics', 'baro', 'orders', 'companion', 'install',
+    'sell', 'sets', 'relics', 'baro', 'routines', 'orders', 'companion', 'install',
   ]);
   let view = $state<View>(
     (() => {
@@ -450,6 +450,21 @@
     if (h > 0) return `${h}h ${m}m`;
     return `${m}m`;
   }
+
+  // Daily/weekly profit-routine clocks. Warframe resets daily at 00:00 UTC
+  // and weekly Monday 00:00 UTC; we show only countdowns + static reminders,
+  // never completion state (acts done / Endo banked are account state the
+  // inventory+market snapshot can't carry). Date.now() isn't reactive, so
+  // these recompute on load / view change — the same non-ticking model as the
+  // Baro card, which is fine for a "next reset in ~Xh" reminder.
+  let routinesState = $derived.by(() => {
+    const now = Date.now();
+    const d = new Date(now);
+    const nextDaily = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1);
+    const daysToMon = ((8 - d.getUTCDay()) % 7) || 7; // 0=Sun..6=Sat → next Mon
+    const nextWeekly = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + daysToMon);
+    return { dailyMs: nextDaily - now, weeklyMs: nextWeekly - now };
+  });
 
   // Relic planner — top 3 owned (Intact) relics by expected-plat-per-crack.
   let relicPlan = $derived.by(() => {
@@ -911,6 +926,9 @@
             {#if baroState?.phase === 'here'}<span class="badge here">here</span>{/if}
           </button>
         {/if}
+        <button type="button" class="nav-item" class:active={effectiveView === 'routines'} onclick={() => setView('routines')}>
+          <span>Routines</span>
+        </button>
       </div>
 
       <div class="nav-group">
@@ -1274,6 +1292,72 @@
             <button onclick={() => { setView('sell'); applyPreset('ducats'); }}>Open Ducats preset →</button>
           </div>
         </div>
+      </section>
+
+    {:else if effectiveView === 'routines'}
+      <section class="view-header">
+        <h2>Profit routines</h2>
+        <p class="lede">
+          Daily and weekly habits that compound — including the Endo sources that fund the
+          buy-unranked → max → resell flip. Countdowns are live; what you've already claimed
+          isn't tracked (your inventory + the market snapshot can't see account state).
+        </p>
+      </section>
+
+      <section class="card routine">
+        <div class="routine-clocks">
+          <div class="clock">
+            <span class="clock-label">Daily reset</span>
+            <strong class="clock-val">{humanWindow(routinesState.dailyMs)}</strong>
+            <span class="clock-sub">00:00 UTC</span>
+          </div>
+          <div class="clock">
+            <span class="clock-label">Weekly reset</span>
+            <strong class="clock-val">{humanWindow(routinesState.weeklyMs)}</strong>
+            <span class="clock-sub">Mon 00:00 UTC</span>
+          </div>
+          <div class="clock">
+            <span class="clock-label">{baroState?.phase === 'here' ? 'Baro leaves' : 'Baro arrives'}</span>
+            <strong class="clock-val">{voidTrader ? humanWindow(baroState?.windowMs) : '—'}</strong>
+            <span class="clock-sub">{voidTrader?.location ?? 'schedule unknown'}</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card routine">
+        <h3>Daily</h3>
+        <ul class="routine-list">
+          <li><strong>Login tribute</strong> — claim it; the milestone days hand out Endo and the exclusive weapons/Forma that fund everything else.</li>
+          <li><strong>Keep the foundry busy</strong> — start a Forma or a sellable BP every day; an idle foundry is lost plat.</li>
+          <li><strong>Cap syndicate standing</strong> → buy augment mods / arcanes to flip on WFM — a steady daily plat trickle.</li>
+          <li><strong>6 Steel Path incursions</strong> → Steel Essence → Teshin's weekly rotation (Riven slivers, Kuva, Umbra Forma).</li>
+          <li><strong>Sortie</strong> — ~4,000 Endo on the Endo reward, plus a Riven chance.</li>
+        </ul>
+      </section>
+
+      <section class="card routine">
+        <h3>Weekly <span class="muted">· resets Monday</span></h3>
+        <ul class="routine-list">
+          <li><strong>Maroo's Ayatan Treasure Hunt</strong> — a free sculpture worth ~1,500–3,450 Endo once filled with stars.</li>
+          <li><strong>Archon Hunt</strong> — up to ~8,000 Endo in one clear, plus an Archon Shard.</li>
+          <li><strong>Nightwave acts</strong> → Cred for potatoes/Forma. This <em>saves</em> plat (those items are account-bound) — it doesn't earn it.</li>
+          <li><strong>Baro check</strong> on arrival — but buy to <strong>hold</strong>, not flip: his mods crater ~50% on arrival and recover over weeks (watch the Sell view's “hold” tags).</li>
+        </ul>
+      </section>
+
+      <section class="card routine">
+        <h3>Endo — to fund the rank-up flip</h3>
+        <p class="routine-note">
+          Maxing one Primed mod ≈ <strong>20,000 Endo + ~1.3M credits</strong> and roughly doubles its
+          value (e.g. Primed Continuity ~69p unranked → ~139p maxed). Best sources:
+        </p>
+        <ul class="routine-list">
+          <li><strong>Arbitrations</strong> — ~5,000–10,000 Endo/hr (the grind option; needs the full star chart cleared).</li>
+          <li><strong>Vodyanoi</strong> (Sedna, Steel Path) — the throughput king; a coordinated squad pushes far higher.</li>
+          <li><strong>Hieracon (Pluto) excavation</strong> — steady and solo-friendly, with relics as a byproduct.</li>
+          <li><strong>Archon (~8k/wk) + Sortie (~4k/day) + Maroo's weekly</strong> — passive lumps from the routines above.</li>
+          <li class="routine-avoid"><strong>Skip Eidolons &amp; Profit-Taker for Endo</strong> — they pay ~zero Endo; farm those for arcanes/plat instead.</li>
+        </ul>
       </section>
 
     {:else if effectiveView === 'orders'}
@@ -2218,6 +2302,33 @@
   .baro-detail { font-size: 12.5px; margin: 0; line-height: 1.5; }
   .baro-detail strong { color: var(--fg); font-weight: 600; }
   .baro-detail .unit { color: var(--muted); font-size: 11px; margin-left: 1px; }
+
+  /* Profit routines — countdown clocks + reminder lists. */
+  .routine h3 { margin: 0 0 6px; font-size: 14px; }
+  .routine h3 .muted { font-weight: 400; }
+  .routine-clocks {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+  }
+  @media (max-width: 760px) { .routine-clocks { grid-template-columns: 1fr; } }
+  .clock {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 14px;
+  }
+  .clock-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  .clock-val { font-size: 20px; font-weight: 600; color: var(--fg); }
+  .clock-sub { font-size: 11px; color: var(--muted); }
+  .routine-list { margin: 8px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 7px; }
+  .routine-list li { font-size: 12.5px; line-height: 1.5; }
+  .routine-list strong { color: var(--fg); font-weight: 600; }
+  .routine-note { font-size: 12.5px; line-height: 1.5; margin: 0; color: var(--muted); }
+  .routine-avoid { color: var(--muted); }
 
   /* Relic planner — three-card grid above the main table. Equal-weight
      cards because the user is making a "what tonight" choice and equal
