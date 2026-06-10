@@ -232,8 +232,16 @@ def test_poison_drops_cap_pinned_max_price_even_with_sane_median():
 
 
 def test_poison_drops_extreme_outlier_vs_baseline():
-    rows = [_day(median=1), _day(median=1), _day(median=1), _day(median=99)]
-    assert drop_poisoned_rows(rows) == rows[:3]  # 99 > 50x baseline(1)
+    # >50x baseline AND >= the 200p absolute floor (Mawfish: 300p on a 2p fish)
+    rows = [_day(median=1), _day(median=1), _day(median=1), _day(median=300)]
+    assert drop_poisoned_rows(rows) == rows[:3]
+
+
+def test_poison_keeps_cheap_outliers_below_absolute_floor():
+    """A real balance-patch repricing (1p junk → 60p) is >50x but honest;
+    only outliers that are also expensive in absolute terms get dropped."""
+    rows = [_day(median=1), _day(median=1), _day(median=1), _day(median=60)]
+    assert drop_poisoned_rows(rows) == rows
 
 
 def test_poison_keeps_legit_spike_below_factor():

@@ -79,6 +79,7 @@
     const next = new Set(activePills);
     if (next.has(key)) next.delete(key); else next.add(key);
     activePills = next;
+    page = 0;
   }
 
   // Counts come from the un-pill-filtered rows so an active chip doesn't
@@ -280,6 +281,7 @@
       type="text"
       placeholder="Filter by name…"
       bind:value={filter}
+      oninput={() => (page = 0)}
     />
     <div class="pill-filters">
       {#each PILL_DEFS as p (p.key)}

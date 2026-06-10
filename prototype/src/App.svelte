@@ -220,7 +220,8 @@
       lastUpdated = snap.ts;
       resolved = { owned: snap.owned, unresolved: {} };
       if (!market) market = await loadMarket();
-      recomputeResults();
+      // No explicit recompute: the results $effect tracks resolved/market and
+      // flushes before paint — the old call here just computed everything twice.
       phase = 'done';
     } catch (e) {
       console.error(e);
@@ -416,11 +417,6 @@
     }
     out.sort((a, b) => b.sell_score - a.sell_score);
     return out;
-  }
-
-  function recomputeResults() {
-    if (!resolved.owned.size || !market) return;
-    results = computeResults(resolved.owned);
   }
 
   // Re-derive results whenever any filter input or the owned set changes.
@@ -913,8 +909,13 @@
         <div class="body">
           <h3>Run it once</h3>
           <p>With Warframe past the login screen, run:</p>
-          <pre class="snippet"><code>sudo wfm-fetch-inventory</code></pre>
-          <p class="muted">Writes <code>~/Downloads/inventory.json</code>.</p>
+          <pre class="snippet"><code>wfm-fetch-inventory</code></pre>
+          <p class="muted">
+            Writes <code>inventory.json</code> to your Downloads folder.
+            Windows: no admin needed. Linux: grant ptrace once
+            (<code>sudo setcap cap_sys_ptrace=eip ~/.local/bin/wfm-fetch-inventory</code>)
+            and it runs without sudo forever.
+          </p>
         </div>
       </li>
       <li>
@@ -954,7 +955,7 @@
   <aside class="sidebar">
     <div class="brand">
       <h1>WF · market check</h1>
-      <div class="sub">Linux-first</div>
+      <div class="sub">Windows + Linux · no Overwolf</div>
     </div>
 
     <nav>
@@ -1538,11 +1539,12 @@
     <details>
       <summary>Can I sync between desktop and laptop?</summary>
       <p>
-        There are no accounts. Two options: run the companion on each
-        device, or copy your <code>inventory.json</code> across. If
-        cross-device becomes a common ask we'll add encrypted export /
-        re-import (the file you sync stays encrypted with a passphrase
-        only you hold).
+        There are no accounts. Use the built-in <strong>Export</strong>
+        button in the sidebar: it produces a file encrypted with a
+        passphrase only you hold (AES-256-GCM, PBKDF2 600k), which you
+        can drop into the app on any other device. Or simply copy your
+        <code>inventory.json</code> across / run the companion on each
+        device.
       </p>
     </details>
 
