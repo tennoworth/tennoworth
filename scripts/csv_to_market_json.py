@@ -10,10 +10,21 @@ calling WFM directly (which can't be done from a browser — no CORS headers).
 import csv
 import json
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
 import requests
+
+# Cloudflare 1015-blocks generic UAs (scripts/CLAUDE.md hard rule). Same
+# string as wfm_demand.py — keep them in sync.
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0",
+}
+
+
+def _get(url, timeout=30):
+    return requests.get(url, timeout=timeout, headers=HEADERS)
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -87,24 +98,31 @@ def _parse_medians(raw):
 
 
 def fetch_vault_status(catalog):
-    """Returns {slug: "vaulted"|"vaulting-soon"|"available"} for every
-    prime part findable across WFCD warframe-items. Walks each parent
-    item (warframe / weapon), reads `vaulted` + `estimatedVaultDate`,
+    """Returns ({slug: "vaulted"|"vaulting-soon"|"available"}, complete)
+    for every prime part findable across WFCD warframe-items. Walks each
+    parent item (warframe / weapon), reads `vaulted` + `estimatedVaultDate`,
     propagates to all component slugs (set, blueprint, each part).
-    Missing/unparseable upstream = empty map; the UI degrades to no
-    badge."""
+
+    `complete` is False when ANY source failed — a 9-of-10 fetch yields a
+    truthy-but-incomplete map, and per the snapshot contract missing slugs
+    read as "available", so overwriting a complete prior with it silently
+    strips vault badges (a sell signal). The caller merges with prior in
+    that case."""
     from datetime import datetime, timezone, timedelta
     out = {}
+    complete = True
     now = datetime.now(timezone.utc)
     soon_cutoff = now + timedelta(days=VAULT_SOON_DAYS)
 
     for url in WFCD_VAULT_SOURCES:
         try:
-            arr = requests.get(url, timeout=30).json()
+            arr = _get(url).json()
         except Exception as e:
             print(f"  warning: could not fetch {url}: {e}")
+            complete = False
             continue
         if not isinstance(arr, list):
+            complete = False
             continue
         for parent in arr:
             if not isinstance(parent, dict):
@@ -149,7 +167,7 @@ def fetch_vault_status(catalog):
                 if slug and slug not in seen:
                     out[slug] = status
                     seen.add(slug)
-    return out
+    return out, complete
 
 
 def fetch_void_trader():
@@ -158,7 +176,7 @@ def fetch_void_trader():
     inventory list isn't shown. Empty dict on any failure or missing
     field; the Baro card then hides instead of rendering 'undefined'."""
     try:
-        data = requests.get(WFSTAT_VOIDTRADER_URL, timeout=30).json()
+        data = _get(WFSTAT_VOIDTRADER_URL).json()
     except Exception as e:
         print(f"  warning: could not fetch {WFSTAT_VOIDTRADER_URL}: {e}")
         return {}
@@ -181,7 +199,7 @@ def fetch_relic_rewards(catalog):
     planner UI degrades to an empty-state card).
     """
     try:
-        body = requests.get(WFSTAT_RELICS_URL, timeout=30).json()
+        body = _get(WFSTAT_RELICS_URL).json()
     except Exception as e:
         print(f"  warning: could not fetch {WFSTAT_RELICS_URL}: {e}")
         return {}
@@ -235,17 +253,25 @@ def fetch_parent_data(catalog):
        - `set_to_parts`: {set_slug: {name, parts: [{slug, component_name}]}}
     The set map powers the browser's set-completion card without
     requiring another network round-trip. `catalog` is the lowercased
-    name → slug map already built from WFM."""
+    name → slug map already built from WFM.
+
+    Returns (path_to_info, set_to_parts, complete) — complete is False
+    when any endpoint failed, so the caller can merge with the prior
+    snapshot instead of replacing a complete map with a partial one
+    (which made whole inventory categories unresolvable)."""
     path_to_info = {}
     set_to_parts = {}
+    complete = True
     for url, fallback_cat in WFSTAT_PARENT_ENDPOINTS:
         try:
-            arr = requests.get(url, timeout=30).json()
+            arr = _get(url).json()
         except Exception as e:
             print(f"  warning: could not fetch {url}: {e}")
+            complete = False
             continue
         if not isinstance(arr, list):
             print(f"  warning: {url} returned non-list (skipping)")
+            complete = False
             continue
         for parent in arr:
             # Some warframestat endpoints occasionally contain string
@@ -307,7 +333,7 @@ def fetch_parent_data(catalog):
                     "name": parent_name,
                     "parts": this_set_parts,
                 }
-    return path_to_info, set_to_parts
+    return path_to_info, set_to_parts, complete
 
 
 def fetch_wfstat_slim():
@@ -316,7 +342,7 @@ def fetch_wfstat_slim():
     the endpoint varies on Accept-Language, and a localized catalog
     silently breaks the name → WFM-slug join (a pt-PT browser produced
     rows like "Liga Metálica" that matched nothing on WFM)."""
-    r = requests.get(WFSTAT_ITEMS_URL, timeout=60, headers={"Accept-Language": "en"})
+    r = requests.get(WFSTAT_ITEMS_URL, timeout=60, headers={**HEADERS, "Accept-Language": "en"})
     r.raise_for_status()
     arr = r.json()
     if not isinstance(arr, list):
@@ -334,10 +360,25 @@ def fetch_catalog():
     `meta_by_slug` maps slug → {tags, ducats, max_rank, subtypes} pulled
     from WFM's authoritative item catalog — used to populate `items[]`
     entries so the browser can filter by category and surface ducat values
-    without re-fetching /v2/items."""
-    r = requests.get(WFM_ITEMS_URL, timeout=30)
-    r.raise_for_status()
-    body = r.json()
+    without re-fetching /v2/items.
+
+    Retries with backoff — this script is the sole market.json producer,
+    and an unguarded single GET here aborted the whole rebuild (discarding
+    a finished 45-min scrape) on one Cloudflare hiccup. Raises only after
+    all attempts fail; main() then falls back to the prior snapshot."""
+    last_err = None
+    for attempt in range(3):
+        try:
+            r = _get(WFM_ITEMS_URL)
+            r.raise_for_status()
+            body = r.json()
+            break
+        except Exception as e:
+            last_err = e
+            print(f"  warning: WFM catalog attempt {attempt + 1}/3 failed: {e}", flush=True)
+            time.sleep(2 * (attempt + 1))
+    else:
+        raise RuntimeError(f"WFM catalog unreachable after 3 attempts: {last_err}")
     items = body.get("data") or body.get("payload") or body
     catalog = {}
     meta_by_slug = {}
@@ -360,12 +401,36 @@ def main():
     if not CSV_IN.exists():
         sys.exit(f"{CSV_IN} not found — run wfm_demand.py first.")
 
+    # Prior snapshot loads FIRST: it's the fallback for every fetch below
+    # (full outage → keep surface; partial outage → merge over prior).
+    prior = {}
+    if JSON_OUT.exists():
+        try:
+            prior = json.loads(JSON_OUT.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            prior = {}
+
     print("Fetching warframe.market master catalog...")
-    catalog, meta_by_slug = fetch_catalog()
-    print(f"  {len(catalog):,} items")
+    try:
+        catalog, meta_by_slug = fetch_catalog()
+        print(f"  {len(catalog):,} items")
+    except RuntimeError as e:
+        # This script is the sole market.json producer and is documented as
+        # "useful when WFM is down" — so a WFM outage must not discard a
+        # finished 45-min scrape. Tags/ducats are recoverable from the prior
+        # snapshot's own items.
+        if not prior.get("catalog"):
+            sys.exit(f"{e} — and no prior snapshot to fall back on.")
+        print(f"  {e} — reusing the prior snapshot's catalog", flush=True)
+        catalog = prior["catalog"]
+        meta_by_slug = {
+            slug: {"tags": it.get("tags") or [], "ducats": it.get("ducats"),
+                   "max_rank": None, "subtypes": []}
+            for slug, it in (prior.get("items") or {}).items()
+        }
 
     print("Fetching warframestat component path map + sets...")
-    path_to_info, set_to_parts = fetch_parent_data(catalog)
+    path_to_info, set_to_parts, parents_complete = fetch_parent_data(catalog)
     print(f"  {len(path_to_info):,} component paths · {len(set_to_parts):,} prime sets")
 
     print("Fetching relic drop tables (Intact)...")
@@ -373,7 +438,7 @@ def main():
     print(f"  {len(relic_rewards):,} relics with reward data")
 
     print("Fetching prime vault status...")
-    vault_status = fetch_vault_status(catalog)
+    vault_status, vault_complete = fetch_vault_status(catalog)
     counts = {}
     for v in vault_status.values():
         counts[v] = counts.get(v, 0) + 1
@@ -400,30 +465,51 @@ def main():
         tmp.replace(CATALOG_OUT)
         print(f"  {len(wfstat_slim):,} entries → {CATALOG_OUT.name}", flush=True)
 
-    # Preserve-on-empty. warframestat 522s intermittently (caught
+    # Preserve-on-outage. warframestat 522s intermittently (caught
     # 2026-05-28: an outage left set_to_parts empty and blanked the Sets
-    # card). When a fetch comes back empty but the committed snapshot
-    # still has the data, keep the old values rather than re-blanking the
-    # Sets / Relics / Vaulted surfaces on every cron tick.
-    prior = {}
-    if JSON_OUT.exists():
-        try:
-            prior = json.loads(JSON_OUT.read_text(encoding="utf-8"))
-        except (json.JSONDecodeError, OSError):
-            prior = {}
+    # card). Empty fetch → keep the prior surface wholesale. PARTIAL fetch
+    # (one of N sources failed) → merge fresh over prior: a 9-of-10 vault
+    # fetch is truthy but incomplete, and missing slugs implicitly read as
+    # "available", so replacing the prior with it silently stripped vault
+    # badges. Each surface carries a fetched_at stamp so stale-data
+    # survival is visible instead of masked by a fresh updated_at.
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    prior_stamps = prior.get("surface_fetched_at") or {}
+    surface_fetched_at = {}
+    STALE_DAYS = 7
 
-    def keep_prior(name, fresh):
+    def reconcile(name, fresh, complete=True):
         old = prior.get(name)
         if not fresh and old:
-            print(f"  {name}: fetch empty — keeping {len(old):,} from prior snapshot", flush=True)
+            kept_since = prior_stamps.get(name, now_iso)
+            print(f"  {name}: fetch empty — keeping {len(old):,} from prior snapshot "
+                  f"(fetched {kept_since})", flush=True)
+            try:
+                age = datetime.now(timezone.utc) - datetime.strptime(
+                    kept_since, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+                if age.days >= STALE_DAYS:
+                    print(f"  WARNING: {name} has been stale for {age.days} days — "
+                          f"upstream looks permanently broken, investigate.", flush=True)
+            except ValueError:
+                pass
+            surface_fetched_at[name] = kept_since
             return old
+        if not complete and old:
+            merged = {**old, **fresh}
+            recovered = len(merged) - len(fresh)
+            if recovered > 0:
+                print(f"  {name}: partial fetch — kept {recovered:,} entries "
+                      f"from prior snapshot", flush=True)
+            surface_fetched_at[name] = now_iso
+            return merged
+        surface_fetched_at[name] = now_iso
         return fresh
 
-    path_to_info = keep_prior("path_to_info", path_to_info)
-    set_to_parts = keep_prior("set_to_parts", set_to_parts)
-    relic_rewards = keep_prior("relic_rewards", relic_rewards)
-    vault_status = keep_prior("vault_status", vault_status)
-    baro = keep_prior("baro", baro)
+    path_to_info = reconcile("path_to_info", path_to_info, parents_complete)
+    set_to_parts = reconcile("set_to_parts", set_to_parts, parents_complete)
+    relic_rewards = reconcile("relic_rewards", relic_rewards)
+    vault_status = reconcile("vault_status", vault_status, vault_complete)
+    baro = reconcile("baro", baro)
 
     items = {}
     with open(CSV_IN, newline="", encoding="utf-8") as fh:
@@ -486,6 +572,10 @@ def main():
         # the Baro view needs no runtime warframestat fetch. Empty {} when
         # warframestat is unreachable — the card hides.
         "baro": baro,
+        # Per-surface freshness. updated_at refreshes every run even when a
+        # surface is riding on preserved prior data — these stamps say when
+        # each surface was actually fetched successfully.
+        "surface_fetched_at": surface_fetched_at,
     }
     JSON_OUT.parent.mkdir(parents=True, exist_ok=True)
     # Atomic write: the browser reloads market.json live, so it must never
