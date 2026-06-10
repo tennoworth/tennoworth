@@ -78,11 +78,19 @@
     return e instanceof Error ? e.message : String(e);
   }
 
+  // The companion relays WFM rejections as HTTP 200 with a per-order
+  // {status:"error", message} body. Treating "no throw" as success applied
+  // the edit locally while WFM kept the old value — silent desync.
+  function assertOrderOk(r: unknown): void {
+    const res = r as { status?: string; message?: string } | null;
+    if (res?.status === 'error') throw new Error(res.message || 'WFM rejected the update');
+  }
+
   async function toggleVisible(o: WfmOrder): Promise<void> {
     if (!config) return;
     markBusy(o.id, true);
     try {
-      await updateOrder(config, o.id, { visible: !o.visible });
+      assertOrderOk(await updateOrder(config, o.id, { visible: !o.visible }));
       o.visible = !o.visible;
       orders = [...orders];
     } catch (e) {
@@ -97,13 +105,20 @@
     editValue = o.platinum;
   }
 
+  // Mirror of the companion's MAX_PLATINUM (which mirrors the WFM UI cap).
+  const MAX_PLATINUM = 3000;
+
   async function saveEdit(o: WfmOrder): Promise<void> {
     if (!config) return;
     const newPrice = Number(editValue);
     if (!newPrice || newPrice < 1) return;
+    if (newPrice > MAX_PLATINUM) {
+      alert(`Price ${newPrice}p is above the ${MAX_PLATINUM}p cap.`);
+      return;
+    }
     markBusy(o.id, true);
     try {
-      await updateOrder(config, o.id, { platinum: newPrice });
+      assertOrderOk(await updateOrder(config, o.id, { platinum: newPrice }));
       o.platinum = newPrice;
       orders = [...orders];
       editingId = null;
@@ -183,7 +198,7 @@
               <td class="right">{o.quantity ?? '?'}</td>
               <td class="right">
                 {#if editingId === o.id}
-                  <input type="number" bind:value={editValue} min="1" max="9999" style="width:64px" />
+                  <input type="number" bind:value={editValue} min="1" max={MAX_PLATINUM} style="width:64px" />
                   <button class="tiny" onclick={() => saveEdit(o)} disabled={busy}>save</button>
                   <button class="tiny ghost" onclick={() => (editingId = null)}>×</button>
                 {:else}

@@ -1047,6 +1047,15 @@ fn handle_request(
                     Ok(v) => v,
                     Err(e) => return respond_json(request, 400, &serde_json::json!({"error": format!("malformed: {e}")})),
                 };
+                // Same cap as the create path (build_order_body) — without it,
+                // an edit could push a listing past what the WFM UI allows, and
+                // WFM's rejection comes back as a per-order error the browser
+                // used to swallow.
+                if let Some(p) = upd.platinum {
+                    if p > MAX_PLATINUM {
+                        return respond_json(request, 400, &serde_json::json!({"error": format!("price {p}p > max {MAX_PLATINUM}p")}));
+                    }
+                }
                 return match update_order(state, id, &upd) {
                     Ok(v) => respond_json(request, 200, &v),
                     Err(e) => respond_json(request, 502, &serde_json::json!({"error": e.to_string()})),
