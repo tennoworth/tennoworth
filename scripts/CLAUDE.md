@@ -3,14 +3,18 @@
 One-shot Python tooling. Python is the right call for these — don't
 rewrite as Rust.
 
-- `wfm_demand.py` (root) — full WFM scrape. Runs on GH Actions cron
-  every 2h, writes `prototype/public/market.json`. Locally takes
-  ~45 min at 3 req/s.
+- `wfm_demand.py` (root) — full WFM scrape (~45 min at 3 req/s; cron
+  every 2h). Writes `wfm_results.csv` ONLY. Never point its
+  `--json-out` at the public market.json — that path omits
+  set_to_parts / relic_rewards / vault_status and blanks the Sets,
+  Relics, and Vaulted surfaces.
+- `scripts/csv_to_market_json.py` — the SOLE generator of
+  `prototype/public/market.json` (full shape) AND
+  `prototype/public/wfstat-catalog.json` (the browser resolver's
+  item catalog — warframestat dropped CORS, so it's baked here).
+  Every scrape, local or cron, must finish with this script (~30 s).
 - `wfm_inventory.py` (root) — debug-only CLI version of the browser's
   join logic. The browser app is the canonical surface.
-- `scripts/csv_to_market_json.py` — rebuilds `market.json` from the
-  existing `wfm_results.csv` (~10 s). Useful when WFM is down or you
-  just want a fast snapshot regen.
 - `wfm_popular_rivens.py` — separate exploration; rivens aren't in
   the main pipeline yet.
 
