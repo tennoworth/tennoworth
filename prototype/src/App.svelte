@@ -14,7 +14,7 @@
   import { flattenInventory, extractKeptLvls } from './lib/inventory';
   import { loadCatalogs, resolvePath, type Catalogs } from './lib/resolver';
   import { loadMarket, lookup } from './lib/market';
-  import { scoreRow, bandSignal } from './lib/sell-priority';
+  import { scoreRow, bandSignal, clearingPrice } from './lib/sell-priority';
   import { deriveSetRecos } from './lib/set-recos';
   import { deriveRelicPlan } from './lib/relic-planner';
   import {
@@ -341,9 +341,12 @@
       const ducats = rec.subtype ? null : (m.ducats ?? null);
       // p/100d — "platinum cost per 100 ducats of value." Low numbers
       // mean ducat-trading the part is the better deal vs selling it on
-      // WFM. Null when no ducats data.
-      const plat_per_100d = ducats && ducats > 0 && m.low_sell > 0
-        ? (m.low_sell * 100) / ducats
+      // WFM. Null when no ducats data. Uses the clamped clearing price,
+      // not raw low_sell — a single 1p troll ask made a stable 38p part
+      // read as a "feed it to Baro" deal.
+      const row_price = clearingPrice(m);
+      const plat_per_100d = ducats && ducats > 0 && row_price > 0
+        ? (row_price * 100) / ducats
         : null;
       // 90d trend signal. `median_90d` is what experienced WFM traders
       // price against (48h avg is noisy on low-volume items). We compute
@@ -376,6 +379,7 @@
         donchTop: m.donch_top_90d,
         donchBot: m.donch_bot_90d,
         lowSell: m.low_sell,
+        topBuy: m.top_buy,
       });
       const tags = Array.isArray(m.tags) ? m.tags : [];
       out.push({
