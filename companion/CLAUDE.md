@@ -58,7 +58,10 @@ without checking every regex still compiles.
   because origin isn't the protection — the token is.
 - One thread per request. Plan execution paced to 3 req/sec to match
   WFM's norm (see `SERVE_RATE_LIMIT_MS`).
-- `MAX_PLAN_ITEMS = 50`, `MIN_PLATINUM = 5`, `MAX_PLATINUM = 999`.
+- `MAX_PLAN_ITEMS = 50`, `MIN_PLATINUM = 5`, `MAX_PLATINUM = 3000`
+  (the WFM UI cap — maxed arcanes legitimately trade 1500-2500p; an
+  earlier 999 cap silently blocked those listings). The PATCH
+  (edit-order) route enforces the same cap.
   Slug-mismatch guard: refuse listings priced ≥ 3× below the
   reference `low_sell`.
 - `CORS preflight` advertises `GET, POST, PATCH, DELETE, OPTIONS`. If
@@ -130,7 +133,7 @@ of truth and these notes as the *why*.
 |---|---|---|
 | `itemId` | required | NOT `item`. From `/v2/items[].id`. |
 | `type` | required, `"sell"` / `"buy"` | NOT `order_type`. |
-| `platinum` | required, > 0 | We cap 5 ≤ p ≤ 999 client-side. |
+| `platinum` | required, > 0 | We cap 5 ≤ p ≤ 3000 client-side. |
 | `quantity` | required, > 0 | The stack size you're listing. |
 | `visible` | required, bool | We default to `false` and let the user toggle later. |
 | `perTrade` | required | Must divide `quantity` EVENLY and be ≤ 6 (in-game trade slots). Use `per_trade_for(quantity)` — largest divisor of quantity that's ≤ 6. qty=27 → 3, qty=10 → 5, qty=7 → 1. Rejected with `app.field.tooBig` if > 6; `app.field.orders.perTradeMustDivideQuantity` if not a divisor. |
@@ -148,7 +151,8 @@ in calling code.
 - Atomic writes via `tmp` + `fs::rename`. The Linux semantics give us
   a torn-file-free read on POSIX FS — match the same convention used
   in `wfm_demand.py` (`os.replace`).
-- Use `restrict_file_perms(0o600)` on anything containing a secret or
+- Use `write_restricted()` (0600 from the first syscall — no
+  umask race window) on anything containing a secret or
   partial pending-plan state.
 - Network calls go through `wfm_client()` so the `BROWSER_UA` +
   timeout policy applies uniformly.

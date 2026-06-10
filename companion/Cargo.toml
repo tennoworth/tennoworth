@@ -21,6 +21,9 @@ rpassword = "7"
 aes-gcm = "0.10"
 pbkdf2 = "0.12"
 sha2 = "0.10"
+# Already in the tree via aes-gcm; used directly for constant-time
+# session-token comparison (str == short-circuits on first mismatch).
+subtle = "2"
 hmac = "0.12"
 base64 = "0.22"
 rand = "0.8"
