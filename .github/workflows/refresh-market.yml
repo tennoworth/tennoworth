@@ -24,10 +24,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # No `cache: pip` — setup-python hard-errors on it when the repo has no
+      # requirements.txt/pyproject.toml, killing every run before the scrape.
+      # The only dep is `requests`; caching buys nothing.
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-          cache: pip
 
       - name: Install deps
         run: pip install requests
@@ -39,6 +41,25 @@ jobs:
             --exclude "" \
             --min-volume 1 \
             --out wfm_results.csv
+
+      # wfm_demand.py exits 0 even when sustained 429s made it skip most
+      # items, and "the CSV changed" is the only commit gate below — so a
+      # throttled run would commit a gutted snapshot and serve it for 2 h.
+      # Same row-count floor as deploy/run-scrape.sh: absolute minimum plus
+      # no worse than 25% shrinkage vs the checked-out prior CSV.
+      - name: Guard against truncated scrape
+        run: |
+          MIN_ROWS=800
+          prior=0
+          if git show HEAD:wfm_results.csv >/tmp/prior.csv 2>/dev/null; then
+            prior=$(( $(wc -l < /tmp/prior.csv) - 1 ))
+          fi
+          now=$(( $(wc -l < wfm_results.csv) - 1 ))
+          if [ "$now" -lt "$MIN_ROWS" ] || { [ "$prior" -gt 0 ] && [ "$now" -lt $(( prior * 3 / 4 )) ]; }; then
+            echo "ABORT: scrape kept $now rows (prior $prior) — looks truncated/throttled." >&2
+            exit 1
+          fi
+          echo "scrape kept $now rows (prior $prior) — OK"
 
       - name: Build market.json
         # csv_to_market_json.py is the only generator that emits the
