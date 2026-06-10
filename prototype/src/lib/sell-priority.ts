@@ -8,20 +8,29 @@
 // the product positioning ("what to sell right now") wants answered.
 //
 // Formula:
-//   price        = low_sell when > 0 else max(1, avg)     // realistic clearing price
+//   price        = clearingPrice(m)                        // clamped, see below
 //   daily_sales  = max(0.05, vol_48h / 2)                  // floor so dead items still rank, just low
 //   units_today  = min(owned, daily_sales)                 // can't realise more than the market absorbs
 //   sell_score   = units_today × price
 //
 // `patience` flag = true when vol_48h < 2 — these listings exist for the
-// item but it barely moves. The UI uses the flag to draw a hint; sorting
-// by sell_score already pushes them down naturally.
+// item but it barely moves. The flag is the ONLY mitigation for dead
+// items: the volume floor (0.05) deliberately keeps them ranked, so a
+// dead item with a sane clearing price can still appear high when you
+// own many copies. That's why clearingPrice() must never trust a lone
+// aspirational ask (see below) — before the clamp, a vol-1 item with a
+// 2,999p fantasy ask ranked #2 of 2,623.
 
 import type { MarketItemEntry } from './types';
 
+type PricedEntry = Pick<
+  MarketItemEntry,
+  'vol' | 'low_sell' | 'avg' | 'median_now' | 'median_90d'
+> | null | undefined;
+
 export interface SellScoreInput {
   owned: number;
-  m: Pick<MarketItemEntry, 'vol' | 'low_sell' | 'avg'> | null | undefined;
+  m: PricedEntry;
 }
 
 export interface SellScoreOutput {
@@ -29,12 +38,34 @@ export interface SellScoreOutput {
   patience: boolean;
 }
 
+// What a listing would realistically clear at. The lowest live ask is the
+// honest answer MOST of the time, but it's a single number any account can
+// set for free, so it gets sanity-clamped against the closed-trade median:
+//  - ask < median/3  → a troll/stale 1p undercut (akbolto receiver: one 1p
+//    ask under a stable 38p median cratered its score, killed its peak pill,
+//    and fired a "feed it to Baro" deal badge). One such listing absorbs one
+//    sale; the realistic price is still the median.
+//  - dead item (vol < 2) with ask > 3× median → an aspirational ask nobody
+//    pays (corpus_void_key: vol 1, lone 2,999p ask, last real trade ~200p).
+//    Liquid items keep their ask — there the book is real information.
+// No ask at all → median, then avg, floor 1.
+export function clearingPrice(m: PricedEntry): number {
+  const lowSell = Number(m?.low_sell) || 0;
+  const median = Number(m?.median_now) || Number(m?.median_90d) || 0;
+  const avg = Number(m?.avg) || 0;
+  const vol = Number(m?.vol) || 0;
+  if (lowSell <= 0) return median > 0 ? median : Math.max(1, avg);
+  if (median > 0) {
+    if (lowSell * 3 < median) return median;
+    if (vol < 2 && lowSell > median * 3) return median;
+  }
+  return lowSell;
+}
+
 export function scoreRow({ owned, m }: SellScoreInput): SellScoreOutput {
   if (!m) return { sell_score: 0, patience: false };
   const vol = Number(m.vol) || 0;
-  const lowSell = Number(m.low_sell) || 0;
-  const avg = Number(m.avg) || 0;
-  const price = lowSell > 0 ? lowSell : Math.max(1, avg);
+  const price = clearingPrice(m);
   const dailySales = Math.max(0.05, vol / 2);
   const unitsToday = Math.min(owned, dailySales);
   return {
@@ -56,18 +87,26 @@ export interface BandSignalInput {
   donchTop?: number | null;
   donchBot?: number | null;
   lowSell?: number | null;
+  topBuy?: number | null;
 }
 
 const HOLD_BELOW = 0.2;
 const PEAK_ABOVE = 0.8;
-// A peak must be corroborated by the live book: real trades clear near the
-// standing ask, so when the closed-trade median prints at more than ~2× the
-// lowest live ask, the "peak" price isn't realizable — either wash trades
-// (Goopolla: 36 "sales" at 12p over 209 live asks at 1p) or a price that
-// already crashed since those trades closed. Either way "list now" is wrong.
+// A peak must be corroborated by the live book — "peak" means "list NOW",
+// and you list into the standing market, not into a price history. Two
+// independent corroborations, either suffices:
+//  - ask-side: a live ask within 2× of the price (real peaks have asks
+//    tracking the trades up; wash-traded "peaks" sit over 1p ask walls —
+//    Goopolla printed 36 "sales" at 12p over 209 live asks at 1p);
+//  - demand-side: a live top buy offer within 2× of the price. This is the
+//    signal a solo seller can't fake cheaply, and it rescues legit peaks
+//    whose ask side is polluted by one troll undercut.
+// NO live book at all → neutral, fail closed: an uncorroborated peak on a
+// no-ask item (neo_t7_relic: median 42, zero asks, top buy 15) was exactly
+// the cheapest state to manipulate into existence.
 const PEAK_MAX_ASK_GAP = 2;
 
-export function bandSignal({ price, donchTop, donchBot, lowSell }: BandSignalInput): TimingState {
+export function bandSignal({ price, donchTop, donchBot, lowSell, topBuy }: BandSignalInput): TimingState {
   const p = Number(price) || 0;
   const top = Number(donchTop) || 0;
   const bot = Number(donchBot) || 0;
@@ -76,8 +115,10 @@ export function bandSignal({ price, donchTop, donchBot, lowSell }: BandSignalInp
   if (pos <= HOLD_BELOW) return 'hold';
   if (pos >= PEAK_ABOVE) {
     const ask = Number(lowSell) || 0;
-    if (ask > 0 && p > ask * PEAK_MAX_ASK_GAP) return 'neutral';
-    return 'peak';
+    const buy = Number(topBuy) || 0;
+    const askCorroborates = ask > 0 && p <= ask * PEAK_MAX_ASK_GAP;
+    const buyCorroborates = buy > 0 && p <= buy * PEAK_MAX_ASK_GAP;
+    return askCorroborates || buyCorroborates ? 'peak' : 'neutral';
   }
   return 'neutral';
 }
