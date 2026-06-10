@@ -78,6 +78,11 @@ def _item_name(item):
 # or an extreme outlier vs the rest of the series before computing any aggregate.
 PLAT_CAP = 99_999
 OUTLIER_FACTOR = 50  # a day > 50x the cleaned baseline is almost certainly faked
+# ...but only when the outlier is also expensive in absolute terms. A real
+# balance-patch repricing of a 1p junk item to 60p is >50x yet honest; freezing
+# its stats at the dead price for ~45 days is worse than letting it through.
+# Wash-trade pumps worth doing are large (Mawfish printed 300p on a 2p fish).
+OUTLIER_ABS_MIN = 200
 
 
 def drop_poisoned_rows(rows):
@@ -97,7 +102,11 @@ def drop_poisoned_rows(rows):
     if meds:
         baseline = meds[len(meds) // 2]
         if baseline > 0:
-            clean = [d for d in clean if (d.get("median") or 0) <= baseline * OUTLIER_FACTOR]
+            clean = [
+                d for d in clean
+                if (d.get("median") or 0) <= baseline * OUTLIER_FACTOR
+                or (d.get("median") or 0) < OUTLIER_ABS_MIN
+            ]
     return clean
 
 
