@@ -182,7 +182,15 @@ fn run_fetch(args: FetchArgs) -> Result<()> {
     // Pretty-print if valid JSON, write bytes as-is otherwise.
     let out_path = args.out.unwrap_or_else(default_out_path);
     if let Some(parent) = out_path.parent() {
-        fs::create_dir_all(parent).ok();
+        // Restrict only a directory we ourselves created (matches run_login
+        // and plan persistence). The default target is ~/Downloads — the
+        // user's to manage; clamping a pre-existing dir to 0700 would be far
+        // more surprising than the metadata leak it prevents.
+        if !parent.exists() {
+            fs::create_dir_all(parent).ok();
+            restrict_dir_perms(parent);
+            chown_to_real_user(parent);
+        }
     }
     let final_bytes: Vec<u8> = match serde_json::from_slice::<serde_json::Value>(&bytes) {
         Ok(value) => serde_json::to_vec_pretty(&value).unwrap_or_else(|_| bytes.to_vec()),
@@ -295,9 +303,10 @@ fn chown_to_real_user(_path: &std::path::Path) {}
 
 // ---- login + JWT storage ---------------------------------------------------
 //
-// WFM auth: POST /v1/auth/signin with {email, password, auth_type: "header"}.
-// Server returns the JWT in the `Authorization` *response* header (not body).
-// We pull it from there and encrypt-at-rest with AES-256-GCM, key derived
+// WFM auth: POST /v1/auth/signin with {email, password, auth_type: "cookie"},
+// X-CSRFToken scraped from the signin page's <meta name="csrf-token">. The JWT
+// arrives in `Set-Cookie` (v2 endpoints reject header-style JWTs, so cookie is
+// the only flow that works). We encrypt it at rest with AES-256-GCM, key derived
 // via PBKDF2-HMAC-SHA256 with 600k iterations (OWASP 2023). The on-disk
 // shape mirrors the web app's encrypted-export format so a single human can
 // reason about both.
@@ -548,15 +557,6 @@ fn default_pending_path() -> PathBuf {
     let home = real_user_home().unwrap_or_else(dirs_home);
     home.join(".config").join("wfminv").join("pending_plan.json")
 }
-
-#[cfg(unix)]
-fn restrict_file_perms(path: &std::path::Path) {
-    use std::os::unix::fs::PermissionsExt;
-    let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o600));
-}
-
-#[cfg(not(unix))]
-fn restrict_file_perms(_path: &std::path::Path) {}
 
 // Writes `bytes` to `path`, creating the file at 0o600 from the first
 // syscall on Unix. This avoids the race window where a default-umask
@@ -936,11 +936,15 @@ fn handle_request(
         );
     }
 
-    // Every other route requires the session token.
-    let token_ok = request
-        .headers()
-        .iter()
-        .any(|h| h.field.equiv("X-Session-Token") && h.value.as_str() == state.session_token);
+    // Every other route requires the session token. Constant-time compare —
+    // `str ==` short-circuits on the first mismatching byte. Loopback timing
+    // attacks against a per-process token are far-fetched, but the fix is one
+    // line and `subtle` is already in the dependency tree via aes-gcm.
+    let token_ok = request.headers().iter().any(|h| {
+        use subtle::ConstantTimeEq;
+        h.field.equiv("X-Session-Token")
+            && h.value.as_str().as_bytes().ct_eq(state.session_token.as_bytes()).into()
+    });
     if !token_ok {
         return respond_json(
             request,
@@ -1019,7 +1023,7 @@ fn handle_request(
 
     if path == "/orders/visibility" && matches!(method, tiny_http::Method::Post) {
         let mut body = String::new();
-        std::io::Read::take(request.as_reader(), MAX_BODY_BYTES).read_to_string(&mut body).ok();
+        std::io::Read::take(request.as_reader(), MAX_BODY_BYTES).read_to_string(&mut body).context("reading request body")?;
         let req: VisibilityRequest = match serde_json::from_str(&body) {
             Ok(v) => v,
             Err(e) => return respond_json(request, 400, &serde_json::json!({"error": format!("malformed: {e}")})),
@@ -1042,7 +1046,7 @@ fn handle_request(
             }
             tiny_http::Method::Patch => {
                 let mut body = String::new();
-                std::io::Read::take(request.as_reader(), MAX_BODY_BYTES).read_to_string(&mut body).ok();
+                std::io::Read::take(request.as_reader(), MAX_BODY_BYTES).read_to_string(&mut body).context("reading request body")?;
                 let upd: UpdateRequest = match serde_json::from_str(&body) {
                     Ok(v) => v,
                     Err(e) => return respond_json(request, 400, &serde_json::json!({"error": format!("malformed: {e}")})),
@@ -1311,12 +1315,12 @@ fn random_token(bytes: usize) -> String {
 
 fn fetch_wfm_catalog(client: &Client, platform: &str) -> Result<BTreeMap<String, WfmCatalogItem>> {
     // v1 retired; v2 returns a flat `data` array of {id, slug, ...}.
-    // (POST /v1/profile/orders still works for listing creation — only the
-    // items list endpoint moved to v2.)
+    // Order creation is v2 as well (POST /v2/order, see build_order_body).
     let resp = client
         .get("https://api.warframe.market/v2/items")
         .header("Platform", platform)
         .header("Language", "en")
+        .header("Crossplay", "true")
         .send()
         .context("fetching /v2/items")?;
     if !resp.status().is_success() {
