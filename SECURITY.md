@@ -16,13 +16,17 @@ characteristics:
 2. **The companion CLI** (`companion/`, Rust binary distributed via
    GitHub releases). Runs on the user's machine. Reads the game's
    process memory (Linux: needs `CAP_SYS_PTRACE`; Windows: same-user
-   process access). Writes `inventory.json` to disk. When the WFM
-   listing feature ships, it will also hold a WFM JWT on disk
-   (encrypted) and POST orders to warframe.market.
+   process access). Writes `inventory.json` to disk (0600). For the
+   WFM listing feature it holds your WFM JWT encrypted at rest
+   (AES-256-GCM, PBKDF2-600k passphrase) and, while `serve` runs,
+   relays order operations to warframe.market over a loopback HTTP
+   server (`127.0.0.1`, random port, per-process `X-Session-Token`
+   auth). The JWT never reaches the browser.
 
 3. **Our build + release pipeline** (GitHub Actions). Two workflows:
    - `refresh-market.yml` — scrapes warframe.market every 2 h and
-     commits a static `market.json` to the repo.
+     commits a static `market.json` + `wfstat-catalog.json` to the
+     repo.
    - `release-companion.yml` — on tag push, cross-builds the Rust
      binary for Linux + Windows, generates SHA256SUMS, attaches both
      to a GitHub release.
@@ -30,12 +34,15 @@ characteristics:
 ## What we commit to
 
 - **The web app does not exfiltrate your inventory.** All processing
-  is in your browser. The only network calls are:
-  - `GET /market.json` from our own origin (static file)
-  - `GET https://api.warframestat.us/items/` (item name resolution;
-    CORS-enabled, no credentials)
-  - Future: companion HTTP server on `127.0.0.1` (when WFM listing is
-    enabled)
+  is in your browser, and there are **zero third-party origins** in
+  the CSP. The only network calls are:
+  - `GET /market.json` and `GET /wfstat-catalog.json` from our own
+    origin (static files; the item-name catalog used to come from
+    warframestat.us directly, but it's baked at build time since
+    2026-06)
+  - the companion's loopback HTTP server on `127.0.0.1` (only when
+    you've connected it; carries the `X-Session-Token` it printed,
+    never your WFM credentials)
 - **The companion does not transmit your accountId or nonce.** They
   are scraped from game memory and used as URL parameters in a single
   HTTPS request to `api.warframe.com/api/inventory.php`, then
@@ -89,9 +96,13 @@ verify locally:
 
 ```bash
 git checkout <tag>
-cd prototype && npm ci && npm run build
+cd prototype && bun install --frozen-lockfile && bun run build
 diff -r dist/ <deployed dist contents>
 ```
+
+(`bun.lock` is the source-of-truth lockfile — there is no
+`package-lock.json`, so `npm ci` will not work, and an npm-resolved
+tree wouldn't reproduce the bun-built `dist/` anyway.)
 
 The web app does not load any third-party scripts. Inspect the
 `<head>` of the deployed HTML — the CSP only permits scripts from
@@ -109,7 +120,10 @@ The encrypted export feature (`Export inventory`) uses:
 - All via the browser's native WebCrypto API. No third-party crypto
   libraries.
 
-Source: `prototype/src/lib/crypto.js`.
+The companion's on-disk JWT (`wfm-jwt.enc`) uses the same parameters
+so one person can audit both.
+
+Source: `prototype/src/lib/crypto.ts` and `companion/src/main.rs`.
 
 ## Reporting a vulnerability
 

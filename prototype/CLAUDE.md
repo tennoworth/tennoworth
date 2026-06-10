@@ -105,7 +105,7 @@ changes** so old data is silently invalidated.
 
 ## Companion HTTP contract
 
-Routes the browser depends on (see `src/lib/companion.js`):
+Routes the browser depends on (see `src/lib/companion.ts`):
 - `GET /health` — no auth; `{ok, platform}`
 - `POST /plan` — submit listing batch
 - `GET /plan/pending` — last pending plan or 404
@@ -123,7 +123,7 @@ companion prints at startup.
 
 ## Crypto
 
-Encrypted export (`src/lib/crypto.js`):
+Encrypted export (`src/lib/crypto.ts`):
 - **PBKDF2-HMAC-SHA256**, 600,000 iterations (OWASP 2023).
 - **AES-256-GCM**, fresh 12-byte IV + 16-byte salt per export.
 - Native WebCrypto. No third-party crypto libraries.
