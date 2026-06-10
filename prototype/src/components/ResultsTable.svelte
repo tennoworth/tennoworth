@@ -15,10 +15,12 @@
     plat_per_100d: number | null;
     avg_price: number;
     low_sell: number;
+    low5_avg: number;
     top_buy: number;
     volume_48h: number;
     ratio: number;
     potential_plat: number;
+    raw_value: number;
     sell_score: number;
     patience: boolean;
     timing: 'hold' | 'peak' | 'neutral';
@@ -126,6 +128,7 @@
     volume_48h:     { text: 'Trades closed in the last 48 h.', unit: 'trades / 48 h', dir: 'higher = more liquid; ≥ 5 is healthy' },
     ratio:          { text: 'Live buyers ÷ live sellers — a rough demand signal.', unit: 'ratio', dir: '> 1 = buyers outnumber sellers' },
     potential_plat: { text: 'Owned × Avg. Optimistic — selling N copies usually clears below the average.', unit: 'plat', dir: 'upper bound, not realistic' },
+    raw_value:      { text: 'Owned × the average of the ~5 cheapest live asks (the highlighted @ price). What the stack is worth at current listings — no liquidity discount; one troll listing barely moves it.', unit: 'plat', dir: 'falls back to Owned × Avg until the next scrape adds ask-depth data' },
     sell_score:     { text: 'Expected plat per day if you listed everything. min(owned, vol_48h / 2) × low_sell. Items below 2 trades / 48 h get a "patience" tag instead.', unit: 'plat / day', dir: 'higher = better; uncapped' },
     ducats:         { text: 'Ducat value at Baro Ki’Teer.', unit: 'ducats', dir: 'only prime parts have a non-zero value' },
     plat_per_100d:  { text: 'Plat cost per 100 ducats of value. “Deal” badge fires below 20.', unit: 'plat / 100 ducats', dir: 'lower = better ducat trade than WFM' },
@@ -147,6 +150,7 @@
     { key: 'ratio',          label: 'Demand',   align: 'right' },
     { key: 'ducats',         label: 'Ducats',   align: 'right' },
     { key: 'plat_per_100d',  label: 'p/100d',   align: 'right' },
+    { key: 'raw_value',      label: 'Raw value', align: 'right' },
     { key: 'potential_plat', label: 'Potential', align: 'right' },
   ];
 
@@ -268,7 +272,7 @@
     if (typeof v === 'number') {
       if (key === 'ratio') return v.toFixed(2);
       if (key === 'plat_per_100d') return v.toFixed(1);
-      if (key === 'avg_price' || key === 'potential_plat' || key === 'sell_score') return v.toFixed(0);
+      if (key === 'avg_price' || key === 'potential_plat' || key === 'sell_score' || key === 'raw_value') return v.toFixed(0);
       return v.toLocaleString();
     }
     return String(v);
@@ -393,6 +397,15 @@
               {:else if col.key === 'plat_per_100d'}
                 {#if r.plat_per_100d != null}
                   <span class={r.plat_per_100d <= DUCAT_DEAL_THRESHOLD ? 'ducat-num' : ''}>{fmt(r.plat_per_100d, col.key)}</span>
+                {:else}
+                  <span class="muted">—</span>
+                {/if}
+              {:else if col.key === 'raw_value'}
+                {#if r.raw_value > 0}
+                  {fmt(r.raw_value, col.key)}
+                  {#if r.low5_avg > 0}
+                    <span class="ask-avg" title="Average of the ~5 cheapest live asks right now">@{fmt(r.low5_avg, 'plat_per_100d')}</span>
+                  {/if}
                 {:else}
                   <span class="muted">—</span>
                 {/if}
@@ -626,6 +639,16 @@
   .trend.up   { color: var(--good); }
   .trend.down { color: var(--bad); }
   .trend.flat { color: var(--muted); }
+
+  /* Raw-value column: the total leads; the per-unit ask average rides
+     along as the highlighted "@price" so the multiplier is auditable
+     at a glance. */
+  .ask-avg {
+    margin-left: 5px;
+    font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--accent);
+  }
 
   /* Ducat column treatment. Warm-gold tint on the number itself so the
      domain signal reads at a glance; a quiet "deal" badge rather than a

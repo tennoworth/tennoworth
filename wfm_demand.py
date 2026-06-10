@@ -154,6 +154,19 @@ def subtype_rows(rows, pick):
     return [d for d in rows if (d.get("subtype") or pick) == pick]
 
 
+def avg_lowest_asks(orders, n=5):
+    """Average of the n cheapest live asks — a depth-aware "current price".
+
+    low_sell alone is ONE number any account can set for free (a 1p troll
+    listing); the mean of the cheapest five is what the sell wall actually
+    looks like, and faking it costs five standing listings. 0.0 when there
+    are no live asks."""
+    prices = sorted(p for o in orders if (p := o.get("platinum") or 0) > 0)[:n]
+    if not prices:
+        return 0.0
+    return round(sum(prices) / len(prices), 1)
+
+
 def series_stats(nineties):
     """(median_now, median_90d, medians_7d, donch_top, donch_bot) from an
     already tier-narrowed, poison-filtered 90-day series.
@@ -240,6 +253,7 @@ def analyze_item(session, item):
 
     top_buy = max((o["platinum"] for o in live_buys), default=0)
     low_sell = min((o["platinum"] for o in live_sells), default=0)
+    low5_avg = avg_lowest_asks(live_sells)
 
     # If there are buyers but no sellers, treat as very high demand pressure.
     if live_sells:
@@ -261,6 +275,7 @@ def analyze_item(session, item):
         "buy_sell_ratio": round(ratio, 2),
         "top_buy_price": top_buy,
         "low_sell_price": low_sell,
+        "low5_avg": low5_avg,
         "spread": (low_sell - top_buy) if (low_sell and top_buy) else 0,
         "volume_48h": volume_48h,
         "avg_price_48h": round(avg_price_48h, 1),
@@ -285,6 +300,7 @@ def build_snapshot(sorted_rows, *, platform, catalog, final):
             r["url_name"]: {
                 "avg": r["avg_price_48h"],
                 "low_sell": r["low_sell_price"],
+                "low5_avg": r.get("low5_avg", 0),
                 "top_buy": r["top_buy_price"],
                 "vol": r["volume_48h"],
                 "ratio": r["buy_sell_ratio"],

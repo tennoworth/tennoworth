@@ -395,10 +395,16 @@
         plat_per_100d,
         avg_price: m.avg,
         low_sell: m.low_sell,
+        low5_avg: m.low5_avg || 0,
         top_buy: m.top_buy,
         volume_48h: m.vol,
         ratio: m.ratio,
         potential_plat: rec.count * m.avg,
+        // Raw stack value: owned × the avg of the ~5 cheapest live asks —
+        // "what is this pile worth at current listings", no liquidity
+        // discounting (that's sell_score's job). Falls back to the 48h
+        // closed avg on snapshots that predate low5_avg.
+        raw_value: rec.count * ((m.low5_avg || 0) > 0 ? m.low5_avg : m.avg),
         sell_score,
         patience,
         timing,

@@ -519,6 +519,9 @@ def main():
             items[slug] = {
                 "avg": float(r["avg_price_48h"] or 0),
                 "low_sell": int(r["low_sell_price"] or 0),
+                # Avg of the ~5 cheapest live asks (depth-aware current
+                # price); 0 on pre-2026-06-10 CSVs — UI falls back to avg.
+                "low5_avg": float(r.get("low5_avg") or 0),
                 "top_buy": int(r["top_buy_price"] or 0),
                 "vol": int(r["volume_48h"] or 0),
                 "ratio": float(r["buy_sell_ratio"] or 0),
