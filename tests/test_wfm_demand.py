@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from wfm_demand import (  # noqa: E402
     PLAT_CAP,
+    avg_lowest_asks,
     build_snapshot,
     canonical_subtype,
     drop_poisoned_rows,
@@ -40,6 +41,7 @@ def _row(slug, **overrides):
         "buy_sell_ratio": 1.0,
         "top_buy_price": 10,
         "low_sell_price": 12,
+        "low5_avg": 12.5,
         "spread": 2,
         "volume_48h": 5,
         "avg_price_48h": 11.0,
@@ -79,7 +81,7 @@ def test_snapshot_partial_flag_flips_with_final():
 def test_snapshot_item_shape_uses_short_keys():
     """The web UI relies on short keys (avg/low_sell/...) — guard against drift."""
     rows = [_row("zephyr_prime_set",
-                 avg_price_48h=42.5, low_sell_price=40, top_buy_price=44,
+                 avg_price_48h=42.5, low_sell_price=40, low5_avg=41.2, top_buy_price=44,
                  volume_48h=99, buy_sell_ratio=0.5, live_buys=10, live_sells=20,
                  tags=["prime", "warframe"], ducats=15,
                  median_now=45.0, median_90d=44.0,
@@ -88,7 +90,7 @@ def test_snapshot_item_shape_uses_short_keys():
     snap = build_snapshot(rows, platform="pc", catalog={}, final=True)
     entry = snap["items"]["zephyr_prime_set"]
     assert entry == {
-        "avg": 42.5, "low_sell": 40, "top_buy": 44,
+        "avg": 42.5, "low_sell": 40, "low5_avg": 41.2, "top_buy": 44,
         "vol": 99, "ratio": 0.5, "buys": 10, "sells": 20,
         "tags": ["prime", "warframe"],
         "ducats": 15,
@@ -119,6 +121,7 @@ def test_snapshot_item_shape_includes_default_extended_fields_when_absent():
     assert entry["tags"] == []
     assert entry["ducats"] is None
     assert entry["median_now"] == 0
+    assert entry["low5_avg"] == 0
     assert entry["median_90d"] == 0
     assert entry["medians_7d"] == []
     assert entry["donch_top_90d"] == 0
@@ -315,6 +318,24 @@ def test_subtype_falls_back_to_dominant_volume_without_intact():
 def test_subtype_keeps_generic_rows_under_a_pick():
     rows = [_day(median=5, subtype="intact"), _day(median=6)]
     assert subtype_rows(rows, "intact") == rows
+
+
+def test_avg_lowest_asks_takes_cheapest_n():
+    orders = [{"platinum": p} for p in (30, 12, 50, 14, 11, 200, 13)]
+    # cheapest five: 11, 12, 13, 14, 30 → 16.0
+    assert avg_lowest_asks(orders) == 16.0
+
+
+def test_avg_lowest_asks_dilutes_a_single_troll_listing():
+    """One 1p ask drags low_sell to 1 but barely moves the depth average."""
+    orders = [{"platinum": 1}] + [{"platinum": 38} for _ in range(6)]
+    assert avg_lowest_asks(orders) == 30.6  # (1+38*4)/5
+
+
+def test_avg_lowest_asks_handles_thin_and_empty_books():
+    assert avg_lowest_asks([{"platinum": 20}, {"platinum": 24}]) == 22.0
+    assert avg_lowest_asks([]) == 0.0
+    assert avg_lowest_asks([{"platinum": 0}, {}]) == 0.0
 
 
 def test_series_stats_empty():
