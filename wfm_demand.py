@@ -81,7 +81,13 @@ OUTLIER_FACTOR = 50  # a day > 50x the cleaned baseline is almost certainly fake
 
 
 def drop_poisoned_rows(rows):
-    """Strip wash-trade / cap-pinned daily rows from a closed-stats list."""
+    """Strip wash-trade / cap-pinned daily rows from a closed-stats list.
+
+    When the cap filter removes EVERYTHING, the item's only activity is
+    manipulation — return the empty list so volume sums to 0 and the item
+    falls out at the --min-volume gate. (An earlier `or rows` fallback
+    handed the raw cap-pinned rows back in exactly that case, which put
+    the fabricated 99,999p average at the top of the score sort.)"""
     clean = [
         d for d in rows
         if (d.get("median") or 0) < PLAT_CAP * 0.9
@@ -92,9 +98,72 @@ def drop_poisoned_rows(rows):
         baseline = meds[len(meds) // 2]
         if baseline > 0:
             clean = [d for d in clean if (d.get("median") or 0) <= baseline * OUTLIER_FACTOR]
-    # If filtering removed everything (a pure-manipulation item), keep the raw
-    # rows so downstream gets *a* number instead of an empty series.
-    return clean or rows
+    return clean
+
+
+def rank0_rows(rows):
+    """Keep the unranked tier of a closed-stats list.
+
+    WFM emits one row per (day, mod_rank) for mods — an unranked AND a
+    max-rank tier. Baro sells mods unranked and that's the tier players
+    resell, so stats must describe rank 0. Items without rank tiers
+    (weapons, sets, relics) lack the key entirely, so ABSENCE OF METADATA
+    is the only correct fallback condition: an empty result here means
+    every trade in the window was max-rank, and the honest output is
+    "no rank-0 activity" (vol 0), not max-rank prices wearing a rank-0
+    label. (The old `or rows_all` fallback fired exactly in that case,
+    reinstating the 2-3x Primed-mod inflation it existed to prevent.)"""
+    if not any("mod_rank" in d for d in rows):
+        return rows
+    return [d for d in rows if (d.get("mod_rank") or 0) == 0]
+
+
+def canonical_subtype(rows):
+    """The single subtype tier this item's stats should describe, or None.
+
+    Relics have the same per-(day, subtype) duality mods have with rank:
+    one radiant day at 120p blending into 5-14p intact days fabricated a
+    +991% trend and a "peak" badge on meso_l1_relic. Prefer 'intact'
+    (the tier relics drop as and overwhelmingly trade as); for items
+    whose subtypes don't include intact (gems, fish), use the
+    dominant-by-volume tier so the series never mixes price scales."""
+    vols = {}
+    for d in rows:
+        s = d.get("subtype")
+        if s:
+            vols[s] = vols.get(s, 0) + (d.get("volume") or 0)
+    if not vols:
+        return None
+    return "intact" if "intact" in vols else max(vols, key=lambda s: vols[s])
+
+
+def subtype_rows(rows, pick):
+    """Filter a stats/order list to one subtype tier (None = no-op).
+    Rows without a subtype are generic — keep them."""
+    if pick is None:
+        return rows
+    return [d for d in rows if (d.get("subtype") or pick) == pick]
+
+
+def series_stats(nineties):
+    """(median_now, median_90d, medians_7d, donch_top, donch_bot) from an
+    already tier-narrowed, poison-filtered 90-day series.
+
+    median_now = the latest day's median — "what it trades at today".
+    median_90d = the median OF the daily medians — the 90-day baseline.
+    The band is recomputed from the filtered daily medians, not WFM's
+    precomputed donch_top/bot — those still reflect a cap-pinned day even
+    after we drop it from the series. median_now is one of these medians,
+    so it always sits inside [donch_bot, donch_top]."""
+    daily_medians = [d.get("median", 0) or 0 for d in nineties]
+    medians_7d = daily_medians[-7:]
+    if not nineties:
+        return 0, 0, medians_7d, 0, 0
+    median_now = nineties[-1].get("median", 0) or 0
+    nonzero = [m for m in daily_medians if m > 0]
+    median_90d = statistics.median(nonzero) if nonzero else median_now
+    band = nonzero or [median_now]
+    return median_now, median_90d, medians_7d, max(band), min(band)
 
 
 def analyze_item(session, item):
@@ -110,8 +179,19 @@ def analyze_item(session, item):
     if orders is None or not stats_payload:
         return None
 
+    # 48h closed stats = trades that actually completed. Both windows are
+    # narrowed to ONE tier — rank 0 for mods, one subtype for relics/gems —
+    # before any aggregate, so avg/median/donch never mix price scales.
+    recent_all = [d for d in stats_payload.get("statistics_closed", {}).get("48hours", [])
+                  if isinstance(d, dict)]
+    nineties_all = [d for d in stats_payload.get("statistics_closed", {}).get("90days", [])
+                    if isinstance(d, dict)]
+    sub_pick = canonical_subtype(recent_all + nineties_all)
+
     # Only count orders from players currently reachable in-game/online —
     # offline listings rarely close, so they're noise for "what's selling now."
+    # Orders are tier-filtered like the stats: a radiant relic buy order must
+    # not become the top_buy quoted against an intact-tier median.
     def live(o, kind):
         return (
             o.get("type") == kind
@@ -119,18 +199,10 @@ def analyze_item(session, item):
             and o.get("visible", True)
         )
 
-    live_buys = [o for o in orders if live(o, "buy")]
-    live_sells = [o for o in orders if live(o, "sell")]
+    live_buys = subtype_rows([o for o in orders if live(o, "buy")], sub_pick)
+    live_sells = subtype_rows([o for o in orders if live(o, "sell")], sub_pick)
 
-    # 48h closed stats = trades that actually completed. Filter to rank 0 so
-    # avg_price_48h / volume_48h aren't contaminated by max-rank trades (the
-    # same (day, mod_rank) duality the 90day series has). Single-tier items
-    # (weapons/sets) have only rank-0 rows, so the filter is a no-op; fall back
-    # to the raw rows when rank metadata is entirely absent.
-    recent_all = [d for d in stats_payload.get("statistics_closed", {}).get("48hours", [])
-                  if isinstance(d, dict)]
-    recent = [d for d in recent_all if (d.get("mod_rank") or 0) == 0] or recent_all
-    recent = drop_poisoned_rows(recent)
+    recent = drop_poisoned_rows(subtype_rows(rank0_rows(recent_all), sub_pick))
     volume_48h = sum(d.get("volume", 0) for d in recent)
     if volume_48h > 0:
         avg_price_48h = (
@@ -148,33 +220,14 @@ def analyze_item(session, item):
     # Δ vs 90d = (median_now - median_90d) / median_90d, and the timing band
     # positions median_now inside [donch_bot, donch_top].
     #
-    # WFM returns one row per (day, mod_rank): mods carry an unranked (rank 0)
-    # AND a max-rank tier. The raw series mixes them — medians_7d alternated
-    # rank-0/max, and on a day a thin mod only had a maxed trade, the "latest"
-    # silently grabbed the max-rank price (Primed Shotgun Ammo Mutation read 160p
-    # vs ~45p unranked). Baro sells mods unranked and that's the tier players
-    # resell, so filter to rank 0. Single-tier items (weapons/sets) are a no-op;
-    # fall back to the raw series only if rank metadata is entirely absent.
-    nineties_all = [d for d in stats_payload.get("statistics_closed", {}).get("90days", [])
-                    if isinstance(d, dict)]
-    nineties = [d for d in nineties_all if (d.get("mod_rank") or 0) == 0] or nineties_all
-    nineties = drop_poisoned_rows(nineties)
-    daily_medians = [d.get("median", 0) or 0 for d in nineties]
-    medians_7d = daily_medians[-7:]
-    if nineties:
-        latest = nineties[-1]
-        median_now = latest.get("median", 0) or 0
-        nonzero = [m for m in daily_medians if m > 0]
-        median_90d = statistics.median(nonzero) if nonzero else median_now
-        # Recompute the band from the poison-filtered daily medians, not WFM's
-        # precomputed donch_top/bot — those still reflect a cap-pinned day even
-        # after we drop it from the series. median_now is one of these medians,
-        # so it always sits inside [donch_bot, donch_top].
-        band = nonzero or [median_now]
-        donch_top_90d = max(band)
-        donch_bot_90d = min(band)
-    else:
-        median_now = median_90d = donch_top_90d = donch_bot_90d = 0
+    # Same tier-narrowing as the 48h window (see rank0_rows / canonical_subtype
+    # for why the old fallbacks were wrong): the raw series mixes rank tiers for
+    # mods and refinement tiers for relics — medians_7d alternated tiers, and on
+    # a day with only a maxed/radiant trade, "latest" silently grabbed the wrong
+    # price scale (Primed Shotgun Ammo Mutation read 160p vs ~45p unranked;
+    # meso_l1_relic read Δ+991% off one radiant day).
+    nineties = drop_poisoned_rows(subtype_rows(rank0_rows(nineties_all), sub_pick))
+    median_now, median_90d, medians_7d, donch_top_90d, donch_bot_90d = series_stats(nineties)
 
     top_buy = max((o["platinum"] for o in live_buys), default=0)
     low_sell = min((o["platinum"] for o in live_sells), default=0)
@@ -233,6 +286,7 @@ def build_snapshot(sorted_rows, *, platform, catalog, final):
                 # treat them as optional.
                 "tags": r.get("tags") or [],
                 "ducats": r.get("ducats"),
+                "median_now": r.get("median_now", 0),
                 "median_90d": r.get("median_90d", 0),
                 "medians_7d": r.get("medians_7d") or [],
                 "donch_top_90d": r.get("donch_top_90d", 0),

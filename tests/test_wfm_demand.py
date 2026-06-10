@@ -16,7 +16,16 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from wfm_demand import build_snapshot, write_snapshot  # noqa: E402
+from wfm_demand import (  # noqa: E402
+    PLAT_CAP,
+    build_snapshot,
+    canonical_subtype,
+    drop_poisoned_rows,
+    rank0_rows,
+    series_stats,
+    subtype_rows,
+    write_snapshot,
+)
 
 
 def _row(slug, **overrides):
@@ -34,6 +43,7 @@ def _row(slug, **overrides):
         "spread": 2,
         "volume_48h": 5,
         "avg_price_48h": 11.0,
+        "median_now": 11.0,
         "median_90d": 11.0,
         "medians_7d": [],
         "donch_top_90d": 0,
@@ -72,7 +82,8 @@ def test_snapshot_item_shape_uses_short_keys():
                  avg_price_48h=42.5, low_sell_price=40, top_buy_price=44,
                  volume_48h=99, buy_sell_ratio=0.5, live_buys=10, live_sells=20,
                  tags=["prime", "warframe"], ducats=15,
-                 median_90d=44.0, medians_7d=[42, 43, 44, 45, 44, 44, 44],
+                 median_now=45.0, median_90d=44.0,
+                 medians_7d=[42, 43, 44, 45, 44, 44, 45],
                  donch_top_90d=60, donch_bot_90d=30)]
     snap = build_snapshot(rows, platform="pc", catalog={}, final=True)
     entry = snap["items"]["zephyr_prime_set"]
@@ -81,8 +92,12 @@ def test_snapshot_item_shape_uses_short_keys():
         "vol": 99, "ratio": 0.5, "buys": 10, "sells": 20,
         "tags": ["prime", "warframe"],
         "ducats": 15,
+        # median_now must ship in --json-out snapshots too — the browser
+        # computes Δ90d from it, and omitting it silently regresses the
+        # column to structurally 0 (the bug the split was made to fix).
+        "median_now": 45.0,
         "median_90d": 44.0,
-        "medians_7d": [42, 43, 44, 45, 44, 44, 44],
+        "medians_7d": [42, 43, 44, 45, 44, 44, 45],
         "donch_top_90d": 60,
         "donch_bot_90d": 30,
     }
@@ -103,6 +118,7 @@ def test_snapshot_item_shape_includes_default_extended_fields_when_absent():
     entry = snap["items"]["old_row"]
     assert entry["tags"] == []
     assert entry["ducats"] is None
+    assert entry["median_now"] == 0
     assert entry["median_90d"] == 0
     assert entry["medians_7d"] == []
     assert entry["donch_top_90d"] == 0
@@ -193,6 +209,125 @@ def test_write_csv_columns_match_row_keys(tmp_path):
     # Header == keys of an analyzed row, in the same order.
     assert header == list(rows[0].keys())
     assert first["url_name"] == "x"
+
+
+# ---- stats filters ---------------------------------------------------------
+# These pure functions carry the anti-poisoning logic; every case below is a
+# bug that shipped (or was caught in review) — keep them as regression pins.
+
+def _day(median=10, volume=5, **over):
+    base = {"median": median, "volume": volume, "max_price": median * 2}
+    base.update(over)
+    return base
+
+
+def test_poison_drops_cap_pinned_median():
+    rows = [_day(median=1), _day(median=PLAT_CAP)]
+    assert drop_poisoned_rows(rows) == [rows[0]]
+
+
+def test_poison_drops_cap_pinned_max_price_even_with_sane_median():
+    rows = [_day(median=10), _day(median=12, max_price=PLAT_CAP)]
+    assert drop_poisoned_rows(rows) == [rows[0]]
+
+
+def test_poison_drops_extreme_outlier_vs_baseline():
+    rows = [_day(median=1), _day(median=1), _day(median=1), _day(median=99)]
+    assert drop_poisoned_rows(rows) == rows[:3]  # 99 > 50x baseline(1)
+
+
+def test_poison_keeps_legit_spike_below_factor():
+    rows = [_day(median=10), _day(median=12), _day(median=400)]
+    assert drop_poisoned_rows(rows) == rows  # 400 < 50x baseline(12)
+
+
+def test_poison_returns_empty_when_everything_is_manipulated():
+    """The Goopolla regression: a pure wash-trade series must yield vol 0,
+    not the raw 99,999p rows (the old `or rows` fallback shipped the fake
+    average to the top of the score sort)."""
+    rows = [_day(median=PLAT_CAP, volume=10), _day(median=PLAT_CAP, volume=36)]
+    assert drop_poisoned_rows(rows) == []
+
+
+def test_poison_empty_input_is_empty():
+    assert drop_poisoned_rows([]) == []
+
+
+def test_rank0_passthrough_when_no_rank_metadata():
+    """Weapons/sets/relics have no mod_rank key at all — keep everything."""
+    rows = [_day(), _day(median=12)]
+    assert rank0_rows(rows) == rows
+
+
+def test_rank0_filters_max_rank_tier():
+    rows = [_day(median=60, mod_rank=0), _day(median=160, mod_rank=10)]
+    assert rank0_rows(rows) == [rows[0]]
+
+
+def test_rank0_all_max_rank_returns_empty_not_inflated():
+    """The Primed-mod regression: a window with ONLY max-rank trades must
+    read as 'no rank-0 activity' (vol 0), not max-rank prices wearing a
+    rank-0 label (the old `or rows_all` fallback fired exactly here)."""
+    rows = [_day(median=160, mod_rank=10), _day(median=179, mod_rank=10)]
+    assert rank0_rows(rows) == []
+
+
+def test_rank0_treats_null_rank_as_unranked():
+    rows = [_day(median=60, mod_rank=None), _day(median=160, mod_rank=10)]
+    assert rank0_rows(rows) == [rows[0]]
+
+
+def test_subtype_none_for_untiered_items():
+    rows = [_day(), _day(median=12)]
+    assert canonical_subtype(rows) is None
+    assert subtype_rows(rows, None) == rows
+
+
+def test_subtype_prefers_intact_for_relics():
+    """The meso_l1_relic regression: one radiant day at 120p must not blend
+    into the intact baseline (it fabricated Δ+991% and a 'peak' badge)."""
+    rows = [
+        _day(median=5, volume=2, subtype="intact"),
+        _day(median=14, volume=18, subtype="intact"),
+        _day(median=120, volume=12, subtype="radiant"),
+    ]
+    pick = canonical_subtype(rows)
+    assert pick == "intact"
+    assert subtype_rows(rows, pick) == rows[:2]
+
+
+def test_subtype_falls_back_to_dominant_volume_without_intact():
+    rows = [
+        _day(median=3, volume=40, subtype="raw"),
+        _day(median=9, volume=2, subtype="cut"),
+    ]
+    assert canonical_subtype(rows) == "raw"
+
+
+def test_subtype_keeps_generic_rows_under_a_pick():
+    rows = [_day(median=5, subtype="intact"), _day(median=6)]
+    assert subtype_rows(rows, "intact") == rows
+
+
+def test_series_stats_empty():
+    assert series_stats([]) == (0, 0, [], 0, 0)
+
+
+def test_series_stats_splits_now_from_baseline_and_recomputes_band():
+    rows = [_day(median=m) for m in (10, 12, 8, 14, 11)]
+    median_now, median_90d, medians_7d, top, bot = series_stats(rows)
+    assert median_now == 11          # latest day, not the baseline
+    assert median_90d == 11          # median of [8,10,11,12,14]
+    assert medians_7d == [10, 12, 8, 14, 11]
+    assert (top, bot) == (14, 8)     # from the series, not WFM's donch
+
+
+def test_series_stats_ignores_zero_median_days_in_baseline():
+    rows = [_day(median=0), _day(median=10), _day(median=20)]
+    median_now, median_90d, _, top, bot = series_stats(rows)
+    assert median_now == 20
+    assert median_90d == 15
+    assert (top, bot) == (20, 10)
 
 
 def test_write_partial_then_final_keeps_both_files_consistent(tmp_path):
