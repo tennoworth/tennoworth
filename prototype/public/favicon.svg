@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="TennoWorth">
+  <rect width="64" height="64" rx="14" fill="#0e0f12"/>
+  <!-- price candlesticks: the "market" motif, legible down to 16px -->
+  <g fill="#5ec8ff">
+    <rect x="15" y="30" width="6" height="22" rx="2"/>
+    <rect x="16.5" y="22" width="3" height="10" rx="1.5"/>
+    <rect x="29" y="16" width="6" height="36" rx="2"/>
+    <rect x="30.5" y="10" width="3" height="9" rx="1.5"/>
+    <rect x="43" y="24" width="6" height="28" rx="2"/>
+    <rect x="44.5" y="18" width="3" height="9" rx="1.5"/>
+  </g>
+</svg>
