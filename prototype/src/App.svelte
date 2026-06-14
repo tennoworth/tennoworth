@@ -888,7 +888,7 @@
 {#if phase !== 'done'}
 <main class="landing">
   <header>
-    <h1>WF inventory · market check</h1>
+    <h1>TennoWorth</h1>
     <p class="sub">
       Drop your <code>inventory.json</code>. We cross-reference against a
       warframe.market snapshot (refreshed centrally on a schedule) and rank
@@ -960,7 +960,7 @@
 
   <aside class="sidebar">
     <div class="brand">
-      <h1>WF · market check</h1>
+      <h1>TennoWorth</h1>
       <div class="sub">Windows + Linux · no Overwolf</div>
     </div>
 

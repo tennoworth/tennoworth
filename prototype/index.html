@@ -38,10 +38,67 @@
     />
     <meta http-equiv="Referrer-Policy" content="no-referrer" />
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
-    <title>WF Inventory Market — Prototype</title>
+
+    <title>TennoWorth — what to sell in Warframe, right now</title>
+    <meta
+      name="description"
+      content="Drop your Warframe inventory and TennoWorth ranks what's actually worth selling on warframe.market right now — Baro flips, set-vs-parts arbitrage, ducat dumps. A no-Overwolf AlecaFrame alternative that runs on Windows and Linux. No account, no upload — everything stays in your browser."
+    />
+    <link rel="canonical" href="https://tennoworth.app/" />
+    <meta name="theme-color" content="#0e0f12" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+
+    <!--
+      og:url / og:image use the canonical absolute origin because social
+      scrapers (Discord, Twitter, Slack) fetch them server-side, not
+      relative to the page. They are NOT subject to the page CSP. Update
+      the origin here if the canonical domain changes from tennoworth.app.
+    -->
+    <meta property="og:site_name" content="TennoWorth" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://tennoworth.app/" />
+    <meta property="og:title" content="TennoWorth — what to sell in Warframe, right now" />
+    <meta
+      property="og:description"
+      content="Ranks your Warframe inventory by what's worth selling on warframe.market right now. No-Overwolf AlecaFrame alternative for Windows + Linux. Nothing leaves your browser."
+    />
+    <meta property="og:image" content="https://tennoworth.app/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="TennoWorth — what to sell in Warframe, right now" />
+    <meta
+      name="twitter:description"
+      content="Ranks your Warframe inventory by what's worth selling right now. No-Overwolf AlecaFrame alternative for Windows + Linux."
+    />
+    <meta name="twitter:image" content="https://tennoworth.app/og.png" />
   </head>
   <body>
     <div id="app"></div>
+    <!--
+      Crawlable fallback for non-JS bots and a plain-text description of
+      the tool. The Svelte app mounts into #app and never touches this
+      sibling; users with JS see the real app, not this block.
+    -->
+    <noscript>
+      <main style="max-width:42rem;margin:4rem auto;padding:0 1.25rem;font-family:system-ui,sans-serif;color:#e6e8ec;background:#0e0f12;line-height:1.55;">
+        <h1>TennoWorth — what to sell in Warframe, right now</h1>
+        <p>
+          TennoWorth cross-references your Warframe inventory against a
+          warframe.market price snapshot and ranks what's actually worth
+          selling: live sell-score, Baro Ki'Teer buy-and-hold flip timing,
+          set-vs-parts arbitrage, and ducat-dump efficiency.
+        </p>
+        <p>
+          It's a no-Overwolf alternative to AlecaFrame that treats
+          <strong>Windows and Linux as equal, first-class targets</strong> —
+          including Steam Deck. There's no account and no upload: a tiny
+          local companion reads your inventory from the running game, and the
+          ranking happens entirely in your browser.
+        </p>
+        <p>This page needs JavaScript enabled to run the dashboard.</p>
+      </main>
+    </noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
