@@ -476,6 +476,10 @@
         plat_per_100d,
         avg_price: m.avg,
         low_sell: m.low_sell,
+        // The sanity-clamped ask (what the score already prices at) — the
+        // listing modal prefills from this, not raw low_sell, so a lone
+        // fantasy ask can't become the suggested price.
+        clearing_price: clearingPrice(m),
         low5_avg: m.low5_avg || 0,
         top_buy: m.top_buy,
         volume_48h: m.vol,
@@ -1649,6 +1653,13 @@
                   <span title="If you cracked every one you own.">
                     {p.epp_owned.toFixed(0)}p total
                   </span>
+                  {#if p.sell_now > 0}
+                    <span class="muted">·</span>
+                    <span
+                      class:bad-text={p.sell_now > p.epp}
+                      title="What this relic clears at sold intact on WFM, no cracking. When this beats the crack EV, selling wins."
+                    >or sell: {p.sell_now.toFixed(0)}p ea</span>
+                  {/if}
                 </div>
                 <details class="relic-rewards">
                   <summary>top drops</summary>
@@ -1929,27 +1940,43 @@
     <details>
       <summary>How do I connect the companion to list items on WFM?</summary>
       <p>
-        Seeing “what to sell” needs only the inventory drop. To actually
-        <em>create or edit listings</em> from the app, connect the companion:
+        Running <code>wfm-fetch-inventory serve</code> opens this app already
+        connected — inventory and the sell list need nothing else. To also
+        <em>create or edit listings</em> from the app:
       </p>
       <p>
         1. <code>wfm-fetch-inventory login</code> — once; signs you in to
         warframe.market and encrypts the token behind a passphrase.<br />
-        2. <code>wfm-fetch-inventory serve</code> — <strong>in a real terminal
-        window</strong>; it prompts for that passphrase and then prints a URL.<br />
-        3. Copy the whole <code>http://127.0.0.1:&lt;port&gt;?token=…</code> line and
-        paste it into the <strong>Companion</strong> tab.
+        2. Keep <code>serve</code> running in a terminal. The first time you
+        list something, that terminal asks for your passphrase — after that,
+        listing just works for the rest of the session.
       </p>
       <p>
-        The port is <strong>random and changes every run</strong> — it is not this
-        website's <code>5173</code> — and the token rotates each run too, so re-copy
-        the line whenever you restart <code>serve</code>.
-      </p>
-      <p>
-        If <code>serve</code> exits with <code>reading passphrase / No such device
-        or address (os error 6)</code>, it has no terminal to read your passphrase.
-        Run it directly in a terminal window, or pipe the passphrase:
+        If the browser didn't open on its own, copy the whole
+        <code>http://127.0.0.1:&lt;port&gt;?token=…</code> line serve prints into the
+        <strong>Companion</strong> tab. The port is <strong>random and changes
+        every run</strong> — it is not this website's <code>5173</code>.
+        Running serve somewhere without a terminal (systemd, nohup)? Pipe the
+        passphrase at startup:
         <code>printf %s 'your-passphrase' | wfm-fetch-inventory serve --passphrase-stdin</code>.
+      </p>
+    </details>
+
+    <details>
+      <summary>I listed an item — what happens next?</summary>
+      <p>
+        Your listing sits on warframe.market (we create them
+        <strong>invisible</strong> so you can review first — flip them visible
+        in the review dialog or on WFM). When a buyer wants it, they message
+        you <strong>in-game</strong>: <code>/w YourName Hi! I want to buy your
+        Serration…</code>. Invite them to your squad, go to any dojo or relay,
+        open a trade, and put in the item while they put in the platinum.
+      </p>
+      <p>
+        Two gotchas: you must be <strong>in-game</strong> to trade (WFM marks
+        you online automatically while the site is open), and trading requires
+        a clan dojo or Maroo's Bazaar. Mark the listing sold on WFM afterwards
+        — or just delete it from the <strong>My orders</strong> tab here.
       </p>
     </details>
 
