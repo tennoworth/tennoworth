@@ -140,9 +140,9 @@ cd companion && cargo build --release
 
 - **Ducat values column.** Data lives in warframestat.us already; plumb
   through `loadCatalogs()` → owned record → table column.
-- **Publish the first GitHub release** (tag → `release-companion.yml`)
-  so the install.sh/install.ps1/InstallWidget download paths — which
-  now point at `tennoworth/tennoworth` — have a binary to fetch instead
-  of 404ing.
+- **Register tennoworth.app + point it at the deploy/ kit** — the
+  install one-liner shown to users assumes the site origin; today only
+  the dev server serves install.sh. GitHub repo + v0.1.0 release are
+  live and the full installer path is verified end-to-end (Linux).
 - **Move off GitHub Pages for production hosting** so `public/_headers`
   is actually applied (HSTS, X-Frame-Options, etc).
