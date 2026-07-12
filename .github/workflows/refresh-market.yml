@@ -34,40 +34,16 @@ jobs:
       - name: Install deps
         run: pip install requests
 
-      - name: Scrape warframe.market
-        run: |
-          python3 wfm_demand.py \
-            --filter "" \
-            --exclude "" \
-            --min-volume 1 \
-            --out wfm_results.csv
-
-      # wfm_demand.py exits 0 even when sustained 429s made it skip most
-      # items, and "the CSV changed" is the only commit gate below — so a
-      # throttled run would commit a gutted snapshot and serve it for 2 h.
-      # Same row-count floor as deploy/run-scrape.sh: absolute minimum plus
-      # no worse than 25% shrinkage vs the checked-out prior CSV.
-      - name: Guard against truncated scrape
-        run: |
-          MIN_ROWS=800
-          prior=0
-          if git show HEAD:wfm_results.csv >/tmp/prior.csv 2>/dev/null; then
-            prior=$(( $(wc -l < /tmp/prior.csv) - 1 ))
-          fi
-          now=$(( $(wc -l < wfm_results.csv) - 1 ))
-          if [ "$now" -lt "$MIN_ROWS" ] || { [ "$prior" -gt 0 ] && [ "$now" -lt $(( prior * 3 / 4 )) ]; }; then
-            echo "ABORT: scrape kept $now rows (prior $prior) — looks truncated/throttled." >&2
-            exit 1
-          fi
-          echo "scrape kept $now rows (prior $prior) — OK"
-
-      - name: Build market.json
-        # csv_to_market_json.py is the only generator that emits the
-        # set_to_parts / relic_rewards / vault_status keys the web app's
-        # Sets, Relics, and Vaulted surfaces depend on. Pointing
-        # wfm_demand.py --json-out straight at the public file omits them
-        # and blanks those cards on every cron tick.
-        run: python3 scripts/csv_to_market_json.py
+      # One scrape entrypoint shared with the self-host systemd timer —
+      # scrape, truncation guard (row-count floor + 25%-shrinkage check
+      # against the checked-out prior CSV), and the full-shape rebuild all
+      # live in deploy/run-scrape.sh so the logic can't drift between the
+      # two runners again.
+      - name: Scrape, guard, rebuild
+        env:
+          APP: ${{ github.workspace }}
+          PYTHON: python3
+        run: bash deploy/run-scrape.sh
 
       - name: Commit if changed
         run: |
