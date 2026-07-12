@@ -113,7 +113,7 @@ Routes the browser depends on (see `src/lib/companion.ts`):
   The app pulls this on the "Pull/Refresh inventory" button and auto-pulls when
   it arrives via the companion's deep link (`#companion=<url>?token=…`).
 - `POST /plan` — submit listing batch
-- `GET /plan/pending` — last pending plan or 404
+- `GET /plan/pending` — last pending plan or 404 (no JWT — safe to poll on connect)
 - `POST /plan/resume` — re-runs skipping completed items
 - `DELETE /plan/pending` — discard
 - `GET /orders` — user's listings (enriched server-side with item names)
@@ -123,6 +123,18 @@ Routes the browser depends on (see `src/lib/companion.ts`):
 
 All authed routes require `X-Session-Token` from the URL the
 companion prints at startup.
+
+**Listing unlock (lazy JWT).** `serve` starts without decrypting the JWT, so
+`/health`, `/inventory`, and `/plan/pending` work with no login. The
+listing/order routes (`/plan`, `/plan/resume`, `/orders`, `/orders/visibility`,
+`/order/<id>`) unlock the JWT on first use and can return:
+- **401 `{error, needs_login: true}`** — no login on the companion; steer the
+  user to run `wfm-fetch-inventory login`.
+- **503 `{error, needs_login: false}`** — login exists but couldn't unlock (the
+  companion has no terminal to prompt for the passphrase, or a transient
+  failure). The first real listing request may also block while the companion
+  prompts for the passphrase in *its* terminal, so surface a "check the terminal
+  running serve" hint on the List action.
 
 ---
 

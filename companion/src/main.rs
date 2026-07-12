@@ -671,7 +671,7 @@ fn civil_from_days(z: i64) -> (i64, u32, u32) {
 //     the token is.
 
 use std::collections::BTreeMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 const SERVE_RATE_LIMIT_MS: u64 = 350;
@@ -752,71 +752,37 @@ struct WfmCatalogItem {
 }
 
 fn run_serve(args: ServeArgs) -> Result<()> {
-    // --- 1. Decrypt the stored JWT ---
+    // --- 1. Peek the stored login WITHOUT decrypting ---
+    // The whole point of serve-first: inventory pull (GET /inventory) uses only
+    // the in-memory game creds and needs no login, so serve must start and be
+    // useful even with no JWT on disk. The platform tag is stored in plaintext
+    // in the envelope, so we can read it without the passphrase; the JWT itself
+    // stays encrypted until the first listing action actually needs it.
     let jwt_path = args.jwt_path.unwrap_or_else(default_jwt_path);
-    if !jwt_path.exists() {
-        bail!(
-            "No JWT at {}. Run `wfm-fetch-inventory login` first.",
-            jwt_path.display()
-        );
-    }
-    let blob: EncryptedJwt = serde_json::from_slice(&fs::read(&jwt_path)?)
-        .with_context(|| format!("reading encrypted JWT from {}", jwt_path.display()))?;
-    let jwt = if args.passphrase_stdin {
-        let mut s = String::new();
-        std::io::stdin().read_line(&mut s).context("reading passphrase from stdin")?;
-        let passphrase = s.trim_end_matches(['\n', '\r']).to_string();
-        decrypt_jwt(&blob, &passphrase)?
+    let (listing_init, platform) = if jwt_path.exists() {
+        let blob: EncryptedJwt = serde_json::from_slice(&fs::read(&jwt_path)?)
+            .with_context(|| format!("reading encrypted JWT from {}", jwt_path.display()))?;
+        let platform = blob.platform.clone();
+        // --passphrase-stdin is the automation path: stdin may be a one-shot
+        // pipe that won't survive to the first request, so capture the line now
+        // and unlock eagerly below (fail fast on a bad passphrase).
+        let source = if args.passphrase_stdin {
+            let mut s = String::new();
+            std::io::stdin()
+                .read_line(&mut s)
+                .context("reading passphrase from stdin")?;
+            PassphraseSource::Provided(s.trim_end_matches(['\n', '\r']).to_string())
+        } else {
+            PassphraseSource::Tty
+        };
+        (ListingAuth::Locked { blob, source }, platform)
     } else {
-        // serve must read the passphrase interactively. Outside a real terminal
-        // (IDE "run" button, nohup, systemd unit, a pipe, some multiplexers)
-        // rpassword fails with a cryptic "No such device or address (os error 6)".
-        // Detect that up front and point at the --passphrase-stdin escape hatch.
-        if !std::io::stdin().is_terminal() {
-            bail!(
-                "serve needs an interactive terminal to read your encryption passphrase.\n\
-                 Run it directly in a terminal window, or pipe the passphrase:\n  \
-                 printf %s 'your-passphrase' | wfm-fetch-inventory serve --passphrase-stdin"
-            );
-        }
-        // Re-prompt on a mistyped passphrase instead of aborting the whole
-        // startup (which would re-fight catalog warm-up on the next run).
-        let mut attempt = 0;
-        loop {
-            attempt += 1;
-            let passphrase = rpassword::prompt_password("Encryption passphrase: ")
-                .context("reading passphrase")?;
-            match decrypt_jwt(&blob, &passphrase) {
-                Ok(jwt) => break jwt,
-                Err(e) if attempt < 3 => eprintln!("  {e}  ({} attempt(s) left)", 3 - attempt),
-                Err(e) => return Err(e),
-            }
-        }
+        // No login yet — inventory-only. Market data is pc, so report pc.
+        (ListingAuth::Unavailable, "pc".to_string())
     };
-    let platform = blob.platform.clone();
-    eprintln!("→ Decrypted JWT ({} chars, platform={})", jwt.len(), platform);
+    let can_list = !matches!(listing_init, ListingAuth::Unavailable);
 
-    // --- 2. Warm slug→item_id cache from /v1/items ---
-    eprintln!("→ Loading WFM item catalog…");
-    let http = Client::builder()
-        .user_agent(BROWSER_UA)
-        .timeout(Duration::from_secs(60))
-        .build()
-        .context("building HTTP client")?;
-    let catalog = fetch_wfm_catalog(&http, &platform)?;
-    eprintln!("  {} items in catalog", catalog.len());
-    let id_to_name: BTreeMap<String, String> = catalog
-        .values()
-        .map(|c| (c.item_id.clone(), c.display_name.clone()))
-        .collect();
-    let catalog = Arc::new(catalog);
-    let id_to_name = Arc::new(id_to_name);
-
-    // Discover the user's WFM username — needed for /v2/orders/user/<username>.
-    let username = fetch_wfm_me(&http, &jwt, &platform)?;
-    eprintln!("→ Signed in as {username}");
-
-    // --- 3. Random session token + bind ---
+    // --- 2. Random session token + bind ---
     let session_token = random_token(32);
     let bind = format!("127.0.0.1:{}", args.port);
     let server = tiny_http::Server::http(&bind)
@@ -830,7 +796,18 @@ fn run_serve(args: ServeArgs) -> Result<()> {
     eprintln!("  This port is RANDOM and changes every run — it is NOT the website's 5173.");
     eprintln!("\n  ▶ Paste THIS whole line into the web app's Companion tab:");
     eprintln!("      http://{actual}?token={session_token}");
-    eprintln!("\n  Leave this running while you list items. Ctrl-C to stop.\n");
+    if can_list {
+        eprintln!(
+            "\n  Listing on warframe.market is available. The first time you list, this\n  \
+             terminal will ask for your companion passphrase to unlock it."
+        );
+    } else {
+        eprintln!(
+            "\n  Inventory pull is ready. To also create/edit WFM listings from the app,\n  \
+             run `wfm-fetch-inventory login` once, then restart serve."
+        );
+    }
+    eprintln!("\n  Leave this running while you use the app. Ctrl-C (or close the terminal) to stop.\n");
 
     // Open the web app pre-connected so the user never copies the URL/token.
     // The token rides in the URL fragment (#…) — fragments are never sent to a
@@ -846,15 +823,20 @@ fn run_serve(args: ServeArgs) -> Result<()> {
 
     // --- 4. Serve requests ---
     let state = Arc::new(ServeState {
-        jwt,
-        platform: platform.clone(),
-        catalog,
-        id_to_name,
+        platform,
         session_token,
-        username,
         pending_path: default_pending_path(),
         plan_running: std::sync::atomic::AtomicBool::new(false),
+        listing: Mutex::new(listing_init),
     });
+
+    // Automation path: unlock now so a bad --passphrase-stdin fails at startup
+    // rather than on the first listing request.
+    if args.passphrase_stdin && can_list {
+        if let Err(e) = ensure_unlocked(&state) {
+            bail!("listing unlock failed: {}", e.into_message());
+        }
+    }
     for request in server.incoming_requests() {
         let state = Arc::clone(&state);
         // One thread per request — workload is light, listing batches are
@@ -882,18 +864,149 @@ impl Drop for PlanGuard<'_> {
 }
 
 struct ServeState {
-    jwt: String,
     platform: String,
-    catalog: Arc<BTreeMap<String, WfmCatalogItem>>,
-    /// itemId → display name. Used to inject readable names into the
-    /// /orders response so the UI doesn't show raw 24-char hex IDs.
-    id_to_name: Arc<BTreeMap<String, String>>,
     session_token: String,
-    username: String,
     pending_path: PathBuf,
     /// Serializes plan execution: a second concurrent POST /plan or /plan/resume
     /// gets 409 instead of racing on pending_plan.json and clobbering recovery.
     plan_running: std::sync::atomic::AtomicBool,
+    /// warframe.market listing credentials, unlocked lazily. Inventory pull and
+    /// /health never touch this, so serve is fully useful before (or without) a
+    /// login. The first listing action decrypts the JWT + warms the catalog.
+    listing: Mutex<ListingAuth>,
+}
+
+/// Where the decryption passphrase comes from when we unlock listing.
+enum PassphraseSource {
+    /// Captured from stdin at startup (--passphrase-stdin, automation).
+    Provided(String),
+    /// Prompt on the controlling terminal at first-use.
+    Tty,
+}
+
+/// Lifecycle of the listing credentials inside a running serve.
+enum ListingAuth {
+    /// No JWT on disk — listing is off until the user runs `login`.
+    Unavailable,
+    /// JWT present but not yet decrypted.
+    Locked {
+        blob: EncryptedJwt,
+        source: PassphraseSource,
+    },
+    /// Decrypted JWT + warmed catalog, ready to hit WFM.
+    Unlocked(Arc<Unlocked>),
+}
+
+/// Everything a listing request needs, produced once on first use.
+struct Unlocked {
+    jwt: String,
+    username: String,
+    catalog: Arc<BTreeMap<String, WfmCatalogItem>>,
+    /// itemId → display name. Injected into the /orders response so the UI
+    /// doesn't show raw 24-char hex IDs.
+    id_to_name: Arc<BTreeMap<String, String>>,
+}
+
+/// Why a listing route couldn't get credentials — lets handle_request answer
+/// with the right status (401 "log in first" vs a transient 502).
+enum UnlockError {
+    NeedsLogin,
+    Failed(anyhow::Error),
+}
+
+impl UnlockError {
+    fn into_message(self) -> String {
+        match self {
+            UnlockError::NeedsLogin => {
+                "Listing needs a warframe.market login. Run `wfm-fetch-inventory login`, \
+                 then restart serve."
+                    .to_string()
+            }
+            UnlockError::Failed(e) => format!("{e:#}"),
+        }
+    }
+}
+
+/// Returns the unlocked listing credentials, decrypting + warming the catalog on
+/// first call. Holds the listing mutex across the (possibly interactive) unlock
+/// so concurrent listing requests can't double-prompt — the second waits, then
+/// sees the already-unlocked state.
+fn ensure_unlocked(state: &ServeState) -> std::result::Result<Arc<Unlocked>, UnlockError> {
+    let mut guard = state.listing.lock().expect("listing mutex poisoned");
+    match &*guard {
+        ListingAuth::Unlocked(u) => return Ok(Arc::clone(u)),
+        ListingAuth::Unavailable => return Err(UnlockError::NeedsLogin),
+        ListingAuth::Locked { .. } => {}
+    }
+    // Take ownership of the Locked payload for the fallible unlock, leaving a
+    // placeholder. Restore it on failure so a later retry (mistyped passphrase,
+    // network blip) can try again instead of being stuck Unavailable.
+    let (blob, source) = match std::mem::replace(&mut *guard, ListingAuth::Unavailable) {
+        ListingAuth::Locked { blob, source } => (blob, source),
+        _ => unreachable!("checked Locked above"),
+    };
+    match build_unlocked(&blob, &source) {
+        Ok(u) => {
+            let arc = Arc::new(u);
+            *guard = ListingAuth::Unlocked(Arc::clone(&arc));
+            Ok(arc)
+        }
+        Err(e) => {
+            *guard = ListingAuth::Locked { blob, source };
+            Err(UnlockError::Failed(e))
+        }
+    }
+}
+
+fn build_unlocked(blob: &EncryptedJwt, source: &PassphraseSource) -> Result<Unlocked> {
+    let platform = blob.platform.clone();
+    let jwt = match source {
+        PassphraseSource::Provided(p) => decrypt_jwt(blob, p)?,
+        PassphraseSource::Tty => {
+            // Only now do we need a real terminal — serve itself started fine
+            // without one (inventory-only). Fail with an actionable message
+            // rather than rpassword's cryptic os-error-6.
+            if !std::io::stdin().is_terminal() {
+                bail!(
+                    "Listing needs your passphrase, but serve has no interactive terminal.\n\
+                     Start serve in a terminal, or pass --passphrase-stdin."
+                );
+            }
+            eprintln!("\n  ▶ Unlocking warframe.market listing — enter your companion passphrase:");
+            let mut attempt = 0;
+            loop {
+                attempt += 1;
+                let pass = rpassword::prompt_password("Encryption passphrase: ")
+                    .context("reading passphrase")?;
+                match decrypt_jwt(blob, &pass) {
+                    Ok(jwt) => break jwt,
+                    Err(e) if attempt < 3 => eprintln!("  {e}  ({} attempt(s) left)", 3 - attempt),
+                    Err(e) => return Err(e),
+                }
+            }
+        }
+    };
+    eprintln!("→ Decrypted JWT ({} chars, platform={})", jwt.len(), platform);
+    eprintln!("→ Loading WFM item catalog…");
+    let http = Client::builder()
+        .user_agent(BROWSER_UA)
+        .timeout(Duration::from_secs(60))
+        .build()
+        .context("building HTTP client")?;
+    let catalog = fetch_wfm_catalog(&http, &platform)?;
+    eprintln!("  {} items in catalog", catalog.len());
+    let id_to_name: BTreeMap<String, String> = catalog
+        .values()
+        .map(|c| (c.item_id.clone(), c.display_name.clone()))
+        .collect();
+    let username = fetch_wfm_me(&http, &jwt, &platform)?;
+    eprintln!("→ Signed in as {username}");
+    Ok(Unlocked {
+        jwt,
+        username,
+        catalog: Arc::new(catalog),
+        id_to_name: Arc::new(id_to_name),
+    })
 }
 
 // Persisted between requests so a crash mid-batch doesn't lose work. The
@@ -1052,6 +1165,10 @@ fn handle_request(
             Some(p) => p,
             None => return respond_json(request, 404, &serde_json::json!({"error": "no pending plan"})),
         };
+        let unlocked = match ensure_unlocked(state) {
+            Ok(u) => u,
+            Err(e) => return respond_unlock_error(request, e),
+        };
         let _guard = match state.plan_running.compare_exchange(
             false, true,
             std::sync::atomic::Ordering::SeqCst,
@@ -1060,7 +1177,7 @@ fn handle_request(
             Ok(_) => PlanGuard(&state.plan_running),
             Err(_) => return respond_json(request, 409, &serde_json::json!({"error": "a plan is already running; retry after it finishes"})),
         };
-        let response = run_pending(state, &mut pending);
+        let response = run_pending(state, &unlocked, &mut pending);
         clear_pending(&state.pending_path);
         return respond_json(request, 200, &response);
     }
@@ -1078,6 +1195,10 @@ fn handle_request(
                 );
             }
         };
+        let unlocked = match ensure_unlocked(state) {
+            Ok(u) => u,
+            Err(e) => return respond_unlock_error(request, e),
+        };
         // Reject a concurrent plan instead of letting two threads race on
         // pending_plan.json. The guard clears the flag on any return path.
         let _guard = match state.plan_running.compare_exchange(
@@ -1088,12 +1209,16 @@ fn handle_request(
             Ok(_) => PlanGuard(&state.plan_running),
             Err(_) => return respond_json(request, 409, &serde_json::json!({"error": "a plan is already running; retry after it finishes"})),
         };
-        let response = execute_plan(state, plan);
+        let response = execute_plan(state, &unlocked, plan);
         return respond_json(request, 200, &response);
     }
 
     if path == "/orders" && matches!(method, tiny_http::Method::Get) {
-        return match list_user_orders(state) {
+        let unlocked = match ensure_unlocked(state) {
+            Ok(u) => u,
+            Err(e) => return respond_unlock_error(request, e),
+        };
+        return match list_user_orders(state, &unlocked) {
             Ok(v) => respond_json(request, 200, &v),
             Err(e) => respond_json(request, 502, &serde_json::json!({"error": e.to_string()})),
         };
@@ -1106,7 +1231,11 @@ fn handle_request(
             Ok(v) => v,
             Err(e) => return respond_json(request, 400, &serde_json::json!({"error": format!("malformed: {e}")})),
         };
-        let results = bulk_set_visibility(state, &req);
+        let unlocked = match ensure_unlocked(state) {
+            Ok(u) => u,
+            Err(e) => return respond_unlock_error(request, e),
+        };
+        let results = bulk_set_visibility(state, &unlocked, &req);
         return respond_json(request, 200, &serde_json::json!({"results": results}));
     }
 
@@ -1117,7 +1246,11 @@ fn handle_request(
         }
         match method {
             tiny_http::Method::Delete => {
-                return match delete_order(state, id) {
+                let unlocked = match ensure_unlocked(state) {
+                    Ok(u) => u,
+                    Err(e) => return respond_unlock_error(request, e),
+                };
+                return match delete_order(state, &unlocked, id) {
                     Ok(_) => respond_json(request, 200, &serde_json::json!({"ok": true})),
                     Err(e) => respond_json(request, 502, &serde_json::json!({"error": e.to_string()})),
                 };
@@ -1138,7 +1271,11 @@ fn handle_request(
                         return respond_json(request, 400, &serde_json::json!({"error": format!("price {p}p > max {MAX_PLATINUM}p")}));
                     }
                 }
-                return match update_order(state, id, &upd) {
+                let unlocked = match ensure_unlocked(state) {
+                    Ok(u) => u,
+                    Err(e) => return respond_unlock_error(request, e),
+                };
+                return match update_order(state, &unlocked, id, &upd) {
                     Ok(v) => respond_json(request, 200, &v),
                     Err(e) => respond_json(request, 502, &serde_json::json!({"error": e.to_string()})),
                 };
@@ -1181,18 +1318,18 @@ fn fetch_wfm_me(client: &Client, jwt: &str, platform: &str) -> Result<String> {
         .ok_or_else(|| anyhow!("/v2/me response shape unexpected: {body}"))
 }
 
-fn list_user_orders(state: &ServeState) -> Result<serde_json::Value> {
+fn list_user_orders(state: &ServeState, unlocked: &Unlocked) -> Result<serde_json::Value> {
     let client = wfm_client()?;
     let url = format!(
         "https://api.warframe.market/v2/orders/user/{}",
-        state.username
+        unlocked.username
     );
     let resp = client
         .get(&url)
         .header("Platform", &state.platform)
         .header("Language", "en")
         .header("Crossplay", "true")
-        .header("Cookie", format!("JWT={}", state.jwt))
+        .header("Cookie", format!("JWT={}", unlocked.jwt))
         .header("Origin", "https://warframe.market")
         .header("Referer", "https://warframe.market/")
         .send()
@@ -1202,7 +1339,7 @@ fn list_user_orders(state: &ServeState) -> Result<serde_json::Value> {
     if !status.is_success() {
         bail!("WFM HTTP {status}: {body}");
     }
-    enrich_orders_with_names(&mut body, &state.id_to_name);
+    enrich_orders_with_names(&mut body, &unlocked.id_to_name);
     Ok(body)
 }
 
@@ -1250,7 +1387,7 @@ fn attach_item_name(order: &mut serde_json::Value, id_to_name: &BTreeMap<String,
     }
 }
 
-fn bulk_set_visibility(state: &ServeState, req: &VisibilityRequest) -> Vec<PerOrderResult> {
+fn bulk_set_visibility(state: &ServeState, unlocked: &Unlocked, req: &VisibilityRequest) -> Vec<PerOrderResult> {
     let client = match wfm_client() {
         Ok(c) => c,
         Err(e) => {
@@ -1269,12 +1406,12 @@ fn bulk_set_visibility(state: &ServeState, req: &VisibilityRequest) -> Vec<PerOr
             thread::sleep(Duration::from_millis(SERVE_RATE_LIMIT_MS) - elapsed);
         }
         last = std::time::Instant::now();
-        out.push(patch_one_order(&client, state, id, &serde_json::json!({"visible": req.visible})));
+        out.push(patch_one_order(&client, state, unlocked, id, &serde_json::json!({"visible": req.visible})));
     }
     out
 }
 
-fn update_order(state: &ServeState, id: &str, upd: &UpdateRequest) -> Result<PerOrderResult> {
+fn update_order(state: &ServeState, unlocked: &Unlocked, id: &str, upd: &UpdateRequest) -> Result<PerOrderResult> {
     let client = wfm_client()?;
     let mut body = serde_json::Map::new();
     if let Some(v) = upd.platinum { body.insert("platinum".into(), serde_json::json!(v)); }
@@ -1284,12 +1421,13 @@ fn update_order(state: &ServeState, id: &str, upd: &UpdateRequest) -> Result<Per
     if body.is_empty() {
         bail!("update body has no fields to patch");
     }
-    Ok(patch_one_order(&client, state, id, &serde_json::Value::Object(body)))
+    Ok(patch_one_order(&client, state, unlocked, id, &serde_json::Value::Object(body)))
 }
 
 fn patch_one_order(
     client: &Client,
     state: &ServeState,
+    unlocked: &Unlocked,
     id: &str,
     body: &serde_json::Value,
 ) -> PerOrderResult {
@@ -1299,7 +1437,7 @@ fn patch_one_order(
         .header("Platform", &state.platform)
         .header("Language", "en")
         .header("Crossplay", "true")
-        .header("Cookie", format!("JWT={}", state.jwt))
+        .header("Cookie", format!("JWT={}", unlocked.jwt))
         .header("Origin", "https://warframe.market")
         .header("Referer", "https://warframe.market/")
         .json(body)
@@ -1326,7 +1464,7 @@ fn patch_one_order(
     }
 }
 
-fn delete_order(state: &ServeState, id: &str) -> Result<()> {
+fn delete_order(state: &ServeState, unlocked: &Unlocked, id: &str) -> Result<()> {
     let client = wfm_client()?;
     let url = format!("https://api.warframe.market/v2/order/{id}");
     let resp = client
@@ -1334,7 +1472,7 @@ fn delete_order(state: &ServeState, id: &str) -> Result<()> {
         .header("Platform", &state.platform)
         .header("Language", "en")
         .header("Crossplay", "true")
-        .header("Cookie", format!("JWT={}", state.jwt))
+        .header("Cookie", format!("JWT={}", unlocked.jwt))
         .header("Origin", "https://warframe.market")
         .header("Referer", "https://warframe.market/")
         .send()
@@ -1379,6 +1517,19 @@ fn respond_json<T: serde::Serialize>(
         .with_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
     request.respond(response).context("sending response")?;
     Ok(())
+}
+
+// Turn a failed listing-unlock into an HTTP response. NeedsLogin is a 401 with
+// a `needs_login` flag the browser keys off to steer the user to `login`; a
+// decrypt/network failure is a 503 (transient — retrying may work).
+fn respond_unlock_error(request: tiny_http::Request, err: UnlockError) -> Result<()> {
+    let needs_login = matches!(err, UnlockError::NeedsLogin);
+    let status = if needs_login { 401 } else { 503 };
+    respond_json(
+        request,
+        status,
+        &serde_json::json!({ "error": err.into_message(), "needs_login": needs_login }),
+    )
 }
 
 // Send already-serialized JSON bytes (e.g. the upstream inventory.json) without
@@ -1474,7 +1625,7 @@ fn fetch_wfm_catalog(client: &Client, platform: &str) -> Result<BTreeMap<String,
     Ok(out)
 }
 
-fn execute_plan(state: &ServeState, plan: PlanRequest) -> PlanResponse {
+fn execute_plan(state: &ServeState, unlocked: &Unlocked, plan: PlanRequest) -> PlanResponse {
     let plan_id = random_token(8);
 
     if plan.items.is_empty() {
@@ -1520,7 +1671,7 @@ fn execute_plan(state: &ServeState, plan: PlanRequest) -> PlanResponse {
         eprintln!("warning: could not seed pending plan: {e:#}");
     }
 
-    let response = run_pending(state, &mut pending);
+    let response = run_pending(state, unlocked, &mut pending);
     clear_pending(&state.pending_path);
     response
 }
@@ -1529,7 +1680,7 @@ fn execute_plan(state: &ServeState, plan: PlanRequest) -> PlanResponse {
 // state (ok / error). Used both by the initial /plan POST and /plan/resume.
 // Rewrites the on-disk pending file atomically after every item so a crash
 // at any point leaves a consistent record.
-fn run_pending(state: &ServeState, pending: &mut PendingPlan) -> PlanResponse {
+fn run_pending(state: &ServeState, unlocked: &Unlocked, pending: &mut PendingPlan) -> PlanResponse {
     let http = match Client::builder()
         .user_agent(BROWSER_UA)
         .timeout(Duration::from_secs(30))
@@ -1571,7 +1722,7 @@ fn run_pending(state: &ServeState, pending: &mut PendingPlan) -> PlanResponse {
             subtype: pending.items[i].subtype.clone(),
             reference_low_sell: pending.items[i].reference_low_sell,
         };
-        let result = execute_one(&http, state, &plan_item);
+        let result = execute_one(&http, state, unlocked, &plan_item);
         pending.items[i].status = result.status.clone();
         pending.items[i].message = result.message.clone();
         pending.items[i].order_id = result.order_id.clone();
@@ -1654,7 +1805,7 @@ fn build_order_body(item: &PlanItem, cat: &WfmCatalogItem) -> serde_json::Value 
     serde_json::Value::Object(body)
 }
 
-fn execute_one(http: &Client, state: &ServeState, item: &PlanItem) -> ItemResult {
+fn execute_one(http: &Client, state: &ServeState, unlocked: &Unlocked, item: &PlanItem) -> ItemResult {
     let mk_err = |msg: String| ItemResult {
         slug: item.slug.clone(),
         status: "error".into(),
@@ -1686,7 +1837,7 @@ fn execute_one(http: &Client, state: &ServeState, item: &PlanItem) -> ItemResult
     }
 
     // --- resolve slug → item_id ---
-    let cat = match state.catalog.get(&item.slug) {
+    let cat = match unlocked.catalog.get(&item.slug) {
         Some(c) => c,
         None => return mk_err(format!("slug {:?} not in WFM catalog", item.slug)),
     };
@@ -1706,7 +1857,7 @@ fn execute_one(http: &Client, state: &ServeState, item: &PlanItem) -> ItemResult
         .header("Platform", &state.platform)
         .header("Language", "en")
         .header("Crossplay", "true")
-        .header("Cookie", format!("JWT={}", state.jwt))
+        .header("Cookie", format!("JWT={}", unlocked.jwt))
         .header("Origin", "https://warframe.market")
         .header("Referer", "https://warframe.market/")
         .json(&body)

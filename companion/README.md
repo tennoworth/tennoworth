@@ -10,13 +10,27 @@ it from.
 
 ## Quick start
 
-The binary has three subcommands. The order is:
+Easiest path — **just run `serve`**:
 
-1. **`fetch`** (default) — grab your inventory → `./inventory.json`,
-   then drop it into the web app. This is all you need to see *what to sell*.
-2. **`login`** (once) — sign in to warframe.market; encrypts your token at rest.
-3. **`serve`** — run a local server so the web app can *create/edit listings*
-   for you. Needed only for the list-on-WFM half.
+```bash
+wfm-fetch-inventory serve    # leave it running; your browser opens on the sell list
+```
+
+It opens the web app pre-connected and pulls your inventory straight from the
+running game — no file, no login, no copy-paste. Leave it running; close the
+terminal (or Ctrl-C) when you're done. Refreshing your inventory later is one
+click in the app.
+
+The three subcommands:
+
+1. **`serve`** — the recommended default. Local server the web app talks to;
+   opens your browser pre-connected and streams your inventory on demand.
+   Works with **no login** — creating/editing warframe.market listings is the
+   only part that needs one, and it unlocks the first time you use it.
+2. **`fetch`** (default action) — the no-server alternative: grab your inventory
+   to `./inventory.json` once and drop it into the web app by hand.
+3. **`login`** (once) — sign in to warframe.market so `serve` can list items for
+   you. Optional; only needed for the list-on-WFM half.
 
 ### 1. Get your inventory (`fetch`)
 
@@ -45,20 +59,10 @@ normal PowerShell as the same user that started the game:
 The inventory file lands in the directory you ran the command from
 (override with `--out <path>`).
 
-### 2 & 3. List on warframe.market (`login` → `serve`)
+### Run the server (`serve`)
 
 ```bash
-wfm-fetch-inventory login    # once — interactive sign-in, sets a passphrase
-wfm-fetch-inventory serve    # leave running; prints a URL to paste into the app
-```
-
-`serve` **must run in a real terminal window** — it prompts for the passphrase
-you set at `login`. From a non-terminal context (IDE run button, `nohup`,
-systemd) it fails with `reading passphrase / No such device or address (os
-error 6)`; pipe the passphrase instead:
-
-```bash
-printf %s 'your-passphrase' | wfm-fetch-inventory serve --passphrase-stdin
+wfm-fetch-inventory serve    # leave running; opens your browser on the sell list
 ```
 
 On start, `serve` **opens your browser pre-connected** to the app — no
@@ -70,9 +74,31 @@ line like `http://127.0.0.1:49xxx?token=…`; paste that **whole line** into the
 web app's Companion tab. The port is **random and changes every run** — it is
 *not* the website's `5173`, and the token rotates each run too.
 
-`serve` also exposes `GET /inventory`, so the app's "Pull / Refresh inventory"
-button memory-scans the running game on demand — you never touch a file. (That
-route uses only the in-memory session creds, never your JWT.)
+The `GET /inventory` route it exposes uses only the in-memory game creds — never
+your JWT — so the sell list and the app's "Pull / Refresh inventory" button work
+with no login at all.
+
+### List on warframe.market (`login`, then serve unlocks on first use)
+
+Creating/editing listings needs a warframe.market login. Run it once:
+
+```bash
+wfm-fetch-inventory login    # interactive sign-in; sets a passphrase
+```
+
+After that, `serve` **starts without asking for anything** — it only prompts for
+your passphrase (in the terminal where it's running) the first time you actually
+list something. Until then, listing sits ready but locked.
+
+From a non-terminal context (IDE run button, `nohup`, systemd) that first-use
+prompt can't appear; pipe the passphrase at startup instead and listing unlocks
+immediately:
+
+```bash
+printf %s 'your-passphrase' | wfm-fetch-inventory serve --passphrase-stdin
+```
+
+(Inventory pull still works without any of this — login only gates listing.)
 
 ### Flags
 
