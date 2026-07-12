@@ -18,3 +18,8 @@ rust_out
 # Scratch space for third-party binaries pulled in for compat testing
 # (e.g. competitor export tools) — never redistribute someone else's binary.
 /tools/
+
+# Internal working artifacts — design exploration and research notes for
+# the maintainer, not documentation for people checking the project.
+/.mockups/
+/.research/
