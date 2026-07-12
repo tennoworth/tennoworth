@@ -1,0 +1,8 @@
+[package]
+name = "market-math"
+version = "0.1.0"
+edition = "2021"
+description = "Pure market-data heuristics ported from wfm_demand.py — no I/O, no deps."
+license = "MIT"
+
+[dependencies]
