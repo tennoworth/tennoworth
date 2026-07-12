@@ -225,13 +225,6 @@ def analyze_item(session, item):
     live_sells = subtype_rows([o for o in orders if live(o, "sell")], sub_pick)
 
     recent = drop_poisoned_rows(subtype_rows(rank0_rows(recent_all), sub_pick))
-    volume_48h = sum(d.get("volume", 0) for d in recent)
-    if volume_48h > 0:
-        avg_price_48h = (
-            sum(d.get("avg_price", 0) * d.get("volume", 0) for d in recent) / volume_48h
-        )
-    else:
-        avg_price_48h = 0.0
 
     # 90d series — the WFM frontend prices against this, not 48h avg, because
     # 48h is noisy on low-volume items. We emit two distinct numbers so the UI's
@@ -251,9 +244,42 @@ def analyze_item(session, item):
     nineties = drop_poisoned_rows(subtype_rows(rank0_rows(nineties_all), sub_pick))
     median_now, median_90d, medians_7d, donch_top_90d, donch_bot_90d = series_stats(nineties)
 
+    # 48h volume-weighted average. `vol` stays the honest closed-trade count, but
+    # a single fat-finger/scam sale on a thin item otherwise sets `avg`
+    # arbitrarily — deimos_heart_scene had one 500p sale against a 9p 90d median
+    # with the live book at 25-33p, so `avg` read 500. Mirror clearingPrice's
+    # sanity clamp: weight only 48h day-rows whose avg_price sits within 3x of
+    # the 90d baseline median; if every trade in the window was an outlier, fall
+    # back to that median rather than quoting the outlier.
+    volume_48h = sum(d.get("volume", 0) for d in recent)
+    sane = ([d for d in recent
+             if median_90d / 3 <= (d.get("avg_price") or 0) <= median_90d * 3]
+            if median_90d > 0 else recent)
+    sane_vol = sum(d.get("volume", 0) for d in sane)
+    if sane_vol > 0:
+        avg_price_48h = (
+            sum(d.get("avg_price", 0) * d.get("volume", 0) for d in sane) / sane_vol
+        )
+    elif median_90d > 0:
+        avg_price_48h = median_90d
+    else:
+        avg_price_48h = 0.0
+
     top_buy = max((o["platinum"] for o in live_buys), default=0)
     low_sell = min((o["platinum"] for o in live_sells), default=0)
     low5_avg = avg_lowest_asks(live_sells)
+    # "Raw value" = owned x low5_avg. On a thin/steep book one cheap ask sets
+    # low_sell while the next asks cliff upward, so the mean of the 5 cheapest
+    # overstates what the stack realistically clears (kuva_fortress_crevice_scene:
+    # cheapest ask 5p but the 5-ask mean 35p). Clamp the HIGH side to the 90d
+    # median — a genuine price rise lifts low_sell and the median too, so this
+    # catches only the skew. High-side only: a genuinely cheap current book is the
+    # honest raw value, so we never clamp it up. The `low_sell <= median*3` guard
+    # is the cliff test: it fires only when the CHEAPEST ask is reasonable but the
+    # 5-ask mean isn't (the fantasy-cliff book) — a real across-the-board rise
+    # lifts low_sell above the band too, and is left untouched.
+    if median_90d > 0 and low5_avg > median_90d * 3 and low_sell <= median_90d * 3:
+        low5_avg = float(median_90d)
 
     # If there are buyers but no sellers, treat as very high demand pressure.
     if live_sells:
