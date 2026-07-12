@@ -23,3 +23,5 @@ rust_out
 # the maintainer, not documentation for people checking the project.
 /.mockups/
 /.research/
+/.loop-journal.md
+/docs/onboarding-friction.md
