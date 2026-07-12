@@ -760,9 +760,24 @@
   // Hidden file input we trigger from the "Replace inventory" button. Using
   // the same handler as the drop-zone keeps both paths identical.
   let hiddenFileInput;
+  let refreshOpen = $state(false);
   function openFilePicker() {
+    refreshOpen = false;
     hiddenFileInput?.click();
   }
+  async function refreshFromGame() {
+    refreshOpen = false;
+    await pullInventory();
+  }
+  $effect(() => {
+    if (!refreshOpen) return;
+    const handler = (e) => {
+      const t = e.target;
+      if (!t?.closest?.('.refresh-pop, .refresh-trigger')) refreshOpen = false;
+    };
+    document.addEventListener('click', handler, true);
+    return () => document.removeEventListener('click', handler, true);
+  });
   async function onHiddenPicked(e) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -1214,7 +1229,37 @@
         </span>
       {/if}
       <div class="src-pin-actions">
-        <button onclick={openFilePicker} title="Drop or pick a new inventory.json. Counts that changed will be highlighted.">Replace</button>
+        <div class="refresh-wrap">
+          <button
+            class="refresh-trigger"
+            onclick={() => (refreshOpen = !refreshOpen)}
+            aria-expanded={refreshOpen}
+            title="Load fresh inventory — re-fetch from the game or pick a new file."
+          >Refresh ▾</button>
+          {#if refreshOpen}
+            <div class="refresh-pop card">
+              {#if companionStatus === 'connected'}
+                <p class="rp-lede">Connected to the companion — pull straight from the game, no file needed.</p>
+                <button class="rp-primary" onclick={refreshFromGame} disabled={pullingInventory}>
+                  {pullingInventory ? 'Scanning game…' : 'Refresh from game'}
+                </button>
+                <div class="rp-or">or pick a file</div>
+                <button class="ghost rp-file" onclick={openFilePicker}>Choose inventory.json…</button>
+              {:else}
+                <p class="rp-lede">Re-run the companion (Warframe open), then drop the new file:</p>
+                <div class="snippet-row">
+                  <pre class="snippet"><code>wfm-fetch-inventory</code></pre>
+                  <CopyBtn text="wfm-fetch-inventory" />
+                </div>
+                <button class="rp-primary" onclick={openFilePicker}>Choose inventory.json…</button>
+                <p class="rp-hint muted small">
+                  Tip: run <code>serve</code> once and you can refresh with a single click — no file. See the
+                  <a href="#companion" onclick={() => (refreshOpen = false)}>Companion tab</a>.
+                </p>
+              {/if}
+            </div>
+          {/if}
+        </div>
         <button class="ghost" onclick={openExportDialog} title="Download an encrypted snapshot for another device or backup.">Export</button>
         <button class="ghost" onclick={handleClear} title="Forget the saved inventory entirely.">Clear</button>
       </div>
@@ -2168,6 +2213,43 @@
     cursor: pointer;
   }
   .src-pin-actions button:hover { color: var(--fg); border-color: var(--accent); }
+
+  .refresh-wrap { position: relative; }
+  .refresh-pop {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 0;
+    z-index: 30;
+    width: 300px;
+    max-width: 80vw;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  }
+  .refresh-pop .rp-lede { margin: 0; font-size: 12px; color: var(--fg); line-height: 1.45; }
+  .refresh-pop .rp-hint { margin: 2px 0 0 0; }
+  .refresh-pop .rp-or {
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+    text-align: center;
+  }
+  .refresh-pop .rp-primary {
+    font-size: 12px;
+    padding: 7px 10px;
+    color: var(--bg);
+    background: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  .refresh-pop .rp-primary:hover:not(:disabled) { filter: brightness(1.08); }
+  .refresh-pop .rp-primary:disabled { opacity: 0.6; cursor: default; }
+  .refresh-pop .rp-file { font-size: 12px; padding: 6px 10px; border-radius: 6px; }
 
   /* Workspace view header — h2 + lede paragraph. The lede gives one
      sentence of context about what this view does so the user lands
