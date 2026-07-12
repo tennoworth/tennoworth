@@ -25,6 +25,7 @@ rust_out
 /.research/
 /.loop-journal.md
 /docs/onboarding-friction.md
+/docs/rust-port-phase3.md
 
 # AI tooling config — kept locally, not part of the public project surface.
 /.claude/
