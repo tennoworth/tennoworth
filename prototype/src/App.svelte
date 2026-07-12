@@ -1053,11 +1053,11 @@
             Writes <code>inventory.json</code> to the directory you run it from.
             Windows: no admin needed, run from a normal PowerShell. Linux: grant
             ptrace once
-            (<code>sudo setcap cap_sys_ptrace=eip ~/.local/bin/wfm-fetch-inventory</code>)
-            and it runs without sudo forever.
+            (<code>sudo setcap cap_sys_ptrace=eip "$(command -v wfm-fetch-inventory)"</code>
+            — works wherever the binary lives) and it runs without sudo forever.
             If you get <code>command not found</code>, it isn't on your PATH yet —
-            open a new terminal or run the full path
-            (<code>~/.local/bin/wfm-fetch-inventory</code>).
+            open a new terminal, or run it by its full path and put that path in
+            the setcap line instead.
           </p>
         </div>
       </li>
