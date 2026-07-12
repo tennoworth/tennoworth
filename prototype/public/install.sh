@@ -8,7 +8,7 @@
 set -eu
 
 # Configure these once before publishing the first release.
-REPO="${WFMINV_REPO:-OWNER/REPO}"
+REPO="${WFMINV_REPO:-tennoworth/tennoworth}"
 BIN_NAME="wfm-fetch-inventory"
 ASSET="${BIN_NAME}-linux-x86_64"
 DEST="${WFMINV_DEST:-$HOME/.local/bin}"
