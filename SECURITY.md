@@ -82,8 +82,11 @@ PowerShell equivalent:
 ```powershell
 $expected = (Get-Content SHA256SUMS | Select-String 'windows-x86_64').ToString().Split(' ')[0]
 $actual = (Get-FileHash .\wfm-fetch-inventory-windows-x86_64.exe -Algorithm SHA256).Hash.ToLower()
-$expected -eq $actual
+if ($expected -eq $actual) { "OK — checksum matches" } else { "MISMATCH — do NOT run it; re-download" }
 ```
+
+If it prints `MISMATCH`, the file is corrupt or tampered — delete it and
+re-download. Don't run a binary that fails this check.
 
 The `install.sh` and `install.ps1` scripts do this verification
 automatically when you use them.
