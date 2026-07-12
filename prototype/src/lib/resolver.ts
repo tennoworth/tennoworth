@@ -44,6 +44,17 @@ function slugGuess(name: string): string {
     .replace(/\s+/g, '_');
 }
 
+// De-camel-case a path's basename into a display-name guess:
+// ".../SagekPrimeBarrelBlueprint" → "Sagek Prime Barrel".
+function pathNameGuess(path: string): string | null {
+  let base = path.split('/').pop() ?? '';
+  for (const suffix of ['Blueprint', 'Component']) {
+    if (base.endsWith(suffix)) base = base.slice(0, -suffix.length);
+  }
+  if (!base) return null;
+  return base.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
+}
+
 // Refinement levels in warframestat.us relic names. All four share a WFM
 // slug (axi_k2_relic) but WFM lists them as distinct subtypes when
 // creating an order. We preserve the refinement so each variant is a
@@ -96,7 +107,22 @@ export function resolvePath(
       }
     }
   }
-  if (!info) return { name: null, slug: null, category: null, subtype: null };
+  if (!info) {
+    // Last resort: guess the display name from the path itself and check it
+    // against WFM's own catalog. That catalog is refreshed on every scrape
+    // and lists new primes the day they release — weeks before warframestat
+    // indexes their /Lotus/ paths — and weapon-part codenames usually ARE
+    // the display name (BurstonPrimeBarrel → "Burston Prime Barrel").
+    // Strict on purpose: only an exact market.catalog hit counts, so a bad
+    // guess can never fabricate an item. Category stays null; the caller
+    // falls back to the inventory key.
+    const guess = pathNameGuess(path);
+    const guessSlug = guess ? market?.catalog?.[guess.toLowerCase()] : undefined;
+    if (guess && guessSlug) {
+      return { name: guess, slug: guessSlug, category: null, subtype: null };
+    }
+    return { name: null, slug: null, category: null, subtype: null };
+  }
   const { name, category } = info;
 
   // Relics carry a refinement (Intact / Exceptional / Flawless / Radiant)
