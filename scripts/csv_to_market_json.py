@@ -84,6 +84,39 @@ WFCD_VAULT_SOURCES = [
 VAULT_SOON_DAYS = 60
 
 
+def _clamp_avg(row):
+    """Outlier-protect the displayed 48h `avg` the same way wfm_demand.py now
+    does at scrape time. A single fat-finger / scam sale on a thin item sets the
+    volume-weighted 48h average arbitrarily — deimos_heart_scene had one 500p
+    trade against a 9p 90d median (live book 25-33p), so `avg` read 500. When
+    avg falls outside 3x of the 90d baseline median, quote the median instead.
+    This is the rebuild-path mirror of the scraper clamp, so existing CSVs are
+    corrected by a ~10s rebuild without a 45-min re-scrape. Guarded on avg > 0
+    so a genuine no-recent-trade row (avg 0) is left as 0, not invented."""
+    avg = float(row.get("avg_price_48h") or 0)
+    med = float(row.get("median_90d") or 0)
+    if avg > 0 and med > 0 and not (med / 3 <= avg <= med * 3):
+        return med
+    return avg
+
+
+def _clamp_low5(row):
+    """Rebuild-path mirror of the low5_avg clamp in wfm_demand.py. "Raw value"
+    = owned x low5_avg; on a thin/steep book the mean of the 5 cheapest asks
+    overstates (one cheap ask, then a price cliff — kuva_fortress_crevice_scene
+    read 35p against a 5p median). Clamp the high side to the 90d median so an
+    existing CSV is corrected by a ~10s rebuild. High-side only: a genuinely
+    cheap current book is the honest raw value, so we never clamp it up."""
+    v = float(row.get("low5_avg") or 0)
+    med = float(row.get("median_90d") or 0)
+    ls = float(row.get("low_sell_price") or 0)
+    # Cliff test (ls <= med*3): only when the cheapest ask is reasonable but the
+    # 5-ask mean isn't. A real across-the-board rise lifts low_sell too — leave it.
+    if v > 0 and med > 0 and v > med * 3 and ls <= med * 3:
+        return med
+    return v
+
+
 def _parse_medians(raw):
     """CSV stores the 7-day median series as the Python `repr` of a list
     (csv.DictWriter just calls str() on it). Parse defensively so an old
@@ -517,11 +550,11 @@ def main():
             slug = r["url_name"]
             meta = meta_by_slug.get(slug, {})
             items[slug] = {
-                "avg": float(r["avg_price_48h"] or 0),
+                "avg": _clamp_avg(r),
                 "low_sell": int(r["low_sell_price"] or 0),
                 # Avg of the ~5 cheapest live asks (depth-aware current
                 # price); 0 on pre-2026-06-10 CSVs — UI falls back to avg.
-                "low5_avg": float(r.get("low5_avg") or 0),
+                "low5_avg": _clamp_low5(r),
                 "top_buy": int(r["top_buy_price"] or 0),
                 "vol": int(r["volume_48h"] or 0),
                 "ratio": float(r["buy_sell_ratio"] or 0),

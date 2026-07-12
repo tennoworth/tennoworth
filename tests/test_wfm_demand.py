@@ -27,6 +27,7 @@ from wfm_demand import (  # noqa: E402
     subtype_rows,
     write_snapshot,
 )
+from scripts.csv_to_market_json import _clamp_avg, _clamp_low5  # noqa: E402
 
 
 def _row(slug, **overrides):
@@ -373,3 +374,52 @@ def test_write_partial_then_final_keeps_both_files_consistent(tmp_path):
     snap2 = json.loads(json_path.read_text())
     assert snap2["partial"] is False
     assert snap2["item_count"] == 2
+
+
+# ---- 48h avg outlier clamp (rebuild path) -------------------------------
+# A single fat-finger/scam sale on a thin item used to set `avg` arbitrarily
+# (deimos_heart_scene: one 500p trade against a 9p 90d median read as avg=500).
+
+def test_clamp_avg_pulls_high_outlier_to_median():
+    # The real bug: avg 500 vs 90d median 9 → quote the median, not the outlier.
+    assert _clamp_avg({"avg_price_48h": "500", "median_90d": "9"}) == 9.0
+
+
+def test_clamp_avg_pulls_low_outlier_up_to_median():
+    # Symmetric: a troll-low trade below 1/3 the median is also an outlier.
+    assert _clamp_avg({"avg_price_48h": "26", "median_90d": "80"}) == 80.0
+
+
+def test_clamp_avg_leaves_in_range_value_untouched():
+    # Within 3x of the median = a real price; don't touch it.
+    assert _clamp_avg({"avg_price_48h": "12", "median_90d": "9"}) == 12.0
+    assert _clamp_avg({"avg_price_48h": "27", "median_90d": "9"}) == 27.0  # exactly 3x
+
+
+def test_clamp_avg_keeps_zero_and_handles_missing_median():
+    # avg 0 (no recent trades) stays 0 — don't invent a price.
+    assert _clamp_avg({"avg_price_48h": "0", "median_90d": "9"}) == 0.0
+    # No 90d baseline to clamp against → leave avg as-is.
+    assert _clamp_avg({"avg_price_48h": "500", "median_90d": "0"}) == 500.0
+
+
+# ---- low5_avg cliff clamp (Raw value) -----------------------------------
+# "Raw value" = owned x low5_avg. A thin/steep book (one cheap ask, then a
+# price cliff) inflates the mean of the 5 cheapest asks
+# (kuva_fortress_crevice_scene: low_sell 5 but low5_avg 35 vs a 5p median).
+
+def test_clamp_low5_pulls_down_a_cliff_book():
+    # Cheapest ask reasonable (5 ≈ median), 5-ask mean inflated → clamp to median.
+    assert _clamp_low5({"low5_avg": "35.2", "median_90d": "5", "low_sell_price": "5"}) == 5.0
+
+
+def test_clamp_low5_preserves_a_real_across_the_board_high():
+    # low_sell is also well above the median → genuine move, not a cliff. Keep it.
+    assert _clamp_low5({"low5_avg": "72", "median_90d": "17", "low_sell_price": "59"}) == 72.0
+
+
+def test_clamp_low5_leaves_in_range_and_zero_untouched():
+    assert _clamp_low5({"low5_avg": "12", "median_90d": "9", "low_sell_price": "8"}) == 12.0
+    assert _clamp_low5({"low5_avg": "0", "median_90d": "5", "low_sell_price": "5"}) == 0.0
+    # No 90d baseline → leave as-is.
+    assert _clamp_low5({"low5_avg": "35", "median_90d": "0", "low_sell_price": "5"}) == 35.0
