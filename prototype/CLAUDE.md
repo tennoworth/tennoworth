@@ -161,9 +161,12 @@ host.
 
 Allowed `connect-src`: `self`, `http://127.0.0.1:*`,
 `http://localhost:*`. The two loopback entries are for the companion;
-there are no third-party origins. The CSP lives in THREE places that
-must stay in sync: `index.html` (meta), `public/_headers`, and
-`deploy/Caddyfile`.
+there are no third-party origins. The CSP ships in three places
+(`index.html` meta, `public/_headers`, `deploy/Caddyfile`) but is
+**edited in ONE**: `scripts/sync-csp.mjs`. Change the directives there,
+run `bun run csp` to rewrite all three; `bun run build` fails via its
+prebuild `--check` if any copy drifted. (The meta copy deliberately
+omits `frame-ancestors` — browsers ignore it in meta tags.)
 
 ---
 

@@ -1,14 +1,22 @@
 #!/usr/bin/env bash
 # Refresh market.json: full WFM scrape (~45 min @ 3 req/s) → CSV, then rebuild
-# the full-shape snapshot. Run from the repo so the scripts' default paths apply.
+# the full-shape snapshot. This is the ONE scrape entrypoint — the self-host
+# systemd timer and the GitHub Actions cron both call it, so the truncation
+# guard can never drift between the two again (it did once: the guard lived
+# here but was missing from CI, and a throttled CI run would have committed a
+# gutted snapshot).
 #
 # NEVER point wfm_demand.py --json-out at the public market.json — that path omits
 # set_to_parts / relic_rewards / vault_status. csv_to_market_json.py is the only
 # generator that produces the full shape.
+#
+# Environment (all optional):
+#   APP     repo root to run in           (default /srv/wfm/app — the LXC layout)
+#   PYTHON  python interpreter to use     (default /srv/wfm/venv/bin/python)
 set -euo pipefail
 
-APP=/srv/wfm/app
-VENV=/srv/wfm/venv/bin
+APP="${APP:-/srv/wfm/app}"
+PYTHON="${PYTHON:-/srv/wfm/venv/bin/python}"
 CSV=wfm_results.csv
 MIN_ROWS=800                 # absolute floor; a healthy scrape keeps ~2.6k
 cd "$APP"
@@ -21,7 +29,7 @@ cd "$APP"
 prior=0
 [ -f "$CSV" ] && prior=$(( $(wc -l < "$CSV") - 1 ))
 
-"$VENV/python" wfm_demand.py --filter "" --exclude "" --min-volume 1 --out "$CSV"
+"$PYTHON" wfm_demand.py --filter "" --exclude "" --min-volume 1 --out "$CSV"
 now=$(( $(wc -l < "$CSV") - 1 ))
 
 if [ "$now" -lt "$MIN_ROWS" ] || { [ "$prior" -gt 0 ] && [ "$now" -lt $(( prior * 3 / 4 )) ]; }; then
@@ -30,5 +38,5 @@ if [ "$now" -lt "$MIN_ROWS" ] || { [ "$prior" -gt 0 ] && [ "$now" -lt $(( prior 
   exit 1
 fi
 
-"$VENV/python" scripts/csv_to_market_json.py
+"$PYTHON" scripts/csv_to_market_json.py
 echo "scrape complete: $now rows, $(date -Is)"
