@@ -110,6 +110,23 @@ def drop_poisoned_rows(rows):
     return clean
 
 
+def rank0_orders(orders):
+    """Keep the unranked tier of a live order list.
+
+    v2 orders carry `rank` (None/absent on untiered items — sets, relics,
+    parts). The closed stats we quote are rank-0 (see rank0_rows), so the
+    live book must be too: a maxed-mod ask/buy must not become the
+    low_sell/top_buy quoted against rank-0 volume (tempo_royale: rank-3
+    ask 30p under a 35p rank-0 book read as "sell at 30"; arcane_velocity:
+    a rank-5 buy order at 160p sat next to a 7p rank-0 sell price).
+    Same honest fallback as rank0_rows: if every live order is ranked,
+    the truth is "no rank-0 book", not maxed prices wearing a rank-0
+    label."""
+    if not any(o.get("rank") is not None for o in orders):
+        return orders
+    return [o for o in orders if (o.get("rank") or 0) == 0]
+
+
 def rank0_rows(rows):
     """Keep the unranked tier of a closed-stats list.
 
@@ -221,8 +238,8 @@ def analyze_item(session, item):
             and o.get("visible", True)
         )
 
-    live_buys = subtype_rows([o for o in orders if live(o, "buy")], sub_pick)
-    live_sells = subtype_rows([o for o in orders if live(o, "sell")], sub_pick)
+    live_buys = rank0_orders(subtype_rows([o for o in orders if live(o, "buy")], sub_pick))
+    live_sells = rank0_orders(subtype_rows([o for o in orders if live(o, "sell")], sub_pick))
 
     recent = drop_poisoned_rows(subtype_rows(rank0_rows(recent_all), sub_pick))
 

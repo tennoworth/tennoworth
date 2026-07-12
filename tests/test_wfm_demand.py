@@ -22,6 +22,7 @@ from wfm_demand import (  # noqa: E402
     build_snapshot,
     canonical_subtype,
     drop_poisoned_rows,
+    rank0_orders,
     rank0_rows,
     series_stats,
     subtype_rows,
@@ -423,3 +424,37 @@ def test_clamp_low5_leaves_in_range_and_zero_untouched():
     assert _clamp_low5({"low5_avg": "0", "median_90d": "5", "low_sell_price": "5"}) == 0.0
     # No 90d baseline → leave as-is.
     assert _clamp_low5({"low5_avg": "35", "median_90d": "0", "low_sell_price": "5"}) == 35.0
+
+
+# ---- rank0_orders (live-book tier narrowing) ------------------------------
+# v2 live orders carry `rank`. The closed stats we quote are rank-0, so the
+# live book must be too — a rank-3 ask at 30p under a 35p rank-0 book read as
+# "sell at 30" (tempo_royale, verified live 2026-07-12), and a rank-5 buy
+# order at 160p sat next to a 7p rank-0 sell price (arcane_velocity).
+
+def _order(plat, rank=None):
+    o = {"platinum": plat, "type": "sell", "visible": True}
+    if rank is not None:
+        o["rank"] = rank
+    else:
+        o["rank"] = None  # v2 sends the key with null on untiered items
+    return o
+
+
+def test_rank0_orders_drops_ranked_tiers():
+    book = [_order(30, rank=3), _order(35, rank=0), _order(40, rank=0)]
+    kept = rank0_orders(book)
+    assert [o["platinum"] for o in kept] == [35, 40]
+
+
+def test_rank0_orders_keeps_untiered_items_whole():
+    # Sets/relics/parts: rank is null on every order — no tiers, keep all.
+    book = [_order(10), _order(12), _order(15)]
+    assert rank0_orders(book) == book
+
+
+def test_rank0_orders_all_maxed_means_empty_not_maxed_prices():
+    # Honest fallback: every live order is ranked → "no rank-0 book",
+    # not maxed prices wearing a rank-0 label.
+    book = [_order(120, rank=5), _order(140, rank=5)]
+    assert rank0_orders(book) == []

@@ -36,6 +36,9 @@ describe('scoreRow', () => {
   it('flags low-volume items as patience', () => {
     expect(scoreRow({ owned: 5, m: { low_sell: 200, avg: 220, vol: 1 } }).patience).toBe(true);
     expect(scoreRow({ owned: 5, m: { low_sell: 200, avg: 220, vol: 0 } }).patience).toBe(true);
+    // vol 2 used to dodge the tag while still barely moving (winding_isles).
+    expect(scoreRow({ owned: 5, m: { low_sell: 200, avg: 220, vol: 2 } }).patience).toBe(true);
+    expect(scoreRow({ owned: 5, m: { low_sell: 200, avg: 220, vol: 3 } }).patience).toBe(false);
   });
 
   it('does not zero out completely dead items — they should still rank, just very low', () => {
@@ -53,8 +56,17 @@ describe('scoreRow', () => {
     // corpus_void_key: vol 1, lone 2,999p ask, real trades ~200p. Raw
     // low_sell scored it 1499.5 — rank #2 of 2,623 in the live snapshot.
     const r = scoreRow({ owned: 3, m: { low_sell: 2999, avg: 204, vol: 1, median_90d: 200 } });
-    // dailySales = 0.5 → 0.5 × clamped(200) = 100, not 1499.5
-    expect(r.sell_score).toBeCloseTo(100);
+    // dailySales = 0.5 → 0.5 × clamped(200 × 1.5) = 150, not 1499.5
+    expect(r.sell_score).toBeCloseTo(150);
+  });
+
+  it('does not let a vol-2 item with a 10× ask dodge the clamp (winding isles)', () => {
+    // winding_isles_scene: vol 2, one live 100p ask over a 10p median —
+    // ranked #7 at "expected 100p/day" because the old gate was vol < 2.
+    const r = scoreRow({ owned: 1, m: { low_sell: 100, avg: 10, vol: 2, median_now: 10 } });
+    // clearing = 10 × 1.5 = 15, units = min(1, 1) → 15, not 100
+    expect(r.sell_score).toBeCloseTo(15);
+    expect(r.patience).toBe(true);
   });
 });
 
@@ -69,12 +81,21 @@ describe('clearingPrice', () => {
     expect(clearingPrice({ low_sell: 1, median_now: 38, avg: 30, vol: 54 })).toBe(38);
   });
 
-  it('clamps a dead item’s aspirational ask down to the median', () => {
-    expect(clearingPrice({ low_sell: 2999, median_now: 204, avg: 204, vol: 1 })).toBe(204);
+  it('clamps a thin item’s aspirational ask down to 1.5× median', () => {
+    expect(clearingPrice({ low_sell: 2999, median_now: 204, avg: 204, vol: 1 })).toBe(306);
+    // vol 2–4 books get the same treatment — they used to dodge the vol<2 gate
+    expect(clearingPrice({ low_sell: 100, median_now: 10, avg: 10, vol: 2 })).toBe(15);
+    expect(clearingPrice({ low_sell: 100, median_now: 10, avg: 10, vol: 4 })).toBe(15);
+  });
+
+  it('keeps a thin item’s ask when it is within 1.5× of the median', () => {
+    expect(clearingPrice({ low_sell: 14, median_now: 10, avg: 11, vol: 2 })).toBe(14);
   });
 
   it('keeps a liquid item’s high ask — there the book is real information', () => {
     expect(clearingPrice({ low_sell: 700, median_now: 200, avg: 250, vol: 30 })).toBe(700);
+    // LIQUID_VOL boundary: vol 5 counts as liquid
+    expect(clearingPrice({ low_sell: 100, median_now: 10, avg: 10, vol: 5 })).toBe(100);
   });
 
   it('falls back median → avg → 1 when there is no ask', () => {

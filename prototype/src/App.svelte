@@ -15,7 +15,7 @@
   import { flattenInventory, extractKeptLvls } from './lib/inventory';
   import { loadCatalogs, resolvePath, type Catalogs } from './lib/resolver';
   import { loadMarket, lookup } from './lib/market';
-  import { scoreRow, bandSignal, clearingPrice } from './lib/sell-priority';
+  import { scoreRow, bandSignal, clearingPrice, LIQUID_VOL } from './lib/sell-priority';
   import { deriveSetRecos } from './lib/set-recos';
   import { deriveRelicPlan } from './lib/relic-planner';
   import {
@@ -143,6 +143,7 @@
     hint: string;
     columns?: string[];
     vaultOnly?: boolean;
+    ducatsOnly?: boolean;
     minVol?: number; // hard per-preset liquidity floor (Trending uses it)
     minMedian?: number; // 90d-baseline price floor — a +1100% Δ on a 1p fish is noise or wash-trading, not a mover
     defaultSort?: { key: string; dir: number };
@@ -150,16 +151,17 @@
   const PRESETS: Record<string, Preset> = {
     default:  {
       minPrice: 5, hideAtLvl: 5, typeFilter: 'all', activeTags: [],
-      label: 'Default', hint: 'sane defaults — score sort',
+      label: 'Default', hint: 'everything sellable, best first',
       defaultSort: { key: 'sell_score', dir: -1 },
     },
     ducats: {
-      minPrice: 0, hideAtLvl: 11, typeFilter: 'all', activeTags: ['prime'],
-      label: 'Ducats', hint: 'best ducat value first',
+      minPrice: 0, hideAtLvl: 11, typeFilter: 'all', activeTags: [],
+      label: 'Ducats', hint: 'prime parts worth feeding to Baro (ducats = his currency)',
       columns: ['name', 'owned', 'sell_score', 'low_sell', 'volume_48h', 'ducats', 'plat_per_100d'],
       // Rank by plat-per-100-ducats ASCENDING: lowest plat value per ducat =
       // worth more fed to Baro than sold on WFM. (Nulls — non-ducat rows — sink.)
       defaultSort: { key: 'plat_per_100d', dir: 1 },
+      ducatsOnly: true,
     },
     trending: {
       minPrice: 5, hideAtLvl: 5, typeFilter: 'all', activeTags: [],
@@ -391,6 +393,13 @@
         const status = market.vault_status?.[rec.slug];
         if (status !== 'vaulted' && status !== 'vaulting-soon') continue;
       }
+      // Ducats preset: only rows that actually carry a ducat value. The
+      // 'prime' tag alone also matches syndicate augments for prime weapons
+      // (gilded_truth is tagged burston_prime), which have no ducat value —
+      // a "best ducat value" list showing "Ducats: —" rows is nonsense.
+      if (PRESETS[activePreset]?.ducatsOnly) {
+        if (rec.subtype || m.ducats == null) continue;
+      }
       // Trending's liquidity floor: drop thin-volume rows so the Δ-sort
       // surfaces real movers, not median spikes (a fish whose 4p median
       // ticked to 48p reads as +1100% on ~1 trade).
@@ -433,9 +442,14 @@
       // snapshots median_now === median_90d → Δ = 0 until the next scrape, which
       // is honest rather than fake.
       const median_90d = m.median_90d > 0 ? m.median_90d : null;
-      const delta_90d_pct = median_now != null && median_90d != null && median_90d > 0
-        ? ((median_now - median_90d) / median_90d) * 100
-        : null;
+      // A trend needs trades behind it: one closed sale can print ▲127% on a
+      // vol-1 row (mountain's edge), which reads as signal but is one person's
+      // afternoon. Below LIQUID_VOL the honest Δ is "not enough data" (null →
+      // renders as ·), same bar the ask-clamp uses.
+      const delta_90d_pct =
+        median_now != null && median_90d != null && median_90d > 0 && (m.vol || 0) >= LIQUID_VOL
+          ? ((median_now - median_90d) / median_90d) * 100
+          : null;
       // Timing: where today's median sits in its 90-day band. Uses median_now,
       // not low_sell — the Donchian bands are built from the daily median
       // series, so a thin-book ask outlier (a lone 200p listing on a ~20p item)
@@ -517,7 +531,18 @@
   // relic_rewards / vault_status). No runtime warframestat fetch — that
   // broke the resolver-only rule and vanished during warframestat
   // outages. Null until market loads, or when the bake came back empty.
-  let voidTrader = $derived(market?.baro ?? null);
+  // warframestat's Baro feed usually carries display names ("Strata Relay
+  // (Earth)") but event nodes leak internals — TennoConHUB2 rendered raw in
+  // the countdown. Map the known offenders, pass everything else through.
+  const NODE_NAMES = {
+    TennoConHUB2: 'TennoCon Relay',
+    SolarisUnitedHub1: 'Fortuna backroom',
+  };
+  let voidTrader = $derived.by(() => {
+    const b = market?.baro;
+    if (!b) return null;
+    return { ...b, location: NODE_NAMES[b.location] ?? b.location };
+  });
 
   // Total ducats across the user's currently-sellable inventory.
   // Only count rows that resolved to a market entry with ducats > 0;
@@ -609,6 +634,7 @@
     // so "23 prime" would show but Vaulted preset + prime chip would
     // produce 6 rows.
     const vaultOnly = !!PRESETS[activePreset]?.vaultOnly;
+    const ducatsOnly = !!PRESETS[activePreset]?.ducatsOnly;
     const minVol = PRESETS[activePreset]?.minVol ?? 0;
     const minMedianFloor = PRESETS[activePreset]?.minMedian ?? 0;
     for (const rec of resolved.owned.values()) {
@@ -622,6 +648,7 @@
         const status = market.vault_status?.[rec.slug];
         if (status !== 'vaulted' && status !== 'vaulting-soon') continue;
       }
+      if (ducatsOnly && (rec.subtype || m.ducats == null)) continue;
       if (minVol > 0 && (m.vol || 0) < minVol) continue;
       if (minMedianFloor > 0 && (m.median_90d || 0) < minMedianFloor) continue;
       for (const t of (m.tags || [])) {
@@ -649,9 +676,40 @@
     return [...set].sort();
   });
 
+  // Total + per-category breakdown of paths no catalog could price-match.
+  // The number itself is reassurance ("the app saw these and skipped them,
+  // your prime junk isn't missing"), the breakdown is hover detail.
+  // The Type filter mixes warframestat catalog categories (Mods, Arcanes,
+  // Relics…) with raw inventory.json keys used as fallback (MiscItems,
+  // RawUpgrades…). The internal names leak as-is without this map.
+  const TYPE_LABELS = {
+    MiscItems: 'Parts & misc',
+    Recipes: 'Blueprints',
+    RawUpgrades: 'Mods (unranked stacks)',
+    Suits: 'Warframes',
+    LongGuns: 'Primary weapons',
+    Pistols: 'Secondary weapons',
+    Melee: 'Melee weapons',
+    SpaceGuns: 'Archwing guns',
+    SpaceMelee: 'Archwing melee',
+    SentinelWeapons: 'Sentinel weapons',
+  };
+
+  let unresolvedCount = $derived(
+    Object.values(resolved.unresolved).reduce((s, n) => s + n, 0)
+  );
+
+  // Every owned row with ANY market match — no preset/filter applied. The
+  // sidebar Sell badge pins to this so it stays stable while filters change.
+  let sellableCount = $derived.by(() => {
+    if (!market) return 0;
+    let n = 0;
+    for (const rec of resolved.owned.values()) if (lookup(market, rec.slug)) n += 1;
+    return n;
+  });
   let unresolvedSummary = $derived(
     Object.entries(resolved.unresolved)
-      .map(([k, v]) => `${k}:${v}`)
+      .map(([k, v]) => `${k}: ${v}`)
       .join(', ')
   );
 
@@ -685,12 +743,13 @@
   let setSurfaceAge = $derived(surfaceAge('set_to_parts'));
 
   // Coarse freshness bucket for the small status dot next to "market Xh ago".
-  // green ≤ 6h, amber ≤ 24h, red after that. Matches our 2h scrape cadence
-  // so a healthy snapshot is always green.
+  // The scrape cron runs every 2h, so a healthy snapshot is under 3h old —
+  // "fresh" means exactly that. Calling a 5h-old book "fresh" during an
+  // event-week price spike would be generous to the point of misleading.
   let marketFreshness = $derived.by(() => {
     if (!market?.updated_at) return 'unknown';
     const h = (Date.now() - new Date(market.updated_at)) / 3.6e6;
-    if (h <= 6) return 'fresh';
+    if (h <= 3) return 'fresh';
     if (h <= 24) return 'aging';
     return 'stale';
   });
@@ -707,11 +766,12 @@
     const presetMinVol = preset?.minVol ?? 0;
     const presetMinMedian = preset?.minMedian ?? 0;
     const vaultOnly = preset?.vaultOnly ?? false;
+    const ducatsOnly = preset?.ducatsOnly ?? false;
     // Walk the same filter logic as computeResults but count what each
     // restriction excludes — including the preset-only clauses, so we don't
     // blame a price slider when it was really the Vaulted/Trending preset.
     let candidates = 0, byPrice = 0, byOwned = 0, byType = 0, byKept = 0,
-        byTag = 0, byVault = 0, byVol = 0, byMedian = 0;
+        byTag = 0, byVault = 0, byDucats = 0, byVol = 0, byMedian = 0;
     for (const rec of resolved.owned.values()) {
       const m = lookup(market, rec.slug);
       if (!m) continue;
@@ -728,6 +788,7 @@
         const status = market.vault_status?.[rec.slug];
         if (status !== 'vaulted' && status !== 'vaulting-soon') byVault += 1;
       }
+      if (ducatsOnly && (rec.subtype || m.ducats == null)) byDucats += 1;
       if (presetMinVol > 0 && (m.vol || 0) < presetMinVol) byVol += 1;
       if (presetMinMedian > 0 && (m.median_90d || 0) < presetMinMedian) byMedian += 1;
     }
@@ -739,6 +800,7 @@
       ['kept',  byKept],
       ['tag',   byTag],
       ['vault', byVault],
+      ['ducats', byDucats],
       ['vol',   byVol],
       ['median', byMedian],
     ].sort((a, b) => b[1] - a[1])[0];
@@ -747,7 +809,7 @@
 
   // Preset-driven empty states reset the preset; hand-filter ones relax the
   // offending slider. A price slider can't rescue a "no vaulted parts" empty.
-  const PRESET_EMPTY_KINDS = new Set(['tag', 'vault', 'vol', 'median']);
+  const PRESET_EMPTY_KINDS = new Set(['tag', 'vault', 'ducats', 'vol', 'median']);
   // One-shot quick-fix actions the empty state can offer.
   function relaxFilters({ kind }) {
     if (kind === 'price') minPrice = 1;
@@ -1168,7 +1230,10 @@
         <div class="nav-label">Trade</div>
         <button type="button" class="nav-item" class:active={effectiveView === 'sell'} onclick={() => setView('sell')}>
           <span>Sell</span>
-          <span class="badge">{results.length}</span>
+          <!-- Pinned to the unfiltered sellable count: with a narrow preset
+               active (Vaulted on a no-vaulted inventory), a filter-driven
+               "Sell 0" reads as "your inventory got wiped". -->
+          <span class="badge">{sellableCount}</span>
         </button>
         {#if setRecos.length > 0}
           <button type="button" class="nav-item" class:active={effectiveView === 'sets'} onclick={() => setView('sets')}>
@@ -1220,9 +1285,9 @@
       {#if inventoryStaleness}
         <span class="muted small">saved {inventoryStaleness}</span>
       {/if}
-      {#if unresolvedSummary}
-        <span class="muted small" title="Item paths warframestat.us couldn't resolve. Usually quest items, resources, and very new content.">
-          unresolved {unresolvedSummary}
+      {#if unresolvedCount > 0}
+        <span class="muted small" title="Breakdown: {unresolvedSummary}. Usually untradeable blueprints, quest items, and very new content — your sellable items aren't affected.">
+          {unresolvedCount} items couldn't be price-matched (not shown)
         </span>
       {/if}
       <div class="src-pin-actions">
@@ -1370,7 +1435,7 @@
                 <select bind:value={typeFilter}>
                   <option value="all">All</option>
                   {#each availableTypes as t}
-                    <option value={t}>{t}</option>
+                    <option value={t}>{TYPE_LABELS[t] ?? t}</option>
                   {/each}
                 </select>
               </label>
@@ -1450,9 +1515,21 @@
               <p class="muted">Trending hides thin-volume rows and penny items so the Δ-sort surfaces real movers.</p>
             </div>
             <button onclick={() => relaxFilters({ kind: emptyReason.kind })}>Back to Default</button>
+          {:else if emptyReason.kind === 'ducats'}
+            <div>
+              <strong>You own no prime parts with a ducat value.</strong>
+              <p class="muted">Ducats are Baro Ki'Teer's currency — only prime parts and blueprints carry them.</p>
+            </div>
+            <button onclick={() => relaxFilters({ kind: 'ducats' })}>Back to Default</button>
+          {:else if emptyReason.kind === 'tag' && activePreset === 'sets'}
+            <div>
+              <strong>You own nothing that trades as part of a prime set.</strong>
+              <p class="muted">The Sets preset only shows prime parts and assembled sets.</p>
+            </div>
+            <button onclick={() => relaxFilters({ kind: 'tag' })}>Back to Default</button>
           {:else if emptyReason.kind === 'tag'}
             <div>
-              <strong>No rows carry the active badge filter{activeTags.size > 1 ? 's' : ''} ({[...activeTags].join(', ')}).</strong>
+              <strong>Nothing matches the active badge filter{activeTags.size > 1 ? 's' : ''} ({[...activeTags].join(', ')}).</strong>
               <p class="muted">Clear the badge chips (or switch preset) to see the rest.</p>
             </div>
             <button onclick={() => relaxFilters({ kind: 'tag' })}>Back to Default</button>
@@ -1746,7 +1823,7 @@
               <button
                 onclick={() => (listingOpen = true)}
                 disabled={listableRows.length === 0}
-                title="Stage the top rows of the current view (preset + sort) for listing. The in-table name filter and badge chips are not applied — review each row in the modal before sending."
+                title="Stage the top rows of exactly what the table shows now — preset, sort, name filter, and badge chips all apply (relics excluded; the planner handles those). Review each row in the modal before sending."
               >List {Math.min(listableRows.length, 50)} on WFM</button>
               <button class="ghost" onclick={disconnectCompanion}>Disconnect</button>
             </div>

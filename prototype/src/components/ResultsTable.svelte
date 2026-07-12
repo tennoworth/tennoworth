@@ -60,15 +60,38 @@
   // Pill filter — the badges rendered next to item names double as filterable
   // facets. Multi-select is OR ("show me peaks and holds"); empty = no filter.
   type PillKey = 'peak' | 'hold' | 'patience' | 'vaulted' | 'vaulting-soon' | 'aug';
-  const PILL_DEFS: { key: PillKey; label: string; cls: string }[] = [
-    { key: 'peak',          label: 'peak',          cls: 'peak' },
-    { key: 'hold',          label: 'hold',          cls: 'hold' },
-    { key: 'patience',      label: 'patience',      cls: 'patience' },
-    { key: 'vaulted',       label: 'vaulted',       cls: 'vaulted' },
-    { key: 'vaulting-soon', label: 'vaulting soon', cls: 'vaulting-soon' },
-    { key: 'aug',           label: 'aug',           cls: 'augment' },
+  // `what` is the badge's meaning, shown in the chip tooltip — the labels
+  // alone read as insider shorthand ("aug" was guessed as "August").
+  const PILL_DEFS: { key: PillKey; label: string; cls: string; what: string }[] = [
+    { key: 'peak',          label: 'peak',          cls: 'peak',
+      what: 'Price near its 90-day high — a good moment to sell' },
+    { key: 'hold',          label: 'hold',          cls: 'hold',
+      what: 'Price near its 90-day low (e.g. Baro just flooded it) — usually recovers, consider waiting' },
+    { key: 'patience',      label: 'patience',      cls: 'patience',
+      what: 'Barely trades (under 3 sales in 48h) — listing it works, selling it takes a while' },
+    { key: 'vaulted',       label: 'vaulted',       cls: 'vaulted',
+      what: 'Prime part no longer obtainable in-game — supply only shrinks' },
+    { key: 'vaulting-soon', label: 'vaulting soon', cls: 'vaulting-soon',
+      what: 'About to leave the drop tables — price usually rises after' },
+    { key: 'aug',           label: 'aug',           cls: 'augment',
+      what: 'Syndicate augment mod — rebuyable with syndicate standing, so sell freely' },
   ];
   let activePills = $state<Set<PillKey>>(new Set());
+
+  // '/' focuses the name filter from anywhere (unless already typing) —
+  // the filter box is the fastest path through a 400-row table.
+  let filterInput: HTMLInputElement | undefined = $state();
+  $effect(() => {
+    const handler = (e: KeyboardEvent): void => {
+      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      e.preventDefault();
+      filterInput?.focus();
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  });
 
   function rowPills(r: Row): PillKey[] {
     const out: PillKey[] = [];
@@ -293,8 +316,9 @@
   <div class="toolbar">
     <input
       type="text"
-      placeholder="Filter by name…"
+      placeholder="Filter by name… ( / )"
       bind:value={filter}
+      bind:this={filterInput}
       oninput={() => (page = 0)}
     />
     <div class="pill-filters">
@@ -306,13 +330,13 @@
             class="tag pill-chip {p.cls}"
             class:on={activePills.has(p.key)}
             onclick={() => togglePill(p.key)}
-            title={activePills.has(p.key) ? 'Click to stop filtering by this badge' : `Show only rows tagged "${p.label}"`}
+            title={`${p.what}. ${activePills.has(p.key) ? 'Click to stop filtering by this badge.' : 'Click to show only these rows.'}`}
           >{p.label} <span class="pill-n">{n}</span></button>
         {/if}
       {/each}
     </div>
     <div class="muted">
-      {sorted.length.toLocaleString()} rows · sorted by
+      {sorted.length.toLocaleString()} {sorted.length === 1 ? 'row' : 'rows'} · sorted by
       <strong>{columns.find((c) => c.key === sortKey)?.label}</strong>
       {sortDir === -1 ? '↓' : '↑'}
     </div>
