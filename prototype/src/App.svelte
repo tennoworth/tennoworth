@@ -1237,7 +1237,7 @@
             title="Load fresh inventory — re-fetch from the game or pick a new file."
           >Refresh ▾</button>
           {#if refreshOpen}
-            <div class="refresh-pop card">
+            <div class="refresh-pop">
               {#if companionStatus === 'connected'}
                 <p class="rp-lede">Connected to the companion — pull straight from the game, no file needed.</p>
                 <button class="rp-primary" onclick={refreshFromGame} disabled={pullingInventory}>
@@ -2226,7 +2226,10 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+    background: var(--panel-2);
+    border: 1px solid var(--accent);
+    border-radius: 10px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
   }
   .refresh-pop .rp-lede { margin: 0; font-size: 12px; color: var(--fg); line-height: 1.45; }
   .refresh-pop .rp-hint { margin: 2px 0 0 0; }
