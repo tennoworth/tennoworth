@@ -107,10 +107,10 @@
   {/if}
 
   <p class="muted small">
-    That's all you need to see <em>what to sell</em>. To also create/edit
-    warframe.market listings from the app, run <code>wfm-fetch-inventory login</code>
-    once, then <code>wfm-fetch-inventory serve</code> in a terminal, and paste
-    the URL it prints into the Companion tab.
+    Then run <code>wfm-fetch-inventory serve</code> in a terminal — your browser
+    opens on the sell list, connected, no file needed. To also create/edit
+    warframe.market listings, run <code>wfm-fetch-inventory login</code> once;
+    <code>serve</code> unlocks listing the first time you use it.
   </p>
 
   <details class="advanced">
