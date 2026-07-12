@@ -1062,37 +1062,37 @@
       <li>
         <span class="n">02</span>
         <div class="body">
-          <h3>Run it once</h3>
-          <p>With Warframe past the login screen, run:</p>
+          <h3>Run <code>serve</code> — easiest</h3>
+          <p>With Warframe past the login screen, run this and leave it going:</p>
           <div class="snippet-row">
-            <pre class="snippet"><code>wfm-fetch-inventory</code></pre>
-            <CopyBtn text="wfm-fetch-inventory" />
+            <pre class="snippet"><code>wfm-fetch-inventory serve</code></pre>
+            <CopyBtn text="wfm-fetch-inventory serve" />
           </div>
           <p class="muted">
-            Writes <code>inventory.json</code> to the directory you run it from.
-            Windows: no admin needed, run from a normal PowerShell. Linux: grant
-            ptrace once and it runs without sudo forever (works wherever the
+            Your browser opens on the sell list, connected — no file, no login.
+            Refreshing later is one click. Close the terminal (or Ctrl-C) to stop.
+            Linux: grant ptrace once so it can read the game (works wherever the
             binary lives):
           </p>
           <div class="snippet-row">
             <pre class="snippet"><code>sudo setcap cap_sys_ptrace=eip "$(command -v wfm-fetch-inventory)"</code></pre>
             <CopyBtn text={'sudo setcap cap_sys_ptrace=eip "$(command -v wfm-fetch-inventory)"'} />
           </div>
-          <p class="muted">
-            If you get <code>command not found</code>, it isn't on your PATH yet —
-            open a new terminal, or run it by its full path and put that path in
-            the setcap line instead.
-          </p>
         </div>
       </li>
       <li>
         <span class="n">03</span>
         <div class="body">
-          <h3>Drop it below</h3>
+          <h3>Prefer a file? Run it once</h3>
           <p>
-            The file resolves against a cached warframe.market snapshot
-            (refreshed every 2 h) and ranks what's worth selling.
+            No always-on server: <code>wfm-fetch-inventory</code> (no subcommand)
+            writes <code>inventory.json</code> to the folder you run it from —
+            drop that below. Same sell list, just manual.
           </p>
+          <div class="snippet-row">
+            <pre class="snippet"><code>wfm-fetch-inventory</code></pre>
+            <CopyBtn text="wfm-fetch-inventory" />
+          </div>
           <p class="muted">Everything runs locally. Nothing's uploaded.</p>
         </div>
       </li>
@@ -1101,20 +1101,17 @@
         <div class="body">
           <h3>Optional: list on WFM</h3>
           <p>
-            Want to create or edit listings straight from here? Run
-            <code>login</code> once, then <code>serve</code> in a terminal:
+            To create or edit listings from here, log in once. After that
+            <code>serve</code> unlocks it the first time you list (it'll ask for
+            your passphrase in the terminal where serve is running):
           </p>
           <div class="snippet-row">
             <pre class="snippet"><code>wfm-fetch-inventory login</code></pre>
             <CopyBtn text="wfm-fetch-inventory login" />
           </div>
-          <div class="snippet-row">
-            <pre class="snippet"><code>wfm-fetch-inventory serve</code></pre>
-            <CopyBtn text="wfm-fetch-inventory serve" />
-          </div>
           <p class="muted">
-            Paste the URL <code>serve</code> prints into the <a href="#companion">Companion</a>
-            tab. The rest of the app works without this.
+            Inventory and the sell list never need this — login only gates
+            listing.
           </p>
         </div>
       </li>
@@ -1776,16 +1773,15 @@
             </div>
           </div>
           <div class="companion-help">
-            <strong>How to get this URL</strong>
+            <strong>Easiest: just run serve</strong>
             <ol>
-              <li><code>wfm-fetch-inventory login</code> <CopyBtn text="wfm-fetch-inventory login" /> — once, to sign in to warframe.market.</li>
-              <li><code>wfm-fetch-inventory serve</code> <CopyBtn text="wfm-fetch-inventory serve" /> — <em>in a real terminal window</em> (it prompts for your passphrase), and leave it running.</li>
-              <li>Copy the whole <code>http://127.0.0.1:<wbr>…?token=…</code> line it prints and paste it above.</li>
+              <li><code>wfm-fetch-inventory serve</code> <CopyBtn text="wfm-fetch-inventory serve" /> — in a terminal; leave it running. It opens your browser here already connected, no login needed.</li>
+              <li>If the browser didn't open, copy the whole <code>http://127.0.0.1:<wbr>…?token=…</code> line it prints and paste it above.</li>
             </ol>
             <p class="muted">
               That port is <strong>random</strong> and changes every run — it is <em>not</em> this website's 5173.
-              If <code>serve</code> errors with <code>reading passphrase / os error 6</code>, it has no terminal:
-              run it in a terminal, or pipe the passphrase with <code>--passphrase-stdin</code>. See the FAQ for details.
+              To create/edit listings, run <code>wfm-fetch-inventory login</code> <CopyBtn text="wfm-fetch-inventory login" /> once;
+              <code>serve</code> then asks for your passphrase (in its own terminal) the first time you list. See the FAQ for details.
             </p>
           </div>
         {/if}
@@ -2360,7 +2356,7 @@
      compact body. Steps separated by hairlines, not boxes. */
   .steps {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 0;
     list-style: none;
     padding: 0;
@@ -2393,7 +2389,6 @@
     color: var(--fg);
     line-height: 1.45;
   }
-  .steps .body p + p { margin-top: 6px; }
   .steps .body p.muted { color: var(--muted); font-size: 12px; }
   .steps .snippet { margin: 6px 0; font-size: 12px; padding: 6px 10px; }
   .snippet-row { display: flex; gap: 6px; align-items: stretch; margin: 6px 0; }
