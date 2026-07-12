@@ -91,8 +91,10 @@
   {#if activeOs === 'linux'}
     <p class="muted small">
       Installs to <code>~/.local/bin</code>. Needs <code>curl</code>. To run
-      without sudo each time, one-time:
-      <code>sudo setcap cap_sys_ptrace=eip ~/.local/bin/wfm-fetch-inventory</code>.
+      without sudo each time, one-time (path-agnostic, also works for a
+      from-source build on your PATH):
+      <code>sudo setcap cap_sys_ptrace=eip "$(command -v wfm-fetch-inventory)"</code>.
+      Re-run after every upgrade — replacing the binary wipes the capability.
     </p>
   {:else}
     <p class="muted small">
@@ -101,6 +103,13 @@
       same user that launched Warframe.
     </p>
   {/if}
+
+  <p class="muted small">
+    That's all you need to see <em>what to sell</em>. To also create/edit
+    warframe.market listings from the app, run <code>wfm-fetch-inventory login</code>
+    once, then <code>wfm-fetch-inventory serve</code> in a terminal, and paste
+    the URL it prints into the Companion tab.
+  </p>
 
   <details class="advanced">
     <summary>Prefer to download the binary manually?</summary>

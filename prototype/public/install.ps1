@@ -86,9 +86,21 @@ if (-not ($userPath -split ';' | Where-Object { $_ -eq $Dest })) {
 Next steps
   1. Start Warframe and log past the title screen.
   2. Open the trade or profile screen once (forces an auth call).
-  3. In a fresh terminal, run:
+  3. In a fresh PowerShell window, run:
        wfm-fetch-inventory
-     (No admin needed — run as the same user that's running Warframe. If
-      you see "Access is denied", try an elevated terminal.)
+     No admin needed. Run it at the SAME elevation as Warframe — if you
+     launched the game via Steam (the usual case), use a NORMAL (non-admin)
+     PowerShell. An elevated terminal can't read a non-elevated game and
+     fails with "Access is denied".
   4. inventory.json lands in your Downloads folder — drop it into the web UI.
+
+Optional — to create/edit warframe.market listings from the web app:
+  5. wfm-fetch-inventory login     # once; interactive sign-in
+  6. wfm-fetch-inventory serve     # leave this window open
+     Paste the URL it prints into the app's Companion tab. The port is
+     random (not the website's 5173).
+
+Note: the binary is not code-signed yet, so Windows SmartScreen may warn
+"Windows protected your PC". Click "More info" -> "Run anyway". The
+checksum was already verified above against the published SHA256SUMS.
 '@
