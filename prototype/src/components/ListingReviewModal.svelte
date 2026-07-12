@@ -11,6 +11,8 @@
     owned: number;
     low_sell: number;
     avg_price: number;
+    clearing_price?: number;
+    kept_lvl?: number | null;
   }
 
   interface PlanRow {
@@ -22,6 +24,7 @@
     platinum: number;
     quantity: number;
     owned: number;
+    rank: number;
     reference_low_sell: number;
     avg: number;
   }
@@ -42,7 +45,13 @@
 
   function initialPlanFor(rows: InputRow[]): PlanRow[] {
     return rows.map((r) => {
-      const target = r.low_sell > 0 ? r.low_sell : Math.round(r.avg_price);
+      // Prefill from the clamped clearing price, not raw low_sell — the raw
+      // ask inherits every troll listing (a lone 100p ask on a 10p item, or
+      // a 1p undercut on an undercut day). Falls back for older callers.
+      const target =
+        (r.clearing_price ?? 0) > 0 ? Math.round(r.clearing_price as number)
+        : r.low_sell > 0 ? r.low_sell
+        : Math.round(r.avg_price);
       return {
         key: r.key ?? r.slug,
         slug: r.slug,
@@ -52,10 +61,21 @@
         platinum: Math.max(5, target),
         quantity: 1,
         owned: r.owned,
+        // Rank 0 = unranked, the tier dupe stacks actually are. Editable so
+        // a leveled copy can be listed at its real rank; the companion only
+        // sends rank for items WFM ranks (mods/arcanes), so a non-zero rank
+        // on a rankless item is ignored server-side, not an error.
+        rank: 0,
         reference_low_sell: r.low_sell || 0,
         avg: r.avg_price,
       };
     });
+  }
+
+  // Prefill sanity flag: a suggested price far off the 48h average deserves
+  // a second look before it goes out in a 50-item batch.
+  function priceOff(r: PlanRow): boolean {
+    return r.avg > 0 && (r.platinum > r.avg * 1.3 || r.platinum < r.avg * 0.7);
   }
 
   // Re-initialize when modal opens.
@@ -105,6 +125,7 @@
         quantity: r.quantity,
         order_type: 'sell' as const,
         visible: false,
+        rank: r.rank > 0 ? r.rank : undefined,
         subtype: r.subtype || undefined,
         reference_low_sell: r.reference_low_sell || undefined,
       }));
@@ -162,9 +183,12 @@
 
       {#if phase === 'review'}
         <p class="lead">
-          Review every row. Default price is the current lowest live sell
-          (floored at 5p). Everything is created <strong>invisible</strong>
-          — you toggle visible later, after spot-checking on warframe.market.
+          Review every row. Default price is the estimated clearing price —
+          the lowest live ask, sanity-clamped against the recent median so a
+          lone troll listing can't set it (floored at 5p). Rank 0 = unranked;
+          set a rank only if you're listing a leveled copy. Everything is
+          created <strong>invisible</strong> — you toggle visible later,
+          after spot-checking on warframe.market.
         </p>
 
         <div class="bulkrow">
@@ -182,6 +206,7 @@
                 <th>Owned</th>
                 <th>Price (p)</th>
                 <th>Avg</th>
+                <th title="Mod/arcane rank of the copies you're listing. 0 = unranked (dupe stacks). Ignored for items WFM doesn't rank.">Rank</th>
                 <th>Subtotal</th>
               </tr>
             </thead>
@@ -207,9 +232,21 @@
                       max={MAX_PLATINUM}
                       bind:value={plan[i].platinum}
                       disabled={!row.include}
+                      class:off={row.include && priceOff(row)}
+                      title={row.include && priceOff(row) ? `More than 30% off the 48h average (${row.avg.toFixed(0)}p) — double-check before sending` : undefined}
                     />
                   </td>
                   <td class="muted">{row.avg.toFixed(0)}</td>
+                  <td>
+                    <input
+                      type="number"
+                      min="0"
+                      max="10"
+                      class="rank"
+                      bind:value={plan[i].rank}
+                      disabled={!row.include}
+                    />
+                  </td>
                   <td class="right">{(row.platinum * row.quantity).toLocaleString()}</td>
                 </tr>
               {/each}
@@ -398,6 +435,8 @@
     padding: 3px 6px;
   }
   input[type="number"]:disabled { opacity: 0.4; }
+  input[type="number"].rank { width: 46px; }
+  input[type="number"].off { border-color: var(--warn); }
   footer {
     display: flex;
     justify-content: space-between;
