@@ -23,7 +23,7 @@
   import { encryptPayload, decryptPayload, isEncrypted } from './lib/crypto';
   import {
     loadCompanionConfig, saveCompanionConfig, clearCompanionConfig,
-    parseCompanionUrl, pingCompanion,
+    parseCompanionUrl, pingCompanion, fetchInventory,
     getPendingPlan, resumePendingPlan, discardPendingPlan,
   } from './lib/companion';
   import type { CompanionConfig, Inventory, Market, OwnedRecord, PendingPlan, ItemResult } from './lib/types';
@@ -31,6 +31,14 @@
   type Phase = 'idle' | 'loading' | 'done' | 'error';
   let phase = $state<Phase>('idle');
   let error = $state<string | null>(null);
+  // Non-fatal: a price-snapshot load failure (offline, transient market.json
+  // 404 during the cron push) when we already have a restored inventory. We
+  // render the snapshot and flag prices unavailable instead of throwing the
+  // user back to the cold-start landing.
+  let marketLoadError = $state<string | null>(null);
+  // A dropped file parsed but yielded zero tradeable items — likely the wrong
+  // file (not a companion inventory.json), or a genuinely all-untradable one.
+  let loadIssue = $state<null | 'not-an-inventory' | 'all-untradable'>(null);
   let inventoryName = $state<string | null>(null);
   let lastUpdated = $state<number | null>(null);
 
@@ -42,6 +50,17 @@
   });
   let deltas = $state<Map<string, number>>(new Map());
   let results = $state<any[]>([]);
+  // The Sell table pushes its filtered+sorted rows up here so the "List on WFM"
+  // CTA stages exactly what the user sees (name filter + badge chips), not the
+  // unfiltered preset results.
+  let tableView = $state<{ rows: any[]; active: boolean }>({ rows: [], active: false });
+  // Rows eligible for the bulk "List on WFM" action: the table-filtered set when
+  // a table filter is active, else all results — minus relics (subtyped rows),
+  // since selling an intact relic at a few plat usually loses to cracking it
+  // (the Relic planner ranks those), so they shouldn't be staged by default.
+  let listableRows = $derived(
+    (tableView.active ? tableView.rows : results).filter((r) => !r.subtype)
+  );
   let minPrice = $state(5);
   let minOwned = $state(1);
   let typeFilter = $state('all');
@@ -208,25 +227,56 @@
   // a dependency, so writing `resolved` here and then reading it via
   // recomputeResults caused an infinite re-run loop.
   onMount(async () => {
-    // Companion config (independent of inventory).
-    companionConfig = loadCompanionConfig();
-    if (companionConfig) verifyCompanion();
+    // Auto-connect from a deep link the companion opened on `serve` start
+    // (#companion=http://127.0.0.1:<port>?token=…). The token rides in the URL
+    // fragment, which is never sent to a server — so it stays local. We strip it
+    // from the address bar / history immediately either way.
+    const FRAG = '#companion=';
+    let deepLink = false;
+    if (location.hash.startsWith(FRAG)) {
+      try {
+        const cfg = parseCompanionUrl(location.hash.slice(FRAG.length));
+        companionConfig = cfg;
+        saveCompanionConfig(cfg);
+        deepLink = true;
+      } catch { /* malformed deep link — fall through to any saved config */ }
+      history.replaceState(null, '', location.pathname + location.search);
+    }
+    if (!companionConfig) companionConfig = loadCompanionConfig();
+    if (companionConfig) await verifyCompanion();
 
     // Restore the last inventory snapshot if there is one.
     const snap = loadSnapshot();
-    if (!snap) return;
-    try {
-      inventoryName = snap.invName;
-      lastUpdated = snap.ts;
-      resolved = { owned: snap.owned, unresolved: {} };
-      if (!market) market = await loadMarket();
-      // No explicit recompute: the results $effect tracks resolved/market and
-      // flushes before paint — the old call here just computed everything twice.
-      phase = 'done';
-    } catch (e) {
-      console.error(e);
-      error = e.message || String(e);
-      phase = 'error';
+    if (snap) {
+      try {
+        inventoryName = snap.invName;
+        lastUpdated = snap.ts;
+        resolved = { owned: snap.owned, unresolved: {} };
+        if (!market) {
+          try {
+            market = await loadMarket();
+          } catch (e) {
+            // We already have the restored inventory in hand — a failed price
+            // refresh must NOT throw us back to cold-start and hide the user's
+            // data. Render from the snapshot; flag prices unavailable.
+            console.error(e);
+            marketLoadError = 'Couldn’t load the price snapshot — you may be offline. Your saved inventory is shown below; prices and rankings will be unavailable until it loads. Reload to retry.';
+          }
+        }
+        // No explicit recompute: the results $effect tracks resolved/market and
+        // flushes before paint — the old call here just computed everything twice.
+        phase = 'done';
+      } catch (e) {
+        console.error(e);
+        error = e.message || String(e);
+        phase = 'error';
+      }
+    }
+
+    // Arrived via the companion's deep link and have no inventory yet → pull it
+    // automatically, so "run serve → browser shows your sell list" just works.
+    if (deepLink && companionStatus === 'connected' && resolved.owned.size === 0) {
+      await pullInventory();
     }
   });
 
@@ -237,6 +287,8 @@
     resolved = { owned: new Map(), unresolved: {} };
     deltas = new Map();
     results = [];
+    tableView = { rows: [], active: false };
+    loadIssue = null;
     phase = 'idle';
   }
 
@@ -250,6 +302,7 @@
     inventoryName = name;
     phase = 'loading';
     error = null;
+    loadIssue = null;
     try {
       if (!catalogs || !market) {
         [catalogs, market] = await Promise.all([
@@ -261,7 +314,9 @@
       const keptLvls = extractKeptLvls(data);  // /Lotus/... → max lvl in Upgrades
       const owned = new Map();
       const unresolved = {};
+      let flatCount = 0;
       for (const { category: invCat, path, count } of flattenInventory(data)) {
+        flatCount++;
         const { name: itemName, slug, category: itemType, subtype } =
           resolvePath(path, catalogs, market);
         if (!slug) {
@@ -283,6 +338,17 @@
           rec.kept_lvl = keptLvl;
         }
         owned.set(key, rec);
+      }
+      // Nothing resolved to a tradeable item. Either this isn't a companion
+      // inventory.json at all (no recognizable Suits/LongGuns/Recipes keys, so
+      // flatten yielded nothing), or it is one but holds only untradable items.
+      // Either way, stay on the landing with a clear message rather than dumping
+      // the user into a blank Sell pane — and don't overwrite their snapshot.
+      if (owned.size === 0) {
+        loadIssue = flatCount === 0 ? 'not-an-inventory' : 'all-untradable';
+        inventoryName = null;
+        phase = 'idle';
+        return;
       }
       // Diff against the previously-saved snapshot before overwriting it.
       const previous = loadSnapshot();
@@ -522,8 +588,11 @@
   // Relic planner — top 3 owned (Intact) relics by expected-plat-per-crack.
   let relicPlan = $derived.by(() => {
     if (!resolved.owned.size || !market?.relic_rewards) return [];
-    return deriveRelicPlan(resolved.owned, market, 3);
+    return deriveRelicPlan(resolved.owned, market, Infinity);
   });
+  const RELIC_PREVIEW = 6;
+  let relicShowAll = $state(false);
+  let relicVisible = $derived(relicShowAll ? relicPlan : relicPlan.slice(0, RELIC_PREVIEW));
 
   // Available tags = every tag that appears on a row surviving the OTHER
   // filters (price/owned/type/kept), with its live count. Empty chips
@@ -599,6 +668,21 @@
   let marketStaleness = $derived(ago(market?.updated_at));
   let inventoryStaleness = $derived(ago(lastUpdated));
 
+  // A vendor surface (Baro schedule, relic drops, vault status, set maps) is
+  // refreshed on a full scrape but NOT on a CSV-only rebuild — so it can lag
+  // the price `updated_at`. Flag a surface only when it's meaningfully old
+  // (these rotate on the order of days/weeks), so we don't nag on a healthy
+  // snapshot where every stamp matches.
+  function surfaceAge(key) {
+    const ts = market?.surface_fetched_at?.[key];
+    if (!ts) return null;
+    const days = (Date.now() - new Date(ts).getTime()) / 8.64e7;
+    return days >= 3 ? ago(ts) : null;
+  }
+  let baroSurfaceAge = $derived(surfaceAge('baro'));
+  let relicSurfaceAge = $derived(surfaceAge('relic_rewards'));
+  let setSurfaceAge = $derived(surfaceAge('set_to_parts'));
+
   // Coarse freshness bucket for the small status dot next to "market Xh ago".
   // green ≤ 6h, amber ≤ 24h, red after that. Matches our 2h scrape cadence
   // so a healthy snapshot is always green.
@@ -618,8 +702,15 @@
   // Friendly diagnosis of WHY the table is empty so we don't just shrug.
   let emptyReason = $derived.by(() => {
     if (results.length > 0 || !resolved.owned.size) return null;
-    // Walk the same filter logic but count what each restriction excludes.
-    let candidates = 0, byPrice = 0, byOwned = 0, byType = 0, byKept = 0;
+    const preset = activePreset ? PRESETS[activePreset] : null;
+    const presetMinVol = preset?.minVol ?? 0;
+    const presetMinMedian = preset?.minMedian ?? 0;
+    const vaultOnly = preset?.vaultOnly ?? false;
+    // Walk the same filter logic as computeResults but count what each
+    // restriction excludes — including the preset-only clauses, so we don't
+    // blame a price slider when it was really the Vaulted/Trending preset.
+    let candidates = 0, byPrice = 0, byOwned = 0, byType = 0, byKept = 0,
+        byTag = 0, byVault = 0, byVol = 0, byMedian = 0;
     for (const rec of resolved.owned.values()) {
       const m = lookup(market, rec.slug);
       if (!m) continue;
@@ -628,6 +719,16 @@
       if (rec.count < minOwned) byOwned += 1;
       if (typeFilter !== 'all' && rec.type !== typeFilter) byType += 1;
       if (rec.kept_lvl !== null && rec.kept_lvl >= hideAtLvl) byKept += 1;
+      if (activeTags.size > 0) {
+        const tags = m.tags || [];
+        if (!tags.some((t) => activeTags.has(t))) byTag += 1;
+      }
+      if (vaultOnly) {
+        const status = market.vault_status?.[rec.slug];
+        if (status !== 'vaulted' && status !== 'vaulting-soon') byVault += 1;
+      }
+      if (presetMinVol > 0 && (m.vol || 0) < presetMinVol) byVol += 1;
+      if (presetMinMedian > 0 && (m.median_90d || 0) < presetMinMedian) byMedian += 1;
     }
     if (candidates === 0) return { kind: 'no-market', candidates };
     const top = [
@@ -635,16 +736,24 @@
       ['owned', byOwned],
       ['type',  byType],
       ['kept',  byKept],
+      ['tag',   byTag],
+      ['vault', byVault],
+      ['vol',   byVol],
+      ['median', byMedian],
     ].sort((a, b) => b[1] - a[1])[0];
-    return { kind: top[0], excluded: top[1], candidates };
+    return { kind: top[0], excluded: top[1], candidates, preset: activePreset };
   });
 
+  // Preset-driven empty states reset the preset; hand-filter ones relax the
+  // offending slider. A price slider can't rescue a "no vaulted parts" empty.
+  const PRESET_EMPTY_KINDS = new Set(['tag', 'vault', 'vol', 'median']);
   // One-shot quick-fix actions the empty state can offer.
   function relaxFilters({ kind }) {
     if (kind === 'price') minPrice = 1;
     if (kind === 'owned') minOwned = 1;
     if (kind === 'type')  typeFilter = 'all';
     if (kind === 'kept')  hideAtLvl = 11;
+    if (PRESET_EMPTY_KINDS.has(kind)) applyPreset('default');
   }
 
   // Hidden file input we trigger from the "Replace inventory" button. Using
@@ -689,6 +798,8 @@
   let companionPlatform = $state(null);
   let companionError = $state(null);
   let companionInput = $state('');
+  let pullingInventory = $state(false);   // GET /inventory in flight
+  let pullError = $state<string | null>(null);
   let listingOpen = $state(false);
 
   // Sidebar nav: if the user's persisted view is unavailable (Baro not
@@ -709,16 +820,19 @@
     try {
       const r = await pingCompanion(companionConfig);
       companionPlatform = r?.platform ?? null;
+      // /health is unauthenticated, so a live server with the WRONG token would
+      // still show green here. Confirm the token with one authed call before we
+      // claim connected: getPendingPlan returns null on 404 (no plan) but
+      // throws on a 401 (bad token) — exactly the signal we want. It also
+      // surfaces the Resume option for an interrupted batch.
+      pendingPlan = await getPendingPlan(companionConfig);
       companionStatus = 'connected';
-      // Poll once for an interrupted batch so the user gets a Resume option
-      // without having to dig anywhere. Best-effort — a network blip here
-      // shouldn't break the connect flow.
-      try {
-        pendingPlan = await getPendingPlan(companionConfig);
-      } catch { pendingPlan = null; }
     } catch (e) {
       companionStatus = 'error';
-      companionError = e.message || String(e);
+      const msg = e.message || String(e);
+      companionError = /401|token/i.test(msg)
+        ? 'Token rejected — re-copy the full URL from the serve output (the token changes every time you restart serve).'
+        : msg;
     }
   }
 
@@ -783,6 +897,25 @@
     pendingPlan = null;
     resumePhase = 'idle';
     resumeResults = [];
+    pullError = null;
+  }
+
+  // Pull inventory straight from the companion (it memory-scans the running
+  // game) and run it through the same resolution pipeline as a dropped file —
+  // no file, no drag-in.
+  async function pullInventory() {
+    if (!companionConfig || pullingInventory) return;
+    pullingInventory = true;
+    pullError = null;
+    try {
+      const data = await fetchInventory(companionConfig);
+      await handleInventory({ name: 'inventory (from companion)', data });
+    } catch (e) {
+      // Game not running / not past login → the companion's actionable message.
+      pullError = e.message || String(e);
+    } finally {
+      pullingInventory = false;
+    }
   }
 
   function openExportDialog() {
@@ -918,9 +1051,13 @@
           <pre class="snippet"><code>wfm-fetch-inventory</code></pre>
           <p class="muted">
             Writes <code>inventory.json</code> to your Downloads folder.
-            Windows: no admin needed. Linux: grant ptrace once
+            Windows: no admin needed, run from a normal PowerShell. Linux: grant
+            ptrace once
             (<code>sudo setcap cap_sys_ptrace=eip ~/.local/bin/wfm-fetch-inventory</code>)
             and it runs without sudo forever.
+            If you get <code>command not found</code>, it isn't on your PATH yet —
+            open a new terminal or run the full path
+            (<code>~/.local/bin/wfm-fetch-inventory</code>).
           </p>
         </div>
       </li>
@@ -935,7 +1072,39 @@
           <p class="muted">Everything runs locally. Nothing's uploaded.</p>
         </div>
       </li>
+      <li>
+        <span class="n">04</span>
+        <div class="body">
+          <h3>Optional: list on WFM</h3>
+          <p>
+            Want to create or edit listings straight from here? Run
+            <code>login</code> once, then <code>serve</code> in a terminal:
+          </p>
+          <pre class="snippet"><code>wfm-fetch-inventory login
+wfm-fetch-inventory serve</code></pre>
+          <p class="muted">
+            Paste the URL <code>serve</code> prints into the <a href="#companion">Companion</a>
+            tab. The rest of the app works without this.
+          </p>
+        </div>
+      </li>
     </ol>
+
+    {#if loadIssue}
+      <div class="card warn-banner">
+        {#if loadIssue === 'not-an-inventory'}
+          ⚠ That file doesn't look like an inventory. We didn't find the
+          <code>Suits</code> / <code>LongGuns</code> / <code>Recipes</code> … keys
+          a companion <code>inventory.json</code> has. Re-run the companion and
+          drop the file it writes to your Downloads folder.
+        {:else}
+          ⚠ That file parsed, but nothing in it is tradeable on warframe.market
+          (quest items, resources, and brand-new content have no listings). If
+          you expected sellable items, double-check it's the right
+          <code>inventory.json</code>.
+        {/if}
+      </div>
+    {/if}
 
     <DropZone
       oninventory={handleInventory}
@@ -945,6 +1114,8 @@
 
   {#if phase === 'error'}
     <div class="card error">Error: {error}</div>
+    <p class="muted" style="text-align:center;margin:8px 0">Try another file:</p>
+    <DropZone oninventory={handleInventory} loading={false} />
   {/if}
 
   <InstallWidget />
@@ -1060,12 +1231,20 @@
         </div>
         <div class="stat right">
           <span class="k">
-            <span class="dot {marketFreshness}" aria-hidden="true"></span>
+            <span class="dot {marketFreshness}" role="img" aria-label="Market data {marketFreshness}"></span>
             Market data
           </span>
-          <span class="v small">{marketStaleness ?? '—'}</span>
+          <span class="v small">{marketStaleness ?? '—'}{marketFreshness !== 'unknown' ? ` · ${marketFreshness}` : ''}</span>
         </div>
       </section>
+
+      {#if marketLoadError}
+        <div class="card warn-banner">⚠ {marketLoadError}</div>
+      {:else if marketFreshness === 'stale'}
+        <div class="card warn-banner">
+          ⚠ Prices may be outdated — this market snapshot is {marketStaleness} old. Rankings below use stale data.
+        </div>
+      {/if}
 
       <section class="card">
         <div class="row presets-row">
@@ -1085,9 +1264,9 @@
             <button
               class="list-cta"
               onclick={() => (listingOpen = true)}
-              disabled={results.length === 0}
-              title="Open the review modal for the current filtered rows"
-            >List {Math.min(results.length, 50)} on WFM</button>
+              disabled={listableRows.length === 0}
+              title="Stage the top rows of the current view (preset + sort) for listing. The in-table name filter and badge chips are not applied — review each row in the modal before sending."
+            >List {Math.min(listableRows.length, 50)} on WFM</button>
           {/if}
         </div>
         {#if availableTags.length > 0}
@@ -1152,7 +1331,9 @@
         <div class="score-explainer">
           <strong>About the “Score” column.</strong>
           Expected plat <strong>per day</strong> if you listed everything —
-          <code>min(owned, vol_48h / 2) × low_sell</code>.
+          <code>min(owned, vol_48h / 2) × clearing price</code>, where clearing
+          price is the lowest live ask, clamped up to the 90-day median when the
+          ask is a lone troll undercut (so one 1p listing can't crater a row).
           Higher = better, uncapped. Items below 2 trades / 48 h get a
           “patience” tag instead of a near-zero score.
           Click <code>?</code> on any column header for the same kind of
@@ -1162,7 +1343,8 @@
       {/if}
 
       {#if results.length > 0}
-        <ResultsTable {results} {deltas} {visibleColumns} {presetSort} />
+        <ResultsTable {results} {deltas} {visibleColumns} {presetSort}
+          onfiltered={(rows, active) => (tableView = { rows, active })} />
       {:else if emptyReason}
         <div class="card empty">
           {#if emptyReason.kind === 'no-market'}
@@ -1198,6 +1380,24 @@
               <p class="muted">Raise the threshold (or set 11 to disable) to see them.</p>
             </div>
             <button onclick={() => relaxFilters({ kind: 'kept' })}>Disable the rank filter</button>
+          {:else if emptyReason.kind === 'vault'}
+            <div>
+              <strong>You own no vaulted or vaulting-soon prime parts.</strong>
+              <p class="muted">The Vaulted preset only shows parts past (or near) their vault cliff.</p>
+            </div>
+            <button onclick={() => relaxFilters({ kind: 'vault' })}>Back to Default</button>
+          {:else if emptyReason.kind === 'vol' || emptyReason.kind === 'median'}
+            <div>
+              <strong>Nothing you own clears the Trending liquidity floor.</strong>
+              <p class="muted">Trending hides thin-volume rows and penny items so the Δ-sort surfaces real movers.</p>
+            </div>
+            <button onclick={() => relaxFilters({ kind: emptyReason.kind })}>Back to Default</button>
+          {:else if emptyReason.kind === 'tag'}
+            <div>
+              <strong>No rows carry the active badge filter{activeTags.size > 1 ? 's' : ''} ({[...activeTags].join(', ')}).</strong>
+              <p class="muted">Clear the badge chips (or switch preset) to see the rest.</p>
+            </div>
+            <button onclick={() => relaxFilters({ kind: 'tag' })}>Back to Default</button>
           {/if}
         </div>
       {/if}
@@ -1208,6 +1408,9 @@
         <p class="lede">
           Inventory cross-referenced against {Object.keys(market?.set_to_parts ?? {}).length}
           prime sets. Ranked by net plat.
+          {#if setSurfaceAge}
+            <span class="muted">· ⚠ set/vault data {setSurfaceAge}</span>
+          {/if}
         </p>
       </section>
       {#if setRecos.length > 0}
@@ -1234,6 +1437,15 @@
                       {r.extras} duplicate{r.extras === 1 ? '' : 's'}
                     {/if}
                   </span>
+                  {#if r.set_vol !== undefined && (r.kind === 'near-complete' || r.kind === 'complete-with-extras')}
+                    {#if r.set_vol < 1}
+                      <span class="set-liq cold" title="The assembled set has traded under 1×/48h — a flip may sit unsold for a while.">set rarely trades</span>
+                    {:else if r.set_vol < 5}
+                      <span class="set-liq thin" title="Thin set volume — expect to wait for a buyer before you recoup the plat.">thin · {r.set_vol}/48h</span>
+                    {:else}
+                      <span class="set-liq moving" title="Healthy set volume.">{r.set_vol}/48h</span>
+                    {/if}
+                  {/if}
                 </div>
                 <p class="reco-detail muted">
                   {#if r.kind === 'near-complete'}
@@ -1266,12 +1478,21 @@
     {:else if effectiveView === 'relics'}
       <section class="view-header">
         <h2>Relic planner</h2>
-        <p class="lede">Top {relicPlan.length} relics you own by expected plat per crack (Intact state).</p>
+        <p class="lede">
+          {#if relicPlan.length > relicVisible.length}
+            Top {relicVisible.length} of {relicPlan.length} relics you own, ranked by expected plat per crack (Intact state).
+          {:else}
+            Your {relicPlan.length} relic{relicPlan.length === 1 ? '' : 's'} ranked by expected plat per crack (Intact state).
+          {/if}
+          {#if relicSurfaceAge}
+            <span class="muted">· ⚠ drop-table data {relicSurfaceAge}</span>
+          {/if}
+        </p>
       </section>
       {#if relicPlan.length > 0}
         <section class="card relic-planner">
           <div class="relic-grid">
-            {#each relicPlan as p (p.relic_slug)}
+            {#each relicVisible as p (p.relic_slug)}
               <div class="relic-card">
                 <div class="relic-title">
                   <strong class="reco-verb">Crack</strong>
@@ -1310,6 +1531,13 @@
               </div>
             {/each}
           </div>
+          {#if relicPlan.length > RELIC_PREVIEW}
+            <div class="relic-more">
+              <button class="ghost" onclick={() => (relicShowAll = !relicShowAll)}>
+                {relicShowAll ? 'Show fewer' : `Show ${relicPlan.length - RELIC_PREVIEW} more`}
+              </button>
+            </div>
+          {/if}
         </section>
       {:else}
         <div class="card empty">
@@ -1330,6 +1558,9 @@
             Arrives in {humanWindow(baroState.windowMs)} at {voidTrader.location}.
           {:else}
             Next visit at {voidTrader.location}.
+          {/if}
+          {#if baroSurfaceAge}
+            <span class="muted">· ⚠ schedule data {baroSurfaceAge} — may be a rotation behind</span>
           {/if}
         </p>
       </section>
@@ -1446,13 +1677,19 @@
               <span class="dot fresh" aria-hidden="true"></span>
               <strong>Connected</strong>
               <span class="muted">· {companionPlatform ?? 'pc'} · {companionConfig.baseUrl}</span>
+              {#if pullError}<span class="bad">· {pullError}</span>{/if}
             </div>
             <div class="row gap-sm">
               <button
+                onclick={pullInventory}
+                disabled={pullingInventory}
+                title="Memory-scan the running game and load your inventory directly — no file, no drag-in. Re-run any time to refresh."
+              >{pullingInventory ? 'Scanning game…' : (resolved.owned.size > 0 ? 'Refresh inventory' : 'Pull inventory')}</button>
+              <button
                 onclick={() => (listingOpen = true)}
-                disabled={results.length === 0}
-                title="Open the review modal for the current filtered rows"
-              >List {Math.min(results.length, 50)} on WFM</button>
+                disabled={listableRows.length === 0}
+                title="Stage the top rows of the current view (preset + sort) for listing. The in-table name filter and badge chips are not applied — review each row in the modal before sending."
+              >List {Math.min(listableRows.length, 50)} on WFM</button>
               <button class="ghost" onclick={disconnectCompanion}>Disconnect</button>
             </div>
           </div>
@@ -1476,6 +1713,19 @@
                 {companionStatus === 'connecting' ? 'Checking…' : 'Connect'}
               </button>
             </div>
+          </div>
+          <div class="companion-help">
+            <strong>How to get this URL</strong>
+            <ol>
+              <li><code>wfm-fetch-inventory login</code> — once, to sign in to warframe.market.</li>
+              <li><code>wfm-fetch-inventory serve</code> — <em>in a real terminal window</em> (it prompts for your passphrase), and leave it running.</li>
+              <li>Copy the whole <code>http://127.0.0.1:<wbr>…?token=…</code> line it prints and paste it above.</li>
+            </ol>
+            <p class="muted">
+              That port is <strong>random</strong> and changes every run — it is <em>not</em> this website's 5173.
+              If <code>serve</code> errors with <code>reading passphrase / os error 6</code>, it has no terminal:
+              run it in a terminal, or pipe the passphrase with <code>--passphrase-stdin</code>. See the FAQ for details.
+            </p>
           </div>
         {/if}
       </section>
@@ -1539,6 +1789,33 @@
         every 2 hours and commits a fresh <code>market.json</code> to the
         repo. The site serves that file. The dot next to “Market data” is
         green if the snapshot is under 6 h old, amber under 24 h, red after.
+      </p>
+    </details>
+
+    <details>
+      <summary>How do I connect the companion to list items on WFM?</summary>
+      <p>
+        Seeing “what to sell” needs only the inventory drop. To actually
+        <em>create or edit listings</em> from the app, connect the companion:
+      </p>
+      <p>
+        1. <code>wfm-fetch-inventory login</code> — once; signs you in to
+        warframe.market and encrypts the token behind a passphrase.<br />
+        2. <code>wfm-fetch-inventory serve</code> — <strong>in a real terminal
+        window</strong>; it prompts for that passphrase and then prints a URL.<br />
+        3. Copy the whole <code>http://127.0.0.1:&lt;port&gt;?token=…</code> line and
+        paste it into the <strong>Companion</strong> tab.
+      </p>
+      <p>
+        The port is <strong>random and changes every run</strong> — it is not this
+        website's <code>5173</code> — and the token rotates each run too, so re-copy
+        the line whenever you restart <code>serve</code>.
+      </p>
+      <p>
+        If <code>serve</code> exits with <code>reading passphrase / No such device
+        or address (os error 6)</code>, it has no terminal to read your passphrase.
+        Run it directly in a terminal window, or pipe the passphrase:
+        <code>printf %s 'your-passphrase' | wfm-fetch-inventory serve --passphrase-stdin</code>.
       </p>
     </details>
 
@@ -1645,7 +1922,7 @@
 
 <ListingReviewModal
   bind:open={listingOpen}
-  rows={results.slice(0, 50)}
+  rows={listableRows.slice(0, 50)}
   config={companionConfig}
 />
 
@@ -2018,6 +2295,17 @@
   .steps .body p + p { margin-top: 6px; }
   .steps .body p.muted { color: var(--muted); font-size: 12px; }
   .steps .snippet { margin: 6px 0; font-size: 12px; padding: 6px 10px; }
+  .companion-help {
+    margin-top: 12px;
+    padding: 12px 14px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    line-height: 1.5;
+  }
+  .companion-help ol { margin: 6px 0 8px; padding-left: 20px; }
+  .companion-help li { margin: 3px 0; }
+  .companion-help p.muted { color: var(--muted); font-size: 12px; margin: 0; }
+  .companion-help code { font-size: 12px; }
   @media (max-width: 760px) {
     .steps { grid-template-columns: 1fr; }
     .steps li { border-right: none; border-bottom: 1px solid var(--border); }
@@ -2169,6 +2457,13 @@
      table — the casual-flipper persona was confused by what Score
      meant; hover-tooltip alone wasn't enough. localStorage flag means
      each user sees it once. */
+  .warn-banner {
+    border-left: 3px solid var(--stale, #d9534f);
+    padding: 10px 14px;
+    font-size: 13px;
+    color: var(--fg);
+    line-height: 1.5;
+  }
   .score-explainer {
     background: var(--panel);
     border: 1px solid var(--border);
@@ -2330,6 +2625,16 @@
   .kind-near-complete       { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
   .kind-complete-with-extras { color: var(--good);   border-color: color-mix(in srgb, var(--good)   40%, var(--border)); }
   .kind-extras              { color: var(--warn);   border-color: color-mix(in srgb, var(--warn)   40%, var(--border)); }
+  .set-liq {
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    border-radius: 3px;
+    padding: 1px 6px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  .set-liq.moving { color: var(--muted); }
+  .set-liq.thin   { color: var(--warn); }
+  .set-liq.cold   { color: var(--bad); }
   .reco-detail { font-size: 12.5px; margin: 0; line-height: 1.5; }
   .reco-detail strong { color: var(--fg); font-weight: 600; }
   .good-text { color: var(--good); }
@@ -2406,6 +2711,7 @@
     gap: 12px;
   }
   @media (max-width: 760px) { .relic-grid { grid-template-columns: 1fr; } }
+  .relic-more { margin-top: 12px; text-align: center; }
   .relic-card {
     background: var(--panel-2);
     border: 1px solid var(--border);

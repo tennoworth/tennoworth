@@ -107,6 +107,11 @@ changes** so old data is silently invalidated.
 
 Routes the browser depends on (see `src/lib/companion.ts`):
 - `GET /health` — no auth; `{ok, platform}`
+- `GET /inventory` — memory-scans the running game and returns inventory.json
+  directly (no file). Token-authed; **JWT-free** (in-memory session creds only,
+  so it works without `login`). 503 + `{error}` when the game isn't scannable.
+  The app pulls this on the "Pull/Refresh inventory" button and auto-pulls when
+  it arrives via the companion's deep link (`#companion=<url>?token=…`).
 - `POST /plan` — submit listing batch
 - `GET /plan/pending` — last pending plan or 404
 - `POST /plan/resume` — re-runs skipping completed items
