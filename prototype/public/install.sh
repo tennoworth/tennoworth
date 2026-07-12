@@ -106,9 +106,17 @@ Next steps
   3. Grant ptrace permission once (recommended — then no sudo, ever):
        sudo setcap cap_sys_ptrace=eip "$DEST/$BIN_NAME"
        $BIN_NAME
-     Rather not? Run a single fetch with sudo instead:
-       sudo $BIN_NAME
+     Rather not? Run a single fetch with sudo instead (absolute path —
+     sudo's secure_path won't find a bare command name):
+       sudo "$DEST/$BIN_NAME"
   4. inventory.json lands in ~/Downloads — drop it into the web UI.
+
+Optional — to create/edit warframe.market listings from the web app:
+  5. $BIN_NAME login          # once; interactive sign-in
+  6. $BIN_NAME serve          # leave running in this terminal
+     Paste the URL it prints into the app's Companion tab. That port is
+     random (not the website's 5173). serve needs a real terminal for the
+     passphrase prompt — or pipe it with --passphrase-stdin.
 
 Re-running this installer (an upgrade) replaces the binary and clears
 the capability — re-run the setcap line above afterwards.
