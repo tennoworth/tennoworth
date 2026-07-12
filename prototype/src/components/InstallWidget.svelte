@@ -115,7 +115,7 @@
     <summary>Prefer to download the binary manually?</summary>
     <p>
       Grab the latest release from
-      <a href="https://github.com/OWNER/REPO/releases/latest" target="_blank" rel="noopener noreferrer">GitHub releases</a>
+      <a href="https://github.com/tennoworth/tennoworth/releases/latest" target="_blank" rel="noopener noreferrer">GitHub releases</a>
       (asset names: <code>wfm-fetch-inventory-linux-x86_64</code>,
       <code>wfm-fetch-inventory-windows-x86_64.exe</code>). The release also
       ships a <code>SHA256SUMS</code> file — verify with

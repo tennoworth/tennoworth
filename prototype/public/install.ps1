@@ -7,7 +7,7 @@
 $ErrorActionPreference = 'Stop'
 
 # Configure before publishing the first release.
-$Repo  = if ($env:WFMINV_REPO) { $env:WFMINV_REPO } else { 'OWNER/REPO' }
+$Repo  = if ($env:WFMINV_REPO) { $env:WFMINV_REPO } else { 'tennoworth/tennoworth' }
 $Asset = 'wfm-fetch-inventory-windows-x86_64.exe'
 $Dest  = Join-Path $env:LOCALAPPDATA 'wfminv'
 $Bin   = Join-Path $Dest 'wfm-fetch-inventory.exe'

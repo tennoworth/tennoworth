@@ -140,8 +140,9 @@ cd companion && cargo build --release
 
 - **Ducat values column.** Data lives in warframestat.us already; plumb
   through `loadCatalogs()` → owned record → table column.
-- **Pick a name + create the GitHub repo.** Then replace `OWNER/REPO`
-  in `prototype/public/install.sh`, `install.ps1`, and
-  `InstallWidget.svelte`.
+- **Publish the first GitHub release** (tag → `release-companion.yml`)
+  so the install.sh/install.ps1/InstallWidget download paths — which
+  now point at `tennoworth/tennoworth` — have a binary to fetch instead
+  of 404ing.
 - **Move off GitHub Pages for production hosting** so `public/_headers`
   is actually applied (HSTS, X-Frame-Options, etc).
