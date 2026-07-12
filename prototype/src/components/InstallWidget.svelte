@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import CopyBtn from './CopyBtn.svelte';
 
   type OsName = 'linux' | 'windows' | 'mac';
 
@@ -93,7 +94,8 @@
       Installs to <code>~/.local/bin</code>. Needs <code>curl</code>. To run
       without sudo each time, one-time (path-agnostic, also works for a
       from-source build on your PATH):
-      <code>sudo setcap cap_sys_ptrace=eip "$(command -v wfm-fetch-inventory)"</code>.
+      <code>sudo setcap cap_sys_ptrace=eip "$(command -v wfm-fetch-inventory)"</code>
+      <CopyBtn text={'sudo setcap cap_sys_ptrace=eip "$(command -v wfm-fetch-inventory)"'} />.
       Re-run after every upgrade — replacing the binary wipes the capability.
     </p>
   {:else}
