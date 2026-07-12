@@ -38,6 +38,12 @@ export interface SellScoreOutput {
   patience: boolean;
 }
 
+// Below this many closed trades / 48 h the book is too thin to trust its ask
+// as a forecast, and too thin to certify a trend. Shared by the ask clamp,
+// the patience tag, and the UI's trend badges (via LIQUID_VOL export).
+export const LIQUID_VOL = 5;
+const PATIENCE_VOL = 3;
+
 // What a listing would realistically clear at. The lowest live ask is the
 // honest answer MOST of the time, but it's a single number any account can
 // set for free, so it gets sanity-clamped against the closed-trade median:
@@ -45,9 +51,12 @@ export interface SellScoreOutput {
 //    ask under a stable 38p median cratered its score, killed its peak pill,
 //    and fired a "feed it to Baro" deal badge). One such listing absorbs one
 //    sale; the realistic price is still the median.
-//  - dead item (vol < 2) with ask > 3× median → an aspirational ask nobody
-//    pays (corpus_void_key: vol 1, lone 2,999p ask, last real trade ~200p).
-//    Liquid items keep their ask — there the book is real information.
+//  - thin item (vol < LIQUID_VOL) with ask > 1.5× median → an aspirational
+//    ask nobody pays. The old gate was vol < 2 with a 3× tolerance, which
+//    vol-2 items dodged entirely: winding_isles_scene (vol 2, one 100p ask
+//    over a 10p median) ranked #7 at "expected 100p/day". On a thin book
+//    the closed trades are the evidence; cap at 1.5× median. Liquid items
+//    keep their ask — there the book is real information.
 // No ask at all → median, then avg, floor 1.
 export function clearingPrice(m: PricedEntry): number {
   const lowSell = Number(m?.low_sell) || 0;
@@ -57,7 +66,7 @@ export function clearingPrice(m: PricedEntry): number {
   if (lowSell <= 0) return median > 0 ? median : Math.max(1, avg);
   if (median > 0) {
     if (lowSell * 3 < median) return median;
-    if (vol < 2 && lowSell > median * 3) return median;
+    if (vol < LIQUID_VOL && lowSell > median * 1.5) return median * 1.5;
   }
   return lowSell;
 }
@@ -70,7 +79,8 @@ export function scoreRow({ owned, m }: SellScoreInput): SellScoreOutput {
   const unitsToday = Math.min(owned, dailySales);
   return {
     sell_score: unitsToday * price,
-    patience: vol < 2,
+    // Was vol < 2, which vol-2 items dodged while still barely moving.
+    patience: vol < PATIENCE_VOL,
   };
 }
 
