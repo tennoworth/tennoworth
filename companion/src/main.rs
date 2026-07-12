@@ -17,7 +17,7 @@ use regex::bytes::Regex;
 use reqwest::blocking::Client;
 use std::collections::HashMap;
 use std::fs;
-use std::io::Read;
+use std::io::{IsTerminal, Read};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use sysinfo::System;
@@ -80,7 +80,9 @@ struct LoginArgs {
     #[arg(long)]
     out: Option<PathBuf>,
 
-    /// WFM platform header (pc/ps4/xbox/switch). Defaults to pc.
+    /// WFM account platform: pc (covers Steam & Epic), ps4, xbox, or switch.
+    /// Defaults to pc — only override if your warframe.market account is a
+    /// console account.
     #[arg(long, default_value = "pc")]
     platform: String,
 }
@@ -99,6 +101,17 @@ struct ServeArgs {
     /// Useful for automation / systemd units. Send a single line.
     #[arg(long)]
     passphrase_stdin: bool,
+
+    /// On startup, open this app URL in the browser pre-connected to this server
+    /// (no URL/token copy-paste). Override for local dev, e.g.
+    /// `--app-url http://127.0.0.1:5173`.
+    #[arg(long, default_value = "https://tennoworth.app")]
+    app_url: String,
+
+    /// Don't open a browser on startup (headless / remote serve, or you'll
+    /// connect the web app yourself).
+    #[arg(long)]
+    no_open: bool,
 }
 
 struct SessionInfo {
@@ -120,38 +133,32 @@ fn main() -> Result<()> {
     }
 }
 
-fn run_fetch(args: FetchArgs) -> Result<()> {
-    let pid = match args.pid {
+/// Memory-scan the running game and fetch the raw inventory.json bytes.
+/// Uses ONLY the in-memory session creds (accountId + nonce) — never the
+/// encrypted JWT — so the inventory path needs no `login`. Silent (no prints):
+/// callers add progress output as appropriate. Shared by `fetch` (writes a
+/// file) and `serve`'s GET /inventory route (returns the bytes to the browser).
+fn fetch_inventory_bytes(
+    pid: Option<u32>,
+    platform_tag: Option<String>,
+) -> Result<(Vec<u8>, SessionInfo)> {
+    let pid = match pid {
         Some(p) => p,
         None => find_wf_pid().ok_or_else(|| {
             anyhow!(
                 "Warframe doesn't appear to be running.\n\
-                 Start the game, log past the title screen, then re-run."
+                 Start the game, log past the title screen, then retry."
             )
         })?,
     };
-
-    eprintln!("PID {pid} — scanning Warframe memory...");
-
     let info = scan_session(pid).context("memory scan failed")?;
-
-    eprintln!(
-        "  credentials: 1 of {} unique pair(s) ({} hits)",
-        info.distinct_creds, info.cred_hits
-    );
-    if let Some(b) = &info.build {
-        eprintln!("  build label: {b}");
-    }
-    eprintln!("  platform tag: ct={}", info.ct);
-
-    let ct = args.platform_tag.unwrap_or_else(|| info.ct.clone());
+    let ct = platform_tag.unwrap_or_else(|| info.ct.clone());
 
     let mut params: Vec<(&str, &str)> =
         vec![("accountId", &info.account_id), ("nonce", &info.nonce), ("ct", &ct)];
     if let Some(b) = &info.build {
         params.push(("appVersion", b.as_str()));
     }
-
     let client = Client::builder()
         .user_agent(format!(
             "Warframe/{}",
@@ -160,8 +167,6 @@ fn run_fetch(args: FetchArgs) -> Result<()> {
         .timeout(Duration::from_secs(60))
         .build()
         .context("building HTTP client")?;
-
-    eprint!("  GET {INVENTORY_URL} ... ");
     let resp = client
         .get(INVENTORY_URL)
         .query(&params)
@@ -169,15 +174,29 @@ fn run_fetch(args: FetchArgs) -> Result<()> {
         .context("inventory request failed")?;
     let status = resp.status();
     let bytes = resp.bytes().context("reading inventory response")?;
-    eprintln!("HTTP {status} ({} bytes)", bytes.len());
-
     if !status.is_success() || bytes.len() < 1024 {
         let preview = String::from_utf8_lossy(&bytes[..bytes.len().min(400)]);
         bail!(
-            "Inventory endpoint not happy.\nBody:\n{preview}\n\n\
-             If the response was small or 4xx, DE may have rotated something."
+            "Inventory endpoint returned HTTP {status} ({} bytes).\nBody:\n{preview}\n\n\
+             If the response was small or 4xx, DE may have rotated something.",
+            bytes.len()
         );
     }
+    Ok((bytes.to_vec(), info))
+}
+
+fn run_fetch(args: FetchArgs) -> Result<()> {
+    eprintln!("Scanning Warframe memory...");
+    let (bytes, info) = fetch_inventory_bytes(args.pid, args.platform_tag)?;
+    eprintln!(
+        "  credentials: 1 of {} unique pair(s) ({} hits)",
+        info.distinct_creds, info.cred_hits
+    );
+    if let Some(b) = &info.build {
+        eprintln!("  build label: {b}");
+    }
+    eprintln!("  platform tag: ct={}", info.ct);
+    eprintln!("  inventory: HTTP OK ({} bytes)", bytes.len());
 
     // Pretty-print if valid JSON, write bytes as-is otherwise.
     let out_path = args.out.unwrap_or_else(default_out_path);
@@ -208,7 +227,7 @@ fn run_fetch(args: FetchArgs) -> Result<()> {
         out_path.display(),
         final_bytes.len()
     );
-    eprintln!("Drop that file into the web UI to see what's worth selling.");
+    eprintln!("Drop that file into the web UI — or run `serve` to skip the file entirely.");
     Ok(())
 }
 
@@ -350,6 +369,17 @@ struct CipherParams {
 }
 
 fn run_login(args: LoginArgs) -> Result<()> {
+    // Reject a mistyped platform up front — an unknown value would otherwise be
+    // baked into the encrypted JWT and silently authenticate against the wrong
+    // (or a non-existent) WFM market on every later serve.
+    const PLATFORMS: [&str; 4] = ["pc", "ps4", "xbox", "switch"];
+    if !PLATFORMS.contains(&args.platform.as_str()) {
+        bail!(
+            "Unknown --platform '{}'. Use one of: {}. (pc covers Steam & Epic.)",
+            args.platform,
+            PLATFORMS.join(", ")
+        );
+    }
     // --- collect inputs from the user ---
     let email = match args.email {
         Some(e) => e,
@@ -490,7 +520,8 @@ fn run_login(args: LoginArgs) -> Result<()> {
 
     eprintln!("\n→ Stored encrypted JWT at {}", out_path.display());
     eprintln!("→ Platform: {}", args.platform);
-    eprintln!("\nYou can now run other companion subcommands that need WFM auth.");
+    eprintln!("\nNext: run `wfm-fetch-inventory serve` (in a terminal) and paste the URL");
+    eprintln!("it prints into the web app's Companion tab to list items on warframe.market.");
     eprintln!("Re-run `login` whenever the JWT expires (months from now).");
     Ok(())
 }
@@ -733,15 +764,37 @@ fn run_serve(args: ServeArgs) -> Result<()> {
     }
     let blob: EncryptedJwt = serde_json::from_slice(&fs::read(&jwt_path)?)
         .with_context(|| format!("reading encrypted JWT from {}", jwt_path.display()))?;
-    let passphrase = if args.passphrase_stdin {
+    let jwt = if args.passphrase_stdin {
         let mut s = String::new();
         std::io::stdin().read_line(&mut s).context("reading passphrase from stdin")?;
-        s.trim_end_matches(['\n', '\r']).to_string()
+        let passphrase = s.trim_end_matches(['\n', '\r']).to_string();
+        decrypt_jwt(&blob, &passphrase)?
     } else {
-        rpassword::prompt_password("Encryption passphrase: ")
-            .context("reading passphrase")?
+        // serve must read the passphrase interactively. Outside a real terminal
+        // (IDE "run" button, nohup, systemd unit, a pipe, some multiplexers)
+        // rpassword fails with a cryptic "No such device or address (os error 6)".
+        // Detect that up front and point at the --passphrase-stdin escape hatch.
+        if !std::io::stdin().is_terminal() {
+            bail!(
+                "serve needs an interactive terminal to read your encryption passphrase.\n\
+                 Run it directly in a terminal window, or pipe the passphrase:\n  \
+                 printf %s 'your-passphrase' | wfm-fetch-inventory serve --passphrase-stdin"
+            );
+        }
+        // Re-prompt on a mistyped passphrase instead of aborting the whole
+        // startup (which would re-fight catalog warm-up on the next run).
+        let mut attempt = 0;
+        loop {
+            attempt += 1;
+            let passphrase = rpassword::prompt_password("Encryption passphrase: ")
+                .context("reading passphrase")?;
+            match decrypt_jwt(&blob, &passphrase) {
+                Ok(jwt) => break jwt,
+                Err(e) if attempt < 3 => eprintln!("  {e}  ({} attempt(s) left)", 3 - attempt),
+                Err(e) => return Err(e),
+            }
+        }
     };
-    let jwt = decrypt_jwt(&blob, &passphrase)?;
     let platform = blob.platform.clone();
     eprintln!("→ Decrypted JWT ({} chars, platform={})", jwt.len(), platform);
 
@@ -769,17 +822,29 @@ fn run_serve(args: ServeArgs) -> Result<()> {
     let session_token = random_token(32);
     let bind = format!("127.0.0.1:{}", args.port);
     let server = tiny_http::Server::http(&bind)
-        .map_err(|e| anyhow!("tiny_http bind failed: {e}"))?;
+        .map_err(|e| anyhow!("Could not bind {bind}: {e}\nThe port may already be in use — pick another with --port <N> (0 = a random free port)."))?;
     let actual = server
         .server_addr()
         .to_ip()
         .ok_or_else(|| anyhow!("server bound to non-IP address"))?;
 
-    eprintln!("\n  Companion listening on http://{actual}");
-    eprintln!("  Session token:           {session_token}");
-    eprintln!("\nIn the web app, set the companion URL to:");
-    eprintln!("  http://{actual}?token={session_token}\n");
-    eprintln!("Ctrl-C to stop.\n");
+    eprintln!("\n  Companion listening on http://{actual}  (platform={platform})");
+    eprintln!("  This port is RANDOM and changes every run — it is NOT the website's 5173.");
+    eprintln!("\n  ▶ Paste THIS whole line into the web app's Companion tab:");
+    eprintln!("      http://{actual}?token={session_token}");
+    eprintln!("\n  Leave this running while you list items. Ctrl-C to stop.\n");
+
+    // Open the web app pre-connected so the user never copies the URL/token.
+    // The token rides in the URL fragment (#…) — fragments are never sent to a
+    // server, so it stays local. Best-effort: a headless box has no browser.
+    if !args.no_open {
+        let app = args.app_url.trim_end_matches('/');
+        let connect_url = format!("{app}#companion=http://{actual}?token={session_token}");
+        match open_in_browser(&connect_url) {
+            Ok(()) => eprintln!("  Opened {app} in your browser — it should connect automatically."),
+            Err(_) => eprintln!("  (Couldn't open a browser — paste the line above into the Companion tab.)"),
+        }
+    }
 
     // --- 4. Serve requests ---
     let state = Arc::new(ServeState {
@@ -951,6 +1016,21 @@ fn handle_request(
             401,
             &serde_json::json!({ "error": "missing or invalid X-Session-Token" }),
         );
+    }
+
+    // Inventory pull — memory-scan the running game and hand inventory.json
+    // straight to the browser, so the user never touches a file. Uses ONLY the
+    // in-memory session creds (accountId + nonce); the decrypted JWT is never
+    // involved. 503 with an actionable message when the game isn't scannable.
+    if path == "/inventory" && matches!(method, tiny_http::Method::Get) {
+        return match fetch_inventory_bytes(None, None) {
+            Ok((bytes, _)) => respond_raw_json(request, 200, bytes),
+            Err(e) => respond_json(
+                request,
+                503,
+                &serde_json::json!({ "error": format!("{e:#}") }),
+            ),
+        };
     }
 
     if path == "/plan/pending" {
@@ -1300,6 +1380,43 @@ fn respond_json<T: serde::Serialize>(
         .with_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap())
         .with_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
     request.respond(response).context("sending response")?;
+    Ok(())
+}
+
+// Send already-serialized JSON bytes (e.g. the upstream inventory.json) without
+// a parse+reserialize round trip. Same CORS/content-type as respond_json.
+fn respond_raw_json(request: tiny_http::Request, status: u16, body: Vec<u8>) -> Result<()> {
+    use tiny_http::Header;
+    let response = tiny_http::Response::from_data(body)
+        .with_status_code(status)
+        .with_header(Header::from_bytes(&b"Content-Type"[..], &b"application/json"[..]).unwrap())
+        .with_header(Header::from_bytes(&b"Access-Control-Allow-Origin"[..], &b"*"[..]).unwrap());
+    request.respond(response).context("sending response")?;
+    Ok(())
+}
+
+/// Open `url` in the user's default browser. Spawns and returns immediately —
+/// never blocks the server. Best-effort: errors if no opener exists (e.g. a
+/// headless box), which the caller treats as non-fatal.
+fn open_in_browser(url: &str) -> Result<()> {
+    use std::process::{Command, Stdio};
+    #[cfg(target_os = "linux")]
+    let mut cmd = { let mut c = Command::new("xdg-open"); c.arg(url); c };
+    #[cfg(target_os = "macos")]
+    let mut cmd = { let mut c = Command::new("open"); c.arg(url); c };
+    #[cfg(target_os = "windows")]
+    let mut cmd = {
+        // `start` is a cmd builtin; the "" is the window title. Our URL is a
+        // loopback host + digits + base64url token — no cmd-special characters.
+        let mut c = Command::new("cmd");
+        c.args(["/C", "start", "", url]);
+        c
+    };
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .context("launching browser")?;
     Ok(())
 }
 
