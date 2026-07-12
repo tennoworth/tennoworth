@@ -78,6 +78,10 @@ export interface Market {
   vault_status?: Record<string, VaultStatus>;
   baro?: Baro | null;
   source?: string;
+  // Per-surface fetch timestamps (ISO). On a CSV-only rebuild these can lag
+  // `updated_at` — prices refreshed but the vendor surfaces (baro/relics/
+  // vault/sets) did not. Lets the UI flag a stale schedule/vault surface.
+  surface_fetched_at?: Record<string, string>;
 }
 
 // -------- inventory.json --------

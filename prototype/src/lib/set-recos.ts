@@ -34,6 +34,7 @@ export interface SetReco {
   set_slug: string;
   set_name: string;
   set_low_sell?: number;
+  set_vol?: number;           // 48h closed-trade volume of the assembled set
   parts: SetRecoPart[];
   parts_low_sell?: number;
   missing?: Array<{ slug: string; name: string; low_sell: number }>;
@@ -93,6 +94,7 @@ export function deriveSetRecos(
     if (ownedDistinct === 0) continue;
 
     const setLowSell = setEntry?.low_sell || 0;
+    const setVol = setEntry?.vol || 0;
     const complete = ownedDistinct === parts.length;
 
     if (complete) {
@@ -107,6 +109,7 @@ export function deriveSetRecos(
           set_slug: setSlug,
           set_name: info.name,
           set_low_sell: setLowSell,
+          set_vol: setVol,
           parts: partRows,
           extras: extraCopies,
           extras_plat: extrasPlat,
@@ -124,6 +127,7 @@ export function deriveSetRecos(
           set_slug: setSlug,
           set_name: info.name,
           set_low_sell: setLowSell,
+          set_vol: setVol,
           parts_low_sell: partsLowSellSum - missingCost, // value of parts you already own
           parts: partRows,
           missing,

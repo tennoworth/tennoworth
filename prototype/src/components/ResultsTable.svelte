@@ -44,8 +44,12 @@
     deltas?: Map<string, number>;
     visibleColumns?: string[] | null;
     presetSort?: { key: string; dir: number } | null;
+    // Emits the table's current filtered+sorted rows (all pages) and whether a
+    // table-local filter is active, so the parent's "List on WFM" CTA can stage
+    // exactly what the user sees instead of the unfiltered preset results.
+    onfiltered?: (rows: Row[], filterActive: boolean) => void;
   }
-  let { results, deltas = new Map(), visibleColumns = null, presetSort = null }: Props = $props();
+  let { results, deltas = new Map(), visibleColumns = null, presetSort = null, onfiltered = undefined }: Props = $props();
 
   let sortKey = $state<string>('sell_score');
   let sortDir = $state(-1);
@@ -129,7 +133,7 @@
     ratio:          { text: 'Live buyers ÷ live sellers — a rough demand signal.', unit: 'ratio', dir: '> 1 = buyers outnumber sellers' },
     potential_plat: { text: 'Owned × Avg. Optimistic — selling N copies usually clears below the average.', unit: 'plat', dir: 'upper bound, not realistic' },
     raw_value:      { text: 'Owned × the average of the ~5 cheapest live asks (the highlighted @ price). What the stack is worth at current listings — no liquidity discount; one troll listing barely moves it.', unit: 'plat', dir: 'falls back to Owned × Avg until the next scrape adds ask-depth data' },
-    sell_score:     { text: 'Expected plat per day if you listed everything. min(owned, vol_48h / 2) × low_sell. Items below 2 trades / 48 h get a "patience" tag instead.', unit: 'plat / day', dir: 'higher = better; uncapped' },
+    sell_score:     { text: 'Expected plat per day if you listed everything. min(owned, vol_48h / 2) × clearing price, where clearing price = lowest live ask, clamped up to the 90-day median when the ask is a lone troll undercut. Items below 2 trades / 48 h get a "patience" tag instead.', unit: 'plat / day', dir: 'higher = better; uncapped' },
     ducats:         { text: 'Ducat value at Baro Ki’Teer.', unit: 'ducats', dir: 'only prime parts have a non-zero value' },
     plat_per_100d:  { text: 'Plat cost per 100 ducats of value. “Deal” badge fires below 20.', unit: 'plat / 100 ducats', dir: 'lower = better ducat trade than WFM' },
     medians_7d:     { text: 'Sparkline of the last 7 days of daily median price. Hover the line for the raw values.' },
@@ -255,6 +259,12 @@
     });
   });
 
+  // Push the displayed (filtered+sorted) rows up so the parent's List CTA can
+  // act on them. filterActive distinguishes "user narrowed the table" from the
+  // default full view.
+  let filterActive = $derived(filter.trim() !== '' || activePills.size > 0);
+  $effect(() => { onfiltered?.(sorted, filterActive); });
+
   // Pagination — clamps current page when sorted/pageSize change so the
   // user doesn't end up on an empty trailing page after filtering.
   let maxPage = $derived(Math.max(0, Math.ceil(sorted.length / pageSize) - 1));
@@ -365,6 +375,9 @@
                   <span class="tag vaulted" title="Prime is currently vaulted. Listings often command a premium.">vaulted</span>
                 {:else if r.vault_status === 'vaulting-soon'}
                   <span class="tag vaulting-soon" title="Estimated to vault within ~60 days. Selling now beats the post-vault floor for active traders.">vaulting soon</span>
+                {/if}
+                {#if r.subtype === 'intact' || r.subtype === 'exceptional' || r.subtype === 'flawless' || r.subtype === 'radiant'}
+                  <span class="tag relic-tag" title="This is a relic. Selling it intact usually clears less than cracking it — check the Relic planner tab, which ranks your relics by expected plat per crack. Relics are excluded from the bulk 'List on WFM' action.">relic → planner</span>
                 {/if}
                 {#if r.is_augment}
                   <span class="tag augment" title="Syndicate augment mod. Typically 25,000 standing to re-purchase from the issuing syndicate (6 mainline syndicates).">aug</span>
@@ -485,7 +498,19 @@
        sideways rather than amputating columns. */
     overflow-x: auto;
     overflow-y: hidden;
+    /* Make the horizontal scrollbar visible at rest so columns past the fold
+       (e.g. Potential on a laptop width) read as scrollable, not amputated.
+       Overlay scrollbars hide by default and made the table look clipped. */
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
   }
+  .wrap::-webkit-scrollbar { height: 9px; }
+  .wrap::-webkit-scrollbar-track { background: transparent; }
+  .wrap::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 5px;
+  }
+  .wrap::-webkit-scrollbar-thumb:hover { background: var(--muted); }
   /* Keep the table from collapsing under flex / grid parents — without
      this `table { width: 100% }` shrinks the columns into ellipsis-soup
      instead of becoming scrollable. */
@@ -532,7 +557,10 @@
     font-variant-numeric: tabular-nums;
   }
   th, td {
-    padding: 7px 12px;
+    /* Tightened from 12px → 8px horizontal so all 14 default columns fit the
+       capped content width without clipping "Potential" off the right edge.
+       Still scrolls (with a visible scrollbar) on narrow laptop widths. */
+    padding: 7px 8px;
     text-align: left;
     border-bottom: 1px solid var(--border);
   }
@@ -710,6 +738,10 @@
   .tag.peak {
     color: var(--good);
     border-color: color-mix(in srgb, var(--good) 35%, var(--border));
+  }
+  .tag.relic-tag {
+    color: var(--muted);
+    border-color: color-mix(in srgb, var(--muted) 30%, var(--border));
   }
 
   .pager {

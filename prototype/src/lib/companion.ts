@@ -58,8 +58,17 @@ export function parseCompanionUrl(input: string): CompanionConfig {
       `Companion URL host must be 127.0.0.1 or localhost — got ${u.hostname}. Refusing to send your session token off-machine.`
     );
   }
+  // The website itself runs on a loopback port in dev (5173); pasting the
+  // browser address bar passes every check above, then fails opaquely against
+  // SPA HTML. The companion prints a RANDOM port — catch the website port here.
+  const webHost = typeof location !== 'undefined' ? location.host : '';
+  if (u.host === webHost || u.port === '5173' || u.port === '4173') {
+    throw new Error(
+      `That looks like this website's address (port ${u.port || '80'}), not the companion. Run \`wfm-fetch-inventory serve\` and paste the http://127.0.0.1:<random-port>?token=… line it prints.`
+    );
+  }
   const token = u.searchParams.get('token');
-  if (!token) throw new Error('URL is missing ?token=… — re-paste the full line.');
+  if (!token) throw new Error('URL is missing ?token=… — re-paste the full line the companion printed.');
   return {
     baseUrl: `${u.protocol}//${u.host}`,
     token,
@@ -72,9 +81,28 @@ export interface PingResponse {
 }
 
 export async function pingCompanion(cfg: CompanionConfig): Promise<PingResponse> {
-  const r = await fetch(`${cfg.baseUrl}/health`);
-  if (!r.ok) throw new Error(`Health check failed: HTTP ${r.status}`);
-  return r.json() as Promise<PingResponse>;
+  let r: Response;
+  try {
+    r = await fetch(`${cfg.baseUrl}/health`);
+  } catch {
+    throw new Error(`Couldn't reach the companion at ${cfg.baseUrl}. Is \`serve\` still running in a terminal?`);
+  }
+  if (!r.ok) {
+    throw new Error(`Health check failed: HTTP ${r.status}. Check the URL is the companion's (random port), not the website's (5173).`);
+  }
+  let body: unknown;
+  try {
+    body = await r.json();
+  } catch {
+    // A 200 that isn't JSON means we hit a web server, not the companion —
+    // classically the website's own port answering with index.html.
+    throw new Error(`That URL answered with a web page, not the companion. Paste the http://127.0.0.1:<random-port>?token=… line that \`serve\` printed — not the website.`);
+  }
+  const resp = body as PingResponse;
+  if (!resp || resp.ok !== true) {
+    throw new Error(`Unexpected response from ${cfg.baseUrl}/health — is that really the companion?`);
+  }
+  return resp;
 }
 
 /** Plan items submitted to the companion via POST /plan. */
@@ -112,6 +140,15 @@ export async function bulkVisibility(
 /** Fetch the user's current WFM orders via the companion. */
 export async function fetchOrders(cfg: CompanionConfig): Promise<unknown> {
   return await callCompanion(cfg, 'GET', '/orders');
+}
+
+/**
+ * Pull inventory.json straight from the companion (it memory-scans the running
+ * game on demand) — no file, no drag-in. Returns the parsed inventory object.
+ * Throws with the companion's actionable message (e.g. game not running) on 503.
+ */
+export async function fetchInventory(cfg: CompanionConfig): Promise<unknown> {
+  return await callCompanion(cfg, 'GET', '/inventory');
 }
 
 export interface OrderPatch {
