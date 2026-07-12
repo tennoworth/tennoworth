@@ -11,6 +11,7 @@
   import InstallWidget from './components/InstallWidget.svelte';
   import ListingReviewModal from './components/ListingReviewModal.svelte';
   import MyOrdersPanel from './components/MyOrdersPanel.svelte';
+  import CopyBtn from './components/CopyBtn.svelte';
   import { flattenInventory, extractKeptLvls } from './lib/inventory';
   import { loadCatalogs, resolvePath, type Catalogs } from './lib/resolver';
   import { loadMarket, lookup } from './lib/market';
@@ -1048,13 +1049,21 @@
         <div class="body">
           <h3>Run it once</h3>
           <p>With Warframe past the login screen, run:</p>
-          <pre class="snippet"><code>wfm-fetch-inventory</code></pre>
+          <div class="snippet-row">
+            <pre class="snippet"><code>wfm-fetch-inventory</code></pre>
+            <CopyBtn text="wfm-fetch-inventory" />
+          </div>
           <p class="muted">
             Writes <code>inventory.json</code> to the directory you run it from.
             Windows: no admin needed, run from a normal PowerShell. Linux: grant
-            ptrace once
-            (<code>sudo setcap cap_sys_ptrace=eip "$(command -v wfm-fetch-inventory)"</code>
-            — works wherever the binary lives) and it runs without sudo forever.
+            ptrace once and it runs without sudo forever (works wherever the
+            binary lives):
+          </p>
+          <div class="snippet-row">
+            <pre class="snippet"><code>sudo setcap cap_sys_ptrace=eip "$(command -v wfm-fetch-inventory)"</code></pre>
+            <CopyBtn text={'sudo setcap cap_sys_ptrace=eip "$(command -v wfm-fetch-inventory)"'} />
+          </div>
+          <p class="muted">
             If you get <code>command not found</code>, it isn't on your PATH yet —
             open a new terminal, or run it by its full path and put that path in
             the setcap line instead.
@@ -1080,8 +1089,14 @@
             Want to create or edit listings straight from here? Run
             <code>login</code> once, then <code>serve</code> in a terminal:
           </p>
-          <pre class="snippet"><code>wfm-fetch-inventory login
-wfm-fetch-inventory serve</code></pre>
+          <div class="snippet-row">
+            <pre class="snippet"><code>wfm-fetch-inventory login</code></pre>
+            <CopyBtn text="wfm-fetch-inventory login" />
+          </div>
+          <div class="snippet-row">
+            <pre class="snippet"><code>wfm-fetch-inventory serve</code></pre>
+            <CopyBtn text="wfm-fetch-inventory serve" />
+          </div>
           <p class="muted">
             Paste the URL <code>serve</code> prints into the <a href="#companion">Companion</a>
             tab. The rest of the app works without this.
@@ -1718,8 +1733,8 @@ wfm-fetch-inventory serve</code></pre>
           <div class="companion-help">
             <strong>How to get this URL</strong>
             <ol>
-              <li><code>wfm-fetch-inventory login</code> — once, to sign in to warframe.market.</li>
-              <li><code>wfm-fetch-inventory serve</code> — <em>in a real terminal window</em> (it prompts for your passphrase), and leave it running.</li>
+              <li><code>wfm-fetch-inventory login</code> <CopyBtn text="wfm-fetch-inventory login" /> — once, to sign in to warframe.market.</li>
+              <li><code>wfm-fetch-inventory serve</code> <CopyBtn text="wfm-fetch-inventory serve" /> — <em>in a real terminal window</em> (it prompts for your passphrase), and leave it running.</li>
               <li>Copy the whole <code>http://127.0.0.1:<wbr>…?token=…</code> line it prints and paste it above.</li>
             </ol>
             <p class="muted">
@@ -2296,6 +2311,8 @@ wfm-fetch-inventory serve</code></pre>
   .steps .body p + p { margin-top: 6px; }
   .steps .body p.muted { color: var(--muted); font-size: 12px; }
   .steps .snippet { margin: 6px 0; font-size: 12px; padding: 6px 10px; }
+  .snippet-row { display: flex; gap: 6px; align-items: stretch; margin: 6px 0; }
+  .snippet-row .snippet { flex: 1; margin: 0; min-width: 0; overflow-x: auto; }
   .companion-help {
     margin-top: 12px;
     padding: 12px 14px;
