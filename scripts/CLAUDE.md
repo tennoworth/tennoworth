@@ -13,10 +13,6 @@ rewrite as Rust.
   `prototype/public/wfstat-catalog.json` (the browser resolver's
   item catalog — warframestat dropped CORS, so it's baked here).
   Every scrape, local or cron, must finish with this script (~30 s).
-- `wfm_inventory.py` (root) — debug-only CLI version of the browser's
-  join logic. The browser app is the canonical surface.
-- `wfm_popular_rivens.py` — separate exploration; rivens aren't in
-  the main pipeline yet.
 
 Tests live in `tests/`. Run with `pytest tests/`.
 
