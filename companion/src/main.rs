@@ -1943,7 +1943,7 @@ fn scan_session(pid: u32) -> Result<SessionInfo> {
     use windows::Win32::System::Threading::{
         OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ,
     };
-    use windows::Win32::System::ProcessStatus::ReadProcessMemory;
+    use windows::Win32::System::Diagnostics::Debug::ReadProcessMemory;
 
     unsafe {
         let handle: HANDLE = OpenProcess(
