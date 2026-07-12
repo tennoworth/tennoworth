@@ -117,6 +117,25 @@ describe('resolvePath', () => {
     const r = resolvePath('/Lotus/X', catalogs, /* market */ null);
     expect(r.slug).toBe('test_item');
   });
+
+  // New primes hit WFM's catalog day-one but lag in warframestat for weeks —
+  // the path-derived name guess bridges that window (real case: a brand-new
+  // prime's part blueprints sat unresolved while WFM already traded them).
+  it('resolves a path absent from BOTH catalogs via a WFM-catalog name guess', () => {
+    const path = '/Lotus/Types/Recipes/Weapons/WeaponParts/SagekPrimeBarrelBlueprint';
+    const market = fakeMarket({ 'sagek prime barrel': 'sagek_prime_barrel' });
+    const r = resolvePath(path, fakeCatalogs([]), market);
+    expect(r.slug).toBe('sagek_prime_barrel');
+    expect(r.name).toBe('Sagek Prime Barrel');
+    expect(r.category).toBeNull(); // caller falls back to the inventory key
+  });
+
+  it('name guess is strict — no WFM-catalog hit means still unresolved', () => {
+    const path = '/Lotus/Types/Recipes/Components/FormaBlueprint';
+    const market = fakeMarket({ 'sagek prime barrel': 'sagek_prime_barrel' });
+    const r = resolvePath(path, fakeCatalogs([]), market);
+    expect(r).toEqual({ name: null, slug: null, category: null, subtype: null });
+  });
 });
 
 describe('loadCatalogs', () => {
