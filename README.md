@@ -29,18 +29,21 @@ Warframe (running)  ──►  companion  ──►  inventory.json
 
 ## Quick start
 
-1. **Get the companion.** Until a release is published, build it from source:
+1. **Get the companion** from the
+   [latest release](https://github.com/tennoworth/tennoworth/releases/latest)
+   (binaries + `SHA256SUMS`), or build it from source:
    ```bash
    cd companion && cargo build --release
    # binary: companion/target/release/wfm-fetch-inventory
    ```
-   (Or run `prototype/public/install.sh` / `install.ps1` once the repo is live.)
+   (The website's `install.sh` / `install.ps1` one-liners do the download +
+   checksum verify for you.)
 
 2. **Fetch your inventory** (Warframe running, past the login screen):
    ```bash
    # Linux: grant ptrace once (re-run after every rebuild — the cap is wiped)
    sudo setcap cap_sys_ptrace=eip ./wfm-fetch-inventory
-   ./wfm-fetch-inventory                 # → ~/Downloads/inventory.json
+   ./wfm-fetch-inventory                 # → ./inventory.json (where you run it)
    ```
    On Windows just run `.\wfm-fetch-inventory.exe` from a normal PowerShell.
 

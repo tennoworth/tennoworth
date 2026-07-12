@@ -92,7 +92,7 @@ Next steps
      launched the game via Steam (the usual case), use a NORMAL (non-admin)
      PowerShell. An elevated terminal can't read a non-elevated game and
      fails with "Access is denied".
-  4. inventory.json lands in your Downloads folder — drop it into the web UI.
+  4. inventory.json lands in the directory you ran it from — drop it into the web UI.
 
 Optional — to create/edit warframe.market listings from the web app:
   5. wfm-fetch-inventory login     # once; interactive sign-in

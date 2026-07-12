@@ -1050,7 +1050,7 @@
           <p>With Warframe past the login screen, run:</p>
           <pre class="snippet"><code>wfm-fetch-inventory</code></pre>
           <p class="muted">
-            Writes <code>inventory.json</code> to your Downloads folder.
+            Writes <code>inventory.json</code> to the directory you run it from.
             Windows: no admin needed, run from a normal PowerShell. Linux: grant
             ptrace once
             (<code>sudo setcap cap_sys_ptrace=eip ~/.local/bin/wfm-fetch-inventory</code>)
@@ -1096,7 +1096,8 @@ wfm-fetch-inventory serve</code></pre>
           ⚠ That file doesn't look like an inventory. We didn't find the
           <code>Suits</code> / <code>LongGuns</code> / <code>Recipes</code> … keys
           a companion <code>inventory.json</code> has. Re-run the companion and
-          drop the file it writes to your Downloads folder.
+          drop the <code>inventory.json</code> it writes (it lands in the
+          directory you ran it from).
         {:else}
           ⚠ That file parsed, but nothing in it is tradeable on warframe.market
           (quest items, resources, and brand-new content have no listings). If
@@ -1770,7 +1771,7 @@ wfm-fetch-inventory serve</code></pre>
       <summary>Where does my inventory data actually go?</summary>
       <p>
         Nowhere we control. The companion writes <code>inventory.json</code>
-        to your <code>~/Downloads</code>. The browser app processes that
+        to the directory you run it from. The browser app processes that
         file locally — every byte stays in your tab. We persist a copy in
         your browser's storage (localStorage + IndexedDB) so a refresh
         doesn't wipe it. The market snapshot is the only thing we host,

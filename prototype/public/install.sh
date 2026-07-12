@@ -109,7 +109,8 @@ Next steps
      Rather not? Run a single fetch with sudo instead (absolute path —
      sudo's secure_path won't find a bare command name):
        sudo "$DEST/$BIN_NAME"
-  4. inventory.json lands in ~/Downloads — drop it into the web UI.
+  4. inventory.json lands in the directory you ran it from — drop it
+     into the web UI.
 
 Optional — to create/edit warframe.market listings from the web app:
   5. $BIN_NAME login          # once; interactive sign-in
