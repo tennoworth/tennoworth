@@ -3,7 +3,8 @@
 Cross-platform companion (Linux + Windows) for the WF inventory market-check
 web app. While Warframe is running, scrapes the game's process memory for the
 session credentials it already obtained at login, then calls DE's
-`inventory.php` endpoint and writes the response to your Downloads folder.
+`inventory.php` endpoint and writes the response to the directory you ran
+it from.
 
 ~3 MB binary, single file, no runtime deps. Rust.
 
@@ -11,7 +12,7 @@ session credentials it already obtained at login, then calls DE's
 
 The binary has three subcommands. The order is:
 
-1. **`fetch`** (default) — grab your inventory → `~/Downloads/inventory.json`,
+1. **`fetch`** (default) — grab your inventory → `./inventory.json`,
    then drop it into the web app. This is all you need to see *what to sell*.
 2. **`login`** (once) — sign in to warframe.market; encrypts your token at rest.
 3. **`serve`** — run a local server so the web app can *create/edit listings*
@@ -41,8 +42,8 @@ normal PowerShell as the same user that started the game:
 .\wfm-fetch-inventory.exe
 ```
 
-The inventory file ends up at `~/Downloads/inventory.json`
-(`C:\Users\<you>\Downloads\inventory.json` on Windows).
+The inventory file lands in the directory you ran the command from
+(override with `--out <path>`).
 
 ### 2 & 3. List on warframe.market (`login` → `serve`)
 
@@ -125,7 +126,7 @@ build on a native `windows-latest` runner, no mingw needed.
    fragments still sitting in deallocated heap).
 5. Calls `https://api.warframe.com/api/inventory.php` with those parameters
    and the build's User-Agent.
-6. Writes the response to `<Downloads>/inventory.json`.
+6. Writes the response to `./inventory.json` (the invocation directory).
 
 ## What it doesn't do
 

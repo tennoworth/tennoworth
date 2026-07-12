@@ -61,7 +61,7 @@
       Don't have one yet? Run the
       <a href="#companion">companion CLI</a>
       with Warframe open — it extracts <code>inventory.json</code> from your
-      running game and saves it to your Downloads folder. Already have one from another
+      running game and saves it in the folder you ran it from. Already have one from another
       tool (AlecaFrame export, Sainan's <code>warframe-api-helper</code>)? It
       drops in here too.
     </p>

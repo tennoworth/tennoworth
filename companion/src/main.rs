@@ -3,7 +3,7 @@
 //! Cross-platform CLI that, while Warframe is running, scrapes the game's
 //! process memory for the accountId + nonce + build label the game already
 //! obtained at login, then calls api.warframe.com/api/inventory.php and
-//! writes the response to the user's Downloads folder.
+//! writes the response to the current directory.
 //!
 //! Platform notes:
 //!   • Linux:   reads /proc/<pid>/mem. Needs ptrace permission (sudo or
@@ -61,7 +61,7 @@ struct FetchArgs {
     #[arg(long)]
     pid: Option<u32>,
 
-    /// Output path. Defaults to <Downloads>/inventory.json.
+    /// Output path. Defaults to ./inventory.json (the directory you run from).
     #[arg(long)]
     out: Option<PathBuf>,
 
@@ -202,9 +202,9 @@ fn run_fetch(args: FetchArgs) -> Result<()> {
     let out_path = args.out.unwrap_or_else(default_out_path);
     if let Some(parent) = out_path.parent() {
         // Restrict only a directory we ourselves created (matches run_login
-        // and plan persistence). The default target is ~/Downloads — the
-        // user's to manage; clamping a pre-existing dir to 0700 would be far
-        // more surprising than the metadata leak it prevents.
+        // and plan persistence). The default target is the CWD — the user's
+        // to manage; clamping a pre-existing dir to 0700 would be far more
+        // surprising than the metadata leak it prevents.
         if !parent.exists() {
             fs::create_dir_all(parent).ok();
             restrict_dir_perms(parent);
@@ -261,11 +261,9 @@ fn matches_warframe(p: &sysinfo::Process) -> bool {
 }
 
 fn default_out_path() -> PathBuf {
-    let home = real_user_home().unwrap_or_else(|| dirs_home());
-    let downloads = home.join("Downloads");
-    if downloads.is_dir() {
-        return downloads.join("inventory.json");
-    }
+    // The directory the user ran the command from — a manual downloader
+    // gets the file next to the binary they just fetched, a PATH user gets
+    // it wherever they cd'd. sudo preserves CWD, so no root-home surprise.
     std::env::current_dir()
         .unwrap_or_else(|_| PathBuf::from("."))
         .join("inventory.json")
