@@ -25,3 +25,6 @@ rust_out
 /.research/
 /.loop-journal.md
 /docs/onboarding-friction.md
+
+# AI tooling config — kept locally, not part of the public project surface.
+/.claude/
