@@ -1,0 +1,46 @@
+name: build-web
+
+# Build the static prototype/dist/ off the exposed box (node/bun never touch
+# it — see deploy/README.md "Build supply-chain"). Publishes a rolling
+# `web-latest` release asset the deploy box pulls with a plain curl, no auth,
+# no Tailscale/LAN transfer needed — matches release-companion.yml's pattern.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'prototype/**'
+      - '.github/workflows/build-web.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install, test, build
+        working-directory: prototype
+        run: |
+          bun install --frozen-lockfile
+          bun run test
+          bun run build
+
+      - name: Package
+        run: tar -C prototype/dist -czf dist.tgz .
+
+      - name: Publish rolling release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: web-latest
+          name: web-latest (auto-built)
+          files: dist.tgz
+          draft: false
+          prerelease: true
+          make_latest: false
+          body: Rolling build of prototype/dist from the latest main. Not a version release — see releases tagged v* for the companion binary.
