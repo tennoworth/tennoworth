@@ -282,3 +282,10 @@ companion/target/debug/tennoworth-desktop
 TENNOWORTH_PROBE=1 TENNOWORTH_RUNTAG=run1 TENNOWORTH_PROBE_OUT=/tmp/probe.json \
   companion/target/debug/tennoworth-desktop
 ```
+
+`cargo tauri build` here bundles deb + rpm OK; AppImage still fails at
+`linuxdeploy` (the same sandbox mount restriction as the spike, Q5) — not a code
+issue. **Path gotcha:** in `tauri.conf.json`, `frontendDist` is relative to the
+config file (`tennoworth-desktop/`) → `../../prototype/dist-desktop`, but Tauri
+runs `before{Dev,Build}Command` from the config's PARENT (`companion/`), so that
+command uses `cd ../prototype` (one `..` fewer). Verified by printing `pwd`.

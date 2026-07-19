@@ -5,8 +5,8 @@
   "identifier": "app.tennoworth.desktop",
   "build": {
     "frontendDist": "../../prototype/dist-desktop",
-    "beforeDevCommand": "cd ../../prototype && bun run build:desktop",
-    "beforeBuildCommand": "cd ../../prototype && bun run build:desktop"
+    "beforeDevCommand": "cd ../prototype && bun run build:desktop",
+    "beforeBuildCommand": "cd ../prototype && bun run build:desktop"
   },
   "app": {
     "withGlobalTauri": true,
