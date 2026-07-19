@@ -5,6 +5,7 @@ import {
   parseCompanionUrl, pingCompanion, submitPlan,
   bulkVisibility, fetchOrders, updateOrder, deleteOrder,
   getPendingPlan, resumePendingPlan, discardPendingPlan,
+  CompanionUnreachableError,
 } from './companion.js';
 
 beforeEach(() => {
@@ -82,6 +83,30 @@ describe('pingCompanion', () => {
   it('throws on non-2xx', async () => {
     globalThis.fetch.mockResolvedValue({ ok: false, status: 500 });
     await expect(pingCompanion({ baseUrl: 'http://x' })).rejects.toThrow(/500/);
+  });
+
+  // The unreachable-vs-error distinction is what lets the app tell "serve is
+  // down / the browser blocked loopback" apart from "connected but wrong", so
+  // the type — not just the message — is the contract under test.
+  it('throws CompanionUnreachableError when the health fetch itself rejects', async () => {
+    globalThis.fetch.mockRejectedValue(new TypeError('Failed to fetch'));
+    await expect(pingCompanion({ baseUrl: 'http://127.0.0.1:1', token: 't' }))
+      .rejects.toBeInstanceOf(CompanionUnreachableError);
+  });
+
+  it('does NOT classify a non-OK HTTP response as unreachable', async () => {
+    globalThis.fetch.mockResolvedValue({ ok: false, status: 500 });
+    await expect(pingCompanion({ baseUrl: 'http://x', token: 't' }))
+      .rejects.not.toBeInstanceOf(CompanionUnreachableError);
+  });
+
+  it('does NOT classify a non-JSON 200 (a web page) as unreachable', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: true,
+      json: async () => { throw new Error('not json'); },
+    });
+    await expect(pingCompanion({ baseUrl: 'http://x', token: 't' }))
+      .rejects.not.toBeInstanceOf(CompanionUnreachableError);
   });
 });
 
