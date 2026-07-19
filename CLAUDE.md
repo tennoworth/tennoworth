@@ -28,6 +28,7 @@ prototype/       Svelte 5 + Vite app, deployed as static
 prototype/public/market.json    central artifact: the WFM snapshot
 scripts/         one-shot Python utilities
 wfm_demand.py    main WFM scraper (root, run on cron)
+deploy/          self-host kit: Caddyfile, setup script, scrape + web-pull systemd units for the production LXC
 tests/           pytest tests for the Python side
 .github/workflows/  refresh-market (cron), release-companion (tag), audit
 .claude/         Claude Code config — agents, commands, hooks
@@ -57,11 +58,12 @@ SECURITY.md      threat model + what we do and don't commit to
                           └───────────────────────────────┘
                                        ▲
                                        │ GET market.json
-                                       │ (refreshed by cron)
-                            ┌──────────┴──────────┐
-                            │  wfm_demand.py      │
-                            │  (GH Actions, 2h)   │
-                            └─────────────────────┘
+                                       │ (refreshed on the box)
+                            ┌──────────┴─────────────────────────────┐
+                            │  wfm_demand.py                          │
+                            │  (systemd timer on the box, 2h;         │
+                            │   GH cron refreshes repo copy)          │
+                            └─────────────────────────────────────────┘
 ```
 
 ---
@@ -138,11 +140,13 @@ cd companion && cargo build --release
 
 ## Open items (as of latest session)
 
-- **Ducat values column.** Data lives in warframestat.us already; plumb
-  through `loadCatalogs()` → owned record → table column.
-- **Register tennoworth.app + point it at the deploy/ kit** — the
-  install one-liner shown to users assumes the site origin; today only
-  the dev server serves install.sh. GitHub repo + v0.1.0 release are
-  live and the full installer path is verified end-to-end (Linux).
-- **Move off GitHub Pages for production hosting** so `public/_headers`
-  is actually applied (HSTS, X-Frame-Options, etc).
+- **Container-110 outbound firewall lockdown.** Drafted, deferred —
+  restrict the production LXC's egress to just WFM + the GitHub release
+  assets it pulls.
+- **Language-consolidation phases 1-3** (see the Rust consolidation
+  plan): (1) move the GH cron from 2h → daily now the box owns the live
+  refresh; (2) land the `wfm-scrape` converter port; (3) port the
+  scraper itself.
+- **Verify the `serve` late-JWT-unlock listing path end-to-end** with a
+  real WFM login — the 401/503 `needs_login` branches on the first
+  listing request are still unverified against a live companion.

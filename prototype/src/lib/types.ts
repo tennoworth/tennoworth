@@ -31,20 +31,20 @@ export interface MarketItemEntry {
 }
 
 /** Component path → display info, baked from warframestat parent walk. */
-export interface PathInfo {
+interface PathInfo {
   name: string;
   slug: string;
   category: string;
 }
 
 /** Set slug → constituent parts, baked from warframestat parent walk. */
-export interface SetEntry {
+interface SetEntry {
   name: string;
   parts: Array<{ slug: string; component_name: string }>;
 }
 
 /** Single drop entry on a relic, from drops.warframestat.us. */
-export interface RelicReward {
+interface RelicReward {
   reward_slug: string;
   reward_name: string;
   rarity: string;
@@ -52,11 +52,11 @@ export interface RelicReward {
 }
 
 /** Prime-part vault state — `vaulted` and `vaulting-soon` are sell-signals. */
-export type VaultStatus = 'vaulted' | 'vaulting-soon' | 'available';
+type VaultStatus = 'vaulted' | 'vaulting-soon' | 'available';
 
 /** Baro Ki'Teer schedule, baked from warframestat at build time so the
  *  Baro view needs no runtime warframestat fetch. */
-export interface Baro {
+interface Baro {
   activation: string;
   expiry: string;
   location: string;
@@ -172,7 +172,7 @@ export interface PlanResponse {
 }
 
 /** Pending-plan persistence shape — kept on disk in `pending_plan.json`. */
-export interface PendingPlanItem {
+interface PendingPlanItem {
   slug: string;
   platinum: number;
   quantity: number;

@@ -23,13 +23,26 @@ characteristics:
    server (`127.0.0.1`, random port, per-process `X-Session-Token`
    auth). The JWT never reaches the browser.
 
-3. **Our build + release pipeline** (GitHub Actions). Two workflows:
+3. **Our build + release pipeline** (GitHub Actions). Four workflows:
    - `refresh-market.yml` — scrapes warframe.market every 2 h and
      commits a static `market.json` + `wfstat-catalog.json` to the
      repo.
    - `release-companion.yml` — on tag push, cross-builds the Rust
      binary for Linux + Windows, generates SHA256SUMS, attaches both
      to a GitHub release.
+   - `build-web.yml` — on a push touching `prototype/`, builds the
+     static web bundle and publishes it as a rolling `web-latest`
+     prerelease asset (the self-host box pulls it with a plain curl).
+   - `audit.yml` — on push / PR and weekly, runs dependency advisories
+     (`bun audit`, `cargo audit`) plus the JS, Python, and Rust test
+     suites.
+
+   Production serving is **not** GitHub-hosted: a self-hosted box (an
+   unprivileged LXC, reached only through a Cloudflare Tunnel, fronted
+   by Caddy) pulls the CI-built web bundle and runs its own scrape
+   timer. That box is a trust boundary the repo's public CI does not
+   cover — compromising it would let an attacker serve malicious JS or
+   a stale snapshot to visitors.
 
 ## What we commit to
 

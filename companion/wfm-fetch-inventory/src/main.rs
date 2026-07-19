@@ -557,7 +557,6 @@ fn encrypt_jwt(jwt: &str, passphrase: &str, platform: &str) -> Result<EncryptedJ
     })
 }
 
-#[allow(dead_code)]
 fn decrypt_jwt(blob: &EncryptedJwt, passphrase: &str) -> Result<String> {
     if blob.format != JWT_FORMAT {
         bail!("Unknown JWT blob format: {}", blob.format);
@@ -732,8 +731,6 @@ struct ItemResult {
 
 struct WfmCatalogItem {
     item_id: String,
-    #[allow(dead_code)]
-    url_name: String,
     /// Human-readable display name from /v2/items i18n.en.name. Used to
     /// enrich GET /orders so the panel doesn't render raw itemIds.
     display_name: String,
@@ -1637,8 +1634,6 @@ fn open_in_browser(url: &str) -> Result<()> {
     use std::process::{Command, Stdio};
     #[cfg(target_os = "linux")]
     let mut cmd = { let mut c = Command::new("xdg-open"); c.arg(url); c };
-    #[cfg(target_os = "macos")]
-    let mut cmd = { let mut c = Command::new("open"); c.arg(url); c };
     #[cfg(target_os = "windows")]
     let mut cmd = {
         // `start` is a cmd builtin; the "" is the window title. Our URL is a
@@ -1701,7 +1696,6 @@ fn fetch_wfm_catalog(client: &Client, platform: &str) -> Result<BTreeMap<String,
                 .unwrap_or_default();
             out.insert(slug.to_string(), WfmCatalogItem {
                 item_id: id.to_string(),
-                url_name: slug.to_string(),
                 display_name,
                 max_rank,
                 subtypes,
@@ -2437,7 +2431,6 @@ mod tests {
     fn cat(name: &str, max_rank: Option<u32>, subtypes: &[&str]) -> WfmCatalogItem {
         WfmCatalogItem {
             item_id: format!("id-{name}"),
-            url_name: name.into(),
             display_name: name.into(),
             max_rank,
             subtypes: subtypes.iter().map(|s| s.to_string()).collect(),

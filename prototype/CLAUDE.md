@@ -92,6 +92,9 @@ not `dispatch('inventory', detail)`.
 `localStorage` keys we use:
 - `wfminv:last-owned-v4` — saved owned-items snapshot.
 - `wfminv:companion-v1` — companion URL + session token.
+- `wfminv:filters-open-v1` — filter panel expanded/collapsed.
+- `wfminv:view-v1` — selected view/preset.
+- `wfminv:score-explainer-dismissed-v1` — score explainer dismissed flag.
 
 IndexedDB DB:
 - `wfminv` / store `catalogs` / key `wfstat-items-v3` — slim
@@ -152,12 +155,14 @@ so a single human can reason about both.
 
 ## CSP & headers
 
-`public/_headers` is loaded by Cloudflare Pages / Netlify / Vercel —
-**GitHub Pages silently drops it.** That's a known production-readiness
-gap. The `<meta http-equiv="Content-Security-Policy">` in
-`index.html` gives us script/connect/style protection even on GH
-Pages; HSTS / frame-ancestors / X-Frame-Options need a real header
-host.
+Production serves through **Caddy on the self-host box**, which applies
+the full header set (HSTS, `frame-ancestors` / X-Frame-Options, the
+CSP) from `deploy/Caddyfile` — kept in sync with the other CSP copies
+by `scripts/sync-csp.mjs`. The `<meta http-equiv="Content-Security-Policy">`
+in `index.html` still ships script/connect/style protection as a
+belt-and-suspenders fallback. The `public/_headers` file only matters
+for preview deployments on Cloudflare Pages / Netlify / Vercel (GitHub
+Pages silently drops it), where the header host isn't ours.
 
 Allowed `connect-src`: `self`, `http://127.0.0.1:*`,
 `http://localhost:*`. The two loopback entries are for the companion;
