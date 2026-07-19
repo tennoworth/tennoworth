@@ -263,13 +263,22 @@ What the spike settles:
   CSP; the `connect-src` change is required only for (a) console cleanliness /
   IPC-path performance and (b) C4's remote refresh.
 
+**Status: implemented in C2** (`feat/desktop-transport`). The transport lives at
+`prototype/src/lib/transport.ts` (HTTP + Tauri impls, `__TAURI_INTERNALS__`
+boot sniff); the desktop commands (`health`, `scan_inventory`) are in
+`companion/tennoworth-desktop/src/main.rs`; the desktop CSP variant is a
+`scripts/sync-csp.mjs --desktop` rewrite emitted by `bun run build:desktop`.
+
 ## Reproduce
 
 ```bash
-cd prototype && bun install && bun run build          # produces prototype/dist
-cd companion && cargo build -p tennoworth-desktop     # or: cargo tauri build (from tennoworth-desktop/)
+# Desktop dist carries the desktop CSP (connect-src with ipc://…); frontendDist
+# points at prototype/dist-desktop, so build THAT before the crate:
+cd prototype && bun install && bun run build:desktop  # → prototype/dist-desktop
+cd companion && cargo build -p tennoworth-desktop     # or: cargo tauri build (runs build:desktop for you)
 # Plain shell:
 companion/target/debug/tennoworth-desktop
-# Spike probe (writes evidence JSON, auto-exits):
-SPIKE_PROBE=1 SPIKE_RUNTAG=run1 SPIKE_OUT=/tmp/spike.json companion/target/debug/tennoworth-desktop
+# Evidence probe (writes JSON, drives the scan button, auto-exits):
+TENNOWORTH_PROBE=1 TENNOWORTH_RUNTAG=run1 TENNOWORTH_PROBE_OUT=/tmp/probe.json \
+  companion/target/debug/tennoworth-desktop
 ```
