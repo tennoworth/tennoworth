@@ -1919,6 +1919,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "wfm-core"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "anyhow",
+ "base64",
+ "directories",
+ "hmac",
+ "libc",
+ "pbkdf2",
+ "rand 0.8.6",
+ "regex",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sysinfo",
+ "windows 0.58.0",
+]
+
+[[package]]
 name = "wfm-fetch-inventory"
 version = "0.1.0"
 dependencies = [
@@ -1940,6 +1961,7 @@ dependencies = [
  "subtle",
  "sysinfo",
  "tiny_http",
+ "wfm-core",
  "windows 0.58.0",
 ]
 

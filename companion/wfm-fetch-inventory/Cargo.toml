@@ -6,6 +6,7 @@ description = "Linux+Windows companion that extracts Warframe inventory.json fro
 license = "MIT"
 
 [dependencies]
+wfm-core = { path = "../wfm-core" }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 regex = "1"
