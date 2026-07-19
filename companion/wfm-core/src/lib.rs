@@ -13,6 +13,8 @@
 //! `eprintln!` diagnostics — pending-plan write warnings, a loose-key-perms
 //! warning — are preserved verbatim from the pre-extraction binary.)
 
+pub mod platform;
+
 // WFM is behind Cloudflare with bot protection. A non-browser UA gets a 1015
 // rate-limit error or a JS challenge before our request ever reaches the API.
 // Kept byte-identical to the pre-extraction companion UA (do not swap for
