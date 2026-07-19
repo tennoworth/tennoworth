@@ -23,6 +23,7 @@ use wfm_core::auth::{
     EncryptedJwt,
 };
 use wfm_core::inventory::{fetch_inventory_bytes, InventoryScanner};
+use wfm_core::pending::{clear_pending, load_pending, write_pending_atomic, PendingItem, PendingPlan};
 use wfm_core::platform::{chown_to_real_user, restrict_dir_perms, write_restricted};
 use wfm_core::util::{chrono_now_iso, default_jwt_path, default_pending_path, random_token, wfm_client};
 
@@ -734,66 +735,6 @@ fn build_unlocked(blob: &EncryptedJwt, source: &PassphraseSource) -> Result<Unlo
         catalog: Arc::new(catalog),
         id_to_name: Arc::new(id_to_name),
     })
-}
-
-// Persisted between requests so a crash mid-batch doesn't lose work. The
-// browser polls /plan/pending on (re)connect and offers Resume / Discard.
-// Atomic-writes via tmp + rename so a concurrent read never sees a torn file
-// — same convention as `os.replace` in wfm_demand.py.
-#[derive(Serialize, Deserialize, Clone)]
-struct PendingPlan {
-    plan_id: String,
-    started_at: String,
-    items: Vec<PendingItem>,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-struct PendingItem {
-    slug: String,
-    platinum: u32,
-    quantity: u32,
-    order_type: String,
-    visible: bool,
-    rank: Option<u32>,
-    #[serde(default)]
-    subtype: Option<String>,
-    #[serde(default)]
-    reference_low_sell: Option<u32>,
-    /// "pending" | "ok" | "error"
-    status: String,
-    #[serde(default)]
-    message: Option<String>,
-    #[serde(default)]
-    order_id: Option<String>,
-}
-
-fn write_pending_atomic(path: &Path, plan: &PendingPlan) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent).ok();
-        restrict_dir_perms(parent);
-        chown_to_real_user(parent);
-    }
-    let tmp = path.with_extension("json.tmp");
-    let bytes = serde_json::to_vec(plan).context("serializing pending plan")?;
-    // Create the tmp file at 0o600 from the first syscall — pending plans
-    // contain unsubmitted listing details, not OK to leak to other local
-    // users even briefly.
-    write_restricted(&tmp, &bytes)?;
-    fs::rename(&tmp, path)
-        .with_context(|| format!("renaming {} → {}", tmp.display(), path.display()))?;
-    // chown the final path back to the real user so a sudo invocation of
-    // `serve` doesn't leave a root-owned file in their config dir.
-    chown_to_real_user(path);
-    Ok(())
-}
-
-fn load_pending(path: &Path) -> Option<PendingPlan> {
-    let data = fs::read(path).ok()?;
-    serde_json::from_slice(&data).ok()
-}
-
-fn clear_pending(path: &Path) {
-    let _ = fs::remove_file(path);
 }
 
 #[derive(Deserialize)]
@@ -1819,41 +1760,6 @@ mod tests {
     use std::env;
     use wfm_core::auth::{CipherParams, KdfParams, JWT_KDF_ITERATIONS};
 
-    fn sample_plan() -> PendingPlan {
-        PendingPlan {
-            plan_id: "abc12345".into(),
-            started_at: "2026-05-27T15:30:00Z".into(),
-            items: vec![
-                PendingItem {
-                    slug: "loki_prime_set".into(),
-                    platinum: 120,
-                    quantity: 1,
-                    order_type: "sell".into(),
-                    visible: false,
-                    rank: None,
-                    subtype: None,
-                    reference_low_sell: Some(110),
-                    status: "ok".into(),
-                    message: None,
-                    order_id: Some("order-1".into()),
-                },
-                PendingItem {
-                    slug: "rhino_prime_set".into(),
-                    platinum: 95,
-                    quantity: 1,
-                    order_type: "sell".into(),
-                    visible: false,
-                    rank: None,
-                    subtype: None,
-                    reference_low_sell: Some(90),
-                    status: "pending".into(),
-                    message: None,
-                    order_id: None,
-                },
-            ],
-        }
-    }
-
     fn tmp_path(name: &str) -> PathBuf {
         let mut p = env::temp_dir();
         p.push(format!("wfminv-test-{}-{}.json", std::process::id(), name));
@@ -1866,46 +1772,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&p);
         std::fs::create_dir_all(&p).unwrap();
         p
-    }
-
-    #[test]
-    fn pending_plan_roundtrips_through_disk() {
-        let path = tmp_path("roundtrip");
-        let plan = sample_plan();
-        write_pending_atomic(&path, &plan).unwrap();
-
-        let loaded = load_pending(&path).expect("file readable");
-        assert_eq!(loaded.plan_id, plan.plan_id);
-        assert_eq!(loaded.items.len(), 2);
-        assert_eq!(loaded.items[0].status, "ok");
-        assert_eq!(loaded.items[1].status, "pending");
-
-        clear_pending(&path);
-        assert!(load_pending(&path).is_none());
-    }
-
-    #[test]
-    fn load_pending_returns_none_when_missing() {
-        let path = tmp_path("missing");
-        let _ = std::fs::remove_file(&path);
-        assert!(load_pending(&path).is_none());
-    }
-
-    #[test]
-    fn load_pending_tolerates_missing_optional_fields() {
-        // older file written before rank/reference_low_sell were optional, or
-        // a hand-edit. Deserialization must still succeed.
-        let path = tmp_path("partial");
-        let raw = r#"{
-            "plan_id":"x","started_at":"t","items":[
-              {"slug":"a","platinum":5,"quantity":1,"order_type":"sell","visible":false,"rank":null,"status":"pending"}
-            ]}"#;
-        std::fs::write(&path, raw).unwrap();
-        let loaded = load_pending(&path).expect("parses");
-        assert_eq!(loaded.items.len(), 1);
-        assert!(loaded.items[0].order_id.is_none());
-        assert!(loaded.items[0].reference_low_sell.is_none());
-        clear_pending(&path);
     }
 
     // --- late-load unlock (login while serve keeps running) --------------
@@ -2152,16 +2018,6 @@ mod tests {
         enrich_orders_with_names(&mut body, &sample_id_map());
         assert_eq!(body["data"]["sell"][0]["item"]["name"], "Custom Name");
         assert_eq!(body["data"]["sell"][0]["item"]["icon"], "x.png");
-    }
-
-    #[test]
-    fn atomic_write_leaves_no_tmp_file() {
-        let path = tmp_path("notmp");
-        write_pending_atomic(&path, &sample_plan()).unwrap();
-        let tmp = path.with_extension("json.tmp");
-        assert!(!tmp.exists(), "tmp file should be renamed away");
-        assert!(path.exists());
-        clear_pending(&path);
     }
 
     // ---- /assistant: request/response shape ----
