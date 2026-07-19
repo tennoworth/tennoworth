@@ -5,7 +5,11 @@
 //! walks regions with `VirtualQueryEx` and reads them with `ReadProcessMemory`.
 //! Both feed the same regex aggregation and dominant-pair pick.
 
-use anyhow::{anyhow, bail, Result};
+// `anyhow!` is only used by the Linux-gated `ptrace_open_error`; a bare
+// import would be an unused_imports warning on the Windows leg.
+#[cfg(target_os = "linux")]
+use anyhow::anyhow;
+use anyhow::{bail, Result};
 use regex::bytes::Regex;
 use std::collections::HashMap;
 use sysinfo::System;
