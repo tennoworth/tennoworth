@@ -9,6 +9,11 @@ running game — nothing is uploaded, no account login to *us*). The browser app
 joins it against a live warframe.market price snapshot and ranks your items by
 expected plat, not by a raw average price. Runs on Steam Deck.
 
+You can also try TennoWorth instantly at [tennoworth.app](https://tennoworth.app) —
+the landing page is a full market browser with live prices, volume trends,
+vaulted items, and a Baro countdown, all from a 2-hourly warframe.market
+snapshot. No download required.
+
 ## How it works
 
 ```
@@ -21,8 +26,11 @@ Warframe (running)  ──►  companion  ──►  inventory.json
                                                                   WFM listings
 ```
 
-- **`companion/`** — a ~3 MB Rust CLI (`fetch` / `login` / `serve`). PC-only by
-  nature (it reads game memory). See [`companion/README.md`](companion/README.md).
+- **`companion/`** — a Rust workspace with multiple crates; the main binary
+  `wfm-fetch-inventory` is a thin CLI adapter over the `wfm-core` library
+  (scan, inventory fetch, WFM auth with encrypted JWT, listings, pending plans,
+  and assistant relay). PC-only by nature (it reads game memory). See
+  [`companion/README.md`](companion/README.md).
 - **`prototype/`** — the Svelte browser app. No backend, no accounts, no data
   leaves your machine. `prototype/public/market.json` is the shared price
   snapshot.
@@ -61,6 +69,13 @@ Warframe (running)  ──►  companion  ──►  inventory.json
    [`companion/README.md`](companion/README.md) for the `--passphrase-stdin`
    escape hatch.
 
+## Desktop app (in development)
+
+A native desktop app (Tauri v2) is being built at
+`companion/tennoworth-desktop/` as the future primary interface — same-origin
+webview with no browser loopback permissions. See
+[`docs/product-plan-2026-07.md`](docs/product-plan-2026-07.md) for the roadmap.
+
 ## Develop
 
 ```bash
@@ -78,6 +93,9 @@ The companion only reads game memory — it never writes, never injects.
 AlecaFrame via Overwolf) have run for years with no documented bans, but DE
 has never formally blessed this category of tool. **Use at your own risk; no
 warranty.**
+
+For a detailed breakdown of what the companion reads and what never leaves your
+machine, see the in-app 'Trust & safety' section.
 
 ## License
 
