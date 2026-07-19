@@ -178,6 +178,7 @@ export async function askAssistant(
         history: (history || []).slice(-MAX_HISTORY),
         context: context ?? '',
       }),
+      targetAddressSpace: 'loopback',
     });
   } catch {
     throw new AssistantError('network');

@@ -96,8 +96,9 @@ export class CompanionUnreachableError extends Error {
   }
 }
 
-// Firefox 147+ under ETP Strict prompts for Local Network Access and, while
-// that prompt is undecided, a fetch to 127.0.0.1 HANGS indefinitely — it
+// Firefox prompts for Local Network Access (149+ under ETP Strict, 151+ for
+// everyone) and, while that prompt is undecided, a fetch to 127.0.0.1 HANGS
+// indefinitely — it
 // neither resolves nor rejects (Chromium can wedge similarly). Without a
 // timeout the connect flow spins forever and never reaches a failure state, so
 // the "unreachable" banner never appears. Timing the probe out turns the hang
@@ -114,7 +115,10 @@ export async function pingCompanion(
 ): Promise<PingResponse> {
   let r: Response;
   try {
-    r = await fetch(`${cfg.baseUrl}/health`, { signal: AbortSignal.timeout(timeoutMs) });
+    r = await fetch(`${cfg.baseUrl}/health`, {
+      signal: AbortSignal.timeout(timeoutMs),
+      targetAddressSpace: 'loopback',
+    });
   } catch {
     // Every rejection here — connection refused (serve down), an HTTPS origin
     // blocking loopback, or the timeout firing on a hung permission prompt — is
@@ -249,7 +253,7 @@ async function callCompanion(
   signal?: AbortSignal,
 ): Promise<unknown> {
   const headers: Record<string, string> = { 'X-Session-Token': cfg.token };
-  const init: RequestInit = { method, headers };
+  const init: RequestInit = { method, headers, targetAddressSpace: 'loopback' };
   if (signal) init.signal = signal;
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
