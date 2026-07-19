@@ -37,6 +37,8 @@ if [ "$REPO" = "OWNER/REPO" ] && [ -z "${WFMINV_BASE_URL:-}" ]; then
   echo >&2
   echo "If you're the developer, build it locally instead:" >&2
   echo "    cd companion && cargo build --release" >&2
+  echo "    target/release/$BIN_NAME   # try it — under Proton it usually just works" >&2
+  echo "  Only if that prints 'Permission denied', grant ptrace once:" >&2
   echo "    sudo setcap cap_sys_ptrace=eip target/release/$BIN_NAME" >&2
   exit 1
 fi
@@ -101,24 +103,26 @@ esac
 cat <<EOF
 
 Next steps
-  1. Start Warframe and log past the title screen.
-  2. Open the trade or profile screen once (forces an auth call).
-  3. Grant ptrace permission once (recommended — then no sudo, ever):
-       sudo setcap cap_sys_ptrace=eip "$DEST/$BIN_NAME"
+  1. Start Warframe, log past the title screen, and open the trade or
+     profile screen once (forces the auth call the scan reads).
+  2. Just run it — under Proton this usually works with no extra setup:
        $BIN_NAME
+     inventory.json lands in the directory you ran it from — drop it
+     into the web UI.
+  3. ONLY IF step 2 prints "Permission denied": grant ptrace once (then
+     it's no sudo, ever):
+       sudo setcap cap_sys_ptrace=eip "$DEST/$BIN_NAME"
      Rather not? Run a single fetch with sudo instead (absolute path —
      sudo's secure_path won't find a bare command name):
        sudo "$DEST/$BIN_NAME"
-  4. inventory.json lands in the directory you ran it from — drop it
-     into the web UI.
 
 Optional — to create/edit warframe.market listings from the web app:
-  5. $BIN_NAME login          # once; interactive sign-in
-  6. $BIN_NAME serve          # leave running in this terminal
+  4. $BIN_NAME login          # once; interactive sign-in
+  5. $BIN_NAME serve          # leave running in this terminal
      Paste the URL it prints into the app's Companion tab. That port is
      random (not the website's 5173). serve needs a real terminal for the
      passphrase prompt — or pipe it with --passphrase-stdin.
 
 Re-running this installer (an upgrade) replaces the binary and clears
-the capability — re-run the setcap line above afterwards.
+the capability — if you ran the setcap line above, re-run it afterwards.
 EOF

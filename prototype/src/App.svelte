@@ -26,6 +26,7 @@
     loadCompanionConfig, saveCompanionConfig, clearCompanionConfig,
     parseCompanionUrl, pingCompanion, fetchInventory,
     getPendingPlan, resumePendingPlan, discardPendingPlan,
+    CompanionUnreachableError,
   } from './lib/companion';
   import type { CompanionConfig, Inventory, Market, OwnedRecord, PendingPlan, ItemResult } from './lib/types';
 
@@ -242,7 +243,13 @@
         companionConfig = cfg;
         saveCompanionConfig(cfg);
         deepLink = true;
-      } catch { /* malformed deep link — fall through to any saved config */ }
+      } catch (e) {
+        // Surface WHY the link was rejected (parseCompanionUrl emits
+        // user-appropriate reasons), then fall through to any saved config.
+        // Deliberately NOT touching companionStatus — a valid saved connection
+        // must still verify clean below.
+        deepLinkError = `That companion link didn't work: ${e instanceof Error ? e.message : String(e)}`;
+      }
       history.replaceState(null, '', location.pathname + location.search);
     }
     if (!companionConfig) companionConfig = loadCompanionConfig();
@@ -876,13 +883,27 @@
 
   // ---- Companion connection state ----
   let companionConfig = $state(null);          // {baseUrl, token} | null
-  let companionStatus = $state('unchecked');   // unchecked | connecting | connected | error
+  // 'unreachable' is distinct from 'error': the /health fetch itself rejected
+  // (serve down, or the browser blocked the loopback request on an HTTPS
+  // origin). It drives the persistent cross-view banner below.
+  let companionStatus = $state('unchecked');   // unchecked | connecting | connected | error | unreachable
   let companionPlatform = $state(null);
   let companionError = $state(null);
   let companionInput = $state('');
   let pullingInventory = $state(false);   // GET /inventory in flight
   let pullError = $state<string | null>(null);
   let listingOpen = $state(false);
+  // Malformed `#companion=` deep link — surfaced as a dismissible banner rather
+  // than swallowed, without disturbing any valid saved connection.
+  let deepLinkError = $state<string | null>(null);
+  // Cross-view "unreachable" banner controls. `loopbackDenied` is sharpened by
+  // an optional Permissions-API probe (Chrome has definitively blocked local
+  // network access); `unreachableDismissed` lets the user close the banner.
+  let loopbackDenied = $state(false);
+  let unreachableDismissed = $state(false);
+  // Stale-async guard: verifyCompanion can be in flight from onMount, a manual
+  // connect, or Retry at once. Only the newest run may commit status/error.
+  let verifyGen = 0;
 
   // Sidebar nav: if the user's persisted view is unavailable (Baro not
   // visiting, companion not connected), fall back to Sell rather than
@@ -897,24 +918,60 @@
 
   async function verifyCompanion() {
     if (!companionConfig) return;
+    const gen = ++verifyGen;
     companionStatus = 'connecting';
     companionError = null;
+    loopbackDenied = false;
+    unreachableDismissed = false;
     try {
       const r = await pingCompanion(companionConfig);
+      if (gen !== verifyGen) return;
       companionPlatform = r?.platform ?? null;
       // /health is unauthenticated, so a live server with the WRONG token would
       // still show green here. Confirm the token with one authed call before we
       // claim connected: getPendingPlan returns null on 404 (no plan) but
       // throws on a 401 (bad token) — exactly the signal we want. It also
-      // surfaces the Resume option for an interrupted batch.
+      // surfaces the Resume option for an interrupted batch. A network reject
+      // HERE is a raw TypeError (not CompanionUnreachableError), so it never
+      // classifies as 'unreachable' — /health already proved reachability.
       pendingPlan = await getPendingPlan(companionConfig);
+      if (gen !== verifyGen) return;
       companionStatus = 'connected';
     } catch (e) {
+      if (gen !== verifyGen) return;
+      // Only the /health fetch rejecting on an HTTPS origin means "blocked or
+      // serve-down" — the case the cross-view banner exists for. Everything
+      // else (bad token, non-OK HTTP, a post-/health network blip) stays 'error'.
+      if (e instanceof CompanionUnreachableError && location.protocol === 'https:') {
+        companionStatus = 'unreachable';
+        companionError = e.message;
+        void probeLoopbackPermission(gen);
+        return;
+      }
       companionStatus = 'error';
       const msg = e.message || String(e);
       companionError = /401|token/i.test(msg)
         ? 'Token rejected — re-copy the full URL from the serve output (the token changes every time you restart serve).'
         : msg;
+    }
+  }
+
+  // Optional supplemental precision for the unreachable banner. If the browser
+  // exposes the loopback/local-network permission and reports it 'denied', we
+  // can state Chrome HAS blocked the request rather than "may have". Wrapped so
+  // an unsupported browser (query throws) or a stale run never affects state.
+  async function probeLoopbackPermission(gen) {
+    try {
+      let status;
+      try {
+        status = await navigator.permissions.query({ name: 'loopback-network' });
+      } catch {
+        status = await navigator.permissions.query({ name: 'local-network-access' });
+      }
+      if (gen !== verifyGen) return;
+      if (status?.state === 'denied') loopbackDenied = true;
+    } catch {
+      /* Permissions API absent or the name unsupported — leave the copy generic. */
     }
   }
 
@@ -1112,6 +1169,8 @@
     </p>
   </header>
 
+  {@render generalBanners()}
+
   {#if phase === 'idle' || phase === 'loading'}
     <ol class="steps">
       <li>
@@ -1137,8 +1196,9 @@
           <p class="muted">
             Your browser opens on the sell list, connected — no file, no login.
             Refreshing later is one click. Close the terminal (or Ctrl-C) to stop.
-            Linux: grant ptrace once so it can read the game (works wherever the
-            binary lives):
+            Linux: Proton installs usually just work. Only if it prints
+            <code>Permission denied</code> reading the game, grant ptrace once
+            (works wherever the binary lives):
           </p>
           <div class="snippet-row">
             <pre class="snippet"><code>sudo setcap cap_sys_ptrace=eip "$(command -v wfm-fetch-inventory)"</code></pre>
@@ -1272,7 +1332,7 @@
         {/if}
         <button type="button" class="nav-item" class:active={effectiveView === 'companion'} onclick={() => setView('companion')}>
           <span>Companion</span>
-          <span class="dot {companionStatus === 'connected' ? 'fresh' : companionStatus === 'error' ? 'stale' : ''}" aria-hidden="true"></span>
+          <span class="dot {companionStatus === 'connected' ? 'fresh' : (companionStatus === 'error' || companionStatus === 'unreachable') ? 'stale' : ''}" aria-hidden="true"></span>
         </button>
       </div>
 
@@ -1333,6 +1393,8 @@
   </aside>
 
   <main class="workspace">
+
+    {@render generalBanners()}
 
     {#if effectiveView === 'sell'}
       <section class="view-header">
@@ -1823,7 +1885,6 @@
               <span class="dot fresh" aria-hidden="true"></span>
               <strong>Connected</strong>
               <span class="muted">· {companionPlatform ?? 'pc'} · {companionConfig.baseUrl}</span>
-              {#if pullError}<span class="bad">· {pullError}</span>{/if}
             </div>
             <div class="row gap-sm">
               <button
@@ -2013,7 +2074,61 @@
         supported here yet; semlar's tools do this better.
       </p>
     </details>
+
+    <details>
+      <summary>Want to support this?</summary>
+      <p>
+        Free, no ads, no accounts, no telemetry — always. If it saved
+        you some plat and you want to chip in toward hosting, that's
+        appreciated but never expected:
+        <a href="https://ko-fi.com/prowly" target="_blank" rel="noopener">ko-fi.com/prowly</a>.
+      </p>
+    </details>
   </section>
+{/snippet}
+
+{#snippet generalBanners()}
+  <!-- Cross-view banner region: any of unreachable / bad-deep-link / pull-error,
+       each independently dismissible. Rendered on both the landing and the
+       workspace so a failure is visible wherever the user is standing. -->
+  {#if companionStatus === 'unreachable' && !unreachableDismissed}
+    <div class="card warn-banner general-banner" role="alert">
+      <div class="gb-body">
+        {#if loopbackDenied}
+          <strong>Can't reach the companion on 127.0.0.1.</strong>
+          Chrome has blocked local-network access for this site. Re-enable it in
+          Chrome's site settings (Local network access), then Retry. If you also
+          stopped <code>serve</code>, restart it first.
+        {:else}
+          <strong>Couldn't reach the companion on 127.0.0.1.</strong>
+          Either <code>serve</code> isn't running, or your browser blocked
+          local-network access — Chrome shows an “allow local network access”
+          prompt the first time; if you denied it, re-enable it for this site in
+          Chrome's site settings (Local network access).
+        {/if}
+      </div>
+      <div class="gb-actions">
+        <button onclick={verifyCompanion}>Retry</button>
+        <button class="gb-dismiss" aria-label="Dismiss" onclick={() => (unreachableDismissed = true)}>×</button>
+      </div>
+    </div>
+  {/if}
+  {#if deepLinkError}
+    <div class="card warn-banner general-banner" role="alert">
+      <div class="gb-body">{deepLinkError}</div>
+      <div class="gb-actions">
+        <button class="gb-dismiss" aria-label="Dismiss" onclick={() => (deepLinkError = null)}>×</button>
+      </div>
+    </div>
+  {/if}
+  {#if pullError}
+    <div class="card warn-banner general-banner" role="alert">
+      <div class="gb-body gb-pre">{pullError}</div>
+      <div class="gb-actions">
+        <button class="gb-dismiss" aria-label="Dismiss" onclick={() => (pullError = null)}>×</button>
+      </div>
+    </div>
+  {/if}
 {/snippet}
 
 {#snippet pendingBanner()}
@@ -2666,6 +2781,39 @@
     color: var(--fg);
     line-height: 1.5;
   }
+
+  /* Cross-view banner region (unreachable / bad deep link / pull error). Reuses
+     the warn-banner left-accent + card tokens; adds a body/actions row so the
+     dismiss × (and Retry) sit at the end without wrapping under the copy. */
+  .general-banner {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .general-banner .gb-body { min-width: 0; }
+  .general-banner .gb-body.gb-pre {
+    white-space: pre-wrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .general-banner .gb-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  .general-banner .gb-dismiss {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 3px;
+  }
+  .general-banner .gb-dismiss:hover { color: var(--fg); }
   .score-explainer {
     background: var(--panel);
     border: 1px solid var(--border);

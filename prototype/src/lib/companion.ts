@@ -80,12 +80,28 @@ export interface PingResponse {
   platform?: string;
 }
 
+/**
+ * Thrown ONLY when the `/health` fetch() itself rejects (a network-level
+ * TypeError) — connection refused because `serve` isn't running, or the browser
+ * blocking a loopback request from an HTTPS origin (Chromium's Local Network
+ * Access gate). It is deliberately NOT thrown for a non-OK HTTP response: a 500
+ * or an HTML answer means we DID reach something, which needs different
+ * guidance. Callers key off this type to distinguish "couldn't connect at all"
+ * from "connected but wrong".
+ */
+export class CompanionUnreachableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'CompanionUnreachableError';
+  }
+}
+
 export async function pingCompanion(cfg: CompanionConfig): Promise<PingResponse> {
   let r: Response;
   try {
     r = await fetch(`${cfg.baseUrl}/health`);
   } catch {
-    throw new Error(`Couldn't reach the companion at ${cfg.baseUrl}. Is \`serve\` still running in a terminal?`);
+    throw new CompanionUnreachableError(`Couldn't reach the companion at ${cfg.baseUrl}. Is \`serve\` still running in a terminal?`);
   }
   if (!r.ok) {
     throw new Error(`Health check failed: HTTP ${r.status}. Check the URL is the companion's (random port), not the website's (5173).`);
