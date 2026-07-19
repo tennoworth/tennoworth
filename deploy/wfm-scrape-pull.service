@@ -1,0 +1,8 @@
+[Unit]
+Description=Pull the CI-built wfm-scrape pipeline binary when scrape-latest changes
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/srv/wfm/pull-scrape.sh

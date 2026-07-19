@@ -36,6 +36,12 @@ python3 -m venv /srv/wfm/venv
 /srv/wfm/venv/bin/pip install --upgrade pip requests
 install -m 0755 "$DEPLOY/run-scrape.sh" /srv/wfm/run-scrape.sh
 install -m 0755 "$DEPLOY/pull-web.sh" /srv/wfm/pull-web.sh
+install -m 0755 "$DEPLOY/pull-scrape.sh" /srv/wfm/pull-scrape.sh
+mkdir -p /srv/wfm/bin
+# Phase 2b converter shadow: pre-create the parity log so wfm-scrape.service's
+# ReadWritePaths bind-mount has a target (a missing file would otherwise make
+# the sandboxed service fail to start).
+touch /srv/wfm/shadow-parity.log
 chown -R wfm:wfm /srv/wfm
 
 echo "==> Caddy config"
@@ -53,13 +59,15 @@ else
   systemctl reload caddy
 fi
 
-echo "==> Scrape + web-pull timers"
-install -m 0644 "$DEPLOY/wfm-scrape.service"   /etc/systemd/system/wfm-scrape.service
-install -m 0644 "$DEPLOY/wfm-scrape.timer"     /etc/systemd/system/wfm-scrape.timer
-install -m 0644 "$DEPLOY/wfm-web-pull.service" /etc/systemd/system/wfm-web-pull.service
-install -m 0644 "$DEPLOY/wfm-web-pull.timer"   /etc/systemd/system/wfm-web-pull.timer
+echo "==> Scrape + web-pull + scrape-pull timers"
+install -m 0644 "$DEPLOY/wfm-scrape.service"      /etc/systemd/system/wfm-scrape.service
+install -m 0644 "$DEPLOY/wfm-scrape.timer"        /etc/systemd/system/wfm-scrape.timer
+install -m 0644 "$DEPLOY/wfm-web-pull.service"    /etc/systemd/system/wfm-web-pull.service
+install -m 0644 "$DEPLOY/wfm-web-pull.timer"      /etc/systemd/system/wfm-web-pull.timer
+install -m 0644 "$DEPLOY/wfm-scrape-pull.service" /etc/systemd/system/wfm-scrape-pull.service
+install -m 0644 "$DEPLOY/wfm-scrape-pull.timer"   /etc/systemd/system/wfm-scrape-pull.timer
 systemctl daemon-reload
-systemctl enable --now wfm-scrape.timer wfm-web-pull.timer
+systemctl enable --now wfm-scrape.timer wfm-web-pull.timer wfm-scrape-pull.timer
 
 echo "==> Unattended security upgrades"
 apt-get install -y unattended-upgrades

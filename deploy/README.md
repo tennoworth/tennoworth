@@ -133,6 +133,52 @@ starts with data at most a day old, and the box's first own scrape (within
 copy is ever badly stale, `workflow_dispatch` the cron manually — do NOT
 scrape from two places at the same time.
 
+## Converter shadow (phase 2b)
+
+The market pipeline is mid-migration from Python to Rust. Phase 2b runs the
+**Rust converter in shadow** on the box to prove semantic parity before any
+cutover — Python stays the production writer.
+
+**What it does.** After each production scrape promotes `market.json`,
+`run-scrape.sh` runs `wfm-scrape build` (the Rust port of
+`csv_to_market_json.py`) in a throwaway dir against the *same*
+`wfm_results.csv` and the *same* prior snapshot the Python run used, then
+compares its output to the promoted `market.json` with
+[`scripts/semantic_diff.py`](../scripts/semantic_diff.py). It **never**
+touches the promoted output: the shadow writes only into a temp dir and the
+whole step is wrapped so any failure (or a missing/broken binary) exits 0 —
+a shadow crash cannot fail the scrape service. The step runs only when
+`/srv/wfm/bin/wfm-scrape` exists, so GitHub Actions runs of the same script
+skip it automatically.
+
+The binary is delivered like the web bundle: CI publishes a rolling
+`scrape-latest` release ([`build-scrape.yml`](../.github/workflows/build-scrape.yml)),
+and [`wfm-scrape-pull.timer`](wfm-scrape-pull.timer) runs
+[`pull-scrape.sh`](pull-scrape.sh) every 30 min to install it to
+`/srv/wfm/bin` — the box never builds Rust.
+
+**How to read it.** One summary line lands in the journal per scrape:
+
+```bash
+journalctl -u wfm-scrape.service | grep SHADOW
+#   SHADOW PARITY OK (2026-07-19T…)                     ← converged this run
+#   SHADOW PARITY DIFF: 3 paths — first: .items.foo.avg …  ← diverged
+#   SHADOW UNAVAILABLE: rust build failed (rc=1, …)     ← shadow itself broke
+```
+
+The full diff for every run is appended to **`/srv/wfm/shadow-parity.log`**
+(auto-trimmed to the last ~500 lines).
+
+**Expect occasional benign DIFFs.** The two converters fetch upstreams
+(warframestat / relics / vault / Baro) at slightly different instants, so a
+surface that changed between the two fetches shows a transient diff that
+clears on the next run. The cutover gate is **zero structural / persistent
+diffs across an observation window**, not a single clean run.
+
+**Cutover is a later, explicit step.** Once the log shows a clean window,
+swapping Python for Rust as the production writer is a separate deliberate
+change — this phase only observes.
+
 ---
 
 ## Admin access
