@@ -16,8 +16,13 @@
 //!   never live endpoints.
 
 pub mod clock;
+pub mod coerce;
 pub mod csvin;
 pub mod fetch;
+pub mod http;
 pub mod jsonutil;
+pub mod orders;
 pub mod reconcile;
 pub mod render;
+pub mod scrape;
+pub mod stats;

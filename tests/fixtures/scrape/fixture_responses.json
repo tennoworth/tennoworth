@@ -1,0 +1,255 @@
+{
+  "https://api.warframe.market/v2/items": {
+    "data": [
+      {"slug": "volt_prime_barrel", "i18n": {"en": {"name": "Volt Prime Barrel"}}, "tags": ["prime", "component"], "ducats": 45},
+      {"slug": "goopolla", "i18n": {"en": {"name": "Goopolla"}}, "tags": ["fish"], "ducats": null},
+      {"slug": "primed_continuity", "i18n": {"en": {"name": "Primed Continuity"}}, "tags": ["mod"], "ducats": 0},
+      {"slug": "lith_v1_relic", "i18n": {"en": {"name": "Lith V1 Relic"}}, "tags": ["relic"], "ducats": null},
+      {"slug": "axi_a1_relic", "i18n": {"en": {"name": "Axi A1 Relic"}}, "tags": ["relic"], "ducats": null},
+      {"slug": "nova_prime_blueprint", "i18n": {"en": {"name": "Nova Prime Blueprint"}}, "tags": ["prime", "blueprint"], "ducats": 15},
+      {"slug": "ivara_prime_set", "i18n": {"en": {"name": "Ivara Prime Set"}}, "tags": ["prime", "set"], "ducats": null},
+      {"slug": "retry_recover", "i18n": {"en": {"name": "Retry Recover"}}, "tags": ["prime"], "ducats": 20},
+      {"slug": "stats_exhaust", "i18n": {"en": {"name": "Stats Exhaust"}}, "tags": ["prime"], "ducats": 10},
+      {"slug": "missing_ninetydays", "i18n": {"en": {"name": "Missing Ninetydays"}}, "tags": ["prime"], "ducats": null}
+    ]
+  },
+
+  "https://api.warframe.market/v2/orders/item/volt_prime_barrel": {
+    "data": [
+      {"type": "buy", "platinum": 20, "visible": true, "user": {"status": "ingame"}},
+      {"type": "buy", "platinum": 18, "visible": true, "user": {"status": "online"}},
+      {"type": "buy", "platinum": 22, "visible": true, "user": {"status": "ingame"}},
+      {"type": "buy", "platinum": 99, "visible": true, "user": {"status": "offline"}},
+      {"type": "sell", "platinum": 25, "visible": true, "user": {"status": "ingame"}},
+      {"type": "sell", "platinum": 27, "visible": true, "user": {"status": "online"}},
+      {"type": "sell", "platinum": 30, "visible": true, "user": {"status": "ingame"}},
+      {"type": "sell", "platinum": 26, "visible": true, "user": {"status": "ingame"}},
+      {"type": "sell", "platinum": 24, "visible": false, "user": {"status": "ingame"}}
+    ]
+  },
+  "https://api.warframe.market/v1/items/volt_prime_barrel/statistics": {
+    "payload": {
+      "statistics_closed": {
+        "48hours": [
+          {"median": 26, "max_price": 30, "volume": 5, "avg_price": 26.0},
+          {"median": 27, "max_price": 32, "volume": 3, "avg_price": 27.0}
+        ],
+        "90days": [
+          {"median": 24, "max_price": 28, "volume": 4, "avg_price": 24.0},
+          {"median": 25, "max_price": 29, "volume": 6, "avg_price": 25.0},
+          {"median": 26, "max_price": 30, "volume": 5, "avg_price": 26.0},
+          {"median": 27, "max_price": 31, "volume": 3, "avg_price": 27.0},
+          {"median": 26, "max_price": 30, "volume": 4, "avg_price": 26.0},
+          {"median": 25, "max_price": 29, "volume": 5, "avg_price": 25.0},
+          {"median": 26, "max_price": 30, "volume": 6, "avg_price": 26.0}
+        ]
+      }
+    }
+  },
+
+  "https://api.warframe.market/v2/orders/item/goopolla": {
+    "data": [
+      {"type": "buy", "platinum": 2, "visible": true, "user": {"status": "ingame"}},
+      {"type": "buy", "platinum": 3, "visible": true, "user": {"status": "online"}},
+      {"type": "sell", "platinum": 3, "visible": true, "user": {"status": "ingame"}},
+      {"type": "sell", "platinum": 4, "visible": true, "user": {"status": "online"}},
+      {"type": "sell", "platinum": 5, "visible": true, "user": {"status": "ingame"}}
+    ]
+  },
+  "https://api.warframe.market/v1/items/goopolla/statistics": {
+    "payload": {
+      "statistics_closed": {
+        "48hours": [
+          {"median": 2, "max_price": 4, "volume": 5, "avg_price": 2.0},
+          {"median": 99999, "max_price": 99999, "volume": 10, "avg_price": 99999.0}
+        ],
+        "90days": [
+          {"median": 1, "max_price": 2, "volume": 3, "avg_price": 1.0},
+          {"median": 2, "max_price": 4, "volume": 5, "avg_price": 2.0},
+          {"median": 2, "max_price": 3, "volume": 4, "avg_price": 2.0},
+          {"median": 3, "max_price": 5, "volume": 2, "avg_price": 3.0},
+          {"median": 99999, "max_price": 99999, "volume": 10, "avg_price": 99999.0},
+          {"median": 300, "max_price": 600, "volume": 8, "avg_price": 300.0}
+        ]
+      }
+    }
+  },
+
+  "https://api.warframe.market/v2/orders/item/primed_continuity": {
+    "data": [
+      {"type": "buy", "platinum": 40, "rank": 0, "visible": true, "user": {"status": "ingame"}},
+      {"type": "buy", "platinum": 38, "rank": 0, "visible": true, "user": {"status": "online"}},
+      {"type": "buy", "platinum": 160, "rank": 10, "visible": true, "user": {"status": "ingame"}},
+      {"type": "sell", "platinum": 42, "rank": 0, "visible": true, "user": {"status": "ingame"}},
+      {"type": "sell", "platinum": 44, "rank": 0, "visible": true, "user": {"status": "online"}},
+      {"type": "sell", "platinum": 170, "rank": 10, "visible": true, "user": {"status": "ingame"}}
+    ]
+  },
+  "https://api.warframe.market/v1/items/primed_continuity/statistics": {
+    "payload": {
+      "statistics_closed": {
+        "48hours": [
+          {"median": 40, "max_price": 45, "volume": 6, "avg_price": 40.0, "mod_rank": 0},
+          {"median": 160, "max_price": 180, "volume": 4, "avg_price": 160.0, "mod_rank": 10}
+        ],
+        "90days": [
+          {"median": 38, "max_price": 42, "volume": 3, "avg_price": 38.0, "mod_rank": 0},
+          {"median": 155, "max_price": 175, "volume": 2, "avg_price": 155.0, "mod_rank": 10},
+          {"median": 40, "max_price": 44, "volume": 5, "avg_price": 40.0, "mod_rank": 0},
+          {"median": 165, "max_price": 185, "volume": 3, "avg_price": 165.0, "mod_rank": 10},
+          {"median": 42, "max_price": 46, "volume": 4, "avg_price": 42.0, "mod_rank": 0}
+        ]
+      }
+    }
+  },
+
+  "https://api.warframe.market/v2/orders/item/lith_v1_relic": {
+    "data": [
+      {"type": "buy", "platinum": 11, "subtype": "intact", "visible": true, "user": {"status": "ingame"}},
+      {"type": "buy", "platinum": 115, "subtype": "radiant", "visible": true, "user": {"status": "ingame"}},
+      {"type": "sell", "platinum": 13, "subtype": "intact", "visible": true, "user": {"status": "ingame"}},
+      {"type": "sell", "platinum": 14, "subtype": "intact", "visible": true, "user": {"status": "online"}},
+      {"type": "sell", "platinum": 130, "subtype": "radiant", "visible": true, "user": {"status": "ingame"}}
+    ]
+  },
+  "https://api.warframe.market/v1/items/lith_v1_relic/statistics": {
+    "payload": {
+      "statistics_closed": {
+        "48hours": [
+          {"median": 12, "max_price": 15, "volume": 7, "avg_price": 12.0, "subtype": "intact"},
+          {"median": 120, "max_price": 140, "volume": 3, "avg_price": 120.0, "subtype": "radiant"}
+        ],
+        "90days": [
+          {"median": 10, "max_price": 13, "volume": 5, "avg_price": 10.0, "subtype": "intact"},
+          {"median": 110, "max_price": 130, "volume": 2, "avg_price": 110.0, "subtype": "radiant"},
+          {"median": 12, "max_price": 15, "volume": 8, "avg_price": 12.0, "subtype": "intact"},
+          {"median": 125, "max_price": 145, "volume": 3, "avg_price": 125.0, "subtype": "radiant"},
+          {"median": 14, "max_price": 17, "volume": 6, "avg_price": 14.0, "subtype": "intact"}
+        ]
+      }
+    }
+  },
+
+  "https://api.warframe.market/v2/orders/item/axi_a1_relic": {
+    "data": [
+      {"type": "buy", "platinum": 8, "visible": true, "user": {"status": "ingame"}},
+      {"type": "sell", "platinum": 10, "visible": true, "user": {"status": "ingame"}},
+      {"type": "sell", "platinum": 11, "visible": true, "user": {"status": "online"}}
+    ]
+  },
+  "https://api.warframe.market/v1/items/axi_a1_relic/statistics": {
+    "payload": {
+      "statistics_closed": {
+        "48hours": [
+          {"median": 8.0, "max_price": 12.0, "volume": 3.0, "avg_price": 8.5},
+          {"median": 9.0, "volume": 2.0},
+          null,
+          5,
+          {"median": 10.0, "max_price": 14.0, "volume": 1.0, "avg_price": null}
+        ],
+        "90days": [
+          {"median": 7.0, "max_price": 11.0, "volume": 2.0, "avg_price": 7.0},
+          {"median": 8.0, "max_price": 12.0, "volume": 3.0, "avg_price": 8.0},
+          {"median": 9.0, "max_price": 13.0, "volume": 4.0, "avg_price": 9.0},
+          {"median": 10.0, "max_price": 14.0, "volume": 1.0, "avg_price": 10.0}
+        ]
+      }
+    }
+  },
+
+  "https://api.warframe.market/v2/orders/item/nova_prime_blueprint": {
+    "data": []
+  },
+  "https://api.warframe.market/v1/items/nova_prime_blueprint/statistics": {
+    "payload": {
+      "statistics_closed": {
+        "48hours": [
+          {"median": 15, "max_price": 18, "volume": 4, "avg_price": 15.0}
+        ],
+        "90days": [
+          {"median": 14, "max_price": 17, "volume": 3, "avg_price": 14.0},
+          {"median": 15, "max_price": 18, "volume": 4, "avg_price": 15.0},
+          {"median": 16, "max_price": 19, "volume": 2, "avg_price": 16.0}
+        ]
+      }
+    }
+  },
+
+  "https://api.warframe.market/v2/orders/item/ivara_prime_set": {
+    "data": [
+      {"type": "buy", "platinum": 30, "visible": true, "user": {"status": "ingame"}},
+      {"type": "buy", "platinum": 28, "visible": true, "user": {"status": "online"}},
+      {"type": "buy", "platinum": 32, "visible": true, "user": {"status": "ingame"}}
+    ]
+  },
+  "https://api.warframe.market/v1/items/ivara_prime_set/statistics": {
+    "payload": {
+      "statistics_closed": {
+        "48hours": [
+          {"median": 30, "max_price": 35, "volume": 5, "avg_price": 30.0}
+        ],
+        "90days": [
+          {"median": 28, "max_price": 33, "volume": 3, "avg_price": 28.0},
+          {"median": 30, "max_price": 35, "volume": 4, "avg_price": 30.0},
+          {"median": 32, "max_price": 37, "volume": 2, "avg_price": 32.0}
+        ]
+      }
+    }
+  },
+
+  "//": "retry_recover (parity case i): the orders endpoint 429s twice then 200s. Both scrapers must retry through the backoff and land on the SAME row. A JSON array value is a scripted per-call sequence; each element is a bare 200 body or a {status, body} object.",
+  "https://api.warframe.market/v2/orders/item/retry_recover": [
+    {"status": 429, "body": {}},
+    {"status": 429, "body": {}},
+    {"data": [
+      {"type": "buy", "platinum": 15, "visible": true, "user": {"status": "ingame"}},
+      {"type": "sell", "platinum": 20, "visible": true, "user": {"status": "ingame"}},
+      {"type": "sell", "platinum": 22, "visible": true, "user": {"status": "online"}}
+    ]}
+  ],
+  "https://api.warframe.market/v1/items/retry_recover/statistics": {
+    "payload": {
+      "statistics_closed": {
+        "48hours": [
+          {"median": 20, "max_price": 24, "volume": 6, "avg_price": 20.0}
+        ],
+        "90days": [
+          {"median": 18, "max_price": 22, "volume": 4, "avg_price": 18.0},
+          {"median": 20, "max_price": 24, "volume": 6, "avg_price": 20.0},
+          {"median": 21, "max_price": 25, "volume": 3, "avg_price": 21.0}
+        ]
+      }
+    }
+  },
+
+  "//stats_exhaust": "parity case ii: the STATS endpoint 429s all three attempts, so the item is skipped by BOTH scrapers (never appears in either CSV). Orders succeed on the first try.",
+  "https://api.warframe.market/v2/orders/item/stats_exhaust": {
+    "data": [
+      {"type": "buy", "platinum": 10, "visible": true, "user": {"status": "ingame"}},
+      {"type": "sell", "platinum": 12, "visible": true, "user": {"status": "ingame"}}
+    ]
+  },
+  "https://api.warframe.market/v1/items/stats_exhaust/statistics": [
+    {"status": 429, "body": {}},
+    {"status": 429, "body": {}},
+    {"status": 429, "body": {}}
+  ],
+
+  "//missing_ninetydays": "parity case v: stats payload with NO 90days key — series_stats collapses to zeros, but the 48h window still keeps the item over the volume gate.",
+  "https://api.warframe.market/v2/orders/item/missing_ninetydays": {
+    "data": [
+      {"type": "buy", "platinum": 25, "visible": true, "user": {"status": "ingame"}},
+      {"type": "sell", "platinum": 30, "visible": true, "user": {"status": "ingame"}},
+      {"type": "sell", "platinum": 33, "visible": true, "user": {"status": "online"}}
+    ]
+  },
+  "https://api.warframe.market/v1/items/missing_ninetydays/statistics": {
+    "payload": {
+      "statistics_closed": {
+        "48hours": [
+          {"median": 30, "max_price": 35, "volume": 5, "avg_price": 30.0}
+        ]
+      }
+    }
+  }
+}
