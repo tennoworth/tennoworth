@@ -21,7 +21,11 @@ characteristics:
    (AES-256-GCM, PBKDF2-600k passphrase) and, while `serve` runs,
    relays order operations to warframe.market over a loopback HTTP
    server (`127.0.0.1`, random port, per-process `X-Session-Token`
-   auth). The JWT never reaches the browser.
+   auth). The JWT never reaches the browser. If you opt into the
+   **AI assistant** (by installing a DeepSeek API key), `serve` also
+   relays your questions — with the rows currently shown in your sell
+   table (after your filters) as context — to `api.deepseek.com`; that
+   key is stored in plaintext at rest (see “The AI assistant” below).
 
 3. **Our build + release pipeline** (GitHub Actions). Four workflows:
    - `refresh-market.yml` — scrapes warframe.market every 2 h and
@@ -66,6 +70,52 @@ characteristics:
   binaries.
 - **No telemetry, no analytics, no accounts.** Verify with your
   browser's network tab.
+
+## The AI assistant (optional, off by default)
+
+The in-app AI advisor is the **one feature that sends your data off your
+machine**, and it is off unless you opt in. Because it is the single
+exception to the app's "your data never leaves the page" promise, here is
+exactly what it does:
+
+- **It only runs when you install a DeepSeek API key.** With no key the
+  `/assistant` route returns 503 and the drawer stays disabled — no key
+  means nothing is ever sent.
+- **New egress.** Before the assistant, the companion talked only to
+  `127.0.0.1` (the browser) and warframe.market / warframe.com. With a key
+  configured, `serve` adds exactly one more destination:
+  `https://api.deepseek.com/chat/completions`. The browser still never talks
+  to DeepSeek directly — the companion relays, so the API key stays
+  server-side and never reaches the page.
+- **What's sent.** Your typed question, the recent chat history, and a
+  curated context string built from the rows currently shown in your **sell
+  table (after your filters)** — for each row: item name, owned/sellable
+  counts, average price, 48-hour volume, and vault status (the item list is
+  capped to roughly the top 100 rows by sell score) — plus totals across those
+  rows (distinct item count, total owned, total estimated plat) and the market
+  snapshot's age. Your full inventory, account identifiers, WFM JWT,
+  `accountId`, `nonce`, and the companion session token are **never** included.
+- **Token-gated like every other companion route.** `/assistant` requires
+  the same per-process `X-Session-Token`, plus size caps (question ≤ 2000
+  chars, context ≤ 100 KB, history ≤ 12 turns) and a call-rate throttle
+  (≤ 20 calls / 60 s → HTTP 429) so a runaway loop or a hostile local client
+  can't burn your DeepSeek credit.
+- **Prompt-injection surface.** The context is curated WFM / warframestat
+  item names plus your own text — not arbitrary third-party content — and the
+  system prompt that constrains the model to the data table is
+  **server-constructed only**. Client-supplied chat history is sanitized:
+  any role other than `user` / `assistant` (notably `system`) is dropped, so
+  a client cannot smuggle in its own system instructions.
+
+**The DeepSeek key is stored in plaintext at rest.** It is read from the
+`DEEPSEEK_API_KEY` environment variable or, failing that, a `deepseek-key`
+file in the same config directory as the encrypted JWT. Unlike the JWT, that
+file is **not** encrypted: it is a low-value, easily-rotated API credential
+(not an account bearer token), so we deliberately skipped a second
+passphrase-unlock flow for it. The companion expects `0600` and logs a
+one-line stderr warning (it does **not** fail) if the file is group- or
+other-readable. If you'd rather keep no plaintext key on disk, use the
+environment variable instead.
 
 ## What we cannot promise
 

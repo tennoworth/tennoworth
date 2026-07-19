@@ -11,6 +11,7 @@
   import InstallWidget from './components/InstallWidget.svelte';
   import ListingReviewModal from './components/ListingReviewModal.svelte';
   import MyOrdersPanel from './components/MyOrdersPanel.svelte';
+  import AssistantChat from './components/AssistantChat.svelte';
   import CopyBtn from './components/CopyBtn.svelte';
   import { flattenInventory, extractKeptLvls } from './lib/inventory';
   import { loadCatalogs, resolvePath, type Catalogs } from './lib/resolver';
@@ -2026,6 +2027,18 @@
         and it's the same for every visitor.
       </p>
       <p>
+        <strong>One exception — the optional AI assistant.</strong> You turn it
+        on by installing a DeepSeek API key on the companion; when you open it
+        and ask a question, it sends the rows currently shown in your sell table
+        (after your filters) — item names, owned/sellable counts, prices,
+        48-hour volume, and vault status — plus totals across those rows and the
+        market snapshot's age, together with your typed question, to DeepSeek's
+        API to answer. It does <em>not</em> send your full inventory, your
+        account, or the companion token. Nothing else in the app sends your data
+        anywhere, and the assistant is off entirely unless you've set up a key.
+        Details in “What does the AI assistant send, and where?” below.
+      </p>
+      <p>
         No accounts, no telemetry, no analytics. Inspect the network tab
         if you don't trust us.
       </p>
@@ -2125,6 +2138,29 @@
         you some plat and you want to chip in toward hosting, that's
         appreciated but never expected:
         <a href="https://ko-fi.com/prowly" target="_blank" rel="noopener">ko-fi.com/prowly</a>.
+      </p>
+    </details>
+
+    <details>
+      <summary>What does the AI assistant send, and where?</summary>
+      <p>
+        The assistant only does anything once you've installed a DeepSeek API
+        key on the companion <em>and</em> you open the advisor and ask it a
+        question. When you do, it sends the rows currently shown in your sell
+        table (after your filters) — for each, the item name, owned/sellable
+        counts, price, 48-hour volume, and vault status — plus totals across
+        those rows and the market snapshot's age, together with the question you
+        typed, to <code>api.deepseek.com</code>, and shows you the reply. The
+        companion relays the call so the key never touches the browser.
+      </p>
+      <p>
+        It does <strong>not</strong> send your whole inventory, your account, the
+        companion token, or anything at all while the assistant is closed. The
+        key stays on your machine (companion-side, read from
+        <code>DEEPSEEK_API_KEY</code> or a <code>deepseek-key</code> file next to
+        your login). Don't want any of this? Don't set up a key — the assistant
+        stays off, and no data goes to DeepSeek. Remove the key to turn it back
+        off later.
       </p>
     </details>
 
@@ -2272,6 +2308,13 @@
   bind:open={listingOpen}
   rows={listableRows.slice(0, 50)}
   config={companionConfig}
+/>
+
+<AssistantChat
+  rows={tableView.active ? tableView.rows : results}
+  marketAge={marketStaleness}
+  config={companionConfig}
+  companionStatus={companionStatus}
 />
 
 <dialog bind:this={exportDialog} class="cryptobox">

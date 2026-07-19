@@ -90,6 +90,39 @@ without checking every regex still compiles.
   completion. `/plan/pending`, `/plan/resume`, `DELETE /plan/pending`
   expose this to the browser.
 
+### `POST /assistant` — the only route with third-party egress
+
+The AI-advisor proxy. Every other route talks only to `127.0.0.1` and
+warframe.market/.com; this one calls
+`https://api.deepseek.com/chat/completions` (model `deepseek-chat`,
+temp 0.3, `max_tokens` 1024, 60 s timeout) so the DeepSeek API key never
+reaches the browser. Token-gated with the same `X-Session-Token` as the
+listing routes.
+
+- **Key source** (`resolve_deepseek_key()`): env `DEEPSEEK_API_KEY` wins;
+  otherwise a `deepseek-key` file in the JWT's config dir (trimmed). No key →
+  `503 {error:"no_api_key"}`. The key is **plaintext at rest** — on read the
+  companion warns to stderr (once) if the file is looser than `0600`; it does
+  not fail. The startup banner reports whether the advisor is available.
+- **Grounding + prompt-injection**: the system prompt is built server-side
+  from `ASSISTANT_SYSTEM_PROMPT` + the browser's curated context — the rows
+  shown in the user's filtered sell table (item names, owned/sellable counts,
+  prices, 48-hour volume, vault status, plus totals and the market snapshot's
+  age). The context is fenced between `[BEGIN MARKET DATA]` / `[END MARKET DATA]`
+  markers and the prompt marks everything inside as data-to-answer-from, never
+  instructions — so a crafted item name can't steer the model. Client history
+  roles are sanitized to `user`/`assistant` in `build_assistant_messages()` — a
+  client-sent `system` turn is dropped, so a local client can't override the
+  prompt. On any upstream failure the browser-facing `502 {error:"upstream"}`
+  carries only the DeepSeek HTTP status code, never its response body.
+- **Caps**: question ≤ 2000 chars, context ≤ 100 KB, history ≤ 12 turns
+  (`cap_history`), body ≤ 512 KB, plus an in-process throttle of ≤ 20 calls /
+  60 s (`assistant_rate_limited`, tracked in `ServeState.assistant_calls`) →
+  `429 {error:"rate_limited"}`.
+- Adding another egress destination is a security-relevant change: update
+  SECURITY.md's assistant section and this note — third-party destinations are
+  a deliberate, audited list.
+
 ## Cross-platform memory access
 
 `scan_session(pid)` is implemented twice, gated by
