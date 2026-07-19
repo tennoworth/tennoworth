@@ -1,9 +1,18 @@
 # companion/ — Rust workspace: CLI + loopback HTTP server
 
-Cargo WORKSPACE with four members (target/ shared, so the binary path in
+Cargo WORKSPACE with five members (target/ shared, so the binary path in
 every doc stays `companion/target/release/wfm-fetch-inventory`):
 - `wfm-fetch-inventory/` — the player-facing binary, cross-platform
-  (Linux + Windows), ~3 MB. The ONLY release-gated crate.
+  (Linux + Windows), ~3 MB. A thin adapter: it owns only CLI parsing and
+  the loopback HTTP server (routing, session token, CORS, TTY passphrase
+  prompting). Release-gated together with `wfm-core`.
+- `wfm-core/` — the reusable core linked into the binary: process
+  detection + memory scan (with a single-flight scan guard), DE inventory
+  fetch, WFM auth + encrypted-JWT storage, the listing/order service,
+  pending-plan persistence, and the DeepSeek assistant relay. **No
+  interactive terminal I/O** — the CLI reads the passphrase and hands the
+  plaintext in as a parameter, so a future Tauri shell can drive the same
+  core. Serve handlers delegate their work here.
 - `market-math/` — pure market-data heuristics ported from wfm_demand.py.
   No I/O, no deps, no clocks — keep it that way; its tests are 1:1 ports of
   tests/test_wfm_demand.py. When you change a heuristic, change BOTH
@@ -176,8 +185,8 @@ shape drift in the agent that watches WFM endpoints.
 
 Every 400 response of the form `{"inputs":{"<field>":"<rule>"}}` we've
 hit is captured here. The body assembly lives in `build_order_body()`
-in `companion/src/main.rs`; treat that function as the single source
-of truth and these notes as the *why*.
+in `companion/wfm-core/src/listing.rs`; treat that function as the single
+source of truth and these notes as the *why*.
 
 | Field | Rule | Notes |
 |---|---|---|
