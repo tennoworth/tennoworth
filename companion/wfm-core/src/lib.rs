@@ -29,3 +29,10 @@ pub mod util;
 // wfm-client's — that crate carries a different Firefox version string).
 pub const BROWSER_UA: &str =
     "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0";
+
+/// This crate's version string. Trivial, side-effect-free entry point an
+/// adapter (CLI or the Tauri desktop shell) can call to confirm it is linked
+/// against a live `wfm-core`.
+pub fn version() -> &'static str {
+    env!("CARGO_PKG_VERSION")
+}
