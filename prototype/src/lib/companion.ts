@@ -96,11 +96,31 @@ export class CompanionUnreachableError extends Error {
   }
 }
 
-export async function pingCompanion(cfg: CompanionConfig): Promise<PingResponse> {
+// Firefox 147+ under ETP Strict prompts for Local Network Access and, while
+// that prompt is undecided, a fetch to 127.0.0.1 HANGS indefinitely — it
+// neither resolves nor rejects (Chromium can wedge similarly). Without a
+// timeout the connect flow spins forever and never reaches a failure state, so
+// the "unreachable" banner never appears. Timing the probe out turns the hang
+// into a rejection we can classify. Only /health and the connect-time
+// /plan/pending probe get a timeout; the listing/order routes deliberately do
+// NOT — the first listing call legitimately blocks while serve prompts for a
+// passphrase in its own terminal.
+const HEALTH_TIMEOUT_MS = 8000;
+const PENDING_PLAN_TIMEOUT_MS = 10000;
+
+export async function pingCompanion(
+  cfg: CompanionConfig,
+  timeoutMs: number = HEALTH_TIMEOUT_MS,
+): Promise<PingResponse> {
   let r: Response;
   try {
-    r = await fetch(`${cfg.baseUrl}/health`);
+    r = await fetch(`${cfg.baseUrl}/health`, { signal: AbortSignal.timeout(timeoutMs) });
   } catch {
+    // Every rejection here — connection refused (serve down), an HTTPS origin
+    // blocking loopback, or the timeout firing on a hung permission prompt — is
+    // "we never reached the companion" from the user's side, so all classify as
+    // unreachable. Non-OK responses and bad JSON below stay plain Errors: those
+    // mean we DID reach something.
     throw new CompanionUnreachableError(`Couldn't reach the companion at ${cfg.baseUrl}. Is \`serve\` still running in a terminal?`);
   }
   if (!r.ok) {
@@ -194,8 +214,17 @@ export async function deleteOrder(cfg: CompanionConfig, orderId: string): Promis
  */
 export async function getPendingPlan(cfg: CompanionConfig): Promise<PendingPlan | null> {
   try {
-    return (await callCompanion(cfg, 'GET', '/plan/pending')) as PendingPlan;
+    return (await callCompanion(
+      cfg, 'GET', '/plan/pending', undefined, AbortSignal.timeout(PENDING_PLAN_TIMEOUT_MS),
+    )) as PendingPlan;
   } catch (e) {
+    // A timeout here is NOT "unreachable" — /health already proved the companion
+    // answers, and only the /health fetch may classify as unreachable. But we
+    // must not swallow it as "no pending plan" either, or we'd hide an
+    // interrupted batch — surface it as a plain Error.
+    if (e instanceof DOMException && (e.name === 'TimeoutError' || e.name === 'AbortError')) {
+      throw new Error(`The companion didn't answer /plan/pending in time — is \`serve\` still responding?`);
+    }
     const msg = e instanceof Error ? e.message : String(e);
     if (/no pending plan|HTTP 404/i.test(msg)) return null;
     throw e;
@@ -217,9 +246,11 @@ async function callCompanion(
   method: string,
   path: string,
   body?: unknown,
+  signal?: AbortSignal,
 ): Promise<unknown> {
   const headers: Record<string, string> = { 'X-Session-Token': cfg.token };
   const init: RequestInit = { method, headers };
+  if (signal) init.signal = signal;
   if (body !== undefined) {
     headers['Content-Type'] = 'application/json';
     init.body = JSON.stringify(body);
