@@ -1,0 +1,19 @@
+# TennoWorth desktop shell — Phase C day-1 de-risking spike (see
+# docs/desktop-spike-findings.md). MINIMAL by design: one window, the built
+# SPA loaded via Tauri's asset protocol, and a couple of throwaway `spike_*`
+# commands used only to prove IPC + capture evidence. Not a feature surface.
+[package]
+name = "tennoworth-desktop"
+version = "0.1.0"
+edition = "2021"
+description = "TennoWorth desktop shell (Tauri v2). Spike scaffold: webview loads the SPA, wfm-core invoked via Tauri commands."
+license = "MIT"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+wfm-core = { path = "../wfm-core" }
