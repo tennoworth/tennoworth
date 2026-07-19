@@ -15,7 +15,7 @@
 #                         production yet — Python remains the pipeline until
 #                         the phase-5 cutover.
 [workspace]
-members = ["wfm-fetch-inventory", "wfm-core", "market-math", "wfm-scrape", "wfm-client"]
+members = ["wfm-fetch-inventory", "wfm-core", "market-math", "wfm-scrape", "wfm-client", "tennoworth-desktop"]
 resolver = "2"
 
 # Shared by every member; the release binary size/behavior of
