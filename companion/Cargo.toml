@@ -1,5 +1,10 @@
 # Workspace root. Members:
-#   wfm-fetch-inventory — the player-facing companion binary (fetch/login/serve)
+#   wfm-fetch-inventory — the player-facing companion binary (fetch/login/serve),
+#                         a thin adapter over wfm-core.
+#   wfm-core            — reusable core: process scan, inventory fetch, WFM auth +
+#                         encrypted-JWT storage, listing/order service, pending-plan
+#                         store, DeepSeek assistant relay. No terminal I/O — the CLI
+#                         is adapter #1, a Tauri desktop shell will be adapter #2.
 #   market-math         — pure market-data heuristics, ported from wfm_demand.py
 #                         as phase 2 of the Python→Rust pipeline consolidation.
 #                         No I/O, no deps. Keep it pure — that's what makes it
@@ -10,7 +15,7 @@
 #                         production yet — Python remains the pipeline until
 #                         the phase-5 cutover.
 [workspace]
-members = ["wfm-fetch-inventory", "market-math", "wfm-scrape", "wfm-client"]
+members = ["wfm-fetch-inventory", "wfm-core", "market-math", "wfm-scrape", "wfm-client"]
 resolver = "2"
 
 # Shared by every member; the release binary size/behavior of
