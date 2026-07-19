@@ -52,7 +52,7 @@ interface RelicReward {
 }
 
 /** Prime-part vault state — `vaulted` and `vaulting-soon` are sell-signals. */
-type VaultStatus = 'vaulted' | 'vaulting-soon' | 'available';
+export type VaultStatus = 'vaulted' | 'vaulting-soon' | 'available';
 
 /** Baro Ki'Teer schedule, baked from warframestat at build time so the
  *  Baro view needs no runtime warframestat fetch. */
