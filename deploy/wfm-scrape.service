@@ -12,10 +12,13 @@ ExecStart=/srv/wfm/run-scrape.sh
 TimeoutStartSec=3600
 Nice=10
 
-# Sandboxing — the scraper only reads its repo and rewrites files under it.
+# Sandboxing — the scraper rewrites files under its repo, plus (phase 2b) the
+# converter-shadow parity log. The '-' prefix keeps the unit startable if the
+# log file is ever missing (setup-container.sh pre-creates it); the shadow write
+# then simply no-ops rather than the whole service failing to start.
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=/srv/wfm/app
+ReadWritePaths=/srv/wfm/app -/srv/wfm/shadow-parity.log
 ProtectHome=true
 PrivateTmp=true
 ProtectKernelTunables=true

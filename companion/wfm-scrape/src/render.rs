@@ -177,7 +177,11 @@ fn parse_i64_or(s: &str, default: i64) -> i64 {
     if s.is_empty() {
         return default;
     }
-    s.parse().unwrap_or(default)
+    // The scraper writes some integer columns float-formatted ("15.0");
+    // Python does int(float(s)) — truncation toward zero. Falling back to a
+    // bare i64 parse silently zeroed every such value (caught by the first
+    // real-data shadow run: 2857 Donchian diffs).
+    s.parse().or_else(|_| s.parse::<f64>().map(|f| f.trunc() as i64)).unwrap_or(default)
 }
 
 #[cfg(test)]

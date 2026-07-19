@@ -26,6 +26,11 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(ROOT))
 
+# Semantic comparison lives in scripts/semantic_diff.py — the single source of
+# truth shared with the deploy-box converter shadow (deploy/run-scrape.sh).
+# Importable here after the sys.path insert above.
+from scripts.semantic_diff import canonical_diff, TIMESTAMP_KEYS  # noqa: E402
+
 FIXTURES = HERE / "fixtures" / "convert"
 RUST_BINARY = ROOT / "companion" / "target" / "release" / "wfm-scrape"
 NOW_ISO = "2026-07-01T12:00:00Z"
@@ -36,69 +41,11 @@ CARGO_BUILD = "cd companion && cargo build --release -p wfm-scrape"
 # the Python run never touch the committed fixtures.
 FIXTURE_INPUTS = ("fixture_responses.json", "wfm_results.csv", "prior-market.json")
 
-# Timestamps legitimately differ between the two runs: Python stamps
-# updated_at / surface_fetched_at from its (module-level, unpatched) wall
-# clock, Rust from the injected --now. Everything else must match.
-TIMESTAMP_KEYS = ("updated_at", "surface_fetched_at")
-
-
-# ---- semantic comparison helpers --------------------------------------
-
-def canonicalize(obj):
-    """Recursively sort dict keys and normalize numbers for comparison.
-    int and float both collapse to a 9-dp float so 5 and 5.0 compare equal."""
-    if isinstance(obj, dict):
-        return {k: canonicalize(v) for k, v in sorted(obj.items())}
-    if isinstance(obj, list):
-        return [canonicalize(x) for x in obj]
-    if isinstance(obj, bool):
-        return obj
-    if isinstance(obj, (int, float)):
-        if isinstance(obj, float) and obj != obj:  # NaN
-            return "__NaN__"
-        if isinstance(obj, float) and obj == float("inf"):
-            return "__Infinity__"
-        if isinstance(obj, float) and obj == float("-inf"):
-            return "__-Infinity__"
-        return float(round(obj, 9))
-    return obj
-
-
-def canonical_diff(py_output, rs_output):
-    """Return [(path, py_val, rs_val)] for every discrepancy. NaN/Inf on
-    either side is a discrepancy; floats compare within 1e-9. A missing key
-    and an explicit null both canonicalize to None, so Rust's
-    skip_serializing_if omissions (ducats=None) don't read as mismatches."""
-    discrepancies = []
-
-    def _walk(path, a, b):
-        ca = canonicalize(a)
-        cb = canonicalize(b)
-        if isinstance(ca, str) and ca.startswith("__") and ca != cb:
-            discrepancies.append((path, a, b))
-            return
-        if type(ca) != type(cb):
-            discrepancies.append((path, a, b))
-            return
-        if isinstance(ca, dict):
-            keys = set(ca.keys()) | set(cb.keys())
-            for k in sorted(keys):
-                _walk(f"{path}.{k}", ca.get(k), cb.get(k))
-        elif isinstance(ca, list):
-            if len(ca) != len(cb):
-                discrepancies.append((f"{path}.len", len(a), len(b)))
-                return
-            for i in range(len(ca)):
-                _walk(f"{path}[{i}]", ca[i], cb[i])
-        elif isinstance(ca, float):
-            if abs(ca - cb) > 1e-9:
-                discrepancies.append((path, a, b))
-        else:
-            if ca != cb:
-                discrepancies.append((path, a, b))
-
-    _walk("", py_output, rs_output)
-    return discrepancies
+# canonicalize / canonical_diff / TIMESTAMP_KEYS now live in
+# scripts/semantic_diff.py (imported above). Timestamps legitimately differ
+# between the two runs — Python stamps updated_at / surface_fetched_at from its
+# (module-level, unpatched) wall clock, Rust from the injected --now — so the
+# test filters TIMESTAMP_KEYS paths out of the material diff below.
 
 
 # ---- Python converter runner (patched requests + datetime) ------------

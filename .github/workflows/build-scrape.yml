@@ -1,0 +1,65 @@
+name: build-scrape
+
+# Build the host-only wfm-scrape pipeline binary whenever it (or a crate it
+# depends on) changes, and publish it as a rolling `scrape-latest` release the
+# deploy box pulls with a plain curl, no auth — matches build-web.yml's shape.
+# This is NOT the player-facing companion (that ships on tag v* via
+# release-companion.yml); it runs the converter SHADOW on the box (phase 2b),
+# journaling parity with the Python converter without ever touching production.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'companion/wfm-scrape/**'
+      - 'companion/wfm-client/**'
+      - 'companion/market-math/**'
+      - 'companion/Cargo.toml'
+      - 'companion/Cargo.lock'
+      - '.github/workflows/build-scrape.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    # ubuntu-22.04 specifically: its glibc 2.35 is old enough that the binary
+    # works on every actively-supported distro (glibc has backward- but no
+    # forward-compat). Same reasoning as release-companion.yml.
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: companion
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: companion
+
+      - name: Build
+        run: cargo build --release -p wfm-scrape
+
+      - name: Package + checksum
+        run: |
+          mkdir -p ../dist
+          cp target/release/wfm-scrape ../dist/wfm-scrape
+          cd ../dist
+          sha256sum wfm-scrape > wfm-scrape.sha256
+          cat wfm-scrape.sha256
+
+      - name: Publish rolling release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: scrape-latest
+          name: scrape-latest (auto-built)
+          files: |
+            dist/wfm-scrape
+            dist/wfm-scrape.sha256
+          draft: false
+          prerelease: true
+          make_latest: false
+          body: Rolling build of the host-only wfm-scrape pipeline binary from the latest main. Auto-built; runs the converter shadow on the deploy box (phase 2b), not production. Not a version release — see releases tagged v* for the player companion.
