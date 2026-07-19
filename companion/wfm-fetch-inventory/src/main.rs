@@ -21,7 +21,8 @@ use std::io::{IsTerminal, Read};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use sysinfo::System;
-use wfm_core::platform::{chown_to_real_user, dirs_home, real_user_home, restrict_dir_perms, write_restricted};
+use wfm_core::platform::{chown_to_real_user, restrict_dir_perms, write_restricted};
+use wfm_core::util::{chrono_now_iso, default_jwt_path, default_pending_path, random_token, wfm_client};
 
 const INVENTORY_URL: &str = "https://api.warframe.com/api/inventory.php";
 const WFM_SIGNIN_URL: &str = "https://api.warframe.market/v1/auth/signin";
@@ -526,47 +527,6 @@ fn decrypt_jwt(blob: &EncryptedJwt, passphrase: &str) -> Result<String> {
         .decrypt(Nonce::from_slice(&iv), ciphertext.as_ref())
         .map_err(|_| anyhow!("Wrong passphrase, or the JWT file was modified."))?;
     String::from_utf8(plaintext).context("JWT plaintext was not valid UTF-8")
-}
-
-fn default_jwt_path() -> PathBuf {
-    let home = real_user_home().unwrap_or_else(dirs_home);
-    home.join(".config").join("wfminv").join("wfm-jwt.enc")
-}
-
-fn default_pending_path() -> PathBuf {
-    let home = real_user_home().unwrap_or_else(dirs_home);
-    home.join(".config").join("wfminv").join("pending_plan.json")
-}
-
-fn chrono_now_iso() -> String {
-    // We don't pull in chrono just for this; format manually from SystemTime.
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-    let days_since_epoch = secs / 86400;
-    let secs_in_day = secs % 86400;
-    let h = secs_in_day / 3600;
-    let m = (secs_in_day / 60) % 60;
-    let s = secs_in_day % 60;
-    let (y, mo, d) = civil_from_days(days_since_epoch as i64);
-    format!("{y:04}-{mo:02}-{d:02}T{h:02}:{m:02}:{s:02}Z")
-}
-
-// Howard Hinnant's algorithm — converts days-since-epoch to (year, month, day).
-fn civil_from_days(z: i64) -> (i64, u32, u32) {
-    let z = z + 719468;
-    let era = if z >= 0 { z } else { z - 146096 } / 146097;
-    let doe = (z - era * 146097) as u64;
-    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
-    let y = yoe as i64 + era * 400;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = (doy - (153 * mp + 2) / 5 + 1) as u32;
-    let m = (if mp < 10 { mp + 3 } else { mp - 9 }) as u32;
-    let y = if m <= 2 { y + 1 } else { y };
-    (y, m, d)
 }
 
 // ---- serve subcommand -----------------------------------------------------
@@ -1596,14 +1556,6 @@ fn delete_order(unlocked: &Unlocked, id: &str) -> Result<()> {
     Ok(())
 }
 
-fn wfm_client() -> Result<Client> {
-    Client::builder()
-        .user_agent(BROWSER_UA)
-        .timeout(Duration::from_secs(30))
-        .build()
-        .context("building HTTP client")
-}
-
 // ---- Assistant (DeepSeek) helpers ------------------------------------------
 
 fn assistant_request_too_large(question: &str, context: &str) -> bool {
@@ -1842,16 +1794,6 @@ fn open_in_browser(url: &str) -> Result<()> {
         .spawn()
         .context("launching browser")?;
     Ok(())
-}
-
-fn random_token(bytes: usize) -> String {
-    let mut buf = vec![0u8; bytes];
-    OsRng.fill_bytes(&mut buf);
-    B64.encode(&buf)
-        .replace('+', "-")
-        .replace('/', "_")
-        .trim_end_matches('=')
-        .to_string()
 }
 
 fn fetch_wfm_catalog(client: &Client, platform: &str) -> Result<BTreeMap<String, WfmCatalogItem>> {
