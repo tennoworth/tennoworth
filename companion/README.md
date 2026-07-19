@@ -165,12 +165,13 @@ build on a native `windows-latest` runner, no mingw needed.
 
 ## Ban risk
 
-EAC (the anti-cheat) does not, as of mid-2026, flag read-only memory
-inspection of the game process. Sainan's
+The companion only ever *reads* memory — it never writes to the game, never
+injects code, and doesn't interact with anti-cheat. **We cannot promise this
+is ban-safe.** Sainan's
 [warframe-api-helper](https://github.com/Sainan/warframe-api-helper) has used
-the same approach for years with no documented bans, and AlecaFrame does the
-equivalent via Overwolf. DE has not formally blessed this category of tool,
-however. **Use at your own risk; there is no warranty.**
+the same read-only approach for years with no documented bans, and AlecaFrame
+does the equivalent via Overwolf — but DE has never formally blessed this
+category of tool. **Use at your own risk; there is no warranty.**
 
 ## License
 
