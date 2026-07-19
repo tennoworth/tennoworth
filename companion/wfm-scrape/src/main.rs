@@ -40,8 +40,20 @@ fn main() {
             }
         }
         "scrape" => {
-            eprintln!("scrape subcommand not yet ported (phase 4)");
-            std::process::exit(1);
+            if let Err(e) = run_scrape_cmd(&args) {
+                eprintln!("error: {e}");
+                std::process::exit(1);
+            }
+        }
+        // Hidden dev/parity harness (deliberately absent from the usage banner):
+        // reads `x,n` lines on stdin and prints `round_dp(x, n)` one per line, so
+        // the cross-language rounding parity test can shell the REAL release
+        // binary instead of trusting a Rust-side unit test.
+        "round-check" => {
+            if let Err(e) = run_round_check() {
+                eprintln!("error: {e}");
+                std::process::exit(1);
+            }
         }
         _ => {
             eprintln!("unknown subcommand: {}", args[1]);
@@ -53,6 +65,98 @@ fn main() {
 fn extract_flag(args: &[String], flag: &str) -> Option<String> {
     let idx = args.iter().position(|a| a == flag)?;
     args.get(idx + 1).cloned()
+}
+
+/// Read `x,n` lines on stdin, print `market_math::round_dp(x, n)` per line via
+/// `Display`. Feeds the cross-language rounding parity test the actual binary's
+/// rounding, so a divergence from Python's `round(x, n)` is caught executably.
+fn run_round_check() -> Result<(), String> {
+    use std::io::{BufRead, Write};
+    let stdin = std::io::stdin();
+    let stdout = std::io::stdout();
+    let mut w = stdout.lock();
+    for line in stdin.lock().lines() {
+        let line = line.map_err(|e| format!("stdin read: {e}"))?;
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let (xs, ns) = line
+            .split_once(',')
+            .ok_or_else(|| format!("bad line (want `x,n`): {line:?}"))?;
+        let x: f64 = xs.trim().parse().map_err(|_| format!("bad x: {:?}", xs.trim()))?;
+        let n: usize = ns.trim().parse().map_err(|_| format!("bad n: {:?}", ns.trim()))?;
+        writeln!(w, "{}", market_math::round_dp(x, n)).map_err(|e| format!("stdout write: {e}"))?;
+    }
+    Ok(())
+}
+
+/// Wire the `scrape` subcommand — the `wfm_demand.py` port.
+///
+/// Accepts the exact flags run-scrape.sh passes (`--filter --exclude
+/// --min-volume --out`) plus the rest of Python's argparse surface
+/// (`--platform --limit --checkpoint-every`), all with matching defaults.
+/// `--fixtures-dir <DIR>` swaps live HTTP for a frozen `fixture_responses.json`
+/// (URL→body) and disables real sleeps, so the CI parity gate runs offline and
+/// instantly. `--now` is accepted for symmetry with `build` but is inert here —
+/// the scrape CSV carries no timestamp.
+fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
+    use wfm_scrape::http::{FixtureScrapeHttp, LiveScrapeHttp, NoopSleeper, RealSleeper, ScrapeHttp, Sleeper};
+    use wfm_scrape::scrape::{run_scrape, ScrapeConfig};
+
+    let parse_usize = |s: String, what: &str| -> Result<usize, String> {
+        s.parse::<usize>().map_err(|_| format!("invalid {what}: {s}"))
+    };
+    let parse_i64 = |s: String, what: &str| -> Result<i64, String> {
+        s.parse::<i64>().map_err(|_| format!("invalid {what}: {s}"))
+    };
+
+    let fixtures_dir = extract_flag(args, "--fixtures-dir");
+    let platform = extract_flag(args, "--platform").unwrap_or_else(|| "pc".into());
+
+    let mut cfg = ScrapeConfig {
+        filter: extract_flag(args, "--filter").unwrap_or_else(|| "prime".into()),
+        exclude: extract_flag(args, "--exclude").unwrap_or_else(|| "set".into()),
+        platform: platform.clone(),
+        limit: extract_flag(args, "--limit").map(|s| parse_usize(s, "--limit")).transpose()?.unwrap_or(0),
+        min_volume: extract_flag(args, "--min-volume").map(|s| parse_i64(s, "--min-volume")).transpose()?.unwrap_or(5),
+        out: PathBuf::from(extract_flag(args, "--out").unwrap_or_else(|| "wfm_results.csv".into())),
+        checkpoint_every: extract_flag(args, "--checkpoint-every")
+            .map(|s| parse_usize(s, "--checkpoint-every"))
+            .transpose()?
+            .unwrap_or(100),
+        max_coercions: wfm_scrape::coerce::DEFAULT_MAX_COERCIONS,
+    };
+
+    let (http, sleeper): (Box<dyn ScrapeHttp>, Box<dyn Sleeper>) = if let Some(fd) = &fixtures_dir {
+        let fd = Path::new(fd);
+        // Default the output into the fixtures dir when --out was not given, so
+        // a fixture run never scribbles into the cwd.
+        if extract_flag(args, "--out").is_none() {
+            cfg.out = fd.join("wfm_results.csv");
+        }
+        let resp_path = fd.join("fixture_responses.json");
+        let raw = std::fs::read_to_string(&resp_path).map_err(|e| format!("read {resp_path:?}: {e}"))?;
+        let responses: HashMap<String, serde_json::Value> =
+            serde_json::from_str(&raw).map_err(|e| format!("parse {resp_path:?}: {e}"))?;
+        (Box::new(FixtureScrapeHttp::new(responses)), Box::new(NoopSleeper))
+    } else {
+        let client = wfm_client::build_client(30).map_err(|e| format!("build HTTP client: {e}"))?;
+        (Box::new(LiveScrapeHttp { client, platform }), Box::new(RealSleeper))
+    };
+
+    let summary = run_scrape(http.as_ref(), sleeper.as_ref(), &cfg)?;
+    eprintln!(
+        "scrape complete: scanned {}, kept {}, coercions {} → {}",
+        summary.scanned,
+        summary.kept,
+        summary.coercions,
+        cfg.out.display()
+    );
+    if summary.kept == 0 {
+        eprintln!("No items matched your criteria. Try lowering --min-volume.");
+    }
+    Ok(())
 }
 
 fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), String> {

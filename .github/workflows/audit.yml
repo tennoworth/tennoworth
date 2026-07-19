@@ -68,10 +68,10 @@ jobs:
       - name: Install deps
         run: pip install pytest requests
       - name: pytest
-        # Parity is excluded here: it needs the Rust binary and has its own
-        # convert-parity job that builds it — collecting it binary-less in CI
-        # would fail by design.
-        run: pytest tests/ --ignore=tests/test_convert_parity.py
+        # Parity gates are excluded here: they need the Rust binary and have
+        # their own build-and-run jobs (convert-parity / scrape-parity) —
+        # collecting them binary-less in CI would fail by design.
+        run: pytest tests/ --ignore=tests/test_convert_parity.py --ignore=tests/test_scrape_parity.py
 
   cargo-test:
     runs-on: ubuntu-latest
@@ -109,3 +109,26 @@ jobs:
         run: pip install pytest requests
       - name: pytest parity
         run: pytest tests/test_convert_parity.py
+
+  # Parity gate for the Python→Rust scraper port (wfm_demand.py → wfm-scrape
+  # `scrape`): builds the host-only binary, then runs both scrapers on the
+  # frozen fixtures and semantically diffs their output CSVs. GitHub sets
+  # CI=true, so a missing binary FAILS the job rather than silently skipping.
+  scrape-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: companion
+      - name: Build wfm-scrape (release)
+        working-directory: companion
+        run: cargo build --release -p wfm-scrape
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install deps
+        run: pip install pytest requests
+      - name: pytest parity
+        run: pytest tests/test_scrape_parity.py

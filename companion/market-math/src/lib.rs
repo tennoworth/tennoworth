@@ -275,6 +275,62 @@ pub fn clamp_low5(low5: f64, median_90d: f64, low_sell: f64) -> f64 {
     }
 }
 
+/// Highest live buy price, or 0 when there are no buys — Python's
+/// `max((o["platinum"] for o in live_buys), default=0)`.
+pub fn top_buy(buys: &[LiveOrder]) -> f64 {
+    buys.iter().map(|o| o.platinum).reduce(f64::max).unwrap_or(0.0)
+}
+
+/// Lowest live sell price, or 0 when there are no sells — Python's
+/// `min((o["platinum"] for o in live_sells), default=0)`.
+pub fn low_sell(sells: &[LiveOrder]) -> f64 {
+    sells.iter().map(|o| o.platinum).reduce(f64::min).unwrap_or(0.0)
+}
+
+/// Bid/ask spread, mirroring Python's truthy guard:
+/// `(low_sell - top_buy) if (low_sell and top_buy) else 0`. A zero on either
+/// side (no book) yields 0, not a negative "spread" against a phantom price.
+pub fn spread(low_sell: f64, top_buy: f64) -> f64 {
+    if low_sell != 0.0 && top_buy != 0.0 {
+        low_sell - top_buy
+    } else {
+        0.0
+    }
+}
+
+/// Live buy/sell pressure ratio. With sellers present it's `buys / sells`;
+/// with buyers but no sellers Python treats it as very high demand pressure
+/// (`buys * 10`), an arbitrary boost for "no competition". No sellers AND no
+/// buyers → 0.
+pub fn demand_ratio(buys: usize, sells: usize) -> f64 {
+    if sells > 0 {
+        buys as f64 / sells as f64
+    } else {
+        buys as f64 * 10.0
+    }
+}
+
+/// The composite "worth farming right now" score — the SCORE() at the bottom
+/// of `analyze_item`: `volume_48h * avg_price_48h * (1 + ratio)`.
+pub fn score(volume_48h: f64, avg_price_48h: f64, ratio: f64) -> f64 {
+    volume_48h * avg_price_48h * (1.0 + ratio)
+}
+
+/// Python's `round(x, dp)` — round half to EVEN (banker's rounding) on the
+/// *true* value of the float. A naive `(x * 10^dp).round_ties_even()` would
+/// diverge whenever the scaling multiply lands the value exactly on a tie the
+/// unscaled value wasn't on (2.675 → 267.5, rounding up to 2.68 where Python
+/// keeps 2.67). Rust's `{:.dp}` formatter is correctly-rounded to the true
+/// value with the same ties-to-even rule CPython uses, so round-trip through it
+/// matches Python bit-for-bit across the pipeline's value range. Non-finite
+/// passes through unchanged.
+pub fn round_dp(x: f64, dp: usize) -> f64 {
+    if !x.is_finite() {
+        return x;
+    }
+    format!("{x:.dp$}").parse().unwrap_or(x)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -545,5 +601,63 @@ mod tests {
         assert_eq!(clamp_low5(12.0, 9.0, 8.0), 12.0);
         assert_eq!(clamp_low5(0.0, 5.0, 5.0), 0.0);
         assert_eq!(clamp_low5(35.0, 0.0, 5.0), 35.0);
+    }
+
+    // ---- top_buy / low_sell / spread --------------------------------------
+    #[test]
+    fn top_buy_is_the_dearest_bid_or_zero() {
+        let book = [ask(10.0), ask(35.0), ask(22.0)];
+        assert_eq!(top_buy(&book), 35.0);
+        assert_eq!(top_buy(&[]), 0.0); // Python's max(..., default=0)
+    }
+
+    #[test]
+    fn low_sell_is_the_cheapest_ask_or_zero() {
+        let book = [ask(42.0), ask(40.0), ask(55.0)];
+        assert_eq!(low_sell(&book), 40.0);
+        assert_eq!(low_sell(&[]), 0.0); // Python's min(..., default=0)
+    }
+
+    #[test]
+    fn spread_zeroes_when_either_side_is_missing() {
+        assert_eq!(spread(40.0, 35.0), 5.0);
+        assert_eq!(spread(40.0, 0.0), 0.0); // no bid → no spread
+        assert_eq!(spread(0.0, 35.0), 0.0); // no ask → no spread
+    }
+
+    // ---- demand_ratio -----------------------------------------------------
+    #[test]
+    fn demand_ratio_is_buys_over_sells_when_sellers_exist() {
+        assert_eq!(demand_ratio(12, 18), 12.0 / 18.0);
+        assert_eq!(demand_ratio(0, 5), 0.0);
+    }
+
+    #[test]
+    fn demand_ratio_boosts_when_no_sellers() {
+        assert_eq!(demand_ratio(3, 0), 30.0); // buyers, no competition
+        assert_eq!(demand_ratio(0, 0), 0.0); // dead book
+    }
+
+    // ---- score ------------------------------------------------------------
+    #[test]
+    fn score_is_volume_times_avg_times_one_plus_ratio() {
+        assert_eq!(score(384.0, 43.2, 0.67), 384.0 * 43.2 * 1.67);
+        assert_eq!(score(0.0, 43.2, 2.0), 0.0);
+    }
+
+    // ---- round_dp (Python round, ties-to-even) ----------------------------
+    #[test]
+    fn round_dp_matches_python_banker_rounding() {
+        assert_eq!(round_dp(0.6666666, 2), 0.67);
+        assert_eq!(round_dp(2.25, 1), 2.2); // ties to even (down)
+        assert_eq!(round_dp(2.35, 1), 2.4); // ties to even (up)
+        assert_eq!(round_dp(2.675, 2), 2.67); // float repr is 2.67499… → down
+        assert_eq!(round_dp(11.0, 1), 11.0);
+    }
+
+    #[test]
+    fn round_dp_passes_non_finite_through() {
+        assert!(round_dp(f64::NAN, 1).is_nan());
+        assert_eq!(round_dp(f64::INFINITY, 1), f64::INFINITY);
     }
 }
