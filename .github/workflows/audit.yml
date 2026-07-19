@@ -68,7 +68,10 @@ jobs:
       - name: Install deps
         run: pip install pytest requests
       - name: pytest
-        run: pytest tests/
+        # Parity is excluded here: it needs the Rust binary and has its own
+        # convert-parity job that builds it — collecting it binary-less in CI
+        # would fail by design.
+        run: pytest tests/ --ignore=tests/test_convert_parity.py
 
   cargo-test:
     runs-on: ubuntu-latest
