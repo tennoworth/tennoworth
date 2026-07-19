@@ -68,6 +68,13 @@ SECURITY.md      threat model + what we do and don't commit to
 
 ---
 
+## Branching (see docs/branching.md)
+
+`develop` = integration (branch features off it, merge back with review);
+`main` = production (auto-deploys; promote with `git merge --ff-only develop`).
+Hotfixes branch off `main`, then merge `main` back into `develop`. Companion
+`v*` tags are cut on `main` only.
+
 ## Cross-cutting hygiene rules (apply everywhere)
 
 - **No comments that restate the code.** Comments explain *why* — the
