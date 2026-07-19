@@ -2084,6 +2084,33 @@
         <a href="https://ko-fi.com/prowly" target="_blank" rel="noopener">ko-fi.com/prowly</a>.
       </p>
     </details>
+
+    <details>
+      <summary>Firefox can't connect — or forgot my inventory?</summary>
+      <p>
+        Firefox 147+ asks permission before a site may reach “device apps and
+        services” — that's the companion on <code>127.0.0.1</code>. Click
+        <strong>Allow</strong> when the prompt appears and the connection goes
+        through.
+      </p>
+      <p>
+        With <strong>strict</strong> Enhanced Tracking Protection, Firefox goes
+        further: it can silently block the connection <em>and</em> purge this
+        site's saved data as a suspected “bounce tracker” — that's what deletes
+        your saved inventory. Both come from the same protection bundle.
+      </p>
+      <p>
+        The fix for both: click the <strong>shield icon</strong> in the address
+        bar and turn protection off for this site (or add a permissions
+        exception), then interact with the page — any click — so Firefox sees
+        the site is genuinely used.
+      </p>
+      <p>
+        Your <code>inventory.json</code> file itself is never at risk. If saved
+        data was purged, just re-drop it or re-pull from the companion to
+        restore.
+      </p>
+    </details>
   </section>
 {/snippet}
 
@@ -2095,17 +2122,19 @@
     <div class="card warn-banner general-banner" role="alert">
       <div class="gb-body">
         {#if loopbackDenied}
-          <strong>Can't reach the companion on 127.0.0.1.</strong>
-          Chrome has blocked local-network access for this site. Re-enable it in
-          Chrome's site settings (Local network access), then Retry. If you also
-          stopped <code>serve</code>, restart it first.
+          <strong>Your browser has blocked this site's access to 127.0.0.1.</strong>
+          Chrome: allow it in Site settings → Local network access. Firefox:
+          Settings → Privacy &amp; Security → Permissions → “Device apps and
+          services” — or, if you use strict tracking protection, turn the shield
+          off for this site.
         {:else}
           <strong>Couldn't reach the companion on 127.0.0.1.</strong>
           Either <code>serve</code> isn't running, or your browser blocked
           local-network access — Chrome shows an “allow local network access”
-          prompt the first time; if you denied it, re-enable it for this site in
-          Chrome's site settings (Local network access).
+          prompt the first time, and Firefox 147+ asks to allow “device apps and
+          services”; if you denied or dismissed it, re-enable it for this site.
         {/if}
+        <a href="#install" onclick={() => setView('install')}>More help in the FAQ →</a>
       </div>
       <div class="gb-actions">
         <button onclick={verifyCompanion}>Retry</button>

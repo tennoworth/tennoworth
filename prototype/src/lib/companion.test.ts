@@ -94,6 +94,16 @@ describe('pingCompanion', () => {
       .rejects.toBeInstanceOf(CompanionUnreachableError);
   });
 
+  // A hung Local Network Access prompt (Firefox 147+) makes the /health fetch
+  // hang until our AbortSignal.timeout fires — a DOMException named
+  // 'TimeoutError'. A hang is unreachable from the user's side, same as a
+  // network-level reject, so it must classify as CompanionUnreachableError.
+  it('classifies an aborted (timed-out) health fetch as unreachable', async () => {
+    globalThis.fetch.mockRejectedValue(new DOMException('signal timed out', 'TimeoutError'));
+    await expect(pingCompanion({ baseUrl: 'http://127.0.0.1:1', token: 't' }))
+      .rejects.toBeInstanceOf(CompanionUnreachableError);
+  });
+
   it('does NOT classify a non-OK HTTP response as unreachable', async () => {
     globalThis.fetch.mockResolvedValue({ ok: false, status: 500 });
     await expect(pingCompanion({ baseUrl: 'http://x', token: 't' }))
@@ -223,6 +233,15 @@ describe('pending plan recovery', () => {
       json: async () => ({ error: 'kaboom' }),
     });
     await expect(getPendingPlan(cfg)).rejects.toThrow(/kaboom/);
+  });
+
+  // A timed-out /plan/pending must surface as a plain Error — NOT null (that
+  // would hide an interrupted batch) and NOT CompanionUnreachableError (only the
+  // /health fetch may classify as unreachable).
+  it('getPendingPlan surfaces a timeout as a plain "in time" error, not null', async () => {
+    globalThis.fetch.mockRejectedValue(new DOMException('signal timed out', 'TimeoutError'));
+    await expect(getPendingPlan(cfg)).rejects.toThrow(/in time/);
+    await expect(getPendingPlan(cfg)).rejects.not.toBeInstanceOf(CompanionUnreachableError);
   });
 
   it('resumePendingPlan POSTs to /plan/resume', async () => {
