@@ -13,6 +13,7 @@
 //! `eprintln!` diagnostics — pending-plan write warnings, a loose-key-perms
 //! warning — are preserved verbatim from the pre-extraction binary.)
 
+pub mod assistant;
 pub mod auth;
 pub mod error;
 pub mod inventory;
