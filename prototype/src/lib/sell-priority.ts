@@ -44,6 +44,20 @@ export interface SellScoreOutput {
 export const LIQUID_VOL = 5;
 const PATIENCE_VOL = 3;
 
+// "Keep copies" reserve — N copies of every owned item held back from ever
+// being listed, so the user can't sell their only copy of something by
+// accident. 0 (the default) is a no-op; clamped so a stale/edited
+// localStorage value can never go negative.
+//
+// `leveled` = how many owned copies carry XP > 0. Warframe only allows
+// trading UNRANKED gear — any XP makes that specific copy untradeable — so
+// a leveled copy already satisfies the "don't sell my only copy" intent the
+// reserve exists for. Leveled copies and the reserve don't stack: the hold-
+// back is whichever is larger, not their sum.
+export function sellableQty(count: number, reserve: number, leveled = 0): number {
+  return Math.max(0, count - Math.max(reserve, leveled));
+}
+
 // What a listing would realistically clear at. The lowest live ask is the
 // honest answer MOST of the time, but it's a single number any account can
 // set for free, so it gets sanity-clamped against the closed-trade median:

@@ -8,9 +8,17 @@
 // (rec.kept_lvl !== null && rec.kept_lvl >= hideAtLvl) matched nothing — a mod
 // you've leveled into your build reappeared as "safe to sell". Old v2/v3
 // snapshots are silently invalidated.
+//
+// v5: also persist `leveled` (count of owned instances with XP > 0 — copies
+// Warframe has flagged untradeable). Without the bump, a restored v4 snapshot
+// would read `leveled` as undefined on every row, and `sellableQty` would
+// treat genuinely-leveled gear as fully sellable until the next inventory
+// pull — the same silent-danger shape as the v3→v4 kept_lvl bug, but here it
+// risks listing a copy that can't actually be traded. Old v4 snapshots are
+// silently invalidated; reloading the inventory recomputes `leveled` fresh.
 import type { OwnedRecord } from './types';
 
-const KEY = 'wfminv:last-owned-v4';
+const KEY = 'wfminv:last-owned-v5';
 
 export interface Snapshot {
   ts: number;
@@ -37,6 +45,7 @@ export function saveSnapshot({ invName, owned }: SaveSnapshotInput): void {
           slug: rec.slug,
           subtype: rec.subtype ?? null,
           kept_lvl: rec.kept_lvl ?? null,
+          leveled: rec.leveled ?? 0,
         },
       ]),
     };

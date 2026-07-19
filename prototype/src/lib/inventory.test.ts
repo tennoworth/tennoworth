@@ -55,6 +55,26 @@ describe('flattenInventory', () => {
     expect([...flattenInventory(inv)]).toEqual([]);
   });
 
+  it('reads XP off instance-category entries', () => {
+    const inv = { Suits: [{ ItemType: '/Lotus/Frame', XP: 1544818, ItemId: { $oid: 'x' } }] };
+    expect([...flattenInventory(inv)][0].xp).toBe(1544818);
+  });
+
+  it('defaults xp to 0 when XP is absent (stack categories)', () => {
+    const inv = { MiscItems: [{ ItemType: '/Lotus/A', ItemCount: 2 }] };
+    expect([...flattenInventory(inv)][0].xp).toBe(0);
+  });
+
+  it('defaults xp to 0 when XP is present but not a number', () => {
+    const inv = { Suits: [{ ItemType: '/Lotus/Frame', XP: '1544818' }] };
+    expect([...flattenInventory(inv)][0].xp).toBe(0);
+  });
+
+  it('treats XP: 0 (unranked, still an individualised instance) as xp 0', () => {
+    const inv = { LongGuns: [{ ItemType: '/Lotus/Gun', XP: 0 }] };
+    expect([...flattenInventory(inv)][0].xp).toBe(0);
+  });
+
   it('exposes the category list so callers can reason about coverage', () => {
     expect(TRADEABLE_CATEGORIES).toContain('MiscItems');
     expect(TRADEABLE_CATEGORIES).toContain('Suits');

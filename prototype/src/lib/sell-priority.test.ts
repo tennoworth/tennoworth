@@ -1,6 +1,6 @@
 // @ts-nocheck — vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
 import { describe, it, expect } from 'vitest';
-import { scoreRow, bandSignal, clearingPrice } from './sell-priority.js';
+import { scoreRow, bandSignal, clearingPrice, sellableQty } from './sell-priority.js';
 
 describe('scoreRow', () => {
   it('returns zero score with no market data', () => {
@@ -106,6 +106,47 @@ describe('clearingPrice', () => {
 
   it('uses median_90d when median_now is absent (pre-split snapshots)', () => {
     expect(clearingPrice({ low_sell: 1, median_90d: 38, avg: 30, vol: 54 })).toBe(38);
+  });
+});
+
+describe('sellableQty', () => {
+  it('passes owned count through untouched when reserve is 0', () => {
+    expect(sellableQty(5, 0)).toBe(5);
+    expect(sellableQty(0, 0)).toBe(0);
+  });
+
+  it('subtracts the reserve from owned count', () => {
+    expect(sellableQty(5, 1)).toBe(4);
+    expect(sellableQty(5, 5)).toBe(0);
+  });
+
+  it('clamps at 0 rather than going negative when reserve exceeds owned', () => {
+    expect(sellableQty(2, 5)).toBe(0);
+    expect(sellableQty(0, 3)).toBe(0);
+  });
+
+  it('is backward-equivalent to the old 2-arg signature when leveled is 0 (default)', () => {
+    expect(sellableQty(5, 1)).toBe(sellableQty(5, 1, 0));
+    expect(sellableQty(2, 5)).toBe(sellableQty(2, 5, 0));
+  });
+
+  it('leveled copies satisfy the reserve when leveled > reserve', () => {
+    // 5 owned, 2 leveled (untradeable), reserve only asks for 1 kept back —
+    // the leveled copies already cover that, so sellable = 5 - 2 = 3.
+    expect(sellableQty(5, 1, 2)).toBe(3);
+  });
+
+  it('the reserve holds back more than the leveled count when reserve > leveled', () => {
+    // 5 owned, 1 leveled, but the user wants 3 kept back — reserve wins.
+    expect(sellableQty(5, 3, 1)).toBe(2);
+  });
+
+  it('holds back everything when all owned copies are leveled', () => {
+    expect(sellableQty(4, 0, 4)).toBe(0);
+  });
+
+  it('clamps at 0 rather than going negative when leveled exceeds owned', () => {
+    expect(sellableQty(3, 0, 5)).toBe(0);
   });
 });
 

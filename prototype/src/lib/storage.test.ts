@@ -21,7 +21,7 @@ describe('saveSnapshot / loadSnapshot', () => {
     expect(got.owned).toBeInstanceOf(Map);
     expect(got.owned.size).toBe(3);
     expect(got.owned.get('vitality|')).toEqual({
-      count: 51, name: 'Vitality', type: 'Mods', slug: 'vitality', subtype: null, kept_lvl: null,
+      count: 51, name: 'Vitality', type: 'Mods', slug: 'vitality', subtype: null, kept_lvl: null, leveled: 0,
     });
     expect(got.owned.get('axi_k2_relic|radiant').subtype).toBe('radiant');
     // kept_lvl must survive the round-trip — losing it disabled the leveled-mod
@@ -30,12 +30,21 @@ describe('saveSnapshot / loadSnapshot', () => {
     expect(got.ts).toBeGreaterThan(0);
   });
 
+  it('round-trips leveled (untradeable-copy count)', () => {
+    const owned = new Map([
+      ['broken_war|', { count: 3, name: 'Broken War', type: 'Melee', slug: 'broken_war', subtype: null, kept_lvl: null, leveled: 2 }],
+    ]);
+    saveSnapshot({ invName: 'inventory.json', owned });
+    const got = loadSnapshot();
+    expect(got.owned.get('broken_war|').leveled).toBe(2);
+  });
+
   it('returns null when nothing was saved', () => {
     expect(loadSnapshot()).toBeNull();
   });
 
   it('returns null on corrupted storage rather than throwing', () => {
-    localStorage.setItem('wfminv:last-owned-v4', '{garbage');
+    localStorage.setItem('wfminv:last-owned-v5', '{garbage');
     expect(loadSnapshot()).toBeNull();
   });
 

@@ -9,6 +9,8 @@
     subtype: string | null;
     name: string;
     owned: number;
+    sellable: number;
+    leveled: number;
     type: string;
     kept_lvl: number | null;
     ducats: number | null;
@@ -147,7 +149,7 @@
   interface HelpEntry { text: string; unit?: string; dir?: string; }
   const HELP: Record<string, HelpEntry> = {
     name:           { text: 'Display name on warframe.market. Click to open the listing.' },
-    owned:          { text: 'How many copies you own in your inventory.', unit: 'count' },
+    owned:          { text: 'How many copies you own in your inventory. When the "Keep copies" reserve is set above 0, the sellable count (owned minus the reserve) shows alongside it. Leveled copies (any XP) can’t be traded in-game at all, so they’re held back the same way — shown as "leveled" rather than "kept".', unit: 'count' },
     delta:          { text: 'Change in count vs. the previous inventory you loaded.', unit: 'count', dir: 'positive = farmed, negative = sold' },
     avg_price:      { text: 'Volume-weighted average across closed trades in the last 48 h.', unit: 'plat', dir: 'noisy on low-volume items' },
     low_sell:       { text: 'Lowest current sell listing from in-game / online players.', unit: 'plat', dir: 'what you can realistically clear at right now' },
@@ -385,7 +387,7 @@
     <tbody>
       {#each paged as r (r.key ?? r.slug)}
         {@const d = rowDelta(r)}
-        <tr>
+        <tr class:row-dim={r.sellable <= 0}>
           {#each columns as col}
             <td class={col.align}>
               {#if col.key === 'name'}
@@ -413,6 +415,14 @@
                   <span class="tag hold" title="Price is near its 90-day low — you'd be selling into a trough. Common right after a Baro visit floods the mod; it typically recovers over weeks. Consider holding.">hold</span>
                 {:else if r.timing === 'peak'}
                   <span class="tag peak" title="Price is near its 90-day high — a good moment to list this one.">peak</span>
+                {/if}
+              {:else if col.key === 'owned'}
+                {fmt(r.owned, col.key)}
+                {#if r.sellable < r.owned}
+                  {@const heldBack = r.owned - r.sellable}
+                  {@const leveledPart = Math.min(r.leveled || 0, heldBack)}
+                  {@const keptPart = heldBack - leveledPart}
+                  <span class="kept-note">({#if leveledPart > 0}<span class="leveled-note" title="Leveled gear can't be traded in-game — only unranked copies can be sold.">{leveledPart} leveled</span>{/if}{#if leveledPart > 0 && keptPart > 0} · {/if}{#if keptPart > 0}<span title="{keptPart} cop{keptPart === 1 ? 'y' : 'ies'} held back by the Keep copies reserve — not counted as sellable.">{keptPart} kept</span>{/if})</span>
                 {/if}
               {:else if col.key === 'delta'}
                 {#if d > 0}
@@ -666,6 +676,11 @@
   th.right .hcontent { justify-content: flex-end; }
   th.active { color: var(--accent); }
   tbody tr:hover { background: rgba(255,255,255,0.02); }
+  /* Rows with nothing left to sell (leveled gear ate the whole stack, or
+     the "keep copies" reserve did) stay visible but recede — still useful
+     as inventory context, not an action item. */
+  tbody tr.row-dim { opacity: 0.5; }
+  tbody tr.row-dim:hover { opacity: 0.75; }
   td a { color: var(--fg); text-decoration: none; }
   td a:hover { color: var(--accent); text-decoration: underline; }
   .arrow { color: var(--accent); }
@@ -673,6 +688,21 @@
   .delta.up   { color: var(--good); }
   .delta.down { color: var(--bad); }
   .delta.zero { color: var(--muted); }
+
+  /* Owned column: a "(N kept)" / "(N leveled)" suffix only appears once
+     something actually holds copies back, so the column looks unchanged
+     for the feature-off (default, no leveled gear) case. */
+  .kept-note {
+    margin-left: 5px;
+    font-size: 11px;
+    color: var(--muted);
+  }
+  /* Leveled gear is a harder constraint than the Keep-copies reserve — the
+     game itself won't let you trade it, not just a local preference — so it
+     gets a distinct (warmer) tint inside the same kept-note suffix. */
+  .leveled-note {
+    color: var(--warn);
+  }
 
   /* Sparkline + Δ-90d treatment. Sparkline uses currentColor stroked at
      1.2 px so it inherits the row colour; trend badge sits in its own

@@ -15,7 +15,7 @@
   import { flattenInventory, extractKeptLvls } from './lib/inventory';
   import { loadCatalogs, resolvePath, type Catalogs } from './lib/resolver';
   import { loadMarket, lookup } from './lib/market';
-  import { scoreRow, bandSignal, clearingPrice, LIQUID_VOL } from './lib/sell-priority';
+  import { scoreRow, bandSignal, clearingPrice, sellableQty, LIQUID_VOL } from './lib/sell-priority';
   import { deriveSetRecos } from './lib/set-recos';
   import { deriveRelicPlan } from './lib/relic-planner';
   import {
@@ -61,10 +61,29 @@
   // since selling an intact relic at a few plat usually loses to cracking it
   // (the Relic planner ranks those), so they shouldn't be staged by default.
   let listableRows = $derived(
-    (tableView.active ? tableView.rows : results).filter((r) => !r.subtype)
+    (tableView.active ? tableView.rows : results).filter((r) => !r.subtype && r.sellable > 0)
   );
   let minPrice = $state(5);
   let minOwned = $state(1);
+  // "Keep copies" reserve — holds back N copies of every owned item from
+  // being listed (sellable = owned − N). Distinct from minOwned, which only
+  // hides rows from view; this changes what's actually sellable, so unlike
+  // minOwned/minPrice it's worth persisting — losing your only copy of
+  // something to an underpriced snipe is the mistake this exists to prevent.
+  const RESERVE_KEY = 'wfminv:reserve-copies-v1';
+  let reserveCopies = $state(
+    (() => {
+      try {
+        const n = parseInt(localStorage.getItem(RESERVE_KEY), 10);
+        return Number.isFinite(n) && n >= 0 ? n : 0;
+      } catch { return 0; }
+    })()
+  );
+  function setReserveCopies(e) {
+    const n = Math.max(0, parseInt(e.currentTarget.value, 10) || 0);
+    reserveCopies = n;
+    try { localStorage.setItem(RESERVE_KEY, String(n)); } catch { /* ignore */ }
+  }
   let typeFilter = $state('all');
   // Hide rows when the user has a copy of the mod ranked to ≥ `hideAtLvl`
   // in `Upgrades`. Per-record `kept_lvl` is `null` for items the user has
@@ -325,7 +344,7 @@
       const owned = new Map();
       const unresolved = {};
       let flatCount = 0;
-      for (const { category: invCat, path, count } of flattenInventory(data)) {
+      for (const { category: invCat, path, count, xp } of flattenInventory(data)) {
         flatCount++;
         const { name: itemName, slug, category: itemType, subtype } =
           resolvePath(path, catalogs, market);
@@ -338,9 +357,13 @@
         const keptLvl = keptLvls.get(path);
         const rec = owned.get(key) || {
           count: 0, name: itemName, type, slug, subtype: subtype ?? null,
-          kept_lvl: null,
+          kept_lvl: null, leveled: 0,
         };
         rec.count += count;
+        // XP > 0 on an instance category entry means DE has flagged that
+        // specific copy untradeable in-game (only unranked gear can trade).
+        // Stack categories never carry XP, so this stays 0 for them.
+        if (xp > 0) rec.leveled += count;
         // Carry forward the highest kept lvl across any inventory path
         // that resolved to the same slug+subtype (rare for mods — one path
         // per slug — but harmless for the relic refinement case).
@@ -381,6 +404,7 @@
     for (const [key, rec] of owned) {
       const m = lookup(market, rec.slug);
       if (!m) continue;
+      const sellable = sellableQty(rec.count, reserveCopies, rec.leveled ?? 0);
       if (m.avg < minPrice) continue;
       if (rec.count < minOwned) continue;
       if (typeFilter !== 'all' && rec.type !== typeFilter) continue;
@@ -418,7 +442,7 @@
       // fake — it takes 45+ days of sustained manipulation to move it.
       const presetMinMedian = PRESETS[activePreset]?.minMedian ?? 0;
       if (presetMinMedian > 0 && (m.median_90d || 0) < presetMinMedian) continue;
-      const { sell_score, patience } = scoreRow({ owned: rec.count, m });
+      const { sell_score, patience } = scoreRow({ owned: sellable, m });
       // ducats live on `m` because WFM is authoritative for the value —
       // warframestat's bulk /items/ endpoint doesn't carry it. Relics get
       // null so we don't suggest "Baro this" on a non-ducat trade.
@@ -477,6 +501,8 @@
         subtype: rec.subtype ?? null,
         name: rec.name,
         owned: rec.count,
+        sellable,
+        leveled: rec.leveled ?? 0,
         type: rec.type,
         kept_lvl: rec.kept_lvl,
         ducats,
@@ -491,12 +517,12 @@
         top_buy: m.top_buy,
         volume_48h: m.vol,
         ratio: m.ratio,
-        potential_plat: rec.count * m.avg,
+        potential_plat: sellable * m.avg,
         // Raw stack value: owned × the avg of the ~5 cheapest live asks —
         // "what is this pile worth at current listings", no liquidity
         // discounting (that's sell_score's job). Falls back to the 48h
         // closed avg on snapshots that predate low5_avg.
-        raw_value: rec.count * ((m.low5_avg || 0) > 0 ? m.low5_avg : m.avg),
+        raw_value: sellable * ((m.low5_avg || 0) > 0 ? m.low5_avg : m.avg),
         sell_score,
         patience,
         timing,
@@ -522,7 +548,7 @@
   // tracked) but write only to `results`, which the effect doesn't read —
   // no chance of a re-run loop.
   $effect(() => {
-    minPrice; minOwned; typeFilter; hideAtLvl; activeTags.size;  // track filter changes
+    minPrice; minOwned; typeFilter; hideAtLvl; activeTags.size; reserveCopies;  // track filter changes
     if (resolved.owned.size && market) {        // track owned + market readiness
       results = computeResults(resolved.owned);
     }
@@ -715,7 +741,12 @@
   let sellableCount = $derived.by(() => {
     if (!market) return 0;
     let n = 0;
-    for (const rec of resolved.owned.values()) if (lookup(market, rec.slug)) n += 1;
+    // Count an item only if at least one copy is actually listable after the
+    // keep-copies reserve and leveled (untradeable) copies — otherwise the
+    // headline tile would claim items are sellable that the reserve holds back,
+    // contradicting the dimmed rows and zeroed potential.
+    for (const rec of resolved.owned.values())
+      if (lookup(market, rec.slug) && sellableQty(rec.count, reserveCopies, rec.leveled ?? 0) > 0) n += 1;
     return n;
   });
   let unresolvedSummary = $derived(
@@ -1092,6 +1123,7 @@
             slug: rec.slug,
             subtype: rec.subtype ?? null,
             kept_lvl: rec.kept_lvl ?? null,
+            leveled: rec.leveled ?? 0,
           },
         ]),
       };
@@ -1143,6 +1175,10 @@
             ...rec,
             slug: rec.slug ?? (key.includes('|') ? key.split('|')[0] : key),
             subtype: rec.subtype ?? null,
+            // Older exports predate the leveled-gear feature — default to 0
+            // (unknown) rather than leaving it undefined, which sellableQty's
+            // default param would also catch but keeps the record shape honest.
+            leveled: rec.leveled ?? 0,
           },
         ])
       );
@@ -1412,7 +1448,7 @@
         </div>
         <div class="stat">
           <span class="k">Sellable</span>
-          <span class="v">{results.length.toLocaleString()}</span>
+          <span class="v">{results.filter((r) => r.sellable > 0).length.toLocaleString()}</span>
         </div>
         <div class="stat">
           <span class="k">Potential</span>
@@ -1486,7 +1522,7 @@
         <details class="filter-disclosure" open={filtersOpen} ontoggle={toggleFiltersOpen}>
           <summary>
             <span class="dis-label">Filters</span>
-            <span class="muted small">price · owned · type · ranked-mods threshold</span>
+            <span class="muted small">price · owned · keep copies · type · ranked-mods threshold</span>
           </summary>
           <div class="row">
             <div class="filters">
@@ -1498,6 +1534,10 @@
               <label title="Hides items you own fewer copies of than this. Set to 2 to keep one of each for yourself.">
                 Min owned
                 <input type="number" bind:value={minOwned} min="1" step="1" style="width:50px" />
+              </label>
+              <label title="Copies of each item to hold back from selling. Set to 1 to never list your last copy. Unlike Min owned (which only hides rows from this table), this changes what's actually listable.">
+                Keep copies
+                <input type="number" value={reserveCopies} oninput={setReserveCopies} min="0" step="1" style="width:50px" />
               </label>
               <label>
                 Type

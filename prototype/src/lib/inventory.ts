@@ -20,6 +20,11 @@ export interface FlatInventoryEntry {
   category: string;
   path: string;
   count: number;
+  /** Per-instance XP from the memory-scanned inventory. Only the instance
+   *  categories (Suits, LongGuns, ...) carry this; stack entries (MiscItems,
+   *  Recipes, RawUpgrades) have no XP field and always yield 0. Any XP > 0
+   *  means DE has flagged that copy untradeable in-game. */
+  xp: number;
 }
 
 export function* flattenInventory(inv: Inventory): Generator<FlatInventoryEntry> {
@@ -29,7 +34,8 @@ export function* flattenInventory(inv: Inventory): Generator<FlatInventoryEntry>
     for (const e of entries) {
       const path = e.ItemType ?? e.Type;
       const count = e.ItemCount ?? 1;
-      if (path) yield { category, path, count };
+      const xp = typeof e.XP === 'number' ? e.XP : 0;
+      if (path) yield { category, path, count, xp };
     }
   }
 }
