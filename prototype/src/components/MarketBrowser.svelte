@@ -27,7 +27,7 @@
   // Index + the standing reports are pure derivations of the snapshot.
   let index = $derived(buildBrowseIndex(market));
   let results = $derived(searchItems(market, index, query, 12));
-  let movers = $derived(topMovers(market, index, { minVol: 20, limit: 8 }));
+  let movers = $derived(topMovers(market, index, { minVol: 20, minPrice: 10, limit: 8 }));
   let vaulted = $derived(vaultedTop(market, index, 12));
 
   // Baro schedule — same NODE_NAMES cleanup the dashboard applies. Schedule

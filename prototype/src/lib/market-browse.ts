@@ -107,17 +107,21 @@ export function searchItems(
 
 export interface MoversOpts {
   minVol?: number;
+  minPrice?: number;
   limit?: number;
 }
 
-// Top risers/fallers by Δ% vs the 90-day median. The volume floor keeps thin
-// books out — a 200% "move" on 3 trades is noise, not a signal.
+// Top risers/fallers by Δ% vs the 90-day median. Two floors keep the flagship
+// list honest: the volume floor drops thin books (a 200% "move" on 3 trades is
+// noise), and the price floor drops cheap junk (a ±100% swing on a 3p relic
+// isn't worth plat — the move has to be on an item where plat is at stake).
 export function topMovers(
   market: Market | null | undefined,
   index: BrowseIndex,
   opts: MoversOpts = {}
 ): { risers: BrowseRow[]; fallers: BrowseRow[] } {
   const minVol = opts.minVol ?? 20;
+  const minPrice = opts.minPrice ?? 10;
   const limit = opts.limit ?? 8;
   const items = market?.items;
   if (!items) return { risers: [], fallers: [] };
@@ -125,6 +129,7 @@ export function topMovers(
   const rows: BrowseRow[] = [];
   for (const [slug, e] of Object.entries(items)) {
     if (!e || e.vol < minVol) continue;
+    if (typeof e.avg !== 'number' || e.avg < minPrice) continue;
     const d = itemDeltaPct(e);
     if (d == null || d === 0) continue;
     rows.push(toRow(index, slug, e, vault?.[slug]));
