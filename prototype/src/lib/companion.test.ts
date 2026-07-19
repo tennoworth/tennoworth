@@ -78,6 +78,11 @@ describe('pingCompanion', () => {
     });
     const cfg = { baseUrl: 'http://x', token: 't' };
     await expect(pingCompanion(cfg)).resolves.toEqual({ ok: true, platform: 'pc' });
+    // Local Network Access opt-in: the /health fetch must declare loopback so an
+    // HTTPS origin is allowed to reach 127.0.0.1 under the 2026 LNA gate.
+    const [url, init] = globalThis.fetch.mock.calls[0];
+    expect(url).toBe('http://x/health');
+    expect(init.targetAddressSpace).toBe('loopback');
   });
 
   it('throws on non-2xx', async () => {
@@ -94,7 +99,7 @@ describe('pingCompanion', () => {
       .rejects.toBeInstanceOf(CompanionUnreachableError);
   });
 
-  // A hung Local Network Access prompt (Firefox 147+) makes the /health fetch
+  // A hung Local Network Access prompt (Firefox 149+ ETP Strict, 151+ all) makes the /health fetch
   // hang until our AbortSignal.timeout fires — a DOMException named
   // 'TimeoutError'. A hang is unreachable from the user's side, same as a
   // network-level reject, so it must classify as CompanionUnreachableError.
