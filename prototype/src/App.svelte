@@ -17,6 +17,9 @@
   import { loadCatalogs, resolvePath, type Catalogs } from './lib/resolver';
   import { loadMarket, lookup } from './lib/market';
   import { scoreRow, bandSignal, clearingPrice, sellableQty, LIQUID_VOL } from './lib/sell-priority';
+
+  const APP_VERSION = __APP_VERSION__;
+  const APP_COMMIT = __APP_COMMIT__;
   import { deriveSetRecos } from './lib/set-recos';
   import { deriveRelicPlan } from './lib/relic-planner';
   import {
@@ -1318,6 +1321,7 @@
 
   <footer>
     Open source · MIT · data from warframe.market and warframestat.us
+    <span class="ver" title="build {APP_COMMIT}">· v{APP_VERSION} · {APP_COMMIT}</span>
   </footer>
 </main>
 {:else}
@@ -1327,6 +1331,7 @@
     <div class="brand">
       <h1>TennoWorth</h1>
       <div class="sub">Windows + Linux · no Overwolf</div>
+      <div class="ver" title="build {APP_COMMIT}">v{APP_VERSION} · {APP_COMMIT}</div>
     </div>
 
     <nav>
@@ -2685,6 +2690,13 @@
   }
   pre code { background: transparent; padding: 0; }
   .sub { color: var(--muted); margin: 6px 0 0 0; max-width: 64ch; font-size: 13px; }
+  .ver {
+    color: var(--muted);
+    font-size: 11px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+  aside.sidebar .brand .ver { margin-top: 4px; opacity: 0.75; }
 
   /* "How this works" — three numbered steps. Asymmetric: large outlined number,
      compact body. Steps separated by hairlines, not boxes. */
