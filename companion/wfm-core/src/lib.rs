@@ -16,6 +16,7 @@
 pub mod auth;
 pub mod error;
 pub mod inventory;
+pub mod listing;
 pub mod pending;
 pub mod platform;
 pub mod scan;
