@@ -1020,8 +1020,11 @@
       const cfg = parseCompanionUrl(companionInput);
       companionConfig = cfg;
       saveCompanionConfig(cfg);
-      companionInput = '';
       await verifyCompanion();
+      // Clear the pasted URL only once the token actually verified. A failed
+      // connect must leave it in place so retry is one click, not a full
+      // re-paste of the URL+token the serve output printed.
+      if (companionStatus === 'connected') companionInput = '';
     } catch (e) {
       companionStatus = 'error';
       companionError = e.message || String(e);

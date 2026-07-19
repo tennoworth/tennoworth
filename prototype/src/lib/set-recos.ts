@@ -20,9 +20,9 @@
 
 import type { Market, OwnedRecord } from './types';
 
-export type SetRecoKind = 'near-complete' | 'complete-with-extras' | 'extras';
+type SetRecoKind = 'near-complete' | 'complete-with-extras' | 'extras';
 
-export interface SetRecoPart {
+interface SetRecoPart {
   slug: string;
   name: string;
   count: number;

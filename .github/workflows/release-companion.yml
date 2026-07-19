@@ -42,6 +42,11 @@ jobs:
         with:
           workspaces: companion
 
+      # Runs on both OS legs — release defense-in-depth: never ship a binary
+      # from a tree whose tests don't pass on that platform.
+      - name: Test
+        run: cargo test --target ${{ matrix.target }}
+
       - name: Build
         run: cargo build --release --target ${{ matrix.target }}
 

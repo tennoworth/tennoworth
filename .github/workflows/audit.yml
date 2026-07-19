@@ -7,6 +7,12 @@ name: audit
 on:
   push:
     branches: [main]
+    # The 2-hourly market-refresh bot commits touch only these three data
+    # files; skip a full CI run for a data-only push (~85 wasted runs/week).
+    paths-ignore:
+      - 'prototype/public/market.json'
+      - 'prototype/public/wfstat-catalog.json'
+      - 'wfm_results.csv'
   pull_request:
   schedule:
     - cron: '17 4 * * 1'  # every Monday at 04:17 UTC
@@ -51,3 +57,29 @@ jobs:
         run: cargo install --locked cargo-audit
       - name: cargo audit
         run: cargo audit --deny warnings
+
+  python-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install deps
+        run: pip install pytest requests
+      - name: pytest
+        run: pytest tests/
+
+  cargo-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: companion
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: companion
+      - name: cargo test
+        run: cargo test

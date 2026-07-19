@@ -25,7 +25,7 @@ import { clearingPrice } from './sell-priority';
 
 const MOVING_THRESHOLD = 5;  // 48h trades; below this the part stagnates
 
-export interface RelicPlanReward {
+interface RelicPlanReward {
   slug: string;
   name: string;
   rarity: string;
