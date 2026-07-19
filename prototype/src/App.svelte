@@ -1256,7 +1256,9 @@
           <p>
             No always-on server: <code>wfm-fetch-inventory</code> (no subcommand)
             writes <code>inventory.json</code> to the folder you run it from —
-            drop that below. Same sell list, just manual.
+            drop that below. It's the same companion producing the same file;
+            this path just skips leaving <code>serve</code> running, handy when
+            you're offline or on a locked-down box. Same sell list, just manual.
           </p>
           <div class="snippet-row">
             <pre class="snippet"><code>wfm-fetch-inventory</code></pre>
@@ -1320,7 +1322,8 @@
   {@render faqContent()}
 
   <footer>
-    Open source · MIT · data from warframe.market and warframestat.us
+    <a href="#trust">Trust &amp; safety</a> · Open source · MIT · data from
+    warframe.market and warframestat.us
     <span class="ver" title="build {APP_COMMIT}">· v{APP_VERSION} · {APP_COMMIT}</span>
   </footer>
 </main>
@@ -2012,12 +2015,14 @@
         doesn't write to the game's memory or modify game state.
       </p>
       <p>
-        EAC (the anti-cheat) targets memory <em>writes</em> and known cheat
-        signatures, not read-only inspection. Equivalent tools (Sainan's
-        warframe-api-helper, AlecaFrame via Overwolf) have been used for
-        years with no documented bans. <strong>That's not a guarantee.</strong>
-        DE has not formally blessed this category. Use at your own risk;
-        we accept none.
+        <strong>We can't promise this is ban-safe</strong> — no third-party
+        tool honestly can. What we <em>can</em> say: the companion only ever
+        reads memory. It never writes to the game, never injects code, and
+        doesn't interact with anti-cheat. Equivalent tools (Sainan's
+        warframe-api-helper, AlecaFrame via Overwolf) have run for years with
+        no documented bans, but Digital Extremes has never formally blessed
+        this category of tool. Use it at your own risk; we accept none. More
+        detail in <a href="#trust">Trust &amp; safety</a> below.
       </p>
     </details>
 
@@ -2198,6 +2203,95 @@
         Your <code>inventory.json</code> file itself is never at risk. If saved
         data was purged, just re-drop it or re-pull from the companion to
         restore.
+      </p>
+    </details>
+  </section>
+
+  <section id="trust" class="faq trust">
+    <h2>Trust &amp; safety</h2>
+    <p class="trust-lede">
+      Straight answers about what this tool touches, what it can't, and how to
+      check us for yourself — not legal boilerplate. The short version: the
+      companion only ever <em>reads</em> your running game, the web app runs
+      entirely in your browser, and we can't promise this is ban-safe — so use
+      it at your own risk.
+    </p>
+
+    <details>
+      <summary>What the companion reads</summary>
+      <p>
+        While Warframe is running, the companion scans the game's memory for
+        two things your client already has: your <strong>account ID</strong>
+        and the <strong>session nonce</strong> it uses to talk to Digital
+        Extremes. It then asks DE's own inventory API for your items — the exact
+        same request the game client makes. It <strong>never writes to the
+        game's memory and never injects code</strong>; it only reads, then makes
+        one HTTPS call. Your account ID and nonce are used for that single
+        request and discarded — never printed, never saved, never sent anywhere
+        else.
+      </p>
+    </details>
+
+    <details>
+      <summary>Isn't reading game memory sketchy? It's what AlecaFrame does too</summary>
+      <p>
+        Reading a process you own is ordinary, and it's the same technique the
+        most popular tool already uses. AlecaFrame reads Warframe's memory too —
+        through an Overwolf plugin (<code>gep_warframeext.dll</code>) that calls
+        Windows' <code>ReadProcessMemory</code>. We do the same thing without
+        the Overwolf middleman (and without being Windows-only). Nothing here
+        modifies the game.
+      </p>
+    </details>
+
+    <details>
+      <summary>What never leaves your machine</summary>
+      <p>
+        The web app has no backend and no accounts — every item, price join, and
+        ranking is computed in your browser tab. If you log in to
+        warframe.market to post listings, that login token is
+        <strong>encrypted on disk</strong> (AES-256-GCM) at
+        <code>~/.config/wfminv/</code> (or the Windows equivalent), and the
+        browser never sees it — the companion holds it and relays.
+      </p>
+      <p>
+        The one feature that ever sends anything off your machine is the
+        <strong>optional AI assistant</strong>, and only when you use it: it
+        sends just the rows visible in your sell table (after your filters),
+        never your full inventory and never your account. No telemetry, no
+        analytics — confirm it in your browser's network tab.
+      </p>
+    </details>
+
+    <details>
+      <summary>How you can verify all this yourself</summary>
+      <p>
+        Everything is open source — read the companion's memory-scan code and
+        the web app's join logic. The companion's release binaries are
+        <strong>reproducibly built in public CI</strong>: you can audit the
+        workflow file, the source at the tagged commit, and the build logs, and
+        every release ships a <code>SHA256SUMS</code> file so you can confirm
+        your download matches (the install scripts check it for you). The site
+        loads <strong>zero third-party scripts</strong> — inspect the page's
+        Content-Security-Policy. Full detail lives in
+        <a href="https://github.com/tennoworth/tennoworth/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer">SECURITY.md</a>.
+      </p>
+    </details>
+
+    <details>
+      <summary>The honest risk — and what happens if DE's stance changes</summary>
+      <p>
+        We <strong>can't promise this is ban-safe</strong>; no third-party tool
+        honestly can. What we can say: the companion only reads memory, never
+        writes or injects, and doesn't interact with anti-cheat. Equivalent
+        tools (Sainan's warframe-api-helper, AlecaFrame via Overwolf) have run
+        for years with no documented bans, but Digital Extremes has never
+        formally blessed this category of tool. Use it at your own risk.
+      </p>
+      <p>
+        And if DE's stance ever changes, only the memory-scan path stops: the
+        <strong>market browser and dropping in an <code>inventory.json</code>
+        file keep working</strong>.
       </p>
     </details>
   </section>
@@ -3323,6 +3417,16 @@
   .faq details > p + p { margin-top: 8px; }
   .faq details > p code,
   .faq details > p strong { color: var(--fg); }
+
+  .trust { scroll-margin-top: 16px; }
+  .trust-lede {
+    margin: 12px 0 4px;
+    padding-bottom: 4px;
+    font-size: 13px;
+    color: var(--fg);
+    line-height: 1.6;
+    max-width: 72ch;
+  }
 
   footer {
     color: var(--muted);
