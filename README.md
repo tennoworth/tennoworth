@@ -72,10 +72,12 @@ posture and threat model: [`SECURITY.md`](SECURITY.md).
 
 ## Ban risk
 
-The companion does read-only memory inspection — the same approach
-[warframe-api-helper](https://github.com/Sainan/warframe-api-helper) has used
-for years and the equivalent of what AlecaFrame does via Overwolf. DE has not
-formally blessed this category of tool. **Use at your own risk; no warranty.**
+The companion only reads game memory — it never writes, never injects.
+**We can't promise it's ban-safe.** Equivalent tools
+([warframe-api-helper](https://github.com/Sainan/warframe-api-helper) and
+AlecaFrame via Overwolf) have run for years with no documented bans, but DE
+has never formally blessed this category of tool. **Use at your own risk; no
+warranty.**
 
 ## License
 
