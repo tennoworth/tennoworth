@@ -5,39 +5,21 @@ edition = "2021"
 description = "Linux+Windows companion that extracts Warframe inventory.json from the running game process."
 license = "MIT"
 
+# Thin adapter over wfm-core: this crate owns only CLI parsing and the loopback
+# HTTP server (routing, session token, CORS, TTY passphrase prompting). Scan,
+# fetch, auth/JWT, listing, pending-plan and the assistant relay all live in
+# wfm-core, which pulls the heavy deps (reqwest, crypto, sysinfo, …) transitively.
 [dependencies]
+wfm-core = { path = "../wfm-core" }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
-regex = "1"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking", "gzip", "json", "cookies"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-sysinfo = { version = "0.32", default-features = false, features = ["system"] }
-directories = "5"
 
-# Login + JWT encryption
+# Interactive passphrase prompts for `login` / late listing unlock.
 rpassword = "7"
-aes-gcm = "0.10"
-pbkdf2 = "0.12"
-sha2 = "0.10"
-# Already in the tree via aes-gcm; used directly for constant-time
-# session-token comparison (str == short-circuits on first mismatch).
+# Constant-time session-token comparison (str == short-circuits on first byte).
 subtle = "2"
-hmac = "0.12"
-base64 = "0.22"
-rand = "0.8"
 
 # Serve subcommand (loopback HTTP server)
 tiny_http = "0.12"
-
-[target.'cfg(unix)'.dependencies]
-libc = "0.2"
-
-[target.'cfg(windows)'.dependencies]
-windows = { version = "0.58", features = [
-    "Win32_System_Diagnostics_ToolHelp",
-    "Win32_System_Diagnostics_Debug",
-    "Win32_System_Memory",
-    "Win32_System_Threading",
-    "Win32_Foundation",
-] }
