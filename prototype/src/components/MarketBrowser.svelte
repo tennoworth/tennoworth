@@ -96,7 +96,7 @@
   const plat = (v: number) => Math.round(v).toLocaleString();
 </script>
 
-<section class="browser">
+<section class="browser" data-testid="market-browser">
   <div class="browser-head">
     <h2>What's worth selling right now</h2>
     <span class="market-status">

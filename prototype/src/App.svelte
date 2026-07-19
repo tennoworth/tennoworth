@@ -29,11 +29,23 @@
   import { encryptPayload, decryptPayload, isEncrypted } from './lib/crypto';
   import {
     loadCompanionConfig, saveCompanionConfig, clearCompanionConfig,
-    parseCompanionUrl, pingCompanion, fetchInventory,
+    parseCompanionUrl, pingCompanion,
     getPendingPlan, resumePendingPlan, discardPendingPlan,
     CompanionUnreachableError,
   } from './lib/companion';
+  import { createTransport, isDesktopRuntime } from './lib/transport';
   import type { CompanionConfig, Inventory, Market, OwnedRecord, PendingPlan, ItemResult } from './lib/types';
+
+  // Desktop (Tauri) vs hosted/serve (browser) is decided ONCE at boot. In
+  // desktop mode the companion-connect surface (URL/token/handshake, orders,
+  // assistant, listing) is hidden — those need the passphrase UI that lands
+  // next chunk — and inventory comes from the `scan_inventory` IPC command
+  // instead of the loopback HTTP server.
+  const isDesktop = isDesktopRuntime();
+  // HTTP transport reads companionConfig lazily via the getter; the Tauri
+  // transport ignores it. companionConfig is declared further down (with the
+  // rest of the companion state) — the getter is only invoked at call time.
+  const transport = createTransport(() => companionConfig);
 
   type Phase = 'idle' | 'loading' | 'done' | 'error';
   let phase = $state<Phase>('idle');
@@ -255,29 +267,42 @@
   // a dependency, so writing `resolved` here and then reading it via
   // recomputeResults caused an infinite re-run loop.
   onMount(async () => {
-    // Auto-connect from a deep link the companion opened on `serve` start
-    // (#companion=http://127.0.0.1:<port>?token=…). The token rides in the URL
-    // fragment, which is never sent to a server — so it stays local. We strip it
-    // from the address bar / history immediately either way.
-    const FRAG = '#companion=';
+    // Desktop mode has no loopback companion: skip the whole URL/token/deep-link
+    // handshake. A best-effort `health` invoke confirms wfm-core is linked and
+    // records the platform for display; failure is non-fatal (the dashboard and
+    // file-drop still work). The connect flow below is browser-only.
     let deepLink = false;
-    if (location.hash.startsWith(FRAG)) {
+    if (isDesktop) {
       try {
-        const cfg = parseCompanionUrl(location.hash.slice(FRAG.length));
-        companionConfig = cfg;
-        saveCompanionConfig(cfg);
-        deepLink = true;
+        const h = await transport.health();
+        companionPlatform = h?.platform ?? null;
       } catch (e) {
-        // Surface WHY the link was rejected (parseCompanionUrl emits
-        // user-appropriate reasons), then fall through to any saved config.
-        // Deliberately NOT touching companionStatus — a valid saved connection
-        // must still verify clean below.
-        deepLinkError = `That companion link didn't work: ${e instanceof Error ? e.message : String(e)}`;
+        console.error('desktop health check failed', e);
       }
-      history.replaceState(null, '', location.pathname + location.search);
+    } else {
+      // Auto-connect from a deep link the companion opened on `serve` start
+      // (#companion=http://127.0.0.1:<port>?token=…). The token rides in the URL
+      // fragment, which is never sent to a server — so it stays local. We strip it
+      // from the address bar / history immediately either way.
+      const FRAG = '#companion=';
+      if (location.hash.startsWith(FRAG)) {
+        try {
+          const cfg = parseCompanionUrl(location.hash.slice(FRAG.length));
+          companionConfig = cfg;
+          saveCompanionConfig(cfg);
+          deepLink = true;
+        } catch (e) {
+          // Surface WHY the link was rejected (parseCompanionUrl emits
+          // user-appropriate reasons), then fall through to any saved config.
+          // Deliberately NOT touching companionStatus — a valid saved connection
+          // must still verify clean below.
+          deepLinkError = `That companion link didn't work: ${e instanceof Error ? e.message : String(e)}`;
+        }
+        history.replaceState(null, '', location.pathname + location.search);
+      }
+      if (!companionConfig) companionConfig = loadCompanionConfig();
+      if (companionConfig) await verifyCompanion();
     }
-    if (!companionConfig) companionConfig = loadCompanionConfig();
-    if (companionConfig) await verifyCompanion();
 
     // Restore the last inventory snapshot if there is one.
     const snap = loadSnapshot();
@@ -960,6 +985,9 @@
   let effectiveView = $derived.by<View>(() => {
     if (view === 'baro' && !showBaroCard) return 'sell';
     if (view === 'orders' && companionStatus !== 'connected') return 'sell';
+    // Desktop hides the loopback-companion + orders panes entirely (no connect
+    // surface); a stale persisted 'companion'/'orders' view falls back to Sell.
+    if (isDesktop && (view === 'companion' || view === 'orders')) return 'sell';
     return view;
   });
 
@@ -1089,18 +1117,22 @@
     pullError = null;
   }
 
-  // Pull inventory straight from the companion (it memory-scans the running
-  // game) and run it through the same resolution pipeline as a dropped file —
-  // no file, no drag-in.
+  // Scan inventory straight from the running game and run it through the same
+  // resolution pipeline as a dropped file — no file, no drag-in. Browser mode
+  // goes through the loopback companion (needs a connection); desktop mode goes
+  // straight to the `scan_inventory` IPC command. Either way, "game not running
+  // / not past login" surfaces the scanner's exact actionable message.
   async function pullInventory() {
-    if (!companionConfig || pullingInventory) return;
+    if (pullingInventory || (!isDesktop && !companionConfig)) return;
     pullingInventory = true;
     pullError = null;
     try {
-      const data = await fetchInventory(companionConfig);
-      await handleInventory({ name: 'inventory (from companion)', data });
+      const data = await transport.fetchInventory();
+      await handleInventory({
+        name: isDesktop ? 'inventory (from game)' : 'inventory (from companion)',
+        data,
+      });
     } catch (e) {
-      // Game not running / not past login → the companion's actionable message.
       pullError = e.message || String(e);
     } finally {
       pullingInventory = false;
@@ -1213,13 +1245,19 @@
 </script>
 
 {#if phase !== 'done'}
-<main class="landing">
+<main class="landing" data-testid={isDesktop ? 'desktop-mode' : undefined}>
   <header>
     <h1>TennoWorth</h1>
     <p class="sub">
-      What's worth selling in Warframe right now — search any item, spot the
-      movers, and see what's vaulted, straight from a live warframe.market
-      snapshot. No install, no login.
+      {#if isDesktop}
+        What's worth selling in Warframe right now — scan your account and
+        TennoWorth ranks your inventory by what to sell, joined to a live
+        warframe.market snapshot.
+      {:else}
+        What's worth selling in Warframe right now — search any item, spot the
+        movers, and see what's vaulted, straight from a live warframe.market
+        snapshot. No install, no login.
+      {/if}
     </p>
   </header>
 
@@ -1230,6 +1268,24 @@
       <MarketBrowser {market} staleness={marketStaleness} freshness={marketFreshness} />
     {/if}
 
+    {#if isDesktop}
+      <section class="upsell-lead">
+        <h2>Get your personal sell list</h2>
+        <p class="sub">
+          With Warframe open and past the login screen, scan your account —
+          TennoWorth ranks <em>your</em> inventory by what to sell right now.
+        </p>
+        <div class="desktop-scan-row">
+          <button
+            class="rp-primary"
+            data-testid="desktop-scan"
+            onclick={pullInventory}
+            disabled={pullingInventory}
+          >{pullingInventory ? 'Scanning game…' : 'Scan inventory'}</button>
+          <span class="muted small">or drop an <code>inventory.json</code> below</span>
+        </div>
+      </section>
+    {:else}
     <section class="upsell-lead">
       <h2>Get your personal sell list</h2>
       <p class="sub">
@@ -1311,6 +1367,7 @@
         </div>
       </li>
     </ol>
+    {/if}
 
     {#if loadIssue}
       <div class="card warn-banner">
@@ -1394,6 +1451,7 @@
         </button>
       </div>
 
+      {#if !isDesktop}
       <div class="nav-group">
         <div class="nav-label">Manage</div>
         {#if companionStatus === 'connected'}
@@ -1407,6 +1465,7 @@
           <span class="dot {companionStatus === 'connected' ? 'fresh' : (companionStatus === 'error' || companionStatus === 'unreachable') ? 'stale' : ''}" aria-hidden="true"></span>
         </button>
       </div>
+      {/if}
 
       <div class="nav-group">
         <div class="nav-label">Library</div>
@@ -1436,7 +1495,14 @@
           >Refresh ▾</button>
           {#if refreshOpen}
             <div class="refresh-pop">
-              {#if companionStatus === 'connected'}
+              {#if isDesktop}
+                <p class="rp-lede">Scan the running game — no file needed.</p>
+                <button class="rp-primary" data-testid="desktop-scan" onclick={refreshFromGame} disabled={pullingInventory}>
+                  {pullingInventory ? 'Scanning game…' : 'Scan game'}
+                </button>
+                <div class="rp-or">or pick a file</div>
+                <button class="ghost rp-file" onclick={openFilePicker}>Choose inventory.json…</button>
+              {:else if companionStatus === 'connected'}
                 <p class="rp-lede">Connected to the companion — pull straight from the game, no file needed.</p>
                 <button class="rp-primary" onclick={refreshFromGame} disabled={pullingInventory}>
                   {pullingInventory ? 'Scanning game…' : 'Refresh from game'}
@@ -2434,6 +2500,9 @@
   style="display:none"
 />
 
+<!-- Listing + assistant are loopback-companion surfaces that need a WFM login /
+     passphrase — not wired in the desktop build yet, so hidden in desktop mode. -->
+{#if !isDesktop}
 <ListingReviewModal
   bind:open={listingOpen}
   rows={listableRows.slice(0, 50)}
@@ -2446,6 +2515,7 @@
   config={companionConfig}
   companionStatus={companionStatus}
 />
+{/if}
 
 <dialog bind:this={exportDialog} class="cryptobox">
   <form onsubmit={performExport}>
@@ -2832,6 +2902,13 @@
   }
   .upsell-lead h2 { margin: 0; }
   .upsell-lead .sub { margin-top: 4px; }
+  .desktop-scan-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
 
   /* "How this works" — three numbered steps. Asymmetric: large outlined number,
      compact body. Steps separated by hairlines, not boxes. */
