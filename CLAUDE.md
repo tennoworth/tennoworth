@@ -143,10 +143,10 @@ cd companion && cargo build --release
 - **Container-110 outbound firewall lockdown.** Drafted, deferred —
   restrict the production LXC's egress to just WFM + the GitHub release
   assets it pulls.
-- **Language-consolidation phases 1-3** (see the Rust consolidation
-  plan): (1) move the GH cron from 2h → daily now the box owns the live
-  refresh; (2) land the `wfm-scrape` converter port; (3) port the
-  scraper itself.
+- **Language-consolidation phases 2-3** (see the Rust consolidation
+  plan): land the `wfm-scrape` converter port behind a CI parity gate,
+  then port the scraper itself. (Phase 1 — GH cron reduced to a daily
+  offset bootstrap-snapshot role — is done.)
 - **Verify the `serve` late-JWT-unlock listing path end-to-end** with a
   real WFM login — the 401/503 `needs_login` branches on the first
   listing request are still unverified against a live companion.

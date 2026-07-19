@@ -1,13 +1,18 @@
 name: refresh-market
 
-# Scrape warframe.market on a schedule and commit the snapshot the web app
-# consumes. Public repo → unlimited Actions minutes. Each run takes ~30-45
-# minutes (~3800 items × 2 calls × 0.34 s pacing), well under the 6 h job
-# timeout.
+# Refresh the REPOSITORY snapshot of market data (bootstrap/dev copy).
+# Production data does NOT come from here: the self-host box runs the same
+# pipeline on its own 2 h systemd timer and Caddy serves the box's copy.
+# This cron exists so a fresh clone / new box deploy starts with data that
+# is at most a day old (its first own scrape lands within 2 h anyway).
+# Each run takes ~30-45 minutes (~3800 items × 2 calls × 0.34 s pacing).
 
 on:
   schedule:
-    - cron: '15 */2 * * *'  # every 2 hours at :15 (off-the-hour, polite)
+    # Daily, offset from the box's timer (which fires at even UTC hours
+    # +≤10 min jitter and runs ~45 min): 03:05 sits in the 02:55–04:00 gap,
+    # so the two scrapers never hit WFM at the same time.
+    - cron: '5 3 * * *'
   workflow_dispatch:        # also runnable manually from the Actions tab
 
 permissions:
