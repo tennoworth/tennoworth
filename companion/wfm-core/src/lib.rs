@@ -14,6 +14,7 @@
 //! warning — are preserved verbatim from the pre-extraction binary.)
 
 pub mod platform;
+pub mod util;
 
 // WFM is behind Cloudflare with bot protection. A non-browser UA gets a 1015
 // rate-limit error or a JS challenge before our request ever reaches the API.
