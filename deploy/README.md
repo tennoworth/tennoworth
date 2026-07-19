@@ -121,6 +121,18 @@ Solo alternative: `bun run build` locally, then
 `rsync -az --delete prototype/dist/ wfm@<tailscale-ip>:/srv/wfm/app/prototype/dist/`
 over Tailscale (never an exposed port).
 
+## Where market data comes from (bootstrap vs production)
+
+The box is the **production writer**: `wfm-scrape.timer` runs the full
+pipeline every 2 h and Caddy serves the box's own
+`prototype/public/market.json`. The repo's committed copy is a **bootstrap
+snapshot only**, refreshed daily by the `refresh-market` GH cron (offset so
+the two scrapers never run concurrently): a fresh clone / brand-new box
+starts with data at most a day old, and the box's first own scrape (within
+2 h of `wfm-scrape.timer` enablement) takes over from there. If the repo
+copy is ever badly stale, `workflow_dispatch` the cron manually — do NOT
+scrape from two places at the same time.
+
 ---
 
 ## Admin access
