@@ -13,6 +13,7 @@
   import MyOrdersPanel from './components/MyOrdersPanel.svelte';
   import AssistantChat from './components/AssistantChat.svelte';
   import CopyBtn from './components/CopyBtn.svelte';
+  import MarketBrowser from './components/MarketBrowser.svelte';
   import { flattenInventory, extractKeptLvls } from './lib/inventory';
   import { loadCatalogs, resolvePath, type Catalogs } from './lib/resolver';
   import { loadMarket, lookup } from './lib/market';
@@ -310,6 +311,17 @@
     // automatically, so "run serve → browser shows your sell list" just works.
     if (deepLink && companionStatus === 'connected' && resolved.owned.size === 0) {
       await pullInventory();
+    }
+
+    // Cold landing (no saved inventory): preload the snapshot so the no-install
+    // MarketBrowser has data to show. Best-effort — a failure just hides the
+    // browser; the install steps below it still work.
+    if (phase === 'idle' && !market) {
+      try {
+        market = await loadMarket();
+      } catch (e) {
+        console.error(e);
+      }
     }
   });
 
@@ -1205,16 +1217,28 @@
   <header>
     <h1>TennoWorth</h1>
     <p class="sub">
-      Drop your <code>inventory.json</code>. We cross-reference against a
-      warframe.market snapshot (refreshed centrally on a schedule) and rank
-      what's worth selling. Everything happens in your browser — your inventory
-      never leaves the page.
+      What's worth selling in Warframe right now — search any item, spot the
+      movers, and see what's vaulted, straight from a live warframe.market
+      snapshot. No install, no login.
     </p>
   </header>
 
   {@render generalBanners()}
 
   {#if phase === 'idle' || phase === 'loading'}
+    {#if market}
+      <MarketBrowser {market} staleness={marketStaleness} freshness={marketFreshness} />
+    {/if}
+
+    <section class="upsell-lead">
+      <h2>Get your personal sell list</h2>
+      <p class="sub">
+        Point the companion at your account and TennoWorth ranks
+        <em>your</em> inventory by what to sell right now — the same prices,
+        joined to what you actually own.
+      </p>
+    </section>
+
     <ol class="steps">
       <li>
         <span class="n">01</span>
@@ -2798,6 +2822,16 @@
     letter-spacing: 0.02em;
   }
   aside.sidebar .brand .ver { margin-top: 4px; opacity: 0.75; }
+
+  /* Upsell lead — separates the free market browser above from the companion
+     install flow below. A hairline + top padding, no box. */
+  .upsell-lead {
+    border-top: 1px solid var(--border);
+    padding-top: 18px;
+    margin-top: 4px;
+  }
+  .upsell-lead h2 { margin: 0; }
+  .upsell-lead .sub { margin-top: 4px; }
 
   /* "How this works" — three numbered steps. Asymmetric: large outlined number,
      compact body. Steps separated by hairlines, not boxes. */
