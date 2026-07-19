@@ -1,0 +1,18 @@
+[package]
+name = "wfm-scrape"
+version = "0.1.0"
+edition = "2021"
+description = "Host-only market pipeline: `build` ports scripts/csv_to_market_json.py (phase 3), `scrape` will port wfm_demand.py (phase 4). Shadow port — Python stays production until the phase-5 cutover."
+license = "MIT"
+
+[dependencies]
+market-math = { path = "../market-math" }
+wfm-client = { path = "../wfm-client" }
+csv = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking", "gzip", "json"] }
+# Host-only binary — chrono is fine here (the player binary doesn't get it).
+# Needed for the injected clock: ISO stamps, fromisoformat-style parsing of
+# WFCD vault dates, and the vaulting-soon horizon arithmetic.
+chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }

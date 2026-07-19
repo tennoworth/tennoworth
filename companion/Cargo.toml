@@ -2,11 +2,15 @@
 #   wfm-fetch-inventory — the player-facing companion binary (fetch/login/serve)
 #   market-math         — pure market-data heuristics, ported from wfm_demand.py
 #                         as phase 2 of the Python→Rust pipeline consolidation.
-#                         No I/O, no deps; the future wfm-scrape binary builds
-#                         on it. Keep it pure — that's what makes it testable
-#                         against the frozen Python fixtures.
+#                         No I/O, no deps. Keep it pure — that's what makes it
+#                         testable against the frozen Python fixtures.
+#   wfm-scrape          — host-only pipeline crate (phase 3 of the port).
+#                         `build` mirrors scripts/csv_to_market_json.py;
+#                         `scrape` (phase 4) will mirror wfm_demand.py. NOT
+#                         production yet — Python remains the pipeline until
+#                         the phase-5 cutover.
 [workspace]
-members = ["wfm-fetch-inventory", "market-math"]
+members = ["wfm-fetch-inventory", "market-math", "wfm-scrape", "wfm-client"]
 resolver = "2"
 
 # Shared by every member; the release binary size/behavior of

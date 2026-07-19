@@ -83,3 +83,26 @@ jobs:
           workspaces: companion
       - name: cargo test
         run: cargo test
+
+  # Parity gate for the Python→Rust converter port: builds the host-only
+  # wfm-scrape binary, then runs both converters on the frozen fixtures and
+  # semantically diffs their market.json. GitHub sets CI=true, so a missing
+  # binary FAILS the job rather than silently skipping.
+  convert-parity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: companion
+      - name: Build wfm-scrape (release)
+        working-directory: companion
+        run: cargo build --release -p wfm-scrape
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install deps
+        run: pip install pytest requests
+      - name: pytest parity
+        run: pytest tests/test_convert_parity.py

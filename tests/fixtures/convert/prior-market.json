@@ -1,0 +1,66 @@
+{
+  "updated_at": "2026-06-30T00:00:00Z",
+  "platform": "pc",
+  "item_count": 1,
+  "catalog_count": 2,
+  "source": "bootstrap from wfm_results.csv + /v2/items",
+  "catalog": {
+    "primed continuity": "primed_continuity",
+    "volt prime chassis": "volt_prime_chassis"
+  },
+  "items": {
+    "primed_continuity": {
+      "avg": 40.0,
+      "low_sell": 38,
+      "low5_avg": 40.0,
+      "top_buy": 30,
+      "vol": 200,
+      "ratio": 0.5,
+      "buys": 8,
+      "sells": 12,
+      "tags": ["mod"],
+      "ducats": 0,
+      "median_now": 35,
+      "median_90d": 33,
+      "medians_7d": [30, 32, 35],
+      "donch_top_90d": 45,
+      "donch_bot_90d": 15
+    }
+  },
+  "path_to_info": {
+    "/Lotus/Types/Recipes/WarframeRecipes/VoltPrimeChassisComponent": {
+      "name": "Volt Prime Chassis",
+      "slug": "volt_prime_chassis",
+      "category": "Warframes"
+    }
+  },
+  "set_to_parts": {
+    "volt_prime_set": {
+      "name": "Volt Prime",
+      "parts": [
+        {"slug": "volt_prime_chassis", "component_name": "Chassis"}
+      ]
+    }
+  },
+  "relic_rewards": {
+    "lith_v1_relic": [
+      {"reward_slug": "volt_prime_chassis", "reward_name": "Volt Prime Chassis", "rarity": "Common", "chance": 25.33}
+    ]
+  },
+  "vault_status": {
+    "volt_prime_chassis": "available",
+    "volt_prime_set": "available"
+  },
+  "baro": {
+    "activation": "2026-06-20T14:00:00.000Z",
+    "expiry": "2026-06-22T14:00:00.000Z",
+    "location": "Venus/Vesper Relay"
+  },
+  "surface_fetched_at": {
+    "path_to_info": "2026-06-15T00:00:00Z",
+    "set_to_parts": "2026-06-15T00:00:00Z",
+    "relic_rewards": "2026-06-15T00:00:00Z",
+    "vault_status": "2026-06-15T00:00:00Z",
+    "baro": "2026-06-20T14:00:00Z"
+  }
+}

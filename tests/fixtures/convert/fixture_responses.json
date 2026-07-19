@@ -1,0 +1,115 @@
+{
+  "https://api.warframe.market/v2/items": {
+    "data": [
+      {
+        "slug": "primed_continuity",
+        "i18n": {"en": {"name": "Primed Continuity"}},
+        "tags": ["mod"],
+        "ducats": 0,
+        "maxRank": 10,
+        "subtypes": []
+      },
+      {
+        "slug": "volt_prime_chassis",
+        "i18n": {"en": {"name": "Volt Prime Chassis"}},
+        "tags": ["prime", "component"],
+        "ducats": 45,
+        "maxRank": null,
+        "subtypes": []
+      },
+      {
+        "slug": "volt_prime_set",
+        "i18n": {"en": {"name": "Volt Prime Set"}},
+        "tags": ["prime", "set"],
+        "ducats": null,
+        "maxRank": null,
+        "subtypes": []
+      },
+      {
+        "slug": "volt_prime_chassis_blueprint",
+        "i18n": {"en": {"name": "Volt Prime Chassis Blueprint"}},
+        "tags": ["prime", "component"],
+        "ducats": 45,
+        "maxRank": null,
+        "subtypes": []
+      },
+      {
+        "slug": "volt_prime_neuroptics",
+        "i18n": {"en": {"name": "Volt Prime Neuroptics"}},
+        "tags": ["prime", "component"],
+        "ducats": 45,
+        "maxRank": null,
+        "subtypes": []
+      },
+      {
+        "slug": "lith_v1_relic",
+        "i18n": {"en": {"name": "Lith V1 Relic"}},
+        "tags": ["relic"],
+        "ducats": null,
+        "maxRank": null,
+        "subtypes": ["intact", "exceptional", "flawless", "radiant"]
+      }
+    ]
+  },
+  "https://api.warframestat.us/warframes/": [
+    {
+      "name": "Volt Prime",
+      "category": "Warframes",
+      "components": [
+        {"uniqueName": "/Lotus/Types/Recipes/WarframeRecipes/VoltPrimeChassisComponent", "name": "Chassis"},
+        {"uniqueName": "/Lotus/Types/Recipes/WarframeRecipes/VoltPrimeNeuropticsComponent", "name": "Neuroptics"},
+        {"uniqueName": "/Lotus/Types/Items/MiscItems/OrokinCell", "name": "Orokin Cell"}
+      ]
+    }
+  ],
+  "https://api.warframestat.us/weapons/": [],
+  "https://api.warframestat.us/sentinels/": [],
+  "https://drops.warframestat.us/data/relics.json": {
+    "relics": [
+      {
+        "state": "Intact",
+        "tier": "Lith",
+        "relicName": "V1",
+        "rewards": [
+          {"itemName": "Volt Prime Chassis", "rarity": "Common", "chance": 25.33},
+          {"itemName": "Volt Prime Neuroptics", "rarity": "Uncommon", "chance": 11.0}
+        ]
+      },
+      {
+        "state": "Radiant",
+        "tier": "Lith",
+        "relicName": "V1",
+        "rewards": []
+      }
+    ]
+  },
+  "https://raw.githubusercontent.com/WFCD/warframe-items/master/data/json/Warframes.json": [
+    {
+      "name": "Volt Prime",
+      "vaulted": true,
+      "estimatedVaultDate": null,
+      "components": [
+        {"name": "Chassis"},
+        {"name": "Neuroptics"}
+      ]
+    }
+  ],
+  "https://raw.githubusercontent.com/WFCD/warframe-items/master/data/json/Primary.json": [],
+  "https://raw.githubusercontent.com/WFCD/warframe-items/master/data/json/Secondary.json": [],
+  "https://raw.githubusercontent.com/WFCD/warframe-items/master/data/json/Melee.json": [],
+  "https://raw.githubusercontent.com/WFCD/warframe-items/master/data/json/Archwing.json": [],
+  "https://raw.githubusercontent.com/WFCD/warframe-items/master/data/json/Arch-Gun.json": [],
+  "https://raw.githubusercontent.com/WFCD/warframe-items/master/data/json/Arch-Melee.json": [],
+  "https://raw.githubusercontent.com/WFCD/warframe-items/master/data/json/SentinelWeapons.json": [],
+  "https://raw.githubusercontent.com/WFCD/warframe-items/master/data/json/Sentinels.json": [],
+  "https://raw.githubusercontent.com/WFCD/warframe-items/master/data/json/Pets.json": [],
+  "https://api.warframestat.us/pc/voidTrader/": {
+    "activation": "2026-07-10T14:00:00.000Z",
+    "expiry": "2026-07-12T14:00:00.000Z",
+    "location": "Pluto/Orcus Relay"
+  },
+  "https://api.warframestat.us/items/": [
+    {"uniqueName": "/Lotus/Types/Recipes/WarframeRecipes/VoltPrimeChassisComponent", "name": "Volt Prime Chassis", "category": "Warframes"},
+    {"uniqueName": "/Lotus/Types/Recipes/WarframeRecipes/VoltPrimeNeuropticsComponent", "name": "Volt Prime Neuroptics", "category": "Warframes"}
+  ]
+}
