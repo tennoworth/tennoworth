@@ -44,12 +44,13 @@ jobs:
 
       # Runs on both OS legs — release defense-in-depth: never ship a binary
       # from a tree whose tests don't pass on that platform. Scoped to the
-      # shipped player binary + its heuristics crate: wfm-scrape / wfm-client
-      # are host-only pipeline crates (not in the release), CI-gated by
-      # audit.yml instead — a workspace-wide build here would compile them on
-      # the Windows leg for nothing.
+      # shipped player binary + the crates linked into it (wfm-core, its
+      # heuristics crate market-math): wfm-scrape / wfm-client are host-only
+      # pipeline crates (not in the release), CI-gated by audit.yml instead —
+      # a workspace-wide build here would compile them on the Windows leg for
+      # nothing.
       - name: Test
-        run: cargo test --target ${{ matrix.target }} -p wfm-fetch-inventory -p market-math
+        run: cargo test --target ${{ matrix.target }} -p wfm-fetch-inventory -p wfm-core -p market-math
 
       - name: Build
         run: cargo build --release --target ${{ matrix.target }} -p wfm-fetch-inventory
