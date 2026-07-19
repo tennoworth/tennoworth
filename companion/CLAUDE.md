@@ -1,15 +1,22 @@
 # companion/ — Rust workspace: CLI + loopback HTTP server
 
-Cargo WORKSPACE with two members (target/ shared, so the binary path in
+Cargo WORKSPACE with four members (target/ shared, so the binary path in
 every doc stays `companion/target/release/wfm-fetch-inventory`):
 - `wfm-fetch-inventory/` — the player-facing binary, cross-platform
-  (Linux + Windows), ~3 MB.
-- `market-math/` — pure market-data heuristics ported from wfm_demand.py
-  (phase 2 of the Python→Rust consolidation). No I/O, no deps, no clocks —
-  keep it that way; its tests are 1:1 ports of tests/test_wfm_demand.py and
-  the future wfm-scrape binary builds on it. When you change a heuristic,
-  change BOTH implementations (Python is still the production scraper) and
-  both test suites, until the cutover.
+  (Linux + Windows), ~3 MB. The ONLY release-gated crate.
+- `market-math/` — pure market-data heuristics ported from wfm_demand.py.
+  No I/O, no deps, no clocks — keep it that way; its tests are 1:1 ports of
+  tests/test_wfm_demand.py. When you change a heuristic, change BOTH
+  implementations (Python is still the production scraper) and both test
+  suites, until the cutover.
+- `wfm-scrape/` — host-only pipeline binary. `build` mirrors
+  scripts/csv_to_market_json.py and is gated by the CI parity test
+  (tests/test_convert_parity.py — semantic JSON vs the Python converter on
+  frozen fixtures); `scrape` (the wfm_demand.py port) is not implemented yet.
+  NOT production; Python remains the pipeline writer until cutover.
+- `wfm-client/` — shared WFM transport primitives (UA, headers, envelope
+  unwrap, rate limiter, retries). Share primitives only — do not grow it
+  into an abstraction that swallows authed order mutation.
 
 The binary has three subcommands in one tree:
 - `fetch` — extracts `inventory.json` from the running game process.
