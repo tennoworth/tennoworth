@@ -2172,22 +2172,27 @@
     <details>
       <summary>Firefox can't connect — or forgot my inventory?</summary>
       <p>
-        Firefox 147+ asks permission before a site may reach “device apps and
-        services” — that's the companion on <code>127.0.0.1</code>. Click
-        <strong>Allow</strong> when the prompt appears and the connection goes
+        Firefox gates a site's access to local-network and on-device apps —
+        that's the companion on <code>127.0.0.1</code> — behind a permission.
+        It applies under <strong>strict</strong> Enhanced Tracking Protection
+        from Firefox <strong>149</strong>, and for everyone from Firefox
+        <strong>151</strong>. When you connect, watch for the permission prompt
+        and click <strong>Allow</strong> — that's what lets the connection
         through.
       </p>
       <p>
-        With <strong>strict</strong> Enhanced Tracking Protection, Firefox goes
-        further: it can silently block the connection <em>and</em> purge this
-        site's saved data as a suspected “bounce tracker” — that's what deletes
-        your saved inventory. Both come from the same protection bundle.
+        Missed the prompt, or want to grant it ahead of time? It lives in
+        <strong>Settings → Privacy &amp; Security → Permissions</strong>, in the
+        local-network / device-access section — <em>not</em> the shield icon in
+        the address bar (that toggles tracking protection, which is a different
+        setting).
       </p>
       <p>
-        The fix for both: click the <strong>shield icon</strong> in the address
-        bar and turn protection off for this site (or add a permissions
-        exception), then interact with the page — any click — so Firefox sees
-        the site is genuinely used.
+        Separately, <strong>strict</strong> Enhanced Tracking Protection can
+        purge this site's saved data as a suspected “bounce tracker” — that's
+        what wipes your saved inventory. Interacting with the page — any click —
+        tells Firefox the site is genuinely used; you can also add this site as
+        an ETP exception (the shield icon) to keep its data.
       </p>
       <p>
         Your <code>inventory.json</code> file itself is never at risk. If saved
@@ -2208,15 +2213,17 @@
         {#if loopbackDenied}
           <strong>Your browser has blocked this site's access to 127.0.0.1.</strong>
           Chrome: allow it in Site settings → Local network access. Firefox:
-          Settings → Privacy &amp; Security → Permissions → “Device apps and
-          services” — or, if you use strict tracking protection, turn the shield
-          off for this site.
+          Settings → Privacy &amp; Security → Permissions, in the local-network /
+          device-access section — <em>not</em> the shield icon (that toggles
+          tracking protection, not this permission).
         {:else}
           <strong>Couldn't reach the companion on 127.0.0.1.</strong>
           Either <code>serve</code> isn't running, or your browser blocked
           local-network access — Chrome shows an “allow local network access”
-          prompt the first time, and Firefox 147+ asks to allow “device apps and
-          services”; if you denied or dismissed it, re-enable it for this site.
+          prompt the first time, and Firefox (strict tracking protection from
+          149, everyone from 151) asks permission to reach local-network /
+          on-device apps. If you denied or dismissed the prompt, re-enable it
+          under Settings → Privacy &amp; Security → Permissions.
         {/if}
         <a href="#install" onclick={() => setView('install')}>More help in the FAQ →</a>
       </div>
