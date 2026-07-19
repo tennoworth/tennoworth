@@ -109,6 +109,13 @@ changes** so old data is silently invalidated.
 
 ## Companion HTTP contract
 
+`src/lib/transport.ts` is the dual-mode seam: it picks `HttpCompanionTransport`
+(wraps `companion.ts` + `assistant.ts` 1:1 — the routes below) or
+`TauriTransport` (`invoke` into wfm-core) once at boot by sniffing
+`window.__TAURI_INTERNALS__`. App-level ops go through the transport;
+`companion.ts` / `assistant.ts` keep their exports for the components that
+import them directly. The HTTP contract itself is unchanged:
+
 Routes the browser depends on (see `src/lib/companion.ts`):
 - `GET /health` — no auth; `{ok, platform}`
 - `GET /inventory` — memory-scans the running game and returns inventory.json
@@ -165,7 +172,7 @@ belt-and-suspenders fallback. The `public/_headers` file only matters
 for preview deployments on Cloudflare Pages / Netlify / Vercel (GitHub
 Pages silently drops it), where the header host isn't ours.
 
-Allowed `connect-src`: `self`, `http://127.0.0.1:*`,
+Allowed `connect-src` (hosted): `self`, `http://127.0.0.1:*`,
 `http://localhost:*`. The two loopback entries are for the companion;
 there are no third-party origins. The CSP ships in three places
 (`index.html` meta, `public/_headers`, `deploy/Caddyfile`) but is
@@ -173,6 +180,17 @@ there are no third-party origins. The CSP ships in three places
 run `bun run csp` to rewrite all three; `bun run build` fails via its
 prebuild `--check` if any copy drifted. (The meta copy deliberately
 omits `frame-ancestors` — browsers ignore it in meta tags.)
+
+**Desktop (Tauri) is a build-variant, not a fourth committed copy.**
+`bun run build:desktop` builds to `dist-desktop/` (gitignored) and runs
+`sync-csp.mjs --desktop dist-desktop/index.html`, which rewrites only that
+built file's meta CSP to
+`connect-src 'self' ipc://localhost http://ipc.localhost https://tennoworth.app`
+(loopback dropped — there is no companion HTTP server in desktop; the Tauri
+IPC scheme added so `invoke` uses the fast path with no CSP violations; plus
+the one C4 refresh origin). It NEVER touches the three hosted copies, so the
+hosted CSP stays byte-identical. `companion/tennoworth-desktop`'s
+`frontendDist` points at `dist-desktop`.
 
 ---
 
