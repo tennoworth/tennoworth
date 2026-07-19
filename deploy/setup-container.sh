@@ -35,6 +35,7 @@ id wfm >/dev/null 2>&1 || useradd --system --create-home --home-dir /srv/wfm --s
 python3 -m venv /srv/wfm/venv
 /srv/wfm/venv/bin/pip install --upgrade pip requests
 install -m 0755 "$DEPLOY/run-scrape.sh" /srv/wfm/run-scrape.sh
+install -m 0755 "$DEPLOY/pull-web.sh" /srv/wfm/pull-web.sh
 chown -R wfm:wfm /srv/wfm
 
 echo "==> Caddy config"
@@ -52,11 +53,13 @@ else
   systemctl reload caddy
 fi
 
-echo "==> Scrape timer"
-install -m 0644 "$DEPLOY/wfm-scrape.service" /etc/systemd/system/wfm-scrape.service
-install -m 0644 "$DEPLOY/wfm-scrape.timer"   /etc/systemd/system/wfm-scrape.timer
+echo "==> Scrape + web-pull timers"
+install -m 0644 "$DEPLOY/wfm-scrape.service"   /etc/systemd/system/wfm-scrape.service
+install -m 0644 "$DEPLOY/wfm-scrape.timer"     /etc/systemd/system/wfm-scrape.timer
+install -m 0644 "$DEPLOY/wfm-web-pull.service" /etc/systemd/system/wfm-web-pull.service
+install -m 0644 "$DEPLOY/wfm-web-pull.timer"   /etc/systemd/system/wfm-web-pull.timer
 systemctl daemon-reload
-systemctl enable --now wfm-scrape.timer
+systemctl enable --now wfm-scrape.timer wfm-web-pull.timer
 
 echo "==> Unattended security upgrades"
 apt-get install -y unattended-upgrades

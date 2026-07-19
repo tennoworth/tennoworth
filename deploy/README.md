@@ -109,9 +109,12 @@ off the internet-facing box). The box only ever holds *built static output*.
   with: { files: dist.tgz, tag_name: web-${{ github.sha }} }
 ```
 
-On the box (manual, a small timer, or over Tailscale rsync), extract to
-`/srv/wfm/app/prototype/dist` and `systemctl reload caddy`. Rollback = re-extract
-the previous artifact. Don't worry about the `market.json` baked into `dist/` —
+On the box this is automatic: [`wfm-web-pull.timer`](wfm-web-pull.timer) runs
+[`pull-web.sh`](pull-web.sh) every 15 min, which checks the `web-latest`
+release asset's `updated_at`, downloads on change, sanity-checks the tree
+(index.html + assets/ present), swaps `dist/` atomically, and reloads Caddy.
+Manual equivalent: extract to `/srv/wfm/app/prototype/dist` and
+`systemctl reload caddy`. Rollback = re-extract the previous artifact. Don't worry about the `market.json` baked into `dist/` —
 the Caddyfile serves the cron-refreshed one from `prototype/public/` instead.
 
 Solo alternative: `bun run build` locally, then
