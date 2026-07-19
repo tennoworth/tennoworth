@@ -21,6 +21,8 @@ function fixture() {
       'thin item': 'thin_item',
       'flat item': 'flat_item',
       'no baseline': 'no_baseline',
+      'cheap riser': 'cheap_riser',
+      'edge riser': 'edge_riser',
       'quest key': 'quest_key', // in catalog but NOT in items
     },
     items: {
@@ -31,6 +33,8 @@ function fixture() {
       thin_item: { avg: 5, vol: 3, median_now: 30, median_90d: 10 }, // +200% but vol<20
       flat_item: { avg: 10, vol: 100, median_now: 25, median_90d: 25 }, // 0% move
       no_baseline: { avg: 8, vol: 80, median_now: 25, median_90d: 0 }, // no usable baseline
+      cheap_riser: { avg: 9.9, vol: 100, median_now: 20, median_90d: 10 }, // +100% but avg<10 floor
+      edge_riser: { avg: 10, vol: 100, median_now: 10.5, median_90d: 10 }, // +5%, avg==10 floor
     },
     vault_status: {
       mag_prime_set: 'vaulted',
@@ -138,6 +142,18 @@ describe('topMovers', () => {
     const { risers } = topMovers(m, idx, { minVol: 20 });
     // thin_item has +200% but vol 3 < 20.
     expect(risers.some((r) => r.slug === 'thin_item')).toBe(false);
+  });
+
+  it('applies the price floor — avg 9.9 excluded, avg 10 included', () => {
+    const { risers } = topMovers(m, idx, { minVol: 1, minPrice: 10 });
+    const slugs = risers.map((r) => r.slug);
+    expect(slugs).not.toContain('cheap_riser'); // avg 9.9 < 10, despite +100%
+    expect(slugs).toContain('edge_riser'); // avg 10 == floor
+  });
+
+  it('defaults the price floor to 10 platinum', () => {
+    const { risers } = topMovers(m, idx, { minVol: 1 });
+    expect(risers.map((r) => r.slug)).not.toContain('cheap_riser');
   });
 
   it('excludes zero-move and unusable-baseline items', () => {
