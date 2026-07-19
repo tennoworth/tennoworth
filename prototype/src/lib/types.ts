@@ -94,11 +94,16 @@ export interface InventoryUpgrade {
   ItemId?: { $oid: string };
 }
 
-/** A stack entry from RawUpgrades / MiscItems / Suits / etc. */
+/** A stack entry from RawUpgrades / MiscItems / Suits / etc. Instance
+ *  categories (Suits, LongGuns, Pistols, Melee, SpaceGuns, SpaceMelee,
+ *  Sentinels, SentinelWeapons) carry `XP` per array element (one owned
+ *  copy) instead of `ItemCount`; any XP > 0 makes that copy untradeable
+ *  in-game. Stack categories have `ItemCount` and no `XP`. */
 export interface InventoryStackEntry {
   ItemType?: string;
   Type?: string;
   ItemCount?: number;
+  XP?: number;
 }
 
 /** Top-level inventory shape. The companion / DE's API emits ~200 keys;
@@ -149,6 +154,10 @@ export interface OwnedRecord {
   /** Highest `lvl` seen across instances of this item in `Upgrades`.
    *  `null` = no individualised instance at all (always show). */
   kept_lvl: number | null;
+  /** Count of owned instances with XP > 0 — copies Warframe has flagged
+   *  untradeable because they've been leveled. 0 for stack categories
+   *  (MiscItems, Recipes, RawUpgrades), which have no per-instance XP. */
+  leveled: number;
 }
 
 // -------- Companion HTTP --------

@@ -9,6 +9,8 @@
     subtype?: string | null;
     name: string;
     owned: number;
+    sellable?: number;
+    leveled?: number;
     low_sell: number;
     avg_price: number;
     clearing_price?: number;
@@ -24,6 +26,8 @@
     platinum: number;
     quantity: number;
     owned: number;
+    sellable: number;
+    leveled: number;
     rank: number;
     reference_low_sell: number;
     avg: number;
@@ -52,6 +56,11 @@
         (r.clearing_price ?? 0) > 0 ? Math.round(r.clearing_price as number)
         : r.low_sell > 0 ? r.low_sell
         : Math.round(r.avg_price);
+      // Cap using sellable (owned minus the "Keep copies" reserve), not raw
+      // owned — this is the last line of defense against listing a copy the
+      // user asked to hold back. Falls back to owned for callers that
+      // predate the reserve field.
+      const sellable = r.sellable ?? r.owned;
       return {
         key: r.key ?? r.slug,
         slug: r.slug,
@@ -61,6 +70,8 @@
         platinum: Math.max(5, target),
         quantity: 1,
         owned: r.owned,
+        sellable,
+        leveled: r.leveled ?? 0,
         // Rank 0 = unranked, the tier dupe stacks actually are. Editable so
         // a leveled copy can be listed at its real rank; the companion only
         // sends rank for items WFM ranks (mods/arcanes), so a non-zero rank
@@ -100,7 +111,7 @@
   const MAX_PLATINUM = 3000;
   let canSubmit = $derived(
     selectedCount > 0 && selectedCount <= 50 && plan.every(
-      (r) => !r.include || (r.platinum >= 5 && r.platinum <= MAX_PLATINUM && r.quantity >= 1 && r.quantity <= r.owned)
+      (r) => !r.include || (r.platinum >= 5 && r.platinum <= MAX_PLATINUM && r.quantity >= 1 && r.quantity <= r.sellable)
     )
   );
 
@@ -219,12 +230,21 @@
                     <input
                       type="number"
                       min="1"
-                      max={row.owned}
+                      max={row.sellable}
                       bind:value={plan[i].quantity}
                       disabled={!row.include}
                     />
                   </td>
-                  <td class="muted">{row.owned}</td>
+                  <td class="muted">
+                    {#if row.sellable < row.owned}
+                      {@const heldBack = row.owned - row.sellable}
+                      {@const leveledPart = Math.min(row.leveled || 0, heldBack)}
+                      {@const keptPart = heldBack - leveledPart}
+                      {row.owned} owned{#if leveledPart > 0}{' · '}<span class="leveled-note" title="Leveled gear can't be traded in-game — only unranked copies can be sold.">{leveledPart} leveled</span>{/if}{#if keptPart > 0}{' · '}<span class="kept-note" title="{keptPart} cop{keptPart === 1 ? 'y' : 'ies'} held back by the Keep copies reserve — not counted as sellable.">{keptPart} kept</span>{/if}
+                    {:else}
+                      {row.owned} owned
+                    {/if}
+                  </td>
                   <td>
                     <input
                       type="number"
@@ -423,6 +443,11 @@
   td.right { text-align: right; }
   td.muted { color: var(--muted); }
   tr.dim { opacity: 0.45; }
+  /* Leveled gear is a harder constraint than the Keep-copies reserve — the
+     game itself won't let you trade it — so it gets the same warm tint
+     ResultsTable uses for its owned-column note. */
+  .leveled-note { color: var(--warn); }
+  .kept-note { color: var(--muted); }
   input[type="number"] {
     font: inherit;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;

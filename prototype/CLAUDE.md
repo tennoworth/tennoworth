@@ -90,7 +90,8 @@ not `dispatch('inventory', detail)`.
 | HTTP request/response cache | Cache API (not used yet) |
 
 `localStorage` keys we use:
-- `wfminv:last-owned-v4` — saved owned-items snapshot.
+- `wfminv:last-owned-v5` — saved owned-items snapshot.
+- `wfminv:reserve-copies-v1` — reserve/keep-copies count.
 - `wfminv:companion-v1` — companion URL + session token.
 - `wfminv:filters-open-v1` — filter panel expanded/collapsed.
 - `wfminv:view-v1` — selected view/preset.
