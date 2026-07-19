@@ -6,7 +6,7 @@ name: audit
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
     # The 2-hourly market-refresh bot commits touch only these three data
     # files; skip a full CI run for a data-only push (~85 wasted runs/week).
     paths-ignore:
