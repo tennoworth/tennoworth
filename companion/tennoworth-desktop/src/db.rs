@@ -175,6 +175,26 @@ impl Db {
         Ok(snapshot_id)
     }
 
+    /// The item rows of the most recent snapshot (highest id), or an empty vec
+    /// when no snapshot exists yet. `slug` is the DE item path — the caller
+    /// resolves it to a WFM slug for the market join (see `sellables`).
+    pub fn latest_snapshot_items(&self) -> rusqlite::Result<Vec<SnapshotItem>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT slug, count, leveled FROM snapshot_item
+             WHERE snapshot_id = (SELECT MAX(id) FROM snapshot)
+             ORDER BY slug",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(SnapshotItem {
+                slug: r.get(0)?,
+                count: r.get(1)?,
+                leveled: r.get(2)?,
+            })
+        })?;
+        rows.collect()
+    }
+
     pub fn list_snapshots(&self, limit: i64) -> rusqlite::Result<Vec<SnapshotSummary>> {
         let conn = self.conn.lock().unwrap();
         let mut stmt = conn.prepare(
@@ -365,6 +385,40 @@ mod tests {
         assert_eq!(list.len(), 2);
         assert_eq!(list[0].source, "import"); // higher id, listed first
         assert_eq!(list[0].item_count, 1);
+    }
+
+    #[test]
+    fn latest_snapshot_items_returns_only_the_newest_snapshots_rows() {
+        let db = Db::open_in_memory().unwrap();
+        // No snapshot yet → empty, not an error.
+        assert!(db.latest_snapshot_items().unwrap().is_empty());
+
+        db.insert_snapshot(
+            "import",
+            Some("2020-01-01T00:00:00Z"),
+            None,
+            &[SnapshotItem { slug: "/Lotus/Old".into(), count: 1, leveled: 0 }],
+        )
+        .unwrap();
+        db.insert_snapshot(
+            "memory",
+            None,
+            None,
+            &[
+                SnapshotItem { slug: "/Lotus/New/A".into(), count: 3, leveled: 1 },
+                SnapshotItem { slug: "/Lotus/New/B".into(), count: 7, leveled: 0 },
+            ],
+        )
+        .unwrap();
+
+        let latest = db.latest_snapshot_items().unwrap();
+        // Only the second (highest-id) snapshot's rows, ordered by slug.
+        assert_eq!(latest.len(), 2);
+        assert_eq!(latest[0].slug, "/Lotus/New/A");
+        assert_eq!(latest[0].count, 3);
+        assert_eq!(latest[0].leveled, 1);
+        assert_eq!(latest[1].slug, "/Lotus/New/B");
+        assert_eq!(latest[1].count, 7);
     }
 
     #[test]

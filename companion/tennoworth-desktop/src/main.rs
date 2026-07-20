@@ -20,6 +20,7 @@
 
 mod db;
 mod market;
+mod sellables;
 mod snapshot;
 
 use std::io::Write;
@@ -156,6 +157,22 @@ async fn refresh_market(cache: State<'_, MarketCache>) -> Result<RefreshResult, 
     tauri::async_runtime::spawn_blocking(move || market::refresh(&dir))
         .await
         .map_err(|e| format!("market refresh task failed to run: {e}"))
+}
+
+/// Rank the latest snapshot × market by the shared sell-priority score and
+/// return the top `limit` sellables. The single join both the tray menu and the
+/// post-scan notification consume; also available to the SPA. Reads the freshest
+/// market it holds (app-data cache, else the compile-time bundle).
+#[tauri::command]
+fn top_sellables(
+    db: State<'_, Db>,
+    cache: State<'_, MarketCache>,
+    limit: usize,
+) -> Vec<sellables::SellableRow> {
+    let market = sellables::MarketData::load(&cache);
+    let mut rows = sellables::rank_sellables(&db, &market);
+    rows.truncate(limit);
+    rows
 }
 
 /// Probe-only: persist the evidence JSON to $TENNOWORTH_PROBE_OUT (and echo it
@@ -355,6 +372,7 @@ fn main() {
             list_snapshots,
             cached_market,
             refresh_market,
+            top_sellables,
             probe_report,
             probe_exit
         ])
