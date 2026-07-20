@@ -7,6 +7,7 @@
     "dev": "vite",
     "prebuild": "node ../scripts/sync-csp.mjs --check",
     "build": "vite build",
+    "build:desktop": "node ../scripts/sync-csp.mjs --check && vite build --outDir dist-desktop --emptyOutDir && node ../scripts/sync-csp.mjs --desktop dist-desktop/index.html",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
