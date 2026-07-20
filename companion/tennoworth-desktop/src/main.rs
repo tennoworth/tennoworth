@@ -19,6 +19,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod db;
+mod market;
 mod snapshot;
 
 use std::io::Write;
@@ -26,6 +27,7 @@ use std::sync::OnceLock;
 use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
 
 use db::{Db, Reserve, SnapshotSummary};
+use market::{MarketCache, RefreshResult};
 use wfm_core::inventory::InventoryScanner;
 
 /// Process-wide scanner so the single-flight guard actually serializes two
@@ -132,6 +134,28 @@ fn delete_reserve(db: State<'_, Db>, slug: String) -> Result<(), String> {
 #[tauri::command]
 fn list_snapshots(db: State<'_, Db>, limit: i64) -> Result<Vec<SnapshotSummary>, String> {
     db.list_snapshots(limit).map_err(|e| e.to_string())
+}
+
+/// The app-data-cached market snapshot, or null on a first run / unreadable
+/// cache. No network: the SPA reads this at boot to prefer the cache (last
+/// known-good from the live server) over the compile-time bundled floor.
+#[tauri::command]
+fn cached_market(cache: State<'_, MarketCache>) -> Option<String> {
+    cache.cached()
+}
+
+/// Conditionally refresh the market snapshot from tennoworth.app (ETag /
+/// If-None-Match), updating the app-data cache. Async + spawn_blocking so the
+/// (network) call never blocks the webview event loop, mirroring scan_inventory
+/// (reqwest::blocking must not run on an async worker thread). Every network /
+/// HTTP / body failure is swallowed inside `market::refresh` and returns a
+/// no-op RefreshResult — the only Err here is the blocking task failing to run.
+#[tauri::command]
+async fn refresh_market(cache: State<'_, MarketCache>) -> Result<RefreshResult, String> {
+    let dir = cache.dir();
+    tauri::async_runtime::spawn_blocking(move || market::refresh(&dir))
+        .await
+        .map_err(|e| format!("market refresh task failed to run: {e}"))
 }
 
 /// Probe-only: persist the evidence JSON to $TENNOWORTH_PROBE_OUT (and echo it
@@ -263,6 +287,12 @@ const PROBE_JS: &str = r#"(function(){
     .then(function(x){ R.fetchMarket = x; })
     .then(function(){ return probeFetch('/wfstat-catalog.json').then(function(x){ R.fetchCatalog = x; }); })
     .then(function(){ return invk('health').then(function(v){ R.invokeHealth = v; }); })
+    // C4 market refresh: cache presence before, the conditional-GET outcome, then
+    // cache presence after. Across launches this shows 200 → cache written, then
+    // If-None-Match → 304 → cache kept (updated:false, no body re-sent).
+    .then(function(){ return invk('cached_market').then(function(v){ R.cachedMarketBefore = (typeof v === 'string' && v.length > 0); R.cachedMarketBeforeLen = (typeof v === 'string') ? v.length : 0; }); })
+    .then(function(){ return invk('refresh_market').then(function(v){ R.marketRefresh = (v && typeof v === 'object') ? { updated: v.updated, updated_at: v.updated_at, etag: v.etag, bodyLen: v.body ? v.body.length : 0 } : v; }); })
+    .then(function(){ return invk('cached_market').then(function(v){ R.cachedMarketAfter = (typeof v === 'string' && v.length > 0); R.cachedMarketAfterLen = (typeof v === 'string') ? v.length : 0; }); })
     // Cross-restart persistence: the value a PRIOR run wrote. null on run 1,
     // '4' on run 2 → proves the SQLite setting survived the restart.
     .then(function(){ return invk('get_setting', { key: 'reserve-copies' }).then(function(v){ R.reserveAtStart = v; }); })
@@ -323,6 +353,8 @@ fn main() {
             set_reserve,
             delete_reserve,
             list_snapshots,
+            cached_market,
+            refresh_market,
             probe_report,
             probe_exit
         ])
@@ -341,6 +373,11 @@ fn main() {
             let store = Db::open(&db_path)
                 .map_err(|e| format!("opening state DB {}: {e}", db_path.display()))?;
             app.manage(store);
+
+            // The C4 market cache lives next to the DB in the same app-data dir.
+            // Unlike the DB, a missing/unreadable cache is never fatal — the
+            // bundled snapshot is the floor — so this can't fail startup.
+            app.manage(MarketCache::new(data_dir));
 
             let mut b = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
                 .title("TennoWorth")

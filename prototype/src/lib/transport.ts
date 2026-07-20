@@ -12,7 +12,7 @@
 // NotImplementedError until that surface lands (next chunk), and the desktop UI
 // hides those affordances.
 
-import type { CompanionConfig, PendingPlan, PlanResponse, ItemResult } from './types';
+import type { CompanionConfig, PendingPlan, PlanResponse, ItemResult, Market } from './types';
 import {
   pingCompanion,
   fetchInventory,
@@ -50,6 +50,21 @@ export class NotImplementedError extends Error {
 }
 
 /**
+ * Result of a desktop market refresh. `updated` is true only when a validated
+ * 200 delivered a strictly-considerable snapshot in `market` (the caller decides
+ * whether to swap, guarding a server rollback by comparing `updated_at`). On 304
+ * / offline / error it is false with no `market` — the caller keeps what it has.
+ * `updatedAt` reports the freshest snapshot the desktop now holds (fetched or
+ * cached) so the staleness indicator stays correct even when nothing changed.
+ */
+export interface MarketRefreshResult {
+  updated: boolean;
+  updatedAt: string | null;
+  etag: string | null;
+  market?: Market;
+}
+
+/**
  * The operations the app performs against the companion / core, config-free.
  * The HTTP implementation binds the loopback URL+token internally (via a
  * getter); the Tauri implementation needs no config at all — that whole surface
@@ -59,6 +74,20 @@ export interface Transport {
   readonly mode: 'http' | 'tauri';
   /** GET /health (HTTP) or the `health` command (Tauri). */
   health(timeoutMs?: number): Promise<PingResponse>;
+  /**
+   * The app-data-cached market snapshot, fresher than the compile-time bundled
+   * floor. Desktop-only substrate: `null` in the browser (the hosted build
+   * always fetches fresh same-origin) and on a desktop first run. Never fetches.
+   */
+  loadCachedMarket(): Promise<Market | null>;
+  /**
+   * Desktop-only: conditionally refresh the market snapshot from tennoworth.app
+   * (ETag / If-None-Match) via a Rust command, updating the app-data cache. A
+   * pure no-op in the browser (the hosted build gets fresh data same-origin from
+   * the box — it must make NO third-party fetch). Never rejects on network
+   * failure; a failed refresh returns `{ updated: false }`.
+   */
+  refreshMarket(): Promise<MarketRefreshResult>;
   /** Memory-scan the running game and return the parsed inventory object. */
   fetchInventory(): Promise<unknown>;
   submitPlan(items: PlanItemInput[]): Promise<PlanResponse>;
@@ -104,6 +133,16 @@ export class HttpCompanionTransport implements Transport {
     return timeoutMs === undefined
       ? pingCompanion(this.#cfg())
       : pingCompanion(this.#cfg(), timeoutMs);
+  }
+  // The hosted build has no client-side market cache and refreshes nothing: the
+  // box serves a fresh /market.json same-origin. Both are pure no-ops and make
+  // NO third-party fetch (prototype/CLAUDE.md's cardinal rule) — market.ts's
+  // existing same-origin fetch stays the sole market load in browser mode.
+  async loadCachedMarket(): Promise<Market | null> {
+    return null;
+  }
+  async refreshMarket(): Promise<MarketRefreshResult> {
+    return { updated: false, updatedAt: null, etag: null };
   }
   fetchInventory(): Promise<unknown> {
     return fetchInventory(this.#cfg());
@@ -175,6 +214,33 @@ export class TauriTransport implements Transport {
     // (e.g. "Warframe doesn't appear to be running…").
     const json = await resolveInvoke()<string>('scan_inventory');
     return JSON.parse(json);
+  }
+
+  // The `cached_market` command returns the raw cached body (or null). Parse it
+  // here; a corrupt cache (parse throws) reads as "no cache" so the caller falls
+  // back to the bundled floor rather than crashing the boot.
+  async loadCachedMarket(): Promise<Market | null> {
+    const raw = await resolveInvoke()<string | null>('cached_market');
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as Market;
+    } catch {
+      return null;
+    }
+  }
+
+  async refreshMarket(): Promise<MarketRefreshResult> {
+    // The Rust command swallows all network/HTTP failures and returns a no-op
+    // RefreshResult, so this rejects only on a genuine IPC fault. `body` is
+    // present only when `updated`; parse it into the Market to swap in.
+    const r = await resolveInvoke()<{
+      updated: boolean;
+      updated_at: string | null;
+      etag: string | null;
+      body: string | null;
+    }>('refresh_market');
+    const market = r.updated && r.body ? (JSON.parse(r.body) as Market) : undefined;
+    return { updated: !!r.updated, updatedAt: r.updated_at ?? null, etag: r.etag ?? null, market };
   }
 
   submitPlan(): Promise<PlanResponse> {

@@ -21,3 +21,7 @@ wfm-core = { path = "../wfm-core" }
 # canonical desktop store works on a clean Windows/Linux box with nothing
 # pre-installed (matches the "download → works" goal).
 rusqlite = { version = "0.32", features = ["bundled"] }
+# C4 market refresh: the one remote GET (tennoworth.app/market.json). Feature set
+# is a subset of wfm-core's reqwest, so Cargo's feature unification adds no new
+# build — egress stays in Rust, off the webview (prototype/CLAUDE.md rule).
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking", "gzip"] }
