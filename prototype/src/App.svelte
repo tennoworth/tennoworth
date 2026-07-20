@@ -255,6 +255,38 @@
     });
   });
 
+  // Best available market snapshot for this runtime. Desktop: the app-data
+  // cache (last known-good from the live server) beats the compile-time bundled
+  // floor; browser: loadCachedMarket() is a no-op null, so this collapses to the
+  // exact same one same-origin fetch the hosted app has always done. Can throw
+  // (loadMarket rejects on a missing snapshot) — callers keep their try/catch.
+  async function loadBestMarket(): Promise<Market> {
+    const cached = await transport.loadCachedMarket();
+    return cached ?? (await loadMarket());
+  }
+
+  // Desktop-only: after the bundled/cached copy is on screen, top it up from
+  // tennoworth.app in the background and swap in a strictly-newer snapshot. The
+  // Rust command swallows offline/timeout/HTTP failures (returns updated:false),
+  // so this never blocks or breaks boot — a failure just leaves the current copy.
+  async function refreshMarketInBackground(): Promise<void> {
+    try {
+      const res = await transport.refreshMarket();
+      if (!res.updated || !res.market) return;
+      const cur = market?.updated_at ? Date.parse(market.updated_at) : NaN;
+      const next = res.market.updated_at ? Date.parse(res.market.updated_at) : NaN;
+      // Swap when we have nothing yet, the current stamp is unusable, or the
+      // fetched snapshot is strictly newer (guards a server rollback serving an
+      // older snapshot than the cache we already show).
+      if (!market || !Number.isFinite(cur) || (Number.isFinite(next) && next > cur)) {
+        market = res.market;
+        marketLoadError = null;
+      }
+    } catch (e) {
+      console.error('market refresh failed', e);
+    }
+  }
+
   // Restore the last snapshot exactly once after mount. Using onMount (not
   // $effect) is critical: $effect tracks any state read inside its body as
   // a dependency, so writing `resolved` here and then reading it via
@@ -306,7 +338,7 @@
         resolved = { owned: snap.owned, unresolved: {} };
         if (!market) {
           try {
-            market = await loadMarket();
+            market = await loadBestMarket();
           } catch (e) {
             // We already have the restored inventory in hand — a failed price
             // refresh must NOT throw us back to cold-start and hide the user's
@@ -336,11 +368,18 @@
     // browser; the install steps below it still work.
     if (phase === 'idle' && !market) {
       try {
-        market = await loadMarket();
+        market = await loadBestMarket();
       } catch (e) {
         console.error(e);
       }
     }
+
+    // Desktop only: keep the bundled/cached snapshot fresh from tennoworth.app.
+    // Fire-and-forget AFTER the copy above is on screen — the refresh must never
+    // block app start (the hosted build skips this: it already gets fresh data
+    // same-origin from the box). Runs even if the loads above failed, so an
+    // offline-first-launch can still recover once the network returns.
+    if (isDesktop) void refreshMarketInBackground();
   });
 
   function handleClear() {
@@ -374,7 +413,7 @@
       if (!catalogs || !market) {
         [catalogs, market] = await Promise.all([
           catalogs ?? loadCatalogs(),
-          market ?? loadMarket(),
+          market ?? loadBestMarket(),
         ]);
       }
 
@@ -1247,7 +1286,7 @@
       );
       deltas = diffOwned((await store.loadSnapshot())?.owned, ownedMap);
       resolved = { owned: ownedMap, unresolved: {} };
-      if (!market) market = await loadMarket();
+      if (!market) market = await loadBestMarket();
       await store.saveSnapshot({ invName: inventoryName, owned: ownedMap });
       phase = 'done';
       importDialog?.close();
