@@ -1,7 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The single main window plus the app-defined health / scan_inventory (and probe-only) commands. App-defined commands need no ACL entry in Tauri v2; core:default covers the window basics.",
+  "description": "The main window, the app-defined commands (health / scan_inventory / market / top_sellables / tray, plus probe-only), and the window controls the tray + close-to-tray lifecycle drives (close/hide/show/is-visible). App-defined and Rust-fired commands (incl. the Rust-side notification) need no ACL entry in Tauri v2; core:default covers the window basics.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-close",
+    "core:window:allow-hide",
+    "core:window:allow-show",
+    "core:window:allow-is-visible"
+  ]
 }

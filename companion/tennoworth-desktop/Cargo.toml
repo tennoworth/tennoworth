@@ -13,10 +13,19 @@ license = "MIT"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+# `tray-icon` enables the system tray (C6). Linux tray needs libayatana-
+# appindicator at runtime; a failed tray init is logged and swallowed
+# (window + notifications still work) — see init_tray.
+tauri = { version = "2", features = ["tray-icon"] }
+# Post-scan system notification ("N items worth ~Xp to sell"). Fired from Rust
+# (NotificationExt), so no JS ACL entry is needed.
+tauri-plugin-notification = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 wfm-core = { path = "../wfm-core" }
+# The sell-priority scoring (single source of truth, mirrored in sell-priority.ts)
+# used to rank the tray + notification sellables. Pure, no-dep crate.
+market-math = { path = "../market-math" }
 # `bundled` compiles SQLite from source — no system libsqlite3 dependency, so the
 # canonical desktop store works on a clean Windows/Linux box with nothing
 # pre-installed (matches the "download → works" goal).
