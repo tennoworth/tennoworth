@@ -22,12 +22,13 @@ mod db;
 mod market;
 mod sellables;
 mod snapshot;
+mod update;
 
 use std::io::Write;
 use std::sync::{Mutex, OnceLock};
 use tauri::menu::{Menu, MenuBuilder, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder, Wry};
+use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, Wry};
 use tauri_plugin_notification::NotificationExt;
 
 use db::{Db, Reserve, SnapshotSummary};
@@ -408,6 +409,38 @@ fn top_sellables(
     rows
 }
 
+/// C5: run an update check now. Never rejects — offline / malformed manifest /
+/// any updater failure reads as "no update available" (see update.rs). The SPA
+/// can call this for a manual re-check; the launch path uses the same routine.
+#[tauri::command]
+async fn check_update(app: AppHandle) -> update::UpdateStatus {
+    update::check(&app).await
+}
+
+/// The last check's outcome, no network. The SPA reads this at mount so an
+/// `update-available` event emitted before its listener registered is never
+/// lost (`checked: false` means the launch check hasn't completed yet).
+#[tauri::command]
+fn update_status(state: State<'_, update::UpdateState>) -> update::UpdateStatus {
+    state.last()
+}
+
+/// C5: download + install the pending update — only ever invoked from the
+/// SPA's explicit "Install update" confirmation. Errors (download failure, bad
+/// signature) surface verbatim in the SPA's banner; the running app is
+/// untouched and the update stays retryable.
+#[tauri::command]
+async fn install_update(app: AppHandle) -> Result<(), String> {
+    update::install_pending(&app).await
+}
+
+/// Relaunch to apply an installed update ("apply on restart" — the SPA's
+/// "Restart now" button after a successful install).
+#[tauri::command]
+fn restart_app(app: AppHandle) {
+    app.restart()
+}
+
 /// Probe-only: persist the evidence JSON to $TENNOWORTH_PROBE_OUT (and echo it
 /// to stdout between markers so it is captured even without file access).
 #[tauri::command]
@@ -558,6 +591,23 @@ const PROBE_JS: &str = r#"(function(){
     .then(function(x){ R.fetchMarket = x; })
     .then(function(){ return probeFetch('/wfstat-catalog.json').then(function(x){ R.fetchCatalog = x; }); })
     .then(function(){ return invk('health').then(function(v){ R.invokeHealth = v; }); })
+    // C5 update check, endpoint overridden via TENNOWORTH_UPDATE_URL (offline
+    // run: https to a refused port; malformed run: live JSON of the wrong
+    // shape). Must resolve to {checked:true, available:false} — never reject.
+    .then(function(){ return invk('check_update').then(function(v){ R.updateCheck = v; }); })
+    .then(function(){ return invk('update_status').then(function(v){ R.updateStatus = v; }); })
+    // The SPA's own mount handshake should have surfaced the banner iff an
+    // update is available (debug-build happy-path run); and an explicit
+    // install against a fixture manifest must REJECT (unreachable bundle URL /
+    // garbage signature) without hurting the app — invk records the rejection
+    // as an 'ERR:' string, and every later step still runs.
+    .then(function(){
+      R.updateBannerVisible = !!document.querySelector('[data-testid="update-banner"]');
+      if (R.updateCheck && R.updateCheck.available) {
+        return invk('install_update').then(function(v){ R.updateInstall = v; });
+      }
+      R.updateInstall = 'NOT_ATTEMPTED';
+    })
     // C4 market refresh: cache presence before, the conditional-GET outcome, then
     // cache presence after. Across launches this shows 200 → cache written, then
     // If-None-Match → 304 → cache kept (updated:false, no body re-sent).
@@ -628,7 +678,9 @@ fn main() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(TrayState::default())
+        .manage(update::UpdateState::default())
         .invoke_handler(tauri::generate_handler![
             health,
             scan_inventory,
@@ -643,6 +695,10 @@ fn main() {
             refresh_market,
             top_sellables,
             tray_state,
+            check_update,
+            update_status,
+            install_update,
+            restart_app,
             debug_post_scan,
             probe_report,
             probe_exit
@@ -700,6 +756,22 @@ fn main() {
             if let Err(e) = init_tray(&app.handle().clone()) {
                 eprintln!("tennoworth: tray unavailable, continuing without it: {e}");
             }
+
+            // C5: launch update check, off the main thread so it can never
+            // block startup. NO silent install — a found update only stores
+            // status + emits `update-available`; the SPA asks the user, and
+            // only their explicit confirmation invokes install_update. Any
+            // failure inside check() (offline, bad manifest) already reads as
+            // "no update", so this task cannot take the app down.
+            let update_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let status = update::check(&update_handle).await;
+                if status.available {
+                    if let Err(e) = update_handle.emit(update::EVENT_UPDATE_AVAILABLE, &status) {
+                        eprintln!("tennoworth: update-available emit failed: {e}");
+                    }
+                }
+            });
 
             if probe {
                 let mut so = std::io::stdout();
