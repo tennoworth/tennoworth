@@ -4601,6 +4601,7 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-updater",
  "wfm-core",
+ "zeroize",
 ]
 
 [[package]]
