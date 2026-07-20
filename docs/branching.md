@@ -32,8 +32,11 @@ CI runs; promoting to `main` is the deliberate "this goes live" act.
   into `develop` immediately.
 - **Companion releases** (`v*` tags) are cut on `main` only — a tag must
   point at deployed-quality code.
-- **Data-bot commits** (2-hourly market refresh) keep landing on `main`
-  directly — they're production data, not code, and CI skips them.
+- **Data-bot commits** (market refresh) land on `develop` (the default
+  branch) and ride the next promotion. That's fine: the repo's market.json
+  is only a bootstrap snapshot — production freshness comes from the box's
+  own systemd scrape, not the repo. Keeping bots off `main` is what makes
+  ff-only promotion possible.
 - Promote in small batches. If `develop` sits ahead of `main` for more
   than a couple of days, either promote or explain why in the PR/commit.
 
