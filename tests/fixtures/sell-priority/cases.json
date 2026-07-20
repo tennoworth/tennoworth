@@ -1,0 +1,70 @@
+{
+  "_comment": "Cross-language parity fixture for the sell-priority ranking. Read by BOTH prototype/src/lib/sell-priority.parity.test.ts (TS, the canonical scoring) and companion/tennoworth-desktop/src/sellables.rs tests (the ported Rust scoring in market-math). `expected_order` is the golden ranking: cases with sellable_qty > 0, sorted by sell_score descending. Scores are deliberately DISTINCT (no ties) so ordering is unambiguous and isolates score parity from tie-break semantics. Change the score in either language and this golden must change, which then fails the other side until it is brought back into agreement. `sellable_qty` = max(0, count - max(reserve, leveled)); a case with sellable_qty 0 (reserve_zeroes) must NOT appear in expected_order.",
+  "cases": [
+    {
+      "slug": "liquid_high",
+      "count": 2,
+      "reserve": 0,
+      "leveled": 0,
+      "market": { "vol": 30, "low_sell": 700, "avg": 250, "median_now": 200, "median_90d": 200 }
+    },
+    {
+      "slug": "avg_fallback",
+      "count": 4,
+      "reserve": 0,
+      "leveled": 0,
+      "market": { "vol": 10, "low_sell": 0, "avg": 50, "median_now": 0, "median_90d": 0 }
+    },
+    {
+      "slug": "fantasy_ask",
+      "count": 3,
+      "reserve": 0,
+      "leveled": 0,
+      "market": { "vol": 1, "low_sell": 2999, "avg": 204, "median_now": 0, "median_90d": 200 }
+    },
+    {
+      "slug": "ash_prime_blueprint",
+      "count": 8,
+      "reserve": 1,
+      "leveled": 0,
+      "market": { "vol": 76, "low_sell": 10, "avg": 11.3, "median_now": 10, "median_90d": 10 }
+    },
+    {
+      "slug": "accumulating_whipclaw",
+      "count": 5,
+      "reserve": 0,
+      "leveled": 0,
+      "market": { "vol": 107, "low_sell": 8, "avg": 9, "median_now": 10, "median_90d": 9 }
+    },
+    {
+      "slug": "abating_link",
+      "count": 3,
+      "reserve": 0,
+      "leveled": 1,
+      "market": { "vol": 23, "low_sell": 12, "avg": 14.3, "median_now": 15, "median_90d": 14 }
+    },
+    {
+      "slug": "dead_single",
+      "count": 1,
+      "reserve": 0,
+      "leveled": 0,
+      "market": { "vol": 0, "low_sell": 100, "avg": 100, "median_now": 0, "median_90d": 0 }
+    },
+    {
+      "slug": "reserve_zeroes",
+      "count": 2,
+      "reserve": 5,
+      "leveled": 0,
+      "market": { "vol": 50, "low_sell": 40, "avg": 40, "median_now": 40, "median_90d": 40 }
+    }
+  ],
+  "expected_order": [
+    "liquid_high",
+    "avg_fallback",
+    "fantasy_ask",
+    "ash_prime_blueprint",
+    "accumulating_whipclaw",
+    "abating_link",
+    "dead_single"
+  ]
+}
