@@ -9,7 +9,11 @@ User=wfm
 Group=wfm
 WorkingDirectory=/srv/wfm/app
 ExecStart=/srv/wfm/run-scrape.sh
-TimeoutStartSec=3600
+# Actual runtime crept past 3600s (item count + pacing grew) and systemd was
+# killing the scrape a few hundred seconds short of writing market.json —
+# every run for ~14h just re-served the last successful snapshot. Matches
+# the GH Actions job's own timeout-minutes: 90 headroom.
+TimeoutStartSec=5400
 Nice=10
 
 # Sandboxing — the scraper rewrites files under its repo, plus (phase 2b) the
