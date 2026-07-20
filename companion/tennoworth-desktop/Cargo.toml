@@ -34,3 +34,6 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 # is a subset of wfm-core's reqwest, so Cargo's feature unification adds no new
 # build — egress stays in Rust, off the webview (prototype/CLAUDE.md rule).
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking", "gzip"] }
+# Scrub the plaintext JWT from memory on logout (best-effort). Already vendored
+# transitively via aes-gcm, so this pins no new build.
+zeroize = "1"
