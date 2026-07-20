@@ -33,6 +33,16 @@ CSP `connect-src` has no third-party origins left. A runtime
 warframestat fetch broke this rule once before and vanished during
 outages — don't reintroduce one.
 
+The **desktop** build keeps its bundled `market.json` fresh from
+`https://tennoworth.app/market.json`, but that egress lives in **Rust**
+(the `refresh_market` / `cached_market` Tauri commands in
+`tennoworth-desktop`), never the webview — same rule. The SPA touches it
+only through the transport seam (`transport.refreshMarket()` /
+`loadCachedMarket()`), a null/no-op in browser mode. Boot order: load
+the cached copy (fresher than the compile-time bundle) else the bundle,
+then refresh in the background and swap in a strictly-newer snapshot.
+Never add a webview `fetch('https://tennoworth.app/…')`.
+
 For order management (create / edit / delete listings), the browser
 talks to the **companion's loopback HTTP server** on `127.0.0.1`,
 which has the JWT in memory and relays. The browser never sees the
