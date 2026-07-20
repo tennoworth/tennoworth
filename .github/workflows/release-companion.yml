@@ -28,6 +28,28 @@ jobs:
             artifact: wfm-fetch-inventory.exe
             asset:    wfm-fetch-inventory-windows-x86_64.exe
     runs-on: ${{ matrix.os }}
+    env:
+      # Signing is OFF until these secrets exist — this is the state the
+      # workflow ships in. GitHub forbids the `secrets` context in a step
+      # `if:`, so each secret is surfaced as an env var here and steps gate
+      # on `env.* != ''` (the documented indirection). Absent secrets read
+      # as '' and every signing/verify step below no-ops. Names must stay in
+      # sync with docs/signing-runbook.md.
+      #
+      # Path 1 — a portable PFX (PKCS#12). Realistic only for a test/legacy
+      # cert: CA/B Forum rules since 2023 keep new OV code-signing keys on an
+      # HSM that cannot be exported to a PFX, so the real Certum cert almost
+      # certainly uses Path 2.
+      WINDOWS_PFX_BASE64:   ${{ secrets.WINDOWS_PFX_BASE64 }}
+      WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
+      # Path 2 — Certum SimplySign cloud keystore. Set SIMPLYSIGN_ENABLED to
+      # 'true' to select it; the rest feed the (pluggable) signing command,
+      # whose final shape depends on the tool Certum ships (see runbook).
+      SIMPLYSIGN_ENABLED:         ${{ secrets.SIMPLYSIGN_ENABLED }}
+      SIMPLYSIGN_USER:            ${{ secrets.SIMPLYSIGN_USER }}
+      SIMPLYSIGN_PASSWORD:        ${{ secrets.SIMPLYSIGN_PASSWORD }}
+      SIMPLYSIGN_OTP_SECRET:      ${{ secrets.SIMPLYSIGN_OTP_SECRET }}
+      SIMPLYSIGN_CERT_THUMBPRINT: ${{ secrets.SIMPLYSIGN_CERT_THUMBPRINT }}
     defaults:
       run:
         working-directory: companion
@@ -61,6 +83,90 @@ jobs:
           mkdir -p ../dist
           cp target/${{ matrix.target }}/release/${{ matrix.artifact }} ../dist/${{ matrix.asset }}
 
+      # Authenticode-sign the Windows binary IN PLACE, before it is uploaded
+      # (and therefore before publish/ hashes it), so SHA256SUMS covers the
+      # signed bytes. Windows leg only, and only when signing secrets exist;
+      # otherwise the binary ships unsigned and the notice step below fires.
+      - name: Sign Windows binary
+        id: sign
+        if: matrix.target == 'x86_64-pc-windows-msvc' && (env.WINDOWS_PFX_BASE64 != '' || env.SIMPLYSIGN_ENABLED == 'true')
+        working-directory: ${{ github.workspace }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $asset = "dist/${{ matrix.asset }}"
+          # Certum's RFC-3161 timestamp authority. A timestamp lets the
+          # signature stay valid after the cert expires; change if the
+          # issuer differs.
+          $ts = 'http://time.certum.pl'
+
+          # signtool ships with the Windows SDK on the hosted runner but is
+          # not on PATH — pick the newest. Export it so the verify step reuses
+          # the same binary regardless of which signing path ran.
+          $signtool = Get-ChildItem 'C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe' -ErrorAction SilentlyContinue |
+            Sort-Object FullName -Descending | Select-Object -First 1
+          if (-not $signtool) { throw 'signtool.exe not found on runner' }
+          "SIGNTOOL=$($signtool.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+          if ($env:WINDOWS_PFX_BASE64 -ne '') {
+            # --- Path 1: portable PFX -------------------------------------
+            $pfx = Join-Path $env:RUNNER_TEMP 'codesign.pfx'
+            [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_PFX_BASE64))
+            try {
+              & $signtool.FullName sign /fd SHA256 /f $pfx /p $env:WINDOWS_PFX_PASSWORD `
+                /tr $ts /td SHA256 /v $asset
+              if ($LASTEXITCODE -ne 0) { throw "signtool sign failed ($LASTEXITCODE)" }
+            } finally {
+              Remove-Item $pfx -Force -ErrorAction SilentlyContinue
+            }
+          } else {
+            # --- Path 2: Certum SimplySign (cloud HSM) — PLUGGABLE ---------
+            # Certum's Open Source cert is almost certainly delivered
+            # SimplySign-only (non-exportable key on a cloud QSCD). The exact
+            # command depends on the tool we settle on (SimplySign Desktop +
+            # PKCS#11 driving signtool, Certum's SignService CLI, or
+            # osslsigncode via the PKCS#11 engine) and on how the OTP is fed
+            # in CI. Wire the concrete invocation here once chosen — the
+            # SIMPLYSIGN_* env vars above are already in scope. See
+            # docs/signing-runbook.md, "SimplySign in CI".
+            #
+            # Until wired, selecting this path fails loudly rather than
+            # shipping a silently-unsigned binary that verify would then flag.
+            throw 'SIMPLYSIGN_ENABLED is set but the SimplySign signing command is not wired yet — see docs/signing-runbook.md.'
+          }
+
+      # Runs only when signing actually happened. Uses the Default
+      # Authentication Verification Policy (/pa), the same policy Windows
+      # applies at run time, so a pass here means SmartScreen sees a valid
+      # signature too.
+      - name: Verify Authenticode signature
+        if: steps.sign.outcome == 'success'
+        working-directory: ${{ github.workspace }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          & $env:SIGNTOOL verify /pa /v "dist/${{ matrix.asset }}"
+          if ($LASTEXITCODE -ne 0) { throw "signtool verify failed ($LASTEXITCODE)" }
+          Add-Content $env:GITHUB_STEP_SUMMARY '### Windows binary signed and verified'
+          Add-Content $env:GITHUB_STEP_SUMMARY ''
+          Add-Content $env:GITHUB_STEP_SUMMARY '**${{ matrix.asset }}** passed signtool verify /pa (timestamped).'
+
+      # Fires on the Windows leg whenever signing did NOT run (the shipping
+      # state: no secrets configured). A skipped sign step counts as success
+      # for the implicit success() gate, so this still runs.
+      - name: Note unsigned Windows build
+        if: matrix.target == 'x86_64-pc-windows-msvc' && steps.sign.outcome != 'success'
+        shell: bash
+        run: |
+          echo "::notice title=Unsigned Windows binary::No signing secrets configured — the Windows release is UNSIGNED. SmartScreen will warn users. See docs/signing-runbook.md."
+          {
+            echo "### Windows binary UNSIGNED"
+            echo ""
+            echo "No signing secrets configured, so this release ships without an Authenticode signature."
+            echo "Windows SmartScreen will show \"Windows protected your PC\" until signing is enabled."
+            echo "See \`docs/signing-runbook.md\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset }}
@@ -71,6 +177,10 @@ jobs:
     needs: build
     if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
+    env:
+      # Same secret-indirection pattern as the build job: absent ('') makes
+      # the scan step skip with a summary notice; the release still ships.
+      VT_API_KEY: ${{ secrets.VT_API_KEY }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -83,6 +193,54 @@ jobs:
           cd dist
           sha256sum * > SHA256SUMS
           cat SHA256SUMS
+
+      # Submit the released binaries to VirusTotal so AV false positives on a
+      # memory-reading exe surface early (risk register #3). Non-fatal: a VT
+      # outage or a bad key must never block a release. The GUI link is keyed
+      # on the SHA-256 we already computed, so it resolves once analysis lands.
+      - name: Scan release artifacts on VirusTotal
+        if: env.VT_API_KEY != ''
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          {
+            echo "### VirusTotal"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+          for f in wfm-fetch-inventory-linux-x86_64 wfm-fetch-inventory-windows-x86_64.exe; do
+            if [ ! -f "$f" ]; then
+              echo "::warning::VirusTotal: $f not found, skipping"
+              continue
+            fi
+            # Free tier is 4 req/min, 500/day — 2 files/release is well within.
+            if ! curl -sS --fail-with-body -X POST \
+                  https://www.virustotal.com/api/v3/files \
+                  -H "x-apikey: $VT_API_KEY" \
+                  --form file=@"$f" >/dev/null; then
+              echo "::warning::VirusTotal upload failed for $f (non-fatal)"
+              echo "- $f — upload failed (see job log)" >> "$GITHUB_STEP_SUMMARY"
+              continue
+            fi
+            sha=$(grep "  $f$" SHA256SUMS | awk '{print $1}' || true)
+            if [ -n "$sha" ]; then
+              url="https://www.virustotal.com/gui/file/$sha"
+              echo "::notice title=VirusTotal::$f -> $url"
+              echo "- [$f]($url)" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "- $f — uploaded (no SHA256SUMS entry to link)" >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+      - name: Note VirusTotal skipped
+        if: env.VT_API_KEY == ''
+        run: |
+          echo "::notice title=VirusTotal skipped::VT_API_KEY not configured — artifacts were not submitted. See docs/signing-runbook.md."
+          {
+            echo "### VirusTotal skipped"
+            echo ""
+            echo "\`VT_API_KEY\` secret not configured — release artifacts were not submitted to VirusTotal."
+            echo "See \`docs/signing-runbook.md\`."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Create / update GitHub release
         uses: softprops/action-gh-release@v2

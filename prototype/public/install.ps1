@@ -73,6 +73,18 @@ Write-Host '→ Checksum OK'
 Move-Item -Force $Tmp $Bin
 Write-Host "→ Installed: $Bin"
 
+# Authenticode check — advisory only. The SHA-256 match above is the actual
+# integrity guarantee; an unsigned (or not-yet-trusted) binary must never
+# block the install while releases are pre-signing. Status is anything but
+# 'Valid' until the Certum cert lands (see docs/signing-runbook.md).
+$sig = Get-AuthenticodeSignature $Bin
+if ($sig.Status -eq 'Valid') {
+    Write-Host "→ Authenticode signature: VALID"
+    Write-Host "  Signed by: $($sig.SignerCertificate.Subject)"
+} else {
+    Write-Host "→ Authenticode signature: not present yet (status: $($sig.Status))"
+}
+
 # Add to user PATH if not already there. This affects future shells only —
 # the current one keeps the old PATH until restart.
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
@@ -99,8 +111,21 @@ Optional — to create/edit warframe.market listings from the web app:
   6. wfm-fetch-inventory serve     # leave this window open
      Paste the URL it prints into the app's Companion tab. The port is
      random (not the website's 5173).
+'@
+
+if ($sig.Status -eq 'Valid') {
+    @'
+
+Note: this build is code-signed and its signature verified above. Windows
+SmartScreen may still warn until the publisher builds reputation — that is
+expected for a new certificate and fades as more people install. If warned,
+click "More info" -> "Run anyway".
+'@
+} else {
+    @'
 
 Note: the binary is not code-signed yet, so Windows SmartScreen may warn
 "Windows protected your PC". Click "More info" -> "Run anyway". The
 checksum was already verified above against the published SHA256SUMS.
 '@
+}
