@@ -710,6 +710,14 @@ fn debug_write_login(
     if std::env::var("TENNOWORTH_PROBE").ok().as_deref() != Some("1") {
         return Err(CmdError::internal("debug_write_login is probe-only"));
     }
+    // Without the path override this would write a synthetic envelope over the
+    // REAL ~/.config/wfminv/wfm-jwt.enc — a probe run must never be able to
+    // clobber actual credentials, so refuse rather than fall back.
+    if std::env::var_os("TENNOWORTH_JWT_PATH").is_none() {
+        return Err(CmdError::internal(
+            "debug_write_login requires TENNOWORTH_JWT_PATH (refusing to touch the real login file)",
+        ));
+    }
     session.debug_write_login(&passphrase)
 }
 
