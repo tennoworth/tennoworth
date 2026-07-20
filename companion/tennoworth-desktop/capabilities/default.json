@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Spike shell: the single main window plus the app-defined spike_* / hello commands. App-defined commands need no ACL entry in Tauri v2; core:default covers the window basics.",
+  "description": "The single main window plus the app-defined health / scan_inventory (and probe-only) commands. App-defined commands need no ACL entry in Tauri v2; core:default covers the window basics.",
   "windows": ["main"],
   "permissions": ["core:default"]
 }
