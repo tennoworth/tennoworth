@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { submitPlan, bulkVisibility } from '../lib/companion';
-  import type { CompanionConfig, ItemResult } from '../lib/types';
+  import { DesktopCmdError, type Transport } from '../lib/transport';
+  import type { ItemResult } from '../lib/types';
 
   /** Row shape passed in from ResultsTable / App.svelte. */
   interface InputRow {
@@ -36,10 +36,16 @@
   interface Props {
     open?: boolean;
     rows: InputRow[];
-    config: CompanionConfig | null;
+    /** The app's boot-selected transport — loopback HTTP in the browser,
+     *  Tauri IPC on desktop. Same op names either way. */
+    transport: Transport;
+    /** Desktop only: a listing call came back `needs_login` / `needs_unlock`.
+     *  The app opens the matching auth dialog on top of this modal; the user
+     *  resends after authenticating. Never fires in browser mode. */
+    onauthrequired?: (code: 'needs_login' | 'needs_unlock') => void;
     onclose?: () => void;
   }
-  let { open = $bindable(false), rows, config, onclose }: Props = $props();
+  let { open = $bindable(false), rows, transport, onauthrequired, onclose }: Props = $props();
 
   let plan = $state<PlanRow[]>([]);
   type Phase = 'review' | 'sending' | 'results' | 'error';
@@ -124,8 +130,18 @@
     return e instanceof Error ? e.message : String(e);
   }
 
+  /** Desktop lock-state rejection → hand off to the auth dialogs and return to
+   *  review so Send is one click away once the session unlocks. */
+  function handleAuthCode(e: unknown): boolean {
+    if (e instanceof DesktopCmdError && (e.code === 'needs_login' || e.code === 'needs_unlock')) {
+      phase = 'review';
+      onauthrequired?.(e.code);
+      return true;
+    }
+    return false;
+  }
+
   async function send(): Promise<void> {
-    if (!config) return;
     phase = 'sending';
     networkError = null;
     const items = plan
@@ -141,10 +157,11 @@
         reference_low_sell: r.reference_low_sell || undefined,
       }));
     try {
-      const resp = await submitPlan(config, items);
+      const resp = await transport.submitPlan(items);
       serverResults = resp.results || [];
       phase = 'results';
     } catch (e) {
+      if (handleAuthCode(e)) return;
       networkError = errMsg(e);
       phase = 'error';
     }
@@ -162,19 +179,24 @@
   }
 
   async function makeAllVisible(): Promise<void> {
-    if (!config) return;
     const ids = serverResults
       .filter((r) => r.status === 'ok' && r.order_id)
       .map((r) => r.order_id as string);
     if (ids.length === 0) return;
     visibilityBusy = true;
     try {
-      const resp = await bulkVisibility(config, ids, true);
+      const resp = await transport.bulkVisibility(ids, true);
       visibilityResults = resp?.results || [];
       visibilityDone = true;
     } catch (e) {
-      networkError = errMsg(e);
-      phase = 'error';
+      // A lock-state rejection here (desktop logout between send and toggle)
+      // must not dump the user to the error phase and lose the results table.
+      if (e instanceof DesktopCmdError && (e.code === 'needs_login' || e.code === 'needs_unlock')) {
+        onauthrequired?.(e.code);
+      } else {
+        networkError = errMsg(e);
+        phase = 'error';
+      }
     } finally {
       visibilityBusy = false;
     }
