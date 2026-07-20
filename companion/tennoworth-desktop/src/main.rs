@@ -482,6 +482,27 @@ const PROBE_JS: &str = r#"(function(){
     }).catch(function(e){ return { error: String(e && e.message || e), name: e && e.name }; });
   }
   function delay(ms){ return new Promise(function(res){ setTimeout(res, ms); }); }
+  function curWin(){
+    try { if (window.__TAURI__ && window.__TAURI__.window && window.__TAURI__.window.getCurrentWindow) return window.__TAURI__.window.getCurrentWindow(); } catch(e){}
+    return null;
+  }
+  // C6 lifecycle: window.close() fires CloseRequested, which Rust intercepts
+  // (prevent_close + hide) — so the window HIDES to the tray and the process
+  // stays alive (this very script keeps running). show() reshows it.
+  function windowLifecycle(){
+    var w = curWin();
+    if (!w) { R.lifecycle = 'NO_WINDOW_API'; return Promise.resolve(); }
+    R.lifecycle = {};
+    return w.isVisible().then(function(v){ R.lifecycle.visibleBeforeClose = v; })
+      .then(function(){ return w.close(); })
+      .then(function(){ return delay(600); })
+      .then(function(){ return w.isVisible(); }).then(function(v){ R.lifecycle.visibleAfterClose = v; })
+      .then(function(){ return w.show(); })
+      .then(function(){ return delay(300); })
+      .then(function(){ return w.isVisible(); }).then(function(v){ R.lifecycle.visibleAfterReshow = v; })
+      .then(function(){ R.lifecycle.survivedClose = true; })
+      .catch(function(e){ R.lifecycle.err = String(e && e.message || e); });
+  }
   // Synthesize a REAL file-drop onto the DropZone: webkit's DragEvent ctor won't
   // carry a dataTransfer, so attach one with a File via defineProperty. This
   // exercises DropZone → handleInventory(origin:'file') → import_snapshot.
@@ -567,9 +588,22 @@ const PROBE_JS: &str = r#"(function(){
       R.resultsRowsAfterDrop = document.querySelectorAll('table tbody tr').length;
       return invk('list_snapshots', { limit: 50 }).then(function(v){ R.snapshotsAfterDrop = v; });
     })
+    // C6 (top_sellables): rank the imported snapshot × bundled market. With a
+    // clean data dir (reserve 0) this is the deterministic 3-item ranking.
+    .then(function(){ return invk('top_sellables', { limit: 5 }).then(function(v){ R.topSellables = v; }); })
+    // C6 (notification): run the post-scan surface path against the latest
+    // snapshot (probe-only, so it works with no game) → payload {count,total}.
+    .then(function(){ return invk('debug_post_scan').then(function(v){ R.debugNotify = v; }); })
+    // C6 (tray model): the labels the rebuild actually pushed + stored payload.
+    .then(function(){ return invk('tray_state').then(function(v){ R.trayState = v; }); })
     // (a) Set reserve via the REAL input (now rendered) → set_setting.
     .then(function(){ return setReserve().then(function(via){ R.reserveSetVia = via; }); })
     .then(function(){ return invk('get_setting', { key: 'reserve-copies' }).then(function(v){ R.reserveAfterSet = v; }); })
+    // Checkpoint the evidence BEFORE the lifecycle test — if close-to-tray were
+    // broken and destroyed the window, the final report below would never write.
+    .then(function(){ return invk('probe_report', { payload: JSON.stringify(R) }); })
+    // C6 (lifecycle): close hides to tray (process survives), show reshows.
+    .then(function(){ return windowLifecycle(); })
     .then(function(){
       R.done = true;
       var json = JSON.stringify(R);
