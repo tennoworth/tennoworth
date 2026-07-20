@@ -24,12 +24,19 @@ mod sellables;
 mod snapshot;
 
 use std::io::Write;
-use std::sync::OnceLock;
-use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
+use std::sync::{Mutex, OnceLock};
+use tauri::menu::{Menu, MenuBuilder, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder, Wry};
+use tauri_plugin_notification::NotificationExt;
 
 use db::{Db, Reserve, SnapshotSummary};
 use market::{MarketCache, RefreshResult};
+use sellables::{MarketData, ScanNotification, SellableRow};
 use wfm_core::inventory::InventoryScanner;
+
+/// How many sellables the tray menu shows.
+const TRAY_LIMIT: usize = 5;
 
 /// Process-wide scanner so the single-flight guard actually serializes two
 /// concurrent `scan_inventory` invokes (a second concurrent scan gets
@@ -37,6 +44,191 @@ use wfm_core::inventory::InventoryScanner;
 fn scanner() -> &'static InventoryScanner {
     static SCANNER: OnceLock<InventoryScanner> = OnceLock::new();
     SCANNER.get_or_init(InventoryScanner::new)
+}
+
+/// Evidence-facing view of what the tray/notification code last produced. The
+/// GTK tray menu isn't reliably screenshot-able under headless Wayland, so the
+/// probe reads the labels the rebuild actually pushed and the last notification
+/// payload from here instead. Also the single home for the "last notification"
+/// so a later window can surface it.
+#[derive(Default)]
+struct TrayState {
+    /// The sellable labels ("Name — Np") the last rebuild put in the menu.
+    labels: Mutex<Vec<String>>,
+    last_notification: Mutex<Option<ScanNotification>>,
+}
+
+/// Rank the full latest-snapshot × market sell list (reads the Db + MarketCache
+/// managed state off the handle). Shared by the tray rebuild and the
+/// notification so they never disagree.
+fn rank_all(app: &AppHandle) -> Vec<SellableRow> {
+    let db = app.state::<Db>();
+    let cache = app.state::<MarketCache>();
+    let market = MarketData::load(&cache);
+    sellables::rank_sellables(&db, &market)
+}
+
+/// Build the tray menu from the top sellables: one enabled item per sellable
+/// ("Name — Np", id `sell:<slug>`), a separator, then Open / Rescan / Quit.
+/// An empty list shows a single disabled hint instead.
+fn build_tray_menu(app: &AppHandle, top: &[SellableRow]) -> tauri::Result<Menu<Wry>> {
+    let mut mb = MenuBuilder::new(app);
+    let mut sellable_items: Vec<MenuItem<Wry>> = Vec::new();
+    if top.is_empty() {
+        let hint = MenuItem::with_id(
+            app,
+            "noop",
+            "No sellables yet — scan your inventory",
+            false,
+            None::<&str>,
+        )?;
+        sellable_items.push(hint);
+    } else {
+        for r in top {
+            let label = format!("{} — {}p", r.name, r.price.round() as i64);
+            let item =
+                MenuItem::with_id(app, format!("sell:{}", r.slug), label, true, None::<&str>)?;
+            sellable_items.push(item);
+        }
+    }
+    for item in &sellable_items {
+        mb = mb.item(item);
+    }
+    let open = MenuItem::with_id(app, "open", "Open TennoWorth", true, None::<&str>)?;
+    let rescan = MenuItem::with_id(app, "rescan", "Rescan", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+    mb.separator()
+        .item(&open)
+        .item(&rescan)
+        .item(&quit)
+        .build()
+}
+
+/// The human labels a menu built from `top` shows (for evidence / the probe).
+fn sellable_labels(top: &[SellableRow]) -> Vec<String> {
+    if top.is_empty() {
+        return vec!["No sellables yet — scan your inventory".to_string()];
+    }
+    top.iter()
+        .map(|r| format!("{} — {}p", r.name, r.price.round() as i64))
+        .collect()
+}
+
+/// Recompute the ranking and swap the tray menu in. Best-effort at every step:
+/// a menu-build error or a missing tray (init failed / de-scoped) is logged and
+/// swallowed — the window and notifications must keep working regardless. Called
+/// at startup, after each scan, and after a market refresh. Returns the full
+/// ranked list so a caller (the scan path) can reuse it for the notification.
+fn rebuild_tray(app: &AppHandle) -> Vec<SellableRow> {
+    let rows = rank_all(app);
+    let top: Vec<SellableRow> = rows.iter().take(TRAY_LIMIT).cloned().collect();
+    *app.state::<TrayState>().labels.lock().unwrap() = sellable_labels(&top);
+    match build_tray_menu(app, &top) {
+        Ok(menu) => match app.tray_by_id("main") {
+            Some(tray) => {
+                if let Err(e) = tray.set_menu(Some(menu)) {
+                    eprintln!("tennoworth: tray set_menu failed: {e}");
+                }
+            }
+            None => eprintln!("tennoworth: no tray to update (init failed or de-scoped)"),
+        },
+        Err(e) => eprintln!("tennoworth: tray menu build failed: {e}"),
+    }
+    rows
+}
+
+/// After a successful scan: rebuild the tray off the new snapshot and fire the
+/// post-scan notification — but only when something is actually sellable. No
+/// notification on an empty result (build_notification returns None).
+fn post_scan_surfaces(app: &AppHandle) {
+    let rows = rebuild_tray(app);
+    if let Some(n) = sellables::build_notification(&rows) {
+        *app.state::<TrayState>().last_notification.lock().unwrap() = Some(n);
+        let noun = if n.count == 1 { "item" } else { "items" };
+        let body = format!("{} {} worth ~{}p to sell", n.count, noun, n.total_plat);
+        if let Err(e) = app
+            .notification()
+            .builder()
+            .title("TennoWorth")
+            .body(&body)
+            .show()
+        {
+            eprintln!("tennoworth: post-scan notification failed: {e}");
+        }
+    }
+}
+
+/// Show, un-minimize, and focus the main window — the tray's "Open" and a
+/// left-click both route here.
+fn show_main_window(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+    }
+}
+
+/// Run a scan from the tray "Rescan" item: scan → record snapshot → refresh the
+/// tray + notification. Runs on its own thread (the menu-event callback must not
+/// block), and mirrors what the SPA-driven `scan_inventory` command does. A scan
+/// error is logged, not surfaced (there's no banner behind a tray click).
+fn tray_rescan(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || match scanner().scan(None, None) {
+        Ok((bytes, info)) => {
+            let db = app.state::<Db>();
+            if let Err(e) = record_snapshot(&db, "memory", info.build.as_deref(), &bytes) {
+                eprintln!("tennoworth: tray rescan snapshot not recorded: {e}");
+            }
+            post_scan_surfaces(&app);
+        }
+        Err(e) => eprintln!("tennoworth: tray rescan failed: {}", e.into_message()),
+    });
+}
+
+/// Build and register the system tray. Best-effort: any failure (including the
+/// forced-failure test hook) returns Err, which the caller logs and swallows so
+/// startup never dies on a tray problem — the Linux baseline is window +
+/// notifications, tray is a bonus.
+fn init_tray(app: &AppHandle) -> tauri::Result<()> {
+    // Test hook: force the tray-init failure path so the graceful-degradation
+    // branch is verifiable (the window must still work).
+    if std::env::var("TENNOWORTH_TRAY_FAIL").ok().as_deref() == Some("1") {
+        return Err(tauri::Error::FailedToReceiveMessage);
+    }
+    let rows = rank_all(app);
+    let top: Vec<SellableRow> = rows.iter().take(TRAY_LIMIT).cloned().collect();
+    *app.state::<TrayState>().labels.lock().unwrap() = sellable_labels(&top);
+    let menu = build_tray_menu(app, &top)?;
+    let icon = app
+        .default_window_icon()
+        .cloned()
+        .ok_or(tauri::Error::FailedToReceiveMessage)?;
+    TrayIconBuilder::with_id("main")
+        .icon(icon)
+        .tooltip("TennoWorth — what to sell right now")
+        .menu(&menu)
+        .show_menu_on_left_click(false)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "open" => show_main_window(app),
+            "rescan" => tray_rescan(app),
+            "quit" => app.exit(0),
+            // Clicking a specific sellable opens the full table to act on it.
+            id if id.starts_with("sell:") => show_main_window(app),
+            _ => {}
+        })
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                show_main_window(tray.app_handle());
+            }
+        })
+        .build(app)?;
+    Ok(())
 }
 
 #[derive(serde::Serialize)]
@@ -86,7 +278,7 @@ fn record_snapshot(
 /// is best-effort: a failure is logged to stderr and swallowed — losing a
 /// history row must never cost the user their scan (scan value > history value).
 #[tauri::command]
-async fn scan_inventory(db: State<'_, Db>) -> Result<String, String> {
+async fn scan_inventory(app: AppHandle, db: State<'_, Db>) -> Result<String, String> {
     let (bytes, info) = tauri::async_runtime::spawn_blocking(|| scanner().scan(None, None))
         .await
         .map_err(|e| format!("scan task failed to run: {e}"))?
@@ -95,6 +287,11 @@ async fn scan_inventory(db: State<'_, Db>) -> Result<String, String> {
     if let Err(e) = record_snapshot(&db, "memory", info.build.as_deref(), &bytes) {
         eprintln!("tennoworth: inventory snapshot not recorded: {e}");
     }
+
+    // C6: refresh the tray off the new snapshot and fire the post-scan
+    // notification. Best-effort — never let a surface problem fail the scan
+    // (the SPA still gets its inventory JSON below).
+    post_scan_surfaces(&app);
 
     String::from_utf8(bytes).map_err(|e| format!("inventory response was not valid UTF-8: {e}"))
 }
@@ -152,11 +349,47 @@ fn cached_market(cache: State<'_, MarketCache>) -> Option<String> {
 /// HTTP / body failure is swallowed inside `market::refresh` and returns a
 /// no-op RefreshResult — the only Err here is the blocking task failing to run.
 #[tauri::command]
-async fn refresh_market(cache: State<'_, MarketCache>) -> Result<RefreshResult, String> {
+async fn refresh_market(app: AppHandle, cache: State<'_, MarketCache>) -> Result<RefreshResult, String> {
     let dir = cache.dir();
-    tauri::async_runtime::spawn_blocking(move || market::refresh(&dir))
+    let result = tauri::async_runtime::spawn_blocking(move || market::refresh(&dir))
         .await
-        .map_err(|e| format!("market refresh task failed to run: {e}"))
+        .map_err(|e| format!("market refresh task failed to run: {e}"))?;
+    // A fresh market snapshot can re-price the tray's sellables — rebuild it
+    // (no notification; that's a scan-only surface). Only when the body changed.
+    if result.updated {
+        rebuild_tray(&app);
+    }
+    Ok(result)
+}
+
+/// The tray labels the last rebuild pushed + the last notification payload —
+/// evidence surface for the probe (the GTK menu isn't screenshot-able headless)
+/// and the backing for a later in-window "last scan" recap.
+#[derive(serde::Serialize)]
+struct TrayStateReport {
+    labels: Vec<String>,
+    last_notification: Option<ScanNotification>,
+}
+
+#[tauri::command]
+fn tray_state(state: State<'_, TrayState>) -> TrayStateReport {
+    TrayStateReport {
+        labels: state.labels.lock().unwrap().clone(),
+        last_notification: *state.last_notification.lock().unwrap(),
+    }
+}
+
+/// Probe-only: run the full post-scan surface path (rebuild tray + fire the
+/// notification) against whatever the latest snapshot is, so the notification
+/// payload can be asserted without a running game (a seeded import_snapshot is
+/// enough). Gated behind TENNOWORTH_PROBE so a normal build can't reach it.
+#[tauri::command]
+fn debug_post_scan(app: AppHandle) -> Result<Option<ScanNotification>, String> {
+    if std::env::var("TENNOWORTH_PROBE").ok().as_deref() != Some("1") {
+        return Err("debug_post_scan is probe-only".into());
+    }
+    post_scan_surfaces(&app);
+    Ok(*app.state::<TrayState>().last_notification.lock().unwrap())
 }
 
 /// Rank the latest snapshot × market by the shared sell-priority score and
@@ -360,6 +593,8 @@ fn main() {
     let runtag = std::env::var("TENNOWORTH_RUNTAG").unwrap_or_else(|_| "na".into());
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
+        .manage(TrayState::default())
         .invoke_handler(tauri::generate_handler![
             health,
             scan_inventory,
@@ -373,6 +608,8 @@ fn main() {
             cached_market,
             refresh_market,
             top_sellables,
+            tray_state,
+            debug_post_scan,
             probe_report,
             probe_exit
         ])
@@ -411,6 +648,25 @@ fn main() {
                 b = b.initialization_script(&js);
             }
             let w = b.build()?;
+
+            // Desktop window lifecycle: closing the window HIDES it to the tray
+            // instead of quitting — only the tray's "Quit" (app.exit) actually
+            // exits. Single-instance is assumed, so re-showing is "Open".
+            let w_for_close = w.clone();
+            w.on_window_event(move |event| {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = w_for_close.hide();
+                }
+            });
+
+            // Tray is best-effort (Linux is de-scoped to best-effort behind
+            // libayatana; a forced-failure hook exists for testing). A failure
+            // is logged and swallowed — window + notifications carry on.
+            if let Err(e) = init_tray(&app.handle().clone()) {
+                eprintln!("tennoworth: tray unavailable, continuing without it: {e}");
+            }
+
             if probe {
                 let mut so = std::io::stdout();
                 match w.url() {
