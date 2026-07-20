@@ -145,8 +145,8 @@ export class HttpCompanionTransport implements Transport {
 // with `.core.invoke`); `__TAURI_INTERNALS__` is the lower-level object the
 // runtime sniff keys off. Prefer the public core.invoke, fall back to the
 // internals shim.
-type TauriInvoke = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
-function resolveInvoke(): TauriInvoke {
+export type TauriInvoke = <T>(cmd: string, args?: Record<string, unknown>) => Promise<T>;
+export function resolveInvoke(): TauriInvoke {
   const w = globalThis as unknown as {
     __TAURI__?: { core?: { invoke?: TauriInvoke } };
     __TAURI_INTERNALS__?: { invoke?: TauriInvoke };

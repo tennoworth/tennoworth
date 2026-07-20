@@ -31,25 +31,43 @@ export interface SaveSnapshotInput {
   owned: Map<string, OwnedRecord>;
 }
 
-export function saveSnapshot({ invName, owned }: SaveSnapshotInput): void {
+// Serialize/deserialize are the single source of truth for the on-the-wire
+// snapshot shape, shared by the localStorage store (below) and the desktop
+// SQLite store (state-store.ts) so both persist byte-identical payloads. Only
+// the backing store differs — the bytes never do.
+export function serializeSnapshot({ invName, owned }: SaveSnapshotInput): string {
+  const payload = {
+    ts: Date.now(),
+    invName,
+    owned: [...owned.entries()].map(([key, rec]) => [
+      key,
+      {
+        count: rec.count,
+        name: rec.name,
+        type: rec.type,
+        slug: rec.slug,
+        subtype: rec.subtype ?? null,
+        kept_lvl: rec.kept_lvl ?? null,
+        leveled: rec.leveled ?? 0,
+      },
+    ]),
+  };
+  return JSON.stringify(payload);
+}
+
+export function deserializeSnapshot(raw: string | null): Snapshot | null {
+  if (!raw) return null;
+  const p = JSON.parse(raw);
+  return {
+    ts: p.ts,
+    invName: p.invName,
+    owned: new Map<string, OwnedRecord>(p.owned),
+  };
+}
+
+export function saveSnapshot(input: SaveSnapshotInput): void {
   try {
-    const payload = {
-      ts: Date.now(),
-      invName,
-      owned: [...owned.entries()].map(([key, rec]) => [
-        key,
-        {
-          count: rec.count,
-          name: rec.name,
-          type: rec.type,
-          slug: rec.slug,
-          subtype: rec.subtype ?? null,
-          kept_lvl: rec.kept_lvl ?? null,
-          leveled: rec.leveled ?? 0,
-        },
-      ]),
-    };
-    localStorage.setItem(KEY, JSON.stringify(payload));
+    localStorage.setItem(KEY, serializeSnapshot(input));
   } catch (e) {
     console.warn('Could not persist inventory snapshot:', e);
   }
@@ -57,14 +75,7 @@ export function saveSnapshot({ invName, owned }: SaveSnapshotInput): void {
 
 export function loadSnapshot(): Snapshot | null {
   try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return null;
-    const p = JSON.parse(raw);
-    return {
-      ts: p.ts,
-      invName: p.invName,
-      owned: new Map<string, OwnedRecord>(p.owned),
-    };
+    return deserializeSnapshot(localStorage.getItem(KEY));
   } catch (e) {
     console.warn('Could not load inventory snapshot:', e);
     return null;
