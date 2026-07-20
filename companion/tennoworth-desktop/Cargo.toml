@@ -20,6 +20,12 @@ tauri = { version = "2", features = ["tray-icon"] }
 # Post-scan system notification ("N items worth ~Xp to sell"). Fired from Rust
 # (NotificationExt), so no JS ACL entry is needed.
 tauri-plugin-notification = "2"
+# C5 auto-update against the GitHub-releases latest.json. Driven entirely from
+# Rust through app-defined commands (check_update / install_update) — check on
+# launch, notify, download+install only on explicit confirmation, apply on
+# restart. The signature pubkey lives in tauri.conf.json; the private key is
+# generated offline and never enters the repo (docs/signing-runbook.md §9).
+tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 wfm-core = { path = "../wfm-core" }

@@ -18,6 +18,7 @@
   "bundle": {
     "active": true,
     "targets": "all",
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -25,5 +26,13 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ]
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "PLACEHOLDER-NOT-A-REAL-KEY: generate the updater keypair OFFLINE with `cargo tauri signer generate` and paste the .pub file contents here — docs/signing-runbook.md section 9. Until then every signature check fails and no update can ever install.",
+      "endpoints": [
+        "https://github.com/tennoworth/tennoworth/releases/latest/download/latest.json"
+      ]
+    }
   }
 }
