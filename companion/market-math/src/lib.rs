@@ -10,6 +10,14 @@
 //! - Where Python semantics are quirky (ties-to-even rounding, upper-middle
 //!   baseline, insertion-order tie-breaks), we preserve them DELIBERATELY
 //!   and say so at the site. Divergence is a decision, not an accident.
+//!
+//! The [`sell_priority`] submodule is the ONE exception to "1:1 with Python":
+//! it mirrors the CLIENT scoring in `prototype/src/lib/sell-priority.ts`
+//! instead (there is no Python counterpart), so the desktop tray + notification
+//! rank with the same formula the SPA table uses. It obeys the same purity
+//! rules and is parity-tested against the TS on a shared fixture.
+
+pub mod sell_priority;
 
 /// Wash-trade cap: WFM clamps prices at 99,999p; a daily median or max at
 /// (near) the cap is manipulation, not trade.
