@@ -174,6 +174,14 @@ pub fn resolve_deepseek_key(env_value: Option<&str>, config_dir: &Path) -> Optio
     Some(trimmed.to_string())
 }
 
+// A user-created `assistant-off` marker file in the config dir disables the
+// assistant even when a key IS present — "I have a key but want this off
+// until I trust it" must not require deleting the key. Checked per request,
+// so `touch`/`rm` toggles without a serve restart.
+pub fn assistant_disabled(config_dir: &Path) -> bool {
+    config_dir.join("assistant-off").exists()
+}
+
 pub fn deepseek_client() -> Result<Client> {
     Client::builder()
         .user_agent(crate::BROWSER_UA)
@@ -502,6 +510,23 @@ mod tests {
         let dir = tmp_dir("key-blank-file");
         std::fs::write(dir.join("deepseek-key"), "\n\n").unwrap();
         assert!(resolve_deepseek_key(None, &dir).is_none());
+    }
+
+    // ---- kill switch ----
+
+    #[test]
+    fn assistant_disabled_when_marker_file_exists() {
+        let dir = tmp_dir("assistant-off-marker");
+        std::fs::write(dir.join("assistant-off"), "").unwrap();
+        assert!(assistant_disabled(&dir));
+    }
+
+    #[test]
+    fn assistant_enabled_without_marker_even_with_key_present() {
+        let dir = tmp_dir("assistant-on-with-key");
+        std::fs::write(dir.join("deepseek-key"), "sk-test").unwrap();
+        assert!(!assistant_disabled(&dir));
+        assert_eq!(resolve_deepseek_key(None, &dir).as_deref(), Some("sk-test"));
     }
 
     // ---- error detail truncation ----
