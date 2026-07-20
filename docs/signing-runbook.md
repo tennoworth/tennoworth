@@ -1,4 +1,13 @@
-# Code-signing runbook (Windows / Authenticode)
+# Code-signing runbook
+
+Two independent signing systems live here: **Windows Authenticode** for the
+companion CLI (§1–8, the Phase B2 pipeline) and the **Tauri updater keypair**
+for the desktop app's auto-update (§9–10, Phase C5). They share nothing — a
+Certum cert cannot sign updater bundles and the updater key means nothing to
+SmartScreen — but both follow the same rule: private key material never
+touches the repo.
+
+## Windows / Authenticode (companion CLI)
 
 Operational guide for the Phase B2 signing pipeline. This is the
 **cert-independent prep**: the workflow (`.github/workflows/release-companion.yml`)
@@ -254,3 +263,160 @@ For reference, so you can confirm the shipping state is behaving:
 
 Flipping any secret on changes only the corresponding gated step — nothing else
 in the release flow moves.
+
+---
+
+## 9. Tauri updater keypair (desktop auto-update, Phase C5)
+
+The desktop app (`companion/tennoworth-desktop`) checks
+`https://github.com/tennoworth/tennoworth/releases/latest/download/latest.json`
+at launch and on demand. Every update bundle is signed with a **minisign
+keypair** and verified against the public key baked into
+`tauri.conf.json → plugins.updater.pubkey` before install. This key is the
+whole trust model: whoever holds the private key can ship code to every
+desktop install, so it is generated **offline, by you, once** — never in CI,
+never by an agent, never committed.
+
+### Current state (deliberate)
+
+`plugins.updater.pubkey` holds a clearly-marked **placeholder**. Until you
+replace it, signature verification fails on everything, so no update can ever
+install — checks still work and degrade to "no update". This is the safe
+shipping state until the keypair exists.
+
+### Generate the keypair (offline, one time)
+
+```sh
+# tauri-cli (cargo install tauri-cli --version '^2' — or use `bunx @tauri-apps/cli`)
+cargo tauri signer generate -w ~/.tauri/tennoworth-updater.key
+```
+
+- Set a **password** when prompted (it encrypts the private key at rest;
+  CI needs it too, see below).
+- Output: `tennoworth-updater.key` (PRIVATE — the secret) and
+  `tennoworth-updater.key.pub` (public, safe to publish).
+- Paste the **contents of the `.pub` file** (the base64 blob, one line) into
+  `companion/tennoworth-desktop/tauri.conf.json → plugins.updater.pubkey`
+  and commit that — the pubkey is meant to be public.
+
+### Where the private key lives
+
+- Your machine (`~/.tauri/`), **plus two offline backups** (password manager
+  attachment + a drive that is not this computer). §"Loss" explains why two.
+- The password lives in the password manager, separate from the key file.
+- Never in the repo, never echoed in a workflow, never pasted to an agent.
+
+### How CI signs (when the C8 release workflow lands)
+
+`tauri build` signs updater artifacts automatically when these env vars are
+present (set as GitHub Actions **repository secrets**, same indirection
+pattern as §2):
+
+| Secret | Value |
+|---|---|
+| `TAURI_SIGNING_PRIVATE_KEY` | Contents of `tennoworth-updater.key` (the base64 blob — the file content itself, not a path) |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | The password set at generation |
+
+`bundle.createUpdaterArtifacts: true` is already set in `tauri.conf.json`, so
+a signed build emits, per platform, the bundle **plus a detached `.sig` file**
+whose contents go into `latest.json` (§10). Without the secrets, `tauri build`
+still produces installable bundles — they just can't be consumed by the
+updater.
+
+### Rotation
+
+Installed apps verify with the **old** pubkey until they update. Order
+matters:
+
+1. Generate the new keypair offline (as above).
+2. Replace `plugins.updater.pubkey` with the **new** pubkey in the repo.
+3. Cut that release signed with the **OLD** key (leave the old
+   `TAURI_SIGNING_PRIVATE_KEY` secret in place for this one release) — this is
+   the bridge release: old installs accept it, and it carries the new pubkey.
+4. After it ships, swap the CI secrets to the new key. All later releases are
+   signed with the new key, which the bridge release taught installs to trust.
+
+Skipping step 3 strands every existing install (they'd reject the first
+new-key release).
+
+### Loss
+
+There is no CA and no re-issue: lose the private key (and both backups) and
+**existing installs can never auto-update again** — their baked-in pubkey will
+reject anything you can still produce. Recovery is manual: generate a fresh
+pair, ship a new release, and tell users to download and reinstall once (the
+trust page + release notes). Painful but bounded — this is why the two offline
+backups are non-negotiable.
+
+### Compromise
+
+An attacker needs the private key **and** its password **and** the ability to
+serve a manifest (GitHub release write access) to push a malicious update. If
+you believe the key leaked:
+
+1. Delete/rotate the GitHub Actions secrets immediately.
+2. Run the rotation flow above (the bridge release is safe to sign with a
+   compromised-but-not-yet-abused key; if abuse is confirmed, fall back to the
+   manual-reinstall path instead and say so loudly).
+3. Delete any GitHub release assets the attacker touched; publish an advisory
+   in the repo + trust page.
+
+Timestamping does not apply here (minisign, not Authenticode) — there is
+nothing that keeps old signatures valid across rotation except the bridge
+release.
+
+---
+
+## 10. What the desktop release workflow must produce (C8 contract)
+
+There is **no desktop release workflow yet** — C5 deliberately shipped only
+the client side. The updater endpoint 404s today (and the placeholder pubkey
+rejects everything), which the desktop app treats as "no update available".
+When C8 builds the packaging workflow, the updater side of it must produce,
+per release:
+
+1. **Signed bundles + detached signatures**, built by `tauri build` with the
+   §9 secrets set: at minimum `TennoWorth_<ver>_amd64.AppImage` (+ `.sig`) on
+   the Linux leg and the NSIS `TennoWorth_<ver>_x64-setup.exe` (+ `.sig`) on
+   the Windows leg. The `.sig` files exist only when `TAURI_SIGNING_*` is
+   configured — the workflow should **fail loudly** if they're missing rather
+   than publish an un-updatable release (mirror the SimplySign `throw`
+   pattern, §3).
+2. **`latest.json`**, uploaded as a release asset alongside the bundles:
+
+   ```json
+   {
+     "version": "0.2.0",
+     "notes": "…release notes…",
+     "pub_date": "2026-08-01T12:00:00Z",
+     "platforms": {
+       "linux-x86_64": {
+         "signature": "<contents of the .AppImage.sig file>",
+         "url": "https://github.com/tennoworth/tennoworth/releases/download/desktop-v0.2.0/TennoWorth_0.2.0_amd64.AppImage"
+       },
+       "windows-x86_64": {
+         "signature": "<contents of the -setup.exe.sig file>",
+         "url": "https://github.com/tennoworth/tennoworth/releases/download/desktop-v0.2.0/TennoWorth_0.2.0_x64-setup.exe"
+       }
+     }
+   }
+   ```
+
+   `signature` is the **contents** of the `.sig` file, not a URL to it.
+   `version` must be plain semver (no leading `v`) and strictly greater than
+   the installed version for the updater to offer it.
+3. **The "latest release" gotcha:** the endpoint uses
+   `releases/latest/download/latest.json`, and this repo also cuts companion
+   CLI releases (`v*` tags) that contain no `latest.json`. GitHub's "latest"
+   is the newest non-draft, non-prerelease release of the whole repo — so a
+   CLI release published after a desktop release makes the endpoint 404 until
+   the next desktop release (checks degrade to "no update"; nothing breaks,
+   but updates stall). C8 must pick one: mark CLI releases as pre-releases,
+   re-attach `latest.json` to every release, or move the endpoint to a fixed
+   tag (e.g. `releases/download/desktop-latest/latest.json`) that the desktop
+   workflow force-updates. Decide there — the config change is one line.
+4. **Updater behavior** the workflow can rely on: Linux updates only apply to
+   the AppImage packaging (a raw binary or distro package refuses to install
+   updates — expected); Windows runs the NSIS installer in passive mode, which
+   restarts the app itself. Neither downloads anything without the user
+   clicking Install in the banner.
