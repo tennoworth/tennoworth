@@ -7,9 +7,14 @@
 // adapter over the same crate):
 //   - `health`         → version / platform info (the IPC liveness round-trip)
 //   - `scan_inventory` → single-flight memory scan → inventory JSON bytes
-//
-// The login / listing / assistant surface (which needs the passphrase UI) is
-// NOT wired here yet — the SPA hides those affordances in desktop mode.
+//   - WFM session      → `wfm_auth_status` / `wfm_login` / `unlock_jwt` /
+//                        `wfm_logout` (see wfm_session.rs — the passphrase
+//                        arrives from the webview, never a TTY)
+//   - listing/orders   → `submit_plan` / `get_pending_plan` / `resume_pending_plan`
+//                        / `discard_pending_plan` / `fetch_orders` / `update_order`
+//                        / `delete_order` / `bulk_visibility` — the desktop mirror
+//                        of serve's HTTP routes, same wfm-core services
+//   - `ask_assistant`  → the DeepSeek relay (key stays in Rust, off the webview)
 //
 // A verification probe is opt-in behind TENNOWORTH_PROBE=1: it injects a
 // document-start script (PROBE_JS) that records origin / storage / fetch / IPC /
@@ -24,8 +29,10 @@ mod sellables;
 mod snapshot;
 mod wfm_session;
 
+use std::collections::BTreeMap;
 use std::io::Write;
 use std::sync::{Arc, Mutex, OnceLock};
+use std::time::Instant;
 use tauri::menu::{Menu, MenuBuilder, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder, Wry};
@@ -36,14 +43,15 @@ use db::{Db, Reserve, SnapshotSummary};
 use market::{MarketCache, RefreshResult};
 use sellables::{MarketData, ScanNotification, SellableRow};
 use wfm_core::assistant::{
-    assistant_request_too_large, build_assistant_messages, call_deepseek, cap_history,
-    deepseek_client, resolve_deepseek_key, short_reason, AssistantMessage, AssistantResponse,
+    assistant_rate_limited, assistant_request_too_large, build_assistant_messages, call_deepseek,
+    cap_history, deepseek_client, resolve_deepseek_key, short_reason, AssistantMessage,
+    AssistantResponse,
 };
 use wfm_core::inventory::InventoryScanner;
 use wfm_core::listing::{
     bulk_set_visibility, delete_order as core_delete_order, execute_plan as core_execute_plan,
     list_user_orders, run_pending, update_order as core_update_order, PerOrderResult, PlanItem,
-    PlanRequest, PlanResponse, UpdateRequest, VisibilityRequest, Unlocked, MAX_PLATINUM,
+    PlanRequest, PlanResponse, Unlocked, UpdateRequest, VisibilityRequest, MAX_PLATINUM,
 };
 use wfm_core::pending::{clear_pending, load_pending, PendingPlan};
 use wfm_session::{CmdError, WfmSession};
@@ -421,6 +429,275 @@ fn top_sellables(
     rows
 }
 
+// ---- WFM session + listing commands ---------------------------------------
+//
+// The desktop mirror of serve's listing routes: same wfm-core services, with
+// the passphrase arriving from the webview (`wfm_login` / `unlock_jwt`)
+// instead of a TTY prompt. Every fallible command rejects with a serialized
+// CmdError {code, message}; `needs_login` / `needs_unlock` drive the SPA's
+// login and passphrase dialogs — the desktop analogue of serve's
+// 401 needs_login:true vs 503 split. The plaintext JWT stays inside
+// WfmSession; no command returns it, and no command logs it.
+
+#[derive(serde::Serialize)]
+struct WfmAuthStatus {
+    /// A login envelope exists on disk (encrypted; says nothing about the
+    /// passphrase being known).
+    logged_in: bool,
+    /// This process holds the decrypted JWT in memory.
+    unlocked: bool,
+}
+
+#[tauri::command]
+fn wfm_auth_status(session: State<'_, Arc<WfmSession>>) -> WfmAuthStatus {
+    let (logged_in, unlocked) = session.auth_status();
+    WfmAuthStatus { logged_in, unlocked }
+}
+
+/// Sign in to warframe.market with credentials from the SPA's login dialog,
+/// persist the encrypted JWT (unchanged envelope format), and unlock the
+/// session. Network — spawn_blocking keeps the webview event loop free.
+#[tauri::command]
+async fn wfm_login(
+    session: State<'_, Arc<WfmSession>>,
+    email: String,
+    password: String,
+    passphrase: String,
+    platform: String,
+) -> Result<(), CmdError> {
+    let s = Arc::clone(&session);
+    tauri::async_runtime::spawn_blocking(move || {
+        // Zeroizing scrubs OUR copies of the secrets when the closure ends —
+        // best-effort (the IPC deserializer made its own transient copies).
+        let password = Zeroizing::new(password);
+        let passphrase = Zeroizing::new(passphrase);
+        s.login(&email, &password, &passphrase, &platform)
+    })
+    .await
+    .map_err(|e| CmdError::internal(format!("login task failed to run: {e}")))?
+}
+
+/// Decrypt the stored JWT with the passphrase from the SPA's unlock dialog and
+/// warm the WFM catalog. Missing file → `needs_login`; wrong passphrase →
+/// `bad_passphrase`; catalog/me failure → `wfm` (transient, retryable).
+#[tauri::command]
+async fn unlock_jwt(
+    session: State<'_, Arc<WfmSession>>,
+    passphrase: String,
+) -> Result<(), CmdError> {
+    let s = Arc::clone(&session);
+    tauri::async_runtime::spawn_blocking(move || {
+        let passphrase = Zeroizing::new(passphrase);
+        s.unlock(&passphrase)
+    })
+    .await
+    .map_err(|e| CmdError::internal(format!("unlock task failed to run: {e}")))?
+}
+
+/// Lock the session and scrub the in-memory JWT. The on-disk envelope stays —
+/// re-unlocking needs only the passphrase, not a fresh WFM login.
+#[tauri::command]
+fn wfm_logout(session: State<'_, Arc<WfmSession>>) {
+    session.logout();
+}
+
+const PLAN_BUSY_MSG: &str = "A listing plan is already running — wait for it to finish.";
+
+/// Execute a listing batch — the desktop POST /plan. Pacing, caps, pending-file
+/// persistence, and per-item results all come from wfm-core's execute_plan.
+#[tauri::command]
+async fn submit_plan(
+    session: State<'_, Arc<WfmSession>>,
+    items: Vec<PlanItem>,
+) -> Result<PlanResponse, CmdError> {
+    let s = Arc::clone(&session);
+    tauri::async_runtime::spawn_blocking(move || {
+        let unlocked = s.require_unlocked()?;
+        let _guard = s.begin_plan().ok_or_else(|| CmdError::of("busy", PLAN_BUSY_MSG))?;
+        Ok(core_execute_plan(s.pending_path(), &unlocked, PlanRequest { items }))
+    })
+    .await
+    .map_err(|e| CmdError::internal(format!("plan task failed to run: {e}")))?
+}
+
+/// The last interrupted plan, or null. No auth — mirrors serve's JWT-free
+/// GET /plan/pending, so the SPA can poll it before any unlock.
+#[tauri::command]
+fn get_pending_plan(session: State<'_, Arc<WfmSession>>) -> Option<PendingPlan> {
+    load_pending(session.pending_path())
+}
+
+#[tauri::command]
+fn discard_pending_plan(session: State<'_, Arc<WfmSession>>) {
+    clear_pending(session.pending_path());
+}
+
+/// Re-run the pending plan, skipping items already in a terminal state.
+#[tauri::command]
+async fn resume_pending_plan(
+    session: State<'_, Arc<WfmSession>>,
+) -> Result<PlanResponse, CmdError> {
+    let s = Arc::clone(&session);
+    tauri::async_runtime::spawn_blocking(move || {
+        // Pending-first ordering mirrors serve (its 404 outranks auth): with
+        // nothing to resume the user must not be bounced into a login dialog.
+        let mut pending = load_pending(s.pending_path())
+            .ok_or_else(|| CmdError::of("no_pending", "No pending plan to resume."))?;
+        let unlocked = s.require_unlocked()?;
+        let _guard = s.begin_plan().ok_or_else(|| CmdError::of("busy", PLAN_BUSY_MSG))?;
+        let response = run_pending(s.pending_path(), &unlocked, &mut pending);
+        clear_pending(s.pending_path());
+        Ok(response)
+    })
+    .await
+    .map_err(|e| CmdError::internal(format!("resume task failed to run: {e}")))?
+}
+
+/// The user's current WFM listings, enriched with display names (GET /orders).
+#[tauri::command]
+async fn fetch_orders(session: State<'_, Arc<WfmSession>>) -> Result<serde_json::Value, CmdError> {
+    let s = Arc::clone(&session);
+    tauri::async_runtime::spawn_blocking(move || {
+        let unlocked = s.require_unlocked()?;
+        list_user_orders(&unlocked).map_err(CmdError::wfm)
+    })
+    .await
+    .map_err(|e| CmdError::internal(format!("orders task failed to run: {e}")))?
+}
+
+/// PATCH one order: price / quantity / visible / rank.
+#[tauri::command]
+async fn update_order(
+    session: State<'_, Arc<WfmSession>>,
+    order_id: String,
+    patch: UpdateRequest,
+) -> Result<PerOrderResult, CmdError> {
+    // Same cap as the create path — mirrors serve's pre-auth 400 so an edit
+    // can't push a listing past what the WFM UI allows.
+    if let Some(p) = patch.platinum {
+        if p > MAX_PLATINUM {
+            return Err(CmdError::wfm(format!("price {p}p > max {MAX_PLATINUM}p")));
+        }
+    }
+    let s = Arc::clone(&session);
+    tauri::async_runtime::spawn_blocking(move || {
+        let unlocked = s.require_unlocked()?;
+        core_update_order(&unlocked, &order_id, &patch).map_err(CmdError::wfm)
+    })
+    .await
+    .map_err(|e| CmdError::internal(format!("order update task failed to run: {e}")))?
+}
+
+#[tauri::command]
+async fn delete_order(
+    session: State<'_, Arc<WfmSession>>,
+    order_id: String,
+) -> Result<(), CmdError> {
+    let s = Arc::clone(&session);
+    tauri::async_runtime::spawn_blocking(move || {
+        let unlocked = s.require_unlocked()?;
+        core_delete_order(&unlocked, &order_id).map_err(CmdError::wfm)
+    })
+    .await
+    .map_err(|e| CmdError::internal(format!("order delete task failed to run: {e}")))?
+}
+
+/// Bulk-toggle listing visibility (POST /orders/visibility). Per-order results;
+/// pacing lives in wfm-core's bulk_set_visibility.
+#[tauri::command]
+async fn bulk_visibility(
+    session: State<'_, Arc<WfmSession>>,
+    order_ids: Vec<String>,
+    visible: bool,
+) -> Result<Vec<PerOrderResult>, CmdError> {
+    let s = Arc::clone(&session);
+    tauri::async_runtime::spawn_blocking(move || {
+        let unlocked = s.require_unlocked()?;
+        Ok(bulk_set_visibility(&unlocked, &VisibilityRequest { order_ids, visible }))
+    })
+    .await
+    .map_err(|e| CmdError::internal(format!("visibility task failed to run: {e}")))?
+}
+
+/// The DeepSeek advisor relay (POST /assistant) — the only command with
+/// third-party egress. Key resolution, caps, prompt fencing, and the ≤20/60s
+/// throttle all mirror serve; the API key never reaches the webview.
+#[tauri::command]
+async fn ask_assistant(
+    session: State<'_, Arc<WfmSession>>,
+    question: String,
+    history: Vec<AssistantMessage>,
+    context: Option<String>,
+) -> Result<AssistantResponse, CmdError> {
+    let s = Arc::clone(&session);
+    tauri::async_runtime::spawn_blocking(move || {
+        let context = context.unwrap_or_default();
+        if assistant_request_too_large(&question, &context) {
+            return Err(CmdError::of("too_large", "Question or context is too large."));
+        }
+        let api_key = resolve_deepseek_key(
+            std::env::var("DEEPSEEK_API_KEY").ok().as_deref(),
+            s.key_dir(),
+        )
+        .ok_or_else(|| {
+            CmdError::of(
+                "no_api_key",
+                "No DeepSeek API key configured — set DEEPSEEK_API_KEY or the deepseek-key config file.",
+            )
+        })?;
+        // Checked just before the upstream call — a rejected/oversized/keyless
+        // request never counts against the budget (same as serve).
+        {
+            let mut calls = s.assistant_calls.lock().expect("assistant_calls mutex poisoned");
+            if assistant_rate_limited(&mut calls, Instant::now()) {
+                return Err(CmdError::of(
+                    "rate_limited",
+                    "Too many advisor requests — wait a minute and try again.",
+                ));
+            }
+        }
+        let messages = build_assistant_messages(&context, &cap_history(history), &question);
+        let client = deepseek_client().map_err(|e| CmdError::of("upstream", short_reason(&e)))?;
+        let (answer, usage) = call_deepseek(&client, &api_key, messages)
+            .map_err(|e| CmdError::of("upstream", short_reason(&e)))?;
+        Ok(AssistantResponse { answer, usage })
+    })
+    .await
+    .map_err(|e| CmdError::internal(format!("assistant task failed to run: {e}")))?
+}
+
+/// Probe-only: write a real encrypted login envelope (production encrypt +
+/// persist path) so the hermetic probe can drive the needs_unlock /
+/// bad_passphrase branches without a live WFM login.
+#[tauri::command]
+fn debug_write_login(
+    session: State<'_, Arc<WfmSession>>,
+    passphrase: String,
+) -> Result<(), CmdError> {
+    if std::env::var("TENNOWORTH_PROBE").ok().as_deref() != Some("1") {
+        return Err(CmdError::internal("debug_write_login is probe-only"));
+    }
+    session.debug_write_login(&passphrase)
+}
+
+/// Probe-only: flip the session to unlocked with a synthetic credential bundle
+/// (empty catalog, fake JWT) — no network. Listing commands then exercise
+/// their offline validation paths; anything that would hit WFM fails per-item.
+#[tauri::command]
+fn debug_seed_unlocked(session: State<'_, Arc<WfmSession>>) -> Result<(), CmdError> {
+    if std::env::var("TENNOWORTH_PROBE").ok().as_deref() != Some("1") {
+        return Err(CmdError::internal("debug_seed_unlocked is probe-only"));
+    }
+    session.debug_set_unlocked(Unlocked {
+        jwt: "probe.jwt.value".into(),
+        username: "probe".into(),
+        platform: "pc".into(),
+        catalog: Arc::new(BTreeMap::new()),
+        id_to_name: Arc::new(BTreeMap::new()),
+    });
+    Ok(())
+}
+
 /// Probe-only: persist the evidence JSON to $TENNOWORTH_PROBE_OUT (and echo it
 /// to stdout between markers so it is captured even without file access).
 #[tauri::command]
@@ -488,6 +765,17 @@ const PROBE_JS: &str = r#"(function(){
     var inv = invokeFn();
     if (!inv) return Promise.resolve('NO_INVOKE_FN');
     return inv(cmd, args).catch(function(e){ return 'ERR:'+(e && e.message || e); });
+  }
+  // Like invk, but keeps the typed CmdError shape: rejections come back as
+  // { ok:false, code, message } so the report can assert needs_login vs
+  // needs_unlock vs bad_passphrase instead of a flattened string.
+  function invkE(cmd, args){
+    var inv = invokeFn();
+    if (!inv) return Promise.resolve('NO_INVOKE_FN');
+    return inv(cmd, args).then(
+      function(v){ return { ok: true, value: v === undefined ? null : v }; },
+      function(e){ return { ok: false, code: e && e.code, message: String(e && e.message || e).slice(0, 160) }; }
+    );
   }
   function probeFetch(url){
     return fetch(url, { cache:'no-store' }).then(function(r){
@@ -612,6 +900,84 @@ const PROBE_JS: &str = r#"(function(){
     // (a) Set reserve via the REAL input (now rendered) → set_setting.
     .then(function(){ return setReserve().then(function(via){ R.reserveSetVia = via; }); })
     .then(function(){ return invk('get_setting', { key: 'reserve-copies' }).then(function(v){ R.reserveAfterSet = v; }); })
+    // C7 WFM listing session: the full lock-state machine, hermetic (no WFM
+    // network — TENNOWORTH_JWT_PATH/TENNOWORTH_PENDING_PATH point at scratch,
+    // and every plan item fails validation before any HTTP).
+    .then(function(){ R.wfm = {}; return invkE('wfm_auth_status').then(function(v){ R.wfm.status0 = v; }); })
+    // No login file → typed needs_login (the desktop analogue of serve's 401).
+    .then(function(){ return invkE('submit_plan', { items: [] }).then(function(v){ R.wfm.planNoLogin = v; }); })
+    // Real Sell CTA with no login → the login dialog opens (proactive check).
+    .then(function(){
+      var btn = document.querySelector('[data-testid="desktop-list"]');
+      R.wfm.listBtnFound = !!btn;
+      if (btn) btn.click();
+      return delay(700);
+    })
+    .then(function(){
+      var d = document.querySelector('[data-testid="wfm-login-dialog"]');
+      R.wfm.loginDialogOpen = !!(d && d.open);
+      if (d && d.open) d.close();
+    })
+    // Write a REAL encrypted envelope (production encrypt+persist), then the
+    // same call sites must flip to needs_unlock.
+    .then(function(){ return invkE('debug_write_login', { passphrase: 'probe-pass-123456' }).then(function(v){ R.wfm.wroteLogin = v; }); })
+    .then(function(){ return invkE('wfm_auth_status').then(function(v){ R.wfm.status1 = v; }); })
+    .then(function(){ return invkE('submit_plan', { items: [] }).then(function(v){ R.wfm.planLocked = v; }); })
+    // Real CTA again → unlock dialog; drive the REAL form with a wrong
+    // passphrase → bad_passphrase surfaces in the dialog, which stays open.
+    .then(function(){
+      var btn = document.querySelector('[data-testid="desktop-list"]');
+      if (btn) btn.click();
+      return delay(700);
+    })
+    .then(function(){
+      var d = document.querySelector('[data-testid="wfm-unlock-dialog"]');
+      R.wfm.unlockDialogOpen = !!(d && d.open);
+      if (!(d && d.open)) return;
+      var inp = d.querySelector('[data-testid="wfm-unlock-pass"]');
+      var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+      setter.call(inp, 'wrong-passphrase');
+      inp.dispatchEvent(new Event('input', { bubbles: true }));
+      d.querySelector('form').requestSubmit();
+      return delay(2500).then(function(){
+        var err = d.querySelector('[data-testid="wfm-auth-error"]');
+        R.wfm.unlockWrongPassError = err ? (err.innerText || '').slice(0, 120) : null;
+        R.wfm.unlockDialogStillOpen = d.open;
+        d.close();
+      });
+    })
+    // Seed an unlocked session (probe-only, synthetic bundle — no network),
+    // then the CTA opens the review modal with the staged fixture rows.
+    .then(function(){ return invkE('debug_seed_unlocked').then(function(v){ R.wfm.seeded = v; }); })
+    .then(function(){ return invkE('wfm_auth_status').then(function(v){ R.wfm.status2 = v; }); })
+    .then(function(){
+      var btn = document.querySelector('[data-testid="desktop-list"]');
+      if (btn) btn.click();
+      return delay(700);
+    })
+    .then(function(){
+      var modal = document.querySelector('.modal');
+      R.wfm.reviewModalOpen = !!modal;
+      R.wfm.reviewModalRows = document.querySelectorAll('.modal tbody tr').length;
+      var x = document.querySelector('.modal header .x');
+      if (x) x.click();
+      return delay(300);
+    })
+    // Offline plan execution: both items fail wfm-core validation BEFORE any
+    // HTTP (price under the 5p floor; slug not in the catalog) — exercises the
+    // full plan pipeline incl. pending-file seed + clean clear, no network.
+    .then(function(){
+      return invkE('submit_plan', { items: [
+        { slug: 'ash_prime_set', platinum: 1, quantity: 1, order_type: 'sell', visible: false },
+        { slug: 'not_a_real_slug', platinum: 10, quantity: 1, order_type: 'sell', visible: false }
+      ]}).then(function(v){ R.wfm.planOffline = v; });
+    })
+    .then(function(){ return invkE('get_pending_plan').then(function(v){ R.wfm.pendingAfterPlan = v; }); })
+    .then(function(){ return invkE('resume_pending_plan').then(function(v){ R.wfm.resumeNoPending = v; }); })
+    .then(function(){ return invkE('wfm_logout').then(function(v){ R.wfm.logout = v; }); })
+    .then(function(){ return invkE('wfm_auth_status').then(function(v){ R.wfm.status3 = v; }); })
+    // Locked again with the envelope still on disk → needs_unlock, not login.
+    .then(function(){ return invkE('submit_plan', { items: [] }).then(function(v){ R.wfm.planAfterLogout = v; }); })
     // Checkpoint the evidence BEFORE the lifecycle test — if close-to-tray were
     // broken and destroyed the window, the final report below would never write.
     .then(function(){ return invk('probe_report', { payload: JSON.stringify(R) }); })
@@ -642,6 +1008,7 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_notification::init())
         .manage(TrayState::default())
+        .manage(Arc::new(WfmSession::new()))
         .invoke_handler(tauri::generate_handler![
             health,
             scan_inventory,
@@ -656,6 +1023,21 @@ fn main() {
             refresh_market,
             top_sellables,
             tray_state,
+            wfm_auth_status,
+            wfm_login,
+            unlock_jwt,
+            wfm_logout,
+            submit_plan,
+            get_pending_plan,
+            discard_pending_plan,
+            resume_pending_plan,
+            fetch_orders,
+            update_order,
+            delete_order,
+            bulk_visibility,
+            ask_assistant,
+            debug_write_login,
+            debug_seed_unlocked,
             debug_post_scan,
             probe_report,
             probe_exit

@@ -7,10 +7,10 @@
 // functions so call sites read the same. HttpCompanionTransport delegates 1:1 to
 // those modules (no behaviour change in browser mode — they keep their exports
 // for the components that still import them directly). TauriTransport invokes a
-// wfm-core-backed command per implemented op; the ops that still need the
-// passphrase/login UI (listing, orders, assistant) are declared but throw
-// NotImplementedError until that surface lands (next chunk), and the desktop UI
-// hides those affordances.
+// wfm-core-backed command per op; listing/order commands reject with a typed
+// {code, message} CmdError which surfaces here as DesktopCmdError —
+// `needs_login` / `needs_unlock` drive the SPA's login and passphrase dialogs
+// (the desktop analogue of serve's 401 needs_login:true vs 503 split).
 
 import type { CompanionConfig, PendingPlan, PlanResponse, ItemResult, Market } from './types';
 import {
@@ -28,25 +28,44 @@ import {
   type PlanItemInput,
   type OrderPatch,
 } from './companion';
-import { askAssistant, type AssistantMessage, type AssistantAnswer } from './assistant';
+import {
+  askAssistant,
+  AssistantError,
+  type AssistantMessage,
+  type AssistantAnswer,
+} from './assistant';
 
 export type { PingResponse, PlanItemInput, OrderPatch } from './companion';
 export type { AssistantMessage, AssistantAnswer } from './assistant';
 
 /**
- * Thrown by TauriTransport for the operations that are declared on the
- * interface but not wired in the desktop build yet (listing / orders /
- * assistant — they need the passphrase UI). `op` names the operation so the
- * caller can log or branch; the desktop UI hides these affordances so a user
- * never reaches one.
+ * A desktop command rejection, rehydrated from the Rust CmdError
+ * `{ code, message }` the invoke promise rejects with. Callers branch on
+ * `code` (`needs_login` / `needs_unlock` open the auth dialogs;
+ * `bad_passphrase` stays in the passphrase dialog; everything else shows
+ * `message` verbatim). Never carries the JWT, passphrase, or password —
+ * the Rust side guarantees that.
  */
-export class NotImplementedError extends Error {
-  op: string;
-  constructor(op: string) {
-    super(`${op} is not available in the desktop app yet.`);
-    this.name = 'NotImplementedError';
-    this.op = op;
+export class DesktopCmdError extends Error {
+  code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = 'DesktopCmdError';
+    this.code = code;
   }
+}
+
+/** Rethrow an invoke rejection as its typed form. Rust CmdError arrives as a
+ *  plain `{code, message}` object; other commands reject with strings. */
+function rethrowInvoke(e: unknown): never {
+  if (e && typeof e === 'object') {
+    const o = e as { code?: unknown; message?: unknown };
+    if (typeof o.code === 'string' && typeof o.message === 'string') {
+      throw new DesktopCmdError(o.code, o.message);
+    }
+  }
+  if (e instanceof Error) throw e;
+  throw new Error(String(e));
 }
 
 /**
@@ -196,10 +215,10 @@ export function resolveInvoke(): TauriInvoke {
 }
 
 /**
- * Tauri transport: each op is a wfm-core-backed command. Only the two the
- * first desktop flow needs are wired — `health` and `fetchInventory`
- * (→ scan_inventory). The listing / order / assistant ops throw
- * NotImplementedError until the desktop passphrase surface lands.
+ * Tauri transport: each op is a wfm-core-backed command. The listing/order ops
+ * mirror serve's HTTP routes 1:1 (submit_plan ↔ POST /plan, get_pending_plan ↔
+ * GET /plan/pending, …); their rejections surface as DesktopCmdError so the
+ * caller can branch on `needs_login` / `needs_unlock`.
  */
 export class TauriTransport implements Transport {
   readonly mode = 'tauri' as const;
@@ -243,32 +262,133 @@ export class TauriTransport implements Transport {
     return { updated: !!r.updated, updatedAt: r.updated_at ?? null, etag: r.etag ?? null, market };
   }
 
-  submitPlan(): Promise<PlanResponse> {
-    throw new NotImplementedError('submitPlan');
+  async submitPlan(items: PlanItemInput[]): Promise<PlanResponse> {
+    try {
+      return await resolveInvoke()<PlanResponse>('submit_plan', { items });
+    } catch (e) {
+      rethrowInvoke(e);
+    }
   }
-  getPendingPlan(): Promise<PendingPlan | null> {
-    throw new NotImplementedError('getPendingPlan');
+  async getPendingPlan(): Promise<PendingPlan | null> {
+    // The command returns Option<PendingPlan> — null when there's nothing
+    // queued, matching the HTTP path's 404 → null normalization.
+    try {
+      return await resolveInvoke()<PendingPlan | null>('get_pending_plan');
+    } catch (e) {
+      rethrowInvoke(e);
+    }
   }
-  resumePendingPlan(): Promise<PlanResponse> {
-    throw new NotImplementedError('resumePendingPlan');
+  async resumePendingPlan(): Promise<PlanResponse> {
+    try {
+      return await resolveInvoke()<PlanResponse>('resume_pending_plan');
+    } catch (e) {
+      rethrowInvoke(e);
+    }
   }
-  discardPendingPlan(): Promise<unknown> {
-    throw new NotImplementedError('discardPendingPlan');
+  async discardPendingPlan(): Promise<unknown> {
+    try {
+      return await resolveInvoke()<null>('discard_pending_plan');
+    } catch (e) {
+      rethrowInvoke(e);
+    }
   }
-  fetchOrders(): Promise<unknown> {
-    throw new NotImplementedError('fetchOrders');
+  async fetchOrders(): Promise<unknown> {
+    try {
+      return await resolveInvoke()<unknown>('fetch_orders');
+    } catch (e) {
+      rethrowInvoke(e);
+    }
   }
-  updateOrder(): Promise<unknown> {
-    throw new NotImplementedError('updateOrder');
+  async updateOrder(orderId: string, patch: OrderPatch): Promise<unknown> {
+    try {
+      return await resolveInvoke()<unknown>('update_order', { orderId, patch });
+    } catch (e) {
+      rethrowInvoke(e);
+    }
   }
-  deleteOrder(): Promise<unknown> {
-    throw new NotImplementedError('deleteOrder');
+  async deleteOrder(orderId: string): Promise<unknown> {
+    try {
+      return await resolveInvoke()<null>('delete_order', { orderId });
+    } catch (e) {
+      rethrowInvoke(e);
+    }
   }
-  bulkVisibility(): Promise<{ results: ItemResult[] }> {
-    throw new NotImplementedError('bulkVisibility');
+  async bulkVisibility(orderIds: string[], visible: boolean): Promise<{ results: ItemResult[] }> {
+    try {
+      const results = await resolveInvoke()<ItemResult[]>('bulk_visibility', { orderIds, visible });
+      return { results };
+    } catch (e) {
+      rethrowInvoke(e);
+    }
   }
-  askAssistant(): Promise<AssistantAnswer> {
-    throw new NotImplementedError('askAssistant');
+  async askAssistant(
+    question: string,
+    history: AssistantMessage[],
+    context: string | null,
+  ): Promise<AssistantAnswer> {
+    // Map CmdError codes onto the AssistantError contract AssistantChat
+    // already renders, so the drawer copy is identical in both modes.
+    try {
+      return await resolveInvoke()<AssistantAnswer>('ask_assistant', { question, history, context });
+    } catch (e) {
+      const o = e as { code?: unknown; message?: unknown } | null;
+      if (o && typeof o.code === 'string') {
+        const detail = typeof o.message === 'string' ? o.message : undefined;
+        if (o.code === 'no_api_key') throw new AssistantError('no_api_key');
+        if (o.code === 'upstream') throw new AssistantError('upstream', detail);
+        throw new AssistantError('unknown', detail ?? o.code);
+      }
+      rethrowInvoke(e);
+    }
+  }
+}
+
+// ---- Desktop-only WFM auth ops --------------------------------------------
+// Not on the Transport interface: the browser build has no login surface (serve
+// prompts in its own terminal), so these are reachable only from desktop-gated
+// UI. Secrets flow webview → Rust exactly once per call and are never returned.
+
+export interface DesktopWfmStatus {
+  /** An encrypted login envelope exists on disk. */
+  logged_in: boolean;
+  /** The desktop process holds the decrypted JWT in memory. */
+  unlocked: boolean;
+}
+
+export async function desktopWfmStatus(): Promise<DesktopWfmStatus> {
+  try {
+    return await resolveInvoke()<DesktopWfmStatus>('wfm_auth_status');
+  } catch (e) {
+    rethrowInvoke(e);
+  }
+}
+
+export async function desktopWfmLogin(
+  email: string,
+  password: string,
+  passphrase: string,
+  platform: string,
+): Promise<void> {
+  try {
+    await resolveInvoke()<null>('wfm_login', { email, password, passphrase, platform });
+  } catch (e) {
+    rethrowInvoke(e);
+  }
+}
+
+export async function desktopWfmUnlock(passphrase: string): Promise<void> {
+  try {
+    await resolveInvoke()<null>('unlock_jwt', { passphrase });
+  } catch (e) {
+    rethrowInvoke(e);
+  }
+}
+
+export async function desktopWfmLogout(): Promise<void> {
+  try {
+    await resolveInvoke()<null>('wfm_logout');
+  } catch (e) {
+    rethrowInvoke(e);
   }
 }
 

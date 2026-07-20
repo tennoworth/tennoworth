@@ -28,18 +28,21 @@
   import { encryptPayload, decryptPayload, isEncrypted } from './lib/crypto';
   import {
     loadCompanionConfig, saveCompanionConfig, clearCompanionConfig,
-    parseCompanionUrl, pingCompanion,
-    getPendingPlan, resumePendingPlan, discardPendingPlan,
+    parseCompanionUrl, pingCompanion, getPendingPlan,
     CompanionUnreachableError,
   } from './lib/companion';
-  import { createTransport, isDesktopRuntime } from './lib/transport';
+  import {
+    createTransport, isDesktopRuntime,
+    desktopWfmStatus, desktopWfmLogin, desktopWfmUnlock, DesktopCmdError,
+  } from './lib/transport';
   import type { CompanionConfig, Inventory, Market, OwnedRecord, PendingPlan, ItemResult } from './lib/types';
 
   // Desktop (Tauri) vs hosted/serve (browser) is decided ONCE at boot. In
   // desktop mode the companion-connect surface (URL/token/handshake, orders,
-  // assistant, listing) is hidden — those need the passphrase UI that lands
-  // next chunk — and inventory comes from the `scan_inventory` IPC command
-  // instead of the loopback HTTP server.
+  // assistant) is hidden; inventory comes from the `scan_inventory` IPC command
+  // and listing goes through the wfm_session commands — the typed
+  // needs_login/needs_unlock rejections open the WFM login/passphrase dialogs
+  // below (the desktop analogue of serve's terminal passphrase prompt).
   const isDesktop = isDesktopRuntime();
   // HTTP transport reads companionConfig lazily via the getter; the Tauri
   // transport ignores it. companionConfig is declared further down (with the
@@ -303,6 +306,14 @@
         companionPlatform = h?.platform ?? null;
       } catch (e) {
         console.error('desktop health check failed', e);
+      }
+      // Interrupted-batch recovery: the desktop analogue of the connect-time
+      // /plan/pending poll. get_pending_plan is JWT-free, so this needs no
+      // unlock. Best-effort — a failure just hides the Resume banner.
+      try {
+        pendingPlan = await transport.getPendingPlan();
+      } catch (e) {
+        console.error('desktop pending-plan check failed', e);
       }
     } else {
       // Auto-connect from a deep link the companion opened on `serve` start
@@ -1115,23 +1126,30 @@
   );
 
   async function doResume() {
-    if (!companionConfig) return;
+    if (!isDesktop && !companionConfig) return;
     resumePhase = 'running';
     resumeError = null;
     try {
-      const resp = await resumePendingPlan(companionConfig);
+      const resp = await transport.resumePendingPlan();
       resumeResults = resp?.results ?? [];
       resumePhase = 'done';
       pendingPlan = null;
     } catch (e) {
+      // Desktop locked-session rejection: keep the banner (the plan is still
+      // pending) and open the matching auth dialog — Resume works after that.
+      if (e instanceof DesktopCmdError && (e.code === 'needs_login' || e.code === 'needs_unlock')) {
+        resumePhase = 'idle';
+        openWfmAuthDialog(e.code);
+        return;
+      }
       resumePhase = 'error';
       resumeError = e.message || String(e);
     }
   }
 
   async function doDiscard() {
-    if (!companionConfig) return;
-    try { await discardPendingPlan(companionConfig); } catch { /* ignore */ }
+    if (!isDesktop && !companionConfig) return;
+    try { await transport.discardPendingPlan(); } catch { /* ignore */ }
     pendingPlan = null;
     resumePhase = 'idle';
     resumeResults = [];
@@ -1190,6 +1208,114 @@
       pullError = e.message || String(e);
     } finally {
       pullingInventory = false;
+    }
+  }
+
+  // ---- Desktop WFM auth (login / unlock dialogs) -----------------------
+  // The desktop analogue of serve's terminal passphrase prompt. Opened by the
+  // Sell CTA's proactive status check and by the typed needs_login /
+  // needs_unlock rejections listing commands return. Secrets go straight into
+  // the wfm_login / unlock_jwt commands and the bound fields are cleared as
+  // soon as the call returns — nothing lingers in webview state.
+  let wfmLoginDialog = $state();
+  let wfmUnlockDialog = $state();
+  let wfmLoginEmail = $state('');
+  let wfmLoginPassword = $state('');
+  let wfmLoginPassphrase = $state('');
+  let wfmLoginConfirm = $state('');
+  let wfmLoginPlatform = $state('pc');
+  let wfmUnlockPassphrase = $state('');
+  let wfmAuthBusy = $state(false);
+  let wfmAuthError = $state(null);
+  // What to do once the session unlocks: 'list' re-opens the listing flow the
+  // CTA started; null (the Resume path) leaves the user where they were.
+  let wfmAuthNext = null;
+
+  function openWfmAuthDialog(code, next = null) {
+    wfmAuthError = null;
+    wfmAuthNext = next;
+    if (code === 'needs_login') {
+      wfmLoginPassword = '';
+      wfmLoginPassphrase = '';
+      wfmLoginConfirm = '';
+      wfmLoginDialog?.showModal();
+    } else {
+      wfmUnlockPassphrase = '';
+      wfmUnlockDialog?.showModal();
+    }
+  }
+
+  function wfmAuthUnlocked() {
+    if (wfmAuthNext === 'list') listingOpen = true;
+    wfmAuthNext = null;
+  }
+
+  // The Sell CTA routes here. Browser mode opens the review modal directly
+  // (serve handles auth in its own terminal). Desktop checks the session first
+  // so the user meets the login/passphrase dialog BEFORE staging 50 rows — the
+  // same codes also arrive lazily via the modal's onauthrequired if the
+  // session state changed between staging and Send.
+  async function openListingFlow() {
+    if (!isDesktop) {
+      listingOpen = true;
+      return;
+    }
+    try {
+      const s = await desktopWfmStatus();
+      if (s.unlocked) listingOpen = true;
+      else openWfmAuthDialog(s.logged_in ? 'needs_unlock' : 'needs_login', 'list');
+    } catch (e) {
+      // Status probe failed (IPC fault) — open the modal anyway; Send will
+      // surface the typed code and route to the right dialog.
+      console.error('wfm auth status check failed', e);
+      listingOpen = true;
+    }
+  }
+
+  async function performWfmLogin(e) {
+    e?.preventDefault();
+    wfmAuthError = null;
+    if (wfmLoginPassphrase !== wfmLoginConfirm) {
+      wfmAuthError = "Passphrases don't match.";
+      return;
+    }
+    wfmAuthBusy = true;
+    try {
+      await desktopWfmLogin(wfmLoginEmail.trim(), wfmLoginPassword, wfmLoginPassphrase, wfmLoginPlatform);
+      wfmLoginDialog?.close();
+      wfmAuthUnlocked();
+    } catch (err) {
+      wfmAuthError = err.message || String(err);
+    } finally {
+      wfmLoginPassword = '';
+      wfmLoginPassphrase = '';
+      wfmLoginConfirm = '';
+      wfmAuthBusy = false;
+    }
+  }
+
+  async function performWfmUnlock(e) {
+    e?.preventDefault();
+    wfmAuthError = null;
+    wfmAuthBusy = true;
+    try {
+      await desktopWfmUnlock(wfmUnlockPassphrase);
+      wfmUnlockDialog?.close();
+      wfmAuthUnlocked();
+    } catch (err) {
+      // The login file vanished between the check and the unlock — switch to
+      // the login dialog instead of asking for a passphrase that can't work.
+      if (err instanceof DesktopCmdError && err.code === 'needs_login') {
+        wfmUnlockDialog?.close();
+        openWfmAuthDialog('needs_login', wfmAuthNext);
+      } else {
+        // bad_passphrase and transient WFM failures stay in the dialog with
+        // their message — retry is a re-type away.
+        wfmAuthError = err.message || String(err);
+      }
+    } finally {
+      wfmUnlockPassphrase = '';
+      wfmAuthBusy = false;
     }
   }
 
@@ -1641,10 +1767,11 @@
           <span class="muted preset-hint">
             {activePreset ? PRESETS[activePreset].hint : 'custom — saved preset cleared'}
           </span>
-          {#if companionStatus === 'connected'}
+          {#if isDesktop || companionStatus === 'connected'}
             <button
               class="list-cta"
-              onclick={() => (listingOpen = true)}
+              data-testid="desktop-list"
+              onclick={openListingFlow}
               disabled={listableRows.length === 0}
               title="Stage the top rows of the current view (preset + sort) for listing. The in-table name filter and badge chips are not applied — review each row in the modal before sending."
             >List {Math.min(listableRows.length, 50)} on WFM</button>
@@ -2490,7 +2617,7 @@
 {/snippet}
 
 {#snippet pendingBanner()}
-  {#if companionStatus === 'connected' && (pendingPlan || resumePhase !== 'idle')}
+  {#if (isDesktop || companionStatus === 'connected') && (pendingPlan || resumePhase !== 'idle')}
     <section class="card pending-banner">
       {#if resumePhase === 'running'}
         <div class="row">
@@ -2554,21 +2681,111 @@
   style="display:none"
 />
 
-<!-- Listing + assistant are loopback-companion surfaces that need a WFM login /
-     passphrase — not wired in the desktop build yet, so hidden in desktop mode. -->
-{#if !isDesktop}
+<!-- Both modes: browser sends through the loopback companion, desktop through
+     the wfm_session commands — the transport picks. onauthrequired only fires
+     in desktop mode (typed needs_login/needs_unlock rejections). -->
 <ListingReviewModal
   bind:open={listingOpen}
   rows={listableRows.slice(0, 50)}
-  config={companionConfig}
+  {transport}
+  onauthrequired={(code) => openWfmAuthDialog(code, 'list')}
 />
 
+<!-- Assistant is still a loopback-companion surface (its drawer keys off the
+     companion connection state) — hidden in desktop mode until that UI is
+     rethought, though the ask_assistant command + transport op already exist. -->
+{#if !isDesktop}
 <AssistantChat
   rows={tableView.active ? tableView.rows : results}
   marketAge={marketStaleness}
   config={companionConfig}
   companionStatus={companionStatus}
 />
+{/if}
+
+{#if isDesktop}
+<dialog bind:this={wfmLoginDialog} class="cryptobox" data-testid="wfm-login-dialog">
+  <form onsubmit={performWfmLogin}>
+    <header>
+      <h3>Log in to warframe.market</h3>
+      <p class="muted">
+        Listing needs your WFM account once. The sign-in token is encrypted
+        with your passphrase and stored only on this machine; your password is
+        used for this sign-in and never stored.
+      </p>
+    </header>
+    <label>
+      Email
+      <input type="email" autocomplete="username" bind:value={wfmLoginEmail} required autofocus />
+    </label>
+    <label>
+      Password
+      <input type="password" autocomplete="current-password" bind:value={wfmLoginPassword} required />
+    </label>
+    <label>
+      Platform
+      <select bind:value={wfmLoginPlatform}>
+        <option value="pc">PC (Steam &amp; Epic)</option>
+        <option value="ps4">PlayStation</option>
+        <option value="xbox">Xbox</option>
+        <option value="switch">Switch</option>
+      </select>
+    </label>
+    <label>
+      Encryption passphrase
+      <input
+        type="password"
+        autocomplete="new-password"
+        bind:value={wfmLoginPassphrase}
+        placeholder="min 12 characters — guards the stored token"
+        required
+        minlength="12"
+      />
+    </label>
+    <label>
+      Confirm passphrase
+      <input type="password" autocomplete="new-password" bind:value={wfmLoginConfirm} required minlength="12" />
+    </label>
+    {#if wfmAuthError}
+      <div class="err" data-testid="wfm-auth-error">{wfmAuthError}</div>
+    {/if}
+    <footer>
+      <button type="button" class="ghost" onclick={() => wfmLoginDialog?.close()}>Cancel</button>
+      <button type="submit" disabled={wfmAuthBusy}>{wfmAuthBusy ? 'Signing in…' : 'Log in'}</button>
+    </footer>
+  </form>
+</dialog>
+
+<dialog bind:this={wfmUnlockDialog} class="cryptobox" data-testid="wfm-unlock-dialog">
+  <form onsubmit={performWfmUnlock}>
+    <header>
+      <h3>Unlock warframe.market listing</h3>
+      <p class="muted">
+        Enter the passphrase you set at login to decrypt your WFM token for
+        this session. It stays in the app's memory — never on disk, never in
+        this window.
+      </p>
+    </header>
+    <label>
+      Passphrase
+      <input
+        type="password"
+        autocomplete="current-password"
+        data-testid="wfm-unlock-pass"
+        bind:value={wfmUnlockPassphrase}
+        required
+        autofocus
+      />
+    </label>
+    {#if wfmAuthError}
+      <div class="err" data-testid="wfm-auth-error">{wfmAuthError}</div>
+    {/if}
+    <footer>
+      <button type="button" class="ghost" onclick={() => wfmUnlockDialog?.close()}>Cancel</button>
+      <button type="submit" disabled={wfmAuthBusy}>{wfmAuthBusy ? 'Unlocking…' : 'Unlock'}</button>
+    </footer>
+  </form>
+</dialog>
 {/if}
 
 <dialog bind:this={exportDialog} class="cryptobox">
@@ -3640,7 +3857,9 @@
     text-transform: uppercase;
     color: var(--muted);
   }
-  dialog.cryptobox input[type="password"] {
+  dialog.cryptobox input[type="password"],
+  dialog.cryptobox input[type="email"],
+  dialog.cryptobox select {
     font: inherit;
     color: var(--fg);
     background: var(--panel-2);
@@ -3649,7 +3868,9 @@
     padding: 8px 10px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
-  dialog.cryptobox input[type="password"]:focus {
+  dialog.cryptobox input[type="password"]:focus,
+  dialog.cryptobox input[type="email"]:focus,
+  dialog.cryptobox select:focus {
     outline: none;
     border-color: var(--accent);
   }
