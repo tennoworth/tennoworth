@@ -23,9 +23,8 @@
   const APP_COMMIT = __APP_COMMIT__;
   import { deriveSetRecos } from './lib/set-recos';
   import { deriveRelicPlan } from './lib/relic-planner';
-  import {
-    saveSnapshot, loadSnapshot, clearSnapshot, diffOwned,
-  } from './lib/storage';
+  import { diffOwned } from './lib/storage';
+  import type { StateStore } from './lib/state-store';
   import { encryptPayload, decryptPayload, isEncrypted } from './lib/crypto';
   import {
     loadCompanionConfig, saveCompanionConfig, clearCompanionConfig,
@@ -46,6 +45,12 @@
   // transport ignores it. companionConfig is declared further down (with the
   // rest of the companion state) — the getter is only invoked at call time.
   const transport = createTransport(() => companionConfig);
+
+  // Persistence seam: localStorage in the browser, SQLite-over-IPC in desktop.
+  // Selected + primed (scalar settings loaded into cache) in main.ts and passed
+  // in, so the scalar-setting `$state` initializers below can read it
+  // synchronously with no first-paint flash. Snapshot methods are async.
+  let { store }: { store: StateStore } = $props();
 
   type Phase = 'idle' | 'loading' | 'done' | 'error';
   let phase = $state<Phase>('idle');
@@ -87,19 +92,16 @@
   // hides rows from view; this changes what's actually sellable, so unlike
   // minOwned/minPrice it's worth persisting — losing your only copy of
   // something to an underpriced snipe is the mistake this exists to prevent.
-  const RESERVE_KEY = 'wfminv:reserve-copies-v1';
   let reserveCopies = $state(
     (() => {
-      try {
-        const n = parseInt(localStorage.getItem(RESERVE_KEY), 10);
-        return Number.isFinite(n) && n >= 0 ? n : 0;
-      } catch { return 0; }
+      const n = parseInt(store.getSetting('reserve-copies'), 10);
+      return Number.isFinite(n) && n >= 0 ? n : 0;
     })()
   );
   function setReserveCopies(e) {
     const n = Math.max(0, parseInt(e.currentTarget.value, 10) || 0);
     reserveCopies = n;
-    try { localStorage.setItem(RESERVE_KEY, String(n)); } catch { /* ignore */ }
+    void store.setSetting('reserve-copies', String(n));
   }
   let typeFilter = $state('all');
   // Hide rows when the user has a copy of the mod ranked to ≥ `hideAtLvl`
@@ -119,14 +121,11 @@
   // Filter rail is collapsed by default — user feedback (casual flipper)
   // found a visible "tax form" intimidating; power users open it once and
   // it stays open via localStorage. Tag chips + table search stay visible.
-  const FILTERS_OPEN_KEY = 'wfminv:filters-open-v1';
-  let filtersOpen = $state(
-    typeof localStorage !== 'undefined' && localStorage.getItem(FILTERS_OPEN_KEY) === '1'
-  );
+  let filtersOpen = $state((() => store.getSetting('filters-open') === '1')());
   function toggleFiltersOpen(e: Event): void {
     const isOpen = (e.currentTarget as HTMLDetailsElement).open;
     filtersOpen = isOpen;
-    try { localStorage.setItem(FILTERS_OPEN_KEY, isOpen ? '1' : '0'); } catch { /* ignore */ }
+    void store.setSetting('filters-open', isOpen ? '1' : '0');
   }
 
   // Sidebar nav view — which workspace pane is active. Persists so a
@@ -134,31 +133,25 @@
   // 'sell' if the persisted view's data isn't available (Baro not
   // visiting, companion not connected).
   type View = 'sell' | 'sets' | 'relics' | 'baro' | 'routines' | 'orders' | 'companion' | 'install';
-  const VIEW_KEY = 'wfminv:view-v1';
   const VALID_VIEWS: ReadonlySet<View> = new Set([
     'sell', 'sets', 'relics', 'baro', 'routines', 'orders', 'companion', 'install',
   ]);
   let view = $state<View>(
     (() => {
-      try {
-        const saved = localStorage.getItem(VIEW_KEY) as View | null;
-        return saved && VALID_VIEWS.has(saved) ? saved : 'sell';
-      } catch { return 'sell'; }
+      const saved = store.getSetting('view') as View | null;
+      return saved && VALID_VIEWS.has(saved) ? saved : 'sell';
     })()
   );
   function setView(v: View): void {
     view = v;
-    try { localStorage.setItem(VIEW_KEY, v); } catch { /* ignore */ }
+    void store.setSetting('view', v);
   }
 
   // First-session Score explainer — dismissable, one-time, persists.
-  const SCORE_EXPLAINER_KEY = 'wfminv:score-explainer-dismissed-v1';
-  let scoreExplainerDismissed = $state(
-    typeof localStorage !== 'undefined' && localStorage.getItem(SCORE_EXPLAINER_KEY) === '1'
-  );
+  let scoreExplainerDismissed = $state((() => store.getSetting('score-explainer-dismissed') === '1')());
   function dismissScoreExplainer(): void {
     scoreExplainerDismissed = true;
-    try { localStorage.setItem(SCORE_EXPLAINER_KEY, '1'); } catch { /* ignore */ }
+    void store.setSetting('score-explainer-dismissed', '1');
   }
 
   // Preset pills above the rec cards. Each preset is one click that
@@ -305,7 +298,7 @@
     }
 
     // Restore the last inventory snapshot if there is one.
-    const snap = loadSnapshot();
+    const snap = await store.loadSnapshot();
     if (snap) {
       try {
         inventoryName = snap.invName;
@@ -351,7 +344,7 @@
   });
 
   function handleClear() {
-    clearSnapshot();
+    void store.clearSnapshot();
     inventoryName = null;
     lastUpdated = null;
     resolved = { owned: new Map(), unresolved: {} };
@@ -362,7 +355,11 @@
     phase = 'idle';
   }
 
-  async function handleInventory({ name, data }) {
+  // `origin` distinguishes a dropped/picked file ('file', the default DropZone
+  // path) from a memory scan ('scan', via pullInventory). Desktop history: the
+  // scan path already records a source='memory' snapshot inside scan_inventory,
+  // so only a raw file-drop records a source='import' one here — never both.
+  async function handleInventory({ name, data, origin = 'file' }) {
     // Encrypted exports route to the passphrase dialog instead of the
     // inventory-resolution pipeline.
     if (isEncrypted(data)) {
@@ -413,6 +410,21 @@
         }
         owned.set(key, rec);
       }
+      // Desktop-only: append a source='import' history row for a raw file-drop
+      // that is a genuine inventory (flatten found tradeable-category content).
+      // Deliberately BEFORE the resolution gate below: history tracks what you
+      // own (DE paths + counts), which is independent of whether anything
+      // resolves to a currently-sellable WFM slug — so an all-untradable
+      // inventory still records. `origin === 'file'` excludes the scan path,
+      // which already recorded a source='memory' row inside scan_inventory.
+      // Best-effort — a lost history row must never cost the user their import.
+      if (isDesktop && origin === 'file' && flatCount > 0) {
+        try {
+          await store.recordImportSnapshot(JSON.stringify(data));
+        } catch (e) {
+          console.error('inventory import snapshot not recorded', e);
+        }
+      }
       // Nothing resolved to a tradeable item. Either this isn't a companion
       // inventory.json at all (no recognizable Suits/LongGuns/Recipes keys, so
       // flatten yielded nothing), or it is one but holds only untradable items.
@@ -425,10 +437,10 @@
         return;
       }
       // Diff against the previously-saved snapshot before overwriting it.
-      const previous = loadSnapshot();
+      const previous = await store.loadSnapshot();
       deltas = diffOwned(previous?.owned, owned);
       resolved = { owned, unresolved };
-      saveSnapshot({ invName: name, owned });
+      await store.saveSnapshot({ invName: name, owned });
       lastUpdated = Date.now();
 
       results = computeResults(owned);
@@ -1131,6 +1143,9 @@
       await handleInventory({
         name: isDesktop ? 'inventory (from game)' : 'inventory (from companion)',
         data,
+        // Desktop scan_inventory already recorded the source='memory' history
+        // row; don't double-record this as an import.
+        origin: 'scan',
       });
     } catch (e) {
       pullError = e.message || String(e);
@@ -1230,10 +1245,10 @@
           },
         ])
       );
-      deltas = diffOwned(loadSnapshot()?.owned, ownedMap);
+      deltas = diffOwned((await store.loadSnapshot())?.owned, ownedMap);
       resolved = { owned: ownedMap, unresolved: {} };
       if (!market) market = await loadMarket();
-      saveSnapshot({ invName: inventoryName, owned: ownedMap });
+      await store.saveSnapshot({ invName: inventoryName, owned: ownedMap });
       phase = 'done';
       importDialog?.close();
     } catch (err) {
@@ -1636,7 +1651,7 @@
               </label>
               <label title="Copies of each item to hold back from selling. Set to 1 to never list your last copy. Unlike Min owned (which only hides rows from this table), this changes what's actually listable.">
                 Keep copies
-                <input type="number" value={reserveCopies} oninput={setReserveCopies} min="0" step="1" style="width:50px" />
+                <input type="number" data-testid="reserve-copies" value={reserveCopies} oninput={setReserveCopies} min="0" step="1" style="width:50px" />
               </label>
               <label>
                 Type
