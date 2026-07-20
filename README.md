@@ -9,10 +9,22 @@ running game — nothing is uploaded, no account login to *us*). The browser app
 joins it against a live warframe.market price snapshot and ranks your items by
 expected plat, not by a raw average price. Runs on Steam Deck.
 
-You can also try TennoWorth instantly at [tennoworth.app](https://tennoworth.app) —
-the landing page is a full market browser with live prices, volume trends,
-vaulted items, and a Baro countdown, all from a 2-hourly warframe.market
-snapshot. No download required.
+**Try it now with zero install** at **[tennoworth.app](https://tennoworth.app)** —
+the landing page is a full market browser (below). Prices, 48-hour volume,
+7-day trend sparklines, vaulted items, and the Baro countdown, straight from a
+snapshot refreshed every 2 hours. Connect the companion later to rank *your*
+inventory.
+
+<p align="center">
+  <img src="docs/img/market-browser.png" alt="TennoWorth market browser: top movers, vaulted &amp; valuable items, and Baro countdown from a live warframe.market snapshot" width="820">
+</p>
+
+Search any tradeable item for its price, volume, and trend — no download, no
+login:
+
+<p align="center">
+  <img src="docs/img/search.png" alt="Searching &quot;primed&quot; returns every matching item with price, 48-hour volume, and a 7-day sparkline" width="820">
+</p>
 
 ## How it works
 
@@ -26,11 +38,11 @@ Warframe (running)  ──►  companion  ──►  inventory.json
                                                                   WFM listings
 ```
 
-- **`companion/`** — a Rust workspace with multiple crates; the main binary
+- **`companion/`** — a Rust workspace. The player-facing binary
   `wfm-fetch-inventory` is a thin CLI adapter over the `wfm-core` library
   (scan, inventory fetch, WFM auth with encrypted JWT, listings, pending plans,
-  and assistant relay). PC-only by nature (it reads game memory). See
-  [`companion/README.md`](companion/README.md).
+  assistant relay); `tennoworth-desktop` is the native app (below). PC-only by
+  nature — it reads game memory. See [`companion/README.md`](companion/README.md).
 - **`prototype/`** — the Svelte browser app. No backend, no accounts, no data
   leaves your machine. `prototype/public/market.json` is the shared price
   snapshot.
@@ -89,15 +101,15 @@ the roadmap.
 cd prototype && bun install && bun run dev   # http://127.0.0.1:5173
 ```
 
+Domain-specific notes live in the per-directory `CLAUDE.md` files. Security
+posture and threat model: [`SECURITY.md`](SECURITY.md).
+
 ### Branching
 
 This repository uses a develop-then-main promotion model — `develop` is the
 integration branch (feature branches merge here, CI runs here), `main` is
 production (auto-deploys), and promotion is fast-forward only. See
 [`docs/branching.md`](docs/branching.md) for details.
-
-Domain-specific notes live in the per-directory `CLAUDE.md` files. Security
-posture and threat model: [`SECURITY.md`](SECURITY.md).
 
 ## Ban risk
 
