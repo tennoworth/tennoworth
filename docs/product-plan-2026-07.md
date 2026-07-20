@@ -16,13 +16,19 @@ in < 3 min with zero terminal. Returning user: answer < 5 s from launch.
 1. **The desktop app (Tauri v2) is the destination.** Same-origin webview
    kills the whole LNA/loopback/random-port class. The companion-serves-SPA
    pivot is dead (random port = storage amnesia).
-2. **Sign everything with one publisher identity, starting now.** Azure
-   Trusted Signing is NOT available to EU individual developers — use a
-   Certum Open Source code-signing cert (~€70/yr, requires public repo — we
-   qualify). Publisher reputation accrues across files, so signing today's
-   CLI is not wasted when the desktop exe ships (DeepSeek's "sinkhole" claim
-   adjudicated: the cert and rep carry over; only deep AV-whitelisting work
-   on the CLI would be wasted).
+2. ~~**Sign everything with one publisher identity, starting now.**~~
+   **REVERSED 2026-07-20 — user declined to buy a code-signing cert.** The
+   original call was a Certum Open Source cert (Azure Trusted Signing is
+   closed to EU individual devs). That is off the table. Consequence,
+   stated plainly: the unsigned-binary SmartScreen wall (the review's #1
+   Windows adoption killer) is now an **accepted risk**, not a solved one —
+   the desktop Tauri exe warns just like the CLI. Mitigation pivots to
+   **package-manager distribution** (winget + Scoop on Windows; AUR +
+   Flatpak/AppImage on Linux, our wedge) plus the trust page + SHA256SUMS +
+   honest install copy. The B2 signing pipeline stays merged but **dormant**
+   (every step no-ops without secrets), so the decision is reversible by
+   adding secrets alone. See docs/signing-runbook.md and the
+   windows-trust-via-package-managers task.
 3. **Window + notifications first; overlay is a v2 spike, not v1 scope.**
    DeepSeek pushed overlay-first (click-through HUD). Rejected for v1: it is
    the highest-maintenance surface (DPI, fullscreen modes, per-driver bugs —
