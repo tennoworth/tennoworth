@@ -71,16 +71,30 @@ Warframe (running)  ──►  companion  ──►  inventory.json
 
 ## Desktop app (in development)
 
-A native desktop app (Tauri v2) is being built at
-`companion/tennoworth-desktop/` as the future primary interface — same-origin
-webview with no browser loopback permissions. See
-[`docs/product-plan-2026-07.md`](docs/product-plan-2026-07.md) for the roadmap.
+A native desktop app (Tauri v2) at `companion/tennoworth-desktop/` has
+progressed from scaffold to a working end-to-end flow. It launches as a
+same-origin webview (no browser loopback / Local-Network-Access permissions
+needed), renders the market data, scans your inventory directly over Tauri IPC
+into `wfm-core`, and persists settings + inventory snapshots in a local SQLite
+store that survives restarts and keeps inventory history.
+
+The desktop app is **still in development** and not yet released — there is
+no download yet. The browser app + companion remain the way to use TennoWorth
+today. See [`docs/product-plan-2026-07.md`](docs/product-plan-2026-07.md) for
+the roadmap.
 
 ## Develop
 
 ```bash
 cd prototype && bun install && bun run dev   # http://127.0.0.1:5173
 ```
+
+### Branching
+
+This repository uses a develop-then-main promotion model — `develop` is the
+integration branch (feature branches merge here, CI runs here), `main` is
+production (auto-deploys), and promotion is fast-forward only. See
+[`docs/branching.md`](docs/branching.md) for details.
 
 Domain-specific notes live in the per-directory `CLAUDE.md` files. Security
 posture and threat model: [`SECURITY.md`](SECURITY.md).
