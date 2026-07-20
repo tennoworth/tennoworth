@@ -1,7 +1,9 @@
 # TennoWorth desktop shell — Phase C (see docs/desktop-spike-findings.md). One
 # window loading the built SPA via Tauri's asset protocol; the SPA's Transport
-# drives wfm-core through thin `health` / `scan_inventory` commands. Login /
-# listing / assistant are not wired here yet (they need the passphrase UI).
+# drives wfm-core through thin commands: health / scan_inventory, the WFM
+# session (login / unlock — passphrase from the webview, see wfm_session.rs),
+# the listing/order surface mirroring serve's HTTP routes, and the assistant
+# relay.
 [package]
 name = "tennoworth-desktop"
 version = "0.1.0"

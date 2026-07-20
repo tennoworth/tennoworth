@@ -15,11 +15,12 @@
 //! present, session locked) so the SPA can raise the login or passphrase modal —
 //! the desktop analogue of serve's 401 `needs_login:true` vs 503 split.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 use wfm_core::auth::{
     bootstrap_session, decrypt_jwt, encrypt_jwt, fetch_wfm_me, signin, validate_platform,
@@ -35,7 +36,7 @@ use zeroize::Zeroize;
 ///   - `needs_login`   — no login on this machine → open the login modal.
 ///   - `needs_unlock`  — login present, session locked → open the passphrase modal.
 ///   - `bad_passphrase`— wrong passphrase in the unlock/login modal.
-///   - `no_api_key` / `upstream` — the assistant relay (C9).
+///   - `no_api_key` / `upstream` / `rate_limited` / `too_large` — the assistant relay.
 ///   - `no_pending` / `busy` — pending-plan resume edge cases.
 ///   - `wfm` / `internal` — everything else, message shown verbatim.
 ///
@@ -95,6 +96,9 @@ pub struct WfmSession {
     /// Serializes plan execution: a second concurrent `execute_plan` /
     /// `resume_pending_plan` gets `busy` instead of racing on the pending file.
     plan_running: AtomicBool,
+    /// Sliding-window timestamps of recent assistant calls — same budget as
+    /// serve's `ServeState.assistant_calls` (≤ 20 DeepSeek calls / 60 s).
+    pub assistant_calls: Mutex<VecDeque<Instant>>,
 }
 
 impl WfmSession {
@@ -115,6 +119,7 @@ impl WfmSession {
             key_dir,
             inner: Mutex::new(None),
             plan_running: AtomicBool::new(false),
+            assistant_calls: Mutex::new(VecDeque::new()),
         }
     }
 
@@ -274,6 +279,16 @@ impl WfmSession {
     pub fn debug_set_unlocked(&self, unlocked: Unlocked) {
         *self.inner.lock().expect("session mutex poisoned") = Some(Arc::new(unlocked));
     }
+
+    /// Probe-only companion to `debug_set_unlocked`: write a real encrypted
+    /// envelope (same `encrypt_jwt` + `persist` production code) at the
+    /// session's jwt_path so a hermetic run can exercise the needs_unlock /
+    /// bad_passphrase branches against a genuine AES-GCM blob, no WFM login.
+    pub fn debug_write_login(&self, passphrase: &str) -> Result<(), CmdError> {
+        let encrypted =
+            encrypt_jwt("probe.jwt.value", passphrase, "pc").map_err(CmdError::internal)?;
+        self.persist(&encrypted)
+    }
 }
 
 impl Default for WfmSession {
@@ -330,6 +345,7 @@ mod tests {
             key_dir,
             inner: Mutex::new(None),
             plan_running: AtomicBool::new(false),
+            assistant_calls: Mutex::new(VecDeque::new()),
         }
     }
 
@@ -348,7 +364,7 @@ mod tests {
         let path = tmp_path("no-login");
         let _ = fs::remove_file(&path);
         let s = session_with(path);
-        let err = s.require_unlocked().unwrap_err();
+        let err = s.require_unlocked().err().expect("expected a typed error");
         assert_eq!(err.code, "needs_login");
     }
 
@@ -358,7 +374,7 @@ mod tests {
         // Any file at the path counts as "a login exists" for the classification.
         fs::write(&path, serde_json::to_vec(&encrypt_jwt("j", "correct horse battery", "pc").unwrap()).unwrap()).unwrap();
         let s = session_with(path.clone());
-        let err = s.require_unlocked().unwrap_err();
+        let err = s.require_unlocked().err().expect("expected a typed error");
         assert_eq!(err.code, "needs_unlock");
         let _ = fs::remove_file(&path);
     }
@@ -429,7 +445,7 @@ mod tests {
         s.logout();
         assert!(!s.is_unlocked());
         // After logout with no file on disk, listing steers back to login.
-        assert_eq!(s.require_unlocked().unwrap_err().code, "needs_login");
+        assert_eq!(s.require_unlocked().err().expect("expected a typed error").code, "needs_login");
     }
 
     #[test]
@@ -451,6 +467,37 @@ mod tests {
             .login("me@example.com", "pw", "a-long-enough-passphrase", "playstation")
             .unwrap_err();
         assert_eq!(err.code, "internal");
+    }
+
+    #[test]
+    fn begin_plan_serializes_and_guard_releases_on_drop() {
+        let s = session_with(tmp_path("busy"));
+        let guard = s.begin_plan().expect("first plan starts");
+        // A concurrent plan while one is running → busy (caller maps to the
+        // `busy` code).
+        assert!(s.begin_plan().is_none());
+        drop(guard);
+        // Guard drop (incl. early return / panic paths) releases the flag.
+        assert!(s.begin_plan().is_some());
+    }
+
+    #[test]
+    fn debug_write_login_roundtrips_through_real_decrypt() {
+        let path = tmp_path("probe-login");
+        let _ = fs::remove_file(&path);
+        let s = session_with(path.clone());
+        s.debug_write_login("probe-pass-123456").unwrap();
+        assert_eq!(s.auth_status(), (true, false));
+        // Wrong passphrase against the probe envelope is the same code path the
+        // probe drives through the unlock dialog.
+        assert_eq!(
+            s.decrypt_from_disk("wrong-pass").unwrap_err().code,
+            "bad_passphrase"
+        );
+        let (jwt, platform) = s.decrypt_from_disk("probe-pass-123456").unwrap();
+        assert_eq!(jwt, "probe.jwt.value");
+        assert_eq!(platform, "pc");
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
