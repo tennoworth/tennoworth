@@ -84,6 +84,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: companion
+      # tennoworth-desktop (Tauri v2) links the Linux GUI stack; without these
+      # -dev packages the *-sys crates fail at pkg-config and the whole
+      # workspace test run dies before a single test executes.
+      - name: Install Tauri Linux deps
+        run: >
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends
+          libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
+          librsvg2-dev patchelf
       - name: cargo test
         run: cargo test
 

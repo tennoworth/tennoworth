@@ -1,0 +1,34 @@
+# cargo-audit policy for the companion workspace.
+#
+# Everything ignored below is UNMAINTAINED/UNSOUND-class (no known
+# vulnerabilities) and enters the tree exclusively through Tauri v2's
+# Linux GUI stack (tennoworth-desktop → tauri → gtk3-rs + friends).
+# Tauri is pinned to GTK3/WebKitGTK-4.1 bindings until upstream moves to
+# GTK4/webkitgtk-6; every Tauri v2 Linux app carries this exact set.
+# Revisit on each Tauri minor bump — remove entries that stop firing.
+#
+# A NEW advisory (anything not listed here) still fails CI, including any
+# real vulnerability in these same crates.
+
+[advisories]
+ignore = [
+    # gtk-rs GTK3 bindings — "no longer maintained" (2024-08 batch)
+    "RUSTSEC-2024-0411", # gdkwayland-sys
+    "RUSTSEC-2024-0412", # gdk
+    "RUSTSEC-2024-0413", # atk
+    "RUSTSEC-2024-0414", # gdkx11-sys
+    "RUSTSEC-2024-0415", # gtk
+    "RUSTSEC-2024-0416", # atk-sys
+    "RUSTSEC-2024-0417", # gdkx11
+    "RUSTSEC-2024-0418", # gdk-sys
+    "RUSTSEC-2024-0419", # gtk3-macros
+    "RUSTSEC-2024-0420", # gtk-sys
+    # transitive via the same stack
+    "RUSTSEC-2024-0370", # proc-macro-error unmaintained (via gtk3-macros)
+    "RUSTSEC-2024-0429", # glib VariantStrIter unsoundness (glib 0.18, tauri-pinned)
+    "RUSTSEC-2025-0075", # unic-char-range unmaintained (via tauri)
+    "RUSTSEC-2025-0080", # unic-common unmaintained (via tauri)
+    "RUSTSEC-2025-0081", # unic-char-property unmaintained (via tauri)
+    "RUSTSEC-2025-0098", # unic-ucd-version unmaintained (via tauri)
+    "RUSTSEC-2025-0100", # unic-ucd-ident unmaintained (via tauri)
+]
