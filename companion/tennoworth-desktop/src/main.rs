@@ -22,18 +22,31 @@ mod db;
 mod market;
 mod sellables;
 mod snapshot;
+mod wfm_session;
 
 use std::io::Write;
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use tauri::menu::{Menu, MenuBuilder, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder, Wry};
 use tauri_plugin_notification::NotificationExt;
+use zeroize::Zeroizing;
 
 use db::{Db, Reserve, SnapshotSummary};
 use market::{MarketCache, RefreshResult};
 use sellables::{MarketData, ScanNotification, SellableRow};
+use wfm_core::assistant::{
+    assistant_request_too_large, build_assistant_messages, call_deepseek, cap_history,
+    deepseek_client, resolve_deepseek_key, short_reason, AssistantMessage, AssistantResponse,
+};
 use wfm_core::inventory::InventoryScanner;
+use wfm_core::listing::{
+    bulk_set_visibility, delete_order as core_delete_order, execute_plan as core_execute_plan,
+    list_user_orders, run_pending, update_order as core_update_order, PerOrderResult, PlanItem,
+    PlanRequest, PlanResponse, UpdateRequest, VisibilityRequest, Unlocked, MAX_PLATINUM,
+};
+use wfm_core::pending::{clear_pending, load_pending, PendingPlan};
+use wfm_session::{CmdError, WfmSession};
 
 /// How many sellables the tray menu shows.
 const TRAY_LIMIT: usize = 5;
