@@ -18,10 +18,14 @@
 // the env so the default run is a plain window.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod db;
+mod snapshot;
+
 use std::io::Write;
 use std::sync::OnceLock;
-use tauri::{WebviewUrl, WebviewWindowBuilder};
+use tauri::{Manager, State, WebviewUrl, WebviewWindowBuilder};
 
+use db::{Db, Reserve, SnapshotSummary};
 use wfm_core::inventory::InventoryScanner;
 
 /// Process-wide scanner so the single-flight guard actually serializes two
@@ -53,21 +57,81 @@ fn health() -> Health {
     }
 }
 
+/// Extract snapshot rows from raw inventory bytes and append them to history as
+/// one transactional snapshot. Shared by the memory scan and the file-drop
+/// import. Returns the new snapshot id.
+fn record_snapshot(
+    db: &Db,
+    source: &str,
+    game_version: Option<&str>,
+    bytes: &[u8],
+) -> Result<i64, String> {
+    let items = snapshot::extract_items(bytes)
+        .map_err(|e| format!("parse inventory for snapshot: {e}"))?;
+    db.insert_snapshot(source, None, game_version, &items)
+        .map_err(|e| format!("insert snapshot: {e}"))
+}
+
 /// Memory-scan the running game and return the inventory JSON as a string —
 /// the exact bytes the CLI would write to inventory.json. Async + spawn_blocking
 /// so the (potentially slow) scan never blocks the webview event loop. A busy
 /// guard or a missing/unscannable game becomes a rejected invoke carrying
 /// wfm-core's graceful, actionable message (e.g. "Warframe doesn't appear to be
 /// running…") — the SPA surfaces it verbatim in its error banner.
+///
+/// On success it also appends a `source='memory'` history snapshot. That insert
+/// is best-effort: a failure is logged to stderr and swallowed — losing a
+/// history row must never cost the user their scan (scan value > history value).
 #[tauri::command]
-async fn scan_inventory() -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(|| match scanner().scan(None, None) {
-        Ok((bytes, _info)) => String::from_utf8(bytes)
-            .map_err(|e| format!("inventory response was not valid UTF-8: {e}")),
-        Err(e) => Err(e.into_message()),
-    })
-    .await
-    .map_err(|e| format!("scan task failed to run: {e}"))?
+async fn scan_inventory(db: State<'_, Db>) -> Result<String, String> {
+    let (bytes, info) = tauri::async_runtime::spawn_blocking(|| scanner().scan(None, None))
+        .await
+        .map_err(|e| format!("scan task failed to run: {e}"))?
+        .map_err(|e| e.into_message())?;
+
+    if let Err(e) = record_snapshot(&db, "memory", info.build.as_deref(), &bytes) {
+        eprintln!("tennoworth: inventory snapshot not recorded: {e}");
+    }
+
+    String::from_utf8(bytes).map_err(|e| format!("inventory response was not valid UTF-8: {e}"))
+}
+
+/// Record a dropped inventory.json as a `source='import'` history snapshot.
+/// Used by the desktop file-drop path; unlike the scan path this surfaces the
+/// error to the caller (the SPA logs it and moves on).
+#[tauri::command]
+fn import_snapshot(db: State<'_, Db>, inventory_json: String) -> Result<i64, String> {
+    record_snapshot(&db, "import", None, inventory_json.as_bytes())
+}
+
+#[tauri::command]
+fn get_setting(db: State<'_, Db>, key: String) -> Result<Option<String>, String> {
+    db.get_setting(&key).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_setting(db: State<'_, Db>, key: String, value: String) -> Result<(), String> {
+    db.set_setting(&key, &value).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_reserves(db: State<'_, Db>) -> Result<Vec<Reserve>, String> {
+    db.get_reserves().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_reserve(db: State<'_, Db>, slug: String, keep: i64) -> Result<(), String> {
+    db.set_reserve(&slug, keep).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn delete_reserve(db: State<'_, Db>, slug: String) -> Result<(), String> {
+    db.delete_reserve(&slug).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn list_snapshots(db: State<'_, Db>, limit: i64) -> Result<Vec<SnapshotSummary>, String> {
+    db.list_snapshots(limit).map_err(|e| e.to_string())
 }
 
 /// Probe-only: persist the evidence JSON to $TENNOWORTH_PROBE_OUT (and echo it
@@ -188,10 +252,32 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             health,
             scan_inventory,
+            import_snapshot,
+            get_setting,
+            set_setting,
+            get_reserves,
+            set_reserve,
+            delete_reserve,
+            list_snapshots,
             probe_report,
             probe_exit
         ])
         .setup(move |app| {
+            // Open the canonical SQLite store in the platform app-data dir and
+            // hand it to the command layer as managed state. A failure here is
+            // unrecoverable (the store is canonical) — abort startup with a
+            // clear message rather than run with silent, ephemeral state.
+            let data_dir = app
+                .path()
+                .app_data_dir()
+                .map_err(|e| format!("resolving app data dir: {e}"))?;
+            std::fs::create_dir_all(&data_dir)
+                .map_err(|e| format!("creating app data dir {}: {e}", data_dir.display()))?;
+            let db_path = data_dir.join("tennoworth.db");
+            let store = Db::open(&db_path)
+                .map_err(|e| format!("opening state DB {}: {e}", db_path.display()))?;
+            app.manage(store);
+
             let mut b = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
                 .title("TennoWorth")
                 .inner_size(1200.0, 800.0);
