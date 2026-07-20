@@ -133,6 +133,22 @@ starts with data at most a day old, and the box's first own scrape (within
 copy is ever badly stale, `workflow_dispatch` the cron manually — do NOT
 scrape from two places at the same time.
 
+### Live-site data stale? Triage in this order
+
+1. `curl -s https://tennoworth.app/market.json | python3 -c 'import json,sys; print(json.load(sys.stdin)["updated_at"])'`
+   — more than ~3 h old means the **box's** writer failed. The GH cron
+   cannot fix this (bootstrap-only) — don't debug the Actions tab.
+2. On the box: `systemctl status wfm-scrape.timer wfm-scrape.service` and
+   `journalctl -u wfm-scrape.service -n 100`.
+3. Known failure mode (bit us 2026-07-20): scrape runtime grows with the
+   item catalog and crossed `TimeoutStartSec` — systemd killed every run
+   ~200 s before it could write market.json, so the site silently served
+   the last good snapshot for 14 h. If the journal shows healthy progress
+   lines ending in `start operation timed out`, raise `TimeoutStartSec`
+   (unit file lives in this dir; runtime was ~3800 s at 3837 items).
+   Watch the same creep against the GH job's `timeout-minutes: 90` and the
+   2 h timer cadence itself.
+
 ## Converter shadow (phase 2b)
 
 The market pipeline is mid-migration from Python to Rust. Phase 2b runs the

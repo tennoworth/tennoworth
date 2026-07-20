@@ -31,7 +31,7 @@ wfm_demand.py    main WFM scraper (root, run on cron)
 deploy/          self-host kit: Caddyfile, setup script, scrape + web-pull systemd units for the production LXC
 tests/           pytest tests for the Python side
 .github/workflows/  refresh-market (cron), release-companion (tag), audit
-.claude/         Claude Code config — agents, commands, hooks
+.claude/         Claude Code local config + agent worktrees
 SECURITY.md      threat model + what we do and don't commit to
 ```
 
@@ -74,6 +74,22 @@ SECURITY.md      threat model + what we do and don't commit to
 `main` = production (auto-deploys; promote with `git merge --ff-only develop`).
 Hotfixes branch off `main`, then merge `main` back into `develop`. Companion
 `v*` tags are cut on `main` only.
+
+## Multi-agent / delegation rules
+
+Learned the hard way (2026-07-20 incident: a feature branch got merged into
+another agent's branch instead of develop, masked by a stale-green audit):
+
+- **Repo-mutating agents run in isolated worktrees.** If an agent dies
+  mid-task, launch a FRESH agent with worktree isolation — resuming the dead
+  one can silently drop it into the primary checkout. Every agent verifies
+  `git rev-parse --show-toplevel` before its first git write.
+- **Never background a git merge/push that assumes HEAD.** A concurrent
+  agent can move the checkout. Guard with
+  `[ "$(git branch --show-current)" = "develop" ] && …` or use explicit refs.
+- **Clean up as you go.** After a feature branch merges: delete it locally
+  and on both remotes, `git worktree remove` its worktree, prune. Keep
+  `wip/unshipped-local` and any branch with a live agent.
 
 ## Cross-cutting hygiene rules (apply everywhere)
 
