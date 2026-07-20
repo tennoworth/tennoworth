@@ -163,8 +163,24 @@ fn probe_exit() {
     });
 }
 
+// A minimal DE inventory: four distinct tradeable-category paths (so
+// extract_items → item_count == 4), three of which resolve to WFM slugs with
+// market stats (so the drop flips to the sell view and the reserve input
+// renders). Kept in sync with the categories snapshot::extract_items walks.
+const PROBE_FIXTURE: &str = r#"{
+  "RawUpgrades": [
+    { "ItemType": "/Lotus/Upgrades/Mods/Shotgun/DualStat/AcceleratedBlastMod", "ItemCount": 3 },
+    { "ItemType": "/Lotus/Powersuits/Trinity/LinkAugmentCard", "ItemCount": 2 },
+    { "ItemType": "/Lotus/Powersuits/Khora/KhoraCrackAugmentCard", "ItemCount": 5 }
+  ],
+  "MiscItems": [
+    { "ItemType": "/Lotus/Types/Items/MiscItems/OrokinCell", "ItemCount": 42 }
+  ]
+}"#;
+
 const PROBE_JS: &str = r#"(function(){
   var R = { runtag: "__RUNTAG__", steps_ts: new Date().toISOString(), cspViolations: [], consoleErrors: [] };
+  var FIXTURE = __FIXTURE__;
   try {
     document.addEventListener('securitypolicyviolation', function(e){
       if (R.cspViolations.length < 20) R.cspViolations.push({ blockedURI: e.blockedURI, violatedDirective: e.violatedDirective, effectiveDirective: e.effectiveDirective, disposition: e.disposition });
@@ -181,12 +197,48 @@ const PROBE_JS: &str = r#"(function(){
     } catch(e){}
     return null;
   }
+  function invk(cmd, args){
+    var inv = invokeFn();
+    if (!inv) return Promise.resolve('NO_INVOKE_FN');
+    return inv(cmd, args).catch(function(e){ return 'ERR:'+(e && e.message || e); });
+  }
   function probeFetch(url){
     return fetch(url, { cache:'no-store' }).then(function(r){
       return r.text().then(function(b){ return { ok:r.ok, status:r.status, type:r.type, len:b.length, head:b.slice(0,48) }; });
     }).catch(function(e){ return { error: String(e && e.message || e), name: e && e.name }; });
   }
   function delay(ms){ return new Promise(function(res){ setTimeout(res, ms); }); }
+  // Synthesize a REAL file-drop onto the DropZone: webkit's DragEvent ctor won't
+  // carry a dataTransfer, so attach one with a File via defineProperty. This
+  // exercises DropZone → handleInventory(origin:'file') → import_snapshot.
+  function dropFixture(){
+    try {
+      var dz = document.querySelector('.dropzone');
+      if (!dz) return 'NO_DROPZONE';
+      var file = new File([FIXTURE], 'fixture-inventory.json', { type: 'application/json' });
+      var dt = new DataTransfer();
+      dt.items.add(file);
+      var ev = new Event('drop', { bubbles: true, cancelable: true });
+      Object.defineProperty(ev, 'dataTransfer', { value: dt });
+      dz.dispatchEvent(ev);
+      return 'DROPPED';
+    } catch(e){ return 'ERR:'+(e && e.message || e); }
+  }
+  // Drive the REAL reserve input if the sell view rendered (→ setReserveCopies →
+  // store.setSetting → set_setting); else fall back to the raw command so the
+  // scenario still records evidence. Reports which path was taken.
+  function setReserve(){
+    try {
+      var el = document.querySelector('[data-testid="reserve-copies"]');
+      if (el) {
+        var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(el, '4');
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        return delay(300).then(function(){ return 'UI'; });
+      }
+    } catch(e){ return Promise.resolve('UI_ERR:'+(e && e.message || e)); }
+    return invk('set_setting', { key: 'reserve-copies', value: '4' }).then(function(){ return 'INVOKE'; });
+  }
   function run(){
     try {
       R.origin = location.origin;
@@ -202,30 +254,42 @@ const PROBE_JS: &str = r#"(function(){
       R.desktopBadge = !!document.querySelector('[data-testid="desktop-mode"]');
       R.marketBrowserRendered = !!document.querySelector('.market-browser, [data-testid="market-browser"]');
     } catch(e){ R.envErr = String(e); }
-    // Persistence marker chain: read the prior run's, write this run's.
+    // Persistence marker chain (webview localStorage — separate from the SQLite
+    // store; the real cross-restart proof is reserveAtStart via get_setting).
     var marker = R.runtag + '@' + new Date().toISOString();
     try { R.priorMarker = localStorage.getItem('__tennoworth_probe_marker__'); } catch(e){ R.priorMarker = 'ERR:'+e; }
     try { localStorage.setItem('__tennoworth_probe_marker__', marker); R.wroteMarker = marker; } catch(e){ R.wroteMarker='ERR:'+e; }
     probeFetch('/market.json')
     .then(function(x){ R.fetchMarket = x; })
     .then(function(){ return probeFetch('/wfstat-catalog.json').then(function(x){ R.fetchCatalog = x; }); })
+    .then(function(){ return invk('health').then(function(v){ R.invokeHealth = v; }); })
+    // Cross-restart persistence: the value a PRIOR run wrote. null on run 1,
+    // '4' on run 2 → proves the SQLite setting survived the restart.
+    .then(function(){ return invk('get_setting', { key: 'reserve-copies' }).then(function(v){ R.reserveAtStart = v; }); })
+    .then(function(){ return invk('list_snapshots', { limit: 50 }).then(function(v){ R.snapshotsAtStart = v; }); })
+    // (b) Scan with no game running: drive the REAL scan button. Graceful error
+    // banner, and — critically — NO source='memory' snapshot row is added.
     .then(function(){
-      var inv = invokeFn();
-      if (!inv) { R.invokeHealth = 'NO_INVOKE_FN'; return; }
-      return inv('health').then(function(v){ R.invokeHealth = v; }, function(e){ R.invokeHealth = 'ERR:'+(e && e.message || e); });
-    })
-    .then(function(){
-      // Drive the REAL scan button and read the resulting UI banner — proves the
-      // full desktop scan flow (button → transport → scan_inventory → banner).
       var btn = document.querySelector('[data-testid="desktop-scan"]');
       R.scanButtonFound = !!btn;
       if (!btn) return;
       btn.click();
-      return delay(1500).then(function(){
+      return delay(1800).then(function(){
         var banner = document.querySelector('.general-banner .gb-body');
         R.scanBannerText = banner ? (banner.innerText || '').slice(0, 300) : null;
       });
     })
+    .then(function(){ return invk('list_snapshots', { limit: 50 }).then(function(v){ R.snapshotsAfterScan = v; }); })
+    // (c) File-drop the fixture → source='import' snapshot with item_count == 4.
+    .then(function(){ R.dropResult = dropFixture(); return delay(2500); })
+    .then(function(){
+      R.phaseDoneAfterDrop = !document.querySelector('[data-testid="desktop-mode"] .dropzone, .dropzone');
+      R.resultsRowsAfterDrop = document.querySelectorAll('table tbody tr').length;
+      return invk('list_snapshots', { limit: 50 }).then(function(v){ R.snapshotsAfterDrop = v; });
+    })
+    // (a) Set reserve via the REAL input (now rendered) → set_setting.
+    .then(function(){ return setReserve().then(function(via){ R.reserveSetVia = via; }); })
+    .then(function(){ return invk('get_setting', { key: 'reserve-copies' }).then(function(v){ R.reserveAfterSet = v; }); })
     .then(function(){
       R.done = true;
       var json = JSON.stringify(R);
@@ -238,7 +302,7 @@ const PROBE_JS: &str = r#"(function(){
         });
       }
     })
-    .catch(function(e){ try { R.fatal='ERR:'+(e && e.message || e); localStorage.setItem('__tennoworth_probe_report__', JSON.stringify(R)); } catch(_){} });
+    .catch(function(e){ try { R.fatal='ERR:'+(e && e.message || e); localStorage.setItem('__tennoworth_probe_report__', JSON.stringify(R)); invk('probe_report', { payload: JSON.stringify(R) }); } catch(_){} });
   }
   if (document.readyState === 'complete') setTimeout(run, 900);
   else window.addEventListener('load', function(){ setTimeout(run, 900); });
@@ -282,7 +346,14 @@ fn main() {
                 .title("TennoWorth")
                 .inner_size(1200.0, 800.0);
             if probe {
-                b = b.initialization_script(&PROBE_JS.replace("__RUNTAG__", &runtag));
+                // serde_json turns the fixture &str into a quoted, escaped JS
+                // string literal so `var FIXTURE = __FIXTURE__;` parses.
+                let fixture_literal = serde_json::to_string(PROBE_FIXTURE)
+                    .expect("probe fixture serializes to a JS string literal");
+                let js = PROBE_JS
+                    .replace("__RUNTAG__", &runtag)
+                    .replace("__FIXTURE__", &fixture_literal);
+                b = b.initialization_script(&js);
             }
             let w = b.build()?;
             if probe {
