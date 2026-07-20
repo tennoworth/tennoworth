@@ -90,6 +90,59 @@ describe('TauriTransport op → invoke mapping', () => {
     expect(internalInvoke).not.toHaveBeenCalled();
   });
 
+  it('loadCachedMarket() invokes `cached_market` and JSON-parses the body', async () => {
+    const invoke = vi.fn().mockResolvedValue('{"updated_at":"2026-07-20T10:00:00Z","items":{}}');
+    installTauri(invoke);
+    const t = new TauriTransport();
+    await expect(t.loadCachedMarket()).resolves.toEqual({
+      updated_at: '2026-07-20T10:00:00Z',
+      items: {},
+    });
+    expect(invoke).toHaveBeenCalledWith('cached_market');
+  });
+
+  it('loadCachedMarket() returns null on a first run (command returns null)', async () => {
+    const invoke = vi.fn().mockResolvedValue(null);
+    installTauri(invoke);
+    await expect(new TauriTransport().loadCachedMarket()).resolves.toBeNull();
+  });
+
+  it('loadCachedMarket() returns null on a corrupt cache rather than throwing', async () => {
+    const invoke = vi.fn().mockResolvedValue('{not json');
+    installTauri(invoke);
+    await expect(new TauriTransport().loadCachedMarket()).resolves.toBeNull();
+  });
+
+  it('refreshMarket() on a 200 parses body into market and reports updated+etag', async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      updated: true,
+      updated_at: '2026-07-20T10:00:00Z',
+      etag: '"e1"',
+      body: '{"updated_at":"2026-07-20T10:00:00Z","items":{"x":{"avg":9}}}',
+    });
+    installTauri(invoke);
+    const res = await new TauriTransport().refreshMarket();
+    expect(invoke).toHaveBeenCalledWith('refresh_market');
+    expect(res.updated).toBe(true);
+    expect(res.updatedAt).toBe('2026-07-20T10:00:00Z');
+    expect(res.etag).toBe('"e1"');
+    expect(res.market).toEqual({ updated_at: '2026-07-20T10:00:00Z', items: { x: { avg: 9 } } });
+  });
+
+  it('refreshMarket() on a 304/offline no-op reports updated:false with no market', async () => {
+    const invoke = vi.fn().mockResolvedValue({
+      updated: false,
+      updated_at: '2026-07-20T10:00:00Z',
+      etag: '"e1"',
+      body: null,
+    });
+    installTauri(invoke);
+    const res = await new TauriTransport().refreshMarket();
+    expect(res.updated).toBe(false);
+    expect(res.market).toBeUndefined();
+    expect(res.updatedAt).toBe('2026-07-20T10:00:00Z');
+  });
+
   it.each([
     ['submitPlan', (t) => t.submitPlan([])],
     ['getPendingPlan', (t) => t.getPendingPlan()],
@@ -150,6 +203,22 @@ describe('HttpCompanionTransport delegates to companion.ts with the current conf
   it('reads config lazily — a getter returning null rejects before any fetch', () => {
     const t = new HttpCompanionTransport(() => null);
     expect(() => t.fetchInventory()).toThrow(/Not connected/);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('loadCachedMarket() is a null no-op that makes NO fetch (hosted rule)', async () => {
+    const t = new HttpCompanionTransport(() => null);
+    await expect(t.loadCachedMarket()).resolves.toBeNull();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it('refreshMarket() is an updated:false no-op that makes NO third-party fetch', async () => {
+    const t = new HttpCompanionTransport(() => null);
+    await expect(t.refreshMarket()).resolves.toEqual({
+      updated: false,
+      updatedAt: null,
+      etag: null,
+    });
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });
