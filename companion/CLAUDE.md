@@ -113,6 +113,10 @@ listing routes.
   `503 {error:"no_api_key"}`. The key is **plaintext at rest** — on read the
   companion warns to stderr (once) if the file is looser than `0600`; it does
   not fail. The startup banner reports whether the advisor is available.
+- **Kill switch** (`assistant_disabled()`): an `assistant-off` marker file in
+  the same config dir disables the route even when a key is present —
+  returns the same `503 no_api_key` so the SPA needs no special handling.
+  Checked per request; `touch`/`rm` toggles without a restart.
 - **Grounding + prompt-injection**: the system prompt is built server-side
   from `ASSISTANT_SYSTEM_PROMPT` + the browser's curated context — the rows
   shown in the user's filtered sell table (item names, owned/sellable counts,

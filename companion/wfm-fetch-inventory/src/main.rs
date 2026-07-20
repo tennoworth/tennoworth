@@ -17,9 +17,9 @@ use std::fs;
 use std::io::{IsTerminal, Read};
 use std::path::{Path, PathBuf};
 use wfm_core::assistant::{
-    assistant_rate_limited, assistant_request_too_large, build_assistant_messages, call_deepseek,
-    cap_history, deepseek_client, resolve_deepseek_key, short_reason, AssistantRequest,
-    AssistantResponse, MAX_ASSISTANT_BODY_BYTES,
+    assistant_disabled, assistant_rate_limited, assistant_request_too_large,
+    build_assistant_messages, call_deepseek, cap_history, deepseek_client, resolve_deepseek_key,
+    short_reason, AssistantRequest, AssistantResponse, MAX_ASSISTANT_BODY_BYTES,
 };
 use wfm_core::auth::{
     bootstrap_session, decrypt_jwt, encrypt_jwt, fetch_wfm_me, signin, validate_platform,
@@ -340,13 +340,20 @@ fn run_serve(args: ServeArgs) -> Result<()> {
              no restart needed."
         );
     }
-    match resolve_deepseek_key(std::env::var("DEEPSEEK_API_KEY").ok().as_deref(), &deepseek_key_dir) {
-        Some(_) => eprintln!("  AI advisor is available (DeepSeek key found)."),
-        None => eprintln!(
-            "  AI advisor is off — set the DEEPSEEK_API_KEY env var, or write your key\n  \
-             (trimmed, no quotes) to {}.",
-            deepseek_key_dir.join("deepseek-key").display()
-        ),
+    if assistant_disabled(&deepseek_key_dir) {
+        eprintln!(
+            "  AI advisor is disabled — {} exists; delete it to re-enable.",
+            deepseek_key_dir.join("assistant-off").display()
+        );
+    } else {
+        match resolve_deepseek_key(std::env::var("DEEPSEEK_API_KEY").ok().as_deref(), &deepseek_key_dir) {
+            Some(_) => eprintln!("  AI advisor is available (DeepSeek key found)."),
+            None => eprintln!(
+                "  AI advisor is off — set the DEEPSEEK_API_KEY env var, or write your key\n  \
+                 (trimmed, no quotes) to {}.",
+                deepseek_key_dir.join("deepseek-key").display()
+            ),
+        }
     }
     eprintln!("\n  Leave this running while you use the app. Ctrl-C (or close the terminal) to stop.\n");
 
@@ -838,6 +845,11 @@ fn handle_request(
         };
         if assistant_request_too_large(&req.question, &req.context) {
             return respond_json(request, 400, &serde_json::json!({"error": "too_large"}));
+        }
+        // The marker-file kill switch reuses the no_api_key response the SPA
+        // already maps to its "assistant unavailable" hint — no client change.
+        if assistant_disabled(&state.deepseek_key_dir) {
+            return respond_json(request, 503, &serde_json::json!({"error": "no_api_key"}));
         }
         let api_key = match resolve_deepseek_key(std::env::var("DEEPSEEK_API_KEY").ok().as_deref(), &state.deepseek_key_dir) {
             Some(k) => k,
