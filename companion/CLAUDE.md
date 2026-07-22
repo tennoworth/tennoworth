@@ -116,7 +116,9 @@ listing routes.
 - **Kill switch** (`assistant_disabled()`): an `assistant-off` marker file in
   the same config dir disables the route even when a key is present —
   returns the same `503 no_api_key` so the SPA needs no special handling.
-  Checked per request; `touch`/`rm` toggles without a restart.
+  Checked per request; `touch`/`rm` toggles without a restart. `/health`
+  reports the net result as `assistant: bool` (key present AND not switched
+  off) so the SPA offers the chat button only when an ask can succeed.
 - **Grounding + prompt-injection**: the system prompt is built server-side
   from `ASSISTANT_SYSTEM_PROMPT` + the browser's curated context — the rows
   shown in the user's filtered sell table (item names, owned/sellable counts,
