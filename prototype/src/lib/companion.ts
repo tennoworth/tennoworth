@@ -78,6 +78,10 @@ export function parseCompanionUrl(input: string): CompanionConfig {
 export interface PingResponse {
   ok: boolean;
   platform?: string;
+  /** True when the AI advisor can actually answer (key present, not switched
+   *  off). Absent on companions predating v0.1.6 — treated as unavailable, so
+   *  the chat button only appears when a companion positively reports it. */
+  assistant?: boolean;
 }
 
 /**

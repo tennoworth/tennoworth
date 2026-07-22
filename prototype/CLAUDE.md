@@ -127,7 +127,10 @@ changes** so old data is silently invalidated.
 import them directly. The HTTP contract itself is unchanged:
 
 Routes the browser depends on (see `src/lib/companion.ts`):
-- `GET /health` — no auth; `{ok, platform}`
+- `GET /health` — no auth; `{ok, platform, assistant}`. `assistant` is
+  whether the advisor can answer (key present, no `assistant-off` marker);
+  the chat FAB renders only when it's `true` — absent (pre-v0.1.6
+  companion) counts as unavailable.
 - `GET /inventory` — memory-scans the running game and returns inventory.json
   directly (no file). Token-authed; **JWT-free** (in-memory session creds only,
   so it works without `login`). 503 + `{error}` when the game isn't scannable.

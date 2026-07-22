@@ -645,13 +645,18 @@ fn handle_request(
         return respond_cors_preflight(request);
     }
 
-    // Health endpoint — no auth required.
+    // Health endpoint — no auth required. `assistant` tells the SPA whether
+    // the advisor can actually answer (key present, not switched off) so it
+    // can hide the chat button instead of offering a dead end; re-evaluated
+    // per poll, so toggling the key/marker needs no serve restart.
     if path == "/health" && matches!(method, tiny_http::Method::Get) {
         let platform = state.platform.lock().expect("platform mutex poisoned").clone();
+        let assistant = !assistant_disabled(&state.deepseek_key_dir)
+            && resolve_deepseek_key(std::env::var("DEEPSEEK_API_KEY").ok().as_deref(), &state.deepseek_key_dir).is_some();
         return respond_json(
             request,
             200,
-            &serde_json::json!({ "ok": true, "platform": platform }),
+            &serde_json::json!({ "ok": true, "platform": platform, "assistant": assistant }),
         );
     }
 

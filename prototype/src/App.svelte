@@ -1039,6 +1039,11 @@
   // origin). It drives the persistent cross-view banner below.
   let companionStatus = $state('unchecked');   // unchecked | connecting | connected | error | unreachable
   let companionPlatform = $state(null);
+  // The advisor FAB renders only when a connected companion positively reports
+  // the assistant usable (/health `assistant: true`) — a key-less, switched-off
+  // (assistant-off marker), or pre-v0.1.6 companion means no button, not a
+  // button that dead-ends in "no key configured".
+  let assistantAvailable = $state(false);
   let companionError = $state(null);
   let companionInput = $state('');
   let pullingInventory = $state(false);   // GET /inventory in flight
@@ -1114,6 +1119,7 @@
       const r = await pingCompanion(companionConfig);
       if (gen !== verifyGen) return;
       companionPlatform = r?.platform ?? null;
+      assistantAvailable = r?.assistant === true;
       // /health is unauthenticated, so a live server with the WRONG token would
       // still show green here. Confirm the token with one authed call before we
       // claim connected: getPendingPlan returns null on 404 (no plan) but
@@ -1230,6 +1236,7 @@
     companionConfig = null;
     companionStatus = 'unchecked';
     companionPlatform = null;
+    assistantAvailable = false;
     pendingPlan = null;
     resumePhase = 'idle';
     resumeResults = [];
@@ -2767,8 +2774,10 @@
 
 <!-- Assistant is still a loopback-companion surface (its drawer keys off the
      companion connection state) — hidden in desktop mode until that UI is
-     rethought, though the ask_assistant command + transport op already exist. -->
-{#if !isDesktop}
+     rethought, though the ask_assistant command + transport op already exist.
+     Only offered when the connected companion positively reports the advisor
+     usable — see assistantAvailable. -->
+{#if !isDesktop && companionStatus === 'connected' && assistantAvailable}
 <AssistantChat
   rows={tableView.active ? tableView.rows : results}
   marketAge={marketStaleness}
