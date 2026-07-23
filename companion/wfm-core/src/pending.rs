@@ -39,6 +39,10 @@ pub struct PendingItem {
     pub message: Option<String>,
     #[serde(default)]
     pub order_id: Option<String>,
+    /// "created" | "updated" once terminal — how the ok state was reached.
+    /// Default None keeps pre-reconcile pending files loadable.
+    #[serde(default)]
+    pub action: Option<String>,
 }
 
 pub fn write_pending_atomic(path: &Path, plan: &PendingPlan) -> Result<()> {
@@ -99,6 +103,7 @@ mod tests {
                     status: "ok".into(),
                     message: None,
                     order_id: Some("order-1".into()),
+                    action: Some("created".into()),
                 },
                 PendingItem {
                     slug: "rhino_prime_set".into(),
@@ -112,6 +117,7 @@ mod tests {
                     status: "pending".into(),
                     message: None,
                     order_id: None,
+                    action: None,
                 },
             ],
         }
