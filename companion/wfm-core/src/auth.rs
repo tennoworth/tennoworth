@@ -213,23 +213,39 @@ pub fn encrypt_jwt(jwt: &str, passphrase: &str, platform: &str) -> Result<Encryp
     })
 }
 
-pub fn decrypt_jwt(blob: &EncryptedJwt, passphrase: &str) -> Result<String> {
-    if blob.format != JWT_FORMAT {
-        bail!("Unknown JWT blob format: {}", blob.format);
-    }
+/// Run the blob's KDF over `passphrase`, yielding the raw AES-256 key. Split
+/// from `decrypt_jwt` so the desktop can hold the derived key in the OS
+/// keyring for silent unlock — the key is salt-bound (a re-login rotates the
+/// salt, so a stale key fails GCM auth) and useless without the .enc file,
+/// unlike the passphrase, which users may reuse elsewhere.
+pub fn derive_jwt_key(blob: &EncryptedJwt, passphrase: &str) -> Result<[u8; 32]> {
     let salt = B64.decode(&blob.kdf.salt).context("decoding salt")?;
-    let iv = B64.decode(&blob.cipher.iv).context("decoding IV")?;
-    let ciphertext = B64.decode(&blob.ciphertext).context("decoding ciphertext")?;
-
     let mut key_bytes = [0u8; 32];
     pbkdf2::<Hmac<Sha256>>(passphrase.as_bytes(), &salt, blob.kdf.iterations, &mut key_bytes)
         .map_err(|e| anyhow!("PBKDF2 failed: {e}"))?;
+    Ok(key_bytes)
+}
 
-    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(&key_bytes));
+pub fn decrypt_jwt_with_key(blob: &EncryptedJwt, key_bytes: &[u8; 32]) -> Result<String> {
+    if blob.format != JWT_FORMAT {
+        bail!("Unknown JWT blob format: {}", blob.format);
+    }
+    let iv = B64.decode(&blob.cipher.iv).context("decoding IV")?;
+    let ciphertext = B64.decode(&blob.ciphertext).context("decoding ciphertext")?;
+
+    let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key_bytes));
     let plaintext = cipher
         .decrypt(Nonce::from_slice(&iv), ciphertext.as_ref())
         .map_err(|_| anyhow!("Wrong passphrase, or the JWT file was modified."))?;
     String::from_utf8(plaintext).context("JWT plaintext was not valid UTF-8")
+}
+
+pub fn decrypt_jwt(blob: &EncryptedJwt, passphrase: &str) -> Result<String> {
+    if blob.format != JWT_FORMAT {
+        bail!("Unknown JWT blob format: {}", blob.format);
+    }
+    let key_bytes = derive_jwt_key(blob, passphrase)?;
+    decrypt_jwt_with_key(blob, &key_bytes)
 }
 
 /// Resolve the WFM username (`data.slug`) for a decrypted JWT. Used when
@@ -275,6 +291,24 @@ mod tests {
     fn decrypt_with_wrong_passphrase_fails() {
         let blob = encrypt_jwt("jwt.abc.123", "correct horse battery", "pc").unwrap();
         assert!(decrypt_jwt(&blob, "wrong passphrase!!").is_err());
+    }
+
+    #[test]
+    fn derived_key_decrypts_without_the_passphrase() {
+        let blob = encrypt_jwt("jwt.abc.123", "correct horse battery", "pc").unwrap();
+        let key = derive_jwt_key(&blob, "correct horse battery").unwrap();
+        assert_eq!(decrypt_jwt_with_key(&blob, &key).unwrap(), "jwt.abc.123");
+    }
+
+    #[test]
+    fn derived_key_is_salt_bound_so_a_relogin_invalidates_it() {
+        // Same passphrase, fresh envelope → fresh salt → the old derived key
+        // must fail GCM auth (this is what makes a stale keyring entry
+        // detectable instead of silently decrypting a rotated login).
+        let old = encrypt_jwt("jwt.abc.123", "correct horse battery", "pc").unwrap();
+        let old_key = derive_jwt_key(&old, "correct horse battery").unwrap();
+        let new = encrypt_jwt("jwt.def.456", "correct horse battery", "pc").unwrap();
+        assert!(decrypt_jwt_with_key(&new, &old_key).is_err());
     }
 
     #[test]
