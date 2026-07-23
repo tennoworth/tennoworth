@@ -24,6 +24,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod db;
+mod keyring_store;
 mod market;
 mod sellables;
 mod snapshot;
@@ -497,6 +498,7 @@ async fn wfm_login(
     password: String,
     passphrase: String,
     platform: String,
+    remember: bool,
 ) -> Result<(), CmdError> {
     let s = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
@@ -504,7 +506,7 @@ async fn wfm_login(
         // best-effort (the IPC deserializer made its own transient copies).
         let password = Zeroizing::new(password);
         let passphrase = Zeroizing::new(passphrase);
-        s.login(&email, &password, &passphrase, &platform)
+        s.login(&email, &password, &passphrase, &platform, remember)
     })
     .await
     .map_err(|e| CmdError::internal(format!("login task failed to run: {e}")))?
@@ -517,14 +519,27 @@ async fn wfm_login(
 async fn unlock_jwt(
     session: State<'_, Arc<WfmSession>>,
     passphrase: String,
+    remember: bool,
 ) -> Result<(), CmdError> {
     let s = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
         let passphrase = Zeroizing::new(passphrase);
-        s.unlock(&passphrase)
+        s.unlock(&passphrase, remember)
     })
     .await
     .map_err(|e| CmdError::internal(format!("unlock task failed to run: {e}")))?
+}
+
+/// Try the OS-keyring "remember on this device" key before the SPA raises the
+/// passphrase modal. Infallible by contract: any miss (no entry, no keyring
+/// daemon, stale key, network warm failure) returns false and the modal opens
+/// exactly as before. Network on success (catalog warm) — spawn_blocking.
+#[tauri::command]
+async fn try_silent_unlock(session: State<'_, Arc<WfmSession>>) -> Result<bool, CmdError> {
+    let s = Arc::clone(&session);
+    tauri::async_runtime::spawn_blocking(move || s.try_silent_unlock())
+        .await
+        .map_err(|e| CmdError::internal(format!("silent-unlock task failed to run: {e}")))
 }
 
 /// Lock the session and scrub the in-memory JWT. The on-disk envelope stays —
@@ -1090,6 +1105,7 @@ fn main() {
             wfm_auth_status,
             wfm_login,
             unlock_jwt,
+            try_silent_unlock,
             wfm_logout,
             submit_plan,
             get_pending_plan,

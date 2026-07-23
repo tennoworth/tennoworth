@@ -45,3 +45,12 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 # Scrub the plaintext JWT from memory on logout (best-effort). Already vendored
 # transitively via aes-gcm, so this pins no new build.
 zeroize = "1"
+# "Remember on this device": the PBKDF2-derived unlock key (never the
+# passphrase — users reuse those) goes in the OS keyring. v3 needs explicit
+# per-platform store features or you silently get the mock store; this is the
+# crate README's cross-platform set. Linux talks Secret Service over DBus
+# (GNOME Keyring, KWallet via org.kde.secretservicecompat); crypto-rust avoids
+# an OpenSSL link. Desktop-only dependency — the CLI must not grow DBus deps.
+keyring = { version = "3", features = ["windows-native", "sync-secret-service", "crypto-rust"] }
+# Encoding for the keyring entry value (same version wfm-core pins).
+base64 = "0.22"
