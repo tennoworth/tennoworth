@@ -33,7 +33,7 @@
   } from './lib/companion';
   import {
     createTransport, isDesktopRuntime,
-    desktopWfmStatus, desktopWfmLogin, desktopWfmUnlock, DesktopCmdError,
+    desktopWfmStatus, desktopWfmLogin, desktopWfmUnlock, desktopTrySilentUnlock, DesktopCmdError,
   } from './lib/transport';
   import {
     updateStatus as fetchUpdateStatus, installUpdate, restartApp, onUpdateAvailable,
@@ -1282,13 +1282,16 @@
   let wfmLoginConfirm = $state('');
   let wfmLoginPlatform = $state('pc');
   let wfmUnlockPassphrase = $state('');
+  // "Remember on this device" (OS keyring). One preference shared by the
+  // login and unlock dialogs; default on — the browser-cookie parity call.
+  let wfmRemember = $state(true);
   let wfmAuthBusy = $state(false);
   let wfmAuthError = $state(null);
   // What to do once the session unlocks: 'list' re-opens the listing flow the
   // CTA started; null (the Resume path) leaves the user where they were.
   let wfmAuthNext = null;
 
-  function openWfmAuthDialog(code, next = null) {
+  async function openWfmAuthDialog(code, next = null) {
     wfmAuthError = null;
     wfmAuthNext = next;
     if (code === 'needs_login') {
@@ -1297,6 +1300,17 @@
       wfmLoginConfirm = '';
       wfmLoginDialog?.showModal();
     } else {
+      // A remembered device key (OS keyring) unlocks without the modal. Any
+      // miss — no entry, no keyring daemon, stale key — falls through to the
+      // passphrase prompt exactly as before.
+      try {
+        if (await desktopTrySilentUnlock()) {
+          wfmAuthUnlocked();
+          return;
+        }
+      } catch (e) {
+        console.error('silent unlock failed', e);
+      }
       wfmUnlockPassphrase = '';
       wfmUnlockDialog?.showModal();
     }
@@ -1338,7 +1352,7 @@
     }
     wfmAuthBusy = true;
     try {
-      await desktopWfmLogin(wfmLoginEmail.trim(), wfmLoginPassword, wfmLoginPassphrase, wfmLoginPlatform);
+      await desktopWfmLogin(wfmLoginEmail.trim(), wfmLoginPassword, wfmLoginPassphrase, wfmLoginPlatform, wfmRemember);
       wfmLoginDialog?.close();
       wfmAuthUnlocked();
     } catch (err) {
@@ -1356,7 +1370,7 @@
     wfmAuthError = null;
     wfmAuthBusy = true;
     try {
-      await desktopWfmUnlock(wfmUnlockPassphrase);
+      await desktopWfmUnlock(wfmUnlockPassphrase, wfmRemember);
       wfmUnlockDialog?.close();
       wfmAuthUnlocked();
     } catch (err) {
@@ -2580,7 +2594,10 @@
         warframe.market to post listings, that login token is
         <strong>encrypted on disk</strong> (AES-256-GCM) at
         <code>~/.config/wfminv/</code> (or the Windows equivalent), and the
-        browser never sees it — the companion holds it and relays.
+        browser never sees it — the companion holds it and relays. The
+        desktop app can optionally remember the unlock key in your OS
+        keyring (KWallet, GNOME Keyring, Windows Credential Manager) —
+        never the passphrase itself; details in SECURITY.md.
       </p>
       <p>
         The one feature that ever sends anything off your machine is the
@@ -2829,6 +2846,12 @@
       Confirm passphrase
       <input type="password" autocomplete="new-password" bind:value={wfmLoginConfirm} required minlength="12" />
     </label>
+    <label class="remember">
+      <input type="checkbox" bind:checked={wfmRemember} />
+      Remember on this device — stores the unlock key in your OS keyring
+      (KWallet, GNOME Keyring, Windows Credential Manager) so you're not asked
+      each launch. Never the passphrase itself.
+    </label>
     {#if wfmAuthError}
       <div class="err" data-testid="wfm-auth-error">{wfmAuthError}</div>
     {/if}
@@ -2859,6 +2882,11 @@
         required
         autofocus
       />
+    </label>
+    <label class="remember">
+      <input type="checkbox" bind:checked={wfmRemember} />
+      Remember on this device — stores the unlock key in your OS keyring so
+      you're not asked each launch. Never the passphrase itself.
     </label>
     {#if wfmAuthError}
       <div class="err" data-testid="wfm-auth-error">{wfmAuthError}</div>
@@ -3940,6 +3968,16 @@
     text-transform: uppercase;
     color: var(--muted);
   }
+  dialog.cryptobox label.remember {
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 8px;
+    text-transform: none;
+    letter-spacing: normal;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  dialog.cryptobox label.remember input { margin-top: 2px; }
   dialog.cryptobox input[type="password"],
   dialog.cryptobox input[type="email"],
   dialog.cryptobox select {

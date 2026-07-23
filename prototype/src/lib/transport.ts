@@ -368,17 +368,32 @@ export async function desktopWfmLogin(
   password: string,
   passphrase: string,
   platform: string,
+  remember: boolean,
 ): Promise<void> {
   try {
-    await resolveInvoke()<null>('wfm_login', { email, password, passphrase, platform });
+    await resolveInvoke()<null>('wfm_login', { email, password, passphrase, platform, remember });
   } catch (e) {
     rethrowInvoke(e);
   }
 }
 
-export async function desktopWfmUnlock(passphrase: string): Promise<void> {
+export async function desktopWfmUnlock(passphrase: string, remember: boolean): Promise<void> {
   try {
-    await resolveInvoke()<null>('unlock_jwt', { passphrase });
+    await resolveInvoke()<null>('unlock_jwt', { passphrase, remember });
+  } catch (e) {
+    rethrowInvoke(e);
+  }
+}
+
+/**
+ * Try the OS-keyring "remember on this device" key before showing the
+ * passphrase modal. Never throws for a miss — false just means "ask the
+ * human"; a genuine IPC fault still rethrows so the caller's fallback
+ * (open the modal) runs.
+ */
+export async function desktopTrySilentUnlock(): Promise<boolean> {
+  try {
+    return await resolveInvoke()<boolean>('try_silent_unlock');
   } catch (e) {
     rethrowInvoke(e);
   }
