@@ -2994,12 +2994,12 @@
 
   /* Shell layout: persistent left rail + workspace column. Sidebar is
      220px (room for nav-item label + 3-digit badge); workspace fills
-     the rest. Shell caps at 1720 (220 + 1500) so the 13-column table
-     can still breathe on ultra-wide displays. */
+     the rest. Content column caps at ~1680px (design spec), so the
+     shell is 220 + padding + 1680. */
   .shell {
     display: grid;
     grid-template-columns: 220px 1fr;
-    max-width: min(1720px, 100vw);
+    max-width: min(1960px, 100vw);
     margin: 0 auto;
     min-height: 100vh;
   }
@@ -3027,7 +3027,7 @@
   }
   aside.sidebar .brand {
     padding: 0 18px 14px;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--hairline);
     margin-bottom: 10px;
   }
   aside.sidebar .brand h1 {
@@ -3037,7 +3037,7 @@
     letter-spacing: -0.005em;
   }
   aside.sidebar .brand .sub {
-    color: var(--muted);
+    color: var(--faint);
     font-size: 11px;
     margin-top: 2px;
   }
@@ -3049,14 +3049,15 @@
   }
   .nav-group {
     padding: 6px 0;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--hairline);
   }
   .nav-group:last-child { border-bottom: none; }
   .nav-label {
     font-size: 10px;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--faint);
+    font-weight: 600;
     padding: 8px 18px 4px;
   }
   .nav-item {
@@ -3080,7 +3081,7 @@
   .nav-item.active {
     color: var(--fg);
     border-left-color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 6%, transparent);
+    background: var(--panel-2);
   }
   .nav-item .badge {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -3107,7 +3108,7 @@
      bottom via margin-top:auto on the nav above. */
   .src-pin {
     padding: 12px 18px;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--hairline);
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -3150,7 +3151,7 @@
     gap: 8px;
     background: var(--panel-2);
     border: 1px solid var(--accent);
-    border-radius: 10px;
+    border-radius: 8px;
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
   }
   .refresh-pop .rp-lede { margin: 0; font-size: 12px; color: var(--fg); line-height: 1.45; }
@@ -3232,7 +3233,7 @@
       align-items: center;
       gap: 4px;
       border-bottom: none;
-      border-right: 1px solid var(--border);
+      border-right: 1px solid var(--hairline);
       padding: 0 8px;
     }
     .nav-group:last-child { border-right: none; }
@@ -3278,7 +3279,7 @@
   pre code { background: transparent; padding: 0; }
   .sub { color: var(--muted); margin: 6px 0 0 0; max-width: 64ch; font-size: 13px; }
   .ver {
-    color: var(--muted);
+    color: var(--faint);
     font-size: 11px;
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.02em;
@@ -3288,7 +3289,7 @@
   /* Upsell lead — separates the free market browser above from the companion
      install flow below. A hairline + top padding, no box. */
   .upsell-lead {
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--hairline);
     padding-top: 18px;
     margin-top: 4px;
   }
@@ -3313,7 +3314,7 @@
     margin: 0;
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 8px;
     overflow: hidden;
   }
   .steps li {
@@ -3321,7 +3322,7 @@
     display: flex;
     gap: 14px;
     align-items: flex-start;
-    border-right: 1px solid var(--border);
+    border-right: 1px solid var(--hairline);
   }
   .steps li:last-child { border-right: none; }
   .steps .n {
@@ -3346,7 +3347,7 @@
   .companion-help {
     margin-top: 12px;
     padding: 12px 14px;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--hairline);
     font-size: 13px;
     line-height: 1.5;
   }
@@ -3356,27 +3357,29 @@
   .companion-help code { font-size: 12px; }
   @media (max-width: 760px) {
     .steps { grid-template-columns: 1fr; }
-    .steps li { border-right: none; border-bottom: 1px solid var(--border); }
+    .steps li { border-right: none; border-bottom: 1px solid var(--hairline); }
     .steps li:last-child { border-bottom: none; }
   }
 
-  /* Stats strip — big numbers, tiny labels. Number-first hierarchy. */
+  /* Stats strip — segmented bordered box: one outlined container,
+     hairline dividers between cells. */
   .stats {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1px;
-    background: var(--border);
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-self: flex-start;
+    background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 6px;
     overflow: hidden;
   }
   .stat {
-    background: var(--panel);
-    padding: 14px 18px;
+    padding: 7px 16px;
     display: flex;
-    flex-direction: column;
-    gap: 4px;
+    align-items: baseline;
+    gap: 8px;
+    border-right: 1px solid var(--hairline);
   }
+  .stat:last-child { border-right: none; }
   .stat .k {
     font-size: 11px;
     letter-spacing: 0.06em;
@@ -3388,17 +3391,13 @@
   }
   .stat .v {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 22px;
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
     font-weight: 600;
-    letter-spacing: -0.01em;
-    line-height: 1.1;
+    line-height: 1.3;
   }
-  .stat .v.small { font-size: 14px; font-weight: 500; }
-  .stat .v .unit { font-size: 13px; color: var(--muted); margin-left: 2px; }
-  .stat.right .k, .stat.right .v { justify-content: flex-end; text-align: right; }
-  @media (max-width: 760px) {
-    .stats { grid-template-columns: repeat(2, 1fr); }
-  }
+  .stat .v.small { font-weight: 500; font-size: 12.5px; }
+  .stat .v .unit { font-size: 11px; color: var(--muted); margin-left: 2px; }
 
   /* Freshness dot: green/amber/red signal, tuned for our 2 h scrape cadence. */
   .dot {
@@ -3408,7 +3407,7 @@
     background: var(--muted);
     display: inline-block;
   }
-  .dot.fresh   { background: var(--good); box-shadow: 0 0 6px color-mix(in srgb, var(--good) 60%, transparent); }
+  .dot.fresh   { background: var(--good); }
   .dot.aging   { background: var(--warn); }
   .dot.stale   { background: var(--bad); }
 
@@ -3416,7 +3415,7 @@
   .card {
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 8px;
     padding: 14px 16px;
     display: flex;
     flex-direction: column;
@@ -3444,20 +3443,18 @@
     background: transparent;
     border: 1px solid var(--border);
     color: var(--muted);
-    border-radius: 999px;
-    padding: 4px 14px;
-    font-size: 12px;
+    border-radius: 5px;
+    padding: 4px 12px;
     letter-spacing: 0.02em;
     cursor: pointer;
     transition: color 120ms, border-color 120ms, background 120ms;
     font: inherit;
     font-size: 12px;
   }
-  .preset:hover { color: var(--fg); border-color: var(--accent); }
+  .preset:hover { color: var(--fg); background: var(--panel-2); }
   .preset.active {
     color: var(--accent);
     border-color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 14%, transparent);
   }
   .preset-hint { margin-left: auto; font-size: 11.5px; }
 
@@ -3466,7 +3463,7 @@
      tag chips above. Open state persists in localStorage so power users
      don't re-click every session. */
   .filter-disclosure {
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--hairline);
     padding-top: 10px;
     margin-top: 2px;
   }
@@ -3506,7 +3503,7 @@
      meant; hover-tooltip alone wasn't enough. localStorage flag means
      each user sees it once. */
   .warn-banner {
-    border-left: 3px solid var(--stale, #d9534f);
+    border-left: 3px solid var(--bad);
     padding: 10px 14px;
     font-size: 13px;
     color: var(--fg);
@@ -3608,7 +3605,7 @@
     background: transparent;
     color: var(--muted);
     border: 1px solid var(--border);
-    border-radius: 999px;
+    border-radius: 4px;
     padding: 4px 10px 4px 12px;
     font-size: 11px;
     letter-spacing: 0.02em;
@@ -3628,7 +3625,7 @@
   .chip.active {
     color: var(--accent);
     border-color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    background: var(--panel-2);
   }
   .chip.zero {
     text-decoration: line-through;
@@ -3663,9 +3660,9 @@
   select {
     font: inherit;
     color: var(--fg);
-    background: var(--panel);
+    background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: 4px;
     padding: 5px 8px;
   }
   button.ghost {
@@ -3684,7 +3681,7 @@
      right-aligned headline number per row. */
   .set-recos { padding: 14px 16px; gap: 8px; }
   .reco {
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--hairline);
     padding: 10px 0;
     align-items: center;
   }
@@ -3875,13 +3872,13 @@
     gap: 0;
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 8px;
     padding: 4px 18px;
     margin-top: 8px;
   }
   .faq h2 { padding: 14px 0 8px; margin: 0; }
   .faq details {
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--hairline);
     padding: 12px 0;
   }
   .faq details > summary {
@@ -3944,7 +3941,7 @@
     background: var(--panel);
     color: var(--fg);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 8px;
     padding: 0;
     max-width: 420px;
     width: calc(100% - 32px);
@@ -3993,16 +3990,15 @@
   dialog.cryptobox select {
     font: inherit;
     color: var(--fg);
-    background: var(--panel-2);
+    background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: 4px;
     padding: 8px 10px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   dialog.cryptobox input[type="password"]:focus,
   dialog.cryptobox input[type="email"]:focus,
   dialog.cryptobox select:focus {
-    outline: none;
     border-color: var(--accent);
   }
   dialog.cryptobox .err {
