@@ -1515,12 +1515,12 @@
   {@render generalBanners()}
 
   {#if phase === 'idle' || phase === 'loading'}
-    {#if market}
-      <MarketBrowser {market} staleness={marketStaleness} freshness={marketFreshness} />
-    {/if}
-
     {#if isDesktop}
-      <section class="upsell-lead">
+      <!-- The scan CTA leads the desktop empty state (fresh install AND
+           post-Clear): scanning is the app's whole point, so it must never
+           sit below the fold of the market browser — that's how a user ends
+           up back on the manual file path. -->
+      <section class="upsell-lead desktop-hero">
         <h2>Get your personal sell list</h2>
         <p class="sub">
           With Warframe open and past the login screen, scan your account —
@@ -1533,10 +1533,16 @@
             onclick={pullInventory}
             disabled={pullingInventory}
           >{pullingInventory ? 'Scanning game…' : 'Scan inventory'}</button>
-          <span class="muted small">or drop an <code>inventory.json</code> below</span>
+          <span class="muted small">no file, no terminal — or drop an <code>inventory.json</code> below</span>
         </div>
       </section>
-    {:else}
+    {/if}
+
+    {#if market}
+      <MarketBrowser {market} staleness={marketStaleness} freshness={marketFreshness} />
+    {/if}
+
+    {#if !isDesktop}
     <section class="upsell-lead">
       <h2>Get your personal sell list</h2>
       <p class="sub">
@@ -1649,7 +1655,9 @@
     <DropZone oninventory={handleInventory} loading={false} />
   {/if}
 
-  <InstallWidget />
+  {#if !isDesktop}
+    <InstallWidget />
+  {/if}
 
   {@render faqContent()}
 
@@ -1721,7 +1729,7 @@
       <div class="nav-group">
         <div class="nav-label">Library</div>
         <button type="button" class="nav-item" class:active={effectiveView === 'install'} onclick={() => setView('install')}>
-          <span>Install · FAQ</span>
+          <span>{isDesktop ? 'FAQ' : 'Install · FAQ'}</span>
         </button>
       </div>
     </nav>
@@ -2332,10 +2340,12 @@
 
     {:else if effectiveView === 'install'}
       <section class="view-header">
-        <h2>Install · FAQ</h2>
-        <p class="lede">Getting the companion + answers to common questions.</p>
+        <h2>{isDesktop ? 'FAQ' : 'Install · FAQ'}</h2>
+        <p class="lede">{isDesktop ? 'Answers to common questions.' : 'Getting the companion + answers to common questions.'}</p>
       </section>
-      <InstallWidget />
+      {#if !isDesktop}
+        <InstallWidget />
+      {/if}
       {@render faqContent()}
     {/if}
 
