@@ -189,7 +189,21 @@ The encrypted export feature (`Export inventory`) uses:
 The companion's on-disk JWT (`wfm-jwt.enc`) uses the same parameters
 so one person can audit both.
 
-Source: `prototype/src/lib/crypto.ts` and `companion/src/main.rs`.
+**Desktop "Remember on this device" (opt-out, default on):** the
+desktop app can store the PBKDF2-*derived* unlock key — never the
+passphrase itself — in the OS keyring (Secret Service / KWallet /
+GNOME Keyring on Linux, Credential Manager on Windows) so listing
+unlocks silently after launch, the same protection class your browser
+gives the warframe.market cookie. The stored key is salt-bound to the
+current `wfm-jwt.enc` (a re-login invalidates it) and useless without
+that file. Untick the box, log out, or remove the `tennoworth` entry
+in your keyring manager to revert to passphrase-per-session. Trade-off
+stated plainly: anything running in your unlocked desktop session that
+can read your keyring can combine the two — at-rest offline protection
+of the file itself is unchanged.
+
+Source: `prototype/src/lib/crypto.ts`, `companion/wfm-core/src/auth.rs`,
+and `companion/tennoworth-desktop/src/keyring_store.rs`.
 
 ## Reporting a vulnerability
 

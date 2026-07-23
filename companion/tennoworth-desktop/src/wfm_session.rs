@@ -23,7 +23,8 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use wfm_core::auth::{
-    bootstrap_session, decrypt_jwt, encrypt_jwt, fetch_wfm_me, signin, validate_platform,
+    bootstrap_session, decrypt_jwt_with_key, derive_jwt_key, encrypt_jwt, fetch_wfm_me, signin,
+    validate_platform,
     EncryptedJwt,
 };
 use wfm_core::listing::{fetch_wfm_catalog, Unlocked};
@@ -99,11 +100,18 @@ pub struct WfmSession {
     /// Sliding-window timestamps of recent assistant calls — same budget as
     /// serve's `ServeState.assistant_calls` (≤ 20 DeepSeek calls / 60 s).
     pub assistant_calls: Mutex<VecDeque<Instant>>,
+    /// "Remember on this device" is only offered against the REAL login file:
+    /// any `TENNOWORTH_JWT_PATH` override (the probe/test seam) turns the OS
+    /// keyring off entirely, so hermetic runs can never pollute — or unlock
+    /// via — the user's actual keyring entry.
+    use_keyring: bool,
 }
 
 impl WfmSession {
     pub fn new() -> Self {
-        let jwt_path = std::env::var_os("TENNOWORTH_JWT_PATH")
+        let overridden = std::env::var_os("TENNOWORTH_JWT_PATH");
+        let use_keyring = overridden.is_none();
+        let jwt_path = overridden
             .map(PathBuf::from)
             .unwrap_or_else(default_jwt_path);
         let pending_path = std::env::var_os("TENNOWORTH_PENDING_PATH")
@@ -120,6 +128,7 @@ impl WfmSession {
             inner: Mutex::new(None),
             plan_running: AtomicBool::new(false),
             assistant_calls: Mutex::new(VecDeque::new()),
+            use_keyring,
         }
     }
 
@@ -146,13 +155,17 @@ impl WfmSession {
     /// login — the user can re-unlock with their passphrase. Best-effort scrub:
     /// if a listing call is in flight it holds a clone of the Arc, so we can't be
     /// the sole owner; dropping still frees the plaintext, just without an
-    /// explicit overwrite first.
+    /// explicit overwrite first. Also forgets the remembered device key —
+    /// an explicit logout that silently re-unlocked itself wouldn't be one.
     pub fn logout(&self) {
         let mut guard = self.inner.lock().expect("session mutex poisoned");
         if let Some(arc) = guard.take() {
             if let Ok(mut unlocked) = Arc::try_unwrap(arc) {
                 unlocked.jwt.zeroize();
             }
+        }
+        if self.use_keyring {
+            crate::keyring_store::forget_key();
         }
     }
 
@@ -182,11 +195,10 @@ impl WfmSession {
         }
     }
 
-    /// Read + decrypt the on-disk JWT with `passphrase` — the offline half of
-    /// `unlock`. Returns `(jwt_plaintext, platform)`. Split out so the error
-    /// mapping (missing file → `needs_login`, wrong passphrase → `bad_passphrase`)
-    /// is unit-testable without the network catalog warm.
-    fn decrypt_from_disk(&self, passphrase: &str) -> Result<(String, String), CmdError> {
+    /// Read + parse the on-disk envelope — shared by the passphrase and
+    /// silent-unlock paths, with the same error mapping (missing file →
+    /// `needs_login`).
+    fn read_blob(&self) -> Result<EncryptedJwt, CmdError> {
         let bytes = match fs::read(&self.jwt_path) {
             Ok(b) => b,
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Err(CmdError::needs_login()),
@@ -197,23 +209,84 @@ impl WfmSession {
                 )))
             }
         };
-        let blob: EncryptedJwt = serde_json::from_slice(&bytes)
-            .map_err(|e| CmdError::internal(format!("login file is unreadable: {e}")))?;
+        serde_json::from_slice(&bytes)
+            .map_err(|e| CmdError::internal(format!("login file is unreadable: {e}")))
+    }
+
+    /// Read + decrypt the on-disk JWT with `passphrase` — the offline half of
+    /// `unlock`. Returns `(jwt_plaintext, platform, derived_key)`. Split out so
+    /// the error mapping (missing file → `needs_login`, wrong passphrase →
+    /// `bad_passphrase`) is unit-testable without the network catalog warm.
+    fn decrypt_from_disk(&self, passphrase: &str) -> Result<(String, String, [u8; 32]), CmdError> {
+        let blob = self.read_blob()?;
         let platform = blob.platform.clone();
         // Any decrypt failure (wrong key or tampered ciphertext) reads as a bad
         // passphrase — the only actionable cause from the user's side.
-        let jwt = decrypt_jwt(&blob, passphrase).map_err(|_| CmdError::bad_passphrase())?;
-        Ok((jwt, platform))
+        let key = derive_jwt_key(&blob, passphrase).map_err(|_| CmdError::bad_passphrase())?;
+        let jwt = decrypt_jwt_with_key(&blob, &key).map_err(|_| CmdError::bad_passphrase())?;
+        Ok((jwt, platform, key))
     }
 
     /// Decrypt the on-disk JWT and warm the WFM catalog, populating the session.
     /// Network: `/v2/items` + `/v2/me`. On success the plaintext JWT is held only
-    /// inside the session `Arc`.
-    pub fn unlock(&self, passphrase: &str) -> Result<(), CmdError> {
-        let (jwt, platform) = self.decrypt_from_disk(passphrase)?;
+    /// inside the session `Arc`; with `remember`, the salt-bound derived key
+    /// (never the passphrase) also goes to the OS keyring for silent unlock.
+    /// Remember only on FULL success — an unlock the user abandons after a
+    /// network failure should leave no trace.
+    pub fn unlock(&self, passphrase: &str, remember: bool) -> Result<(), CmdError> {
+        let (jwt, platform, key) = self.decrypt_from_disk(passphrase)?;
         let unlocked = warm(jwt, platform)?;
         *self.inner.lock().expect("session mutex poisoned") = Some(Arc::new(unlocked));
+        if self.use_keyring {
+            if remember {
+                crate::keyring_store::store_key(&key);
+            } else {
+                // Unticking the box is an explicit "stop remembering".
+                crate::keyring_store::forget_key();
+            }
+        }
         Ok(())
+    }
+
+    /// Try the OS-keyring key against the current login file — the silent
+    /// analogue of `unlock`, called by the SPA before it raises the passphrase
+    /// modal. Never fails the caller: every miss (no entry, no daemon, network
+    /// warm failure) is `Ok(false)` → the modal opens as before. The entry is
+    /// deleted ONLY on a definitive GCM auth failure (stale after a re-login),
+    /// never on transient store errors.
+    pub fn try_silent_unlock(&self) -> bool {
+        if self.is_unlocked() {
+            return true;
+        }
+        if !self.use_keyring || !self.jwt_path.exists() {
+            return false;
+        }
+        let Some(key) = crate::keyring_store::load_key() else {
+            return false;
+        };
+        let Ok(blob) = self.read_blob() else {
+            return false;
+        };
+        let platform = blob.platform.clone();
+        let jwt = match decrypt_jwt_with_key(&blob, &key) {
+            Ok(jwt) => jwt,
+            Err(_) => {
+                crate::keyring_store::forget_key();
+                return false;
+            }
+        };
+        match warm(jwt, platform) {
+            Ok(unlocked) => {
+                *self.inner.lock().expect("session mutex poisoned") = Some(Arc::new(unlocked));
+                true
+            }
+            Err(e) => {
+                // Key is good; the warm (network) failed. Keep the entry and
+                // let the passphrase modal surface the error on retry.
+                eprintln!("tennoworth: silent unlock warm failed: {}", e.message);
+                false
+            }
+        }
     }
 
     /// Sign in to warframe.market, persist the encrypted JWT (unchanged on-disk
@@ -227,6 +300,7 @@ impl WfmSession {
         password: &str,
         passphrase: &str,
         platform: &str,
+        remember: bool,
     ) -> Result<(), CmdError> {
         validate_platform(platform).map_err(CmdError::internal)?;
         if email.trim().is_empty() {
@@ -254,6 +328,18 @@ impl WfmSession {
         // unlocks via the passphrase modal — surface the network error either way.
         let unlocked = warm(jwt, platform.to_string())?;
         *self.inner.lock().expect("session mutex poisoned") = Some(Arc::new(unlocked));
+        if self.use_keyring {
+            if remember {
+                // A fresh login rotated the salt, so derive against the blob we
+                // just persisted — any older keyring entry is overwritten.
+                match derive_jwt_key(&encrypted, passphrase) {
+                    Ok(key) => crate::keyring_store::store_key(&key),
+                    Err(e) => eprintln!("tennoworth: deriving remember-key failed: {e}"),
+                }
+            } else {
+                crate::keyring_store::forget_key();
+            }
+        }
         Ok(())
     }
 
@@ -346,6 +432,8 @@ mod tests {
             inner: Mutex::new(None),
             plan_running: AtomicBool::new(false),
             assistant_calls: Mutex::new(VecDeque::new()),
+            // Tests must never read or write the developer's real OS keyring.
+            use_keyring: false,
         }
     }
 
@@ -417,9 +505,14 @@ mod tests {
         let blob = encrypt_jwt("jwt.secret.value", "the-correct-passphrase", "ps4").unwrap();
         fs::write(&path, serde_json::to_vec(&blob).unwrap()).unwrap();
         let s = session_with(path.clone());
-        let (jwt, platform) = s.decrypt_from_disk("the-correct-passphrase").unwrap();
+        let (jwt, platform, key) = s.decrypt_from_disk("the-correct-passphrase").unwrap();
         assert_eq!(jwt, "jwt.secret.value");
         assert_eq!(platform, "ps4");
+        // The derived key it hands back must actually open the same envelope —
+        // that key is what "remember on this device" stores.
+        let blob: EncryptedJwt =
+            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        assert_eq!(decrypt_jwt_with_key(&blob, &key).unwrap(), "jwt.secret.value");
         let _ = fs::remove_file(&path);
     }
 
@@ -454,7 +547,7 @@ mod tests {
         // touches WFM.
         let path = tmp_path("login-short");
         let s = session_with(path);
-        let err = s.login("me@example.com", "hunter2hunter2", "short", "pc").unwrap_err();
+        let err = s.login("me@example.com", "hunter2hunter2", "short", "pc", false).unwrap_err();
         assert_eq!(err.code, "internal");
         assert!(err.message.contains("12 characters"));
     }
@@ -464,7 +557,7 @@ mod tests {
         let path = tmp_path("login-plat");
         let s = session_with(path);
         let err = s
-            .login("me@example.com", "pw", "a-long-enough-passphrase", "playstation")
+            .login("me@example.com", "pw", "a-long-enough-passphrase", "playstation", false)
             .unwrap_err();
         assert_eq!(err.code, "internal");
     }
@@ -494,10 +587,31 @@ mod tests {
             s.decrypt_from_disk("wrong-pass").unwrap_err().code,
             "bad_passphrase"
         );
-        let (jwt, platform) = s.decrypt_from_disk("probe-pass-123456").unwrap();
+        let (jwt, platform, _key) = s.decrypt_from_disk("probe-pass-123456").unwrap();
         assert_eq!(jwt, "probe.jwt.value");
         assert_eq!(platform, "pc");
         let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn try_silent_unlock_is_inert_when_keyring_is_disabled() {
+        // The probe/test seam (use_keyring: false) must short-circuit BEFORE
+        // any keyring access, even with a perfectly good login file on disk —
+        // a hermetic run must never unlock via the developer's real keyring.
+        let path = tmp_path("silent-gated");
+        let blob = encrypt_jwt("jwt.secret.value", "correct horse battery", "pc").unwrap();
+        fs::write(&path, serde_json::to_vec(&blob).unwrap()).unwrap();
+        let s = session_with(path.clone());
+        assert!(!s.try_silent_unlock());
+        assert!(!s.is_unlocked());
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn try_silent_unlock_reports_true_when_already_unlocked() {
+        let s = session_with(tmp_path("silent-already"));
+        s.debug_set_unlocked(dummy_unlocked());
+        assert!(s.try_silent_unlock());
     }
 
     #[test]
