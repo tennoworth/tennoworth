@@ -167,7 +167,12 @@
     }
   }
 
-  let okCount = $derived(serverResults.filter((r) => r.status === 'ok').length);
+  let updatedCount = $derived(
+    serverResults.filter((r) => r.status === 'ok' && r.action === 'updated').length,
+  );
+  let okCount = $derived(
+    serverResults.filter((r) => r.status === 'ok').length - updatedCount,
+  );
   let errCount = $derived(serverResults.filter((r) => r.status !== 'ok').length);
 
   let visibilityBusy = $state(false);
@@ -179,8 +184,10 @@
   }
 
   async function makeAllVisible(): Promise<void> {
+    // Only freshly-created orders: updated ones keep the visibility the user
+    // chose on WFM (matches the "N created" count on the button).
     const ids = serverResults
-      .filter((r) => r.status === 'ok' && r.order_id)
+      .filter((r) => r.status === 'ok' && r.action !== 'updated' && r.order_id)
       .map((r) => r.order_id as string);
     if (ids.length === 0) return;
     visibilityBusy = true;
@@ -320,9 +327,11 @@
       {:else if phase === 'results'}
         <p class="lead">
           Done. <span class="ok">{okCount} created</span>
+          {#if updatedCount > 0}· <span class="ok">{updatedCount} updated</span>{/if}
           {#if errCount > 0}· <span class="bad">{errCount} failed</span>{/if}.
           New listings are <strong>invisible</strong> on WFM — log in to
-          warframe.market, eyeball them, then make them visible.
+          warframe.market, eyeball them, then make them visible. Updated
+          orders keep their existing visibility and price history.
         </p>
         <div class="scroll">
           <table>

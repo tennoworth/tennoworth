@@ -75,6 +75,9 @@ pub struct ItemResult {
     pub message: Option<String>,
     /// WFM order id when status = "ok".
     pub order_id: Option<String>,
+    /// "created" (new order) | "updated" (reconciled onto an existing order).
+    /// None on errors and on pre-reconcile pending files.
+    pub action: Option<String>,
 }
 
 pub struct WfmCatalogItem {
@@ -363,6 +366,7 @@ pub fn execute_plan(pending_path: &std::path::Path, unlocked: &Unlocked, plan: P
                     plan.items.len()
                 )),
                 order_id: None,
+                action: None,
             }],
         };
     }
@@ -384,6 +388,7 @@ pub fn execute_plan(pending_path: &std::path::Path, unlocked: &Unlocked, plan: P
             status: "pending".into(),
             message: None,
             order_id: None,
+            action: None,
         }).collect(),
     };
     if let Err(e) = write_pending_atomic(pending_path, &pending) {
@@ -414,9 +419,27 @@ pub fn run_pending(pending_path: &std::path::Path, unlocked: &Unlocked, pending:
                     status: "error".into(),
                     message: Some(format!("HTTP client build failed: {e}")),
                     order_id: None,
+                    action: None,
                 }],
             };
         }
+    };
+
+    // Reconcile against the user's live orders: WFM 403s a duplicate
+    // (same item/type/rank/subtype — "exceededOrderLimitSamePrice"), so those
+    // become PATCHes of the existing order instead. Fetch once per run; on
+    // failure fall back to create-only (the old behavior — a duplicate then
+    // fails with WFM's own message, still rendered verbatim).
+    let existing = if pending.items.iter().any(|i| i.status == "pending") {
+        match list_user_orders(unlocked) {
+            Ok(body) => index_existing_orders(&body),
+            Err(e) => {
+                eprintln!("warning: existing-order fetch failed; plan will create only: {e:#}");
+                BTreeMap::new()
+            }
+        }
+    } else {
+        BTreeMap::new()
     };
 
     let mut last_call = std::time::Instant::now()
@@ -441,10 +464,11 @@ pub fn run_pending(pending_path: &std::path::Path, unlocked: &Unlocked, pending:
             subtype: pending.items[i].subtype.clone(),
             reference_low_sell: pending.items[i].reference_low_sell,
         };
-        let result = execute_one(&http, unlocked, &plan_item);
+        let result = execute_one(&http, unlocked, &plan_item, &existing);
         pending.items[i].status = result.status.clone();
         pending.items[i].message = result.message.clone();
         pending.items[i].order_id = result.order_id.clone();
+        pending.items[i].action = result.action.clone();
         if let Err(e) = write_pending_atomic(pending_path, pending) {
             eprintln!("warning: could not persist pending update: {e:#}");
         }
@@ -457,6 +481,7 @@ pub fn run_pending(pending_path: &std::path::Path, unlocked: &Unlocked, pending:
             status: i.status.clone(),
             message: i.message.clone(),
             order_id: i.order_id.clone(),
+            action: i.action.clone(),
         }).collect(),
     }
 }
@@ -497,6 +522,82 @@ pub fn per_trade_for(quantity: u32) -> u32 {
 //     Default to the first listed subtype — that's the lowest-value
 //     variant by WFM convention (intact relic, unrevealed riven) and
 //     matches what the user almost always wants to dump first.
+/// One of the user's live WFM orders, as much as reconciliation needs.
+pub struct ExistingOrder {
+    pub id: String,
+    pub platinum: u64,
+    pub quantity: u64,
+}
+
+/// (itemId, order type, rank, subtype) — the identity WFM enforces uniqueness
+/// on (a second order with the same key 403s with
+/// `app.order.error.exceededOrderLimitSamePrice`).
+pub type OrderKey = (String, String, Option<u64>, Option<String>);
+
+fn index_one_order(
+    out: &mut BTreeMap<OrderKey, ExistingOrder>,
+    o: &serde_json::Value,
+    bucket_type: Option<&str>,
+) {
+    let Some(id) = o.get("id").and_then(|v| v.as_str()) else { return };
+    let Some(item_id) = o.get("itemId").and_then(|v| v.as_str()) else { return };
+    let Some(ty) = o.get("type").and_then(|v| v.as_str()).or(bucket_type) else { return };
+    out.insert(
+        (
+            item_id.to_string(),
+            ty.to_string(),
+            o.get("rank").and_then(|v| v.as_u64()),
+            o.get("subtype").and_then(|v| v.as_str()).map(str::to_string),
+        ),
+        ExistingOrder {
+            id: id.to_string(),
+            platinum: o.get("platinum").and_then(|v| v.as_u64()).unwrap_or(0),
+            quantity: o.get("quantity").and_then(|v| v.as_u64()).unwrap_or(0),
+        },
+    );
+}
+
+/// Index a /v2/orders/user/<username> response by OrderKey. Tolerates both
+/// shapes WFM has shipped ({data:{sell,buy}} and flat {data:[...]}), same as
+/// enrich_orders_with_names.
+pub fn index_existing_orders(body: &serde_json::Value) -> BTreeMap<OrderKey, ExistingOrder> {
+    let mut out = BTreeMap::new();
+    let Some(data) = body.get("data") else { return out };
+    if let Some(arr) = data.as_array() {
+        for o in arr {
+            index_one_order(&mut out, o, None);
+        }
+        return out;
+    }
+    for bucket in ["sell", "buy"] {
+        if let Some(arr) = data.get(bucket).and_then(|v| v.as_array()) {
+            for o in arr {
+                index_one_order(&mut out, o, Some(bucket));
+            }
+        }
+    }
+    out
+}
+
+/// The OrderKey this plan item will occupy on WFM. MUST mirror
+/// build_order_body's rank/subtype normalization — if the body would send
+/// rank 0 by default, the key says Some(0), so it collides with exactly the
+/// order WFM would reject as a duplicate.
+pub fn plan_item_key(item: &PlanItem, cat: &WfmCatalogItem) -> OrderKey {
+    let rank = cat.max_rank.map(|_| u64::from(item.rank.unwrap_or(0)));
+    let subtype = if cat.subtypes.is_empty() {
+        None
+    } else {
+        Some(
+            item.subtype
+                .clone()
+                .filter(|s| cat.subtypes.contains(s))
+                .unwrap_or_else(|| cat.subtypes[0].clone()),
+        )
+    };
+    (cat.item_id.clone(), item.order_type.clone(), rank, subtype)
+}
+
 pub fn build_order_body(item: &PlanItem, cat: &WfmCatalogItem) -> serde_json::Value {
     let mut body = serde_json::Map::new();
     body.insert("itemId".into(), serde_json::json!(cat.item_id));
@@ -519,12 +620,18 @@ pub fn build_order_body(item: &PlanItem, cat: &WfmCatalogItem) -> serde_json::Va
     serde_json::Value::Object(body)
 }
 
-fn execute_one(http: &Client, unlocked: &Unlocked, item: &PlanItem) -> ItemResult {
+fn execute_one(
+    http: &Client,
+    unlocked: &Unlocked,
+    item: &PlanItem,
+    existing: &BTreeMap<OrderKey, ExistingOrder>,
+) -> ItemResult {
     let mk_err = |msg: String| ItemResult {
         slug: item.slug.clone(),
         status: "error".into(),
         message: Some(msg),
         order_id: None,
+        action: None,
     };
 
     // --- safety caps ---
@@ -555,6 +662,33 @@ fn execute_one(http: &Client, unlocked: &Unlocked, item: &PlanItem) -> ItemResul
         Some(c) => c,
         None => return mk_err(format!("slug {:?} not in WFM catalog", item.slug)),
     };
+
+    // An order with this exact identity already exists → PATCH it. The plan's
+    // quantities come from the current inventory scan (they already count the
+    // listed copies), so overwrite price + quantity — never sum. Visibility is
+    // left alone: the existing order keeps whatever the user chose on WFM.
+    if let Some(prior) = existing.get(&plan_item_key(item, cat)) {
+        let patch = serde_json::json!({ "platinum": item.platinum, "quantity": item.quantity });
+        let r = patch_one_order(http, unlocked, &prior.id, &patch);
+        return if r.status == "ok" {
+            ItemResult {
+                slug: item.slug.clone(),
+                status: "ok".into(),
+                message: Some(format!(
+                    "updated existing order (was {}p × {})",
+                    prior.platinum, prior.quantity
+                )),
+                order_id: Some(prior.id.clone()),
+                action: Some("updated".into()),
+            }
+        } else {
+            mk_err(format!(
+                "updating existing order: {}",
+                r.message.unwrap_or_else(|| "(no message)".into())
+            ))
+        };
+    }
+
     let body = build_order_body(item, cat);
 
     // Order-creation endpoint (verified via the WFM frontend's actual
@@ -603,6 +737,7 @@ fn execute_one(http: &Client, unlocked: &Unlocked, item: &PlanItem) -> ItemResul
         status: "ok".into(),
         message: None,
         order_id,
+        action: Some("created".into()),
     }
 }
 
@@ -632,6 +767,79 @@ mod tests {
         enrich_orders_with_names(&mut body, &sample_id_map());
         assert_eq!(body["data"]["sell"][0]["item"]["name"], "Loki Prime Set");
         assert_eq!(body["data"]["buy"][0]["item"]["name"], "Secura Dual Cestra");
+    }
+
+    #[test]
+    fn index_existing_orders_reads_both_response_shapes() {
+        // Bucketed shape: type comes from the bucket name.
+        let bucketed = serde_json::json!({
+            "data": {
+                "sell": [
+                    {"id": "o1", "itemId": "item-a", "platinum": 20, "quantity": 3, "rank": 0},
+                ],
+                "buy": [
+                    {"id": "o2", "itemId": "item-a", "platinum": 5, "quantity": 1, "rank": 0},
+                ]
+            }
+        });
+        let idx = index_existing_orders(&bucketed);
+        let sell = idx.get(&("item-a".into(), "sell".into(), Some(0), None)).unwrap();
+        assert_eq!((sell.id.as_str(), sell.platinum, sell.quantity), ("o1", 20, 3));
+        assert!(idx.contains_key(&("item-a".into(), "buy".into(), Some(0), None)));
+
+        // Flat shape: type is a field on the order.
+        let flat = serde_json::json!({
+            "data": [
+                {"id": "o3", "itemId": "item-b", "type": "sell", "platinum": 9, "quantity": 2,
+                 "subtype": "radiant"},
+            ]
+        });
+        let idx = index_existing_orders(&flat);
+        assert!(idx.contains_key(&("item-b".into(), "sell".into(), None, Some("radiant".into()))));
+    }
+
+    #[test]
+    fn plan_item_key_mirrors_build_order_body_defaults() {
+        // Ranked item, no explicit rank: the body sends rank 0, so the key
+        // must say Some(0) — that's the order WFM would call a duplicate.
+        let ranked = WfmCatalogItem {
+            item_id: "item-r".into(),
+            display_name: "Some Arcane".into(),
+            max_rank: Some(5),
+            subtypes: vec![],
+        };
+        let item = PlanItem {
+            slug: "some_arcane".into(),
+            platinum: 20,
+            quantity: 1,
+            order_type: "sell".into(),
+            visible: false,
+            rank: None,
+            subtype: None,
+            reference_low_sell: None,
+        };
+        let key = plan_item_key(&item, &ranked);
+        let body = build_order_body(&item, &ranked);
+        assert_eq!(key.2, body.get("rank").and_then(|v| v.as_u64()));
+        assert_eq!(key.3, None);
+
+        // Subtyped item, bogus requested subtype: both fall back to the
+        // catalog's first entry.
+        let relic = WfmCatalogItem {
+            item_id: "item-s".into(),
+            display_name: "Axi A1 Relic".into(),
+            max_rank: None,
+            subtypes: vec!["intact".into(), "radiant".into()],
+        };
+        let item = PlanItem { subtype: Some("nonsense".into()), ..item };
+        let key = plan_item_key(&item, &relic);
+        let body = build_order_body(&item, &relic);
+        assert_eq!(key.2, None);
+        assert_eq!(
+            key.3.as_deref(),
+            body.get("subtype").and_then(|v| v.as_str())
+        );
+        assert_eq!(key.3.as_deref(), Some("intact"));
     }
 
     #[test]

@@ -173,6 +173,9 @@ export interface ItemResult {
   status: 'ok' | 'skipped' | 'error';
   message?: string | null;
   order_id?: string | null;
+  /** 'created' | 'updated' — how an ok row landed on WFM (absent on errors
+   *  and on pre-reconcile companions). */
+  action?: 'created' | 'updated' | null;
 }
 
 export interface PlanResponse {
