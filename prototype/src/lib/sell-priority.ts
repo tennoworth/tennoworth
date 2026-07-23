@@ -146,3 +146,41 @@ export function bandSignal({ price, donchTop, donchBot, lowSell, topBuy }: BandS
   }
   return 'neutral';
 }
+
+// "Top picks" strip — the best rows to act on right now, out of everything
+// already scored above. `MIN_PICK_SCORE` is a first-pass guess, not a
+// measured threshold: 20 plat/day filters out the long tail of items that
+// technically clear sell_score > 0 but aren't worth a user's attention.
+// Tune once we have usage data.
+export const MIN_PICK_SCORE = 20; // tunable floor, plat/day — first-pass guess, not measured
+export const MAX_PICKS = 5;
+
+// Only the fields selectPicks actually reads. Generic-constrained so the
+// caller's full row shape (name, slug, timing, clearing_price, …) passes
+// through untouched — the picks UI and the listing modal both need most of
+// that shape, so returning a stripped-down copy would just force a second
+// lookup back into `results` for every row a pick surfaces.
+export interface PickCandidate {
+  sellable: number;
+  patience: boolean;
+  sell_score: number;
+}
+
+export interface SelectPicksOptions {
+  cap?: number;
+  minScore?: number;
+}
+
+// Rows must already be sorted best-first (sell_score desc) — App.svelte's
+// computeResults() does that once for the whole table. This function only
+// filters and truncates: re-sorting here would cost nothing today but would
+// silently paper over a caller that stopped guaranteeing the order, which is
+// exactly the kind of bug that should be visible, not masked.
+export function selectPicks<T extends PickCandidate>(
+  rows: T[],
+  { cap = MAX_PICKS, minScore = MIN_PICK_SCORE }: SelectPicksOptions = {}
+): T[] {
+  return rows
+    .filter((r) => r.sellable > 0 && !r.patience && r.sell_score >= minScore)
+    .slice(0, cap);
+}
