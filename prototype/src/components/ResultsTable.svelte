@@ -389,7 +389,7 @@
         {@const d = rowDelta(r)}
         <tr class:row-dim={r.sellable <= 0}>
           {#each columns as col}
-            <td class={col.align}>
+            <td class="{col.align} col-{col.key}">
               {#if col.key === 'name'}
                 <a
                   href="https://warframe.market/items/{r.slug}"
@@ -525,7 +525,7 @@
   .wrap {
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 8px;
     /* Vertical: clip; Horizontal: scroll. Default `overflow: hidden`
        was clipping ~10 of 13 columns on tablet / phone widths — the
        table itself is intrinsically wide, so let the user scroll it
@@ -573,12 +573,15 @@
     cursor: pointer;
     background: transparent;
     font-family: inherit;
+    /* Filter chips share .tag's outline voice; inactive chips dim their
+       outline so the active one reads by border weight, not by a fill. */
+    border-color: color-mix(in srgb, currentColor 45%, transparent);
     transition: background 120ms ease, border-color 120ms ease;
   }
-  .pill-chip:hover { background: rgba(255,255,255,0.04); }
+  .pill-chip:hover { border-color: currentColor; }
   .pill-chip.on {
-    background: color-mix(in srgb, currentColor 14%, transparent);
     border-color: currentColor;
+    background: var(--panel-2);
   }
   .pill-n {
     opacity: 0.65;
@@ -594,13 +597,23 @@
     /* Tightened from 12px → 8px horizontal so all 14 default columns fit the
        capped content width without clipping "Potential" off the right edge.
        Still scrolls (with a visible scrollbar) on narrow laptop widths. */
-    padding: 7px 8px;
+    padding: 8px;
     text-align: left;
-    border-bottom: 1px solid var(--border);
+  }
+  td {
+    border-bottom: 1px solid var(--hairline);
+    font-size: 13px;
+    color: var(--muted);
   }
   th {
     background: var(--panel-2);
+    border-bottom: 1px solid var(--border);
+    font-size: 10px;
     font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    white-space: nowrap;
     cursor: pointer;
     user-select: none;
     position: sticky;
@@ -633,7 +646,6 @@
   .info-btn:focus {
     color: var(--accent);
     border-color: var(--accent);
-    outline: none;
   }
   /* Click-popover anchored under the `?` button. Stays inside the table
      visually but z-indexed above sticky headers; the click-outside
@@ -671,11 +683,14 @@
     min-width: 60px;
     font-weight: 600;
   }
-  th:hover { background: #232733; }
+  th:hover { background: #1D2733; }
   th.right, td.right { text-align: right; }
   th.right .hcontent { justify-content: flex-end; }
   th.active { color: var(--accent); }
-  tbody tr:hover { background: rgba(255,255,255,0.02); }
+  tbody tr:nth-child(even) { background: var(--zebra); }
+  tbody tr:hover td { background: var(--panel-2); }
+  td.col-name { color: var(--fg); }
+  td.col-sell_score { color: var(--fg); font-weight: 600; }
   /* Rows with nothing left to sell (leveled gear ate the whole stack, or
      the "keep copies" reserve did) stay visible but recede — still useful
      as inventory context, not an action item. */
@@ -741,9 +756,10 @@
     margin-left: 6px;
     padding: 0 5px;
     font-size: 9.5px;
-    letter-spacing: 0.04em;
+    font-weight: 600;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    border: 1px solid color-mix(in srgb, var(--ducat) 40%, var(--border));
+    border: 1px solid currentColor;
     color: var(--ducat);
     border-radius: 3px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -753,50 +769,32 @@
   /* "patience" tag — quiet so it doesn't compete with the item name, but
      present enough that a scan picks it up. Used for items with vol_48h < 2,
      i.e. listings that exist but rarely clear. */
+  /* Status badges: thin outlines in the tag's own colour (border rides
+     currentColor) — never filled backgrounds. */
   .tag {
     display: inline-block;
     margin-left: 6px;
     padding: 1px 6px;
-    font-size: 10px;
-    letter-spacing: 0.04em;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    border: 1px solid var(--border);
-    border-radius: 4px;
+    border: 1px solid currentColor;
+    border-radius: 3px;
     color: var(--muted);
     vertical-align: middle;
   }
-  .tag.patience {
-    color: var(--warn);
-    border-color: color-mix(in srgb, var(--warn) 30%, var(--border));
-  }
+  .tag.patience { color: var(--muted); }
   /* Vault: a hard sell-signal for vaulted primes, lighter signal for
      vaulting-soon. Augment chip is informational only (re-buy cost). */
-  .tag.vaulted {
-    color: var(--bad);
-    border-color: color-mix(in srgb, var(--bad) 35%, var(--border));
-  }
-  .tag.vaulting-soon {
-    color: var(--warn);
-    border-color: color-mix(in srgb, var(--warn) 35%, var(--border));
-  }
-  .tag.augment {
-    color: var(--accent);
-    border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
-  }
+  .tag.vaulted { color: var(--bad); }
+  .tag.vaulting-soon { color: var(--warn); }
+  .tag.augment { color: var(--accent); }
   /* Timing: "hold" warns you're near the 90d low (don't dump into a trough —
      e.g. a Baro-flooded mod); "peak" marks a price near its 90d high. */
-  .tag.hold {
-    color: var(--warn);
-    border-color: color-mix(in srgb, var(--warn) 30%, var(--border));
-  }
-  .tag.peak {
-    color: var(--good);
-    border-color: color-mix(in srgb, var(--good) 35%, var(--border));
-  }
-  .tag.relic-tag {
-    color: var(--muted);
-    border-color: color-mix(in srgb, var(--muted) 30%, var(--border));
-  }
+  .tag.hold { color: var(--warn); }
+  .tag.peak { color: var(--good); }
+  .tag.relic-tag { color: var(--muted); }
 
   .pager {
     display: flex;
@@ -804,7 +802,7 @@
     justify-content: space-between;
     gap: 12px;
     padding: 10px 14px;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--hairline);
     flex-wrap: wrap;
   }
   .pager-controls {
@@ -820,7 +818,7 @@
     color: var(--fg);
     font-size: 12px;
     padding: 4px 10px;
-    border-radius: 6px;
+    border-radius: 5px;
     cursor: pointer;
     transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
   }
@@ -842,9 +840,9 @@
   .page-size select {
     font: inherit;
     color: var(--fg);
-    background: var(--panel);
+    background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: 4px;
     padding: 3px 6px;
   }
 </style>

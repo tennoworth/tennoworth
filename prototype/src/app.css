@@ -1,17 +1,25 @@
 :root {
-  --bg: #0e0f12;
-  --panel: #16181d;
-  --panel-2: #1c1f26;
-  --border: #262a33;
-  --fg: #d8dde6;
-  --muted: #7a8089;
-  --accent: #5ec8ff;
-  --good: #6ed99a;
-  --warn: #e9c46a;
-  --bad: #e76f51;
+  --bg: #0D1116;
+  --panel: #131920;
+  --panel-2: #182028;
+  /* Container outlines only — deliberately brighter than the old #262a33
+     so panels read as carved. Inner divisions (row separators, cell
+     borders) use --hairline instead. */
+  --border: #2E3B4B;
+  --hairline: #202A35;
+  --zebra: #10161D;
+  --fg: #DAE3ED;
+  --muted: #8A98A8;
+  /* Decorative only (nav group labels, version strings) — never for
+     real information; that floor is --muted. */
+  --faint: #596675;
+  --accent: #4E9EEA;
+  --good: #56BB80;
+  --warn: #C79A50;
+  --bad: #D97680;
   /* Warm ducat-coin tone — used only on the ducats column + ducat-deal
      badge so the colour reads as a domain signal, not a generic accent. */
-  --ducat: #c9a14a;
+  --ducat: #C79A50;
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color-scheme: dark;
 }
@@ -25,22 +33,23 @@ body {
   line-height: 1.5;
 }
 a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button {
   font: inherit;
   color: var(--fg);
   background: var(--panel-2);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 5px;
   padding: 6px 12px;
   cursor: pointer;
 }
-button:hover:not(:disabled) { background: #232733; }
+button:hover:not(:disabled) { background: #1D2733; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 input[type="text"], input[type="number"] {
   font: inherit;
   color: var(--fg);
-  background: var(--panel);
+  background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: 4px;
   padding: 6px 10px;
 }
