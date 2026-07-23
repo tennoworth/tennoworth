@@ -17,7 +17,7 @@
   import { flattenInventory, extractKeptLvls } from './lib/inventory';
   import { loadCatalogs, resolvePath, type Catalogs } from './lib/resolver';
   import { loadMarket, lookup } from './lib/market';
-  import { scoreRow, bandSignal, clearingPrice, sellableQty, LIQUID_VOL } from './lib/sell-priority';
+  import { scoreRow, bandSignal, clearingPrice, sellableQty, selectPicks, LIQUID_VOL, MIN_PICK_SCORE } from './lib/sell-priority';
 
   const APP_VERSION = __APP_VERSION__;
   const APP_COMMIT = __APP_COMMIT__;
@@ -921,6 +921,54 @@
     results.reduce((s, r) => s + r.potential_plat, 0)
   );
 
+  // Top picks strip. Built from `results`, which is already sorted best-first,
+  // so selectPicks is a cheap filter+slice — no rescoring. Deliberately reads
+  // `results` rather than `tableView.rows`: the table's own local name-search
+  // box and pill-filter chips only narrow `tableView.rows`, so picks stay
+  // "global" with respect to those. They are NOT independent of the filter
+  // rail / active preset, though — computeResults() reads minPrice/minOwned/
+  // typeFilter/hideAtLvl/activeTags and the active preset's own floors
+  // (vaultOnly/ducatsOnly/minVol/minMedian) directly rather than taking them
+  // as parameters, so `results` (and therefore picks) narrows along with
+  // whatever preset the user has selected. True preset-independence would
+  // need computeResults to accept filter overrides — out of scope here.
+  let allPicks = $derived.by(() => selectPicks(results));
+  // Snooze is session-only, no persistence and no new localStorage key — a
+  // dismissed pick reappearing on reload is the honest, cheap behaviour; it
+  // isn't worth a storage-key version bump for a "hide until refresh" nicety.
+  let snoozedPicks = $state(new Set());
+  let picks = $derived(allPicks.filter((p) => !snoozedPicks.has(p.key ?? p.slug)));
+  function snoozePick(key) {
+    const next = new Set(snoozedPicks);
+    next.add(key);
+    snoozedPicks = next;
+  }
+
+  // Plain-language reason line for a pick, built only from fields the row
+  // already carries (timing / delta_90d_pct / clearing_price / volume_48h) —
+  // no invented ETAs or destinations. Order of checks mirrors how confident
+  // each signal is: a corroborated peak is the strongest "act now" case,
+  // hold is the strongest "don't" case, then whatever 90d trend exists,
+  // then the plain fallback for a flat/illiquid-trend row.
+  function pickReason(p) {
+    const price = Math.round(p.clearing_price);
+    if (p.timing === 'hold') {
+      return 'Near its 90-day low — selling now leaves plat on the table.';
+    }
+    if (p.timing === 'peak') {
+      return p.delta_90d_pct != null && p.delta_90d_pct > 0
+        ? `Near its 90-day high, up ${Math.round(p.delta_90d_pct)}% — a good moment to list around ${price}p.`
+        : `Near its 90-day high — a good moment to list around ${price}p.`;
+    }
+    if (p.delta_90d_pct != null && p.delta_90d_pct >= 1) {
+      return `Up ${Math.round(p.delta_90d_pct)}% vs its 90-day baseline — clears around ${price}p at current demand.`;
+    }
+    if (p.delta_90d_pct != null && p.delta_90d_pct <= -1) {
+      return `Down ${Math.abs(Math.round(p.delta_90d_pct))}% vs its 90-day baseline — clears around ${price}p at current demand.`;
+    }
+    return `Clears around ${price}p at current demand.`;
+  }
+
   // Friendly diagnosis of WHY the table is empty so we don't just shrug.
   let emptyReason = $derived.by(() => {
     if (results.length > 0 || !resolved.owned.size) return null;
@@ -1049,6 +1097,10 @@
   let pullingInventory = $state(false);   // GET /inventory in flight
   let pullError = $state<string | null>(null);
   let listingOpen = $state(false);
+  // null = the normal bulk "List N on WFM" behaviour (top-50 of the current
+  // view). A picks-strip "List" click stages exactly that one row instead —
+  // same modal, same price/qty editing, no second staging path.
+  let reviewRowsOverride = $state(null);
   // Malformed `#companion=` deep link — surfaced as a dismissible banner rather
   // than swallowed, without disturbing any valid saved connection.
   let deepLinkError = $state<string | null>(null);
@@ -1326,7 +1378,12 @@
   // so the user meets the login/passphrase dialog BEFORE staging 50 rows — the
   // same codes also arrive lazily via the modal's onauthrequired if the
   // session state changed between staging and Send.
-  async function openListingFlow() {
+  //
+  // `overrideRow` is set by a picks-strip "List" click to stage that single
+  // row instead of the top-50 bulk view; unconditional so every call (bulk
+  // included) resets any stale override from a previous picks click.
+  async function openListingFlow(overrideRow = null) {
+    reviewRowsOverride = overrideRow ? [overrideRow] : null;
     if (!isDesktop) {
       listingOpen = true;
       return;
@@ -1832,6 +1889,62 @@
         </div>
       {/if}
 
+      {#if results.length > 0}
+        {#if allPicks.length > 0}
+          <section class="card picks">
+            <div class="picks-head">
+              <div class="picks-title">
+                <h3>Top picks</h3>
+                <span
+                  class="muted"
+                  title="Same Score as the table below — expected plat per day if listed. Picks also need at least 3 trades/48h (so a listing won't just sit) and {MIN_PICK_SCORE}p/day to clear the bar."
+                >Best sells right now, ranked by expected plat/day — thin-volume listings excluded.</span>
+              </div>
+            </div>
+            <div class="picks-body">
+              {#each picks as p, i (p.key ?? p.slug)}
+                <div class="pick-row">
+                  <span class="pick-rank">{i + 1}</span>
+                  <div class="pick-main">
+                    <a
+                      class="pick-name"
+                      href="https://warframe.market/items/{p.slug}"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >{p.name}</a>
+                    <p class="pick-reason" class:hold={p.timing === 'hold'} class:peak={p.timing === 'peak'}>
+                      {pickReason(p)}
+                      <span class="pick-vol">({Math.round(p.volume_48h).toLocaleString()} trades / 48h)</span>
+                    </p>
+                  </div>
+                  <div class="pick-score">~{Math.round(p.sell_score).toLocaleString()}<span class="unit">p/day</span></div>
+                  <div class="pick-actions">
+                    <button class="pick-list" onclick={() => openListingFlow(p)}>List</button>
+                    <button
+                      type="button"
+                      class="pick-snooze"
+                      onclick={() => snoozePick(p.key ?? p.slug)}
+                      aria-label="Hide {p.name} for this session"
+                      title="Hide for this session"
+                    >×</button>
+                  </div>
+                </div>
+              {/each}
+              {#if picks.length === 0}
+                <p class="muted picks-all-snoozed">All picks snoozed for this session.</p>
+              {/if}
+            </div>
+          </section>
+        {:else}
+          <div class="card empty">
+            <div>
+              <strong>No picks clear the bar right now.</strong>
+              <p class="muted">Nothing owned trades often enough and scores high enough to headline — check the table below for the rest.</p>
+            </div>
+          </div>
+        {/if}
+      {/if}
+
       <section class="card">
         <div class="row presets-row">
           {#each Object.entries(PRESETS) as [name, preset]}
@@ -1850,7 +1963,7 @@
             <button
               class="list-cta"
               data-testid="desktop-list"
-              onclick={openListingFlow}
+              onclick={() => openListingFlow()}
               disabled={listableRows.length === 0}
               title="Stage the top rows of the current view (preset + sort) for listing. The in-table name filter and badge chips are not applied — review each row in the modal before sending."
             >List {Math.min(listableRows.length, 50)} on WFM</button>
@@ -2794,9 +2907,10 @@
      in desktop mode (typed needs_login/needs_unlock rejections). -->
 <ListingReviewModal
   bind:open={listingOpen}
-  rows={listableRows.slice(0, 50)}
+  rows={reviewRowsOverride ?? listableRows.slice(0, 50)}
   {transport}
   onauthrequired={(code) => openWfmAuthDialog(code, 'list')}
+  onclose={() => (reviewRowsOverride = null)}
 />
 
 <!-- Assistant is still a loopback-companion surface (its drawer keys off the
@@ -3727,6 +3841,78 @@
     color: var(--good);
     margin-left: 4px;
   }
+
+  /* Top picks strip. Same carved-panel shell as ResultsTable's .wrap — a
+     panel border with a raised (--panel-2) header bar — rather than the
+     uniform .card padding used by set-recos/relic-planner, so the picks'
+     one-line "what qualifies" copy reads as a fixed header over a list of
+     rows, not just another item in the list. Rows are hairline-divided,
+     matching .reco below. */
+  .picks { padding: 0; overflow: hidden; }
+  .picks-head {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    padding: 12px 16px;
+    background: var(--panel-2);
+    border-bottom: 1px solid var(--border);
+  }
+  .picks-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .picks-title h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--fg); }
+  .picks-body { display: flex; flex-direction: column; padding: 0 16px; }
+  .pick-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 0;
+    border-top: 1px solid var(--hairline);
+  }
+  .pick-row:first-of-type { border-top: none; }
+  .pick-rank {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    color: var(--muted);
+    width: 14px;
+    flex-shrink: 0;
+    text-align: right;
+  }
+  .pick-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+  .pick-name { color: var(--fg); text-decoration: none; font-weight: 600; font-size: 13px; }
+  .pick-name:hover { color: var(--accent); text-decoration: underline; }
+  .pick-reason { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+  /* Timing tint mirrors .tag.hold/.tag.peak in ResultsTable — same signal,
+     same colour, so the strip and the table below read as one vocabulary. */
+  .pick-reason.hold { color: var(--warn); }
+  .pick-reason.peak { color: var(--good); }
+  .pick-vol {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    color: var(--muted);
+    margin-left: 2px;
+  }
+  .pick-score {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--fg);
+    flex-shrink: 0;
+    text-align: right;
+    min-width: 64px;
+  }
+  .pick-score .unit { font-size: 11px; color: var(--muted); margin-left: 2px; }
+  .pick-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .pick-list { font-size: 12px; padding: 5px 12px; }
+  .pick-snooze {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 4px 7px;
+  }
+  .pick-snooze:hover { color: var(--bad); }
+  .picks-all-snoozed { padding: 12px 0; margin: 0; }
 
   /* Baro card. Quiet by default (countdown mode); flips to a warm-gold
      border when Baro is actively visiting so the user can't miss the

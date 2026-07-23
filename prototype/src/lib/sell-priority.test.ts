@@ -1,6 +1,6 @@
 // @ts-nocheck — vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
 import { describe, it, expect } from 'vitest';
-import { scoreRow, bandSignal, clearingPrice, sellableQty } from './sell-priority.js';
+import { scoreRow, bandSignal, clearingPrice, sellableQty, selectPicks, MIN_PICK_SCORE, MAX_PICKS } from './sell-priority.js';
 
 describe('scoreRow', () => {
   it('returns zero score with no market data', () => {
@@ -211,5 +211,60 @@ describe('bandSignal', () => {
 
   it('does not let the ask gap interfere with hold', () => {
     expect(bandSignal({ price: 28, donchBot: 25, donchTop: 66, lowSell: 1 })).toBe('hold');
+  });
+});
+
+describe('selectPicks', () => {
+  // Minimal row shape — real callers pass the full `results` row (name,
+  // slug, timing, clearing_price, …); selectPicks only reads these three.
+  function row(overrides = {}) {
+    return { sellable: 5, patience: false, sell_score: 50, ...overrides };
+  }
+
+  it('returns nothing for empty input', () => {
+    expect(selectPicks([])).toEqual([]);
+  });
+
+  it('excludes rows below the score floor', () => {
+    const rows = [row({ sell_score: 5 }), row({ sell_score: 19.9 })];
+    expect(selectPicks(rows, { minScore: 20 })).toEqual([]);
+    // default floor (MIN_PICK_SCORE) behaves the same without an explicit option
+    expect(selectPicks(rows)).toEqual([]);
+  });
+
+  it('excludes patience rows even when the score is high', () => {
+    const rows = [row({ sell_score: 500, patience: true })];
+    expect(selectPicks(rows)).toEqual([]);
+  });
+
+  it('excludes rows with nothing sellable', () => {
+    const rows = [row({ sell_score: 500, sellable: 0 })];
+    expect(selectPicks(rows)).toEqual([]);
+  });
+
+  it('respects an explicit cap', () => {
+    const rows = Array.from({ length: 10 }, (_, i) => row({ sell_score: 100 - i, key: i }));
+    const picks = selectPicks(rows, { cap: 3 });
+    expect(picks).toHaveLength(3);
+    expect(picks.map((r) => r.key)).toEqual([0, 1, 2]);
+  });
+
+  it('defaults the cap to MAX_PICKS', () => {
+    const rows = Array.from({ length: MAX_PICKS + 3 }, () => row());
+    expect(selectPicks(rows)).toHaveLength(MAX_PICKS);
+  });
+
+  it('defaults the score floor to MIN_PICK_SCORE', () => {
+    const rows = [row({ sell_score: MIN_PICK_SCORE - 0.01 }), row({ sell_score: MIN_PICK_SCORE })];
+    expect(selectPicks(rows)).toEqual([row({ sell_score: MIN_PICK_SCORE })]);
+  });
+
+  it('slices in the given order instead of re-sorting — trusts the caller pre-sorted', () => {
+    // Deliberately out of score order. If selectPicks ever re-sorted, this
+    // would come back ['high', 'low'] and mask a caller regression instead
+    // of surfacing it.
+    const rows = [row({ sell_score: 10, key: 'low' }), row({ sell_score: 90, key: 'high' })];
+    const picks = selectPicks(rows, { minScore: 1 });
+    expect(picks.map((r) => r.key)).toEqual(['low', 'high']);
   });
 });
