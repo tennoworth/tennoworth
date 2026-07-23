@@ -3252,12 +3252,20 @@
   .src-pin-actions button:hover { color: var(--fg); border-color: var(--accent); }
 
   .refresh-wrap { position: relative; }
+  /* Sized and anchored to stay inside the 220px sidebar rail rather than
+     the trigger button's own box. `.refresh-trigger` is only as wide as
+     "Refresh ▾", so a popover anchored `left: 0` at its old 300px width
+     overflowed ~100px past the sidebar's right border, landing on top of
+     unrelated main-content UI. The negative `left` cancels `.src-pin`'s
+     18px inset so the popover's edges line up with the sidebar's own
+     edges instead of the button's — it opens as a contained dropdown,
+     never past the sidebar/main boundary. */
   .refresh-pop {
     position: absolute;
     bottom: calc(100% + 6px);
-    left: 0;
+    left: -10px;
     z-index: 30;
-    width: 300px;
+    width: 204px;
     max-width: 80vw;
     padding: 12px;
     display: flex;
