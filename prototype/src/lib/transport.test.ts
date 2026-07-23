@@ -9,6 +9,7 @@ import {
   desktopWfmStatus,
   desktopWfmLogin,
   desktopWfmUnlock,
+  desktopTrySilentUnlock,
   desktopWfmLogout,
 } from './transport.js';
 import { CompanionUnreachableError } from './companion.js';
@@ -240,21 +241,39 @@ describe('desktop WFM auth ops', () => {
   it('desktopWfmLogin() passes credentials through and resolves void', async () => {
     const invoke = vi.fn().mockResolvedValue(null);
     installTauri(invoke);
-    await desktopWfmLogin('me@example.com', 'pw', 'a-long-enough-passphrase', 'pc');
+    await desktopWfmLogin('me@example.com', 'pw', 'a-long-enough-passphrase', 'pc', true);
     expect(invoke).toHaveBeenCalledWith('wfm_login', {
       email: 'me@example.com',
       password: 'pw',
       passphrase: 'a-long-enough-passphrase',
       platform: 'pc',
+      remember: true,
     });
   });
 
   it('desktopWfmUnlock() surfaces bad_passphrase as a typed DesktopCmdError', async () => {
     const invoke = vi.fn().mockRejectedValue({ code: 'bad_passphrase', message: 'Wrong passphrase, or the login file was modified.' });
     installTauri(invoke);
-    const err = await desktopWfmUnlock('nope').catch((e) => e);
+    const err = await desktopWfmUnlock('nope', false).catch((e) => e);
     expect(err).toBeInstanceOf(DesktopCmdError);
     expect(err.code).toBe('bad_passphrase');
+  });
+
+  it('desktopWfmUnlock() forwards the remember flag', async () => {
+    const invoke = vi.fn().mockResolvedValue(null);
+    installTauri(invoke);
+    await desktopWfmUnlock('a-long-enough-passphrase', true);
+    expect(invoke).toHaveBeenCalledWith('unlock_jwt', {
+      passphrase: 'a-long-enough-passphrase',
+      remember: true,
+    });
+  });
+
+  it('desktopTrySilentUnlock() resolves the keyring verdict as a plain boolean', async () => {
+    const invoke = vi.fn().mockResolvedValue(false);
+    installTauri(invoke);
+    await expect(desktopTrySilentUnlock()).resolves.toBe(false);
+    expect(invoke).toHaveBeenCalledWith('try_silent_unlock');
   });
 
   it('desktopWfmLogout() invokes wfm_logout', async () => {
