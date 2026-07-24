@@ -1,0 +1,71 @@
+{
+  "path_name_guess_cases": [
+    {
+      "path": "/Lotus/Types/Recipes/Weapons/WeaponParts/SagekPrimeBarrelBlueprint",
+      "expected": "Sagek Prime Barrel"
+    },
+    {
+      "path": "/Lotus/Types/Recipes/WarframeRecipes/VoltPrimeChassisComponent",
+      "expected": "Volt Prime Chassis"
+    },
+    {
+      "comment": "double-suffix strip: Component then Blueprint, in that order",
+      "path": "/Lotus/Foo/ThingComponentBlueprint",
+      "expected": "Thing"
+    },
+    {
+      "comment": "empty basename after trailing slash",
+      "path": "/Lotus/Foo/",
+      "expected": null
+    },
+    {
+      "comment": "no path separator at all; only lowercase->uppercase is a boundary, so the A/N run in AName does not split",
+      "path": "JustAName",
+      "expected": "Just AName"
+    },
+    {
+      "comment": "digit immediately before a capital counts as a word boundary",
+      "path": "/Lotus/Weapons/Mk1Braton",
+      "expected": "Mk1 Braton"
+    },
+    {
+      "comment": "consecutive capitals (acronym-like) do not get split",
+      "path": "/Lotus/Foo/HUDMarker",
+      "expected": "HUDMarker"
+    },
+    {
+      "comment": "suffix alone, nothing left after stripping",
+      "path": "/Lotus/Foo/Blueprint",
+      "expected": null
+    },
+    {
+      "path": "/Lotus/Foo/Bar",
+      "expected": "Bar"
+    }
+  ],
+  "slug_guess_cases": [
+    {
+      "name": "Ash Prime",
+      "expected": "ash_prime"
+    },
+    {
+      "comment": "the case that surfaced the bug: TS used to delete punctuation\n(mk1braton), Rust already turned it into a separator (mk1_braton) —\nWFM's real slug is mk1_braton. TS was fixed to match.",
+      "name": "MK1-Braton",
+      "expected": "mk1_braton"
+    },
+    {
+      "comment": "parens and repeated punctuation collapse to one separator",
+      "name": "Zenith (Prime)",
+      "expected": "zenith_prime"
+    },
+    {
+      "comment": "leading/trailing punctuation and whitespace",
+      "name": "  Wraith -- Twin Vipers  ",
+      "expected": "wraith_twin_vipers"
+    },
+    {
+      "name": "Paracesis",
+      "expected": "paracesis"
+    }
+  ]
+}

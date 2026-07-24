@@ -159,6 +159,25 @@ describe('askAssistant', () => {
     });
   });
 
+  it('maps 429 rate_limited to AssistantError with code rate_limited and the detail preserved', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false, status: 429,
+      json: async () => ({ error: 'rate_limited', detail: 'Too many advisor requests — wait a minute and try again.' }),
+    });
+    await expect(askAssistant(cfg, 'q', [], null)).rejects.toMatchObject({
+      code: 'rate_limited',
+      detail: 'Too many advisor requests — wait a minute and try again.',
+    });
+  });
+
+  it('maps 400 too_large to AssistantError with code too_large', async () => {
+    globalThis.fetch.mockResolvedValue({
+      ok: false, status: 400,
+      json: async () => ({ error: 'too_large' }),
+    });
+    await expect(askAssistant(cfg, 'q', [], null)).rejects.toMatchObject({ code: 'too_large' });
+  });
+
   it('maps 401 to AssistantError with code auth regardless of body', async () => {
     globalThis.fetch.mockResolvedValue({
       ok: false, status: 401,
@@ -195,6 +214,18 @@ describe('assistantErrorMessage', () => {
   it('maps upstream to "The AI service failed: <detail>"', () => {
     expect(assistantErrorMessage(new AssistantError('upstream', 'timeout')))
       .toBe('The AI service failed: timeout');
+  });
+
+  it('maps rate_limited to its detail, or a default copy when detail is absent', () => {
+    expect(assistantErrorMessage(new AssistantError('rate_limited', 'wait 30s')))
+      .toBe('wait 30s');
+    expect(assistantErrorMessage(new AssistantError('rate_limited')))
+      .toMatch(/wait a minute/);
+  });
+
+  it('maps too_large to a fixed "too large" copy', () => {
+    expect(assistantErrorMessage(new AssistantError('too_large')))
+      .toBe('Question or context is too large.');
   });
 
   it('maps auth to the same rejected-token copy as other companion auth failures', () => {

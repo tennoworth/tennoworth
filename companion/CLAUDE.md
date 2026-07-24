@@ -220,7 +220,23 @@ in calling code.
   umask race window) on anything containing a secret or
   partial pending-plan state.
 - Network calls go through `wfm_client()` so the `BROWSER_UA` +
-  timeout policy applies uniformly.
+  timeout policy applies uniformly, and header-building goes through
+  `wfm_client::wfm_headers()` / `wfm_authed_headers()` so the
+  Crossplay/Platform/Language (+ Cookie/Origin/Referer for authed calls)
+  set stays uniform too — don't hand-roll `.header(...)` chains at a new
+  call site.
+- Order-mutation calls (create/update/delete) go through
+  `listing.rs`'s `send_with_retry()` — a short retry on transport
+  errors and 5xx only, never 4xx (those are semantic and retrying won't
+  help). Mirror this for any new order-mutation call site; a one-shot
+  `.send()` here means a single dropped packet mid-batch permanently
+  fails that item.
+- Shared dependency versions (reqwest, serde, serde_json, anyhow,
+  base64) live once in the workspace root's `[workspace.dependencies]`.
+  A new member crate should inherit via `dep = { workspace = true }`,
+  not pin its own version — that's how two of them drifted their
+  `reqwest` feature sets before anyone noticed (Cargo was silently
+  unifying the build anyway; only the *declaration* had gone stale).
 - Cross-compile Linux → Windows works with `mingw-w64-gcc` system
   package + `rustup target add x86_64-pc-windows-gnu`, but CI uses a
   native Windows runner so we don't need to.

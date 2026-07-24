@@ -39,8 +39,10 @@ const WFM_BOOTSTRAP_URL: &str = "https://warframe.market/auth/signin";
 pub const JWT_FORMAT: &str = "wfminv-jwt-v1";
 pub const JWT_KDF_ITERATIONS: u32 = 600_000;
 
-/// WFM account platforms. `pc` covers Steam & Epic.
-pub const PLATFORMS: [&str; 4] = ["pc", "ps4", "xbox", "switch"];
+/// WFM account platforms. Canonical list lives in wfm-client (shared with
+/// wfm-scrape); re-exported here so existing callers of `auth::PLATFORMS`
+/// don't need to change.
+pub use wfm_client::PLATFORMS;
 
 /// The on-disk encrypted-JWT envelope. Field names + shape are a compat
 /// contract — see the module docs. Mirrors the web app's encrypted-export
@@ -71,16 +73,11 @@ pub struct CipherParams {
 
 /// Reject a mistyped platform up front — an unknown value would otherwise be
 /// baked into the encrypted JWT and silently authenticate against the wrong
-/// (or a non-existent) WFM market on every later serve.
+/// (or a non-existent) WFM market on every later serve. Thin wrapper over
+/// wfm-client's canonical validator, kept anyhow-flavored for this crate's
+/// existing callers.
 pub fn validate_platform(platform: &str) -> Result<()> {
-    if !PLATFORMS.contains(&platform) {
-        bail!(
-            "Unknown --platform '{}'. Use one of: {}. (pc covers Steam & Epic.)",
-            platform,
-            PLATFORMS.join(", ")
-        );
-    }
-    Ok(())
+    wfm_client::validate_platform(platform).map_err(|e| anyhow!(e))
 }
 
 /// GET the signin page: build a cookie-storing client (the session cookie set
@@ -251,16 +248,13 @@ pub fn decrypt_jwt(blob: &EncryptedJwt, passphrase: &str) -> Result<String> {
 /// Resolve the WFM username (`data.slug`) for a decrypted JWT. Used when
 /// warming listing credentials.
 pub fn fetch_wfm_me(client: &Client, jwt: &str, platform: &str) -> Result<String> {
-    let resp = client
-        .get("https://api.warframe.market/v2/me")
-        .header("Platform", platform)
-        .header("Language", "en")
-        .header("Crossplay", "true")
-        .header("Cookie", format!("JWT={jwt}"))
-        .header("Origin", "https://warframe.market")
-        .header("Referer", "https://warframe.market/")
-        .send()
-        .context("/v2/me request failed")?;
+    let resp = wfm_client::wfm_authed_headers(
+        client.get("https://api.warframe.market/v2/me"),
+        platform,
+        jwt,
+    )
+    .send()
+    .context("/v2/me request failed")?;
     let status = resp.status();
     let body: serde_json::Value = resp.json().context("parsing /v2/me")?;
     if !status.is_success() {
@@ -317,5 +311,24 @@ mod tests {
         assert!(validate_platform("switch").is_ok());
         assert!(validate_platform("PC").is_err());
         assert!(validate_platform("playstation").is_err());
+    }
+
+    // Parity gate: prototype/src/lib/crypto.ts's KDF_ITERATIONS must match this
+    // crate's JWT_KDF_ITERATIONS exactly — a mismatch bricks JWT decryption
+    // with a false "wrong passphrase" error. Both sides read
+    // tests/fixtures/jwt-kdf.json.
+    #[test]
+    fn jwt_kdf_iterations_matches_the_shared_fixture() {
+        #[derive(serde::Deserialize)]
+        struct Fixture {
+            iterations: u32,
+        }
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/jwt-kdf.json"
+        );
+        let raw = std::fs::read_to_string(path).expect("read the shared KDF fixture");
+        let fx: Fixture = serde_json::from_str(&raw).expect("parse the KDF fixture");
+        assert_eq!(JWT_KDF_ITERATIONS, fx.iterations);
     }
 }

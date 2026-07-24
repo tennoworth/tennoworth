@@ -56,13 +56,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: ./.github/actions/setup-rust
         with:
           targets: ${{ matrix.target }}
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: companion
 
       # Runs on both OS legs — release defense-in-depth: never ship a binary
       # from a tree whose tests don't pass on that platform. Scoped to the

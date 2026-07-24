@@ -5589,6 +5589,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "sysinfo",
+ "wfm-client",
  "windows 0.58.0",
 ]
 

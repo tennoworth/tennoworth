@@ -120,4 +120,28 @@ mod tests {
     fn invalid_json_is_an_error() {
         assert!(extract_items(b"not json").is_err());
     }
+
+    // Parity gate: prototype/src/lib/inventory.ts walks the same DE categories
+    // to build the sell table. Both sides read
+    // tests/fixtures/tradeable-categories.json so a category added on one side
+    // and forgotten on the other fails CI instead of silently under-counting.
+    #[test]
+    fn tradeable_categories_matches_the_shared_fixture() {
+        #[derive(serde::Deserialize)]
+        struct Fixture {
+            categories: Vec<String>,
+        }
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/tradeable-categories.json"
+        );
+        let raw = std::fs::read_to_string(path).expect("read the shared category fixture");
+        let fx: Fixture = serde_json::from_str(&raw).expect("parse the category fixture");
+
+        let mut got: Vec<&str> = TRADEABLE_CATEGORIES.to_vec();
+        got.sort_unstable();
+        let mut want: Vec<&str> = fx.categories.iter().map(String::as_str).collect();
+        want.sort_unstable();
+        assert_eq!(got, want);
+    }
 }

@@ -1,6 +1,8 @@
 <script lang="ts">
   import { fetchOrders, updateOrder, deleteOrder } from '../lib/companion';
   import type { CompanionConfig } from '../lib/types';
+  import { MAX_PLATINUM } from '../lib/limits';
+  import { humanError } from '../lib/errors';
 
   // WFM order shape is open — many fields appear depending on the
   // endpoint version (v1 vs v2). We type only what we read.
@@ -56,7 +58,7 @@
         phase = 'done';
       })
       .catch((e: unknown) => {
-        error = e instanceof Error ? e.message : String(e);
+        error = humanError(e);
         phase = 'error';
       });
   }
@@ -72,10 +74,6 @@
     const next = new Set(busyIds);
     if (on) next.add(id); else next.delete(id);
     busyIds = next;
-  }
-
-  function errMsg(e: unknown): string {
-    return e instanceof Error ? e.message : String(e);
   }
 
   // The companion relays WFM rejections as HTTP 200 with a per-order
@@ -94,7 +92,7 @@
       o.visible = !o.visible;
       orders = [...orders];
     } catch (e) {
-      alert(`Couldn't toggle: ${errMsg(e)}`);
+      alert(`Couldn't toggle: ${humanError(e)}`);
     } finally {
       markBusy(o.id, false);
     }
@@ -104,9 +102,6 @@
     editingId = o.id;
     editValue = o.platinum;
   }
-
-  // Mirror of the companion's MAX_PLATINUM (which mirrors the WFM UI cap).
-  const MAX_PLATINUM = 3000;
 
   async function saveEdit(o: WfmOrder): Promise<void> {
     if (!config) return;
@@ -123,7 +118,7 @@
       orders = [...orders];
       editingId = null;
     } catch (e) {
-      alert(`Couldn't update: ${errMsg(e)}`);
+      alert(`Couldn't update: ${humanError(e)}`);
     } finally {
       markBusy(o.id, false);
     }
@@ -137,7 +132,7 @@
       await deleteOrder(config, o.id);
       orders = orders.filter((x) => x.id !== o.id);
     } catch (e) {
-      alert(`Couldn't delete: ${errMsg(e)}`);
+      alert(`Couldn't delete: ${humanError(e)}`);
     } finally {
       markBusy(o.id, false);
     }

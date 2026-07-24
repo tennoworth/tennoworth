@@ -2,6 +2,8 @@
 // URL+token in localStorage so the user pastes it once.
 
 import type { CompanionConfig, PendingPlan, PlanResponse, ItemResult } from './types';
+import { humanError } from './errors';
+import { fetchCompanionJson } from './companion-transport';
 
 const STORAGE_KEY = 'wfminv:companion-v1';
 
@@ -233,7 +235,7 @@ export async function getPendingPlan(cfg: CompanionConfig): Promise<PendingPlan 
     if (e instanceof DOMException && (e.name === 'TimeoutError' || e.name === 'AbortError')) {
       throw new Error(`The companion didn't answer /plan/pending in time — is \`serve\` still responding?`);
     }
-    const msg = e instanceof Error ? e.message : String(e);
+    const msg = humanError(e);
     if (/no pending plan|HTTP 404/i.test(msg)) return null;
     throw e;
   }
@@ -256,19 +258,10 @@ async function callCompanion(
   body?: unknown,
   signal?: AbortSignal,
 ): Promise<unknown> {
-  const headers: Record<string, string> = { 'X-Session-Token': cfg.token };
-  const init: RequestInit = { method, headers, targetAddressSpace: 'loopback' };
-  if (signal) init.signal = signal;
-  if (body !== undefined) {
-    headers['Content-Type'] = 'application/json';
-    init.body = JSON.stringify(body);
-  }
-  const r = await fetch(`${cfg.baseUrl}${path}`, init);
-  let resp: unknown = null;
-  try { resp = await r.json(); } catch { /* keep null */ }
-  if (!r.ok) {
+  const { ok, status, body: resp } = await fetchCompanionJson(cfg.baseUrl, cfg.token, path, { method, body, signal });
+  if (!ok) {
     const respObj = resp as { error?: unknown } | null;
-    const msg = respObj?.error ?? `HTTP ${r.status}`;
+    const msg = respObj?.error ?? `HTTP ${status}`;
     throw new Error(typeof msg === 'string' ? msg : JSON.stringify(msg));
   }
   return resp;

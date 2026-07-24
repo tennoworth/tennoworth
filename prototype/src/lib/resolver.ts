@@ -36,17 +36,23 @@ export async function loadCatalogs(): Promise<Catalogs> {
   return { uniqueToInfo: new Map(slim) };
 }
 
-function slugGuess(name: string): string {
+// Punctuation becomes a word-separator (not deleted) — WFM's own slugs do
+// the same: "MK1-Braton" -> "mk1_braton", not "mk1braton". Ported 1:1 to
+// companion/tennoworth-desktop/src/sellables.rs's slug_guess(); both are
+// checked against tests/fixtures/name-guess/cases.json.
+export function slugGuess(name: string): string {
   return name
-    .replace(/[^a-zA-Z0-9 ]/g, '')
+    .replace(/[^a-zA-Z0-9 ]/g, ' ')
     .trim()
     .toLowerCase()
     .replace(/\s+/g, '_');
 }
 
 // De-camel-case a path's basename into a display-name guess:
-// ".../SagekPrimeBarrelBlueprint" → "Sagek Prime Barrel".
-function pathNameGuess(path: string): string | null {
+// ".../SagekPrimeBarrelBlueprint" → "Sagek Prime Barrel". Ported 1:1 to
+// companion/tennoworth-desktop/src/sellables.rs's path_name_guess(); both
+// are checked against tests/fixtures/name-guess/cases.json.
+export function pathNameGuess(path: string): string | null {
   let base = path.split('/').pop() ?? '';
   for (const suffix of ['Blueprint', 'Component']) {
     if (base.endsWith(suffix)) base = base.slice(0, -suffix.length);
@@ -60,6 +66,14 @@ function pathNameGuess(path: string): string | null {
 // creating an order. We preserve the refinement so each variant is a
 // separate inventory row and the right subtype reaches the companion at
 // listing time.
+//
+// WFM's live catalog is authoritative for the listing path (it reads
+// subtypes[] directly) — this set only matters for *detecting* a relic by
+// name here. If WFM ever adds a 5th refinement, listing keeps working but
+// this resolver silently fails to recognize that refinement's relics.
+// companion/wfm-core/src/listing.rs has a matching lowercase fixture
+// (search "intact", "exceptional", "flawless", "radiant") used only as
+// test data, not enforcement — keep both lists in sync by hand.
 const REFINEMENTS = new Set(['Intact', 'Exceptional', 'Flawless', 'Radiant']);
 
 function resolveRelic(name: string, market: Market | null | undefined): ResolvedItem | null {

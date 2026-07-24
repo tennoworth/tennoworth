@@ -124,7 +124,11 @@ changes** so old data is silently invalidated.
 `TauriTransport` (`invoke` into wfm-core) once at boot by sniffing
 `window.__TAURI_INTERNALS__`. App-level ops go through the transport;
 `companion.ts` / `assistant.ts` keep their exports for the components that
-import them directly. The HTTP contract itself is unchanged:
+import them directly. Both share their fetch+parse core via
+`companion-transport.ts`'s `fetchCompanionJson()` (same X-Session-Token
+header, same Local Network Access opt-in) — add new companion-HTTP call
+sites through that, not a third hand-rolled fetch. The HTTP contract itself
+is unchanged:
 
 Routes the browser depends on (see `src/lib/companion.ts`):
 - `GET /health` — no auth; `{ok, platform, assistant}`. `assistant` is

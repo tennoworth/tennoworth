@@ -381,6 +381,55 @@ mod tests {
         );
     }
 
+    // ---- name-guess parity (Rust consumer side) ----------------------------
+    // The TS canonical side lives in prototype/src/lib/resolver.parity.test.ts;
+    // both check the SAME fixture (tests/fixtures/name-guess/cases.json). If
+    // this fails but the TS passes (or vice versa), path_name_guess/slug_guess
+    // have diverged from resolver.ts's pathNameGuess/slugGuess.
+    #[derive(Deserialize)]
+    struct PathGuessCase {
+        path: String,
+        expected: Option<String>,
+    }
+    #[derive(Deserialize)]
+    struct SlugGuessCase {
+        name: String,
+        expected: String,
+    }
+    #[derive(Deserialize)]
+    struct NameGuessFixture {
+        path_name_guess_cases: Vec<PathGuessCase>,
+        slug_guess_cases: Vec<SlugGuessCase>,
+    }
+
+    #[test]
+    fn name_guess_matches_resolver_ts_on_shared_fixture() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/name-guess/cases.json"
+        );
+        let raw = std::fs::read_to_string(path).expect("read the shared name-guess fixture");
+        let fx: NameGuessFixture =
+            serde_json::from_str(&raw).expect("parse the name-guess fixture");
+
+        for c in &fx.path_name_guess_cases {
+            assert_eq!(
+                path_name_guess(&c.path),
+                c.expected,
+                "path_name_guess({:?}) diverged from resolver.ts's pathNameGuess",
+                c.path
+            );
+        }
+        for c in &fx.slug_guess_cases {
+            assert_eq!(
+                slug_guess(&c.name),
+                c.expected,
+                "slug_guess({:?}) diverged from resolver.ts's slugGuess",
+                c.name
+            );
+        }
+    }
+
     // ---- resolver (against the real bundled catalogs) ---------------------
     #[test]
     fn resolves_prime_part_via_path_to_info() {
