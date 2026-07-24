@@ -6,7 +6,11 @@
 # relay.
 [package]
 name = "tennoworth-desktop"
-version = "0.1.0"
+# Keep in lockstep with tauri.conf.json's version and the desktop-v* tag:
+# this is CARGO_PKG_VERSION, what update.rs reports as the installed version
+# and what the updater compares against latest.json. release-desktop.yml
+# fails the build if the three ever drift apart.
+version = "0.3.0"
 edition = "2021"
 description = "TennoWorth desktop shell (Tauri v2). Webview loads the SPA; wfm-core invoked via Tauri commands (health, scan_inventory)."
 license = "MIT"

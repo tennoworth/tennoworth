@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "TennoWorth",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "identifier": "app.tennoworth.desktop",
   "build": {
     "frontendDist": "../../prototype/dist-desktop",
@@ -29,9 +29,9 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "PLACEHOLDER-NOT-A-REAL-KEY: generate the updater keypair OFFLINE with `cargo tauri signer generate` and paste the .pub file contents here — docs/signing-runbook.md section 9. Until then every signature check fails and no update can ever install.",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI1MzkwQjZDRDM4RDBCRUIKUldUckM0M1RiQXM1SlN2NXVDditnNUFZekpOczRhN3NxMEI2NVVlcnRsNFd4cTNnQ0tXMVJ3ZDYK",
       "endpoints": [
-        "https://github.com/tennoworth/tennoworth/releases/latest/download/latest.json"
+        "https://github.com/tennoworth/tennoworth/releases/download/desktop-latest/latest.json"
       ]
     }
   }
