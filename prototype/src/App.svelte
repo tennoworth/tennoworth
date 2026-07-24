@@ -30,9 +30,9 @@
   import { encryptPayload, decryptPayload, isEncrypted } from './lib/crypto';
   import {
     loadCompanionConfig, saveCompanionConfig, clearCompanionConfig,
-    parseCompanionUrl, pingCompanion, getPendingPlan,
-    CompanionUnreachableError,
+    parseCompanionUrl,
   } from './lib/companion';
+  import { verifyCompanionConnection, probeLoopbackDenied } from './lib/companion-connect';
   import {
     createTransport, isDesktopRuntime,
     desktopWfmStatus, desktopWfmLogin, desktopWfmUnlock, desktopTrySilentUnlock, DesktopCmdError,
@@ -900,6 +900,11 @@
     return view;
   });
 
+  // The actual connect/error/unreachable classification lives in
+  // lib/companion-connect.ts (unit-testable there); this stays the
+  // $state orchestration plus the stale-async guard (only the newest
+  // verifyGen may commit a result — verifyCompanion can be in flight from
+  // onMount, a manual connect, or Retry at once).
   async function verifyCompanion() {
     if (!companionConfig) return;
     const gen = ++verifyGen;
@@ -907,57 +912,27 @@
     companionError = null;
     loopbackDenied = false;
     unreachableDismissed = false;
-    try {
-      const r = await pingCompanion(companionConfig);
-      if (gen !== verifyGen) return;
-      companionPlatform = r?.platform ?? null;
-      assistantAvailable = r?.assistant === true;
-      // /health is unauthenticated, so a live server with the WRONG token would
-      // still show green here. Confirm the token with one authed call before we
-      // claim connected: getPendingPlan returns null on 404 (no plan) but
-      // throws on a 401 (bad token) — exactly the signal we want. It also
-      // surfaces the Resume option for an interrupted batch. A network reject
-      // HERE is a raw TypeError (not CompanionUnreachableError), so it never
-      // classifies as 'unreachable' — /health already proved reachability.
-      pendingPlan = await getPendingPlan(companionConfig);
-      if (gen !== verifyGen) return;
+    const result = await verifyCompanionConnection(companionConfig);
+    if (gen !== verifyGen) return;
+    if (result.status === 'connected') {
+      companionPlatform = result.platform;
+      assistantAvailable = result.assistant;
+      pendingPlan = result.pendingPlan;
       companionStatus = 'connected';
-    } catch (e) {
-      if (gen !== verifyGen) return;
-      // Only the /health fetch rejecting on an HTTPS origin means "blocked or
-      // serve-down" — the case the cross-view banner exists for. Everything
-      // else (bad token, non-OK HTTP, a post-/health network blip) stays 'error'.
-      if (e instanceof CompanionUnreachableError && location.protocol === 'https:') {
-        companionStatus = 'unreachable';
-        companionError = e.message;
-        void probeLoopbackPermission(gen);
-        return;
-      }
+    } else if (result.status === 'unreachable') {
+      companionStatus = 'unreachable';
+      companionError = result.message;
+      void probeLoopbackPermission(gen);
+    } else {
       companionStatus = 'error';
-      const msg = e.message || String(e);
-      companionError = /401|token/i.test(msg)
-        ? 'Token rejected — re-copy the full URL from the serve output (the token changes every time you restart serve).'
-        : msg;
+      companionError = result.message;
     }
   }
 
-  // Optional supplemental precision for the unreachable banner. If the browser
-  // exposes the loopback/local-network permission and reports it 'denied', we
-  // can state Chrome HAS blocked the request rather than "may have". Wrapped so
-  // an unsupported browser (query throws) or a stale run never affects state.
   async function probeLoopbackPermission(gen) {
-    try {
-      let status;
-      try {
-        status = await navigator.permissions.query({ name: 'loopback-network' });
-      } catch {
-        status = await navigator.permissions.query({ name: 'local-network-access' });
-      }
-      if (gen !== verifyGen) return;
-      if (status?.state === 'denied') loopbackDenied = true;
-    } catch {
-      /* Permissions API absent or the name unsupported — leave the copy generic. */
-    }
+    const denied = await probeLoopbackDenied();
+    if (gen !== verifyGen) return;
+    if (denied) loopbackDenied = true;
   }
 
   // ---- Pending-plan recovery ----
