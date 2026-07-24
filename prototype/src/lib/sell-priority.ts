@@ -107,7 +107,9 @@ export function scoreRow({ owned, m }: SellScoreInput): SellScoreOutput {
 export type TimingState = 'hold' | 'peak' | 'neutral';
 
 export interface BandSignalInput {
-  price: number;
+  // Nullable like the other fields — the function already treats a missing
+  // price as "no signal" via `Number(price) || 0`, same as a missing band.
+  price: number | null;
   donchTop?: number | null;
   donchBot?: number | null;
   lowSell?: number | null;
