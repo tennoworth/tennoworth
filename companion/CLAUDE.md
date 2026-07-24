@@ -191,7 +191,7 @@ shape drift in the agent that watches WFM endpoints.
 
 Every 400 response of the form `{"inputs":{"<field>":"<rule>"}}` we've
 hit is captured here. The body assembly lives in `build_order_body()`
-in `companion/wfm-core/src/listing.rs`; treat that function as the single
+in `companion/wfm-core/src/plan.rs`; treat that function as the single
 source of truth and these notes as the *why*.
 
 | Field | Rule | Notes |

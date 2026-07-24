@@ -14,7 +14,7 @@
 
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Manager, State};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
 /// Emitted to the webview when the launch check finds an update. The SPA also
@@ -153,4 +153,39 @@ pub async fn install_pending(app: &AppHandle) -> Result<(), String> {
         .download_and_install(|_, _| {}, || {})
         .await
         .map_err(|e| format!("Update could not be installed: {e}"))
+}
+
+// ---- Tauri commands -----------------------------------------------------
+
+/// C5: run an update check now. Never rejects — offline / malformed manifest /
+/// any updater failure reads as "no update available" (see `check` above). The
+/// SPA can call this for a manual re-check; the launch path uses the same
+/// routine.
+#[tauri::command]
+pub async fn check_update(app: AppHandle) -> UpdateStatus {
+    check(&app).await
+}
+
+/// The last check's outcome, no network. The SPA reads this at mount so an
+/// `update-available` event emitted before its listener registered is never
+/// lost (`checked: false` means the launch check hasn't completed yet).
+#[tauri::command]
+pub fn update_status(state: State<'_, UpdateState>) -> UpdateStatus {
+    state.last()
+}
+
+/// C5: download + install the pending update — only ever invoked from the
+/// SPA's explicit "Install update" confirmation. Errors (download failure, bad
+/// signature) surface verbatim in the SPA's banner; the running app is
+/// untouched and the update stays retryable.
+#[tauri::command]
+pub async fn install_update(app: AppHandle) -> Result<(), String> {
+    install_pending(&app).await
+}
+
+/// Relaunch to apply an installed update ("apply on restart" — the SPA's
+/// "Restart now" button after a successful install).
+#[tauri::command]
+pub fn restart_app(app: AppHandle) {
+    app.restart()
 }
