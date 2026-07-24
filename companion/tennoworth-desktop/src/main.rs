@@ -145,6 +145,12 @@ fn main() {
             let mut b = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
                 .title("TennoWorth")
                 .inner_size(1200.0, 800.0);
+            // Without an explicit icon the window (and its taskbar/switcher
+            // entry) falls back to a generic WM avatar — tray.rs already
+            // pulls the same compiled-in icon via default_window_icon().
+            if let Some(icon) = app.default_window_icon() {
+                b = b.icon(icon.clone())?;
+            }
             if probe {
                 b = b.initialization_script(probe::build_probe_script(&runtag));
             }
