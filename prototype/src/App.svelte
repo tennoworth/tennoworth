@@ -453,7 +453,7 @@
       await store.saveSnapshot({ invName: name, owned });
       lastUpdated = Date.now();
 
-      results = computeResults(owned);
+      results = computeFilteredResults(owned, market, filterState, reserveCopies);
       phase = 'done';
     } catch (e) {
       console.error(e);
