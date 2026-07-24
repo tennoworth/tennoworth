@@ -15,6 +15,7 @@
   import CopyBtn from './components/CopyBtn.svelte';
   import MarketBrowser from './components/MarketBrowser.svelte';
   import DesktopUpdateBanner from './components/DesktopUpdateBanner.svelte';
+  import WfmAuthDialogs from './components/WfmAuthDialogs.svelte';
   import { flattenInventory, extractKeptLvls } from './lib/inventory';
   import { loadCatalogs, resolvePath, type Catalogs } from './lib/resolver';
   import { loadMarket, lookup } from './lib/market';
@@ -36,7 +37,7 @@
   import { verifyCompanionConnection, probeLoopbackDenied } from './lib/companion-connect';
   import {
     createTransport, isDesktopRuntime,
-    desktopWfmStatus, desktopWfmLogin, desktopWfmUnlock, desktopTrySilentUnlock, DesktopCmdError,
+    desktopWfmStatus, DesktopCmdError,
   } from './lib/transport';
   import type { CompanionConfig, Inventory, Market, OwnedRecord, PendingPlan, ItemResult } from './lib/types';
   import { humanError } from './lib/errors';
@@ -916,7 +917,7 @@
       // pending) and open the matching auth dialog — Resume works after that.
       if (e instanceof DesktopCmdError && (e.code === 'needs_login' || e.code === 'needs_unlock')) {
         resumePhase = 'idle';
-        openWfmAuthDialog(e.code);
+        wfmAuthDialogsRef.open(e.code);
         return;
       }
       resumePhase = 'error';
@@ -990,56 +991,15 @@
   }
 
   // ---- Desktop WFM auth (login / unlock dialogs) -----------------------
-  // The desktop analogue of serve's terminal passphrase prompt. Opened by the
-  // Sell CTA's proactive status check and by the typed needs_login /
-  // needs_unlock rejections listing commands return. Secrets go straight into
-  // the wfm_login / unlock_jwt commands and the bound fields are cleared as
-  // soon as the call returns — nothing lingers in webview state.
-  let wfmLoginDialog = $state();
-  let wfmUnlockDialog = $state();
-  let wfmLoginEmail = $state('');
-  let wfmLoginPassword = $state('');
-  let wfmLoginPassphrase = $state('');
-  let wfmLoginConfirm = $state('');
-  let wfmLoginPlatform = $state('pc');
-  let wfmUnlockPassphrase = $state('');
-  // "Remember on this device" (OS keyring). One preference shared by the
-  // login and unlock dialogs; default on — the browser-cookie parity call.
-  let wfmRemember = $state(true);
-  let wfmAuthBusy = $state(false);
-  let wfmAuthError = $state(null);
-  // What to do once the session unlocks: 'list' re-opens the listing flow the
-  // CTA started; null (the Resume path) leaves the user where they were.
-  let wfmAuthNext = null;
-
-  async function openWfmAuthDialog(code, next = null) {
-    wfmAuthError = null;
-    wfmAuthNext = next;
-    if (code === 'needs_login') {
-      wfmLoginPassword = '';
-      wfmLoginPassphrase = '';
-      wfmLoginConfirm = '';
-      wfmLoginDialog?.showModal();
-    } else {
-      // A remembered device key (OS keyring) unlocks without the modal. Any
-      // miss — no entry, no keyring daemon, stale key — falls through to the
-      // passphrase prompt exactly as before.
-      try {
-        if (await desktopTrySilentUnlock()) {
-          wfmAuthUnlocked();
-          return;
-        }
-      } catch (e) {
-        console.error('silent unlock failed', e);
-      }
-      wfmUnlockPassphrase = '';
-      wfmUnlockDialog?.showModal();
-    }
-  }
-
-  function wfmAuthUnlocked() {
-    if (wfmAuthNext === 'list') listingOpen = true;
-    wfmAuthNext = null;
+  // The desktop analogue of serve's terminal passphrase prompt. The dialogs
+  // themselves, their state, and the login/unlock calls live in
+  // WfmAuthDialogs.svelte; App.svelte triggers them imperatively (three call
+  // sites: the Sell CTA below, doResume's needs_login/needs_unlock rejection,
+  // and ListingReviewModal's onauthrequired) via this ref, and decides what
+  // 'list' means on unlock (open the review modal).
+  let wfmAuthDialogsRef = $state();
+  function handleWfmUnlocked(next) {
+    if (next === 'list') listingOpen = true;
   }
 
   // The Sell CTA routes here. Browser mode opens the review modal directly
@@ -1060,59 +1020,12 @@
     try {
       const s = await desktopWfmStatus();
       if (s.unlocked) listingOpen = true;
-      else openWfmAuthDialog(s.logged_in ? 'needs_unlock' : 'needs_login', 'list');
+      else wfmAuthDialogsRef.open(s.logged_in ? 'needs_unlock' : 'needs_login', 'list');
     } catch (e) {
       // Status probe failed (IPC fault) — open the modal anyway; Send will
       // surface the typed code and route to the right dialog.
       console.error('wfm auth status check failed', e);
       listingOpen = true;
-    }
-  }
-
-  async function performWfmLogin(e) {
-    e?.preventDefault();
-    wfmAuthError = null;
-    if (wfmLoginPassphrase !== wfmLoginConfirm) {
-      wfmAuthError = "Passphrases don't match.";
-      return;
-    }
-    wfmAuthBusy = true;
-    try {
-      await desktopWfmLogin(wfmLoginEmail.trim(), wfmLoginPassword, wfmLoginPassphrase, wfmLoginPlatform, wfmRemember);
-      wfmLoginDialog?.close();
-      wfmAuthUnlocked();
-    } catch (err) {
-      wfmAuthError = err.message || String(err);
-    } finally {
-      wfmLoginPassword = '';
-      wfmLoginPassphrase = '';
-      wfmLoginConfirm = '';
-      wfmAuthBusy = false;
-    }
-  }
-
-  async function performWfmUnlock(e) {
-    e?.preventDefault();
-    wfmAuthError = null;
-    wfmAuthBusy = true;
-    try {
-      await desktopWfmUnlock(wfmUnlockPassphrase, wfmRemember);
-      wfmUnlockDialog?.close();
-      wfmAuthUnlocked();
-    } catch (err) {
-      // The login file vanished between the check and the unlock — switch to
-      // the login dialog instead of asking for a passphrase that can't work.
-      if (err instanceof DesktopCmdError && err.code === 'needs_login') {
-        wfmUnlockDialog?.close();
-        openWfmAuthDialog('needs_login', wfmAuthNext);
-      } else {
-        // bad_passphrase and transient WFM failures stay in the dialog with
-        // their message — retry is a re-type away.
-        wfmAuthError = err.message || String(err);
-      }
-    } finally {
-      wfmUnlockPassphrase = '';
-      wfmAuthBusy = false;
     }
   }
 
@@ -2566,7 +2479,7 @@
   bind:open={listingOpen}
   rows={reviewRowsOverride ?? listableRows.slice(0, 50)}
   {transport}
-  onauthrequired={(code) => openWfmAuthDialog(code, 'list')}
+  onauthrequired={(code) => wfmAuthDialogsRef.open(code, 'list')}
   onclose={() => (reviewRowsOverride = null)}
 />
 
@@ -2585,99 +2498,7 @@
 {/if}
 
 {#if isDesktop}
-<dialog bind:this={wfmLoginDialog} class="cryptobox" data-testid="wfm-login-dialog">
-  <form onsubmit={performWfmLogin}>
-    <header>
-      <h3>Log in to warframe.market</h3>
-      <p class="muted">
-        Listing needs your WFM account once. The sign-in token is encrypted
-        with your passphrase and stored only on this machine; your password is
-        used for this sign-in and never stored.
-      </p>
-    </header>
-    <label>
-      Email
-      <input type="email" autocomplete="username" bind:value={wfmLoginEmail} required autofocus />
-    </label>
-    <label>
-      Password
-      <input type="password" autocomplete="current-password" bind:value={wfmLoginPassword} required />
-    </label>
-    <label>
-      Platform
-      <select bind:value={wfmLoginPlatform}>
-        <option value="pc">PC (Steam &amp; Epic)</option>
-        <option value="ps4">PlayStation</option>
-        <option value="xbox">Xbox</option>
-        <option value="switch">Switch</option>
-      </select>
-    </label>
-    <label>
-      Encryption passphrase
-      <input
-        type="password"
-        autocomplete="new-password"
-        bind:value={wfmLoginPassphrase}
-        placeholder="min 12 characters — guards the stored token"
-        required
-        minlength="12"
-      />
-    </label>
-    <label>
-      Confirm passphrase
-      <input type="password" autocomplete="new-password" bind:value={wfmLoginConfirm} required minlength="12" />
-    </label>
-    <label class="remember">
-      <input type="checkbox" bind:checked={wfmRemember} />
-      Remember on this device — stores the unlock key in your OS keyring
-      (KWallet, GNOME Keyring, Windows Credential Manager) so you're not asked
-      each launch. Never the passphrase itself.
-    </label>
-    {#if wfmAuthError}
-      <div class="err" data-testid="wfm-auth-error">{wfmAuthError}</div>
-    {/if}
-    <footer>
-      <button type="button" class="ghost" onclick={() => wfmLoginDialog?.close()}>Cancel</button>
-      <button type="submit" disabled={wfmAuthBusy}>{wfmAuthBusy ? 'Signing in…' : 'Log in'}</button>
-    </footer>
-  </form>
-</dialog>
-
-<dialog bind:this={wfmUnlockDialog} class="cryptobox" data-testid="wfm-unlock-dialog">
-  <form onsubmit={performWfmUnlock}>
-    <header>
-      <h3>Unlock warframe.market listing</h3>
-      <p class="muted">
-        Enter the passphrase you set at login to decrypt your WFM token for
-        this session. It stays in the app's memory — never on disk, never in
-        this window.
-      </p>
-    </header>
-    <label>
-      Passphrase
-      <input
-        type="password"
-        autocomplete="current-password"
-        data-testid="wfm-unlock-pass"
-        bind:value={wfmUnlockPassphrase}
-        required
-        autofocus
-      />
-    </label>
-    <label class="remember">
-      <input type="checkbox" bind:checked={wfmRemember} />
-      Remember on this device — stores the unlock key in your OS keyring so
-      you're not asked each launch. Never the passphrase itself.
-    </label>
-    {#if wfmAuthError}
-      <div class="err" data-testid="wfm-auth-error">{wfmAuthError}</div>
-    {/if}
-    <footer>
-      <button type="button" class="ghost" onclick={() => wfmUnlockDialog?.close()}>Cancel</button>
-      <button type="submit" disabled={wfmAuthBusy}>{wfmAuthBusy ? 'Unlocking…' : 'Unlock'}</button>
-    </footer>
-  </form>
-</dialog>
+  <WfmAuthDialogs bind:this={wfmAuthDialogsRef} onunlocked={handleWfmUnlocked} />
 {/if}
 
 <dialog bind:this={exportDialog} class="cryptobox">
@@ -3897,19 +3718,7 @@
     text-transform: uppercase;
     color: var(--muted);
   }
-  dialog.cryptobox label.remember {
-    flex-direction: row;
-    align-items: flex-start;
-    gap: 8px;
-    text-transform: none;
-    letter-spacing: normal;
-    font-size: 12px;
-    line-height: 1.45;
-  }
-  dialog.cryptobox label.remember input { margin-top: 2px; }
-  dialog.cryptobox input[type="password"],
-  dialog.cryptobox input[type="email"],
-  dialog.cryptobox select {
+  dialog.cryptobox input[type="password"] {
     font: inherit;
     color: var(--fg);
     background: var(--bg);
@@ -3918,9 +3727,7 @@
     padding: 8px 10px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
-  dialog.cryptobox input[type="password"]:focus,
-  dialog.cryptobox input[type="email"]:focus,
-  dialog.cryptobox select:focus {
+  dialog.cryptobox input[type="password"]:focus {
     border-color: var(--accent);
   }
   dialog.cryptobox .err {
