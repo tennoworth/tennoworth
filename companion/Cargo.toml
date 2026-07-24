@@ -18,6 +18,21 @@
 members = ["wfm-fetch-inventory", "wfm-core", "market-math", "wfm-scrape", "wfm-client", "tennoworth-desktop"]
 resolver = "2"
 
+# Single version authority for deps shared by 2+ members — a member bumping
+# its own copy independently used to be able to drift the workspace out of
+# sync with nothing catching it. Members inherit via `dep = { workspace =
+# true }`; reqwest's feature union is declared once here rather than
+# per-member because Cargo already unifies reqwest's features across a
+# `--workspace` build regardless of what each member individually asks for
+# (a member declaring a smaller subset never actually got a smaller build —
+# see tennoworth-desktop's Cargo.toml).
+[workspace.dependencies]
+anyhow = "1"
+base64 = "0.22"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking", "gzip", "json", "cookies"] }
+
 # Shared by every member; the release binary size/behavior of
 # wfm-fetch-inventory must not change from the pre-workspace layout.
 [profile.release]

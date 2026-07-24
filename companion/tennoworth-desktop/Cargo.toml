@@ -28,8 +28,8 @@ tauri-plugin-notification = "2"
 # restart. The signature pubkey lives in tauri.conf.json; the private key is
 # generated offline and never enters the repo (docs/signing-runbook.md §9).
 tauri-plugin-updater = "2"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde = { workspace = true }
+serde_json = { workspace = true }
 wfm-core = { path = "../wfm-core" }
 # The sell-priority scoring (single source of truth, mirrored in sell-priority.ts)
 # used to rank the tray + notification sellables. Pure, no-dep crate.
@@ -38,10 +38,13 @@ market-math = { path = "../market-math" }
 # canonical desktop store works on a clean Windows/Linux box with nothing
 # pre-installed (matches the "download → works" goal).
 rusqlite = { version = "0.32", features = ["bundled"] }
-# C4 market refresh: the one remote GET (tennoworth.app/market.json). Feature set
-# is a subset of wfm-core's reqwest, so Cargo's feature unification adds no new
-# build — egress stays in Rust, off the webview (prototype/CLAUDE.md rule).
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking", "gzip"] }
+# C4 market refresh: the one remote GET (tennoworth.app/market.json). Egress
+# stays in Rust, off the webview (prototype/CLAUDE.md rule). Inherits the
+# workspace's full reqwest feature set (see root Cargo.toml) rather than
+# declaring a smaller one — Cargo already unified it with wfm-core's superset
+# in every `--workspace` build regardless, so the old "subset" declaration
+# here was cosmetic, not a smaller actual build.
+reqwest = { workspace = true }
 # Scrub the plaintext JWT from memory on logout (best-effort). Already vendored
 # transitively via aes-gcm, so this pins no new build.
 zeroize = "1"
@@ -52,5 +55,5 @@ zeroize = "1"
 # (GNOME Keyring, KWallet via org.kde.secretservicecompat); crypto-rust avoids
 # an OpenSSL link. Desktop-only dependency — the CLI must not grow DBus deps.
 keyring = { version = "3", features = ["windows-native", "sync-secret-service", "crypto-rust"] }
-# Encoding for the keyring entry value (same version wfm-core pins).
-base64 = "0.22"
+# Encoding for the keyring entry value.
+base64 = { workspace = true }

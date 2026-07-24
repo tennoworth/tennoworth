@@ -49,10 +49,7 @@ jobs:
         working-directory: companion
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: companion
+      - uses: ./.github/actions/setup-rust
       - name: Install cargo-audit
         run: cargo install --locked cargo-audit
       - name: cargo audit
@@ -62,11 +59,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: ./.github/actions/setup-python
         with:
-          python-version: '3.12'
-      - name: Install deps
-        run: pip install pytest requests
+          packages: pytest requests
       - name: pytest
         # Parity gates are excluded here: they need the Rust binary and have
         # their own build-and-run jobs (convert-parity / scrape-parity) —
@@ -80,10 +75,7 @@ jobs:
         working-directory: companion
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: companion
+      - uses: ./.github/actions/setup-rust
       # tennoworth-desktop (Tauri v2) links the Linux GUI stack; without these
       # -dev packages the *-sys crates fail at pkg-config and the whole
       # workspace test run dies before a single test executes.
@@ -103,18 +95,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: companion
+      - uses: ./.github/actions/setup-rust
       - name: Build wfm-scrape (release)
         working-directory: companion
         run: cargo build --release -p wfm-scrape
-      - uses: actions/setup-python@v5
+      - uses: ./.github/actions/setup-python
         with:
-          python-version: '3.12'
-      - name: Install deps
-        run: pip install pytest requests
+          packages: pytest requests
       - name: pytest parity
         run: pytest tests/test_convert_parity.py
 
@@ -126,17 +113,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: companion
+      - uses: ./.github/actions/setup-rust
       - name: Build wfm-scrape (release)
         working-directory: companion
         run: cargo build --release -p wfm-scrape
-      - uses: actions/setup-python@v5
+      - uses: ./.github/actions/setup-python
         with:
-          python-version: '3.12'
-      - name: Install deps
-        run: pip install pytest requests
+          packages: pytest requests
       - name: pytest parity
         run: pytest tests/test_scrape_parity.py

@@ -11,6 +11,7 @@ beforeAll(() => {
 });
 
 import { encryptPayload, decryptPayload, isEncrypted } from './crypto.js';
+import kdfFixture from '../../../tests/fixtures/jwt-kdf.json';
 
 const SAMPLE = {
   invName: 'inventory.json',
@@ -28,6 +29,15 @@ describe('encryptPayload / decryptPayload (round-trip)', () => {
     expect(blob.kdf.iterations).toBeGreaterThanOrEqual(100000);
     const back = await decryptPayload(blob, 'correct horse battery staple');
     expect(back).toEqual(SAMPLE);
+  });
+
+  // Parity gate: companion/wfm-core/src/auth.rs's JWT_KDF_ITERATIONS must match
+  // this module's KDF_ITERATIONS exactly — a mismatch bricks JWT decryption
+  // with a false "wrong passphrase" error. Both sides read
+  // tests/fixtures/jwt-kdf.json.
+  it('uses the iteration count pinned in the shared KDF fixture', async () => {
+    const blob = await encryptPayload(SAMPLE, 'correct horse battery staple');
+    expect(blob.kdf.iterations).toBe(kdfFixture.iterations);
   });
 
   it('produces a different ciphertext each call (fresh salt + IV)', async () => {

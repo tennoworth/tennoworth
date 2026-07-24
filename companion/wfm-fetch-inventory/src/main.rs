@@ -19,7 +19,8 @@ use std::path::{Path, PathBuf};
 use wfm_core::assistant::{
     assistant_disabled, assistant_rate_limited, assistant_request_too_large,
     build_assistant_messages, call_deepseek, cap_history, deepseek_client, resolve_deepseek_key,
-    short_reason, AssistantRequest, AssistantResponse, MAX_ASSISTANT_BODY_BYTES,
+    short_reason, AssistantErrorCode, AssistantRequest, AssistantResponse,
+    MAX_ASSISTANT_BODY_BYTES,
 };
 use wfm_core::auth::{
     bootstrap_session, decrypt_jwt, encrypt_jwt, fetch_wfm_me, signin, validate_platform,
@@ -33,6 +34,34 @@ use wfm_core::listing::{
 use wfm_core::pending::{clear_pending, load_pending};
 use wfm_core::platform::{chown_to_real_user, restrict_dir_perms, write_restricted};
 use wfm_core::util::{browser_client, default_jwt_path, default_pending_path, random_token};
+
+/// Wraps a secret string (JWT, CSRF token) so it can't be accidentally
+/// interpolated in full — Display always prints `<N chars, TAG>`, never the
+/// value. The companion's hard invariant is that secrets never hit
+/// stdout/stderr (see companion/CLAUDE.md); previously that relied on every
+/// log site remembering to call `.len()` by hand. Shadow the plain `String`
+/// with this right after it's produced, `.expose()` only at the specific
+/// call sites that need the real value — any print added later in the same
+/// scope is then safe by construction, not by review.
+struct Sealed<'a> {
+    value: &'a str,
+    tag: &'static str,
+}
+
+impl<'a> Sealed<'a> {
+    fn new(value: &'a str, tag: &'static str) -> Self {
+        Self { value, tag }
+    }
+    fn expose(&self) -> &'a str {
+        self.value
+    }
+}
+
+impl std::fmt::Display for Sealed<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "<{} chars, {}>", self.value.chars().count(), self.tag)
+    }
+}
 
 #[derive(Parser, Debug)]
 #[command(
@@ -215,11 +244,13 @@ fn run_login(args: LoginArgs) -> Result<()> {
 
     eprintln!("→ Bootstrapping session…");
     let (client, csrf_token) = bootstrap_session()?;
-    eprintln!("→ Got CSRF token ({} chars)", csrf_token.len());
+    let csrf_token = Sealed::new(&csrf_token, "CSRF");
+    eprintln!("→ Got CSRF token ({csrf_token})");
 
     eprintln!("→ Signing in to warframe.market…");
-    let jwt = signin(&client, &email, &password, &args.platform, &csrf_token)?;
-    eprintln!("→ Got JWT ({} chars, cookie-auth)", jwt.len());
+    let jwt = signin(&client, &email, &password, &args.platform, csrf_token.expose())?;
+    let jwt = Sealed::new(&jwt, "JWT");
+    eprintln!("→ Got JWT ({jwt}, cookie-auth)");
 
     // --- encrypt with a passphrase ---
     let passphrase = rpassword::prompt_password(
@@ -234,7 +265,7 @@ fn run_login(args: LoginArgs) -> Result<()> {
         bail!("Passphrase must be at least 12 characters — it guards your multi-month WFM token against offline brute force.");
     }
 
-    let encrypted = encrypt_jwt(&jwt, &passphrase, &args.platform)?;
+    let encrypted = encrypt_jwt(jwt.expose(), &passphrase, &args.platform)?;
     let out_path = args.out.unwrap_or_else(default_jwt_path);
     if let Some(parent) = out_path.parent() {
         fs::create_dir_all(parent).context("creating config directory")?;
@@ -612,7 +643,8 @@ fn build_unlocked(blob: &EncryptedJwt, source: &PassphraseSource) -> Result<Unlo
             }
         }
     };
-    eprintln!("→ Decrypted JWT ({} chars, platform={})", jwt.len(), platform);
+    let jwt = Sealed::new(&jwt, "JWT");
+    eprintln!("→ Decrypted JWT ({jwt}, platform={platform})");
     eprintln!("→ Loading WFM item catalog…");
     let http = browser_client(60)?;
     let catalog = fetch_wfm_catalog(&http, &platform)?;
@@ -621,10 +653,10 @@ fn build_unlocked(blob: &EncryptedJwt, source: &PassphraseSource) -> Result<Unlo
         .values()
         .map(|c| (c.item_id.clone(), c.display_name.clone()))
         .collect();
-    let username = fetch_wfm_me(&http, &jwt, &platform)?;
+    let username = fetch_wfm_me(&http, jwt.expose(), &platform)?;
     eprintln!("→ Signed in as {username}");
     Ok(Unlocked {
-        jwt,
+        jwt: jwt.expose().to_string(),
         username,
         platform,
         catalog: Arc::new(catalog),
@@ -849,16 +881,16 @@ fn handle_request(
             Err(_) => return respond_json(request, 400, &serde_json::json!({"error": "bad_request"})),
         };
         if assistant_request_too_large(&req.question, &req.context) {
-            return respond_json(request, 400, &serde_json::json!({"error": "too_large"}));
+            return respond_json(request, 400, &serde_json::json!({"error": AssistantErrorCode::TooLarge.as_str()}));
         }
         // The marker-file kill switch reuses the no_api_key response the SPA
         // already maps to its "assistant unavailable" hint — no client change.
         if assistant_disabled(&state.deepseek_key_dir) {
-            return respond_json(request, 503, &serde_json::json!({"error": "no_api_key"}));
+            return respond_json(request, 503, &serde_json::json!({"error": AssistantErrorCode::NoApiKey.as_str()}));
         }
         let api_key = match resolve_deepseek_key(std::env::var("DEEPSEEK_API_KEY").ok().as_deref(), &state.deepseek_key_dir) {
             Some(k) => k,
-            None => return respond_json(request, 503, &serde_json::json!({"error": "no_api_key"})),
+            None => return respond_json(request, 503, &serde_json::json!({"error": AssistantErrorCode::NoApiKey.as_str()})),
         };
         // Call-rate throttle, checked just before the upstream call: a
         // rejected/oversized/keyless request never counts against the budget.
@@ -868,7 +900,7 @@ fn handle_request(
                 return respond_json(
                     request,
                     429,
-                    &serde_json::json!({"error": "rate_limited", "detail": "Too many advisor requests — wait a minute and try again."}),
+                    &serde_json::json!({"error": AssistantErrorCode::RateLimited.as_str(), "detail": "Too many advisor requests — wait a minute and try again."}),
                 );
             }
         }
@@ -876,11 +908,11 @@ fn handle_request(
         let messages = build_assistant_messages(&context, &cap_history(history), &question);
         let client = match deepseek_client() {
             Ok(c) => c,
-            Err(e) => return respond_json(request, 502, &serde_json::json!({"error": "upstream", "detail": short_reason(&e)})),
+            Err(e) => return respond_json(request, 502, &serde_json::json!({"error": AssistantErrorCode::Upstream.as_str(), "detail": short_reason(&e)})),
         };
         return match call_deepseek(&client, &api_key, messages) {
             Ok((answer, usage)) => respond_json(request, 200, &AssistantResponse { answer, usage }),
-            Err(e) => respond_json(request, 502, &serde_json::json!({"error": "upstream", "detail": short_reason(&e)})),
+            Err(e) => respond_json(request, 502, &serde_json::json!({"error": AssistantErrorCode::Upstream.as_str(), "detail": short_reason(&e)})),
         };
     }
 
@@ -1050,5 +1082,15 @@ mod tests {
             _ => panic!("expected a Locked state carrying the blob's ps4 platform"),
         }
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn sealed_display_never_contains_the_secret() {
+        let jwt = "jwt.super.secret.payload.abc123";
+        let sealed = Sealed::new(jwt, "JWT");
+        let shown = format!("{sealed}");
+        assert!(!shown.contains(jwt), "Display leaked the raw secret: {shown}");
+        assert_eq!(shown, format!("<{} chars, JWT>", jwt.len()));
+        assert_eq!(sealed.expose(), jwt);
     }
 }

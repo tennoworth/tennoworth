@@ -1,0 +1,4 @@
+{
+  "iterations": 600000,
+  "note": "PBKDF2-HMAC-SHA256 iteration count for the wfminv-jwt-v1 on-disk/export format. Shared by companion/wfm-core/src/auth.rs (JWT_KDF_ITERATIONS) and prototype/src/lib/crypto.ts (KDF_ITERATIONS) — a mismatch means the companion encrypts at one count and the browser decrypts at another, surfacing as a false 'wrong passphrase' error."
+}

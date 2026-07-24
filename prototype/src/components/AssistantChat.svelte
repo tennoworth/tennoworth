@@ -4,6 +4,7 @@
     type AssistantSourceRow,
   } from '../lib/assistant';
   import type { CompanionConfig } from '../lib/types';
+  import DialogHeader from './DialogHeader.svelte';
 
   interface ChatMessage {
     role: 'user' | 'assistant';
@@ -125,10 +126,7 @@
 {#if open}
   <div class="backdrop" onclick={close} role="presentation"></div>
   <div class="drawer" role="dialog" aria-modal="true" aria-labelledby="assistant-title">
-    <header>
-      <h2 id="assistant-title">AI advisor</h2>
-      <button class="x" onclick={close} aria-label="Close">×</button>
-    </header>
+    <DialogHeader titleId="assistant-title" title="AI advisor" onclose={close} />
 
     <div class="staleness">
       Market data: {marketAge ?? 'unknown'}
@@ -232,35 +230,6 @@
     display: flex;
     flex-direction: column;
   }
-
-  header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 18px;
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
-  }
-  header h2 {
-    margin: 0;
-    font-size: 13px;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--accent);
-    font-weight: 600;
-  }
-  .x {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--muted);
-    font-size: 16px;
-    line-height: 1;
-    width: 26px;
-    height: 26px;
-    border-radius: 6px;
-    cursor: pointer;
-  }
-  .x:hover { color: var(--fg); }
 
   .staleness {
     padding: 8px 18px;

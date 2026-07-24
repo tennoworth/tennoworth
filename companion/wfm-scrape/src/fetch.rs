@@ -12,6 +12,11 @@ use chrono::{DateTime, Utc};
 use crate::clock;
 use crate::render::CatalogItemMeta;
 
+/// Days before `estimatedVaultDate` a part is tagged "vaulting-soon" instead
+/// of "available". Mirrors `VAULT_SOON_DAYS` in scripts/csv_to_market_json.py
+/// — change both together.
+const VAULT_SOON_DAYS: i64 = 60;
+
 /// Narrow GET interface so every fetch stage is testable offline.
 pub trait Http {
     fn get_json(&self, url: &str) -> Result<serde_json::Value, String>;
@@ -269,7 +274,7 @@ pub fn fetch_vault_status(
         "https://raw.githubusercontent.com/WFCD/warframe-items/master/data/json/Sentinels.json",
         "https://raw.githubusercontent.com/WFCD/warframe-items/master/data/json/Pets.json",
     ];
-    let vault_soon_cutoff = now + chrono::Duration::days(60);
+    let vault_soon_cutoff = now + chrono::Duration::days(VAULT_SOON_DAYS);
     let mut out = HashMap::new();
     let mut complete = true;
 

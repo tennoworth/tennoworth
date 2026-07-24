@@ -4,15 +4,22 @@ One-shot Python tooling. Python is the right call for these — don't
 rewrite as Rust.
 
 - `wfm_demand.py` (root) — full WFM scrape (~45 min at 3 req/s; cron
-  every 2h). Writes `wfm_results.csv` ONLY. Never point its
-  `--json-out` at the public market.json — that path omits
-  set_to_parts / relic_rewards / vault_status and blanks the Sets,
-  Relics, and Vaulted surfaces.
+  every 2h). Writes `wfm_results.csv` by default; `--json-out` also
+  writes JSON, but never point that flag at the public market.json —
+  that path omits set_to_parts / relic_rewards / vault_status and
+  blanks the Sets, Relics, and Vaulted surfaces.
 - `scripts/csv_to_market_json.py` — the SOLE generator of
   `prototype/public/market.json` (full shape) AND
   `prototype/public/wfstat-catalog.json` (the browser resolver's
   item catalog — warframestat dropped CORS, so it's baked here).
-  Every scrape, local or cron, must finish with this script (~30 s).
+  Every scrape, local or cron, must finish with this script
+  (observed runtime ~30 s; not enforced or asserted anywhere).
+- `scripts/wfm_common.py` — shared WFM HTTP primitives: `BROWSER_UA`
+  (mirrors `companion/wfm-client`'s, which mirrors `wfm-core`'s — the
+  value proven against production traffic), `wfm_session()`, and a
+  retrying `fetch_json()`. Both scripts above import from here rather
+  than each carrying their own UA literal — that's how the two drifted
+  (128 vs 130) unnoticed before.
 
 Tests live in `tests/`. Run with `pytest tests/`.
 
@@ -40,8 +47,9 @@ better.
 
 ### Browser-style User-Agent
 WFM's Cloudflare layer 1015-rate-limits generic UAs. Use a real
-Firefox/Chrome UA string. Already wired in `wfm_demand.py` — match
-that pattern in any new script.
+Firefox/Chrome UA string. Import `BROWSER_UA` (and `wfm_session()` for
+a preconfigured `requests.Session`) from `scripts/wfm_common.py` in
+any new script — don't add a third hardcoded copy.
 
 ### Don't commit WFM auth secrets
 `wfm_demand.py` runs unauthenticated against public WFM data. If you
