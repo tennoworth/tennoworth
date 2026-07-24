@@ -27,10 +27,12 @@ use wfm_core::auth::{
     EncryptedJwt,
 };
 use wfm_core::inventory::{fetch_inventory_bytes, InventoryScanner};
+use wfm_core::catalog::fetch_wfm_catalog;
 use wfm_core::listing::{
-    bulk_set_visibility, delete_order, execute_plan, fetch_wfm_catalog, list_user_orders,
-    run_pending, update_order, PlanRequest, Unlocked, UpdateRequest, VisibilityRequest, MAX_PLATINUM,
+    bulk_set_visibility, delete_order, list_user_orders, update_order, Unlocked, UpdateRequest,
+    VisibilityRequest, MAX_PLATINUM,
 };
+use wfm_core::plan::{execute_plan, run_pending, PlanRequest};
 use wfm_core::pending::{clear_pending, load_pending};
 use wfm_core::platform::{chown_to_real_user, restrict_dir_perms, write_restricted};
 use wfm_core::util::{browser_client, default_jwt_path, default_pending_path, random_token};

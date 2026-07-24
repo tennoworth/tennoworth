@@ -27,7 +27,8 @@ use wfm_core::auth::{
     validate_platform,
     EncryptedJwt,
 };
-use wfm_core::listing::{fetch_wfm_catalog, Unlocked};
+use wfm_core::catalog::fetch_wfm_catalog;
+use wfm_core::listing::Unlocked;
 use wfm_core::platform::{chown_to_real_user, restrict_dir_perms, write_restricted};
 use wfm_core::util::{browser_client, default_jwt_path, default_pending_path};
 use zeroize::Zeroize;
