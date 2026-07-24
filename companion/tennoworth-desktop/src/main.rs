@@ -51,11 +51,14 @@ use wfm_core::assistant::{
 };
 use wfm_core::inventory::InventoryScanner;
 use wfm_core::listing::{
-    bulk_set_visibility, delete_order as core_delete_order, execute_plan as core_execute_plan,
-    list_user_orders, run_pending, update_order as core_update_order, PerOrderResult, PlanItem,
-    PlanRequest, PlanResponse, Unlocked, UpdateRequest, VisibilityRequest, MAX_PLATINUM,
+    bulk_set_visibility, delete_order as core_delete_order, list_user_orders,
+    update_order as core_update_order, PerOrderResult, Unlocked, UpdateRequest,
+    VisibilityRequest, MAX_PLATINUM,
 };
 use wfm_core::pending::{clear_pending, load_pending, PendingPlan};
+use wfm_core::plan::{
+    execute_plan as core_execute_plan, run_pending, PlanItem, PlanRequest, PlanResponse,
+};
 use wfm_session::{CmdError, WfmSession};
 
 /// How many sellables the tray menu shows.

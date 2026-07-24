@@ -15,10 +15,12 @@
 
 pub mod assistant;
 pub mod auth;
+pub mod catalog;
 pub mod error;
 pub mod inventory;
 pub mod listing;
 pub mod pending;
+pub mod plan;
 pub mod platform;
 pub mod scan;
 pub mod util;
