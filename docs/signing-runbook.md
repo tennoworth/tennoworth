@@ -369,11 +369,13 @@ release.
 
 ## 10. What the desktop release workflow must produce (C8 contract)
 
-There is **no desktop release workflow yet** — C5 deliberately shipped only
-the client side. The updater endpoint 404s today (and the placeholder pubkey
-rejects everything), which the desktop app treats as "no update available".
-When C8 builds the packaging workflow, the updater side of it must produce,
-per release:
+`.github/workflows/release-desktop.yml` now implements this contract — it
+builds both legs via `tauri-apps/tauri-action`, which generates and uploads
+`latest.json` itself. The **placeholder pubkey is still the live blocker**:
+until §9's keygen runs and the two `TAURI_SIGNING_*` secrets exist, the
+workflow refuses to build (first step) rather than publishing an
+un-installable release, and any running app rejects every signature. The
+contract the workflow satisfies, per release:
 
 1. **Signed bundles + detached signatures**, built by `tauri build` with the
    §9 secrets set: at minimum `TennoWorth_<ver>_amd64.AppImage` (+ `.sig`) on
@@ -405,18 +407,36 @@ per release:
    `signature` is the **contents** of the `.sig` file, not a URL to it.
    `version` must be plain semver (no leading `v`) and strictly greater than
    the installed version for the updater to offer it.
-3. **The "latest release" gotcha:** the endpoint uses
-   `releases/latest/download/latest.json`, and this repo also cuts companion
-   CLI releases (`v*` tags) that contain no `latest.json`. GitHub's "latest"
-   is the newest non-draft, non-prerelease release of the whole repo — so a
-   CLI release published after a desktop release makes the endpoint 404 until
-   the next desktop release (checks degrade to "no update"; nothing breaks,
-   but updates stall). C8 must pick one: mark CLI releases as pre-releases,
-   re-attach `latest.json` to every release, or move the endpoint to a fixed
-   tag (e.g. `releases/download/desktop-latest/latest.json`) that the desktop
-   workflow force-updates. Decide there — the config change is one line.
+3. **The "latest release" gotcha — RESOLVED (2026-07-24) via a fixed tag.**
+   GitHub's "latest" is the newest non-draft, non-prerelease release of the
+   whole repo, and this repo also cuts companion CLI releases (`v*`) carrying
+   no `latest.json` — so the old `releases/latest/download/…` endpoint would
+   404 whenever a CLI release landed after a desktop one (checks degrade to
+   "no update"; nothing breaks, but updates stall until the next desktop
+   release). The endpoint is now pinned to the fixed rolling tag
+   `releases/download/desktop-latest/latest.json`, which only
+   release-desktop.yml republishes, so the two release streams can never
+   collide regardless of order. The release is marked `prerelease` for the
+   same reason `web-latest`/`scrape-latest` are: it keeps the rolling desktop
+   build out of the repo's "Latest release" badge, which stays reserved for
+   the CLI's `v*` tags.
+
+   Consequence to keep in mind: the endpoint is baked into every shipped
+   binary, so the `desktop-latest` tag can never be renamed or deleted
+   without stranding installs — same constraint as the repo path itself.
 4. **Updater behavior** the workflow can rely on: Linux updates only apply to
    the AppImage packaging (a raw binary or distro package refuses to install
    updates — expected); Windows runs the NSIS installer in passive mode, which
    restarts the app itself. Neither downloads anything without the user
    clicking Install in the banner.
+5. **Version sources must agree.** Three places carry a version and only the
+   workflow's guard ties them together: the `desktop-v*` tag,
+   `tauri.conf.json` (→ `latest.json`'s `version`), and
+   `tennoworth-desktop/Cargo.toml` (→ `CARGO_PKG_VERSION`, which `update.rs`
+   reports as "you have vX" and the plugin compares against). All three were
+   aligned to 0.3.0 on 2026-07-24 to match the SPA sidebar, which reads a
+   *fourth* independent number — `prototype/package.json`, baked in by
+   `vite.config.js` as `__APP_VERSION__`. Before 0.3.0 they read 0.1.0 while
+   the sidebar said 0.3.0, so one window showed two different versions.
+   Nothing keeps the SPA number in step automatically: when bumping the
+   desktop app, bump `package.json` too or the same split reappears.
