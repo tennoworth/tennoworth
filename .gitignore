@@ -29,3 +29,4 @@ rust_out
 
 # AI tooling config — kept locally, not part of the public project surface.
 /.claude/
+/.claude.local.md
