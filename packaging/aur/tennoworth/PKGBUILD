@@ -62,7 +62,7 @@ package() {
   # Without these the window and taskbar entry fall back to a generic WM
   # avatar — the app sets its own window icon, but the desktop entry is what
   # the shell matches on (StartupWMClass=TennoWorth).
-  install -Dm644 "packaging/aur/tennoworth.desktop" \
+  install -Dm644 "packaging/aur/tennoworth/tennoworth.desktop" \
     "$pkgdir/usr/share/applications/tennoworth.desktop"
 
   for size in 32 64 128; do

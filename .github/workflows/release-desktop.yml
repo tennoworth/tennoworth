@@ -82,6 +82,30 @@ jobs:
         working-directory: prototype
         run: bun install --frozen-lockfile
 
+      # desktop-latest is a ROLLING tag and tauri-action only ever ADDS assets,
+      # so artifacts from previous versions survive into the next release and
+      # get folded back into the regenerated manifest. That is not theoretical:
+      # 0.3.1's latest.json pointed every Linux platform at 0.3.0's AppImage,
+      # which by then we had deliberately stopped shipping. Clear the release
+      # first so it only ever holds the build that just ran.
+      - name: Purge stale assets from the rolling release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if gh release view desktop-latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release view desktop-latest --repo "$GITHUB_REPOSITORY" \
+              --json assets --jq '.assets[].name' | while read -r asset; do
+                [ -z "$asset" ] && continue
+                echo "removing stale asset: $asset"
+                gh release delete-asset desktop-latest "$asset" \
+                  --repo "$GITHUB_REPOSITORY" --yes
+              done
+          else
+            echo "no existing desktop-latest release — nothing to purge"
+          fi
+
       # Publishes to the FIXED `desktop-latest` tag, not GitHub's floating
       # "latest release". GitHub's notion of latest is repo-wide, and this repo
       # also cuts CLI `v*` releases that carry no latest.json — a CLI release
@@ -115,3 +139,108 @@ jobs:
           # name one. NSIS is what the desktop app's install flow assumes
           # (passive install, self-restart).
           updaterJsonPreferNsis: true
+
+  # Raw Linux binary for the AUR `tennoworth-bin` package. Deliberately NOT an
+  # AppImage: bundling a GPU-dependent stack is exactly what made 0.3.0 paint a
+  # white window. This ships one dynamically-linked executable that resolves
+  # webkit2gtk/gtk3 from the user's own system at runtime, same as the
+  # source-built package — it only skips the compile.
+  #
+  # ubuntu-22.04 is load-bearing, not incidental: glibc is backward- but not
+  # forward-compatible, so the build host's glibc becomes the floor for every
+  # user. 22.04's 2.35 runs everywhere current; a binary built on a rolling
+  # distro would demand a glibc most users don't have yet. Same reasoning as
+  # release-companion.yml's Linux leg.
+  #
+  # Publishes to the VERSIONED tag, never to rolling desktop-latest: a PKGBUILD
+  # pins a sha256, so its source URL has to be immutable. An asset that gets
+  # overwritten by the next release would break every installed package's
+  # checksum the moment a new version ships.
+  linux-binary:
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: ./.github/actions/setup-rust
+
+      # Identical list to audit.yml's — without these the *-sys crates fail at
+      # pkg-config before anything builds.
+      - name: Install Tauri Linux deps
+        run: >
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends
+          libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
+          librsvg2-dev
+
+      # tauri-build embeds the SPA at compile time from frontendDist, and plain
+      # `cargo build` does not run tauri.conf.json's beforeBuildCommand the way
+      # `cargo tauri build` does — so the frontend is built explicitly here.
+      # packaging/aur/PKGBUILD does the same thing for the same reason.
+      - name: Build frontend
+        working-directory: prototype
+        run: |
+          bun install --frozen-lockfile
+          bun run build:desktop
+
+      - name: Build binary
+        working-directory: companion
+        run: cargo build --release -p tennoworth-desktop
+
+      # Fails the release rather than shipping a binary that won't start on a
+      # user's machine. 2.35 is what ubuntu-22.04 provides; anything higher
+      # means the toolchain pulled in a newer symbol and the portability
+      # guarantee above is silently gone.
+      - name: Verify glibc floor
+        run: |
+          set -euo pipefail
+          bin=companion/target/release/tennoworth-desktop
+          max=$(objdump -T "$bin" | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -1)
+          echo "highest glibc symbol required: $max"
+          if [ "$(printf '%s\n2.35\n' "$max" | sort -V | tail -1)" != "2.35" ]; then
+            echo "::error title=glibc floor too high::Binary needs glibc $max but the build host should cap it at 2.35. It would fail to start on older distros."
+            exit 1
+          fi
+          ldd "$bin" | grep -E 'webkit2gtk|libgtk-3' || true
+
+      # One self-contained tarball: binary + desktop entry + icons. The -bin
+      # PKGBUILD needs all three (without the .desktop and icons the app gets a
+      # generic WM avatar in the taskbar), and shipping them together beats
+      # either duplicating them into the AUR repo or making the package pull
+      # the whole source tarball just to extract a few PNGs.
+      - name: Stage artifact
+        run: |
+          set -euo pipefail
+          stage="tennoworth-desktop-linux-x86_64"
+          mkdir -p "dist/$stage/icons"
+          cp companion/target/release/tennoworth-desktop "dist/$stage/"
+          cp packaging/aur/tennoworth/tennoworth.desktop "dist/$stage/"
+          for f in 32x32.png 64x64.png 128x128.png 128x128@2x.png icon.png; do
+            cp "companion/tennoworth-desktop/icons/$f" "dist/$stage/icons/"
+          done
+          cp LICENSE "dist/$stage/"
+          tar -C dist -czf "dist/$stage.tar.gz" "$stage"
+          rm -rf "dist/$stage"
+          cd dist && sha256sum "$stage.tar.gz" | tee "$stage.tar.gz.sha256"
+
+      # prerelease + make_latest:false for the same reason as the rolling tag:
+      # the repo's "Latest release" badge stays reserved for the CLI's v* tags.
+      - name: Publish to the versioned release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          files: |
+            dist/tennoworth-desktop-linux-x86_64.tar.gz
+            dist/tennoworth-desktop-linux-x86_64.tar.gz.sha256
+          draft: false
+          prerelease: true
+          make_latest: false
+          body: |
+            Linux binary for the AUR `tennoworth-bin` package, dynamically
+            linked against system webkit2gtk/gtk3 (glibc floor 2.35).
+
+            Windows installers and the updater manifest live on the rolling
+            [desktop-latest](https://github.com/tennoworth/tennoworth/releases/tag/desktop-latest)
+            release. Linux source builds: `packaging/aur/`.
