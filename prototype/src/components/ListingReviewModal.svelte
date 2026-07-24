@@ -1,6 +1,9 @@
 <script lang="ts">
   import { DesktopCmdError, type Transport } from '../lib/transport';
   import type { ItemResult } from '../lib/types';
+  import { MAX_PLATINUM, MIN_PLATINUM, MAX_PLAN_ITEMS } from '../lib/limits';
+  import { humanError } from '../lib/errors';
+  import DialogHeader from './DialogHeader.svelte';
 
   /** Row shape passed in from ResultsTable / App.svelte. */
   interface InputRow {
@@ -111,23 +114,15 @@
       .filter((r) => r.include)
       .reduce((s, r) => s + r.platinum * r.quantity, 0)
   );
-  // Max price matches the companion's MAX_PLATINUM. 999 was conservative
-  // and silently blocked listings for maxed Arcane Energize / Galvanized
-  // Aptitude etc. (real prices 1500–2500p). WFM's own UI caps at 3000.
-  const MAX_PLATINUM = 3000;
   let canSubmit = $derived(
-    selectedCount > 0 && selectedCount <= 50 && plan.every(
-      (r) => !r.include || (r.platinum >= 5 && r.platinum <= MAX_PLATINUM && r.quantity >= 1 && r.quantity <= r.sellable)
+    selectedCount > 0 && selectedCount <= MAX_PLAN_ITEMS && plan.every(
+      (r) => !r.include || (r.platinum >= MIN_PLATINUM && r.platinum <= MAX_PLATINUM && r.quantity >= 1 && r.quantity <= r.sellable)
     )
   );
 
   function close(): void {
     open = false;
     onclose?.();
-  }
-
-  function errMsg(e: unknown): string {
-    return e instanceof Error ? e.message : String(e);
   }
 
   /** Desktop lock-state rejection → hand off to the auth dialogs and return to
@@ -162,7 +157,7 @@
       phase = 'results';
     } catch (e) {
       if (handleAuthCode(e)) return;
-      networkError = errMsg(e);
+      networkError = humanError(e);
       phase = 'error';
     }
   }
@@ -201,7 +196,7 @@
       if (e instanceof DesktopCmdError && (e.code === 'needs_login' || e.code === 'needs_unlock')) {
         onauthrequired?.(e.code);
       } else {
-        networkError = errMsg(e);
+        networkError = humanError(e);
         phase = 'error';
       }
     } finally {
@@ -216,10 +211,7 @@
 {#if open}
   <div class="backdrop" role="dialog" aria-modal="true" aria-labelledby="rm-title">
     <div class="modal">
-      <header>
-        <h2 id="rm-title">List on warframe.market</h2>
-        <button class="x" onclick={close} aria-label="Close">×</button>
-      </header>
+      <DialogHeader titleId="rm-title" title="List on warframe.market" onclose={close} />
 
       {#if phase === 'review'}
         <p class="lead">
@@ -402,33 +394,6 @@
     flex-direction: column;
     overflow: hidden;
   }
-  header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 14px 18px;
-    border-bottom: 1px solid var(--border);
-  }
-  header h2 {
-    margin: 0;
-    font-size: 13px;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--accent);
-    font-weight: 600;
-  }
-  .x {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--muted);
-    font-size: 16px;
-    line-height: 1;
-    width: 26px;
-    height: 26px;
-    border-radius: 6px;
-    cursor: pointer;
-  }
-  .x:hover { color: var(--fg); }
   .lead {
     padding: 14px 18px 0;
     margin: 0;

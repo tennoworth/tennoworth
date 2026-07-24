@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { humanError } from '../lib/errors';
+
   interface Props {
     loading?: boolean;
     oninventory?: (event: { name: string; data: unknown }) => void;
@@ -17,8 +19,7 @@
       const data = JSON.parse(text);
       oninventory?.({ name: file.name, data });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      parseError = `Couldn't parse ${file.name} as JSON: ${msg}`;
+      parseError = `Couldn't parse ${file.name} as JSON: ${humanError(e)}`;
     }
   }
 

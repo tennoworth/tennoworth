@@ -46,8 +46,8 @@ use market::{MarketCache, RefreshResult};
 use sellables::{MarketData, ScanNotification, SellableRow};
 use wfm_core::assistant::{
     assistant_rate_limited, assistant_request_too_large, build_assistant_messages, call_deepseek,
-    cap_history, deepseek_client, resolve_deepseek_key, short_reason, AssistantMessage,
-    AssistantResponse,
+    cap_history, deepseek_client, resolve_deepseek_key, short_reason, AssistantErrorCode,
+    AssistantMessage, AssistantResponse,
 };
 use wfm_core::inventory::InventoryScanner;
 use wfm_core::listing::{
@@ -681,7 +681,10 @@ async fn ask_assistant(
     tauri::async_runtime::spawn_blocking(move || {
         let context = context.unwrap_or_default();
         if assistant_request_too_large(&question, &context) {
-            return Err(CmdError::of("too_large", "Question or context is too large."));
+            return Err(CmdError::of(
+                AssistantErrorCode::TooLarge.as_str(),
+                "Question or context is too large.",
+            ));
         }
         let api_key = resolve_deepseek_key(
             std::env::var("DEEPSEEK_API_KEY").ok().as_deref(),
@@ -689,7 +692,7 @@ async fn ask_assistant(
         )
         .ok_or_else(|| {
             CmdError::of(
-                "no_api_key",
+                AssistantErrorCode::NoApiKey.as_str(),
                 "No DeepSeek API key configured — set DEEPSEEK_API_KEY or the deepseek-key config file.",
             )
         })?;
@@ -699,15 +702,16 @@ async fn ask_assistant(
             let mut calls = s.assistant_calls.lock().expect("assistant_calls mutex poisoned");
             if assistant_rate_limited(&mut calls, Instant::now()) {
                 return Err(CmdError::of(
-                    "rate_limited",
+                    AssistantErrorCode::RateLimited.as_str(),
                     "Too many advisor requests — wait a minute and try again.",
                 ));
             }
         }
         let messages = build_assistant_messages(&context, &cap_history(history), &question);
-        let client = deepseek_client().map_err(|e| CmdError::of("upstream", short_reason(&e)))?;
+        let client = deepseek_client()
+            .map_err(|e| CmdError::of(AssistantErrorCode::Upstream.as_str(), short_reason(&e)))?;
         let (answer, usage) = call_deepseek(&client, &api_key, messages)
-            .map_err(|e| CmdError::of("upstream", short_reason(&e)))?;
+            .map_err(|e| CmdError::of(AssistantErrorCode::Upstream.as_str(), short_reason(&e)))?;
         Ok(AssistantResponse { answer, usage })
     })
     .await

@@ -8,6 +8,7 @@
     vaultedTop,
     type BrowseRow,
   } from '../lib/market-browse';
+  import { sparklinePoints } from '../lib/sparkline';
 
   // Powered ONLY by the already-loaded market.json — no fetches here. App.svelte
   // passes the snapshot plus its own freshness/staleness derivations so the
@@ -75,24 +76,6 @@
     return `${m}m`;
   }
 
-  // Normalise a 7-point series into a fixed [1, H-1] band so a flat line
-  // still draws. Mirrors ResultsTable's sparkline. null when too few points.
-  function sparklinePoints(arr: number[] | null | undefined, w = 56, h = 16): string | null {
-    if (!Array.isArray(arr) || arr.length < 2) return null;
-    let min = Infinity, max = -Infinity;
-    for (const v of arr) {
-      if (v < min) min = v;
-      if (v > max) max = v;
-    }
-    const range = max - min || 1;
-    const step = w / (arr.length - 1);
-    return arr.map((v, i) => {
-      const x = i * step;
-      const y = (h - 1) - ((v - min) / range) * (h - 2);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(' ');
-  }
-
   const plat = (v: number) => Math.round(v).toLocaleString();
 </script>
 
@@ -124,10 +107,10 @@
           <span class="trend down" title="Latest median {Math.abs(r.deltaPct).toFixed(0)}% below the 90-day median">▼{Math.abs(r.deltaPct).toFixed(0)}%</span>
         {/if}
       {/if}
-      {#if sparklinePoints(r.medians_7d)}
+      {#if sparklinePoints(r.medians_7d, 56, 16)}
         <svg class="sparkline" viewBox="0 0 56 16" width="56" height="16" aria-hidden="true">
           <title>7-day medians: {r.medians_7d?.join(', ')}</title>
-          <polyline points={sparklinePoints(r.medians_7d)} fill="none" stroke="currentColor" stroke-width="1.5" />
+          <polyline points={sparklinePoints(r.medians_7d, 56, 16)} fill="none" stroke="currentColor" stroke-width="1.5" />
         </svg>
       {/if}
       <span class="price">{plat(r.avg)}<span class="unit">p</span></span>

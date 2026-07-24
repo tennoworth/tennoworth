@@ -1,6 +1,7 @@
 // @ts-nocheck — vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
 import { describe, it, expect } from 'vitest';
 import { flattenInventory, extractKeptLvls, TRADEABLE_CATEGORIES } from './inventory.js';
+import categoriesFixture from '../../../tests/fixtures/tradeable-categories.json';
 
 describe('flattenInventory', () => {
   it('yields nothing for an empty inventory', () => {
@@ -79,6 +80,14 @@ describe('flattenInventory', () => {
     expect(TRADEABLE_CATEGORIES).toContain('MiscItems');
     expect(TRADEABLE_CATEGORIES).toContain('Suits');
     expect(TRADEABLE_CATEGORIES).not.toContain('Boosters');
+  });
+
+  // Parity gate: companion/tennoworth-desktop/src/snapshot.rs walks the same
+  // DE categories to build history snapshots for the desktop tray. Both sides
+  // read tests/fixtures/tradeable-categories.json so a category added on one
+  // side and forgotten on the other fails CI instead of silently under-counting.
+  it('matches the shared cross-language category fixture', () => {
+    expect([...TRADEABLE_CATEGORIES].sort()).toEqual([...categoriesFixture.categories].sort());
   });
 });
 

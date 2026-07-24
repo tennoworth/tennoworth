@@ -29,15 +29,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # No `cache: pip` — setup-python hard-errors on it when the repo has no
-      # requirements.txt/pyproject.toml, killing every run before the scrape.
-      # The only dep is `requests`; caching buys nothing.
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install deps
-        run: pip install requests
+      - uses: ./.github/actions/setup-python
 
       # One scrape entrypoint shared with the self-host systemd timer —
       # scrape, truncation guard (row-count floor + 25%-shrinkage check

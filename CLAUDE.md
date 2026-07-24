@@ -31,6 +31,8 @@ wfm_demand.py    main WFM scraper (root, run on cron)
 deploy/          self-host kit: Caddyfile, setup script, scrape + web-pull systemd units for the production LXC
 tests/           pytest tests for the Python side
 .github/workflows/  refresh-market (cron), release-companion (tag), audit
+.github/actions/    shared composite actions (setup-rust, setup-python,
+                     publish-rolling-release) the workflows above call into
 .claude/         Claude Code local config + agent worktrees
 SECURITY.md      threat model + what we do and don't commit to
 ```
@@ -93,6 +95,21 @@ another agent's branch instead of develop, masked by a stale-green audit):
 
 ## Cross-cutting hygiene rules (apply everywhere)
 
+- **Cross-language logic duplication needs a parity fixture, not just a
+  comment.** This repo is Rust + TypeScript + Python by necessity (companion,
+  browser app, scraper) — the same heuristic sometimes has to exist in two of
+  them (name/slug resolution, scoring, shared constants like a KDF iteration
+  count or a category list). A `// keep these in sync` comment is not a gate;
+  it silently rots. Instead: put the shared cases + expected output in
+  `tests/fixtures/<name>/`, and add a test on **each** side that reads the
+  same fixture and asserts against it (`sell-priority/cases.json` and
+  `name-guess/cases.json` are the reference examples — grep their consuming
+  tests for the pattern). If the same value only needs to match, not compute
+  anything, the fixture can be a single JSON file both sides parse directly
+  (see `jwt-kdf.json`, `tradeable-categories.json`). A 2026-07 sweep found
+  several places where the "just a comment" version had already drifted
+  silently — one of them (a slug-guessing fallback) was a live, if narrow,
+  bug.
 - **No comments that restate the code.** Comments explain *why* — the
   non-obvious constraint, the past bug they prevent. If removing a
   comment wouldn't confuse a reader, delete it.

@@ -1,0 +1,34 @@
+name: Publish rolling release
+description: >
+  softprops/action-gh-release with the shared policy for TennoWorth's rolling
+  "-latest" releases (scrape-latest, web-latest): draft off, prerelease on
+  and make_latest off (both keep a rolling build out of the repo's "Latest
+  release" badge — that's reserved for a real v* tag). Per-release
+  tag/name/files/body stay caller-supplied so the two releases can't
+  silently diverge on the policy while still describing themselves
+  differently.
+inputs:
+  tag_name:
+    description: The rolling tag to update, e.g. scrape-latest.
+    required: true
+  release_name:
+    description: The release title, e.g. "scrape-latest (auto-built)".
+    required: true
+  files:
+    description: Newline-separated list of asset paths to attach.
+    required: true
+  body:
+    description: Release body text.
+    required: true
+runs:
+  using: composite
+  steps:
+    - uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ inputs.tag_name }}
+        name: ${{ inputs.release_name }}
+        files: ${{ inputs.files }}
+        draft: false
+        prerelease: true
+        make_latest: false
+        body: ${{ inputs.body }}

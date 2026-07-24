@@ -28,9 +28,10 @@ characteristics:
    key is stored in plaintext at rest (see “The AI assistant” below).
 
 3. **Our build + release pipeline** (GitHub Actions). Four workflows:
-   - `refresh-market.yml` — scrapes warframe.market every 2 h and
+   - `refresh-market.yml` — scrapes warframe.market once daily and
      commits a static `market.json` + `wfstat-catalog.json` to the
-     repo.
+     repo (a floor so a fresh clone starts with recent data; the
+     self-host box's own systemd timer covers the real 2 h cadence).
    - `release-companion.yml` — on tag push, cross-builds the Rust
      binary for Linux + Windows, generates SHA256SUMS, attaches both
      to a GitHub release.

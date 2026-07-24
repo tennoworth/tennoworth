@@ -16,10 +16,17 @@ from pathlib import Path
 
 import requests
 
-# Cloudflare 1015-blocks generic UAs (scripts/CLAUDE.md hard rule). Same
-# string as wfm_demand.py — keep them in sync.
+# Explicit sys.path insert (not a relative import) so this module resolves
+# wfm_common the same way whether run directly (`python3
+# scripts/csv_to_market_json.py`) or imported as `scripts.csv_to_market_json`
+# (tests/test_wfm_demand.py does the latter) — a relative import would break
+# the direct-script case.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from wfm_common import BROWSER_UA  # noqa: E402
+
+# Cloudflare 1015-blocks generic UAs (scripts/CLAUDE.md hard rule).
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0",
+    "User-Agent": BROWSER_UA,
 }
 
 
@@ -398,7 +405,12 @@ def fetch_catalog():
     Retries with backoff — this script is the sole market.json producer,
     and an unguarded single GET here aborted the whole rebuild (discarding
     a finished 45-min scrape) on one Cloudflare hiccup. Raises only after
-    all attempts fail; main() then falls back to the prior snapshot."""
+    all attempts fail; main() then falls back to the prior snapshot.
+
+    Deliberately hand-rolled rather than wfm_common.fetch_json/wfm_demand.py's
+    fetch_json (2s/4s/6s backoff here vs. those two's 1s/2s/4s) — this loop
+    is the actual fix for the incident described above, so it isn't being
+    merged into the shared helper without re-verifying that behavior."""
     last_err = None
     for attempt in range(3):
         try:
