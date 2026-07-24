@@ -21,6 +21,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
+use tauri::State;
 
 use wfm_core::auth::{
     bootstrap_session, decrypt_jwt_with_key, derive_jwt_key, encrypt_jwt, fetch_wfm_me, signin,
@@ -31,7 +32,7 @@ use wfm_core::catalog::fetch_wfm_catalog;
 use wfm_core::listing::Unlocked;
 use wfm_core::platform::{chown_to_real_user, restrict_dir_perms, write_restricted};
 use wfm_core::util::{browser_client, default_jwt_path, default_pending_path};
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 /// Typed command error serialized to the webview as `{ code, message }`. The SPA
 /// maps `code` to its own error classes:
@@ -402,6 +403,90 @@ fn warm(jwt: String, platform: String) -> Result<Unlocked, CmdError> {
         catalog: Arc::new(catalog),
         id_to_name: Arc::new(id_to_name),
     })
+}
+
+// ---- Tauri commands ---------------------------------------------------
+//
+// The desktop mirror of serve's auth routes: same lock-state machine, with
+// the passphrase arriving from the webview (`wfm_login` / `unlock_jwt`)
+// instead of a TTY prompt. `needs_login` / `needs_unlock` drive the SPA's
+// login and passphrase dialogs — the desktop analogue of serve's 401
+// needs_login:true vs 503 split.
+
+#[derive(serde::Serialize)]
+pub struct WfmAuthStatus {
+    /// A login envelope exists on disk (encrypted; says nothing about the
+    /// passphrase being known).
+    logged_in: bool,
+    /// This process holds the decrypted JWT in memory.
+    unlocked: bool,
+}
+
+#[tauri::command]
+pub fn wfm_auth_status(session: State<'_, Arc<WfmSession>>) -> WfmAuthStatus {
+    let (logged_in, unlocked) = session.auth_status();
+    WfmAuthStatus { logged_in, unlocked }
+}
+
+/// Sign in to warframe.market with credentials from the SPA's login dialog,
+/// persist the encrypted JWT (unchanged envelope format), and unlock the
+/// session. Network — spawn_blocking keeps the webview event loop free.
+#[tauri::command]
+pub async fn wfm_login(
+    session: State<'_, Arc<WfmSession>>,
+    email: String,
+    password: String,
+    passphrase: String,
+    platform: String,
+    remember: bool,
+) -> Result<(), CmdError> {
+    let s = Arc::clone(&session);
+    tauri::async_runtime::spawn_blocking(move || {
+        // Zeroizing scrubs OUR copies of the secrets when the closure ends —
+        // best-effort (the IPC deserializer made its own transient copies).
+        let password = Zeroizing::new(password);
+        let passphrase = Zeroizing::new(passphrase);
+        s.login(&email, &password, &passphrase, &platform, remember)
+    })
+    .await
+    .map_err(|e| CmdError::internal(format!("login task failed to run: {e}")))?
+}
+
+/// Decrypt the stored JWT with the passphrase from the SPA's unlock dialog and
+/// warm the WFM catalog. Missing file → `needs_login`; wrong passphrase →
+/// `bad_passphrase`; catalog/me failure → `wfm` (transient, retryable).
+#[tauri::command]
+pub async fn unlock_jwt(
+    session: State<'_, Arc<WfmSession>>,
+    passphrase: String,
+    remember: bool,
+) -> Result<(), CmdError> {
+    let s = Arc::clone(&session);
+    tauri::async_runtime::spawn_blocking(move || {
+        let passphrase = Zeroizing::new(passphrase);
+        s.unlock(&passphrase, remember)
+    })
+    .await
+    .map_err(|e| CmdError::internal(format!("unlock task failed to run: {e}")))?
+}
+
+/// Try the OS-keyring "remember on this device" key before the SPA raises the
+/// passphrase modal. Infallible by contract: any miss (no entry, no keyring
+/// daemon, stale key, network warm failure) returns false and the modal opens
+/// exactly as before. Network on success (catalog warm) — spawn_blocking.
+#[tauri::command]
+pub async fn try_silent_unlock(session: State<'_, Arc<WfmSession>>) -> Result<bool, CmdError> {
+    let s = Arc::clone(&session);
+    tauri::async_runtime::spawn_blocking(move || s.try_silent_unlock())
+        .await
+        .map_err(|e| CmdError::internal(format!("silent-unlock task failed to run: {e}")))
+}
+
+/// Lock the session and scrub the in-memory JWT. The on-disk envelope stays —
+/// re-unlocking needs only the passphrase, not a fresh WFM login.
+#[tauri::command]
+pub fn wfm_logout(session: State<'_, Arc<WfmSession>>) {
+    session.logout();
 }
 
 #[cfg(test)]
