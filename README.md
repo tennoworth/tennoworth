@@ -90,10 +90,26 @@ needed), renders the market data, scans your inventory directly over Tauri IPC
 into `wfm-core`, and persists settings + inventory snapshots in a local SQLite
 store that survives restarts and keeps inventory history.
 
-The desktop app is **still in development** and not yet released — there is
-no download yet. The browser app + companion remain the way to use TennoWorth
-today. See [`docs/product-plan-2026-07.md`](docs/product-plan-2026-07.md) for
-the roadmap.
+The desktop app is **still in development**. Early builds exist, but the
+browser app + companion remain the supported way to use TennoWorth today. See
+[`docs/product-plan-2026-07.md`](docs/product-plan-2026-07.md) for the roadmap.
+
+Each platform ships the way that platform actually works:
+
+- **Windows** — an installer (`.exe`) or `.msi` from the
+  [desktop-latest release](https://github.com/tennoworth/tennoworth/releases/tag/desktop-latest).
+  Unsigned, so SmartScreen warns on first run (see
+  [`SECURITY.md`](SECURITY.md)). The app updates itself from there.
+- **Linux** — build from source via the AUR
+  ([`packaging/aur/`](packaging/aur/)), which links against your own
+  WebKitGTK and GPU stack. `pacman -Syu` handles updates; the in-app updater
+  deliberately stays quiet.
+
+There is intentionally **no Linux AppImage/deb/rpm**. The AppImage bundled the
+build machine's ubuntu-22.04 WebKitGTK, which aborts at
+`EGL_BAD_PARAMETER` against a rolling-release Mesa and shows a white window —
+inherent to shipping a GPU-dependent stack built on another distro, not a bug a
+flag fixes.
 
 ## Develop
 

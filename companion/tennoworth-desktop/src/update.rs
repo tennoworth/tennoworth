@@ -80,6 +80,24 @@ impl UpdateState {
 /// controlled endpoint (the market.rs `TENNOWORTH_MARKET_URL` pattern). None on
 /// any builder failure — including a non-https override, which the plugin
 /// rejects in release builds.
+/// Linux installs come from distro packaging (AUR), which owns updating — and
+/// Tauri's updater only ever supported the AppImage bundle on Linux, which we
+/// deliberately stopped publishing: bundling Ubuntu-era WebKitGTK against a
+/// rolling-release host aborts at EGL init before the webview paints. Checking
+/// anyway would show a banner whose Install button could never work.
+///
+/// The `TENNOWORTH_UPDATE_URL` override still forces a real check, so probe.rs
+/// can exercise the full flow on the Linux CI runner.
+#[cfg(target_os = "linux")]
+fn updates_owned_by_packager() -> bool {
+    std::env::var_os("TENNOWORTH_UPDATE_URL").is_none()
+}
+
+#[cfg(not(target_os = "linux"))]
+fn updates_owned_by_packager() -> bool {
+    false
+}
+
 fn build_updater(app: &AppHandle) -> Option<tauri_plugin_updater::Updater> {
     let mut builder = app.updater_builder().timeout(CHECK_TIMEOUT);
     if let Ok(raw) = std::env::var("TENNOWORTH_UPDATE_URL") {
@@ -116,6 +134,11 @@ pub async fn check(app: &AppHandle) -> UpdateStatus {
         ..Default::default()
     };
     let state = app.state::<UpdateState>();
+    if updates_owned_by_packager() {
+        eprintln!("tennoworth: update check skipped — Linux updates come from the package manager");
+        state.store(status.clone(), None);
+        return status;
+    }
     let Some(updater) = build_updater(app) else {
         state.store(status.clone(), None);
         return status;

@@ -21,18 +21,17 @@ permissions:
   contents: write
 
 jobs:
+  # Windows only. Linux ships through distro packaging (packaging/aur/PKGBUILD),
+  # which compiles against the user's own system libraries. The AppImage this
+  # workflow used to publish bundled ubuntu-22.04's WebKitGTK, which aborts at
+  # `Could not create default EGL display: EGL_BAD_PARAMETER` against a
+  # rolling-release host's Mesa — a white window, before the webview paints.
+  # That is inherent to shipping a GPU-dependent stack built on an old distro,
+  # not something a flag fixes, and Tauri's Linux updater only ever supported
+  # AppImage anyway. deb/rpm went unused. So: no Linux bundle here by design.
+  # Linux compilation is still gated on every push by audit.yml's cargo test.
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # Same glibc reasoning as release-companion.yml: 22.04's glibc 2.35
-          # is old enough to run on every actively-supported distro. The
-          # updater only supports the AppImage bundle on Linux (deb/rpm are
-          # install-only, they can never self-update).
-          - os: ubuntu-22.04
-          - os: windows-latest
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
     env:
       # Generated offline by a human, never in CI, never committed — see
       # docs/signing-runbook.md §9. Absent secrets make `tauri build` fail
@@ -76,15 +75,6 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - uses: ./.github/actions/setup-rust
-
-      # Identical list to audit.yml's — without these the *-sys crates fail at
-      # pkg-config before anything builds.
-      - name: Install Tauri Linux deps
-        if: matrix.os == 'ubuntu-22.04'
-        run: >
-          sudo apt-get update && sudo apt-get install -y --no-install-recommends
-          libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
-          librsvg2-dev patchelf
 
       # tauri.conf.json's beforeBuildCommand runs `bun run build:desktop`, so
       # the SPA's deps must exist before tauri-action invokes the build.

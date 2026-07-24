@@ -378,12 +378,21 @@ un-installable release, and any running app rejects every signature. The
 contract the workflow satisfies, per release:
 
 1. **Signed bundles + detached signatures**, built by `tauri build` with the
-   §9 secrets set: at minimum `TennoWorth_<ver>_amd64.AppImage` (+ `.sig`) on
-   the Linux leg and the NSIS `TennoWorth_<ver>_x64-setup.exe` (+ `.sig`) on
-   the Windows leg. The `.sig` files exist only when `TAURI_SIGNING_*` is
-   configured — the workflow should **fail loudly** if they're missing rather
-   than publish an un-updatable release (mirror the SimplySign `throw`
-   pattern, §3).
+   §9 secrets set: the NSIS `TennoWorth_<ver>_x64-setup.exe` and
+   `TennoWorth_<ver>_x64_en-US.msi`, each with a `.sig`. The `.sig` files
+   exist only when `TAURI_SIGNING_*` is configured — the workflow **fails
+   loudly** if the key is absent rather than publishing an un-updatable
+   release (mirroring the SimplySign `throw` pattern, §3).
+
+   **Windows only, deliberately.** The 0.3.0 release also shipped a Linux
+   AppImage/deb/rpm; the AppImage bundled ubuntu-22.04's WebKitGTK and died at
+   `Could not create default EGL display: EGL_BAD_PARAMETER` against a
+   rolling-release host's Mesa — a white window, before the webview painted.
+   That is inherent to shipping a GPU-dependent stack built on an older
+   distro. Linux moved to source builds via the AUR
+   (`packaging/aur/`), which link against the user's own libraries, so from
+   0.3.1 `bundle.targets` is `["nsis", "msi"]` and the workflow has no Linux
+   leg. Linux compilation is still gated on every push by audit.yml.
 2. **`latest.json`**, uploaded as a release asset alongside the bundles:
 
    ```json
@@ -424,11 +433,13 @@ contract the workflow satisfies, per release:
    Consequence to keep in mind: the endpoint is baked into every shipped
    binary, so the `desktop-latest` tag can never be renamed or deleted
    without stranding installs — same constraint as the repo path itself.
-4. **Updater behavior** the workflow can rely on: Linux updates only apply to
-   the AppImage packaging (a raw binary or distro package refuses to install
-   updates — expected); Windows runs the NSIS installer in passive mode, which
-   restarts the app itself. Neither downloads anything without the user
-   clicking Install in the banner.
+4. **Updater behavior** the workflow can rely on: Windows runs the NSIS
+   installer in passive mode, which restarts the app itself, and downloads
+   nothing without the user clicking Install in the banner. **On Linux the
+   check is skipped entirely** — `update.rs`'s `updates_owned_by_packager()`
+   returns early, since Tauri's Linux updater only ever supported AppImage and
+   the AUR package owns updating. Setting `TENNOWORTH_UPDATE_URL` overrides
+   the skip so probe.rs can still exercise the flow on the Linux CI runner.
 5. **Version sources must agree.** Three places carry a version and only the
    workflow's guard ties them together: the `desktop-v*` tag,
    `tauri.conf.json` (→ `latest.json`'s `version`), and
