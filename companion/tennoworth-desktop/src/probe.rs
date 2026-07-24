@@ -377,14 +377,31 @@ pub fn debug_seed_unlocked(session: State<'_, Arc<WfmSession>>) -> Result<(), Cm
 /// to stdout between markers so it is captured even without file access).
 #[tauri::command]
 pub fn probe_report(payload: String) -> Result<String, String> {
-    let out = std::env::var("TENNOWORTH_PROBE_OUT")
-        .unwrap_or_else(|_| "/tmp/tennoworth-probe.json".into());
+    // A literal "/tmp" default put the file at C:\tmp on Windows — a Unix path
+    // silently resolving to the drive root. temp_dir() is %TEMP% there and /tmp
+    // here.
+    let out = std::env::var("TENNOWORTH_PROBE_OUT").unwrap_or_else(|_| {
+        std::env::temp_dir()
+            .join("tennoworth-probe.json")
+            .to_string_lossy()
+            .into_owned()
+    });
     std::fs::write(&out, payload.as_bytes()).map_err(|e| e.to_string())?;
+    // This command is called TWICE by design: once as a checkpoint before the
+    // lifecycle test (so evidence survives if close-to-tray kills the window),
+    // then again at the end. Label the markers so a consumer reading the first
+    // match doesn't mistake the checkpoint for the whole run — the suffix is
+    // additive, so greps for the bare marker still match both.
+    let kind = if payload.contains("\"done\":true") {
+        "FINAL"
+    } else {
+        "CHECKPOINT"
+    };
     let mut so = std::io::stdout();
     let _ = writeln!(so, "PROBE_REPORT_FILE {out}");
-    let _ = writeln!(so, "PROBE_REPORT_BEGIN");
+    let _ = writeln!(so, "PROBE_REPORT_BEGIN {kind}");
     let _ = writeln!(so, "{payload}");
-    let _ = writeln!(so, "PROBE_REPORT_END");
+    let _ = writeln!(so, "PROBE_REPORT_END {kind}");
     let _ = so.flush();
     Ok(out)
 }

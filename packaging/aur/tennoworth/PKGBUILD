@@ -11,7 +11,7 @@
 # Linux (see companion/tennoworth-desktop/src/update.rs).
 
 pkgname=tennoworth
-pkgver=0.3.1
+pkgver=0.3.2
 pkgrel=1
 pkgdesc="Warframe inventory + market dashboard — see what's worth selling right now"
 arch=('x86_64')
