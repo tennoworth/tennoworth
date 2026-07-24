@@ -20,9 +20,11 @@ license=('MIT')
 # webkit2gtk-4.1 is the webview; libayatana-appindicator backs the tray, which
 # degrades gracefully but is expected to be present on a normal desktop.
 depends=('webkit2gtk-4.1' 'gtk3' 'libayatana-appindicator' 'openssl')
-# bun builds the SPA and nodejs runs scripts/sync-csp.mjs, which the frontend
-# build shells out to.
-makedepends=('rust' 'cargo' 'bun' 'nodejs')
+# `cargo` rather than `rust`: it is a virtual provide satisfied by either the
+# rust package or rustup, so this doesn't force toolchain-manager users to
+# install a second copy. bun builds the SPA; nodejs runs scripts/sync-csp.mjs,
+# which the frontend build shells out to.
+makedepends=('cargo' 'bun' 'nodejs')
 options=('!lto')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/desktop-v$pkgver.tar.gz")
 sha256sums=('SKIP')
@@ -44,6 +46,13 @@ build() {
 
   cd "$srcdir/$_srcdir/companion"
   export RUSTUP_TOOLCHAIN=stable
+  # Strips the packager's absolute build paths out of debug info and panic
+  # messages. This does NOT silence makepkg's "Package contains reference to
+  # $srcdir" warning: one reference survives because tauri-build's generated
+  # context embeds CARGO_MANIFEST_DIR as a literal, and --remap-path-prefix
+  # only rewrites paths rustc emits, not strings baked in by a proc macro.
+  # That single leftover is cosmetic and expected — don't chase it.
+  export RUSTFLAGS="--remap-path-prefix=$srcdir=/ ${RUSTFLAGS:-}"
   cargo build --release --frozen -p tennoworth-desktop
 }
 
