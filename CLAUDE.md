@@ -89,6 +89,15 @@ another agent's branch instead of develop, masked by a stale-green audit):
 - **Never background a git merge/push that assumes HEAD.** A concurrent
   agent can move the checkout. Guard with
   `[ "$(git branch --show-current)" = "develop" ] && …` or use explicit refs.
+- **Merging into develop from a checkout you don't control:** don't
+  `git checkout develop` in place if another session might be using the
+  primary checkout. Use a throwaway `git worktree add <tmp-path> develop`,
+  merge there, verify (`git diff <feature-tip> <merge-commit>` should be
+  empty), `git worktree remove` — leave the shared checkout's branch alone.
+- **`git branch -d` checks ancestry against current HEAD, not `develop`** —
+  on a shared checkout sitting on an unrelated branch it will falsely
+  refuse a fully-merged branch. Confirm with
+  `git merge-base --is-ancestor <branch> develop` first.
 - **Clean up as you go.** After a feature branch merges: delete it locally
   and on both remotes, `git worktree remove` its worktree, prune. Keep
   `wip/unshipped-local` and any branch with a live agent.
