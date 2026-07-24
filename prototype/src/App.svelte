@@ -19,6 +19,7 @@
   import { loadMarket, lookup } from './lib/market';
   import { sellableQty, selectPicks, MIN_PICK_SCORE } from './lib/sell-priority';
   import { computeResults as computeFilteredResults, computeAvailableTags, computeEmptyReason, type FilterState } from './lib/filter-engine';
+  import { PRESETS, presetFilterValues, presetStillMatches } from './lib/presets';
 
   const APP_VERSION = __APP_VERSION__;
   const APP_COMMIT = __APP_COMMIT__;
@@ -168,62 +169,9 @@
   // selected preset is tracked so the pill can show as active. Custom
   // edits null out the selection (you're no longer "on" a preset).
   let activePreset = $state<string | null>('default');
-  // Each preset is a one-click configuration of (filters, tag chips, and
-  // visible columns). Casual users said the 11-column default table was
-  // overwhelming; presets now also reshape what shows so the workflow's
-  // signal isn't drowned in unrelated numbers. `columns` is the ordered
-  // visible-column list; missing = all columns (Default).
-  interface Preset {
-    minPrice: number;
-    hideAtLvl: number;
-    typeFilter: string;
-    activeTags: string[];
-    label: string;
-    hint: string;
-    columns?: string[];
-    vaultOnly?: boolean;
-    ducatsOnly?: boolean;
-    minVol?: number; // hard per-preset liquidity floor (Trending uses it)
-    minMedian?: number; // 90d-baseline price floor — a +1100% Δ on a 1p fish is noise or wash-trading, not a mover
-    defaultSort?: { key: string; dir: number };
-  }
-  const PRESETS: Record<string, Preset> = {
-    default:  {
-      minPrice: 5, hideAtLvl: 5, typeFilter: 'all', activeTags: [],
-      label: 'Default', hint: 'everything sellable, best first',
-      defaultSort: { key: 'sell_score', dir: -1 },
-    },
-    ducats: {
-      minPrice: 0, hideAtLvl: 11, typeFilter: 'all', activeTags: [],
-      label: 'Ducats', hint: 'prime parts worth feeding to Baro (ducats = his currency)',
-      columns: ['name', 'owned', 'sell_score', 'low_sell', 'volume_48h', 'ducats', 'plat_per_100d'],
-      // Rank by plat-per-100-ducats ASCENDING: lowest plat value per ducat =
-      // worth more fed to Baro than sold on WFM. (Nulls — non-ducat rows — sink.)
-      defaultSort: { key: 'plat_per_100d', dir: 1 },
-      ducatsOnly: true,
-    },
-    trending: {
-      minPrice: 5, hideAtLvl: 5, typeFilter: 'all', activeTags: [],
-      label: 'Trending', hint: 'movers vs 90d median · vol ≥ 10 · baseline ≥ 5p',
-      columns: ['name', 'owned', 'sell_score', 'low_sell', 'medians_7d', 'delta_90d_pct', 'volume_48h', 'ratio'],
-      defaultSort: { key: 'delta_90d_pct', dir: -1 },
-      minVol: 10,
-      minMedian: 5,
-    },
-    sets: {
-      minPrice: 0, hideAtLvl: 11, typeFilter: 'all', activeTags: ['set'],
-      label: 'Sets', hint: 'only set-tagged rows',
-      columns: ['name', 'owned', 'sell_score', 'low_sell', 'top_buy', 'potential_plat'],
-      defaultSort: { key: 'sell_score', dir: -1 },
-    },
-    vault: {
-      minPrice: 0, hideAtLvl: 11, typeFilter: 'all', activeTags: [],
-      label: 'Vaulted', hint: 'vaulted + vaulting-soon prime parts (sell before the cliff)',
-      columns: ['name', 'owned', 'sell_score', 'low_sell', 'top_buy', 'volume_48h', 'potential_plat'],
-      vaultOnly: true,
-      defaultSort: { key: 'sell_score', dir: -1 },
-    },
-  };
+  // PRESETS itself, plus the pure lookup/matching logic, live in
+  // lib/presets.ts. `columns` is the ordered visible-column list;
+  // missing = all columns (Default).
   let visibleColumns = $derived<string[] | null>(activePreset ? PRESETS[activePreset]?.columns ?? null : null);
   // A preset's optional default sort, handed to ResultsTable. Stable object
   // identity per preset → switching presets re-applies it; header clicks don't.
@@ -245,12 +193,12 @@
     minMedian: PRESETS[activePreset]?.minMedian ?? 0,
   });
   function applyPreset(name: string): void {
-    const p = PRESETS[name];
-    if (!p) return;
-    minPrice = p.minPrice;
-    hideAtLvl = p.hideAtLvl;
-    typeFilter = p.typeFilter;
-    activeTags = new Set(p.activeTags);
+    const values = presetFilterValues(name);
+    if (!values) return;
+    minPrice = values.minPrice;
+    hideAtLvl = values.hideAtLvl;
+    typeFilter = values.typeFilter;
+    activeTags = values.activeTags;
     activePreset = name;
   }
   $effect(() => {
@@ -262,15 +210,9 @@
     void minPrice; void minOwned; void hideAtLvl; void typeFilter; void activeTags.size;
     untrack(() => {
       if (activePreset === null) return;
-      const p = PRESETS[activePreset];
-      if (!p) return;
-      const matches =
-        minPrice === p.minPrice &&
-        hideAtLvl === p.hideAtLvl &&
-        typeFilter === p.typeFilter &&
-        activeTags.size === p.activeTags.length &&
-        p.activeTags.every((t) => activeTags.has(t));
-      if (!matches) activePreset = null;
+      if (!presetStillMatches(activePreset, { minPrice, hideAtLvl, typeFilter, activeTags })) {
+        activePreset = null;
+      }
     });
   });
 
