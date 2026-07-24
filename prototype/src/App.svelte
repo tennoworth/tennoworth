@@ -14,6 +14,7 @@
   import AssistantChat from './components/AssistantChat.svelte';
   import CopyBtn from './components/CopyBtn.svelte';
   import MarketBrowser from './components/MarketBrowser.svelte';
+  import DesktopUpdateBanner from './components/DesktopUpdateBanner.svelte';
   import { flattenInventory, extractKeptLvls } from './lib/inventory';
   import { loadCatalogs, resolvePath, type Catalogs } from './lib/resolver';
   import { loadMarket, lookup } from './lib/market';
@@ -37,10 +38,6 @@
     createTransport, isDesktopRuntime,
     desktopWfmStatus, desktopWfmLogin, desktopWfmUnlock, desktopTrySilentUnlock, DesktopCmdError,
   } from './lib/transport';
-  import {
-    updateStatus as fetchUpdateStatus, installUpdate, restartApp, onUpdateAvailable,
-    type UpdateStatus,
-  } from './lib/desktop-update';
   import type { CompanionConfig, Inventory, Market, OwnedRecord, PendingPlan, ItemResult } from './lib/types';
   import { humanError } from './lib/errors';
 
@@ -265,19 +262,8 @@
       } catch (e) {
         console.error('desktop health check failed', e);
       }
-      // C5 update-available handshake: listen for the push (the Rust launch
-      // check may still be in flight) AND pull the stored status (its emit may
-      // have beaten this listener). Best-effort — a failure here must never
-      // disturb boot, and "no update" needs no UI at all.
-      onUpdateAvailable((s) => {
-        if (s.available) updateInfo = s;
-      });
-      try {
-        const s = await fetchUpdateStatus();
-        if (s.available) updateInfo = s;
-      } catch (e) {
-        console.error('update status read failed', e);
-      }
+      // C5 update-available handshake now lives entirely in
+      // DesktopUpdateBanner.svelte's own onMount.
       // Interrupted-batch recovery: the desktop analogue of the connect-time
       // /plan/pending poll. get_pending_plan is JWT-free, so this needs no
       // unlock. Best-effort — a failure just hides the Resume banner.
@@ -849,39 +835,7 @@
   // network access); `unreachableDismissed` lets the user close the banner.
   let loopbackDenied = $state(false);
   let unreachableDismissed = $state(false);
-  // ---- Desktop auto-update (C5) ----
-  // A found update only ever shows a banner; nothing downloads until the user
-  // clicks Install, and the new version applies on restart. `updateInfo` stays
-  // null in the browser build (no listener registered, no status read).
-  let updateInfo = $state<UpdateStatus | null>(null);
-  let updateInstalling = $state(false);
-  let updateInstalled = $state(false);
-  let updateError = $state<string | null>(null);
-  let updateDismissed = $state(false);
-
-  // Explicit confirmation is THE gate: install_update rejects on a download
-  // failure or a bad bundle signature, which lands in the banner while the
-  // running app stays intact (and the update stays retryable).
-  async function installUpdateNow() {
-    updateError = null;
-    updateInstalling = true;
-    try {
-      await installUpdate();
-      updateInstalled = true;
-    } catch (e) {
-      updateError = humanError(e);
-    } finally {
-      updateInstalling = false;
-    }
-  }
-
-  async function restartToApply() {
-    try {
-      await restartApp();
-    } catch (e) {
-      updateError = humanError(e);
-    }
-  }
+  // Desktop auto-update (C5) now lives entirely in DesktopUpdateBanner.svelte.
   // Stale-async guard: verifyCompanion can be in flight from onMount, a manual
   // connect, or Retry at once. Only the newest run may commit status/error.
   let verifyGen = 0;
@@ -2535,29 +2489,8 @@
       </div>
     </div>
   {/if}
-  {#if updateInfo && !updateDismissed}
-    <div class="card warn-banner general-banner" role="status" data-testid="update-banner">
-      <div class="gb-body">
-        {#if updateInstalled}
-          <strong>Update installed.</strong> TennoWorth v{updateInfo.version} takes over
-          the next time the app starts.
-        {:else}
-          <strong>Update available:</strong> TennoWorth v{updateInfo.version}
-          (you have v{updateInfo.current_version}). Nothing downloads until you install.
-          {#if updateError}<br />{updateError}{/if}
-        {/if}
-      </div>
-      <div class="gb-actions">
-        {#if updateInstalled}
-          <button onclick={restartToApply}>Restart now</button>
-        {:else}
-          <button onclick={installUpdateNow} disabled={updateInstalling}>
-            {updateInstalling ? 'Installing…' : 'Install update'}
-          </button>
-        {/if}
-        <button class="gb-dismiss" aria-label="Dismiss" onclick={() => (updateDismissed = true)}>×</button>
-      </div>
-    </div>
+  {#if isDesktop}
+    <DesktopUpdateBanner />
   {/if}
 {/snippet}
 
