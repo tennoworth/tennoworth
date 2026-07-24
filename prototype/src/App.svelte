@@ -1208,12 +1208,21 @@
       {/if}
       <div class="src-pin-actions">
         <div class="refresh-wrap">
+          <!-- Reflects the scan itself, not just the menu: refreshFromGame
+               closes the popover before awaiting, so the "Scanning game…"
+               label inside it vanished the moment it mattered and a ~10s scan
+               looked like a dead click. This trigger stays on screen. -->
           <button
             class="refresh-trigger"
+            class:busy={pullingInventory}
             onclick={() => (refreshOpen = !refreshOpen)}
             aria-expanded={refreshOpen}
-            title="Load fresh inventory — re-fetch from the game or pick a new file."
-          >Refresh ▾</button>
+            aria-busy={pullingInventory}
+            disabled={pullingInventory}
+            title={pullingInventory
+              ? 'Reading the running game’s memory — this can take a few seconds.'
+              : 'Load fresh inventory — re-fetch from the game or pick a new file.'}
+          >{pullingInventory ? 'Scanning…' : 'Refresh ▾'}</button>
           {#if refreshOpen}
             <div class="refresh-pop">
               {#if isDesktop}
@@ -2227,6 +2236,16 @@
   .src-pin-actions button:hover { color: var(--fg); border-color: var(--accent); }
 
   .refresh-wrap { position: relative; }
+  /* The trigger is disabled mid-scan, and the global button:disabled rule
+     dims it to 0.5 — which reads as "unavailable", the opposite of the
+     "working on it" signal a multi-second scan needs. Keep it legible and
+     accent-tinted so it reads as busy. */
+  .refresh-trigger.busy {
+    opacity: 1;
+    color: var(--accent);
+    border-color: var(--accent);
+    cursor: progress;
+  }
   /* Sized and anchored to stay inside the 220px sidebar rail rather than
      the trigger button's own box. `.refresh-trigger` is only as wide as
      "Refresh ▾", so a popover anchored `left: 0` at its old 300px width
