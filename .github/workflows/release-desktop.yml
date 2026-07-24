@@ -1,0 +1,127 @@
+name: release-desktop
+
+# Builds, signs and publishes the Tauri desktop app + the `latest.json`
+# manifest the in-app updater reads. Separate from release-companion.yml
+# (which ships only the CLI) because the two have different tags, different
+# artifacts and — critically — different release targets: see the fixed-tag
+# note below.
+#
+# Cut a release by tagging `desktop-v<semver>` on main. The tag must match
+# `tauri.conf.json`'s version or the guard below fails the run: the updater
+# compares the manifest version against the version compiled into the app,
+# so a tag/config mismatch ships a manifest that either can't install or
+# offers a phantom upgrade.
+
+on:
+  push:
+    tags: ['desktop-v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Same glibc reasoning as release-companion.yml: 22.04's glibc 2.35
+          # is old enough to run on every actively-supported distro. The
+          # updater only supports the AppImage bundle on Linux (deb/rpm are
+          # install-only, they can never self-update).
+          - os: ubuntu-22.04
+          - os: windows-latest
+    runs-on: ${{ matrix.os }}
+    env:
+      # Generated offline by a human, never in CI, never committed — see
+      # docs/signing-runbook.md §9. Absent secrets make `tauri build` fail
+      # loudly rather than publish a release the updater can never install
+      # (bundle.createUpdaterArtifacts is on, and signing them needs the key).
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Refuse to build without the updater signing key
+        shell: bash
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error title=No updater signing key::TAURI_SIGNING_PRIVATE_KEY is not set. Generate the keypair offline (docs/signing-runbook.md §9) and add it as a repo secret. Publishing unsigned bundles would produce a latest.json no installed app can ever accept."
+            exit 1
+          fi
+
+      # Three versions must agree, and nothing else enforces it:
+      #   - the tag          → names the release
+      #   - tauri.conf.json  → the version written into latest.json
+      #   - Cargo.toml       → CARGO_PKG_VERSION, what the running app reports
+      #                        as "you have vX" and compares against
+      # Drift is silent and only surfaces on user machines, as an update that
+      # installs but never seems to take effect (manifest newer than config)
+      # or one that's never offered at all (config ahead of manifest).
+      - name: Check tag, tauri.conf.json and Cargo.toml versions agree
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#desktop-v}"
+          conf_version=$(grep -m1 '"version"' companion/tennoworth-desktop/tauri.conf.json | cut -d'"' -f4)
+          cargo_version=$(grep -m1 '^version' companion/tennoworth-desktop/Cargo.toml | cut -d'"' -f2)
+          if [ "$tag_version" != "$conf_version" ] || [ "$tag_version" != "$cargo_version" ]; then
+            echo "::error title=Version mismatch::tag=desktop-v$tag_version tauri.conf.json=$conf_version Cargo.toml=$cargo_version — all three must match."
+            exit 1
+          fi
+          echo "Version $conf_version confirmed across tag, tauri.conf.json and Cargo.toml."
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: ./.github/actions/setup-rust
+
+      # Identical list to audit.yml's — without these the *-sys crates fail at
+      # pkg-config before anything builds.
+      - name: Install Tauri Linux deps
+        if: matrix.os == 'ubuntu-22.04'
+        run: >
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends
+          libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
+          librsvg2-dev patchelf
+
+      # tauri.conf.json's beforeBuildCommand runs `bun run build:desktop`, so
+      # the SPA's deps must exist before tauri-action invokes the build.
+      - name: Install frontend deps
+        working-directory: prototype
+        run: bun install --frozen-lockfile
+
+      # Publishes to the FIXED `desktop-latest` tag, not GitHub's floating
+      # "latest release". GitHub's notion of latest is repo-wide, and this repo
+      # also cuts CLI `v*` releases that carry no latest.json — a CLI release
+      # published after a desktop one would 404 the updater endpoint until the
+      # next desktop release. A fixed tag makes the two release streams
+      # independent, and matches the existing web-latest / scrape-latest
+      # convention (.github/actions/publish-rolling-release). tauri.conf.json's
+      # updater endpoint must keep pointing at this exact tag.
+      #
+      # prerelease keeps the rolling desktop build out of the repo's "Latest
+      # release" badge, which stays reserved for the CLI's v* tags.
+      #
+      # projectPath is the dir holding tauri.conf.json — this repo has no
+      # `src-tauri` layout and no npm-side @tauri-apps/cli, so the action
+      # installs its own CLI rather than shelling out to `bun tauri`. Local
+      # builds still use `cargo tauri`; both drive the same tauri.conf.json.
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: companion/tennoworth-desktop
+          tagName: desktop-latest
+          releaseName: desktop-latest (auto-built)
+          releaseBody: >
+            Rolling desktop build. The in-app updater reads latest.json from
+            this release. Not a version release — see releases tagged v* for
+            the companion CLI.
+          releaseDraft: false
+          prerelease: true
+          # Windows builds both MSI and NSIS; the updater manifest can only
+          # name one. NSIS is what the desktop app's install flow assumes
+          # (passive install, self-restart).
+          updaterJsonPreferNsis: true
