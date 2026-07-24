@@ -1854,7 +1854,12 @@
     {#if effectiveView === 'sell'}
       <section class="view-header">
         <h2>Sell</h2>
-        <p class="lede">Items in your inventory worth listing right now, ranked by sell score.</p>
+        <span
+          class="lede-dot"
+          role="img"
+          aria-label="About this view"
+          title="Items in your inventory worth listing right now, ranked by sell score."
+        >ⓘ</span>
       </section>
 
       <section class="stats">
@@ -1920,7 +1925,7 @@
                   </div>
                   <div class="pick-score">~{Math.round(p.sell_score).toLocaleString()}<span class="unit">p/day</span></div>
                   <div class="pick-actions">
-                    <button class="pick-list" onclick={() => openListingFlow(p)}>List</button>
+                    <button class="pick-list" onclick={() => openListingFlow(p)} aria-label="List {p.name} on WFM">List</button>
                     <button
                       type="button"
                       class="pick-snooze"
@@ -1946,38 +1951,32 @@
         {/if}
       {/if}
 
-      <section class="card">
-        <div class="row presets-row">
+      <section class="sell-toolbar">
+        <div class="toolbar-group presets-row">
           {#each Object.entries(PRESETS) as [name, preset]}
             <button
               type="button"
               class="preset"
               class:active={activePreset === name}
+              aria-pressed={activePreset === name}
               onclick={() => applyPreset(name)}
               title={preset.hint}
             >{preset.label}</button>
           {/each}
-          <span class="muted preset-hint">
-            {activePreset ? PRESETS[activePreset].hint : 'custom — saved preset cleared'}
-          </span>
-          {#if isDesktop || companionStatus === 'connected'}
-            <button
-              class="list-cta"
-              data-testid="desktop-list"
-              onclick={() => openListingFlow()}
-              disabled={listableRows.length === 0}
-              title="Stage the top rows of the current view (preset + sort) for listing. The in-table name filter and badge chips are not applied — review each row in the modal before sending."
-            >List {Math.min(listableRows.length, 50)} on WFM</button>
-          {/if}
         </div>
+        <span class="muted preset-hint">
+          {activePreset ? PRESETS[activePreset].hint : 'custom — saved preset cleared'}
+        </span>
         {#if availableTags.length > 0}
-          <div class="row tagchips">
+          <div class="toolbar-divider" aria-hidden="true"></div>
+          <div class="toolbar-group tagchips">
             {#each availableTags as [tag, count]}
               <button
                 type="button"
                 class="chip"
                 class:active={activeTags.has(tag)}
                 class:zero={count === 0}
+                aria-pressed={activeTags.has(tag)}
                 onclick={() => toggleTag(tag)}
                 title={count === 0 ? `No matching rows pass the other filters` : `${count} row${count === 1 ? '' : 's'} carry this tag`}
               >
@@ -1992,12 +1991,13 @@
             {/if}
           </div>
         {/if}
+        <div class="toolbar-divider" aria-hidden="true"></div>
         <details class="filter-disclosure" open={filtersOpen} ontoggle={toggleFiltersOpen}>
           <summary>
             <span class="dis-label">Filters</span>
             <span class="muted small">price · owned · keep copies · type · ranked-mods threshold</span>
           </summary>
-          <div class="row">
+          <div class="filters-panel">
             <div class="filters">
               <label>
                 Min avg price
@@ -2028,6 +2028,15 @@
             </div>
           </div>
         </details>
+        {#if isDesktop || companionStatus === 'connected'}
+          <button
+            class="list-cta"
+            data-testid="desktop-list"
+            onclick={() => openListingFlow()}
+            disabled={listableRows.length === 0}
+            title="Stage the top rows of the current view (preset + sort) for listing. The in-table name filter and badge chips are not applied — review each row in the modal before sending."
+          >List {Math.min(listableRows.length, 50)} on WFM</button>
+        {/if}
       </section>
 
       {@render pendingBanner()}
@@ -3300,9 +3309,15 @@
   .refresh-pop .rp-primary:disabled { opacity: 0.6; cursor: default; }
   .refresh-pop .rp-file { font-size: 12px; padding: 6px 10px; border-radius: 6px; }
 
-  /* Workspace view header — h2 + lede paragraph. The lede gives one
-     sentence of context about what this view does so the user lands
-     without re-reading the docs. */
+  /* Workspace view header — h2 + a hover/focus info dot carrying the
+     one-sentence lede, folded onto a single row (was h2 + a full lede
+     paragraph on its own line) to reclaim vertical space above the fold. */
+  .view-header {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    min-height: 28px;
+  }
   .view-header h2 {
     font-size: 20px;
     font-weight: 600;
@@ -3311,12 +3326,20 @@
     color: var(--fg);
     margin: 0;
   }
-  .view-header .lede {
+  .lede-dot {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    font-size: 11px;
+    line-height: 1;
     color: var(--muted);
-    font-size: 13px;
-    margin: 4px 0 0;
-    max-width: 64ch;
+    border: 1px solid var(--hairline);
+    cursor: help;
   }
+  .lede-dot:hover, .lede-dot:focus-visible { color: var(--accent); border-color: var(--accent); }
 
   /* Primary CTA inside the presets row — pushed to the far right via
      margin-left:auto so it doesn't visually mix with the chip-style
@@ -3558,10 +3581,25 @@
   .muted { color: var(--muted); font-size: 12.5px; }
   .filters { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 
-  /* Preset pills — one-click filter configurations above the chips. The
-     active pill is accent-bordered. A subtle hint string trails the row
-     to let the user know what the current selection emphasises. */
-  .presets-row { gap: 8px; flex-wrap: wrap; }
+  /* Sell toolbar — presets, tag chips, and the Filters disclosure merged
+     into one borderless, wrapping strip (were three stacked rows inside a
+     bordered .card) so the workspace loses a card's worth of vertical
+     space and outline on every load. The primary CTA anchors the end of
+     this same line via margin-left:auto, same as it did inside the old
+     presets-row. */
+  .sell-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 12px;
+    padding: 8px 2px;
+  }
+  .toolbar-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .toolbar-divider { width: 1px; height: 20px; background: var(--hairline); flex: 0 0 auto; }
+
+  /* Preset pills — one-click filter configurations. The active pill is
+     accent-bordered AND carries a leading check mark so the selection
+     doesn't rely on colour alone. A subtle hint string trails the group. */
   .preset {
     background: transparent;
     border: 1px solid var(--border);
@@ -3579,28 +3617,29 @@
     color: var(--accent);
     border-color: var(--accent);
   }
-  .preset-hint { margin-left: auto; font-size: 11.5px; }
+  .preset.active::before { content: '✓ '; }
+  .preset-hint { font-size: 11.5px; }
 
-  /* Filters disclosure — collapses the rail's numeric inputs behind a
-     single summary line. Visible by default: search (in the table) +
-     tag chips above. Open state persists in localStorage so power users
-     don't re-click every session. */
-  .filter-disclosure {
-    border-top: 1px solid var(--hairline);
-    padding-top: 10px;
-    margin-top: 2px;
-  }
+  /* Filters disclosure — now an inline toolbar item (was a full-width
+     block with its own top border) whose panel floats as a popover below
+     the summary instead of pushing the toolbar's other groups down. Open
+     state persists in localStorage so power users don't re-click every
+     session. */
+  .filter-disclosure { position: relative; }
   .filter-disclosure > summary {
     cursor: pointer;
     list-style: none;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
     font-size: 12px;
     color: var(--muted);
-    padding: 2px 0;
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 5px;
     user-select: none;
   }
+  .filter-disclosure > summary:hover { color: var(--fg); background: var(--panel-2); }
   .filter-disclosure > summary::-webkit-details-marker { display: none; }
   .filter-disclosure > summary::before {
     content: '+';
@@ -3611,6 +3650,7 @@
     display: inline-block;
   }
   .filter-disclosure[open] > summary::before { content: '−'; color: var(--accent); }
+  .filter-disclosure[open] > summary { color: var(--accent); border-color: var(--accent); }
   .filter-disclosure > summary .dis-label {
     color: var(--fg);
     font-weight: 600;
@@ -3619,7 +3659,17 @@
     font-size: 11px;
   }
   .filter-disclosure[open] > summary .dis-label { color: var(--accent); }
-  .filter-disclosure > .row { margin-top: 10px; }
+  .filters-panel {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 15;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+  }
 
   /* First-session Score explainer. Single dismissable line above the
      table — the casual-flipper persona was confused by what Score
@@ -3885,10 +3935,38 @@
     flex-shrink: 0;
     text-align: right;
   }
-  .pick-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-  .pick-name { color: var(--fg); text-decoration: none; font-weight: 600; font-size: 13px; }
+  /* Single line per pick (was name above reason, two stacked lines) —
+     reclaims vertical space so more picks fit above the fold. The reason
+     sentence truncates by default and expands on hover/focus rather than
+     wrapping, so a long sentence can't push the row back to two lines. */
+  .pick-main { display: flex; flex-direction: row; align-items: baseline; gap: 10px; min-width: 0; flex: 1; }
+  .pick-name {
+    flex: 0 0 auto;
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--fg);
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 13px;
+  }
   .pick-name:hover { color: var(--accent); text-decoration: underline; }
-  .pick-reason { margin: 0; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+  .pick-reason {
+    margin: 0;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 12.5px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+  .pick-row:hover .pick-reason, .pick-row:focus-within .pick-reason {
+    white-space: normal;
+    overflow: visible;
+  }
   /* Timing tint mirrors .tag.hold/.tag.peak in ResultsTable — same signal,
      same colour, so the strip and the table below read as one vocabulary. */
   .pick-reason.hold { color: var(--warn); }
@@ -3910,7 +3988,7 @@
   }
   .pick-score .unit { font-size: 11px; color: var(--muted); margin-left: 2px; }
   .pick-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-  .pick-list { font-size: 12px; padding: 5px 12px; }
+  .pick-list { font-size: 12px; padding: 5px 12px; min-height: 24px; }
   .pick-snooze {
     background: transparent;
     border: none;
@@ -3919,6 +3997,8 @@
     line-height: 1;
     cursor: pointer;
     padding: 4px 7px;
+    min-width: 24px;
+    min-height: 24px;
   }
   .pick-snooze:hover { color: var(--bad); }
   .picks-all-snoozed { padding: 12px 0; margin: 0; }
