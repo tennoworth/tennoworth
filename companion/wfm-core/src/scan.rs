@@ -12,6 +12,7 @@ use anyhow::anyhow;
 use anyhow::{bail, Result};
 use regex::bytes::Regex;
 use std::collections::HashMap;
+use std::sync::LazyLock;
 use sysinfo::System;
 
 /// The session secrets + build metadata scraped out of the running game.
@@ -56,35 +57,37 @@ pub fn matches_warframe(p: &sysinfo::Process) -> bool {
     false
 }
 
-fn cred_re() -> Regex {
+// Compiled once for the process lifetime, not once per scanned chunk.
+// aggregate_match runs on every ~4 MB chunk (Linux) / every VirtualQuery
+// region (Windows) — a multi-GB game process is hundreds to low-thousands
+// of calls, and Regex::new() was previously re-run 3x on every single one.
+static CRED_RE: LazyLock<Regex> = LazyLock::new(|| {
     // Confirmed in May 2026 memory scan: this exact form appears in the URLs
     // the game sends. Update here if DE ever rotates the parameter names.
     // ASCII [0-9] (not \d) so we don't need the regex crate's unicode-perl
     // feature — saves ~150 KB on the binary.
     Regex::new(r"accountId=([0-9a-fA-F]{24})&nonce=([0-9]{6,})").unwrap()
-}
+});
 
-fn build_re() -> Regex {
-    Regex::new(r#""BuildLabel":"([0-9.]+)/[A-Za-z0-9]+"#).unwrap()
-}
+static BUILD_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r#""BuildLabel":"([0-9.]+)/[A-Za-z0-9]+"#).unwrap());
 
-fn ct_re() -> Regex {
-    Regex::new(r"&ct=([A-Z]{2,4})\b").unwrap()
-}
+static CT_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"&ct=([A-Z]{2,4})\b").unwrap());
 
-fn aggregate_match<'a>(haystack: &'a [u8], counts: &mut PatternCounts) {
-    for cap in cred_re().captures_iter(haystack) {
+fn aggregate_match(haystack: &[u8], counts: &mut PatternCounts) {
+    for cap in CRED_RE.captures_iter(haystack) {
         let aid = String::from_utf8_lossy(&cap[1]).to_ascii_lowercase();
         let nonce = String::from_utf8_lossy(&cap[2]).into_owned();
         *counts.creds.entry((aid, nonce)).or_insert(0) += 1;
     }
-    for cap in build_re().captures_iter(haystack) {
+    for cap in BUILD_RE.captures_iter(haystack) {
         *counts
             .builds
             .entry(String::from_utf8_lossy(&cap[1]).into_owned())
             .or_insert(0) += 1;
     }
-    for cap in ct_re().captures_iter(haystack) {
+    for cap in CT_RE.captures_iter(haystack) {
         *counts
             .cts
             .entry(String::from_utf8_lossy(&cap[1]).into_owned())
@@ -151,9 +154,15 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
         File::open(&mem_path).map_err(|e| ptrace_open_error(&mem_path, pid, e))?;
 
     let mut counts = PatternCounts::default();
-    let mut buf = vec![0u8; 4 * 1024 * 1024];
-    let mut tail: Vec<u8> = Vec::new();
+    const CHUNK: usize = 4 * 1024 * 1024;
     let overlap = 96;
+    // Scratch buffer reused across every chunk of every region — `hay[0..tail_len]`
+    // holds the small overlap carried from the previous chunk (0 bytes at the
+    // start of a new region) and reads land right after it, so a pattern
+    // straddling a chunk boundary still matches without a fresh allocation
+    // and copy on every iteration (a multi-GB process is thousands of
+    // iterations; this used to allocate+copy ~4 MB on every one of them).
+    let mut hay = vec![0u8; overlap + CHUNK];
 
     let skip_substrings = ["[vvar]", "[vsyscall]", "[vdso]", "/dev/", "/SYSV"];
 
@@ -179,26 +188,22 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
         let start: u64 = u64::from_str_radix(start_s, 16)?;
         let end: u64 = u64::from_str_radix(end_s, 16)?;
         let mut offset = start;
-        tail.clear();
+        let mut tail_len = 0usize;
         while offset < end {
-            let want = std::cmp::min(buf.len() as u64, end - offset) as usize;
+            let want = std::cmp::min(CHUNK as u64, end - offset) as usize;
             if mem_file.seek(SeekFrom::Start(offset)).is_err() {
                 break;
             }
-            let n = match mem_file.read(&mut buf[..want]) {
+            let n = match mem_file.read(&mut hay[tail_len..tail_len + want]) {
                 Ok(0) => break,
                 Ok(n) => n,
                 Err(_) => break,
             };
-            // Concatenate small overlap from previous chunk so a pattern
-            // straddling the boundary still matches.
-            let mut hay: Vec<u8> = Vec::with_capacity(tail.len() + n);
-            hay.extend_from_slice(&tail);
-            hay.extend_from_slice(&buf[..n]);
-            aggregate_match(&hay, &mut counts);
-            tail.clear();
+            let total = tail_len + n;
+            aggregate_match(&hay[..total], &mut counts);
             let keep = std::cmp::min(overlap, n);
-            tail.extend_from_slice(&buf[n - keep..n]);
+            hay.copy_within(total - keep..total, 0);
+            tail_len = keep;
             offset += n as u64;
         }
     }
