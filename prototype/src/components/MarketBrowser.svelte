@@ -229,7 +229,7 @@
   .card {
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 10px;
+    border-radius: 8px;
     padding: 14px 16px;
     display: flex;
     flex-direction: column;
@@ -272,11 +272,14 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 5px 0;
-    border-top: 1px solid var(--border);
+    padding: 5px 6px;
+    margin: 0 -6px;
+    border-top: 1px solid var(--hairline);
+    border-radius: 4px;
     font-size: 13px;
   }
   .item:first-child { border-top: none; }
+  .item:hover { background: var(--panel-2); }
   .nm {
     flex: 1;
     min-width: 0;
