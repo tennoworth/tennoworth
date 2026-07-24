@@ -16,6 +16,7 @@
   import MarketBrowser from './components/MarketBrowser.svelte';
   import DesktopUpdateBanner from './components/DesktopUpdateBanner.svelte';
   import WfmAuthDialogs from './components/WfmAuthDialogs.svelte';
+  import ExportImportDialogs from './components/ExportImportDialogs.svelte';
   import { flattenInventory, extractKeptLvls } from './lib/inventory';
   import { loadCatalogs, resolvePath, type Catalogs } from './lib/resolver';
   import { loadMarket, lookup } from './lib/market';
@@ -29,7 +30,7 @@
   import { deriveRelicPlan } from './lib/relic-planner';
   import { diffOwned } from './lib/storage';
   import type { StateStore } from './lib/state-store';
-  import { encryptPayload, decryptPayload, isEncrypted } from './lib/crypto';
+  import { isEncrypted } from './lib/crypto';
   import {
     loadCompanionConfig, saveCompanionConfig, clearCompanionConfig,
     parseCompanionUrl,
@@ -371,7 +372,7 @@
     // Encrypted exports route to the passphrase dialog instead of the
     // inventory-resolution pipeline.
     if (isEncrypted(data)) {
-      openImportDialog(data);
+      exportImportRef.openImport(data);
       return;
     }
     inventoryName = name;
@@ -796,16 +797,21 @@
   // ---- Encrypted export / import ---------------------------------------
   // Path-of-Building style: passphrase-derived AES-GCM, no accounts. The
   // exported file decrypts back into the same {invName, owned} the UI
-  // restores from localStorage on page load.
-  let exportDialog;
-  let importDialog;
-  let exportPass = $state('');
-  let exportConfirm = $state('');
-  let exportBusy = $state(false);
-  let importPass = $state('');
-  let importBlob = $state(null);
-  let importBusy = $state(false);
-  let cryptoError = $state(null);
+  // restores from localStorage on page load. The dialogs, their state, and
+  // the encrypt/decrypt calls live in ExportImportDialogs.svelte; App.svelte
+  // triggers them imperatively (the Export button, and handleInventory()
+  // routing an encrypted drop to the import dialog) and owns what a
+  // successful import means for its own state.
+  let exportImportRef = $state();
+  async function handleImported({ invName, ts, ownedMap }) {
+    inventoryName = invName;
+    lastUpdated = ts;
+    deltas = diffOwned((await store.loadSnapshot())?.owned, ownedMap);
+    resolved = { owned: ownedMap, unresolved: {} };
+    if (!market) market = await loadBestMarket();
+    await store.saveSnapshot({ invName: inventoryName, owned: ownedMap });
+    phase = 'done';
+  }
 
   // ---- Companion connection state ----
   let companionConfig = $state(null);          // {baseUrl, token} | null
@@ -1029,109 +1035,6 @@
     }
   }
 
-  function openExportDialog() {
-    cryptoError = null;
-    exportPass = '';
-    exportConfirm = '';
-    exportDialog?.showModal();
-  }
-
-  async function performExport(e) {
-    e?.preventDefault();
-    cryptoError = null;
-    if (exportPass !== exportConfirm) {
-      cryptoError = "Passphrases don't match.";
-      return;
-    }
-    if (exportPass.length < 4) {
-      cryptoError = 'Passphrase must be at least 4 characters.';
-      return;
-    }
-    exportBusy = true;
-    try {
-      const payload = {
-        invName: inventoryName,
-        ts: lastUpdated,
-        owned: [...resolved.owned.entries()].map(([key, rec]) => [
-          key,
-          {
-            count: rec.count,
-            name: rec.name,
-            type: rec.type,
-            slug: rec.slug,
-            subtype: rec.subtype ?? null,
-            kept_lvl: rec.kept_lvl ?? null,
-            leveled: rec.leveled ?? 0,
-          },
-        ]),
-      };
-      const blob = await encryptPayload(payload, exportPass);
-      const text = JSON.stringify(blob);
-      const file = new Blob([text], { type: 'application/json' });
-      const url = URL.createObjectURL(file);
-      const a = document.createElement('a');
-      const stamp = new Date().toISOString().slice(0, 10);
-      a.href = url;
-      a.download = `wfminv-${stamp}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      exportDialog?.close();
-    } catch (err) {
-      cryptoError = err.message || String(err);
-    } finally {
-      exportBusy = false;
-    }
-  }
-
-  function openImportDialog(blob) {
-    cryptoError = null;
-    importPass = '';
-    importBlob = blob;
-    importDialog?.showModal();
-  }
-
-  async function performImport(e) {
-    e?.preventDefault();
-    cryptoError = null;
-    importBusy = true;
-    try {
-      const payload = await decryptPayload(importBlob, importPass);
-      if (!Array.isArray(payload?.owned)) {
-        throw new Error('Decrypted file is missing the owned-items array.');
-      }
-      // Hydrate the same way onMount/localStorage restoration does. Old
-      // (pre-subtype) exports stored the slug as the map key and lacked
-      // rec.slug / rec.subtype — backfill from the key so they still load.
-      inventoryName = payload.invName || 'imported.json';
-      lastUpdated = payload.ts || Date.now();
-      const ownedMap = new Map(
-        payload.owned.map(([key, rec]) => [
-          key.includes('|') ? key : `${key}|`,
-          {
-            ...rec,
-            slug: rec.slug ?? (key.includes('|') ? key.split('|')[0] : key),
-            subtype: rec.subtype ?? null,
-            // Older exports predate the leveled-gear feature — default to 0
-            // (unknown) rather than leaving it undefined, which sellableQty's
-            // default param would also catch but keeps the record shape honest.
-            leveled: rec.leveled ?? 0,
-          },
-        ])
-      );
-      deltas = diffOwned((await store.loadSnapshot())?.owned, ownedMap);
-      resolved = { owned: ownedMap, unresolved: {} };
-      if (!market) market = await loadBestMarket();
-      await store.saveSnapshot({ invName: inventoryName, owned: ownedMap });
-      phase = 'done';
-      importDialog?.close();
-    } catch (err) {
-      cryptoError = err.message || String(err);
-    } finally {
-      importBusy = false;
-    }
-  }
 </script>
 
 {#if phase !== 'done'}
@@ -1422,7 +1325,7 @@
             </div>
           {/if}
         </div>
-        <button class="ghost" onclick={openExportDialog} title="Download an encrypted snapshot for another device or backup.">Export</button>
+        <button class="ghost" onclick={() => exportImportRef.openExport()} title="Download an encrypted snapshot for another device or backup.">Export</button>
         <button class="ghost" onclick={handleClear} title="Forget the saved inventory entirely.">Clear</button>
       </div>
     </div>
@@ -2501,76 +2404,13 @@
   <WfmAuthDialogs bind:this={wfmAuthDialogsRef} onunlocked={handleWfmUnlocked} />
 {/if}
 
-<dialog bind:this={exportDialog} class="cryptobox">
-  <form onsubmit={performExport}>
-    <header>
-      <h3>Export encrypted snapshot</h3>
-      <p class="muted">
-        Saves your resolved inventory as an encrypted JSON file. Decrypt on
-        another device with the same passphrase. Nothing leaves your browser.
-      </p>
-    </header>
-    <label>
-      Passphrase
-      <input
-        type="password"
-        autocomplete="new-password"
-        bind:value={exportPass}
-        placeholder="something only you'd type"
-        required
-        minlength="4"
-        autofocus
-      />
-    </label>
-    <label>
-      Confirm
-      <input
-        type="password"
-        autocomplete="new-password"
-        bind:value={exportConfirm}
-        required
-        minlength="4"
-      />
-    </label>
-    {#if cryptoError}
-      <div class="err">{cryptoError}</div>
-    {/if}
-    <footer>
-      <button type="button" class="ghost" onclick={() => exportDialog?.close()}>Cancel</button>
-      <button type="submit" disabled={exportBusy}>{exportBusy ? 'Encrypting…' : 'Download'}</button>
-    </footer>
-  </form>
-</dialog>
-
-<dialog bind:this={importDialog} class="cryptobox">
-  <form onsubmit={performImport}>
-    <header>
-      <h3>Decrypt snapshot</h3>
-      <p class="muted">
-        This looks like an encrypted wfminv snapshot. Enter the passphrase you
-        used when exporting it.
-      </p>
-    </header>
-    <label>
-      Passphrase
-      <input
-        type="password"
-        autocomplete="current-password"
-        bind:value={importPass}
-        required
-        minlength="4"
-        autofocus
-      />
-    </label>
-    {#if cryptoError}
-      <div class="err">{cryptoError}</div>
-    {/if}
-    <footer>
-      <button type="button" class="ghost" onclick={() => importDialog?.close()}>Cancel</button>
-      <button type="submit" disabled={importBusy}>{importBusy ? 'Decrypting…' : 'Decrypt'}</button>
-    </footer>
-  </form>
-</dialog>
+<ExportImportDialogs
+  bind:this={exportImportRef}
+  owned={resolved.owned}
+  {inventoryName}
+  {lastUpdated}
+  onimport={handleImported}
+/>
 
 <style>
   main.landing {
@@ -3679,70 +3519,7 @@
     letter-spacing: 0.02em;
   }
 
-  /* Crypto dialogs — minimal, modal, escapes-to-close. */
-  dialog.cryptobox {
-    background: var(--panel);
-    color: var(--fg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0;
-    max-width: 420px;
-    width: calc(100% - 32px);
-  }
-  dialog.cryptobox::backdrop {
-    background: rgba(0, 0, 0, 0.55);
-    backdrop-filter: blur(2px);
-  }
-  dialog.cryptobox form {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    padding: 20px 20px 16px;
-  }
-  dialog.cryptobox header { display: flex; flex-direction: column; gap: 6px; }
-  dialog.cryptobox h3 {
-    margin: 0;
-    font-size: 13px;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--accent);
-    font-weight: 600;
-  }
-  dialog.cryptobox header p { margin: 0; font-size: 12.5px; line-height: 1.5; }
-  dialog.cryptobox label {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: 11.5px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
-  dialog.cryptobox input[type="password"] {
-    font: inherit;
-    color: var(--fg);
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 8px 10px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  }
-  dialog.cryptobox input[type="password"]:focus {
-    border-color: var(--accent);
-  }
-  dialog.cryptobox .err {
-    color: var(--bad);
-    font-size: 12px;
-    background: color-mix(in srgb, var(--bad) 12%, transparent);
-    border: 1px solid color-mix(in srgb, var(--bad) 40%, var(--border));
-    padding: 8px 10px;
-    border-radius: 6px;
-  }
-  dialog.cryptobox footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    padding-top: 4px;
-    border: none;
-  }
+  /* .cryptobox dialog styling moved to WfmAuthDialogs.svelte and
+     ExportImportDialogs.svelte — no more dialog.cryptobox elements render
+     directly in this template. */
 </style>
