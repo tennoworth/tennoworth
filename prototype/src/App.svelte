@@ -14,10 +14,16 @@
   import AssistantChat from './components/AssistantChat.svelte';
   import CopyBtn from './components/CopyBtn.svelte';
   import MarketBrowser from './components/MarketBrowser.svelte';
+  import DesktopUpdateBanner from './components/DesktopUpdateBanner.svelte';
+  import WfmAuthDialogs from './components/WfmAuthDialogs.svelte';
+  import ExportImportDialogs from './components/ExportImportDialogs.svelte';
+  import SellPane from './components/SellPane.svelte';
   import { flattenInventory, extractKeptLvls } from './lib/inventory';
   import { loadCatalogs, resolvePath, type Catalogs } from './lib/resolver';
   import { loadMarket, lookup } from './lib/market';
-  import { scoreRow, bandSignal, clearingPrice, sellableQty, selectPicks, LIQUID_VOL, MIN_PICK_SCORE } from './lib/sell-priority';
+  import { sellableQty } from './lib/sell-priority';
+  import { computeResults as computeFilteredResults, computeAvailableTags, computeEmptyReason, type FilterState } from './lib/filter-engine';
+  import { PRESETS, presetFilterValues, presetStillMatches } from './lib/presets';
 
   const APP_VERSION = __APP_VERSION__;
   const APP_COMMIT = __APP_COMMIT__;
@@ -25,20 +31,16 @@
   import { deriveRelicPlan } from './lib/relic-planner';
   import { diffOwned } from './lib/storage';
   import type { StateStore } from './lib/state-store';
-  import { encryptPayload, decryptPayload, isEncrypted } from './lib/crypto';
+  import { isEncrypted } from './lib/crypto';
   import {
     loadCompanionConfig, saveCompanionConfig, clearCompanionConfig,
-    parseCompanionUrl, pingCompanion, getPendingPlan,
-    CompanionUnreachableError,
+    parseCompanionUrl,
   } from './lib/companion';
+  import { verifyCompanionConnection, probeLoopbackDenied } from './lib/companion-connect';
   import {
     createTransport, isDesktopRuntime,
-    desktopWfmStatus, desktopWfmLogin, desktopWfmUnlock, desktopTrySilentUnlock, DesktopCmdError,
+    desktopWfmStatus, DesktopCmdError,
   } from './lib/transport';
-  import {
-    updateStatus as fetchUpdateStatus, installUpdate, restartApp, onUpdateAvailable,
-    type UpdateStatus,
-  } from './lib/desktop-update';
   import type { CompanionConfig, Inventory, Market, OwnedRecord, PendingPlan, ItemResult } from './lib/types';
   import { humanError } from './lib/errors';
 
@@ -167,62 +169,9 @@
   // selected preset is tracked so the pill can show as active. Custom
   // edits null out the selection (you're no longer "on" a preset).
   let activePreset = $state<string | null>('default');
-  // Each preset is a one-click configuration of (filters, tag chips, and
-  // visible columns). Casual users said the 11-column default table was
-  // overwhelming; presets now also reshape what shows so the workflow's
-  // signal isn't drowned in unrelated numbers. `columns` is the ordered
-  // visible-column list; missing = all columns (Default).
-  interface Preset {
-    minPrice: number;
-    hideAtLvl: number;
-    typeFilter: string;
-    activeTags: string[];
-    label: string;
-    hint: string;
-    columns?: string[];
-    vaultOnly?: boolean;
-    ducatsOnly?: boolean;
-    minVol?: number; // hard per-preset liquidity floor (Trending uses it)
-    minMedian?: number; // 90d-baseline price floor — a +1100% Δ on a 1p fish is noise or wash-trading, not a mover
-    defaultSort?: { key: string; dir: number };
-  }
-  const PRESETS: Record<string, Preset> = {
-    default:  {
-      minPrice: 5, hideAtLvl: 5, typeFilter: 'all', activeTags: [],
-      label: 'Default', hint: 'everything sellable, best first',
-      defaultSort: { key: 'sell_score', dir: -1 },
-    },
-    ducats: {
-      minPrice: 0, hideAtLvl: 11, typeFilter: 'all', activeTags: [],
-      label: 'Ducats', hint: 'prime parts worth feeding to Baro (ducats = his currency)',
-      columns: ['name', 'owned', 'sell_score', 'low_sell', 'volume_48h', 'ducats', 'plat_per_100d'],
-      // Rank by plat-per-100-ducats ASCENDING: lowest plat value per ducat =
-      // worth more fed to Baro than sold on WFM. (Nulls — non-ducat rows — sink.)
-      defaultSort: { key: 'plat_per_100d', dir: 1 },
-      ducatsOnly: true,
-    },
-    trending: {
-      minPrice: 5, hideAtLvl: 5, typeFilter: 'all', activeTags: [],
-      label: 'Trending', hint: 'movers vs 90d median · vol ≥ 10 · baseline ≥ 5p',
-      columns: ['name', 'owned', 'sell_score', 'low_sell', 'medians_7d', 'delta_90d_pct', 'volume_48h', 'ratio'],
-      defaultSort: { key: 'delta_90d_pct', dir: -1 },
-      minVol: 10,
-      minMedian: 5,
-    },
-    sets: {
-      minPrice: 0, hideAtLvl: 11, typeFilter: 'all', activeTags: ['set'],
-      label: 'Sets', hint: 'only set-tagged rows',
-      columns: ['name', 'owned', 'sell_score', 'low_sell', 'top_buy', 'potential_plat'],
-      defaultSort: { key: 'sell_score', dir: -1 },
-    },
-    vault: {
-      minPrice: 0, hideAtLvl: 11, typeFilter: 'all', activeTags: [],
-      label: 'Vaulted', hint: 'vaulted + vaulting-soon prime parts (sell before the cliff)',
-      columns: ['name', 'owned', 'sell_score', 'low_sell', 'top_buy', 'volume_48h', 'potential_plat'],
-      vaultOnly: true,
-      defaultSort: { key: 'sell_score', dir: -1 },
-    },
-  };
+  // PRESETS itself, plus the pure lookup/matching logic, live in
+  // lib/presets.ts. `columns` is the ordered visible-column list;
+  // missing = all columns (Default).
   let visibleColumns = $derived<string[] | null>(activePreset ? PRESETS[activePreset]?.columns ?? null : null);
   // A preset's optional default sort, handed to ResultsTable. Stable object
   // identity per preset → switching presets re-applies it; header clicks don't.
@@ -233,13 +182,23 @@
       ? { ...PRESETS[activePreset].defaultSort }
       : null,
   );
+  // The filter cascade's inputs, bundled for lib/filter-engine.ts — the
+  // hand-set sliders/chips plus whatever the active preset restricts
+  // (vault-only, ducats-only, min-volume, min-median).
+  let filterState = $derived<FilterState>({
+    minPrice, minOwned, typeFilter, hideAtLvl, activeTags,
+    vaultOnly: !!PRESETS[activePreset]?.vaultOnly,
+    ducatsOnly: !!PRESETS[activePreset]?.ducatsOnly,
+    minVol: PRESETS[activePreset]?.minVol ?? 0,
+    minMedian: PRESETS[activePreset]?.minMedian ?? 0,
+  });
   function applyPreset(name: string): void {
-    const p = PRESETS[name];
-    if (!p) return;
-    minPrice = p.minPrice;
-    hideAtLvl = p.hideAtLvl;
-    typeFilter = p.typeFilter;
-    activeTags = new Set(p.activeTags);
+    const values = presetFilterValues(name);
+    if (!values) return;
+    minPrice = values.minPrice;
+    hideAtLvl = values.hideAtLvl;
+    typeFilter = values.typeFilter;
+    activeTags = values.activeTags;
     activePreset = name;
   }
   $effect(() => {
@@ -251,15 +210,9 @@
     void minPrice; void minOwned; void hideAtLvl; void typeFilter; void activeTags.size;
     untrack(() => {
       if (activePreset === null) return;
-      const p = PRESETS[activePreset];
-      if (!p) return;
-      const matches =
-        minPrice === p.minPrice &&
-        hideAtLvl === p.hideAtLvl &&
-        typeFilter === p.typeFilter &&
-        activeTags.size === p.activeTags.length &&
-        p.activeTags.every((t) => activeTags.has(t));
-      if (!matches) activePreset = null;
+      if (!presetStillMatches(activePreset, { minPrice, hideAtLvl, typeFilter, activeTags })) {
+        activePreset = null;
+      }
     });
   });
 
@@ -312,19 +265,8 @@
       } catch (e) {
         console.error('desktop health check failed', e);
       }
-      // C5 update-available handshake: listen for the push (the Rust launch
-      // check may still be in flight) AND pull the stored status (its emit may
-      // have beaten this listener). Best-effort — a failure here must never
-      // disturb boot, and "no update" needs no UI at all.
-      onUpdateAvailable((s) => {
-        if (s.available) updateInfo = s;
-      });
-      try {
-        const s = await fetchUpdateStatus();
-        if (s.available) updateInfo = s;
-      } catch (e) {
-        console.error('update status read failed', e);
-      }
+      // C5 update-available handshake now lives entirely in
+      // DesktopUpdateBanner.svelte's own onMount.
       // Interrupted-batch recovery: the desktop analogue of the connect-time
       // /plan/pending poll. get_pending_plan is JWT-free, so this needs no
       // unlock. Best-effort — a failure just hides the Resume banner.
@@ -431,7 +373,7 @@
     // Encrypted exports route to the passphrase dialog instead of the
     // inventory-resolution pipeline.
     if (isEncrypted(data)) {
-      openImportDialog(data);
+      exportImportRef.openImport(data);
       return;
     }
     inventoryName = name;
@@ -511,7 +453,7 @@
       await store.saveSnapshot({ invName: name, owned });
       lastUpdated = Date.now();
 
-      results = computeResults(owned);
+      results = computeFilteredResults(owned, market, filterState, reserveCopies);
       phase = 'done';
     } catch (e) {
       console.error(e);
@@ -520,158 +462,15 @@
     }
   }
 
-  function computeResults(owned) {
-    const out = [];
-    for (const [key, rec] of owned) {
-      const m = lookup(market, rec.slug);
-      if (!m) continue;
-      const sellable = sellableQty(rec.count, reserveCopies, rec.leveled ?? 0);
-      if (m.avg < minPrice) continue;
-      if (rec.count < minOwned) continue;
-      if (typeFilter !== 'all' && rec.type !== typeFilter) continue;
-      // Hide rows where the user has a leveled-enough copy in `Upgrades`.
-      // null kept_lvl = no individualised instance at all (always show).
-      if (rec.kept_lvl !== null && rec.kept_lvl >= hideAtLvl) continue;
-      // Tag chips — OR within the active set, AND with everything above.
-      if (activeTags.size > 0) {
-        const tags = m.tags || [];
-        let any = false;
-        for (const t of tags) { if (activeTags.has(t)) { any = true; break; } }
-        if (!any) continue;
-      }
-      // Vault preset extra-filter: only rows whose part is vaulted or
-      // about to be. Implicit-"available" rows drop out.
-      if (PRESETS[activePreset]?.vaultOnly) {
-        const status = market.vault_status?.[rec.slug];
-        if (status !== 'vaulted' && status !== 'vaulting-soon') continue;
-      }
-      // Ducats preset: only rows that actually carry a ducat value. The
-      // 'prime' tag alone also matches syndicate augments for prime weapons
-      // (gilded_truth is tagged burston_prime), which have no ducat value —
-      // a "best ducat value" list showing "Ducats: —" rows is nonsense.
-      if (PRESETS[activePreset]?.ducatsOnly) {
-        if (rec.subtype || m.ducats == null) continue;
-      }
-      // Trending's liquidity floor: drop thin-volume rows so the Δ-sort
-      // surfaces real movers, not median spikes (a fish whose 4p median
-      // ticked to 48p reads as +1100% on ~1 trade).
-      const presetMinVol = PRESETS[activePreset]?.minVol ?? 0;
-      if (presetMinVol > 0 && (m.vol || 0) < presetMinVol) continue;
-      // Baseline-price floor: wash trades fake volume AND avg, so the two
-      // floors above don't catch penny-junk pumps (Goopolla: 1p fish pushed
-      // to "12p", vol 47). The 90d-baseline median is the hardest number to
-      // fake — it takes 45+ days of sustained manipulation to move it.
-      const presetMinMedian = PRESETS[activePreset]?.minMedian ?? 0;
-      if (presetMinMedian > 0 && (m.median_90d || 0) < presetMinMedian) continue;
-      const { sell_score, patience } = scoreRow({ owned: sellable, m });
-      // ducats live on `m` because WFM is authoritative for the value —
-      // warframestat's bulk /items/ endpoint doesn't carry it. Relics get
-      // null so we don't suggest "Baro this" on a non-ducat trade.
-      const ducats = rec.subtype ? null : (m.ducats ?? null);
-      // p/100d — "platinum cost per 100 ducats of value." Low numbers
-      // mean ducat-trading the part is the better deal vs selling it on
-      // WFM. Null when no ducats data. Uses the clamped clearing price,
-      // not raw low_sell — a single 1p troll ask made a stable 38p part
-      // read as a "feed it to Baro" deal.
-      const row_price = clearingPrice(m);
-      const plat_per_100d = ducats && ducats > 0 && row_price > 0
-        ? (row_price * 100) / ducats
-        : null;
-      // 90d trend signal. `median_90d` is what experienced WFM traders
-      // price against (48h avg is noisy on low-volume items). We compute
-      // Δ% vs the 90d median using the most recent daily median as
-      // "now". Null when there's no series yet (CSV-only rebuilds
-      // inherit zeros until the next full scrape).
-      const medians = Array.isArray(m.medians_7d) ? m.medians_7d.filter(v => v > 0) : [];
-      // "today" = latest daily median. Pre-split snapshots have no median_now,
-      // so fall back to median_90d (which on those WAS the latest day).
-      // `||` not `??`: a literal median_now of 0 is never a meaningful "today"
-      // price (it's a thin item with no recent trade), so fall back to the 90d
-      // baseline rather than null out the band + Δ signals entirely.
-      const median_now = m.median_now || m.median_90d || null;
-      // median_90d is now the 90-day BASELINE (median of the daily medians), so
-      // Δ-vs-90d = today vs the 90-day norm — a real signal at last. On old
-      // snapshots median_now === median_90d → Δ = 0 until the next scrape, which
-      // is honest rather than fake.
-      const median_90d = m.median_90d > 0 ? m.median_90d : null;
-      // A trend needs trades behind it: one closed sale can print ▲127% on a
-      // vol-1 row (mountain's edge), which reads as signal but is one person's
-      // afternoon. Below LIQUID_VOL the honest Δ is "not enough data" (null →
-      // renders as ·), same bar the ask-clamp uses.
-      const delta_90d_pct =
-        median_now != null && median_90d != null && median_90d > 0 && (m.vol || 0) >= LIQUID_VOL
-          ? ((median_now - median_90d) / median_90d) * 100
-          : null;
-      // Timing: where today's median sits in its 90-day band. Uses median_now,
-      // not low_sell — the Donchian bands are built from the daily median
-      // series, so a thin-book ask outlier (a lone 200p listing on a ~20p item)
-      // would mislabel as "peak". median_now is always inside its own band.
-      // "hold" = near the 90d low (don't dump into a trough — e.g. a mod Baro
-      // just flooded), "peak" = near the 90d high (list now).
-      const timing = bandSignal({
-        price: median_now,
-        donchTop: m.donch_top_90d,
-        donchBot: m.donch_bot_90d,
-        lowSell: m.low_sell,
-        topBuy: m.top_buy,
-      });
-      const tags = Array.isArray(m.tags) ? m.tags : [];
-      out.push({
-        key,
-        slug: rec.slug,
-        subtype: rec.subtype ?? null,
-        name: rec.name,
-        owned: rec.count,
-        sellable,
-        leveled: rec.leveled ?? 0,
-        type: rec.type,
-        kept_lvl: rec.kept_lvl,
-        ducats,
-        plat_per_100d,
-        avg_price: m.avg,
-        low_sell: m.low_sell,
-        // The sanity-clamped ask (what the score already prices at) — the
-        // listing modal prefills from this, not raw low_sell, so a lone
-        // fantasy ask can't become the suggested price.
-        clearing_price: clearingPrice(m),
-        low5_avg: m.low5_avg || 0,
-        top_buy: m.top_buy,
-        volume_48h: m.vol,
-        ratio: m.ratio,
-        potential_plat: sellable * m.avg,
-        // Raw stack value: owned × the avg of the ~5 cheapest live asks —
-        // "what is this pile worth at current listings", no liquidity
-        // discounting (that's sell_score's job). Falls back to the 48h
-        // closed avg on snapshots that predate low5_avg.
-        raw_value: sellable * ((m.low5_avg || 0) > 0 ? m.low5_avg : m.avg),
-        sell_score,
-        patience,
-        timing,
-        medians_7d: medians,
-        median_90d,
-        delta_90d_pct,
-        // Per-row metadata for the new chip / badge surfaces. `tags` is
-        // already the source of truth for filter chips; passing it on
-        // the row lets ResultsTable render an [Aug] pill without
-        // re-looking-up the market entry. vault_status drives the
-        // vault badge; absent = "available" implicitly.
-        tags,
-        is_augment: tags.includes('augment'),
-        vault_status: market.vault_status?.[rec.slug] ?? null,
-      });
-    }
-    out.sort((a, b) => b.sell_score - a.sell_score);
-    return out;
-  }
-
   // Re-derive results whenever any filter input or the owned set changes.
   // We deliberately read the filter state inside the effect (so they're
   // tracked) but write only to `results`, which the effect doesn't read —
-  // no chance of a re-run loop.
+  // no chance of a re-run loop. The filter cascade itself lives in
+  // lib/filter-engine.ts (shared with availableTags + emptyReason below).
   $effect(() => {
-    minPrice; minOwned; typeFilter; hideAtLvl; activeTags.size; reserveCopies;  // track filter changes
-    if (resolved.owned.size && market) {        // track owned + market readiness
-      results = computeResults(resolved.owned);
+    filterState; reserveCopies;                   // track filter changes
+    if (resolved.owned.size && market) {          // track owned + market readiness
+      results = computeFilteredResults(resolved.owned, market, filterState, reserveCopies);
     }
   });
 
@@ -785,42 +584,8 @@
   // went. Sorted by count desc, then alphabetical.
   let availableTags = $derived.by(() => {
     if (!resolved.owned.size || !market) return [];
-    const counts = new Map();
-    // Mirror every filter clause `computeResults` applies — otherwise
-    // chip counts overstate what clicking actually yields. Specifically
-    // the vaultOnly preset clause was missed in the original derivation,
-    // so "23 prime" would show but Vaulted preset + prime chip would
-    // produce 6 rows.
-    const vaultOnly = !!PRESETS[activePreset]?.vaultOnly;
-    const ducatsOnly = !!PRESETS[activePreset]?.ducatsOnly;
-    const minVol = PRESETS[activePreset]?.minVol ?? 0;
-    const minMedianFloor = PRESETS[activePreset]?.minMedian ?? 0;
-    for (const rec of resolved.owned.values()) {
-      const m = lookup(market, rec.slug);
-      if (!m) continue;
-      if (m.avg < minPrice) continue;
-      if (rec.count < minOwned) continue;
-      if (typeFilter !== 'all' && rec.type !== typeFilter) continue;
-      if (rec.kept_lvl !== null && rec.kept_lvl >= hideAtLvl) continue;
-      if (vaultOnly) {
-        const status = market.vault_status?.[rec.slug];
-        if (status !== 'vaulted' && status !== 'vaulting-soon') continue;
-      }
-      if (ducatsOnly && (rec.subtype || m.ducats == null)) continue;
-      if (minVol > 0 && (m.vol || 0) < minVol) continue;
-      if (minMedianFloor > 0 && (m.median_90d || 0) < minMedianFloor) continue;
-      for (const t of (m.tags || [])) {
-        counts.set(t, (counts.get(t) || 0) + 1);
-      }
-    }
-    return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    return computeAvailableTags(resolved.owned, market, filterState);
   });
-
-  function toggleTag(tag) {
-    const next = new Set(activeTags);
-    if (next.has(tag)) next.delete(tag); else next.add(tag);
-    activeTags = next;
-  }
 
   // Auto-derived options for the type dropdown: every category that has at
   // least one sellable item. Built off owned + market (not `results`), so it
@@ -837,21 +602,6 @@
   // Total + per-category breakdown of paths no catalog could price-match.
   // The number itself is reassurance ("the app saw these and skipped them,
   // your prime junk isn't missing"), the breakdown is hover detail.
-  // The Type filter mixes warframestat catalog categories (Mods, Arcanes,
-  // Relics…) with raw inventory.json keys used as fallback (MiscItems,
-  // RawUpgrades…). The internal names leak as-is without this map.
-  const TYPE_LABELS = {
-    MiscItems: 'Parts & misc',
-    Recipes: 'Blueprints',
-    RawUpgrades: 'Mods (unranked stacks)',
-    Suits: 'Warframes',
-    LongGuns: 'Primary weapons',
-    Pistols: 'Secondary weapons',
-    Melee: 'Melee weapons',
-    SpaceGuns: 'Archwing guns',
-    SpaceMelee: 'Archwing melee',
-    SentinelWeapons: 'Sentinel weapons',
-  };
 
   let unresolvedCount = $derived(
     Object.values(resolved.unresolved).reduce((s, n) => s + n, 0)
@@ -922,113 +672,10 @@
     results.reduce((s, r) => s + r.potential_plat, 0)
   );
 
-  // Top picks strip. Built from `results`, which is already sorted best-first,
-  // so selectPicks is a cheap filter+slice — no rescoring. Deliberately reads
-  // `results` rather than `tableView.rows`: the table's own local name-search
-  // box and pill-filter chips only narrow `tableView.rows`, so picks stay
-  // "global" with respect to those. They are NOT independent of the filter
-  // rail / active preset, though — computeResults() reads minPrice/minOwned/
-  // typeFilter/hideAtLvl/activeTags and the active preset's own floors
-  // (vaultOnly/ducatsOnly/minVol/minMedian) directly rather than taking them
-  // as parameters, so `results` (and therefore picks) narrows along with
-  // whatever preset the user has selected. True preset-independence would
-  // need computeResults to accept filter overrides — out of scope here.
-  let allPicks = $derived.by(() => selectPicks(results));
-  // Snooze is session-only, no persistence and no new localStorage key — a
-  // dismissed pick reappearing on reload is the honest, cheap behaviour; it
-  // isn't worth a storage-key version bump for a "hide until refresh" nicety.
-  let snoozedPicks = $state(new Set());
-  let picks = $derived(allPicks.filter((p) => !snoozedPicks.has(p.key ?? p.slug)));
-  function snoozePick(key) {
-    const next = new Set(snoozedPicks);
-    next.add(key);
-    snoozedPicks = next;
-  }
-
-  // Plain-language reason line for a pick, built only from fields the row
-  // already carries (timing / delta_90d_pct / clearing_price / volume_48h) —
-  // no invented ETAs or destinations. Order of checks mirrors how confident
-  // each signal is: a corroborated peak is the strongest "act now" case,
-  // hold is the strongest "don't" case, then whatever 90d trend exists,
-  // then the plain fallback for a flat/illiquid-trend row.
-  function pickReason(p) {
-    const price = Math.round(p.clearing_price);
-    if (p.timing === 'hold') {
-      return 'Near its 90-day low — selling now leaves plat on the table.';
-    }
-    if (p.timing === 'peak') {
-      return p.delta_90d_pct != null && p.delta_90d_pct > 0
-        ? `Near its 90-day high, up ${Math.round(p.delta_90d_pct)}% — a good moment to list around ${price}p.`
-        : `Near its 90-day high — a good moment to list around ${price}p.`;
-    }
-    if (p.delta_90d_pct != null && p.delta_90d_pct >= 1) {
-      return `Up ${Math.round(p.delta_90d_pct)}% vs its 90-day baseline — clears around ${price}p at current demand.`;
-    }
-    if (p.delta_90d_pct != null && p.delta_90d_pct <= -1) {
-      return `Down ${Math.abs(Math.round(p.delta_90d_pct))}% vs its 90-day baseline — clears around ${price}p at current demand.`;
-    }
-    return `Clears around ${price}p at current demand.`;
-  }
-
   // Friendly diagnosis of WHY the table is empty so we don't just shrug.
-  let emptyReason = $derived.by(() => {
-    if (results.length > 0 || !resolved.owned.size) return null;
-    const preset = activePreset ? PRESETS[activePreset] : null;
-    const presetMinVol = preset?.minVol ?? 0;
-    const presetMinMedian = preset?.minMedian ?? 0;
-    const vaultOnly = preset?.vaultOnly ?? false;
-    const ducatsOnly = preset?.ducatsOnly ?? false;
-    // Walk the same filter logic as computeResults but count what each
-    // restriction excludes — including the preset-only clauses, so we don't
-    // blame a price slider when it was really the Vaulted/Trending preset.
-    let candidates = 0, byPrice = 0, byOwned = 0, byType = 0, byKept = 0,
-        byTag = 0, byVault = 0, byDucats = 0, byVol = 0, byMedian = 0;
-    for (const rec of resolved.owned.values()) {
-      const m = lookup(market, rec.slug);
-      if (!m) continue;
-      candidates += 1;
-      if (m.avg < minPrice) byPrice += 1;
-      if (rec.count < minOwned) byOwned += 1;
-      if (typeFilter !== 'all' && rec.type !== typeFilter) byType += 1;
-      if (rec.kept_lvl !== null && rec.kept_lvl >= hideAtLvl) byKept += 1;
-      if (activeTags.size > 0) {
-        const tags = m.tags || [];
-        if (!tags.some((t) => activeTags.has(t))) byTag += 1;
-      }
-      if (vaultOnly) {
-        const status = market.vault_status?.[rec.slug];
-        if (status !== 'vaulted' && status !== 'vaulting-soon') byVault += 1;
-      }
-      if (ducatsOnly && (rec.subtype || m.ducats == null)) byDucats += 1;
-      if (presetMinVol > 0 && (m.vol || 0) < presetMinVol) byVol += 1;
-      if (presetMinMedian > 0 && (m.median_90d || 0) < presetMinMedian) byMedian += 1;
-    }
-    if (candidates === 0) return { kind: 'no-market', candidates };
-    const top = [
-      ['price', byPrice],
-      ['owned', byOwned],
-      ['type',  byType],
-      ['kept',  byKept],
-      ['tag',   byTag],
-      ['vault', byVault],
-      ['ducats', byDucats],
-      ['vol',   byVol],
-      ['median', byMedian],
-    ].sort((a, b) => b[1] - a[1])[0];
-    return { kind: top[0], excluded: top[1], candidates, preset: activePreset };
-  });
-
-  // Preset-driven empty states reset the preset; hand-filter ones relax the
-  // offending slider. A price slider can't rescue a "no vaulted parts" empty.
-  const PRESET_EMPTY_KINDS = new Set(['tag', 'vault', 'ducats', 'vol', 'median']);
-  // One-shot quick-fix actions the empty state can offer.
-  function relaxFilters({ kind }) {
-    if (kind === 'price') minPrice = 1;
-    if (kind === 'owned') minOwned = 1;
-    if (kind === 'type')  typeFilter = 'all';
-    if (kind === 'kept')  hideAtLvl = 11;
-    if (PRESET_EMPTY_KINDS.has(kind)) applyPreset('default');
-  }
+  let emptyReason = $derived.by(() =>
+    computeEmptyReason(resolved.owned, market, filterState, results.length, activePreset)
+  );
 
   // Hidden file input we trigger from the "Replace inventory" button. Using
   // the same handler as the drop-zone keeps both paths identical.
@@ -1070,16 +717,21 @@
   // ---- Encrypted export / import ---------------------------------------
   // Path-of-Building style: passphrase-derived AES-GCM, no accounts. The
   // exported file decrypts back into the same {invName, owned} the UI
-  // restores from localStorage on page load.
-  let exportDialog;
-  let importDialog;
-  let exportPass = $state('');
-  let exportConfirm = $state('');
-  let exportBusy = $state(false);
-  let importPass = $state('');
-  let importBlob = $state(null);
-  let importBusy = $state(false);
-  let cryptoError = $state(null);
+  // restores from localStorage on page load. The dialogs, their state, and
+  // the encrypt/decrypt calls live in ExportImportDialogs.svelte; App.svelte
+  // triggers them imperatively (the Export button, and handleInventory()
+  // routing an encrypted drop to the import dialog) and owns what a
+  // successful import means for its own state.
+  let exportImportRef = $state();
+  async function handleImported({ invName, ts, ownedMap }) {
+    inventoryName = invName;
+    lastUpdated = ts;
+    deltas = diffOwned((await store.loadSnapshot())?.owned, ownedMap);
+    resolved = { owned: ownedMap, unresolved: {} };
+    if (!market) market = await loadBestMarket();
+    await store.saveSnapshot({ invName: inventoryName, owned: ownedMap });
+    phase = 'done';
+  }
 
   // ---- Companion connection state ----
   let companionConfig = $state(null);          // {baseUrl, token} | null
@@ -1110,39 +762,7 @@
   // network access); `unreachableDismissed` lets the user close the banner.
   let loopbackDenied = $state(false);
   let unreachableDismissed = $state(false);
-  // ---- Desktop auto-update (C5) ----
-  // A found update only ever shows a banner; nothing downloads until the user
-  // clicks Install, and the new version applies on restart. `updateInfo` stays
-  // null in the browser build (no listener registered, no status read).
-  let updateInfo = $state<UpdateStatus | null>(null);
-  let updateInstalling = $state(false);
-  let updateInstalled = $state(false);
-  let updateError = $state<string | null>(null);
-  let updateDismissed = $state(false);
-
-  // Explicit confirmation is THE gate: install_update rejects on a download
-  // failure or a bad bundle signature, which lands in the banner while the
-  // running app stays intact (and the update stays retryable).
-  async function installUpdateNow() {
-    updateError = null;
-    updateInstalling = true;
-    try {
-      await installUpdate();
-      updateInstalled = true;
-    } catch (e) {
-      updateError = humanError(e);
-    } finally {
-      updateInstalling = false;
-    }
-  }
-
-  async function restartToApply() {
-    try {
-      await restartApp();
-    } catch (e) {
-      updateError = humanError(e);
-    }
-  }
+  // Desktop auto-update (C5) now lives entirely in DesktopUpdateBanner.svelte.
   // Stale-async guard: verifyCompanion can be in flight from onMount, a manual
   // connect, or Retry at once. Only the newest run may commit status/error.
   let verifyGen = 0;
@@ -1161,6 +781,11 @@
     return view;
   });
 
+  // The actual connect/error/unreachable classification lives in
+  // lib/companion-connect.ts (unit-testable there); this stays the
+  // $state orchestration plus the stale-async guard (only the newest
+  // verifyGen may commit a result — verifyCompanion can be in flight from
+  // onMount, a manual connect, or Retry at once).
   async function verifyCompanion() {
     if (!companionConfig) return;
     const gen = ++verifyGen;
@@ -1168,57 +793,27 @@
     companionError = null;
     loopbackDenied = false;
     unreachableDismissed = false;
-    try {
-      const r = await pingCompanion(companionConfig);
-      if (gen !== verifyGen) return;
-      companionPlatform = r?.platform ?? null;
-      assistantAvailable = r?.assistant === true;
-      // /health is unauthenticated, so a live server with the WRONG token would
-      // still show green here. Confirm the token with one authed call before we
-      // claim connected: getPendingPlan returns null on 404 (no plan) but
-      // throws on a 401 (bad token) — exactly the signal we want. It also
-      // surfaces the Resume option for an interrupted batch. A network reject
-      // HERE is a raw TypeError (not CompanionUnreachableError), so it never
-      // classifies as 'unreachable' — /health already proved reachability.
-      pendingPlan = await getPendingPlan(companionConfig);
-      if (gen !== verifyGen) return;
+    const result = await verifyCompanionConnection(companionConfig);
+    if (gen !== verifyGen) return;
+    if (result.status === 'connected') {
+      companionPlatform = result.platform;
+      assistantAvailable = result.assistant;
+      pendingPlan = result.pendingPlan;
       companionStatus = 'connected';
-    } catch (e) {
-      if (gen !== verifyGen) return;
-      // Only the /health fetch rejecting on an HTTPS origin means "blocked or
-      // serve-down" — the case the cross-view banner exists for. Everything
-      // else (bad token, non-OK HTTP, a post-/health network blip) stays 'error'.
-      if (e instanceof CompanionUnreachableError && location.protocol === 'https:') {
-        companionStatus = 'unreachable';
-        companionError = e.message;
-        void probeLoopbackPermission(gen);
-        return;
-      }
+    } else if (result.status === 'unreachable') {
+      companionStatus = 'unreachable';
+      companionError = result.message;
+      void probeLoopbackPermission(gen);
+    } else {
       companionStatus = 'error';
-      const msg = e.message || String(e);
-      companionError = /401|token/i.test(msg)
-        ? 'Token rejected — re-copy the full URL from the serve output (the token changes every time you restart serve).'
-        : msg;
+      companionError = result.message;
     }
   }
 
-  // Optional supplemental precision for the unreachable banner. If the browser
-  // exposes the loopback/local-network permission and reports it 'denied', we
-  // can state Chrome HAS blocked the request rather than "may have". Wrapped so
-  // an unsupported browser (query throws) or a stale run never affects state.
   async function probeLoopbackPermission(gen) {
-    try {
-      let status;
-      try {
-        status = await navigator.permissions.query({ name: 'loopback-network' });
-      } catch {
-        status = await navigator.permissions.query({ name: 'local-network-access' });
-      }
-      if (gen !== verifyGen) return;
-      if (status?.state === 'denied') loopbackDenied = true;
-    } catch {
-      /* Permissions API absent or the name unsupported — leave the copy generic. */
-    }
+    const denied = await probeLoopbackDenied();
+    if (gen !== verifyGen) return;
+    if (denied) loopbackDenied = true;
   }
 
   // ---- Pending-plan recovery ----
@@ -1248,7 +843,7 @@
       // pending) and open the matching auth dialog — Resume works after that.
       if (e instanceof DesktopCmdError && (e.code === 'needs_login' || e.code === 'needs_unlock')) {
         resumePhase = 'idle';
-        openWfmAuthDialog(e.code);
+        wfmAuthDialogsRef.open(e.code);
         return;
       }
       resumePhase = 'error';
@@ -1322,56 +917,15 @@
   }
 
   // ---- Desktop WFM auth (login / unlock dialogs) -----------------------
-  // The desktop analogue of serve's terminal passphrase prompt. Opened by the
-  // Sell CTA's proactive status check and by the typed needs_login /
-  // needs_unlock rejections listing commands return. Secrets go straight into
-  // the wfm_login / unlock_jwt commands and the bound fields are cleared as
-  // soon as the call returns — nothing lingers in webview state.
-  let wfmLoginDialog = $state();
-  let wfmUnlockDialog = $state();
-  let wfmLoginEmail = $state('');
-  let wfmLoginPassword = $state('');
-  let wfmLoginPassphrase = $state('');
-  let wfmLoginConfirm = $state('');
-  let wfmLoginPlatform = $state('pc');
-  let wfmUnlockPassphrase = $state('');
-  // "Remember on this device" (OS keyring). One preference shared by the
-  // login and unlock dialogs; default on — the browser-cookie parity call.
-  let wfmRemember = $state(true);
-  let wfmAuthBusy = $state(false);
-  let wfmAuthError = $state(null);
-  // What to do once the session unlocks: 'list' re-opens the listing flow the
-  // CTA started; null (the Resume path) leaves the user where they were.
-  let wfmAuthNext = null;
-
-  async function openWfmAuthDialog(code, next = null) {
-    wfmAuthError = null;
-    wfmAuthNext = next;
-    if (code === 'needs_login') {
-      wfmLoginPassword = '';
-      wfmLoginPassphrase = '';
-      wfmLoginConfirm = '';
-      wfmLoginDialog?.showModal();
-    } else {
-      // A remembered device key (OS keyring) unlocks without the modal. Any
-      // miss — no entry, no keyring daemon, stale key — falls through to the
-      // passphrase prompt exactly as before.
-      try {
-        if (await desktopTrySilentUnlock()) {
-          wfmAuthUnlocked();
-          return;
-        }
-      } catch (e) {
-        console.error('silent unlock failed', e);
-      }
-      wfmUnlockPassphrase = '';
-      wfmUnlockDialog?.showModal();
-    }
-  }
-
-  function wfmAuthUnlocked() {
-    if (wfmAuthNext === 'list') listingOpen = true;
-    wfmAuthNext = null;
+  // The desktop analogue of serve's terminal passphrase prompt. The dialogs
+  // themselves, their state, and the login/unlock calls live in
+  // WfmAuthDialogs.svelte; App.svelte triggers them imperatively (three call
+  // sites: the Sell CTA below, doResume's needs_login/needs_unlock rejection,
+  // and ListingReviewModal's onauthrequired) via this ref, and decides what
+  // 'list' means on unlock (open the review modal).
+  let wfmAuthDialogsRef = $state();
+  function handleWfmUnlocked(next) {
+    if (next === 'list') listingOpen = true;
   }
 
   // The Sell CTA routes here. Browser mode opens the review modal directly
@@ -1392,7 +946,7 @@
     try {
       const s = await desktopWfmStatus();
       if (s.unlocked) listingOpen = true;
-      else openWfmAuthDialog(s.logged_in ? 'needs_unlock' : 'needs_login', 'list');
+      else wfmAuthDialogsRef.open(s.logged_in ? 'needs_unlock' : 'needs_login', 'list');
     } catch (e) {
       // Status probe failed (IPC fault) — open the modal anyway; Send will
       // surface the typed code and route to the right dialog.
@@ -1401,156 +955,6 @@
     }
   }
 
-  async function performWfmLogin(e) {
-    e?.preventDefault();
-    wfmAuthError = null;
-    if (wfmLoginPassphrase !== wfmLoginConfirm) {
-      wfmAuthError = "Passphrases don't match.";
-      return;
-    }
-    wfmAuthBusy = true;
-    try {
-      await desktopWfmLogin(wfmLoginEmail.trim(), wfmLoginPassword, wfmLoginPassphrase, wfmLoginPlatform, wfmRemember);
-      wfmLoginDialog?.close();
-      wfmAuthUnlocked();
-    } catch (err) {
-      wfmAuthError = err.message || String(err);
-    } finally {
-      wfmLoginPassword = '';
-      wfmLoginPassphrase = '';
-      wfmLoginConfirm = '';
-      wfmAuthBusy = false;
-    }
-  }
-
-  async function performWfmUnlock(e) {
-    e?.preventDefault();
-    wfmAuthError = null;
-    wfmAuthBusy = true;
-    try {
-      await desktopWfmUnlock(wfmUnlockPassphrase, wfmRemember);
-      wfmUnlockDialog?.close();
-      wfmAuthUnlocked();
-    } catch (err) {
-      // The login file vanished between the check and the unlock — switch to
-      // the login dialog instead of asking for a passphrase that can't work.
-      if (err instanceof DesktopCmdError && err.code === 'needs_login') {
-        wfmUnlockDialog?.close();
-        openWfmAuthDialog('needs_login', wfmAuthNext);
-      } else {
-        // bad_passphrase and transient WFM failures stay in the dialog with
-        // their message — retry is a re-type away.
-        wfmAuthError = err.message || String(err);
-      }
-    } finally {
-      wfmUnlockPassphrase = '';
-      wfmAuthBusy = false;
-    }
-  }
-
-  function openExportDialog() {
-    cryptoError = null;
-    exportPass = '';
-    exportConfirm = '';
-    exportDialog?.showModal();
-  }
-
-  async function performExport(e) {
-    e?.preventDefault();
-    cryptoError = null;
-    if (exportPass !== exportConfirm) {
-      cryptoError = "Passphrases don't match.";
-      return;
-    }
-    if (exportPass.length < 4) {
-      cryptoError = 'Passphrase must be at least 4 characters.';
-      return;
-    }
-    exportBusy = true;
-    try {
-      const payload = {
-        invName: inventoryName,
-        ts: lastUpdated,
-        owned: [...resolved.owned.entries()].map(([key, rec]) => [
-          key,
-          {
-            count: rec.count,
-            name: rec.name,
-            type: rec.type,
-            slug: rec.slug,
-            subtype: rec.subtype ?? null,
-            kept_lvl: rec.kept_lvl ?? null,
-            leveled: rec.leveled ?? 0,
-          },
-        ]),
-      };
-      const blob = await encryptPayload(payload, exportPass);
-      const text = JSON.stringify(blob);
-      const file = new Blob([text], { type: 'application/json' });
-      const url = URL.createObjectURL(file);
-      const a = document.createElement('a');
-      const stamp = new Date().toISOString().slice(0, 10);
-      a.href = url;
-      a.download = `wfminv-${stamp}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
-      exportDialog?.close();
-    } catch (err) {
-      cryptoError = err.message || String(err);
-    } finally {
-      exportBusy = false;
-    }
-  }
-
-  function openImportDialog(blob) {
-    cryptoError = null;
-    importPass = '';
-    importBlob = blob;
-    importDialog?.showModal();
-  }
-
-  async function performImport(e) {
-    e?.preventDefault();
-    cryptoError = null;
-    importBusy = true;
-    try {
-      const payload = await decryptPayload(importBlob, importPass);
-      if (!Array.isArray(payload?.owned)) {
-        throw new Error('Decrypted file is missing the owned-items array.');
-      }
-      // Hydrate the same way onMount/localStorage restoration does. Old
-      // (pre-subtype) exports stored the slug as the map key and lacked
-      // rec.slug / rec.subtype — backfill from the key so they still load.
-      inventoryName = payload.invName || 'imported.json';
-      lastUpdated = payload.ts || Date.now();
-      const ownedMap = new Map(
-        payload.owned.map(([key, rec]) => [
-          key.includes('|') ? key : `${key}|`,
-          {
-            ...rec,
-            slug: rec.slug ?? (key.includes('|') ? key.split('|')[0] : key),
-            subtype: rec.subtype ?? null,
-            // Older exports predate the leveled-gear feature — default to 0
-            // (unknown) rather than leaving it undefined, which sellableQty's
-            // default param would also catch but keeps the record shape honest.
-            leveled: rec.leveled ?? 0,
-          },
-        ])
-      );
-      deltas = diffOwned((await store.loadSnapshot())?.owned, ownedMap);
-      resolved = { owned: ownedMap, unresolved: {} };
-      if (!market) market = await loadBestMarket();
-      await store.saveSnapshot({ invName: inventoryName, owned: ownedMap });
-      phase = 'done';
-      importDialog?.close();
-    } catch (err) {
-      cryptoError = err.message || String(err);
-    } finally {
-      importBusy = false;
-    }
-  }
 </script>
 
 {#if phase !== 'done'}
@@ -1841,7 +1245,7 @@
             </div>
           {/if}
         </div>
-        <button class="ghost" onclick={openExportDialog} title="Download an encrypted snapshot for another device or backup.">Export</button>
+        <button class="ghost" onclick={() => exportImportRef.openExport()} title="Download an encrypted snapshot for another device or backup.">Export</button>
         <button class="ghost" onclick={handleClear} title="Forget the saved inventory entirely.">Clear</button>
       </div>
     </div>
@@ -1852,282 +1256,19 @@
     {@render generalBanners()}
 
     {#if effectiveView === 'sell'}
-      <section class="view-header">
-        <h2>Sell</h2>
-        <span
-          class="lede-dot"
-          role="img"
-          aria-label="About this view"
-          title="Items in your inventory worth listing right now, ranked by sell score."
-        >ⓘ</span>
-      </section>
-
-      <section class="stats">
-        <div class="stat">
-          <span class="k">Owned</span>
-          <span class="v">{resolved.owned.size.toLocaleString()}</span>
-        </div>
-        <div class="stat">
-          <span class="k">Sellable</span>
-          <span class="v">{results.filter((r) => r.sellable > 0).length.toLocaleString()}</span>
-        </div>
-        <div class="stat">
-          <span class="k">Potential</span>
-          <span class="v">
-            {totalPotential.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-            <span class="unit">p</span>
-          </span>
-        </div>
-        <div class="stat right">
-          <span class="k">
-            <span class="dot {marketFreshness}" role="img" aria-label="Market data {marketFreshness}"></span>
-            Market data
-          </span>
-          <span class="v small">{marketStaleness ?? '—'}{marketFreshness !== 'unknown' ? ` · ${marketFreshness}` : ''}</span>
-        </div>
-      </section>
-
-      {#if marketLoadError}
-        <div class="card warn-banner">⚠ {marketLoadError}</div>
-      {:else if marketFreshness === 'stale'}
-        <div class="card warn-banner">
-          ⚠ Prices may be outdated — this market snapshot is {marketStaleness} old. Rankings below use stale data.
-        </div>
-      {/if}
-
-      {#if results.length > 0}
-        {#if allPicks.length > 0}
-          <section class="card picks">
-            <div class="picks-head">
-              <div class="picks-title">
-                <h3>Top picks</h3>
-                <span
-                  class="muted"
-                  title="Same Score as the table below — expected plat per day if listed. Picks also need at least 3 trades/48h (so a listing won't just sit) and {MIN_PICK_SCORE}p/day to clear the bar."
-                >Best sells right now, ranked by expected plat/day — thin-volume listings excluded.</span>
-              </div>
-            </div>
-            <div class="picks-body">
-              {#each picks as p, i (p.key ?? p.slug)}
-                <div class="pick-row">
-                  <span class="pick-rank">{i + 1}</span>
-                  <div class="pick-main">
-                    <a
-                      class="pick-name"
-                      href="https://warframe.market/items/{p.slug}"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >{p.name}</a>
-                    <p class="pick-reason" class:hold={p.timing === 'hold'} class:peak={p.timing === 'peak'}>
-                      {pickReason(p)}
-                      <span class="pick-vol">({Math.round(p.volume_48h).toLocaleString()} trades / 48h)</span>
-                    </p>
-                  </div>
-                  <div class="pick-score">~{Math.round(p.sell_score).toLocaleString()}<span class="unit">p/day</span></div>
-                  <div class="pick-actions">
-                    <button class="pick-list" onclick={() => openListingFlow(p)} aria-label="List {p.name} on WFM">List</button>
-                    <button
-                      type="button"
-                      class="pick-snooze"
-                      onclick={() => snoozePick(p.key ?? p.slug)}
-                      aria-label="Hide {p.name} for this session"
-                      title="Hide for this session"
-                    >×</button>
-                  </div>
-                </div>
-              {/each}
-              {#if picks.length === 0}
-                <p class="muted picks-all-snoozed">All picks snoozed for this session.</p>
-              {/if}
-            </div>
-          </section>
-        {:else}
-          <div class="card empty">
-            <div>
-              <strong>No picks clear the bar right now.</strong>
-              <p class="muted">Nothing owned trades often enough and scores high enough to headline — check the table below for the rest.</p>
-            </div>
-          </div>
-        {/if}
-      {/if}
-
-      <section class="sell-toolbar">
-        <div class="toolbar-group presets-row">
-          {#each Object.entries(PRESETS) as [name, preset]}
-            <button
-              type="button"
-              class="preset"
-              class:active={activePreset === name}
-              aria-pressed={activePreset === name}
-              onclick={() => applyPreset(name)}
-              title={preset.hint}
-            >{preset.label}</button>
-          {/each}
-        </div>
-        <span class="muted preset-hint">
-          {activePreset ? PRESETS[activePreset].hint : 'custom — saved preset cleared'}
-        </span>
-        {#if availableTags.length > 0}
-          <div class="toolbar-divider" aria-hidden="true"></div>
-          <div class="toolbar-group tagchips">
-            {#each availableTags as [tag, count]}
-              <button
-                type="button"
-                class="chip"
-                class:active={activeTags.has(tag)}
-                class:zero={count === 0}
-                aria-pressed={activeTags.has(tag)}
-                onclick={() => toggleTag(tag)}
-                title={count === 0 ? `No matching rows pass the other filters` : `${count} row${count === 1 ? '' : 's'} carry this tag`}
-              >
-                {tag}
-                <span class="chip-count">{count}</span>
-              </button>
-            {/each}
-            {#if activeTags.size > 0}
-              <button type="button" class="chip-clear" onclick={() => (activeTags = new Set())}>
-                clear ({activeTags.size})
-              </button>
-            {/if}
-          </div>
-        {/if}
-        <div class="toolbar-divider" aria-hidden="true"></div>
-        <details class="filter-disclosure" open={filtersOpen} ontoggle={toggleFiltersOpen}>
-          <summary>
-            <span class="dis-label">Filters</span>
-            <span class="muted small">price · owned · keep copies · type · ranked-mods threshold</span>
-          </summary>
-          <div class="filters-panel">
-            <div class="filters">
-              <label>
-                Min avg price
-                <input type="number" bind:value={minPrice} min="0" step="1" style="width:60px" />
-                <span class="muted">p</span>
-              </label>
-              <label title="Hides items you own fewer copies of than this. Set to 2 to keep one of each for yourself.">
-                Min owned
-                <input type="number" bind:value={minOwned} min="1" step="1" style="width:50px" />
-              </label>
-              <label title="Copies of each item to hold back from selling. Set to 1 to never list your last copy. Unlike Min owned (which only hides rows from this table), this changes what's actually listable.">
-                Keep copies
-                <input type="number" data-testid="reserve-copies" value={reserveCopies} oninput={setReserveCopies} min="0" step="1" style="width:50px" />
-              </label>
-              <label>
-                Type
-                <select bind:value={typeFilter}>
-                  <option value="all">All</option>
-                  {#each availableTypes as t}
-                    <option value={t}>{TYPE_LABELS[t] ?? t}</option>
-                  {/each}
-                </select>
-              </label>
-              <label title="Hides a row when you have a copy of that mod in `Upgrades` at this rank or higher. 5 ≈ regular maxed (most mods cap at lvl 5). 10 ≈ only Primed/Galvanized maxed. 0 ≈ also hide unranked instances (e.g. rivens). 11 disables the filter.">
-                Hide if ranked ≥
-                <input type="number" bind:value={hideAtLvl} min="0" max="11" step="1" style="width:55px" />
-              </label>
-            </div>
-          </div>
-        </details>
-        {#if isDesktop || companionStatus === 'connected'}
-          <button
-            class="list-cta"
-            data-testid="desktop-list"
-            onclick={() => openListingFlow()}
-            disabled={listableRows.length === 0}
-            title="Stage the top rows of the current view (preset + sort) for listing. The in-table name filter and badge chips are not applied — review each row in the modal before sending."
-          >List {Math.min(listableRows.length, 50)} on WFM</button>
-        {/if}
-      </section>
-
-      {@render pendingBanner()}
-
-      {#if results.length > 0 && !scoreExplainerDismissed}
-        <div class="score-explainer">
-          <strong>About the “Score” column.</strong>
-          Expected plat <strong>per day</strong> if you listed everything —
-          <code>min(owned, vol_48h / 2) × clearing price</code>, where clearing
-          price is the lowest live ask, clamped up to the 90-day median when the
-          ask is a lone troll undercut (so one 1p listing can't crater a row).
-          Higher = better, uncapped. Items below 2 trades / 48 h get a
-          “patience” tag instead of a near-zero score.
-          Click <code>?</code> on any column header for the same kind of
-          explainer.
-          <button class="dismiss" onclick={dismissScoreExplainer} aria-label="Dismiss">×</button>
-        </div>
-      {/if}
-
-      {#if results.length > 0}
-        <ResultsTable {results} {deltas} {visibleColumns} {presetSort}
-          onfiltered={(rows, active) => (tableView = { rows, active })} />
-      {:else if emptyReason}
-        <div class="card empty">
-          {#if emptyReason.kind === 'no-market'}
-            <div>
-              <strong>Nothing in this inventory has live market data.</strong>
-              <p class="muted">
-                Either nothing here is tradeable, or your market snapshot is
-                empty. Check that <code>market.json</code> looks healthy
-                ({marketStaleness ?? 'never updated'}).
-              </p>
-            </div>
-          {:else if emptyReason.kind === 'price'}
-            <div>
-              <strong>{emptyReason.excluded} sellable items are under {minPrice}p average.</strong>
-              <p class="muted">Lower the price threshold to see them.</p>
-            </div>
-            <button onclick={() => relaxFilters({ kind: 'price' })}>Drop min price to 1p</button>
-          {:else if emptyReason.kind === 'owned'}
-            <div>
-              <strong>{emptyReason.excluded} items you own are below the “owned” threshold ({minOwned}).</strong>
-              <p class="muted">Most are 1-of-a-kind — set min-owned to 1 to include them.</p>
-            </div>
-            <button onclick={() => relaxFilters({ kind: 'owned' })}>Set min owned to 1</button>
-          {:else if emptyReason.kind === 'type'}
-            <div>
-              <strong>Nothing in your inventory matches type “{typeFilter}”.</strong>
-              <p class="muted">Switch back to All to see everything.</p>
-            </div>
-            <button onclick={() => relaxFilters({ kind: 'type' })}>Show all types</button>
-          {:else if emptyReason.kind === 'kept'}
-            <div>
-              <strong>All {emptyReason.excluded} candidates have a copy you've ranked to {hideAtLvl}+ in <code>Upgrades</code>.</strong>
-              <p class="muted">Raise the threshold (or set 11 to disable) to see them.</p>
-            </div>
-            <button onclick={() => relaxFilters({ kind: 'kept' })}>Disable the rank filter</button>
-          {:else if emptyReason.kind === 'vault'}
-            <div>
-              <strong>You own no vaulted or vaulting-soon prime parts.</strong>
-              <p class="muted">The Vaulted preset only shows parts past (or near) their vault cliff.</p>
-            </div>
-            <button onclick={() => relaxFilters({ kind: 'vault' })}>Back to Default</button>
-          {:else if emptyReason.kind === 'vol' || emptyReason.kind === 'median'}
-            <div>
-              <strong>Nothing you own clears the Trending liquidity floor.</strong>
-              <p class="muted">Trending hides thin-volume rows and penny items so the Δ-sort surfaces real movers.</p>
-            </div>
-            <button onclick={() => relaxFilters({ kind: emptyReason.kind })}>Back to Default</button>
-          {:else if emptyReason.kind === 'ducats'}
-            <div>
-              <strong>You own no prime parts with a ducat value.</strong>
-              <p class="muted">Ducats are Baro Ki'Teer's currency — only prime parts and blueprints carry them.</p>
-            </div>
-            <button onclick={() => relaxFilters({ kind: 'ducats' })}>Back to Default</button>
-          {:else if emptyReason.kind === 'tag' && activePreset === 'sets'}
-            <div>
-              <strong>You own nothing that trades as part of a prime set.</strong>
-              <p class="muted">The Sets preset only shows prime parts and assembled sets.</p>
-            </div>
-            <button onclick={() => relaxFilters({ kind: 'tag' })}>Back to Default</button>
-          {:else if emptyReason.kind === 'tag'}
-            <div>
-              <strong>Nothing matches the active badge filter{activeTags.size > 1 ? 's' : ''} ({[...activeTags].join(', ')}).</strong>
-              <p class="muted">Clear the badge chips (or switch preset) to see the rest.</p>
-            </div>
-            <button onclick={() => relaxFilters({ kind: 'tag' })}>Back to Default</button>
-          {/if}
-        </div>
-      {/if}
-
+      <SellPane
+        bind:minPrice bind:minOwned bind:typeFilter bind:hideAtLvl bind:activeTags
+        bind:tableView
+        {resolved} {results} {deltas} {totalPotential}
+        {marketFreshness} {marketStaleness} {marketLoadError}
+        {listableRows} {availableTags} {availableTypes}
+        {visibleColumns} {presetSort} {emptyReason}
+        {activePreset} {reserveCopies} {filtersOpen} {scoreExplainerDismissed}
+        {isDesktop} {companionStatus}
+        {applyPreset} {setReserveCopies} {toggleFiltersOpen} {dismissScoreExplainer}
+        {openListingFlow}
+        {pendingBanner}
+      />
     {:else if effectiveView === 'sets'}
       <section class="view-header">
         <h2>Set picks</h2>
@@ -2821,29 +1962,8 @@
       </div>
     </div>
   {/if}
-  {#if updateInfo && !updateDismissed}
-    <div class="card warn-banner general-banner" role="status" data-testid="update-banner">
-      <div class="gb-body">
-        {#if updateInstalled}
-          <strong>Update installed.</strong> TennoWorth v{updateInfo.version} takes over
-          the next time the app starts.
-        {:else}
-          <strong>Update available:</strong> TennoWorth v{updateInfo.version}
-          (you have v{updateInfo.current_version}). Nothing downloads until you install.
-          {#if updateError}<br />{updateError}{/if}
-        {/if}
-      </div>
-      <div class="gb-actions">
-        {#if updateInstalled}
-          <button onclick={restartToApply}>Restart now</button>
-        {:else}
-          <button onclick={installUpdateNow} disabled={updateInstalling}>
-            {updateInstalling ? 'Installing…' : 'Install update'}
-          </button>
-        {/if}
-        <button class="gb-dismiss" aria-label="Dismiss" onclick={() => (updateDismissed = true)}>×</button>
-      </div>
-    </div>
+  {#if isDesktop}
+    <DesktopUpdateBanner />
   {/if}
 {/snippet}
 
@@ -2919,7 +2039,7 @@
   bind:open={listingOpen}
   rows={reviewRowsOverride ?? listableRows.slice(0, 50)}
   {transport}
-  onauthrequired={(code) => openWfmAuthDialog(code, 'list')}
+  onauthrequired={(code) => wfmAuthDialogsRef.open(code, 'list')}
   onclose={() => (reviewRowsOverride = null)}
 />
 
@@ -2938,171 +2058,16 @@
 {/if}
 
 {#if isDesktop}
-<dialog bind:this={wfmLoginDialog} class="cryptobox" data-testid="wfm-login-dialog">
-  <form onsubmit={performWfmLogin}>
-    <header>
-      <h3>Log in to warframe.market</h3>
-      <p class="muted">
-        Listing needs your WFM account once. The sign-in token is encrypted
-        with your passphrase and stored only on this machine; your password is
-        used for this sign-in and never stored.
-      </p>
-    </header>
-    <label>
-      Email
-      <input type="email" autocomplete="username" bind:value={wfmLoginEmail} required autofocus />
-    </label>
-    <label>
-      Password
-      <input type="password" autocomplete="current-password" bind:value={wfmLoginPassword} required />
-    </label>
-    <label>
-      Platform
-      <select bind:value={wfmLoginPlatform}>
-        <option value="pc">PC (Steam &amp; Epic)</option>
-        <option value="ps4">PlayStation</option>
-        <option value="xbox">Xbox</option>
-        <option value="switch">Switch</option>
-      </select>
-    </label>
-    <label>
-      Encryption passphrase
-      <input
-        type="password"
-        autocomplete="new-password"
-        bind:value={wfmLoginPassphrase}
-        placeholder="min 12 characters — guards the stored token"
-        required
-        minlength="12"
-      />
-    </label>
-    <label>
-      Confirm passphrase
-      <input type="password" autocomplete="new-password" bind:value={wfmLoginConfirm} required minlength="12" />
-    </label>
-    <label class="remember">
-      <input type="checkbox" bind:checked={wfmRemember} />
-      Remember on this device — stores the unlock key in your OS keyring
-      (KWallet, GNOME Keyring, Windows Credential Manager) so you're not asked
-      each launch. Never the passphrase itself.
-    </label>
-    {#if wfmAuthError}
-      <div class="err" data-testid="wfm-auth-error">{wfmAuthError}</div>
-    {/if}
-    <footer>
-      <button type="button" class="ghost" onclick={() => wfmLoginDialog?.close()}>Cancel</button>
-      <button type="submit" disabled={wfmAuthBusy}>{wfmAuthBusy ? 'Signing in…' : 'Log in'}</button>
-    </footer>
-  </form>
-</dialog>
-
-<dialog bind:this={wfmUnlockDialog} class="cryptobox" data-testid="wfm-unlock-dialog">
-  <form onsubmit={performWfmUnlock}>
-    <header>
-      <h3>Unlock warframe.market listing</h3>
-      <p class="muted">
-        Enter the passphrase you set at login to decrypt your WFM token for
-        this session. It stays in the app's memory — never on disk, never in
-        this window.
-      </p>
-    </header>
-    <label>
-      Passphrase
-      <input
-        type="password"
-        autocomplete="current-password"
-        data-testid="wfm-unlock-pass"
-        bind:value={wfmUnlockPassphrase}
-        required
-        autofocus
-      />
-    </label>
-    <label class="remember">
-      <input type="checkbox" bind:checked={wfmRemember} />
-      Remember on this device — stores the unlock key in your OS keyring so
-      you're not asked each launch. Never the passphrase itself.
-    </label>
-    {#if wfmAuthError}
-      <div class="err" data-testid="wfm-auth-error">{wfmAuthError}</div>
-    {/if}
-    <footer>
-      <button type="button" class="ghost" onclick={() => wfmUnlockDialog?.close()}>Cancel</button>
-      <button type="submit" disabled={wfmAuthBusy}>{wfmAuthBusy ? 'Unlocking…' : 'Unlock'}</button>
-    </footer>
-  </form>
-</dialog>
+  <WfmAuthDialogs bind:this={wfmAuthDialogsRef} onunlocked={handleWfmUnlocked} />
 {/if}
 
-<dialog bind:this={exportDialog} class="cryptobox">
-  <form onsubmit={performExport}>
-    <header>
-      <h3>Export encrypted snapshot</h3>
-      <p class="muted">
-        Saves your resolved inventory as an encrypted JSON file. Decrypt on
-        another device with the same passphrase. Nothing leaves your browser.
-      </p>
-    </header>
-    <label>
-      Passphrase
-      <input
-        type="password"
-        autocomplete="new-password"
-        bind:value={exportPass}
-        placeholder="something only you'd type"
-        required
-        minlength="4"
-        autofocus
-      />
-    </label>
-    <label>
-      Confirm
-      <input
-        type="password"
-        autocomplete="new-password"
-        bind:value={exportConfirm}
-        required
-        minlength="4"
-      />
-    </label>
-    {#if cryptoError}
-      <div class="err">{cryptoError}</div>
-    {/if}
-    <footer>
-      <button type="button" class="ghost" onclick={() => exportDialog?.close()}>Cancel</button>
-      <button type="submit" disabled={exportBusy}>{exportBusy ? 'Encrypting…' : 'Download'}</button>
-    </footer>
-  </form>
-</dialog>
-
-<dialog bind:this={importDialog} class="cryptobox">
-  <form onsubmit={performImport}>
-    <header>
-      <h3>Decrypt snapshot</h3>
-      <p class="muted">
-        This looks like an encrypted wfminv snapshot. Enter the passphrase you
-        used when exporting it.
-      </p>
-    </header>
-    <label>
-      Passphrase
-      <input
-        type="password"
-        autocomplete="current-password"
-        bind:value={importPass}
-        required
-        minlength="4"
-        autofocus
-      />
-    </label>
-    {#if cryptoError}
-      <div class="err">{cryptoError}</div>
-    {/if}
-    <footer>
-      <button type="button" class="ghost" onclick={() => importDialog?.close()}>Cancel</button>
-      <button type="submit" disabled={importBusy}>{importBusy ? 'Decrypting…' : 'Decrypt'}</button>
-    </footer>
-  </form>
-</dialog>
+<ExportImportDialogs
+  bind:this={exportImportRef}
+  owned={resolved.owned}
+  {inventoryName}
+  {lastUpdated}
+  onimport={handleImported}
+/>
 
 <style>
   main.landing {
@@ -3326,34 +2291,6 @@
     color: var(--fg);
     margin: 0;
   }
-  .lede-dot {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    font-size: 11px;
-    line-height: 1;
-    color: var(--muted);
-    border: 1px solid var(--hairline);
-    cursor: help;
-  }
-  .lede-dot:hover, .lede-dot:focus-visible { color: var(--accent); border-color: var(--accent); }
-
-  /* Primary CTA inside the presets row — pushed to the far right via
-     margin-left:auto so it doesn't visually mix with the chip-style
-     presets next to it. Same colour family as the accent. */
-  .list-cta {
-    margin-left: auto;
-    background: var(--accent);
-    color: var(--bg);
-    border: 1px solid var(--accent);
-    font-weight: 600;
-  }
-  .list-cta:hover:not(:disabled) { filter: brightness(1.1); }
-  .list-cta:disabled { opacity: 0.4; cursor: not-allowed; }
-
   /* Mobile: stack the shell. Sidebar becomes a horizontal scroll strip
      at the top; src-pin moves under the nav and shows the inventory name
      inline. Below ~900px the 220px rail eats too much of the workspace,
@@ -3507,44 +2444,6 @@
     .steps li:last-child { border-bottom: none; }
   }
 
-  /* Stats strip — segmented bordered box: one outlined container,
-     hairline dividers between cells. */
-  .stats {
-    display: inline-flex;
-    flex-wrap: wrap;
-    align-self: flex-start;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    overflow: hidden;
-  }
-  .stat {
-    padding: 7px 16px;
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    border-right: 1px solid var(--hairline);
-  }
-  .stat:last-child { border-right: none; }
-  .stat .k {
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--muted);
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .stat .v {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-variant-numeric: tabular-nums;
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 1.3;
-  }
-  .stat .v.small { font-weight: 500; font-size: 12.5px; }
-  .stat .v .unit { font-size: 11px; color: var(--muted); margin-left: 2px; }
-
   /* Freshness dot: green/amber/red signal, tuned for our 2 h scrape cadence. */
   .dot {
     width: 7px;
@@ -3579,97 +2478,7 @@
   .src { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; }
   .src strong { font-weight: 600; }
   .muted { color: var(--muted); font-size: 12.5px; }
-  .filters { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 
-  /* Sell toolbar — presets, tag chips, and the Filters disclosure merged
-     into one borderless, wrapping strip (were three stacked rows inside a
-     bordered .card) so the workspace loses a card's worth of vertical
-     space and outline on every load. The primary CTA anchors the end of
-     this same line via margin-left:auto, same as it did inside the old
-     presets-row. */
-  .sell-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px 12px;
-    padding: 8px 2px;
-  }
-  .toolbar-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-  .toolbar-divider { width: 1px; height: 20px; background: var(--hairline); flex: 0 0 auto; }
-
-  /* Preset pills — one-click filter configurations. The active pill is
-     accent-bordered AND carries a leading check mark so the selection
-     doesn't rely on colour alone. A subtle hint string trails the group. */
-  .preset {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--muted);
-    border-radius: 5px;
-    padding: 4px 12px;
-    letter-spacing: 0.02em;
-    cursor: pointer;
-    transition: color 120ms, border-color 120ms, background 120ms;
-    font: inherit;
-    font-size: 12px;
-  }
-  .preset:hover { color: var(--fg); background: var(--panel-2); }
-  .preset.active {
-    color: var(--accent);
-    border-color: var(--accent);
-  }
-  .preset.active::before { content: '✓ '; }
-  .preset-hint { font-size: 11.5px; }
-
-  /* Filters disclosure — now an inline toolbar item (was a full-width
-     block with its own top border) whose panel floats as a popover below
-     the summary instead of pushing the toolbar's other groups down. Open
-     state persists in localStorage so power users don't re-click every
-     session. */
-  .filter-disclosure { position: relative; }
-  .filter-disclosure > summary {
-    cursor: pointer;
-    list-style: none;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    color: var(--muted);
-    padding: 4px 10px;
-    border: 1px solid var(--border);
-    border-radius: 5px;
-    user-select: none;
-  }
-  .filter-disclosure > summary:hover { color: var(--fg); background: var(--panel-2); }
-  .filter-disclosure > summary::-webkit-details-marker { display: none; }
-  .filter-disclosure > summary::before {
-    content: '+';
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 13px;
-    color: var(--muted);
-    width: 10px;
-    display: inline-block;
-  }
-  .filter-disclosure[open] > summary::before { content: '−'; color: var(--accent); }
-  .filter-disclosure[open] > summary { color: var(--accent); border-color: var(--accent); }
-  .filter-disclosure > summary .dis-label {
-    color: var(--fg);
-    font-weight: 600;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    font-size: 11px;
-  }
-  .filter-disclosure[open] > summary .dis-label { color: var(--accent); }
-  .filters-panel {
-    position: absolute;
-    top: calc(100% + 6px);
-    left: 0;
-    z-index: 15;
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px;
-    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
-  }
 
   /* First-session Score explainer. Single dismissable line above the
      table — the casual-flipper persona was confused by what Score
@@ -3715,39 +2524,6 @@
     padding: 3px;
   }
   .general-banner .gb-dismiss:hover { color: var(--fg); }
-  .score-explainer {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-left: 3px solid var(--accent);
-    border-radius: 8px;
-    padding: 10px 38px 10px 14px;
-    font-size: 12.5px;
-    color: var(--muted);
-    line-height: 1.5;
-    position: relative;
-  }
-  .score-explainer strong { color: var(--fg); font-weight: 600; }
-  .score-explainer code {
-    background: var(--panel-2);
-    padding: 1px 6px;
-    border-radius: 4px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 0.93em;
-    color: var(--fg);
-  }
-  .score-explainer .dismiss {
-    position: absolute;
-    top: 6px; right: 8px;
-    background: transparent;
-    border: none;
-    color: var(--muted);
-    font-size: 16px;
-    line-height: 1;
-    cursor: pointer;
-    padding: 4px 8px;
-  }
-  .score-explainer .dismiss:hover { color: var(--fg); }
-
   /* Action-verb prefix on rec cards. Casual users said the cards were
      too noun-heavy — leading with a verb gives them the instruction. */
   .reco-verb {
@@ -3759,85 +2535,6 @@
     margin-right: 6px;
   }
 
-  /* Tag chip row — pills, OR-combined among themselves, AND with the
-     filters row above. Inactive chips show the live row-count next to
-     the tag so the user can see what's worth toggling. Zero-count chips
-     stay visible (strikethrough+muted) so vocabulary is discoverable. */
-  /* Chip row caps at ~96px (≈3 wrap rows on desktop, ≈4 on mobile) with
-     internal vertical scroll. Without the cap an inventory with 168
-     distinct tags grew to 1489px on iPhone — five viewport heights of
-     pills before the user reached any actionable card. */
-  .tagchips {
-    gap: 6px;
-    align-items: flex-start;
-    max-height: 96px;
-    overflow-y: auto;
-    align-content: flex-start;
-  }
-  .chip {
-    background: transparent;
-    color: var(--muted);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 4px 10px 4px 12px;
-    font-size: 11px;
-    letter-spacing: 0.02em;
-    cursor: pointer;
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
-    font: inherit;
-    font-size: 11px;
-    line-height: 1.2;
-    /* Tap-target — old 21px height failed iOS HIG / WCAG ≥ 24px. 28px
-       leaves room without losing the pill aesthetic. */
-    min-height: 28px;
-    transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
-  }
-  .chip:hover { color: var(--fg); border-color: var(--accent); }
-  .chip.active {
-    color: var(--accent);
-    border-color: var(--accent);
-    background: var(--panel-2);
-  }
-  .chip.zero {
-    text-decoration: line-through;
-    opacity: 0.45;
-    cursor: default;
-  }
-  .chip-count {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 10px;
-    color: var(--muted);
-  }
-  .chip.active .chip-count { color: var(--accent); }
-  .chip-clear {
-    background: transparent;
-    border: none;
-    color: var(--muted);
-    font-size: 11px;
-    cursor: pointer;
-    padding: 3px 8px;
-  }
-  .chip-clear:hover { color: var(--bad); }
-  .filters label {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 12px;
-    letter-spacing: 0.02em;
-    color: var(--muted);
-    text-transform: uppercase;
-  }
-  .filters input, .filters select { text-transform: none; letter-spacing: 0; }
-  select {
-    font: inherit;
-    color: var(--fg);
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 5px 8px;
-  }
   button.ghost {
     background: transparent;
     border: 1px solid var(--border);
@@ -3900,108 +2597,6 @@
     color: var(--good);
     margin-left: 4px;
   }
-
-  /* Top picks strip. Same carved-panel shell as ResultsTable's .wrap — a
-     panel border with a raised (--panel-2) header bar — rather than the
-     uniform .card padding used by set-recos/relic-planner, so the picks'
-     one-line "what qualifies" copy reads as a fixed header over a list of
-     rows, not just another item in the list. Rows are hairline-divided,
-     matching .reco below. */
-  .picks { padding: 0; overflow: hidden; }
-  .picks-head {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    padding: 12px 16px;
-    background: var(--panel-2);
-    border-bottom: 1px solid var(--border);
-  }
-  .picks-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-  .picks-title h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--fg); }
-  .picks-body { display: flex; flex-direction: column; padding: 0 16px; }
-  .pick-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 0;
-    border-top: 1px solid var(--hairline);
-  }
-  .pick-row:first-of-type { border-top: none; }
-  .pick-rank {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 11px;
-    color: var(--muted);
-    width: 14px;
-    flex-shrink: 0;
-    text-align: right;
-  }
-  /* Single line per pick (was name above reason, two stacked lines) —
-     reclaims vertical space so more picks fit above the fold. The reason
-     sentence truncates by default and expands on hover/focus rather than
-     wrapping, so a long sentence can't push the row back to two lines. */
-  .pick-main { display: flex; flex-direction: row; align-items: baseline; gap: 10px; min-width: 0; flex: 1; }
-  .pick-name {
-    flex: 0 0 auto;
-    max-width: 220px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--fg);
-    text-decoration: none;
-    font-weight: 600;
-    font-size: 13px;
-  }
-  .pick-name:hover { color: var(--accent); text-decoration: underline; }
-  .pick-reason {
-    margin: 0;
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 12.5px;
-    color: var(--muted);
-    line-height: 1.5;
-  }
-  .pick-row:hover .pick-reason, .pick-row:focus-within .pick-reason {
-    white-space: normal;
-    overflow: visible;
-  }
-  /* Timing tint mirrors .tag.hold/.tag.peak in ResultsTable — same signal,
-     same colour, so the strip and the table below read as one vocabulary. */
-  .pick-reason.hold { color: var(--warn); }
-  .pick-reason.peak { color: var(--good); }
-  .pick-vol {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 11px;
-    color: var(--muted);
-    margin-left: 2px;
-  }
-  .pick-score {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--fg);
-    flex-shrink: 0;
-    text-align: right;
-    min-width: 64px;
-  }
-  .pick-score .unit { font-size: 11px; color: var(--muted); margin-left: 2px; }
-  .pick-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-  .pick-list { font-size: 12px; padding: 5px 12px; min-height: 24px; }
-  .pick-snooze {
-    background: transparent;
-    border: none;
-    color: var(--muted);
-    font-size: 15px;
-    line-height: 1;
-    cursor: pointer;
-    padding: 4px 7px;
-    min-width: 24px;
-    min-height: 24px;
-  }
-  .pick-snooze:hover { color: var(--bad); }
-  .picks-all-snoozed { padding: 12px 0; margin: 0; }
 
   /* Baro card. Quiet by default (countdown mode); flips to a warm-gold
      border when Baro is actively visiting so the user can't miss the
@@ -4138,7 +2733,6 @@
   }
   .card.empty strong { font-weight: 600; }
   .card.empty p { margin: 4px 0 0 0; }
-  .card.empty button { flex-shrink: 0; }
 
   /* FAQ — native <details>, minimal chrome, custom marker. */
   .faq {
@@ -4211,84 +2805,7 @@
     letter-spacing: 0.02em;
   }
 
-  /* Crypto dialogs — minimal, modal, escapes-to-close. */
-  dialog.cryptobox {
-    background: var(--panel);
-    color: var(--fg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0;
-    max-width: 420px;
-    width: calc(100% - 32px);
-  }
-  dialog.cryptobox::backdrop {
-    background: rgba(0, 0, 0, 0.55);
-    backdrop-filter: blur(2px);
-  }
-  dialog.cryptobox form {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    padding: 20px 20px 16px;
-  }
-  dialog.cryptobox header { display: flex; flex-direction: column; gap: 6px; }
-  dialog.cryptobox h3 {
-    margin: 0;
-    font-size: 13px;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--accent);
-    font-weight: 600;
-  }
-  dialog.cryptobox header p { margin: 0; font-size: 12.5px; line-height: 1.5; }
-  dialog.cryptobox label {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: 11.5px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
-  dialog.cryptobox label.remember {
-    flex-direction: row;
-    align-items: flex-start;
-    gap: 8px;
-    text-transform: none;
-    letter-spacing: normal;
-    font-size: 12px;
-    line-height: 1.45;
-  }
-  dialog.cryptobox label.remember input { margin-top: 2px; }
-  dialog.cryptobox input[type="password"],
-  dialog.cryptobox input[type="email"],
-  dialog.cryptobox select {
-    font: inherit;
-    color: var(--fg);
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 8px 10px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  }
-  dialog.cryptobox input[type="password"]:focus,
-  dialog.cryptobox input[type="email"]:focus,
-  dialog.cryptobox select:focus {
-    border-color: var(--accent);
-  }
-  dialog.cryptobox .err {
-    color: var(--bad);
-    font-size: 12px;
-    background: color-mix(in srgb, var(--bad) 12%, transparent);
-    border: 1px solid color-mix(in srgb, var(--bad) 40%, var(--border));
-    padding: 8px 10px;
-    border-radius: 6px;
-  }
-  dialog.cryptobox footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    padding-top: 4px;
-    border: none;
-  }
+  /* .cryptobox dialog styling moved to WfmAuthDialogs.svelte and
+     ExportImportDialogs.svelte — no more dialog.cryptobox elements render
+     directly in this template. */
 </style>

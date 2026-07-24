@@ -107,6 +107,13 @@ not `dispatch('inventory', detail)`.
 - `wfminv:view-v1` — selected view/preset.
 - `wfminv:score-explainer-dismissed-v1` — score explainer dismissed flag.
 
+**Don't read/write these via raw `localStorage` calls.** Go through
+`src/lib/state-store.ts`'s `store.getSetting`/`setSetting` (`SettingKey`
+union) — it's the one seam that also backs the desktop build (Tauri/SQLite)
+with the same calls; a raw `localStorage.setItem` silently no-ops there.
+New setting → extend `SettingKey`, `LOCAL_SETTING_KEYS`, and the desktop
+`hydrate()` key list together.
+
 IndexedDB DB:
 - `wfminv` / store `catalogs` / key `wfstat-items-v3` — slim
   `[uniqueName, {name, category}]` pairs from the baked
