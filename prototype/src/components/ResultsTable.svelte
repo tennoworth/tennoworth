@@ -59,6 +59,10 @@
   let filter = $state('');
   let pageSize = $state(20);
   let page = $state(0);
+  // Compact/Comfortable row-height toggle. Session-only (not persisted) —
+  // Compact is the new denser default; Comfortable restores today's shipped
+  // 8px cell padding for anyone who preferred the old row height.
+  let density = $state<'compact' | 'comfortable'>('compact');
 
   // Pill filter — the badges rendered next to item names double as filterable
   // facets. Multi-select is OR ("show me peaks and holds"); empty = no filter.
@@ -113,6 +117,53 @@
     activePills = next;
     page = 0;
   }
+
+  interface BadgeDef { cls: string; label: string; title: string; }
+
+  // Ordered per-row status badges — same source facts as rowPills (vault
+  // status, relic, augment, patience, timing) but rendered as inline
+  // outlined chips next to the item name. Capped in the template to
+  // BADGE_CAP visible + a "+N" overflow trigger so a row carrying every
+  // possible badge (vault + relic + aug + timing) doesn't crowd the name.
+  function rowBadges(r: Row): BadgeDef[] {
+    const out: BadgeDef[] = [];
+    if (r.vault_status === 'vaulted') {
+      out.push({ cls: 'vaulted', label: 'vaulted', title: 'Prime is currently vaulted. Listings often command a premium.' });
+    } else if (r.vault_status === 'vaulting-soon') {
+      out.push({ cls: 'vaulting-soon', label: 'vaulting soon', title: 'Estimated to vault within ~60 days. Selling now beats the post-vault floor for active traders.' });
+    }
+    if (r.subtype === 'intact' || r.subtype === 'exceptional' || r.subtype === 'flawless' || r.subtype === 'radiant') {
+      out.push({ cls: 'relic-tag', label: 'relic → planner', title: "This is a relic. Selling it intact usually clears less than cracking it — check the Relic planner tab, which ranks your relics by expected plat per crack. Relics are excluded from the bulk 'List on WFM' action." });
+    }
+    if (r.is_augment) {
+      out.push({ cls: 'augment', label: 'aug', title: 'Syndicate augment mod. Typically 25,000 standing to re-purchase from the issuing syndicate (6 mainline syndicates).' });
+    }
+    if (r.patience) {
+      out.push({ cls: 'patience', label: 'patience', title: 'Volume under 2 trades/48h — listing will sit a while before clearing.' });
+    }
+    if (r.timing === 'hold') {
+      out.push({ cls: 'hold', label: 'hold', title: "Price is near its 90-day low — you'd be selling into a trough. Common right after a Baro visit floods the mod; it typically recovers over weeks. Consider holding." });
+    } else if (r.timing === 'peak') {
+      out.push({ cls: 'peak', label: 'peak', title: 'Price is near its 90-day high — a good moment to list this one.' });
+    }
+    return out;
+  }
+  const BADGE_CAP = 2;
+
+  let openBadgeOverflow = $state<string | null>(null);
+  function toggleBadgeOverflow(key: string, e: MouseEvent): void {
+    e.stopPropagation();
+    openBadgeOverflow = openBadgeOverflow === key ? null : key;
+  }
+  $effect(() => {
+    if (!openBadgeOverflow) return;
+    const handler = (e: MouseEvent): void => {
+      const t = e.target as HTMLElement | null;
+      if (!t?.closest('.badge-overflow-popover, .badge-overflow-btn')) openBadgeOverflow = null;
+    };
+    document.addEventListener('click', handler, true);
+    return () => document.removeEventListener('click', handler, true);
+  });
 
   // Counts come from the un-pill-filtered rows so an active chip doesn't
   // zero out its siblings; chips with no matching rows aren't rendered.
@@ -316,6 +367,7 @@
             type="button"
             class="tag pill-chip {p.cls}"
             class:on={activePills.has(p.key)}
+            aria-pressed={activePills.has(p.key)}
             onclick={() => togglePill(p.key)}
             title={`${p.what}. ${activePills.has(p.key) ? 'Click to stop filtering by this badge.' : 'Click to show only these rows.'}`}
           >{p.label} <span class="pill-n">{n}</span></button>
@@ -329,7 +381,7 @@
     </div>
   </div>
 
-  <table>
+  <table class:comfortable={density === 'comfortable'}>
     <thead>
       <tr>
         {#each columns as col}
@@ -382,24 +434,26 @@
                   rel="noopener noreferrer"
                   >{r.name || r.slug}</a
                 >
-                {#if r.vault_status === 'vaulted'}
-                  <span class="tag vaulted" title="Prime is currently vaulted. Listings often command a premium.">vaulted</span>
-                {:else if r.vault_status === 'vaulting-soon'}
-                  <span class="tag vaulting-soon" title="Estimated to vault within ~60 days. Selling now beats the post-vault floor for active traders.">vaulting soon</span>
-                {/if}
-                {#if r.subtype === 'intact' || r.subtype === 'exceptional' || r.subtype === 'flawless' || r.subtype === 'radiant'}
-                  <span class="tag relic-tag" title="This is a relic. Selling it intact usually clears less than cracking it — check the Relic planner tab, which ranks your relics by expected plat per crack. Relics are excluded from the bulk 'List on WFM' action.">relic → planner</span>
-                {/if}
-                {#if r.is_augment}
-                  <span class="tag augment" title="Syndicate augment mod. Typically 25,000 standing to re-purchase from the issuing syndicate (6 mainline syndicates).">aug</span>
-                {/if}
-                {#if r.patience}
-                  <span class="tag patience" title="Volume under 2 trades/48h — listing will sit a while before clearing.">patience</span>
-                {/if}
-                {#if r.timing === 'hold'}
-                  <span class="tag hold" title="Price is near its 90-day low — you'd be selling into a trough. Common right after a Baro visit floods the mod; it typically recovers over weeks. Consider holding.">hold</span>
-                {:else if r.timing === 'peak'}
-                  <span class="tag peak" title="Price is near its 90-day high — a good moment to list this one.">peak</span>
+                {@const badges = rowBadges(r)}
+                {#each badges.slice(0, BADGE_CAP) as b}
+                  <span class="tag {b.cls}" title={b.title}>{b.label}</span>
+                {/each}
+                {#if badges.length > BADGE_CAP}
+                  {@const rowKey = r.key ?? r.slug}
+                  {@const hiddenCount = badges.length - BADGE_CAP}
+                  <button
+                    type="button"
+                    class="tag badge-overflow-btn"
+                    onclick={(e) => toggleBadgeOverflow(rowKey, e)}
+                    aria-label="{hiddenCount} more badge{hiddenCount === 1 ? '' : 's'} for {r.name || r.slug}"
+                  >+{hiddenCount}</button>
+                  {#if openBadgeOverflow === rowKey}
+                    <span class="badge-overflow-popover" role="tooltip">
+                      {#each badges.slice(BADGE_CAP) as b}
+                        <span class="tag {b.cls}" title={b.title}>{b.label}</span>
+                      {/each}
+                    </span>
+                  {/if}
                 {/if}
               {:else if col.key === 'owned'}
                 {fmt(r.owned, col.key)}
@@ -411,9 +465,9 @@
                 {/if}
               {:else if col.key === 'delta'}
                 {#if d > 0}
-                  <span class="delta up">+{d}</span>
+                  <span class="delta up">▲+{d}</span>
                 {:else if d < 0}
-                  <span class="delta down">{d}</span>
+                  <span class="delta down">▼{Math.abs(d)}</span>
                 {:else}
                   <span class="delta zero">·</span>
                 {/if}
@@ -491,16 +545,33 @@
           disabled={currentPage >= maxPage}
         >Next ›</button>
         <span class="pager-spacer"></span>
-        <label class="page-size">
-          Per page
-          <select bind:value={pageSize}>
-            <option value={20}>20</option>
-            <option value={40}>40</option>
-            <option value={60}>60</option>
-            <option value={80}>80</option>
-            <option value={100}>100</option>
-          </select>
-        </label>
+        <div class="segmented density-seg" role="group" aria-label="Row density">
+          <button
+            type="button"
+            class="seg-btn"
+            class:active={density === 'compact'}
+            aria-pressed={density === 'compact'}
+            onclick={() => (density = 'compact')}
+          >Compact</button>
+          <button
+            type="button"
+            class="seg-btn"
+            class:active={density === 'comfortable'}
+            aria-pressed={density === 'comfortable'}
+            onclick={() => (density = 'comfortable')}
+          >Comfortable</button>
+        </div>
+        <div class="segmented pagesize-seg" role="group" aria-label="Rows per page">
+          {#each [20, 40, 60, 80, 100] as n}
+            <button
+              type="button"
+              class="seg-btn"
+              class:active={pageSize === n}
+              aria-pressed={pageSize === n}
+              onclick={() => (pageSize = n)}
+            >{n}</button>
+          {/each}
+        </div>
       </div>
     </div>
   {/if}
@@ -579,16 +650,25 @@
     font-variant-numeric: tabular-nums;
   }
   th, td {
-    /* Tightened from 12px → 8px horizontal so all 14 default columns fit the
-       capped content width without clipping "Potential" off the right edge.
-       Still scrolls (with a visible scrollbar) on narrow laptop widths. */
-    padding: 8px;
+    /* Horizontal stays 8px (tightened from 12px so all 14 default columns
+       fit the capped content width without clipping "Potential" off the
+       right edge — still scrolls on narrow laptop widths). Vertical is the
+       density-toggle axis: 6px compact (new default, was a flat 8px),
+       8px comfortable (today's shipped row height). */
+    padding: 6px 8px;
     text-align: left;
   }
+  table.comfortable th, table.comfortable td { padding: 8px; }
   td {
     border-bottom: 1px solid var(--hairline);
     font-size: 13px;
     color: var(--muted);
+  }
+  /* Numeric columns render in tabular monospace so digits lock to a grid a
+     trader can scan down, not just read left-to-right. Item/badges/trend
+     stay on the body sans stack. */
+  td.right {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   th {
     background: var(--panel-2);
@@ -672,15 +752,20 @@
   th.right, td.right { text-align: right; }
   th.right .hcontent { justify-content: flex-end; }
   th.active { color: var(--accent); }
-  tbody tr:nth-child(even) { background: var(--zebra); }
+  /* Hairline row dividers only (was additionally zebra-striped on even
+     rows) — the hairline + this hover tint carry row separation on their
+     own now that the header/panel borders read at proper contrast. */
   tbody tr:hover td { background: var(--panel-2); }
-  td.col-name { color: var(--fg); }
+  td.col-name { position: relative; color: var(--fg); }
   td.col-sell_score { color: var(--fg); font-weight: 600; }
   /* Rows with nothing left to sell (leveled gear ate the whole stack, or
      the "keep copies" reserve did) stay visible but recede — still useful
-     as inventory context, not an action item. */
-  tbody tr.row-dim { opacity: 0.5; }
-  tbody tr.row-dim:hover { opacity: 0.75; }
+     as inventory context, not an action item. Was `opacity: 0.5`, which
+     silently dropped already-low-contrast --muted text below WCAG AA;
+     this keeps every row's text at a token with checked contrast and just
+     forces the name cell down to --muted instead of --fg. */
+  tbody tr.row-dim td { color: var(--muted); }
+  tbody tr.row-dim td.col-name, tbody tr.row-dim td.col-sell_score { color: var(--muted); font-weight: 400; }
   td a { color: var(--fg); text-decoration: none; }
   td a:hover { color: var(--accent); text-decoration: underline; }
   .arrow { color: var(--accent); }
@@ -815,19 +900,53 @@
     opacity: 0.4;
     cursor: not-allowed;
   }
-  .page-size {
+  /* Segmented controls — density + page-size. Replaces the native
+     page-size <select>, which read as the one default-browser-chrome
+     control in an otherwise fully custom-styled table. */
+  .segmented {
     display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--muted);
-    font-size: 12px;
-  }
-  .page-size select {
-    font: inherit;
-    color: var(--fg);
-    background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 3px 6px;
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .seg-btn {
+    font: inherit;
+    background: var(--panel-2);
+    border: none;
+    border-left: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 11.5px;
+    padding: 4px 10px;
+    min-height: 24px;
+    cursor: pointer;
+  }
+  .seg-btn:first-child { border-left: none; }
+  .seg-btn:hover { color: var(--fg); background: #1D2733; }
+  .seg-btn.active { color: var(--accent); background: var(--panel); font-weight: 600; }
+
+  /* "+N" badge overflow — reuses the header info-popover's click/click-
+     outside interaction so a row carrying every possible badge doesn't
+     crowd the item name past ~2 chips. */
+  .badge-overflow-btn {
+    cursor: pointer;
+    background: transparent;
+    color: var(--muted);
+    font-family: inherit;
+  }
+  .badge-overflow-btn:hover { color: var(--accent); border-color: var(--accent); }
+  .badge-overflow-popover {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    z-index: 50;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    max-width: 240px;
+    padding: 8px;
+    background: var(--panel);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   }
 </style>
