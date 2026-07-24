@@ -12,8 +12,11 @@ rust_out
 
 # Personal data — real companion output, never a fixture. Debug scripts
 # default to these filenames; never commit the real thing.
-/inventory.json
-/wfm_inventory_sellable.csv
+# NOT anchored with a leading slash: the CLI writes inventory.json to its own
+# working directory, so a `companion/inventory.json` slipped past the old
+# /inventory.json rule and sat untracked-but-committable.
+inventory.json
+wfm_inventory_sellable.csv
 
 # Scratch space for third-party binaries pulled in for compat testing
 # (e.g. competitor export tools) — never redistribute someone else's binary.
