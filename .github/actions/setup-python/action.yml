@@ -1,0 +1,20 @@
+name: Setup Python + install deps
+description: >
+  actions/setup-python + pip install, the pair every Python CI job needs.
+  Deliberately no `cache: pip` — this repo has no requirements.txt or
+  pyproject.toml, and setup-python hard-errors on that cache option when
+  neither exists, killing the job before its body ever runs.
+inputs:
+  packages:
+    description: Space-separated pip package list to install.
+    required: false
+    default: requests
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: Install deps
+      shell: bash
+      run: pip install ${{ inputs.packages }}

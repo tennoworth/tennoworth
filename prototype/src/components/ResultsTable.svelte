@@ -1,5 +1,6 @@
 <script lang="ts">
   import { untrack } from 'svelte';
+  import { sparklinePoints } from '../lib/sparkline';
 
   // Row shape passed in from App.svelte's computeResults. Mirrors the
   // fields actually rendered/sorted; keep this in sync.
@@ -240,22 +241,6 @@
   // Build SVG polyline points for an N-point sparkline. Normalises to a
   // fixed [1, H-1] band so a flat series doesn't render as a 0-height
   // line. Returns null when there aren't enough points to draw.
-  function sparklinePoints(arr: number[] | null | undefined, w = 60, h = 18): string | null {
-    if (!Array.isArray(arr) || arr.length < 2) return null;
-    let min = Infinity, max = -Infinity;
-    for (const v of arr) {
-      if (v < min) min = v;
-      if (v > max) max = v;
-    }
-    const range = max - min || 1;
-    const step = w / (arr.length - 1);
-    return arr.map((v, i) => {
-      const x = i * step;
-      const y = (h - 1) - ((v - min) / range) * (h - 2);
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
-    }).join(' ');
-  }
-
   function rowDelta(r: Row): number {
     // Deltas come from diffOwned which keys by the composite (slug|subtype)
     // so radiant vs intact relic counts don't collide. Each row carries its
@@ -460,7 +445,7 @@
                 {#if r.medians_7d && r.medians_7d.length >= 2}
                   <svg class="sparkline" viewBox="0 0 60 18" width="60" height="18" aria-hidden="true">
                     <title>last 7d medians: {r.medians_7d.join(', ')}</title>
-                    <polyline points={sparklinePoints(r.medians_7d)} fill="none" stroke="currentColor" stroke-width="1.2" />
+                    <polyline points={sparklinePoints(r.medians_7d, 60, 18)} fill="none" stroke="currentColor" stroke-width="1.2" />
                   </svg>
                 {:else}
                   <span class="muted">—</span>

@@ -11,6 +11,7 @@ on:
     paths:
       - 'prototype/**'
       - '.github/workflows/build-web.yml'
+      - '.github/actions/publish-rolling-release/**'
   workflow_dispatch:
 
 permissions:
@@ -35,12 +36,9 @@ jobs:
         run: tar -C prototype/dist -czf dist.tgz .
 
       - name: Publish rolling release
-        uses: softprops/action-gh-release@v2
+        uses: ./.github/actions/publish-rolling-release
         with:
           tag_name: web-latest
-          name: web-latest (auto-built)
+          release_name: web-latest (auto-built)
           files: dist.tgz
-          draft: false
-          prerelease: true
-          make_latest: false
           body: Rolling build of prototype/dist from the latest main. Not a version release — see releases tagged v* for the companion binary.

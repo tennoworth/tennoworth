@@ -2,6 +2,8 @@
 // companion.ts — same X-Session-Token mechanism, same loopback-only origin.
 
 import type { CompanionConfig } from './types';
+import { humanError } from './errors';
+import { fetchCompanionJson } from './companion-transport';
 
 // -------- Context building --------
 
@@ -116,7 +118,19 @@ export interface AssistantAnswer {
   usage: AssistantUsage;
 }
 
-export type AssistantErrorCode = 'no_api_key' | 'upstream' | 'auth' | 'network' | 'unknown';
+// The first four are wire-level codes the companion returns (both the HTTP
+// /assistant route and the desktop ask_assistant IPC command) — mirrors
+// companion/wfm-core/src/assistant.rs's AssistantErrorCode. Renaming one is a
+// breaking change; grep that file before changing either side. `auth` /
+// `network` / `unknown` are client-only, synthesized here.
+export type AssistantErrorCode =
+  | 'no_api_key'
+  | 'upstream'
+  | 'rate_limited'
+  | 'too_large'
+  | 'auth'
+  | 'network'
+  | 'unknown';
 
 /** Typed error askAssistant throws — the component maps `code` (and, for
  *  `upstream`, `detail`) to the user-facing copy the product spec fixes. */
@@ -132,6 +146,12 @@ export class AssistantError extends Error {
 }
 
 const MAX_HISTORY = 12;
+// Longer than the companion's own 60s DeepSeek timeout (companion/CLAUDE.md)
+// so a legitimately-slow upstream call isn't cut off client-side first.
+// Previously this fetch had NO timeout at all — an undecided Local Network
+// Access permission prompt (the bug HEALTH_TIMEOUT_MS exists to work around
+// for /health) could hang it forever.
+const ASSISTANT_TIMEOUT_MS = 65_000;
 
 const AUTH_REJECTED_MSG =
   'Token rejected — re-copy the full URL from the serve output (the token changes every time you restart serve).';
@@ -144,6 +164,10 @@ export function assistantErrorMessage(e: unknown): string {
         return 'The companion has no DeepSeek API key configured — set DEEPSEEK_API_KEY or the deepseek-key config file.';
       case 'upstream':
         return `The AI service failed: ${e.detail ?? 'unknown error'}`;
+      case 'rate_limited':
+        return e.detail || 'Too many advisor requests — wait a minute and try again.';
+      case 'too_large':
+        return 'Question or context is too large.';
       case 'auth':
         return AUTH_REJECTED_MSG; // same copy as App.svelte's companionError 401 handling
       case 'network':
@@ -152,7 +176,7 @@ export function assistantErrorMessage(e: unknown): string {
         return e.detail || e.message || 'Something went wrong asking the advisor.';
     }
   }
-  return e instanceof Error ? e.message : String(e);
+  return humanError(e);
 }
 
 /**
@@ -168,37 +192,39 @@ export async function askAssistant(
   history: AssistantMessage[],
   context: string | null,
 ): Promise<AssistantAnswer> {
-  let r: Response;
+  let result: Awaited<ReturnType<typeof fetchCompanionJson>>;
   try {
-    r = await fetch(`${config.baseUrl}/assistant`, {
+    result = await fetchCompanionJson(config.baseUrl, config.token, '/assistant', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Session-Token': config.token },
-      body: JSON.stringify({
+      body: {
         question,
         history: (history || []).slice(-MAX_HISTORY),
         context: context ?? '',
-      }),
-      targetAddressSpace: 'loopback',
+      },
+      signal: AbortSignal.timeout(ASSISTANT_TIMEOUT_MS),
     });
   } catch {
     throw new AssistantError('network');
   }
+  const { ok, status, body } = result;
 
-  let body: unknown = null;
-  try { body = await r.json(); } catch { /* keep null */ }
-
-  if (!r.ok) {
-    if (r.status === 401) throw new AssistantError('auth');
+  if (!ok) {
+    if (status === 401) throw new AssistantError('auth');
     const errObj = body as { error?: unknown; detail?: unknown } | null;
-    if (r.status === 503 && errObj?.error === 'no_api_key') throw new AssistantError('no_api_key');
-    if (r.status === 502 && errObj?.error === 'upstream') {
+    if (status === 503 && errObj?.error === 'no_api_key') throw new AssistantError('no_api_key');
+    if (status === 400 && errObj?.error === 'too_large') throw new AssistantError('too_large');
+    if (status === 429 && errObj?.error === 'rate_limited') {
+      const detail = errObj?.detail;
+      throw new AssistantError('rate_limited', typeof detail === 'string' ? detail : undefined);
+    }
+    if (status === 502 && errObj?.error === 'upstream') {
       const detail = errObj?.detail;
       throw new AssistantError(
         'upstream',
         typeof detail === 'string' ? detail : JSON.stringify(detail ?? 'unknown error'),
       );
     }
-    const fallback = typeof errObj?.error === 'string' ? errObj.error : `HTTP ${r.status}`;
+    const fallback = typeof errObj?.error === 'string' ? errObj.error : `HTTP ${status}`;
     throw new AssistantError('unknown', fallback);
   }
 

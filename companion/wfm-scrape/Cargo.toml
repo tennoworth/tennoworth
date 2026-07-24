@@ -9,9 +9,9 @@ license = "MIT"
 market-math = { path = "../market-math" }
 wfm-client = { path = "../wfm-client" }
 csv = "1"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking", "gzip", "json"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { workspace = true }
 # Host-only binary — chrono is fine here (the player binary doesn't get it).
 # Needed for the injected clock: ISO stamps, fromisoformat-style parsing of
 # WFCD vault dates, and the vaulting-soon horizon arithmetic.

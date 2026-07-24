@@ -18,6 +18,11 @@ use std::path::{Path, PathBuf};
 use chrono::Utc;
 
 use wfm_scrape::clock;
+
+/// Days after which a preserved-from-prior surface triggers a "this surface
+/// is stale" warning. Mirrors `STALE_DAYS` in scripts/csv_to_market_json.py
+/// — change both together.
+const STALE_DAYS: i64 = 7;
 use wfm_scrape::csvin;
 use wfm_scrape::fetch::{self, FixtureHttp, Http, LiveHttp};
 use wfm_scrape::reconcile::reconcile;
@@ -113,6 +118,7 @@ fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
 
     let fixtures_dir = extract_flag(args, "--fixtures-dir");
     let platform = extract_flag(args, "--platform").unwrap_or_else(|| "pc".into());
+    wfm_client::validate_platform(&platform)?;
 
     let mut cfg = ScrapeConfig {
         filter: extract_flag(args, "--filter").unwrap_or_else(|| "prime".into()),
@@ -307,11 +313,11 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     let vs_old: Option<HashMap<String, String>> = prior.get("vault_status").and_then(|s| serde_json::from_value(s.clone()).ok());
     let baro_old: Option<HashMap<String, serde_json::Value>> = prior.get("baro").and_then(|s| serde_json::from_value(s.clone()).ok());
 
-    let r_p2i = reconcile("path_to_info", path_to_info, p2i_old.as_ref(), prior_stamps.get("path_to_info").map(|s| s.as_str()), now, parents_complete, 7);
-    let r_s2p = reconcile("set_to_parts", set_to_parts, s2p_old.as_ref(), prior_stamps.get("set_to_parts").map(|s| s.as_str()), now, parents_complete, 7);
-    let r_rr = reconcile("relic_rewards", relic_rewards, rr_old.as_ref(), prior_stamps.get("relic_rewards").map(|s| s.as_str()), now, true, 7);
-    let r_vs = reconcile("vault_status", vault_status, vs_old.as_ref(), prior_stamps.get("vault_status").map(|s| s.as_str()), now, vault_complete, 7);
-    let r_baro = reconcile("baro", baro, baro_old.as_ref(), prior_stamps.get("baro").map(|s| s.as_str()), now, true, 7);
+    let r_p2i = reconcile("path_to_info", path_to_info, p2i_old.as_ref(), prior_stamps.get("path_to_info").map(|s| s.as_str()), now, parents_complete, STALE_DAYS);
+    let r_s2p = reconcile("set_to_parts", set_to_parts, s2p_old.as_ref(), prior_stamps.get("set_to_parts").map(|s| s.as_str()), now, parents_complete, STALE_DAYS);
+    let r_rr = reconcile("relic_rewards", relic_rewards, rr_old.as_ref(), prior_stamps.get("relic_rewards").map(|s| s.as_str()), now, true, STALE_DAYS);
+    let r_vs = reconcile("vault_status", vault_status, vs_old.as_ref(), prior_stamps.get("vault_status").map(|s| s.as_str()), now, vault_complete, STALE_DAYS);
+    let r_baro = reconcile("baro", baro, baro_old.as_ref(), prior_stamps.get("baro").map(|s| s.as_str()), now, true, STALE_DAYS);
 
     for r in [&r_p2i, &r_s2p, &r_rr] {
         if let Some(w) = &r.stale_warning {

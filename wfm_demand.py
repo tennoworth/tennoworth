@@ -27,10 +27,13 @@ import statistics
 import sys
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 
-import requests
+# Explicit sys.path insert (not a relative import) so this resolves whether
+# run directly (`python3 wfm_demand.py`) or imported by tests.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from scripts.wfm_common import API_ROOT, fetch_json as _wfm_fetch_json, wfm_session  # noqa: E402
 
-API_ROOT = "https://api.warframe.market"
 REQUEST_DELAY = 0.34  # ~3 req/sec — stay under their rate limit
 
 
@@ -38,26 +41,12 @@ def fetch_json(session, path, retries=3):
     """GET with simple exponential backoff on 429s and transient errors.
 
     Handles both legacy v1 responses ({"payload": ...}) and v2 responses
-    ({"apiVersion": ..., "data": ...}) by returning whichever envelope is present.
+    ({"apiVersion": ..., "data": ...}) by returning whichever envelope is
+    present. Thin wrapper over scripts/wfm_common.py's shared implementation
+    — kept as a path-relative call here since every existing call site in
+    this file passes a path (e.g. "/v2/items"), not a full URL.
     """
-    for attempt in range(retries):
-        try:
-            r = session.get(f"{API_ROOT}{path}", timeout=30)
-            if r.status_code == 429:
-                time.sleep(2 ** attempt)
-                continue
-            r.raise_for_status()
-            body = r.json()
-            if "payload" in body:
-                return body["payload"]
-            if "data" in body:
-                return body["data"]
-            return body
-        except requests.RequestException:
-            if attempt == retries - 1:
-                return None
-            time.sleep(2 ** attempt)
-    return None
+    return _wfm_fetch_json(session, f"{API_ROOT}{path}", retries=retries)
 
 
 def get_all_items(session):
@@ -396,6 +385,9 @@ def main():
     p.add_argument("--exclude", default="set",
                    help="Substring to exclude (default: 'set' — full prime sets sell less "
                         "than individual parts). Use --exclude '' to disable.")
+    # Mirrors PLATFORMS in companion/wfm-client/src/lib.rs (the canonical
+    # Rust list, also used by the companion and wfm-scrape) — update both
+    # together if WFM ever adds a platform.
     p.add_argument("--platform", default="pc",
                    choices=["pc", "ps4", "xbox", "switch"], help="Platform.")
     p.add_argument("--limit", type=int, default=0,
@@ -410,16 +402,11 @@ def main():
     p.add_argument("--top", type=int, default=25, help="Top N to print to terminal.")
     args = p.parse_args()
 
-    session = requests.Session()
     # WFM's Cloudflare layer 1015-rate-limits generic UAs (see scripts/CLAUDE.md);
     # a real browser UA is required. The old "wfm-demand-analyzer/1.0" survived on
     # GH Actions datacenter IPs but risks a 1015 block from a residential IP — and
-    # this scraper now runs on the user's home box. Match scripts/wfm_demand's rule.
-    session.headers.update({
-        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0",
-        "Platform": args.platform,
-        "Language": "en",
-    })
+    # this scraper now runs on the user's home box.
+    session = wfm_session(args.platform)
 
     print(f"[{datetime.now():%H:%M:%S}] Fetching master item list...")
     items = get_all_items(session)

@@ -17,6 +17,8 @@ on:
       - 'companion/Cargo.toml'
       - 'companion/Cargo.lock'
       - '.github/workflows/build-scrape.yml'
+      - '.github/actions/setup-rust/**'
+      - '.github/actions/publish-rolling-release/**'
   workflow_dispatch:
 
 permissions:
@@ -24,9 +26,8 @@ permissions:
 
 jobs:
   build:
-    # ubuntu-22.04 specifically: its glibc 2.35 is old enough that the binary
-    # works on every actively-supported distro (glibc has backward- but no
-    # forward-compat). Same reasoning as release-companion.yml.
+    # ubuntu-22.04 for its glibc 2.35 — see release-companion.yml's top
+    # comment for the full rationale (backward- but no forward-compat).
     runs-on: ubuntu-22.04
     defaults:
       run:
@@ -34,11 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: companion
+      - uses: ./.github/actions/setup-rust
 
       - name: Build
         run: cargo build --release -p wfm-scrape
@@ -52,14 +49,11 @@ jobs:
           cat wfm-scrape.sha256
 
       - name: Publish rolling release
-        uses: softprops/action-gh-release@v2
+        uses: ./.github/actions/publish-rolling-release
         with:
           tag_name: scrape-latest
-          name: scrape-latest (auto-built)
+          release_name: scrape-latest (auto-built)
           files: |
             dist/wfm-scrape
             dist/wfm-scrape.sha256
-          draft: false
-          prerelease: true
-          make_latest: false
           body: Rolling build of the host-only wfm-scrape pipeline binary from the latest main. Auto-built; runs the converter shadow on the deploy box (phase 2b), not production. Not a version release — see releases tagged v* for the player companion.

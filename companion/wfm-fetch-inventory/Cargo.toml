@@ -11,10 +11,10 @@ license = "MIT"
 # wfm-core, which pulls the heavy deps (reqwest, crypto, sysinfo, …) transitively.
 [dependencies]
 wfm-core = { path = "../wfm-core" }
-anyhow = "1"
+anyhow = { workspace = true }
 clap = { version = "4", features = ["derive"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 # Interactive passphrase prompts for `login` / late listing unlock.
 rpassword = "7"

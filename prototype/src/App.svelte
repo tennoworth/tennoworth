@@ -40,6 +40,7 @@
     type UpdateStatus,
   } from './lib/desktop-update';
   import type { CompanionConfig, Inventory, Market, OwnedRecord, PendingPlan, ItemResult } from './lib/types';
+  import { humanError } from './lib/errors';
 
   // Desktop (Tauri) vs hosted/serve (browser) is decided ONCE at boot. In
   // desktop mode the companion-connect surface (URL/token/handshake, orders,
@@ -349,7 +350,7 @@
           // user-appropriate reasons), then fall through to any saved config.
           // Deliberately NOT touching companionStatus — a valid saved connection
           // must still verify clean below.
-          deepLinkError = `That companion link didn't work: ${e instanceof Error ? e.message : String(e)}`;
+          deepLinkError = `That companion link didn't work: ${humanError(e)}`;
         }
         history.replaceState(null, '', location.pathname + location.search);
       }
@@ -1129,7 +1130,7 @@
       await installUpdate();
       updateInstalled = true;
     } catch (e) {
-      updateError = e instanceof Error ? e.message : String(e);
+      updateError = humanError(e);
     } finally {
       updateInstalling = false;
     }
@@ -1139,7 +1140,7 @@
     try {
       await restartApp();
     } catch (e) {
-      updateError = e instanceof Error ? e.message : String(e);
+      updateError = humanError(e);
     }
   }
   // Stale-async guard: verifyCompanion can be in flight from onMount, a manual

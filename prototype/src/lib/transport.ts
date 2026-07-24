@@ -336,6 +336,8 @@ export class TauriTransport implements Transport {
         const detail = typeof o.message === 'string' ? o.message : undefined;
         if (o.code === 'no_api_key') throw new AssistantError('no_api_key');
         if (o.code === 'upstream') throw new AssistantError('upstream', detail);
+        if (o.code === 'rate_limited') throw new AssistantError('rate_limited', detail);
+        if (o.code === 'too_large') throw new AssistantError('too_large');
         throw new AssistantError('unknown', detail ?? o.code);
       }
       rethrowInvoke(e);

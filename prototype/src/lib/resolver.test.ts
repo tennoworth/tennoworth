@@ -43,7 +43,7 @@ describe('resolvePath', () => {
     ]);
     const market = fakeMarket();  // empty WFM catalog
     const r = resolvePath('/Lotus/Weird', catalogs, market);
-    expect(r.slug).toBe('sisters_cool_hammer');  // punctuation stripped, snake_case
+    expect(r.slug).toBe('sister_s_cool_hammer');  // punctuation is a word-separator, not deleted — matches WFM's own slugs (see resolver.parity.test.ts)
     expect(r.category).toBe('Melee');
   });
 

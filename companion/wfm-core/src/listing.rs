@@ -30,6 +30,40 @@ pub const SLUG_MISMATCH_GUARD_MULTIPLIER: u32 = 3;
 // `app.field.tooBig` (verified on a real relic listing, May 2026).
 const MAX_PER_TRADE: u32 = 6;
 
+/// Attempts for create/update/delete order calls. This is the path a user
+/// watches in real time — unlike the catalog warm (which already retries via
+/// wfm-client), these calls used to give up after one transport error or 5xx,
+/// so a single dropped packet mid-batch surfaced as a permanent failure on
+/// that item.
+const ORDER_RETRY_ATTEMPTS: u32 = 2;
+
+/// Retry a request builder for transport errors and 5xx responses only —
+/// never 4xx, which are semantic (a bad price, wrong subtype, a slug that
+/// doesn't exist) and won't succeed on retry. Backoff shares
+/// `wfm_client::retry_backoff` (2s/4s/6s) rather than a second hand-rolled
+/// curve. Requests with a non-cloneable body (not the case for any call site
+/// here — all send `.json(...)`) fall back to a single attempt.
+fn send_with_retry(
+    builder: reqwest::blocking::RequestBuilder,
+    max_attempts: u32,
+) -> reqwest::Result<reqwest::blocking::Response> {
+    for attempt in 0..max_attempts {
+        let this_send = match builder.try_clone() {
+            Some(b) => b.send(),
+            None => return builder.send(),
+        };
+        let retryable = match &this_send {
+            Ok(resp) => resp.status().is_server_error(),
+            Err(_) => true,
+        };
+        if !retryable || attempt + 1 == max_attempts {
+            return this_send;
+        }
+        std::thread::sleep(wfm_client::retry_backoff(attempt));
+    }
+    unreachable!("ORDER_RETRY_ATTEMPTS must be >= 1")
+}
+
 #[derive(Deserialize)]
 pub struct PlanRequest {
     pub items: Vec<PlanItem>,
@@ -139,11 +173,7 @@ pub struct PerOrderResult {
 pub fn fetch_wfm_catalog(client: &Client, platform: &str) -> Result<BTreeMap<String, WfmCatalogItem>> {
     // v1 retired; v2 returns a flat `data` array of {id, slug, ...}.
     // Order creation is v2 as well (POST /v2/order, see build_order_body).
-    let resp = client
-        .get("https://api.warframe.market/v2/items")
-        .header("Platform", platform)
-        .header("Language", "en")
-        .header("Crossplay", "true")
+    let resp = wfm_client::wfm_headers(client.get("https://api.warframe.market/v2/items"), platform)
         .send()
         .context("fetching /v2/items")?;
     if !resp.status().is_success() {
@@ -187,14 +217,7 @@ pub fn list_user_orders(unlocked: &Unlocked) -> Result<serde_json::Value> {
         "https://api.warframe.market/v2/orders/user/{}",
         unlocked.username
     );
-    let resp = client
-        .get(&url)
-        .header("Platform", &unlocked.platform)
-        .header("Language", "en")
-        .header("Crossplay", "true")
-        .header("Cookie", format!("JWT={}", unlocked.jwt))
-        .header("Origin", "https://warframe.market")
-        .header("Referer", "https://warframe.market/")
+    let resp = wfm_client::wfm_authed_headers(client.get(&url), &unlocked.platform, &unlocked.jwt)
         .send()
         .context("/v2/orders/user request failed")?;
     let status = resp.status();
@@ -294,16 +317,10 @@ fn patch_one_order(
     body: &serde_json::Value,
 ) -> PerOrderResult {
     let url = format!("https://api.warframe.market/v2/order/{id}");
-    let resp = client
-        .patch(&url)
-        .header("Platform", &unlocked.platform)
-        .header("Language", "en")
-        .header("Crossplay", "true")
-        .header("Cookie", format!("JWT={}", unlocked.jwt))
-        .header("Origin", "https://warframe.market")
-        .header("Referer", "https://warframe.market/")
-        .json(body)
-        .send();
+    let resp = send_with_retry(
+        wfm_client::wfm_authed_headers(client.patch(&url), &unlocked.platform, &unlocked.jwt).json(body),
+        ORDER_RETRY_ATTEMPTS,
+    );
     match resp {
         Ok(r) => {
             let status = r.status();
@@ -329,16 +346,11 @@ fn patch_one_order(
 pub fn delete_order(unlocked: &Unlocked, id: &str) -> Result<()> {
     let client = wfm_client()?;
     let url = format!("https://api.warframe.market/v2/order/{id}");
-    let resp = client
-        .delete(&url)
-        .header("Platform", &unlocked.platform)
-        .header("Language", "en")
-        .header("Crossplay", "true")
-        .header("Cookie", format!("JWT={}", unlocked.jwt))
-        .header("Origin", "https://warframe.market")
-        .header("Referer", "https://warframe.market/")
-        .send()
-        .context("DELETE request failed")?;
+    let resp = send_with_retry(
+        wfm_client::wfm_authed_headers(client.delete(&url), &unlocked.platform, &unlocked.jwt),
+        ORDER_RETRY_ATTEMPTS,
+    )
+    .context("DELETE request failed")?;
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().unwrap_or_default();
@@ -700,16 +712,15 @@ fn execute_one(
     // Header set captured from the live frontend's preflight:
     //   access-control-request-headers: content-type, crossplay, language, platform
     // It uses pure cookie auth — no Authorization header. We mirror that.
-    let resp = http
-        .post("https://api.warframe.market/v2/order")
-        .header("Platform", &unlocked.platform)
-        .header("Language", "en")
-        .header("Crossplay", "true")
-        .header("Cookie", format!("JWT={}", unlocked.jwt))
-        .header("Origin", "https://warframe.market")
-        .header("Referer", "https://warframe.market/")
-        .json(&body)
-        .send();
+    let resp = send_with_retry(
+        wfm_client::wfm_authed_headers(
+            http.post("https://api.warframe.market/v2/order"),
+            &unlocked.platform,
+            &unlocked.jwt,
+        )
+        .json(&body),
+        ORDER_RETRY_ATTEMPTS,
+    );
     let resp = match resp {
         Ok(r) => r,
         Err(e) => return mk_err(format!("HTTP request failed: {e}")),
@@ -889,6 +900,12 @@ mod tests {
     fn order_body_for_relic_includes_subtype_omits_rank() {
         // Reproducer for the May 2026 400: {"rank":"app.field.notAllowed",
         // "subtype":"app.field.required","perTrade":"app.field.required"}.
+        //
+        // The four refinements below (here and at the other `cat(...,
+        // &["intact", ...])` call sites in this module) are test data only —
+        // production reads subtypes[] from WFM's live catalog. They mirror
+        // prototype/src/lib/resolver.ts's REFINEMENTS set by hand; keep both
+        // in sync if WFM ever adds a refinement tier.
         let cat = cat("neo_b2_relic", None, &["intact", "exceptional", "flawless", "radiant"]);
         let item = plan_item("neo_b2_relic", None, None);
         let body = build_order_body(&item, &cat);

@@ -215,8 +215,11 @@ describe('TauriTransport op → invoke mapping', () => {
     expect(err.detail).toBe('HTTP 500');
     installTauri(vi.fn().mockRejectedValue({ code: 'rate_limited', message: 'Too many advisor requests' }));
     err = await t.askAssistant('q', [], null).catch((e) => e);
-    expect(err.code).toBe('unknown');
+    expect(err.code).toBe('rate_limited');
     expect(err.detail).toMatch(/Too many/);
+    installTauri(vi.fn().mockRejectedValue({ code: 'too_large', message: 'Question or context is too large.' }));
+    err = await t.askAssistant('q', [], null).catch((e) => e);
+    expect(err.code).toBe('too_large');
   });
 
   it('askAssistant() resolves with the command answer on success', async () => {
