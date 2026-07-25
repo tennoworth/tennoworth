@@ -125,27 +125,22 @@ jobs:
       - name: Archive artifacts on the versioned release
         if: startsWith(github.ref, 'refs/tags/desktop-v')
         shell: bash
-        env:
-          ARTIFACT_PATHS: ${{ steps.tauri.outputs.artifactPaths }}
         run: |
           set -euo pipefail
           mkdir -p dist
-          # tauri-action reports Windows paths (D:\a\...\TennoWorth.msi), which
-          # Git Bash's `[ -f ]` cannot resolve — tr to forward slashes first.
-          # Also: an `&&` chain as the loop body makes a single missing file the
-          # step's exit status under `set -e`, so use an explicit if/else and
-          # assert on the result at the end instead.
-          printf '%s' "$ARTIFACT_PATHS" | jq -r '.[]' | tr '\\' '/' | while read -r p; do
-            if [ -f "$p" ]; then
-              cp "$p" dist/
-              echo "archiving $(basename "$p")"
-            else
-              echo "::warning title=Artifact missing::$p"
-            fi
-          done
+          # Collect from the bundle tree by RELATIVE path rather than from
+          # tauri-action's `artifactPaths` output. That output is in native
+          # Windows form (D:\a\...\TennoWorth.msi) and Git Bash could not stat
+          # it even after converting to forward slashes, so every file looked
+          # missing. A relative find from the workspace avoids the drive-letter
+          # translation question altogether.
+          find companion/target/release/bundle -type f \
+            \( -name '*.msi' -o -name '*.exe' -o -name '*.sig' \) \
+            -exec cp -v {} dist/ \;
           ls -la dist
           if [ -z "$(ls -A dist 2>/dev/null)" ]; then
-            echo "::error title=Nothing archived::tauri-action reported artifacts but none were copied. The versioned release would ship empty, leaving this build unpinnable."
+            echo "::error title=Nothing archived::No installers found under companion/target/release/bundle. The versioned release would ship empty, leaving this build unpinnable."
+            find companion/target/release/bundle -type f 2>/dev/null | head -20 || echo "(bundle dir absent)"
             exit 1
           fi
 
