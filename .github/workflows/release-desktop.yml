@@ -125,13 +125,29 @@ jobs:
       - name: Archive artifacts on the versioned release
         if: startsWith(github.ref, 'refs/tags/desktop-v')
         shell: bash
+        env:
+          ARTIFACT_PATHS: ${{ steps.tauri.outputs.artifactPaths }}
         run: |
           set -euo pipefail
           mkdir -p dist
-          echo '${{ steps.tauri.outputs.artifactPaths }}' | jq -r '.[]' | while read -r p; do
-            [ -f "$p" ] && cp "$p" dist/ && echo "archiving $(basename "$p")"
+          # tauri-action reports Windows paths (D:\a\...\TennoWorth.msi), which
+          # Git Bash's `[ -f ]` cannot resolve — tr to forward slashes first.
+          # Also: an `&&` chain as the loop body makes a single missing file the
+          # step's exit status under `set -e`, so use an explicit if/else and
+          # assert on the result at the end instead.
+          printf '%s' "$ARTIFACT_PATHS" | jq -r '.[]' | tr '\\' '/' | while read -r p; do
+            if [ -f "$p" ]; then
+              cp "$p" dist/
+              echo "archiving $(basename "$p")"
+            else
+              echo "::warning title=Artifact missing::$p"
+            fi
           done
           ls -la dist
+          if [ -z "$(ls -A dist 2>/dev/null)" ]; then
+            echo "::error title=Nothing archived::tauri-action reported artifacts but none were copied. The versioned release would ship empty, leaving this build unpinnable."
+            exit 1
+          fi
 
       - name: Publish archival copies
         if: startsWith(github.ref, 'refs/tags/desktop-v')
