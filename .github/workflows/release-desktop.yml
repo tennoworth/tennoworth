@@ -82,30 +82,6 @@ jobs:
         working-directory: prototype
         run: bun install --frozen-lockfile
 
-      # desktop-latest is a ROLLING tag and tauri-action only ever ADDS assets,
-      # so artifacts from previous versions survive into the next release and
-      # get folded back into the regenerated manifest. That is not theoretical:
-      # 0.3.1's latest.json pointed every Linux platform at 0.3.0's AppImage,
-      # which by then we had deliberately stopped shipping. Clear the release
-      # first so it only ever holds the build that just ran.
-      - name: Purge stale assets from the rolling release
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          if gh release view desktop-latest --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release view desktop-latest --repo "$GITHUB_REPOSITORY" \
-              --json assets --jq '.assets[].name' | while read -r asset; do
-                [ -z "$asset" ] && continue
-                echo "removing stale asset: $asset"
-                gh release delete-asset desktop-latest "$asset" \
-                  --repo "$GITHUB_REPOSITORY" --yes
-              done
-          else
-            echo "no existing desktop-latest release — nothing to purge"
-          fi
-
       # Publishes to the FIXED `desktop-latest` tag, not GitHub's floating
       # "latest release". GitHub's notion of latest is repo-wide, and this repo
       # also cuts CLI `v*` releases that carry no latest.json — a CLI release
@@ -123,6 +99,7 @@ jobs:
       # installs its own CLI rather than shelling out to `bun tauri`. Local
       # builds still use `cargo tauri`; both drive the same tauri.conf.json.
       - uses: tauri-apps/tauri-action@v0
+        id: tauri
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -139,6 +116,61 @@ jobs:
           # name one. NSIS is what the desktop app's install flow assumes
           # (passive install, self-restart).
           updaterJsonPreferNsis: true
+
+      # Windows artifacts also go to the IMMUTABLE tagged release, not just the
+      # rolling one. Without this there is no way to pin, re-download or roll
+      # back a specific Windows version: desktop-latest is overwritten every
+      # build, so a superseded installer is simply gone. (The Linux job already
+      # publishes to the tag; this brings Windows in line.)
+      - name: Archive artifacts on the versioned release
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          echo '${{ steps.tauri.outputs.artifactPaths }}' | jq -r '.[]' | while read -r p; do
+            [ -f "$p" ] && cp "$p" dist/ && echo "archiving $(basename "$p")"
+          done
+          ls -la dist
+
+      - name: Publish archival copies
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          files: dist/*
+          draft: false
+          prerelease: true
+          make_latest: false
+
+      # Stale-asset cleanup runs AFTER the upload, never before.
+      #
+      # It used to run first, which meant desktop-latest sat empty for the whole
+      # ~8-minute build and latest.json 404'd for every client that checked in
+      # that window — trading the stale-asset bug for a worse one. Cleaning up
+      # afterwards means the previous release stays intact and servable right up
+      # until the new one replaces it, and clients only ever see a complete
+      # manifest: the old version during the build, the new one after.
+      - name: Remove superseded assets from the rolling release
+        if: startsWith(github.ref, 'refs/tags/desktop-v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          ver="${GITHUB_REF_NAME#desktop-v}"
+          gh release view desktop-latest --repo "$GITHUB_REPOSITORY" \
+            --json assets --jq '.assets[].name' | while read -r asset; do
+              [ -z "$asset" ] && continue
+              case "$asset" in
+                latest.json)  echo "keep (manifest): $asset" ;;
+                *"$ver"*)     echo "keep (current):  $asset" ;;
+                *)            echo "remove (stale):  $asset"
+                              gh release delete-asset desktop-latest "$asset" \
+                                --repo "$GITHUB_REPOSITORY" --yes ;;
+              esac
+            done
 
   # Raw Linux binary for the AUR `tennoworth-bin` package. Deliberately NOT an
   # AppImage: bundling a GPU-dependent stack is exactly what made 0.3.0 paint a
