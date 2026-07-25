@@ -78,6 +78,16 @@ fn main() {
     let runtag = std::env::var("TENNOWORTH_RUNTAG").unwrap_or_else(|_| "na".into());
 
     tauri::Builder::default()
+        // MUST be registered first — the plugin has to claim the single-instance
+        // lock before anything else initialises, or a second launch does real
+        // work (opening the DB, building a webview) before being told to quit.
+        //
+        // Closing the window hides to tray rather than exiting, so a relaunch
+        // would otherwise start a rival process against the same SQLite file.
+        // Re-show the window we already have instead.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            tray::show_main_window(app);
+        }))
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(tray::TrayState::default())

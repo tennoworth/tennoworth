@@ -2240,6 +2240,11 @@
      dims it to 0.5 — which reads as "unavailable", the opposite of the
      "working on it" signal a multi-second scan needs. Keep it legible and
      accent-tinted so it reads as busy. */
+  /* Reserve the width both labels need. "Refresh ▾" and "Scanning…" render at
+     different widths, and without a floor the swap resized the button mid-scan
+     — enough to push Export up beside it and wrap Clear onto its own row, so
+     the whole sidebar footer jumped exactly when the user was watching it. */
+  .refresh-trigger { min-width: 9ch; text-align: center; }
   .refresh-trigger.busy {
     opacity: 1;
     color: var(--accent);

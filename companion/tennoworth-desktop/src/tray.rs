@@ -132,7 +132,7 @@ pub fn post_scan_surfaces(app: &AppHandle) {
 
 /// Show, un-minimize, and focus the main window — the tray's "Open" and a
 /// left-click both route here.
-fn show_main_window(app: &AppHandle) {
+pub(crate) fn show_main_window(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
         let _ = w.unminimize();

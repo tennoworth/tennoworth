@@ -10,7 +10,7 @@ name = "tennoworth-desktop"
 # this is CARGO_PKG_VERSION, what update.rs reports as the installed version
 # and what the updater compares against latest.json. release-desktop.yml
 # fails the build if the three ever drift apart.
-version = "0.3.2"
+version = "0.3.3"
 edition = "2021"
 description = "TennoWorth desktop shell (Tauri v2). Webview loads the SPA; wfm-core invoked via Tauri commands (health, scan_inventory)."
 license = "MIT"
@@ -32,6 +32,13 @@ tauri-plugin-notification = "2"
 # restart. The signature pubkey lives in tauri.conf.json; the private key is
 # generated offline and never enters the repo (docs/signing-runbook.md §9).
 tauri-plugin-updater = "2"
+# Closing the window only hides it to the tray, so without this a relaunch
+# started a SECOND process against the same SQLite DB instead of re-showing the
+# hidden window. Every close-then-reopen leaked an instance (~40MB shell plus a
+# full WebView2 tree each); a Windows test hit 5 processes and 17 webview
+# children at 1.3GB, with only one window, which is what "I click it and
+# nothing opens" actually was. Concurrent writers on one DB were the worse half.
+tauri-plugin-single-instance = "2"
 serde = { workspace = true }
 serde_json = { workspace = true }
 wfm-core = { path = "../wfm-core" }
