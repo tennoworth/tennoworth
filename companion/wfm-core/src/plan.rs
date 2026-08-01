@@ -7,6 +7,7 @@ use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::thread;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use crate::catalog::WfmCatalogItem;
@@ -16,6 +17,29 @@ use crate::listing::{
 };
 use crate::pending::{clear_pending, write_pending_atomic, PendingItem, PendingPlan};
 use crate::util::{chrono_now_iso, random_token};
+
+/// Resets a plan-in-flight flag on scope exit — including early return and
+/// panic — so a rejected or crashed request can't leave plan execution wedged.
+/// Both adapters serialize plan runs behind an `AtomicBool` and had each
+/// written this guard.
+pub struct PlanGuard<'a>(&'a AtomicBool);
+
+impl<'a> PlanGuard<'a> {
+    /// Take the flag, or `None` if a plan is already running. The guard's
+    /// existence IS the claim; dropping it releases.
+    pub fn acquire(flag: &'a AtomicBool) -> Option<Self> {
+        match flag.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst) {
+            Ok(_) => Some(PlanGuard(flag)),
+            Err(_) => None,
+        }
+    }
+}
+
+impl Drop for PlanGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
+}
 
 const MAX_PLAN_ITEMS: usize = 50;
 const MIN_PLATINUM: u32 = 5;

@@ -15,23 +15,23 @@
 //! present, session locked) so the SPA can raise the login or passphrase modal —
 //! the desktop analogue of serve's 401 `needs_login:true` vs 503 split.
 
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::VecDeque;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 use tauri::State;
 
 use wfm_core::auth::{
-    bootstrap_session, decrypt_jwt_with_key, derive_jwt_key, encrypt_jwt, fetch_wfm_me, signin,
+    bootstrap_session, decrypt_jwt_with_key, derive_jwt_key, encrypt_jwt, signin,
     validate_passphrase, validate_platform,
     EncryptedJwt,
 };
-use wfm_core::catalog::fetch_wfm_catalog;
-use wfm_core::listing::Unlocked;
+use wfm_core::listing::{warm_unlocked, Unlocked};
+use wfm_core::plan::PlanGuard;
 use wfm_core::platform::{chown_to_real_user, restrict_dir_perms, write_restricted};
-use wfm_core::util::{browser_client, default_jwt_path, default_pending_path};
+use wfm_core::util::{config_dir_for, default_jwt_path, default_pending_path};
 use zeroize::{Zeroize, Zeroizing};
 
 /// Typed command error serialized to the webview as `{ code, message }`. The SPA
@@ -68,16 +68,6 @@ impl CmdError {
     }
     pub fn internal(e: impl std::fmt::Display) -> Self {
         Self::of("internal", e.to_string())
-    }
-}
-
-/// Clears the plan-in-flight flag on scope exit (incl. early return / panic) so
-/// a rejected or crashed listing command can't leave the session wedged.
-/// Mirrors serve's `PlanGuard`.
-pub struct PlanGuard<'a>(&'a AtomicBool);
-impl Drop for PlanGuard<'_> {
-    fn drop(&mut self) {
-        self.0.store(false, Ordering::SeqCst);
     }
 }
 
@@ -119,10 +109,7 @@ impl WfmSession {
         let pending_path = std::env::var_os("TENNOWORTH_PENDING_PATH")
             .map(PathBuf::from)
             .unwrap_or_else(default_pending_path);
-        let key_dir = jwt_path
-            .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| PathBuf::from("."));
+        let key_dir = config_dir_for(&jwt_path);
         Self {
             jwt_path,
             pending_path,
@@ -188,13 +175,7 @@ impl WfmSession {
     }
 
     pub fn begin_plan(&self) -> Option<PlanGuard<'_>> {
-        match self
-            .plan_running
-            .compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst)
-        {
-            Ok(_) => Some(PlanGuard(&self.plan_running)),
-            Err(_) => None,
-        }
+        PlanGuard::acquire(&self.plan_running)
     }
 
     /// Read + parse the on-disk envelope — shared by the passphrase and
@@ -384,21 +365,13 @@ impl Default for WfmSession {
 /// Build the `Unlocked` bundle (catalog + username) for an already-decrypted
 /// JWT. Shared by `unlock` (decrypt path) and `login` (fresh-JWT path). This is
 /// the only network in the session module — everything above is offline.
+///
+/// The warm itself lives in wfm-core; this wrapper exists for the error
+/// mapping, which is the only thing that ever differed from serve's copy.
+/// wfm-core returns anyhow so it owes nothing to either shell, and the network
+/// failures a user sees here are WFM's.
 fn warm(jwt: String, platform: String) -> Result<Unlocked, CmdError> {
-    let http = browser_client(60).map_err(CmdError::internal)?;
-    let catalog = fetch_wfm_catalog(&http, &platform).map_err(CmdError::wfm)?;
-    let id_to_name: BTreeMap<String, String> = catalog
-        .values()
-        .map(|c| (c.item_id.clone(), c.display_name.clone()))
-        .collect();
-    let username = fetch_wfm_me(&http, &jwt, &platform).map_err(CmdError::wfm)?;
-    Ok(Unlocked {
-        jwt,
-        username,
-        platform,
-        catalog: Arc::new(catalog),
-        id_to_name: Arc::new(id_to_name),
-    })
+    warm_unlocked(jwt, platform).map_err(CmdError::wfm)
 }
 
 // ---- Tauri commands ---------------------------------------------------
@@ -488,7 +461,8 @@ pub fn wfm_logout(session: State<'_, Arc<WfmSession>>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::AtomicU32;
+    use std::collections::BTreeMap;
+    use std::sync::atomic::{AtomicU32, Ordering};
 
     // Unique temp paths per test so a parallel test run never collides on the
     // shared jwt/pending files.

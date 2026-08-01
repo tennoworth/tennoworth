@@ -27,11 +27,14 @@ pub mod util;
 
 // WFM is behind Cloudflare with bot protection. A non-browser UA gets a 1015
 // rate-limit error or a JS challenge before our request ever reaches the API.
-// Kept byte-identical to the pre-extraction companion UA — this is the value
-// proven against production traffic. wfm-client and both Python scrapers now
-// mirror this string; bump all of them together if you ever need to change it.
-pub const BROWSER_UA: &str =
-    "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0";
+// This is the value proven against production traffic.
+//
+// Re-exported from wfm-client rather than declared again. The two copies were
+// byte-identical and each carried a "bump both together" comment — an
+// instruction a compiler cannot enforce and a reader can miss. Now there is
+// one string. The Python scrapers still mirror it by hand; that pair is not
+// something a Rust re-export can reach.
+pub use wfm_client::BROWSER_UA;
 
 /// This crate's version string. Trivial, side-effect-free entry point an
 /// adapter (CLI or the Tauri desktop shell) can call to confirm it is linked
