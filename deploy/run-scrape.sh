@@ -12,9 +12,12 @@
 #
 # PHASE 5, FIRST HALF: the SCRAPE step now runs the Rust port
 # (`wfm-scrape scrape`) by default; wfm_demand.py remains as the fallback and
-# the rollback. The CONVERT step is deliberately NOT cut over — its production
-# evidence is the shadow journal below, and that has to be read before the
-# Python converter stops being the generator.
+# the rollback. The CONVERT step is deliberately NOT cut over, because its
+# evidence does not exist yet: /srv/wfm/bin/wfm-scrape only landed on the box
+# at 2026-08-01T15:16Z, and the shadow block below is gated on that binary, so
+# every scrape before then skipped it silently. shadow-parity.log was still
+# zero bytes after ~2 weeks of 2-hourly runs. The window has a sample size of
+# one at best — read it before promoting the Rust converter.
 #
 # ACTIVATION: nothing pulls /srv/wfm/app — pull-web.sh, pull-scrape.sh and
 # pull-packages.sh cover the dist, the binary and the packages, but the repo
