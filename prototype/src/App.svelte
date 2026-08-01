@@ -471,6 +471,13 @@
   // tracked) but write only to `results`, which the effect doesn't read —
   // no chance of a re-run loop. The filter cascade itself lives in
   // lib/filter-engine.ts (shared with availableTags + emptyReason below).
+  //
+  // The several independent walks over `owned` here and below look like an
+  // obvious merge target. Measured 2026-08-01 with a 2,165-item inventory:
+  // 0.1 ms median / 0.2 ms max of synchronous JS per filter change. The ~33 ms
+  // a slider drag actually costs is Svelte's flush and the table repaint, which
+  // merging the walks does not touch. Don't trade this cascade's clarity for
+  // it without measuring again.
   $effect(() => {
     filterState; reserveCopies;                   // track filter changes
     if (resolved.owned.size && market) {          // track owned + market readiness

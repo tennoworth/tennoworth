@@ -300,7 +300,11 @@
     return deltas.get(r.key ?? r.slug) ?? 0;
   }
 
-  let sorted = $derived.by(() => {
+  // Filter and sort are separate deriveds so that changing the SORT doesn't
+  // re-run the pill predicate over every row. (Changing the filter still
+  // invalidates the sort — it has to, the row set changed. The win is
+  // one-directional.)
+  let filtered = $derived.by(() => {
     const f = filter.trim().toLowerCase();
     let rows = f
       ? results.filter((r) => (r.name || r.slug).toLowerCase().includes(f))
@@ -308,7 +312,11 @@
     if (activePills.size > 0) {
       rows = rows.filter((r) => rowPills(r).some((p) => activePills.has(p)));
     }
-    return [...rows].sort((a, b) => {
+    return rows;
+  });
+
+  let sorted = $derived.by(() => {
+    return [...filtered].sort((a, b) => {
       const av = sortKey === 'delta' ? rowDelta(a) : (a as unknown as Record<string, unknown>)[sortKey];
       const bv = sortKey === 'delta' ? rowDelta(b) : (b as unknown as Record<string, unknown>)[sortKey];
       // Push nulls to the bottom regardless of sort direction — ducats /
