@@ -16,6 +16,17 @@
 # evidence is the shadow journal below, and that has to be read before the
 # Python converter stops being the generator.
 #
+# ACTIVATION: nothing pulls /srv/wfm/app — pull-web.sh, pull-scrape.sh and
+# pull-packages.sh cover the dist, the binary and the packages, but the repo
+# checkout is updated by hand. Until someone runs `git -C /srv/wfm/app pull`,
+# the box keeps executing the previous version of THIS FILE and stays on
+# wfm_demand.py. The binary side needs nothing: build-scrape publishes on every
+# main push and wfm-scrape-pull.timer installs it every 30 min, so
+# /srv/wfm/bin/wfm-scrape is already current.
+#
+# After pulling, confirm the switch took: the run logs `scraper: <path> scrape`
+# on the Rust path and `scraper: wfm_demand.py` on the Python one.
+#
 # Environment (all optional):
 #   APP      repo root to run in          (default /srv/wfm/app — the LXC layout)
 #   PYTHON   python interpreter to use    (default /srv/wfm/venv/bin/python)
