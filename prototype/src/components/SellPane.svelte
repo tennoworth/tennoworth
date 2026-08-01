@@ -16,6 +16,7 @@
   // relaxFilters) is local — nothing outside this view ever touched them.
   import ResultsTable from './ResultsTable.svelte';
   import { PRESETS } from '../lib/presets';
+  import { wfmItemUrl, plat } from '../lib/format';
   import { selectPicks, MIN_PICK_SCORE } from '../lib/sell-priority';
 
   let {
@@ -190,16 +191,16 @@
             <div class="pick-main">
               <a
                 class="pick-name"
-                href="https://warframe.market/items/{p.slug}"
+                href={wfmItemUrl(p.slug)}
                 target="_blank"
                 rel="noopener noreferrer"
               >{p.name}</a>
               <p class="pick-reason" class:hold={p.timing === 'hold'} class:peak={p.timing === 'peak'}>
                 {pickReason(p)}
-                <span class="pick-vol">({Math.round(p.volume_48h).toLocaleString()} trades / 48h)</span>
+                <span class="pick-vol">({plat(p.volume_48h)} trades / 48h)</span>
               </p>
             </div>
-            <div class="pick-score">~{Math.round(p.sell_score).toLocaleString()}<span class="unit">p/day</span></div>
+            <div class="pick-score">~{plat(p.sell_score)}<span class="unit">p/day</span></div>
             <div class="pick-actions">
               <button class="pick-list" onclick={() => openListingFlow(p)} aria-label="List {p.name} on WFM">List</button>
               <button
@@ -442,14 +443,6 @@
     flex-direction: column;
     gap: 12px;
   }
-  .warn-banner {
-    border-left: 3px solid var(--bad);
-    padding: 10px 14px;
-    font-size: 13px;
-    color: var(--fg);
-    line-height: 1.5;
-  }
-  .muted { color: var(--muted); font-size: 12.5px; }
   .card.empty {
     flex-direction: row;
     align-items: center;

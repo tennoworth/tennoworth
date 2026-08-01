@@ -31,13 +31,21 @@ export interface SaveSnapshotInput {
   owned: Map<string, OwnedRecord>;
 }
 
-// Serialize/deserialize are the single source of truth for the on-the-wire
-// snapshot shape, shared by the localStorage store (below) and the desktop
-// SQLite store (state-store.ts) so both persist byte-identical payloads. Only
-// the backing store differs — the bytes never do.
-export function serializeSnapshot({ invName, owned }: SaveSnapshotInput): string {
-  const payload = {
-    ts: Date.now(),
+// The single source of truth for the on-the-wire snapshot shape: the
+// localStorage store (below), the desktop SQLite store (state-store.ts), and
+// the encrypted export (ExportImportDialogs.svelte) all build their payload
+// here, so all three carry byte-identical records.
+//
+// The export used to re-list these seven fields itself. Nothing would have
+// caught the drift: add a field to OwnedRecord, wire it into the stores,
+// forget the export, and every export silently loses it — discovered only by
+// a user importing on another machine and finding data missing.
+export function buildSnapshotPayload(
+  { invName, owned }: SaveSnapshotInput,
+  ts: number,
+): { ts: number; invName: string; owned: Array<[string, Record<string, unknown>]> } {
+  return {
+    ts,
     invName,
     owned: [...owned.entries()].map(([key, rec]) => [
       key,
@@ -52,7 +60,10 @@ export function serializeSnapshot({ invName, owned }: SaveSnapshotInput): string
       },
     ]),
   };
-  return JSON.stringify(payload);
+}
+
+export function serializeSnapshot(input: SaveSnapshotInput): string {
+  return JSON.stringify(buildSnapshotPayload(input, Date.now()));
 }
 
 export function deserializeSnapshot(raw: string | null): Snapshot | null {

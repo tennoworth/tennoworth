@@ -1,5 +1,6 @@
 // @ts-nocheck — vitest fixtures; the transport's TS contract is exercised by tsc.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { installTauri, removeTauri } from './test-utils.js';
 import {
   isDesktopRuntime,
   createTransport,
@@ -16,14 +17,6 @@ import { AssistantError } from './assistant.js';
 
 // The desktop sniff and TauriTransport read the Tauri globals; install/remove
 // them per test so the two modes are isolated.
-function installTauri(invoke) {
-  globalThis.__TAURI_INTERNALS__ = { invoke };
-  globalThis.__TAURI__ = { core: { invoke } };
-}
-function removeTauri() {
-  delete globalThis.__TAURI_INTERNALS__;
-  delete globalThis.__TAURI__;
-}
 
 afterEach(() => {
   removeTauri();

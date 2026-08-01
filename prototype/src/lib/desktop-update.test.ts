@@ -1,5 +1,6 @@
 // @ts-nocheck — vitest fixtures; the module's TS contract is exercised by tsc.
 import { describe, it, expect, afterEach, vi } from 'vitest';
+import { installTauri, removeTauri } from './test-utils.js';
 import {
   updateStatus,
   installUpdate,
@@ -7,14 +8,6 @@ import {
   onUpdateAvailable,
 } from './desktop-update.js';
 
-function installTauri(invoke, listen) {
-  globalThis.__TAURI_INTERNALS__ = { invoke };
-  globalThis.__TAURI__ = { core: { invoke }, ...(listen ? { event: { listen } } : {}) };
-}
-function removeTauri() {
-  delete globalThis.__TAURI_INTERNALS__;
-  delete globalThis.__TAURI__;
-}
 
 afterEach(() => {
   removeTauri();
