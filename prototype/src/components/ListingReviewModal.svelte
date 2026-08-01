@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { untrack } from 'svelte';
   import { DesktopCmdError, type Transport } from '../lib/transport';
   import type { ItemResult } from '../lib/types';
   import { MAX_PLATINUM, MIN_PLATINUM, MAX_PLAN_ITEMS } from '../lib/limits';
@@ -98,10 +99,18 @@
     return r.avg > 0 && (r.platinum > r.avg * 1.3 || r.platinum < r.avg * 0.7);
   }
 
-  // Re-initialize when modal opens.
+  // Re-initialize when the modal OPENS — and only then.
+  //
+  // `rows` is read through untrack() deliberately. The caller passes
+  // `reviewRowsOverride ?? listableRows.slice(0, 50)`, and that .slice() mints
+  // a fresh array identity every time the `listableRows` derived recomputes.
+  // Tracking it meant any background recompute while the modal was open
+  // re-ran this init and threw away the user's in-flight price and quantity
+  // edits, mid-review, on a batch of up to 50 listings. The rows to review are
+  // whatever they were when the modal opened; nothing here wants live updates.
   $effect(() => {
     if (open) {
-      plan = initialPlanFor(rows ?? []);
+      plan = initialPlanFor(untrack(() => rows) ?? []);
       phase = 'review';
       serverResults = [];
       networkError = null;

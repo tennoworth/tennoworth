@@ -452,7 +452,11 @@
       await store.saveSnapshot({ invName: name, owned });
       lastUpdated = Date.now();
 
-      results = computeFilteredResults(owned, market, filterState, reserveCopies);
+      // No explicit recompute: the results $effect below tracks resolved +
+      // market and flushes before paint. The call that was here computed the
+      // identical array a second time — the same fix the restore path above
+      // already got. Its only distinct case, "market not loaded yet", is
+      // covered by that effect's own `market` guard.
       phase = 'done';
     } catch (e) {
       console.error(e);

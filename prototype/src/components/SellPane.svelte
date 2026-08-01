@@ -38,6 +38,11 @@
     pendingBanner,
   } = $props();
 
+  // Was inline in the template, so it re-filtered the whole results array on
+  // EVERY render of this pane — including every keystroke in the name filter,
+  // which cannot change the answer. $derived recomputes only when results does.
+  let sellableCount = $derived(results.filter((r) => r.sellable > 0).length);
+
   // Auto-derived options for the type dropdown label map. The Type filter
   // mixes warframestat catalog categories (Mods, Arcanes, Relics…) with raw
   // inventory.json keys used as fallback (MiscItems, RawUpgrades…). The
@@ -140,7 +145,7 @@
   </div>
   <div class="stat">
     <span class="k">Sellable</span>
-    <span class="v">{results.filter((r) => r.sellable > 0).length.toLocaleString()}</span>
+    <span class="v">{sellableCount.toLocaleString()}</span>
   </div>
   <div class="stat">
     <span class="k">Potential</span>
