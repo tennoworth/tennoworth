@@ -159,6 +159,11 @@ if [ -x "$SHADOW_BIN" ] && [ -n "$SHADOW_PRIOR" ]; then
 $(cat "$scratch/build.log" 2>/dev/null)"
     elif diff_out=$("$PYTHON" scripts/semantic_diff.py prototype/public/market.json "$shadow_out" 2>&1); then
       echo "SHADOW PARITY OK ($ts)"
+      # semantic_diff prints nothing on success, which journalled as a header
+      # followed by a blank line — indistinguishable from a write that got
+      # truncated. Say it explicitly; the log is what someone reads weeks later
+      # when deciding whether the window is clean.
+      diff_out="PARITY OK — 0 material diffs"
     else
       n=$(printf '%s\n' "$diff_out" | head -n1 | grep -oE '^[0-9]+' || true)
       first=$(printf '%s\n' "$diff_out" | sed -n '2p' | sed 's/^  *//')
