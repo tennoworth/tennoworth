@@ -21,7 +21,9 @@ use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use std::fs;
 use std::path::PathBuf;
-use wfm_core::auth::{bootstrap_session, encrypt_jwt, signin, validate_platform};
+use wfm_core::auth::{
+    bootstrap_session, encrypt_jwt, signin, validate_passphrase, validate_platform,
+};
 use wfm_core::inventory::fetch_inventory_bytes;
 use wfm_core::platform::{chown_to_real_user, restrict_dir_perms, write_restricted};
 use wfm_core::util::default_jwt_path;
@@ -227,9 +229,7 @@ fn run_login(args: LoginArgs) -> Result<()> {
     if passphrase != confirm {
         bail!("Passphrases don't match.");
     }
-    if passphrase.len() < 12 {
-        bail!("Passphrase must be at least 12 characters — it guards your multi-month WFM token against offline brute force.");
-    }
+    validate_passphrase(&passphrase)?;
 
     let encrypted = encrypt_jwt(jwt.expose(), &passphrase, &args.platform)?;
     let out_path = args.out.unwrap_or_else(default_jwt_path);

@@ -92,8 +92,7 @@
   {#if activeOs === 'linux'}
     <p class="muted small">
       Installs to <code>~/.local/bin</code>. Needs <code>curl</code>. Just run
-      <code>wfm-fetch-inventory</code> (or <code>serve</code>) — Proton installs
-      usually work as-is. <strong>Only if</strong> it prints
+      <code>wfm-fetch-inventory</code> (or <code>serve</code>). <strong>If</strong> it prints
       <code>Permission denied</code> reading the game, grant ptrace once
       (path-agnostic, also works for a from-source build on your PATH):
       <code>sudo setcap cap_sys_ptrace=eip "$(command -v wfm-fetch-inventory)"</code>

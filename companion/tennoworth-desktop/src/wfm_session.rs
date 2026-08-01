@@ -25,7 +25,7 @@ use tauri::State;
 
 use wfm_core::auth::{
     bootstrap_session, decrypt_jwt_with_key, derive_jwt_key, encrypt_jwt, fetch_wfm_me, signin,
-    validate_platform,
+    validate_passphrase, validate_platform,
     EncryptedJwt,
 };
 use wfm_core::catalog::fetch_wfm_catalog;
@@ -311,13 +311,9 @@ impl WfmSession {
         if password.is_empty() {
             return Err(CmdError::internal("Password cannot be empty."));
         }
-        // Same floor as the CLI `login` — the passphrase guards a multi-month
-        // bearer token against offline brute force.
-        if passphrase.chars().count() < 12 {
-            return Err(CmdError::internal(
-                "Passphrase must be at least 12 characters — it guards your multi-month WFM token against offline brute force.",
-            ));
-        }
+        // Shared with the CLI `login` via wfm-core so the floor cannot drift
+        // (it had: bytes here, chars there). Checked before any network call.
+        validate_passphrase(passphrase).map_err(|e| CmdError::internal(e.to_string()))?;
 
         let (client, csrf) = bootstrap_session().map_err(CmdError::wfm)?;
         let jwt = signin(&client, email, password, platform, &csrf).map_err(CmdError::wfm)?;

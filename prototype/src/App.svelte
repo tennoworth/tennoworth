@@ -1038,9 +1038,9 @@
           <p class="muted">
             Your browser opens on the sell list, connected — no file, no login.
             Refreshing later is one click. Close the terminal (or Ctrl-C) to stop.
-            Linux: Proton installs usually just work. Only if it prints
-            <code>Permission denied</code> reading the game, grant ptrace once
-            (works wherever the binary lives):
+            Linux: if it prints <code>Permission denied</code> reading the game,
+            grant ptrace once (works wherever the binary lives). Most desktop
+            kernels need this — it isn't a Proton thing:
           </p>
           <div class="snippet-row">
             <pre class="snippet"><code>sudo setcap cap_sys_ptrace=eip "$(command -v wfm-fetch-inventory)"</code></pre>

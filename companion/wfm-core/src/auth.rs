@@ -80,6 +80,27 @@ pub fn validate_platform(platform: &str) -> Result<()> {
     wfm_client::validate_platform(platform).map_err(|e| anyhow!(e))
 }
 
+/// Minimum passphrase length, in **characters** — the unit the error message
+/// promises the user.
+pub const MIN_PASSPHRASE_CHARS: usize = 12;
+
+/// The single passphrase-length gate for every entry point that sets one.
+///
+/// This lives here because it previously did not: `login` counted
+/// `passphrase.len()` (bytes) while the desktop dialog counted
+/// `chars().count()`, under a comment asserting the two were the same floor.
+/// They were not — a 4-character CJK passphrase is 12 bytes, so the CLI
+/// accepted what the desktop app rejected. Both callers now share this
+/// function, so the floor cannot drift again.
+pub fn validate_passphrase(passphrase: &str) -> Result<()> {
+    if passphrase.chars().count() < MIN_PASSPHRASE_CHARS {
+        bail!(
+            "Passphrase must be at least {MIN_PASSPHRASE_CHARS} characters — it guards your multi-month WFM token against offline brute force."
+        );
+    }
+    Ok(())
+}
+
 /// GET the signin page: build a cookie-storing client (the session cookie set
 /// here must ride the later signin POST), and scrape the CSRF token out of the
 /// page. Returns the client so `signin` reuses the same cookie jar.
@@ -279,6 +300,23 @@ mod tests {
         assert_eq!(blob.kdf.iterations, JWT_KDF_ITERATIONS);
         let jwt = decrypt_jwt(&blob, "correct horse battery").unwrap();
         assert_eq!(jwt, "jwt.abc.123");
+    }
+
+    #[test]
+    fn passphrase_floor_counts_characters_not_bytes() {
+        // The regression this function exists to kill: 4 CJK characters are 12
+        // UTF-8 bytes, so a byte-counting floor waved them through. `login`
+        // counted bytes, the desktop dialog counted chars, and a comment
+        // claimed the two floors matched.
+        let four_cjk = "密码密码";
+        assert_eq!(four_cjk.len(), 12);
+        assert_eq!(four_cjk.chars().count(), 4);
+        assert!(validate_passphrase(four_cjk).is_err());
+
+        assert!(validate_passphrase("hunter2").is_err());
+        assert!(validate_passphrase("correct horse battery").is_ok());
+        // Exactly at the floor, in a script where chars != bytes.
+        assert!(validate_passphrase("密码密码密码密码密码密码").is_ok());
     }
 
     #[test]
