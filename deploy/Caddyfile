@@ -42,6 +42,26 @@
 		file_server
 	}
 
+	# Signed apt + dnf repositories, published by wfm-repo-pull.timer. Served
+	# from a separate root; the URL path already carries the /apt or /rpm
+	# prefix, so root + path resolves without a strip_prefix.
+	#
+	# No file_server `browse` — apt and dnf fetch exact paths (dists/…/InRelease,
+	# repodata/repomd.xml) and never need an index. Directory listings would only
+	# expose the pool layout.
+	@repo path /apt/* /rpm/*
+	handle @repo {
+		root * /srv/wfm/repo
+		# Metadata must not go stale: a cached InRelease/repomd.xml that no
+		# longer matches the pool makes apt/dnf fail checksum verification,
+		# which reads to users as a corrupt repo. Packages themselves are
+		# immutable per version, so they can be cached hard.
+		@immutable path /apt/pool/* /rpm/*.rpm
+		header Cache-Control "public, max-age=300, must-revalidate"
+		header @immutable Cache-Control "public, max-age=31536000, immutable"
+		file_server
+	}
+
 	# Everything else: the SPA. Wrapped in a catch-all handle so we never mix a
 	# handle block with bare file_server/try_files (Caddy's directive ordering
 	# there is surprising). try_files rewrites unknown paths to index.html.

@@ -197,6 +197,68 @@ change — this phase only observes.
 
 ---
 
+## Package repositories (apt + dnf)
+
+The box publishes signed apt and dnf repos for the desktop app at
+`https://tennoworth.app/apt` and `/rpm`. CI builds the `.deb`/`.rpm`; the box
+signs them. **The signing key never goes into GitHub Actions** — a leaked repo
+key lets anyone serve trusted packages to every user who added the repo, and
+`apt` would install them without complaint.
+
+### One-time setup
+
+1. Import the signing subkey into **root's** keyring (the pull units run as
+   root — only `wfm-scrape.service` drops to `wfm`):
+
+   ```bash
+   scp tennoworth-secret-subkeys.asc root@tennoworth-web:/root/
+   ssh root@tennoworth-web
+   gpg --import /root/tennoworth-secret-subkeys.asc && shred -u /root/tennoworth-secret-subkeys.asc
+   gpg --list-secret-keys        # primary MUST read `sec#` — the # means it stayed offline
+   ```
+
+   Export it with `--export-secret-subkeys`, never `--export-secret-keys`. The
+   latter ships the primary key, which is what an attacker would need to
+   impersonate the project rather than just this repo.
+
+2. The subkey copy on the box must have **no passphrase**, or the timer hangs
+   waiting for a prompt nobody can answer. `setup-repo.sh` refuses to proceed
+   otherwise. Strip it with `gpg --edit-key <FPR>` → `passwd` → empty → `save`.
+
+3. Run the bootstrap and install the units:
+
+   ```bash
+   /srv/wfm/setup-repo.sh
+   systemctl enable --now wfm-repo-pull.timer
+   ```
+
+### How a release reaches users
+
+`wfm-repo-pull.timer` (30 min) → `pull-packages.sh` → finds the newest
+`desktop-v*` tag → downloads the `.deb`/`.rpm` → verifies checksums →
+`reprepro includedeb` (signs `InRelease`) and `rpm --addsign` +
+`createrepo_c` + detached-signs `repomd.xml`.
+
+It tracks the newest **versioned** tag, not `desktop-latest`. Package repos are
+historical: reprepro keeps the pool, and a package whose bytes changed under a
+version users already installed is a broken repo. `desktop-latest` is
+republished in place, so it can't be the source.
+
+### If the repo stops updating
+
+```bash
+systemctl status wfm-repo-pull.service
+journalctl -u wfm-repo-pull.service -n 50
+cat /srv/wfm/repo-release.stamp          # last published tag
+gpg --list-secret-keys                   # subkey expired? (2028-07-31)
+```
+
+A **subkey expiry** is the failure with the worst blast radius: every user's
+`apt update` starts failing signature checks at once. Extend it on the laptop
+with `gpg --quick-set-expire`, re-export, re-import, then delete
+`/srv/wfm/repo-release.stamp` to force a re-sign. Users re-import nothing —
+the primary they trust is unchanged.
+
 ## Admin access
 
 Run **Tailscale** on the container (or the Proxmox host) and SSH/manage over the

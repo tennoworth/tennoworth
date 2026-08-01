@@ -155,6 +155,43 @@ re-download. Don't run a binary that fails this check.
 The `install.sh` and `install.ps1` scripts do this verification
 automatically when you use them.
 
+## The Linux package signing key
+
+The apt and dnf repositories at `https://tennoworth.app/apt` and `/rpm` are
+GPG-signed. If you installed via `apt` or `dnf`, your package manager already
+verifies every package and index against this key on every update — there is
+no separate checksum step to run.
+
+```
+Key:         TennoWorth Packages <pmbaprow@gmail.com>
+Fingerprint: CC5F 8E29 7E44 6C5B 8D27  69AC 6409 3BF6 3D57 3CE8
+Published:   https://tennoworth.app/tennoworth-archive-keyring.asc
+```
+
+Check the key you downloaded matches, before trusting it:
+
+```bash
+gpg --show-keys tennoworth-archive-keyring.asc
+# Fingerprint must equal the one above, with no spaces:
+# CC5F8E297E446C5B8D2769AC64093BF63D573CE8
+```
+
+How the key is handled, so you can judge what a compromise would cost:
+
+- The **primary key** only certifies. It has never been on an
+  internet-connected server and is not used to sign packages.
+- A separate **signing subkey** (`F226 2474 2E2D 5D74`, expires 2028-07-31)
+  is the only key material on the server that publishes the repositories.
+  If that box were compromised, the subkey can be revoked and rotated without
+  users re-importing anything, because the primary they trust is unchanged.
+- A revocation certificate exists offline. If you ever see a revocation for
+  this key, stop trusting the repositories immediately.
+
+Signing covers the repository, not the identity of the author — it proves a
+package came from whoever controls this key and was not altered in transit.
+Note this is entirely separate from Windows code signing, which we do **not**
+do; see "What we cannot promise".
+
 ## How to verify the web app
 
 The production bundle on the deployment is the unmodified output of

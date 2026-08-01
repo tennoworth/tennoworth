@@ -25,6 +25,10 @@ depends=('webkit2gtk-4.1' 'gtk3' 'libayatana-appindicator' 'openssl')
 # install a second copy. bun builds the SPA; nodejs runs scripts/sync-csp.mjs,
 # which the frontend build shells out to.
 makedepends=('cargo' 'bun' 'nodejs')
+# Grants cap_sys_ptrace so the first inventory scan works without the user
+# hitting an error and being told to open a terminal. Re-runs on upgrade
+# because replacing the binary clears file capabilities.
+install=tennoworth.install
 options=('!lto')
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/desktop-v$pkgver.tar.gz")
 sha256sums=('SKIP')
@@ -70,7 +74,8 @@ package() {
 
   # Without these the window and taskbar entry fall back to a generic WM
   # avatar — the app sets its own window icon, but the desktop entry is what
-  # the shell matches on (StartupWMClass=TennoWorth).
+  # the shell matches on (StartupWMClass=tennoworth-desktop — the binary
+  # basename, which is what GTK reports as WM_CLASS; see that file).
   install -Dm644 "packaging/aur/tennoworth/tennoworth.desktop" \
     "$pkgdir/usr/share/applications/tennoworth.desktop"
 

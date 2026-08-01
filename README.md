@@ -100,16 +100,43 @@ Each platform ships the way that platform actually works:
   [desktop-latest release](https://github.com/tennoworth/tennoworth/releases/tag/desktop-latest).
   Unsigned, so SmartScreen warns on first run (see
   [`SECURITY.md`](SECURITY.md)). The app updates itself from there.
-- **Linux** — build from source via the AUR
-  ([`packaging/aur/`](packaging/aur/)), which links against your own
-  WebKitGTK and GPU stack. `pacman -Syu` handles updates; the in-app updater
-  deliberately stays quiet.
+- **Linux** — your distro's own package manager, from signed repositories.
+  Updates arrive with the rest of your system; the in-app updater deliberately
+  stays quiet on Linux.
 
-There is intentionally **no Linux AppImage/deb/rpm**. The AppImage bundled the
-build machine's ubuntu-22.04 WebKitGTK, which aborts at
-`EGL_BAD_PARAMETER` against a rolling-release Mesa and shows a white window —
-inherent to shipping a GPU-dependent stack built on another distro, not a bug a
-flag fixes.
+**Debian / Ubuntu**
+
+```bash
+curl -fsSL https://tennoworth.app/tennoworth-archive-keyring.asc \
+  | sudo tee /etc/apt/keyrings/tennoworth.asc > /dev/null
+echo "deb [signed-by=/etc/apt/keyrings/tennoworth.asc] https://tennoworth.app/apt stable main" \
+  | sudo tee /etc/apt/sources.list.d/tennoworth.list > /dev/null
+sudo apt update && sudo apt install tennoworth
+```
+
+**Fedora**
+
+```bash
+sudo dnf config-manager --add-repo https://tennoworth.app/rpm/tennoworth.repo
+sudo dnf install tennoworth
+```
+
+**Arch** — [`packaging/aur/`](packaging/aur/): `tennoworth` builds from source,
+`tennoworth-bin` uses the prebuilt binary.
+
+The key fingerprint is published in [`SECURITY.md`](SECURITY.md) — worth
+checking before you trust a key you downloaded over the network.
+
+There is intentionally **no Linux AppImage**. It bundled the build machine's
+ubuntu-22.04 WebKitGTK, which aborts at `EGL_BAD_PARAMETER` against a
+rolling-release Mesa and shows a white window — inherent to shipping a
+GPU-dependent stack built on another distro, not a bug a flag fixes. The deb
+and rpm avoid this precisely because they *depend on* your system WebKitGTK
+rather than carrying their own, exactly as the AUR packages do.
+
+Note the package is named `tenno-worth` internally (Tauri derives it from the
+product name and offers no override), but both packages declare
+`Provides: tennoworth`, so `apt install tennoworth` resolves correctly.
 
 ## Develop
 

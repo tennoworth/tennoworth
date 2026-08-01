@@ -33,3 +33,13 @@ wfm_inventory_sellable.csv
 # AI tooling config — kept locally, not part of the public project surface.
 /.claude/
 /.claude.local.md
+
+# GPG secret material for the apt/dnf repos. The signing subkey lives only on
+# container 110; the primary key and revocation cert live offline. None of it
+# belongs in git — a committed signing key lets anyone serve trusted packages
+# to every user who added our repo. The PUBLIC key is deliberately not matched
+# here: prototype/public/tennoworth-archive-keyring.asc must stay tracked.
+*secret-key*.asc
+*secret-subkeys*.asc
+*private*.asc
+*revoke*.asc

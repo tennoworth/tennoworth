@@ -1,0 +1,13 @@
+[Unit]
+Description=Check for a new desktop release every 30 minutes
+
+[Timer]
+# Slower than the web pull (15min): desktop releases are cut by hand from a
+# tag, not republished on every push, so a tighter interval would just be
+# GitHub API calls that always find the same tag.
+OnBootSec=5min
+OnUnitActiveSec=30min
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target
