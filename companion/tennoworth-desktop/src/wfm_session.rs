@@ -31,7 +31,7 @@ use wfm_core::auth::{
 use wfm_core::listing::{warm_unlocked, Unlocked};
 use wfm_core::plan::PlanGuard;
 use wfm_core::platform::{chown_to_real_user, restrict_dir_perms, write_restricted};
-use wfm_core::util::{config_dir_for, default_jwt_path, default_pending_path};
+use wfm_core::util::{config_dir_for, default_jwt_path};
 use zeroize::{Zeroize, Zeroizing};
 
 /// Typed command error serialized to the webview as `{ code, message }`. The SPA
@@ -106,10 +106,13 @@ impl WfmSession {
         let jwt_path = overridden
             .map(PathBuf::from)
             .unwrap_or_else(default_jwt_path);
+        // Companion state lives together: a relocated JWT takes the pending
+        // plan and the DeepSeek key with it, matching serve. The explicit
+        // env override stays as the probe seam.
+        let key_dir = config_dir_for(&jwt_path);
         let pending_path = std::env::var_os("TENNOWORTH_PENDING_PATH")
             .map(PathBuf::from)
-            .unwrap_or_else(default_pending_path);
-        let key_dir = config_dir_for(&jwt_path);
+            .unwrap_or_else(|| key_dir.join("pending_plan.json"));
         Self {
             jwt_path,
             pending_path,

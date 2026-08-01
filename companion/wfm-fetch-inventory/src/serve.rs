@@ -34,7 +34,7 @@ use wfm_core::listing::{
 };
 use wfm_core::pending::{clear_pending, load_pending};
 use wfm_core::plan::{execute_plan, run_pending, PlanGuard, PlanRequest};
-use wfm_core::util::{config_dir_for, default_jwt_path, default_pending_path, random_token};
+use wfm_core::util::{config_dir_for, default_jwt_path, random_token};
 
 use crate::Sealed;
 
@@ -73,9 +73,13 @@ pub fn run_serve(args: ServeArgs) -> Result<()> {
     // in the envelope, so we can read it without the passphrase; the JWT itself
     // stays encrypted until the first listing action actually needs it.
     let jwt_path = args.jwt_path.unwrap_or_else(default_jwt_path);
-    // The DeepSeek key file lives alongside the JWT (same config dir), resolved
-    // once here so a per-request `--jwt-path` override doesn't need re-resolving.
-    let deepseek_key_dir = config_dir_for(&jwt_path);
+    // Everything else companion-owned lives beside the JWT, so --jwt-path
+    // relocates the whole config dir rather than half of it. The DeepSeek key
+    // already worked this way; the pending plan did not, so a custom --jwt-path
+    // silently split a user's state across two directories.
+    let config_dir = config_dir_for(&jwt_path);
+    let deepseek_key_dir = config_dir.clone();
+    let pending_path = config_dir.join("pending_plan.json");
     let (listing_init, platform) = if jwt_path.exists() {
         let blob: EncryptedJwt = serde_json::from_slice(&fs::read(&jwt_path)?)
             .with_context(|| format!("reading encrypted JWT from {}", jwt_path.display()))?;
@@ -162,7 +166,7 @@ pub fn run_serve(args: ServeArgs) -> Result<()> {
     let state = Arc::new(ServeState {
         platform: Mutex::new(platform),
         session_token,
-        pending_path: default_pending_path(),
+        pending_path,
         plan_running: std::sync::atomic::AtomicBool::new(false),
         scanner: InventoryScanner::new(),
         listing: Mutex::new(listing_init),
