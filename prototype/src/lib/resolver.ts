@@ -7,7 +7,7 @@
 // so non-English browsers got localized names that matched nothing on
 // WFM. name -> WFM slug comes from the catalog baked into market.json.
 
-import { readCached, writeCached, type SlimCatalog } from './catalog-cache';
+import { readCached, writeCached, purgeRetiredCaches, type SlimCatalog } from './catalog-cache';
 import type { Market, ResolvedItem, SlimItemInfo } from './types';
 
 const WFSTAT_CATALOG_URL = '/wfstat-catalog.json';
@@ -17,6 +17,11 @@ export interface Catalogs {
 }
 
 export async function loadCatalogs(): Promise<Catalogs> {
+  // Reclaim rows from retired cache keys. Fire-and-forget: bumping the key
+  // invalidates the old row but leaves it on disk, and this is the only code
+  // path that still knows the old names.
+  void purgeRetiredCaches();
+
   // Cheap path: IndexedDB cache, 24 h TTL. The slim form holds only the
   // (uniqueName, name, category) triples (~17k entries) we actually need —
   // keeps the stored payload to a fraction of warframestat.us's ~5 MB raw.
