@@ -40,6 +40,17 @@ jobs:
         env:
           APP: ${{ github.workspace }}
           PYTHON: python3
+          # Explicitly the Python scraper. This job has no Rust toolchain, so
+          # `auto` would fall back here anyway — but silently, warning on every
+          # run, which trains you to ignore a warning that means something real
+          # on the box.
+          #
+          # Keeping it pinned is worth something on its own: the box runs the
+          # Rust scraper and this runs the reference implementation, both
+          # writing market.json to the same repo. A material divergence between
+          # the ports shows up in the daily commit diff without anyone building
+          # a shadow for it.
+          WFM_SCRAPER: python
         run: bash deploy/run-scrape.sh
 
       - name: Commit if changed

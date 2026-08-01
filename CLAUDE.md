@@ -27,7 +27,8 @@ companion/       Rust binary — fetch / login / serve subcommands
 prototype/       Svelte 5 + Vite app, deployed as static
 prototype/public/market.json    central artifact: the WFM snapshot
 scripts/         one-shot Python utilities
-wfm_demand.py    main WFM scraper (root, run on cron)
+wfm_demand.py    the ORIGINAL WFM scraper. Still the rollback path and the
+                 parity reference; production now runs the Rust port
 packaging/aur/   AUR recipes (tennoworth, tennoworth-bin) + their .install hooks
 deploy/          self-host kit for the production LXC: Caddyfile, setup, scrape/web-pull units, plus the signed apt+dnf repo publisher (setup-repo.sh, pull-packages.sh)
 tests/           pytest tests for the Python side
@@ -63,9 +64,12 @@ SECURITY.md      threat model + what we do and don't commit to
                                        │ GET market.json
                                        │ (refreshed on the box)
                             ┌──────────┴─────────────────────────────┐
-                            │  wfm_demand.py                          │
+                            │  wfm-scrape scrape  (Rust)              │
+                            │  → CSV → csv_to_market_json.py          │
                             │  (systemd timer on the box, 2h;         │
                             │   GH cron refreshes repo copy)          │
+                            │  wfm_demand.py is the rollback:         │
+                            │   WFM_SCRAPER=python in the unit        │
                             └─────────────────────────────────────────┘
 ```
 
@@ -190,9 +194,16 @@ cd prototype && bun install && bun run dev   # http://127.0.0.1:5173
 python3 scripts/csv_to_market_json.py
 
 # Full WFM scrape (~45 min, 3 req/s) → CSV only, then rebuild the snapshot.
+# Production runs the Rust port; deploy/run-scrape.sh drives both steps and
+# carries the truncation guard, so prefer it over calling these by hand.
+companion/target/release/wfm-scrape scrape --filter "" --exclude "" \
+  --min-volume 1 --out wfm_results.csv
+python3 scripts/csv_to_market_json.py
+
+# The Python scraper is the rollback and the parity reference — identical
+# flags, and the two are gated against each other by tests/test_scrape_parity.py.
 python3 wfm_demand.py --filter "" --exclude "" --min-volume 1 \
   --out wfm_results.csv
-python3 scripts/csv_to_market_json.py
 
 # Companion subcommands (all in the same binary). Grant ptrace once so
 # fetch needs no sudo — re-run after every `cargo build --release`, which
