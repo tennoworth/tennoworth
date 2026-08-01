@@ -1,4 +1,4 @@
-# TennoWorth desktop shell — Phase C (see docs/desktop-spike-findings.md). One
+# TennoWorth desktop shell — Phase C (see the desktop spike notes). One
 # window loading the built SPA via Tauri's asset protocol; the SPA's Transport
 # drives wfm-core through thin commands: health / scan_inventory, the WFM
 # session (login / unlock — passphrase from the webview, see wfm_session.rs),
@@ -30,7 +30,7 @@ tauri-plugin-notification = "2"
 # Rust through app-defined commands (check_update / install_update) — check on
 # launch, notify, download+install only on explicit confirmation, apply on
 # restart. The signature pubkey lives in tauri.conf.json; the private key is
-# generated offline and never enters the repo (docs/signing-runbook.md §9).
+# generated offline and never enters the repo (the maintainer signing runbook §9).
 tauri-plugin-updater = "2"
 # Closing the window only hides it to the tray, so without this a relaunch
 # started a SECOND process against the same SQLite DB instead of re-showing the

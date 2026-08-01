@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Provision the static-host container. Run INSIDE the unprivileged LXC as root
 # (`pct enter <id>` from the Proxmox host), AFTER you've placed the repo at
-# /srv/wfm/app. See deploy/README.md for the Proxmox-host steps (pct create,
+# /srv/wfm/app. See the deploy runbook for the Proxmox-host steps (pct create,
 # VLAN/firewall) that come first.
 #
 # Idempotent-ish: safe to re-run. Edit the CLOUDFLARED_TOKEN line or run the
@@ -89,7 +89,7 @@ cat <<'NEXT'
 
 2. Get the built site onto the box (do NOT build here — keep node/bun off the
    exposed box). From CI or your dev machine, place the Vite build at
-   $REPO/prototype/dist  (see deploy/README.md "Build / deploy").
+   $REPO/prototype/dist  (see the deploy runbook "Build / deploy").
 
 3. Kick a first scrape and watch it:
      systemctl start wfm-scrape.service

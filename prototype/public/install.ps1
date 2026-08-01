@@ -76,7 +76,7 @@ Write-Host "→ Installed: $Bin"
 # Authenticode check — advisory only. The SHA-256 match above is the actual
 # integrity guarantee; an unsigned (or not-yet-trusted) binary must never
 # block the install while releases are pre-signing. Status is anything but
-# 'Valid' until the Certum cert lands (see docs/signing-runbook.md).
+# 'Valid' until the Certum cert lands (see the maintainer signing runbook).
 $sig = Get-AuthenticodeSignature $Bin
 if ($sig.Status -eq 'Valid') {
     Write-Host "→ Authenticode signature: VALID"

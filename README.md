@@ -91,8 +91,7 @@ into `wfm-core`, and persists settings + inventory snapshots in a local SQLite
 store that survives restarts and keeps inventory history.
 
 The desktop app is **still in development**. Early builds exist, but the
-browser app + companion remain the supported way to use TennoWorth today. See
-[`docs/product-plan-2026-07.md`](docs/product-plan-2026-07.md) for the roadmap.
+browser app + companion remain the supported way to use TennoWorth today.
 
 Each platform ships the way that platform actually works:
 
@@ -151,8 +150,7 @@ posture and threat model: [`SECURITY.md`](SECURITY.md).
 
 This repository uses a develop-then-main promotion model — `develop` is the
 integration branch (feature branches merge here, CI runs here), `main` is
-production (auto-deploys), and promotion is fast-forward only. See
-[`docs/branching.md`](docs/branching.md) for details.
+production (auto-deploys), and promotion is fast-forward only.
 
 ## Ban risk
 

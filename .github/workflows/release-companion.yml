@@ -34,7 +34,7 @@ jobs:
       # `if:`, so each secret is surfaced as an env var here and steps gate
       # on `env.* != ''` (the documented indirection). Absent secrets read
       # as '' and every signing/verify step below no-ops. Names must stay in
-      # sync with docs/signing-runbook.md.
+      # sync with the maintainer signing runbook.
       #
       # Path 1 — a portable PFX (PKCS#12). Realistic only for a test/legacy
       # cert: CA/B Forum rules since 2023 keep new OV code-signing keys on an
@@ -124,11 +124,11 @@ jobs:
             # osslsigncode via the PKCS#11 engine) and on how the OTP is fed
             # in CI. Wire the concrete invocation here once chosen — the
             # SIMPLYSIGN_* env vars above are already in scope. See
-            # docs/signing-runbook.md, "SimplySign in CI".
+            # the maintainer signing runbook, "SimplySign in CI".
             #
             # Until wired, selecting this path fails loudly rather than
             # shipping a silently-unsigned binary that verify would then flag.
-            throw 'SIMPLYSIGN_ENABLED is set but the SimplySign signing command is not wired yet — see docs/signing-runbook.md.'
+            throw 'SIMPLYSIGN_ENABLED is set but the SimplySign signing command is not wired yet — see the maintainer signing runbook.'
           }
 
       # Runs only when signing actually happened. Uses the Default
@@ -154,13 +154,13 @@ jobs:
         if: matrix.target == 'x86_64-pc-windows-msvc' && steps.sign.outcome != 'success'
         shell: bash
         run: |
-          echo "::notice title=Unsigned Windows binary::No signing secrets configured — the Windows release is UNSIGNED. SmartScreen will warn users. See docs/signing-runbook.md."
+          echo "::notice title=Unsigned Windows binary::No signing secrets configured — the Windows release is UNSIGNED. SmartScreen will warn users. See the maintainer signing runbook."
           {
             echo "### Windows binary UNSIGNED"
             echo ""
             echo "No signing secrets configured, so this release ships without an Authenticode signature."
             echo "Windows SmartScreen will show \"Windows protected your PC\" until signing is enabled."
-            echo "See \`docs/signing-runbook.md\`."
+            echo "See \`the maintainer signing runbook\`."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
@@ -230,12 +230,12 @@ jobs:
       - name: Note VirusTotal skipped
         if: env.VT_API_KEY == ''
         run: |
-          echo "::notice title=VirusTotal skipped::VT_API_KEY not configured — artifacts were not submitted. See docs/signing-runbook.md."
+          echo "::notice title=VirusTotal skipped::VT_API_KEY not configured — artifacts were not submitted. See the maintainer signing runbook."
           {
             echo "### VirusTotal skipped"
             echo ""
             echo "\`VT_API_KEY\` secret not configured — release artifacts were not submitted to VirusTotal."
-            echo "See \`docs/signing-runbook.md\`."
+            echo "See \`the maintainer signing runbook\`."
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Create / update GitHub release
