@@ -236,15 +236,31 @@ fn ptrace_open_error(mem_path: &str, pid: u32, e: std::io::Error) -> anyhow::Err
          sudo {bin}\n\
          Note: re-installing or rebuilding the binary clears the capability — re-run setcap after an upgrade."
     );
-    // Yama scope 3 disables ptrace entirely; even a capable binary can't attach.
-    if matches!(
-        std::fs::read_to_string("/proc/sys/kernel/yama/ptrace_scope"),
-        Ok(s) if s.trim() == "3"
-    ) {
-        msg.push_str(
+    // Whether the capability is needed is decided by kernel.yama.ptrace_scope,
+    // NOT by Proton-vs-native (a myth this message used to leave standing: at
+    // scope 1 the game is a child of Steam, not of us, so a non-descendant
+    // tracer is refused however the game was launched). Name the scope we
+    // actually found so the user can tell "expected" from "misconfigured".
+    match std::fs::read_to_string("/proc/sys/kernel/yama/ptrace_scope") {
+        Ok(s) if s.trim() == "3" => msg.push_str(
             "\n\nkernel.yama.ptrace_scope is 3 (ptrace disabled) — setcap alone won't help.\n\
              Lower it until reboot:\n  sudo sysctl kernel.yama.ptrace_scope=1",
-        );
+        ),
+        Ok(s) if s.trim() == "0" => msg.push_str(
+            "\n\nkernel.yama.ptrace_scope is 0, so this normally would not be needed —\n\
+             the game may be running as a different user (a separate Steam or\n\
+             Flatpak account), which the capability also covers.",
+        ),
+        Ok(s) => {
+            let scope = s.trim();
+            msg.push_str(&format!(
+                "\n\nkernel.yama.ptrace_scope is {scope}: only a process's own descendants\n\
+                 may read its memory, and the game is a child of Steam, not of us.\n\
+                 That is the usual desktop default, so this step is expected here —\n\
+                 it is not caused by Proton, and a native launch behaves the same."
+            ));
+        }
+        Err(_) => {}
     }
     anyhow!(msg)
 }

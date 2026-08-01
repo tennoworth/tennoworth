@@ -37,7 +37,7 @@ if [ "$REPO" = "OWNER/REPO" ] && [ -z "${WFMINV_BASE_URL:-}" ]; then
   echo >&2
   echo "If you're the developer, build it locally instead:" >&2
   echo "    cd companion && cargo build --release" >&2
-  echo "    target/release/$BIN_NAME   # try it — under Proton it usually just works" >&2
+  echo "    target/release/$BIN_NAME   # try it" >&2
   echo "  Only if that prints 'Permission denied', grant ptrace once:" >&2
   echo "    sudo setcap cap_sys_ptrace=eip target/release/$BIN_NAME" >&2
   exit 1
@@ -105,12 +105,15 @@ cat <<EOF
 Next steps
   1. Start Warframe, log past the title screen, and open the trade or
      profile screen once (forces the auth call the scan reads).
-  2. Just run it — under Proton this usually works with no extra setup:
+  2. Just run it:
        $BIN_NAME
      inventory.json lands in the directory you ran it from — drop it
      into the web UI.
-  3. ONLY IF step 2 prints "Permission denied": grant ptrace once (then
-     it's no sudo, ever):
+  3. IF step 2 prints "Permission denied": grant ptrace once (then it's
+     no sudo, ever). Most desktop kernels ship kernel.yama.ptrace_scope=1,
+     where this IS required — it has nothing to do with Proton, and a
+     native launch behaves the same. Check yours with:
+       cat /proc/sys/kernel/yama/ptrace_scope    # 0 = not needed
        sudo setcap cap_sys_ptrace=eip "$DEST/$BIN_NAME"
      Rather not? Run a single fetch with sudo instead (absolute path —
      sudo's secure_path won't find a bare command name):
