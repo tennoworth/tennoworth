@@ -650,7 +650,6 @@
     opacity: 0.65;
     font-size: 9px;
   }
-  .muted { color: var(--muted); font-size: 12.5px; }
   table {
     width: 100%;
     border-collapse: collapse;

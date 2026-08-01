@@ -100,13 +100,6 @@
     flex-direction: column;
     gap: 12px;
   }
-  .warn-banner {
-    border-left: 3px solid var(--bad);
-    padding: 10px 14px;
-    font-size: 13px;
-    color: var(--fg);
-    line-height: 1.5;
-  }
   .general-banner {
     flex-direction: row;
     align-items: flex-start;
