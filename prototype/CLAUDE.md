@@ -120,7 +120,12 @@ IndexedDB DB:
   `/wfstat-catalog.json` (v2 caches could hold localized names).
 
 **Always bump the version suffix in the key when the stored shape
-changes** so old data is silently invalidated.
+changes** so old data is silently invalidated. **And add the outgoing key to
+`RETIRED_KEYS` in `catalog-cache.ts` in the same edit** — bumping invalidates
+the old row but cannot delete it, because nothing reads a key it no longer
+knows. The v2→v3 bump shipped without this and left a dead multi-hundred-KB
+row in every existing user's IndexedDB, reachable by no code path until
+`purgeRetiredCaches()` was added. Invalidation is not reclamation.
 
 ---
 
@@ -225,5 +230,16 @@ hosted CSP stays byte-identical. `companion/tennoworth-desktop`'s
   Renaming a state field? Bump the storage key version and move on.
 - **Edit existing files** in preference to creating new ones.
 - **Match the scope of the request.** Bug fix ≠ refactor pass.
-- **Verify in the browser.** For UI changes, drive Playwright or open
-  the dev server and use the feature. "Tests pass" ≠ "feature works."
+- **Verify in the browser, and A/B the fix.** For UI changes drive
+  Playwright or the dev server. "Tests pass" ≠ "feature works" — and a
+  passing test after a fix doesn't prove the bug was real. Revert the fix,
+  re-run the same script, watch it fail, restore. That is what turned R1
+  (the review modal resetting in-flight edits) from a plausible reading of
+  the code into a demonstrated defect.
+  Gotchas that cost time here: the Playwright MCP wants Chrome specifically
+  but `~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome` works when
+  passed as `executablePath`; the app stays on the onboarding view until an
+  inventory is loaded, so anything gated on a connected companion (the bulk
+  List CTA, the orders panel) is invisible before that; the review modal is a
+  `div[role="dialog"]`, not a `<dialog>`; and `.playwright-mcp/inventory-test.json`
+  is a real 2 MB inventory to drive it with.
