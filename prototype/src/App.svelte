@@ -2494,21 +2494,12 @@
   .row.gap-sm { gap: 10px; }
   .src { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; }
   .src strong { font-weight: 600; }
-  .muted { color: var(--muted); font-size: 12.5px; }
 
 
   /* First-session Score explainer. Single dismissable line above the
      table — the casual-flipper persona was confused by what Score
      meant; hover-tooltip alone wasn't enough. localStorage flag means
      each user sees it once. */
-  .warn-banner {
-    border-left: 3px solid var(--bad);
-    padding: 10px 14px;
-    font-size: 13px;
-    color: var(--fg);
-    line-height: 1.5;
-  }
-
   /* Cross-view banner region (unreachable / bad deep link / pull error). Reuses
      the warn-banner left-accent + card tokens; adds a body/actions row so the
      dismiss × (and Retry) sit at the end without wrapping under the copy. */

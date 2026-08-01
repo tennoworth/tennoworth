@@ -134,3 +134,28 @@ dialog.cryptobox footer {
   padding-top: 4px;
   border: none;
 }
+
+/* .muted and .warn-banner are global because they are written as if they
+   already were. Five components — ExportImportDialogs, InstallWidget,
+   ListingReviewModal, MyOrdersPanel, WfmAuthDialogs — mark up
+   class="muted" without declaring the rule, and Svelte's per-component
+   scoping means App.svelte's copy never reached them: that text was
+   rendering at full --fg instead of --muted. Measured 2026-08-01, e.g. the
+   WFM login dialog's explanatory paragraph at rgb(218,227,237) where it
+   should have been rgb(138,152,168).
+
+   Components that want a variant still declare their own — MarketBrowser's
+   12px .muted wins on Svelte's scoped specificity, which is why this is safe
+   to make global rather than something each component must now re-opt into. */
+.muted {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+.warn-banner {
+  border-left: 3px solid var(--bad);
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--fg);
+  line-height: 1.5;
+}
+
