@@ -1,5 +1,6 @@
 // @ts-nocheck — vitest fixtures; the store's TS contract is exercised by tsc.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { installTauri, removeTauri } from './test-utils.js';
 import {
   createStateStore,
   LocalStorageStateStore,
@@ -8,14 +9,6 @@ import {
 
 // TauriStateStore + the desktop sniff read the Tauri globals; install/remove
 // them per test so the two modes stay isolated (same pattern as transport.test).
-function installTauri(invoke) {
-  globalThis.__TAURI_INTERNALS__ = { invoke };
-  globalThis.__TAURI__ = { core: { invoke } };
-}
-function removeTauri() {
-  delete globalThis.__TAURI_INTERNALS__;
-  delete globalThis.__TAURI__;
-}
 
 beforeEach(() => {
   localStorage.clear();

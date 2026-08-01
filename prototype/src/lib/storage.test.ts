@@ -2,6 +2,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   saveSnapshot, loadSnapshot, clearSnapshot, diffOwned,
+  buildSnapshotPayload, serializeSnapshot, deserializeSnapshot,
 } from './storage.js';
 
 beforeEach(() => {
@@ -103,5 +104,47 @@ describe('diffOwned', () => {
     const d = diffOwned(prev, curr);
     expect(d.has('gone')).toBe(false);
     expect(d.has('kept')).toBe(true);  // new -> +5
+  });
+});
+
+
+// The encrypted export (ExportImportDialogs.svelte) and both persistence
+// stores build their payload through buildSnapshotPayload. The export used to
+// re-list the seven record fields itself, and nothing would have caught the
+// drift: add a field to OwnedRecord, wire it into the stores, forget the
+// export, and every export silently loses it — surfacing only when a user
+// imports on another machine and finds data missing.
+//
+// This pins the round-trip rather than the field list, so it stays honest when
+// the shape grows: whatever the builder emits must come back out of
+// deserializeSnapshot unchanged.
+describe('buildSnapshotPayload', () => {
+  const owned = new Map([
+    ['axi_k2_relic', {
+      count: 7, name: 'Axi K2 Relic', type: 'Relics', slug: 'axi_k2_relic',
+      subtype: 'radiant', kept_lvl: null, leveled: 0,
+    }],
+    ['vitality', {
+      count: 51, name: 'Vitality', type: 'Mods', slug: 'vitality',
+      subtype: null, kept_lvl: 10, leveled: 3,
+    }],
+  ]);
+
+  it('round-trips every persisted field through deserializeSnapshot', () => {
+    const payload = buildSnapshotPayload({ invName: 'inventory.json', owned }, 1234);
+    const back = deserializeSnapshot(JSON.stringify(payload));
+    expect(back?.invName).toBe('inventory.json');
+    expect(back?.ts).toBe(1234);
+    expect(back?.owned).toEqual(owned);
+  });
+
+  it('is what serializeSnapshot emits, so export and store cannot diverge', () => {
+    const stored = JSON.parse(serializeSnapshot({ invName: 'inventory.json', owned }));
+    const exported = buildSnapshotPayload({ invName: 'inventory.json', owned }, stored.ts);
+    expect(exported).toEqual(stored);
+  });
+
+  it('carries the callers timestamp, not now() — exports keep the snapshots own', () => {
+    expect(buildSnapshotPayload({ invName: 'x', owned: new Map() }, 999).ts).toBe(999);
   });
 });

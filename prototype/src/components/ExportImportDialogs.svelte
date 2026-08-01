@@ -12,6 +12,7 @@
   // its own state (resolved/deltas/market/phase/store.saveSnapshot), the
   // same split as WfmAuthDialogs' onunlocked.
   import { encryptPayload, decryptPayload } from '../lib/crypto';
+  import { buildSnapshotPayload } from '../lib/storage';
 
   let { owned, inventoryName, lastUpdated, onimport }: {
     owned: Map<string, any>;
@@ -57,22 +58,9 @@
     }
     exportBusy = true;
     try {
-      const payload = {
-        invName: inventoryName,
-        ts: lastUpdated,
-        owned: [...owned.entries()].map(([key, rec]) => [
-          key,
-          {
-            count: rec.count,
-            name: rec.name,
-            type: rec.type,
-            slug: rec.slug,
-            subtype: rec.subtype ?? null,
-            kept_lvl: rec.kept_lvl ?? null,
-            leveled: rec.leveled ?? 0,
-          },
-        ]),
-      };
+      // Same builder the stores use, so an export can never drift from what
+      // gets persisted. Timestamp is the snapshot's own, not now().
+      const payload = buildSnapshotPayload({ invName: inventoryName, owned }, lastUpdated);
       const blob = await encryptPayload(payload, exportPass);
       const text = JSON.stringify(blob);
       const file = new Blob([text], { type: 'application/json' });
