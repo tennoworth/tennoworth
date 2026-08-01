@@ -7,7 +7,6 @@
   // refactor extracts state into a typed store.
   import { onMount, untrack } from 'svelte';
   import DropZone from './components/DropZone.svelte';
-  import ResultsTable from './components/ResultsTable.svelte';
   import InstallWidget from './components/InstallWidget.svelte';
   import ListingReviewModal from './components/ListingReviewModal.svelte';
   import MyOrdersPanel from './components/MyOrdersPanel.svelte';
@@ -41,7 +40,7 @@
     createTransport, isDesktopRuntime,
     desktopWfmStatus, DesktopCmdError,
   } from './lib/transport';
-  import type { CompanionConfig, Inventory, Market, OwnedRecord, PendingPlan, ItemResult } from './lib/types';
+  import type { Market, OwnedRecord } from './lib/types';
   import { humanError } from './lib/errors';
 
   // Desktop (Tauri) vs hosted/serve (browser) is decided ONCE at boot. In
@@ -2639,7 +2638,6 @@
     line-height: 1;
   }
   .baro-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-  .baro-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
   .baro-detail { font-size: 12.5px; margin: 0; line-height: 1.5; }
   .baro-detail strong { color: var(--fg); font-weight: 600; }
   .baro-detail .unit { color: var(--muted); font-size: 11px; margin-left: 1px; }

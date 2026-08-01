@@ -39,11 +39,6 @@ const WFM_BOOTSTRAP_URL: &str = "https://warframe.market/auth/signin";
 pub const JWT_FORMAT: &str = "wfminv-jwt-v1";
 pub const JWT_KDF_ITERATIONS: u32 = 600_000;
 
-/// WFM account platforms. Canonical list lives in wfm-client (shared with
-/// wfm-scrape); re-exported here so existing callers of `auth::PLATFORMS`
-/// don't need to change.
-pub use wfm_client::PLATFORMS;
-
 /// The on-disk encrypted-JWT envelope. Field names + shape are a compat
 /// contract — see the module docs. Mirrors the web app's encrypted-export
 /// format so a single human can reason about both.

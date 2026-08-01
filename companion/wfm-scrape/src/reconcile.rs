@@ -175,26 +175,6 @@ pub fn reconcile<T: Mergeable>(
     }
 }
 
-/// wfstat-catalog.json file-level preserve-on-empty rule.
-///
-/// The bulk /items/ fetch produces a slim catalog that is NOT representable
-/// as a `market.json` surface — it can't be reconstructed from the prior
-/// snapshot. On an empty fetch, the prior FILE is retained as-is. This
-/// function expresses that: `None` means "write nothing" (keep the file
-/// on disk), `Some(bytes)` means "write these bytes atomically".
-pub fn preserve_catalog_file(
-    fresh_bytes: Vec<u8>,
-    prior_exists: bool,
-) -> Option<Vec<u8>> {
-    if fresh_bytes.is_empty() && prior_exists {
-        None
-    } else if fresh_bytes.is_empty() {
-        None
-    } else {
-        Some(fresh_bytes)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -319,23 +299,5 @@ mod tests {
 
         let r = reconcile("baro", fresh.clone(), Some(&prior), None, now, true, 7);
         assert_eq!(r.data, fresh);
-    }
-
-    // ---- wfstat-catalog file-level preserve-on-empty --------------------
-
-    #[test]
-    fn catalog_preserve_keeps_file_when_fetch_empty_and_prior_exists() {
-        assert_eq!(preserve_catalog_file(vec![], true), None);
-    }
-
-    #[test]
-    fn catalog_drops_when_fetch_empty_and_no_prior() {
-        assert_eq!(preserve_catalog_file(vec![], false), None);
-    }
-
-    #[test]
-    fn catalog_writes_when_fresh_arrives() {
-        assert_eq!(preserve_catalog_file(vec![1, 2, 3], true), Some(vec![1, 2, 3]));
-        assert_eq!(preserve_catalog_file(vec![1, 2, 3], false), Some(vec![1, 2, 3]));
     }
 }

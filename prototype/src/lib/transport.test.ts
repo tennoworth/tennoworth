@@ -10,7 +10,6 @@ import {
   desktopWfmLogin,
   desktopWfmUnlock,
   desktopTrySilentUnlock,
-  desktopWfmLogout,
 } from './transport.js';
 import { CompanionUnreachableError } from './companion.js';
 import { AssistantError } from './assistant.js';
@@ -277,13 +276,6 @@ describe('desktop WFM auth ops', () => {
     installTauri(invoke);
     await expect(desktopTrySilentUnlock()).resolves.toBe(false);
     expect(invoke).toHaveBeenCalledWith('try_silent_unlock');
-  });
-
-  it('desktopWfmLogout() invokes wfm_logout', async () => {
-    const invoke = vi.fn().mockResolvedValue(null);
-    installTauri(invoke);
-    await desktopWfmLogout();
-    expect(invoke).toHaveBeenCalledWith('wfm_logout');
   });
 
   it('a non-CmdError rejection (plain string) still becomes an Error, not a swallow', async () => {
