@@ -3,11 +3,17 @@
 One-shot Python tooling. Python is the right call for these — don't
 rewrite as Rust.
 
-- `wfm_demand.py` (root) — full WFM scrape (~45 min at 3 req/s; cron
-  every 2h). Writes `wfm_results.csv` by default; `--json-out` also
-  writes JSON, but never point that flag at the public market.json —
-  that path omits set_to_parts / relic_rewards / vault_status and
-  blanks the Sets, Relics, and Vaulted surfaces.
+- `wfm_demand.py` (root) — the original full WFM scrape (~45 min at 3
+  req/s). **No longer what production runs**: deploy/run-scrape.sh calls
+  the Rust port (`wfm-scrape scrape`) since the phase-5 first-half
+  cutover, and this stays as the rollback (`WFM_SCRAPER=python`) and as
+  the parity reference that tests/test_scrape_parity.py gates the port
+  against. Keep the two behaviourally identical — that gate is the only
+  thing that notices if they drift.
+  Writes `wfm_results.csv` by default; `--json-out` also writes JSON, but
+  never point that flag at the public market.json — that path omits
+  set_to_parts / relic_rewards / vault_status and blanks the Sets,
+  Relics, and Vaulted surfaces.
 - `scripts/csv_to_market_json.py` — the SOLE generator of
   `prototype/public/market.json` (full shape) AND
   `prototype/public/wfstat-catalog.json` (the browser resolver's
