@@ -12,8 +12,13 @@
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
+    // Tightening, NOT the dead-code gate — knip is (see knip.json). These flag
+    // unused LOCALS; every dead-code finding this repo has actually had was an
+    // unused EXPORT, which they are structurally blind to. Turning them on
+    // produced zero new diagnostics, so they cost nothing and catch nothing
+    // retroactively. Don't reach for them the next time dead code shows up.
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,
