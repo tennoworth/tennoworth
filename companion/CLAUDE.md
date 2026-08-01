@@ -1,6 +1,6 @@
 # companion/ — Rust workspace: CLI + loopback HTTP server
 
-Cargo WORKSPACE with five members (target/ shared, so the binary path in
+Cargo WORKSPACE with six members (target/ shared, so the binary path in
 every doc stays `companion/target/release/wfm-fetch-inventory`):
 - `wfm-fetch-inventory/` — the player-facing binary, cross-platform
   (Linux + Windows), ~3 MB. A thin adapter: it owns only CLI parsing and
@@ -26,6 +26,11 @@ every doc stays `companion/target/release/wfm-fetch-inventory`):
 - `wfm-client/` — shared WFM transport primitives (UA, headers, envelope
   unwrap, rate limiter, retries). Share primitives only — do not grow it
   into an abstraction that swallows authed order mutation.
+- `tennoworth-desktop/` — Tauri v2 desktop shell; the app users actually
+  install on Linux and Windows. Drives wfm-core over IPC, so it has no HTTP
+  server, no session token and no browser Local-Network-Access step. The
+  passphrase arrives from the webview — which is why wfm-core must stay free
+  of interactive terminal I/O.
 
 The binary has three subcommands in one tree:
 - `fetch` — extracts `inventory.json` from the running game process.
@@ -68,6 +73,32 @@ glibc has backward-compat but **no** forward-compat. CI uses
 `ubuntu-22.04` (glibc 2.35) deliberately. A binary built on modern
 Arch / CachyOS will not run on Ubuntu 20.04. Don't bump the runner
 without thinking about who that excludes.
+
+### Desktop releases: the version lives in FOUR places
+`tauri.conf.json`, `tennoworth-desktop/Cargo.toml`, and **both**
+`packaging/aur/*/PKGBUILD` pkgvers must equal the `desktop-v*` tag. CI's guard
+only compares the first two; a stale PKGBUILD pkgver just 404s on a tag that
+doesn't exist.
+
+### Tauri deb/rpm facts, each of which cost a debugging cycle
+- **reprepro REJECTS a deb with no `Section:`** ("No section given"). Set
+  `bundle.linux.deb.section`. Without it CI stays green and the repo silently
+  publishes nothing — the worst possible failure shape.
+- Package name is **`tenno-worth`**: Tauri kebab-cases `productName` and the
+  schema has no override. Both formats declare `Provides: tennoworth`, and
+  `apt install tennoworth` / `dnf install tennoworth` were verified to resolve
+  through it. Don't "fix" this by renaming productName.
+- Tauri **auto-adds** the webkit/gtk/appindicator deps; declaring them again
+  duplicates them in `Depends:`. Only declare `libcap2-bin` / `libcap`.
+- `postInstallScript` takes a path **relative to tauri.conf.json** (the docs
+  show absolute). The v2 bundlers are native Rust — no `dpkg-deb`/`rpmbuild`.
+
+### `StartupWMClass` is `tennoworth-desktop`, not the product name
+GTK derives WM_CLASS from `g_get_prgname()` (the binary basename) because
+Tauri's `enable_gtk_app_id` defaults to false. Verified by running the app:
+`WM_CLASS = "tennoworth-desktop", "Tennoworth-desktop"`. A wrong value breaks
+taskbar icon binding *silently* — it shipped broken in the AUR package for
+weeks. Confirm with `xprop WM_CLASS`, never by reasoning from the app name.
 
 ### `regex` crate feature flags affect binary size *and* pattern syntax
 With `default-features = false`, `\d` and `\b` fail to compile (NFA

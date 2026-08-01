@@ -28,7 +28,8 @@ prototype/       Svelte 5 + Vite app, deployed as static
 prototype/public/market.json    central artifact: the WFM snapshot
 scripts/         one-shot Python utilities
 wfm_demand.py    main WFM scraper (root, run on cron)
-deploy/          self-host kit: Caddyfile, setup script, scrape + web-pull systemd units for the production LXC
+packaging/aur/   AUR recipes (tennoworth, tennoworth-bin) + their .install hooks
+deploy/          self-host kit for the production LXC: Caddyfile, setup, scrape/web-pull units, plus the signed apt+dnf repo publisher (setup-repo.sh, pull-packages.sh)
 tests/           pytest tests for the Python side
 .github/workflows/  refresh-market (cron), release-companion (tag), audit
 .github/actions/    shared composite actions (setup-rust, setup-python,
@@ -70,17 +71,21 @@ SECURITY.md      threat model + what we do and don't commit to
 
 ---
 
-## Branching (see docs/branching.md)
+## Branching
 
 `develop` = integration (branch features off it, merge back with review);
 `main` = production (auto-deploys; promote with `git merge --ff-only develop`).
 Hotfixes branch off `main`, then merge `main` back into `develop`. Companion
 `v*` tags are cut on `main` only.
 
+Two remotes: `github` (public, runs CI) and `origin` (self-hosted Gitea) —
+push both. A GH cron commits market refreshes **straight to `develop`**, so a
+local `develop` goes stale within a day. Always fetch and merge before pushing;
+check with `git rev-list --left-right --count develop...github/develop`.
+
 ## Multi-agent / delegation rules
 
-Learned the hard way (2026-07-20 incident: a feature branch got merged into
-another agent's branch instead of develop, masked by a stale-green audit):
+These exist because each has already gone wrong once:
 
 - **Repo-mutating agents run in isolated worktrees.** If an agent dies
   mid-task, launch a FRESH agent with worktree isolation — resuming the dead
@@ -185,17 +190,3 @@ cd companion && cargo test
 cd companion && cargo build --release
 ```
 
----
-
-## Open items (as of latest session)
-
-- **Container-110 outbound firewall lockdown.** Drafted, deferred —
-  restrict the production LXC's egress to just WFM + the GitHub release
-  assets it pulls.
-- **Language-consolidation phases 2-3** (see the Rust consolidation
-  plan): land the `wfm-scrape` converter port behind a CI parity gate,
-  then port the scraper itself. (Phase 1 — GH cron reduced to a daily
-  offset bootstrap-snapshot role — is done.)
-- **Verify the `serve` late-JWT-unlock listing path end-to-end** with a
-  real WFM login — the 401/503 `needs_login` branches on the first
-  listing request are still unverified against a live companion.
