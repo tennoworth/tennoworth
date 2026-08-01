@@ -206,7 +206,13 @@ cookie-style JWT — header-style is rejected. CSRF token:
 `GET https://warframe.market/auth/signin`, parse
 `<meta name="csrf-token">`, send as `X-CSRFToken` on signin POST.
 
-Every API call needs `Crossplay: true` + `Platform: pc` + `Language: en`.
+Every **api.warframe.market** call needs `Crossplay: true` + `Platform: pc` +
+`Language: en` — that's what `wfm_client::wfm_headers()` sends. Signin is the
+exception and is NOT a bug: it POSTs to `warframe.market/v1/auth/signin` with
+`Platform` + `Language` + `auth_type` + `X-CSRFToken` and no `Crossplay`, which
+is what works against the live endpoint. Don't "fix" the omission by adding the
+header — it's an auth-host request, not an API call, and it is verified working
+as written.
 Cloudflare blocks generic UAs (error 1015) — always use `BROWSER_UA`.
 
 | Action | Method + path | Body / notes |

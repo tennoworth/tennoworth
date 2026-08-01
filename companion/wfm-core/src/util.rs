@@ -82,10 +82,6 @@ pub fn default_jwt_path() -> PathBuf {
     config_dir().join("wfm-jwt.enc")
 }
 
-pub fn default_pending_path() -> PathBuf {
-    config_dir().join("pending_plan.json")
-}
-
 /// The directory sibling files (the DeepSeek key, the assistant-off marker)
 /// live in, given wherever the JWT actually is. Follows a `--jwt-path`
 /// override so those files stay beside the credential they belong to, and
