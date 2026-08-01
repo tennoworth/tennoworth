@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from wfm_demand import (  # noqa: E402
     PLAT_CAP,
+    REQUEST_DELAY,
     avg_lowest_asks,
     build_snapshot,
     canonical_subtype,
@@ -455,3 +456,14 @@ def test_rank0_orders_all_maxed_means_empty_not_maxed_prices():
     # not maxed prices wearing a rank-0 label.
     book = [_order(120, rank=5), _order(140, rank=5)]
     assert rank0_orders(book) == []
+
+
+# Parity gate: companion/wfm-scrape/src/http.rs's REQUEST_DELAY must match this
+# module's. Neither scrape-parity run can catch a drift — Python patches
+# time.sleep and Rust injects NoopSleeper — so this fixture is the only thing
+# between a one-sided bump and a silent change to production scrape pacing.
+def test_request_delay_matches_the_shared_fixture():
+    fixture = json.loads(
+        (Path(__file__).resolve().parent / "fixtures" / "pacing.json").read_text()
+    )
+    assert REQUEST_DELAY == fixture["request_delay_ms"] / 1000

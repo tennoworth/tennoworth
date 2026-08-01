@@ -662,4 +662,29 @@ mod tests {
         let body = build_order_body(&item, &cat);
         assert_eq!(body["perTrade"], 3);
     }
+
+    // Parity gate: prototype/src/lib/limits.ts mirrors these three so the UI can
+    // reject an out-of-range value before the round-trip. This crate is the
+    // source of truth; drift surfaces as the UI accepting a batch the companion
+    // then rejects. Both sides read tests/fixtures/limits.json. Kept in plan.rs
+    // because MAX_PLAN_ITEMS and MIN_PLATINUM are private here — a test is not
+    // a reason to widen their visibility.
+    #[test]
+    fn listing_limits_match_the_shared_fixture() {
+        #[derive(serde::Deserialize)]
+        struct Fixture {
+            max_plan_items: usize,
+            min_platinum: u32,
+            max_platinum: u32,
+        }
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/limits.json"
+        );
+        let raw = std::fs::read_to_string(path).expect("read the shared limits fixture");
+        let fx: Fixture = serde_json::from_str(&raw).expect("parse the limits fixture");
+        assert_eq!(MAX_PLAN_ITEMS, fx.max_plan_items);
+        assert_eq!(MIN_PLATINUM, fx.min_platinum);
+        assert_eq!(MAX_PLATINUM, fx.max_platinum);
+    }
 }

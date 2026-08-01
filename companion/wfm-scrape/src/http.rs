@@ -436,4 +436,23 @@ mod tests {
         assert_eq!(fetch_json(&http, &sl, URL), Some(json!([1, 2])));
         assert_eq!(sl.recorded(), vec![Duration::from_secs(1), Duration::from_secs(2)]);
     }
+
+    // Parity gate: wfm_demand.py's REQUEST_DELAY must match this one. Neither
+    // scrape-parity run can catch a drift — both sides stub the sleeper — so
+    // this fixture is the only thing standing between a one-sided bump and a
+    // silent change to production scrape pacing.
+    #[test]
+    fn request_delay_matches_the_shared_fixture() {
+        #[derive(serde::Deserialize)]
+        struct Fixture {
+            request_delay_ms: u64,
+        }
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/pacing.json"
+        );
+        let raw = std::fs::read_to_string(path).expect("read the shared pacing fixture");
+        let fx: Fixture = serde_json::from_str(&raw).expect("parse the pacing fixture");
+        assert_eq!(REQUEST_DELAY.as_millis() as u64, fx.request_delay_ms);
+    }
 }
