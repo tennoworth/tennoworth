@@ -1,0 +1,87 @@
+#!/bin/sh
+# One-time bootstrap for the signed apt + dnf repositories on the box.
+# Idempotent — safe to re-run. Run as root on container 110, AFTER the signing
+# subkey is imported (see deploy/README.md "Package repositories").
+#
+# Why the box signs rather than CI: a repo-signing key in GitHub Actions
+# secrets would let anyone who compromises the workflow serve trusted packages
+# to every user who added our repo. The private subkey lives only here; the
+# primary key never left the maintainer's laptop.
+set -eu
+
+FPR=CC5F8E297E446C5B8D2769AC64093BF63D573CE8
+REPO=/srv/wfm/repo
+
+# rpm is Debian's package for `rpmsign` — dnf users expect gpgcheck=1, which
+# needs the .rpm files themselves signed, not just the metadata.
+apt-get update
+apt-get install -y --no-install-recommends reprepro createrepo-c rpm gnupg
+
+# The signing key must already be here; failing now with a clear message beats
+# reprepro failing later with "no secret key".
+if ! gpg --list-secret-keys "$FPR" >/dev/null 2>&1; then
+  echo "ERROR: signing subkey $FPR is not in root's keyring." >&2
+  echo "Import it first — see deploy/README.md." >&2
+  exit 1
+fi
+
+# Unattended signing must not prompt. A passphrase-protected key here would
+# make the timer hang rather than fail, which is much harder to notice.
+echo test > /tmp/.sigprobe
+if ! gpg --batch --yes --pinentry-mode error --detach-sign -o /tmp/.sigprobe.sig /tmp/.sigprobe 2>/dev/null; then
+  echo "ERROR: the signing key needs a passphrase, so unattended signing will hang." >&2
+  echo "Strip it from THIS copy: gpg --edit-key $FPR -> passwd -> empty -> save" >&2
+  rm -f /tmp/.sigprobe
+  exit 1
+fi
+rm -f /tmp/.sigprobe /tmp/.sigprobe.sig
+
+mkdir -p "$REPO/apt/conf" "$REPO/rpm"
+
+# Codename `stable` rather than a Debian suite name (bookworm/trixie): this
+# repo ships one architecture-independent-of-distro package, and pinning a
+# suite name would imply per-suite builds we do not produce. Users get
+# `deb ... stable main` on Debian and Ubuntu alike.
+cat > "$REPO/apt/conf/distributions" <<EOF
+Origin: TennoWorth
+Label: TennoWorth
+Suite: stable
+Codename: stable
+Architectures: amd64
+Components: main
+Description: TennoWorth — Warframe inventory + market dashboard
+SignWith: $FPR
+EOF
+
+cat > "$REPO/apt/conf/options" <<'EOF'
+verbose
+basedir /srv/wfm/repo/apt
+EOF
+
+# %_gpg_name is how `rpm --addsign` picks a key; without it rpmsign fails with
+# an unhelpful "Could not exec gpg".
+cat > /root/.rpmmacros <<EOF
+%_gpg_name $FPR
+%_gpg_path /root/.gnupg
+EOF
+
+# The .repo file dnf users install. gpgcheck=1 verifies each package's own
+# signature; repo_gpgcheck=1 verifies the signed repomd.xml on top, so a
+# tampered index is caught even before a package is fetched.
+cat > "$REPO/rpm/tennoworth.repo" <<'EOF'
+[tennoworth]
+name=TennoWorth
+baseurl=https://tennoworth.app/rpm
+enabled=1
+gpgcheck=1
+repo_gpgcheck=1
+gpgkey=https://tennoworth.app/tennoworth-archive-keyring.asc
+EOF
+
+chown -R wfm:wfm "$REPO"
+# reprepro and createrepo run as root from the timer; wfm owns the tree so
+# Caddy (running as wfm) can read it.
+chmod -R a+rX "$REPO"
+
+echo "Repo skeleton ready at $REPO"
+echo "Next: run /srv/wfm/pull-packages.sh to publish the current release."

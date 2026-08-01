@@ -227,9 +227,27 @@ jobs:
           bun install --frozen-lockfile
           bun run build:desktop
 
-      - name: Build binary
-        working-directory: companion
-        run: cargo build --release -p tennoworth-desktop
+      # `tauri build` rather than `cargo build`: it produces the same binary at
+      # target/release/tennoworth-desktop (so the glibc check and the tarball
+      # below are unchanged) AND emits the deb/rpm the apt/dnf repos are built
+      # from. No tagName here, so the action builds without publishing —
+      # artifacts are staged and released explicitly further down.
+      #
+      # These bundles do NOT bundle WebKitGTK; they declare a dependency on the
+      # system one, which is why they are safe where the old AppImage was not
+      # (that bundled ubuntu-22.04's WebKit and died at EGL init on rolling
+      # Mesa — see the comment at the top of this file).
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # bundle.createUpdaterArtifacts is on globally; without the key the
+          # bundler logs a signing error even though Linux ships no updater
+          # format. Passing it keeps the log clean and the failure meaningful.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          projectPath: companion/tennoworth-desktop
+          args: --bundles deb,rpm
 
       # Fails the release rather than shipping a binary that won't start on a
       # user's machine. 2.35 is what ubuntu-22.04 provides; anything higher
@@ -267,6 +285,31 @@ jobs:
           rm -rf "dist/$stage"
           cd dist && sha256sum "$stage.tar.gz" | tee "$stage.tar.gz.sha256"
 
+      # The deb/rpm the self-hosted apt and dnf repos are built from. Names are
+      # normalised to fixed filenames because deploy/pull-packages.sh on the box
+      # fetches them by name from the release — Tauri's own names embed the
+      # version (TennoWorth_0.3.3_amd64.deb), which would make the puller need
+      # to know the version before it can fetch it.
+      #
+      # Package name inside the deb/rpm is `tenno-worth` (Tauri kebab-cases
+      # productName and offers no override); both declare `Provides: tennoworth`
+      # so `apt install tennoworth` still resolves. Don't "fix" the filenames to
+      # match the provide — the puller matches on these.
+      - name: Stage Linux packages
+        run: |
+          set -euo pipefail
+          deb=$(find companion/target/release/bundle/deb -name '*.deb' | head -1)
+          rpm=$(find companion/target/release/bundle/rpm -name '*.rpm' | head -1)
+          [ -n "$deb" ] && [ -n "$rpm" ] || {
+            echo "::error title=Missing Linux bundle::tauri build did not emit a deb and an rpm"
+            exit 1
+          }
+          cp "$deb" dist/tennoworth-desktop-amd64.deb
+          cp "$rpm" dist/tennoworth-desktop-x86_64.rpm
+          cd dist
+          sha256sum tennoworth-desktop-amd64.deb   | tee tennoworth-desktop-amd64.deb.sha256
+          sha256sum tennoworth-desktop-x86_64.rpm  | tee tennoworth-desktop-x86_64.rpm.sha256
+
       # prerelease + make_latest:false for the same reason as the rolling tag:
       # the repo's "Latest release" badge stays reserved for the CLI's v* tags.
       - name: Publish to the versioned release
@@ -277,12 +320,20 @@ jobs:
           files: |
             dist/tennoworth-desktop-linux-x86_64.tar.gz
             dist/tennoworth-desktop-linux-x86_64.tar.gz.sha256
+            dist/tennoworth-desktop-amd64.deb
+            dist/tennoworth-desktop-amd64.deb.sha256
+            dist/tennoworth-desktop-x86_64.rpm
+            dist/tennoworth-desktop-x86_64.rpm.sha256
           draft: false
           prerelease: true
           make_latest: false
           body: |
             Linux binary for the AUR `tennoworth-bin` package, dynamically
             linked against system webkit2gtk/gtk3 (glibc floor 2.35).
+
+            `.deb` and `.rpm` are pulled by the box and republished into the
+            signed apt/dnf repos at https://tennoworth.app/apt and /rpm — they
+            are here so the repo builder has an immutable, versioned source.
 
             Windows installers and the updater manifest live on the rolling
             [desktop-latest](https://github.com/tennoworth/tennoworth/releases/tag/desktop-latest)
