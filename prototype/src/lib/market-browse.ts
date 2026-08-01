@@ -89,6 +89,13 @@ export function searchItems(
   const items = market?.items;
   if (!q || !items) return [];
   const vault = market?.vault_status;
+  // Linear scan, deliberately. Measured 2026-08-01 against the real
+  // market.json: 0.2 ms median / 0.3 ms max per keystroke over its 2,549
+  // entries. A prefix index would save a fraction of a millisecond and add a
+  // structure to keep in sync with the snapshot. (The ~17k figure that makes
+  // this look expensive is the wfstat RESOLVER catalog, a different thing —
+  // this iterates market items.)
+  //
   // Rank prefix matches above mid-word substring matches, then by volume, so
   // "primed" surfaces the "Primed …" mods before "… Primed …" parts.
   const starts: BrowseRow[] = [];

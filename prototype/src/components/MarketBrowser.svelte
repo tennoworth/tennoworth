@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { baroLocation, humanWindow, plat } from '../lib/format';
   import { onMount, onDestroy } from 'svelte';
   import type { Market } from '../lib/types';
   import {
@@ -31,16 +32,12 @@
   let movers = $derived(topMovers(market, index, { minVol: 20, minPrice: 10, limit: 8 }));
   let vaulted = $derived(vaultedTop(market, index, 12));
 
-  // Baro schedule — same NODE_NAMES cleanup the dashboard applies. Schedule
-  // only: market.json carries activation/expiry/location, never stock.
-  const NODE_NAMES: Record<string, string> = {
-    TennoConHUB2: 'TennoCon Relay',
-    SolarisUnitedHub1: 'Fortuna backroom',
-  };
+  // Baro schedule. Schedule only: market.json carries activation/expiry/
+  // location, never stock.
   let baro = $derived.by(() => {
     const b = market?.baro;
     if (!b) return null;
-    return { ...b, location: NODE_NAMES[b.location] ?? b.location };
+    return { ...b, location: baroLocation(b.location) };
   });
 
   // A minute-resolution clock so the countdown ticks without a reload. Written
@@ -65,18 +62,7 @@
     return { phase: 'unknown' as const, label: 'Next Baro visit', windowMs: null };
   });
 
-  function humanWindow(ms: number | null): string {
-    if (ms == null || !Number.isFinite(ms) || ms < 0) return '—';
-    const totalMin = Math.floor(ms / 60000);
-    const d = Math.floor(totalMin / (60 * 24));
-    const h = Math.floor((totalMin / 60) % 24);
-    const m = totalMin % 60;
-    if (d > 0) return `${d}d ${h}h`;
-    if (h > 0) return `${h}h ${m}m`;
-    return `${m}m`;
-  }
 
-  const plat = (v: number) => Math.round(v).toLocaleString();
 </script>
 
 <section class="browser" data-testid="market-browser">

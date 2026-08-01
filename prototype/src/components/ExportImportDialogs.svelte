@@ -12,6 +12,7 @@
   // its own state (resolved/deltas/market/phase/store.saveSnapshot), the
   // same split as WfmAuthDialogs' onunlocked.
   import { encryptPayload, decryptPayload } from '../lib/crypto';
+  import { buildSnapshotPayload } from '../lib/storage';
 
   let { owned, inventoryName, lastUpdated, onimport }: {
     owned: Map<string, any>;
@@ -57,22 +58,9 @@
     }
     exportBusy = true;
     try {
-      const payload = {
-        invName: inventoryName,
-        ts: lastUpdated,
-        owned: [...owned.entries()].map(([key, rec]) => [
-          key,
-          {
-            count: rec.count,
-            name: rec.name,
-            type: rec.type,
-            slug: rec.slug,
-            subtype: rec.subtype ?? null,
-            kept_lvl: rec.kept_lvl ?? null,
-            leveled: rec.leveled ?? 0,
-          },
-        ]),
-      };
+      // Same builder the stores use, so an export can never drift from what
+      // gets persisted. Timestamp is the snapshot's own, not now().
+      const payload = buildSnapshotPayload({ invName: inventoryName, owned }, lastUpdated);
       const blob = await encryptPayload(payload, exportPass);
       const text = JSON.stringify(blob);
       const file = new Blob([text], { type: 'application/json' });
@@ -204,69 +192,4 @@
      rationale as WfmAuthDialogs.svelte's copy (Svelte scopes CSS
      per-component). Only the password-input subset — these dialogs have no
      email/select/remember-checkbox fields. */
-  dialog.cryptobox {
-    background: var(--panel);
-    color: var(--fg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0;
-    max-width: 420px;
-    width: calc(100% - 32px);
-  }
-  dialog.cryptobox::backdrop {
-    background: rgba(0, 0, 0, 0.55);
-    backdrop-filter: blur(2px);
-  }
-  dialog.cryptobox form {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    padding: 20px 20px 16px;
-  }
-  dialog.cryptobox header { display: flex; flex-direction: column; gap: 6px; }
-  dialog.cryptobox h3 {
-    margin: 0;
-    font-size: 13px;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--accent);
-    font-weight: 600;
-  }
-  dialog.cryptobox header p { margin: 0; font-size: 12.5px; line-height: 1.5; }
-  dialog.cryptobox label {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: 11.5px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
-  dialog.cryptobox input[type="password"] {
-    font: inherit;
-    color: var(--fg);
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 8px 10px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  }
-  dialog.cryptobox input[type="password"]:focus {
-    border-color: var(--accent);
-  }
-  dialog.cryptobox .err {
-    color: var(--bad);
-    font-size: 12px;
-    background: color-mix(in srgb, var(--bad) 12%, transparent);
-    border: 1px solid color-mix(in srgb, var(--bad) 40%, var(--border));
-    padding: 8px 10px;
-    border-radius: 6px;
-  }
-  dialog.cryptobox footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    padding-top: 4px;
-    border: none;
-  }
 </style>

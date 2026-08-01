@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { sparklinePoints } from '../lib/sparkline';
+  import { wfmItemUrl, ownedBreakdown, LEVELED_NOTE_TITLE, keptNoteTitle } from '../lib/format';
 
   // Row shape passed in from App.svelte's computeResults. Mirrors the
   // fields actually rendered/sorted; keep this in sync.
@@ -299,7 +300,11 @@
     return deltas.get(r.key ?? r.slug) ?? 0;
   }
 
-  let sorted = $derived.by(() => {
+  // Filter and sort are separate deriveds so that changing the SORT doesn't
+  // re-run the pill predicate over every row. (Changing the filter still
+  // invalidates the sort — it has to, the row set changed. The win is
+  // one-directional.)
+  let filtered = $derived.by(() => {
     const f = filter.trim().toLowerCase();
     let rows = f
       ? results.filter((r) => (r.name || r.slug).toLowerCase().includes(f))
@@ -307,7 +312,11 @@
     if (activePills.size > 0) {
       rows = rows.filter((r) => rowPills(r).some((p) => activePills.has(p)));
     }
-    return [...rows].sort((a, b) => {
+    return rows;
+  });
+
+  let sorted = $derived.by(() => {
+    return [...filtered].sort((a, b) => {
       const av = sortKey === 'delta' ? rowDelta(a) : (a as unknown as Record<string, unknown>)[sortKey];
       const bv = sortKey === 'delta' ? rowDelta(b) : (b as unknown as Record<string, unknown>)[sortKey];
       // Push nulls to the bottom regardless of sort direction — ducats /
@@ -429,7 +438,7 @@
             <td class="{col.align} col-{col.key}">
               {#if col.key === 'name'}
                 <a
-                  href="https://warframe.market/items/{r.slug}"
+                  href={wfmItemUrl(r.slug)}
                   target="_blank"
                   rel="noopener noreferrer"
                   >{r.name || r.slug}</a
@@ -458,10 +467,8 @@
               {:else if col.key === 'owned'}
                 {fmt(r.owned, col.key)}
                 {#if r.sellable < r.owned}
-                  {@const heldBack = r.owned - r.sellable}
-                  {@const leveledPart = Math.min(r.leveled || 0, heldBack)}
-                  {@const keptPart = heldBack - leveledPart}
-                  <span class="kept-note">({#if leveledPart > 0}<span class="leveled-note" title="Leveled gear can't be traded in-game — only unranked copies can be sold.">{leveledPart} leveled</span>{/if}{#if leveledPart > 0 && keptPart > 0} · {/if}{#if keptPart > 0}<span title="{keptPart} cop{keptPart === 1 ? 'y' : 'ies'} held back by the Keep copies reserve — not counted as sellable.">{keptPart} kept</span>{/if})</span>
+                  {@const bd = ownedBreakdown(r.owned, r.sellable, r.leveled)}
+                  <span class="kept-note">({#if bd.leveledPart > 0}<span class="leveled-note" title={LEVELED_NOTE_TITLE}>{bd.leveledPart} leveled</span>{/if}{#if bd.leveledPart > 0 && bd.keptPart > 0} · {/if}{#if bd.keptPart > 0}<span title={keptNoteTitle(bd.keptPart)}>{bd.keptPart} kept</span>{/if})</span>
                 {/if}
               {:else if col.key === 'delta'}
                 {#if d > 0}
@@ -643,7 +650,6 @@
     opacity: 0.65;
     font-size: 9px;
   }
-  .muted { color: var(--muted); font-size: 12.5px; }
   table {
     width: 100%;
     border-collapse: collapse;
