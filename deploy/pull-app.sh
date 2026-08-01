@@ -78,6 +78,25 @@ for f in "${LIVE_ARTIFACTS[@]}"; do
   git ls-files --error-unmatch "$f" >/dev/null 2>&1 && git checkout -- "$f"
 done
 
+# Untracked files that the incoming commits add as TRACKED abort the merge.
+# Happens whenever something is hand-placed on the box before it lands in git —
+# tennoworth-archive-keyring.asc was copied here during the apt/dnf repo work
+# and then committed upstream. If the box's copy is byte-identical, drop it and
+# let the merge bring it in; if it differs, that is a human decision, not
+# something a puller should overwrite.
+incoming_untracked=$(git diff --name-only --diff-filter=A HEAD "$REMOTE/$BRANCH" 2>/dev/null || true)
+for f in $incoming_untracked; do
+  [ -f "$f" ] || continue
+  git ls-files --error-unmatch "$f" >/dev/null 2>&1 && continue   # already tracked
+  if git show "$REMOTE/$BRANCH:$f" 2>/dev/null | cmp -s - "$f"; then
+    rm -f "$f" && echo "  cleared identical untracked $f (merge will restore it)"
+  else
+    echo "ABORT: untracked $f differs from the incoming version." >&2
+    echo "  Compare and remove it yourself; refusing to overwrite." >&2
+    exit 1
+  fi
+done
+
 git merge --ff-only "$REMOTE/$BRANCH"
 echo "pulled: $before -> $target"
 
