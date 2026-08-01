@@ -42,6 +42,7 @@
   } from './lib/transport';
   import type { Market, OwnedRecord } from './lib/types';
   import { humanError } from './lib/errors';
+  import { wfmItemUrl, baroLocation, humanWindow } from './lib/format';
 
   // Desktop (Tauri) vs hosted/serve (browser) is decided ONCE at boot. In
   // desktop mode the companion-connect surface (URL/token/handshake, orders,
@@ -491,17 +492,10 @@
   // relic_rewards / vault_status). No runtime warframestat fetch — that
   // broke the resolver-only rule and vanished during warframestat
   // outages. Null until market loads, or when the bake came back empty.
-  // warframestat's Baro feed usually carries display names ("Strata Relay
-  // (Earth)") but event nodes leak internals — TennoConHUB2 rendered raw in
-  // the countdown. Map the known offenders, pass everything else through.
-  const NODE_NAMES = {
-    TennoConHUB2: 'TennoCon Relay',
-    SolarisUnitedHub1: 'Fortuna backroom',
-  };
   let voidTrader = $derived.by(() => {
     const b = market?.baro;
     if (!b) return null;
-    return { ...b, location: NODE_NAMES[b.location] ?? b.location };
+    return { ...b, location: baroLocation(b.location) };
   });
 
   // Total ducats across the user's currently-sellable inventory.
@@ -544,17 +538,6 @@
     }
     return { phase: 'unknown', label: 'Next Baro visit', windowMs: null };
   });
-
-  function humanWindow(ms) {
-    if (ms == null || !Number.isFinite(ms) || ms < 0) return '—';
-    const totalMin = Math.floor(ms / 60000);
-    const d = Math.floor(totalMin / (60 * 24));
-    const h = Math.floor((totalMin / 60) % 24);
-    const m = totalMin % 60;
-    if (d > 0) return `${d}d ${h}h`;
-    if (h > 0) return `${h}h ${m}m`;
-    return `${m}m`;
-  }
 
   // Daily/weekly profit-routine clocks. Warframe resets daily at 00:00 UTC
   // and weekly Monday 00:00 UTC; we show only countdowns + static reminders,
@@ -1302,7 +1285,7 @@
                     {#if r.kind === 'near-complete'}Complete{:else if r.kind === 'complete-with-extras'}List{:else}List{/if}
                   </strong>
                   <a
-                    href="https://warframe.market/items/{r.set_slug}"
+                    href={wfmItemUrl(r.set_slug)}
                     target="_blank"
                     rel="noopener noreferrer"
                   >{r.set_name}</a>
@@ -1376,7 +1359,7 @@
                 <div class="relic-title">
                   <strong class="reco-verb">Crack</strong>
                   <a
-                    href="https://warframe.market/items/{p.relic_slug}"
+                    href={wfmItemUrl(p.relic_slug)}
                     target="_blank"
                     rel="noopener noreferrer"
                   >{p.relic_name}</a>

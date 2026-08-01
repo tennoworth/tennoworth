@@ -1,6 +1,7 @@
 <script lang="ts">
   import { untrack } from 'svelte';
   import { sparklinePoints } from '../lib/sparkline';
+  import { wfmItemUrl, ownedBreakdown, LEVELED_NOTE_TITLE, keptNoteTitle } from '../lib/format';
 
   // Row shape passed in from App.svelte's computeResults. Mirrors the
   // fields actually rendered/sorted; keep this in sync.
@@ -429,7 +430,7 @@
             <td class="{col.align} col-{col.key}">
               {#if col.key === 'name'}
                 <a
-                  href="https://warframe.market/items/{r.slug}"
+                  href={wfmItemUrl(r.slug)}
                   target="_blank"
                   rel="noopener noreferrer"
                   >{r.name || r.slug}</a
@@ -458,10 +459,8 @@
               {:else if col.key === 'owned'}
                 {fmt(r.owned, col.key)}
                 {#if r.sellable < r.owned}
-                  {@const heldBack = r.owned - r.sellable}
-                  {@const leveledPart = Math.min(r.leveled || 0, heldBack)}
-                  {@const keptPart = heldBack - leveledPart}
-                  <span class="kept-note">({#if leveledPart > 0}<span class="leveled-note" title="Leveled gear can't be traded in-game — only unranked copies can be sold.">{leveledPart} leveled</span>{/if}{#if leveledPart > 0 && keptPart > 0} · {/if}{#if keptPart > 0}<span title="{keptPart} cop{keptPart === 1 ? 'y' : 'ies'} held back by the Keep copies reserve — not counted as sellable.">{keptPart} kept</span>{/if})</span>
+                  {@const bd = ownedBreakdown(r.owned, r.sellable, r.leveled)}
+                  <span class="kept-note">({#if bd.leveledPart > 0}<span class="leveled-note" title={LEVELED_NOTE_TITLE}>{bd.leveledPart} leveled</span>{/if}{#if bd.leveledPart > 0 && bd.keptPart > 0} · {/if}{#if bd.keptPart > 0}<span title={keptNoteTitle(bd.keptPart)}>{bd.keptPart} kept</span>{/if})</span>
                 {/if}
               {:else if col.key === 'delta'}
                 {#if d > 0}
