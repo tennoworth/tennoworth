@@ -208,49 +208,9 @@
 </dialog>
 
 <style>
-  /* Duplicated from App.svelte's shared .cryptobox dialog styling — Svelte
-     scopes CSS per-component, and this codebase's existing extracted
-     components already re-declare shared visual classes rather than
-     promoting them to global CSS (see DesktopUpdateBanner.svelte). The
-     export/import dialogs (still in App.svelte) carry their own copy too. */
-  dialog.cryptobox {
-    background: var(--panel);
-    color: var(--fg);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 0;
-    max-width: 420px;
-    width: calc(100% - 32px);
-  }
-  dialog.cryptobox::backdrop {
-    background: rgba(0, 0, 0, 0.55);
-    backdrop-filter: blur(2px);
-  }
-  dialog.cryptobox form {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    padding: 20px 20px 16px;
-  }
-  dialog.cryptobox header { display: flex; flex-direction: column; gap: 6px; }
-  dialog.cryptobox h3 {
-    margin: 0;
-    font-size: 13px;
-    letter-spacing: 0.05em;
-    text-transform: uppercase;
-    color: var(--accent);
-    font-weight: 600;
-  }
-  dialog.cryptobox header p { margin: 0; font-size: 12.5px; line-height: 1.5; }
-  dialog.cryptobox label {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: 11.5px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--muted);
-  }
+  /* The dialog.cryptobox shell now lives in app.css — this component and
+     ExportImportDialogs render the same chrome and had drifted apart. Only
+     the remember-me row, which exists in no other dialog, stays here. */
   dialog.cryptobox label.remember {
     flex-direction: row;
     align-items: flex-start;
@@ -261,35 +221,4 @@
     line-height: 1.45;
   }
   dialog.cryptobox label.remember input { margin-top: 2px; }
-  dialog.cryptobox input[type="password"],
-  dialog.cryptobox input[type="email"],
-  dialog.cryptobox select {
-    font: inherit;
-    color: var(--fg);
-    background: var(--bg);
-    border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 8px 10px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  }
-  dialog.cryptobox input[type="password"]:focus,
-  dialog.cryptobox input[type="email"]:focus,
-  dialog.cryptobox select:focus {
-    border-color: var(--accent);
-  }
-  dialog.cryptobox .err {
-    color: var(--bad);
-    font-size: 12px;
-    background: color-mix(in srgb, var(--bad) 12%, transparent);
-    border: 1px solid color-mix(in srgb, var(--bad) 40%, var(--border));
-    padding: 8px 10px;
-    border-radius: 6px;
-  }
-  dialog.cryptobox footer {
-    display: flex;
-    justify-content: flex-end;
-    gap: 8px;
-    padding-top: 4px;
-    border: none;
-  }
 </style>

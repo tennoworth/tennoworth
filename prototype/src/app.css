@@ -1,58 +1,136 @@
 :root {
-  --bg: #0D1116;
-  --panel: #131920;
-  --panel-2: #182028;
-  /* Container outlines only — brightened again 2026-07-24 (was #2E3B4B,
-     ~1.55:1 against --panel — under WCAG's 3:1 non-text minimum) to
-     ~3.2:1. Inner divisions (row separators, cell borders) use
-     --hairline instead. */
-  --border: #5A7288;
-  --hairline: #202A35;
-  --fg: #DAE3ED;
-  --muted: #8A98A8;
-  /* Decorative only (nav group labels, version strings) — never for
-     real information; that floor is --muted. */
-  --faint: #596675;
-  --accent: #4E9EEA;
-  /* Colourblind-safe teal/vermillion (was #56BB80/#D97680 — too close on
-     a red-green deficiency). Always pair with a redundant +/−/▲/▼ glyph,
-     never rely on hue alone. */
-  --good: #3FBF9B;
-  --warn: #C79A50;
-  --bad: #DE7A52;
-  /* Warm ducat-coin tone — used only on the ducats column + ducat-deal
-     badge so the colour reads as a domain signal, not a generic accent. */
-  --ducat: #C79A50;
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  color-scheme: dark;
+--bg: #0D1116;
+--panel: #131920;
+--panel-2: #182028;
+/* Container outlines only — brightened again 2026-07-24 (was #2E3B4B,
+   ~1.55:1 against --panel — under WCAG's 3:1 non-text minimum) to
+   ~3.2:1. Inner divisions (row separators, cell borders) use
+   --hairline instead. */
+--border: #5A7288;
+--hairline: #202A35;
+--fg: #DAE3ED;
+--muted: #8A98A8;
+/* Decorative only (nav group labels, version strings) — never for
+   real information; that floor is --muted. */
+--faint: #596675;
+--accent: #4E9EEA;
+/* Colourblind-safe teal/vermillion (was #56BB80/#D97680 — too close on
+   a red-green deficiency). Always pair with a redundant +/−/▲/▼ glyph,
+   never rely on hue alone. */
+--good: #3FBF9B;
+--warn: #C79A50;
+--bad: #DE7A52;
+/* Warm ducat-coin tone — used only on the ducats column + ducat-deal
+   badge so the colour reads as a domain signal, not a generic accent. */
+--ducat: #C79A50;
+font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
 html, body, #app { height: 100%; margin: 0; }
 body {
-  background: var(--bg);
-  color: var(--fg);
-  font-size: 14px;
-  line-height: 1.5;
+background: var(--bg);
+color: var(--fg);
+font-size: 14px;
+line-height: 1.5;
 }
 a { color: var(--accent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button {
-  font: inherit;
-  color: var(--fg);
-  background: var(--panel-2);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  padding: 6px 12px;
-  cursor: pointer;
+font: inherit;
+color: var(--fg);
+background: var(--panel-2);
+border: 1px solid var(--border);
+border-radius: 5px;
+padding: 6px 12px;
+cursor: pointer;
 }
 button:hover:not(:disabled) { background: #1D2733; }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 input[type="text"], input[type="number"] {
+font: inherit;
+color: var(--fg);
+background: var(--bg);
+border: 1px solid var(--border);
+border-radius: 4px;
+padding: 6px 10px;
+}
+
+/* Encrypted-dialog chrome. Global, not per-component, because the same
+ dialog.cryptobox shell renders from two components — ExportImportDialogs in
+ every build, WfmAuthDialogs only under {#if isDesktop} — and Svelte scoping
+ forced each to carry its own copy. They had already diverged: WfmAuthDialogs
+ styled email inputs and selects that ExportImportDialogs' copy didn't cover,
+ so a future field added to the export dialog would have rendered unstyled.
+ Selector list here is the union. Rules genuinely local to one dialog (the
+ remember-me checkbox row) stay in that component. */
+dialog.cryptobox {
+  background: var(--panel);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0;
+  max-width: 420px;
+  width: calc(100% - 32px);
+}
+dialog.cryptobox::backdrop {
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(2px);
+}
+dialog.cryptobox form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 20px 20px 16px;
+}
+dialog.cryptobox header { display: flex; flex-direction: column; gap: 6px; }
+dialog.cryptobox h3 {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--accent);
+  font-weight: 600;
+}
+dialog.cryptobox header p { margin: 0; font-size: 12.5px; line-height: 1.5; }
+dialog.cryptobox label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+dialog.cryptobox input[type="password"],
+dialog.cryptobox input[type="email"],
+dialog.cryptobox select {
   font: inherit;
   color: var(--fg);
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 4px;
-  padding: 6px 10px;
+  padding: 8px 10px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+dialog.cryptobox input[type="password"]:focus,
+dialog.cryptobox input[type="email"]:focus,
+dialog.cryptobox select:focus {
+  border-color: var(--accent);
+}
+dialog.cryptobox .err {
+  color: var(--bad);
+  font-size: 12px;
+  background: color-mix(in srgb, var(--bad) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--bad) 40%, var(--border));
+  padding: 8px 10px;
+  border-radius: 6px;
+}
+dialog.cryptobox footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 4px;
+  border: none;
 }
