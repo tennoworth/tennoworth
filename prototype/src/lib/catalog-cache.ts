@@ -12,6 +12,12 @@ const STORE = 'catalogs';
 // English). v2 caches could hold Accept-Language-localized names that
 // never matched the WFM catalog — invalidate them.
 const KEY = 'wfstat-items-v3';
+// Bumping KEY invalidates the old row but cannot delete it: nothing reads a
+// key it no longer knows. Every key this cache has ever used therefore has to
+// stay listed here, or its rows sit in the user's IndexedDB forever — v2 rows
+// are on real installs right now, hundreds of KB each, unreachable by any code
+// path. Add the outgoing key here whenever you bump KEY.
+const RETIRED_KEYS = ['wfstat-items-v1', 'wfstat-items-v2'];
 const TTL_MS = 24 * 60 * 60 * 1000; // 24 h
 
 export type SlimCatalog = Array<[string, SlimItemInfo]>;
@@ -55,7 +61,13 @@ export async function readCached(): Promise<SlimCatalog | null> {
         }),
     );
     if (!entry) return null;
-    if (Date.now() - entry.ts > TTL_MS) return null;
+    if (Date.now() - entry.ts > TTL_MS) {
+      // Drop it rather than leaving a stale multi-hundred-KB row parked until
+      // the next successful write happens to overwrite it — which never comes
+      // if the user stops loading inventories.
+      void clearCached();
+      return null;
+    }
     return entry.data;
   } catch (e) {
     console.warn('catalog cache read failed:', e);
@@ -77,14 +89,32 @@ export async function writeCached(data: SlimCatalog): Promise<void> {
   }
 }
 
+/** Delete the current cache row. Best-effort: a failure here is not worth
+ *  surfacing, the cache is an optimization. */
 export async function clearCached(): Promise<void> {
+  await deleteKeys([KEY]);
+}
+
+/** Reclaim rows left behind by earlier cache-key versions. Called once at
+ *  boot from the resolver — best-effort and non-blocking, so a browser with a
+ *  broken IDB simply keeps the wasted space rather than failing a page load. */
+export async function purgeRetiredCaches(): Promise<void> {
+  await deleteKeys(RETIRED_KEYS);
+}
+
+async function deleteKeys(keys: string[]): Promise<void> {
   try {
     await withStore('readwrite', (store) =>
-      new Promise<void>((resolve, reject) => {
-        const req = store.delete(KEY);
-        req.onsuccess = () => resolve();
-        req.onerror = () => reject(req.error);
-      }),
+      Promise.all(
+        keys.map(
+          (k) =>
+            new Promise<void>((resolve, reject) => {
+              const req = store.delete(k);
+              req.onsuccess = () => resolve();
+              req.onerror = () => reject(req.error);
+            }),
+        ),
+      ).then(() => undefined),
     );
   } catch {
     /* ignore */

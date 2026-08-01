@@ -372,12 +372,38 @@ pub fn fetch_baro(http: &dyn Http) -> HashMap<String, serde_json::Value> {
     out
 }
 
-/// Fetch warframestat bulk item catalog (resolver data).
-/// English is forced via custom header — the endpoint varies on
-/// Accept-Language, and a localized catalog silently breaks the
-/// name→WFM-slug join.
+pub const WFSTAT_ITEMS_URL: &str = "https://api.warframestat.us/items/";
+
+/// Reduce the warframestat bulk item list to the resolver's slim
+/// `[uniqueName, {name, category}]` pairs.
+///
+/// Shared by the live fetch and the fixture path. It was written out twice,
+/// once each, and the filter and the shape have to agree exactly — the browser
+/// resolver joins on these pairs, so a divergence surfaces as owned items that
+/// silently fail to resolve.
+pub fn slim_wfstat_items(arr: &serde_json::Value, url: &str) -> Result<Vec<serde_json::Value>, String> {
+    let items = arr.as_array().ok_or_else(|| format!("{url}: not an array"))?;
+    Ok(items
+        .iter()
+        .filter(|it| it.get("uniqueName").is_some() && it.get("name").is_some())
+        .map(|it| {
+            serde_json::json!([it["uniqueName"], {"name": it["name"], "category": it.get("category")}])
+        })
+        .collect())
+}
+
+/// Fetch the warframestat bulk item catalog (resolver data).
+///
+/// Builds its own client rather than going through [`Http`], because English
+/// must be forced per-call: the endpoint varies on `Accept-Language` and a
+/// localized catalog silently breaks the name→WFM-slug join. The trait's
+/// `get_json(url)` has nowhere to put a header, and pushing `Accept-Language`
+/// onto the shared client would send it on every other endpoint too —
+/// csv_to_market_json.py sets it on this request alone, and that pair still
+/// has to match. Longer timeout for the same reason Python uses 60 s: the
+/// body is multi-MB.
 pub fn fetch_wfstat_slim() -> Result<Vec<serde_json::Value>, String> {
-    let url = "https://api.warframestat.us/items/";
+    let url = WFSTAT_ITEMS_URL;
     let resp = reqwest::blocking::Client::builder()
         .user_agent(wfm_client::BROWSER_UA)
         .timeout(std::time::Duration::from_secs(60))
@@ -393,15 +419,13 @@ pub fn fetch_wfstat_slim() -> Result<Vec<serde_json::Value>, String> {
         return Err(format!("{url}: HTTP {status}"));
     }
     let arr: serde_json::Value = serde_json::from_str(&body).map_err(|e| format!("{url}: JSON: {e}"))?;
-    let items = arr.as_array().ok_or_else(|| format!("{url}: not an array"))?;
-    let slim: Vec<serde_json::Value> = items
-        .iter()
-        .filter(|it| it.get("uniqueName").is_some() && it.get("name").is_some())
-        .map(|it| {
-            serde_json::json!([it["uniqueName"], {"name": it["name"], "category": it.get("category")}])
-        })
-        .collect();
-    Ok(slim)
+    slim_wfstat_items(&arr, url)
+}
+
+/// Fixture-mode counterpart: same reduction, responses served from the map.
+pub fn fetch_wfstat_slim_via_http(http: &dyn Http) -> Result<Vec<serde_json::Value>, String> {
+    let arr = http.get_json(WFSTAT_ITEMS_URL)?;
+    slim_wfstat_items(&arr, WFSTAT_ITEMS_URL)
 }
 
 /// Fixture implementation of [`Http`] — serves pre-recorded responses from

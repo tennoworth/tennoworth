@@ -7,6 +7,7 @@ use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::thread;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use crate::catalog::WfmCatalogItem;
@@ -16,6 +17,29 @@ use crate::listing::{
 };
 use crate::pending::{clear_pending, write_pending_atomic, PendingItem, PendingPlan};
 use crate::util::{chrono_now_iso, random_token};
+
+/// Resets a plan-in-flight flag on scope exit — including early return and
+/// panic — so a rejected or crashed request can't leave plan execution wedged.
+/// Both adapters serialize plan runs behind an `AtomicBool` and had each
+/// written this guard.
+pub struct PlanGuard<'a>(&'a AtomicBool);
+
+impl<'a> PlanGuard<'a> {
+    /// Take the flag, or `None` if a plan is already running. The guard's
+    /// existence IS the claim; dropping it releases.
+    pub fn acquire(flag: &'a AtomicBool) -> Option<Self> {
+        match flag.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst) {
+            Ok(_) => Some(PlanGuard(flag)),
+            Err(_) => None,
+        }
+    }
+}
+
+impl Drop for PlanGuard<'_> {
+    fn drop(&mut self) {
+        self.0.store(false, Ordering::SeqCst);
+    }
+}
 
 const MAX_PLAN_ITEMS: usize = 50;
 const MIN_PLATINUM: u32 = 5;
@@ -661,5 +685,30 @@ mod tests {
         item.quantity = 3;
         let body = build_order_body(&item, &cat);
         assert_eq!(body["perTrade"], 3);
+    }
+
+    // Parity gate: prototype/src/lib/limits.ts mirrors these three so the UI can
+    // reject an out-of-range value before the round-trip. This crate is the
+    // source of truth; drift surfaces as the UI accepting a batch the companion
+    // then rejects. Both sides read tests/fixtures/limits.json. Kept in plan.rs
+    // because MAX_PLAN_ITEMS and MIN_PLATINUM are private here — a test is not
+    // a reason to widen their visibility.
+    #[test]
+    fn listing_limits_match_the_shared_fixture() {
+        #[derive(serde::Deserialize)]
+        struct Fixture {
+            max_plan_items: usize,
+            min_platinum: u32,
+            max_platinum: u32,
+        }
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/limits.json"
+        );
+        let raw = std::fs::read_to_string(path).expect("read the shared limits fixture");
+        let fx: Fixture = serde_json::from_str(&raw).expect("parse the limits fixture");
+        assert_eq!(MAX_PLAN_ITEMS, fx.max_plan_items);
+        assert_eq!(MIN_PLATINUM, fx.min_platinum);
+        assert_eq!(MAX_PLATINUM, fx.max_platinum);
     }
 }

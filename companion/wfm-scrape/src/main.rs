@@ -4,7 +4,9 @@
 //! - `build`: mirrors `scripts/csv_to_market_json.py` (phase 3).
 //!   Reads `wfm_results.csv`, fetches upstreams, reconciles with the
 //!   prior snapshot, and writes `market.json` + `wfstat-catalog.json`.
-//! - `scrape`: will mirror `wfm_demand.py` (phase 4, not yet ported).
+//! - `scrape`: mirrors `wfm_demand.py` (phase 4). Implemented and gated by
+//!   tests/test_scrape_parity.py. NOT yet in production — deploy/run-scrape.sh
+//!   still invokes the Python scraper; that swap is the phase-5 cutover.
 //!
 //! Flags:
 //! - `--fixtures-dir <DIR>`: run offline using frozen fixture files.
@@ -292,8 +294,9 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     let wfstat_slim = if fixtures_dir.is_none() {
         fetch::fetch_wfstat_slim().unwrap_or_default()
     } else {
-        // In fixture mode, use Http trait (can't use fetch_wfstat_slim's custom client)
-        fetch_catalog_slim_via_http(http.as_ref()).unwrap_or_default()
+        // Fixture mode goes through the Http trait; the live path needs its own
+        // client for the per-call Accept-Language. Both share the reduction.
+        fetch::fetch_wfstat_slim_via_http(http.as_ref()).unwrap_or_default()
     };
     if wfstat_slim.is_empty() && catalog_out.exists() {
         eprintln!("  fetch empty — keeping existing {}", catalog_out.file_name().unwrap_or_default().to_string_lossy());
@@ -373,20 +376,6 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     eprintln!("Wrote {} ({} bytes)", json_out.display(), meta.len());
 
     Ok(())
-}
-
-fn fetch_catalog_slim_via_http(http: &dyn Http) -> Result<Vec<serde_json::Value>, String> {
-    let url = "https://api.warframestat.us/items/";
-    let arr = http.get_json(url)?;
-    let items = arr.as_array().ok_or_else(|| format!("{url}: not an array"))?;
-    let slim: Vec<serde_json::Value> = items
-        .iter()
-        .filter(|it| it.get("uniqueName").is_some() && it.get("name").is_some())
-        .map(|it| {
-            serde_json::json!([it["uniqueName"], {"name": it["name"], "category": it.get("category")}])
-        })
-        .collect();
-    Ok(slim)
 }
 
 fn find_root() -> Result<PathBuf, String> {

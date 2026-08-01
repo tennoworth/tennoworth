@@ -12,10 +12,9 @@ use std::time::Duration;
 use serde_json::Value;
 
 /// Fixed post-request delay — Python's `REQUEST_DELAY = 0.34`. The scraper
-/// sleeps this after EACH request (two per item), giving ~2.9 req/s. This is a
-/// fixed spacing, not a token bucket: `wfm-client`'s `RateLimiter` models a
-/// bursty 3/s window instead, so it is deliberately not used here — matching
-/// Python's actual sleep logic is the fidelity requirement.
+/// sleeps this after EACH request (two per item), giving ~2.9 req/s. Fixed
+/// spacing, not a token bucket: a bursty n-per-second window would drift from
+/// Python's actual sleep logic, and matching it is the fidelity requirement.
 pub const REQUEST_DELAY: Duration = Duration::from_millis(340);
 
 /// Number of attempts per request — Python's `fetch_json(retries=3)`.
@@ -436,5 +435,24 @@ mod tests {
         let sl = RecordingSleeper::new();
         assert_eq!(fetch_json(&http, &sl, URL), Some(json!([1, 2])));
         assert_eq!(sl.recorded(), vec![Duration::from_secs(1), Duration::from_secs(2)]);
+    }
+
+    // Parity gate: wfm_demand.py's REQUEST_DELAY must match this one. Neither
+    // scrape-parity run can catch a drift — both sides stub the sleeper — so
+    // this fixture is the only thing standing between a one-sided bump and a
+    // silent change to production scrape pacing.
+    #[test]
+    fn request_delay_matches_the_shared_fixture() {
+        #[derive(serde::Deserialize)]
+        struct Fixture {
+            request_delay_ms: u64,
+        }
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/pacing.json"
+        );
+        let raw = std::fs::read_to_string(path).expect("read the shared pacing fixture");
+        let fx: Fixture = serde_json::from_str(&raw).expect("parse the pacing fixture");
+        assert_eq!(REQUEST_DELAY.as_millis() as u64, fx.request_delay_ms);
     }
 }

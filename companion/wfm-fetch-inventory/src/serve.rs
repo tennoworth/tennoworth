@@ -12,10 +12,10 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use clap::Args;
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::VecDeque;
 use std::fs;
 use std::io::{IsTerminal, Read};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Instant;
@@ -26,16 +26,15 @@ use wfm_core::assistant::{
     short_reason, AssistantErrorCode, AssistantRequest, AssistantResponse,
     MAX_ASSISTANT_BODY_BYTES,
 };
-use wfm_core::auth::{decrypt_jwt, fetch_wfm_me, EncryptedJwt};
-use wfm_core::catalog::fetch_wfm_catalog;
+use wfm_core::auth::{decrypt_jwt, EncryptedJwt};
 use wfm_core::inventory::InventoryScanner;
 use wfm_core::listing::{
-    bulk_set_visibility, delete_order, list_user_orders, update_order, Unlocked, UpdateRequest,
-    VisibilityRequest, MAX_PLATINUM,
+    bulk_set_visibility, delete_order, list_user_orders, update_order, warm_unlocked, Unlocked,
+    UpdateRequest, VisibilityRequest, MAX_PLATINUM,
 };
 use wfm_core::pending::{clear_pending, load_pending};
-use wfm_core::plan::{execute_plan, run_pending, PlanRequest};
-use wfm_core::util::{browser_client, default_jwt_path, default_pending_path, random_token};
+use wfm_core::plan::{execute_plan, run_pending, PlanGuard, PlanRequest};
+use wfm_core::util::{config_dir_for, default_jwt_path, random_token};
 
 use crate::Sealed;
 
@@ -74,12 +73,13 @@ pub fn run_serve(args: ServeArgs) -> Result<()> {
     // in the envelope, so we can read it without the passphrase; the JWT itself
     // stays encrypted until the first listing action actually needs it.
     let jwt_path = args.jwt_path.unwrap_or_else(default_jwt_path);
-    // The DeepSeek key file lives alongside the JWT (same config dir), resolved
-    // once here so a per-request `--jwt-path` override doesn't need re-resolving.
-    let deepseek_key_dir = jwt_path
-        .parent()
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| PathBuf::from("."));
+    // Everything else companion-owned lives beside the JWT, so --jwt-path
+    // relocates the whole config dir rather than half of it. The DeepSeek key
+    // already worked this way; the pending plan did not, so a custom --jwt-path
+    // silently split a user's state across two directories.
+    let config_dir = config_dir_for(&jwt_path);
+    let deepseek_key_dir = config_dir.clone();
+    let pending_path = config_dir.join("pending_plan.json");
     let (listing_init, platform) = if jwt_path.exists() {
         let blob: EncryptedJwt = serde_json::from_slice(&fs::read(&jwt_path)?)
             .with_context(|| format!("reading encrypted JWT from {}", jwt_path.display()))?;
@@ -166,7 +166,7 @@ pub fn run_serve(args: ServeArgs) -> Result<()> {
     let state = Arc::new(ServeState {
         platform: Mutex::new(platform),
         session_token,
-        pending_path: default_pending_path(),
+        pending_path,
         plan_running: std::sync::atomic::AtomicBool::new(false),
         scanner: InventoryScanner::new(),
         listing: Mutex::new(listing_init),
@@ -199,15 +199,6 @@ pub fn run_serve(args: ServeArgs) -> Result<()> {
 // Cap request bodies so a malformed/hostile local client can't make us allocate
 // an unbounded String before parsing. 64 KB dwarfs any real plan (MAX_PLAN_ITEMS=50).
 const MAX_BODY_BYTES: u64 = 64 * 1024;
-
-// Resets the plan-in-flight flag on scope exit (incl. early return / panic) so a
-// rejected or crashed request can't leave plan execution wedged.
-struct PlanGuard<'a>(&'a std::sync::atomic::AtomicBool);
-impl Drop for PlanGuard<'_> {
-    fn drop(&mut self) {
-        self.0.store(false, std::sync::atomic::Ordering::SeqCst);
-    }
-}
 
 struct ServeState {
     /// Platform shown by /health. Starts as the startup snapshot ("pc" when no
@@ -405,25 +396,13 @@ fn build_unlocked(blob: &EncryptedJwt, source: &PassphraseSource) -> Result<Unlo
             }
         }
     };
-    let jwt = Sealed::new(&jwt, "JWT");
-    eprintln!("→ Decrypted JWT ({jwt}, platform={platform})");
+    let sealed = Sealed::new(&jwt, "JWT");
+    eprintln!("→ Decrypted JWT ({sealed}, platform={platform})");
     eprintln!("→ Loading WFM item catalog…");
-    let http = browser_client(60)?;
-    let catalog = fetch_wfm_catalog(&http, &platform)?;
-    eprintln!("  {} items in catalog", catalog.len());
-    let id_to_name: BTreeMap<String, String> = catalog
-        .values()
-        .map(|c| (c.item_id.clone(), c.display_name.clone()))
-        .collect();
-    let username = fetch_wfm_me(&http, jwt.expose(), &platform)?;
-    eprintln!("→ Signed in as {username}");
-    Ok(Unlocked {
-        jwt: jwt.expose().to_string(),
-        username,
-        platform,
-        catalog: Arc::new(catalog),
-        id_to_name: Arc::new(id_to_name),
-    })
+    let unlocked = warm_unlocked(jwt, platform)?;
+    eprintln!("  {} items in catalog", unlocked.catalog.len());
+    eprintln!("→ Signed in as {}", unlocked.username);
+    Ok(unlocked)
 }
 
 fn handle_request(
@@ -513,13 +492,9 @@ fn handle_request(
             Ok(u) => u,
             Err(e) => return respond_unlock_error(request, e),
         };
-        let _guard = match state.plan_running.compare_exchange(
-            false, true,
-            std::sync::atomic::Ordering::SeqCst,
-            std::sync::atomic::Ordering::SeqCst,
-        ) {
-            Ok(_) => PlanGuard(&state.plan_running),
-            Err(_) => return respond_json(request, 409, &serde_json::json!({"error": "a plan is already running; retry after it finishes"})),
+        let _guard = match PlanGuard::acquire(&state.plan_running) {
+            Some(g) => g,
+            None => return respond_json(request, 409, &serde_json::json!({"error": "a plan is already running; retry after it finishes"})),
         };
         let response = run_pending(&state.pending_path, &unlocked, &mut pending);
         clear_pending(&state.pending_path);
@@ -545,13 +520,9 @@ fn handle_request(
         };
         // Reject a concurrent plan instead of letting two threads race on
         // pending_plan.json. The guard clears the flag on any return path.
-        let _guard = match state.plan_running.compare_exchange(
-            false, true,
-            std::sync::atomic::Ordering::SeqCst,
-            std::sync::atomic::Ordering::SeqCst,
-        ) {
-            Ok(_) => PlanGuard(&state.plan_running),
-            Err(_) => return respond_json(request, 409, &serde_json::json!({"error": "a plan is already running; retry after it finishes"})),
+        let _guard = match PlanGuard::acquire(&state.plan_running) {
+            Some(g) => g,
+            None => return respond_json(request, 409, &serde_json::json!({"error": "a plan is already running; retry after it finishes"})),
         };
         let response = execute_plan(&state.pending_path, &unlocked, plan);
         return respond_json(request, 200, &response);

@@ -401,14 +401,6 @@ export async function desktopTrySilentUnlock(): Promise<boolean> {
   }
 }
 
-export async function desktopWfmLogout(): Promise<void> {
-  try {
-    await resolveInvoke()<null>('wfm_logout');
-  } catch (e) {
-    rethrowInvoke(e);
-  }
-}
-
 /**
  * True inside the Tauri desktop webview. Keyed off `__TAURI_INTERNALS__` (the
  * runtime object Tauri v2 always injects), per the desktop spike — this is a

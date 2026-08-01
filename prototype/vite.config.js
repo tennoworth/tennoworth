@@ -19,9 +19,13 @@ try {
   /* not a git checkout — keep 'dev' */
 }
 
-// No proxies — the market snapshot is served from /public/market.json,
-// warframestat.us has CORS, and we never talk to warframe.market from the
-// browser. The GitHub Actions cron job is the only thing that hits WFM.
+// No proxies, and no third-party origins at all. The market snapshot is
+// served from /public/market.json and the resolver catalog from
+// /public/wfstat-catalog.json — both baked at build time. warframestat.us
+// used to be fetched directly, but it dropped its CORS headers on 2026-06-09
+// (and varied on Accept-Language, so non-English browsers got names that
+// matched nothing on WFM). We never talk to warframe.market from the browser.
+// Don't reintroduce a runtime fetch to either.
 export default defineConfig({
   plugins: [svelte()],
   server: { port: 5173, host: '127.0.0.1' },

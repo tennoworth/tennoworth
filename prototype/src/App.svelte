@@ -7,7 +7,6 @@
   // refactor extracts state into a typed store.
   import { onMount, untrack } from 'svelte';
   import DropZone from './components/DropZone.svelte';
-  import ResultsTable from './components/ResultsTable.svelte';
   import InstallWidget from './components/InstallWidget.svelte';
   import ListingReviewModal from './components/ListingReviewModal.svelte';
   import MyOrdersPanel from './components/MyOrdersPanel.svelte';
@@ -41,7 +40,7 @@
     createTransport, isDesktopRuntime,
     desktopWfmStatus, DesktopCmdError,
   } from './lib/transport';
-  import type { CompanionConfig, Inventory, Market, OwnedRecord, PendingPlan, ItemResult } from './lib/types';
+  import type { Market, OwnedRecord } from './lib/types';
   import { humanError } from './lib/errors';
 
   // Desktop (Tauri) vs hosted/serve (browser) is decided ONCE at boot. In
@@ -453,7 +452,11 @@
       await store.saveSnapshot({ invName: name, owned });
       lastUpdated = Date.now();
 
-      results = computeFilteredResults(owned, market, filterState, reserveCopies);
+      // No explicit recompute: the results $effect below tracks resolved +
+      // market and flushes before paint. The call that was here computed the
+      // identical array a second time — the same fix the restore path above
+      // already got. Its only distinct case, "market not loaded yet", is
+      // covered by that effect's own `market` guard.
       phase = 'done';
     } catch (e) {
       console.error(e);
@@ -2639,7 +2642,6 @@
     line-height: 1;
   }
   .baro-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-  .baro-title { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
   .baro-detail { font-size: 12.5px; margin: 0; line-height: 1.5; }
   .baro-detail strong { color: var(--fg); font-weight: 600; }
   .baro-detail .unit { color: var(--muted); font-size: 11px; margin-left: 1px; }
