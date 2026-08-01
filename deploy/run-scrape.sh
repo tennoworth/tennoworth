@@ -122,9 +122,22 @@ echo "scrape complete: $now rows, $(date -Is)"
 # slightly different wall-clock instants, so a surface that changed between the
 # two fetches can show a BENIGN transient diff. The cutover gate is zero
 # STRUCTURAL / persistent diffs across the observation window — not one clean run.
+# A shadow that cannot run must SAY so. This block skipped every scrape from
+# 2026-07-19 to 2026-08-01 because the binary wasn't on the box yet, and said
+# nothing — so shadow-parity.log sat at zero bytes and read as "nothing to
+# report" when it meant "never ran". An empty gate log and a clean gate log
+# have to be distinguishable, or the window you think you observed is
+# imaginary. Same failure the parity tests had: a check that no-ops silently.
+LOG=/srv/wfm/shadow-parity.log
+if [ ! -x "$SHADOW_BIN" ] || [ -z "$SHADOW_PRIOR" ]; then
+  why="binary $SHADOW_BIN not executable"
+  [ -x "$SHADOW_BIN" ] && why="no prior market.json to reconcile against"
+  echo "SHADOW SKIPPED: $why"
+  printf '===== shadow skipped %s =====\n%s\n' "$(date -Is)" "$why" >> "$LOG" 2>/dev/null || true
+fi
+
 if [ -x "$SHADOW_BIN" ] && [ -n "$SHADOW_PRIOR" ]; then
   {
-    LOG=/srv/wfm/shadow-parity.log
     ts=$(date -Is)
     scratch=$(mktemp -d)
 
