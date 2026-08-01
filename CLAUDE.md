@@ -181,10 +181,16 @@ companion/target/release/wfm-fetch-inventory               # default = fetch inv
 companion/target/release/wfm-fetch-inventory login         # interactive WFM signin
 companion/target/release/wfm-fetch-inventory serve         # loopback HTTP server
 
-# Test sweeps
+# Test sweeps — run ALL of these before pushing; every one is local.
 cd prototype && bun run test
 pytest tests/
 cd companion && cargo test
+cd companion && cargo audit --deny warnings   # same flags as audit.yml
+node scripts/sync-csp.mjs --check             # three CSP copies must agree
+
+# The only CI gates that can't run here are the ones ABOUT the CI host:
+# the glibc-2.35 floor check (this machine's glibc is far newer, so a local
+# pass proves nothing) and the Windows build.
 
 # Companion rebuild
 cd companion && cargo build --release
