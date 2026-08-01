@@ -10,9 +10,23 @@
 # set_to_parts / relic_rewards / vault_status. csv_to_market_json.py is the only
 # generator that produces the full shape.
 #
+# PHASE 5, FIRST HALF: the SCRAPE step now runs the Rust port
+# (`wfm-scrape scrape`) by default; wfm_demand.py remains as the fallback and
+# the rollback. The CONVERT step is deliberately NOT cut over — its production
+# evidence is the shadow journal below, and that has to be read before the
+# Python converter stops being the generator.
+#
 # Environment (all optional):
-#   APP     repo root to run in           (default /srv/wfm/app — the LXC layout)
-#   PYTHON  python interpreter to use     (default /srv/wfm/venv/bin/python)
+#   APP      repo root to run in          (default /srv/wfm/app — the LXC layout)
+#   PYTHON   python interpreter to use    (default /srv/wfm/venv/bin/python)
+#   SCRAPE_BIN  Rust pipeline binary      (default /srv/wfm/bin/wfm-scrape)
+#   WFM_SCRAPER auto | rust | python      (default auto)
+#     auto   — Rust when the binary is present, else Python with a warning.
+#              A pull that hasn't landed yet degrades to the old path instead
+#              of failing the timer.
+#     rust   — require the Rust scraper; fail loudly if it's missing.
+#     python — rollback switch. Set this in the unit and the box is back on
+#              wfm_demand.py without a deploy.
 set -euo pipefail
 
 APP="${APP:-/srv/wfm/app}"
@@ -21,15 +35,43 @@ CSV=wfm_results.csv
 MIN_ROWS=800                 # absolute floor; a healthy scrape keeps ~2.6k
 cd "$APP"
 
-# Capture the prior row count. wfm_demand.py does NOT fail on a sustained 429 —
-# it retries, then skips the throttled item and flushes whatever it got with
-# exit 0. So `set -e` won't catch a truncated run, and os.replace gives an
+# Capture the prior row count. NEITHER scraper fails on a sustained 429 — both
+# retry, then skip the throttled item and flush whatever they got with exit 0
+# (the Rust port reproduces that behaviour deliberately; it is parity-gated on
+# it). So `set -e` won't catch a truncated run, and the atomic replace gives an
 # atomic-but-gutted market.json. Gate the rebuild on row count so a throttled
-# scrape can't promote a snapshot missing most items.
+# scrape can't promote a snapshot missing most items. This guard is the only
+# thing standing behind the scraper cutover — keep it ahead of the promote.
 prior=0
 [ -f "$CSV" ] && prior=$(( $(wc -l < "$CSV") - 1 ))
 
-"$PYTHON" wfm_demand.py --filter "" --exclude "" --min-volume 1 --out "$CSV"
+SCRAPE_BIN="${SCRAPE_BIN:-/srv/wfm/bin/wfm-scrape}"
+WFM_SCRAPER="${WFM_SCRAPER:-auto}"
+SCRAPE_ARGS=(--filter "" --exclude "" --min-volume 1 --out "$CSV")
+
+case "$WFM_SCRAPER" in
+  python)
+    echo "scraper: wfm_demand.py (WFM_SCRAPER=python)"
+    "$PYTHON" wfm_demand.py "${SCRAPE_ARGS[@]}"
+    ;;
+  rust)
+    [ -x "$SCRAPE_BIN" ] || { echo "ABORT: WFM_SCRAPER=rust but $SCRAPE_BIN is missing." >&2; exit 1; }
+    echo "scraper: $SCRAPE_BIN scrape"
+    "$SCRAPE_BIN" scrape "${SCRAPE_ARGS[@]}"
+    ;;
+  auto)
+    if [ -x "$SCRAPE_BIN" ]; then
+      echo "scraper: $SCRAPE_BIN scrape"
+      "$SCRAPE_BIN" scrape "${SCRAPE_ARGS[@]}"
+    else
+      echo "WARN: $SCRAPE_BIN missing — falling back to wfm_demand.py." >&2
+      "$PYTHON" wfm_demand.py "${SCRAPE_ARGS[@]}"
+    fi
+    ;;
+  *)
+    echo "ABORT: WFM_SCRAPER must be auto|rust|python, got '$WFM_SCRAPER'." >&2; exit 1
+    ;;
+esac
 now=$(( $(wc -l < "$CSV") - 1 ))
 
 if [ "$now" -lt "$MIN_ROWS" ] || { [ "$prior" -gt 0 ] && [ "$now" -lt $(( prior * 3 / 4 )) ]; }; then
@@ -45,7 +87,7 @@ fi
 # output — so capture the prior here. Gated on the shadow binary so GitHub
 # Actions runners (which lack it) do nothing; a stash failure never aborts the
 # scrape (set -e), the shadow just skips.
-SHADOW_BIN=/srv/wfm/bin/wfm-scrape
+SHADOW_BIN="$SCRAPE_BIN"
 SHADOW_PRIOR=
 if [ -x "$SHADOW_BIN" ] && [ -f prototype/public/market.json ]; then
   SHADOW_PRIOR=$(mktemp 2>/dev/null) && cp prototype/public/market.json "$SHADOW_PRIOR" 2>/dev/null || SHADOW_PRIOR=
