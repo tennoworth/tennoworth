@@ -26,11 +26,6 @@ export function updateStatus(): Promise<UpdateStatus> {
   return resolveInvoke()<UpdateStatus>('update_status');
 }
 
-/** Fresh check (network). Resolves `available: false` on any failure. */
-export function checkUpdate(): Promise<UpdateStatus> {
-  return resolveInvoke()<UpdateStatus>('check_update');
-}
-
 /** Download + install the pending update. Explicit user confirmation only. */
 export async function installUpdate(): Promise<void> {
   await resolveInvoke()('install_update');

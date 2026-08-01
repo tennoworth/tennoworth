@@ -12,10 +12,9 @@ use std::time::Duration;
 use serde_json::Value;
 
 /// Fixed post-request delay — Python's `REQUEST_DELAY = 0.34`. The scraper
-/// sleeps this after EACH request (two per item), giving ~2.9 req/s. This is a
-/// fixed spacing, not a token bucket: `wfm-client`'s `RateLimiter` models a
-/// bursty 3/s window instead, so it is deliberately not used here — matching
-/// Python's actual sleep logic is the fidelity requirement.
+/// sleeps this after EACH request (two per item), giving ~2.9 req/s. Fixed
+/// spacing, not a token bucket: a bursty n-per-second window would drift from
+/// Python's actual sleep logic, and matching it is the fidelity requirement.
 pub const REQUEST_DELAY: Duration = Duration::from_millis(340);
 
 /// Number of attempts per request — Python's `fetch_json(retries=3)`.

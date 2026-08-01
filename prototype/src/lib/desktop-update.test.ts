@@ -2,7 +2,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
   updateStatus,
-  checkUpdate,
   installUpdate,
   restartApp,
   onUpdateAvailable,
@@ -31,12 +30,11 @@ const NO_UPDATE = {
 };
 
 describe('command mapping', () => {
-  it('updateStatus / checkUpdate invoke their commands and pass the payload through', async () => {
+  it('updateStatus invokes its command and passes the payload through', async () => {
     const invoke = vi.fn().mockResolvedValue(NO_UPDATE);
     installTauri(invoke);
     expect(await updateStatus()).toEqual(NO_UPDATE);
-    expect(await checkUpdate()).toEqual(NO_UPDATE);
-    expect(invoke.mock.calls.map((c) => c[0])).toEqual(['update_status', 'check_update']);
+    expect(invoke.mock.calls.map((c) => c[0])).toEqual(['update_status']);
   });
 
   it('installUpdate invokes install_update and surfaces a rejection (bad signature) verbatim', async () => {
