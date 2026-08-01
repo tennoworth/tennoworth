@@ -7,6 +7,13 @@
 # scraper only move when a human moves them — which is how the box sat on a
 # phase-3 commit while main was many commits ahead.
 #
+# It also re-installs the deployed copies. The units do NOT execute the files
+# in the checkout — wfm-scrape.service runs /srv/wfm/run-scrape.sh, a copy
+# setup-container.sh made once. On 2026-08-01 that copy was from Jul 19 08:56
+# and contained no converter-shadow block, while the repo's copy from 14:59 the
+# same day did. Nothing reconciled them, so the shadow "ran" for two weeks in a
+# file nothing executed and shadow-parity.log stayed zero bytes.
+#
 # This is not `git pull`, and the difference matters:
 #
 #   Caddy serves /market.json and /wfstat-catalog.json from prototype/public/
@@ -73,5 +80,29 @@ done
 
 git merge --ff-only "$REMOTE/$BRANCH"
 echo "pulled: $before -> $target"
+
+# Pulling the checkout is NOT enough. The units execute COPIES under /srv/wfm
+# (ExecStart=/srv/wfm/run-scrape.sh), installed once by setup-container.sh and
+# never refreshed since. The running /srv/wfm/run-scrape.sh was six hours older
+# than the repo's and had no converter-shadow block at all — which is why
+# shadow-parity.log sat at zero bytes forever while the repo copy looked fine.
+# Re-install anything that drifted, or a pull is cosmetic.
+for f in run-scrape.sh pull-web.sh pull-scrape.sh pull-packages.sh; do
+  src="deploy/$f"
+  [ -f "$src" ] || continue
+  if ! cmp -s "$src" "/srv/wfm/$f"; then
+    install -m 0755 "$src" "/srv/wfm/$f" && echo "  reinstalled /srv/wfm/$f"
+  fi
+done
+
+# Units need root plus a daemon-reload, so report rather than act — a puller
+# that silently restarts systemd units is a different and larger promise.
+for u in wfm-scrape wfm-web-pull wfm-scrape-pull wfm-repo-pull; do
+  for ext in service timer; do
+    src="deploy/$u.$ext"; dst="/etc/systemd/system/$u.$ext"
+    [ -f "$src" ] && [ -f "$dst" ] || continue
+    cmp -s "$src" "$dst" || echo "  UNIT DRIFT: $dst differs from $src — install it and daemon-reload"
+  done
+done
 
 # restore() runs here via the trap, before anyone reads the result.
