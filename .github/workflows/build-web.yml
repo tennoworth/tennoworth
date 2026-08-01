@@ -1,7 +1,7 @@
 name: build-web
 
 # Build the static prototype/dist/ off the exposed box (node/bun never touch
-# it — see deploy/README.md "Build supply-chain"). Publishes a rolling
+# it — see the deploy runbook "Build supply-chain"). Publishes a rolling
 # `web-latest` release asset the deploy box pulls with a plain curl, no auth,
 # no Tailscale/LAN transfer needed — matches release-companion.yml's pattern.
 

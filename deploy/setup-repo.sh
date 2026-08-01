@@ -1,7 +1,7 @@
 #!/bin/sh
 # One-time bootstrap for the signed apt + dnf repositories on the box.
-# Idempotent — safe to re-run. Run as root on container 110, AFTER the signing
-# subkey is imported (see deploy/README.md "Package repositories").
+# Idempotent — safe to re-run. Run as root on the web host, AFTER the signing
+# subkey is imported (see the deploy runbook "Package repositories").
 #
 # Why the box signs rather than CI: a repo-signing key in GitHub Actions
 # secrets would let anyone who compromises the workflow serve trusted packages
@@ -21,7 +21,7 @@ apt-get install -y --no-install-recommends reprepro createrepo-c rpm gnupg
 # reprepro failing later with "no secret key".
 if ! gpg --list-secret-keys "$FPR" >/dev/null 2>&1; then
   echo "ERROR: signing subkey $FPR is not in root's keyring." >&2
-  echo "Import it first — see deploy/README.md." >&2
+  echo "Import it first — see the deploy runbook." >&2
   exit 1
 fi
 

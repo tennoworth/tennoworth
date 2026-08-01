@@ -1,7 +1,7 @@
 //! Canonical desktop state store (SQLite via rusqlite `bundled`). This is the
 //! single owner of the schema, the migration runner, and every SQL statement —
 //! call sites use the typed methods below and never write raw SQL. The schema is
-//! the one agreed in docs/product-plan-2026-07.md (C3), applied verbatim as the
+//! the one agreed in the product plan (C3), applied verbatim as the
 //! v1 migration.
 //!
 //! Two distinct concerns share this file:

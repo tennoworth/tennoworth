@@ -34,7 +34,7 @@ jobs:
     runs-on: windows-latest
     env:
       # Generated offline by a human, never in CI, never committed — see
-      # docs/signing-runbook.md §9. Absent secrets make `tauri build` fail
+      # the maintainer signing runbook §9. Absent secrets make `tauri build` fail
       # loudly rather than publish a release the updater can never install
       # (bundle.createUpdaterArtifacts is on, and signing them needs the key).
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -46,7 +46,7 @@ jobs:
         shell: bash
         run: |
           if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
-            echo "::error title=No updater signing key::TAURI_SIGNING_PRIVATE_KEY is not set. Generate the keypair offline (docs/signing-runbook.md §9) and add it as a repo secret. Publishing unsigned bundles would produce a latest.json no installed app can ever accept."
+            echo "::error title=No updater signing key::TAURI_SIGNING_PRIVATE_KEY is not set. Generate the keypair offline (the maintainer signing runbook §9) and add it as a repo secret. Publishing unsigned bundles would produce a latest.json no installed app can ever accept."
             exit 1
           fi
 
