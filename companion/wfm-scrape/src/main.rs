@@ -4,7 +4,9 @@
 //! - `build`: mirrors `scripts/csv_to_market_json.py` (phase 3).
 //!   Reads `wfm_results.csv`, fetches upstreams, reconciles with the
 //!   prior snapshot, and writes `market.json` + `wfstat-catalog.json`.
-//! - `scrape`: will mirror `wfm_demand.py` (phase 4, not yet ported).
+//! - `scrape`: mirrors `wfm_demand.py` (phase 4). Implemented and gated by
+//!   tests/test_scrape_parity.py. NOT yet in production — deploy/run-scrape.sh
+//!   still invokes the Python scraper; that swap is the phase-5 cutover.
 //!
 //! Flags:
 //! - `--fixtures-dir <DIR>`: run offline using frozen fixture files.
