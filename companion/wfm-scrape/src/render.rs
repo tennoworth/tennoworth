@@ -95,19 +95,6 @@ pub fn render_items(
     items
 }
 
-/// Build the catalog name→slug map from meta_by_slug keys.
-///
-/// In the Python converter the catalog is built during the WFM fetch
-/// alongside per-item metadata. Here we reconstruct it from whatever
-/// meta map we have (the fetch stage produces both).
-pub fn build_catalog(name_slug_pairs: &[(String, String)]) -> HashMap<String, String> {
-    let mut catalog = HashMap::new();
-    for (name, slug) in name_slug_pairs {
-        catalog.insert(name.to_lowercase(), slug.clone());
-    }
-    catalog
-}
-
 #[derive(Debug, Clone, Serialize)]
 pub struct Snapshot {
     pub updated_at: String,

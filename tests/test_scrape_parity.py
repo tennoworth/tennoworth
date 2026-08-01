@@ -21,15 +21,16 @@ FIXTURE RESPONSE FORMAT (kept byte-identical on both sides, see
 Every artifact is written to a pytest tmp dir, so the committed fixtures never
 gain stray output files.
 
-Missing Rust binary: FAIL under CI (the gate must be real there), skip locally
-with the build command — the same policy as test_convert_parity.py.
+The Rust binary is rebuilt before the comparison by the `rust_binary` fixture
+in conftest.py — the gate asserts parity with the CURRENT source, not with
+whatever happens to be sitting in target/release. Same policy as
+test_convert_parity.py; see conftest.py for why.
 
 Run: pytest tests/test_scrape_parity.py -v
 """
 
 import csv
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -47,9 +48,12 @@ import wfm_demand  # noqa: E402
 
 FIXTURES = HERE / "fixtures" / "scrape"
 RESPONSES_PATH = FIXTURES / "fixture_responses.json"
-RUST_BINARY = ROOT / "companion" / "target" / "release" / "wfm-scrape"
 NOW_ISO = "2026-07-01T12:00:00Z"
-CARGO_BUILD = "cd companion && cargo build --release -p wfm-scrape"
+
+# The binary comes from the session-scoped `rust_binary` fixture in
+# conftest.py, which rebuilds it. Do not reintroduce a module-level path
+# constant — reading the binary without going through the fixture is how the
+# suite used to green against a stale one.
 
 # Column classification for the semantic compare. `url_name` is the join key;
 # `name` is exact text; `tags` and `medians_7d` are list reprs; everything else
@@ -62,14 +66,6 @@ TOL = 1e-6
 
 
 # ---- shared scripted-response fake (mirrors http.rs FixtureScrapeHttp) --
-
-def _require_rust_binary():
-    if not RUST_BINARY.exists():
-        msg = f"wfm-scrape release binary not found at {RUST_BINARY}"
-        if os.environ.get("CI"):
-            pytest.fail(f"{msg} — CI must build it first: {CARGO_BUILD}")
-        pytest.skip(f"{msg} — build it locally: {CARGO_BUILD}")
-
 
 def _fake_get_factory(responses):
     """Return a `Session.get` replacement that serves scripted responses from a
@@ -135,13 +131,11 @@ def run_python_scraper(work_dir, args_extra, out_name="wfm_results_py.csv"):
 
 # ---- Rust scraper runner (subprocess) ---------------------------------
 
-def run_rust_scraper(work_dir, args_extra, out_name="wfm_results_rs.csv"):
-    """Run `wfm-scrape scrape --fixtures-dir <work_dir>`. Missing binary: FAIL
-    under CI, skip locally — same policy as convert parity."""
-    _require_rust_binary()
-
+def run_rust_scraper(rust_binary, work_dir, args_extra, out_name="wfm_results_rs.csv"):
+    """Run `wfm-scrape scrape --fixtures-dir <work_dir>`. `rust_binary` is the
+    conftest fixture, so the binary is guaranteed current with the source."""
     out = work_dir / out_name
-    cmd = [str(RUST_BINARY), "scrape", "--fixtures-dir", str(work_dir)] \
+    cmd = [str(rust_binary), "scrape", "--fixtures-dir", str(work_dir)] \
         + list(args_extra) + ["--out", str(out), "--now", NOW_ISO]
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT))
     if result.returncode != 0:
@@ -225,7 +219,7 @@ def _assert_no_diffs(py_rows, rs_rows):
 BASE_ARGS = ["--filter", "", "--exclude", "", "--min-volume", "1"]
 
 
-def test_scrape_parity(tmp_path):
+def test_scrape_parity(rust_binary, tmp_path):
     """The Python and Rust scrapers on identical fixtures must agree on every
     parsed CSV cell — including the retry-recovery and missing-90days cases.
     `stats_exhaust` (stats 429 x3) is skipped by BOTH, so it appears in neither."""
@@ -248,7 +242,7 @@ def test_scrape_parity(tmp_path):
     assert "stats_exhaust" not in py_rows, "stats_exhaust must be skipped (stats 429 x3)"
 
     # May skip (local) or fail (CI) if the release binary isn't built.
-    rs_csv = run_rust_scraper(work_dir, BASE_ARGS)
+    rs_csv = run_rust_scraper(rust_binary, work_dir, BASE_ARGS)
     rs_rows, rs_header = parse_csv(rs_csv)
 
     # Both must carry the same 19-column header (order-insensitive set check).
@@ -260,7 +254,7 @@ def test_scrape_parity(tmp_path):
     print(f"  OK — {len(py_rows)} items agree across all columns")
 
 
-def test_scrape_parity_limit(tmp_path):
+def test_scrape_parity_limit(rust_binary, tmp_path):
     """--limit truncates AFTER filter/exclude, identically on both sides (Python
     slices `items[:limit]`; Rust `items.truncate(limit)` — same first-N)."""
     work_dir = tmp_path / "limit"
@@ -269,7 +263,7 @@ def test_scrape_parity_limit(tmp_path):
     args = BASE_ARGS + ["--limit", "4"]
 
     py_rows, _ = parse_csv(run_python_scraper(work_dir, args))
-    rs_rows, _ = parse_csv(run_rust_scraper(work_dir, args))
+    rs_rows, _ = parse_csv(run_rust_scraper(rust_binary, work_dir, args))
 
     # The first four master-list items after the (empty) filter/exclude; all
     # clear the volume gate, so exactly these four survive on both sides.
@@ -279,7 +273,7 @@ def test_scrape_parity_limit(tmp_path):
     print(f"  OK — --limit 4 truncated identically to {sorted(py_rows)}")
 
 
-def test_scrape_parity_checkpoint_boundary(tmp_path):
+def test_scrape_parity_checkpoint_boundary(rust_binary, tmp_path):
     """>100 synthetic items force a checkpoint. Both CSVs must agree; the Rust
     run writes its checkpoint to `<out>.partial` and replaces `--out` exactly
     once, at completion (the deliberate divergence from Python's in-place
@@ -310,7 +304,7 @@ def test_scrape_parity_checkpoint_boundary(tmp_path):
     py_rows, _ = parse_csv(run_python_scraper(work_dir, BASE_ARGS))
     assert len(py_rows) == n, f"Python kept {len(py_rows)}, expected {n}"
 
-    rs_out = run_rust_scraper(work_dir, BASE_ARGS)
+    rs_out = run_rust_scraper(rust_binary, work_dir, BASE_ARGS)
     rs_rows, _ = parse_csv(rs_out)
     assert len(rs_rows) == n, f"final --out holds {len(rs_rows)} rows, expected {n}"
 
@@ -326,13 +320,11 @@ def test_scrape_parity_checkpoint_boundary(tmp_path):
     print(f"  OK — {n} items agree; checkpoint fired to .partial ({partial_count} rows)")
 
 
-def test_rounding_parity():
+def test_rounding_parity(rust_binary):
     """Feed the classic tie / binary-half cases through BOTH languages' actual
     rounding paths — Python's `round(x, n)` and the release binary's `round_dp`
     via the hidden `round-check` subcommand — and assert bit-for-bit agreement.
     This shells the REAL binary rather than trusting a Rust-side unit test."""
-    _require_rust_binary()
-
     vectors = [
         (2.675, 2), (1.005, 2), (2.25, 1), (2.35, 1), (0.125, 2),
         # adjacent binary-half cases: exact ties and near-ties on either side.
@@ -341,7 +333,7 @@ def test_rounding_parity():
     ]
     stdin = "".join(f"{x},{n}\n" for x, n in vectors)
     result = subprocess.run(
-        [str(RUST_BINARY), "round-check"],
+        [str(rust_binary), "round-check"],
         input=stdin, capture_output=True, text=True, cwd=str(ROOT),
     )
     assert result.returncode == 0, f"round-check failed: {result.stderr}"

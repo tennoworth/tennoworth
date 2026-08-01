@@ -39,6 +39,10 @@ jobs:
         run: bun run test
       - name: type-check
         run: bunx svelte-check --threshold error
+      # Dead exports. Neither gate above can see them: noUnusedLocals flags
+      # locals not exports, and svelte-check skips @ts-nocheck files.
+      - name: dead-export check
+        run: bun run knip
       - name: build
         run: bun run build
 

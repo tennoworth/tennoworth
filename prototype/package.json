@@ -12,13 +12,14 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "check": "svelte-check",
+    "knip": "knip",
     "csp": "node ../scripts/sync-csp.mjs"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
     "@types/node": "^25.9.1",
-    "@vitest/ui": "^4.1.7",
     "jsdom": "^29.1.1",
+    "knip": "^6.31.0",
     "svelte": "^5.0.0",
     "svelte-check": "^4.4.8",
     "typescript": "^6.0.3",

@@ -28,12 +28,21 @@
   let editingId = $state<string | null>(null);
   let editValue = $state(0);
 
+  // Stale-async guard, same shape as App.svelte's verifyGen: only the newest
+  // load may commit. `config` gets a fresh identity on every reconnect, so two
+  // GET /orders can be in flight at once, and without this an older response
+  // landing second overwrites the newer one — the user ends up looking at
+  // orders from the connection they just replaced.
+  let loadGen = 0;
+
   function loadOrders(): void {
     if (!config) return;
+    const gen = ++loadGen;
     phase = 'loading';
     error = null;
     fetchOrders(config)
       .then((r) => {
+        if (gen !== loadGen) return;
         // WFM v2 returns { data: { sell: [...], buy: [...] } } OR a flat array.
         // Normalize to a flat list with both order types tagged.
         const respObj = r as { data?: unknown } | null | undefined;
@@ -58,6 +67,7 @@
         phase = 'done';
       })
       .catch((e: unknown) => {
+        if (gen !== loadGen) return;
         error = humanError(e);
         phase = 'error';
       });

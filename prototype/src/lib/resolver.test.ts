@@ -6,6 +6,7 @@ vi.mock('./catalog-cache.js', () => ({
   readCached: vi.fn().mockResolvedValue(null),
   writeCached: vi.fn().mockResolvedValue(undefined),
   clearCached: vi.fn().mockResolvedValue(undefined),
+  purgeRetiredCaches: vi.fn().mockResolvedValue(undefined),
 }));
 
 import { loadCatalogs, resolvePath } from './resolver.js';

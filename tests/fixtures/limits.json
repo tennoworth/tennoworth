@@ -1,0 +1,6 @@
+{
+  "max_plan_items": 50,
+  "min_platinum": 5,
+  "max_platinum": 3000,
+  "note": "Listing-batch caps the companion enforces server-side. Rust: MAX_PLAN_ITEMS and MIN_PLATINUM in companion/wfm-core/src/plan.rs, MAX_PLATINUM in listing.rs. Browser: prototype/src/lib/limits.ts, which exists only so the UI can reject an out-of-range value before the round-trip. The companion is the source of truth, so drift shows up as the UI cheerfully accepting a batch the companion then rejects — max_platinum was already raised from 999 once, after it silently blocked maxed Arcanes and Galvanized mods that really sell for 1500-2500p."
+}

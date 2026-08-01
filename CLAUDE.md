@@ -120,10 +120,31 @@ These exist because each has already gone wrong once:
   `name-guess/cases.json` are the reference examples — grep their consuming
   tests for the pattern). If the same value only needs to match, not compute
   anything, the fixture can be a single JSON file both sides parse directly
-  (see `jwt-kdf.json`, `tradeable-categories.json`). A 2026-07 sweep found
-  several places where the "just a comment" version had already drifted
-  silently — one of them (a slug-guessing fallback) was a live, if narrow,
-  bug.
+  (see `jwt-kdf.json`, `tradeable-categories.json`, `pacing.json`,
+  `limits.json`). A 2026-07 sweep found several places where the "just a
+  comment" version had already drifted silently — one of them (a slug-guessing
+  fallback) was a live, if narrow, bug.
+- **A parity gate must test CURRENT code, or it is worse than no gate.** The
+  two Rust-parity runners checked `RUST_BINARY.exists()` and then ran whatever
+  was there. On 2026-08-01 that meant five green parity tests in 0.08 s against
+  a binary eight days old and 17 KB different from what the source produced —
+  the exact stale-green shape as the 2026-07-20 incident, wearing a passing
+  test as a disguise. `tests/conftest.py` now rebuilds before comparing and
+  lets Cargo decide whether that's a no-op. When you add a gate that shells a
+  built artifact, the build is part of the gate. Ask what the gate does when
+  the artifact is stale, not just when it's missing.
+- **Ask what a value's gate can actually SEE.** `REQUEST_DELAY` sat duplicated
+  in Python and Rust while both parity suites stubbed the sleeper, so nothing
+  on either side could observe it. A constant inside the mocked-out part of a
+  test is unguarded no matter how thorough the suite around it looks.
+- **Dead exports are caught by `knip`, not by tsconfig.** `bun run knip`
+  (prototype/, wired into audit.yml). Do NOT reach for `noUnusedLocals` when
+  dead code turns up: it flags unused *locals*, never unused *exports*, and
+  every dead-code finding this repo has actually had was an export. Measured
+  2026-08-01 — turning it on produced zero diagnostics from both `tsc` and
+  `svelte-check` while three dead exports were sitting in `lib/`. Removing
+  App.svelte's `@ts-nocheck` to widen coverage costs 61 errors and is not
+  worth it. `knip.jsonc` records the two things knip does not cover.
 - **No comments that restate the code.** Comments explain *why* — the
   non-obvious constraint, the past bug they prevent. If removing a
   comment wouldn't confuse a reader, delete it.
@@ -183,7 +204,8 @@ companion/target/release/wfm-fetch-inventory serve         # loopback HTTP serve
 
 # Test sweeps — run ALL of these before pushing; every one is local.
 cd prototype && bun run test
-pytest tests/
+cd prototype && bun run knip                  # dead exports; tsconfig can't see them
+pytest tests/                                 # rebuilds wfm-scrape for the parity gates
 cd companion && cargo test
 cd companion && cargo audit --deny warnings   # same flags as audit.yml
 node scripts/sync-csp.mjs --check             # three CSP copies must agree

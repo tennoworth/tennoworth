@@ -9,11 +9,14 @@ stands in for live HTTP on both sides (the Python side via a patched
 generated artifact is written to a pytest tmp dir, so the committed fixtures
 never gain stray output files.
 
+The Rust binary is rebuilt before the comparison by the `rust_binary` fixture
+in conftest.py — the gate asserts parity with the CURRENT source, not with
+whatever happens to be sitting in target/release. See conftest.py for why.
+
 Run: pytest tests/test_convert_parity.py -v
 """
 
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -32,9 +35,12 @@ sys.path.insert(0, str(ROOT))
 from scripts.semantic_diff import canonical_diff, TIMESTAMP_KEYS  # noqa: E402
 
 FIXTURES = HERE / "fixtures" / "convert"
-RUST_BINARY = ROOT / "companion" / "target" / "release" / "wfm-scrape"
 NOW_ISO = "2026-07-01T12:00:00Z"
-CARGO_BUILD = "cd companion && cargo build --release -p wfm-scrape"
+
+# The binary comes from the session-scoped `rust_binary` fixture in
+# conftest.py, which rebuilds it. Do not reintroduce a module-level path
+# constant — reading the binary without going through the fixture is how the
+# suite used to green against a stale one.
 
 # Inputs both converters consume; copied into a tmp work dir per run so the
 # Rust binary (which writes market.json next to its --fixtures-dir inputs) and
@@ -119,17 +125,10 @@ def run_python_converter(work_dir, now_iso=NOW_ISO):
 
 # ---- Rust converter runner (subprocess) -------------------------------
 
-def run_rust_converter(work_dir, now_iso=NOW_ISO):
-    """Run `wfm-scrape build --fixtures-dir <work_dir> --now`. Missing binary:
-    FAIL under CI (the gate must be real there), skip locally with the build
-    command."""
-    if not RUST_BINARY.exists():
-        msg = f"wfm-scrape release binary not found at {RUST_BINARY}"
-        if os.environ.get("CI"):
-            pytest.fail(f"{msg} — CI must build it first: {CARGO_BUILD}")
-        pytest.skip(f"{msg} — build it locally: {CARGO_BUILD}")
-
-    cmd = [str(RUST_BINARY), "build", "--fixtures-dir", str(work_dir), "--now", now_iso]
+def run_rust_converter(rust_binary, work_dir, now_iso=NOW_ISO):
+    """Run `wfm-scrape build --fixtures-dir <work_dir> --now`. `rust_binary` is
+    the conftest fixture, so the binary is guaranteed current with the source."""
+    cmd = [str(rust_binary), "build", "--fixtures-dir", str(work_dir), "--now", now_iso]
     result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(ROOT))
     if result.returncode != 0:
         raise RuntimeError(
@@ -175,7 +174,7 @@ def check_semantic_canaries(snapshot, name):
 
 # ---- test -------------------------------------------------------------
 
-def test_convert_parity(tmp_path):
+def test_convert_parity(rust_binary, tmp_path):
     """Both converters on the same frozen inputs must agree on market.json
     beyond the intentionally-diverging timestamp fields."""
     work_dir = tmp_path / "convert"
@@ -186,8 +185,7 @@ def test_convert_parity(tmp_path):
     py = run_python_converter(work_dir)
     check_semantic_canaries(py, "Python")
 
-    # May skip (local) or fail (CI) if the release binary isn't built.
-    rs = run_rust_converter(work_dir)
+    rs = run_rust_converter(rust_binary, work_dir)
     check_semantic_canaries(rs, "Rust")
 
     diffs = canonical_diff(py, rs)

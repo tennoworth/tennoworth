@@ -9,11 +9,17 @@
 #                         as phase 2 of the Python→Rust pipeline consolidation.
 #                         No I/O, no deps. Keep it pure — that's what makes it
 #                         testable against the frozen Python fixtures.
-#   wfm-scrape          — host-only pipeline crate (phase 3 of the port).
-#                         `build` mirrors scripts/csv_to_market_json.py;
-#                         `scrape` (phase 4) will mirror wfm_demand.py. NOT
-#                         production yet — Python remains the pipeline until
-#                         the phase-5 cutover.
+#   wfm-scrape          — host-only pipeline crate. `build` mirrors
+#                         scripts/csv_to_market_json.py, `scrape` mirrors
+#                         wfm_demand.py; both implemented and parity-gated.
+#                         NOT production yet — deploy/run-scrape.sh still runs
+#                         Python; swapping it is the phase-5 cutover.
+#   wfm-client          — shared WFM transport primitives (UA, Cloudflare
+#                         headers, envelope unwrap, retry backoff). Primitives
+#                         only: do not grow it into one abstraction spanning
+#                         anonymous scraping and authed order mutation.
+#   tennoworth-desktop  — Tauri v2 shell, the app users actually install.
+#                         Adapter #2 over wfm-core, driving it over IPC.
 [workspace]
 members = ["wfm-fetch-inventory", "wfm-core", "market-math", "wfm-scrape", "wfm-client", "tennoworth-desktop"]
 resolver = "2"

@@ -18,14 +18,19 @@ every doc stays `companion/target/release/wfm-fetch-inventory`):
   tests/test_wfm_demand.py. When you change a heuristic, change BOTH
   implementations (Python is still the production scraper) and both test
   suites, until the cutover.
-- `wfm-scrape/` — host-only pipeline binary. `build` mirrors
-  scripts/csv_to_market_json.py and is gated by the CI parity test
-  (tests/test_convert_parity.py — semantic JSON vs the Python converter on
-  frozen fixtures); `scrape` (the wfm_demand.py port) is not implemented yet.
-  NOT production; Python remains the pipeline writer until cutover.
-- `wfm-client/` — shared WFM transport primitives (UA, headers, envelope
-  unwrap, rate limiter, retries). Share primitives only — do not grow it
-  into an abstraction that swallows authed order mutation.
+- `wfm-scrape/` — host-only pipeline binary. Both subcommands are
+  implemented and parity-gated against their Python originals on frozen
+  fixtures: `build` mirrors scripts/csv_to_market_json.py
+  (tests/test_convert_parity.py, semantic JSON diff) and `scrape` mirrors
+  wfm_demand.py (tests/test_scrape_parity.py, semantic CSV diff). Both gates
+  rebuild the binary first — a stale one used to pass them silently.
+  NOT production: deploy/run-scrape.sh still runs the Python scraper, and
+  swapping it is the phase-5 cutover. "Not implemented" is what this said
+  until 2026-08-01, long after the port landed.
+- `wfm-client/` — shared WFM transport primitives: the browser UA (the one
+  definition; wfm-core re-exports it), the Cloudflare-appeasing header set,
+  envelope unwrapping, and retry backoff. Share primitives only — do not grow
+  it into an abstraction that swallows authed order mutation.
 - `tennoworth-desktop/` — Tauri v2 desktop shell; the app users actually
   install on Linux and Windows. Drives wfm-core over IPC, so it has no HTTP
   server, no session token and no browser Local-Network-Access step. The
@@ -201,7 +206,13 @@ cookie-style JWT — header-style is rejected. CSRF token:
 `GET https://warframe.market/auth/signin`, parse
 `<meta name="csrf-token">`, send as `X-CSRFToken` on signin POST.
 
-Every API call needs `Crossplay: true` + `Platform: pc` + `Language: en`.
+Every **api.warframe.market** call needs `Crossplay: true` + `Platform: pc` +
+`Language: en` — that's what `wfm_client::wfm_headers()` sends. Signin is the
+exception and is NOT a bug: it POSTs to `warframe.market/v1/auth/signin` with
+`Platform` + `Language` + `auth_type` + `X-CSRFToken` and no `Crossplay`, which
+is what works against the live endpoint. Don't "fix" the omission by adding the
+header — it's an auth-host request, not an API call, and it is verified working
+as written.
 Cloudflare blocks generic UAs (error 1015) — always use `BROWSER_UA`.
 
 | Action | Method + path | Body / notes |
