@@ -25,6 +25,11 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
+      # Yes, audit.yml also runs these on the same push. Kept deliberately: this
+      # job publishes the artifact the deploy box pulls, and it must not depend
+      # on a sibling job's verdict to decide whether that artifact is sound. The
+      # duplicate costs ~30 s in a parallel job; coupling the two workflows to
+      # save it would make a publish gate that can go green on its own.
       - name: Install, test, build
         working-directory: prototype
         run: |

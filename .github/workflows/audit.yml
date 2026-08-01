@@ -54,7 +54,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-rust
-      - name: Install cargo-audit
+      # Reads as an expensive from-source build and isn't: Swatinem/rust-cache
+      # in setup-rust caches ~/.cargo/bin, so this resolves as already-installed.
+      # Measured on run 30705176923 — 0 s for this step, 23 s for the whole job.
+      # Don't "optimize" it into a prebuilt-binary action without re-measuring.
+      - name: Install cargo-audit (cached by setup-rust)
         run: cargo install --locked cargo-audit
       - name: cargo audit
         run: cargo audit --deny warnings
