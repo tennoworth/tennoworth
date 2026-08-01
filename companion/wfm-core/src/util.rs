@@ -6,7 +6,7 @@ use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
 use rand::{rngs::OsRng, RngCore};
 use reqwest::blocking::Client;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::platform::{dirs_home, real_user_home};
@@ -70,12 +70,30 @@ pub fn wfm_client() -> Result<Client> {
     browser_client(30)
 }
 
+/// `~/.config/wfminv` — the one place companion state lives.
+pub fn config_dir() -> PathBuf {
+    real_user_home()
+        .unwrap_or_else(dirs_home)
+        .join(".config")
+        .join("wfminv")
+}
+
 pub fn default_jwt_path() -> PathBuf {
-    let home = real_user_home().unwrap_or_else(dirs_home);
-    home.join(".config").join("wfminv").join("wfm-jwt.enc")
+    config_dir().join("wfm-jwt.enc")
 }
 
 pub fn default_pending_path() -> PathBuf {
-    let home = real_user_home().unwrap_or_else(dirs_home);
-    home.join(".config").join("wfminv").join("pending_plan.json")
+    config_dir().join("pending_plan.json")
+}
+
+/// The directory sibling files (the DeepSeek key, the assistant-off marker)
+/// live in, given wherever the JWT actually is. Follows a `--jwt-path`
+/// override so those files stay beside the credential they belong to, and
+/// falls back to the cwd for a bare filename.
+pub fn config_dir_for(jwt_path: &Path) -> PathBuf {
+    jwt_path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."))
 }

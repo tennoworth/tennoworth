@@ -12,8 +12,9 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
-use crate::catalog::WfmCatalogItem;
-use crate::util::wfm_client;
+use crate::auth::fetch_wfm_me;
+use crate::catalog::{fetch_wfm_catalog, WfmCatalogItem};
+use crate::util::{browser_client, wfm_client};
 
 /// Shared with [`crate::plan::run_pending`] — both pace their WFM calls to
 /// the same 3 req/sec norm.
@@ -71,6 +72,35 @@ pub struct Unlocked {
     /// itemId → display name. Injected into the /orders response so the UI
     /// doesn't show raw 24-char hex IDs.
     pub id_to_name: Arc<BTreeMap<String, String>>,
+}
+
+/// Build the [`Unlocked`] bundle for an already-decrypted JWT: warm the WFM
+/// catalog, derive the itemId→name map the /orders response needs, and confirm
+/// the credential by resolving the username.
+///
+/// Both adapters need exactly this and had drifted into keeping their own copy
+/// (serve's `build_unlocked` tail, desktop's `warm`) — the same four calls in
+/// the same order, differing only in how they map the error. Callers map;
+/// this stays anyhow so wfm-core owes nothing to either shell.
+///
+/// The only network in the unlock path. 60 s rather than the listing routes'
+/// 30: the catalog is a multi-MB body and a user is watching a one-time warm,
+/// not a per-request round-trip.
+pub fn warm_unlocked(jwt: String, platform: String) -> Result<Unlocked> {
+    let http = browser_client(60)?;
+    let catalog = fetch_wfm_catalog(&http, &platform)?;
+    let id_to_name: BTreeMap<String, String> = catalog
+        .values()
+        .map(|c| (c.item_id.clone(), c.display_name.clone()))
+        .collect();
+    let username = fetch_wfm_me(&http, &jwt, &platform)?;
+    Ok(Unlocked {
+        jwt,
+        username,
+        platform,
+        catalog: Arc::new(catalog),
+        id_to_name: Arc::new(id_to_name),
+    })
 }
 
 #[derive(Deserialize)]
