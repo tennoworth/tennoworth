@@ -42,6 +42,22 @@
 		file_server
 	}
 
+	# The repo signing key. It needs its OWN handle, not the SPA catch-all:
+	# that ends in `try_files {path} /index.html`, so a miss would return
+	# index.html with status 200. The documented install line is
+	#   curl -fsSL .../tennoworth-archive-keyring.asc | sudo tee /etc/apt/keyrings/...
+	# and `curl -f` does not fire on a 200 — the user would silently write HTML
+	# into their keyring and hit an unexplainable signature failure on the next
+	# `apt update`. Served from public/ (git-tracked, present without waiting
+	# for a web bundle rebuild) so a miss is a real 404.
+	@repokey path /tennoworth-archive-keyring.asc
+	handle @repokey {
+		root * /srv/wfm/app/prototype/public
+		header Content-Type "application/pgp-keys"
+		header Cache-Control "public, max-age=3600"
+		file_server
+	}
+
 	# Signed apt + dnf repositories, published by wfm-repo-pull.timer. Served
 	# from a separate root; the URL path already carries the /apt or /rpm
 	# prefix, so root + path resolves without a strip_prefix.
