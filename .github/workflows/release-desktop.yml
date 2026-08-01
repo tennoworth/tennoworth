@@ -21,15 +21,17 @@ permissions:
   contents: write
 
 jobs:
-  # Windows only. Linux ships through distro packaging (packaging/aur/PKGBUILD),
-  # which compiles against the user's own system libraries. The AppImage this
-  # workflow used to publish bundled ubuntu-22.04's WebKitGTK, which aborts at
-  # `Could not create default EGL display: EGL_BAD_PARAMETER` against a
-  # rolling-release host's Mesa — a white window, before the webview paints.
-  # That is inherent to shipping a GPU-dependent stack built on an old distro,
-  # not something a flag fixes, and Tauri's Linux updater only ever supported
-  # AppImage anyway. deb/rpm went unused. So: no Linux bundle here by design.
-  # Linux compilation is still gated on every push by audit.yml's cargo test.
+  # Windows only. Linux is built by the `linux-binary` job below, which emits
+  # the deb/rpm the self-hosted apt and dnf repos are served from, alongside
+  # packaging/aur/PKGBUILD for source builds.
+  #
+  # No AppImage, deliberately: the one this workflow used to publish bundled
+  # ubuntu-22.04's WebKitGTK and aborted at `Could not create default EGL
+  # display: EGL_BAD_PARAMETER` against a rolling-release host's Mesa — a white
+  # window, before the webview paints. That is inherent to shipping a
+  # GPU-dependent stack built on an old distro, not something a flag fixes.
+  # Tauri's Linux updater only ever supported AppImage, so Linux self-update
+  # goes through the distro repos instead.
   build:
     runs-on: windows-latest
     env:

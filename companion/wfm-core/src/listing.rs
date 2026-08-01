@@ -25,10 +25,15 @@ pub(crate) const SERVE_RATE_LIMIT_MS: u64 = 350;
 pub const MAX_PLATINUM: u32 = 3000;
 
 /// Attempts for create/update/delete order calls. This is the path a user
-/// watches in real time — unlike the catalog warm (which already retries via
-/// wfm-client), these calls used to give up after one transport error or 5xx,
-/// so a single dropped packet mid-batch surfaced as a permanent failure on
-/// that item.
+/// watches in real time: these calls used to give up after one transport
+/// error or 5xx, so a single dropped packet mid-batch surfaced as a permanent
+/// failure on that item.
+///
+/// The catalog warm deliberately does NOT retry — `fetch_wfm_catalog` is
+/// single-shot, and a failed warm is one visible error the user can act on
+/// rather than a half-finished batch. This comment used to claim it "already
+/// retries via wfm-client", which was the reason a dead `get_with_retry`
+/// looked load-bearing for months.
 pub(crate) const ORDER_RETRY_ATTEMPTS: u32 = 2;
 
 /// Retry a request builder for transport errors and 5xx responses only —
