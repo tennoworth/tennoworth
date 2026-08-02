@@ -108,12 +108,13 @@ To set it up once:
 
 ```sh
 ssh-keygen -t ed25519 -f ~/.ssh/aur-ci -N '' -C 'tennoworth CI'
-ssh aur@aur.archlinux.org addpubkey ~/.ssh/aur-ci.pub   # register on the AUR account
-gh secret set AUR_SSH_PRIVATE_KEY -f ~/.ssh/aur-ci     # expose to the workflow
+ssh aur@aur.archlinux.org addpubkey < ~/.ssh/aur-ci.pub   # register on the AUR account
+gh secret set AUR_SSH_PRIVATE_KEY --body "$(cat ~/.ssh/aur-ci)"   # expose to the workflow
 ```
 
-The job pins aur.archlinux.org's ed25519 host key rather than trusting on
-first use.
+(`gh secret set -f` would parse the key as an env file and choke on its
+`-----BEGIN` line — `--body` takes the raw value instead.) The job pins
+aur.archlinux.org's ed25519 host key rather than trusting on first use.
 
 ## First-time AUR setup
 
