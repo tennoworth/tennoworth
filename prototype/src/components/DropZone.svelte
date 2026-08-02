@@ -3,9 +3,12 @@
 
   interface Props {
     loading?: boolean;
+    /** Desktop webview: the scan button is the primary path, so the hint
+     *  changes to match. The hosted informational site has no scan. */
+    isDesktop?: boolean;
     oninventory?: (event: { name: string; data: unknown }) => void;
   }
-  let { loading = false, oninventory }: Props = $props();
+  let { loading = false, isDesktop = false, oninventory }: Props = $props();
 
   let dragOver = $state(false);
   let parseError = $state<string | null>(null);
@@ -58,14 +61,21 @@
   {:else}
     <strong>Drop your <code>inventory.json</code> here</strong>
     <p>or click to pick a file</p>
-    <p class="hint">
-      Don't have one yet? Run the
-      <a href="#companion">companion CLI</a>
-      with Warframe open — it extracts <code>inventory.json</code> from your
-      running game and saves it in the folder you ran it from. Already have one from another
-      tool (AlecaFrame export, Sainan's <code>warframe-api-helper</code>)? It
-      drops in here too.
-    </p>
+    {#if isDesktop}
+      <p class="hint">
+        Don't have one? Use <strong>Scan inventory</strong> above — the app
+        reads the running game directly. Exports from another tool (AlecaFrame,
+        Sainan's <code>warframe-api-helper</code>) drop in here too.
+      </p>
+    {:else}
+      <p class="hint">
+        This site is informational — it shows market trends, not your account.
+        To get an <code>inventory.json</code>, use the
+        <a href="https://github.com/tennoworth/tennoworth/releases" target="_blank" rel="noopener noreferrer">desktop app</a>.
+        Exports from another tool (AlecaFrame, Sainan's
+        <code>warframe-api-helper</code>) drop in here too.
+      </p>
+    {/if}
   {/if}
   <input
     bind:this={fileInput}

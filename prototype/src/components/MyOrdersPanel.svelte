@@ -83,7 +83,7 @@
     busyIds = next;
   }
 
-  // The companion relays WFM rejections as HTTP 200 with a per-order
+  // The desktop command relays WFM rejections as a per-order
   // {status:"error", message} body. Treating "no throw" as success applied
   // the edit locally while WFM kept the old value — silent desync.
   function assertOrderOk(r: unknown): void {

@@ -319,7 +319,7 @@
         </footer>
       {:else if phase === 'sending'}
         <p class="lead">
-          Posting to warframe.market via the companion. ~3 listings/second —
+          Posting to warframe.market. ~3 listings/second —
           this will take ~{Math.ceil((selectedCount * 0.35) + 1)} s.
         </p>
         <div class="spinner">Sending…</div>
