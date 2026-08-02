@@ -1,4 +1,4 @@
-// Client-side mirrors of the companion's server-enforced caps. The companion
+// Client-side mirrors of wfm-core's server-enforced caps. wfm-core
 // is the source of truth — these exist only so the UI can reject an
 // out-of-range value before round-tripping to it.
 //

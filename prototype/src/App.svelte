@@ -889,13 +889,14 @@
     <DropZone
       oninventory={handleInventory}
       loading={phase === 'loading'}
+      {isDesktop}
     />
   {/if}
 
   {#if phase === 'error'}
     <div class="card error">Error: {error}</div>
     <p class="muted" style="text-align:center;margin:8px 0">Try another file:</p>
-    <DropZone oninventory={handleInventory} loading={false} />
+    <DropZone oninventory={handleInventory} loading={false} {isDesktop} />
   {/if}
 
   {@render faqContent()}

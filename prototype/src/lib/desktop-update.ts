@@ -2,7 +2,7 @@
 // point invokes a Tauri command, so nothing here is reachable in the hosted
 // build (the update banner renders only in desktop mode; the hosted SPA
 // updates by redeploy). Deliberately NOT on the Transport seam: updates are a
-// desktop-shell concern with no loopback-companion analogue, like the tray.
+// desktop-shell concern with no hosted analogue, like the tray.
 //
 // Contract with the Rust side (tennoworth-desktop/src/update.rs): the check
 // never rejects — offline / malformed manifest / bad endpoint all read as
