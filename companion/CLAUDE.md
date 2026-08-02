@@ -1,18 +1,13 @@
-# companion/ — Rust workspace: CLI + loopback HTTP server
+# companion/ — Rust workspace: desktop app + wfm-core + host pipeline
 
-Cargo WORKSPACE with six members (target/ shared, so the binary path in
-every doc stays `companion/target/release/wfm-fetch-inventory`):
-- `wfm-fetch-inventory/` — the player-facing binary, cross-platform
-  (Linux + Windows), ~3 MB. A thin adapter: it owns only CLI parsing and
-  the loopback HTTP server (routing, session token, CORS, TTY passphrase
-  prompting). Release-gated together with `wfm-core`.
-- `wfm-core/` — the reusable core linked into the binary: process
-  detection + memory scan (with a single-flight scan guard), DE inventory
-  fetch, WFM auth + encrypted-JWT storage, the listing/order service,
-  pending-plan persistence, and the DeepSeek assistant relay. **No
-  interactive terminal I/O** — the CLI reads the passphrase and hands the
-  plaintext in as a parameter, so a future Tauri shell can drive the same
-  core. Serve handlers delegate their work here.
+Cargo WORKSPACE with five members (target/ shared). The standalone player
+CLI (`wfm-fetch-inventory` with fetch/login/serve) was removed on 2026-08-02 —
+the desktop app is the only adapter:
+- `wfm-core/` — the reusable core: process detection + memory scan (with a
+  single-flight scan guard), DE inventory fetch, WFM auth + encrypted-JWT
+  storage, the listing/order service, pending-plan persistence, and the
+  dormant DeepSeek assistant relay. **No interactive terminal I/O** — the
+  desktop shell hands the passphrase in as a parameter over IPC.
 - `market-math/` — pure market-data heuristics ported from wfm_demand.py.
   No I/O, no deps, no clocks — keep it that way; its tests are 1:1 ports of
   tests/test_wfm_demand.py. When you change a heuristic, change BOTH
@@ -37,36 +32,21 @@ every doc stays `companion/target/release/wfm-fetch-inventory`):
   passphrase arrives from the webview — which is why wfm-core must stay free
   of interactive terminal I/O.
 
-The binary has three subcommands in one tree:
-- `fetch` — extracts `inventory.json` from the running game process.
-- `login` — interactive WFM signin; encrypts JWT at rest.
-- `serve` — loopback HTTP server the web app talks to for bulk
-  listings + order management.
-
 Build: `cargo build --release`. Tests: `cargo test`.
 
 ---
 
 ## Hard invariants — break these and we ship a regression
 
-### Companion never prints secrets
+### The app never prints secrets
 `accountId` and `nonce` are session secrets while a play session is
 live. The JWT is a multi-month bearer credential. Keep them out of
-stdout/stderr at all costs. `wfm-fetch-inventory` deliberately omits
-them; `serve` only ever logs `→ Decrypted JWT (N chars, platform=…)`.
-If you add a new subcommand or log line, audit it.
-
-### Companion chowns output back when run as root
-If invoked via `sudo`, the resulting `inventory.json` and any other
-file written under `~` would be root-owned and unreadable to the
-user's file manager. We resolve `$SUDO_USER`'s home and chown the file
-back. `chown_to_real_user()` is the helper — call it after every
-file write.
+stdout/stderr at all costs. If you add a new log line, audit it.
 
 ### `setcap` is wiped on file replacement
 Linux clears file capabilities whenever the binary is replaced. Every
 `cargo build --release` therefore wipes `cap_sys_ptrace`. Document
-this in any "how to run the companion" instructions you write.
+this in any "how to run the app" instructions you write.
 
 ### Linux `/proc/<pid>/comm` truncates at 15 chars
 `Warframe.x64.exe` (16 chars) arrives as `Warframe.x64.ex`. Match the
@@ -113,66 +93,35 @@ without checking every regex still compiles.
 
 ---
 
-## Loopback server (`serve` subcommand)
+## Pacing, caps and pending-plan recovery
 
-- `tiny_http` blocking server bound to `127.0.0.1:0` (random port).
-- Per-process random session token in `X-Session-Token`. CORS is `*`
-  because origin isn't the protection — the token is.
-- One thread per request. Plan execution paced to 3 req/sec to match
-  WFM's norm (see `SERVE_RATE_LIMIT_MS`).
+These live in `wfm-core` (shared) and are driven by the desktop's IPC commands
+(`submit_plan` / `get_pending_plan` / `resume_pending_plan` / …):
+
+- Plan execution paced to ~3 req/sec to match WFM's norm
+  (`SERVE_RATE_LIMIT_MS = 350` in `wfm-core/src/listing.rs`).
 - `MAX_PLAN_ITEMS = 50`, `MIN_PLATINUM = 5`, `MAX_PLATINUM = 3000`
   (the WFM UI cap — maxed arcanes legitimately trade 1500-2500p; an
-  earlier 999 cap silently blocked those listings). The PATCH
-  (edit-order) route enforces the same cap.
+  earlier 999 cap silently blocked those listings). The edit-order
+  command enforces the same cap.
   Slug-mismatch guard: refuse listings priced ≥ 3× below the
   reference `low_sell`.
-- `CORS preflight` advertises `GET, POST, PATCH, DELETE, OPTIONS`. If
-  you add a new HTTP method to any route, add it here too — browsers
-  block the preflight otherwise.
 - Pending-plan recovery: every plan is persisted to
   `~/.config/wfminv/pending_plan.json` (atomic tmp+rename) before the
   first POST, updated after each item, and deleted on clean
-  completion. `/plan/pending`, `/plan/resume`, `DELETE /plan/pending`
-  expose this to the browser.
+  completion. `get_pending_plan` / `resume_pending_plan` /
+  `discard_pending_plan` expose this to the webview.
 
-### `POST /assistant` — the only route with third-party egress
+### The assistant relay is dormant
 
-The AI-advisor proxy. Every other route talks only to `127.0.0.1` and
-warframe.market/.com; this one calls
-`https://api.deepseek.com/chat/completions` (model `deepseek-chat`,
-temp 0.3, `max_tokens` 1024, 60 s timeout) so the DeepSeek API key never
-reaches the browser. Token-gated with the same `X-Session-Token` as the
-listing routes.
-
-- **Key source** (`resolve_deepseek_key()`): env `DEEPSEEK_API_KEY` wins;
-  otherwise a `deepseek-key` file in the JWT's config dir (trimmed). No key →
-  `503 {error:"no_api_key"}`. The key is **plaintext at rest** — on read the
-  companion warns to stderr (once) if the file is looser than `0600`; it does
-  not fail. The startup banner reports whether the advisor is available.
-- **Kill switch** (`assistant_disabled()`): an `assistant-off` marker file in
-  the same config dir disables the route even when a key is present —
-  returns the same `503 no_api_key` so the SPA needs no special handling.
-  Checked per request; `touch`/`rm` toggles without a restart. `/health`
-  reports the net result as `assistant: bool` (key present AND not switched
-  off) so the SPA offers the chat button only when an ask can succeed.
-- **Grounding + prompt-injection**: the system prompt is built server-side
-  from `ASSISTANT_SYSTEM_PROMPT` + the browser's curated context — the rows
-  shown in the user's filtered sell table (item names, owned/sellable counts,
-  prices, 48-hour volume, vault status, plus totals and the market snapshot's
-  age). The context is fenced between `[BEGIN MARKET DATA]` / `[END MARKET DATA]`
-  markers and the prompt marks everything inside as data-to-answer-from, never
-  instructions — so a crafted item name can't steer the model. Client history
-  roles are sanitized to `user`/`assistant` in `build_assistant_messages()` — a
-  client-sent `system` turn is dropped, so a local client can't override the
-  prompt. On any upstream failure the browser-facing `502 {error:"upstream"}`
-  carries only the DeepSeek HTTP status code, never its response body.
-- **Caps**: question ≤ 2000 chars, context ≤ 100 KB, history ≤ 12 turns
-  (`cap_history`), body ≤ 512 KB, plus an in-process throttle of ≤ 20 calls /
-  60 s (`assistant_rate_limited`, tracked in `ServeState.assistant_calls`) →
-  `429 {error:"rate_limited"}`.
-- Adding another egress destination is a security-relevant change: update
-  SECURITY.md's assistant section and this note — third-party destinations are
-  a deliberate, audited list.
+The DeepSeek advisor (`wfm_core::assistant`) still has a registered
+`ask_assistant` Tauri command, but **no UI surfaces it** — the chat drawer was
+removed with the CLI. Nothing calls the command from the SPA, so no data goes
+to DeepSeek. Its caps (`question ≤ 2000 chars`, `context ≤ 100 KB`, `history ≤
+12 turns`, throttle ≤ 20 calls / 60 s) and prompt-injection defenses remain in
+wfm-core for when a desktop assistant UI ships. Before re-enabling, update
+SECURITY.md's assistant section — third-party egress is a deliberate, audited
+list.
 
 ## Cross-platform memory access
 

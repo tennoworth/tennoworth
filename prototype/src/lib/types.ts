@@ -160,11 +160,35 @@ export interface OwnedRecord {
   leveled: number;
 }
 
-// -------- Companion HTTP --------
+// -------- Desktop transport (Tauri IPC) --------
 
-export interface CompanionConfig {
-  baseUrl: string;
-  token: string;
+/** `/health` response shape. `assistant` was the browser companion's advisor
+ *  flag; the desktop keeps the field for wire-compat but nothing surfaces it
+ *  (the assistant is deliberately dormant). */
+export interface PingResponse {
+  ok: boolean;
+  platform?: string;
+  assistant?: boolean;
+}
+
+/** Plan items submitted to wfm-core via `submit_plan`. */
+export interface PlanItemInput {
+  slug: string;
+  platinum: number;
+  quantity: number;
+  order_type: 'sell' | 'buy';
+  visible: boolean;
+  rank?: number;
+  subtype?: string;
+  reference_low_sell?: number;
+}
+
+/** PATCH fields for a single order (price / quantity / visible / rank). */
+export interface OrderPatch {
+  platinum?: number;
+  quantity?: number;
+  visible?: boolean;
+  rank?: number;
 }
 
 /** Single per-item result echoed by the companion's POST /plan / PATCH /order. */

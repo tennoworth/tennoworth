@@ -7,10 +7,8 @@
   // refactor extracts state into a typed store.
   import { onMount, untrack } from 'svelte';
   import DropZone from './components/DropZone.svelte';
-  import InstallWidget from './components/InstallWidget.svelte';
   import ListingReviewModal from './components/ListingReviewModal.svelte';
   import MyOrdersPanel from './components/MyOrdersPanel.svelte';
-  import AssistantChat from './components/AssistantChat.svelte';
   import CopyBtn from './components/CopyBtn.svelte';
   import MarketBrowser from './components/MarketBrowser.svelte';
   import DesktopUpdateBanner from './components/DesktopUpdateBanner.svelte';
@@ -31,11 +29,6 @@
   import type { StateStore } from './lib/state-store';
   import { isEncrypted } from './lib/crypto';
   import {
-    loadCompanionConfig, saveCompanionConfig, clearCompanionConfig,
-    parseCompanionUrl,
-  } from './lib/companion';
-  import { verifyCompanionConnection, probeLoopbackDenied } from './lib/companion-connect';
-  import {
     createTransport, isDesktopRuntime,
     desktopWfmStatus, DesktopCmdError,
   } from './lib/transport';
@@ -43,17 +36,12 @@
   import { humanError } from './lib/errors';
   import { wfmItemUrl, baroLocation, humanWindow } from './lib/format';
 
-  // Desktop (Tauri) vs hosted/serve (browser) is decided ONCE at boot. In
-  // desktop mode the companion-connect surface (URL/token/handshake, orders,
-  // assistant) is hidden; inventory comes from the `scan_inventory` IPC command
-  // and listing goes through the wfm_session commands — the typed
-  // needs_login/needs_unlock rejections open the WFM login/passphrase dialogs
-  // below (the desktop analogue of serve's terminal passphrase prompt).
+  // Desktop (Tauri) vs hosted informational (browser) is decided ONCE at boot.
+  // The hosted site is informational only: market data + a dropped
+  // inventory.json. Everything interactive — scan, list, orders, login,
+  // assistant — lives in the desktop app, driven by the wfm_session commands.
   const isDesktop = isDesktopRuntime();
-  // HTTP transport reads companionConfig lazily via the getter; the Tauri
-  // transport ignores it. companionConfig is declared further down (with the
-  // rest of the companion state) — the getter is only invoked at call time.
-  const transport = createTransport(() => companionConfig);
+  const transport = createTransport();
 
   // Persistence seam: localStorage in the browser, SQLite-over-IPC in desktop.
   // Selected + primed (scalar settings loaded into cache) in main.ts and passed
@@ -70,7 +58,7 @@
   // user back to the cold-start landing.
   let marketLoadError = $state<string | null>(null);
   // A dropped file parsed but yielded zero tradeable items — likely the wrong
-  // file (not a companion inventory.json), or a genuinely all-untradable one.
+  // file (not an inventory.json), or a genuinely all-untradable one.
   let loadIssue = $state<null | 'not-an-inventory' | 'all-untradable'>(null);
   let inventoryName = $state<string | null>(null);
   let lastUpdated = $state<number | null>(null);
@@ -140,10 +128,10 @@
   // Sidebar nav view — which workspace pane is active. Persists so a
   // reload lands the user back where they left off. Falls through to
   // 'sell' if the persisted view's data isn't available (Baro not
-  // visiting, companion not connected).
-  type View = 'sell' | 'sets' | 'relics' | 'baro' | 'routines' | 'orders' | 'companion' | 'install';
+  // visiting; 'orders' is desktop-only — the hosted site is informational).
+  type View = 'sell' | 'sets' | 'relics' | 'baro' | 'routines' | 'orders' | 'install';
   const VALID_VIEWS: ReadonlySet<View> = new Set([
-    'sell', 'sets', 'relics', 'baro', 'routines', 'orders', 'companion', 'install',
+    'sell', 'sets', 'relics', 'baro', 'routines', 'orders', 'install',
   ]);
   let view = $state<View>(
     (() => {
@@ -155,6 +143,16 @@
     view = v;
     void store.setSetting('view', v);
   }
+
+  // Sidebar nav: if the user's persisted view is unavailable (Baro not
+  // visiting, orders on the informational site), fall back to Sell rather than
+  // rendering an empty pane. The nav itself hides those entries; this protects
+  // against a stale localStorage value.
+  let effectiveView = $derived.by<View>(() => {
+    if (view === 'baro' && !showBaroCard) return 'sell';
+    if (view === 'orders' && !isDesktop) return 'sell';
+    return view;
+  });
 
   // First-session Score explainer — dismissable, one-time, persists.
   let scoreExplainerDismissed = $state((() => store.getSetting('score-explainer-dismissed') === '1')());
@@ -252,11 +250,10 @@
   // a dependency, so writing `resolved` here and then reading it via
   // recomputeResults caused an infinite re-run loop.
   onMount(async () => {
-    // Desktop mode has no loopback companion: skip the whole URL/token/deep-link
-    // handshake. A best-effort `health` invoke confirms wfm-core is linked and
-    // records the platform for display; failure is non-fatal (the dashboard and
-    // file-drop still work). The connect flow below is browser-only.
-    let deepLink = false;
+    // Desktop mode: a best-effort `health` invoke confirms wfm-core is linked
+    // and records the platform for display; failure is non-fatal (the dashboard
+    // and file-drop still work). The hosted site is informational — it has no
+    // account features.
     if (isDesktop) {
       try {
         const h = await transport.health();
@@ -266,37 +263,13 @@
       }
       // C5 update-available handshake now lives entirely in
       // DesktopUpdateBanner.svelte's own onMount.
-      // Interrupted-batch recovery: the desktop analogue of the connect-time
-      // /plan/pending poll. get_pending_plan is JWT-free, so this needs no
-      // unlock. Best-effort — a failure just hides the Resume banner.
+      // Interrupted-batch recovery: get_pending_plan is JWT-free, so this needs
+      // no unlock. Best-effort — a failure just hides the Resume banner.
       try {
         pendingPlan = await transport.getPendingPlan();
       } catch (e) {
         console.error('desktop pending-plan check failed', e);
       }
-    } else {
-      // Auto-connect from a deep link the companion opened on `serve` start
-      // (#companion=http://127.0.0.1:<port>?token=…). The token rides in the URL
-      // fragment, which is never sent to a server — so it stays local. We strip it
-      // from the address bar / history immediately either way.
-      const FRAG = '#companion=';
-      if (location.hash.startsWith(FRAG)) {
-        try {
-          const cfg = parseCompanionUrl(location.hash.slice(FRAG.length));
-          companionConfig = cfg;
-          saveCompanionConfig(cfg);
-          deepLink = true;
-        } catch (e) {
-          // Surface WHY the link was rejected (parseCompanionUrl emits
-          // user-appropriate reasons), then fall through to any saved config.
-          // Deliberately NOT touching companionStatus — a valid saved connection
-          // must still verify clean below.
-          deepLinkError = `That companion link didn't work: ${humanError(e)}`;
-        }
-        history.replaceState(null, '', location.pathname + location.search);
-      }
-      if (!companionConfig) companionConfig = loadCompanionConfig();
-      if (companionConfig) await verifyCompanion();
     }
 
     // Restore the last inventory snapshot if there is one.
@@ -325,12 +298,6 @@
         error = e.message || String(e);
         phase = 'error';
       }
-    }
-
-    // Arrived via the companion's deep link and have no inventory yet → pull it
-    // automatically, so "run serve → browser shows your sell list" just works.
-    if (deepLink && companionStatus === 'connected' && resolved.owned.size === 0) {
-      await pullInventory();
     }
 
     // Cold landing (no saved inventory): preload the snapshot so the no-install
@@ -434,7 +401,7 @@
           console.error('inventory import snapshot not recorded', e);
         }
       }
-      // Nothing resolved to a tradeable item. Either this isn't a companion
+      // Nothing resolved to a tradeable item. Either this isn't an
       // inventory.json at all (no recognizable Suits/LongGuns/Recipes keys, so
       // flatten yielded nothing), or it is one but holds only untradable items.
       // Either way, stay on the landing with a clear message rather than dumping
@@ -725,94 +692,13 @@
     phase = 'done';
   }
 
-  // ---- Companion connection state ----
-  let companionConfig = $state(null);          // {baseUrl, token} | null
-  // 'unreachable' is distinct from 'error': the /health fetch itself rejected
-  // (serve down, or the browser blocked the loopback request on an HTTPS
-  // origin). It drives the persistent cross-view banner below.
-  let companionStatus = $state('unchecked');   // unchecked | connecting | connected | error | unreachable
-  let companionPlatform = $state(null);
-  // The advisor FAB renders only when a connected companion positively reports
-  // the assistant usable (/health `assistant: true`) — a key-less, switched-off
-  // (assistant-off marker), or pre-v0.1.6 companion means no button, not a
-  // button that dead-ends in "no key configured".
-  let assistantAvailable = $state(false);
-  let companionError = $state(null);
-  let companionInput = $state('');
-  let pullingInventory = $state(false);   // GET /inventory in flight
-  let pullError = $state<string | null>(null);
-  let listingOpen = $state(false);
-  // null = the normal bulk "List N on WFM" behaviour (top-50 of the current
-  // view). A picks-strip "List" click stages exactly that one row instead —
-  // same modal, same price/qty editing, no second staging path.
-  let reviewRowsOverride = $state(null);
-  // Malformed `#companion=` deep link — surfaced as a dismissible banner rather
-  // than swallowed, without disturbing any valid saved connection.
-  let deepLinkError = $state<string | null>(null);
-  // Cross-view "unreachable" banner controls. `loopbackDenied` is sharpened by
-  // an optional Permissions-API probe (Chrome has definitively blocked local
-  // network access); `unreachableDismissed` lets the user close the banner.
-  let loopbackDenied = $state(false);
-  let unreachableDismissed = $state(false);
-  // Desktop auto-update (C5) now lives entirely in DesktopUpdateBanner.svelte.
-  // Stale-async guard: verifyCompanion can be in flight from onMount, a manual
-  // connect, or Retry at once. Only the newest run may commit status/error.
-  let verifyGen = 0;
-
-  // Sidebar nav: if the user's persisted view is unavailable (Baro not
-  // visiting, companion not connected), fall back to Sell rather than
-  // rendering an empty pane. The nav itself hides those entries; this
-  // protects against a stale localStorage value or in-session state
-  // change (e.g. companion disconnects while user is on Orders).
-  let effectiveView = $derived.by<View>(() => {
-    if (view === 'baro' && !showBaroCard) return 'sell';
-    if (view === 'orders' && companionStatus !== 'connected') return 'sell';
-    // Desktop hides the loopback-companion + orders panes entirely (no connect
-    // surface); a stale persisted 'companion'/'orders' view falls back to Sell.
-    if (isDesktop && (view === 'companion' || view === 'orders')) return 'sell';
-    return view;
-  });
-
-  // The actual connect/error/unreachable classification lives in
-  // lib/companion-connect.ts (unit-testable there); this stays the
-  // $state orchestration plus the stale-async guard (only the newest
-  // verifyGen may commit a result — verifyCompanion can be in flight from
-  // onMount, a manual connect, or Retry at once).
-  async function verifyCompanion() {
-    if (!companionConfig) return;
-    const gen = ++verifyGen;
-    companionStatus = 'connecting';
-    companionError = null;
-    loopbackDenied = false;
-    unreachableDismissed = false;
-    const result = await verifyCompanionConnection(companionConfig);
-    if (gen !== verifyGen) return;
-    if (result.status === 'connected') {
-      companionPlatform = result.platform;
-      assistantAvailable = result.assistant;
-      pendingPlan = result.pendingPlan;
-      companionStatus = 'connected';
-    } else if (result.status === 'unreachable') {
-      companionStatus = 'unreachable';
-      companionError = result.message;
-      void probeLoopbackPermission(gen);
-    } else {
-      companionStatus = 'error';
-      companionError = result.message;
-    }
-  }
-
-  async function probeLoopbackPermission(gen) {
-    const denied = await probeLoopbackDenied();
-    if (gen !== verifyGen) return;
-    if (denied) loopbackDenied = true;
-  }
-
   // ---- Pending-plan recovery ----
   let pendingPlan = $state(null);          // {plan_id, started_at, items[]} | null
   let resumePhase = $state('idle');        // idle | running | done | error
   let resumeError = $state(null);
   let resumeResults = $state([]);
+  // Platform the desktop session reports (from /health), for display.
+  let companionPlatform = $state(null);
 
   let pendingRemaining = $derived(
     pendingPlan?.items?.filter((i) => i.status === 'pending').length ?? 0
@@ -822,7 +708,7 @@
   );
 
   async function doResume() {
-    if (!isDesktop && !companionConfig) return;
+    if (!isDesktop) return;
     resumePhase = 'running';
     resumeError = null;
     try {
@@ -844,7 +730,7 @@
   }
 
   async function doDiscard() {
-    if (!isDesktop && !companionConfig) return;
+    if (!isDesktop) return;
     try { await transport.discardPendingPlan(); } catch { /* ignore */ }
     pendingPlan = null;
     resumePhase = 'idle';
@@ -854,48 +740,21 @@
   let resumeOk = $derived(resumeResults.filter((r) => r.status === 'ok').length);
   let resumeErr = $derived(resumeResults.filter((r) => r.status !== 'ok').length);
 
-  async function connectCompanion() {
-    companionError = null;
-    try {
-      const cfg = parseCompanionUrl(companionInput);
-      companionConfig = cfg;
-      saveCompanionConfig(cfg);
-      await verifyCompanion();
-      // Clear the pasted URL only once the token actually verified. A failed
-      // connect must leave it in place so retry is one click, not a full
-      // re-paste of the URL+token the serve output printed.
-      if (companionStatus === 'connected') companionInput = '';
-    } catch (e) {
-      companionStatus = 'error';
-      companionError = e.message || String(e);
-    }
-  }
-
-  function disconnectCompanion() {
-    clearCompanionConfig();
-    companionConfig = null;
-    companionStatus = 'unchecked';
-    companionPlatform = null;
-    assistantAvailable = false;
-    pendingPlan = null;
-    resumePhase = 'idle';
-    resumeResults = [];
-    pullError = null;
-  }
-
   // Scan inventory straight from the running game and run it through the same
-  // resolution pipeline as a dropped file — no file, no drag-in. Browser mode
-  // goes through the loopback companion (needs a connection); desktop mode goes
-  // straight to the `scan_inventory` IPC command. Either way, "game not running
-  // / not past login" surfaces the scanner's exact actionable message.
+  // resolution pipeline as a dropped file — no file, no drag-in. Desktop only
+  // (the hosted site is informational); the `scan_inventory` IPC command's
+  // rejection carries the scanner's exact actionable message.
+  let pullingInventory = $state(false);   // scan in flight
+  let pullError = $state<string | null>(null);
+
   async function pullInventory() {
-    if (pullingInventory || (!isDesktop && !companionConfig)) return;
+    if (pullingInventory || !isDesktop) return;
     pullingInventory = true;
     pullError = null;
     try {
       const data = await transport.fetchInventory();
       await handleInventory({
-        name: isDesktop ? 'inventory (from game)' : 'inventory (from companion)',
+        name: 'inventory (from game)',
         data,
         // Desktop scan_inventory already recorded the source='memory' history
         // row; don't double-record this as an import.
@@ -909,8 +768,7 @@
   }
 
   // ---- Desktop WFM auth (login / unlock dialogs) -----------------------
-  // The desktop analogue of serve's terminal passphrase prompt. The dialogs
-  // themselves, their state, and the login/unlock calls live in
+  // The dialogs themselves, their state, and the login/unlock calls live in
   // WfmAuthDialogs.svelte; App.svelte triggers them imperatively (three call
   // sites: the Sell CTA below, doResume's needs_login/needs_unlock rejection,
   // and ListingReviewModal's onauthrequired) via this ref, and decides what
@@ -920,21 +778,23 @@
     if (next === 'list') listingOpen = true;
   }
 
-  // The Sell CTA routes here. Browser mode opens the review modal directly
-  // (serve handles auth in its own terminal). Desktop checks the session first
-  // so the user meets the login/passphrase dialog BEFORE staging 50 rows — the
-  // same codes also arrive lazily via the modal's onauthrequired if the
-  // session state changed between staging and Send.
+  let listingOpen = $state(false);
+  // null = the normal bulk "List N on WFM" behaviour (top-50 of the current
+  // view). A picks-strip "List" click stages exactly that one row instead —
+  // same modal, same price/qty editing, no second staging path.
+  let reviewRowsOverride = $state(null);
+
+  // The Sell CTA routes here. Desktop-only (listing needs wfm-core's session).
+  // Checks the session first so the user meets the login/passphrase dialog
+  // BEFORE staging 50 rows — the same codes also arrive lazily via the modal's
+  // onauthrequired if the session state changed between staging and Send.
   //
   // `overrideRow` is set by a picks-strip "List" click to stage that single
   // row instead of the top-50 bulk view; unconditional so every call (bulk
   // included) resets any stale override from a previous picks click.
   async function openListingFlow(overrideRow = null) {
+    if (!isDesktop) return;
     reviewRowsOverride = overrideRow ? [overrideRow] : null;
-    if (!isDesktop) {
-      listingOpen = true;
-      return;
-    }
     try {
       const s = await desktopWfmStatus();
       if (s.unlocked) listingOpen = true;
@@ -998,86 +858,16 @@
 
     {#if !isDesktop}
     <section class="upsell-lead">
-      <h2>Get your personal sell list</h2>
+      <h2>Want your personal sell list?</h2>
       <p class="sub">
-        Point the companion at your account and TennoWorth ranks
-        <em>your</em> inventory by what to sell right now — the same prices,
-        joined to what you actually own.
+        This site is informational — every price, trend and vault status is
+        here, and you can drop an <code>inventory.json</code> below to see what
+        you'd sell. For the full picture — scan your account straight from the
+        running game and list on warframe.market in one place — use the
+        <a href="https://github.com/tennoworth/tennoworth/releases" target="_blank" rel="noopener noreferrer">desktop app</a>
+        (Windows + Linux).
       </p>
     </section>
-
-    <ol class="steps">
-      <li>
-        <span class="n">01</span>
-        <div class="body">
-          <h3>Get the companion</h3>
-          <p>
-            Tiny <a href="#companion">CLI binary</a>. Reads the running
-            game's process memory to fetch your inventory from DE's own
-            endpoint. Nothing else.
-          </p>
-        </div>
-      </li>
-      <li>
-        <span class="n">02</span>
-        <div class="body">
-          <h3>Run <code>serve</code> — easiest</h3>
-          <p>With Warframe past the login screen, run this and leave it going:</p>
-          <div class="snippet-row">
-            <pre class="snippet"><code>wfm-fetch-inventory serve</code></pre>
-            <CopyBtn text="wfm-fetch-inventory serve" />
-          </div>
-          <p class="muted">
-            Your browser opens on the sell list, connected — no file, no login.
-            Refreshing later is one click. Close the terminal (or Ctrl-C) to stop.
-            Linux: if it prints <code>Permission denied</code> reading the game,
-            grant ptrace once (works wherever the binary lives). Most desktop
-            kernels need this — it isn't a Proton thing:
-          </p>
-          <div class="snippet-row">
-            <pre class="snippet"><code>sudo setcap cap_sys_ptrace=eip "$(command -v wfm-fetch-inventory)"</code></pre>
-            <CopyBtn text={'sudo setcap cap_sys_ptrace=eip "$(command -v wfm-fetch-inventory)"'} />
-          </div>
-        </div>
-      </li>
-      <li>
-        <span class="n">03</span>
-        <div class="body">
-          <h3>Prefer a file? Run it once</h3>
-          <p>
-            No always-on server: <code>wfm-fetch-inventory</code> (no subcommand)
-            writes <code>inventory.json</code> to the folder you run it from —
-            drop that below. It's the same companion producing the same file;
-            this path just skips leaving <code>serve</code> running, handy when
-            you're offline or on a locked-down box. Same sell list, just manual.
-          </p>
-          <div class="snippet-row">
-            <pre class="snippet"><code>wfm-fetch-inventory</code></pre>
-            <CopyBtn text="wfm-fetch-inventory" />
-          </div>
-          <p class="muted">Everything runs locally. Nothing's uploaded.</p>
-        </div>
-      </li>
-      <li>
-        <span class="n">04</span>
-        <div class="body">
-          <h3>Optional: list on WFM</h3>
-          <p>
-            To create or edit listings from here, log in once. After that
-            <code>serve</code> unlocks it the first time you list (it'll ask for
-            your passphrase in the terminal where serve is running):
-          </p>
-          <div class="snippet-row">
-            <pre class="snippet"><code>wfm-fetch-inventory login</code></pre>
-            <CopyBtn text="wfm-fetch-inventory login" />
-          </div>
-          <p class="muted">
-            Inventory and the sell list never need this — login only gates
-            listing.
-          </p>
-        </div>
-      </li>
-    </ol>
     {/if}
 
     {#if loadIssue}
@@ -1085,9 +875,8 @@
         {#if loadIssue === 'not-an-inventory'}
           ⚠ That file doesn't look like an inventory. We didn't find the
           <code>Suits</code> / <code>LongGuns</code> / <code>Recipes</code> … keys
-          a companion <code>inventory.json</code> has. Re-run the companion and
-          drop the <code>inventory.json</code> it writes (it lands in the
-          directory you ran it from).
+          an <code>inventory.json</code> from the desktop app or DE's export has.
+          The desktop app scans the game directly — use it to grab a fresh one.
         {:else}
           ⚠ That file parsed, but nothing in it is tradeable on warframe.market
           (quest items, resources, and brand-new content have no listings). If
@@ -1107,10 +896,6 @@
     <div class="card error">Error: {error}</div>
     <p class="muted" style="text-align:center;margin:8px 0">Try another file:</p>
     <DropZone oninventory={handleInventory} loading={false} />
-  {/if}
-
-  {#if !isDesktop}
-    <InstallWidget />
   {/if}
 
   {@render faqContent()}
@@ -1164,18 +949,12 @@
         </button>
       </div>
 
-      {#if !isDesktop}
+      {#if isDesktop}
       <div class="nav-group">
         <div class="nav-label">Manage</div>
-        {#if companionStatus === 'connected'}
-          <button type="button" class="nav-item" class:active={effectiveView === 'orders'} onclick={() => setView('orders')}>
-            <span>My orders</span>
-            {#if pendingPlan && pendingRemaining > 0}<span class="badge warn">{pendingRemaining}</span>{/if}
-          </button>
-        {/if}
-        <button type="button" class="nav-item" class:active={effectiveView === 'companion'} onclick={() => setView('companion')}>
-          <span>Companion</span>
-          <span class="dot {companionStatus === 'connected' ? 'fresh' : (companionStatus === 'error' || companionStatus === 'unreachable') ? 'stale' : ''}" aria-hidden="true"></span>
+        <button type="button" class="nav-item" class:active={effectiveView === 'orders'} onclick={() => setView('orders')}>
+          <span>My orders</span>
+          {#if pendingPlan && pendingRemaining > 0}<span class="badge warn">{pendingRemaining}</span>{/if}
         </button>
       </div>
       {/if}
@@ -1183,7 +962,7 @@
       <div class="nav-group">
         <div class="nav-label">Library</div>
         <button type="button" class="nav-item" class:active={effectiveView === 'install'} onclick={() => setView('install')}>
-          <span>{isDesktop ? 'FAQ' : 'Install · FAQ'}</span>
+          <span>FAQ</span>
         </button>
       </div>
     </nav>
@@ -1224,24 +1003,9 @@
                 </button>
                 <div class="rp-or">or pick a file</div>
                 <button class="ghost rp-file" onclick={openFilePicker}>Choose inventory.json…</button>
-              {:else if companionStatus === 'connected'}
-                <p class="rp-lede">Connected to the companion — pull straight from the game, no file needed.</p>
-                <button class="rp-primary" onclick={refreshFromGame} disabled={pullingInventory}>
-                  {pullingInventory ? 'Scanning game…' : 'Refresh from game'}
-                </button>
-                <div class="rp-or">or pick a file</div>
-                <button class="ghost rp-file" onclick={openFilePicker}>Choose inventory.json…</button>
               {:else}
-                <p class="rp-lede">Re-run the companion (Warframe open), then drop the new file:</p>
-                <div class="snippet-row">
-                  <pre class="snippet"><code>wfm-fetch-inventory</code></pre>
-                  <CopyBtn text="wfm-fetch-inventory" />
-                </div>
+                <p class="rp-lede">The informational site can't scan the game — pick an <code>inventory.json</code> from the desktop app instead:</p>
                 <button class="rp-primary" onclick={openFilePicker}>Choose inventory.json…</button>
-                <p class="rp-hint muted small">
-                  Tip: run <code>serve</code> once and you can refresh with a single click — no file. See the
-                  <a href="#companion" onclick={() => (refreshOpen = false)}>Companion tab</a>.
-                </p>
               {/if}
             </div>
           {/if}
@@ -1265,7 +1029,7 @@
         {listableRows} {availableTags} {availableTypes}
         {visibleColumns} {presetSort} {emptyReason}
         {activePreset} {reserveCopies} {filtersOpen} {scoreExplainerDismissed}
-        {isDesktop} {companionStatus}
+        {isDesktop}
         {applyPreset} {setReserveCopies} {toggleFiltersOpen} {dismissScoreExplainer}
         {openListingFlow}
         {pendingBanner}
@@ -1532,85 +1296,16 @@
     {:else if effectiveView === 'orders'}
       <section class="view-header">
         <h2>My orders</h2>
-        <p class="lede">Your active warframe.market listings, fetched live from the companion.</p>
+        <p class="lede">Your active warframe.market listings, fetched live from the desktop app.</p>
       </section>
       {@render pendingBanner()}
-      <MyOrdersPanel config={companionConfig} />
-
-    {:else if effectiveView === 'companion'}
-      <section class="view-header">
-        <h2>Companion</h2>
-        <p class="lede">
-          The loopback CLI that reads your inventory and relays listing actions to WFM.
-          {#if companionStatus !== 'connected'}Required to list on WFM.{/if}
-        </p>
-      </section>
-      <section class="card companion-strip">
-        {#if companionStatus === 'connected'}
-          <div class="row">
-            <div class="src">
-              <span class="dot fresh" aria-hidden="true"></span>
-              <strong>Connected</strong>
-              <span class="muted">· {companionPlatform ?? 'pc'} · {companionConfig.baseUrl}</span>
-            </div>
-            <div class="row gap-sm">
-              <button
-                onclick={pullInventory}
-                disabled={pullingInventory}
-                title="Memory-scan the running game and load your inventory directly — no file, no drag-in. Re-run any time to refresh."
-              >{pullingInventory ? 'Scanning game…' : (resolved.owned.size > 0 ? 'Refresh inventory' : 'Pull inventory')}</button>
-              <button
-                onclick={() => (listingOpen = true)}
-                disabled={listableRows.length === 0}
-                title="Stage the top rows of exactly what the table shows now — preset, sort, name filter, and badge chips all apply (relics excluded; the planner handles those). Review each row in the modal before sending."
-              >List {Math.min(listableRows.length, 50)} on WFM</button>
-              <button class="ghost" onclick={disconnectCompanion}>Disconnect</button>
-            </div>
-          </div>
-        {:else}
-          <div class="row">
-            <div class="src">
-              <strong>Not connected</strong>
-              <span class="muted">
-                · paste the URL the <code>serve</code> subcommand printed
-                {#if companionStatus === 'error'}(<span class="bad">{companionError}</span>){/if}
-              </span>
-            </div>
-            <div class="row gap-sm">
-              <input
-                type="text"
-                placeholder="http://127.0.0.1:XXXXX?token=…"
-                bind:value={companionInput}
-                style="min-width:320px;font-family:ui-monospace,Menlo,monospace;font-size:12px"
-              />
-              <button onclick={connectCompanion} disabled={!companionInput.trim()}>
-                {companionStatus === 'connecting' ? 'Checking…' : 'Connect'}
-              </button>
-            </div>
-          </div>
-          <div class="companion-help">
-            <strong>Easiest: just run serve</strong>
-            <ol>
-              <li><code>wfm-fetch-inventory serve</code> <CopyBtn text="wfm-fetch-inventory serve" /> — in a terminal; leave it running. It opens your browser here already connected, no login needed.</li>
-              <li>If the browser didn't open, copy the whole <code>http://127.0.0.1:<wbr>…?token=…</code> line it prints and paste it above.</li>
-            </ol>
-            <p class="muted">
-              That port is <strong>random</strong> and changes every run — it is <em>not</em> this website's 5173.
-              To create/edit listings, run <code>wfm-fetch-inventory login</code> <CopyBtn text="wfm-fetch-inventory login" /> once;
-              <code>serve</code> then asks for your passphrase (in its own terminal) the first time you list. See the FAQ for details.
-            </p>
-          </div>
-        {/if}
-      </section>
+      <MyOrdersPanel {transport} />
 
     {:else if effectiveView === 'install'}
       <section class="view-header">
-        <h2>{isDesktop ? 'FAQ' : 'Install · FAQ'}</h2>
-        <p class="lede">{isDesktop ? 'Answers to common questions.' : 'Getting the companion + answers to common questions.'}</p>
+        <h2>FAQ</h2>
+        <p class="lede">Answers to common questions.</p>
       </section>
-      {#if !isDesktop}
-        <InstallWidget />
-      {/if}
       {@render faqContent()}
     {/if}
 
@@ -1625,7 +1320,7 @@
     <details>
       <summary>Is this safe? Can I get banned?</summary>
       <p>
-        The companion reads the running game's process memory to find the
+        The desktop app reads the running game's process memory to find the
         <code>accountId</code> and <code>nonce</code> your client already
         obtained at login, then calls DE's own inventory endpoint with
         those — same call your game client makes. It writes to disk; it
@@ -1633,7 +1328,7 @@
       </p>
       <p>
         <strong>We can't promise this is ban-safe</strong> — no third-party
-        tool honestly can. What we <em>can</em> say: the companion only ever
+        tool honestly can. What we <em>can</em> say: the app only ever
         reads memory. It never writes to the game, never injects code, and
         doesn't interact with anti-cheat. Equivalent tools (Sainan's
         warframe-api-helper, AlecaFrame via Overwolf) have run for years with
@@ -1646,24 +1341,11 @@
     <details>
       <summary>Where does my inventory data actually go?</summary>
       <p>
-        Nowhere we control. The companion writes <code>inventory.json</code>
-        to the directory you run it from. The browser app processes that
-        file locally — every byte stays in your tab. We persist a copy in
-        your browser's storage (localStorage + IndexedDB) so a refresh
-        doesn't wipe it. The market snapshot is the only thing we host,
-        and it's the same for every visitor.
-      </p>
-      <p>
-        <strong>One exception — the optional AI assistant.</strong> You turn it
-        on by installing a DeepSeek API key on the companion; when you open it
-        and ask a question, it sends the rows currently shown in your sell table
-        (after your filters) — item names, owned/sellable counts, prices,
-        48-hour volume, and vault status — plus totals across those rows and the
-        market snapshot's age, together with your typed question, to DeepSeek's
-        API to answer. It does <em>not</em> send your full inventory, your
-        account, or the companion token. Nothing else in the app sends your data
-        anywhere, and the assistant is off entirely unless you've set up a key.
-        Details in “What does the AI assistant send, and where?” below.
+        Nowhere we control. The desktop app scans the game and keeps your
+        inventory locally (SQLite + your browser's storage). If you drop an
+        <code>inventory.json</code> into the site, every byte stays in your
+        tab. The market snapshot is the only thing we host, and it's the same
+        for every visitor.
       </p>
       <p>
         No accounts, no telemetry, no analytics. Inspect the network tab
@@ -1682,27 +1364,18 @@
     </details>
 
     <details>
-      <summary>How do I connect the companion to list items on WFM?</summary>
+      <summary>How do I list items on WFM?</summary>
       <p>
-        Running <code>wfm-fetch-inventory serve</code> opens this app already
-        connected — inventory and the sell list need nothing else. To also
-        <em>create or edit listings</em> from the app:
+        Listing is a <strong>desktop app</strong> feature. Install the desktop
+        app (Windows + Linux), scan your account, and use <strong>List on
+        WFM</strong> from the Sell view. The first time, the app asks you to
+        log in to warframe.market once — the sign-in token is encrypted behind
+        a passphrase you choose, and it never leaves your machine. After that,
+        listing and your orders work for the rest of the session.
       </p>
       <p>
-        1. <code>wfm-fetch-inventory login</code> — once; signs you in to
-        warframe.market and encrypts the token behind a passphrase.<br />
-        2. Keep <code>serve</code> running in a terminal. The first time you
-        list something, that terminal asks for your passphrase — after that,
-        listing just works for the rest of the session.
-      </p>
-      <p>
-        If the browser didn't open on its own, copy the whole
-        <code>http://127.0.0.1:&lt;port&gt;?token=…</code> line serve prints into the
-        <strong>Companion</strong> tab. The port is <strong>random and changes
-        every run</strong> — it is not this website's <code>5173</code>.
-        Running serve somewhere without a terminal (systemd, nohup)? Pipe the
-        passphrase at startup:
-        <code>printf %s 'your-passphrase' | wfm-fetch-inventory serve --passphrase-stdin</code>.
+        This informational site can't list: it has no account, no token, and no
+        way to reach warframe.market on your behalf.
       </p>
     </details>
 
@@ -1730,9 +1403,7 @@
         There are no accounts. Use the built-in <strong>Export</strong>
         button in the sidebar: it produces a file encrypted with a
         passphrase only you hold (AES-256-GCM, PBKDF2 600k), which you
-        can drop into the app on any other device. Or simply copy your
-        <code>inventory.json</code> across / run the companion on each
-        device.
+        can drop into the app on any other device.
       </p>
     </details>
 
@@ -1767,61 +1438,6 @@
         <a href="https://ko-fi.com/prowly" target="_blank" rel="noopener">ko-fi.com/prowly</a>.
       </p>
     </details>
-
-    <details>
-      <summary>What does the AI assistant send, and where?</summary>
-      <p>
-        The assistant only does anything once you've installed a DeepSeek API
-        key on the companion <em>and</em> you open the advisor and ask it a
-        question. When you do, it sends the rows currently shown in your sell
-        table (after your filters) — for each, the item name, owned/sellable
-        counts, price, 48-hour volume, and vault status — plus totals across
-        those rows and the market snapshot's age, together with the question you
-        typed, to <code>api.deepseek.com</code>, and shows you the reply. The
-        companion relays the call so the key never touches the browser.
-      </p>
-      <p>
-        It does <strong>not</strong> send your whole inventory, your account, the
-        companion token, or anything at all while the assistant is closed. The
-        key stays on your machine (companion-side, read from
-        <code>DEEPSEEK_API_KEY</code> or a <code>deepseek-key</code> file next to
-        your login). Don't want any of this? Don't set up a key — the assistant
-        stays off, and no data goes to DeepSeek. Remove the key to turn it back
-        off later.
-      </p>
-    </details>
-
-    <details>
-      <summary>Firefox can't connect — or forgot my inventory?</summary>
-      <p>
-        Firefox gates a site's access to local-network and on-device apps —
-        that's the companion on <code>127.0.0.1</code> — behind a permission.
-        It applies under <strong>strict</strong> Enhanced Tracking Protection
-        from Firefox <strong>149</strong>, and for everyone from Firefox
-        <strong>151</strong>. When you connect, watch for the permission prompt
-        and click <strong>Allow</strong> — that's what lets the connection
-        through.
-      </p>
-      <p>
-        Missed the prompt, or want to grant it ahead of time? It lives in
-        <strong>Settings → Privacy &amp; Security → Permissions</strong>, in the
-        local-network / device-access section — <em>not</em> the shield icon in
-        the address bar (that toggles tracking protection, which is a different
-        setting).
-      </p>
-      <p>
-        Separately, <strong>strict</strong> Enhanced Tracking Protection can
-        purge this site's saved data as a suspected “bounce tracker” — that's
-        what wipes your saved inventory. Interacting with the page — any click —
-        tells Firefox the site is genuinely used; you can also add this site as
-        an ETP exception (the shield icon) to keep its data.
-      </p>
-      <p>
-        Your <code>inventory.json</code> file itself is never at risk. If saved
-        data was purged, just re-drop it or re-pull from the companion to
-        restore.
-      </p>
-    </details>
   </section>
 
   <section id="trust" class="faq trust">
@@ -1829,15 +1445,15 @@
     <p class="trust-lede">
       Straight answers about what this tool touches, what it can't, and how to
       check us for yourself — not legal boilerplate. The short version: the
-      companion only ever <em>reads</em> your running game, the web app runs
+      desktop app only ever <em>reads</em> your running game, the web app runs
       entirely in your browser, and we can't promise this is ban-safe — so use
       it at your own risk.
     </p>
 
     <details>
-      <summary>What the companion reads</summary>
+      <summary>What the desktop app reads</summary>
       <p>
-        While Warframe is running, the companion scans the game's memory for
+        While Warframe is running, the desktop app scans the game's memory for
         two things your client already has: your <strong>account ID</strong>
         and the <strong>session nonce</strong> it uses to talk to Digital
         Extremes. It then asks DE's own inventory API for your items — the exact
@@ -1869,29 +1485,25 @@
         warframe.market to post listings, that login token is
         <strong>encrypted on disk</strong> (AES-256-GCM) at
         <code>~/.config/wfminv/</code> (or the Windows equivalent), and the
-        browser never sees it — the companion holds it and relays. The
+        webview never sees it — it stays in the Rust process. The
         desktop app can optionally remember the unlock key in your OS
         keyring (KWallet, GNOME Keyring, Windows Credential Manager) —
         never the passphrase itself; details in SECURITY.md.
       </p>
       <p>
-        The one feature that ever sends anything off your machine is the
-        <strong>optional AI assistant</strong>, and only when you use it: it
-        sends just the rows visible in your sell table (after your filters),
-        never your full inventory and never your account. No telemetry, no
-        analytics — confirm it in your browser's network tab.
+        No telemetry, no analytics — confirm it in your browser's network tab.
       </p>
     </details>
 
     <details>
       <summary>How you can verify all this yourself</summary>
       <p>
-        Everything is open source — read the companion's memory-scan code and
-        the web app's join logic. The companion's release binaries are
+        Everything is open source — read the desktop app's memory-scan code and
+        the web app's join logic. The desktop releases are
         <strong>reproducibly built in public CI</strong>: you can audit the
         workflow file, the source at the tagged commit, and the build logs, and
-        every release ships a <code>SHA256SUMS</code> file so you can confirm
-        your download matches (the install scripts check it for you). The site
+        every release ships checksums so you can confirm
+        your download matches. The site
         loads <strong>zero third-party scripts</strong> — inspect the page's
         Content-Security-Policy. Full detail lives in
         <a href="https://github.com/tennoworth/tennoworth/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer">SECURITY.md</a>.
@@ -1902,7 +1514,7 @@
       <summary>The honest risk — and what happens if DE's stance changes</summary>
       <p>
         We <strong>can't promise this is ban-safe</strong>; no third-party tool
-        honestly can. What we can say: the companion only reads memory, never
+        honestly can. What we can say: the desktop app only reads memory, never
         writes or injects, and doesn't interact with anti-cheat. Equivalent
         tools (Sainan's warframe-api-helper, AlecaFrame via Overwolf) have run
         for years with no documented bans, but Digital Extremes has never
@@ -1918,43 +1530,9 @@
 {/snippet}
 
 {#snippet generalBanners()}
-  <!-- Cross-view banner region: any of unreachable / bad-deep-link / pull-error,
-       each independently dismissible. Rendered on both the landing and the
-       workspace so a failure is visible wherever the user is standing. -->
-  {#if companionStatus === 'unreachable' && !unreachableDismissed}
-    <div class="card warn-banner general-banner" role="alert">
-      <div class="gb-body">
-        {#if loopbackDenied}
-          <strong>Your browser has blocked this site's access to 127.0.0.1.</strong>
-          Chrome: allow it in Site settings → Local network access. Firefox:
-          Settings → Privacy &amp; Security → Permissions, in the local-network /
-          device-access section — <em>not</em> the shield icon (that toggles
-          tracking protection, not this permission).
-        {:else}
-          <strong>Couldn't reach the companion on 127.0.0.1.</strong>
-          Either <code>serve</code> isn't running, or your browser blocked
-          local-network access — Chrome shows an “allow local network access”
-          prompt the first time, and Firefox (strict tracking protection from
-          149, everyone from 151) asks permission to reach local-network /
-          on-device apps. If you denied or dismissed the prompt, re-enable it
-          under Settings → Privacy &amp; Security → Permissions.
-        {/if}
-        <a href="#install" onclick={() => setView('install')}>More help in the FAQ →</a>
-      </div>
-      <div class="gb-actions">
-        <button onclick={verifyCompanion}>Retry</button>
-        <button class="gb-dismiss" aria-label="Dismiss" onclick={() => (unreachableDismissed = true)}>×</button>
-      </div>
-    </div>
-  {/if}
-  {#if deepLinkError}
-    <div class="card warn-banner general-banner" role="alert">
-      <div class="gb-body">{deepLinkError}</div>
-      <div class="gb-actions">
-        <button class="gb-dismiss" aria-label="Dismiss" onclick={() => (deepLinkError = null)}>×</button>
-      </div>
-    </div>
-  {/if}
+  <!-- Cross-view banner region: pull-error and the desktop update banner, each
+       independently dismissible. Rendered on both the landing and the workspace
+       so a failure is visible wherever the user is standing. -->
   {#if pullError}
     <div class="card warn-banner general-banner" role="alert">
       <div class="gb-body gb-pre">{pullError}</div>
@@ -1969,7 +1547,7 @@
 {/snippet}
 
 {#snippet pendingBanner()}
-  {#if (isDesktop || companionStatus === 'connected') && (pendingPlan || resumePhase !== 'idle')}
+  {#if isDesktop && (pendingPlan || resumePhase !== 'idle')}
     <section class="card pending-banner">
       {#if resumePhase === 'running'}
         <div class="row">
@@ -2033,9 +1611,8 @@
   style="display:none"
 />
 
-<!-- Both modes: browser sends through the loopback companion, desktop through
-     the wfm_session commands — the transport picks. onauthrequired only fires
-     in desktop mode (typed needs_login/needs_unlock rejections). -->
+<!-- Desktop only (listing needs wfm-core's session). onauthrequired fires on
+     typed needs_login/needs_unlock rejections. -->
 <ListingReviewModal
   bind:open={listingOpen}
   rows={reviewRowsOverride ?? listableRows.slice(0, 50)}
@@ -2043,20 +1620,6 @@
   onauthrequired={(code) => wfmAuthDialogsRef.open(code, 'list')}
   onclose={() => (reviewRowsOverride = null)}
 />
-
-<!-- Assistant is still a loopback-companion surface (its drawer keys off the
-     companion connection state) — hidden in desktop mode until that UI is
-     rethought, though the ask_assistant command + transport op already exist.
-     Only offered when the connected companion positively reports the advisor
-     usable — see assistantAvailable. -->
-{#if !isDesktop && companionStatus === 'connected' && assistantAvailable}
-<AssistantChat
-  rows={tableView.active ? tableView.rows : results}
-  marketAge={marketStaleness}
-  config={companionConfig}
-  companionStatus={companionStatus}
-/>
-{/if}
 
 {#if isDesktop}
   <WfmAuthDialogs bind:this={wfmAuthDialogsRef} onunlocked={handleWfmUnlocked} />
@@ -2268,7 +1831,6 @@
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
   }
   .refresh-pop .rp-lede { margin: 0; font-size: 12px; color: var(--fg); line-height: 1.45; }
-  .refresh-pop .rp-hint { margin: 2px 0 0 0; }
   .refresh-pop .rp-or {
     font-size: 10.5px;
     text-transform: uppercase;
@@ -2365,17 +1927,6 @@
   }
   h2 { margin: 0 0 4px 0; font-size: 14px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
   h3 { margin: 0 0 4px 0; font-size: 14px; font-weight: 600; }
-  pre {
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 10px 12px;
-    overflow-x: auto;
-    font-size: 12.5px;
-    margin: 0;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  }
-  pre code { background: transparent; padding: 0; }
   .sub { color: var(--muted); margin: 6px 0 0 0; max-width: 64ch; font-size: 13px; }
   .ver {
     color: var(--faint);
@@ -2385,8 +1936,8 @@
   }
   aside.sidebar .brand .ver { margin-top: 4px; opacity: 0.75; }
 
-  /* Upsell lead — separates the free market browser above from the companion
-     install flow below. A hairline + top padding, no box. */
+  /* Upsell lead — separates the free market browser above from the desktop-app
+     pitch below. A hairline + top padding, no box. */
   .upsell-lead {
     border-top: 1px solid var(--hairline);
     padding-top: 18px;
@@ -2402,66 +1953,8 @@
     margin-top: 12px;
   }
 
-  /* "How this works" — three numbered steps. Asymmetric: large outlined number,
-     compact body. Steps separated by hairlines, not boxes. */
-  .steps {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0;
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    overflow: hidden;
-  }
-  .steps li {
-    padding: 18px 20px;
-    display: flex;
-    gap: 14px;
-    align-items: flex-start;
-    border-right: 1px solid var(--hairline);
-  }
-  .steps li:last-child { border-right: none; }
-  .steps .n {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 13px;
-    letter-spacing: 0.05em;
-    color: var(--accent);
-    font-weight: 600;
-    padding-top: 2px;
-  }
-  .steps .body { min-width: 0; flex: 1; }
-  .steps .body p {
-    margin: 0;
-    font-size: 13px;
-    color: var(--fg);
-    line-height: 1.45;
-  }
-  .steps .body p.muted { color: var(--muted); font-size: 12px; }
-  .steps .snippet { margin: 6px 0; font-size: 12px; padding: 6px 10px; }
-  .snippet-row { display: flex; gap: 6px; align-items: stretch; margin: 6px 0; }
-  .snippet-row .snippet { flex: 1; margin: 0; min-width: 0; overflow-x: auto; }
-  .companion-help {
-    margin-top: 12px;
-    padding: 12px 14px;
-    border-top: 1px solid var(--hairline);
-    font-size: 13px;
-    line-height: 1.5;
-  }
-  .companion-help ol { margin: 6px 0 8px; padding-left: 20px; }
-  .companion-help li { margin: 3px 0; }
-  .companion-help p.muted { color: var(--muted); font-size: 12px; margin: 0; }
-  .companion-help code { font-size: 12px; }
-  @media (max-width: 760px) {
-    .steps { grid-template-columns: 1fr; }
-    .steps li { border-right: none; border-bottom: 1px solid var(--hairline); }
-    .steps li:last-child { border-bottom: none; }
-  }
-
-  /* Freshness dot: green/amber/red signal, tuned for our 2 h scrape cadence. */
   .dot {
+
     width: 7px;
     height: 7px;
     border-radius: 50%;

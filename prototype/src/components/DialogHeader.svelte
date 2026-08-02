@@ -1,7 +1,7 @@
 <script lang="ts">
-  // Shared by AssistantChat's drawer and ListingReviewModal's modal — same
-  // header layout, close-button styling, and title treatment in both. The
-  // parent dialog owns aria-labelledby; titleId keeps the two in sync.
+  // Shared header layout for modal dialogs — close-button styling and title
+  // treatment. The parent dialog owns aria-labelledby; titleId keeps the two
+  // in sync.
   interface Props {
     titleId: string;
     title: string;
@@ -23,8 +23,7 @@
     padding: 14px 18px;
     border-bottom: 1px solid var(--border);
     /* No-op outside a flex parent; keeps the header from being squished when
-       one is (both AssistantChat's drawer and ListingReviewModal's modal are
-       flex columns). */
+       one is (modal dialogs are flex columns). */
     flex-shrink: 0;
   }
   h2 {

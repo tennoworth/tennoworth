@@ -1,42 +1,19 @@
-// Transport abstraction: the SPA's single seam between "talk to the loopback
-// companion over HTTP" (hosted / `serve` build) and "call wfm-core directly
-// over Tauri IPC" (desktop build). Selected ONCE at boot by sniffing the Tauri
-// runtime — see `isDesktopRuntime()` / `createTransport()`.
+// Transport abstraction: the SPA's single seam between "the hosted
+// informational site" (which performs NO companion/order/scan operations) and
+// "call wfm-core directly over Tauri IPC" (the desktop app). Selected ONCE at
+// boot by sniffing the Tauri runtime — see `isDesktopRuntime()` /
+// `createTransport()`.
 //
-// The high-level operation names mirror the existing companion.ts / assistant.ts
-// functions so call sites read the same. HttpCompanionTransport delegates 1:1 to
-// those modules (no behaviour change in browser mode — they keep their exports
-// for the components that still import them directly). TauriTransport invokes a
+// The hosted site is informational only (market data + a dropped
+// inventory.json); every interactive operation — scanning, listing, orders,
+// login — lives in the desktop app. So the hosted build's transport is a
+// HostedTransport that no-ops the two market-cache ops and throws on anything
+// else (which the hosted UI never calls). The Tauri transport invokes a
 // wfm-core-backed command per op; listing/order commands reject with a typed
 // {code, message} CmdError which surfaces here as DesktopCmdError —
-// `needs_login` / `needs_unlock` drive the SPA's login and passphrase dialogs
-// (the desktop analogue of serve's 401 needs_login:true vs 503 split).
+// `needs_login` / `needs_unlock` drive the SPA's login and passphrase dialogs.
 
-import type { CompanionConfig, PendingPlan, PlanResponse, ItemResult, Market } from './types';
-import {
-  pingCompanion,
-  fetchInventory,
-  submitPlan,
-  getPendingPlan,
-  resumePendingPlan,
-  discardPendingPlan,
-  fetchOrders,
-  updateOrder,
-  deleteOrder,
-  bulkVisibility,
-  type PingResponse,
-  type PlanItemInput,
-  type OrderPatch,
-} from './companion';
-import {
-  askAssistant,
-  AssistantError,
-  type AssistantMessage,
-  type AssistantAnswer,
-} from './assistant';
-
-export type { PingResponse, PlanItemInput, OrderPatch } from './companion';
-export type { AssistantMessage, AssistantAnswer } from './assistant';
+import type { PingResponse, PlanItemInput, OrderPatch, PendingPlan, PlanResponse, ItemResult, Market } from './types';
 
 /**
  * A desktop command rejection, rehydrated from the Rust CmdError
@@ -84,13 +61,12 @@ export interface MarketRefreshResult {
 }
 
 /**
- * The operations the app performs against the companion / core, config-free.
- * The HTTP implementation binds the loopback URL+token internally (via a
- * getter); the Tauri implementation needs no config at all — that whole surface
- * is stripped from the desktop build.
+ * The operations the app performs against wfm-core. The hosted build never
+ * calls the interactive ops (its UI is informational); TauriTransport is the
+ * only real implementation.
  */
 export interface Transport {
-  readonly mode: 'http' | 'tauri';
+  readonly mode: 'tauri';
   /** GET /health (HTTP) or the `health` command (Tauri). */
   health(timeoutMs?: number): Promise<PingResponse>;
   /**
@@ -117,85 +93,52 @@ export interface Transport {
   updateOrder(orderId: string, patch: OrderPatch): Promise<unknown>;
   deleteOrder(orderId: string): Promise<unknown>;
   bulkVisibility(orderIds: string[], visible: boolean): Promise<{ results: ItemResult[] }>;
-  askAssistant(
-    question: string,
-    history: AssistantMessage[],
-    context: string | null,
-  ): Promise<AssistantAnswer>;
 }
 
 /**
- * HTTP transport: today's loopback companion. A thin wrapper over companion.ts
- * + assistant.ts that supplies the current CompanionConfig from a getter (the
- * config changes at runtime as the user connects / disconnects, so we read it
- * lazily rather than capture a snapshot). Every method preserves the wrapped
- * module's semantics verbatim — including CompanionUnreachableError from
- * health() and the `targetAddressSpace: 'loopback'` LNA options.
+ * Hosted-site transport: every interactive op is a desktop capability the
+ * informational site deliberately does not have. The two market-cache ops are
+ * safe no-ops (the hosted build fetches fresh same-origin); anything else
+ * throws rather than pretending a capability that would require the desktop app.
  */
-export class HttpCompanionTransport implements Transport {
-  readonly mode = 'http' as const;
-  #getConfig: () => CompanionConfig | null;
+export class HostedTransport implements Transport {
+  readonly mode = 'tauri' as const;
 
-  constructor(getConfig: () => CompanionConfig | null) {
-    this.#getConfig = getConfig;
+  async health(): Promise<PingResponse> {
+    throw new Error('This is the informational site — the desktop app is required for account features.');
   }
-
-  // Loopback ops are only ever dispatched once the UI has a verified
-  // connection, so a null here is a programming error, not a user state.
-  #cfg(): CompanionConfig {
-    const c = this.#getConfig();
-    if (!c) throw new Error('Not connected to the companion.');
-    return c;
-  }
-
-  health(timeoutMs?: number): Promise<PingResponse> {
-    return timeoutMs === undefined
-      ? pingCompanion(this.#cfg())
-      : pingCompanion(this.#cfg(), timeoutMs);
-  }
-  // The hosted build has no client-side market cache and refreshes nothing: the
-  // box serves a fresh /market.json same-origin. Both are pure no-ops and make
-  // NO third-party fetch (prototype/CLAUDE.md's cardinal rule) — market.ts's
-  // existing same-origin fetch stays the sole market load in browser mode.
   async loadCachedMarket(): Promise<Market | null> {
     return null;
   }
   async refreshMarket(): Promise<MarketRefreshResult> {
     return { updated: false, updatedAt: null, etag: null };
   }
-  fetchInventory(): Promise<unknown> {
-    return fetchInventory(this.#cfg());
+  async fetchInventory(): Promise<unknown> {
+    throw new Error('This is the informational site — the desktop app is required to scan your account.');
   }
-  submitPlan(items: PlanItemInput[]): Promise<PlanResponse> {
-    return submitPlan(this.#cfg(), items);
+  async submitPlan(): Promise<PlanResponse> {
+    throw new Error('This is the informational site — the desktop app is required to list on WFM.');
   }
-  getPendingPlan(): Promise<PendingPlan | null> {
-    return getPendingPlan(this.#cfg());
+  async getPendingPlan(): Promise<PendingPlan | null> {
+    return null;
   }
-  resumePendingPlan(): Promise<PlanResponse> {
-    return resumePendingPlan(this.#cfg());
+  async resumePendingPlan(): Promise<PlanResponse> {
+    throw new Error('This is the informational site — the desktop app is required to list on WFM.');
   }
-  discardPendingPlan(): Promise<unknown> {
-    return discardPendingPlan(this.#cfg());
+  async discardPendingPlan(): Promise<unknown> {
+    return null;
   }
-  fetchOrders(): Promise<unknown> {
-    return fetchOrders(this.#cfg());
+  async fetchOrders(): Promise<unknown> {
+    throw new Error('This is the informational site — the desktop app is required to manage orders.');
   }
-  updateOrder(orderId: string, patch: OrderPatch): Promise<unknown> {
-    return updateOrder(this.#cfg(), orderId, patch);
+  async updateOrder(): Promise<unknown> {
+    throw new Error('This is the informational site — the desktop app is required to manage orders.');
   }
-  deleteOrder(orderId: string): Promise<unknown> {
-    return deleteOrder(this.#cfg(), orderId);
+  async deleteOrder(): Promise<unknown> {
+    throw new Error('This is the informational site — the desktop app is required to manage orders.');
   }
-  bulkVisibility(orderIds: string[], visible: boolean): Promise<{ results: ItemResult[] }> {
-    return bulkVisibility(this.#cfg(), orderIds, visible);
-  }
-  askAssistant(
-    question: string,
-    history: AssistantMessage[],
-    context: string | null,
-  ): Promise<AssistantAnswer> {
-    return askAssistant(this.#cfg(), question, history, context);
+  async bulkVisibility(): Promise<{ results: ItemResult[] }> {
+    throw new Error('This is the informational site — the desktop app is required to manage orders.');
   }
 }
 
@@ -229,8 +172,8 @@ export class TauriTransport implements Transport {
 
   async fetchInventory(): Promise<unknown> {
     // The command returns the inventory JSON as a string (the exact bytes the
-    // CLI would write); a rejected invoke carries wfm-core's graceful message
-    // (e.g. "Warframe doesn't appear to be running…").
+    // old CLI would write); a rejected invoke carries wfm-core's graceful
+    // message (e.g. "Warframe doesn't appear to be running…").
     const json = await resolveInvoke()<string>('scan_inventory');
     return JSON.parse(json);
   }
@@ -321,34 +264,12 @@ export class TauriTransport implements Transport {
       rethrowInvoke(e);
     }
   }
-  async askAssistant(
-    question: string,
-    history: AssistantMessage[],
-    context: string | null,
-  ): Promise<AssistantAnswer> {
-    // Map CmdError codes onto the AssistantError contract AssistantChat
-    // already renders, so the drawer copy is identical in both modes.
-    try {
-      return await resolveInvoke()<AssistantAnswer>('ask_assistant', { question, history, context });
-    } catch (e) {
-      const o = e as { code?: unknown; message?: unknown } | null;
-      if (o && typeof o.code === 'string') {
-        const detail = typeof o.message === 'string' ? o.message : undefined;
-        if (o.code === 'no_api_key') throw new AssistantError('no_api_key');
-        if (o.code === 'upstream') throw new AssistantError('upstream', detail);
-        if (o.code === 'rate_limited') throw new AssistantError('rate_limited', detail);
-        if (o.code === 'too_large') throw new AssistantError('too_large');
-        throw new AssistantError('unknown', detail ?? o.code);
-      }
-      rethrowInvoke(e);
-    }
-  }
 }
 
 // ---- Desktop-only WFM auth ops --------------------------------------------
-// Not on the Transport interface: the browser build has no login surface (serve
-// prompts in its own terminal), so these are reachable only from desktop-gated
-// UI. Secrets flow webview → Rust exactly once per call and are never returned.
+// Not on the Transport interface: the hosted build has no login surface, so
+// these are reachable only from desktop-gated UI. Secrets flow webview → Rust
+// exactly once per call and are never returned.
 
 export interface DesktopWfmStatus {
   /** An encrypted login envelope exists on disk. */
@@ -414,9 +335,10 @@ export function isDesktopRuntime(): boolean {
 }
 
 /**
- * Boot-time transport selection. Pass a getter for the current CompanionConfig
- * — it's only ever read by the HTTP transport; the Tauri transport ignores it.
+ * Boot-time transport selection. The desktop webview gets the real Tauri
+ * transport; the hosted informational site gets HostedTransport (no interactive
+ * ops).
  */
-export function createTransport(getConfig: () => CompanionConfig | null): Transport {
-  return isDesktopRuntime() ? new TauriTransport() : new HttpCompanionTransport(getConfig);
+export function createTransport(): Transport {
+  return isDesktopRuntime() ? new TauriTransport() : new HostedTransport();
 }

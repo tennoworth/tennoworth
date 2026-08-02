@@ -24,8 +24,11 @@ import { fileURLToPath } from 'url';
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 // The one directive that differs between the hosted and desktop builds.
-const HOSTED_CONNECT_SRC = "connect-src 'self' http://127.0.0.1:* http://localhost:*";
-// Desktop: no loopback companion (there is no HTTP server) — instead the Tauri
+// The hosted site is informational: everything it loads is baked same-origin,
+// so there are no loopback or third-party connect origins. (The loopback
+// entries were for the removed companion CLI.)
+const HOSTED_CONNECT_SRC = "connect-src 'self'";
+// Desktop: no loopback (there is no HTTP server) — instead the Tauri
 // IPC transport (`ipc://localhost` + the `http://ipc.localhost` fast path) and
 // the single C4 remote-refresh origin. Verified against the desktop spike's
 // captured `connect-src` violations.
@@ -34,9 +37,8 @@ const DESKTOP_CONNECT_SRC =
 
 const DIRECTIVES = [
   "default-src 'self'",
-  // The two loopback entries are the companion's serve endpoint — the only
-  // non-self origin the app ever talks to. No third-party origins: WFM has
-  // no CORS, warframestat dropped theirs; everything is baked same-origin.
+  // No non-self origins: WFM has no CORS, warframestat dropped theirs;
+  // everything (market.json, wfstat-catalog.json) is baked same-origin.
   HOSTED_CONNECT_SRC,
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",

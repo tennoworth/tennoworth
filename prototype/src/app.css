@@ -136,8 +136,8 @@ dialog.cryptobox footer {
 }
 
 /* .muted and .warn-banner are global because they are written as if they
-   already were. Five components — ExportImportDialogs, InstallWidget,
-   ListingReviewModal, MyOrdersPanel, WfmAuthDialogs — mark up
+   already were. Four components — ExportImportDialogs, ListingReviewModal,
+   MyOrdersPanel, WfmAuthDialogs — mark up
    class="muted" without declaring the rule, and Svelte's per-component
    scoping means App.svelte's copy never reached them: that text was
    rendering at full --fg instead of --muted. Measured 2026-08-01, e.g. the

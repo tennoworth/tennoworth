@@ -90,16 +90,16 @@ jobs:
         run: bun install --frozen-lockfile
 
       # Publishes to the FIXED `desktop-latest` tag, not GitHub's floating
-      # "latest release". GitHub's notion of latest is repo-wide, and this repo
-      # also cuts CLI `v*` releases that carry no latest.json — a CLI release
-      # published after a desktop one would 404 the updater endpoint until the
-      # next desktop release. A fixed tag makes the two release streams
+      # "latest release". GitHub's notion of latest is repo-wide, and the
+      # versioned desktop-v* tags need to be pin-able without the rolling tag
+      # moving under them. A fixed tag makes the two release streams
       # independent, and matches the existing web-latest / scrape-latest
       # convention (.github/actions/publish-rolling-release). tauri.conf.json's
       # updater endpoint must keep pointing at this exact tag.
       #
       # prerelease keeps the rolling desktop build out of the repo's "Latest
-      # release" badge, which stays reserved for the CLI's v* tags.
+      # release" badge, which belongs to the versioned desktop-v* tag (see the
+      # "Publish to the versioned release" step — that one is make_latest).
       #
       # projectPath is the dir holding tauri.conf.json — this repo has no
       # `src-tauri` layout and no npm-side @tauri-apps/cli, so the action
@@ -115,8 +115,8 @@ jobs:
           releaseName: desktop-latest (auto-built)
           releaseBody: >
             Rolling desktop build. The in-app updater reads latest.json from
-            this release. Not a version release — see releases tagged v* for
-            the companion CLI.
+            this release. Not a version release — see desktop-v* tags for the
+            versioned desktop app.
           releaseDraft: false
           prerelease: true
           # Windows builds both MSI and NSIS; the updater manifest can only
@@ -159,8 +159,13 @@ jobs:
           name: ${{ github.ref_name }}
           files: dist/*
           draft: false
-          prerelease: true
-          make_latest: false
+          prerelease: false
+          # make_latest:true on BOTH versioned-tag publishes: they target the
+          # same desktop-v* release from two parallel jobs (this one on the
+          # Windows build, the Linux one below), and whichever runs last wins
+          # the release's state. Both must assert Latest, or the last writer
+          # with make_latest:false would demote the badge.
+          make_latest: true
 
       # Stale-asset cleanup runs AFTER the upload, never before.
       #
@@ -317,8 +322,9 @@ jobs:
           sha256sum tennoworth-desktop-amd64.deb   | tee tennoworth-desktop-amd64.deb.sha256
           sha256sum tennoworth-desktop-x86_64.rpm  | tee tennoworth-desktop-x86_64.rpm.sha256
 
-      # prerelease + make_latest:false for the same reason as the rolling tag:
-      # the repo's "Latest release" badge stays reserved for the CLI's v* tags.
+      # The versioned desktop-v* release is the repo's "Latest release" badge —
+      # the desktop app is the product (the standalone CLI companion no longer
+      # exists, so there is no competing v* release stream).
       - name: Publish to the versioned release
         uses: softprops/action-gh-release@v2
         with:
@@ -332,8 +338,8 @@ jobs:
             dist/tennoworth-desktop-x86_64.rpm
             dist/tennoworth-desktop-x86_64.rpm.sha256
           draft: false
-          prerelease: true
-          make_latest: false
+          prerelease: false
+          make_latest: true
           body: |
             Linux binary for the AUR `tennoworth-bin` package, dynamically
             linked against system webkit2gtk/gtk3 (glibc floor 2.35).

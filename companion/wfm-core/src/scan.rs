@@ -226,7 +226,7 @@ fn ptrace_open_error(mem_path: &str, pid: u32, e: std::io::Error) -> anyhow::Err
     let bin = std::env::current_exe()
         .ok()
         .and_then(|p| p.to_str().map(str::to_owned))
-        .unwrap_or_else(|| "wfm-fetch-inventory".to_string());
+        .unwrap_or_else(|| "tennoworth-desktop".to_string());
     let mut msg = format!(
         "Permission denied reading {mem_path} — reading the game's memory needs CAP_SYS_PTRACE.\n\
          Grant it once (no sudo needed afterwards):\n  \

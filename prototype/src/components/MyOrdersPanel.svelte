@@ -1,6 +1,5 @@
 <script lang="ts">
-  import { fetchOrders, updateOrder, deleteOrder } from '../lib/companion';
-  import type { CompanionConfig } from '../lib/types';
+  import type { Transport } from '../lib/transport';
   import { MAX_PLATINUM } from '../lib/limits';
   import { humanError } from '../lib/errors';
 
@@ -17,8 +16,8 @@
     itemId?: string;
   }
 
-  interface Props { config: CompanionConfig | null; }
-  let { config }: Props = $props();
+  interface Props { transport: Transport; }
+  let { transport }: Props = $props();
 
   type Phase = 'idle' | 'loading' | 'done' | 'error';
   let phase = $state<Phase>('idle');
@@ -29,18 +28,16 @@
   let editValue = $state(0);
 
   // Stale-async guard, same shape as App.svelte's verifyGen: only the newest
-  // load may commit. `config` gets a fresh identity on every reconnect, so two
-  // GET /orders can be in flight at once, and without this an older response
-  // landing second overwrites the newer one — the user ends up looking at
-  // orders from the connection they just replaced.
+  // load may commit. Two GET /orders can be in flight at once (e.g. a manual
+  // Refresh during a slow load), and without this an older response landing
+  // second overwrites the newer one.
   let loadGen = 0;
 
   function loadOrders(): void {
-    if (!config) return;
     const gen = ++loadGen;
     phase = 'loading';
     error = null;
-    fetchOrders(config)
+    transport.fetchOrders()
       .then((r) => {
         if (gen !== loadGen) return;
         // WFM v2 returns { data: { sell: [...], buy: [...] } } OR a flat array.
@@ -73,11 +70,11 @@
       });
   }
 
-  // Initial load + reload when the config reference changes (reconnect → fresh
-  // fetch). This $effect alone covers mount when config is already set; a
-  // separate onMount(loadOrders) just double-fired GET /orders on mount.
+  // Initial load on mount. The transport is a boot-time constant (Tauri IPC),
+  // so there's no reconnect to re-trigger on; a separate onMount(loadOrders)
+  // plus this would double-fire.
   $effect(() => {
-    if (config) loadOrders();
+    loadOrders();
   });
 
   function markBusy(id: string, on: boolean): void {
@@ -95,10 +92,9 @@
   }
 
   async function toggleVisible(o: WfmOrder): Promise<void> {
-    if (!config) return;
     markBusy(o.id, true);
     try {
-      assertOrderOk(await updateOrder(config, o.id, { visible: !o.visible }));
+      assertOrderOk(await transport.updateOrder(o.id, { visible: !o.visible }));
       o.visible = !o.visible;
       orders = [...orders];
     } catch (e) {
@@ -114,7 +110,6 @@
   }
 
   async function saveEdit(o: WfmOrder): Promise<void> {
-    if (!config) return;
     const newPrice = Number(editValue);
     if (!newPrice || newPrice < 1) return;
     if (newPrice > MAX_PLATINUM) {
@@ -123,7 +118,7 @@
     }
     markBusy(o.id, true);
     try {
-      assertOrderOk(await updateOrder(config, o.id, { platinum: newPrice }));
+      assertOrderOk(await transport.updateOrder(o.id, { platinum: newPrice }));
       o.platinum = newPrice;
       orders = [...orders];
       editingId = null;
@@ -135,11 +130,10 @@
   }
 
   async function removeOne(o: WfmOrder): Promise<void> {
-    if (!config) return;
     if (!confirm(`Delete this listing? (${itemName(o)} at ${o.platinum}p)`)) return;
     markBusy(o.id, true);
     try {
-      await deleteOrder(config, o.id);
+      await transport.deleteOrder(o.id);
       orders = orders.filter((x) => x.id !== o.id);
     } catch (e) {
       alert(`Couldn't delete: ${humanError(e)}`);
