@@ -94,21 +94,15 @@ const PROBE_JS: &str = r#"(function(){
       .then(function(){ R.lifecycle.survivedClose = true; })
       .catch(function(e){ R.lifecycle.err = String(e && e.message || e); });
   }
-  // Synthesize a REAL file-drop onto the DropZone: webkit's DragEvent ctor won't
-  // carry a dataTransfer, so attach one with a File via defineProperty. This
-  // exercises DropZone → handleInventory(origin:'file') → import_snapshot.
+  // Seed an import snapshot directly through the `import_snapshot` command
+  // (the old DropZone file-drop path that used to reach it is gone — the app
+  // scans from the game). This exercises the same record path a file-drop
+  // did: source='import' history row + the sell view rendering off it.
   function dropFixture(){
-    try {
-      var dz = document.querySelector('.dropzone');
-      if (!dz) return 'NO_DROPZONE';
-      var file = new File([FIXTURE], 'fixture-inventory.json', { type: 'application/json' });
-      var dt = new DataTransfer();
-      dt.items.add(file);
-      var ev = new Event('drop', { bubbles: true, cancelable: true });
-      Object.defineProperty(ev, 'dataTransfer', { value: dt });
-      dz.dispatchEvent(ev);
-      return 'DROPPED';
-    } catch(e){ return 'ERR:'+(e && e.message || e); }
+    return invk('import_snapshot', { inventoryJson: FIXTURE }).then(function(v){
+      if (typeof v === 'string' && v.indexOf('ERR:') === 0) return v;
+      return 'IMPORTED:' + v;
+    });
   }
   // Drive the REAL reserve input if the sell view rendered (→ setReserveCopies →
   // store.setSetting → set_setting); else fall back to the raw command so the
@@ -189,13 +183,9 @@ const PROBE_JS: &str = r#"(function(){
       });
     })
     .then(function(){ return invk('list_snapshots', { limit: 50 }).then(function(v){ R.snapshotsAfterScan = v; }); })
-    // (c) File-drop the fixture → source='import' snapshot with item_count == 4.
-    .then(function(){ R.dropResult = dropFixture(); return delay(2500); })
-    .then(function(){
-      R.phaseDoneAfterDrop = !document.querySelector('[data-testid="desktop-mode"] .dropzone, .dropzone');
-      R.resultsRowsAfterDrop = document.querySelectorAll('table tbody tr').length;
-      return invk('list_snapshots', { limit: 50 }).then(function(v){ R.snapshotsAfterDrop = v; });
-    })
+    // (c) Seed an import snapshot → source='import' snapshot with item_count == 4.
+    .then(function(){ return dropFixture().then(function(v){ R.dropResult = v; return delay(1500); }); })
+    .then(function(){ return invk('list_snapshots', { limit: 50 }).then(function(v){ R.snapshotsAfterDrop = v; }); })
     // C6 (top_sellables): rank the imported snapshot × bundled market. With a
     // clean data dir (reserve 0) this is the deterministic 3-item ranking.
     .then(function(){ return invk('top_sellables', { limit: 5 }).then(function(v){ R.topSellables = v; }); })

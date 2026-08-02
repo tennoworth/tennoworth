@@ -9,11 +9,9 @@
 //   - the last-owned inventory snapshot (the reload-restore copy).
 //
 // The desktop `snapshot` / `snapshot_item` history tables are a separate
-// concern — appended by the `scan_inventory` / `import_snapshot` commands, not
-// by this store's snapshot methods, which persist the display-restore copy.
-// `recordImportSnapshot` is the one bridge to that history: a file-drop in the
-// desktop build appends an `import` history row (a no-op in the browser, which
-// has no history substrate).
+// concern — appended by the `scan_inventory` command, not by this store's
+// snapshot methods, which persist the display-restore copy. (The old
+// `import_snapshot` history bridge went with the file-drop path.)
 //
 // LocalStorageStateStore is byte-for-byte the pre-store behaviour: the same
 // localStorage keys, the same value encodings, and the snapshot round-trip
@@ -78,14 +76,6 @@ export interface StateStore {
   loadSnapshot(): Promise<Snapshot | null>;
   saveSnapshot(input: SaveSnapshotInput): Promise<void>;
   clearSnapshot(): Promise<void>;
-
-  /**
-   * Append a `source='import'` history snapshot from a dropped inventory.json.
-   * Desktop-only substrate: a no-op in the browser. Best-effort by contract —
-   * losing a history row must never break the user's file-drop, so callers
-   * swallow a rejection.
-   */
-  recordImportSnapshot(inventoryJson: string): Promise<void>;
 }
 
 /**
@@ -128,18 +118,13 @@ export class LocalStorageStateStore implements StateStore {
   async clearSnapshot(): Promise<void> {
     clearLocalSnapshot();
   }
-
-  async recordImportSnapshot(): Promise<void> {
-    /* No history substrate in the browser — snapshot history is desktop-only. */
-  }
 }
 
 /**
  * Desktop build. Every method is a wfm-core-backed command over Tauri IPC. The
  * scalar settings ride the `setting` KV table (get_setting/set_setting); the
  * reload-restore snapshot rides the same table under DESKTOP_SNAPSHOT_KEY,
- * serialized with the SAME bytes the browser writes. `recordImportSnapshot`
- * calls `import_snapshot`, which appends to the `snapshot` history tables.
+ * serialized with the SAME bytes the browser writes.
  */
 export class TauriStateStore implements StateStore {
   readonly mode = 'tauri' as const;
@@ -199,12 +184,6 @@ export class TauriStateStore implements StateStore {
       key: DESKTOP_SNAPSHOT_KEY,
       value: '',
     });
-  }
-
-  async recordImportSnapshot(inventoryJson: string): Promise<void> {
-    // Tauri v2 maps the camelCase JS key to the snake_case `inventory_json`
-    // command parameter.
-    await resolveInvoke()<number>('import_snapshot', { inventoryJson });
   }
 }
 

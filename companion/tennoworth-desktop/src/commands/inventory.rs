@@ -1,5 +1,6 @@
-//! Inventory acquisition: memory scan and file-drop import, both landing in
-//! the same snapshot history via [`record_snapshot`].
+//! Inventory acquisition: memory scan (the app's only UI path) landing in the
+//! snapshot history via [`record_snapshot`], plus an `import_snapshot` command
+//! the probe uses to seed history without a running game.
 
 use tauri::{AppHandle, State};
 
@@ -50,9 +51,9 @@ pub async fn scan_inventory(app: AppHandle, db: State<'_, Db>) -> Result<String,
     String::from_utf8(bytes).map_err(|e| format!("inventory response was not valid UTF-8: {e}"))
 }
 
-/// Record a dropped inventory.json as a `source='import'` history snapshot.
-/// Used by the desktop file-drop path; unlike the scan path this surfaces the
-/// error to the caller (the SPA logs it and moves on).
+/// Seed an import snapshot as `source='import'` history. Probe-only now (the
+/// UI file-drop it used to back is gone — the app scans from the game); the
+/// probe calls it to exercise the record path and reach the sell view.
 #[tauri::command]
 pub fn import_snapshot(db: State<'_, Db>, inventory_json: String) -> Result<i64, String> {
     record_snapshot(&db, "import", None, inventory_json.as_bytes())

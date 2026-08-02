@@ -56,9 +56,11 @@
 
   // The Linux ptrace grant lives on the scan step — it's the one thing that
   // trips a first-time Linux user up. Kept separate from the step body so the
-  // code block renders as copyable, not inline prose.
+  // code block renders as copyable, not inline prose. Only shown on the Linux
+  // install tabs — it doesn't apply to Windows.
   const PTRACE_NOTE = 'Linux: grant ptrace once so no sudo is needed per scan:';
   const PTRACE_CMD = 'sudo setcap cap_sys_ptrace=eip /usr/bin/tennoworth-desktop';
+  const isLinux = $derived(activeOs !== 'windows');
 </script>
 
 <section id="desktop" class="desktop-showcase">
@@ -136,7 +138,7 @@
           <div class="body">
             <h4>{s.title}</h4>
             <p>{s.body}</p>
-            {#if s.n === '02'}
+            {#if s.n === '02' && isLinux}
               <p class="muted">{PTRACE_NOTE}</p>
               <div class="snippet-row inline">
                 <pre class="snippet"><code>{PTRACE_CMD}</code></pre>
@@ -157,7 +159,7 @@
       </thead>
       <tbody>
         <tr><td>Market data, trends, vault status</td><td class="yes">✓</td><td class="yes">✓</td></tr>
-        <tr><td>Your inventory ranked</td><td>via file drop</td><td class="yes">✓ scan</td></tr>
+        <tr><td>Your inventory ranked</td><td class="no">—</td><td class="yes">✓ scan</td></tr>
         <tr><td>List on WFM / manage orders</td><td class="no">—</td><td class="yes">✓</td></tr>
         <tr><td>Login</td><td>no accounts</td><td class="yes">in-app</td></tr>
       </tbody>

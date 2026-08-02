@@ -4,13 +4,13 @@
   //
   // Encrypted-export / import dialogs. Triggered imperatively from
   // App.svelte via `bind:this` — openExport() from the toolbar's Export
-  // button, openImport(blob) from handleInventory() when a dropped/scanned
-  // file turns out to be an encrypted wfminv snapshot rather than a plain
-  // inventory.json. Export only reads app state (owned/inventoryName/
-  // lastUpdated, passed as props); a successful import reports the decoded
-  // snapshot back via `onimport` — App.svelte owns what importing means for
-  // its own state (resolved/deltas/market/phase/store.saveSnapshot), the
-  // same split as WfmAuthDialogs' onunlocked.
+  // button, and the import path has its own file picker in this component
+  // (the old DropZone flow that routed an encrypted drop to openImport() is
+  // gone — the app scans from the game and takes no files). Export only reads
+  // app state (owned/inventoryName/lastUpdated, passed as props); a successful
+  // import reports the decoded snapshot back via `onimport` — App.svelte owns
+  // what importing means for its own state (resolved/deltas/market/phase/
+  // store.saveSnapshot), the same split as WfmAuthDialogs' onunlocked.
   import { encryptPayload, decryptPayload } from '../lib/crypto';
   import { buildSnapshotPayload } from '../lib/storage';
 
@@ -38,11 +38,28 @@
     exportDialog?.showModal();
   }
 
-  export function openImport(blob) {
+  let importFileInput = $state();
+  export function pickImport() {
     cryptoError = null;
-    importPass = '';
-    importBlob = blob;
-    importDialog?.showModal();
+    importFileInput?.click();
+  }
+  async function onImportPicked(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const blob = JSON.parse(text);
+      if (!blob || (blob.version === undefined && blob.kdf === undefined)) {
+        throw new Error("That doesn't look like an encrypted wfminv snapshot.");
+      }
+      importBlob = blob;
+      importPass = '';
+      importDialog?.showModal();
+    } catch (err) {
+      cryptoError = err.message || String(err);
+      importDialog?.showModal();
+    }
   }
 
   async function performExport(e) {
@@ -160,12 +177,26 @@
 <dialog bind:this={importDialog} class="cryptobox">
   <form onsubmit={performImport}>
     <header>
-      <h3>Decrypt snapshot</h3>
+      <h3>Restore encrypted snapshot</h3>
       <p class="muted">
-        This looks like an encrypted wfminv snapshot. Enter the passphrase you
-        used when exporting it.
+        Pick a <code>wfminv-*.json</code> backup exported from another device,
+        then enter the passphrase you used when exporting it.
       </p>
     </header>
+    <label>
+      Backup file
+      <button type="button" class="ghost" onclick={pickImport}>Choose file…</button>
+      {#if importBlob}
+        <span class="muted small file-name">selected — ready to decrypt</span>
+      {/if}
+    </label>
+    <input
+      bind:this={importFileInput}
+      type="file"
+      accept="application/json,.json"
+      onchange={onImportPicked}
+      style="display:none"
+    />
     <label>
       Passphrase
       <input
@@ -182,7 +213,7 @@
     {/if}
     <footer>
       <button type="button" class="ghost" onclick={() => importDialog?.close()}>Cancel</button>
-      <button type="submit" disabled={importBusy}>{importBusy ? 'Decrypting…' : 'Decrypt'}</button>
+      <button type="submit" disabled={importBusy || !importBlob}>{importBusy ? 'Decrypting…' : 'Decrypt'}</button>
     </footer>
   </form>
 </dialog>
@@ -192,4 +223,7 @@
      rationale as WfmAuthDialogs.svelte's copy (Svelte scopes CSS
      per-component). Only the password-input subset — these dialogs have no
      email/select/remember-checkbox fields. */
+  label { gap: 8px; }
+  label .ghost { width: max-content; }
+  .file-name { font-size: 12px; }
 </style>

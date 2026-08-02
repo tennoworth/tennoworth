@@ -1,7 +1,9 @@
 # prototype/ — Svelte 5 + Vite web app
 
-Static-deployable browser app. No backend. Drop `inventory.json` →
-join against `public/market.json` → ranked table of what to sell.
+Static-deployable informational site. No backend, no accounts, no file
+input — it renders the market snapshot and the desktop-app showcase. The
+desktop app scans the game and holds your inventory; the site never
+receives it.
 
 Dev: `bun run dev` (http://127.0.0.1:5173). Tests: `bun run test`.
 Build: `bun run build`. Type-check: `bun run check`. Install: `bun install`.
