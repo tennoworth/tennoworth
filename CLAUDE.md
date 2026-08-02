@@ -10,11 +10,12 @@ warframe.me on inventory display — must be **measurably better at
 Detailed rules live in per-domain files. Read the one for the area
 you're editing **before** you start writing code there:
 
-- [`companion/CLAUDE.md`](companion/CLAUDE.md) — Rust CLI + loopback
-  HTTP server. Memory scan, JWT crypto, WFM API map, cross-platform
-  gotchas.
+- [`companion/CLAUDE.md`](companion/CLAUDE.md) — Rust workspace (Tauri
+  desktop app + wfm-core + host pipeline). Memory scan, JWT crypto, WFM
+  API map, cross-platform gotchas.
 - [`prototype/CLAUDE.md`](prototype/CLAUDE.md) — Svelte 5 + Vite
-  browser app. Svelte 5 reactivity gotchas, storage choices, CSP.
+  browser app (the informational site). Svelte 5 reactivity gotchas,
+  storage choices, CSP.
 - [`scripts/CLAUDE.md`](scripts/CLAUDE.md) — Python utilities and
   scrapers. Atomic writes, flush rules, UA requirements.
 
@@ -23,8 +24,9 @@ you're editing **before** you start writing code there:
 ## What lives where
 
 ```
-companion/       Rust binary — fetch / login / serve subcommands
-prototype/       Svelte 5 + Vite app, deployed as static
+companion/       Rust workspace — tennoworth-desktop (the product, Tauri)
+                 drives wfm-core over IPC; wfm-scrape is the host pipeline
+prototype/       Svelte 5 + Vite informational site, deployed as static
 prototype/public/market.json    central artifact: the WFM snapshot
 scripts/         one-shot Python utilities
 wfm_demand.py    the ORIGINAL WFM scraper. Still the rollback path and the
@@ -32,7 +34,8 @@ wfm_demand.py    the ORIGINAL WFM scraper. Still the rollback path and the
 packaging/aur/   AUR recipes (tennoworth, tennoworth-bin) + their .install hooks
 deploy/          self-host kit for the production LXC: Caddyfile, setup, scrape/web-pull units, plus the signed apt+dnf repo publisher (setup-repo.sh, pull-packages.sh)
 tests/           pytest tests for the Python side
-.github/workflows/  refresh-market (cron), release-companion (tag), audit
+.github/workflows/  refresh-market (cron), release-desktop (tag → desktop +
+                     AUR), build-web, audit
 .github/actions/    shared composite actions (setup-rust, setup-python,
                      publish-rolling-release) the workflows above call into
 .claude/         Claude Code local config + agent worktrees
@@ -47,31 +50,35 @@ SECURITY.md      threat model + what we do and don't commit to
 └────────────────────────┬─────────────────────────┘
                          │ scrape accountId+nonce
                          ▼
-            ┌──────── companion CLI ────────┐
-            │  fetch  → inventory.json      │
-            │  login  → ~/.config/wfminv/   │
-            │           wfm-jwt.enc (AES)   │
-            │  serve  → 127.0.0.1:RAND      │
-            └──────┬────────────┬───────────┘
-                   │            │  ↑   X-Session-Token
-                   │            │  │   plan / pending / orders
-                   ▼            ▼
-        inventory.json    ┌── browser app (prototype/) ──┐
-        (drop into UI)   ─┤  joins inv × market.json      │
-                          │  no backend, no accounts      │
-                          └───────────────────────────────┘
-                                       ▲
-                                       │ GET market.json
-                                       │ (refreshed on the box)
-                            ┌──────────┴─────────────────────────────┐
-                            │  wfm-scrape scrape  (Rust)              │
-                            │  → CSV → csv_to_market_json.py          │
-                            │  (systemd timer on the box, 2h;         │
-                            │   GH cron refreshes repo copy)          │
-                            │  wfm_demand.py is the rollback:         │
-                            │   WFM_SCRAPER=python in the unit        │
-                            └─────────────────────────────────────────┘
+        ┌── desktop app (tennoworth-desktop, Tauri) ──┐
+        │  same-origin webview (the SPA)              │
+        │  scan_inventory → wfm-core → IPC            │
+        │  wfm_login → wfm-jwt.enc (AES, Rust-side)   │
+        │  listing / orders → wfm-core → WFM          │
+        └────────────────────────┬────────────────────┘
+                                 │
+                 ┌───────────────┴──────────────────┐
+                 ▼                                 ▼
+       ┌── informational site (prototype/) ──┐    market.json
+       │  market browse + drop inventory.json │    (refreshed on the box)
+       │  no accounts, no scan, no listing    │
+       └──────────────────────────────────────┘
+                            ▲
+                            │ GET market.json
+              ┌─────────────┴────────────────────────────┐
+              │  wfm-scrape scrape  (Rust)               │
+              │  → CSV → csv_to_market_json.py           │
+              │  (systemd timer on the box, 2h;          │
+              │   GH cron refreshes repo copy)           │
+              │  wfm_demand.py is the rollback:          │
+              │   WFM_SCRAPER=python in the unit         │
+              └──────────────────────────────────────────┘
 ```
+
+The standalone companion CLI (`wfm-fetch-inventory` with `fetch`/`login`/
+`serve`) was removed on 2026-08-02: the desktop app is the only interactive
+product, and the site is informational-only. `wfm-core` keeps the assistant
+relay dormant — no UI surfaces it.
 
 ---
 
@@ -205,13 +212,10 @@ python3 scripts/csv_to_market_json.py
 python3 wfm_demand.py --filter "" --exclude "" --min-volume 1 \
   --out wfm_results.csv
 
-# Companion subcommands (all in the same binary). Grant ptrace once so
-# fetch needs no sudo — re-run after every `cargo build --release`, which
-# wipes the capability:
-sudo setcap cap_sys_ptrace=eip companion/target/release/wfm-fetch-inventory
-companion/target/release/wfm-fetch-inventory               # default = fetch inventory.json
-companion/target/release/wfm-fetch-inventory login         # interactive WFM signin
-companion/target/release/wfm-fetch-inventory serve         # loopback HTTP server
+# Companion subcommands. Grant ptrace once so the desktop scan needs no
+# sudo — re-run after every `cargo build --release`, which wipes the
+# capability. The desktop app needs the same grant on Linux:
+sudo setcap cap_sys_ptrace=eip companion/target/release/tennoworth-desktop
 
 # Test sweeps — run ALL of these before pushing; every one is local.
 cd prototype && bun run test

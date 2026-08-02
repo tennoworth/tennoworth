@@ -11,7 +11,7 @@
   // filterState $derived and the results-recompute $effect need to read
   // them, so App.svelte owns the real $state and this component both
   // displays and writes them through native bind:value. tableView is
-  // $bindable for the same reason (AssistantChat reads it). Everything
+  // $bindable for the same reason (the results table reads it). Everything
   // else here (allPicks/picks/snoozedPicks, pickReason, toggleTag,
   // relaxFilters) is local — nothing outside this view ever touched them.
   import ResultsTable from './ResultsTable.svelte';
@@ -32,7 +32,7 @@
     listableRows, availableTags, availableTypes,
     visibleColumns, presetSort, emptyReason,
     activePreset, reserveCopies, filtersOpen, scoreExplainerDismissed,
-    isDesktop, companionStatus,
+    isDesktop,
 
     applyPreset, setReserveCopies, toggleFiltersOpen, dismissScoreExplainer,
     openListingFlow,
@@ -305,7 +305,7 @@
       </div>
     </div>
   </details>
-  {#if isDesktop || companionStatus === 'connected'}
+  {#if isDesktop}
     <button
       class="list-cta"
       data-testid="desktop-list"

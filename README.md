@@ -4,16 +4,16 @@ A cross-platform **Windows + Linux** Warframe inventory + market dashboard —
 the no-Overwolf alternative to AlecaFrame. It answers one question better than
 anything else: **what should I sell right now?**
 
-Your inventory is read locally by a small companion (it memory-scans the
-running game — nothing is uploaded, no account login to *us*). The browser app
-joins it against a live warframe.market price snapshot and ranks your items by
-expected plat, not by a raw average price. Runs on Steam Deck.
+Your inventory is read locally by the desktop app (it memory-scans the running
+game — nothing is uploaded, no account login to *us*). It joins your inventory
+against a live warframe.market price snapshot and ranks your items by expected
+plat, not by a raw average price. Runs on Steam Deck.
 
-**Try it now with zero install** at **[tennoworth.app](https://tennoworth.app)** —
-the landing page is a full market browser (below). Prices, 48-hour volume,
-7-day trend sparklines, vaulted items, and the Baro countdown, straight from a
-snapshot refreshed every 2 hours. Connect the companion later to rank *your*
-inventory.
+**Try the informational site** at **[tennoworth.app](https://tennoworth.app)** —
+a full market browser: prices, 48-hour volume, 7-day trend sparklines, vaulted
+items, and the Baro countdown, straight from a snapshot refreshed every 2
+hours. No download, no login, no account. Want *your* inventory ranked? That's
+the desktop app.
 
 <p align="center">
   <img src="docs/img/market-browser.png" alt="TennoWorth market browser: top movers, vaulted &amp; valuable items, and Baro countdown from a live warframe.market snapshot" width="820">
@@ -29,74 +29,29 @@ login:
 ## How it works
 
 ```
-Warframe (running)  ──►  companion  ──►  inventory.json
-                                              │
-                          market.json  ──►  browser app  ──►  "what to sell"
-                          (refreshed                              │
-                           on a cron)                   optional: companion
-                                                        serve ──► create/edit
-                                                                  WFM listings
+Warframe (running)  ──►  desktop app (Tauri)  ──►  "what to sell"
+                            │  reads game memory    │
+                            │  wfm-core              └──► create/edit
+                            ▼                              WFM listings
+                       market.json
+                       (refreshed on a cron)
 ```
 
-- **`companion/`** — a Rust workspace. The player-facing binary
-  `wfm-fetch-inventory` is a thin CLI adapter over the `wfm-core` library
-  (scan, inventory fetch, WFM auth with encrypted JWT, listings, pending plans,
-  assistant relay); `tennoworth-desktop` is the native app (below). PC-only by
-  nature — it reads game memory. See [`companion/README.md`](companion/README.md).
-- **`prototype/`** — the Svelte browser app. No backend, no accounts, no data
-  leaves your machine. `prototype/public/market.json` is the shared price
-  snapshot.
+- **`companion/`** — a Rust workspace. `wfm-core` is the reusable core (scan,
+  inventory fetch, WFM auth with encrypted JWT, listings, pending plans);
+  `tennoworth-desktop` is the Tauri v2 app that drives it over IPC — the only
+  adapter. PC-only by nature — it reads game memory. See
+  [`companion/README.md`](companion/README.md).
+- **`prototype/`** — the Svelte web app, deployed as the informational site.
+  No backend, no accounts, no data leaves your machine.
+  `prototype/public/market.json` is the shared price snapshot.
 
-## Quick start
+## Desktop app
 
-1. **Get the companion** from the
-   [latest release](https://github.com/tennoworth/tennoworth/releases/latest)
-   (binaries + `SHA256SUMS`), or build it from source:
-   ```bash
-   cd companion && cargo build --release
-   # binary: companion/target/release/wfm-fetch-inventory
-   ```
-   (The website's `install.sh` / `install.ps1` one-liners do the download +
-   checksum verify for you.)
-
-2. **Fetch your inventory** (Warframe running, past the login screen):
-   ```bash
-   # Linux: grant ptrace once (re-run after every rebuild — the cap is wiped)
-   sudo setcap cap_sys_ptrace=eip ./wfm-fetch-inventory
-   ./wfm-fetch-inventory                 # → ./inventory.json (where you run it)
-   ```
-   On Windows just run `.\wfm-fetch-inventory.exe` from a normal PowerShell.
-
-3. **See what to sell.** Open the app and drop `inventory.json` in. That's the
-   whole loop — no `login`/`serve` needed for this.
-
-4. **(Optional) List on warframe.market** straight from the app:
-   ```bash
-   wfm-fetch-inventory login             # once — interactive, sets a passphrase
-   wfm-fetch-inventory serve             # leave running in a terminal
-   ```
-   Paste the `http://127.0.0.1:<random>?token=…` line it prints into the app's
-   Companion tab. That port is random and is **not** the website's `5173`.
-   `serve` needs a real terminal for the passphrase prompt — see
-   [`companion/README.md`](companion/README.md) for the `--passphrase-stdin`
-   escape hatch.
-
-## Desktop app (in development)
-
-A native desktop app (Tauri v2) at `companion/tennoworth-desktop/` has
-progressed from scaffold to a working end-to-end flow. It launches as a
-same-origin webview (no browser loopback / Local-Network-Access permissions
-needed), renders the market data, scans your inventory directly over Tauri IPC
-into `wfm-core`, and persists settings + inventory snapshots in a local SQLite
-store that survives restarts and keeps inventory history.
-
-The desktop app is **still in development**. Early builds exist, but the
-browser app + companion remain the supported way to use TennoWorth today.
-
-Each platform ships the way that platform actually works:
+The desktop app is the product. Install it per platform:
 
 - **Windows** — an installer (`.exe`) or `.msi` from the
-  [desktop-latest release](https://github.com/tennoworth/tennoworth/releases/tag/desktop-latest).
+  [latest release](https://github.com/tennoworth/tennoworth/releases/latest).
   Unsigned, so SmartScreen warns on first run (see
   [`SECURITY.md`](SECURITY.md)). The app updates itself from there.
 - **Linux** — your distro's own package manager, from signed repositories.
@@ -154,15 +109,15 @@ production (auto-deploys), and promotion is fast-forward only.
 
 ## Ban risk
 
-The companion only reads game memory — it never writes, never injects.
+The desktop app only reads game memory — it never writes, never injects.
 **We can't promise it's ban-safe.** Equivalent tools
 ([warframe-api-helper](https://github.com/Sainan/warframe-api-helper) and
 AlecaFrame via Overwolf) have run for years with no documented bans, but DE
 has never formally blessed this category of tool. **Use at your own risk; no
 warranty.**
 
-For a detailed breakdown of what the companion reads and what never leaves your
-machine, see the in-app 'Trust & safety' section.
+For a detailed breakdown of what the desktop app reads and what never leaves
+your machine, see the in-app 'Trust & safety' section.
 
 ## License
 

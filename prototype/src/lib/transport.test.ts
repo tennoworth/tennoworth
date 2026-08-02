@@ -1,10 +1,10 @@
 // @ts-nocheck — vitest fixtures; the transport's TS contract is exercised by tsc.
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { installTauri, removeTauri } from './test-utils.js';
 import {
   isDesktopRuntime,
   createTransport,
-  HttpCompanionTransport,
+  HostedTransport,
   TauriTransport,
   DesktopCmdError,
   desktopWfmStatus,
@@ -12,8 +12,6 @@ import {
   desktopWfmUnlock,
   desktopTrySilentUnlock,
 } from './transport.js';
-import { CompanionUnreachableError } from './companion.js';
-import { AssistantError } from './assistant.js';
 
 // The desktop sniff and TauriTransport read the Tauri globals; install/remove
 // them per test so the two modes are isolated.
@@ -36,18 +34,39 @@ describe('isDesktopRuntime', () => {
 });
 
 describe('createTransport selection', () => {
-  it('returns the HTTP transport in a browser (no Tauri)', () => {
+  it('returns HostedTransport on the informational site (no Tauri)', () => {
     removeTauri();
-    const t = createTransport(() => ({ baseUrl: 'http://x', token: 't' }));
-    expect(t).toBeInstanceOf(HttpCompanionTransport);
-    expect(t.mode).toBe('http');
+    expect(createTransport()).toBeInstanceOf(HostedTransport);
   });
 
   it('returns the Tauri transport inside the desktop webview', () => {
     installTauri(vi.fn());
-    const t = createTransport(() => null);
-    expect(t).toBeInstanceOf(TauriTransport);
-    expect(t.mode).toBe('tauri');
+    expect(createTransport()).toBeInstanceOf(TauriTransport);
+  });
+});
+
+describe('HostedTransport — the informational site has no interactive ops', () => {
+  it('loadCachedMarket() is a null no-op that makes NO fetch (hosted rule)', async () => {
+    await expect(new HostedTransport().loadCachedMarket()).resolves.toBeNull();
+  });
+
+  it('refreshMarket() is an updated:false no-op that makes NO third-party fetch', async () => {
+    await expect(new HostedTransport().refreshMarket()).resolves.toEqual({
+      updated: false,
+      updatedAt: null,
+      etag: null,
+    });
+  });
+
+  it('interactive ops throw — the site is informational only', async () => {
+    const t = new HostedTransport();
+    await expect(t.fetchInventory()).rejects.toThrow(/informational site/);
+    await expect(t.submitPlan([])).rejects.toThrow(/informational site/);
+    await expect(t.fetchOrders()).rejects.toThrow(/informational site/);
+    await expect(t.updateOrder('o', { visible: false })).rejects.toThrow(/informational site/);
+    await expect(t.deleteOrder('o')).rejects.toThrow(/informational site/);
+    await expect(t.bulkVisibility([], true)).rejects.toThrow(/informational site/);
+    await expect(t.resumePendingPlan()).rejects.toThrow(/informational site/);
   });
 });
 
@@ -194,35 +213,6 @@ describe('TauriTransport op → invoke mapping', () => {
     expect(invoke).toHaveBeenCalledWith('bulk_visibility', { orderIds: ['o1'], visible: true });
     expect(res).toEqual({ results: [{ order_id: 'o1', status: 'ok', message: null }] });
   });
-
-  it('askAssistant() maps CmdError codes onto the AssistantError contract', async () => {
-    const t = new TauriTransport();
-    installTauri(vi.fn().mockRejectedValue({ code: 'no_api_key', message: 'no key' }));
-    let err = await t.askAssistant('q', [], null).catch((e) => e);
-    expect(err).toBeInstanceOf(AssistantError);
-    expect(err.code).toBe('no_api_key');
-    installTauri(vi.fn().mockRejectedValue({ code: 'upstream', message: 'HTTP 500' }));
-    err = await t.askAssistant('q', [], null).catch((e) => e);
-    expect(err.code).toBe('upstream');
-    expect(err.detail).toBe('HTTP 500');
-    installTauri(vi.fn().mockRejectedValue({ code: 'rate_limited', message: 'Too many advisor requests' }));
-    err = await t.askAssistant('q', [], null).catch((e) => e);
-    expect(err.code).toBe('rate_limited');
-    expect(err.detail).toMatch(/Too many/);
-    installTauri(vi.fn().mockRejectedValue({ code: 'too_large', message: 'Question or context is too large.' }));
-    err = await t.askAssistant('q', [], null).catch((e) => e);
-    expect(err.code).toBe('too_large');
-  });
-
-  it('askAssistant() resolves with the command answer on success', async () => {
-    const invoke = vi.fn().mockResolvedValue({ answer: 'sell the set', usage: { prompt_tokens: 10, completion_tokens: 5 } });
-    installTauri(invoke);
-    await expect(new TauriTransport().askAssistant('q', [{ role: 'user', content: 'hi' }], 'ctx')).resolves.toEqual({
-      answer: 'sell the set',
-      usage: { prompt_tokens: 10, completion_tokens: 5 },
-    });
-    expect(invoke).toHaveBeenCalledWith('ask_assistant', { question: 'q', history: [{ role: 'user', content: 'hi' }], context: 'ctx' });
-  });
 });
 
 describe('desktop WFM auth ops', () => {
@@ -278,60 +268,5 @@ describe('desktop WFM auth ops', () => {
     expect(err).toBeInstanceOf(Error);
     expect(err).not.toBeInstanceOf(DesktopCmdError);
     expect(err.message).toBe('boom');
-  });
-});
-
-describe('HttpCompanionTransport delegates to companion.ts with the current config', () => {
-  beforeEach(() => {
-    removeTauri();
-    globalThis.fetch = vi.fn();
-  });
-
-  it('fetchInventory() GETs /inventory with the token from the getter', async () => {
-    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ Suits: [] }) });
-    const t = new HttpCompanionTransport(() => ({ baseUrl: 'http://x', token: 'tok' }));
-    await t.fetchInventory();
-    const [url, init] = globalThis.fetch.mock.calls[0];
-    expect(url).toBe('http://x/inventory');
-    expect(init.method).toBe('GET');
-    expect(init.headers['X-Session-Token']).toBe('tok');
-    expect(init.targetAddressSpace).toBe('loopback');
-  });
-
-  it('health() delegates to pingCompanion (loopback LNA option preserved)', async () => {
-    globalThis.fetch.mockResolvedValue({ ok: true, json: async () => ({ ok: true, platform: 'pc' }) });
-    const t = new HttpCompanionTransport(() => ({ baseUrl: 'http://x', token: 't' }));
-    await expect(t.health()).resolves.toEqual({ ok: true, platform: 'pc' });
-    const [url, init] = globalThis.fetch.mock.calls[0];
-    expect(url).toBe('http://x/health');
-    expect(init.targetAddressSpace).toBe('loopback');
-  });
-
-  it('health() still throws CompanionUnreachableError when the fetch rejects', async () => {
-    globalThis.fetch.mockRejectedValue(new TypeError('Failed to fetch'));
-    const t = new HttpCompanionTransport(() => ({ baseUrl: 'http://127.0.0.1:1', token: 't' }));
-    await expect(t.health()).rejects.toBeInstanceOf(CompanionUnreachableError);
-  });
-
-  it('reads config lazily — a getter returning null rejects before any fetch', () => {
-    const t = new HttpCompanionTransport(() => null);
-    expect(() => t.fetchInventory()).toThrow(/Not connected/);
-    expect(globalThis.fetch).not.toHaveBeenCalled();
-  });
-
-  it('loadCachedMarket() is a null no-op that makes NO fetch (hosted rule)', async () => {
-    const t = new HttpCompanionTransport(() => null);
-    await expect(t.loadCachedMarket()).resolves.toBeNull();
-    expect(globalThis.fetch).not.toHaveBeenCalled();
-  });
-
-  it('refreshMarket() is an updated:false no-op that makes NO third-party fetch', async () => {
-    const t = new HttpCompanionTransport(() => null);
-    await expect(t.refreshMarket()).resolves.toEqual({
-      updated: false,
-      updatedAt: null,
-      etag: null,
-    });
-    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 });

@@ -9,38 +9,35 @@ The product has three components with three different trust
 characteristics:
 
 1. **The web app** (`prototype/`, deployed as static files).
-   Pure client-side. No backend. We see no inventory data, no
-   credentials, no telemetry. Compromising the static host gives an
+   Pure client-side informational site. No backend. We see no inventory
+   data, no credentials, no telemetry. Compromising the static host gives an
    attacker the ability to serve malicious JS to visitors.
 
-2. **The companion CLI** (`companion/`, Rust binary distributed via
-   GitHub releases). Runs on the user's machine. Reads the game's
-   process memory (Linux: needs `CAP_SYS_PTRACE`; Windows: same-user
-   process access). Writes `inventory.json` to disk (0600). For the
-   WFM listing feature it holds your WFM JWT encrypted at rest
-   (AES-256-GCM, PBKDF2-600k passphrase) and, while `serve` runs,
-   relays order operations to warframe.market over a loopback HTTP
-   server (`127.0.0.1`, random port, per-process `X-Session-Token`
-   auth). The JWT never reaches the browser. If you opt into the
-   **AI assistant** (by installing a DeepSeek API key), `serve` also
-   relays your questions — with the rows currently shown in your sell
-   table (after your filters) as context — to `api.deepseek.com`; that
-   key is stored in plaintext at rest (see “The AI assistant” below).
+2. **The desktop app** (`companion/tennoworth-desktop`, Rust + Tauri,
+   distributed via GitHub releases and the Linux distro repos). Runs on the
+   user's machine. Reads the game's process memory (Linux: needs
+   `CAP_SYS_PTRACE`; Windows: same-user process access). Scans are
+   performed in-process over Tauri IPC — there is no loopback HTTP server,
+   no session token, and the browser webview never holds the WFM JWT, which
+   stays in the Rust process and is encrypted at rest (AES-256-GCM,
+   PBKDF2-600k passphrase). The core logic it drives lives in
+   `companion/wfm-core`.
 
-3. **Our build + release pipeline** (GitHub Actions). Four workflows:
+3. **Our build + release pipeline** (GitHub Actions). Three workflows:
    - `refresh-market.yml` — scrapes warframe.market once daily and
      commits a static `market.json` + `wfstat-catalog.json` to the
      repo (a floor so a fresh clone starts with recent data; the
      self-host box's own systemd timer covers the real 2 h cadence).
-   - `release-companion.yml` — on tag push, cross-builds the Rust
-     binary for Linux + Windows, generates SHA256SUMS, attaches both
-     to a GitHub release.
    - `build-web.yml` — on a push touching `prototype/`, builds the
      static web bundle and publishes it as a rolling `web-latest`
      prerelease asset (the self-host box pulls it with a plain curl).
    - `audit.yml` — on push / PR and weekly, runs dependency advisories
      (`bun audit`, `cargo audit`) plus the JS, Python, and Rust test
      suites.
+
+   The `release-desktop.yml` workflow builds the desktop app (Windows
+   installers + the Linux deb/rpm) on a `desktop-v*` tag and publishes the
+   AUR packages.
 
    Production serving is **not** GitHub-hosted: a self-hosted box (an
    unprivileged LXC, reached only through a Cloudflare Tunnel, fronted
@@ -53,107 +50,66 @@ characteristics:
 
 - **The web app does not exfiltrate your inventory.** All processing
   is in your browser, and there are **zero third-party origins** in
-  the CSP. The only network calls are:
-  - `GET /market.json` and `GET /wfstat-catalog.json` from our own
-    origin (static files; the item-name catalog used to come from
-    warframestat.us directly, but it's baked at build time since
-    2026-06)
-  - the companion's loopback HTTP server on `127.0.0.1` (only when
-    you've connected it; carries the `X-Session-Token` it printed,
-    never your WFM credentials)
-- **The companion does not transmit your accountId or nonce.** They
+  the CSP. The only network calls are `GET /market.json` and
+  `GET /wfstat-catalog.json` from our own origin (static files; the
+  item-name catalog used to come from warframestat.us directly, but
+  it's baked at build time since 2026-06).
+- **The desktop app does not transmit your accountId or nonce.** They
   are scraped from game memory and used as URL parameters in a single
   HTTPS request to `api.warframe.com/api/inventory.php`, then
   discarded.
+- **The WFM JWT never reaches the webview.** Login is handled in the
+  Rust process; the encrypted token lives on disk and is decrypted
+  only in memory. Listing and order operations are relayed by
+  wfm-core — the webview only sees results.
 - **Release binaries are reproducibly built in public CI.** You can
   audit the workflow file, the source commit at the tag, and the
-  build logs. Each release ships a `SHA256SUMS` file alongside the
-  binaries.
+  build logs. Linux packages are signed (see below).
 - **No telemetry, no analytics, no accounts.** Verify with your
   browser's network tab.
 
-## The AI assistant (optional, off by default)
+## The AI assistant (dormant)
 
-The in-app AI advisor is the **one feature that sends your data off your
-machine**, and it is off unless you opt in. Because it is the single
-exception to the app's "your data never leaves the page" promise, here is
-exactly what it does:
-
-- **It only runs when you install a DeepSeek API key.** With no key the
-  `/assistant` route returns 503 and the drawer stays disabled — no key
-  means nothing is ever sent.
-- **New egress.** Before the assistant, the companion talked only to
-  `127.0.0.1` (the browser) and warframe.market / warframe.com. With a key
-  configured, `serve` adds exactly one more destination:
-  `https://api.deepseek.com/chat/completions`. The browser still never talks
-  to DeepSeek directly — the companion relays, so the API key stays
-  server-side and never reaches the page.
-- **What's sent.** Your typed question, the recent chat history, and a
-  curated context string built from the rows currently shown in your **sell
-  table (after your filters)** — for each row: item name, owned/sellable
-  counts, average price, 48-hour volume, and vault status (the item list is
-  capped to roughly the top 100 rows by sell score) — plus totals across those
-  rows (distinct item count, total owned, total estimated plat) and the market
-  snapshot's age. Your full inventory, account identifiers, WFM JWT,
-  `accountId`, `nonce`, and the companion session token are **never** included.
-- **Token-gated like every other companion route.** `/assistant` requires
-  the same per-process `X-Session-Token`, plus size caps (question ≤ 2000
-  chars, context ≤ 100 KB, history ≤ 12 turns) and a call-rate throttle
-  (≤ 20 calls / 60 s → HTTP 429) so a runaway loop or a hostile local client
-  can't burn your DeepSeek credit.
-- **Prompt-injection surface.** The context is curated WFM / warframestat
-  item names plus your own text — not arbitrary third-party content — and the
-  system prompt that constrains the model to the data table is
-  **server-constructed only**. Client-supplied chat history is sanitized:
-  any role other than `user` / `assistant` (notably `system`) is dropped, so
-  a client cannot smuggle in its own system instructions.
-
-**The DeepSeek key is stored in plaintext at rest.** It is read from the
-`DEEPSEEK_API_KEY` environment variable or, failing that, a `deepseek-key`
-file in the same config directory as the encrypted JWT. Unlike the JWT, that
-file is **not** encrypted: it is a low-value, easily-rotated API credential
-(not an account bearer token), so we deliberately skipped a second
-passphrase-unlock flow for it. The companion expects `0600` and logs a
-one-line stderr warning (it does **not** fail) if the file is group- or
-other-readable. If you'd rather keep no plaintext key on disk, use the
-environment variable instead.
+The DeepSeek advisor relay exists in `wfm-core` and a dormant
+`ask_assistant` Tauri command is registered, but **no UI surfaces it** —
+there is no chat button, no key-setting path, and nothing sends data to
+DeepSeek from the shipped app. It was last wired to the loopback companion's
+`/assistant` route, which no longer exists. The code stays for a future
+desktop assistant; until one ships, the feature is off by construction. If it
+is ever re-enabled, the SECURITY.md section describing its data flow must be
+rewritten before it ships.
 
 ## What we cannot promise
 
-- **We cannot promise this is ban-safe.** The companion reads game
+- **We cannot promise this is ban-safe.** The desktop app reads game
   process memory. Equivalent tools (Sainan's `warframe-api-helper`,
   AlecaFrame via Overwolf) have run for years without documented
   bans, but Digital Extremes has never formally blessed the category.
 - **We cannot promise warframe.market won't change.** The scraping
-  workflow and the listing endpoints (when added) depend on undocumented
+  workflow and the listing endpoints depend on undocumented
   community-API behavior.
 - **We cannot promise that a malicious clone of our site doesn't
   exist.** Always verify the URL. Don't enter your WFM credentials
-  into anything that isn't the published companion binary.
+  into anything that isn't the published desktop app.
 
 ## How to verify a release
 
-For each Rust companion release on GitHub:
+For each desktop release on GitHub:
+
+- **Windows** — the installer (`.exe` / `.msi`) is built in public CI
+  from the tagged commit; download from the `desktop-v*` release and
+  compare its SHA-256 with the `.sha256` file on the same release.
+- **Linux** — prefer your distro's signed repository (apt/dnf); the
+  `.deb` / `.rpm` on the release are what the repo publisher consumes.
+  The AUR `tennoworth-bin` package pins the checksum of its tarball.
 
 ```bash
-# After downloading both files from the release page:
-sha256sum -c SHA256SUMS
-# Should print: wfm-fetch-inventory-linux-x86_64: OK
-```
-
-PowerShell equivalent:
-
-```powershell
-$expected = (Get-Content SHA256SUMS | Select-String 'windows-x86_64').ToString().Split(' ')[0]
-$actual = (Get-FileHash .\wfm-fetch-inventory-windows-x86_64.exe -Algorithm SHA256).Hash.ToLower()
-if ($expected -eq $actual) { "OK — checksum matches" } else { "MISMATCH — do NOT run it; re-download" }
+# Windows example — download both, then:
+sha256sum -c tennoworth-desktop-amd64.deb.sha256 2>/dev/null || true
 ```
 
 If it prints `MISMATCH`, the file is corrupt or tampered — delete it and
 re-download. Don't run a binary that fails this check.
-
-The `install.sh` and `install.ps1` scripts do this verification
-automatically when you use them.
 
 ## The Linux package signing key
 
@@ -224,7 +180,7 @@ The encrypted export feature (`Export inventory`) uses:
 - All via the browser's native WebCrypto API. No third-party crypto
   libraries.
 
-The companion's on-disk JWT (`wfm-jwt.enc`) uses the same parameters
+The desktop app's on-disk JWT (`wfm-jwt.enc`) uses the same parameters
 so one person can audit both.
 
 **Desktop "Remember on this device" (opt-out, default on):** the
@@ -248,7 +204,7 @@ and `companion/tennoworth-desktop/src/keyring_store.rs`.
 Open a GitHub issue with the label `security`, **or** email the
 maintainer (see the repo's main README for contact). For anything
 that could meaningfully harm users (credential theft, RCE in the
-companion, supply-chain compromise), please do not file a public
+desktop app, supply-chain compromise), please do not file a public
 issue first — give us a reasonable window to ship a fix.
 
 ## Out of scope

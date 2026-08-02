@@ -1,17 +1,17 @@
 //! wfm-core — the reusable core of the Warframe companion.
 //!
-//! Everything the companion does that is NOT terminal/HTTP-adapter glue lives
-//! here: process detection + memory scan, DE inventory fetch, warframe.market
+//! Everything the app does that is NOT shell/webview glue lives here:
+//! process detection + memory scan, DE inventory fetch, warframe.market
 //! auth + encrypted-JWT storage, the listing/order service, pending-plan
-//! persistence, and the DeepSeek assistant relay. The CLI (`wfm-fetch-inventory`)
-//! is the first adapter over this crate; a Tauri desktop shell will be the
-//! second.
+//! persistence, and the dormant DeepSeek assistant relay. The Tauri desktop
+//! shell (`tennoworth-desktop`) drives this crate over IPC.
 //!
-//! Design rule: **no interactive terminal I/O in this crate.** Where the CLI
-//! reads a passphrase from a TTY, it does so itself and hands the plaintext to
-//! `wfm-core` as a parameter. (A handful of best-effort, non-interactive
-//! `eprintln!` diagnostics — pending-plan write warnings, a loose-key-perms
-//! warning — are preserved verbatim from the pre-extraction binary.)
+//! Design rule: **no interactive terminal I/O in this crate.** Where the
+//! desktop shell needs a passphrase, it collects it in the webview and hands
+//! the plaintext to `wfm-core` as a parameter. (A handful of best-effort,
+//! non-interactive `eprintln!` diagnostics — pending-plan write warnings, a
+//! loose-key-perms warning — are preserved verbatim from the pre-extraction
+//! binary.)
 
 pub mod assistant;
 pub mod auth;

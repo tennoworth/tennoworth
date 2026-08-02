@@ -41,12 +41,11 @@
   interface Props {
     open?: boolean;
     rows: InputRow[];
-    /** The app's boot-selected transport — loopback HTTP in the browser,
-     *  Tauri IPC on desktop. Same op names either way. */
+    /** The app's boot-selected transport — Tauri IPC into wfm-core. */
     transport: Transport;
     /** Desktop only: a listing call came back `needs_login` / `needs_unlock`.
      *  The app opens the matching auth dialog on top of this modal; the user
-     *  resends after authenticating. Never fires in browser mode. */
+     *  resends after authenticating. */
     onauthrequired?: (code: 'needs_login' | 'needs_unlock') => void;
     onclose?: () => void;
   }
@@ -84,7 +83,7 @@
         sellable,
         leveled: r.leveled ?? 0,
         // Rank 0 = unranked, the tier dupe stacks actually are. Editable so
-        // a leveled copy can be listed at its real rank; the companion only
+        // a leveled copy can be listed at its real rank; the app only
         // sends rank for items WFM ranks (mods/arcanes), so a non-zero rank
         // on a rankless item is ignored server-side, not an error.
         rank: 0,

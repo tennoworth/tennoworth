@@ -1,10 +1,8 @@
 # Workspace root. Members:
-#   wfm-fetch-inventory — the player-facing companion binary (fetch/login/serve),
-#                         a thin adapter over wfm-core.
 #   wfm-core            — reusable core: process scan, inventory fetch, WFM auth +
 #                         encrypted-JWT storage, listing/order service, pending-plan
-#                         store, DeepSeek assistant relay. No terminal I/O — the CLI
-#                         is adapter #1, a Tauri desktop shell will be adapter #2.
+#                         store, DeepSeek assistant relay. No terminal I/O — the
+#                         desktop shell drives it over IPC.
 #   market-math         — pure market-data heuristics, ported from wfm_demand.py
 #                         as phase 2 of the Python→Rust pipeline consolidation.
 #                         No I/O, no deps. Keep it pure — that's what makes it
@@ -19,9 +17,11 @@
 #                         only: do not grow it into one abstraction spanning
 #                         anonymous scraping and authed order mutation.
 #   tennoworth-desktop  — Tauri v2 shell, the app users actually install.
-#                         Adapter #2 over wfm-core, driving it over IPC.
+#                         Drives wfm-core over IPC — the only adapter, since the
+#                         standalone CLI companion was removed (2026-08): the
+#                         product is the desktop app or the informational site.
 [workspace]
-members = ["wfm-fetch-inventory", "wfm-core", "market-math", "wfm-scrape", "wfm-client", "tennoworth-desktop"]
+members = ["wfm-core", "market-math", "wfm-scrape", "wfm-client", "tennoworth-desktop"]
 resolver = "2"
 
 # Single version authority for deps shared by 2+ members — a member bumping
@@ -39,8 +39,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking", "gzip", "json", "cookies"] }
 
-# Shared by every member; the release binary size/behavior of
-# wfm-fetch-inventory must not change from the pre-workspace layout.
+# Shared by every member.
 [profile.release]
 strip = true
 opt-level = "z"

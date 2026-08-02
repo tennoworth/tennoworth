@@ -38,15 +38,16 @@ The **desktop** build keeps its bundled `market.json` fresh from
 (the `refresh_market` / `cached_market` Tauri commands in
 `tennoworth-desktop`), never the webview — same rule. The SPA touches it
 only through the transport seam (`transport.refreshMarket()` /
-`loadCachedMarket()`), a null/no-op in browser mode. Boot order: load
+`loadCachedMarket()`), a no-op on the hosted site. Boot order: load
 the cached copy (fresher than the compile-time bundle) else the bundle,
 then refresh in the background and swap in a strictly-newer snapshot.
 Never add a webview `fetch('https://tennoworth.app/…')`.
 
-For order management (create / edit / delete listings), the browser
-talks to the **companion's loopback HTTP server** on `127.0.0.1`,
-which has the JWT in memory and relays. The browser never sees the
-JWT.
+Interactive features — scanning, order management, login — are **desktop
+only**. The hosted site is informational: `createTransport()` returns
+`HostedTransport` there, which no-ops the market-cache calls and throws on
+every interactive op. The webview never sees the JWT; it stays in the Rust
+process.
 
 ### One source of truth for owned-item resolution
 `src/lib/resolver.ts` is the only place that maps a `/Lotus/...` path
@@ -102,7 +103,6 @@ not `dispatch('inventory', detail)`.
 `localStorage` keys we use:
 - `wfminv:last-owned-v5` — saved owned-items snapshot.
 - `wfminv:reserve-copies-v1` — reserve/keep-copies count.
-- `wfminv:companion-v1` — companion URL + session token.
 - `wfminv:filters-open-v1` — filter panel expanded/collapsed.
 - `wfminv:view-v1` — selected view/preset.
 - `wfminv:score-explainer-dismissed-v1` — score explainer dismissed flag.
@@ -129,52 +129,29 @@ row in every existing user's IndexedDB, reachable by no code path until
 
 ---
 
-## Companion HTTP contract
+## Desktop transport (Tauri IPC)
 
-`src/lib/transport.ts` is the dual-mode seam: it picks `HttpCompanionTransport`
-(wraps `companion.ts` + `assistant.ts` 1:1 — the routes below) or
-`TauriTransport` (`invoke` into wfm-core) once at boot by sniffing
-`window.__TAURI_INTERNALS__`. App-level ops go through the transport;
-`companion.ts` / `assistant.ts` keep their exports for the components that
-import them directly. Both share their fetch+parse core via
-`companion-transport.ts`'s `fetchCompanionJson()` (same X-Session-Token
-header, same Local Network Access opt-in) — add new companion-HTTP call
-sites through that, not a third hand-rolled fetch. The HTTP contract itself
-is unchanged:
+`src/lib/transport.ts` is the app's seam to wfm-core. `createTransport()`
+returns `TauriTransport` (invoke into wfm-core over Tauri IPC) on the
+desktop and `HostedTransport` on the informational site. The hosted site has
+NO interactive ops — `HostedTransport` no-ops the two market-cache calls and
+throws on everything else, because the site is informational only. App-level
+ops go through the transport:
 
-Routes the browser depends on (see `src/lib/companion.ts`):
-- `GET /health` — no auth; `{ok, platform, assistant}`. `assistant` is
-  whether the advisor can answer (key present, no `assistant-off` marker);
-  the chat FAB renders only when it's `true` — absent (pre-v0.1.6
-  companion) counts as unavailable.
-- `GET /inventory` — memory-scans the running game and returns inventory.json
-  directly (no file). Token-authed; **JWT-free** (in-memory session creds only,
-  so it works without `login`). 503 + `{error}` when the game isn't scannable.
-  The app pulls this on the "Pull/Refresh inventory" button and auto-pulls when
-  it arrives via the companion's deep link (`#companion=<url>?token=…`).
-- `POST /plan` — submit listing batch
-- `GET /plan/pending` — last pending plan or 404 (no JWT — safe to poll on connect)
-- `POST /plan/resume` — re-runs skipping completed items
-- `DELETE /plan/pending` — discard
-- `GET /orders` — user's listings (enriched server-side with item names)
-- `POST /orders/visibility` — bulk toggle
-- `PATCH /order/<id>` — price/qty/visible/rank
-- `DELETE /order/<id>`
+- `health` — `{ok, platform}`.
+- `scan_inventory` — memory-scans the running game and returns inventory
+  JSON directly. Desktop only. 503-equivalent rejection when the game isn't
+  scannable.
+- `submit_plan` / `get_pending_plan` / `resume_pending_plan` /
+  `discard_pending_plan` — listing batch + interrupted-batch recovery.
+- `fetch_orders` / `update_order` / `delete_order` / `bulk_visibility` —
+  the My orders panel.
+- `wfm_auth_status` / `wfm_login` / `unlock_jwt` / `try_silent_unlock` —
+  desktop login + unlock (WfmAuthDialogs.svelte).
 
-All authed routes require `X-Session-Token` from the URL the
-companion prints at startup.
-
-**Listing unlock (lazy JWT).** `serve` starts without decrypting the JWT, so
-`/health`, `/inventory`, and `/plan/pending` work with no login. The
-listing/order routes (`/plan`, `/plan/resume`, `/orders`, `/orders/visibility`,
-`/order/<id>`) unlock the JWT on first use and can return:
-- **401 `{error, needs_login: true}`** — no login on the companion; steer the
-  user to run `wfm-fetch-inventory login`.
-- **503 `{error, needs_login: false}`** — login exists but couldn't unlock (the
-  companion has no terminal to prompt for the passphrase, or a transient
-  failure). The first real listing request may also block while the companion
-  prompts for the passphrase in *its* terminal, so surface a "check the terminal
-  running serve" hint on the List action.
+Listing/order commands reject with a typed `{code, message}` CmdError that
+surfaces as `DesktopCmdError` — `needs_login` / `needs_unlock` drive the
+SPA's login and passphrase dialogs.
 
 ---
 
@@ -185,7 +162,7 @@ Encrypted export (`src/lib/crypto.ts`):
 - **AES-256-GCM**, fresh 12-byte IV + 16-byte salt per export.
 - Native WebCrypto. No third-party crypto libraries.
 
-Same parameters mirror the companion's `wfminv-jwt-v1` on-disk format
+Same parameters mirror the desktop app's `wfminv-jwt-v1` on-disk format
 so a single human can reason about both.
 
 ---
@@ -201,9 +178,9 @@ belt-and-suspenders fallback. The `public/_headers` file only matters
 for preview deployments on Cloudflare Pages / Netlify / Vercel (GitHub
 Pages silently drops it), where the header host isn't ours.
 
-Allowed `connect-src` (hosted): `self`, `http://127.0.0.1:*`,
-`http://localhost:*`. The two loopback entries are for the companion;
-there are no third-party origins. The CSP ships in three places
+Allowed `connect-src` (hosted): `self`. The hosted site makes no
+loopback or third-party calls — the loopback entries were for the removed
+companion CLI. The CSP ships in three places
 (`index.html` meta, `public/_headers`, `deploy/Caddyfile`) but is
 **edited in ONE**: `scripts/sync-csp.mjs`. Change the directives there,
 run `bun run csp` to rewrite all three; `bun run build` fails via its
@@ -215,11 +192,10 @@ omits `frame-ancestors` — browsers ignore it in meta tags.)
 `sync-csp.mjs --desktop dist-desktop/index.html`, which rewrites only that
 built file's meta CSP to
 `connect-src 'self' ipc://localhost http://ipc.localhost https://tennoworth.app`
-(loopback dropped — there is no companion HTTP server in desktop; the Tauri
-IPC scheme added so `invoke` uses the fast path with no CSP violations; plus
-the one C4 refresh origin). It NEVER touches the three hosted copies, so the
-hosted CSP stays byte-identical. `companion/tennoworth-desktop`'s
-`frontendDist` points at `dist-desktop`.
+(the Tauri IPC scheme added so `invoke` uses the fast path with no CSP
+violations; plus the one C4 refresh origin). It NEVER touches the three hosted
+copies, so the hosted CSP stays byte-identical.
+`companion/tennoworth-desktop`'s `frontendDist` points at `dist-desktop`.
 
 ---
 
@@ -239,7 +215,7 @@ hosted CSP stays byte-identical. `companion/tennoworth-desktop`'s
   Gotchas that cost time here: the Playwright MCP wants Chrome specifically
   but `~/.cache/ms-playwright/chromium-*/chrome-linux64/chrome` works when
   passed as `executablePath`; the app stays on the onboarding view until an
-  inventory is loaded, so anything gated on a connected companion (the bulk
+  inventory is loaded, so anything gated on a desktop session (the bulk
   List CTA, the orders panel) is invisible before that; the review modal is a
   `div[role="dialog"]`, not a `<dialog>`; and `.playwright-mcp/inventory-test.json`
   is a real 2 MB inventory to drive it with.
