@@ -8,8 +8,8 @@ use crate::db::Db;
 use crate::tray::post_scan_surfaces;
 
 /// Extract snapshot rows from raw inventory bytes and append them to history as
-/// one transactional snapshot. Shared by the memory scan, the file-drop
-/// import, and the tray's "Rescan". Returns the new snapshot id.
+/// one transactional snapshot. Shared by the memory scan and the probe's
+/// import_snapshot seeding. Returns the new snapshot id.
 pub(crate) fn record_snapshot(
     db: &Db,
     source: &str,
@@ -22,8 +22,8 @@ pub(crate) fn record_snapshot(
         .map_err(|e| format!("insert snapshot: {e}"))
 }
 
-/// Memory-scan the running game and return the inventory JSON as a string —
-/// the exact bytes the CLI would write to inventory.json. Async + spawn_blocking
+/// Memory-scan the running game and return the inventory JSON as a string.
+/// Async + spawn_blocking
 /// so the (potentially slow) scan never blocks the webview event loop. A busy
 /// guard or a missing/unscannable game becomes a rejected invoke carrying
 /// wfm-core's graceful, actionable message (e.g. "Warframe doesn't appear to be
@@ -53,8 +53,13 @@ pub async fn scan_inventory(app: AppHandle, db: State<'_, Db>) -> Result<String,
 
 /// Seed an import snapshot as `source='import'` history. Probe-only now (the
 /// UI file-drop it used to back is gone — the app scans from the game); the
-/// probe calls it to exercise the record path and reach the sell view.
+/// probe calls it to exercise the record path and reach the sell view. Gated
+/// behind TENNOWORTH_PROBE like every other probe-only command, so a stock
+/// build can't reach it.
 #[tauri::command]
 pub fn import_snapshot(db: State<'_, Db>, inventory_json: String) -> Result<i64, String> {
+    if std::env::var("TENNOWORTH_PROBE").ok().as_deref() != Some("1") {
+        return Err("import_snapshot is probe-only".into());
+    }
     record_snapshot(&db, "import", None, inventory_json.as_bytes())
 }

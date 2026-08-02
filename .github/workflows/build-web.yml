@@ -3,7 +3,7 @@ name: build-web
 # Build the static prototype/dist/ off the exposed box (node/bun never touch
 # it — see the deploy runbook "Build supply-chain"). Publishes a rolling
 # `web-latest` release asset the deploy box pulls with a plain curl, no auth,
-# no Tailscale/LAN transfer needed — matches release-companion.yml's pattern.
+# no Tailscale/LAN transfer needed — matches release-desktop.yml's pattern.
 
 on:
   push:
@@ -46,4 +46,4 @@ jobs:
           tag_name: web-latest
           release_name: web-latest (auto-built)
           files: dist.tgz
-          body: Rolling build of prototype/dist from the latest main. Not a version release — see releases tagged v* for the companion binary.
+          body: Rolling build of prototype/dist from the latest main. Not a version release — see the desktop-v* tags for the desktop app.

@@ -1,12 +1,12 @@
 // TennoWorth desktop shell (Tauri v2). The webview loads the built SPA
 // (prototype/dist) over Tauri's asset protocol; the SPA's Transport picks the
-// Tauri path at boot and drives wfm-core through the commands in `commands/`
-// instead of the loopback HTTP companion.
+// Tauri path at boot and drives wfm-core through the commands in `commands/`.
 //
-// Commands are deliberately thin adapters over wfm-core (the CLI is the other
-// adapter over the same crate), grouped by domain:
+// Commands are deliberately thin adapters over wfm-core (the only adapter —
+// the standalone CLI was removed with the CLI release stream), grouped by
+// domain:
 //   - `health` (below)   → version / platform info (the IPC liveness round-trip)
-//   - `commands::inventory` → single-flight memory scan + file-drop import
+//   - `commands::inventory` → single-flight memory scan
 //   - `commands::settings`  → key/value settings + reserve-copy CRUD
 //   - `commands::market`    → market cache/refresh + sellables ranking
 //   - `wfm_session`      → `wfm_auth_status` / `wfm_login` / `unlock_jwt` /
@@ -14,10 +14,11 @@
 //                        webview, never a TTY)
 //   - `commands::listing`   → `submit_plan` / `get_pending_plan` / `resume_pending_plan`
 //                        / `discard_pending_plan` / `fetch_orders` / `update_order`
-//                        / `delete_order` / `bulk_visibility` — the desktop mirror
-//                        of serve's HTTP routes, same wfm-core services
-//   - `commands::assistant` → `ask_assistant`, the DeepSeek relay (key stays
-//                        in Rust, off the webview)
+//                        / `delete_order` / `bulk_visibility` — the desktop
+//                        listing/order surface, same wfm-core services
+//   - `commands::assistant` → `ask_assistant`, the DeepSeek relay (dormant —
+//                        no UI surfaces it; the key stays in Rust, off the
+//                        webview)
 //   - `update`           → `check_update` / `update_status` / `install_update`
 //                        / `restart_app` (C5 auto-update)
 //   - `tray`             → system tray + the post-scan notification
@@ -62,7 +63,7 @@ struct Health {
 }
 
 /// IPC liveness + build info. Proves the SPA can reach a live wfm-core over the
-/// Tauri boundary (the desktop analogue of the loopback `/health` probe).
+/// Tauri boundary.
 #[tauri::command]
 fn health() -> Health {
     Health {

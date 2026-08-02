@@ -42,8 +42,8 @@ pub fn civil_from_days(z: i64) -> (i64, u32, u32) {
     (y, m, d)
 }
 
-/// URL-safe, unpadded base64 of `bytes` random bytes. Used for the serve
-/// session token and plan ids.
+/// URL-safe, unpadded base64 of `bytes` random bytes. Used for plan ids and
+/// other opaque identifiers.
 pub fn random_token(bytes: usize) -> String {
     let mut buf = vec![0u8; bytes];
     OsRng.fill_bytes(&mut buf);

@@ -7,8 +7,20 @@
   // upsell pitch links to with a same-page anchor.
 
   type Os = 'windows' | 'debian' | 'fedora' | 'arch';
-  let activeOs = $state<Os>('windows');
+  // Default the active tab to the visitor's OS so a Windows user lands on the
+  // Windows block and a Linux user on the apt block without a click. Fedora vs
+  // Debian/Arch can't be told apart from the UA, so Linux defaults to Debian.
+  let activeOs = $state<Os>(detectOs());
   const osOrder: Os[] = ['windows', 'debian', 'fedora', 'arch'];
+
+  function detectOs(): Os {
+    try {
+      const p = (navigator.platform || '').toLowerCase();
+      return p.includes('win') ? 'windows' : 'debian';
+    } catch {
+      return 'windows';
+    }
+  }
 
   // Install blocks — keep the commands byte-identical to README.md's, so the
   // two can't drift (the Windows row points at the releases page instead of a
@@ -100,16 +112,31 @@
 
   <div class="block" id="desktop-install">
     <h3>Install</h3>
-    <div class="tabs" role="tablist">
+    <div class="tabs" role="tablist" aria-label="Operating system">
       {#each osOrder as key (key)}
         <button
           role="tab"
-          class:active={activeOs === key}
+          id="tab-{key}"
+          aria-controls="panel-install"
           aria-selected={activeOs === key}
+          tabindex={activeOs === key ? 0 : -1}
           onclick={() => (activeOs = key)}
+          onkeydown={(e) => {
+            // Arrow-key navigation between tabs (WAI-ARIA tabs pattern).
+            const idx = osOrder.indexOf(activeOs);
+            let next = null;
+            if (e.key === 'ArrowRight') next = osOrder[(idx + 1) % osOrder.length];
+            if (e.key === 'ArrowLeft') next = osOrder[(idx - 1 + osOrder.length) % osOrder.length];
+            if (next) {
+              e.preventDefault();
+              activeOs = next;
+              document.getElementById(`tab-${next}`)?.focus();
+            }
+          }}
         >{install[key].title}</button>
       {/each}
     </div>
+    <div role="tabpanel" id="panel-install" aria-labelledby="tab-{activeOs}">
     {#if install[activeOs].copiable}
       <div class="snippet-row">
         <pre class="snippet"><code>{install[activeOs].cmd}</code></pre>
@@ -127,6 +154,7 @@
       </div>
     {/if}
     <p class="install-note">{install[activeOs].note}</p>
+    </div>
   </div>
 
   <div class="block">
@@ -161,7 +189,7 @@
         <tr><td>Market data, trends, vault status</td><td class="yes">✓</td><td class="yes">✓</td></tr>
         <tr><td>Your inventory ranked</td><td class="no">—</td><td class="yes">✓ scan</td></tr>
         <tr><td>List on WFM / manage orders</td><td class="no">—</td><td class="yes">✓</td></tr>
-        <tr><td>Login</td><td>no accounts</td><td class="yes">in-app</td></tr>
+        <tr><td>Login</td><td>no accounts</td><td class="yes">in-app (warframe.market)</td></tr>
       </tbody>
     </table>
   </div>
@@ -259,7 +287,7 @@
     cursor: pointer;
   }
   .tabs button:hover { color: var(--fg); }
-  .tabs button.active { background: var(--panel); color: var(--fg); box-shadow: 0 0 0 1px var(--border); }
+  .tabs button[aria-selected="true"] { background: var(--panel); color: var(--fg); box-shadow: 0 0 0 1px var(--border); }
 
   .snippet-row { display: flex; gap: 6px; align-items: stretch; margin-bottom: 10px; }
   .snippet-row.inline { margin: 8px 0 0; max-width: 560px; }

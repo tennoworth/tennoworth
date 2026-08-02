@@ -13,9 +13,9 @@ const INVENTORY_URL: &str = "https://api.warframe.com/api/inventory.php";
 
 /// Memory-scan the running game and fetch the raw inventory.json bytes.
 /// Uses ONLY the in-memory session creds (accountId + nonce) — never the
-/// encrypted JWT — so the inventory path needs no `login`. Silent (no prints):
-/// callers add progress output as appropriate. Shared by `fetch` (writes a
-/// file) and `serve`'s GET /inventory route (returns the bytes to the browser).
+/// encrypted JWT — so the inventory path needs no login. Silent (no prints):
+/// callers add progress output as appropriate. The desktop shell is the only
+/// caller (scan_inventory over IPC).
 pub fn fetch_inventory_bytes(
     pid: Option<u32>,
     platform_tag: Option<String>,
@@ -64,8 +64,8 @@ pub fn fetch_inventory_bytes(
 }
 
 /// Serializes memory scans so two concurrent callers never run two scans at
-/// once. The server is one-thread-per-request; without this, two `/inventory`
-/// requests firing together would each walk the game's whole address space.
+/// once. Without this, two concurrent `scan_inventory` invokes firing together
+/// would each walk the game's whole address space.
 /// The second caller gets `ScanError::Busy` (a transient, retryable state)
 /// rather than a redundant parallel scan.
 #[derive(Default)]

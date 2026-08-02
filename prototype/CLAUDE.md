@@ -19,8 +19,8 @@ Build: `bun run build`. Type-check: `bun run check`. Install: `bun install`.
 ### No third-party fetches from the browser. None.
 WFM serves no `Access-Control-Allow-Origin` header. Direct browser
 fetches will fail CORS. All WFM data must come from the static
-`market.json` snapshot under `public/`, produced by `wfm_demand.py`
-(locally) or the GH Actions cron (in production).
+`market.json` snapshot under `public/`, produced by the box's Rust
+`wfm-scrape`; the GH Actions cron's Python run refreshes the repo copy.
 
 `warframestat.us` used to be the one allowed direct call (it sent
 CORS headers; the resolver hit `/items/` for `/Lotus/...` paths) —
@@ -89,8 +89,8 @@ bindings. Always access through the original (`user.name`), never
 in Svelte 5 and will warn during build.
 
 ### Pass callbacks as props, not via `createEventDispatcher`
-Child components take `oninventory={fn}` as a `$props()` callback,
-not `dispatch('inventory', detail)`.
+Child components take callbacks (`onunlocked={fn}`, `onimport={fn}`) as
+`$props()` props, not `dispatch(...)`.
 
 ---
 

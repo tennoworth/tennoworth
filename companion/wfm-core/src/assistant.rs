@@ -23,7 +23,7 @@ use std::time::{Duration, Instant};
 pub const MAX_ASSISTANT_QUESTION_CHARS: usize = 2000;
 pub const MAX_ASSISTANT_CONTEXT_CHARS: usize = 100_000;
 pub const MAX_ASSISTANT_HISTORY_ENTRIES: usize = 12;
-// The generic serve MAX_BODY_BYTES (64 KB) would truncate a legitimate
+// A generic 64 KB body cap would truncate a legitimate
 // max-size context before it ever reaches the too_large check — this route
 // needs its own cap.
 pub const MAX_ASSISTANT_BODY_BYTES: u64 = 512 * 1024;
@@ -199,7 +199,7 @@ pub fn resolve_deepseek_key(env_value: Option<&str>, config_dir: &Path) -> Optio
 // A user-created `assistant-off` marker file in the config dir disables the
 // assistant even when a key IS present — "I have a key but want this off
 // until I trust it" must not require deleting the key. Checked per request,
-// so `touch`/`rm` toggles without a serve restart.
+// so `touch`/`rm` toggles without a restart.
 pub fn assistant_disabled(config_dir: &Path) -> bool {
     config_dir.join("assistant-off").exists()
 }

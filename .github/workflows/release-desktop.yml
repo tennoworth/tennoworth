@@ -2,9 +2,9 @@ name: release-desktop
 
 # Builds, signs and publishes the Tauri desktop app + the `latest.json`
 # manifest the in-app updater reads, plus the Linux deb/rpm and the two AUR
-# packages. Separate from release-companion.yml (which ships only the CLI)
-# because the two have different tags, different artifacts and — critically —
-# different release targets: see the fixed-tag note below.
+# packages. The desktop app is the only interactive product, so this is the
+# repo's single versioned release stream (the old CLI release workflow was
+# removed with the CLI).
 #
 # Cut a release by tagging `desktop-v<semver>` on main. The tag must match
 # `tauri.conf.json`'s version or the guard below fails the run: the updater
@@ -205,7 +205,7 @@ jobs:
   # forward-compatible, so the build host's glibc becomes the floor for every
   # user. 22.04's 2.35 runs everywhere current; a binary built on a rolling
   # distro would demand a glibc most users don't have yet. Same reasoning as
-  # release-companion.yml's Linux leg.
+  # build-scrape.yml's Linux leg.
   #
   # Publishes to the VERSIONED tag, never to rolling desktop-latest: a PKGBUILD
   # pins a sha256, so its source URL has to be immutable. An asset that gets
@@ -356,9 +356,7 @@ jobs:
   # release jobs build things; this job ships the recipes. It exists because a
   # `desktop-v*` bump used to stop at the repo: the PKGBUILDs said 0.3.4 while
   # aur.archlinux.org sat at 0.3.1 for three releases, because "push to the
-  # AUR" was a manual step nobody remembered. Same failure shape as the
-  # version-guard gap in release-companion.yml — an unguarded step that
-  # silently didn't happen.
+  # AUR" was a manual step nobody remembered.
   #
   # `needs: linux-binary` is load-bearing, not just order: the tennoworth-bin
   # checksum is computed from the tarball that job uploads, so publishing first
@@ -371,8 +369,7 @@ jobs:
       # Absent ('') → the keyed steps no-op and the release still ships, with
       # a notice. The AUR key is account-specific (aur.archlinux.org
       # authenticates per maintainer account), so a repo or fork without the
-      # maintainer's key must not fail a desktop build. Same secret-indirection
-      # pattern as release-companion.yml's VT_API_KEY.
+      # maintainer's key must not fail a desktop build.
       AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
     steps:
       - uses: actions/checkout@v4
@@ -424,9 +421,9 @@ jobs:
           # bin tarball's hash is cross-checked against the .sha256 the
           # linux-binary job uploaded — a release that disagrees with its own
           # attestation is failed loudly, not pinned.
-          bin_sha=$(curl -sSL "https://github.com/$repo/releases/download/desktop-v$ver/tennoworth-desktop-linux-x86_64.tar.gz" | sha256sum | cut -d' ' -f1)
-          src_sha=$(curl -sSL "https://github.com/$repo/archive/refs/tags/desktop-v$ver.tar.gz" | sha256sum | cut -d' ' -f1)
-          published_bin_sha=$(curl -sSL "https://github.com/$repo/releases/download/desktop-v$ver/tennoworth-desktop-linux-x86_64.tar.gz.sha256" | awk '{print $1}')
+          bin_sha=$(curl -fsSL "https://github.com/$repo/releases/download/desktop-v$ver/tennoworth-desktop-linux-x86_64.tar.gz" | sha256sum | cut -d' ' -f1)
+          src_sha=$(curl -fsSL "https://github.com/$repo/archive/refs/tags/desktop-v$ver.tar.gz" | sha256sum | cut -d' ' -f1)
+          published_bin_sha=$(curl -fsSL "https://github.com/$repo/releases/download/desktop-v$ver/tennoworth-desktop-linux-x86_64.tar.gz.sha256" | awk '{print $1}')
           if [ "$bin_sha" != "$published_bin_sha" ]; then
             echo "::error title=Checksum mismatch::bin tarball hashes $bin_sha (computed) and $published_bin_sha (release .sha256) disagree. Refusing to pin."
             exit 1
