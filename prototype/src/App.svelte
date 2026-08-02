@@ -15,6 +15,7 @@
   import WfmAuthDialogs from './components/WfmAuthDialogs.svelte';
   import ExportImportDialogs from './components/ExportImportDialogs.svelte';
   import SellPane from './components/SellPane.svelte';
+  import DesktopShowcase from './components/DesktopShowcase.svelte';
   import { flattenInventory, extractKeptLvls } from './lib/inventory';
   import { loadCatalogs, resolvePath, type Catalogs } from './lib/resolver';
   import { loadMarket, lookup } from './lib/market';
@@ -857,17 +858,7 @@
     {/if}
 
     {#if !isDesktop}
-    <section class="upsell-lead">
-      <h2>Want your personal sell list?</h2>
-      <p class="sub">
-        This site is informational — every price, trend and vault status is
-        here, and you can drop an <code>inventory.json</code> below to see what
-        you'd sell. For the full picture — scan your account straight from the
-        running game and list on warframe.market in one place — use the
-        <a href="https://github.com/tennoworth/tennoworth/releases" target="_blank" rel="noopener noreferrer">desktop app</a>
-        (Windows + Linux).
-      </p>
-    </section>
+      <DesktopShowcase />
     {/if}
 
     {#if loadIssue}
