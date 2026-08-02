@@ -148,5 +148,5 @@ keep these in step in the same commit:
 | `desktop-v*` git tag | names the release, and the tarball this PKGBUILD fetches |
 | `companion/tennoworth-desktop/tauri.conf.json` | `latest.json`'s version |
 | `companion/tennoworth-desktop/Cargo.toml` | `CARGO_PKG_VERSION`, what the app reports |
-| `prototype/package.json` | the version shown in the SPA sidebar |
+| `prototype/package.json` | npm-formality only — the web app is continuously deployed and shows its build commit, not this number (see `prototype/vite.config.js`) |
 | `packaging/aur/PKGBUILD` | the AUR package version |
