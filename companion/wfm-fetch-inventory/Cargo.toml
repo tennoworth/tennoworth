@@ -1,6 +1,6 @@
 [package]
 name = "wfm-fetch-inventory"
-version = "0.1.0"
+version = "0.1.5"
 edition = "2021"
 description = "Linux+Windows companion that extracts Warframe inventory.json from the running game process."
 license = "MIT"

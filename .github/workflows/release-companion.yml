@@ -60,6 +60,28 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      # The tag names the release; Cargo.toml is what the binary prints for
+      # `--version` and what a user quotes in a bug report. Nothing enforced
+      # they agree, and they hadn't since v0.1.0: v0.1.3, v0.1.4 and v0.1.5 all
+      # shipped a binary claiming 0.1.0. release-desktop.yml has had this check
+      # the whole time, which is exactly why the desktop version never drifted
+      # and this one did.
+      #
+      # Bump the version in a commit BEFORE tagging, same as the desktop flow.
+      - name: Check tag and Cargo.toml versions agree
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#v}"
+          cargo_version=$(grep -m1 '^version' companion/wfm-fetch-inventory/Cargo.toml | cut -d'"' -f2)
+          if [ "$tag_version" != "$cargo_version" ]; then
+            echo "::error title=Version mismatch::tag=v$tag_version Cargo.toml=$cargo_version — bump companion/wfm-fetch-inventory/Cargo.toml to match the tag."
+            exit 1
+          fi
+          echo "Version $cargo_version confirmed across tag and Cargo.toml."
+
       # Runs on both OS legs — release defense-in-depth: never ship a binary
       # from a tree whose tests don't pass on that platform. Scoped to the
       # shipped player binary + the crates linked into it (wfm-core, its
