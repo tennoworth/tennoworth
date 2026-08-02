@@ -1,16 +1,21 @@
 name: release-desktop
 
 # Builds, signs and publishes the Tauri desktop app + the `latest.json`
-# manifest the in-app updater reads. Separate from release-companion.yml
-# (which ships only the CLI) because the two have different tags, different
-# artifacts and — critically — different release targets: see the fixed-tag
-# note below.
+# manifest the in-app updater reads, plus the Linux deb/rpm and the two AUR
+# packages. Separate from release-companion.yml (which ships only the CLI)
+# because the two have different tags, different artifacts and — critically —
+# different release targets: see the fixed-tag note below.
 #
 # Cut a release by tagging `desktop-v<semver>` on main. The tag must match
 # `tauri.conf.json`'s version or the guard below fails the run: the updater
 # compares the manifest version against the version compiled into the app,
 # so a tag/config mismatch ships a manifest that either can't install or
 # offers a phantom upgrade.
+#
+# The same tag also publishes packaging/aur/ to aur.archlinux.org via the
+# `aur` job — that is the channel Arch users actually install from, and before
+# the job existed a bump stopped at the repo: AUR sat at 0.3.1 while the repo
+# shipped 0.3.4 (see the job's comment).
 
 on:
   push:
@@ -340,3 +345,121 @@ jobs:
             Windows installers and the updater manifest live on the rolling
             [desktop-latest](https://github.com/tennoworth/tennoworth/releases/tag/desktop-latest)
             release. Linux source builds: `packaging/aur/`.
+
+  # AUR publish — the delivery channel Arch users actually install from. The
+  # release jobs build things; this job ships the recipes. It exists because a
+  # `desktop-v*` bump used to stop at the repo: the PKGBUILDs said 0.3.4 while
+  # aur.archlinux.org sat at 0.3.1 for three releases, because "push to the
+  # AUR" was a manual step nobody remembered. Same failure shape as the
+  # version-guard gap in release-companion.yml — an unguarded step that
+  # silently didn't happen.
+  #
+  # `needs: linux-binary` is load-bearing, not just order: the tennoworth-bin
+  # checksum is computed from the tarball that job uploads, so publishing first
+  # would pin a URL that does not exist yet.
+  aur:
+    needs: linux-binary
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    runs-on: ubuntu-latest
+    env:
+      # Absent ('') → the keyed steps no-op and the release still ships, with
+      # a notice. The AUR key is account-specific (aur.archlinux.org
+      # authenticates per maintainer account), so a repo or fork without the
+      # maintainer's key must not fail a desktop build. Same secret-indirection
+      # pattern as release-companion.yml's VT_API_KEY.
+      AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Skip AUR publish — no key configured
+        if: env.AUR_SSH_PRIVATE_KEY == ''
+        run: |
+          echo "::notice title=AUR publish skipped::AUR_SSH_PRIVATE_KEY is not configured — aur.archlinux.org packages were NOT updated for this release. See packaging/aur/README.md."
+
+      - name: Gate — both PKGBUILDs must carry the tag's version
+        if: env.AUR_SSH_PRIVATE_KEY != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_version="${GITHUB_REF_NAME#desktop-v}"
+          for pkg in tennoworth tennoworth-bin; do
+            pkgver=$(grep -m1 '^pkgver=' "packaging/aur/$pkg/PKGBUILD" | cut -d= -f2)
+            if [ "$tag_version" != "$pkgver" ]; then
+              echo "::error title=AUR pkgver mismatch::packaging/aur/$pkg/PKGBUILD says pkgver=$pkgver but the tag is desktop-v$tag_version. Bump pkgver in both PKGBUILDs in the same commit as the desktop version bump, BEFORE tagging."
+              exit 1
+            fi
+          done
+          echo "pkgver=$tag_version confirmed across both PKGBUILDs."
+
+      - name: Install AUR SSH key, pinning the host key
+        if: env.AUR_SSH_PRIVATE_KEY != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m700 -d "$HOME/.ssh"
+          # Pinned ed25519, not accept-new: aur.archlinux.org publishes its
+          # fingerprints, and a MITM between the runner and the AUR would
+          # otherwise quietly install a different host key.
+          printf '%s\n' 'aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN' > "$HOME/.ssh/known_hosts"
+          printf '%s' "$AUR_SSH_PRIVATE_KEY" > "$HOME/.ssh/aur"
+          chmod 600 "$HOME/.ssh/aur"
+          echo "GIT_SSH_COMMAND=ssh -i $HOME/.ssh/aur -o IdentitiesOnly=yes" >> "$GITHUB_ENV"
+
+      - name: Publish both packages to the AUR
+        if: env.AUR_SSH_PRIVATE_KEY != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          ver="${GITHUB_REF_NAME#desktop-v}"
+          repo="$GITHUB_REPOSITORY"
+
+          # Checksums are computed at publish time from the exact artifacts the
+          # tag carries, so they cannot go stale between a bump and a push. The
+          # bin tarball's hash is cross-checked against the .sha256 the
+          # linux-binary job uploaded — a release that disagrees with its own
+          # attestation is failed loudly, not pinned.
+          bin_sha=$(curl -sSL "https://github.com/$repo/releases/download/desktop-v$ver/tennoworth-desktop-linux-x86_64.tar.gz" | sha256sum | cut -d' ' -f1)
+          src_sha=$(curl -sSL "https://github.com/$repo/archive/refs/tags/desktop-v$ver.tar.gz" | sha256sum | cut -d' ' -f1)
+          published_bin_sha=$(curl -sSL "https://github.com/$repo/releases/download/desktop-v$ver/tennoworth-desktop-linux-x86_64.tar.gz.sha256" | awk '{print $1}')
+          if [ "$bin_sha" != "$published_bin_sha" ]; then
+            echo "::error title=Checksum mismatch::bin tarball hashes $bin_sha (computed) and $published_bin_sha (release .sha256) disagree. Refusing to pin."
+            exit 1
+          fi
+          echo "bin=$bin_sha src=$src_sha (bin cross-checked against the release's own .sha256)"
+
+          mkdir -p "$RUNNER_TEMP/aur"
+          for spec in "tennoworth:$src_sha" "tennoworth-bin:$bin_sha"; do
+            pkg="${spec%%:*}"
+            sha="${spec##*:}"
+            git clone "ssh://aur@aur.archlinux.org/$pkg.git" "$RUNNER_TEMP/aur/$pkg"
+            # Sync the AUR tree to the repo's, not just copy over it: a file
+            # removed from the recipe must disappear from the AUR too. The
+            # -not -path excludes both `.git` itself and everything under it.
+            find "$RUNNER_TEMP/aur/$pkg" -mindepth 1 -not -path '*/.git' -not -path '*/.git/*' -delete
+            cp -r "packaging/aur/$pkg/." "$RUNNER_TEMP/aur/$pkg/"
+            # The repo's PKGBUILD carries 'SKIP' as a parse placeholder (see
+            # packaging/aur/README.md); the AUR copy gets the real checksum.
+            sed -i "s/sha256sums=('SKIP')/sha256sums=('$sha')/" "$RUNNER_TEMP/aur/$pkg/PKGBUILD"
+            # .SRCINFO is generated in a throwaway Arch container, never
+            # written by hand: makepkg is Arch-only, and the AUR rejects a push
+            # whose .SRCINFO disagrees with its PKGBUILD. makepkg refuses to
+            # run as root, so it drops to a throwaway `builder` (uid 1000) —
+            # but the host runner is uid 1001, which could not create a file in
+            # the mounted dir afterwards. The `> .SRCINFO` therefore runs as
+            # root INSIDE the container, landing a world-readable file the
+            # runner can read.
+            docker run --rm -v "$RUNNER_TEMP/aur/$pkg:/pkg" -w /pkg archlinux:latest \
+              sh -c 'useradd -m builder; su builder -c "cd /pkg && makepkg --printsrcinfo" > .SRCINFO'
+            grep -q "sha256sums = $sha" "$RUNNER_TEMP/aur/$pkg/.SRCINFO" || {
+              echo "::error title=.SRCINFO mismatch::$pkg's generated .SRCINFO does not carry checksum $sha. Aborting before push."
+              exit 1
+            }
+            (
+              cd "$RUNNER_TEMP/aur/$pkg"
+              git add -A
+              git -c user.name="$GITHUB_ACTOR" -c user.email="$GITHUB_ACTOR@users.noreply.github.com" \
+                commit -m "$pkg $ver"
+              git push origin HEAD
+            )
+            echo "::notice title=AUR published::$pkg $ver pushed to aur.archlinux.org"
+          done
