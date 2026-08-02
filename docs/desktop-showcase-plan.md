@@ -20,9 +20,10 @@ The SPA is a single static page with **no router** — it's a landing
 (`phase !== 'done'`) and a shell (`phase === 'done`), switched by an in-app
 `view` state that only matters once an inventory is loaded. A standalone route
 would mean inventing routing for one page. Instead, the showcase lives as a
-dedicated `<section id="desktop">` on the landing, between the market browser
-and the drop-zone, with the upsell pitch linking straight to it
-(`<a href="#desktop">`). Same pattern as the existing `#trust` anchor.
+dedicated `<section id="desktop">` on the landing, after the market browser
+and before the FAQ. Same pattern as the existing `#trust` anchor. (The old
+drop-zone file-input path is gone — the hosted site takes no files and the
+desktop app scans from the game, so the landing is market + showcase + FAQ.)
 
 ## Content
 
@@ -60,7 +61,7 @@ and the drop-zone, with the upsell pitch linking straight to it
 | | Site | Desktop app |
 |---|---|---|
 | Market data, trends, vault | ✅ | ✅ |
-| Your inventory ranked | via file drop | ✅ scan |
+| Your inventory ranked | — | ✅ scan |
 | List on WFM / orders | — | ✅ |
 | Login | no accounts | in-app |
 
@@ -73,9 +74,9 @@ and the drop-zone, with the upsell pitch linking straight to it
 ## Implementation notes
 
 - New component `prototype/src/components/DesktopShowcase.svelte`, rendered in
-  the landing's `{#if phase === 'idle'}` block before `<DropZone>`, guarded
-  `{#if !isDesktop}` (a desktop user doesn't need a pitch for the app they're
-  already in).
+  the landing's `{#if phase === 'idle'}` block after the market browser,
+  guarded `{#if !isDesktop}` (a desktop user doesn't need a pitch for the app
+  they're already in).
 - Reuses existing CSS variables + `.snippet-row` / `.card` / `.faq` styles
   already in `app.css` / `App.svelte`; the mockup below is the visual
   reference for the new classes.

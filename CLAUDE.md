@@ -60,8 +60,8 @@ SECURITY.md      threat model + what we do and don't commit to
                  ┌───────────────┴──────────────────┐
                  ▼                                 ▼
        ┌── informational site (prototype/) ──┐    market.json
-       │  market browse + drop inventory.json │    (refreshed on the box)
-       │  no accounts, no scan, no listing    │
+       │  market browse + desktop showcase    │    (refreshed on the box)
+       │  no accounts, no files, no scan      │
        └──────────────────────────────────────┘
                             ▲
                             │ GET market.json

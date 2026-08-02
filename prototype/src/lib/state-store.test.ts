@@ -90,11 +90,6 @@ describe('LocalStorageStateStore — key/shape parity with the pre-store code', 
     await s.clearSnapshot();
     expect(await s.loadSnapshot()).toBeNull();
   });
-
-  it('recordImportSnapshot is a no-op in the browser (no history substrate)', async () => {
-    const s = new LocalStorageStateStore();
-    await expect(s.recordImportSnapshot('{"MiscItems":[]}')).resolves.toBeUndefined();
-  });
 });
 
 describe('TauriStateStore — command mapping', () => {
@@ -175,13 +170,5 @@ describe('TauriStateStore — command mapping', () => {
     await s.clearSnapshot();
     expect(stored).toBe('');
     expect(await s.loadSnapshot()).toBeNull();
-  });
-
-  it('recordImportSnapshot invokes import_snapshot with the camelCase inventoryJson arg', async () => {
-    const invoke = vi.fn().mockResolvedValue(7);
-    installTauri(invoke);
-    const s = new TauriStateStore();
-    await s.recordImportSnapshot('{"MiscItems":[]}');
-    expect(invoke).toHaveBeenCalledWith('import_snapshot', { inventoryJson: '{"MiscItems":[]}' });
   });
 });

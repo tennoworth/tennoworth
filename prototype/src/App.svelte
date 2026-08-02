@@ -6,7 +6,6 @@
   // here would be busy-work that catches no real bugs. Revisit if a
   // refactor extracts state into a typed store.
   import { onMount, untrack } from 'svelte';
-  import DropZone from './components/DropZone.svelte';
   import ListingReviewModal from './components/ListingReviewModal.svelte';
   import MyOrdersPanel from './components/MyOrdersPanel.svelte';
   import CopyBtn from './components/CopyBtn.svelte';
@@ -28,7 +27,6 @@
   import { deriveRelicPlan } from './lib/relic-planner';
   import { diffOwned } from './lib/storage';
   import type { StateStore } from './lib/state-store';
-  import { isEncrypted } from './lib/crypto';
   import {
     createTransport, isDesktopRuntime,
     desktopWfmStatus, DesktopCmdError,
@@ -253,8 +251,8 @@
   onMount(async () => {
     // Desktop mode: a best-effort `health` invoke confirms wfm-core is linked
     // and records the platform for display; failure is non-fatal (the dashboard
-    // and file-drop still work). The hosted site is informational — it has no
-    // account features.
+    // still works). The hosted site is informational — it has no account
+    // features.
     if (isDesktop) {
       try {
         const h = await transport.health();
@@ -273,31 +271,34 @@
       }
     }
 
-    // Restore the last inventory snapshot if there is one.
-    const snap = await store.loadSnapshot();
-    if (snap) {
-      try {
-        inventoryName = snap.invName;
-        lastUpdated = snap.ts;
-        resolved = { owned: snap.owned, unresolved: {} };
-        if (!market) {
-          try {
-            market = await loadBestMarket();
-          } catch (e) {
-            // We already have the restored inventory in hand — a failed price
-            // refresh must NOT throw us back to cold-start and hide the user's
-            // data. Render from the snapshot; flag prices unavailable.
-            console.error(e);
-            marketLoadError = 'Couldn’t load the price snapshot — you may be offline. Your saved inventory is shown below; prices and rankings will be unavailable until it loads. Reload to retry.';
+    // Desktop only: restore the last inventory snapshot. The hosted site is
+    // informational — it never holds an inventory, so it stays on the landing.
+    if (isDesktop) {
+      const snap = await store.loadSnapshot();
+      if (snap) {
+        try {
+          inventoryName = snap.invName;
+          lastUpdated = snap.ts;
+          resolved = { owned: snap.owned, unresolved: {} };
+          if (!market) {
+            try {
+              market = await loadBestMarket();
+            } catch (e) {
+              // We already have the restored inventory in hand — a failed price
+              // refresh must NOT throw us back to cold-start and hide the user's
+              // data. Render from the snapshot; flag prices unavailable.
+              console.error(e);
+              marketLoadError = 'Couldn’t load the price snapshot — you may be offline. Your saved inventory is shown below; prices and rankings will be unavailable until it loads. Reload to retry.';
+            }
           }
+          // No explicit recompute: the results $effect tracks resolved/market and
+          // flushes before paint — the old call here just computed everything twice.
+          phase = 'done';
+        } catch (e) {
+          console.error(e);
+          error = e.message || String(e);
+          phase = 'error';
         }
-        // No explicit recompute: the results $effect tracks resolved/market and
-        // flushes before paint — the old call here just computed everything twice.
-        phase = 'done';
-      } catch (e) {
-        console.error(e);
-        error = e.message || String(e);
-        phase = 'error';
       }
     }
 
@@ -332,17 +333,11 @@
     phase = 'idle';
   }
 
-  // `origin` distinguishes a dropped/picked file ('file', the default DropZone
-  // path) from a memory scan ('scan', via pullInventory). Desktop history: the
-  // scan path already records a source='memory' snapshot inside scan_inventory,
-  // so only a raw file-drop records a source='import' one here — never both.
-  async function handleInventory({ name, data, origin = 'file' }) {
-    // Encrypted exports route to the passphrase dialog instead of the
-    // inventory-resolution pipeline.
-    if (isEncrypted(data)) {
-      exportImportRef.openImport(data);
-      return;
-    }
+  // The single inventory path: a memory scan of the running game. (The hosted
+  // site takes no files, and the desktop app scans directly — there is no
+  // file-drop path.) The scan command already records a source='memory'
+  // snapshot inside scan_inventory, so nothing is recorded here.
+  async function handleInventory({ name, data }) {
     inventoryName = name;
     phase = 'loading';
     error = null;
@@ -387,26 +382,10 @@
         }
         owned.set(key, rec);
       }
-      // Desktop-only: append a source='import' history row for a raw file-drop
-      // that is a genuine inventory (flatten found tradeable-category content).
-      // Deliberately BEFORE the resolution gate below: history tracks what you
-      // own (DE paths + counts), which is independent of whether anything
-      // resolves to a currently-sellable WFM slug — so an all-untradable
-      // inventory still records. `origin === 'file'` excludes the scan path,
-      // which already recorded a source='memory' row inside scan_inventory.
-      // Best-effort — a lost history row must never cost the user their import.
-      if (isDesktop && origin === 'file' && flatCount > 0) {
-        try {
-          await store.recordImportSnapshot(JSON.stringify(data));
-        } catch (e) {
-          console.error('inventory import snapshot not recorded', e);
-        }
-      }
-      // Nothing resolved to a tradeable item. Either this isn't an
-      // inventory.json at all (no recognizable Suits/LongGuns/Recipes keys, so
-      // flatten yielded nothing), or it is one but holds only untradable items.
-      // Either way, stay on the landing with a clear message rather than dumping
-      // the user into a blank Sell pane — and don't overwrite their snapshot.
+      // Nothing resolved to a tradeable item — the scan returned an inventory
+      // with no recognizable tradeable content. Stay on the landing with a
+      // clear message rather than dumping the user into a blank Sell pane —
+      // and don't overwrite their snapshot.
       if (owned.size === 0) {
         loadIssue = flatCount === 0 ? 'not-an-inventory' : 'all-untradable';
         inventoryName = null;
@@ -637,14 +616,8 @@
     computeEmptyReason(resolved.owned, market, filterState, results.length, activePreset)
   );
 
-  // Hidden file input we trigger from the "Replace inventory" button. Using
-  // the same handler as the drop-zone keeps both paths identical.
-  let hiddenFileInput;
+  // Scan is the only inventory source — the refresh pop is a single action.
   let refreshOpen = $state(false);
-  function openFilePicker() {
-    refreshOpen = false;
-    hiddenFileInput?.click();
-  }
   async function refreshFromGame() {
     refreshOpen = false;
     await pullInventory();
@@ -658,21 +631,6 @@
     document.addEventListener('click', handler, true);
     return () => document.removeEventListener('click', handler, true);
   });
-  async function onHiddenPicked(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const text = await file.text();
-      const data = JSON.parse(text);
-      await handleInventory({ name: file.name, data });
-    } catch (err) {
-      error = `Couldn't parse ${file.name}: ${err.message}`;
-      phase = 'error';
-    } finally {
-      // Reset so picking the same file twice still fires change.
-      e.target.value = '';
-    }
-  }
 
   // ---- Encrypted export / import ---------------------------------------
   // Path-of-Building style: passphrase-derived AES-GCM, no accounts. The
@@ -757,9 +715,6 @@
       await handleInventory({
         name: 'inventory (from game)',
         data,
-        // Desktop scan_inventory already recorded the source='memory' history
-        // row; don't double-record this as an import.
-        origin: 'scan',
       });
     } catch (e) {
       pullError = e.message || String(e);
@@ -848,7 +803,6 @@
             onclick={pullInventory}
             disabled={pullingInventory}
           >{pullingInventory ? 'Scanning game…' : 'Scan inventory'}</button>
-          <span class="muted small">no file, no terminal — or drop an <code>inventory.json</code> below</span>
         </div>
       </section>
     {/if}
@@ -860,34 +814,10 @@
     {#if !isDesktop}
       <DesktopShowcase />
     {/if}
-
-    {#if loadIssue}
-      <div class="card warn-banner">
-        {#if loadIssue === 'not-an-inventory'}
-          ⚠ That file doesn't look like an inventory. We didn't find the
-          <code>Suits</code> / <code>LongGuns</code> / <code>Recipes</code> … keys
-          an <code>inventory.json</code> from the desktop app or DE's export has.
-          The desktop app scans the game directly — use it to grab a fresh one.
-        {:else}
-          ⚠ That file parsed, but nothing in it is tradeable on warframe.market
-          (quest items, resources, and brand-new content have no listings). If
-          you expected sellable items, double-check it's the right
-          <code>inventory.json</code>.
-        {/if}
-      </div>
-    {/if}
-
-    <DropZone
-      oninventory={handleInventory}
-      loading={phase === 'loading'}
-      {isDesktop}
-    />
   {/if}
 
-  {#if phase === 'error'}
+  {#if phase === 'error' && isDesktop}
     <div class="card error">Error: {error}</div>
-    <p class="muted" style="text-align:center;margin:8px 0">Try another file:</p>
-    <DropZone oninventory={handleInventory} loading={false} {isDesktop} />
   {/if}
 
   {@render faqContent()}
@@ -988,21 +918,15 @@
           >{pullingInventory ? 'Scanning…' : 'Refresh ▾'}</button>
           {#if refreshOpen}
             <div class="refresh-pop">
-              {#if isDesktop}
-                <p class="rp-lede">Scan the running game — no file needed.</p>
-                <button class="rp-primary" data-testid="desktop-scan" onclick={refreshFromGame} disabled={pullingInventory}>
-                  {pullingInventory ? 'Scanning game…' : 'Scan game'}
-                </button>
-                <div class="rp-or">or pick a file</div>
-                <button class="ghost rp-file" onclick={openFilePicker}>Choose inventory.json…</button>
-              {:else}
-                <p class="rp-lede">The informational site can't scan the game — pick an <code>inventory.json</code> from the desktop app instead:</p>
-                <button class="rp-primary" onclick={openFilePicker}>Choose inventory.json…</button>
-              {/if}
+              <p class="rp-lede">Scan the running game — no file needed.</p>
+              <button class="rp-primary" data-testid="desktop-scan" onclick={refreshFromGame} disabled={pullingInventory}>
+                {pullingInventory ? 'Scanning game…' : 'Scan game'}
+              </button>
             </div>
           {/if}
         </div>
         <button class="ghost" onclick={() => exportImportRef.openExport()} title="Download an encrypted snapshot for another device or backup.">Export</button>
+        <button class="ghost" onclick={() => exportImportRef.pickImport()} title="Restore an encrypted snapshot exported from another device.">Restore</button>
         <button class="ghost" onclick={handleClear} title="Forget the saved inventory entirely.">Clear</button>
       </div>
     </div>
@@ -1334,10 +1258,9 @@
       <summary>Where does my inventory data actually go?</summary>
       <p>
         Nowhere we control. The desktop app scans the game and keeps your
-        inventory locally (SQLite + your browser's storage). If you drop an
-        <code>inventory.json</code> into the site, every byte stays in your
-        tab. The market snapshot is the only thing we host, and it's the same
-        for every visitor.
+        inventory locally (SQLite + your browser's storage). This site is
+        informational — it never receives or stores your inventory. The market
+        snapshot is the only thing we host, and it's the same for every visitor.
       </p>
       <p>
         No accounts, no telemetry, no analytics. Inspect the network tab
@@ -1514,8 +1437,7 @@
       </p>
       <p>
         And if DE's stance ever changes, only the memory-scan path stops: the
-        <strong>market browser and dropping in an <code>inventory.json</code>
-        file keep working</strong>.
+        <strong>market browser on this site keeps working</strong>.
       </p>
     </details>
   </section>
@@ -1595,14 +1517,6 @@
   {/if}
 {/snippet}
 
-<input
-  bind:this={hiddenFileInput}
-  type="file"
-  accept="application/json,.json"
-  onchange={onHiddenPicked}
-  style="display:none"
-/>
-
 <!-- Desktop only (listing needs wfm-core's session). onauthrequired fires on
      typed needs_login/needs_unlock rejections. -->
 <ListingReviewModal
@@ -1627,8 +1541,8 @@
 
 <style>
   main.landing {
-    /* Landing screen — the WF inventory pitch, three-step intro, dropzone,
-       installer widget, FAQ. Centred, narrow, single-column. */
+    /* Landing screen — the market browser, desktop-app showcase, and FAQ.
+       Centred, narrow, single-column. */
     max-width: min(900px, calc(100vw - 32px));
     margin: 0 auto;
     padding: 32px 24px 48px;
@@ -1823,13 +1737,6 @@
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
   }
   .refresh-pop .rp-lede { margin: 0; font-size: 12px; color: var(--fg); line-height: 1.45; }
-  .refresh-pop .rp-or {
-    font-size: 10.5px;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--muted);
-    text-align: center;
-  }
   .refresh-pop .rp-primary {
     font-size: 12px;
     padding: 7px 10px;
@@ -1842,7 +1749,6 @@
   }
   .refresh-pop .rp-primary:hover:not(:disabled) { filter: brightness(1.08); }
   .refresh-pop .rp-primary:disabled { opacity: 0.6; cursor: default; }
-  .refresh-pop .rp-file { font-size: 12px; padding: 6px 10px; border-radius: 6px; }
 
   /* Workspace view header — h2 + a hover/focus info dot carrying the
      one-sentence lede, folded onto a single row (was h2 + a full lede
