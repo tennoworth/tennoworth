@@ -28,6 +28,7 @@
   let exportBusy = $state(false);
   let importPass = $state('');
   let importBlob = $state(null);
+  let importName = $state('');
   let importBusy = $state(false);
   let cryptoError = $state(null);
 
@@ -50,10 +51,14 @@
     try {
       const text = await file.text();
       const blob = JSON.parse(text);
-      if (!blob || (blob.version === undefined && blob.kdf === undefined)) {
+      // Real snapshots carry the format marker; anything else is not ours
+      // (the real gate is decryptPayload's isEncrypted, this is just a
+      // friendlier pre-screen than failing at the passphrase step).
+      if (!blob || blob.format !== 'wfminv-encrypted-v1') {
         throw new Error("That doesn't look like an encrypted wfminv snapshot.");
       }
       importBlob = blob;
+      importName = file.name;
       importPass = '';
       importDialog?.showModal();
     } catch (err) {
@@ -101,6 +106,16 @@
   async function performImport(e) {
     e?.preventDefault();
     cryptoError = null;
+    // Restore replaces the current inventory. Warn before overwriting a
+    // non-empty one — a wrong backup silently destroying a scan is the worst
+    // failure this dialog can cause.
+    const currentCount = owned?.size ?? 0;
+    if (currentCount > 0) {
+      const ok = confirm(
+        `This restores a snapshot from ${importName}, replacing your current ${currentCount}-item inventory. Continue?`
+      );
+      if (!ok) return;
+    }
     importBusy = true;
     try {
       const payload = await decryptPayload(importBlob, importPass);
@@ -139,7 +154,7 @@
       <h3>Export encrypted snapshot</h3>
       <p class="muted">
         Saves your resolved inventory as an encrypted JSON file. Decrypt on
-        another device with the same passphrase. Nothing leaves your browser.
+        another device with the same passphrase. Nothing leaves this app.
       </p>
     </header>
     <label>
@@ -187,7 +202,7 @@
       Backup file
       <button type="button" class="ghost" onclick={pickImport}>Choose file…</button>
       {#if importBlob}
-        <span class="muted small file-name">selected — ready to decrypt</span>
+        <span class="muted small file-name">{importName} — selected, ready to decrypt</span>
       {/if}
     </label>
     <input

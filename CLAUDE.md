@@ -71,7 +71,8 @@ SECURITY.md      threat model + what we do and don't commit to
               │  (systemd timer on the box, 2h;          │
               │   GH cron refreshes repo copy)           │
               │  wfm_demand.py is the rollback:          │
-              │   WFM_SCRAPER=python in the unit         │
+              │   WFM_SCRAPER=python (default is auto,   │
+              │   which prefers the Rust port)           │
               └──────────────────────────────────────────┘
 ```
 
@@ -86,8 +87,8 @@ relay dormant — no UI surfaces it.
 
 `develop` = integration (branch features off it, merge back with review);
 `main` = production (auto-deploys; promote with `git merge --ff-only develop`).
-Hotfixes branch off `main`, then merge `main` back into `develop`. Companion
-`v*` tags are cut on `main` only.
+Hotfixes branch off `main`, then merge `main` back into `develop`. Desktop
+`desktop-v*` tags are cut on `main` only.
 
 Two remotes: `github` (public, runs CI) and `origin` (self-hosted Gitea) —
 push both. A GH cron commits market refreshes **straight to `develop`**, so a

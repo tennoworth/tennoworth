@@ -19,8 +19,8 @@ API=https://api.github.com/repos/tennoworth/tennoworth/releases
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
-# Newest desktop-v* tag. Releases are returned newest-first; the desktop ones
-# are prereleases (make_latest:false), so /releases/latest would miss them.
+# Newest desktop-v* tag. Releases are returned newest-first; filter for the
+# desktop-v* prefix (there are also web-latest / scrape-latest rolling tags).
 tag=$(curl -fsSL -H 'Accept: application/vnd.github+json' "$API?per_page=30" \
   | python3 -c '
 import json,sys

@@ -66,7 +66,6 @@ export interface MarketRefreshResult {
  * only real implementation.
  */
 export interface Transport {
-  readonly mode: 'tauri';
   /** GET /health (HTTP) or the `health` command (Tauri). */
   health(timeoutMs?: number): Promise<PingResponse>;
   /**
@@ -102,8 +101,6 @@ export interface Transport {
  * throws rather than pretending a capability that would require the desktop app.
  */
 export class HostedTransport implements Transport {
-  readonly mode = 'tauri' as const;
-
   async health(): Promise<PingResponse> {
     throw new Error('This is the informational site — the desktop app is required for account features.');
   }
@@ -164,8 +161,6 @@ export function resolveInvoke(): TauriInvoke {
  * caller can branch on `needs_login` / `needs_unlock`.
  */
 export class TauriTransport implements Transport {
-  readonly mode = 'tauri' as const;
-
   async health(): Promise<PingResponse> {
     return await resolveInvoke()<PingResponse>('health');
   }

@@ -8,7 +8,6 @@
   import { onMount, untrack } from 'svelte';
   import ListingReviewModal from './components/ListingReviewModal.svelte';
   import MyOrdersPanel from './components/MyOrdersPanel.svelte';
-  import CopyBtn from './components/CopyBtn.svelte';
   import MarketBrowser from './components/MarketBrowser.svelte';
   import DesktopUpdateBanner from './components/DesktopUpdateBanner.svelte';
   import WfmAuthDialogs from './components/WfmAuthDialogs.svelte';
@@ -32,13 +31,12 @@
     desktopWfmStatus, DesktopCmdError,
   } from './lib/transport';
   import type { Market, OwnedRecord } from './lib/types';
-  import { humanError } from './lib/errors';
   import { wfmItemUrl, baroLocation, humanWindow } from './lib/format';
 
   // Desktop (Tauri) vs hosted informational (browser) is decided ONCE at boot.
-  // The hosted site is informational only: market data + a dropped
-  // inventory.json. Everything interactive — scan, list, orders, login,
-  // assistant — lives in the desktop app, driven by the wfm_session commands.
+  // The hosted site is informational only: market data + the desktop showcase,
+  // no files. Everything interactive — scan, list, orders, login — lives in
+  // the desktop app, driven by the wfm_session commands.
   const isDesktop = isDesktopRuntime();
   const transport = createTransport();
 
@@ -56,9 +54,6 @@
   // render the snapshot and flag prices unavailable instead of throwing the
   // user back to the cold-start landing.
   let marketLoadError = $state<string | null>(null);
-  // A dropped file parsed but yielded zero tradeable items — likely the wrong
-  // file (not an inventory.json), or a genuinely all-untradable one.
-  let loadIssue = $state<null | 'not-an-inventory' | 'all-untradable'>(null);
   let inventoryName = $state<string | null>(null);
   let lastUpdated = $state<number | null>(null);
 
@@ -329,7 +324,6 @@
     deltas = new Map();
     results = [];
     tableView = { rows: [], active: false };
-    loadIssue = null;
     phase = 'idle';
   }
 
@@ -341,7 +335,7 @@
     inventoryName = name;
     phase = 'loading';
     error = null;
-    loadIssue = null;
+    pullError = null;
     try {
       if (!catalogs || !market) {
         [catalogs, market] = await Promise.all([
@@ -383,11 +377,13 @@
         owned.set(key, rec);
       }
       // Nothing resolved to a tradeable item — the scan returned an inventory
-      // with no recognizable tradeable content. Stay on the landing with a
-      // clear message rather than dumping the user into a blank Sell pane —
-      // and don't overwrite their snapshot.
+      // with no recognizable tradeable content. Surface it as a pull error so
+      // the user sees why the scan didn't produce a sell list, and don't
+      // overwrite their snapshot.
       if (owned.size === 0) {
-        loadIssue = flatCount === 0 ? 'not-an-inventory' : 'all-untradable';
+        pullError = flatCount === 0
+          ? "The scan didn't find a recognizable inventory in the game's memory. Make sure Warframe is running and you're past the login screen, then try again."
+          : 'The scan found items, but nothing in them is tradeable on warframe.market (quest items, resources, and brand-new content have no listings).';
         inventoryName = null;
         phase = 'idle';
         return;
@@ -637,9 +633,8 @@
   // exported file decrypts back into the same {invName, owned} the UI
   // restores from localStorage on page load. The dialogs, their state, and
   // the encrypt/decrypt calls live in ExportImportDialogs.svelte; App.svelte
-  // triggers them imperatively (the Export button, and handleInventory()
-  // routing an encrypted drop to the import dialog) and owns what a
-  // successful import means for its own state.
+  // triggers them imperatively (the Export / Restore toolbar buttons) and
+  // owns what a successful import means for its own state.
   let exportImportRef = $state();
   async function handleImported({ invName, ts, ownedMap }) {
     inventoryName = invName;
@@ -700,9 +695,9 @@
   let resumeErr = $derived(resumeResults.filter((r) => r.status !== 'ok').length);
 
   // Scan inventory straight from the running game and run it through the same
-  // resolution pipeline as a dropped file — no file, no drag-in. Desktop only
-  // (the hosted site is informational); the `scan_inventory` IPC command's
-  // rejection carries the scanner's exact actionable message.
+  // resolution pipeline — no file, no drag-in. Desktop only (the hosted site
+  // is informational); the `scan_inventory` IPC command's rejection carries
+  // the scanner's exact actionable message.
   let pullingInventory = $state(false);   // scan in flight
   let pullError = $state<string | null>(null);
 
@@ -812,12 +807,26 @@
     {/if}
 
     {#if !isDesktop}
+      <!-- Above-the-fold path to the desktop app: the site is informational,
+           so the one thing worth telling a first-time visitor right away is
+           that ranking YOUR inventory is the app's job. -->
+      <div class="app-path">
+        Want this ranked against <strong>your</strong> inventory?
+        <a href="#desktop">TennoWorth Desktop ↓</a>
+      </div>
       <DesktopShowcase />
     {/if}
   {/if}
 
   {#if phase === 'error' && isDesktop}
-    <div class="card error">Error: {error}</div>
+    <div class="card error">
+      Error: {error}
+      <div style="margin-top:10px">
+        <button class="rp-primary" data-testid="desktop-scan" onclick={pullInventory} disabled={pullingInventory}>
+          {pullingInventory ? 'Scanning game…' : 'Scan inventory'}
+        </button>
+      </div>
+    </div>
   {/if}
 
   {@render faqContent()}
@@ -914,7 +923,7 @@
             disabled={pullingInventory}
             title={pullingInventory
               ? 'Reading the running game’s memory — this can take a few seconds.'
-              : 'Load fresh inventory — re-fetch from the game or pick a new file.'}
+              : 'Load fresh inventory — re-fetch from the game.'}
           >{pullingInventory ? 'Scanning…' : 'Refresh ▾'}</button>
           {#if refreshOpen}
             <div class="refresh-pop">
@@ -1315,10 +1324,9 @@
     <details>
       <summary>Can I sync between desktop and laptop?</summary>
       <p>
-        There are no accounts. Use the built-in <strong>Export</strong>
-        button in the sidebar: it produces a file encrypted with a
-        passphrase only you hold (AES-256-GCM, PBKDF2 600k), which you
-        can drop into the app on any other device.
+        There are no accounts. In the desktop app, use <strong>Export</strong>
+        to save an encrypted snapshot (passphrase-only, AES-256-GCM, PBKDF2
+        600k), then <strong>Restore</strong> that file on any other device.
       </p>
     </details>
 
@@ -1850,6 +1858,20 @@
     flex-wrap: wrap;
     margin-top: 12px;
   }
+
+  /* Above-the-fold path from the market browser to the desktop showcase. */
+  .app-path {
+    margin-top: 18px;
+    padding: 12px 16px;
+    border: 1px solid var(--hairline);
+    border-left: 3px solid var(--accent);
+    border-radius: 8px;
+    background: var(--panel);
+    font-size: 13.5px;
+    color: var(--muted);
+  }
+  .app-path a { color: var(--accent); text-decoration: none; font-weight: 600; margin-left: 6px; }
+  .app-path a:hover { text-decoration: underline; }
 
   .dot {
 

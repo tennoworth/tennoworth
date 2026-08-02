@@ -4,13 +4,6 @@ description: >
   job needs. Centralized so a toolchain-action swap or a cache-key change
   lands in one place instead of six.
 inputs:
-  targets:
-    description: >
-      Extra Rust target triples to install (comma-separated), passed through
-      to dtolnay/rust-toolchain. Only the release-companion.yml matrix needs
-      this (cross-compiling to the Windows target).
-    required: false
-    default: ''
   workspaces:
     description: Passed through to Swatinem/rust-cache's `workspaces` input.
     required: false
@@ -19,8 +12,6 @@ runs:
   using: composite
   steps:
     - uses: dtolnay/rust-toolchain@stable
-      with:
-        targets: ${{ inputs.targets }}
     - uses: Swatinem/rust-cache@v2
       with:
         workspaces: ${{ inputs.workspaces }}

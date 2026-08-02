@@ -36,8 +36,8 @@ pub mod util;
 // something a Rust re-export can reach.
 pub use wfm_client::BROWSER_UA;
 
-/// This crate's version string. Trivial, side-effect-free entry point an
-/// adapter (CLI or the Tauri desktop shell) can call to confirm it is linked
+/// This crate's version string. Trivial, side-effect-free entry point the
+/// Tauri desktop shell can call to confirm it is linked
 /// against a live `wfm-core`.
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")

@@ -68,7 +68,7 @@ pub struct CipherParams {
 
 /// Reject a mistyped platform up front — an unknown value would otherwise be
 /// baked into the encrypted JWT and silently authenticate against the wrong
-/// (or a non-existent) WFM market on every later serve. Thin wrapper over
+/// (or a non-existent) WFM market on every later session. Thin wrapper over
 /// wfm-client's canonical validator, kept anyhow-flavored for this crate's
 /// existing callers.
 pub fn validate_platform(platform: &str) -> Result<()> {
@@ -81,12 +81,13 @@ pub const MIN_PASSPHRASE_CHARS: usize = 12;
 
 /// The single passphrase-length gate for every entry point that sets one.
 ///
-/// This lives here because it previously did not: `login` counted
-/// `passphrase.len()` (bytes) while the desktop dialog counted
+/// This lives here because it previously did not: the old CLI's `login`
+/// counted `passphrase.len()` (bytes) while the desktop dialog counted
 /// `chars().count()`, under a comment asserting the two were the same floor.
 /// They were not — a 4-character CJK passphrase is 12 bytes, so the CLI
-/// accepted what the desktop app rejected. Both callers now share this
-/// function, so the floor cannot drift again.
+/// accepted what the desktop app rejected. The desktop shell is the only
+/// caller now, and both sides share this function, so the floor cannot
+/// drift again.
 pub fn validate_passphrase(passphrase: &str) -> Result<()> {
     if passphrase.chars().count() < MIN_PASSPHRASE_CHARS {
         bail!(

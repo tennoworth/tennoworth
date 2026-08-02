@@ -2,8 +2,8 @@
 //! calls. Browser UA, Cloudflare-appeasing headers, envelope unwrapping,
 //! and retry backoff.
 //!
-//! Library crate — no binary. Shared by `wfm-scrape` (pipeline) and,
-//! later, potentially by the serve subcommand.
+//! Library crate — no binary. Shared by `wfm-core` (desktop app) and
+//! `wfm-scrape` (pipeline).
 //!
 //! Scoping rule: share primitives only.
 //! Do NOT build one abstraction covering both anonymous scraping and
