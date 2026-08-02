@@ -24,7 +24,6 @@
   import { computeResults as computeFilteredResults, computeAvailableTags, computeEmptyReason, type FilterState } from './lib/filter-engine';
   import { PRESETS, presetFilterValues, presetStillMatches } from './lib/presets';
 
-  const APP_VERSION = __APP_VERSION__;
   const APP_COMMIT = __APP_COMMIT__;
   import { deriveSetRecos } from './lib/set-recos';
   import { deriveRelicPlan } from './lib/relic-planner';
@@ -1119,7 +1118,7 @@
   <footer>
     <a href="#trust">Trust &amp; safety</a> · Open source · MIT · data from
     warframe.market and warframestat.us
-    <span class="ver" title="build {APP_COMMIT}">· v{APP_VERSION} · {APP_COMMIT}</span>
+    <span class="ver" title="build {APP_COMMIT}">· {APP_COMMIT}</span>
   </footer>
 </main>
 {:else}
@@ -1129,7 +1128,7 @@
     <div class="brand">
       <h1>TennoWorth</h1>
       <div class="sub">Windows + Linux · no Overwolf</div>
-      <div class="ver" title="build {APP_COMMIT}">v{APP_VERSION} · {APP_COMMIT}</div>
+      <div class="ver" title="build {APP_COMMIT}">{APP_COMMIT}</div>
     </div>
 
     <nav>
