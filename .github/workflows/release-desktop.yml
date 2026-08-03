@@ -404,8 +404,13 @@ jobs:
           # fingerprints, and a MITM between the runner and the AUR would
           # otherwise quietly install a different host key.
           printf '%s\n' 'aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN' > "$HOME/.ssh/known_hosts"
-          printf '%s' "$AUR_SSH_PRIVATE_KEY" > "$HOME/.ssh/aur"
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > "$HOME/.ssh/aur"
           chmod 600 "$HOME/.ssh/aur"
+          # Fail with a readable message instead of ssh's cryptic
+          # "error in libcrypto" if the key is malformed (e.g. the secret
+          # lost its trailing newline). ssh-keygen -lf parses the key; a bad
+          # one never reaches the AUR.
+          ssh-keygen -lf "$HOME/.ssh/aur" >/dev/null
           echo "GIT_SSH_COMMAND=ssh -i $HOME/.ssh/aur -o IdentitiesOnly=yes" >> "$GITHUB_ENV"
 
       - name: Publish both packages to the AUR

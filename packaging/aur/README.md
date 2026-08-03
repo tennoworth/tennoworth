@@ -113,7 +113,13 @@ gh secret set AUR_SSH_PRIVATE_KEY --body "$(cat ~/.ssh/aur-ci)"   # expose to th
 ```
 
 (`gh secret set -f` would parse the key as an env file and choke on its
-`-----BEGIN` line — `--body` takes the raw value instead.) The job pins
+`-----BEGIN` line — `--body` takes the raw value instead.) Note that `$(cat …)`
+strips the key's trailing newline, and an SSH PEM without it fails to load with
+`error in libcrypto`. The workflow writes the secret back with a trailing
+newline (`printf '%s\n'`) so it parses regardless — but verify after setting
+it: `gh secret set` echoes nothing, so re-read it with
+`gh secret list` and confirm a `desktop-v*` release's `aur` job shows
+"ssh-keygen -lf" succeeding rather than the libcrypto error. The job pins
 aur.archlinux.org's ed25519 host key rather than trusting on first use.
 
 ## First-time AUR setup
