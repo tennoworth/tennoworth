@@ -118,6 +118,13 @@ These exist because each has already gone wrong once:
 - **Clean up as you go.** After a feature branch merges: delete it locally
   and on both remotes, `git worktree remove` its worktree, prune. Keep
   `wip/unshipped-local` and any branch with a live agent.
+- **Full-gate worktree verification for large changes.** Before applying a
+  multi-file change to the primary checkout, run the complete gate stack
+  (check + tests + knip + cargo check) in a throwaway worktree and copy the
+  verified result across. Individual tests passing is not the same as the
+  set integrating — and pair-reviewing each change independently catches
+  what a single reviewer (or `bun run check` in a `@ts-nocheck` file)
+  cannot.
 
 ## Cross-cutting hygiene rules (apply everywhere)
 
@@ -184,6 +191,12 @@ These exist because each has already gone wrong once:
    year boundaries, sudo vs. non-sudo, empty filter strings.
 5. **Verification before claiming done.** For UI changes, drive the
    browser and look at the result. "Build succeeded" ≠ "feature works."
+6. **Named-vs-default imports in `@ts-nocheck` files.** A `import X from`
+   on a named-only export compiles (the file is untyped) and binds
+   `undefined`, silently no-op'ing the feature. 2026-08-03: a default
+   `LIQUID_VOL` import shipped past `bun run check` and the pick-tag just
+   never rendered. Type-check can't see these — only a browser/runtime
+   check (or a named-import convention) can.
 
 ---
 

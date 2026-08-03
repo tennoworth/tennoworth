@@ -50,6 +50,18 @@ Linux clears file capabilities whenever the binary is replaced. Every
 `cargo build --release` therefore wipes `cap_sys_ptrace`. Document
 this in any "how to run the app" instructions you write.
 
+### The desktop build embeds `dist-desktop` at compile time
+`cargo build` bakes `prototype/dist-desktop` (via `frontendDist`) into the
+binary. Rebuild the frontend (`bun run build:desktop`) FIRST and let cargo
+run after — running the two in parallel can embed a stale SPA, so the app
+looks unchanged after a "rebuild" (2026-08-03 near-miss).
+
+### Keyring-less Linux silently degrades remember-on-device
+On a box with no Secret Service daemon (or a locked wallet), the OS-keyring
+"remember" path is best-effort: stderr logs
+`keyring read failed (falling back to passphrase)` and the app falls back
+to a per-launch passphrase prompt. That log line is the diagnostic, not a bug.
+
 ### Linux `/proc/<pid>/comm` truncates at 15 chars
 `Warframe.x64.exe` (16 chars) arrives as `Warframe.x64.ex`. Match the
 unambiguous prefix in `matches_warframe()`, not the full string. Same
