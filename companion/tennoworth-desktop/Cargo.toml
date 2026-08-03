@@ -10,7 +10,7 @@ name = "tennoworth-desktop"
 # this is CARGO_PKG_VERSION, what update.rs reports as the installed version
 # and what the updater compares against latest.json. release-desktop.yml
 # fails the build if the three ever drift apart.
-version = "0.3.4"
+version = "0.3.5"
 edition = "2021"
 description = "TennoWorth desktop shell (Tauri v2). Webview loads the SPA; wfm-core invoked via Tauri commands (health, scan_inventory)."
 license = "MIT"
