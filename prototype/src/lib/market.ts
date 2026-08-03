@@ -14,7 +14,7 @@ export async function loadMarket(): Promise<Market> {
   if (!r.ok) {
     throw new Error(
       `Couldn't load market snapshot (HTTP ${r.status}). ` +
-        `In dev, run \`python3 scripts/csv_to_market_json.py\` to bootstrap one.`
+        `In dev, run \`wfm-scrape build\` (companion) to bootstrap one.`
     );
   }
   cached = (await r.json()) as Market;

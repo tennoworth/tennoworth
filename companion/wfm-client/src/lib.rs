@@ -11,9 +11,9 @@
 
 use std::time::Duration;
 
-// The one definition. wfm-core re-exports this; both Python scrapers mirror
-// the string by hand. Proven against WFM's live Cloudflare bot-protection via
-// the production companion — a generic UA gets a 1015 or a JS challenge.
+// The one definition. wfm-core re-exports this. Proven against WFM's live
+// Cloudflare bot-protection via the production companion — a generic UA gets
+// a 1015 or a JS challenge.
 pub const BROWSER_UA: &str =
     "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0";
 
@@ -56,9 +56,7 @@ pub fn wfm_authed_headers(
 }
 
 /// WFM account platforms. `pc` covers Steam & Epic. Canonical list — wfm-core
-/// re-exports this (see `wfm_core::auth::PLATFORMS`); Python's argparse
-/// `choices` in wfm_demand.py mirrors it by hand and should be updated
-/// together with this.
+/// re-exports this (see `wfm_core::auth::PLATFORMS`).
 pub const PLATFORMS: [&str; 4] = ["pc", "ps4", "xbox", "switch"];
 
 /// Reject a mistyped platform up front — an unknown value would otherwise be

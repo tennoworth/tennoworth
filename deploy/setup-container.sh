@@ -8,18 +8,18 @@
 # `cloudflared service install` step by hand.
 set -euo pipefail
 
-REPO=/srv/wfm/app          # the git repo (Python scraper + prototype/public + prototype/dist)
+REPO=/srv/wfm/app          # the git repo (Rust pipeline binary + prototype/public + prototype/dist)
 DEPLOY="$REPO/deploy"
 
 if [[ ! -d "$REPO/prototype" ]]; then
-  echo "ERROR: expected the repo at $REPO (with prototype/, wfm_demand.py, scripts/)." >&2
+  echo "ERROR: expected the repo at $REPO (with prototype/ and deploy/)." >&2
   echo "Clone it there first, then re-run." >&2
   exit 1
 fi
 
 echo "==> Base packages"
 apt-get update
-apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl gpg python3 python3-venv
+apt-get install -y debian-keyring debian-archive-keyring apt-transport-https curl gpg
 
 echo "==> Caddy"
 if ! command -v caddy >/dev/null; then
@@ -30,18 +30,12 @@ if ! command -v caddy >/dev/null; then
   apt-get update && apt-get install -y caddy
 fi
 
-echo "==> Service user + Python venv"
+echo "==> Service user"
 id wfm >/dev/null 2>&1 || useradd --system --create-home --home-dir /srv/wfm --shell /usr/sbin/nologin wfm
-python3 -m venv /srv/wfm/venv
-/srv/wfm/venv/bin/pip install --upgrade pip requests
 install -m 0755 "$DEPLOY/run-scrape.sh" /srv/wfm/run-scrape.sh
 install -m 0755 "$DEPLOY/pull-web.sh" /srv/wfm/pull-web.sh
 install -m 0755 "$DEPLOY/pull-scrape.sh" /srv/wfm/pull-scrape.sh
 mkdir -p /srv/wfm/bin
-# Phase 2b converter shadow: pre-create the parity log so wfm-scrape.service's
-# ReadWritePaths bind-mount has a target (a missing file would otherwise make
-# the sandboxed service fail to start).
-touch /srv/wfm/shadow-parity.log
 chown -R wfm:wfm /srv/wfm
 
 echo "==> Caddy config"

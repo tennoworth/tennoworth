@@ -14,9 +14,13 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
 # The release is republished in place on every push; the asset's updated_at is
-# the only reliable change signal (the tag and asset name never change).
+# the only reliable change signal (the tag and asset name never change). Match
+# the exact dist.tgz asset and take its stamp.
 stamp=$(curl -fsSL -H 'Accept: application/vnd.github+json' "$API" \
-  | python3 -c 'import json,sys; r=json.load(sys.stdin); print([a["updated_at"] for a in r["assets"] if a["name"]=="dist.tgz"][0])')
+  | grep -A30 '"name": "dist.tgz",' \
+  | grep -m1 '"updated_at"' \
+  | grep -oE '"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+Z"' \
+  | tr -d '"')
 
 if [ -f "$STATE" ] && [ "$(cat "$STATE")" = "$stamp" ]; then
   exit 0

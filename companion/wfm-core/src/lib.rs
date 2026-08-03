@@ -32,8 +32,7 @@ pub mod util;
 // Re-exported from wfm-client rather than declared again. The two copies were
 // byte-identical and each carried a "bump both together" comment — an
 // instruction a compiler cannot enforce and a reader can miss. Now there is
-// one string. The Python scrapers still mirror it by hand; that pair is not
-// something a Rust re-export can reach.
+// one string.
 pub use wfm_client::BROWSER_UA;
 
 /// This crate's version string. Trivial, side-effect-free entry point the

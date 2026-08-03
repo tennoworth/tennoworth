@@ -1,9 +1,9 @@
-//! Scrape transport: a status-aware GET trait, Python-faithful retry/backoff,
-//! and injectable pacing.
+//! Scrape transport: a status-aware GET trait, retry/backoff, and injectable
+//! pacing.
 //!
 //! The converter's [`crate::fetch::Http`] collapses every non-2xx into an
 //! error string, which cannot express the 429-vs-5xx-vs-transport distinction
-//! `wfm_demand.py`'s `fetch_json` acts on. This trait keeps the status so the
+//! the scrape's fetch path acts on. This trait keeps the status so the
 //! retry loop can reproduce that behavior exactly, and stays fixture-driven so
 //! backoff, pacing, and exhaustion are all testable with zero real sleeps.
 
@@ -106,7 +106,7 @@ fn unwrap_payload_first(body: Value) -> Value {
     body
 }
 
-/// GET with retry, a 1:1 port of `wfm_demand.py`'s `fetch_json`:
+/// GET with retry:
 ///   - 2xx → unwrap the envelope and return it.
 ///   - 429 → sleep `2**attempt` and retry — INCLUDING after the final attempt,
 ///     after which it returns `None` (Python sleeps then falls out of the loop).
@@ -135,8 +135,8 @@ pub fn fetch_json(http: &dyn ScrapeHttp, sleeper: &dyn Sleeper, url: &str) -> Op
 }
 
 /// Live transport over `wfm_client`'s browser-UA client. Sends the EXACT header
-/// set `wfm_demand.py` sends — `User-Agent` (via the client), `Platform`,
-/// `Language` — and deliberately NOT `Crossplay` (the Python scraper omits it;
+/// set the scraper needs — `User-Agent` (via the client), `Platform`,
+/// `Language` — and deliberately NOT `Crossplay` (the scraper omits it;
 /// `wfm_client::wfm_headers` would add it, so it is not used here).
 pub struct LiveScrapeHttp {
     pub client: reqwest::blocking::Client,
@@ -177,8 +177,7 @@ impl ScrapeHttp for LiveScrapeHttp {
 /// from the map is a transport error (which, after retries, makes the caller
 /// skip that item — never a panic).
 ///
-/// FIXTURE RESPONSE FORMAT (kept byte-identical to the Python parity fake in
-/// `tests/test_scrape_parity.py`, so both scrapers see the same scripted world):
+/// FIXTURE RESPONSE FORMAT:
 ///   - a bare JSON body (object)          → HTTP 200 with that body,
 ///   - `{"status": <int>, "body": <json>}` → that status (429 → rate-limited,
 ///     other non-2xx → HttpError), the given body on 2xx,
@@ -437,10 +436,9 @@ mod tests {
         assert_eq!(sl.recorded(), vec![Duration::from_secs(1), Duration::from_secs(2)]);
     }
 
-    // Parity gate: wfm_demand.py's REQUEST_DELAY must match this one. Neither
-    // scrape-parity run can catch a drift — both sides stub the sleeper — so
-    // this fixture is the only thing standing between a one-sided bump and a
-    // silent change to production scrape pacing.
+    // The scrape pacing (REQUEST_DELAY) must match the shared pacing.json
+    // fixture — the fixture documents the deliberate production cadence so a
+    // bump is a conscious change, not a silent edit.
     #[test]
     fn request_delay_matches_the_shared_fixture() {
         #[derive(serde::Deserialize)]

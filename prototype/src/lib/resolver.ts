@@ -1,7 +1,7 @@
 // Resolves /Lotus/... internal paths to a warframe.market slug.
 //
 // path -> display name comes from wfstat-catalog.json, baked at build
-// time by csv_to_market_json.py and served same-origin. It used to be a
+// time by wfm-scrape build and served same-origin. It used to be a
 // direct warframestat.us fetch, but upstream dropped its CORS headers
 // (2026-06-09) — and the direct fetch also varied on Accept-Language,
 // so non-English browsers got localized names that matched nothing on
@@ -31,7 +31,7 @@ export async function loadCatalogs(): Promise<Catalogs> {
   }
 
   const r = await fetch(WFSTAT_CATALOG_URL);
-  if (!r.ok) throw new Error(`wfstat-catalog.json responded ${r.status} — rebuild the snapshot (csv_to_market_json.py)`);
+  if (!r.ok) throw new Error(`wfstat-catalog.json responded ${r.status} — rebuild the snapshot (wfm-scrape build)`);
   // Already in slim [uniqueName, {name, category}] form — baked that way.
   const slim = (await r.json()) as SlimCatalog;
   if (!Array.isArray(slim)) throw new Error('wfstat-catalog.json is not an array');

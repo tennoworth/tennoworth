@@ -1,11 +1,10 @@
 #!/bin/sh
 # Pull the CI-built wfm-scrape pipeline binary (scrape-latest release) when it
 # changes and install it to /srv/wfm/bin atomically. Run from the
-# wfm-scrape-pull.timer. This is the phase-2b converter SHADOW binary:
-# run-scrape.sh runs it in a scratch tree after each production scrape to
-# journal parity with the Python converter — it never promotes anything. The
-# box never builds Rust (the toolchain stays off it, same posture as node/bun
-# for the web bundle). Mirrors pull-web.sh.
+# wfm-scrape-pull.timer. This binary IS production: run-scrape.sh executes it
+# for both the scrape and the market.json build. The box never builds Rust
+# (the toolchain stays off it, same posture as node/bun for the web bundle).
+# Mirrors pull-web.sh.
 set -eu
 
 BIN=/srv/wfm/bin/wfm-scrape
@@ -17,9 +16,13 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
 # The release is republished in place on every push; the asset's updated_at is
-# the only reliable change signal (the tag and asset name never change).
+# the only reliable change signal (the tag and asset name never change). Match
+# the exact wfm-scrape asset (not the sibling .sha256 asset) and take its stamp.
 stamp=$(curl -fsSL -H 'Accept: application/vnd.github+json' "$API" \
-  | python3 -c 'import json,sys; r=json.load(sys.stdin); print([a["updated_at"] for a in r["assets"] if a["name"]=="wfm-scrape"][0])')
+  | grep -A30 '"name": "wfm-scrape",' \
+  | grep -m1 '"updated_at"' \
+  | grep -oE '"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]+Z"' \
+  | tr -d '"')
 
 if [ -f "$STATE" ] && [ "$(cat "$STATE")" = "$stamp" ]; then
   exit 0

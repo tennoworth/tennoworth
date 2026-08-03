@@ -1,12 +1,10 @@
-//! `wfm-scrape` binary — host-only market pipeline.
+//! `wfm-scrape` binary — host-only market pipeline (the only one; Python
+//! retired 2026-08).
 //!
 //! Subcommands:
-//! - `build`: mirrors `scripts/csv_to_market_json.py` (phase 3).
-//!   Reads `wfm_results.csv`, fetches upstreams, reconciles with the
+//! - `build`: reads `wfm_results.csv`, fetches upstreams, reconciles with the
 //!   prior snapshot, and writes `market.json` + `wfstat-catalog.json`.
-//! - `scrape`: mirrors `wfm_demand.py` (phase 4). Implemented and gated by
-//!   tests/test_scrape_parity.py. NOT yet in production — deploy/run-scrape.sh
-//!   still invokes the Python scraper; that swap is the phase-5 cutover.
+//! - `scrape`: the full WFM scrape to `wfm_results.csv`.
 //!
 //! Flags:
 //! - `--fixtures-dir <DIR>`: run offline using frozen fixture files.
@@ -22,8 +20,7 @@ use chrono::Utc;
 use wfm_scrape::clock;
 
 /// Days after which a preserved-from-prior surface triggers a "this surface
-/// is stale" warning. Mirrors `STALE_DAYS` in scripts/csv_to_market_json.py
-/// — change both together.
+/// is stale" warning.
 const STALE_DAYS: i64 = 7;
 use wfm_scrape::csvin;
 use wfm_scrape::fetch::{self, FixtureHttp, Http, LiveHttp};
@@ -52,16 +49,6 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        // Hidden dev/parity harness (deliberately absent from the usage banner):
-        // reads `x,n` lines on stdin and prints `round_dp(x, n)` one per line, so
-        // the cross-language rounding parity test can shell the REAL release
-        // binary instead of trusting a Rust-side unit test.
-        "round-check" => {
-            if let Err(e) = run_round_check() {
-                eprintln!("error: {e}");
-                std::process::exit(1);
-            }
-        }
         _ => {
             eprintln!("unknown subcommand: {}", args[1]);
             std::process::exit(1);
@@ -74,39 +61,15 @@ fn extract_flag(args: &[String], flag: &str) -> Option<String> {
     args.get(idx + 1).cloned()
 }
 
-/// Read `x,n` lines on stdin, print `market_math::round_dp(x, n)` per line via
-/// `Display`. Feeds the cross-language rounding parity test the actual binary's
-/// rounding, so a divergence from Python's `round(x, n)` is caught executably.
-fn run_round_check() -> Result<(), String> {
-    use std::io::{BufRead, Write};
-    let stdin = std::io::stdin();
-    let stdout = std::io::stdout();
-    let mut w = stdout.lock();
-    for line in stdin.lock().lines() {
-        let line = line.map_err(|e| format!("stdin read: {e}"))?;
-        let line = line.trim();
-        if line.is_empty() {
-            continue;
-        }
-        let (xs, ns) = line
-            .split_once(',')
-            .ok_or_else(|| format!("bad line (want `x,n`): {line:?}"))?;
-        let x: f64 = xs.trim().parse().map_err(|_| format!("bad x: {:?}", xs.trim()))?;
-        let n: usize = ns.trim().parse().map_err(|_| format!("bad n: {:?}", ns.trim()))?;
-        writeln!(w, "{}", market_math::round_dp(x, n)).map_err(|e| format!("stdout write: {e}"))?;
-    }
-    Ok(())
-}
-
-/// Wire the `scrape` subcommand — the `wfm_demand.py` port.
+/// Wire the `scrape` subcommand.
 ///
 /// Accepts the exact flags run-scrape.sh passes (`--filter --exclude
-/// --min-volume --out`) plus the rest of Python's argparse surface
+/// --min-volume --out`) plus the rest of the argparse surface
 /// (`--platform --limit --checkpoint-every`), all with matching defaults.
 /// `--fixtures-dir <DIR>` swaps live HTTP for a frozen `fixture_responses.json`
-/// (URL→body) and disables real sleeps, so the CI parity gate runs offline and
-/// instantly. `--now` is accepted for symmetry with `build` but is inert here —
-/// the scrape CSV carries no timestamp.
+/// (URL→body) and disables real sleeps, so the fixture regression tests run
+/// offline and instantly. `--now` is accepted for symmetry with `build` but is
+/// inert here — the scrape CSV carries no timestamp.
 fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
     use wfm_scrape::http::{FixtureScrapeHttp, LiveScrapeHttp, NoopSleeper, RealSleeper, ScrapeHttp, Sleeper};
     use wfm_scrape::scrape::{run_scrape, ScrapeConfig};
@@ -223,7 +186,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     };
 
     if !csv_path.exists() {
-        return Err(format!("{} not found — run wfm_demand.py first.", csv_path.display()));
+        return Err(format!("{} not found — run `wfm-scrape scrape` first.", csv_path.display()));
     }
 
     let prior_stamps: HashMap<String, String> = prior
@@ -365,7 +328,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // always new-catalog + old-market (benign: a superset resolver over a
     // self-consistent older snapshot) rather than new-market + old-catalog
     // (which could leave fresh snapshot rows unresolvable until the catalog
-    // lands). Mirrors csv_to_market_json.py's CATALOG_OUT-before-JSON_OUT order.
+    // lands).
     let tmp = json_out.with_extension("json.tmp");
     let json_str = serde_json::to_string(&snapshot).map_err(|e| format!("serialize: {e}"))?;
     let parent = json_out.parent().unwrap_or(std::path::Path::new("."));

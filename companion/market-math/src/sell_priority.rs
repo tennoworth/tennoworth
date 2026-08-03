@@ -1,7 +1,6 @@
 //! Sell-priority scoring — the "what to sell right now" ranking.
 //!
-//! Unlike the rest of this crate (a 1:1 port of the Python pipeline), this
-//! module is a faithful Rust mirror of the CLIENT scoring in
+//! A faithful Rust mirror of the CLIENT scoring in
 //! `prototype/src/lib/sell-priority.ts` — the canonical sell ranking the SPA
 //! table already uses. It lives here so the desktop tray + post-scan
 //! notification rank with the SAME formula, giving one Rust source of truth for

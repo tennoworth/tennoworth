@@ -1,4 +1,4 @@
-//! Fetch stages — each upstream mirrored from `csv_to_market_json.py`.
+//! Fetch stages — each upstream endpoint the converter needs.
 //!
 //! Every function accepting `Http` can be swapped for a fixture in tests.
 //! The live implementation uses `wfm_client` primitives (browser UA,
@@ -13,8 +13,7 @@ use crate::clock;
 use crate::render::CatalogItemMeta;
 
 /// Days before `estimatedVaultDate` a part is tagged "vaulting-soon" instead
-/// of "available". Mirrors `VAULT_SOON_DAYS` in scripts/csv_to_market_json.py
-/// — change both together.
+/// of "available". (Kept from the retired Python converter's `VAULT_SOON_DAYS`.)
 const VAULT_SOON_DAYS: i64 = 60;
 
 /// Narrow GET interface so every fetch stage is testable offline.
@@ -398,10 +397,8 @@ pub fn slim_wfstat_items(arr: &serde_json::Value, url: &str) -> Result<Vec<serde
 /// must be forced per-call: the endpoint varies on `Accept-Language` and a
 /// localized catalog silently breaks the name→WFM-slug join. The trait's
 /// `get_json(url)` has nowhere to put a header, and pushing `Accept-Language`
-/// onto the shared client would send it on every other endpoint too —
-/// csv_to_market_json.py sets it on this request alone, and that pair still
-/// has to match. Longer timeout for the same reason Python uses 60 s: the
-/// body is multi-MB.
+/// onto the shared client would send it on every other endpoint too. Longer
+/// timeout for the same reason: the body is multi-MB.
 pub fn fetch_wfstat_slim() -> Result<Vec<serde_json::Value>, String> {
     let url = WFSTAT_ITEMS_URL;
     let resp = reqwest::blocking::Client::builder()

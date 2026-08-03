@@ -1,10 +1,8 @@
 //! Reconcile — per-surface preserve / merge / stamp semantics.
 //!
-//! Mirror of the Python `reconcile()` closure in `csv_to_market_json.py`
-//! (L514-539). The per-surface rules are subtle and interleave with the
-//! stale-data warning, lost-entry recovery count, and the wfstat-catalog
-//! file-level preserve-on-empty rule — all of which live here as a single
-//! tested unit.
+//! The per-surface rules are subtle and interleave with the stale-data
+//! warning, lost-entry recovery count, and the wfstat-catalog file-level
+//! preserve-on-empty rule — all of which live here as a single tested unit.
 //!
 //! RULES (contract, not opinion):
 //! 1. Empty fresh + prior exists → keep prior data + prior stamp.

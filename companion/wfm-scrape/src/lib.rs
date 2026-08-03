@@ -1,9 +1,8 @@
-//! Rust port of the market pipeline's converter stage
-//! (`scripts/csv_to_market_json.py`) — phase 3 of the Python→Rust
-//! consolidation.
+//! Rust port of the market pipeline's converter stage — the only
+//! implementation (Python retired 2026-08).
 //!
 //! GROUND RULES:
-//! - The Python converter is NOT a pure transform; its failure semantics are
+//! - The converter is NOT a pure transform; its failure semantics are
 //!   contract. Per-surface preserve-on-empty, partial-merge with a
 //!   whole-surface NOW stamp, and file-level preservation of
 //!   wfstat-catalog.json must survive verbatim — see `reconcile`.
@@ -11,9 +10,9 @@
 //!   `surface_fetched_at` stamp, AND the vaulting-soon derivation. Fixtures
 //!   are only reproducible if no code path calls the system clock directly.
 //! - Heuristics live in `market-math`; this crate never re-implements them.
-//! - Validation is a canonicalized semantic diff against the Python converter
-//!   on the same frozen inputs (tests/fixtures/convert/), never byte-diff,
-//!   never live endpoints.
+//! - Fixture regression tests (tests/ dir) shell the real binary against the
+//!   frozen inputs in tests/fixtures/convert/ — never byte-diff, never live
+//!   endpoints.
 
 pub mod clock;
 pub mod coerce;

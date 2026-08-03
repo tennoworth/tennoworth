@@ -22,11 +22,9 @@ trap 'rm -rf "$TMP"' EXIT
 # Newest desktop-v* tag. Releases are returned newest-first; filter for the
 # desktop-v* prefix (there are also web-latest / scrape-latest rolling tags).
 tag=$(curl -fsSL -H 'Accept: application/vnd.github+json' "$API?per_page=30" \
-  | python3 -c '
-import json,sys
-rs=json.load(sys.stdin)
-tags=[r["tag_name"] for r in rs if r["tag_name"].startswith("desktop-v")]
-print(tags[0] if tags else "")')
+  | grep -oE '"tag_name": "desktop-v[^"]*"' \
+  | head -n1 \
+  | sed 's/.*"tag_name": "//; s/"$//')
 
 [ -n "$tag" ] || { echo "no desktop-v* release found" >&2; exit 1; }
 
