@@ -116,8 +116,11 @@ Child components take callbacks (`onunlocked={fn}`, `onimport={fn}`) as
 `src/lib/state-store.ts`'s `store.getSetting`/`setSetting` (`SettingKey`
 union) — it's the one seam that also backs the desktop build (Tauri/SQLite)
 with the same calls; a raw `localStorage.setItem` silently no-ops there.
-New setting → extend `SettingKey`, `LOCAL_SETTING_KEYS`, and the desktop
-`hydrate()` key list together.
+New setting → extend `SettingKey` and `LOCAL_SETTING_KEYS` together.
+`hydrate()` derives its key list from `LOCAL_SETTING_KEYS` (no separate
+literal), and `state-store.test.ts` pins the full set with a set-equality
+gate — add a key without its fixture and the suite fails, so the "extend
+the seam" rule can't drift.
 
 IndexedDB DB:
 - `wfminv` / store `catalogs` / key `wfstat-items-v3` — slim
@@ -157,6 +160,18 @@ ops go through the transport:
 Listing/order commands reject with a typed `{code, message}` CmdError that
 surfaces as `DesktopCmdError` — `needs_login` / `needs_unlock` drive the
 SPA's login and passphrase dialogs.
+
+An auth-gated surface that fetches on mount (MyOrdersPanel) must route a
+`needs_login` / `needs_unlock` rejection to the auth dialogs via an
+`onauthrequired` prop and refetch when the session unlocks (`sessionEpoch`)
+— never render `humanError(e)` for those codes. That routing is what lets
+the OS-keyring silent unlock fire for the surface; without it a keyring
+unlock that should "just work" becomes an error banner.
+
+Rust→SPA push events (the tray hint, the update check) go through the
+shared no-op-safe `listenForTauriEvent` in `desktop-update.ts` — not a
+per-event file — and the event name is pinned by a test (`tray.test.ts`)
+so the Rust↔TS literal can't drift silently.
 
 ---
 
@@ -211,6 +226,15 @@ copies, so the hosted CSP stays byte-identical.
   Renaming a state field? Bump the storage key version and move on.
 - **Edit existing files** in preference to creating new ones.
 - **Match the scope of the request.** Bug fix ≠ refactor pass.
+- **No native `alert()` / `confirm()` in the SPA** — use the
+  `Toast.svelte` corner stack and inline row-confirms. Browser-native
+  dialogs read as "the app broke".
+- **Listing-visibility copy says "hidden", never "invisible"** (2026-08-03
+  rename). The WFM field/API name stays `visible`; only user-facing copy
+  uses "hidden".
+- **The unlock dialog always offers "Forgot it? Log in again"** — a
+  forgotten passphrase is unrecoverable by design; re-login is the only
+  reset, so the escape hatch must never be removed.
 - **Verify in the browser, and A/B the fix.** For UI changes drive
   Playwright or the dev server. "Tests pass" ≠ "feature works" — and a
   passing test after a fix doesn't prove the bug was real. Revert the fix,
