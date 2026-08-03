@@ -24,8 +24,12 @@ wfm_inventory_sellable.csv
 
 # Internal working artifacts — design exploration and research notes for
 # the maintainer, not documentation for people checking the project.
+# /.planning/ is the single home for ephemeral deliverables, plans, and
+# notes that must never enter git — everything in it stays ignored by this
+# rule, no per-file entries needed.
 /.mockups/
 /.research/
+/.planning/
 /.loop-journal.md
 /docs/onboarding-friction.md
 /docs/rust-port-phase3.md
@@ -33,6 +37,9 @@ wfm_inventory_sellable.csv
 # AI tooling config — kept locally, not part of the public project surface.
 /.claude/
 /.claude.local.md
+/.opencode/
+/opencode.json
+/vibeguard.config.json
 
 # Maintainer-only. The GitHub repo is the PUBLIC surface: source, user docs,
 # packaging recipes, CI. Planning, ops runbooks and internal audits live with
