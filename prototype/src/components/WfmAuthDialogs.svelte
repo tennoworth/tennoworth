@@ -65,6 +65,13 @@
     authNext = null;
   }
 
+  // Forgot the passphrase? The token can't be recovered, but re-login mints a
+  // fresh one with a new passphrase — the WFM account is never locked out.
+  function goToLogin() {
+    wfmUnlockDialog?.close();
+    open('needs_login', authNext);
+  }
+
   async function performWfmLogin(e) {
     e?.preventDefault();
     wfmAuthError = null;
@@ -118,9 +125,8 @@
     <header>
       <h3>Log in to warframe.market</h3>
       <p class="muted">
-        Listing needs your WFM account once. The sign-in token is encrypted
-        with your passphrase and stored only on this machine; your password is
-        used for this sign-in and never stored.
+        Your WFM sign-in token is encrypted on this PC with a passphrase you
+        choose. Your password is used for this sign-in and never stored.
       </p>
     </header>
     <label>
@@ -146,14 +152,19 @@
         type="password"
         autocomplete="new-password"
         bind:value={wfmLoginPassphrase}
-        placeholder="min 12 characters — guards the stored token"
+        placeholder="12+ characters — you may need it again after a restart"
         required
         minlength="12"
       />
     </label>
+    <p class="muted">
+      Locks your WFM sign-in token to this PC, so the app can list and manage
+      your orders all session without your WFM password again.
+    </p>
     <label>
       Confirm passphrase
       <input type="password" autocomplete="new-password" bind:value={wfmLoginConfirm} required minlength="12" />
+      <span class="muted">Forgot it? No problem — just log in again and set a new one. Your WFM account is never locked out.</span>
     </label>
     <label class="remember">
       <input type="checkbox" bind:checked={wfmRemember} />
@@ -200,6 +211,9 @@
     {#if wfmAuthError}
       <div class="err" data-testid="wfm-auth-error">{wfmAuthError}</div>
     {/if}
+    <p class="forgot-row muted">
+      Forgot it? <button type="button" class="forgot" onclick={goToLogin}>Log in again</button> to set a new passphrase.
+    </p>
     <footer>
       <button type="button" class="ghost" onclick={() => wfmUnlockDialog?.close()}>Cancel</button>
       <button type="submit" disabled={wfmAuthBusy}>{wfmAuthBusy ? 'Unlocking…' : 'Unlock'}</button>
@@ -221,4 +235,16 @@
     line-height: 1.45;
   }
   dialog.cryptobox label.remember input { margin-top: 2px; }
+  .forgot-row { display: flex; align-items: baseline; gap: 4px; margin: 0; }
+  .forgot {
+    background: none;
+    border: none;
+    padding: 0;
+    font: inherit;
+    font-size: inherit;
+    color: var(--accent);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+  .forgot:hover { color: var(--fg); }
 </style>

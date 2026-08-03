@@ -41,8 +41,8 @@ describe('encryptPayload / decryptPayload (round-trip)', () => {
   });
 
   it('produces a different ciphertext each call (fresh salt + IV)', async () => {
-    const a = await encryptPayload(SAMPLE, 'samepass');
-    const b = await encryptPayload(SAMPLE, 'samepass');
+    const a = await encryptPayload(SAMPLE, 'samepassphrase');
+    const b = await encryptPayload(SAMPLE, 'samepassphrase');
     expect(a.ciphertext).not.toBe(b.ciphertext);
     expect(a.kdf.salt).not.toBe(b.kdf.salt);
     expect(a.cipher.iv).not.toBe(b.cipher.iv);
@@ -54,20 +54,26 @@ describe('encryptPayload — guardrails', () => {
     await expect(encryptPayload(SAMPLE, '')).rejects.toThrow(/passphrase/i);
     await expect(encryptPayload(SAMPLE, 'ab')).rejects.toThrow(/passphrase/i);
   });
+
+  it('enforces the 12-character floor exactly (11 rejected, 12 accepted)', async () => {
+    await expect(encryptPayload(SAMPLE, '12345678901')).rejects.toThrow(/at least 12 characters/i);
+    const blob = await encryptPayload(SAMPLE, '123456789012');
+    expect(isEncrypted(blob)).toBe(true);
+  });
 });
 
 describe('decryptPayload — failure modes', () => {
   it('rejects a wrong passphrase with a useful error', async () => {
-    const blob = await encryptPayload(SAMPLE, 'right');
+    const blob = await encryptPayload(SAMPLE, 'rightpass1234');
     await expect(decryptPayload(blob, 'wrong')).rejects.toThrow(/passphrase|modified/i);
   }, 60_000);
 
   it('detects tampering with the ciphertext', async () => {
-    const blob = await encryptPayload(SAMPLE, 'right');
+    const blob = await encryptPayload(SAMPLE, 'rightpass1234');
     // Flip a base64 character — likely produces a different valid base64 byte
     // but invalid GCM tag.
     blob.ciphertext = blob.ciphertext.slice(0, -2) + 'AB';
-    await expect(decryptPayload(blob, 'right')).rejects.toThrow();
+    await expect(decryptPayload(blob, 'rightpass1234')).rejects.toThrow();
   }, 60_000);
 
   it('refuses to read something that is not our format', async () => {

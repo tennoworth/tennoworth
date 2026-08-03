@@ -37,6 +37,7 @@ mod update;
 mod wfm_session;
 
 use std::io::Write;
+use std::sync::atomic::Ordering;
 use std::sync::{Arc, OnceLock};
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
@@ -169,12 +170,22 @@ fn main() {
 
             // Desktop window lifecycle: closing the window HIDES it to the tray
             // instead of quitting — only the tray's "Quit" (app.exit) actually
-            // exits. Single-instance is assumed, so re-showing is "Open".
+            // exits. Single-instance is assumed, so re-showing is "Open". The
+            // first close-with-tray emits a hint so the SPA can show its once-
+            // ever "still running in the tray" banner; the AtomicBool caps that
+            // to once per session.
+            let hint_sent = Arc::new(std::sync::atomic::AtomicBool::new(false));
             let w_for_close = w.clone();
+            let app_for_hint = app.handle().clone();
             w.on_window_event(move |event| {
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
                     let _ = w_for_close.hide();
+                    if !hint_sent.swap(true, Ordering::Relaxed)
+                        && app_for_hint.tray_by_id("main").is_some()
+                    {
+                        let _ = app_for_hint.emit(crate::tray::EVENT_TRAY_HINT, ());
+                    }
                 }
             });
 

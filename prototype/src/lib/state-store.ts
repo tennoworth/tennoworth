@@ -4,8 +4,9 @@
 // same runtime sniff the transport uses — see `createStateStore()`.
 //
 // It covers EXACTLY the state the SPA persists today, no more:
-//   - four scalar settings (reserve-copies, filters-open, view,
-//     score-explainer-dismissed), each a short string;
+//   - seven scalar settings (reserve-copies, filters-open, view,
+//     score-explainer-dismissed, keep-copies-nudge-dismissed,
+//     tray-toast-seen, sell-onboarding-dismissed), each a short string;
 //   - the last-owned inventory snapshot (the reload-restore copy).
 //
 // The desktop `snapshot` / `snapshot_item` history tables are a separate
@@ -39,18 +40,25 @@ export type SettingKey =
   | 'reserve-copies'
   | 'filters-open'
   | 'view'
-  | 'score-explainer-dismissed';
+  | 'score-explainer-dismissed'
+  | 'keep-copies-nudge-dismissed'
+  | 'tray-toast-seen'
+  | 'sell-onboarding-dismissed';
 
 // The historical localStorage key each setting has always used. Only the
 // browser store carries these `wfminv:…-vN` names (so existing data keeps
 // loading); the desktop store keys its SQLite `setting` rows off the bare
 // SettingKey. Bump a suffix here (not the SettingKey) if a value's shape ever
-// changes, exactly as the pre-store code did.
-const LOCAL_SETTING_KEYS: Record<SettingKey, string> = {
+// changes, exactly as the pre-store code did. Exported so tests can pin the
+// full set (and hydrate() below derives its key list from it).
+export const LOCAL_SETTING_KEYS: Record<SettingKey, string> = {
   'reserve-copies': 'wfminv:reserve-copies-v1',
   'filters-open': 'wfminv:filters-open-v1',
   view: 'wfminv:view-v1',
   'score-explainer-dismissed': 'wfminv:score-explainer-dismissed-v1',
+  'keep-copies-nudge-dismissed': 'wfminv:keep-copies-nudge-dismissed-v1',
+  'tray-toast-seen': 'wfminv:tray-toast-seen-v1',
+  'sell-onboarding-dismissed': 'wfminv:sell-onboarding-dismissed-v1',
 };
 
 // The SQLite `setting.key` the desktop store parks the reload-restore snapshot
@@ -132,12 +140,7 @@ export class TauriStateStore implements StateStore {
 
   async hydrate(): Promise<void> {
     const invoke = resolveInvoke();
-    const keys: SettingKey[] = [
-      'reserve-copies',
-      'filters-open',
-      'view',
-      'score-explainer-dismissed',
-    ];
+    const keys = Object.keys(LOCAL_SETTING_KEYS) as SettingKey[];
     await Promise.all(
       keys.map(async (key) => {
         try {

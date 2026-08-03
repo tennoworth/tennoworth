@@ -72,3 +72,16 @@ export const LEVELED_NOTE_TITLE =
 export function keptNoteTitle(keptPart: number): string {
   return `${keptPart} cop${keptPart === 1 ? 'y' : 'ies'} held back by the Keep copies reserve — not counted as sellable.`;
 }
+
+/**
+ * Human label for a snapshot-freshness bucket. Single source for the
+ * bucket → label map (the freshness dot's title and aria-label both use it),
+ * and the explicit 'unknown' branch means an untimestamped snapshot never
+ * reads as "over 24 hours old".
+ */
+export function freshnessLabel(f: 'fresh' | 'aging' | 'stale' | 'unknown'): string {
+  if (f === 'fresh') return 'under 3 hours old';
+  if (f === 'aging') return '3 to 24 hours old';
+  if (f === 'stale') return 'over 24 hours old';
+  return 'age unknown — no timestamp in this snapshot';
+}

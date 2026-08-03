@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 
 import {
   wfmItemUrl, baroLocation, humanWindow, plat,
-  ownedBreakdown, keptNoteTitle,
+  ownedBreakdown, keptNoteTitle, freshnessLabel,
 } from './format.js';
 
 describe('wfmItemUrl', () => {
@@ -99,5 +99,14 @@ describe('keptNoteTitle', () => {
   it('pluralises copy/copies', () => {
     expect(keptNoteTitle(1)).toContain('1 copy ');
     expect(keptNoteTitle(2)).toContain('2 copies ');
+  });
+});
+
+describe('freshnessLabel', () => {
+  it('maps each bucket to its human label', () => {
+    expect(freshnessLabel('fresh')).toBe('under 3 hours old');
+    expect(freshnessLabel('aging')).toBe('3 to 24 hours old');
+    expect(freshnessLabel('stale')).toBe('over 24 hours old');
+    expect(freshnessLabel('unknown')).toBe('age unknown — no timestamp in this snapshot');
   });
 });

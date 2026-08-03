@@ -1,7 +1,9 @@
 <script lang="ts">
-  import type { Transport } from '../lib/transport';
+  import { onDestroy } from 'svelte';
+  import { DesktopCmdError, type Transport } from '../lib/transport';
   import { MAX_PLATINUM } from '../lib/limits';
   import { humanError } from '../lib/errors';
+  import Toast from './Toast.svelte';
 
   // WFM order shape is open — many fields appear depending on the
   // endpoint version (v1 vs v2). We type only what we read.
@@ -16,16 +18,62 @@
     itemId?: string;
   }
 
-  interface Props { transport: Transport; }
-  let { transport }: Props = $props();
+  interface ToastMsg {
+    id: number;
+    kind: 'error' | 'success';
+    text: string;
+  }
 
-  type Phase = 'idle' | 'loading' | 'done' | 'error';
+  interface Props {
+    transport: Transport;
+    /** Bumped by the parent when the WFM session unlocks — re-fetches so a
+     *  fetch gated on needs_login/needs_unlock retries automatically. */
+    sessionEpoch?: number;
+    /** Desktop lock-state rejection → parent raises the auth dialog (which
+     *  tries the OS-keyring silent unlock before showing the passphrase). */
+    onauthrequired?: (code: 'needs_login' | 'needs_unlock') => void;
+  }
+  let { transport, sessionEpoch = 0, onauthrequired }: Props = $props();
+
+  type Phase = 'idle' | 'loading' | 'locked' | 'done' | 'error';
   let phase = $state<Phase>('idle');
   let error = $state<string | null>(null);
   let orders = $state<WfmOrder[]>([]);
   let busyIds = $state<Set<string>>(new Set());
   let editingId = $state<string | null>(null);
   let editValue = $state(0);
+  // Inline delete confirmation — the destructive click is one tap, the row
+  // tints and the button becomes "Confirm"; a second tap (or the ×) resolves.
+  let confirmId = $state<string | null>(null);
+  let bulkBusy = $state(false);
+
+  // Toasts are component-local. Each toast owns its auto-dismiss timer id so
+  // a manual dismiss can cancel it, and onDestroy clears everything pending —
+  // this panel is conditionally rendered, so a stray timer would otherwise
+  // fire after unmount.
+  let toasts = $state<ToastMsg[]>([]);
+  let toastSeq = 0;
+  const toastTimers = new Map<number, number>();
+
+  function pushToast(text: string, kind: 'error' | 'success' = 'success'): void {
+    const id = ++toastSeq;
+    toasts = [...toasts, { id, kind, text }];
+    toastTimers.set(id, window.setTimeout(() => dismissToast(id), 4500));
+  }
+
+  function dismissToast(id: number): void {
+    const timer = toastTimers.get(id);
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      toastTimers.delete(id);
+    }
+    toasts = toasts.filter((t) => t.id !== id);
+  }
+
+  onDestroy(() => {
+    for (const timer of toastTimers.values()) window.clearTimeout(timer);
+    toastTimers.clear();
+  });
 
   // Stale-async guard, same shape as App.svelte's verifyGen: only the newest
   // load may commit. Two GET /orders can be in flight at once (e.g. a manual
@@ -65,15 +113,26 @@
       })
       .catch((e: unknown) => {
         if (gen !== loadGen) return;
+        // A locked/no-login session is an auth hand-off, not a load error: the
+        // parent opens the dialog (silent keyring unlock first), and the
+        // sessionEpoch bump re-fires this fetch on success. Kept distinct from
+        // 'error' so a cancelled dialog leaves an actionable "unlock required"
+        // state instead of a stale failure.
+        if (e instanceof DesktopCmdError && (e.code === 'needs_login' || e.code === 'needs_unlock')) {
+          phase = 'locked';
+          onauthrequired?.(e.code);
+          return;
+        }
         error = humanError(e);
         phase = 'error';
       });
   }
 
-  // Initial load on mount. The transport is a boot-time constant (Tauri IPC),
-  // so there's no reconnect to re-trigger on; a separate onMount(loadOrders)
-  // plus this would double-fire.
+  // Load on mount and again when the parent bumps sessionEpoch — a fetch that
+  // was gated on needs_login/needs_unlock retries the moment the session is
+  // unlocked (the transport is a boot-time constant, so nothing else retriggers).
   $effect(() => {
+    void sessionEpoch;
     loadOrders();
   });
 
@@ -98,7 +157,7 @@
       o.visible = !o.visible;
       orders = [...orders];
     } catch (e) {
-      alert(`Couldn't toggle: ${humanError(e)}`);
+      pushToast(`Couldn't toggle: ${humanError(e)}`, 'error');
     } finally {
       markBusy(o.id, false);
     }
@@ -113,7 +172,7 @@
     const newPrice = Number(editValue);
     if (!newPrice || newPrice < 1) return;
     if (newPrice > MAX_PLATINUM) {
-      alert(`Price ${newPrice}p is above the ${MAX_PLATINUM}p cap.`);
+      pushToast(`Price ${newPrice}p is above the ${MAX_PLATINUM}p cap.`, 'error');
       return;
     }
     markBusy(o.id, true);
@@ -123,22 +182,51 @@
       orders = [...orders];
       editingId = null;
     } catch (e) {
-      alert(`Couldn't update: ${humanError(e)}`);
+      pushToast(`Couldn't update: ${humanError(e)}`, 'error');
     } finally {
       markBusy(o.id, false);
     }
   }
 
   async function removeOne(o: WfmOrder): Promise<void> {
-    if (!confirm(`Delete this listing? (${itemName(o)} at ${o.platinum}p)`)) return;
+    if (confirmId !== o.id) {
+      confirmId = o.id;
+      return;
+    }
+    confirmId = null;
     markBusy(o.id, true);
     try {
       await transport.deleteOrder(o.id);
       orders = orders.filter((x) => x.id !== o.id);
+      pushToast(`Deleted ${itemName(o)}.`);
     } catch (e) {
-      alert(`Couldn't delete: ${humanError(e)}`);
+      pushToast(`Couldn't delete: ${humanError(e)}`, 'error');
     } finally {
       markBusy(o.id, false);
+    }
+  }
+
+  async function bulkSetVisible(visible: boolean): Promise<void> {
+    if (bulkBusy) return;
+    const ids = orders.filter((o) => o.visible !== visible).map((o) => o.id);
+    if (ids.length === 0) return;
+    bulkBusy = true;
+    try {
+      const resp = await transport.bulkVisibility(ids, visible);
+      // Count status==='ok' — the server can skip rows (already in that state,
+      // gone since fetch), so ids.length would over-report.
+      const ok = (resp?.results ?? []).filter((r) => r.status === 'ok').length;
+      for (const o of orders) if (ids.includes(o.id)) o.visible = visible;
+      orders = [...orders];
+      pushToast(
+        visible
+          ? `${ok} listing${ok === 1 ? '' : 's'} made visible.`
+          : `${ok} listing${ok === 1 ? '' : 's'} made hidden.`,
+      );
+    } catch (e) {
+      pushToast(`Couldn't update visibility: ${humanError(e)}`, 'error');
+    } finally {
+      bulkBusy = false;
     }
   }
 
@@ -161,16 +249,31 @@
     <h2>My WFM listings</h2>
     <div class="row gap-sm">
       <span class="muted">
-        {#if phase === 'loading'}loading…
+        {#if phase === 'loading' || phase === 'idle'}Fetching orders…
         {:else if phase === 'done'}{orders.length} active
+        {:else if phase === 'locked'}unlock required
         {/if}
       </span>
+      <button
+        class="tiny ghost"
+        onclick={() => bulkSetVisible(true)}
+        disabled={bulkBusy || orders.every((o) => o.visible)}
+        title="Make every listing visible to buyers"
+      >All visible</button>
+      <button
+        class="tiny ghost"
+        onclick={() => bulkSetVisible(false)}
+        disabled={bulkBusy || orders.every((o) => !o.visible)}
+        title="Hide every listing from buyers"
+      >All hidden</button>
       <button class="ghost" onclick={loadOrders} disabled={phase === 'loading'}>Refresh</button>
     </div>
   </header>
 
   {#if phase === 'error'}
     <div class="muted bad">Couldn't load orders: {error}</div>
+  {:else if phase === 'locked'}
+    <div class="muted">Unlock warframe.market to see your orders.</div>
   {:else if phase === 'done' && orders.length === 0}
     <div class="muted">No active listings.</div>
   {:else if orders.length > 0}
@@ -189,7 +292,7 @@
         <tbody>
           {#each orders as o (o.id)}
             {@const busy = busyIds.has(o.id)}
-            <tr class:dim={busy}>
+            <tr class:dim={busy} class:confirming={confirmId === o.id}>
               <td>{itemName(o)}</td>
               <td class:sell={o.type === 'sell'} class:buy={o.type === 'buy'}>
                 {o.type ?? '?'}
@@ -210,11 +313,16 @@
                   class="vis {o.visible ? 'on' : 'off'}"
                   onclick={() => toggleVisible(o)}
                   disabled={busy}
-                  title={o.visible ? 'Click to make invisible' : 'Click to make visible'}
+                  title={o.visible ? 'Click to make hidden' : 'Click to make visible'}
                 >{o.visible ? 'on' : 'off'}</button>
               </td>
               <td>
-                <button class="tiny bad" onclick={() => removeOne(o)} disabled={busy} title="Delete">✕</button>
+                {#if confirmId === o.id}
+                  <button class="confirm tiny bad" onclick={() => removeOne(o)} disabled={busy} title="Confirm delete">Confirm</button>
+                  <button class="tiny ghost" onclick={() => (confirmId = null)} title="Cancel">×</button>
+                {:else}
+                  <button class="tiny bad" onclick={() => removeOne(o)} disabled={busy} title="Delete">✕</button>
+                {/if}
               </td>
             </tr>
           {/each}
@@ -223,6 +331,8 @@
     </div>
   {/if}
 </section>
+
+<Toast {toasts} ondismiss={dismissToast} />
 
 <style>
   .orders { gap: 10px; }
@@ -265,6 +375,13 @@
   td.sell { color: var(--good); font-weight: 500; }
   td.buy { color: var(--accent); font-weight: 500; }
   tr.dim { opacity: 0.5; }
+  /* Pending destructive row — the two-tap delete's armed state. The 6% tint is
+     faint by design; the 3px left border is the primary signal. */
+  tr.confirming {
+    background: color-mix(in srgb, var(--bad) 6%, transparent);
+    border-left: 3px solid var(--bad);
+  }
+  .confirm { color: var(--muted); font-size: 12px; white-space: nowrap; }
   .vis {
     appearance: none;
     border: 1px solid var(--border);

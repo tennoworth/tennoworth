@@ -17,7 +17,7 @@
   import ResultsTable from './ResultsTable.svelte';
   import { PRESETS } from '../lib/presets';
   import { wfmItemUrl, plat } from '../lib/format';
-  import { selectPicks, MIN_PICK_SCORE } from '../lib/sell-priority';
+  import { selectPicks, MIN_PICK_SCORE, LIQUID_VOL } from '../lib/sell-priority';
 
   let {
     minPrice = $bindable(),
@@ -32,9 +32,11 @@
     listableRows, availableTags, availableTypes,
     visibleColumns, presetSort, emptyReason,
     activePreset, reserveCopies, filtersOpen, scoreExplainerDismissed,
+    sellOnboardingDismissed, keepCopiesNudgeDismissed,
     isDesktop,
 
     applyPreset, setReserveCopies, toggleFiltersOpen, dismissScoreExplainer,
+    dismissSellOnboarding, dismissKeepCopiesNudge,
     openListingFlow,
     pendingBanner,
   } = $props();
@@ -43,6 +45,17 @@
   // EVERY render of this pane — including every keystroke in the name filter,
   // which cannot change the answer. $derived recomputes only when results does.
   let sellableCount = $derived(results.filter((r) => r.sellable > 0).length);
+
+  // Bulk "List on WFM" staging copy. listableRows is already the filtered (or
+  // unfiltered) set minus relics (subtyped rows) and no-spare rows; the batch
+  // is capped at the first 50 either way.
+  let stagedCount = $derived(Math.min(listableRows.length, 50));
+  let listLabel = $derived(`List ${stagedCount} on WFM`);
+  let listTitle = $derived(
+    tableView.active
+      ? `Stage the ${stagedCount} rows in your current view (up to the first 50) — the in-table name filter and badge chips are applied; relics and rows with no spare copy are excluded. Review each row in the modal before sending.`
+      : `Stage the top ${stagedCount} rows of the current view (up to the first 50) — relics and rows with no spare copy are excluded. Review each row in the modal before sending.`
+  );
 
   // Auto-derived options for the type dropdown label map. The Type filter
   // mixes warframestat catalog categories (Mods, Arcanes, Relics…) with raw
@@ -139,6 +152,34 @@
   >ⓘ</span>
 </section>
 
+{#if !sellOnboardingDismissed}
+  <div class="card sell-onboarding">
+    <div class="so-body">
+      <strong>How Sell works</strong>
+      <p class="muted">
+        Your inventory is ranked by expected plat per day — what to list right
+        now. Review the prices, then <strong>List on WFM</strong> posts them
+        hidden so no buyer sees them until you flip them visible in
+        <strong>My orders</strong>.
+      </p>
+    </div>
+    <button class="dismiss" onclick={dismissSellOnboarding} aria-label="Dismiss">×</button>
+  </div>
+{/if}
+
+{#if sellOnboardingDismissed && !keepCopiesNudgeDismissed && reserveCopies === 0}
+  <div class="card warn-banner keep-nudge">
+    <div class="kn-body">
+      <strong>Keep copies on by default.</strong>
+      <span class="muted">
+        Hold back one copy of every item so an underpriced snipe can't strip
+        your last copy — set <code>Keep copies</code> to 1 in Filters.
+      </span>
+    </div>
+    <button class="dismiss" onclick={dismissKeepCopiesNudge} aria-label="Dismiss">×</button>
+  </div>
+{/if}
+
 <section class="stats">
   <div class="stat">
     <span class="k">Owned</span>
@@ -181,7 +222,7 @@
           <span
             class="muted"
             title="Same Score as the table below — expected plat per day if listed. Picks also need at least 3 trades/48h (so a listing won't just sit) and {MIN_PICK_SCORE}p/day to clear the bar."
-          >Best sells right now, ranked by expected plat/day — thin-volume listings excluded.</span>
+          >Best sells right now, ranked by expected plat/day — patience listings excluded.</span>
         </div>
       </div>
       <div class="picks-body">
@@ -199,6 +240,9 @@
                 {pickReason(p)}
                 <span class="pick-vol">({plat(p.volume_48h)} trades / 48h)</span>
               </p>
+              {#if p.volume_48h < LIQUID_VOL}
+                <span class="pick-tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor — expect to wait for a buyer.">thin</span>
+              {/if}
             </div>
             <div class="pick-score">~{plat(p.sell_score)}<span class="unit">p/day</span></div>
             <div class="pick-actions">
@@ -244,35 +288,38 @@
   <span class="muted preset-hint">
     {activePreset ? PRESETS[activePreset].hint : 'custom — saved preset cleared'}
   </span>
-  {#if availableTags.length > 0}
-    <div class="toolbar-divider" aria-hidden="true"></div>
-    <div class="toolbar-group tagchips">
-      {#each availableTags as [tag, count]}
-        <button
-          type="button"
-          class="chip"
-          class:active={activeTags.has(tag)}
-          class:zero={count === 0}
-          aria-pressed={activeTags.has(tag)}
-          onclick={() => toggleTag(tag)}
-          title={count === 0 ? `No matching rows pass the other filters` : `${count} row${count === 1 ? '' : 's'} carry this tag`}
-        >
-          {tag}
-          <span class="chip-count">{count}</span>
-        </button>
-      {/each}
-      {#if activeTags.size > 0}
-        <button type="button" class="chip-clear" onclick={() => (activeTags = new Set())}>
-          clear ({activeTags.size})
-        </button>
+      {#if availableTags.length > 0}
+        <div class="toolbar-divider" aria-hidden="true"></div>
+        <div class="toolbar-group tagchips">
+          {#each availableTags as [tag, count]}
+            <button
+              type="button"
+              class="chip"
+              class:active={activeTags.has(tag)}
+              class:zero={count === 0}
+              aria-pressed={activeTags.has(tag)}
+              onclick={() => toggleTag(tag)}
+              title={count === 0 ? `No matching rows pass the other filters` : `${count} row${count === 1 ? '' : 's'} carry this tag`}
+            >
+              {tag}
+              <span class="chip-count">{count}</span>
+            </button>
+          {/each}
+          {#if activeTags.size > 0}
+            <button type="button" class="chip-clear" onclick={() => (activeTags = new Set())}>
+              clear ({activeTags.size})
+            </button>
+          {/if}
+        </div>
+        {#if activeTags.size >= 2}
+          <p class="tag-or-note">Multiple tags OR together — a row shows if it carries any selected tag.</p>
+        {/if}
       {/if}
-    </div>
-  {/if}
   <div class="toolbar-divider" aria-hidden="true"></div>
   <details class="filter-disclosure" open={filtersOpen} ontoggle={toggleFiltersOpen}>
     <summary>
       <span class="dis-label">Filters</span>
-      <span class="muted small">price · owned · keep copies · type · ranked-mods threshold</span>
+      <span class="muted small">price · owned · keep copies · type · upgraded mods</span>
     </summary>
     <div class="filters-panel">
       <div class="filters">
@@ -299,7 +346,7 @@
           </select>
         </label>
         <label title="Hides a row when you have a copy of that mod in `Upgrades` at this rank or higher. 5 ≈ regular maxed (most mods cap at lvl 5). 10 ≈ only Primed/Galvanized maxed. 0 ≈ also hide unranked instances (e.g. rivens). 11 disables the filter.">
-          Hide if ranked ≥
+          Hide upgraded copies at rank ≥
           <input type="number" bind:value={hideAtLvl} min="0" max="11" step="1" style="width:55px" />
         </label>
       </div>
@@ -311,26 +358,31 @@
       data-testid="desktop-list"
       onclick={() => openListingFlow()}
       disabled={listableRows.length === 0}
-      title="Stage the top rows of the current view (preset + sort) for listing. The in-table name filter and badge chips are not applied — review each row in the modal before sending."
-    >List {Math.min(listableRows.length, 50)} on WFM</button>
+      title={listTitle}
+    >{listLabel}</button>
   {/if}
 </section>
 
 {@render pendingBanner()}
 
-{#if results.length > 0 && !scoreExplainerDismissed}
-  <div class="score-explainer">
-    <strong>About the “Score” column.</strong>
-    Expected plat <strong>per day</strong> if you listed everything —
-    <code>min(owned, vol_48h / 2) × clearing price</code>, where clearing
-    price is the lowest live ask, clamped up to the 90-day median when the
-    ask is a lone troll undercut (so one 1p listing can't crater a row).
-    Higher = better, uncapped. Items below 2 trades / 48 h get a
-    “patience” tag instead of a near-zero score.
-    Click <code>?</code> on any column header for the same kind of
-    explainer.
-    <button class="dismiss" onclick={dismissScoreExplainer} aria-label="Dismiss">×</button>
-  </div>
+{#if results.length > 0}
+  <details
+    class="score-expander"
+    open={!scoreExplainerDismissed}
+    ontoggle={(e) => (scoreExplainerDismissed = !e.currentTarget.open)}
+  >
+    <summary>About the “Score” column</summary>
+    <div class="score-details">
+      Expected plat <strong>per day</strong> if you listed everything —
+      <code>min(owned, vol_48h / 2) × clearing price</code>, where clearing
+      price is the lowest live ask, clamped up to the 90-day median when the
+      ask is a lone troll undercut (so one 1p listing can't crater a row).
+      Higher = better, uncapped. Items below <strong>3 trades / 48 h</strong>
+      get a “patience” tag instead of a near-zero score.
+      Click <code>?</code> on any column header for the same kind of
+      explainer.
+    </div>
+  </details>
 {/if}
 
 {#if results.length > 0}
@@ -615,23 +667,48 @@
   }
   .filters input, .filters select { text-transform: none; letter-spacing: 0; }
 
-  /* First-session Score explainer. Single dismissable line above the
-     table — the casual-flipper persona was confused by what Score meant;
-     hover-tooltip alone wasn't enough. localStorage flag means each user
-     sees it once. */
-  .score-explainer {
+  /* First-session Score explainer, reworked as an inline <details> expander
+     (D9) — one quiet summary line, the how-it's-calculated body folded under
+     it. Dismissal = collapsed, persisted via the same flag as before. */
+  .score-expander {
     background: var(--panel);
     border: 1px solid var(--border);
     border-left: 3px solid var(--accent);
     border-radius: 8px;
-    padding: 10px 38px 10px 14px;
+    padding: 0 14px;
+    position: relative;
+  }
+  .score-expander > summary {
+    cursor: pointer;
+    list-style: none;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--fg);
+    line-height: 1.5;
+    padding: 10px 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    user-select: none;
+  }
+  .score-expander > summary::-webkit-details-marker { display: none; }
+  .score-expander > summary::before {
+    content: '+';
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--muted);
+    width: 10px;
+    display: inline-block;
+  }
+  .score-expander[open] > summary::before { content: '−'; color: var(--accent); }
+  .score-expander > summary:hover { color: var(--accent); }
+  .score-details {
     font-size: 12.5px;
     color: var(--muted);
     line-height: 1.5;
-    position: relative;
+    padding: 0 0 10px;
   }
-  .score-explainer strong { color: var(--fg); font-weight: 600; }
-  .score-explainer code {
+  .score-details strong { color: var(--fg); font-weight: 600; }
+  .score-details code {
     background: var(--panel-2);
     padding: 1px 6px;
     border-radius: 4px;
@@ -639,18 +716,55 @@
     font-size: 0.93em;
     color: var(--fg);
   }
-  .score-explainer .dismiss {
-    position: absolute;
-    top: 6px; right: 8px;
+
+  /* First-session sell onboarding — above the stats strip, dismissed once. */
+  .sell-onboarding {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    border-left: 3px solid var(--accent);
+  }
+  .sell-onboarding .so-body { min-width: 0; }
+  .sell-onboarding strong { color: var(--fg); font-weight: 600; font-size: 13px; }
+  .sell-onboarding p { margin: 4px 0 0; font-size: 12.5px; line-height: 1.5; }
+  .sell-onboarding .dismiss {
     background: transparent;
     border: none;
     color: var(--muted);
     font-size: 16px;
     line-height: 1;
     cursor: pointer;
-    padding: 4px 8px;
+    padding: 3px;
+    flex-shrink: 0;
   }
-  .score-explainer .dismiss:hover { color: var(--fg); }
+  .sell-onboarding .dismiss:hover { color: var(--fg); }
+
+  /* Keep-copies nudge — one-time education after the onboarding card is
+     dismissed; reappearing until dismissed is the intent (it's a habit, not
+     a task). */
+  .keep-nudge {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    border-left: 3px solid var(--warn);
+  }
+  .keep-nudge .kn-body { min-width: 0; }
+  .keep-nudge strong { color: var(--fg); font-weight: 600; font-size: 13px; }
+  .keep-nudge .muted { font-size: 12.5px; line-height: 1.5; }
+  .keep-nudge code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.93em; }
+  .keep-nudge .dismiss {
+    background: transparent;
+    border: none;
+    color: var(--muted);
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 3px;
+    flex-shrink: 0;
+  }
+  .keep-nudge .dismiss:hover { color: var(--fg); }
 
   /* Tag chip row — pills, OR-combined among themselves, AND with the
      filters row above. Inactive chips show the live row-count next to
@@ -791,6 +905,25 @@
      same colour, so the strip and the table below read as one vocabulary. */
   .pick-reason.hold { color: var(--warn); }
   .pick-reason.peak { color: var(--good); }
+  /* Thin-volume tag — a sibling of .pick-reason inside .pick-main so it stays
+     OUTSIDE the truncating <p> and is visible at a glance. */
+  .pick-tag {
+    flex-shrink: 0;
+    padding: 1px 6px;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border: 1px solid currentColor;
+    border-radius: 3px;
+    color: var(--warn);
+  }
+  .tag-or-note {
+    margin: 0;
+    flex-basis: 100%;
+    font-size: 11.5px;
+    color: var(--muted);
+  }
   .pick-vol {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: 11px;

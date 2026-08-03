@@ -5,6 +5,7 @@ import {
   createStateStore,
   LocalStorageStateStore,
   TauriStateStore,
+  LOCAL_SETTING_KEYS,
 } from './state-store.js';
 
 // TauriStateStore + the desktop sniff read the Tauri globals; install/remove
@@ -43,7 +44,18 @@ describe('LocalStorageStateStore — key/shape parity with the pre-store code', 
     ['filters-open', 'wfminv:filters-open-v1', '1'],
     ['view', 'wfminv:view-v1', 'relics'],
     ['score-explainer-dismissed', 'wfminv:score-explainer-dismissed-v1', '1'],
+    ['keep-copies-nudge-dismissed', 'wfminv:keep-copies-nudge-dismissed-v1', '1'],
+    ['tray-toast-seen', 'wfminv:tray-toast-seen-v1', '1'],
+    ['sell-onboarding-dismissed', 'wfminv:sell-onboarding-dismissed-v1', '1'],
   ];
+
+  // Drift-proof gate: the fixture and LOCAL_SETTING_KEYS must agree, or the
+  // rename-invalidates-user-data protection above has a hole in it.
+  it('LOCAL_SETTING_KEYS matches the CASES fixture exactly', () => {
+    expect([...CASES.map((c) => c[0])].sort()).toEqual(
+      Object.keys(LOCAL_SETTING_KEYS).sort(),
+    );
+  });
 
   it.each(CASES)('setSetting(%s) writes the historical localStorage key verbatim', async (key, lsKey, value) => {
     const s = new LocalStorageStateStore();
@@ -108,10 +120,16 @@ describe('TauriStateStore — command mapping', () => {
     expect(invoke).toHaveBeenCalledWith('get_setting', { key: 'filters-open' });
     expect(invoke).toHaveBeenCalledWith('get_setting', { key: 'view' });
     expect(invoke).toHaveBeenCalledWith('get_setting', { key: 'score-explainer-dismissed' });
+    expect(invoke).toHaveBeenCalledWith('get_setting', { key: 'keep-copies-nudge-dismissed' });
+    expect(invoke).toHaveBeenCalledWith('get_setting', { key: 'tray-toast-seen' });
+    expect(invoke).toHaveBeenCalledWith('get_setting', { key: 'sell-onboarding-dismissed' });
     // getSetting is synchronous after hydrate, served from the cache.
     expect(s.getSetting('reserve-copies')).toBe('2');
     expect(s.getSetting('view')).toBe('baro');
     expect(s.getSetting('filters-open')).toBeNull();
+    expect(s.getSetting('keep-copies-nudge-dismissed')).toBeNull();
+    expect(s.getSetting('tray-toast-seen')).toBeNull();
+    expect(s.getSetting('sell-onboarding-dismissed')).toBeNull();
   });
 
   it('hydrate() never rejects — a failing read leaves the key null (default applies)', async () => {
