@@ -16,8 +16,8 @@ you're editing **before** you start writing code there:
 - [`prototype/CLAUDE.md`](prototype/CLAUDE.md) — Svelte 5 + Vite
   browser app (the informational site). Svelte 5 reactivity gotchas,
   storage choices, CSP.
-- [`scripts/CLAUDE.md`](scripts/CLAUDE.md) — Python utilities and
-  scrapers. Atomic writes, flush rules, UA requirements.
+- [`scripts/CLAUDE.md`](scripts/CLAUDE.md) — the one Node tool
+  (`sync-csp.mjs`) and the shared fixtures.
 
 ---
 
@@ -28,15 +28,13 @@ companion/       Rust workspace — tennoworth-desktop (the product, Tauri)
                  drives wfm-core over IPC; wfm-scrape is the host pipeline
 prototype/       Svelte 5 + Vite informational site, deployed as static
 prototype/public/market.json    central artifact: the WFM snapshot
-scripts/         one-shot Python utilities
-wfm_demand.py    the ORIGINAL WFM scraper. Still the rollback path and the
-                 parity reference; production now runs the Rust port
+scripts/         sync-csp.mjs (the one Node tool); Python retired 2026-08
 packaging/aur/   AUR recipes (tennoworth, tennoworth-bin) + their .install hooks
 deploy/          self-host kit for the production LXC: Caddyfile, setup, scrape/web-pull units, plus the signed apt+dnf repo publisher (setup-repo.sh, pull-packages.sh)
-tests/           pytest tests for the Python side
+tests/           shared cross-language fixtures (Rust↔TS parity); no pytest
 .github/workflows/  refresh-market (cron), release-desktop (tag → desktop +
                      AUR), build-web, audit
-.github/actions/    shared composite actions (setup-rust, setup-python,
+.github/actions/    shared composite actions (setup-rust,
                      publish-rolling-release) the workflows above call into
 .claude/         Claude Code local config + agent worktrees
 SECURITY.md      threat model + what we do and don't commit to
@@ -67,12 +65,9 @@ SECURITY.md      threat model + what we do and don't commit to
                             │ GET market.json
               ┌─────────────┴────────────────────────────┐
               │  wfm-scrape scrape  (Rust)               │
-              │  → CSV → csv_to_market_json.py           │
+              │  → CSV → wfm-scrape build                │
               │  (systemd timer on the box, 2h;          │
               │   GH cron refreshes repo copy)           │
-              │  wfm_demand.py is the rollback:          │
-              │   WFM_SCRAPER=python (default is auto,   │
-              │   which prefers the Rust port)           │
               └──────────────────────────────────────────┘
 ```
 
@@ -129,10 +124,10 @@ These exist because each has already gone wrong once:
 ## Cross-cutting hygiene rules (apply everywhere)
 
 - **Cross-language logic duplication needs a parity fixture, not just a
-  comment.** This repo is Rust + TypeScript + Python by necessity (companion,
-  browser app, scraper) — the same heuristic sometimes has to exist in two of
-  them (name/slug resolution, scoring, shared constants like a KDF iteration
-  count or a category list). A `// keep these in sync` comment is not a gate;
+  comment.** This repo is Rust + TypeScript by necessity (companion, browser
+  app) — the same heuristic sometimes has to exist in both (name/slug
+  resolution, scoring, shared constants like a KDF iteration count or a
+  category list). A `// keep these in sync` comment is not a gate;
   it silently rots. Instead: put the shared cases + expected output in
   `tests/fixtures/<name>/`, and add a test on **each** side that reads the
   same fixture and asserts against it (`sell-priority/cases.json` and
@@ -148,14 +143,17 @@ These exist because each has already gone wrong once:
   was there. On 2026-08-01 that meant five green parity tests in 0.08 s against
   a binary eight days old and 17 KB different from what the source produced —
   the exact stale-green shape as the 2026-07-20 incident, wearing a passing
-  test as a disguise. `tests/conftest.py` now rebuilds before comparing and
-  lets Cargo decide whether that's a no-op. When you add a gate that shells a
+  test as a disguise. `tests/conftest.py` used to rebuild before comparing and
+  let Cargo decide whether that's a no-op. When you add a gate that shells a
   built artifact, the build is part of the gate. Ask what the gate does when
-  the artifact is stale, not just when it's missing.
+  the artifact is stale, not just when it's missing. (The Rust fixture gates
+  in `companion/wfm-scrape/tests/` shell `env!("CARGO_BIN_EXE_wfm-scrape")`,
+  which cargo rebuilds — the same guarantee, without the Python harness.)
 - **Ask what a value's gate can actually SEE.** `REQUEST_DELAY` sat duplicated
   in Python and Rust while both parity suites stubbed the sleeper, so nothing
-  on either side could observe it. A constant inside the mocked-out part of a
-  test is unguarded no matter how thorough the suite around it looks.
+  on either side could observe it — the `pacing.json` fixture is now the only
+  thing that catches a one-sided bump. A constant inside the mocked-out part
+  of a test is unguarded no matter how thorough the suite around it looks.
 - **Dead exports are caught by `knip`, not by tsconfig.** `bun run knip`
   (prototype/, wired into audit.yml). Do NOT reach for `noUnusedLocals` when
   dead code turns up: it flags unused *locals*, never unused *exports*, and
@@ -207,24 +205,17 @@ These exist because each has already gone wrong once:
 cd prototype && bun install && bun run dev   # http://127.0.0.1:5173
 
 # Rebuild static market.json from the existing CSV (~10 s).
-# csv_to_market_json.py is the ONLY generator that produces the full
-# shape (set_to_parts / relic_rewards / vault_status). Always finish a
-# scrape with it — never point wfm_demand.py --json-out at the public
-# market.json, it omits those keys and blanks the Sets/Relics/Vaulted
-# surfaces.
-python3 scripts/csv_to_market_json.py
+# `wfm-scrape build` is the ONLY generator of the full shape
+# (set_to_parts / relic_rewards / vault_status) AND wfstat-catalog.json.
+# Always finish a scrape with it.
+companion/target/release/wfm-scrape build
 
 # Full WFM scrape (~45 min, 3 req/s) → CSV only, then rebuild the snapshot.
-# Production runs the Rust port; deploy/run-scrape.sh drives both steps and
-# carries the truncation guard, so prefer it over calling these by hand.
+# deploy/run-scrape.sh drives both steps and carries the truncation guard,
+# so prefer it over calling these by hand.
 companion/target/release/wfm-scrape scrape --filter "" --exclude "" \
   --min-volume 1 --out wfm_results.csv
-python3 scripts/csv_to_market_json.py
-
-# The Python scraper is the rollback and the parity reference — identical
-# flags, and the two are gated against each other by tests/test_scrape_parity.py.
-python3 wfm_demand.py --filter "" --exclude "" --min-volume 1 \
-  --out wfm_results.csv
+companion/target/release/wfm-scrape build
 
 # Companion subcommands. Grant ptrace once so the desktop scan needs no
 # sudo — re-run after every `cargo build --release`, which wipes the
@@ -234,8 +225,7 @@ sudo setcap cap_sys_ptrace=eip companion/target/release/tennoworth-desktop
 # Test sweeps — run ALL of these before pushing; every one is local.
 cd prototype && bun run test
 cd prototype && bun run knip                  # dead exports; tsconfig can't see them
-pytest tests/                                 # rebuilds wfm-scrape for the parity gates
-cd companion && cargo test
+cd companion && cargo test                    # includes the wfm-scrape fixture gates
 cd companion && cargo audit --deny warnings   # same flags as audit.yml
 node scripts/sync-csp.mjs --check             # three CSP copies must agree
 

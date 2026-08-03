@@ -4,8 +4,9 @@ name: build-scrape
 # depends on) changes, and publish it as a rolling `scrape-latest` release the
 # deploy box pulls with a plain curl, no auth — matches build-web.yml's shape.
 # This is NOT the desktop app (that ships on tag desktop-v* via
-# release-desktop.yml); it runs the converter SHADOW on the box (phase 2b),
-# journaling parity with the Python converter without ever touching production.
+# release-desktop.yml); it is THE production pipeline binary — the box's
+# run-scrape.sh runs it for both the scrape and the market.json build, and the
+# refresh-market GH cron downloads the same release.
 
 on:
   push:
@@ -56,4 +57,4 @@ jobs:
           files: |
             dist/wfm-scrape
             dist/wfm-scrape.sha256
-          body: Rolling build of the host-only wfm-scrape pipeline binary from the latest main. Auto-built; runs the converter shadow on the deploy box (phase 2b), not production. Not a version release — see the desktop-v* tags for the desktop app.
+          body: Rolling build of the host-only wfm-scrape pipeline binary from the latest main. This is the production pipeline binary — the box runs it for the scrape and the market.json build. Not a version release — see the desktop-v* tags for the desktop app.

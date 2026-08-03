@@ -3,15 +3,13 @@
 #                         encrypted-JWT storage, listing/order service, pending-plan
 #                         store, DeepSeek assistant relay. No terminal I/O — the
 #                         desktop shell drives it over IPC.
-#   market-math         — pure market-data heuristics, ported from wfm_demand.py
-#                         as phase 2 of the Python→Rust pipeline consolidation.
-#                         No I/O, no deps. Keep it pure — that's what makes it
-#                         testable against the frozen Python fixtures.
-#   wfm-scrape          — host-only pipeline crate. `build` mirrors
-#                         scripts/csv_to_market_json.py, `scrape` mirrors
-#                         wfm_demand.py; both implemented and parity-gated.
-#                         NOT production yet — deploy/run-scrape.sh still runs
-#                         Python; swapping it is the phase-5 cutover.
+#   market-math         — pure market-data heuristics (ported from the retired
+#                         wfm_demand.py). No I/O, no deps. Keep it pure — that's
+#                         what makes it testable against the shared fixtures.
+#   wfm-scrape          — host-only pipeline crate: `build` renders market.json
+#                         + wfstat-catalog.json, `scrape` runs the WFM scrape.
+#                         The ONLY pipeline (Python retired 2026-08); fixture
+#                         gates in its tests/ dir shell the real binary.
 #   wfm-client          — shared WFM transport primitives (UA, Cloudflare
 #                         headers, envelope unwrap, retry backoff). Primitives
 #                         only: do not grow it into one abstraction spanning

@@ -20,13 +20,13 @@ Build: `bun run build`. Type-check: `bun run check`. Install: `bun install`.
 WFM serves no `Access-Control-Allow-Origin` header. Direct browser
 fetches will fail CORS. All WFM data must come from the static
 `market.json` snapshot under `public/`, produced by the box's Rust
-`wfm-scrape`; the GH Actions cron's Python run refreshes the repo copy.
+`wfm-scrape`; the GH Actions cron's Rust run refreshes the repo copy.
 
 `warframestat.us` used to be the one allowed direct call (it sent
 CORS headers; the resolver hit `/items/` for `/Lotus/...` paths) —
 **upstream dropped its CORS headers on 2026-06-09** and broke every
 inventory upload. The resolver catalog is now baked too:
-`csv_to_market_json.py` writes `public/wfstat-catalog.json` (slim
+`wfm-scrape build` writes `public/wfstat-catalog.json` (slim
 `[uniqueName, {name, category}]` pairs, forced `Accept-Language: en` —
 localized names silently fail the WFM name join). All vendor data
 (relic rewards, vault status, **Baro schedule** — `market.baro`,

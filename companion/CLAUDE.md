@@ -8,22 +8,19 @@ the desktop app is the only adapter:
   storage, the listing/order service, pending-plan persistence, and the
   dormant DeepSeek assistant relay. **No interactive terminal I/O** — the
   desktop shell hands the passphrase in as a parameter over IPC.
-- `market-math/` — pure market-data heuristics ported from wfm_demand.py.
-  No I/O, no deps, no clocks — keep it that way; its tests are 1:1 ports of
-  tests/test_wfm_demand.py. When you change a heuristic, change BOTH
-  implementations (Python remains the parity reference) and both test
-  suites.
-- `wfm-scrape/` — host-only pipeline binary. Both subcommands are
-  implemented and parity-gated against their Python originals on frozen
-  fixtures: `build` mirrors scripts/csv_to_market_json.py
-  (tests/test_convert_parity.py, semantic JSON diff) and `scrape` mirrors
-  wfm_demand.py (tests/test_scrape_parity.py, semantic CSV diff). Both gates
-  rebuild the binary first — a stale one used to pass them silently.
-  The Rust scrape is the default in deploy/run-scrape.sh once the box pulls
-  the current checkout (WFM_SCRAPER default `auto` prefers it); keep both
-  implementations in sync until the rollback path is confirmed dead.
-  "Not implemented" is what this said until 2026-08-01, long after the port
-  landed.
+- `market-math/` — pure market-data heuristics. No I/O, no deps, no clocks —
+  keep it that way. (Ported from the retired wfm_demand.py; its tests were
+  1:1 ports of tests/test_wfm_demand.py, which died with Python in 2026-08.)
+  The sell-priority scoring mirrors the SPA's canonical `sell-priority.ts`
+  and is parity-gated against it on a shared fixture — see the next bullet.
+- `wfm-scrape/` — host-only pipeline binary; the ONLY market pipeline (Python
+  retired 2026-08). `scrape` runs the full WFM scrape to CSV; `build` renders
+  `market.json` + `wfstat-catalog.json`. Fixture regression gates in its
+  `tests/` dir shell the freshly-built binary (`env!("CARGO_BIN_EXE_wfm-scrape")`)
+  against the frozen fixtures in tests/fixtures/{scrape,convert} — cargo
+  rebuilds the binary before they run, so a stale one cannot green them.
+  Production runs it via deploy/run-scrape.sh; the box pulls the CI-published
+  `scrape-latest` binary, never building Rust itself.
 - `wfm-client/` — shared WFM transport primitives: the browser UA (the one
   definition; wfm-core re-exports it), the Cloudflare-appeasing header set,
   envelope unwrapping, and retry backoff. Share primitives only — do not grow
@@ -219,8 +216,8 @@ in calling code.
 ## Rust hygiene
 
 - Atomic writes via `tmp` + `fs::rename`. The Linux semantics give us
-  a torn-file-free read on POSIX FS — match the same convention used
-  in `wfm_demand.py` (`os.replace`).
+  a torn-file-free read on POSIX FS — the same convention the retired
+  Python pipeline used (`os.replace`).
 - Use `write_restricted()` (0600 from the first syscall — no
   umask race window) on anything containing a secret or
   partial pending-plan state.

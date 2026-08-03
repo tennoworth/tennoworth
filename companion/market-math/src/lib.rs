@@ -1,12 +1,9 @@
-//! Pure market-data heuristics, ported 1:1 from `wfm_demand.py` +
-//! `scripts/csv_to_market_json.py` (phase 2 of the Python→Rust pipeline
-//! consolidation — see the rust-consolidation-plan memory / repo docs).
+//! Pure market-data heuristics (originally ported 1:1 from the retired Python
+//! pipeline, `wfm_demand.py` + `scripts/csv_to_market_json.py`).
 //!
 //! RULES FOR THIS CRATE:
 //! - No I/O, no HTTP, no clocks, no dependencies. Pure functions only —
-//!   that's what lets every function be pinned against the frozen Python
-//!   test fixtures (tests/test_wfm_demand.py) and, later, lets the
-//!   wfm-scrape binary be validated by semantic snapshot diffing.
+//!   that's what lets every function be pinned against the shared fixtures.
 //! - Where Python semantics are quirky (ties-to-even rounding, upper-middle
 //!   baseline, insertion-order tie-breaks), we preserve them DELIBERATELY
 //!   and say so at the site. Divergence is a decision, not an accident.
@@ -260,9 +257,9 @@ pub fn weighted_avg_48h(recent: &[StatsDay], median_90d: f64) -> f64 {
     }
 }
 
-/// Rebuild-path mirror of the weighted-avg clamp (from csv_to_market_json's
-/// `_clamp_avg`): when a stored 48h avg falls outside 3× of the 90d baseline
-/// median, quote the median instead. avg 0 (no recent trades) stays 0.
+/// Rebuild-path weighted-avg clamp: when a stored 48h avg falls outside 3× of
+/// the 90d baseline median, quote the median instead. avg 0 (no recent trades)
+/// stays 0.
 pub fn clamp_avg(avg: f64, median_90d: f64) -> f64 {
     if avg > 0.0 && median_90d > 0.0 && !(median_90d / 3.0 <= avg && avg <= median_90d * 3.0) {
         median_90d
@@ -343,7 +340,7 @@ pub fn round_dp(x: f64, dp: usize) -> f64 {
 mod tests {
     use super::*;
 
-    // Fixture helpers mirroring tests/test_wfm_demand.py's _day().
+    // Fixture helpers: minimal StatsDay rows for the heuristic tests below.
     fn day(median: f64) -> StatsDay {
         StatsDay { median, ..Default::default() }
     }

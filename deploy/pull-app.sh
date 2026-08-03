@@ -3,16 +3,16 @@
 #
 # The other three pullers (pull-web.sh, pull-scrape.sh, pull-packages.sh) cover
 # the built bundle, the wfm-scrape binary and the deb/rpm. NOTHING covers the
-# checkout itself, so deploy/run-scrape.sh, the systemd units and the Python
-# scraper only move when a human moves them — which is how the box sat on a
-# phase-3 commit while main was many commits ahead.
+# checkout itself, so deploy/run-scrape.sh and the systemd units only move when
+# a human moves them — which is how the box sat on a phase-3 commit while main
+# was many commits ahead.
 #
 # It also re-installs the deployed copies. The units do NOT execute the files
 # in the checkout — wfm-scrape.service runs /srv/wfm/run-scrape.sh, a copy
 # setup-container.sh made once. On 2026-08-01 that copy was from Jul 19 08:56
-# and contained no converter-shadow block, while the repo's copy from 14:59 the
-# same day did. Nothing reconciled them, so the shadow "ran" for two weeks in a
-# file nothing executed and shadow-parity.log stayed zero bytes.
+# while the repo's copy from 14:59 the same day differed — nothing reconciled
+# them, so the box ran the old pipeline script for two weeks while the repo
+# copy looked current.
 #
 # This is not `git pull`, and the difference matters:
 #
@@ -103,8 +103,7 @@ echo "pulled: $before -> $target"
 # Pulling the checkout is NOT enough. The units execute COPIES under /srv/wfm
 # (ExecStart=/srv/wfm/run-scrape.sh), installed once by setup-container.sh and
 # never refreshed since. The running /srv/wfm/run-scrape.sh was six hours older
-# than the repo's and had no converter-shadow block at all — which is why
-# shadow-parity.log sat at zero bytes forever while the repo copy looked fine.
+# than the repo's — a pull that leaves the copies stale is cosmetic.
 # Re-install anything that drifted, or a pull is cosmetic.
 for f in run-scrape.sh pull-web.sh pull-scrape.sh pull-packages.sh; do
   src="deploy/$f"

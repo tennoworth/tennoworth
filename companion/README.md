@@ -12,8 +12,8 @@ removed on 2026-08-02 — the desktop app replaced it.
 |---|---|
 | `tennoworth-desktop` | Tauri v2 shell — the app users install. Same-origin webview, `wfm-core` over IPC. No HTTP server, no session token. |
 | `wfm-core` | The reusable core: process detection + memory scan, DE inventory fetch, WFM auth + encrypted-JWT storage, listing/order service, pending-plan persistence, dormant DeepSeek assistant relay. **No interactive terminal I/O** — the desktop shell drives it over IPC. |
-| `market-math` | Pure market-data heuristics ported from `wfm_demand.py`. No I/O, no deps. |
-| `wfm-scrape` | Host-only pipeline binary: `build` mirrors `csv_to_market_json.py`, `scrape` mirrors `wfm_demand.py` — parity-gated. |
+| `market-math` | Pure market-data heuristics (ported from the retired Python scraper). No I/O, no deps. |
+| `wfm-scrape` | Host-only pipeline binary: `scrape` runs the WFM scrape to CSV, `build` renders `market.json` + `wfstat-catalog.json`. The only pipeline — Python was retired 2026-08. |
 | `wfm-client` | Shared WFM transport primitives (UA, Cloudflare headers, envelope unwrap, retry backoff). |
 
 Build: `cargo build --release`. Tests: `cargo test`.

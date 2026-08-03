@@ -10,7 +10,7 @@
 
 // -------- market.json --------
 
-/** Per-slug market entry baked by `wfm_demand.py` / `csv_to_market_json.py`. */
+/** Per-slug market entry baked by `wfm-scrape build`. */
 export interface MarketItemEntry {
   avg: number;
   low_sell: number;

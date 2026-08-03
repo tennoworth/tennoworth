@@ -1,4 +1,4 @@
 {
   "request_delay_ms": 340,
-  "note": "Post-request sleep for the WFM scrape, ~3 req/s. Shared by wfm_demand.py (REQUEST_DELAY, seconds) and companion/wfm-scrape/src/http.rs (REQUEST_DELAY, a Duration). This is the one shared constant NEITHER parity gate can see: both stub the sleeper — Python patches time.sleep, Rust injects NoopSleeper — so a bump on one side alone changes production scrape pacing with every existing test still green. Raising it slows a ~45-minute full scrape; lowering it risks WFM rate-limiting the box."
+  "note": "Post-request sleep for the WFM scrape, ~3 req/s. The single source for the scrape pacing (companion/wfm-scrape/src/http.rs REQUEST_DELAY). Python is retired; this fixture documents the constant so a bump is deliberate. Raising it slows a ~45-minute full scrape; lowering it risks WFM rate-limiting the box."
 }

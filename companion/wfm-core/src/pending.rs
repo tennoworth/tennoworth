@@ -4,8 +4,8 @@
 //! first POST, rewritten after each item, and deleted on clean completion. The
 //! browser polls it on (re)connect and offers Resume / Discard. Writes are
 //! atomic (tmp + rename) so a concurrent read never sees a torn file — same
-//! convention as `os.replace` in wfm_demand.py — and the tmp file is created
-//! at 0600 (it holds unsubmitted listing details).
+//! convention as `os.replace` in the retired Python pipeline — and the tmp
+//! file is created at 0600 (it holds unsubmitted listing details).
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};

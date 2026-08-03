@@ -1,64 +1,16 @@
-# scripts/ + Python utilities
+# scripts/ — one Node tool + the shared fixtures
 
-One-shot Python tooling. Python is the right call for these — don't
-rewrite as Rust.
+Python was fully retired 2026-08: the scraper (`wfm_demand.py`), the converter
+(`csv_to_market_json.py`) and the parity/diff tooling (`wfm_common.py`,
+`semantic_diff.py`) are gone, replaced by the Rust `wfm-scrape` binary. What
+remains in this directory is a single Node tool; the shared cross-language
+fixtures live in `tests/fixtures/`.
 
-- `wfm_demand.py` (root) — the original full WFM scrape (~45 min at 3
-  req/s). **No longer what production runs**: deploy/run-scrape.sh calls
-  the Rust port (`wfm-scrape scrape`) since the phase-5 first-half
-  cutover, and this stays as the rollback (`WFM_SCRAPER=python`) and as
-  the parity reference that tests/test_scrape_parity.py gates the port
-  against. Keep the two behaviourally identical — that gate is the only
-  thing that notices if they drift.
-  Writes `wfm_results.csv` by default; `--json-out` also writes JSON, but
-  never point that flag at the public market.json — that path omits
-  set_to_parts / relic_rewards / vault_status and blanks the Sets,
-  Relics, and Vaulted surfaces.
-- `scripts/csv_to_market_json.py` — the SOLE generator of
-  `prototype/public/market.json` (full shape) AND
-  `prototype/public/wfstat-catalog.json` (the browser resolver's
-  item catalog — warframestat dropped CORS, so it's baked here).
-  Every scrape, local or cron, must finish with this script
-  (observed runtime ~30 s; not enforced or asserted anywhere).
-- `scripts/wfm_common.py` — shared WFM HTTP primitives: `BROWSER_UA`
-  (mirrors `companion/wfm-client`'s, which mirrors `wfm-core`'s — the
-  value proven against production traffic), `wfm_session()`, and a
-  retrying `fetch_json()`. Both scripts above import from here rather
-  than each carrying their own UA literal — that's how the two drifted
-  (128 vs 130) unnoticed before.
+- `sync-csp.mjs` — the ONE source of truth for the Content-Security-Policy
+  that ships in three hosted copies (`prototype/index.html` meta,
+  `prototype/public/_headers`, `deploy/Caddyfile`) plus a desktop build
+  variant. Edit the `DIRECTIVES` array, run `bun run csp` from `prototype/`
+  to rewrite all three; `bun run build` fails via its prebuild `--check` if
+  any copy drifted. Do NOT hand-edit the three copies.
 
-Tests live in `tests/`. Run with `pytest tests/`.
-
----
-
-## Hard rules
-
-### Atomic writes via `os.replace()`
-Long-running scrapes write `wfm_results.csv` and `market.json` in
-checkpoints. Concurrent readers (the browser app reloading
-`market.json`) must never see a half-written file. Write to
-`path.tmp`, then `os.replace(path.tmp, path)`. POSIX rename is atomic
-on the same FS. This is already in `wfm_demand.py` — preserve it.
-
-### `flush=True` on progress prints
-Python's stdout is block-buffered when piped or redirected. Long
-loops with periodic `print()` go silent for minutes without it.
-Always add `flush=True` (or `print(..., flush=True)`) when the script
-is intended to run unattended.
-
-### HTTP timeouts on every WFM request
-WFM has occasional Cloudflare hiccups that hang for minutes. Pass an
-explicit `timeout=` to `requests.get/post`. The scrape will recover
-better.
-
-### Browser-style User-Agent
-WFM's Cloudflare layer 1015-rate-limits generic UAs. Use a real
-Firefox/Chrome UA string. Import `BROWSER_UA` (and `wfm_session()` for
-a preconfigured `requests.Session`) from `scripts/wfm_common.py` in
-any new script — don't add a third hardcoded copy.
-
-### Don't commit WFM auth secrets
-`wfm_demand.py` runs unauthenticated against public WFM data. If you
-add a script that needs login, NEVER let credentials reach the repo
-or workflow logs. Read from env at runtime; assert on missing env
-explicitly.
+Tests live in `tests/` (Rust + TS suites; no pytest).

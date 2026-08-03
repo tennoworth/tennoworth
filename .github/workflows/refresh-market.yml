@@ -6,6 +6,11 @@ name: refresh-market
 # This cron exists so a fresh clone / new box deploy starts with data that
 # is at most a day old (its first own scrape lands within 2 h anyway).
 # Each run takes ~30-45 minutes (~3800 items × 2 calls × 0.34 s pacing).
+#
+# Rust-only since 2026-08 (Python retired): it downloads the CI-published
+# `scrape-latest` binary (the same one pull-scrape.sh installs on the box) —
+# no Rust toolchain, no Python — and runs the shared deploy/run-scrape.sh
+# entrypoint, which does the scrape + truncation guard + market.json build.
 
 on:
   schedule:
@@ -29,7 +34,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: ./.github/actions/setup-python
+      - name: Download wfm-scrape (scrape-latest)
+        run: |
+          mkdir -p bin
+          curl -fsSL -o bin/wfm-scrape \
+            https://github.com/tennoworth/tennoworth/releases/download/scrape-latest/wfm-scrape
+          chmod +x bin/wfm-scrape
+          ./bin/wfm-scrape 2>&1 | grep -q 'usage: wfm-scrape' || {
+            echo "downloaded wfm-scrape did not run (corrupt / wrong arch?)" >&2; exit 1
+          }
 
       # One scrape entrypoint shared with the self-host systemd timer —
       # scrape, truncation guard (row-count floor + 25%-shrinkage check
@@ -39,18 +52,7 @@ jobs:
       - name: Scrape, guard, rebuild
         env:
           APP: ${{ github.workspace }}
-          PYTHON: python3
-          # Explicitly the Python scraper. This job has no Rust toolchain, so
-          # `auto` would fall back here anyway — but silently, warning on every
-          # run, which trains you to ignore a warning that means something real
-          # on the box.
-          #
-          # Keeping it pinned is worth something on its own: the box runs the
-          # Rust scraper and this runs the reference implementation, both
-          # writing market.json to the same repo. A material divergence between
-          # the ports shows up in the daily commit diff without anyone building
-          # a shadow for it.
-          WFM_SCRAPER: python
+          SCRAPE_BIN: ${{ github.workspace }}/bin/wfm-scrape
         run: bash deploy/run-scrape.sh
 
       - name: Commit if changed

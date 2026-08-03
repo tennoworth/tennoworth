@@ -1,4 +1,4 @@
-//! Scrape orchestration — the `wfm_demand.py` loop.
+//! Scrape orchestration.
 //!
 //! Fetch the master item list, filter/exclude/limit it, then per item fetch the
 //! order book + closed stats (paced + retried through [`crate::http`]), compose
@@ -258,8 +258,7 @@ pub fn write_csv(rows: &[AnalyzedRow], path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Scrape configuration — the CLI flags, with `wfm_demand.py`'s argparse
-/// defaults.
+/// Scrape configuration — the CLI flags and their defaults.
 #[derive(Debug, Clone)]
 pub struct ScrapeConfig {
     pub filter: String,
