@@ -44,7 +44,7 @@ directories are the source of truth that gets copied into them. Publishing is
    tarball — so `desktop-v<pkgver>` must exist:
 
    ```sh
-   git tag -a desktop-v0.3.4 -m "TennoWorth desktop 0.3.4" && git push github desktop-v0.3.4
+   git tag -a desktop-v0.3.5 -m "TennoWorth desktop 0.3.5" && git push github desktop-v0.3.5
    ```
 
 2. Make sure `pkgver` in both `PKGBUILD`s already matches the tag — the `aur`
@@ -90,7 +90,7 @@ If the `aur` job is broken or the maintainer needs to push by hand:
    ```sh
    makepkg --printsrcinfo > .SRCINFO
    # in the aur.archlinux.org clone:
-   git commit -am "tennoworth 0.3.4" && git push
+   git commit -am "tennoworth 0.3.5" && git push
    ```
 
 `.SRCINFO` is deliberately not committed here — it is per-version generated
