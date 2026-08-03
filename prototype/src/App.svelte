@@ -32,6 +32,7 @@
   } from './lib/transport';
   import type { Market, OwnedRecord } from './lib/types';
   import { wfmItemUrl, baroLocation, humanWindow } from './lib/format';
+  import { listenForTauriEvent, TRAY_HINT_EVENT } from './lib/desktop-update';
 
   // Desktop (Tauri) vs hosted informational (browser) is decided ONCE at boot.
   // The hosted site is informational only: market data + the desktop showcase,
@@ -155,6 +156,28 @@
     void store.setSetting('score-explainer-dismissed', '1');
   }
 
+  // First-session sell onboarding — dismissable, one-time, persists (same
+  // pattern as the score explainer; keeps the keep-copies nudge from stacking
+  // on top of it on a fresh install).
+  let sellOnboardingDismissed = $state((() => store.getSetting('sell-onboarding-dismissed') === '1')());
+  function dismissSellOnboarding(): void {
+    sellOnboardingDismissed = true;
+    void store.setSetting('sell-onboarding-dismissed', '1');
+  }
+
+  // Keep-copies nudge — permanent one-time dismissal (education, not a
+  // recurring nag).
+  let keepCopiesNudgeDismissed = $state((() => store.getSetting('keep-copies-nudge-dismissed') === '1')());
+  function dismissKeepCopiesNudge(): void {
+    keepCopiesNudgeDismissed = true;
+    void store.setSetting('keep-copies-nudge-dismissed', '1');
+  }
+
+  // Tray hint banner — set by the Rust tray-hint event when the user closes the
+  // window while the tray still exists. Once-ever, persisted when SHOWN (not on
+  // dismiss); the Rust side caps within-session duplicates with an AtomicBool.
+  let trayHint = $state(false);
+
   // Preset pills above the rec cards. Each preset is one click that
   // updates the filter state to a known-useful combination. Currently
   // selected preset is tracked so the pill can show as active. Custom
@@ -264,6 +287,15 @@
       } catch (e) {
         console.error('desktop pending-plan check failed', e);
       }
+      // Tray hint: when the window is closed to the tray, surface the once-ever
+      // "still running in the tray" banner. Listeners are best-effort in the
+      // hosted build (no event API), so this is a no-op there.
+      listenForTauriEvent(TRAY_HINT_EVENT, () => {
+        if (store.getSetting('tray-toast-seen') !== '1') {
+          trayHint = true;
+          void store.setSetting('tray-toast-seen', '1');
+        }
+      });
     }
 
     // Desktop only: restore the last inventory snapshot. The hosted site is
@@ -512,6 +544,11 @@
   let relicShowAll = $state(false);
   let relicVisible = $derived(relicShowAll ? relicPlan : relicPlan.slice(0, RELIC_PREVIEW));
 
+  // Routine checklist is collapsed by default — the clocks carry the daily
+  // urgency, the three routine cards are a long-read. Not persisted
+  // (collapsed-by-default is the intent).
+  let routineChecklistOpen = $state(false);
+
   // Available tags = every tag that appears on a row surviving the OTHER
   // filters (price/owned/type/kept), with its live count. Empty chips
   // (count 0) are still rendered (strikethrough) so the user can see what
@@ -725,7 +762,12 @@
   // and ListingReviewModal's onauthrequired) via this ref, and decides what
   // 'list' means on unlock (open the review modal).
   let wfmAuthDialogsRef = $state();
+  // Bumped on every successful login/unlock so auth-gated surfaces (the orders
+  // panel) retry their fetch once the session is live — the "input once, never
+  // again" path is silent via the keyring, and this is what notices it.
+  let sessionEpoch = $state(0);
   function handleWfmUnlocked(next) {
+    sessionEpoch += 1;
     if (next === 'list') listingOpen = true;
   }
 
@@ -799,6 +841,7 @@
             disabled={pullingInventory}
           >{pullingInventory ? 'Scanning game…' : 'Scan inventory'}</button>
         </div>
+        <span class="trust">Reads the running game's memory only — nothing leaves your machine.</span>
       </section>
     {/if}
 
@@ -954,8 +997,10 @@
         {listableRows} {availableTags} {availableTypes}
         {visibleColumns} {presetSort} {emptyReason}
         {activePreset} {reserveCopies} {filtersOpen} {scoreExplainerDismissed}
+        {sellOnboardingDismissed} {keepCopiesNudgeDismissed}
         {isDesktop}
         {applyPreset} {setReserveCopies} {toggleFiltersOpen} {dismissScoreExplainer}
+        {dismissSellOnboarding} {dismissKeepCopiesNudge}
         {openListingFlow}
         {pendingBanner}
       />
@@ -1182,8 +1227,11 @@
         </div>
       </section>
 
-      <section class="card routine">
-        <h3>Daily</h3>
+      <details class="routine-checklist" bind:open={routineChecklistOpen}>
+        <summary>{routineChecklistOpen ? 'Hide checklist' : "Show me today's checklist"}</summary>
+
+        <section class="card routine">
+          <h3>Daily</h3>
         <ul class="routine-list">
           <li><strong>Login tribute</strong> — claim it; the milestone days hand out Endo and the exclusive weapons/Forma that fund everything else.</li>
           <li><strong>Keep the foundry busy</strong> — start a Forma or a sellable BP every day; an idle foundry is lost plat.</li>
@@ -1217,6 +1265,7 @@
           <li class="routine-avoid"><strong>Skip Eidolons &amp; Profit-Taker for Endo</strong> — they pay ~zero Endo; farm those for arcanes/plat instead.</li>
         </ul>
       </section>
+      </details>
 
     {:else if effectiveView === 'orders'}
       <section class="view-header">
@@ -1224,7 +1273,11 @@
         <p class="lede">Your active warframe.market listings, fetched live from the desktop app.</p>
       </section>
       {@render pendingBanner()}
-      <MyOrdersPanel {transport} />
+      <MyOrdersPanel
+        {transport}
+        {sessionEpoch}
+        onauthrequired={(code) => wfmAuthDialogsRef.open(code)}
+      />
 
     {:else if effectiveView === 'install'}
       <section class="view-header">
@@ -1307,8 +1360,8 @@
       <summary>I listed an item — what happens next?</summary>
       <p>
         Your listing sits on warframe.market (we create them
-        <strong>invisible</strong> so you can review first — flip them visible
-        in the review dialog or on WFM). When a buyer wants it, they message
+        <strong>hidden</strong> so you can review first — flip them visible
+        in My orders or on WFM). When a buyer wants it, they message
         you <strong>in-game</strong>: <code>/w YourName Hi! I want to buy your
         Serration…</code>. Invite them to your squad, go to any dojo or relay,
         open a trade, and put in the item while they put in the platinum.
@@ -1463,6 +1516,17 @@
       </div>
     </div>
   {/if}
+  {#if isDesktop && trayHint}
+    <div class="card warn-banner general-banner" role="status">
+      <div class="gb-body">
+        Still running in your tray. Closing the window keeps TennoWorth in the
+        background — use the tray icon's Quit to exit.
+      </div>
+      <div class="gb-actions">
+        <button class="gb-dismiss" aria-label="Dismiss" onclick={() => (trayHint = false)}>×</button>
+      </div>
+    </div>
+  {/if}
   {#if isDesktop}
     <DesktopUpdateBanner />
   {/if}
@@ -1487,7 +1551,7 @@
             <span class="muted">
               <span class="ok-text">{resumeOk} created</span>
               {#if resumeErr > 0}· <span class="bad">{resumeErr} failed</span>{/if}.
-              New listings are still invisible — toggle from the orders panel.
+              New listings are still hidden — toggle from the orders panel.
             </span>
           </div>
           <div class="row gap-sm">
@@ -1858,6 +1922,11 @@
     flex-wrap: wrap;
     margin-top: 12px;
   }
+  .desktop-hero .trust {
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 10px;
+  }
 
   /* Above-the-fold path from the market browser to the desktop showcase. */
   .app-path {
@@ -2065,6 +2134,20 @@
   .routine-list strong { color: var(--fg); font-weight: 600; }
   .routine-note { font-size: 12.5px; line-height: 1.5; margin: 0; color: var(--muted); }
   .routine-avoid { color: var(--muted); }
+  /* Routine checklist — the three routine cards sit behind a collapsed-by-
+     default <details> so the clocks (the daily urgency) stay above the fold. */
+  .routine-checklist { display: flex; flex-direction: column; gap: 12px; }
+  .routine-checklist summary {
+    cursor: pointer;
+    align-self: flex-start;
+    color: var(--muted);
+    font-size: 12px;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    user-select: none;
+  }
+  .routine-checklist summary:hover { color: var(--accent); }
+  .routine-checklist[open] summary { color: var(--accent); }
 
   /* Relic planner — three-card grid above the main table. Equal-weight
      cards because the user is making a "what tonight" choice and equal

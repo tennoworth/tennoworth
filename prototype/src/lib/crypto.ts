@@ -62,8 +62,10 @@ async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKe
 }
 
 export async function encryptPayload(payload: unknown, passphrase: string): Promise<EncryptedBlob> {
-  if (!passphrase || passphrase.length < 4) {
-    throw new Error('Passphrase must be at least 4 characters.');
+  // Third independent gate behind the dialog's minlength + JS validation. The
+  // backstop must match the UI floor (12), not drift back to the old 4.
+  if (!passphrase || passphrase.length < 12) {
+    throw new Error('Passphrase must be at least 12 characters.');
   }
   const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
   const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));

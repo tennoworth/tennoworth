@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { baroLocation, humanWindow, plat } from '../lib/format';
+  import { baroLocation, humanWindow, plat, freshnessLabel } from '../lib/format';
   import { onMount, onDestroy } from 'svelte';
   import type { Market } from '../lib/types';
   import {
@@ -69,7 +69,7 @@
   <div class="browser-head">
     <h2>What's worth selling right now</h2>
     <span class="market-status">
-      <span class="dot {freshness}" role="img" aria-label="Market data {freshness}"></span>
+      <span class="dot {freshness}" role="img" aria-label="Market data: {freshnessLabel(freshness)}" title={freshnessLabel(freshness)}></span>
       Market snapshot {staleness ?? '—'}{freshness !== 'unknown' ? ` · ${freshness}` : ''}
     </span>
   </div>
@@ -99,8 +99,8 @@
           <polyline points={sparklinePoints(r.medians_7d, 56, 16)} fill="none" stroke="currentColor" stroke-width="1.5" />
         </svg>
       {/if}
-      <span class="price">{plat(r.avg)}<span class="unit">p</span></span>
-      <span class="vol" title="48-hour trade volume">{r.vol.toLocaleString()}<span class="unit">/48h</span></span>
+      <span class="price" title="Average of recent WFM sales — list below it to sell faster">{plat(r.avg)}<span class="unit">p</span></span>
+      <span class="vol" title="Trades completed in the last 48 hours">{r.vol.toLocaleString()}<span class="unit">/48h</span></span>
     </div>
   {/snippet}
 
@@ -125,7 +125,7 @@
   </div>
 
   <div class="card movers">
-    <h3>Top movers <span class="muted">· vs 90-day median · vol ≥ 20</span></h3>
+    <h3 title="Compares the latest price to the 90-day median. Only items with 20+ sales in 48 h qualify, so one fluke sale can't move the list.">Top movers <span class="muted">· vs 90-day median · vol ≥ 20</span></h3>
     <div class="cols">
       <div class="col">
         <div class="col-label up">Rising</div>

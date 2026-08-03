@@ -108,6 +108,9 @@ Child components take callbacks (`onunlocked={fn}`, `onimport={fn}`) as
 - `wfminv:filters-open-v1` — filter panel expanded/collapsed.
 - `wfminv:view-v1` — selected view/preset.
 - `wfminv:score-explainer-dismissed-v1` — score explainer dismissed flag.
+- `wfminv:keep-copies-nudge-dismissed-v1` — keep-copies nudge dismissed flag.
+- `wfminv:tray-toast-seen-v1` — tray-toast shown (once-ever) flag.
+- `wfminv:sell-onboarding-dismissed-v1` — sell onboarding card dismissed flag.
 
 **Don't read/write these via raw `localStorage` calls.** Go through
 `src/lib/state-store.ts`'s `store.getSetting`/`setSetting` (`SettingKey`

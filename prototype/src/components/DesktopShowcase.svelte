@@ -55,7 +55,7 @@
   const feature = [
     { title: 'Scan the game', body: 'One click reads the running game\u2019s memory \u2014 no file, no terminal, no copy-paste.' },
     { title: 'Ranked sell list', body: 'Your items scored by expected plat, not raw averages \u2014 preset filters for vaulted, ducats, and more.' },
-    { title: 'List on WFM', body: 'Review and price a batch, post invisible, then manage your orders in-app.' },
+    { title: 'List on WFM', body: 'Review and price a batch, post hidden, then manage your orders in-app.' },
     { title: 'No Overwolf, no accounts', body: 'Reads memory locally; logs into warframe.market only when you list. Nothing is uploaded to us.' },
   ] as const;
 
@@ -73,6 +73,10 @@
   const PTRACE_NOTE = 'Linux: grant ptrace once so no sudo is needed per scan:';
   const PTRACE_CMD = 'sudo setcap cap_sys_ptrace=eip /usr/bin/tennoworth-desktop';
   const isLinux = $derived(activeOs !== 'windows');
+
+  // Screenshot slot: the real asset is a human follow-up, so the <img> loads
+  // it when it exists and the onerror drops back to the placeholder.
+  let shotFailed = $state(false);
 </script>
 
 <section id="desktop" class="desktop-showcase">
@@ -95,8 +99,19 @@
       >Download for Windows</a>
       <a class="btn ghost" href="#desktop-install">Linux — apt / dnf / AUR</a>
     </div>
+    <p class="trust">Reads memory only · open source · nothing leaves your machine</p>
     <div class="hero-shot">
-      <div class="frame">screenshot: the app's ranked sell list</div>
+      {#if shotFailed}
+        <div class="frame-fallback">screenshot: the app's ranked sell list</div>
+      {:else}
+        <img
+          class="shot"
+          src="screenshots/desktop-sell-list.png"
+          alt="Screenshot of TennoWorth Desktop's ranked sell list"
+          loading="lazy"
+          onerror={() => (shotFailed = true)}
+        />
+      {/if}
       <div class="cap">The market browser you're using now, plus your inventory ranked by expected plat.</div>
     </div>
   </div>
@@ -222,6 +237,7 @@
   }
   .hero .sub { color: var(--muted); max-width: 62ch; font-size: 14px; margin: 10px 0 0; }
   .hero .ctas { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
+  .hero .trust { margin: 12px 0 0; color: var(--muted); font-size: 12px; }
 
   .btn {
     appearance: none;
@@ -241,15 +257,18 @@
   .btn.small:hover { color: var(--accent); }
 
   .hero-shot { margin-top: 24px; border: 1px solid var(--hairline); border-radius: 8px; overflow: hidden; }
-  .hero-shot .frame {
+  .hero-shot .shot { display: block; width: 100%; }
+  /* The screenshot asset is a human follow-up; until it exists (or on a load
+     failure) this placeholder carries the same chrome so the slot never
+     renders unstyled. */
+  .hero-shot .frame-fallback {
     display: block;
-    background: var(--panel-2);
     color: var(--faint);
     font-size: 12px;
     text-align: center;
     padding: 46px 0;
-    border-bottom: 1px solid var(--hairline);
     font-family: ui-monospace, Menlo, monospace;
+    background: var(--panel-2);
   }
   .hero-shot .cap { padding: 8px 12px; font-size: 12px; color: var(--muted); }
 

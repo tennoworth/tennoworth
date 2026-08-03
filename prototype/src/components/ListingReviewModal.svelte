@@ -179,6 +179,12 @@
   );
   let errCount = $derived(serverResults.filter((r) => r.status !== 'ok').length);
 
+  // The results table only carries slugs; map back to human names so the
+  // "what did I just list" review isn't a wall of snake_case.
+  let planNameBySlug = $derived(
+    new Map(plan.map((r) => [r.slug, r.name])),
+  );
+
   let visibilityBusy = $state(false);
   let visibilityDone = $state(false);
   let visibilityResults = $state<ItemResult[]>([]);
@@ -227,9 +233,9 @@
           Review every row. Default price is the estimated clearing price —
           the lowest live ask, sanity-clamped against the recent median so a
           lone troll listing can't set it (floored at 5p). Rank 0 = unranked;
-          set a rank only if you're listing a leveled copy. Everything is
-          created <strong>invisible</strong> — you toggle visible later,
-          after spot-checking on warframe.market.
+          set a rank only if you're listing a leveled copy. Listings go up
+          <strong>hidden</strong> — no buyers can see them until you flip
+          them visible on the results screen (or later, in My orders).
         </p>
 
         <div class="bulkrow">
@@ -313,7 +319,7 @@
           <div class="actions">
             <button class="ghost" onclick={close}>Cancel</button>
             <button onclick={send} disabled={!canSubmit}>
-              Send {selectedCount} listings (invisible)
+              Send {selectedCount} listings (hidden)
             </button>
           </div>
         </footer>
@@ -328,9 +334,13 @@
           Done. <span class="ok">{okCount} created</span>
           {#if updatedCount > 0}· <span class="ok">{updatedCount} updated</span>{/if}
           {#if errCount > 0}· <span class="bad">{errCount} failed</span>{/if}.
-          New listings are <strong>invisible</strong> on WFM — log in to
-          warframe.market, eyeball them, then make them visible. Updated
-          orders keep their existing visibility and price history.
+          {#if visibilityDone}
+            Listings are <strong>visible</strong> — buyers can see them now.
+          {:else}
+            New listings start <strong>hidden</strong> — no buyers can see them
+            yet. Flip them visible after you've reviewed the prices.
+          {/if}
+          Updated orders keep their existing visibility and price history.
         </p>
         <div class="scroll">
           <table>
@@ -341,7 +351,10 @@
                   <td class:ok={r.status === 'ok'} class:bad={r.status !== 'ok'}>
                     {r.status === 'ok' ? '✓' : '✗'}
                   </td>
-                  <td>{r.slug}</td>
+                  <td>
+                    <span class="item-name">{planNameBySlug.get(r.slug) ?? r.slug}</span>
+                    <span class="item-slug">{r.slug}</span>
+                  </td>
                   <td class="muted">{r.message ?? r.order_id ?? ''}</td>
                 </tr>
               {/each}
@@ -446,6 +459,13 @@
   td.right { text-align: right; }
   td.muted { color: var(--muted); }
   tr.dim { opacity: 0.45; }
+  .item-name { color: var(--fg); }
+  .item-slug {
+    color: var(--muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+    margin-left: 6px;
+  }
   /* Leveled gear is a harder constraint than the Keep-copies reserve — the
      game itself won't let you trade it — so it gets the same warm tint
      ResultsTable uses for its owned-column note. */

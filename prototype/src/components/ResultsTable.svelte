@@ -531,6 +531,17 @@
     </tbody>
   </table>
 
+  {#if sorted.length === 0 && filterActive}
+    <div class="no-match">
+      No rows match your filter.
+      <button
+        type="button"
+        class="no-match-clear"
+        onclick={() => { filter = ''; activePills = new Set(); page = 0; }}
+      >Clear filters</button>
+    </div>
+  {/if}
+
   {#if sorted.length > pageSize}
     <div class="pager">
       <div class="muted">
@@ -871,6 +882,29 @@
   .tag.hold { color: var(--warn); }
   .tag.peak { color: var(--good); }
   .tag.relic-tag { color: var(--muted); }
+
+  .no-match {
+    padding: 18px 14px;
+    font-size: 13px;
+    color: var(--muted);
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .no-match-clear {
+    font: inherit;
+    font-size: 12px;
+    color: var(--accent);
+    background: transparent;
+    border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
+    border-radius: 5px;
+    padding: 3px 10px;
+    cursor: pointer;
+  }
+  .no-match-clear:hover { background: var(--panel-2); }
 
   .pager {
     display: flex;

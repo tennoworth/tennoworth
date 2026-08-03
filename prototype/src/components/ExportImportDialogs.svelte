@@ -74,8 +74,8 @@
       cryptoError = "Passphrases don't match.";
       return;
     }
-    if (exportPass.length < 4) {
-      cryptoError = 'Passphrase must be at least 4 characters.';
+    if (exportPass.length < 12) {
+      cryptoError = 'Passphrase must be at least 12 characters — same floor as your login passphrase.';
       return;
     }
     exportBusy = true;
@@ -163,9 +163,9 @@
         type="password"
         autocomplete="new-password"
         bind:value={exportPass}
-        placeholder="something only you'd type"
+        placeholder="12+ characters — same floor as your login passphrase"
         required
-        minlength="4"
+        minlength="12"
         autofocus
       />
     </label>
@@ -176,7 +176,7 @@
         autocomplete="new-password"
         bind:value={exportConfirm}
         required
-        minlength="4"
+        minlength="12"
       />
     </label>
     {#if cryptoError}
@@ -218,8 +218,8 @@
         type="password"
         autocomplete="current-password"
         bind:value={importPass}
+        placeholder="Type the passphrase this file was exported with."
         required
-        minlength="4"
         autofocus
       />
     </label>

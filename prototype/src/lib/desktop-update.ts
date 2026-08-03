@@ -36,6 +36,9 @@ export async function restartApp(): Promise<void> {
   await resolveInvoke()('restart_app');
 }
 
+/** Event name the Rust close-with-tray path emits so the SPA shows its once-ever tray banner. */
+export const TRAY_HINT_EVENT = 'tray-hint';
+
 /**
  * Push side: the Rust launch check emits `update-available` when it finds one.
  * Registration is best-effort (no-op when the event API is absent) because the
@@ -43,14 +46,20 @@ export async function restartApp(): Promise<void> {
  * lost, and a check that finishes after mount still lands here.
  */
 export function onUpdateAvailable(cb: (s: UpdateStatus) => void): void {
+  listenForTauriEvent('update-available', cb);
+}
+
+/**
+ * Register a Rust-emitted event listener. Best-effort: the hosted build has no
+ * Tauri event API, so a missing `__TAURI__.event.listen` is a silent no-op and
+ * a rejected registration is swallowed — both are the expected shape for the
+ * "desktop enhancement in a browser app" split this app lives in.
+ */
+export function listenForTauriEvent<T>(event: string, cb: (payload: T) => void): void {
   const w = globalThis as unknown as {
-    __TAURI__?: {
-      event?: {
-        listen?: (name: string, handler: (e: { payload: UpdateStatus }) => void) => Promise<unknown>;
-      };
-    };
+    __TAURI__?: { event?: { listen?: (name: string, handler: (e: { payload: T }) => void) => Promise<unknown> } };
   };
   const listen = w.__TAURI__?.event?.listen;
   if (!listen) return;
-  void listen('update-available', (e) => cb(e.payload)).catch(() => {});
+  void listen(event, (e) => cb(e.payload)).catch(() => {});
 }

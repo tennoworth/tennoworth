@@ -18,6 +18,12 @@ use crate::sellables::{self, MarketData, ScanNotification, SellableRow};
 /// How many sellables the tray menu shows.
 const TRAY_LIMIT: usize = 5;
 
+/// Emitted to the webview when the user closes the window while the tray still
+/// exists, so the SPA can show its once-ever "still running in the tray" toast.
+/// Event name only — the SPA also pins this literal on the TS side (no way to
+/// gate the two against each other across the language boundary).
+pub const EVENT_TRAY_HINT: &str = "tray-hint";
+
 /// Evidence-facing view of what the tray/notification code last produced. The
 /// GTK tray menu isn't reliably screenshot-able under headless Wayland, so the
 /// probe reads the labels the rebuild actually pushed and the last notification
