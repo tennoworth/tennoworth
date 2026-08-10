@@ -1,0 +1,15 @@
+[Unit]
+Description=Fast-forward the box's repo checkout at /srv/wfm/app and re-install the deployed copies
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/srv/wfm/pull-app.sh
+# pull-app.sh refuses to run while a scrape is in flight (replacing
+# run-scrape.sh under a running bash resumes it mid-file at a byte offset that
+# is now different code) and reports that with EX_TEMPFAIL. The scrape occupies
+# roughly half of every 2h window, so colliding is the NORMAL case, not a
+# fault — treat it as success and let the next timer tick find a gap. Any other
+# non-zero exit is a real failure and still surfaces in `systemctl --failed`.
+SuccessExitStatus=75

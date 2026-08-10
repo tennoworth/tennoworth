@@ -46,7 +46,12 @@ cd "$APP"
 if systemctl is-active --quiet wfm-scrape.service 2>/dev/null; then
   echo "ABORT: wfm-scrape.service is running. Re-run when it finishes:" >&2
   echo "  systemctl list-timers wfm-scrape.timer" >&2
-  exit 1
+  # EX_TEMPFAIL, not 1: a scrape occupies ~60 of every 120 minutes, so
+  # wfm-app-pull.timer hits this on about half its ticks. A distinct code lets
+  # the unit whitelist "busy, try later" (SuccessExitStatus=75) while every
+  # real failure still goes red — and a human running this by hand still sees
+  # a non-zero exit.
+  exit 75
 fi
 
 before=$(git rev-parse --short HEAD)
@@ -105,17 +110,27 @@ echo "pulled: $before -> $target"
 # never refreshed since. The running /srv/wfm/run-scrape.sh was six hours older
 # than the repo's — a pull that leaves the copies stale is cosmetic.
 # Re-install anything that drifted, or a pull is cosmetic.
-for f in run-scrape.sh pull-web.sh pull-scrape.sh pull-packages.sh; do
+#
+# pull-app.sh reinstalls ITSELF as well, or a fix to this script is the one
+# thing that still needs a human. That makes the install METHOD load-bearing:
+# `install` truncates and rewrites in place, and bash reads a script
+# incrementally — rewriting the file this process is still executing resumes it
+# at a byte offset that is now different code (the same hazard the scrape guard
+# above exists for). Stage beside the target and rename over it: rename swaps
+# the inode, so the running shell keeps reading the copy it started with.
+for f in run-scrape.sh pull-app.sh pull-web.sh pull-scrape.sh pull-packages.sh; do
   src="deploy/$f"
   [ -f "$src" ] || continue
-  if ! cmp -s "$src" "/srv/wfm/$f"; then
-    install -m 0755 "$src" "/srv/wfm/$f" && echo "  reinstalled /srv/wfm/$f"
+  if ! cmp -s "$src" "/srv/wfm/$f" 2>/dev/null; then
+    install -m 0755 "$src" "/srv/wfm/$f.new" \
+      && mv -f "/srv/wfm/$f.new" "/srv/wfm/$f" \
+      && echo "  reinstalled /srv/wfm/$f"
   fi
 done
 
 # Units need root plus a daemon-reload, so report rather than act — a puller
 # that silently restarts systemd units is a different and larger promise.
-for u in wfm-scrape wfm-web-pull wfm-scrape-pull wfm-repo-pull; do
+for u in wfm-scrape wfm-app-pull wfm-web-pull wfm-scrape-pull wfm-repo-pull; do
   for ext in service timer; do
     src="deploy/$u.$ext"; dst="/etc/systemd/system/$u.$ext"
     [ -f "$src" ] && [ -f "$dst" ] || continue

@@ -35,6 +35,10 @@ id wfm >/dev/null 2>&1 || useradd --system --create-home --home-dir /srv/wfm --s
 install -m 0755 "$DEPLOY/run-scrape.sh" /srv/wfm/run-scrape.sh
 install -m 0755 "$DEPLOY/pull-web.sh" /srv/wfm/pull-web.sh
 install -m 0755 "$DEPLOY/pull-scrape.sh" /srv/wfm/pull-scrape.sh
+# Without this the checkout at /srv/wfm/app only moves when a human moves it,
+# and the copies under /srv/wfm drift from the repo silently — the box ran a
+# retired pipeline 19 commits behind main for a week that way.
+install -m 0755 "$DEPLOY/pull-app.sh" /srv/wfm/pull-app.sh
 mkdir -p /srv/wfm/bin
 chown -R wfm:wfm /srv/wfm
 
@@ -53,15 +57,17 @@ else
   systemctl reload caddy
 fi
 
-echo "==> Scrape + web-pull + scrape-pull timers"
+echo "==> Scrape + app-pull + web-pull + scrape-pull timers"
 install -m 0644 "$DEPLOY/wfm-scrape.service"      /etc/systemd/system/wfm-scrape.service
 install -m 0644 "$DEPLOY/wfm-scrape.timer"        /etc/systemd/system/wfm-scrape.timer
+install -m 0644 "$DEPLOY/wfm-app-pull.service"    /etc/systemd/system/wfm-app-pull.service
+install -m 0644 "$DEPLOY/wfm-app-pull.timer"      /etc/systemd/system/wfm-app-pull.timer
 install -m 0644 "$DEPLOY/wfm-web-pull.service"    /etc/systemd/system/wfm-web-pull.service
 install -m 0644 "$DEPLOY/wfm-web-pull.timer"      /etc/systemd/system/wfm-web-pull.timer
 install -m 0644 "$DEPLOY/wfm-scrape-pull.service" /etc/systemd/system/wfm-scrape-pull.service
 install -m 0644 "$DEPLOY/wfm-scrape-pull.timer"   /etc/systemd/system/wfm-scrape-pull.timer
 systemctl daemon-reload
-systemctl enable --now wfm-scrape.timer wfm-web-pull.timer wfm-scrape-pull.timer
+systemctl enable --now wfm-scrape.timer wfm-app-pull.timer wfm-web-pull.timer wfm-scrape-pull.timer
 
 echo "==> Unattended security upgrades"
 apt-get install -y unattended-upgrades

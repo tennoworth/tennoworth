@@ -1,0 +1,15 @@
+[Unit]
+Description=Check for new commits on main every 30 minutes
+
+[Timer]
+# The checkout is what supplies run-scrape.sh and the unit files, so it has the
+# same "moves on every push" cadence as the web bundle. It is polled at the
+# slower 30min interval anyway because most attempts land while wfm-scrape.service
+# is running and skip (see SuccessExitStatus in the .service) — a tighter
+# interval would just spend more attempts hitting the same busy window.
+OnBootSec=8min
+OnUnitActiveSec=30min
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target
