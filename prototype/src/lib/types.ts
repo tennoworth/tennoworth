@@ -56,10 +56,27 @@ export type VaultStatus = 'vaulted' | 'vaulting-soon' | 'available';
 
 /** Baro Ki'Teer schedule, baked from warframestat at build time so the
  *  Baro view needs no runtime warframestat fetch. */
+/** One line of Baro's stock. `item` is the display name — resolve it through
+ *  `market.catalog` (display_name_lower → slug) to join it to prices. */
+export interface BaroStock {
+  item: string;
+  ducats?: number;
+  credits?: number;
+}
+
 interface Baro {
   activation: string;
   expiry: string;
   location: string;
+  /** What he is selling. Only obtainable during his ~48h visit — the upstream
+   *  endpoint returns an empty list between visits and publishes no schedule or
+   *  history — so the scraper carries the last captured list forward. That
+   *  means this can describe a PAST visit: compare `inventory_for` against
+   *  `activation` before calling it current. Absent until his first visit
+   *  after 2026-08-10, when the capture shipped. */
+  inventory?: BaroStock[];
+  /** The `activation` this stock was captured during. */
+  inventory_for?: string;
 }
 
 /** Full market.json shape. Optional fields cover older snapshots that

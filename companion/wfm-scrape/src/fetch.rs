@@ -368,7 +368,77 @@ pub fn fetch_baro(http: &dyn Http) -> HashMap<String, serde_json::Value> {
     out.insert("activation".into(), serde_json::Value::String(activation.into()));
     out.insert("expiry".into(), serde_json::Value::String(expiry.into()));
     out.insert("location".into(), serde_json::Value::String(location.into()));
+
+    // What he is actually selling — the part that decides whether any of this
+    // is actionable. It exists ONLY while he is at a relay: between visits the
+    // endpoint returns `inventory: []`, and warframestat publishes no schedule
+    // and no history (both verified empty against the live API). So a visit's
+    // stock can only be recorded during the ~48h he is present; miss the window
+    // and the next chance is his next visit, two weeks later. The caller carries
+    // the last captured list forward for exactly that reason.
+    //
+    // Absent (rather than empty) when he is away, so `carry_baro_inventory`
+    // can tell "no data this fetch" from "he is here selling nothing", and so
+    // reconcile's emptiness check keeps working on the surface as a whole.
+    let inventory: Vec<serde_json::Value> = data
+        .get("inventory")
+        .and_then(|i| i.as_array())
+        .map(|entries| {
+            entries
+                .iter()
+                .filter_map(|e| {
+                    let name = e.get("item").and_then(|n| n.as_str())?;
+                    let mut row = serde_json::Map::new();
+                    row.insert("item".into(), serde_json::Value::String(name.into()));
+                    // Ducat and credit cost are the whole point of the
+                    // sell-vs-feed-him comparison; keep them when present.
+                    for key in ["ducats", "credits"] {
+                        if let Some(v) = e.get(key).and_then(|v| v.as_i64()) {
+                            row.insert(key.into(), serde_json::Value::from(v));
+                        }
+                    }
+                    Some(serde_json::Value::Object(row))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    if !inventory.is_empty() {
+        out.insert("inventory".into(), serde_json::Value::Array(inventory));
+        // Which visit this stock belongs to, so a consumer can tell the live
+        // list from a leftover one without guessing from timestamps.
+        out.insert(
+            "inventory_for".into(),
+            serde_json::Value::String(activation.into()),
+        );
+    }
     out
+}
+
+/// Carry a previously captured Baro inventory forward when the current fetch
+/// has none.
+///
+/// `reconcile` cannot do this: it only substitutes the prior value when the
+/// WHOLE surface is empty, and Baro's is never empty — activation, expiry and
+/// location keep arriving between visits. Without this, the one list that is
+/// only obtainable during a 48h window would be dropped on the very next
+/// scrape after he leaves.
+///
+/// `inventory_for` travels with the list, so a consumer can compare it against
+/// the current `activation` and tell "what he is selling right now" from "what
+/// he sold last time".
+pub fn carry_baro_inventory(
+    fresh: &mut HashMap<String, serde_json::Value>,
+    prior: Option<&HashMap<String, serde_json::Value>>,
+) {
+    if fresh.is_empty() || fresh.contains_key("inventory") {
+        return;
+    }
+    let Some(prior) = prior else { return };
+    let (Some(inv), Some(for_)) = (prior.get("inventory"), prior.get("inventory_for")) else {
+        return;
+    };
+    fresh.insert("inventory".into(), inv.clone());
+    fresh.insert("inventory_for".into(), for_.clone());
 }
 
 pub const WFSTAT_ITEMS_URL: &str = "https://api.warframestat.us/items/";
@@ -471,5 +541,136 @@ mod tests {
         let empty = FixtureHttp { responses: HashMap::new() };
         let err = fetch_catalog_wfm(&empty, "https://api.warframe.market/v2/items");
         assert!(err.is_err());
+    }
+
+    const BARO_URL: &str = "https://api.warframestat.us/pc/voidTrader/";
+
+    fn baro_http(body: serde_json::Value) -> FixtureHttp {
+        let mut r = HashMap::new();
+        r.insert(BARO_URL.into(), body);
+        FixtureHttp { responses: r }
+    }
+
+    #[test]
+    fn baro_inventory_is_captured_while_he_is_present() {
+        let got = fetch_baro(&baro_http(serde_json::json!({
+            "activation": "2026-08-21T13:00:00.000Z",
+            "expiry": "2026-08-23T13:00:00.000Z",
+            "location": "Orcus Relay (Pluto)",
+            "inventory": [
+                {"item": "Primed Fury", "ducats": 350, "credits": 200000},
+                {"item": "Prisma Grakata", "ducats": 500, "credits": 300000}
+            ]
+        })));
+        let inv = got.get("inventory").unwrap().as_array().unwrap();
+        assert_eq!(inv.len(), 2);
+        assert_eq!(inv[0].get("item").unwrap(), "Primed Fury");
+        assert_eq!(inv[0].get("ducats").unwrap(), 350);
+        assert_eq!(inv[0].get("credits").unwrap(), 200000);
+        // Tagged with the visit it belongs to.
+        assert_eq!(
+            got.get("inventory_for").unwrap(),
+            "2026-08-21T13:00:00.000Z"
+        );
+    }
+
+    #[test]
+    fn baro_inventory_is_absent_not_empty_between_visits() {
+        // The live shape while he is away: schedule fields present, inventory [].
+        let got = fetch_baro(&baro_http(serde_json::json!({
+            "activation": "2026-08-21T13:00:00.000Z",
+            "expiry": "2026-08-23T13:00:00.000Z",
+            "location": "Orcus Relay (Pluto)",
+            "inventory": []
+        })));
+        assert!(got.contains_key("activation"), "schedule still lands");
+        assert!(!got.contains_key("inventory"), "absent, so carry-forward can fire");
+        assert!(!got.contains_key("inventory_for"));
+    }
+
+    #[test]
+    fn baro_entries_without_an_item_name_are_dropped() {
+        let got = fetch_baro(&baro_http(serde_json::json!({
+            "activation": "a", "expiry": "b", "location": "c",
+            "inventory": [{"ducats": 350}, {"item": "Primed Fury"}]
+        })));
+        let inv = got.get("inventory").unwrap().as_array().unwrap();
+        assert_eq!(inv.len(), 1);
+        assert_eq!(inv[0].get("item").unwrap(), "Primed Fury");
+        // Optional fields simply do not appear rather than defaulting to 0 —
+        // a missing ducat cost is unknown, not free.
+        assert!(inv[0].get("ducats").is_none());
+    }
+
+    #[test]
+    fn carry_forward_preserves_the_last_visits_stock() {
+        let prior: HashMap<String, serde_json::Value> = serde_json::from_value(serde_json::json!({
+            "activation": "2026-08-21T13:00:00.000Z",
+            "expiry": "2026-08-23T13:00:00.000Z",
+            "location": "Orcus Relay (Pluto)",
+            "inventory": [{"item": "Primed Fury", "ducats": 350}],
+            "inventory_for": "2026-08-21T13:00:00.000Z"
+        }))
+        .unwrap();
+        // The next scrape, after he has left: new schedule, no stock.
+        let mut fresh: HashMap<String, serde_json::Value> = serde_json::from_value(serde_json::json!({
+            "activation": "2026-09-04T13:00:00.000Z",
+            "expiry": "2026-09-06T13:00:00.000Z",
+            "location": "Kronia Relay (Saturn)"
+        }))
+        .unwrap();
+
+        carry_baro_inventory(&mut fresh, Some(&prior));
+
+        // The NEW schedule wins; the OLD stock is kept and still labelled with
+        // the visit it came from, so a consumer can see it is not current.
+        assert_eq!(fresh.get("activation").unwrap(), "2026-09-04T13:00:00.000Z");
+        assert_eq!(fresh.get("inventory").unwrap().as_array().unwrap().len(), 1);
+        assert_eq!(fresh.get("inventory_for").unwrap(), "2026-08-21T13:00:00.000Z");
+    }
+
+    #[test]
+    fn carry_forward_never_overwrites_a_live_capture() {
+        let prior: HashMap<String, serde_json::Value> = serde_json::from_value(serde_json::json!({
+            "inventory": [{"item": "Old Thing"}],
+            "inventory_for": "2026-08-21T13:00:00.000Z"
+        }))
+        .unwrap();
+        let mut fresh: HashMap<String, serde_json::Value> = serde_json::from_value(serde_json::json!({
+            "activation": "2026-09-04T13:00:00.000Z",
+            "inventory": [{"item": "New Thing"}],
+            "inventory_for": "2026-09-04T13:00:00.000Z"
+        }))
+        .unwrap();
+
+        carry_baro_inventory(&mut fresh, Some(&prior));
+
+        assert_eq!(fresh.get("inventory").unwrap()[0].get("item").unwrap(), "New Thing");
+        assert_eq!(fresh.get("inventory_for").unwrap(), "2026-09-04T13:00:00.000Z");
+    }
+
+    #[test]
+    fn carry_forward_is_inert_without_usable_prior_data() {
+        let mut fresh: HashMap<String, serde_json::Value> =
+            serde_json::from_value(serde_json::json!({"activation": "x"})).unwrap();
+        carry_baro_inventory(&mut fresh, None);
+        assert!(!fresh.contains_key("inventory"));
+
+        // A prior with a list but no `inventory_for` is pre-upgrade data; taking
+        // it would leave stock that cannot be dated.
+        let partial: HashMap<String, serde_json::Value> =
+            serde_json::from_value(serde_json::json!({"inventory": [{"item": "x"}]})).unwrap();
+        carry_baro_inventory(&mut fresh, Some(&partial));
+        assert!(!fresh.contains_key("inventory"));
+
+        // A totally failed fetch stays failed — carry-forward must not
+        // resurrect a surface reconcile is about to treat as empty.
+        let mut failed: HashMap<String, serde_json::Value> = HashMap::new();
+        let full: HashMap<String, serde_json::Value> = serde_json::from_value(serde_json::json!({
+            "inventory": [{"item": "x"}], "inventory_for": "t"
+        }))
+        .unwrap();
+        carry_baro_inventory(&mut failed, Some(&full));
+        assert!(failed.is_empty());
     }
 }

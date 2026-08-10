@@ -283,6 +283,12 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     let r_s2p = reconcile("set_to_parts", set_to_parts, s2p_old.as_ref(), prior_stamps.get("set_to_parts").map(|s| s.as_str()), now, parents_complete, STALE_DAYS);
     let r_rr = reconcile("relic_rewards", relic_rewards, rr_old.as_ref(), prior_stamps.get("relic_rewards").map(|s| s.as_str()), now, true, STALE_DAYS);
     let r_vs = reconcile("vault_status", vault_status, vs_old.as_ref(), prior_stamps.get("vault_status").map(|s| s.as_str()), now, vault_complete, STALE_DAYS);
+    // Before reconcile, not after: reconcile only falls back to the prior value
+    // when the whole surface is empty, and Baro's never is (schedule fields keep
+    // arriving between visits). His inventory is capturable only during the 48h
+    // he is present, so it has to be carried across explicitly.
+    let mut baro = baro;
+    fetch::carry_baro_inventory(&mut baro, baro_old.as_ref());
     let r_baro = reconcile("baro", baro, baro_old.as_ref(), prior_stamps.get("baro").map(|s| s.as_str()), now, true, STALE_DAYS);
 
     for r in [&r_p2i, &r_s2p, &r_rr] {
