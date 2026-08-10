@@ -42,6 +42,17 @@ install -m 0755 "$DEPLOY/pull-app.sh" /srv/wfm/pull-app.sh
 mkdir -p /srv/wfm/bin
 chown -R wfm:wfm /srv/wfm
 
+# The pullers run as root against a wfm-owned checkout, which git rejects as
+# "dubious ownership" unless the path is vouched for. It must be --system:
+# --global writes /root/.gitconfig, which git only finds via HOME, and systemd
+# starts these units with no HOME set — so a --global exception works when you
+# run the script by hand over ssh and fails the moment the timer fires it.
+# safe.directory is also deliberately ignored from a repo's own local config.
+# --add unconditionally would stack a duplicate line on every re-run; this
+# script is meant to be safe to re-run.
+git config --system --get-all safe.directory 2>/dev/null | grep -qx "$REPO" \
+  || git config --system --add safe.directory "$REPO"
+
 echo "==> Caddy config"
 if [ -s /etc/caddy/Caddyfile ] && ! grep -q 'prototype/dist' /etc/caddy/Caddyfile; then
   # A non-empty Caddyfile that isn't ours = this box already serves other sites.
