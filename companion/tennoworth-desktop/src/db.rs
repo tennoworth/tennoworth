@@ -43,6 +43,32 @@ CREATE TABLE listing_log (            -- what we listed, when, at what price
   outcome TEXT                        -- NULL until sold/cancelled observed
 );
 "#,
+    // v2 — make listing_log actually recordable.
+    //
+    // v1 shipped the table and nothing ever wrote a row, so every plan's
+    // evidence died with the modal that displayed it. Writing it needs four
+    // things v1 has no column for:
+    //   plan_id  — groups the items of one batch, so a partial run reads as
+    //              one event instead of N unrelated rows.
+    //   status   — the point of the log. An 'error' row IS the record of what
+    //              went wrong; without it only successes are representable.
+    //   action   — created vs updated (the duplicate-listing reconcile path).
+    //   order_id — the join key for observing `outcome` later: diff these
+    //              against a later GET /orders and a vanished id means sold or
+    //              cancelled. Nothing does that yet; this is what makes it
+    //              possible without a second migration.
+    //
+    // status defaults to 'ok' only to satisfy NOT NULL on the zero pre-existing
+    // rows; every insert passes it explicitly.
+    r#"
+ALTER TABLE listing_log ADD COLUMN plan_id TEXT;
+ALTER TABLE listing_log ADD COLUMN status TEXT NOT NULL DEFAULT 'ok';
+ALTER TABLE listing_log ADD COLUMN action TEXT;
+ALTER TABLE listing_log ADD COLUMN order_id TEXT;
+ALTER TABLE listing_log ADD COLUMN message TEXT;
+CREATE INDEX listing_log_slug_at ON listing_log(slug, listed_at);
+CREATE INDEX listing_log_order ON listing_log(order_id);
+"#,
 ];
 
 /// One aggregated inventory row for a snapshot: `slug` is the DE item path
@@ -69,6 +95,39 @@ pub struct SnapshotSummary {
     pub taken_at: String,
     pub source: String,
     pub item_count: i64,
+}
+
+/// What to record for one item of a plan run. Built by the listing command
+/// layer from the plan's own items joined to their results — wfm-core stays
+/// storage-free, so the DB write happens here rather than inside the executor.
+pub struct ListingLogRow {
+    pub slug: String,
+    pub price: i64,
+    pub qty: i64,
+    /// "ok" | "skipped" | "error", verbatim from the plan result.
+    pub status: String,
+    /// "created" | "updated" on success, None otherwise.
+    pub action: Option<String>,
+    pub order_id: Option<String>,
+    /// WFM's own error text on failure — the evidence that used to be lost.
+    pub message: Option<String>,
+}
+
+/// A stored `listing_log` row, as handed to the SPA.
+#[derive(serde::Serialize)]
+pub struct ListingLogEntry {
+    pub id: i64,
+    pub plan_id: Option<String>,
+    pub slug: String,
+    pub listed_at: String,
+    pub price: i64,
+    pub qty: i64,
+    pub status: String,
+    pub action: Option<String>,
+    pub order_id: Option<String>,
+    pub message: Option<String>,
+    /// NULL until a later orders-diff observes the listing sold or cancelled.
+    pub outcome: Option<String>,
 }
 
 /// The open database. `Connection` is not `Sync`, so it lives behind a `Mutex`;
@@ -175,6 +234,73 @@ impl Db {
         Ok(snapshot_id)
     }
 
+    /// Append one plan run's items to `listing_log`. One transaction per run,
+    /// so a partial write can't leave half a batch recorded.
+    ///
+    /// `listed_at` is the DB's clock rather than the caller's: these rows are
+    /// compared against each other over time, and one consistent clock is worth
+    /// more here than matching whatever the plan started at.
+    pub fn insert_listing_log(
+        &self,
+        plan_id: &str,
+        rows: &[ListingLogRow],
+    ) -> rusqlite::Result<usize> {
+        if rows.is_empty() {
+            return Ok(0);
+        }
+        let mut conn = self.conn.lock().unwrap();
+        let tx = conn.transaction()?;
+        {
+            let mut stmt = tx.prepare(
+                "INSERT INTO listing_log
+                   (plan_id, slug, listed_at, price, qty, status, action, order_id, message)
+                 VALUES (?1, ?2, strftime('%Y-%m-%dT%H:%M:%SZ','now'), ?3, ?4, ?5, ?6, ?7, ?8)",
+            )?;
+            for r in rows {
+                stmt.execute((
+                    plan_id,
+                    &r.slug,
+                    r.price,
+                    r.qty,
+                    &r.status,
+                    &r.action,
+                    &r.order_id,
+                    &r.message,
+                ))?;
+            }
+        }
+        tx.commit()?;
+        Ok(rows.len())
+    }
+
+    /// Most recent `listing_log` rows, newest first.
+    pub fn list_listing_log(&self, limit: i64) -> rusqlite::Result<Vec<ListingLogEntry>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare(
+            "SELECT id, plan_id, slug, listed_at, price, qty, status, action, order_id,
+                    message, outcome
+               FROM listing_log
+              ORDER BY id DESC
+              LIMIT ?1",
+        )?;
+        let rows = stmt.query_map([limit], |r| {
+            Ok(ListingLogEntry {
+                id: r.get(0)?,
+                plan_id: r.get(1)?,
+                slug: r.get(2)?,
+                listed_at: r.get(3)?,
+                price: r.get(4)?,
+                qty: r.get(5)?,
+                status: r.get(6)?,
+                action: r.get(7)?,
+                order_id: r.get(8)?,
+                message: r.get(9)?,
+                outcome: r.get(10)?,
+            })
+        })?;
+        rows.collect()
+    }
+
     /// The item rows of the most recent snapshot (highest id), or an empty vec
     /// when no snapshot exists yet. `slug` is the DE item path — the caller
     /// resolves it to a WFM slug for the market join (see `sellables`).
@@ -270,9 +396,11 @@ mod tests {
     }
 
     #[test]
-    fn migration_creates_the_full_schema_at_v1() {
+    fn migration_creates_the_full_schema() {
         let db = Db::open_in_memory().unwrap();
-        assert_eq!(db.user_version().unwrap(), 1);
+        // Against MIGRATIONS.len(), not a literal: a hardcoded version silently
+        // stops testing the newest migration the moment one is appended.
+        assert_eq!(db.user_version().unwrap(), MIGRATIONS.len() as i64);
         let conn = db.conn.lock().unwrap();
         let mut names: Vec<String> = conn
             .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
@@ -297,15 +425,16 @@ mod tests {
     #[test]
     fn migration_runner_is_idempotent_across_reopen() {
         let path = temp_db_path();
+        let latest = MIGRATIONS.len() as i64;
         {
             let db = Db::open(&path).unwrap();
             db.set_setting("k", "v").unwrap();
-            assert_eq!(db.user_version().unwrap(), 1);
+            assert_eq!(db.user_version().unwrap(), latest);
         }
         // Reopen: migrate() runs again but must apply nothing and preserve data.
         {
             let db = Db::open(&path).unwrap();
-            assert_eq!(db.user_version().unwrap(), 1);
+            assert_eq!(db.user_version().unwrap(), latest);
             assert_eq!(db.get_setting("k").unwrap().as_deref(), Some("v"));
         }
         // Running the runner directly a second time on a live conn is a no-op.
@@ -314,7 +443,7 @@ mod tests {
             let conn = db.conn.lock().unwrap();
             migrate(&conn).unwrap();
             drop(conn);
-            assert_eq!(db.user_version().unwrap(), 1);
+            assert_eq!(db.user_version().unwrap(), latest);
         }
         let _ = std::fs::remove_file(&path);
     }
@@ -450,5 +579,115 @@ mod tests {
         )
         .unwrap();
         assert_eq!(db.snapshot_count().unwrap(), 1);
+    }
+
+    fn row(slug: &str, status: &str) -> ListingLogRow {
+        ListingLogRow {
+            slug: slug.into(),
+            price: 42,
+            qty: 2,
+            status: status.into(),
+            action: Some("created".into()),
+            order_id: Some(format!("{slug}-oid")),
+            message: None,
+        }
+    }
+
+    #[test]
+    fn listing_log_records_a_plan_and_reads_it_back_newest_first() {
+        let db = Db::open_in_memory().unwrap();
+        assert_eq!(db.list_listing_log(10).unwrap().len(), 0);
+
+        assert_eq!(db.insert_listing_log("plan-a", &[row("mag_prime_set", "ok")]).unwrap(), 1);
+        assert_eq!(db.insert_listing_log("plan-b", &[row("rhino_prime_set", "ok")]).unwrap(), 1);
+
+        let all = db.list_listing_log(10).unwrap();
+        assert_eq!(all.len(), 2);
+        // Newest first.
+        assert_eq!(all[0].slug, "rhino_prime_set");
+        assert_eq!(all[0].plan_id.as_deref(), Some("plan-b"));
+        assert_eq!(all[1].slug, "mag_prime_set");
+        assert_eq!(all[0].price, 42);
+        assert_eq!(all[0].qty, 2);
+        assert_eq!(all[0].order_id.as_deref(), Some("rhino_prime_set-oid"));
+        // Not yet observed as sold/cancelled.
+        assert!(all[0].outcome.is_none());
+        // The DB stamps the time; nothing is allowed to leave it empty.
+        assert!(!all[0].listed_at.is_empty());
+
+        assert_eq!(db.list_listing_log(1).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn listing_log_preserves_failure_evidence() {
+        // The whole point of the table: an error row must survive the modal
+        // that displayed it, carrying WFM's own message.
+        let db = Db::open_in_memory().unwrap();
+        let failed = ListingLogRow {
+            slug: "loki_prime_set".into(),
+            price: 90,
+            qty: 1,
+            status: "error".into(),
+            action: None,
+            order_id: None,
+            message: Some("app.field.orders.perTradeMustDivideQuantity".into()),
+            ..row("loki_prime_set", "error")
+        };
+        db.insert_listing_log("plan-c", &[failed]).unwrap();
+
+        let got = db.list_listing_log(10).unwrap();
+        assert_eq!(got[0].status, "error");
+        assert_eq!(
+            got[0].message.as_deref(),
+            Some("app.field.orders.perTradeMustDivideQuantity")
+        );
+        assert!(got[0].action.is_none());
+        assert!(got[0].order_id.is_none());
+    }
+
+    #[test]
+    fn empty_plan_writes_nothing() {
+        let db = Db::open_in_memory().unwrap();
+        assert_eq!(db.insert_listing_log("plan-empty", &[]).unwrap(), 0);
+        assert_eq!(db.list_listing_log(10).unwrap().len(), 0);
+    }
+
+    #[test]
+    fn v1_databases_upgrade_without_losing_rows() {
+        // Shipped users are on v1. Build a v1 DB the way they have one — run
+        // ONLY the first migration — put a row in it, then open it normally and
+        // check v2's ALTERs landed on top of the existing data rather than
+        // recreating the table.
+        let path = temp_db_path();
+        {
+            let conn = Connection::open(&path).unwrap();
+            conn.execute_batch(MIGRATIONS[0]).unwrap();
+            conn.pragma_update(None, "user_version", 1i64).unwrap();
+            conn.execute(
+                "INSERT INTO listing_log (slug, listed_at, price, qty)
+                 VALUES ('legacy_item', '2026-01-01T00:00:00Z', 7, 1)",
+                [],
+            )
+            .unwrap();
+        }
+
+        let db = Db::open(&path).unwrap();
+        assert_eq!(db.user_version().unwrap(), MIGRATIONS.len() as i64);
+
+        let rows = db.list_listing_log(10).unwrap();
+        assert_eq!(rows.len(), 1, "the pre-existing v1 row must survive");
+        assert_eq!(rows[0].slug, "legacy_item");
+        assert_eq!(rows[0].price, 7);
+        // Columns v1 never had: NULL for the legacy row, except `status`, whose
+        // DEFAULT backfills it.
+        assert_eq!(rows[0].status, "ok");
+        assert!(rows[0].plan_id.is_none());
+        assert!(rows[0].order_id.is_none());
+
+        // And the upgraded table still accepts new writes.
+        db.insert_listing_log("plan-after", &[row("new_item", "ok")]).unwrap();
+        assert_eq!(db.list_listing_log(10).unwrap().len(), 2);
+
+        let _ = std::fs::remove_file(&path);
     }
 }

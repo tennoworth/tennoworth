@@ -105,6 +105,7 @@ fn main() {
             commands::settings::set_reserve,
             commands::settings::delete_reserve,
             commands::settings::list_snapshots,
+            commands::settings::list_listing_log,
             commands::market::cached_market,
             commands::market::refresh_market,
             commands::market::top_sellables,

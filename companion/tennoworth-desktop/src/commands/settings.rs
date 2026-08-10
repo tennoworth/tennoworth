@@ -3,7 +3,7 @@
 
 use tauri::State;
 
-use crate::db::{Db, Reserve, SnapshotSummary};
+use crate::db::{Db, ListingLogEntry, Reserve, SnapshotSummary};
 
 #[tauri::command]
 pub fn get_setting(db: State<'_, Db>, key: String) -> Result<Option<String>, String> {
@@ -33,4 +33,11 @@ pub fn delete_reserve(db: State<'_, Db>, slug: String) -> Result<(), String> {
 #[tauri::command]
 pub fn list_snapshots(db: State<'_, Db>, limit: i64) -> Result<Vec<SnapshotSummary>, String> {
     db.list_snapshots(limit).map_err(|e| e.to_string())
+}
+
+/// What we listed, when, at what price, and whether it worked — newest first.
+/// Written by the listing commands; see `commands::listing::record_plan`.
+#[tauri::command]
+pub fn list_listing_log(db: State<'_, Db>, limit: i64) -> Result<Vec<ListingLogEntry>, String> {
+    db.list_listing_log(limit).map_err(|e| e.to_string())
 }
