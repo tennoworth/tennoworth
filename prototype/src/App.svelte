@@ -1275,6 +1275,7 @@
       {@render pendingBanner()}
       <MyOrdersPanel
         {transport}
+        {market}
         {sessionEpoch}
         onauthrequired={(code) => wfmAuthDialogsRef.open(code)}
       />

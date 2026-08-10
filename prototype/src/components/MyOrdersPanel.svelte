@@ -3,6 +3,9 @@
   import { DesktopCmdError, type Transport } from '../lib/transport';
   import { MAX_PLATINUM } from '../lib/limits';
   import { humanError } from '../lib/errors';
+  import { selectDrifted, type DriftRow } from '../lib/order-drift';
+  import { LIQUID_VOL } from '../lib/sell-priority';
+  import type { Market } from '../lib/types';
   import Toast from './Toast.svelte';
 
   // WFM order shape is open — many fields appear depending on the
@@ -26,6 +29,9 @@
 
   interface Props {
     transport: Transport;
+    /** Price reference for the drift check. Null on a snapshot-less load —
+     *  the drift section simply does not render. */
+    market?: Market | null;
     /** Bumped by the parent when the WFM session unlocks — re-fetches so a
      *  fetch gated on needs_login/needs_unlock retries automatically. */
     sessionEpoch?: number;
@@ -33,7 +39,7 @@
      *  tries the OS-keyring silent unlock before showing the passphrase). */
     onauthrequired?: (code: 'needs_login' | 'needs_unlock') => void;
   }
-  let { transport, sessionEpoch = 0, onauthrequired }: Props = $props();
+  let { transport, market = null, sessionEpoch = 0, onauthrequired }: Props = $props();
 
   type Phase = 'idle' | 'loading' | 'locked' | 'done' | 'error';
   let phase = $state<Phase>('idle');
@@ -230,6 +236,52 @@
     }
   }
 
+  // The market snapshot keys on slug, so an order that never resolves to one
+  // simply cannot be price-checked. Same defensive shape as itemName.
+  function itemSlug(o: WfmOrder): string {
+    return o.item?.slug || o.slug || '';
+  }
+
+  // Orders whose price has drifted from the market. Recomputed whenever the
+  // orders list or the snapshot changes — repricing one row drops it out.
+  let drifted = $derived.by((): DriftRow[] => {
+    if (!market?.items) return [];
+    return selectDrifted(
+      orders
+        .filter((o) => o.type !== 'buy')
+        .map((o) => {
+          const slug = itemSlug(o);
+          return {
+            id: o.id,
+            slug,
+            name: itemName(o),
+            platinum: o.platinum,
+            type: o.type,
+            m: slug ? market.items[slug] : null,
+          };
+        })
+        .filter((r) => r.slug !== ''),
+    );
+  });
+
+  // Applies the suggestion as a normal price edit — same transport call, same
+  // success assertion, so a WFM rejection cannot silently desync the row.
+  async function reprice(row: DriftRow): Promise<void> {
+    const o = orders.find((x) => x.id === row.id);
+    if (!o) return;
+    markBusy(row.id, true);
+    try {
+      assertOrderOk(await transport.updateOrder(row.id, { platinum: row.suggested }));
+      o.platinum = row.suggested;
+      orders = [...orders];
+      pushToast(`${row.name} repriced to ${row.suggested}p.`);
+    } catch (e) {
+      pushToast(`Couldn't reprice: ${humanError(e)}`, 'error');
+    } finally {
+      markBusy(row.id, false);
+    }
+  }
+
   // WFM order objects nest the item info — name lookup is defensive.
   function itemName(o: WfmOrder): string {
     return (
@@ -269,6 +321,39 @@
       <button class="ghost" onclick={loadOrders} disabled={phase === 'loading'}>Refresh</button>
     </div>
   </header>
+
+  {#if drifted.length > 0}
+    <div class="drift">
+      <p class="drift-lead">
+        The market moved under {drifted.length}
+        {drifted.length === 1 ? 'listing' : 'listings'}. Prices come from the
+        last snapshot, so treat them as a starting point, not a quote.
+      </p>
+      <ul class="drift-list">
+        {#each drifted as d (d.id)}
+          <li class="drift-row">
+            <span class="drift-name" title={d.slug}>{d.name}</span>
+            <span class="drift-move">
+              {d.listed}p → <strong>{d.suggested}p</strong>
+              <span class="drift-kind {d.kind}">
+                {d.kind === 'overpriced' ? 'above market' : 'under market'}
+                ({Math.round(d.delta_pct * 100)}%)
+              </span>
+              {#if d.thin}
+                <span class="drift-thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor — thin books make this a weak signal.">thin</span>
+              {/if}
+            </span>
+            <button
+              class="tiny"
+              onclick={() => reprice(d)}
+              disabled={busyIds.has(d.id)}
+              title="Update this listing to {d.suggested}p on warframe.market"
+            >Reprice</button>
+          </li>
+        {/each}
+      </ul>
+    </div>
+  {/if}
 
   {#if phase === 'error'}
     <div class="muted bad">Couldn't load orders: {error}</div>
@@ -420,4 +505,35 @@
     padding: 2px 4px;
   }
   .muted.bad { color: var(--bad); }
+  .drift {
+    border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--border));
+    background: color-mix(in srgb, var(--warn) 6%, transparent);
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 12px;
+  }
+  .drift-lead { margin: 0 0 8px; font-size: 12px; color: var(--muted); }
+  .drift-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .drift-row { display: flex; align-items: center; gap: 10px; font-size: 12px; }
+  .drift-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .drift-move { flex: 0 0 auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .drift-kind { color: var(--muted); font-family: inherit; }
+  .drift-kind.overpriced { color: var(--warn); }
+  .drift-thin {
+    padding: 1px 5px;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    border: 1px solid currentColor;
+    border-radius: 3px;
+    color: var(--warn);
+    font-family: inherit;
+  }
 </style>
