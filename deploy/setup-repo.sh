@@ -59,11 +59,24 @@ basedir /srv/wfm/repo/apt
 EOF
 
 # %_gpg_name is how `rpm --addsign` picks a key; without it rpmsign fails with
-# an unhelpful "Could not exec gpg".
-cat > /root/.rpmmacros <<EOF
+# an unhelpful "Could not exec gpg" (or, on this rpm build, `You must set
+# "%_gpg_name" in your macro file`).
+#
+# It goes in /etc/rpm/macros, NOT /root/.rpmmacros: rpm only finds ~/.rpmmacros
+# through HOME, and wfm-repo-pull.service runs with no HOME set. That is not
+# theoretical — the box had exactly this file and the dnf repo still sat 9 days
+# stale on an unsigned-by-the-new-key build, because every publish since the
+# 0.3.5 release failed at the signing step while `bash` runs of the same script
+# worked. Same shape as the git safe.directory exception in setup-container.sh.
+#
+# /etc/rpm/macros.d/ is NOT read by the rpm in Debian stable — verified on the
+# box, the macro stayed UNSET from there. Use the flat file.
+mkdir -p /etc/rpm
+cat > /etc/rpm/macros <<EOF
 %_gpg_name $FPR
 %_gpg_path /root/.gnupg
 EOF
+chmod 0644 /etc/rpm/macros
 
 # The .repo file dnf users install. gpgcheck=1 verifies each package's own
 # signature; repo_gpgcheck=1 verifies the signed repomd.xml on top, so a
