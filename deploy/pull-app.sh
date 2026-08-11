@@ -43,16 +43,32 @@ LIVE_ARTIFACTS=(
 
 cd "$APP"
 
-if systemctl is-active --quiet wfm-scrape.service 2>/dev/null; then
-  echo "ABORT: wfm-scrape.service is running. Re-run when it finishes:" >&2
-  echo "  systemctl list-timers wfm-scrape.timer" >&2
-  # EX_TEMPFAIL, not 1: a scrape occupies ~60 of every 120 minutes, so
-  # wfm-app-pull.timer hits this on about half its ticks. A distinct code lets
-  # the unit whitelist "busy, try later" (SuccessExitStatus=75) while every
-  # real failure still goes red — and a human running this by hand still sees
-  # a non-zero exit.
-  exit 75
-fi
+# NOT `is-active --quiet`. A Type=oneshot service reports `activating` for the
+# WHOLE of its ExecStart and only reaches `active` on completion (and only with
+# RemainAfterExit, which wfm-scrape.service does not set) — so `is-active`
+# returns non-zero for the entire hour the scrape is actually running, and the
+# guard sailed through in precisely the window it exists to block. Observed on
+# the box 2026-08-11: `is-active` printed `activating` while a scrape was
+# mid-run and the pull proceeded anyway; it was harmless only because
+# run-scrape.sh happened not to differ in that commit range.
+#
+# Test the settled states instead, so any not-settled state counts as busy.
+scrape_state=$(systemctl show wfm-scrape.service -p ActiveState --value 2>/dev/null || true)
+case "${scrape_state:-unknown}" in
+  # `unknown`/empty means systemd could not be queried at all (running this off
+  # the box, no such unit) — nothing to collide with, so proceed.
+  inactive|failed|unknown) ;;
+  *)
+    echo "ABORT: wfm-scrape.service is $scrape_state. Re-run when it finishes:" >&2
+    echo "  systemctl list-timers wfm-scrape.timer" >&2
+    # EX_TEMPFAIL, not 1: a scrape occupies ~60 of every 120 minutes, so
+    # wfm-app-pull.timer hits this on about half its ticks. A distinct code lets
+    # the unit whitelist "busy, try later" (SuccessExitStatus=75) while every
+    # real failure still goes red — and a human running this by hand still sees
+    # a non-zero exit.
+    exit 75
+    ;;
+esac
 
 before=$(git rev-parse --short HEAD)
 git fetch --quiet "$REMOTE" "$BRANCH"
