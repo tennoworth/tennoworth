@@ -1,0 +1,10 @@
+[Unit]
+Description=Record and notify that %i failed
+# No OnFailure of its own — an alert handler that alerts about itself failing
+# is a loop. alert.sh is written to always exit 0 for the same reason.
+
+[Service]
+Type=oneshot
+# %i is the failed unit's name, passed by `OnFailure=wfm-alert@%n.service`.
+ExecStart=/srv/wfm/alert.sh %i
+SyslogIdentifier=wfm-alert

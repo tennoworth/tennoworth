@@ -134,7 +134,7 @@ echo "pulled: $before -> $target"
 # at a byte offset that is now different code (the same hazard the scrape guard
 # above exists for). Stage beside the target and rename over it: rename swaps
 # the inode, so the running shell keeps reading the copy it started with.
-for f in run-scrape.sh pull-app.sh pull-web.sh pull-scrape.sh pull-packages.sh; do
+for f in run-scrape.sh alert.sh pull-app.sh pull-web.sh pull-scrape.sh pull-packages.sh; do
   src="deploy/$f"
   [ -f "$src" ] || continue
   if ! cmp -s "$src" "/srv/wfm/$f" 2>/dev/null; then

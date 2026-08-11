@@ -3,6 +3,8 @@ Description=Refresh Warframe market.json from warframe.market + warframestat
 Wants=network-online.target
 After=network-online.target
 
+OnFailure=wfm-alert@%n.service
+
 [Service]
 Type=oneshot
 User=wfm
@@ -27,6 +29,3 @@ ProtectKernelTunables=true
 ProtectControlGroups=true
 RestrictAddressFamilies=AF_INET AF_INET6
 SystemCallFilter=@system-service
-
-# Ping a healthcheck on failure (optional — set the URL or delete this line).
-# OnFailure=

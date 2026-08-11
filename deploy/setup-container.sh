@@ -39,6 +39,9 @@ install -m 0755 "$DEPLOY/pull-scrape.sh" /srv/wfm/pull-scrape.sh
 # and the copies under /srv/wfm drift from the repo silently — the box ran a
 # retired pipeline 19 commits behind main for a week that way.
 install -m 0755 "$DEPLOY/pull-app.sh" /srv/wfm/pull-app.sh
+# OnFailure handler for every unit below. Optional webhook config lives in
+# /etc/wfm-alert.env (ALERT_WEBHOOK_URL=...); absent means log-only.
+install -m 0755 "$DEPLOY/alert.sh" /srv/wfm/alert.sh
 mkdir -p /srv/wfm/bin
 chown -R wfm:wfm /srv/wfm
 
@@ -69,6 +72,7 @@ else
 fi
 
 echo "==> Scrape + app-pull + web-pull + scrape-pull timers"
+install -m 0644 "$DEPLOY/wfm-alert@.service"      /etc/systemd/system/wfm-alert@.service
 install -m 0644 "$DEPLOY/wfm-scrape.service"      /etc/systemd/system/wfm-scrape.service
 install -m 0644 "$DEPLOY/wfm-scrape.timer"        /etc/systemd/system/wfm-scrape.timer
 install -m 0644 "$DEPLOY/wfm-app-pull.service"    /etc/systemd/system/wfm-app-pull.service

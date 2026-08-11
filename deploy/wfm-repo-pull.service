@@ -3,6 +3,8 @@ Description=Publish the newest desktop release into the signed apt/dnf repos
 After=network-online.target
 Wants=network-online.target
 
+OnFailure=wfm-alert@%n.service
+
 [Service]
 Type=oneshot
 ExecStart=/srv/wfm/pull-packages.sh
