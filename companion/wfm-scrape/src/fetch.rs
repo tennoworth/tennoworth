@@ -113,11 +113,17 @@ pub fn fetch_catalog_wfm(
 pub fn fetch_parent_data(
     http: &dyn Http,
     catalog: &HashMap<String, String>,
+    wfstat_items: Option<&serde_json::Value>,
 ) -> (HashMap<String, serde_json::Value>, HashMap<String, serde_json::Value>, bool) {
+    // NOTE: no /sentinels/ here. That endpoint started failing ~2026-07-31 and
+    // now hard-404s with `Data key 'sentinels' not found`; /companions/ and
+    // /pets/ do not exist either. The same parents are in the bulk /items/
+    // payload under `category: "Sentinels"`, and that payload is already
+    // fetched for the resolver catalog — so sentinels are read from it rather
+    // than costing a second 44 MB download.
     let endpoints = [
         ("https://api.warframestat.us/warframes/", "Warframes"),
         ("https://api.warframestat.us/weapons/", "Weapons"),
-        ("https://api.warframestat.us/sentinels/", "Sentinels"),
     ];
     let mut path_to_info: HashMap<String, serde_json::Value> = HashMap::new();
     let mut set_to_parts: HashMap<String, serde_json::Value> = HashMap::new();
@@ -141,56 +147,91 @@ pub fn fetch_parent_data(
             }
         };
         for parent in items {
-            let parent_name = parent.get("name").and_then(|n| n.as_str()).unwrap_or("");
-            if !parent_name.contains("Prime") {
-                continue;
-            }
-            let parent_cat = parent.get("category").and_then(|c| c.as_str()).unwrap_or(fallback_cat);
-            let set_slug = catalog.get(&format!("{} set", parent_name.to_lowercase()));
-
-            let mut this_set_parts: Vec<serde_json::Value> = Vec::new();
-            for comp in parent.get("components").and_then(|c| c.as_array()).unwrap_or(&vec![]) {
-                let un = comp.get("uniqueName").and_then(|u| u.as_str()).unwrap_or("");
-                let cn = comp.get("name").and_then(|n| n.as_str()).unwrap_or("");
-                if un.is_empty() || cn.is_empty() {
-                    continue;
-                }
-                if un.starts_with("/Lotus/Types/Items/MiscItems/") {
-                    continue;
-                }
-                let full_name = format!("{parent_name} {cn}");
-                let slug = catalog
-                    .get(&format!("{} blueprint", full_name.to_lowercase()))
-                    .or_else(|| catalog.get(&full_name.to_lowercase()))
-                    .or(set_slug)
-                    .cloned();
-                let slug = match slug {
-                    Some(s) => s,
-                    None => continue,
-                };
-                let mut display_name = full_name.clone();
-                if slug.ends_with("_set") && !full_name.ends_with("Set") {
-                    display_name = format!("{full_name} → set");
-                } else if slug.ends_with("_blueprint") && !full_name.ends_with("Blueprint") {
-                    display_name = format!("{full_name} Blueprint");
-                }
-                path_to_info.insert(
-                    un.to_string(),
-                    serde_json::json!({"name": display_name, "slug": slug, "category": parent_cat}),
-                );
-                if set_slug != Some(&slug) {
-                    this_set_parts.push(serde_json::json!({"slug": slug, "component_name": cn}));
-                }
-            }
-            if let (Some(ss), false) = (set_slug, this_set_parts.is_empty()) {
-                set_to_parts.insert(
-                    ss.clone(),
-                    serde_json::json!({"name": parent_name, "parts": this_set_parts}),
-                );
-            }
+            absorb_parent(parent, fallback_cat, catalog, &mut path_to_info, &mut set_to_parts);
         }
     }
+
+    // Sentinels, from the bulk catalog. A missing payload marks the surface
+    // incomplete for the same reason a failed endpoint does: reconcile must
+    // merge over the prior snapshot rather than replace it, or every sentinel
+    // prime silently disappears from set_to_parts.
+    match wfstat_items.and_then(|v| v.as_array()) {
+        Some(all) => {
+            for parent in all
+                .iter()
+                .filter(|it| it.get("category").and_then(|c| c.as_str()) == Some("Sentinels"))
+            {
+                absorb_parent(parent, "Sentinels", catalog, &mut path_to_info, &mut set_to_parts);
+            }
+        }
+        None => {
+            eprintln!("  warning: no bulk item payload — sentinel parents unavailable this run");
+            complete = false;
+        }
+    }
+
     (path_to_info, set_to_parts, complete)
+}
+
+/// Fold one warframestat parent (a Warframe/weapon/sentinel with `components`)
+/// into the component-path map and the set→parts map.
+///
+/// Extracted so the sentinel source, which no longer comes from its own
+/// endpoint, runs byte-identical logic to the two that still do.
+fn absorb_parent(
+    parent: &serde_json::Value,
+    fallback_cat: &str,
+    catalog: &HashMap<String, String>,
+    path_to_info: &mut HashMap<String, serde_json::Value>,
+    set_to_parts: &mut HashMap<String, serde_json::Value>,
+) {
+    let parent_name = parent.get("name").and_then(|n| n.as_str()).unwrap_or("");
+    if !parent_name.contains("Prime") {
+        return;
+    }
+    let parent_cat = parent.get("category").and_then(|c| c.as_str()).unwrap_or(fallback_cat);
+    let set_slug = catalog.get(&format!("{} set", parent_name.to_lowercase()));
+
+    let mut this_set_parts: Vec<serde_json::Value> = Vec::new();
+    for comp in parent.get("components").and_then(|c| c.as_array()).unwrap_or(&vec![]) {
+        let un = comp.get("uniqueName").and_then(|u| u.as_str()).unwrap_or("");
+        let cn = comp.get("name").and_then(|n| n.as_str()).unwrap_or("");
+        if un.is_empty() || cn.is_empty() {
+            continue;
+        }
+        if un.starts_with("/Lotus/Types/Items/MiscItems/") {
+            continue;
+        }
+        let full_name = format!("{parent_name} {cn}");
+        let slug = catalog
+            .get(&format!("{} blueprint", full_name.to_lowercase()))
+            .or_else(|| catalog.get(&full_name.to_lowercase()))
+            .or(set_slug)
+            .cloned();
+        let slug = match slug {
+            Some(s) => s,
+            None => continue,
+        };
+        let mut display_name = full_name.clone();
+        if slug.ends_with("_set") && !full_name.ends_with("Set") {
+            display_name = format!("{full_name} → set");
+        } else if slug.ends_with("_blueprint") && !full_name.ends_with("Blueprint") {
+            display_name = format!("{full_name} Blueprint");
+        }
+        path_to_info.insert(
+            un.to_string(),
+            serde_json::json!({"name": display_name, "slug": slug, "category": parent_cat}),
+        );
+        if set_slug != Some(&slug) {
+            this_set_parts.push(serde_json::json!({"slug": slug, "component_name": cn}));
+        }
+    }
+    if let (Some(ss), false) = (set_slug, this_set_parts.is_empty()) {
+        set_to_parts.insert(
+            ss.clone(),
+            serde_json::json!({"name": parent_name, "parts": this_set_parts}),
+        );
+    }
 }
 
 /// Fetch relic drop tables (Intact state only) from drops.warframestat.us.
@@ -470,6 +511,16 @@ pub fn slim_wfstat_items(arr: &serde_json::Value, url: &str) -> Result<Vec<serde
 /// onto the shared client would send it on every other endpoint too. Longer
 /// timeout for the same reason: the body is multi-MB.
 pub fn fetch_wfstat_slim() -> Result<Vec<serde_json::Value>, String> {
+    slim_wfstat_items(&fetch_wfstat_raw()?, WFSTAT_ITEMS_URL)
+}
+
+/// The bulk warframestat item payload, unreduced.
+///
+/// Split out from `fetch_wfstat_slim` because this ~44 MB response now feeds
+/// two consumers — the resolver catalog AND the sentinel parents, whose own
+/// endpoint 404s — and downloading it twice would add minutes to a scrape that
+/// already runs close to its systemd timeout.
+pub fn fetch_wfstat_raw() -> Result<serde_json::Value, String> {
     let url = WFSTAT_ITEMS_URL;
     let resp = reqwest::blocking::Client::builder()
         .user_agent(wfm_client::BROWSER_UA)
@@ -485,14 +536,7 @@ pub fn fetch_wfstat_slim() -> Result<Vec<serde_json::Value>, String> {
     if !status.is_success() {
         return Err(format!("{url}: HTTP {status}"));
     }
-    let arr: serde_json::Value = serde_json::from_str(&body).map_err(|e| format!("{url}: JSON: {e}"))?;
-    slim_wfstat_items(&arr, url)
-}
-
-/// Fixture-mode counterpart: same reduction, responses served from the map.
-pub fn fetch_wfstat_slim_via_http(http: &dyn Http) -> Result<Vec<serde_json::Value>, String> {
-    let arr = http.get_json(WFSTAT_ITEMS_URL)?;
-    slim_wfstat_items(&arr, WFSTAT_ITEMS_URL)
+    serde_json::from_str(&body).map_err(|e| format!("{url}: JSON: {e}"))
 }
 
 /// Fixture implementation of [`Http`] — serves pre-recorded responses from
@@ -672,5 +716,74 @@ mod tests {
         .unwrap();
         carry_baro_inventory(&mut failed, Some(&full));
         assert!(failed.is_empty());
+    }
+    fn parent_http() -> FixtureHttp {
+        // The two endpoints that still exist, both empty — isolates the
+        // sentinel path.
+        let mut r = HashMap::new();
+        r.insert("https://api.warframestat.us/warframes/".into(), serde_json::json!([]));
+        r.insert("https://api.warframestat.us/weapons/".into(), serde_json::json!([]));
+        FixtureHttp { responses: r }
+    }
+
+    fn sentinel_catalog() -> HashMap<String, String> {
+        let mut c = HashMap::new();
+        c.insert("carrier prime set".into(), "carrier_prime_set".into());
+        c.insert("carrier prime cerebrum".into(), "carrier_prime_cerebrum".into());
+        c
+    }
+
+    #[test]
+    fn sentinel_parents_come_from_the_bulk_item_payload() {
+        // /sentinels/ 404s upstream since ~2026-07-31; these parents must still
+        // resolve, out of the /items/ payload we already download.
+        let items = serde_json::json!([
+            {"name": "Excalibur", "category": "Warframes", "components": []},
+            {"name": "Carrier Prime", "category": "Sentinels", "components": [
+                {"uniqueName": "/Lotus/Types/Sentinels/CarrierPrime/Cerebrum", "name": "Cerebrum"}
+            ]}
+        ]);
+        let (p2i, s2p, complete) =
+            fetch_parent_data(&parent_http(), &sentinel_catalog(), Some(&items));
+
+        assert!(complete, "both live endpoints answered and the payload was present");
+        let info = p2i
+            .get("/Lotus/Types/Sentinels/CarrierPrime/Cerebrum")
+            .expect("sentinel component path resolved");
+        assert_eq!(info.get("slug").unwrap(), "carrier_prime_cerebrum");
+        // Category comes from the item's own field, not the fallback.
+        assert_eq!(info.get("category").unwrap(), "Sentinels");
+
+        let set = s2p.get("carrier_prime_set").expect("sentinel set built");
+        assert_eq!(set.get("name").unwrap(), "Carrier Prime");
+        assert_eq!(set.get("parts").unwrap().as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn non_prime_sentinels_are_ignored_like_every_other_parent() {
+        let items = serde_json::json!([
+            {"name": "Carrier", "category": "Sentinels", "components": [
+                {"uniqueName": "/Lotus/Types/Sentinels/Carrier/Cerebrum", "name": "Cerebrum"}
+            ]}
+        ]);
+        let (p2i, s2p, _) = fetch_parent_data(&parent_http(), &sentinel_catalog(), Some(&items));
+        assert!(p2i.is_empty() && s2p.is_empty());
+    }
+
+    #[test]
+    fn a_missing_item_payload_marks_the_surface_incomplete() {
+        // `complete` is what makes reconcile MERGE over the prior snapshot
+        // instead of replacing it. Getting this wrong would silently delete
+        // every sentinel prime the moment the bulk fetch failed.
+        let (_, _, complete) = fetch_parent_data(&parent_http(), &sentinel_catalog(), None);
+        assert!(!complete);
+    }
+
+    #[test]
+    fn a_failed_live_endpoint_still_marks_the_surface_incomplete() {
+        let empty = FixtureHttp { responses: HashMap::new() };
+        let (_, _, complete) =
+            fetch_parent_data(&empty, &sentinel_catalog(), Some(&serde_json::json!([])));
+        assert!(!complete);
     }
 }

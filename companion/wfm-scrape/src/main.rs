@@ -226,8 +226,25 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     };
     eprintln!("  {} items", catalog.len());
 
+    // Fetched BEFORE the parent walk, and only once: sentinel parents now come
+    // out of this payload (their own endpoint 404s since ~2026-07-31) and the
+    // resolver catalog is reduced from the same copy further down. Two
+    // consumers, one ~44 MB download — a second one would add minutes to a
+    // scrape that already runs close to its systemd timeout.
+    eprintln!("Fetching warframestat bulk item catalog...");
+    let wfstat_raw: Option<serde_json::Value> = if fixtures_dir.is_none() {
+        fetch::fetch_wfstat_raw()
+            .map_err(|e| eprintln!("  warning: {e}"))
+            .ok()
+    } else {
+        http.get_json(fetch::WFSTAT_ITEMS_URL)
+            .map_err(|e| eprintln!("  warning: {e}"))
+            .ok()
+    };
+
     eprintln!("Fetching warframestat component path map + sets...");
-    let (path_to_info, set_to_parts, parents_complete) = fetch::fetch_parent_data(http.as_ref(), &catalog);
+    let (path_to_info, set_to_parts, parents_complete) =
+        fetch::fetch_parent_data(http.as_ref(), &catalog, wfstat_raw.as_ref());
     eprintln!("  {} component paths · {} prime sets", path_to_info.len(), set_to_parts.len());
 
     eprintln!("Fetching relic drop tables (Intact)...");
@@ -253,14 +270,15 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // atomic (tmp+rename) but the PAIR is not — keep the catalog write ahead of
     // the snapshot write so a reader that catches the gap sees new-catalog +
     // old-market, never the reverse.
-    eprintln!("Fetching warframestat bulk item catalog (resolver data)...");
-    let wfstat_slim = if fixtures_dir.is_none() {
-        fetch::fetch_wfstat_slim().unwrap_or_default()
-    } else {
-        // Fixture mode goes through the Http trait; the live path needs its own
-        // client for the per-call Accept-Language. Both share the reduction.
-        fetch::fetch_wfstat_slim_via_http(http.as_ref()).unwrap_or_default()
-    };
+    // Reduced from the payload already in hand — no second request.
+    let wfstat_slim = wfstat_raw
+        .as_ref()
+        .and_then(|v| {
+            fetch::slim_wfstat_items(v, fetch::WFSTAT_ITEMS_URL)
+                .map_err(|e| eprintln!("  warning: {e}"))
+                .ok()
+        })
+        .unwrap_or_default();
     if wfstat_slim.is_empty() && catalog_out.exists() {
         eprintln!("  fetch empty — keeping existing {}", catalog_out.file_name().unwrap_or_default().to_string_lossy());
     } else if !wfstat_slim.is_empty() {
