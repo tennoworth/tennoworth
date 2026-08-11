@@ -450,14 +450,29 @@ jobs:
             sed -i "s/sha256sums=('SKIP')/sha256sums=('$sha')/" "$RUNNER_TEMP/aur/$pkg/PKGBUILD"
             # .SRCINFO is generated in a throwaway Arch container, never
             # written by hand: makepkg is Arch-only, and the AUR rejects a push
-            # whose .SRCINFO disagrees with its PKGBUILD. makepkg refuses to
-            # run as root, so it drops to a throwaway `builder` (uid 1000) —
-            # but the host runner is uid 1001, which could not create a file in
-            # the mounted dir afterwards. The `> .SRCINFO` therefore runs as
-            # root INSIDE the container, landing a world-readable file the
-            # runner can read.
+            # whose .SRCINFO disagrees with its PKGBUILD.
+            #
+            # makepkg refuses to run as root, so it drops to a throwaway
+            # `builder` whose uid MUST match the owner of the bind mount. A bare
+            # `useradd` lands on uid 1000 while the runner's checkout is owned by
+            # 1001, and makepkg's first act is to check $BUILDDIR — which
+            # defaults to the PKGBUILD dir — for write permission, aborting with
+            # `You do not have write permission for the directory $BUILDDIR
+            # (/pkg)`. That failed on every release ever cut; it stayed invisible
+            # because the clone above never got past `Permission denied
+            # (publickey)` until the AUR key was replaced, so the job had never
+            # once reached this line. Reproduced locally against a mount chowned
+            # to 1001, and verified fixed the same way.
+            #
+            # Deriving the uid (rather than chowning /pkg to builder) keeps the
+            # host ownership intact — chowning would hand the directory to a uid
+            # the runner does not own, and the `git add`/`commit` below would
+            # then trip git's dubious-ownership guard.
+            #
+            # The `> .SRCINFO` redirect still runs as root INSIDE the container,
+            # landing a world-readable file the runner can read.
             docker run --rm -v "$RUNNER_TEMP/aur/$pkg:/pkg" -w /pkg archlinux:latest \
-              sh -c 'useradd -m builder; su builder -c "cd /pkg && makepkg --printsrcinfo" > .SRCINFO'
+              sh -c 'uid=$(stat -c %u /pkg); useradd -m -u "$uid" builder; su builder -c "cd /pkg && makepkg --printsrcinfo" > .SRCINFO'
             grep -q "sha256sums = $sha" "$RUNNER_TEMP/aur/$pkg/.SRCINFO" || {
               echo "::error title=.SRCINFO mismatch::$pkg's generated .SRCINFO does not carry checksum $sha. Aborting before push."
               exit 1
