@@ -27,7 +27,7 @@ const CACHE_FILE: &str = "market.json";
 const ETAG_FILE: &str = "market.etag";
 /// Short — a slow refresh must never make the app feel stuck. The bundled/cached
 /// copy is already on screen; this is a background top-up.
-const TIMEOUT: Duration = Duration::from_secs(10);
+pub(crate) const TIMEOUT: Duration = Duration::from_secs(10);
 
 fn market_url() -> String {
     std::env::var("TENNOWORTH_MARKET_URL").unwrap_or_else(|_| MARKET_URL.to_string())
@@ -96,7 +96,10 @@ fn parse_updated_at(body: &str) -> Option<String> {
 
 /// Atomic write (tmp + rename), matching the repo-wide atomic-write rule — a
 /// concurrent reader never sees a half-written cache file.
-fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+///
+/// `pub(crate)` so the definitions cache reuses this one implementation rather
+/// than growing a second tmp+rename.
+pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let tmp = path.with_extension("tmp");
     std::fs::write(&tmp, bytes)?;
     std::fs::rename(&tmp, path)

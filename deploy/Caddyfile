@@ -35,7 +35,11 @@
 	# bakes into dist/). wfstat-catalog.json backs the inventory resolver — the
 	# browser stopped fetching warframestat directly when upstream dropped CORS.
 	# Its own handle block so routing is unambiguous.
-	@livedata path /market.json /wfstat-catalog.json
+	# definitions.json (C7) is here for the same reason and one more: its whole
+	# purpose is fixing a broken scan WITHOUT a release, so it must be editable
+	# in place on the box. Served from dist/ it would need a web rebuild+deploy,
+	# which is the exact latency it exists to avoid.
+	@livedata path /market.json /wfstat-catalog.json /definitions.json
 	handle @livedata {
 		root * /srv/wfm/app/prototype/public
 		header Cache-Control "public, max-age=300, must-revalidate"

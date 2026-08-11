@@ -12,7 +12,7 @@ use anyhow::anyhow;
 use anyhow::{bail, Result};
 use regex::bytes::Regex;
 use std::collections::HashMap;
-use std::sync::LazyLock;
+use std::sync::{Arc, LazyLock, RwLock};
 use sysinfo::System;
 
 /// The session secrets + build metadata scraped out of the running game.
@@ -57,37 +57,163 @@ pub fn matches_warframe(p: &sysinfo::Process) -> bool {
     false
 }
 
-// Compiled once for the process lifetime, not once per scanned chunk.
-// aggregate_match runs on every ~4 MB chunk (Linux) / every VirtualQuery
-// region (Windows) — a multi-GB game process is hundreds to low-thousands
-// of calls, and Regex::new() was previously re-run 3x on every single one.
-static CRED_RE: LazyLock<Regex> = LazyLock::new(|| {
-    // Confirmed in May 2026 memory scan: this exact form appears in the URLs
-    // the game sends. Update here if DE ever rotates the parameter names.
-    // ASCII [0-9] (not \d) so we don't need the regex crate's unicode-perl
-    // feature — saves ~150 KB on the binary.
-    Regex::new(r"accountId=([0-9a-fA-F]{24})&nonce=([0-9]{6,})").unwrap()
-});
+// Confirmed in May 2026 memory scan: this exact form appears in the URLs the
+// game sends. ASCII [0-9] (not \d) so we don't need the regex crate's
+// unicode-perl feature — saves ~150 KB on the binary.
+pub const DEFAULT_CRED_PATTERN: &str = r"accountId=([0-9a-fA-F]{24})&nonce=([0-9]{6,})";
+pub const DEFAULT_BUILD_PATTERN: &str = r#""BuildLabel":"([0-9.]+)/[A-Za-z0-9]+"#;
+pub const DEFAULT_CT_PATTERN: &str = r"&ct=([A-Z]{2,4})\b";
 
-static BUILD_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r#""BuildLabel":"([0-9.]+)/[A-Za-z0-9]+"#).unwrap());
+/// A remote pattern longer than this is rejected unread. The real patterns are
+/// well under 60 bytes; the cap exists so a corrupt or hostile definitions file
+/// cannot hand the scanner something absurd to compile on every launch.
+const MAX_PATTERN_LEN: usize = 512;
 
-static CT_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"&ct=([A-Z]{2,4})\b").unwrap());
+/// The three patterns a scan searches for, as one swappable set.
+///
+/// Compiled once per scan rather than once per chunk: `aggregate_match` runs on
+/// every ~4 MB chunk (Linux) / every VirtualQuery region (Windows), which is
+/// hundreds to low-thousands of calls on a multi-GB game process, and
+/// `Regex::new()` was once re-run 3x on every single one.
+pub struct ScanPatterns {
+    cred: Regex,
+    build: Regex,
+    ct: Regex,
+}
 
-fn aggregate_match(haystack: &[u8], counts: &mut PatternCounts) {
-    for cap in CRED_RE.captures_iter(haystack) {
+impl Default for ScanPatterns {
+    fn default() -> Self {
+        // unwrap is honest here: these are compile-time constants that the test
+        // suite compiles. A failure is a build-breaking typo, not a runtime path.
+        ScanPatterns {
+            cred: Regex::new(DEFAULT_CRED_PATTERN).unwrap(),
+            build: Regex::new(DEFAULT_BUILD_PATTERN).unwrap(),
+            ct: Regex::new(DEFAULT_CT_PATTERN).unwrap(),
+        }
+    }
+}
+
+/// The remote `definitions.json` shape. Every field is optional: a definitions
+/// file that only fixes the credential pattern leaves the other two alone.
+#[derive(Debug, Default, serde::Deserialize, serde::Serialize)]
+pub struct ScanDefinitions {
+    /// Bumped by us for humans reading the file; the app does not gate on it.
+    #[serde(default)]
+    pub version: Option<u32>,
+    #[serde(default)]
+    pub cred_pattern: Option<String>,
+    #[serde(default)]
+    pub build_pattern: Option<String>,
+    #[serde(default)]
+    pub ct_pattern: Option<String>,
+}
+
+/// Why a supplied pattern was refused. Surfaced so a bad definitions push is
+/// diagnosable from the app's own log instead of looking like "scan broke".
+#[derive(Debug, PartialEq)]
+pub struct PatternRejection {
+    pub field: &'static str,
+    pub reason: String,
+}
+
+/// Compile a definitions file into a usable pattern set.
+///
+/// Each pattern is validated INDEPENDENTLY and falls back to the compiled-in
+/// default on any problem, so one bad entry cannot disable scanning wholesale —
+/// the point of shipping this is to fix a broken scan without a release, and a
+/// remote file that can brick the scanner would defeat that.
+///
+/// Validation is three checks, and the arity one is not cosmetic: the match
+/// loop indexes `cap[1]` and `cap[2]`, so a pattern with too few capture groups
+/// would panic mid-scan on the user's machine.
+///
+/// ReDoS is not among the risks — the `regex` crate has no backtracking and is
+/// linear in input size — but the length cap still bounds what we agree to
+/// compile.
+pub fn patterns_from_definitions(defs: &ScanDefinitions) -> (ScanPatterns, Vec<PatternRejection>) {
+    let mut rejections = Vec::new();
+    let default = ScanPatterns::default();
+
+    fn build_one(
+        field: &'static str,
+        supplied: Option<&String>,
+        groups: usize,
+        fallback: Regex,
+        rejections: &mut Vec<PatternRejection>,
+    ) -> Regex {
+        let Some(raw) = supplied else { return fallback };
+        if raw.is_empty() {
+            return fallback;
+        }
+        if raw.len() > MAX_PATTERN_LEN {
+            rejections.push(PatternRejection {
+                field,
+                reason: format!("{} bytes exceeds the {MAX_PATTERN_LEN}-byte cap", raw.len()),
+            });
+            return fallback;
+        }
+        let compiled = match Regex::new(raw) {
+            Ok(re) => re,
+            Err(e) => {
+                rejections.push(PatternRejection { field, reason: format!("does not compile: {e}") });
+                return fallback;
+            }
+        };
+        // captures_len() counts the implicit whole-match group, so a pattern
+        // with N capture groups reports N + 1.
+        let have = compiled.captures_len().saturating_sub(1);
+        if have < groups {
+            rejections.push(PatternRejection {
+                field,
+                reason: format!("needs {groups} capture group(s), has {have}"),
+            });
+            return fallback;
+        }
+        compiled
+    }
+
+    let cred = build_one("cred_pattern", defs.cred_pattern.as_ref(), 2, default.cred, &mut rejections);
+    let build = build_one("build_pattern", defs.build_pattern.as_ref(), 1, default.build, &mut rejections);
+    let ct = build_one("ct_pattern", defs.ct_pattern.as_ref(), 1, default.ct, &mut rejections);
+
+    (ScanPatterns { cred, build, ct }, rejections)
+}
+
+/// The pattern set every scan uses, swappable at runtime by the shell once it
+/// has fetched `definitions.json`.
+///
+/// A process global rather than a `scan_session` parameter so the fetch stays a
+/// shell concern: wfm-core owns no network policy, and every existing caller
+/// keeps its signature. Each scan takes ONE snapshot up front, so a definitions
+/// swap landing mid-scan cannot change the patterns underneath a run in
+/// progress.
+static INSTALLED: LazyLock<RwLock<Arc<ScanPatterns>>> =
+    LazyLock::new(|| RwLock::new(Arc::new(ScanPatterns::default())));
+
+/// Replace the pattern set for subsequent scans. Applying an all-default set
+/// is the documented way to revert to compiled-in behaviour.
+pub fn install_patterns(patterns: ScanPatterns) {
+    *INSTALLED.write().unwrap() = Arc::new(patterns);
+}
+
+/// The set a scan should use, snapshotted for the duration of that scan.
+pub fn current_patterns() -> Arc<ScanPatterns> {
+    Arc::clone(&INSTALLED.read().unwrap())
+}
+
+fn aggregate_match(haystack: &[u8], pats: &ScanPatterns, counts: &mut PatternCounts) {
+    for cap in pats.cred.captures_iter(haystack) {
         let aid = String::from_utf8_lossy(&cap[1]).to_ascii_lowercase();
         let nonce = String::from_utf8_lossy(&cap[2]).into_owned();
         *counts.creds.entry((aid, nonce)).or_insert(0) += 1;
     }
-    for cap in BUILD_RE.captures_iter(haystack) {
+    for cap in pats.build.captures_iter(haystack) {
         *counts
             .builds
             .entry(String::from_utf8_lossy(&cap[1]).into_owned())
             .or_insert(0) += 1;
     }
-    for cap in CT_RE.captures_iter(haystack) {
+    for cap in pats.ct.captures_iter(haystack) {
         *counts
             .cts
             .entry(String::from_utf8_lossy(&cap[1]).into_owned())
@@ -145,6 +271,10 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
     use std::fs::File;
     use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 
+    // One snapshot for the whole scan — a definitions swap landing mid-run
+    // must not change the patterns underneath it.
+    let pats = current_patterns();
+
     let maps_path = format!("/proc/{pid}/maps");
     let mem_path = format!("/proc/{pid}/mem");
 
@@ -200,7 +330,7 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
                 Err(_) => break,
             };
             let total = tail_len + n;
-            aggregate_match(&hay[..total], &mut counts);
+            aggregate_match(&hay[..total], &pats, &mut counts);
             let keep = std::cmp::min(overlap, n);
             hay.copy_within(total - keep..total, 0);
             tail_len = keep;
@@ -277,7 +407,11 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
     use windows::Win32::System::Threading::{
         OpenProcess, PROCESS_QUERY_INFORMATION, PROCESS_VM_READ,
     };
+
     use windows::Win32::System::Diagnostics::Debug::ReadProcessMemory;
+
+    // One snapshot for the whole scan — see the Linux leg.
+    let pats = current_patterns();
 
     unsafe {
         let handle: HANDLE = OpenProcess(
@@ -316,7 +450,7 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
                     Some(&mut read_n),
                 );
                 if ok.is_ok() && read_n > 0 {
-                    aggregate_match(&buf[..read_n], &mut counts);
+                    aggregate_match(&buf[..read_n], &pats, &mut counts);
                 }
             }
             addr = next;
@@ -327,5 +461,156 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
 
         let _ = CloseHandle(handle);
         pick_dominant(counts)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn defs(cred: Option<&str>, build: Option<&str>, ct: Option<&str>) -> ScanDefinitions {
+        ScanDefinitions {
+            version: Some(1),
+            cred_pattern: cred.map(str::to_string),
+            build_pattern: build.map(str::to_string),
+            ct_pattern: ct.map(str::to_string),
+        }
+    }
+
+    /// The scan reads cap[1]/cap[2]; this mirrors that so a pattern which would
+    /// panic mid-scan fails here instead.
+    fn creds_found(p: &ScanPatterns, hay: &[u8]) -> Vec<(String, String)> {
+        p.cred
+            .captures_iter(hay)
+            .map(|c| {
+                (
+                    String::from_utf8_lossy(&c[1]).into_owned(),
+                    String::from_utf8_lossy(&c[2]).into_owned(),
+                )
+            })
+            .collect()
+    }
+
+    const SAMPLE: &[u8] =
+        b"GET /x?accountId=0123456789abcdef01234567&nonce=123456 HTTP/1.1 &ct=STM ";
+
+    #[test]
+    fn defaults_match_the_live_url_shape() {
+        let p = ScanPatterns::default();
+        assert_eq!(
+            creds_found(&p, SAMPLE),
+            vec![("0123456789abcdef01234567".to_string(), "123456".to_string())]
+        );
+        assert!(p.ct.is_match(SAMPLE));
+    }
+
+    #[test]
+    fn an_empty_definitions_file_changes_nothing() {
+        let (p, rej) = patterns_from_definitions(&ScanDefinitions::default());
+        assert!(rej.is_empty());
+        assert_eq!(creds_found(&p, SAMPLE).len(), 1);
+    }
+
+    #[test]
+    fn a_valid_override_is_applied() {
+        // DE rotates the parameter names — the exact scenario this exists for.
+        let (p, rej) = patterns_from_definitions(&defs(
+            Some(r"acct=([0-9a-f]{24})&n=([0-9]{6,})"),
+            None,
+            None,
+        ));
+        assert!(rej.is_empty(), "{rej:?}");
+        assert_eq!(
+            creds_found(&p, b"acct=0123456789abcdef01234567&n=999888 "),
+            vec![("0123456789abcdef01234567".to_string(), "999888".to_string())]
+        );
+        // The untouched patterns still work.
+        assert!(p.ct.is_match(SAMPLE));
+    }
+
+    #[test]
+    fn a_pattern_that_does_not_compile_falls_back() {
+        let (p, rej) = patterns_from_definitions(&defs(Some(r"([unclosed"), None, None));
+        assert_eq!(rej.len(), 1);
+        assert_eq!(rej[0].field, "cred_pattern");
+        assert!(rej[0].reason.contains("does not compile"), "{}", rej[0].reason);
+        // Fell back, so scanning still works rather than dying.
+        assert_eq!(creds_found(&p, SAMPLE).len(), 1);
+    }
+
+    #[test]
+    fn too_few_capture_groups_is_refused() {
+        // Compiles fine, but the match loop indexes cap[2] — accepting this
+        // would panic mid-scan on the user's machine.
+        let (p, rej) = patterns_from_definitions(&defs(Some(r"accountId=([0-9a-f]{24})"), None, None));
+        assert_eq!(rej.len(), 1);
+        assert!(rej[0].reason.contains("needs 2 capture group"), "{}", rej[0].reason);
+        assert_eq!(creds_found(&p, SAMPLE).len(), 1);
+
+        // The single-group patterns are held to their own arity.
+        let (_, rej_ct) = patterns_from_definitions(&defs(None, None, Some(r"&ct=[A-Z]+")));
+        assert_eq!(rej_ct.len(), 1);
+        assert!(rej_ct[0].reason.contains("needs 1 capture group"));
+    }
+
+    #[test]
+    fn an_over_long_pattern_is_refused_without_compiling() {
+        let huge = format!("({})", "a|".repeat(400));
+        assert!(huge.len() > MAX_PATTERN_LEN);
+        let (p, rej) = patterns_from_definitions(&defs(None, Some(&huge), None));
+        assert_eq!(rej.len(), 1);
+        assert!(rej[0].reason.contains("exceeds"), "{}", rej[0].reason);
+        assert!(p.build.is_match(br#""BuildLabel":"38.1.2/ABCdef"#));
+    }
+
+    #[test]
+    fn one_bad_entry_cannot_disable_the_others() {
+        // The whole point: a bad push must not brick scanning.
+        let (p, rej) = patterns_from_definitions(&defs(
+            Some(r"([unclosed"),
+            Some(r#""BuildLabel":"([0-9.]+)"#),
+            Some(r"&ct=([A-Z]{2,4})"),
+        ));
+        assert_eq!(rej.len(), 1, "only the broken one is refused: {rej:?}");
+        assert_eq!(creds_found(&p, SAMPLE).len(), 1, "cred fell back and still works");
+        assert!(p.ct.is_match(SAMPLE), "the valid overrides applied");
+    }
+
+    #[test]
+    fn an_empty_string_means_use_the_default_not_match_everything() {
+        let (p, rej) = patterns_from_definitions(&defs(Some(""), None, None));
+        assert!(rej.is_empty());
+        assert_eq!(creds_found(&p, SAMPLE).len(), 1);
+    }
+
+    #[test]
+    fn installed_patterns_round_trip() {
+        // Snapshot, swap, restore — the global is process-wide, so leaving it
+        // modified would leak into whatever test runs next.
+        let before = current_patterns();
+        let (p, _) = patterns_from_definitions(&defs(Some(r"z=([0-9a-f]{24})&q=([0-9]{6,})"), None, None));
+        install_patterns(p);
+        assert_eq!(
+            creds_found(&current_patterns(), b"z=0123456789abcdef01234567&q=424242 ").len(),
+            1
+        );
+        install_patterns(ScanPatterns {
+            cred: before.cred.clone(),
+            build: before.build.clone(),
+            ct: before.ct.clone(),
+        });
+        assert_eq!(creds_found(&current_patterns(), SAMPLE).len(), 1);
+    }
+
+    #[test]
+    fn definitions_parse_from_the_wire_shape() {
+        let d: ScanDefinitions = serde_json::from_str(
+            r#"{"version":2,"cred_pattern":"acct=([0-9a-f]{24})&n=([0-9]{6,})"}"#,
+        )
+        .unwrap();
+        assert_eq!(d.version, Some(2));
+        assert!(d.build_pattern.is_none(), "absent fields must not error");
+        let (_, rej) = patterns_from_definitions(&d);
+        assert!(rej.is_empty());
     }
 }

@@ -27,6 +27,7 @@
 
 mod commands;
 mod db;
+mod definitions;
 mod keyring_store;
 mod market;
 mod probe;
@@ -153,6 +154,23 @@ fn main() {
             // The C4 market cache lives next to the DB in the same app-data dir.
             // Unlike the DB, a missing/unreadable cache is never fatal — the
             // bundled snapshot is the floor — so this can't fail startup.
+            // C7: scan definitions live in the same dir. Kicked off before the
+            // window exists and never awaited — a scan that beats it simply uses
+            // the compiled-in patterns, which is the correct fallback and not
+            // worth delaying startup for. reqwest::blocking must not run on an
+            // async worker, hence spawn_blocking rather than spawn.
+            let defs_dir = data_dir.clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                let out = definitions::refresh_and_install(&defs_dir);
+                if out.installed {
+                    eprintln!(
+                        "tennoworth: scan definitions installed (fetched={}, rejected={})",
+                        out.fetched,
+                        out.rejected.len()
+                    );
+                }
+            });
+
             app.manage(MarketCache::new(data_dir));
 
             let mut b = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
