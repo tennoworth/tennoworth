@@ -144,6 +144,17 @@ for f in run-scrape.sh alert.sh pull-app.sh pull-web.sh pull-scrape.sh pull-pack
   fi
 done
 
+# The Caddyfile is deployed the same way the units are — a copy under /etc that
+# nothing reconciles. It went stale exactly once and it mattered: the C7
+# @livedata entry for definitions.json sat unpublished, so /definitions.json
+# was served from the BAKED dist/ copy instead of the live public/ one, and
+# editing the file on the box changed nothing. That silently voids the whole
+# point of a remote-fix file. Report it for the same reason as the units.
+if [ -f deploy/Caddyfile ] && [ -f /etc/caddy/Caddyfile ]; then
+  cmp -s deploy/Caddyfile /etc/caddy/Caddyfile \
+    || echo "  CADDY DRIFT: /etc/caddy/Caddyfile differs from deploy/Caddyfile — install it, 'caddy validate', then reload"
+fi
+
 # Units need root plus a daemon-reload, so report rather than act — a puller
 # that silently restarts systemd units is a different and larger promise.
 for u in wfm-scrape wfm-app-pull wfm-web-pull wfm-scrape-pull wfm-repo-pull; do
