@@ -737,6 +737,25 @@
   // the scanner's exact actionable message.
   let pullingInventory = $state(false);   // scan in flight
   let pullError = $state<string | null>(null);
+  // Set only when opening a browser FAILED, so the user can copy the URL.
+  let reportUrl = $state<string | null>(null);
+  let reportingScan = $state(false);
+
+  async function reportScanBroke(): Promise<void> {
+    reportingScan = true;
+    reportUrl = null;
+    try {
+      // A failed open is not a rejection — the command reports it so we can
+      // fall back to a copyable link rather than a dead button.
+      const r = await transport.reportScanIssue(pullError);
+      if (!r.opened) reportUrl = r.url;
+    } catch (e) {
+      reportUrl = null;
+      pullError = `${pullError}\n\nCouldn't build a report: ${(e && e.message) || String(e)}`;
+    } finally {
+      reportingScan = false;
+    }
+  }
 
   async function pullInventory() {
     if (pullingInventory || !isDesktop) return;
@@ -1513,9 +1532,27 @@
     <div class="card warn-banner general-banner" role="alert">
       <div class="gb-body gb-pre">{pullError}</div>
       <div class="gb-actions">
+        {#if isDesktop}
+          <button class="gb-report" onclick={reportScanBroke} disabled={reportingScan}>
+            {reportingScan ? 'Opening…' : 'Report this'}
+          </button>
+        {/if}
         <button class="gb-dismiss" aria-label="Dismiss" onclick={() => (pullError = null)}>×</button>
       </div>
     </div>
+    {#if reportUrl}
+      <!-- Shown only when the browser did not open: the report must still be
+           filable by hand rather than dead-ending on a failed launch. -->
+      <div class="card warn-banner general-banner" role="status">
+        <div class="gb-body">
+          Couldn't open a browser. Copy this link to file the report:
+          <div class="gb-pre report-url">{reportUrl}</div>
+        </div>
+        <div class="gb-actions">
+          <button class="gb-dismiss" aria-label="Dismiss" onclick={() => (reportUrl = null)}>×</button>
+        </div>
+      </div>
+    {/if}
   {/if}
   {#if isDesktop && trayHint}
     <div class="card warn-banner general-banner" role="status">
@@ -2014,6 +2051,25 @@
     padding: 3px;
   }
   .general-banner .gb-dismiss:hover { color: var(--fg); }
+  .general-banner .gb-report {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .general-banner .gb-report:hover:not(:disabled) { color: var(--fg); }
+  .general-banner .gb-report:disabled { opacity: .6; cursor: default; }
+  /* The fallback link is long; let it wrap and stay selectable rather than
+     overflow the banner. */
+  .general-banner .report-url {
+    margin-top: 6px;
+    word-break: break-all;
+    user-select: all;
+  }
   /* Action-verb prefix on rec cards. Casual users said the cards were
      too noun-heavy — leading with a verb gives them the instruction. */
   .reco-verb {

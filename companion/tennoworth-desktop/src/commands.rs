@@ -7,4 +7,5 @@ pub mod assistant;
 pub mod inventory;
 pub mod listing;
 pub mod market;
+pub mod report;
 pub mod settings;

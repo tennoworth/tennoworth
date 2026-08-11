@@ -96,6 +96,33 @@ describe('TauriTransport op → invoke mapping', () => {
     await expect(t.fetchInventory()).rejects.toThrow(/Warframe doesn't appear to be running/);
   });
 
+  it('reportScanIssue() invokes `report_scan_issue` with the error and returns the report', async () => {
+    const calls: Array<[string, unknown]> = [];
+    installTauri((cmd: string, args: unknown) => {
+      calls.push([cmd, args]);
+      return Promise.resolve({ url: 'https://github.com/x/y/issues/new?title=z', opened: true });
+    });
+    const t = new TauriTransport();
+    await expect(t.reportScanIssue('boom')).resolves.toEqual({
+      url: 'https://github.com/x/y/issues/new?title=z',
+      opened: true,
+    });
+    expect(calls[0][0]).toBe('report_scan_issue');
+    expect(calls[0][1]).toEqual({ error: 'boom' });
+    removeTauri();
+  });
+
+  it('reportScanIssue() reports a failed open as data, not a rejection', async () => {
+    // The URL is still filable by hand, so this must not reject — the UI shows
+    // it as a copyable link instead of a dead button.
+    installTauri(() => Promise.resolve({ url: 'https://github.com/x', opened: false }));
+    const t = new TauriTransport();
+    const r = await t.reportScanIssue(null);
+    expect(r.opened).toBe(false);
+    expect(r.url).toBe('https://github.com/x');
+    removeTauri();
+  });
+
   it('prefers window.__TAURI__.core.invoke over the internals shim', async () => {
     const publicInvoke = vi.fn().mockResolvedValue({ ok: true });
     const internalInvoke = vi.fn().mockResolvedValue({ ok: false });

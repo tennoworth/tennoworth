@@ -92,6 +92,7 @@ fn main() {
             tray::show_main_window(app);
         }))
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(tray::TrayState::default())
         .manage(update::UpdateState::default())
@@ -129,6 +130,7 @@ fn main() {
             commands::listing::delete_order,
             commands::listing::bulk_visibility,
             commands::assistant::ask_assistant,
+            commands::report::report_scan_issue,
             probe::debug_write_login,
             probe::debug_seed_unlocked,
             probe::debug_post_scan,

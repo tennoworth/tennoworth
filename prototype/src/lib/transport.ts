@@ -65,6 +65,12 @@ export interface MarketRefreshResult {
  * calls the interactive ops (its UI is informational); TauriTransport is the
  * only real implementation.
  */
+/** Result of the scan-broke report: the URL, and whether a browser opened. */
+export interface ScanReport {
+  url: string;
+  opened: boolean;
+}
+
 export interface Transport {
   /** GET /health (HTTP) or the `health` command (Tauri). */
   health(timeoutMs?: number): Promise<PingResponse>;
@@ -92,6 +98,13 @@ export interface Transport {
   updateOrder(orderId: string, patch: OrderPatch): Promise<unknown>;
   deleteOrder(orderId: string): Promise<unknown>;
   bulkVisibility(orderIds: string[], visible: boolean): Promise<{ results: ItemResult[] }>;
+  /**
+   * Desktop-only: open a prefilled "scan broke" GitHub issue in the real
+   * browser and resolve with the URL. Resolving with the URL matters — if the
+   * open failed the caller can still show it as copyable text rather than
+   * leaving a dead button.
+   */
+  reportScanIssue(error: string | null): Promise<ScanReport>;
 }
 
 /**
@@ -101,6 +114,9 @@ export interface Transport {
  * throws rather than pretending a capability that would require the desktop app.
  */
 export class HostedTransport implements Transport {
+  async reportScanIssue(): Promise<ScanReport> {
+    throw new Error('This is the informational site — the desktop app is required for account features.');
+  }
   async health(): Promise<PingResponse> {
     throw new Error('This is the informational site — the desktop app is required for account features.');
   }
@@ -161,6 +177,10 @@ export function resolveInvoke(): TauriInvoke {
  * caller can branch on `needs_login` / `needs_unlock`.
  */
 export class TauriTransport implements Transport {
+  async reportScanIssue(error: string | null): Promise<ScanReport> {
+    return await resolveInvoke()<ScanReport>('report_scan_issue', { error });
+  }
+
   async health(): Promise<PingResponse> {
     return await resolveInvoke()<PingResponse>('health');
   }

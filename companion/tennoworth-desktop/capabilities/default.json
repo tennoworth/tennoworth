@@ -1,13 +1,23 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The main window, the app-defined commands (health / scan_inventory / market / top_sellables / tray / update check-install-restart, plus probe-only), and the window controls the tray + close-to-tray lifecycle drives (close/hide/show/is-visible). App-defined and Rust-fired commands (incl. the Rust-side notification, and the updater plugin — driven from Rust only, so no updater:* ACL) need no ACL entry in Tauri v2; core:default covers the window basics and the event listen the update-available banner uses.",
-  "windows": ["main"],
+  "description": "The main window, the app-defined commands (health / scan_inventory / market / top_sellables / tray / update check-install-restart, plus probe-only), and the window controls the tray + close-to-tray lifecycle drives (close/hide/show/is-visible). App-defined and Rust-fired commands (incl. the Rust-side notification, and the updater plugin \u2014 driven from Rust only, so no updater:* ACL) need no ACL entry in Tauri v2; core:default covers the window basics and the event listen the update-available banner uses. The opener ACL is scoped to github.com only \u2014 the scan-broke report is the sole thing the app opens externally.",
+  "windows": [
+    "main"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-close",
     "core:window:allow-hide",
     "core:window:allow-show",
-    "core:window:allow-is-visible"
+    "core:window:allow-is-visible",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://github.com/*"
+        }
+      ]
+    }
   ]
 }
