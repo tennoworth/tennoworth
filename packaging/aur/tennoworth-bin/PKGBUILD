@@ -20,7 +20,7 @@
 
 pkgname=tennoworth-bin
 _pkgname=tennoworth
-pkgver=0.3.6
+pkgver=0.3.7
 pkgrel=1
 pkgdesc="Warframe inventory + market dashboard — see what's worth selling right now (prebuilt)"
 arch=('x86_64')

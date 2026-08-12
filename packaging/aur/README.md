@@ -44,7 +44,7 @@ directories are the source of truth that gets copied into them. Publishing is
    tarball — so `desktop-v<pkgver>` must exist:
 
    ```sh
-   git tag -a desktop-v0.3.6 -m "TennoWorth desktop 0.3.6" && git push github desktop-v0.3.6
+   git tag -a desktop-v0.3.7 -m "TennoWorth desktop 0.3.7" && git push github desktop-v0.3.7
    ```
 
 2. Make sure `pkgver` in both `PKGBUILD`s already matches the tag — the `aur`
@@ -95,7 +95,7 @@ If the `aur` job is broken or the maintainer needs to push by hand:
    ```sh
    makepkg --printsrcinfo > .SRCINFO
    # in the aur.archlinux.org clone:
-   git commit -am "tennoworth 0.3.6" && git push
+   git commit -am "tennoworth 0.3.7" && git push
    ```
 
 `.SRCINFO` is deliberately not committed here — it is per-version generated
@@ -149,7 +149,7 @@ One-off, and only the account holder can do it:
 
 ## Version sources
 
-`pkgver` is a **fifth** place carrying a version. The `aur` job's first gate
+`pkgver` is a **sixth** place carrying a version. The `aur` job's first gate
 now covers it — the run fails if the tag and the two `PKGBUILD`s disagree — but
 that only catches the mismatch at publish time. When bumping the desktop app,
 keep these in step in the same commit:
@@ -159,5 +159,6 @@ keep these in step in the same commit:
 | `desktop-v*` git tag | names the release, and the tarball this PKGBUILD fetches |
 | `companion/tennoworth-desktop/tauri.conf.json` | `latest.json`'s version |
 | `companion/tennoworth-desktop/Cargo.toml` | `CARGO_PKG_VERSION`, what the app reports |
+| `companion/Cargo.lock` | nothing at runtime — but `cargo build --frozen` in this PKGBUILD aborts if it disagrees with the manifest, which is how 0.3.5 and 0.3.6 shipped unbuildable from source |
 | `prototype/package.json` | npm-formality only — the web app is continuously deployed and shows its build commit, not this number (see `prototype/vite.config.js`) |
 | `packaging/aur/PKGBUILD` | the AUR package version |
