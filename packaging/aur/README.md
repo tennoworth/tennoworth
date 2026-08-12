@@ -51,6 +51,11 @@ directories are the source of truth that gets copied into them. Publishing is
    job's first gate fails the run if it doesn't. This is why the version bump
    commit touches them alongside `tauri.conf.json` / `Cargo.toml`.
 
+   `companion/Cargo.lock` has to be in that same commit. It records
+   tennoworth-desktop's own version, and this package builds the tag's tarball
+   with `cargo build --frozen`, which aborts rather than re-resolve a lock —
+   the bump is not done until `cd companion && cargo fetch --locked` passes.
+
 3. The `aur` job then, per package: clones the AUR repo, copies these files in,
    replaces the `sha256sums=('SKIP')` placeholder with the checksum computed
    from the tag's actual artifacts (the `-bin` hash is cross-checked against

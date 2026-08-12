@@ -38,6 +38,16 @@ _srcdir="tennoworth-desktop-v$pkgver"
 prepare() {
   cd "$_srcdir/prototype"
   bun install --frozen-lockfile
+
+  # Fetches every crate the lock names, up front, so build() can stay --frozen
+  # (= --locked --offline) with nothing left to download. It also fails HERE,
+  # in prepare, if the tarball's Cargo.lock disagrees with its Cargo.toml —
+  # which is what 0.3.5 and 0.3.6 shipped: the version bump edited Cargo.toml
+  # alone, and --frozen refuses to rewrite a lock. A named failure in prepare
+  # beats the same abort three minutes into a Rust build.
+  cd "$srcdir/$_srcdir/companion"
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$CARCH-unknown-linux-gnu"
 }
 
 build() {

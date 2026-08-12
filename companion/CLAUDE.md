@@ -70,11 +70,18 @@ glibc has backward-compat but **no** forward-compat. CI uses
 Arch / CachyOS will not run on Ubuntu 20.04. Don't bump the runner
 without thinking about who that excludes.
 
-### Desktop releases: the version lives in FOUR places
-`tauri.conf.json`, `tennoworth-desktop/Cargo.toml`, and **both**
-`packaging/aur/*/PKGBUILD` pkgvers must equal the `desktop-v*` tag. CI's guard
-only compares the first two; a stale PKGBUILD pkgver just 404s on a tag that
-doesn't exist.
+### Desktop releases: the version lives in FIVE places
+`tauri.conf.json`, `tennoworth-desktop/Cargo.toml`, **both**
+`packaging/aur/*/PKGBUILD` pkgvers, and `companion/Cargo.lock` must equal the
+`desktop-v*` tag. A stale PKGBUILD pkgver just 404s on a tag that doesn't exist.
+The lock is the one that bites: bump Cargo.toml without running a build to
+re-resolve it and the tag's source tarball carries a lock naming the *previous*
+version, which the AUR source package's `cargo build --frozen` refuses to
+rewrite. Nothing in CI could see it (every build here has network and
+re-resolves silently), so 0.3.5 and 0.3.6 shipped unbuildable from source and
+the failure only appeared on users' machines. `cargo fetch --locked` now gates
+it in `audit.yml` and again in `release-desktop.yml` — commit the lock in the
+same commit as the bump.
 
 ### Tauri deb/rpm facts, each of which cost a debugging cycle
 - **reprepro REJECTS a deb with no `Section:`** ("No section given"). Set

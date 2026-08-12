@@ -83,6 +83,16 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
 
+      # A fourth place the version lives, and the one the guard above can't
+      # see: Cargo.lock records tennoworth-desktop's own version too. This
+      # workflow's build has network access and re-resolves the lock in place,
+      # so the tag's tarball can ship a lock that names the previous version —
+      # unbuildable by the AUR source package, which builds --frozen. 0.3.5 and
+      # 0.3.6 both shipped that way, green here, broken for every Arch user.
+      - name: Gate — Cargo.lock already matches the manifests
+        working-directory: companion
+        run: cargo fetch --locked
+
       # tauri.conf.json's beforeBuildCommand runs `bun run build:desktop`, so
       # the SPA's deps must exist before tauri-action invokes the build.
       - name: Install frontend deps
