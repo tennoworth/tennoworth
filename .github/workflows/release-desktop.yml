@@ -57,15 +57,19 @@ jobs:
             exit 1
           fi
 
-      # Three versions must agree, and nothing else enforces it:
+      # Four versions must agree, and nothing else enforces it:
       #   - the tag          → names the release
       #   - tauri.conf.json  → the version written into latest.json
       #   - Cargo.toml       → CARGO_PKG_VERSION, what the running app reports
       #                        as "you have vX" and compares against
+      #   - package.json     → consumed by nothing, but left behind it reads as
+      #                        a different product; a comment asking for it was
+      #                        the only guard and it sat at 0.3.3 under a 0.3.6
+      #                        desktop until 0.3.7
       # Drift is silent and only surfaces on user machines, as an update that
       # installs but never seems to take effect (manifest newer than config)
       # or one that's never offered at all (config ahead of manifest).
-      - name: Check tag, tauri.conf.json and Cargo.toml versions agree
+      - name: Check tag, tauri.conf.json, Cargo.toml and package.json versions agree
         if: startsWith(github.ref, 'refs/tags/desktop-v')
         shell: bash
         run: |
@@ -73,11 +77,13 @@ jobs:
           tag_version="${GITHUB_REF_NAME#desktop-v}"
           conf_version=$(grep -m1 '"version"' companion/tennoworth-desktop/tauri.conf.json | cut -d'"' -f4)
           cargo_version=$(grep -m1 '^version' companion/tennoworth-desktop/Cargo.toml | cut -d'"' -f2)
-          if [ "$tag_version" != "$conf_version" ] || [ "$tag_version" != "$cargo_version" ]; then
-            echo "::error title=Version mismatch::tag=desktop-v$tag_version tauri.conf.json=$conf_version Cargo.toml=$cargo_version — all three must match."
+          pkg_version=$(jq -r .version prototype/package.json)
+          if [ "$tag_version" != "$conf_version" ] || [ "$tag_version" != "$cargo_version" ] \
+             || [ "$tag_version" != "$pkg_version" ]; then
+            echo "::error title=Version mismatch::tag=desktop-v$tag_version tauri.conf.json=$conf_version Cargo.toml=$cargo_version prototype/package.json=$pkg_version — all four must match."
             exit 1
           fi
-          echo "Version $conf_version confirmed across tag, tauri.conf.json and Cargo.toml."
+          echo "Version $conf_version confirmed across tag, tauri.conf.json, Cargo.toml and package.json."
 
       - uses: oven-sh/setup-bun@v2
 
