@@ -25,6 +25,7 @@ wfm_inventory_sellable.csv
 # notes that must never enter git — everything in it stays ignored by this
 # rule, no per-file entries needed.
 /.mockups/
+/docs/mockups/
 /.research/
 /.planning/
 /.loop-journal.md
@@ -52,6 +53,7 @@ wfm_inventory_sellable.csv
 /docs/signing-runbook.md
 /docs/improvements-plan.md
 /docs/suggestions-plan.md
+/docs/desktop-showcase-plan.md
 /docs/windows-test-*.md
 # The production topology, admin access and hardening posture of the live box.
 # The deploy/ SCRIPTS stay tracked: refresh-market.yml runs run-scrape.sh, and
