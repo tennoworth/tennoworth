@@ -186,6 +186,12 @@ fn main() {
             }
             if probe {
                 b = b.initialization_script(probe::build_probe_script(&runtag));
+                // CI runs the app under the probe in a non-interactive session
+                // where Chromium's GPU process can hang WebView2 init (ui-smoke
+                // hung there on every runner run). The probe is the only caller
+                // that wants this - shipping it to real users would trade a
+                // rare hang for degraded rendering.
+                b = b.additional_browser_args("--disable-gpu --no-first-run --disable-extensions");
             }
             let w = b.build()?;
 
