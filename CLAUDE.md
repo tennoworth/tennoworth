@@ -228,10 +228,11 @@ cd prototype && bun run knip                  # dead exports; tsconfig can't see
 cd companion && cargo test                    # includes the wfm-scrape fixture gates
 cd companion && cargo audit --deny warnings   # same flags as audit.yml
 node scripts/sync-csp.mjs --check             # three CSP copies must agree
+bash scripts/probe-smoke-linux.sh             # real app under xvfb + probe gate (needs xvfb-run)
 
 # The only CI gates that can't run here are the ones ABOUT the CI host:
 # the glibc-2.35 floor check (this machine's glibc is far newer, so a local
-# pass proves nothing) and the Windows build.
+# pass proves nothing) and the Windows build + Windows probe smoke (ui-smoke.yml).
 
 # Companion rebuild
 cd companion && cargo build --release
