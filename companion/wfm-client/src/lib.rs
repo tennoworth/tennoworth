@@ -43,7 +43,7 @@ pub fn wfm_headers(
 
 /// [`wfm_headers`] plus the JWT cookie + Origin/Referer an authed v2 call
 /// needs. WFM's v2 endpoints rely on the cookie the website sets, not the
-/// `Authorization` header — see `companion/CLAUDE.md`'s WFM API quirks.
+/// `Authorization` header — see `companion/AGENTS.md`'s WFM API quirks.
 pub fn wfm_authed_headers(
     builder: reqwest::blocking::RequestBuilder,
     platform: &str,

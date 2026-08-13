@@ -1,4 +1,4 @@
-# CLAUDE.md — project overview
+# AGENTS.md — project overview
 
 Cross-platform **Windows + Linux** Warframe inventory + market dashboard
 — the no-Overwolf alternative to AlecaFrame. Windows and Linux are equal,
@@ -10,13 +10,13 @@ warframe.me on inventory display — must be **measurably better at
 Detailed rules live in per-domain files. Read the one for the area
 you're editing **before** you start writing code there:
 
-- [`companion/CLAUDE.md`](companion/CLAUDE.md) — Rust workspace (Tauri
+- [`companion/AGENTS.md`](companion/AGENTS.md) — Rust workspace (Tauri
   desktop app + wfm-core + host pipeline). Memory scan, JWT crypto, WFM
   API map, cross-platform gotchas.
-- [`prototype/CLAUDE.md`](prototype/CLAUDE.md) — Svelte 5 + Vite
+- [`prototype/AGENTS.md`](prototype/AGENTS.md) — Svelte 5 + Vite
   browser app (the informational site). Svelte 5 reactivity gotchas,
   storage choices, CSP.
-- [`scripts/CLAUDE.md`](scripts/CLAUDE.md) — the three TypeScript tools
+- [`scripts/AGENTS.md`](scripts/AGENTS.md) — the three TypeScript tools
   (sync-csp, check-panic-sites, check-probe-report) and the shared fixtures.
 
 ---
@@ -37,7 +37,6 @@ tests/           shared cross-language fixtures (Rust↔TS parity); no pytest
                      AUR), build-web, audit
 .github/actions/    shared composite actions (setup-rust,
                      publish-rolling-release) the workflows above call into
-.claude/         Claude Code local config + agent worktrees
 SECURITY.md      threat model + what we do and don't commit to
 ```
 

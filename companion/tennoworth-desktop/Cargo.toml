@@ -57,7 +57,7 @@ market-math = { path = "../market-math" }
 # pre-installed (matches the "download → works" goal).
 rusqlite = { version = "0.32", features = ["bundled"] }
 # C4 market refresh: the one remote GET (tennoworth.app/market.json). Egress
-# stays in Rust, off the webview (prototype/CLAUDE.md rule). Inherits the
+# stays in Rust, off the webview (prototype/AGENTS.md rule). Inherits the
 # workspace's full reqwest feature set (see root Cargo.toml) rather than
 # declaring a smaller one — Cargo already unified it with wfm-core's superset
 # in every `--workspace` build regardless, so the old "subset" declaration

@@ -13,7 +13,7 @@
 #
 # This runs again on every upgrade because replacing the binary clears its file
 # capabilities. That is kernel behaviour, not a packaging quirk — see
-# companion/CLAUDE.md's "setcap is wiped on file replacement" invariant.
+# companion/AGENTS.md's "setcap is wiped on file replacement" invariant.
 #
 # Silent on success by design. It only speaks up when it could NOT do its job,
 # because that is the case where the user has to act.
