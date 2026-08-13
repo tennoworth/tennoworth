@@ -1,0 +1,84 @@
+name: ui-smoke
+
+# Runs the REAL desktop app (Tauri v2, Windows) under the TENOWORTH_PROBE
+# harness on every push: the probe injects a synthetic fixture, drives the
+# scan -> sell view -> listing UI over real IPC, and writes its evidence
+# (console errors, CSP violations, mount state) to a JSON report that
+# scripts/check-probe-report.mjs gates on. This is the only gate that catches
+# "builds fine, feature silently no-ops" - the 2026-08-03 default-vs-named
+# import bug passed bun run check, svelte-check AND knip.
+#
+# Linux is not smoke-tested here: the same run would need xvfb-run or a
+# headless WebKitGTK setup (fragile, and the memory scan is Windows-only
+# territory anyway). Windows runs the app in its native session, so the probe
+# needs no display tricks - this is the cheapest faithful E2E signal.
+
+on:
+  push:
+    branches: [main, develop]
+    # Skip the market-refresh cron's data-only commits (same shape as audit.yml).
+    paths-ignore:
+      - 'prototype/public/market.json'
+      - 'prototype/public/wfstat-catalog.json'
+      - 'wfm_results.csv'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe-smoke:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - uses: ./.github/actions/setup-rust
+
+      # The desktop binary embeds the SPA at compile time (frontendDist) and
+      # plain `cargo build` does not run tauri.conf.json's beforeBuildCommand
+      # the way `tauri build` does - build the frontend explicitly first,
+      # exactly like release-desktop.yml and the AUR PKGBUILD do.
+      - name: Build frontend (dist-desktop)
+        working-directory: prototype
+        run: |
+          bun install --frozen-lockfile
+          bun run build:desktop
+
+      - name: Build the desktop app
+        working-directory: companion
+        run: cargo build --release -p tennoworth-desktop
+
+      # The probe auto-exits after the FINAL report; a hang is a probe bug and
+      # gets killed by the step timeout. The report is written twice (checkpoint
+      # + FINAL), so the file read afterwards is the complete run.
+      - name: Run the app under the probe
+        shell: pwsh
+        env:
+          TENOWORTH_PROBE: '1'
+          TENOWORTH_PROBE_OUT: '${{ runner.temp }}\probe-report.json'
+        timeout-minutes: 10
+        run: |
+          & .\companion\target\release\tennoworth-desktop.exe 2>&1 |
+            Tee-Object -FilePath "${{ runner.temp }}\probe-stdout.log"
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "app exited with $LASTEXITCODE"
+            exit $LASTEXITCODE
+          }
+          Get-Content "${{ runner.temp }}\probe-stdout.log" | Select-String -Pattern 'PROBE_REPORT_BEGIN FINAL' | Select-Object -First 1
+
+      - name: Assert the probe report
+        run: node scripts/check-probe-report.mjs "${{ runner.temp }}\probe-report.json"
+
+      - name: Upload probe evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-evidence
+          path: |
+            ${{ runner.temp }}/probe-report.json
+            ${{ runner.temp }}/probe-stdout.log
+          if-no-files-found: ignore
