@@ -21,5 +21,14 @@
   // IMPORTS inside a .svelte file stay invisible (knip reports unused exports,
   // files and dependencies, not per-file imports), and @vitest/ui is treated as
   // used because knip's vitest plugin knows it as an optional peer.
-  "ignoreExportsUsedInFile": true
+  "ignoreExportsUsedInFile": true,
+
+  // knip's svelte plugin hard-codes `svelte.config.js` as its only config
+  // entry (no .ts variant), so a TypeScript svelte.config reports as an unused
+  // file. It IS the toolchain's config; declare it as the entry explicitly.
+  // The vite.config.ts glob the svelte plugin would otherwise inherit comes
+  // from the vite plugin's own config and is unaffected by this override.
+  "svelte": {
+    "entry": ["svelte.config.ts"]
+  }
 }

@@ -160,5 +160,5 @@ keep these in step in the same commit:
 | `companion/tennoworth-desktop/tauri.conf.json` | `latest.json`'s version |
 | `companion/tennoworth-desktop/Cargo.toml` | `CARGO_PKG_VERSION`, what the app reports |
 | `companion/Cargo.lock` | nothing at runtime — but `cargo build --frozen` in this PKGBUILD aborts if it disagrees with the manifest, which is how 0.3.5 and 0.3.6 shipped unbuildable from source |
-| `prototype/package.json` | nothing at runtime — the web app is continuously deployed and shows its build commit, not this number (see `prototype/vite.config.js`). Kept in step anyway so the two halves don't read as different products; it drifted to 0.3.3 against a 0.3.6 desktop while only a comment asked for it, so the release gate checks it now |
+| `prototype/package.json` | nothing at runtime — the web app is continuously deployed and shows its build commit, not this number (see `prototype/vite.config.ts`). Kept in step anyway so the two halves don't read as different products; it drifted to 0.3.3 against a 0.3.6 desktop while only a comment asked for it, so the release gate checks it now |
 | `packaging/aur/PKGBUILD` | the AUR package version |

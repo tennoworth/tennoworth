@@ -23,7 +23,11 @@
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,
     "noEmit": true,
-    "types": ["vitest/globals"]
+    // No ambient globals. vitest.config.ts sets `globals: false` and every
+    // test imports its describe/it/expect from 'vitest', so enabling
+    // vitest/globals here would let a missing import type-check and then
+    // fail at runtime — the one failure class this repo's gates exist for.
+    "types": []
   },
   "include": ["src/**/*", "src/**/*.svelte"],
   "exclude": ["node_modules", "dist"]

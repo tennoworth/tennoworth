@@ -16,8 +16,8 @@ you're editing **before** you start writing code there:
 - [`prototype/CLAUDE.md`](prototype/CLAUDE.md) — Svelte 5 + Vite
   browser app (the informational site). Svelte 5 reactivity gotchas,
   storage choices, CSP.
-- [`scripts/CLAUDE.md`](scripts/CLAUDE.md) — the one Node tool
-  (`sync-csp.mjs`) and the shared fixtures.
+- [`scripts/CLAUDE.md`](scripts/CLAUDE.md) — the three Node tools
+  (sync-csp, check-panic-sites, check-probe-report) and the shared fixtures.
 
 ---
 
@@ -28,7 +28,8 @@ companion/       Rust workspace — tennoworth-desktop (the product, Tauri)
                  drives wfm-core over IPC; wfm-scrape is the host pipeline
 prototype/       Svelte 5 + Vite informational site, deployed as static
 prototype/public/market.json    central artifact: the WFM snapshot
-scripts/         sync-csp.mjs (the one Node tool); Python retired 2026-08
+scripts/         three Node tools (sync-csp.mjs, check-panic-sites.mjs,
+                 check-probe-report.mjs); Python retired 2026-08
 packaging/aur/   AUR recipes (tennoworth, tennoworth-bin) + their .install hooks
 deploy/          self-host kit for the production LXC: Caddyfile, setup, scrape/web-pull units, plus the signed apt+dnf repo publisher (setup-repo.sh, pull-packages.sh)
 tests/           shared cross-language fixtures (Rust↔TS parity); no pytest
