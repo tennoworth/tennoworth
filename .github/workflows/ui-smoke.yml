@@ -56,15 +56,13 @@ jobs:
       # gets killed by the step timeout. The report is written twice (checkpoint
       # + FINAL), so the file read afterwards is the complete run.
       #
-      # 2026-08-13 runner hang: the first runs produced ONE boot line ("scan
-      # definitions installed") and then sat at WebView2 init until the timeout.
-      # wry passes an empty userDataFolder to CreateCoreWebView2Environment-
-      # WithOptions, so the WebView2 runtime resolves the DEFAULT user data
-      # folder - which on the runner's service session can be unwritable/slow,
-      # hanging browser-process startup. WEBVIEW2_USER_DATA_FOLDER redirects it
-      # to runner.temp (the env var is honored for the default path). Browser
-      # args via WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS would NOT work: wry
-      # always sets its own via set_additional_browser_arguments.
+      # 2026-08-13: the first runs failed because the probe env vars in this
+      # workflow used TENOWORTH_* (one N) while the app reads TENNOWORTH_* (two Ns,
+      # the TennoWorth spelling) - probe mode never activated, the app ran as a
+      # normal GUI app, and the step timed out. Fixed in cb39d75. WEBVIEW2_USER_
+      # DATA_FOLDER is kept as standard CI hygiene (a writable user-data folder
+      # never hurts and avoids the default-folder edge cases); the app also adds
+      # probe-only Chromium flags when the probe is active (main.rs).
       - name: Run the app under the probe
         shell: pwsh
         env:
