@@ -23,6 +23,8 @@
 
   let exportDialog = $state();
   let importDialog = $state();
+  let exportPassInput: HTMLInputElement | undefined;
+  let importPassInput: HTMLInputElement | undefined;
   let exportPass = $state('');
   let exportConfirm = $state('');
   let exportBusy = $state(false);
@@ -37,6 +39,7 @@
     exportPass = '';
     exportConfirm = '';
     exportDialog?.showModal();
+    exportPassInput?.focus();
   }
 
   let importFileInput = $state();
@@ -61,9 +64,11 @@
       importName = file.name;
       importPass = '';
       importDialog?.showModal();
+      importPassInput?.focus();
     } catch (err) {
       cryptoError = err.message || String(err);
       importDialog?.showModal();
+      importPassInput?.focus();
     }
   }
 
@@ -166,7 +171,7 @@
         placeholder="12+ characters — same floor as your login passphrase"
         required
         minlength="12"
-        autofocus
+        bind:this={exportPassInput}
       />
     </label>
     <label>
@@ -220,7 +225,7 @@
         bind:value={importPass}
         placeholder="Type the passphrase this file was exported with."
         required
-        autofocus
+        bind:this={importPassInput}
       />
     </label>
     {#if cryptoError}

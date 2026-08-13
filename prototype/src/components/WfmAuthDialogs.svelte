@@ -34,6 +34,8 @@
   // Threaded through to `onunlocked` rather than acted on here — App.svelte
   // owns what 'list' means (opening its own listingOpen state).
   let authNext: string | null = null;
+  let wfmLoginEmailInput: HTMLInputElement | undefined;
+  let wfmUnlockPassInput: HTMLInputElement | undefined;
 
   export async function open(code: string, next: string | null = null) {
     wfmAuthError = null;
@@ -43,6 +45,7 @@
       wfmLoginPassphrase = '';
       wfmLoginConfirm = '';
       wfmLoginDialog?.showModal();
+      wfmLoginEmailInput?.focus();
     } else {
       // A remembered device key (OS keyring) unlocks without the modal. Any
       // miss — no entry, no keyring daemon, stale key — falls through to the
@@ -57,6 +60,7 @@
       }
       wfmUnlockPassphrase = '';
       wfmUnlockDialog?.showModal();
+      wfmUnlockPassInput?.focus();
     }
   }
 
@@ -131,7 +135,7 @@
     </header>
     <label>
       Email
-      <input type="email" autocomplete="username" bind:value={wfmLoginEmail} required autofocus />
+      <input type="email" autocomplete="username" bind:value={wfmLoginEmail} required bind:this={wfmLoginEmailInput} />
     </label>
     <label>
       Password
@@ -200,7 +204,7 @@
         data-testid="wfm-unlock-pass"
         bind:value={wfmUnlockPassphrase}
         required
-        autofocus
+        bind:this={wfmUnlockPassInput}
       />
     </label>
     <label class="remember">

@@ -1,0 +1,113 @@
+// Event-wiring tests for the listing review modal: the submit flow, the
+// lock-state routing (needs_login / needs_unlock -> auth dialogs), and the
+// bulk-visibility toggle. The lib layer (limits, format) is covered by its own
+// tests; this file drives the component itself, which the lib tests can't.
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/svelte';
+import { afterEach } from 'vitest';
+import ListingReviewModal from './ListingReviewModal.svelte';
+import { DesktopCmdError, type Transport } from '../lib/transport';
+
+// globals: false in vitest.config.ts, so testing-library's auto-cleanup
+// does not run; unmount between tests or buttons accumulate in the DOM.
+afterEach(cleanup);
+
+const rows = [
+  { slug: 'accelerated_blast', name: 'Accelerated Blast', owned: 3, sellable: 2, low_sell: 15, avg_price: 20, clearing_price: 18 },
+  { slug: 'ash_prime_blueprint', name: 'Ash Prime Blueprint', owned: 1, sellable: 1, low_sell: 40, avg_price: 45, clearing_price: 42 },
+];
+
+function makeTransport(overrides: Partial<Transport> = {}) {
+  return {
+    submitPlan: vi.fn().mockResolvedValue({ plan_id: 'p1', results: [] }),
+    bulkVisibility: vi.fn().mockResolvedValue({ results: [] }),
+    ...overrides,
+  } as unknown as Transport;
+}
+
+function openModal(overrides: Record<string, unknown> = {}) {
+  return render(ListingReviewModal, {
+    props: { open: true, rows, transport: makeTransport(), ...overrides },
+  });
+}
+
+describe('ListingReviewModal', () => {
+  it('prefills rows on open with the clearing-price clamp and an enabled Send', () => {
+    openModal();
+    expect(screen.getByText('Accelerated Blast')).toBeTruthy();
+    // clearing price 18, not raw low_sell 15, not avg 20
+    expect(screen.getByDisplayValue('18')).toBeTruthy();
+    const send = screen.getByRole('button', { name: /Send 2 listings/ }) as HTMLButtonElement;
+    expect(send.disabled).toBe(false);
+  });
+
+  it('deselect-all disables Send; select-all re-enables it', async () => {
+    openModal();
+    await fireEvent.click(screen.getByText('Deselect all'));
+    await waitFor(() => {
+      const send = screen.getByRole('button', { name: /Send 0 listings/ }) as HTMLButtonElement;
+      expect(send.disabled).toBe(true);
+    });
+    await fireEvent.click(screen.getByText('Select all'));
+    await waitFor(() => {
+      const send = screen.getByRole('button', { name: /Send 2 listings/ }) as HTMLButtonElement;
+      expect(send.disabled).toBe(false);
+    });
+  });
+
+  it('sends the clamped payload, then bulk-visibility toggles created orders', async () => {
+    const transport = makeTransport({
+      submitPlan: vi.fn().mockResolvedValue({
+        plan_id: 'p1',
+        results: [
+          { slug: 'accelerated_blast', status: 'ok', action: 'created', order_id: 'abc123' },
+          { slug: 'ash_prime_blueprint', status: 'ok', action: 'created', order_id: 'def456' },
+        ],
+      }),
+      bulkVisibility: vi.fn().mockResolvedValue({
+        results: [
+          { slug: 'accelerated_blast', status: 'ok' },
+          { slug: 'ash_prime_blueprint', status: 'ok' },
+        ],
+      }),
+    });
+    openModal({ transport });
+    await fireEvent.click(screen.getByRole('button', { name: /Send 2 listings/ }));
+    await waitFor(() => expect(screen.getByText('2 created')).toBeTruthy());
+    expect(transport.submitPlan).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({ slug: 'accelerated_blast', platinum: 18, quantity: 1, order_type: 'sell', visible: false }),
+        expect.objectContaining({ slug: 'ash_prime_blueprint', platinum: 42 }),
+      ]),
+    );
+    await fireEvent.click(screen.getByRole('button', { name: /Make 2 visible/ }));
+    await waitFor(() =>
+      expect(transport.bulkVisibility).toHaveBeenCalledWith(['abc123', 'def456'], true),
+    );
+    await waitFor(() => expect(screen.getByText('2 now visible')).toBeTruthy());
+  });
+
+  it('routes a needs_login rejection to onauthrequired and returns to review', async () => {
+    const onauthrequired = vi.fn();
+    const transport = makeTransport({
+      submitPlan: vi.fn().mockRejectedValue(new DesktopCmdError('needs_login', 'not signed in')),
+    });
+    openModal({ transport, onauthrequired });
+    await fireEvent.click(screen.getByRole('button', { name: /Send 2 listings/ }));
+    await waitFor(() => expect(onauthrequired).toHaveBeenCalledWith('needs_login'));
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /Send 2 listings/ })).toBeTruthy(),
+    );
+  });
+
+  it('a plain failure surfaces humanError and offers Back to review', async () => {
+    const transport = makeTransport({
+      submitPlan: vi.fn().mockRejectedValue(new Error('connection refused')),
+    });
+    openModal({ transport });
+    await fireEvent.click(screen.getByRole('button', { name: /Send 2 listings/ }));
+    await waitFor(() => expect(screen.getByText('connection refused')).toBeTruthy());
+    await fireEvent.click(screen.getByText('Back to review'));
+    expect(screen.getByRole('button', { name: /Send 2 listings/ })).toBeTruthy();
+  });
+});
