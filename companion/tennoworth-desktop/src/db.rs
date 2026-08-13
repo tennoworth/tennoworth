@@ -14,6 +14,7 @@ use std::path::Path;
 use std::sync::Mutex;
 
 use rusqlite::{Connection, OptionalExtension};
+use wfm_core::poison::guard;
 
 /// Schema migrations, applied in order. The index (1-based) is the schema
 /// version each one brings the DB to; `user_version` records the current level.
@@ -156,7 +157,7 @@ impl Db {
     }
 
     pub fn get_setting(&self, key: &str) -> rusqlite::Result<Option<String>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = guard(&self.conn);
         conn.query_row("SELECT value FROM setting WHERE key = ?1", [key], |r| {
             r.get(0)
         })
@@ -164,7 +165,7 @@ impl Db {
     }
 
     pub fn set_setting(&self, key: &str, value: &str) -> rusqlite::Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = guard(&self.conn);
         conn.execute(
             "INSERT INTO setting (key, value) VALUES (?1, ?2)
              ON CONFLICT(key) DO UPDATE SET value = excluded.value",
@@ -174,7 +175,7 @@ impl Db {
     }
 
     pub fn get_reserves(&self) -> rusqlite::Result<Vec<Reserve>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = guard(&self.conn);
         let mut stmt = conn.prepare("SELECT slug, keep FROM reserve ORDER BY slug")?;
         let rows = stmt.query_map([], |r| {
             Ok(Reserve {
@@ -186,7 +187,7 @@ impl Db {
     }
 
     pub fn set_reserve(&self, slug: &str, keep: i64) -> rusqlite::Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = guard(&self.conn);
         conn.execute(
             "INSERT INTO reserve (slug, keep) VALUES (?1, ?2)
              ON CONFLICT(slug) DO UPDATE SET keep = excluded.keep",
@@ -196,7 +197,7 @@ impl Db {
     }
 
     pub fn delete_reserve(&self, slug: &str) -> rusqlite::Result<()> {
-        let conn = self.conn.lock().unwrap();
+        let conn = guard(&self.conn);
         conn.execute("DELETE FROM reserve WHERE slug = ?1", [slug])?;
         Ok(())
     }
@@ -213,7 +214,7 @@ impl Db {
         game_version: Option<&str>,
         items: &[SnapshotItem],
     ) -> rusqlite::Result<i64> {
-        let mut conn = self.conn.lock().unwrap();
+        let mut conn = guard(&self.conn);
         let tx = conn.transaction()?;
         tx.execute(
             "INSERT INTO snapshot (taken_at, source, game_version)
@@ -248,7 +249,7 @@ impl Db {
         if rows.is_empty() {
             return Ok(0);
         }
-        let mut conn = self.conn.lock().unwrap();
+        let mut conn = guard(&self.conn);
         let tx = conn.transaction()?;
         {
             let mut stmt = tx.prepare(
@@ -275,7 +276,7 @@ impl Db {
 
     /// Most recent `listing_log` rows, newest first.
     pub fn list_listing_log(&self, limit: i64) -> rusqlite::Result<Vec<ListingLogEntry>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = guard(&self.conn);
         let mut stmt = conn.prepare(
             "SELECT id, plan_id, slug, listed_at, price, qty, status, action, order_id,
                     message, outcome
@@ -305,7 +306,7 @@ impl Db {
     /// when no snapshot exists yet. `slug` is the DE item path — the caller
     /// resolves it to a WFM slug for the market join (see `sellables`).
     pub fn latest_snapshot_items(&self) -> rusqlite::Result<Vec<SnapshotItem>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = guard(&self.conn);
         let mut stmt = conn.prepare(
             "SELECT slug, count, leveled FROM snapshot_item
              WHERE snapshot_id = (SELECT MAX(id) FROM snapshot)
@@ -322,7 +323,7 @@ impl Db {
     }
 
     pub fn list_snapshots(&self, limit: i64) -> rusqlite::Result<Vec<SnapshotSummary>> {
-        let conn = self.conn.lock().unwrap();
+        let conn = guard(&self.conn);
         let mut stmt = conn.prepare(
             "SELECT s.id, s.taken_at, s.source, COUNT(si.snapshot_id)
              FROM snapshot s
@@ -349,19 +350,19 @@ impl Db {
 
     #[cfg(test)]
     fn snapshot_count(&self) -> rusqlite::Result<i64> {
-        let conn = self.conn.lock().unwrap();
+        let conn = guard(&self.conn);
         conn.query_row("SELECT COUNT(*) FROM snapshot", [], |r| r.get(0))
     }
 
     #[cfg(test)]
     fn snapshot_item_count(&self) -> rusqlite::Result<i64> {
-        let conn = self.conn.lock().unwrap();
+        let conn = guard(&self.conn);
         conn.query_row("SELECT COUNT(*) FROM snapshot_item", [], |r| r.get(0))
     }
 
     #[cfg(test)]
     fn user_version(&self) -> rusqlite::Result<i64> {
-        let conn = self.conn.lock().unwrap();
+        let conn = guard(&self.conn);
         conn.query_row("PRAGMA user_version", [], |r| r.get(0))
     }
 }

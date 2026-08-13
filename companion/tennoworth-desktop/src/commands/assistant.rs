@@ -13,6 +13,8 @@ use wfm_core::assistant::{
     AssistantMessage, AssistantResponse,
 };
 
+use wfm_core::poison::guard;
+
 use crate::wfm_session::{CmdError, WfmSession};
 
 #[tauri::command]
@@ -44,7 +46,7 @@ pub async fn ask_assistant(
         // Checked just before the upstream call — a rejected/oversized/keyless
         // request never counts against the budget (same as serve).
         {
-            let mut calls = s.assistant_calls.lock().expect("assistant_calls mutex poisoned");
+            let mut calls = guard(&s.assistant_calls);
             if assistant_rate_limited(&mut calls, Instant::now()) {
                 return Err(CmdError::of(
                     AssistantErrorCode::RateLimited.as_str(),

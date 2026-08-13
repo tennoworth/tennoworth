@@ -14,6 +14,7 @@
 
 use std::sync::Mutex;
 use std::time::Duration;
+use wfm_core::poison::guard;
 use tauri::{AppHandle, Manager, State};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
@@ -61,17 +62,17 @@ pub struct UpdateState {
 
 impl UpdateState {
     pub fn last(&self) -> UpdateStatus {
-        self.last.lock().unwrap().clone()
+        guard(&self.last).clone()
     }
 
     /// Clone (not take): a failed install must stay retryable.
     fn pending(&self) -> Option<Update> {
-        self.pending.lock().unwrap().clone()
+        guard(&self.pending).clone()
     }
 
     fn store(&self, status: UpdateStatus, update: Option<Update>) {
-        *self.last.lock().unwrap() = status;
-        *self.pending.lock().unwrap() = update;
+        *guard(&self.last) = status;
+        *guard(&self.pending) = update;
     }
 }
 

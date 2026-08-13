@@ -12,6 +12,7 @@ use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 
 use wfm_core::listing::Unlocked;
+use wfm_core::poison::guard;
 
 use crate::sellables::ScanNotification;
 use crate::tray::{post_scan_surfaces, TrayState};
@@ -320,7 +321,7 @@ pub fn debug_post_scan(app: AppHandle) -> Result<Option<ScanNotification>, Strin
         return Err("debug_post_scan is probe-only".into());
     }
     post_scan_surfaces(&app);
-    Ok(*app.state::<TrayState>().last_notification.lock().unwrap())
+    Ok(*guard(&app.state::<TrayState>().last_notification))
 }
 
 /// Probe-only: write a real encrypted login envelope (production encrypt +

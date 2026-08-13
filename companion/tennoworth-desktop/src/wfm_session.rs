@@ -17,6 +17,7 @@
 
 use std::collections::VecDeque;
 use std::fs;
+use wfm_core::poison::guard;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
@@ -133,7 +134,7 @@ impl WfmSession {
     }
 
     pub fn is_unlocked(&self) -> bool {
-        self.inner.lock().expect("session mutex poisoned").is_some()
+        guard(&self.inner).is_some()
     }
 
     /// `(logged_in, unlocked)` for the desktop UI's login affordance:
@@ -150,7 +151,7 @@ impl WfmSession {
     /// explicit overwrite first. Also forgets the remembered device key —
     /// an explicit logout that silently re-unlocked itself wouldn't be one.
     pub fn logout(&self) {
-        let mut guard = self.inner.lock().expect("session mutex poisoned");
+        let mut guard = guard(&self.inner);
         if let Some(arc) = guard.take() {
             if let Ok(mut unlocked) = Arc::try_unwrap(arc) {
                 unlocked.jwt.zeroize();
@@ -167,7 +168,7 @@ impl WfmSession {
     /// by whether a login file exists (serve's `NeedsLogin` vs a present-but-
     /// locked blob).
     pub fn require_unlocked(&self) -> Result<Arc<Unlocked>, CmdError> {
-        if let Some(u) = self.inner.lock().expect("session mutex poisoned").as_ref() {
+        if let Some(u) = guard(&self.inner).as_ref() {
             return Ok(Arc::clone(u));
         }
         if self.jwt_path.exists() {
@@ -222,7 +223,7 @@ impl WfmSession {
     pub fn unlock(&self, passphrase: &str, remember: bool) -> Result<(), CmdError> {
         let (jwt, platform, key) = self.decrypt_from_disk(passphrase)?;
         let unlocked = warm(jwt, platform)?;
-        *self.inner.lock().expect("session mutex poisoned") = Some(Arc::new(unlocked));
+        *guard(&self.inner) = Some(Arc::new(unlocked));
         if self.use_keyring {
             if remember {
                 crate::keyring_store::store_key(&key);
@@ -263,7 +264,7 @@ impl WfmSession {
         };
         match warm(jwt, platform) {
             Ok(unlocked) => {
-                *self.inner.lock().expect("session mutex poisoned") = Some(Arc::new(unlocked));
+                *guard(&self.inner) = Some(Arc::new(unlocked));
                 true
             }
             Err(e) => {
@@ -309,7 +310,7 @@ impl WfmSession {
         // catalog warm fails the JWT is already saved, so a later listing action
         // unlocks via the passphrase modal — surface the network error either way.
         let unlocked = warm(jwt, platform.to_string())?;
-        *self.inner.lock().expect("session mutex poisoned") = Some(Arc::new(unlocked));
+        *guard(&self.inner) = Some(Arc::new(unlocked));
         if self.use_keyring {
             if remember {
                 // A fresh login rotated the salt, so derive against the blob we
@@ -345,7 +346,7 @@ impl WfmSession {
     /// itself runtime-gated behind `TENNOWORTH_PROBE=1` (same pattern as the
     /// other `debug_*` probe commands).
     pub fn debug_set_unlocked(&self, unlocked: Unlocked) {
-        *self.inner.lock().expect("session mutex poisoned") = Some(Arc::new(unlocked));
+        *guard(&self.inner) = Some(Arc::new(unlocked));
     }
 
     /// Probe-only companion to `debug_set_unlocked`: write a real encrypted

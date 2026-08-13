@@ -11,6 +11,8 @@
 use anyhow::anyhow;
 use anyhow::{bail, Result};
 use regex::bytes::Regex;
+
+use crate::poison::{read_guard, write_guard};
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, RwLock};
 use sysinfo::System;
@@ -193,12 +195,12 @@ static INSTALLED: LazyLock<RwLock<Arc<ScanPatterns>>> =
 /// Replace the pattern set for subsequent scans. Applying an all-default set
 /// is the documented way to revert to compiled-in behaviour.
 pub fn install_patterns(patterns: ScanPatterns) {
-    *INSTALLED.write().unwrap() = Arc::new(patterns);
+    *write_guard(&INSTALLED) = Arc::new(patterns);
 }
 
 /// The set a scan should use, snapshotted for the duration of that scan.
 pub fn current_patterns() -> Arc<ScanPatterns> {
-    Arc::clone(&INSTALLED.read().unwrap())
+    Arc::clone(&read_guard(&INSTALLED))
 }
 
 fn aggregate_match(haystack: &[u8], pats: &ScanPatterns, counts: &mut PatternCounts) {
@@ -424,8 +426,8 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
 
         // A zero-sized or wrapping region would make `next` never advance
         // (infinite loop); a huge one would allocate a matching buffer and abort
-        // on OOM. Both are skipped - the same skip-don't-fail philosophy as the
-        // read path - which keeps the per-region allocation bounded.
+        // on OOM. Both are skipped — the same skip-don't-fail philosophy as the
+        // read path — which keeps the per-region allocation bounded.
         const MAX_REGION_READ: usize = 64 * 1024 * 1024;
         loop {
             let q = VirtualQueryEx(
@@ -456,7 +458,7 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
                 }
             }
             addr = next;
-            // No forward progress (zero-sized region or wraparound) - bail out
+            // No forward progress (zero-sized region or wraparound) — bail out
             // of the walk rather than re-querying the same address forever.
             if addr <= base {
                 break;

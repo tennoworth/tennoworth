@@ -10,6 +10,8 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Manager, Wry};
 use tauri_plugin_notification::NotificationExt;
 
+use wfm_core::poison::guard;
+
 use crate::commands::inventory::record_snapshot;
 use crate::db::Db;
 use crate::market::MarketCache;
@@ -100,7 +102,7 @@ fn sellable_labels(top: &[SellableRow]) -> Vec<String> {
 pub fn rebuild_tray(app: &AppHandle) -> Vec<SellableRow> {
     let rows = rank_all(app);
     let top: Vec<SellableRow> = rows.iter().take(TRAY_LIMIT).cloned().collect();
-    *app.state::<TrayState>().labels.lock().unwrap() = sellable_labels(&top);
+    *guard(&app.state::<TrayState>().labels) = sellable_labels(&top);
     match build_tray_menu(app, &top) {
         Ok(menu) => match app.tray_by_id("main") {
             Some(tray) => {
@@ -121,7 +123,7 @@ pub fn rebuild_tray(app: &AppHandle) -> Vec<SellableRow> {
 pub fn post_scan_surfaces(app: &AppHandle) {
     let rows = rebuild_tray(app);
     if let Some(n) = sellables::build_notification(&rows) {
-        *app.state::<TrayState>().last_notification.lock().unwrap() = Some(n);
+        *guard(&app.state::<TrayState>().last_notification) = Some(n);
         let noun = if n.count == 1 { "item" } else { "items" };
         let body = format!("{} {} worth ~{}p to sell", n.count, noun, n.total_plat);
         if let Err(e) = app
@@ -176,7 +178,7 @@ pub fn init_tray(app: &AppHandle) -> tauri::Result<()> {
     }
     let rows = rank_all(app);
     let top: Vec<SellableRow> = rows.iter().take(TRAY_LIMIT).cloned().collect();
-    *app.state::<TrayState>().labels.lock().unwrap() = sellable_labels(&top);
+    *guard(&app.state::<TrayState>().labels) = sellable_labels(&top);
     let menu = build_tray_menu(app, &top)?;
     let icon = app
         .default_window_icon()

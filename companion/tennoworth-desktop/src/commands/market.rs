@@ -3,6 +3,8 @@
 
 use tauri::{AppHandle, State};
 
+use wfm_core::poison::guard;
+
 use crate::db::Db;
 use crate::market::{self, MarketCache, RefreshResult};
 use crate::sellables::{self, SellableRow};
@@ -48,8 +50,8 @@ pub async fn refresh_market(app: AppHandle, cache: State<'_, MarketCache>) -> Re
 #[tauri::command]
 pub fn tray_state(state: State<'_, TrayState>) -> TrayStateReport {
     TrayStateReport {
-        labels: state.labels.lock().unwrap().clone(),
-        last_notification: *state.last_notification.lock().unwrap(),
+        labels: guard(&state.labels).clone(),
+        last_notification: *guard(&state.last_notification),
     }
 }
 
