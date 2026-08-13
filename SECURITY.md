@@ -32,7 +32,7 @@ characteristics:
      static web bundle and publishes it as a rolling `web-latest`
      prerelease asset (the self-host box pulls it with a plain curl).
    - `audit.yml` — on push / PR and weekly, runs dependency advisories
-     (`bun audit`, `cargo audit`) plus the JS, Python, and Rust test
+     (`bun audit`, `cargo audit`) plus the JS and Rust test
      suites.
 
    The `release-desktop.yml` workflow builds the desktop app (Windows
