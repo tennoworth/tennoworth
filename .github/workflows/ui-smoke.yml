@@ -55,12 +55,23 @@ jobs:
       # The probe auto-exits after the FINAL report; a hang is a probe bug and
       # gets killed by the step timeout. The report is written twice (checkpoint
       # + FINAL), so the file read afterwards is the complete run.
+      #
+      # 2026-08-13 runner hang: the first runs produced ONE boot line ("scan
+      # definitions installed") and then sat at WebView2 init until the timeout.
+      # wry passes an empty userDataFolder to CreateCoreWebView2Environment-
+      # WithOptions, so the WebView2 runtime resolves the DEFAULT user data
+      # folder - which on the runner's service session can be unwritable/slow,
+      # hanging browser-process startup. WEBVIEW2_USER_DATA_FOLDER redirects it
+      # to runner.temp (the env var is honored for the default path). Browser
+      # args via WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS would NOT work: wry
+      # always sets its own via set_additional_browser_arguments.
       - name: Run the app under the probe
         shell: pwsh
         env:
           TENOWORTH_PROBE: '1'
           TENOWORTH_PROBE_OUT: '${{ runner.temp }}\probe-report.json'
-        timeout-minutes: 10
+          WEBVIEW2_USER_DATA_FOLDER: '${{ runner.temp }}\webview2-data'
+        timeout-minutes: 5
         run: |
           & .\companion\target\release\tennoworth-desktop.exe 2>&1 |
             Tee-Object -FilePath "${{ runner.temp }}\probe-stdout.log"
@@ -82,3 +93,4 @@ jobs:
             ${{ runner.temp }}/probe-report.json
             ${{ runner.temp }}/probe-stdout.log
           if-no-files-found: ignore
+
