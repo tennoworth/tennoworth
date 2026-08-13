@@ -35,6 +35,10 @@ wfm_inventory_sellable.csv
 /.opencode/
 /opencode.json
 /vibeguard.config.json
+/AGENTS.md
+/companion/AGENTS.md
+/prototype/AGENTS.md
+/scripts/AGENTS.md
 
 # Maintainer-only. The GitHub repo is the PUBLIC surface: source, user docs,
 # packaging recipes, CI. Planning, ops runbooks and internal audits live with

@@ -98,8 +98,7 @@ product name and offers no override), but both packages declare
 cd prototype && bun install && bun run dev   # http://127.0.0.1:5173
 ```
 
-Domain-specific notes live in the per-directory `AGENTS.md` files. Security
-posture and threat model: [`SECURITY.md`](SECURITY.md).
+Security posture and threat model: [`SECURITY.md`](SECURITY.md).
 
 ### Branching
 

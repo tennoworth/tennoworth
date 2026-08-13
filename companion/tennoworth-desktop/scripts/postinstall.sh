@@ -12,8 +12,7 @@
 # user never gets told to open a terminal after a failure.
 #
 # This runs again on every upgrade because replacing the binary clears its file
-# capabilities. That is kernel behaviour, not a packaging quirk — see
-# companion/AGENTS.md's "setcap is wiped on file replacement" invariant.
+# capabilities. That is kernel behaviour, not a packaging quirk.
 #
 # Silent on success by design. It only speaks up when it could NOT do its job,
 # because that is the case where the user has to act.
