@@ -118,7 +118,7 @@ for (const t of TARGETS) {
   if (after !== before) {
     drifted += 1;
     if (check) {
-      console.error(`sync-csp: ${t.path} is out of sync with scripts/sync-csp.mjs`);
+      console.error(`sync-csp: ${t.path} is out of sync with scripts/sync-csp.ts`);
     } else {
       writeFileSync(abs, after);
       console.log(`sync-csp: rewrote ${t.path}`);

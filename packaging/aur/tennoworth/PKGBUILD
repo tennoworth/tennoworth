@@ -22,9 +22,9 @@ license=('MIT')
 depends=('webkit2gtk-4.1' 'gtk3' 'libayatana-appindicator' 'openssl')
 # `cargo` rather than `rust`: it is a virtual provide satisfied by either the
 # rust package or rustup, so this doesn't force toolchain-manager users to
-# install a second copy. bun builds the SPA; nodejs runs scripts/sync-csp.mjs,
+# install a second copy. bun builds the SPA and runs scripts/sync-csp.ts,
 # which the frontend build shells out to.
-makedepends=('cargo' 'bun' 'nodejs')
+makedepends=('cargo' 'bun')
 # Grants cap_sys_ptrace so the first inventory scan works without the user
 # hitting an error and being told to open a terminal. Re-runs on upgrade
 # because replacing the binary clears file capabilities.

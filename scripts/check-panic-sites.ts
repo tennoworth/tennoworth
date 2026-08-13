@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 // Gate: no unwrap()/expect() in production code outside the allowlist.
 //
 // Why this gate exists: unwrap/expect on the scan, listing, and command paths
@@ -10,7 +10,7 @@
 // allowlist in the same commit - the list is meant to shrink.
 // unwrap() in tests is idiomatic and stays; this gate only sees production code.
 //
-// Usage: node scripts/check-panic-sites.mjs [--list]
+// Usage: bun scripts/check-panic-sites.ts [--list]
 //   --list prints every production site found (file:line kind snippet) without
 //          failing - run it after a refactor to regenerate the allowlist.
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -29,7 +29,10 @@ const DIRS = [
 const ALLOWLIST = new Set([
   "companion/tennoworth-desktop/build.rs:12",
   "companion/tennoworth-desktop/build.rs:17",
-  "companion/tennoworth-desktop/src/main.rs:252",
+  // The end-of-main .expect("error while running tauri application") — its
+  // line moved 252 -> 278 when the probe block (2a4ed76) landed above it;
+  // same site, drifted key.
+  "companion/tennoworth-desktop/src/main.rs:278",
   "companion/tennoworth-desktop/src/probe.rs:308",
   "companion/wfm-core/src/auth.rs:125",
   "companion/wfm-core/src/scan.rs:91",

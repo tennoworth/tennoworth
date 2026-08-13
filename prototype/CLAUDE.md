@@ -8,9 +8,9 @@ receives it.
 Dev: `bun run dev` (http://127.0.0.1:5173). Tests: `bun run test`.
 Build: `bun run build`. Type-check: `bun run check`. Install: `bun install`.
 
-`npm` works too — `package.json` scripts are runtime-agnostic — but
-`bun.lock` is the source of truth lockfile and CI uses `bun install
---frozen-lockfile`.
+`npm install` works too, but `bun.lock` is the source of truth lockfile and
+CI uses `bun install --frozen-lockfile`. The build's CSP prebuild hook runs
+`scripts/sync-csp.ts` via `bun`, so `npm run build` also needs bun on PATH.
 
 ---
 
@@ -192,7 +192,7 @@ so a single human can reason about both.
 Production serves through **Caddy on the self-host box**, which applies
 the full header set (HSTS, `frame-ancestors` / X-Frame-Options, the
 CSP) from `deploy/Caddyfile` — kept in sync with the other CSP copies
-by `scripts/sync-csp.mjs`. The `<meta http-equiv="Content-Security-Policy">`
+by `scripts/sync-csp.ts`. The `<meta http-equiv="Content-Security-Policy">`
 in `index.html` still ships script/connect/style protection as a
 belt-and-suspenders fallback. The `public/_headers` file only matters
 for preview deployments on Cloudflare Pages / Netlify / Vercel (GitHub
@@ -202,14 +202,14 @@ Allowed `connect-src` (hosted): `self`. The hosted site makes no
 loopback or third-party calls — the loopback entries were for the removed
 companion CLI. The CSP ships in three places
 (`index.html` meta, `public/_headers`, `deploy/Caddyfile`) but is
-**edited in ONE**: `scripts/sync-csp.mjs`. Change the directives there,
+**edited in ONE**: `scripts/sync-csp.ts`. Change the directives there,
 run `bun run csp` to rewrite all three; `bun run build` fails via its
 prebuild `--check` if any copy drifted. (The meta copy deliberately
 omits `frame-ancestors` — browsers ignore it in meta tags.)
 
 **Desktop (Tauri) is a build-variant, not a fourth committed copy.**
 `bun run build:desktop` builds to `dist-desktop/` (gitignored) and runs
-`sync-csp.mjs --desktop dist-desktop/index.html`, which rewrites only that
+`sync-csp.ts --desktop dist-desktop/index.html`, which rewrites only that
 built file's meta CSP to
 `connect-src 'self' ipc://localhost http://ipc.localhost https://tennoworth.app`
 (the Tauri IPC scheme added so `invoke` uses the fast path with no CSP

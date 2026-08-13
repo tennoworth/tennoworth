@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env bun
 // Gate for the TENNOWORTH_PROBE UI smoke run (ui-smoke.yml): the probe drives
 // the real Tauri webview against a synthetic fixture and writes its evidence
 // as JSON. This asserts the app booted into Tauri IPC mode, the sell view
@@ -6,12 +6,12 @@
 // failure class a static gate cannot see (a default-vs-named import that
 // binds undefined compiles fine and no-ops the feature).
 //
-// Usage: node scripts/check-probe-report.mjs <report.json>
+// Usage: bun scripts/check-probe-report.ts <report.json>
 import { readFileSync } from "node:fs";
 
 const path = process.argv[2];
 if (!path) {
-  console.error("usage: check-probe-report.mjs <report.json>");
+  console.error("usage: check-probe-report.ts <report.json>");
   process.exit(2);
 }
 let report;

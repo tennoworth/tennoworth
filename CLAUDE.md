@@ -16,7 +16,7 @@ you're editing **before** you start writing code there:
 - [`prototype/CLAUDE.md`](prototype/CLAUDE.md) — Svelte 5 + Vite
   browser app (the informational site). Svelte 5 reactivity gotchas,
   storage choices, CSP.
-- [`scripts/CLAUDE.md`](scripts/CLAUDE.md) — the three Node tools
+- [`scripts/CLAUDE.md`](scripts/CLAUDE.md) — the three TypeScript tools
   (sync-csp, check-panic-sites, check-probe-report) and the shared fixtures.
 
 ---
@@ -28,8 +28,8 @@ companion/       Rust workspace — tennoworth-desktop (the product, Tauri)
                  drives wfm-core over IPC; wfm-scrape is the host pipeline
 prototype/       Svelte 5 + Vite informational site, deployed as static
 prototype/public/market.json    central artifact: the WFM snapshot
-scripts/         three Node tools (sync-csp.mjs, check-panic-sites.mjs,
-                 check-probe-report.mjs); Python retired 2026-08
+scripts/         three TypeScript tools (sync-csp.ts, check-panic-sites.ts,
+                 check-probe-report.ts); Python retired 2026-08
 packaging/aur/   AUR recipes (tennoworth, tennoworth-bin) + their .install hooks
 deploy/          self-host kit for the production LXC: Caddyfile, setup, scrape/web-pull units, plus the signed apt+dnf repo publisher (setup-repo.sh, pull-packages.sh)
 tests/           shared cross-language fixtures (Rust↔TS parity); no pytest
@@ -228,7 +228,7 @@ cd prototype && bun run test
 cd prototype && bun run knip                  # dead exports; tsconfig can't see them
 cd companion && cargo test                    # includes the wfm-scrape fixture gates
 cd companion && cargo audit --deny warnings   # same flags as audit.yml
-node scripts/sync-csp.mjs --check             # three CSP copies must agree
+bun scripts/sync-csp.ts --check              # three CSP copies must agree
 bash scripts/probe-smoke-linux.sh             # real app under xvfb + probe gate (needs xvfb-run)
 
 # The only CI gates that can't run here are the ones ABOUT the CI host:

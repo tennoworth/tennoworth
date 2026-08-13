@@ -65,6 +65,6 @@ case "$RC" in
     ;;
 esac
 
-node scripts/check-probe-report.mjs "$REPORT"
+bun scripts/check-probe-report.ts "$REPORT"
 echo "probe-smoke: OK - the real app ran the full UI probe under xvfb and passed."
 

@@ -4,7 +4,7 @@ name: ui-smoke
 # harness on every push: the probe injects a synthetic fixture, drives the
 # scan -> sell view -> listing UI over real IPC, and writes its evidence
 # (console errors, CSP violations, mount state) to a JSON report that
-# scripts/check-probe-report.mjs gates on. This is the only gate that catches
+# scripts/check-probe-report.ts gates on. This is the only gate that catches
 # "builds fine, feature silently no-ops" - the 2026-08-03 default-vs-named
 # import bug passed bun run check, svelte-check AND knip.
 #
@@ -80,7 +80,7 @@ jobs:
           Get-Content "${{ runner.temp }}\probe-stdout.log" | Select-String -Pattern 'PROBE_REPORT_BEGIN FINAL' | Select-Object -First 1
 
       - name: Assert the probe report
-        run: node scripts/check-probe-report.mjs "${{ runner.temp }}\probe-report.json"
+        run: bun scripts/check-probe-report.ts "${{ runner.temp }}\probe-report.json"
 
       - name: Upload probe evidence
         if: always()
