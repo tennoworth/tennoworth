@@ -94,3 +94,14 @@ jobs:
       # stale artifact cannot green them.
       - name: cargo test
         run: cargo test
+
+  # Unwrap/expect in production code is a crash (Tauri does not catch command
+  # panics) plus a poisoned mutex; the allowlist in scripts/check-panic-sites.mjs
+  # holds the ~8 sites that are unreachable by construction. Fails on any NEW
+  # site outside it - fix the site, or add it with a why-comment, never silently.
+  panic-site-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No new production unwrap()/expect() outside the allowlist
+        run: node scripts/check-panic-sites.mjs

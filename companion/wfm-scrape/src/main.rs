@@ -199,12 +199,11 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     let (catalog, meta_by_slug) = match fetch::fetch_catalog_wfm(http.as_ref(), "https://api.warframe.market/v2/items") {
         Ok(v) => v,
         Err(e) => {
-            let prior_catalog = prior.get("catalog").and_then(|c| c.as_object());
-            if prior_catalog.is_none() {
+            let Some(prior_catalog) = prior.get("catalog").and_then(|c| c.as_object()) else {
                 return Err(format!("{e} — and no prior snapshot to fall back on."));
-            }
+            };
             eprintln!("  {e} — reusing the prior snapshot's catalog");
-            let cat: HashMap<String, String> = prior_catalog.unwrap().iter().map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").to_string())).collect();
+            let cat: HashMap<String, String> = prior_catalog.iter().map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").to_string())).collect();
             let items_meta: HashMap<String, CatalogItemMeta> = prior
                 .get("items")
                 .and_then(|i| i.as_object())

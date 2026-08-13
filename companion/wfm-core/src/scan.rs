@@ -229,19 +229,15 @@ struct PatternCounts {
 }
 
 fn pick_dominant(counts: PatternCounts) -> Result<SessionInfo> {
-    if counts.creds.is_empty() {
-        bail!(
+    let total_distinct = counts.creds.len();
+    let ((aid, nonce), hits) = match counts.creds.into_iter().max_by_key(|(_, v)| *v) {
+        Some(pair) => pair,
+        None => bail!(
             "No accountId/nonce pair found in WF memory.\n\
              Make sure you're past the login screen and a recent network\n\
              call has fired (opening the trade or profile screen is reliable)."
-        );
-    }
-    let total_distinct = counts.creds.len();
-    let ((aid, nonce), hits) = counts
-        .creds
-        .into_iter()
-        .max_by_key(|(_, v)| *v)
-        .expect("non-empty checked above");
+        ),
+    };
     let build = counts
         .builds
         .into_iter()
@@ -426,6 +422,11 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
         let mut mbi = MEMORY_BASIC_INFORMATION::default();
         let mbi_size = std::mem::size_of::<MEMORY_BASIC_INFORMATION>();
 
+        // A zero-sized or wrapping region would make `next` never advance
+        // (infinite loop); a huge one would allocate a matching buffer and abort
+        // on OOM. Both are skipped - the same skip-don't-fail philosophy as the
+        // read path - which keeps the per-region allocation bounded.
+        const MAX_REGION_READ: usize = 64 * 1024 * 1024;
         loop {
             let q = VirtualQueryEx(
                 handle,
@@ -436,10 +437,11 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
             if q == 0 {
                 break;
             }
-            let next = mbi.BaseAddress as usize + mbi.RegionSize;
+            let base = mbi.BaseAddress as usize;
+            let next = base + mbi.RegionSize;
             let readable = mbi.State == MEM_COMMIT
                 && (mbi.Protect.0 & (PAGE_NOACCESS.0 | PAGE_GUARD.0)) == 0;
-            if readable {
+            if readable && mbi.RegionSize > 0 && mbi.RegionSize <= MAX_REGION_READ {
                 let mut buf = vec![0u8; mbi.RegionSize];
                 let mut read_n: usize = 0;
                 let ok = ReadProcessMemory(
@@ -454,7 +456,9 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
                 }
             }
             addr = next;
-            if addr == 0 {
+            // No forward progress (zero-sized region or wraparound) - bail out
+            // of the walk rather than re-querying the same address forever.
+            if addr <= base {
                 break;
             }
         }
