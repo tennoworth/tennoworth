@@ -1,6 +1,6 @@
 name: ui-smoke
 
-# Runs the REAL desktop app (Tauri v2, Windows) under the TENOWORTH_PROBE
+# Runs the REAL desktop app (Tauri v2, Windows) under the TENNOWORTH_PROBE
 # harness on every push: the probe injects a synthetic fixture, drives the
 # scan -> sell view -> listing UI over real IPC, and writes its evidence
 # (console errors, CSP violations, mount state) to a JSON report that
@@ -68,8 +68,8 @@ jobs:
       - name: Run the app under the probe
         shell: pwsh
         env:
-          TENOWORTH_PROBE: '1'
-          TENOWORTH_PROBE_OUT: '${{ runner.temp }}\probe-report.json'
+          TENNOWORTH_PROBE: '1'
+          TENNOWORTH_PROBE_OUT: '${{ runner.temp }}\probe-report.json'
           WEBVIEW2_USER_DATA_FOLDER: '${{ runner.temp }}\webview2-data'
         timeout-minutes: 5
         run: |

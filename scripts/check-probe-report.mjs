@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Gate for the TENOWORTH_PROBE UI smoke run (ui-smoke.yml): the probe drives
+// Gate for the TENNOWORTH_PROBE UI smoke run (ui-smoke.yml): the probe drives
 // the real Tauri webview against a synthetic fixture and writes its evidence
 // as JSON. This asserts the app booted into Tauri IPC mode, the sell view
 // rendered its scan CTA, and the run logged no console/CSP violations - the

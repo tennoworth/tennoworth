@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Local Linux UI smoke gate: run the REAL desktop app under a virtual display
-# with TENOWORTH_PROBE=1 and gate the probe report (console/CSP violations,
+# with TENNOWORTH_PROBE=1 and gate the probe report (console/CSP violations,
 # SPA mount, Tauri IPC mode, scan CTA). The remote ui-smoke.yml does the same
 # on Windows; this is the version to run on a Linux box BEFORE pushing - it
 # catches the "builds fine, feature silently no-ops" class that static gates
@@ -40,7 +40,7 @@ trap 'rm -f "$REPORT"' EXIT
 # The probe auto-exits after the FINAL report; timeout is a backstop so a
 # hung webview fails the gate instead of hanging the pre-push flow.
 set +e
-TENOWORTH_PROBE=1 TENOWORTH_PROBE_OUT="$REPORT" timeout 180 xvfb-run -a "$BIN" \
+TENNOWORTH_PROBE=1 TENNOWORTH_PROBE_OUT="$REPORT" timeout 180 xvfb-run -a "$BIN" \
   >/tmp/probe-smoke-stdout.log 2>&1
 RC=$?
 set -e

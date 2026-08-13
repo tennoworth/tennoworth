@@ -153,6 +153,15 @@ fn main() {
                 .map_err(|e| format!("opening state DB {}: {e}", db_path.display()))?;
             app.manage(store);
 
+            // Probe boot mode: verify the Rust boot path - DB, market cache,
+            // definitions fetch - then exit BEFORE the webview exists. The
+            // GitHub runner's non-interactive session cannot initialize
+            // WebView2 (the full probe hangs there on every run), so the
+            // runner gate (ui-smoke.yml) verifies everything up to the window
+            // this way, and the interactive probe runs locally via
+            // scripts/probe-smoke-linux.sh.
+            let boot_probe = probe && std::env::var_os("TENNOWORTH_PROBE_BOOT").is_some();
+
             // The C4 market cache lives next to the DB in the same app-data dir.
             // Unlike the DB, a missing/unreadable cache is never fatal — the
             // bundled snapshot is the floor — so this can't fail startup.
@@ -161,17 +170,28 @@ fn main() {
             // the compiled-in patterns, which is the correct fallback and not
             // worth delaying startup for. reqwest::blocking must not run on an
             // async worker, hence spawn_blocking rather than spawn.
-            let defs_dir = data_dir.clone();
-            tauri::async_runtime::spawn_blocking(move || {
-                let out = definitions::refresh_and_install(&defs_dir);
-                if out.installed {
-                    eprintln!(
-                        "tennoworth: scan definitions installed (fetched={}, rejected={})",
-                        out.fetched,
-                        out.rejected.len()
-                    );
-                }
-            });
+            if !boot_probe {
+                let defs_dir = data_dir.clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    let out = definitions::refresh_and_install(&defs_dir);
+                    if out.installed {
+                        eprintln!(
+                            "tennoworth: scan definitions installed (fetched={}, rejected={})",
+                            out.fetched,
+                            out.rejected.len()
+                        );
+                    }
+                });
+            }
+
+            if boot_probe {
+                let out = definitions::refresh_and_install(&data_dir);
+                println!(
+                    "PROBE_BOOT_OK defs_installed={} defs_fetched={} defs_rejected={}",
+                    out.installed, out.fetched, out.rejected.len()
+                );
+                std::process::exit(0);
+            }
 
             app.manage(MarketCache::new(data_dir));
 
