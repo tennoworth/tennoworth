@@ -35,12 +35,18 @@ echo "probe-smoke: building the desktop binary..."
 
 BIN=companion/target/debug/tennoworth-desktop
 REPORT="$(mktemp -t probe-smoke-XXXXXX.json)"
-trap 'rm -f "$REPORT"' EXIT
+# A FRESH app-data dir is part of the probe contract: the scan CTA and the
+# desktop-mode badge live on the onboarding view, which only renders when the
+# app has no inventory yet - a real data dir would boot straight to the sell
+# view and the probe would never find them. XDG_DATA_HOME isolates the run
+# from the host's actual data (and guarantees a writable DB) on any machine.
+SCRATCH="$(mktemp -d -t probe-xdg-XXXXXX)"
+trap 'rm -f "$REPORT"; rm -rf "$SCRATCH"' EXIT
 
 # The probe auto-exits after the FINAL report; timeout is a backstop so a
 # hung webview fails the gate instead of hanging the pre-push flow.
 set +e
-TENNOWORTH_PROBE=1 TENNOWORTH_PROBE_OUT="$REPORT" timeout 180 xvfb-run -a "$BIN" \
+XDG_DATA_HOME="$SCRATCH" TENNOWORTH_PROBE=1 TENNOWORTH_PROBE_OUT="$REPORT" timeout 180 xvfb-run -a "$BIN" \
   >/tmp/probe-smoke-stdout.log 2>&1
 RC=$?
 set -e
@@ -61,3 +67,4 @@ esac
 
 node scripts/check-probe-report.mjs "$REPORT"
 echo "probe-smoke: OK - the real app ran the full UI probe under xvfb and passed."
+
