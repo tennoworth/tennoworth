@@ -55,11 +55,11 @@ pub fn random_token(bytes: usize) -> String {
 }
 
 /// A blocking reqwest client with the companion's browser UA and a caller-set
-/// timeout. Network calls go through here so the BROWSER_UA + timeout policy
+/// timeout. Network calls go through here so the user_agent() + timeout policy
 /// applies uniformly.
 pub fn browser_client(timeout_secs: u64) -> Result<Client> {
     Client::builder()
-        .user_agent(crate::BROWSER_UA)
+        .user_agent(crate::user_agent())
         .timeout(Duration::from_secs(timeout_secs))
         .build()
         .context("building HTTP client")

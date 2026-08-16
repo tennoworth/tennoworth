@@ -131,7 +131,7 @@ fn refresh_with(dir: &Path, url: &str) -> RefreshResult {
         .filter(|s| !s.is_empty());
 
     let client = match reqwest::blocking::Client::builder()
-        .user_agent(concat!("tennoworth-desktop/", env!("CARGO_PKG_VERSION")))
+        .user_agent(wfm_core::user_agent())
         .timeout(TIMEOUT)
         .build()
     {

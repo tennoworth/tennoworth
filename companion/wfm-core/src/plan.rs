@@ -159,7 +159,7 @@ pub fn execute_plan(pending_path: &std::path::Path, unlocked: &Unlocked, plan: P
 // at any point leaves a consistent record.
 pub fn run_pending(pending_path: &std::path::Path, unlocked: &Unlocked, pending: &mut PendingPlan) -> PlanResponse {
     let http = match Client::builder()
-        .user_agent(crate::BROWSER_UA)
+        .user_agent(crate::user_agent())
         .timeout(Duration::from_secs(30))
         .build()
     {

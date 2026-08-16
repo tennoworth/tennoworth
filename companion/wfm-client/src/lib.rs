@@ -11,21 +11,41 @@
 
 use std::time::Duration;
 
-// The one definition. wfm-core re-exports this. Proven against WFM's live
-// Cloudflare bot-protection via the production companion — a generic UA gets
-// a 1015 or a JS challenge.
-pub const BROWSER_UA: &str =
-    "Mozilla/5.0 (X11; Linux x86_64; rv:130.0) Gecko/20100101 Firefox/130.0";
+/// Project identity for the `User-Agent` header, per warframe.market's API
+/// rules (docs.warframe.market/docs/rules, ToS 2026-06-19 §11): a dedicated,
+/// descriptive UA — project, version, and a way to reach us — is mandatory,
+/// and browser spoofing is grounds for a block. Until 2026-08 this crate
+/// impersonated Firefox on the theory that "a generic UA gets a 1015 or a JS
+/// challenge"; probed 2026-08-16 against v1 + v2 (items, statistics, top
+/// orders, ducats), the descriptive form is accepted everywhere.
+pub const APP_NAME: &str = "TennoWorth";
+pub const APP_HOME: &str = "https://tennoworth.app";
+pub const APP_CONTACT: &str = "https://github.com/tennoworth/tennoworth/issues";
+
+/// Build the project UA for one component: `TennoWorth/0.3.7 (tennoworth-desktop;
+/// +https://tennoworth.app; https://github.com/tennoworth/tennoworth/issues)`.
+/// `component` names the binary (users can run more than one), `version` is
+/// that binary's version — the thing WFM staff would ask us to bump.
+pub fn user_agent(component: &str, version: &str) -> String {
+    format!("{APP_NAME}/{version} ({component}; +{APP_HOME}; {APP_CONTACT})")
+}
+
+/// This library's own UA — for the pipeline and tests. Binaries that carry a
+/// user-visible version (the desktop app) should pass theirs to
+/// [`user_agent`] instead.
+pub fn default_user_agent() -> String {
+    user_agent("wfm-client", env!("CARGO_PKG_VERSION"))
+}
 
 /// WFM requires these on every request — Cloudflare blocks without them.
 pub const HEADER_CROSSPLAY: &str = "Crossplay";
 pub const HEADER_PLATFORM: &str = "Platform";
 pub const HEADER_LANGUAGE: &str = "Language";
 
-/// Build a blocking reqwest client with the browser UA and a shared timeout.
+/// Build a blocking reqwest client with the project UA and a shared timeout.
 pub fn build_client(timeout_secs: u64) -> Result<reqwest::blocking::Client, reqwest::Error> {
     reqwest::blocking::Client::builder()
-        .user_agent(BROWSER_UA)
+        .user_agent(default_user_agent())
         .timeout(Duration::from_secs(timeout_secs))
         .build()
 }

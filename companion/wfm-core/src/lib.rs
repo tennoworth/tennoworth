@@ -30,11 +30,26 @@ pub mod util;
 // rate-limit error or a JS challenge before our request ever reaches the API.
 // This is the value proven against production traffic.
 //
-// Re-exported from wfm-client rather than declared again. The two copies were
-// byte-identical and each carried a "bump both together" comment — an
-// instruction a compiler cannot enforce and a reader can miss. Now there is
-// one string.
-pub use wfm_client::BROWSER_UA;
+/// The `User-Agent` every WFM call from this crate sends — see
+/// [`wfm_client::user_agent`] for the format WFM's rules require. The version
+/// is the *binary's* (the desktop app's), not this library's: the app calls
+/// [`set_app_identity`] once at startup; before that (tests, tools) the UA
+/// carries wfm-core's own name and version.
+pub fn user_agent() -> String {
+    let (component, version) = APP_IDENTITY
+        .get()
+        .cloned()
+        .unwrap_or_else(|| ("wfm-core".to_string(), env!("CARGO_PKG_VERSION").to_string()));
+    wfm_client::user_agent(&component, &version)
+}
+
+static APP_IDENTITY: std::sync::OnceLock<(String, String)> = std::sync::OnceLock::new();
+
+/// Name the binary embedding this crate, once, so [`user_agent`] reports its
+/// version. A second call is ignored (first wins).
+pub fn set_app_identity(component: &str, version: &str) {
+    let _ = APP_IDENTITY.set((component.to_string(), version.to_string()));
+}
 
 /// This crate's version string. Trivial, side-effect-free entry point the
 /// Tauri desktop shell can call to confirm it is linked

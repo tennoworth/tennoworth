@@ -169,7 +169,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         let cat = root.join("prototype").join("public").join("wfstat-catalog.json");
 
         let client = reqwest::blocking::Client::builder()
-            .user_agent(wfm_client::BROWSER_UA)
+            .user_agent(wfm_client::user_agent("wfm-scrape", env!("CARGO_PKG_VERSION")))
             .timeout(std::time::Duration::from_secs(30))
             .build()
             .map_err(|e| format!("build HTTP client: {e}"))?;

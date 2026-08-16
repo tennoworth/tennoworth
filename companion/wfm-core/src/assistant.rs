@@ -206,7 +206,7 @@ pub fn assistant_disabled(config_dir: &Path) -> bool {
 
 pub fn deepseek_client() -> Result<Client> {
     Client::builder()
-        .user_agent(crate::BROWSER_UA)
+        .user_agent(crate::user_agent())
         .timeout(Duration::from_secs(DEEPSEEK_TIMEOUT_SECS))
         .build()
         .context("building HTTP client")

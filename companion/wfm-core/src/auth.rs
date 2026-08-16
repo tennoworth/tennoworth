@@ -102,7 +102,7 @@ pub fn validate_passphrase(passphrase: &str) -> Result<()> {
 /// page. Returns the client so `signin` reuses the same cookie jar.
 pub fn bootstrap_session() -> Result<(Client, String)> {
     let client = Client::builder()
-        .user_agent(crate::BROWSER_UA)
+        .user_agent(crate::user_agent())
         .cookie_store(true)
         .timeout(Duration::from_secs(30))
         .build()

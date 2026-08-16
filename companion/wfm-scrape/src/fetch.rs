@@ -523,7 +523,7 @@ pub fn fetch_wfstat_slim() -> Result<Vec<serde_json::Value>, String> {
 pub fn fetch_wfstat_raw() -> Result<serde_json::Value, String> {
     let url = WFSTAT_ITEMS_URL;
     let resp = reqwest::blocking::Client::builder()
-        .user_agent(wfm_client::BROWSER_UA)
+        .user_agent(wfm_client::user_agent("wfm-scrape", env!("CARGO_PKG_VERSION")))
         .timeout(std::time::Duration::from_secs(60))
         .build()
         .map_err(|e| format!("build client: {e}"))?

@@ -36,12 +36,14 @@ pub const MAX_PLATINUM: u32 = 3000;
 /// looked load-bearing for months.
 pub(crate) const ORDER_RETRY_ATTEMPTS: u32 = 2;
 
-/// Retry a request builder for transport errors and 5xx responses only —
-/// never 4xx, which are semantic (a bad price, wrong subtype, a slug that
-/// doesn't exist) and won't succeed on retry. Backoff shares
+/// Retry a request builder for transport errors, 5xx responses, and 429 —
+/// never any other 4xx, which are semantic (a bad price, wrong subtype, a slug
+/// that doesn't exist) and won't succeed on retry. Backoff shares
 /// `wfm_client::retry_backoff` (2s/4s/6s) rather than a second hand-rolled
-/// curve. Requests with a non-cloneable body (not the case for any call site
-/// here — all send `.json(...)`) fall back to a single attempt.
+/// curve; a 429 that carries `Retry-After` (seconds) waits at least that long
+/// instead, which is what WFM's rate-limit rules ask of clients. Requests
+/// with a non-cloneable body (not the case for any call site here — all send
+/// `.json(...)`) fall back to a single attempt.
 pub(crate) fn send_with_retry(
     builder: reqwest::blocking::RequestBuilder,
     max_attempts: u32,
@@ -51,16 +53,36 @@ pub(crate) fn send_with_retry(
             Some(b) => b.send(),
             None => return builder.send(),
         };
-        let retryable = match &this_send {
-            Ok(resp) => resp.status().is_server_error(),
-            Err(_) => true,
+        let (retryable, retry_after) = match &this_send {
+            Ok(resp) => {
+                let st = resp.status();
+                let after = (st.as_u16() == 429)
+                    .then(|| retry_after_secs(resp.headers()))
+                    .flatten();
+                (st.is_server_error() || st.as_u16() == 429, after)
+            }
+            Err(_) => (true, None),
         };
         if !retryable || attempt + 1 == max_attempts {
             return this_send;
         }
-        std::thread::sleep(wfm_client::retry_backoff(attempt));
+        let wait = wfm_client::retry_backoff(attempt);
+        let wait = match retry_after {
+            Some(ra) if ra > wait => ra,
+            _ => wait,
+        };
+        std::thread::sleep(wait);
     }
     unreachable!("ORDER_RETRY_ATTEMPTS must be >= 1")
+}
+
+/// `Retry-After` as a delay, when it is the delta-seconds form (the only form
+/// WFM/Cloudflare send). Absent, unparseable, or the HTTP-date form → `None`,
+/// and the caller falls back to the standard backoff. Capped at 60 s so a
+/// hostile or mistaken header cannot park the UI thread.
+pub(crate) fn retry_after_secs(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
+    let secs: u64 = headers.get(reqwest::header::RETRY_AFTER)?.to_str().ok()?.trim().parse().ok()?;
+    Some(Duration::from_secs(secs.min(60)))
 }
 
 /// Everything a listing request needs, produced once on first use (decrypt +
@@ -231,4 +253,31 @@ pub fn delete_order(unlocked: &Unlocked, id: &str) -> Result<()> {
         bail!("WFM HTTP {status}: {}", &body[..body.len().min(300)]);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod retry_after_tests {
+    use super::retry_after_secs;
+    use reqwest::header::{HeaderMap, HeaderValue, RETRY_AFTER};
+    use std::time::Duration;
+
+    fn hm(v: &str) -> HeaderMap {
+        let mut h = HeaderMap::new();
+        h.insert(RETRY_AFTER, HeaderValue::from_str(v).unwrap());
+        h
+    }
+
+    #[test]
+    fn delta_seconds_is_honoured_and_capped() {
+        assert_eq!(retry_after_secs(&hm("7")), Some(Duration::from_secs(7)));
+        assert_eq!(retry_after_secs(&hm(" 3 ")), Some(Duration::from_secs(3)));
+        assert_eq!(retry_after_secs(&hm("9999")), Some(Duration::from_secs(60)));
+    }
+
+    #[test]
+    fn absent_or_http_date_falls_back_to_none() {
+        assert_eq!(retry_after_secs(&HeaderMap::new()), None);
+        assert_eq!(retry_after_secs(&hm("Wed, 21 Oct 2026 07:28:00 GMT")), None);
+        assert_eq!(retry_after_secs(&hm("-1")), None);
+    }
 }

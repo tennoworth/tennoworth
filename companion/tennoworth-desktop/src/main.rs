@@ -77,6 +77,9 @@ fn health() -> Health {
 }
 
 fn main() {
+    // Before any network call: every WFM request identifies as this app +
+    // version (WFM's rules require a descriptive User-Agent).
+    wfm_core::set_app_identity("tennoworth-desktop", env!("CARGO_PKG_VERSION"));
     let probe = std::env::var("TENNOWORTH_PROBE").ok().as_deref() == Some("1");
     let runtag = std::env::var("TENNOWORTH_RUNTAG").unwrap_or_else(|_| "na".into());
 
