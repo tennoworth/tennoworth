@@ -11,11 +11,39 @@ use std::time::Duration;
 
 use serde_json::Value;
 
-/// Fixed post-request delay — Python's `REQUEST_DELAY = 0.34`. The scraper
-/// sleeps this after EACH request (two per item), giving ~2.9 req/s. Fixed
-/// spacing, not a token bucket: a bursty n-per-second window would drift from
-/// Python's actual sleep logic, and matching it is the fidelity requirement.
+/// Minimum spacing between request STARTS — WFM's documented ceiling is 3
+/// req/s, so ~2.9 req/s. Measured start-to-start by [`Pacer`], so response
+/// latency is absorbed inside the interval instead of stacked on top of it.
+/// (The retired Python scraper slept this AFTER each response: 340 ms sleep
+/// plus ~140 ms latency gave ~2.1 req/s and a 62-minute run; on GitHub runners
+/// the latency is worse and the run brushed the 90-minute job limit.)
 pub const REQUEST_DELAY: Duration = Duration::from_millis(340);
+
+/// Start-to-start request pacer. Call [`Pacer::wait`] immediately before every
+/// paced request: it sleeps only for whatever remains of [`REQUEST_DELAY`]
+/// since the previous request started, then stamps the new start. The first
+/// call never sleeps. Retry backoff inside [`fetch_json`] is separate and
+/// additive — a 429 still costs its full `2**attempt` on top.
+pub struct Pacer {
+    interval: Duration,
+    last_start: Option<std::time::Instant>,
+}
+
+impl Pacer {
+    pub fn new(interval: Duration) -> Self {
+        Pacer { interval, last_start: None }
+    }
+
+    pub fn wait(&mut self, sleeper: &dyn Sleeper) {
+        if let Some(last) = self.last_start {
+            let elapsed = last.elapsed();
+            if elapsed < self.interval {
+                sleeper.sleep(self.interval - elapsed);
+            }
+        }
+        self.last_start = Some(std::time::Instant::now());
+    }
+}
 
 /// Number of attempts per request — Python's `fetch_json(retries=3)`.
 pub const RETRIES: u32 = 3;
@@ -197,6 +225,11 @@ impl FixtureScrapeHttp {
             responses,
             cursors: std::cell::RefCell::new(std::collections::HashMap::new()),
         }
+    }
+
+    /// Whether `url` has been requested at least once (fixture-present or not).
+    pub fn was_fetched(&self, url: &str) -> bool {
+        self.cursors.borrow().contains_key(url)
     }
 }
 

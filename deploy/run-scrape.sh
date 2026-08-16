@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Refresh market.json: full WFM scrape (~45 min @ 3 req/s) → CSV, then rebuild
-# the full-shape snapshot. This is the ONE scrape entrypoint — the self-host
+# Refresh market.json: full WFM scrape (~37 min @ 3 req/s, paced start-to-start;
+# zero-volume items skip the orders call) → CSV, then rebuild the full-shape
+# snapshot. This is the ONE scrape entrypoint — the self-host
 # systemd timer and the GitHub Actions cron both call it, so the truncation
 # guard can never drift between the two again.
 #

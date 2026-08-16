@@ -17,7 +17,7 @@ use market_math::{
 };
 
 use crate::coerce::{Coercions, DEFAULT_MAX_COERCIONS};
-use crate::http::{fetch_json, ScrapeHttp, Sleeper, REQUEST_DELAY};
+use crate::http::{fetch_json, Pacer, ScrapeHttp, Sleeper, REQUEST_DELAY};
 use crate::orders::{live_orders, parse_orders};
 use crate::stats::parse_stats;
 
@@ -116,19 +116,26 @@ fn json_truthy(v: &Value) -> bool {
     }
 }
 
-/// Analyze one item into a row, or `Ok(None)` to skip it (missing orders or an
-/// empty stats payload — Python's `if orders is None or not stats_payload`).
-/// A hard coercion error (object/bool/non-finite field) propagates as `Err`.
-pub fn analyze_item(
+/// The stats half of an item's analysis — everything derivable from
+/// `/statistics` alone, computed BEFORE the orders fetch so the scrape loop can
+/// skip the second request for items whose 48h volume is already under the
+/// gate (about 30% of the catalog on a typical run).
+pub struct StatsStage {
+    /// The one tier both windows and the live book are narrowed to (rank 0 for
+    /// mods, one subtype for relics), picked from the raw pre-filter stats.
+    pick: Option<String>,
+    recent: Vec<StatsDay>,
+    nineties: Vec<StatsDay>,
+    pub volume_48h: f64,
+}
+
+/// Parse the stats payload, or `None` to skip the item (empty payload —
+/// Python's `not stats_payload`). A hard coercion error propagates as `Err`.
+pub fn analyze_stats(
     item: &CatalogItem,
-    orders: Option<Value>,
     stats: Option<Value>,
     co: &mut Coercions,
-) -> Result<Option<AnalyzedRow>, String> {
-    let orders = match orders {
-        Some(v) => v,
-        None => return Ok(None),
-    };
+) -> Result<Option<StatsStage>, String> {
     let stats = match stats {
         Some(v) if json_truthy(&v) => v,
         _ => return Ok(None),
@@ -136,24 +143,39 @@ pub fn analyze_item(
 
     let (recent_all, nineties_all) = parse_stats(&stats, &item.slug, co)?;
 
-    // The single tier both windows and the live book are narrowed to, computed
-    // from the raw (pre-filter) stats — rank 0 for mods, one subtype for relics.
     let mut combined = recent_all.clone();
     combined.extend(nineties_all.clone());
-    let sub_pick = canonical_subtype(&combined, |d: &StatsDay| d.volume);
-    let pick = sub_pick.as_deref();
+    let pick = canonical_subtype(&combined, |d: &StatsDay| d.volume);
+
+    let recent = drop_poisoned_rows(&subtype_rows(&rank0_rows(&recent_all), pick.as_deref()));
+    let nineties = drop_poisoned_rows(&subtype_rows(&rank0_rows(&nineties_all), pick.as_deref()));
+    let volume_48h: f64 = recent.iter().map(|d| d.volume).sum();
+
+    Ok(Some(StatsStage { pick, recent, nineties, volume_48h }))
+}
+
+/// Finish an item: join the live order book onto its [`StatsStage`], or
+/// `Ok(None)` when the orders fetch failed (Python's `orders is None`).
+pub fn analyze_orders(
+    item: &CatalogItem,
+    stage: &StatsStage,
+    orders: Option<Value>,
+    co: &mut Coercions,
+) -> Result<Option<AnalyzedRow>, String> {
+    let orders = match orders {
+        Some(v) => v,
+        None => return Ok(None),
+    };
+    let pick = stage.pick.as_deref();
 
     let parsed = parse_orders(&orders, &item.slug, co)?;
     let live_buys = rank0_orders(&subtype_rows(&live_orders(&parsed, "buy"), pick));
     let live_sells = rank0_orders(&subtype_rows(&live_orders(&parsed, "sell"), pick));
 
-    let recent = drop_poisoned_rows(&subtype_rows(&rank0_rows(&recent_all), pick));
-    let nineties = drop_poisoned_rows(&subtype_rows(&rank0_rows(&nineties_all), pick));
+    let (median_now, median_90d, medians_7d, donch_top, donch_bot) = series_stats(&stage.nineties);
 
-    let (median_now, median_90d, medians_7d, donch_top, donch_bot) = series_stats(&nineties);
-
-    let volume_48h: f64 = recent.iter().map(|d| d.volume).sum();
-    let avg_price_48h = weighted_avg_48h(&recent, median_90d);
+    let volume_48h = stage.volume_48h;
+    let avg_price_48h = weighted_avg_48h(&stage.recent, median_90d);
 
     let top = top_buy(&live_buys);
     let low = low_sell(&live_sells);
@@ -182,6 +204,27 @@ pub fn analyze_item(
         donch_bot_90d: donch_bot,
         score: round_dp(sc, 1),
     }))
+}
+
+/// Analyze one item into a row, or `Ok(None)` to skip it (missing orders or an
+/// empty stats payload — Python's `if orders is None or not stats_payload`).
+/// A hard coercion error (object/bool/non-finite field) propagates as `Err`.
+/// Both stages in one call, for callers that already hold both payloads.
+pub fn analyze_item(
+    item: &CatalogItem,
+    orders: Option<Value>,
+    stats: Option<Value>,
+    co: &mut Coercions,
+) -> Result<Option<AnalyzedRow>, String> {
+    // Order matters for parity with the loop: a missing orders payload skips
+    // the item without ever parsing stats (so no stats coercions are counted).
+    if orders.is_none() {
+        return Ok(None);
+    }
+    match analyze_stats(item, stats, co)? {
+        Some(stage) => analyze_orders(item, &stage, orders, co),
+        None => Ok(None),
+    }
 }
 
 /// Format a numeric CSV cell. Rust's `Display` already drops a trailing `.0`
@@ -301,6 +344,10 @@ pub fn run_scrape(
     sleeper: &dyn Sleeper,
     cfg: &ScrapeConfig,
 ) -> Result<ScrapeSummary, String> {
+    // Every WFM request — the catalog included — is paced start-to-start (see
+    // `Pacer`) at the documented 3 req/s ceiling.
+    let mut pacer = Pacer::new(REQUEST_DELAY);
+    pacer.wait(sleeper);
     let items_val = fetch_json(http, sleeper, &format!("{API_ROOT}/v2/items"))
         .ok_or_else(|| "Failed to fetch item list. Network problem?".to_string())?;
     let mut items = parse_items(&items_val);
@@ -335,13 +382,24 @@ pub fn run_scrape(
     // masquerade as a finished snapshot.
     let partial = PathBuf::from(format!("{}.partial", cfg.out.display()));
 
+    // Per item the STATS call goes first: its 48h volume decides the
+    // min-volume gate on its own, so an item that would be dropped anyway never
+    // costs the orders call (~30% of the catalog is zero-volume over 48h). The
+    // kept set and every row in it are identical to fetching both
+    // unconditionally.
     for (idx, item) in items.iter().enumerate() {
-        let orders = fetch_json(http, sleeper, &format!("{API_ROOT}/v2/orders/item/{}", item.slug));
-        sleeper.sleep(REQUEST_DELAY);
+        pacer.wait(sleeper);
         let stats = fetch_json(http, sleeper, &format!("{API_ROOT}/v1/items/{}/statistics", item.slug));
-        sleeper.sleep(REQUEST_DELAY);
+        let stage = analyze_stats(item, stats, &mut co)?;
 
-        let row = analyze_item(item, orders, stats, &mut co)?;
+        let row = match stage {
+            Some(stage) if stage.volume_48h >= cfg.min_volume as f64 => {
+                pacer.wait(sleeper);
+                let orders = fetch_json(http, sleeper, &format!("{API_ROOT}/v2/orders/item/{}", item.slug));
+                analyze_orders(item, &stage, orders, &mut co)?
+            }
+            _ => None,
+        };
 
         // The permissive-parsing budget, enforced INCREMENTALLY (Python only
         // checks equivalently at the end). A systemic upstream shape drift (WFM
@@ -358,9 +416,7 @@ pub fn run_scrape(
         }
 
         if let Some(row) = row {
-            if row.volume_48h >= cfg.min_volume as f64 {
-                results.push(row);
-            }
+            results.push(row);
         }
 
         if cfg.checkpoint_every > 0 && (idx + 1) % cfg.checkpoint_every == 0 {
@@ -454,19 +510,34 @@ mod tests {
     }
 
     #[test]
-    fn paces_two_request_delays_per_item_and_no_retry_sleeps_on_clean_fixtures() {
-        // Orchestration-level pacing evidence: exactly two REQUEST_DELAY pauses
-        // per scanned item (one after the order fetch, one after stats). The
+    fn paces_one_spacing_per_request_and_skips_orders_below_the_volume_gate() {
+        // Orchestration-level pacing evidence. Requests: catalog, then per item
+        // stats (+ orders only when the 48h volume clears the gate). The pacer
+        // sleeps before every request except the first, and never the full
+        // REQUEST_DELAY because the fixture round-trip is not zero. The
         // always-200 base fixtures never trigger a retry/backoff sleep, so the
-        // schedule is entirely those fixed spacings.
+        // schedule is entirely those spacings.
+        //
+        // fixture(): volt_prime_barrel clears the gate (stats + orders),
+        // thin_item is 0-volume (stats only) → 4 requests, 3 spacings.
         let dir = std::env::temp_dir().join(format!("wfmscrape_pace_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let out = dir.join("run.csv");
         let sl = RecordingSleeper::new();
-        let summary = run_scrape(&fixture(), &sl, &cfg(&out)).unwrap();
+        let http = fixture();
+        let summary = run_scrape(&http, &sl, &cfg(&out)).unwrap();
+        assert_eq!(summary.scanned, 2);
         let sleeps = sl.recorded();
-        assert_eq!(sleeps.len(), summary.scanned * 2, "two spacings per scanned item");
-        assert!(sleeps.iter().all(|d| *d == REQUEST_DELAY), "every sleep is the fixed spacing");
+        assert_eq!(sleeps.len(), 3, "catalog + 2 stats + 1 orders = 4 requests, 3 spacings");
+        assert!(
+            sleeps.iter().all(|d| *d <= REQUEST_DELAY && *d > REQUEST_DELAY / 2),
+            "each spacing is the remainder of REQUEST_DELAY: {sleeps:?}"
+        );
+        assert!(
+            !http.was_fetched(&format!("{API_ROOT}/v2/orders/item/thin_item")),
+            "orders must not be fetched for an item under the volume gate"
+        );
+        assert!(http.was_fetched(&format!("{API_ROOT}/v2/orders/item/volt_prime_barrel")));
         std::fs::remove_dir_all(&dir).ok();
     }
 
