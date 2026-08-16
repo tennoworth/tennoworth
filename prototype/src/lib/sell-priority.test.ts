@@ -1,6 +1,6 @@
 // @ts-nocheck — vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
 import { describe, it, expect } from 'vitest';
-import { scoreRow, bandSignal, clearingPrice, sellableQty, selectPicks, MIN_PICK_SCORE, MAX_PICKS } from './sell-priority.js';
+import { scoreRow, bandSignal, clearingPrice, sellableQty, spareQty, selectPicks, MIN_PICK_SCORE, MAX_PICKS } from './sell-priority.js';
 
 describe('scoreRow', () => {
   it('returns zero score with no market data', () => {
@@ -266,5 +266,23 @@ describe('selectPicks', () => {
     const rows = [row({ sell_score: 10, key: 'low' }), row({ sell_score: 90, key: 'high' })];
     const picks = selectPicks(rows, { minScore: 1 });
     expect(picks.map((r) => r.key)).toEqual(['low', 'high']);
+  });
+});
+
+describe('spareQty', () => {
+  it('all unranked copies are spare when a ranked copy is owned', () => {
+    expect(spareQty(4, 5)).toBe(4);
+    expect(spareQty(4, 1)).toBe(4);
+  });
+  it('keeps one copy when no ranked copy is owned (kept_lvl null or 0)', () => {
+    expect(spareQty(4, null)).toBe(3);
+    expect(spareQty(4, 0)).toBe(3);
+    expect(spareQty(1, null)).toBe(0);
+    expect(spareQty(0, null)).toBe(0);
+  });
+  it('leveled copies are never spare', () => {
+    expect(spareQty(3, 5, 3)).toBe(0);
+    expect(spareQty(3, 5, 1)).toBe(2);
+    expect(spareQty(3, null, 1)).toBe(1);
   });
 });

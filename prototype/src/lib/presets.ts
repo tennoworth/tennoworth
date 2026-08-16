@@ -15,6 +15,12 @@ export interface Preset {
   ducatsOnly?: boolean;
   minVol?: number; // hard per-preset liquidity floor (Trending uses it)
   minMedian?: number; // 90d-baseline price floor — a +1100% Δ on a 1p fish is noise or wash-trading, not a mover
+  /** Restrict to these row types (any of). Unlike `typeFilter` — the user's
+   *  single-type dropdown — a preset can span several (Spares: Mods + Arcanes). */
+  typesAny?: string[];
+  /** Spares mode: rows are duplicate mods/arcanes, and "sellable" means the
+   *  copies you'd otherwise dissolve (see `spareQty`), not owned − reserve. */
+  sparesOnly?: boolean;
   defaultSort?: { key: string; dir: number };
 }
 
@@ -23,6 +29,14 @@ export const PRESETS: Record<string, Preset> = {
     minPrice: 5, hideAtLvl: 5, typeFilter: 'all', activeTags: [],
     label: 'Default', hint: 'everything sellable, best first',
     defaultSort: { key: 'sell_score', dir: -1 },
+  },
+  spares: {
+    minPrice: 3, hideAtLvl: 11, typeFilter: 'all', activeTags: [],
+    label: 'Spares', hint: 'duplicate mods & arcanes worth ≥ 3p — sell these instead of dissolving them (keeps one unless you own a ranked copy)',
+    columns: ['name', 'owned', 'low_sell', 'volume_48h', 'sell_score', 'potential_plat'],
+    typesAny: ['Mods', 'Arcanes'],
+    sparesOnly: true,
+    defaultSort: { key: 'potential_plat', dir: -1 },
   },
   ducats: {
     minPrice: 0, hideAtLvl: 11, typeFilter: 'all', activeTags: [],

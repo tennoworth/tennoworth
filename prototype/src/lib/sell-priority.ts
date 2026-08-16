@@ -58,6 +58,18 @@ export function sellableQty(count: number, reserve: number, leveled = 0): number
   return Math.max(0, count - Math.max(reserve, leveled));
 }
 
+// The Spares preset's notion of "sellable": copies you would otherwise
+// dissolve for endo. If you own a RANKED copy of the mod/arcane (kept_lvl > 0
+// — the one you actually use), every unranked copy in the stack is a spare.
+// If you don't, keep one to rank up later and the rest are spares. `leveled`
+// copies (XP > 0, untradeable) never count. This is what the "you dissolved
+// 30 Hammer Shot, oh well" threads are about — the tool's cheapest real win.
+export function spareQty(count: number, keptLvl: number | null, leveled = 0): number {
+  const tradeable = Math.max(0, count - leveled);
+  const hasRankedCopy = keptLvl !== null && keptLvl > 0;
+  return hasRankedCopy ? tradeable : Math.max(0, tradeable - 1);
+}
+
 // What a listing would realistically clear at. The lowest live ask is the
 // honest answer MOST of the time, but it's a single number any account can
 // set for free, so it gets sanity-clamped against the closed-trade median:

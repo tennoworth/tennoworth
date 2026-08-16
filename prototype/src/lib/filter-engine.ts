@@ -8,7 +8,7 @@
 // how they combine and report the clauses.
 
 import { lookup } from './market';
-import { clearingPrice, scoreRow, bandSignal, sellableQty, LIQUID_VOL } from './sell-priority';
+import { clearingPrice, scoreRow, bandSignal, sellableQty, spareQty, LIQUID_VOL } from './sell-priority';
 import type { Market, MarketItemEntry, OwnedRecord } from './types';
 
 export interface FilterState {
@@ -22,6 +22,10 @@ export interface FilterState {
   ducatsOnly: boolean;
   minVol: number;
   minMedian: number;
+  /** Preset-only: restrict to any of these row types (empty = no restriction). */
+  typesAny: string[];
+  /** Preset-only: Spares mode (see `spareQty`). */
+  sparesOnly: boolean;
 }
 
 export interface EmptyReason {
@@ -38,7 +42,12 @@ function passesOwned(rec: OwnedRecord, f: FilterState): boolean {
   return rec.count >= f.minOwned;
 }
 function passesType(rec: OwnedRecord, f: FilterState): boolean {
+  if (f.typesAny.length > 0 && !f.typesAny.includes(rec.type)) return false;
   return f.typeFilter === 'all' || rec.type === f.typeFilter;
+}
+function passesSpares(rec: OwnedRecord, f: FilterState): boolean {
+  if (!f.sparesOnly) return true;
+  return spareQty(rec.count, rec.kept_lvl, rec.leveled ?? 0) >= 1;
 }
 function passesKept(rec: OwnedRecord, f: FilterState): boolean {
   // null kept_lvl = no individualised instance at all (always show).
@@ -70,8 +79,10 @@ function passesMedian(m: MarketItemEntry, f: FilterState): boolean {
 
 // Row enrichment: score, timing, ducat-trade math. Runs only for rows that
 // already passed every clause above.
-function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Market, reserveCopies: number) {
-  const sellable = sellableQty(rec.count, reserveCopies, rec.leveled ?? 0);
+function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Market, reserveCopies: number, sparesOnly = false) {
+  const sellable = sparesOnly
+    ? spareQty(rec.count, rec.kept_lvl, rec.leveled ?? 0)
+    : sellableQty(rec.count, reserveCopies, rec.leveled ?? 0);
   const { sell_score, patience } = scoreRow({ owned: sellable, m });
   // ducats live on `m` because WFM is authoritative for the value —
   // warframestat's bulk /items/ endpoint doesn't carry it. Relics get
@@ -188,7 +199,8 @@ export function computeResults(
     if (!passesDucats(rec, m, filters)) continue;
     if (!passesVol(m, filters)) continue;
     if (!passesMedian(m, filters)) continue;
-    out.push(buildRow(key, rec, m, market, reserveCopies));
+    if (!passesSpares(rec, filters)) continue;
+    out.push(buildRow(key, rec, m, market, reserveCopies, filters.sparesOnly));
   }
   out.sort((a, b) => b.sell_score - a.sell_score);
   return out;
@@ -214,6 +226,7 @@ export function computeAvailableTags(
     if (!passesDucats(rec, m, filters)) continue;
     if (!passesVol(m, filters)) continue;
     if (!passesMedian(m, filters)) continue;
+    if (!passesSpares(rec, filters)) continue;
     for (const t of m.tags || []) counts.set(t, (counts.get(t) || 0) + 1);
   }
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
@@ -232,7 +245,7 @@ export function computeEmptyReason(
 ): EmptyReason | null {
   if (resultsLength > 0 || !owned.size) return null;
   let candidates = 0, byPrice = 0, byOwned = 0, byType = 0, byKept = 0,
-      byTag = 0, byVault = 0, byDucats = 0, byVol = 0, byMedian = 0;
+      byTag = 0, byVault = 0, byDucats = 0, byVol = 0, byMedian = 0, bySpares = 0;
   for (const rec of owned.values()) {
     const m = lookup(market, rec.slug);
     if (!m) continue;
@@ -246,11 +259,13 @@ export function computeEmptyReason(
     if (!passesDucats(rec, m, filters)) byDucats += 1;
     if (!passesVol(m, filters)) byVol += 1;
     if (!passesMedian(m, filters)) byMedian += 1;
+    if (!passesSpares(rec, filters)) bySpares += 1;
   }
   if (candidates === 0) return { kind: 'no-market', candidates };
   const top = ([
     ['price', byPrice], ['owned', byOwned], ['type', byType], ['kept', byKept],
     ['tag', byTag], ['vault', byVault], ['ducats', byDucats], ['vol', byVol], ['median', byMedian],
+    ['spares', bySpares],
   ] as Array<[string, number]>).sort((a, b) => b[1] - a[1])[0];
   return { kind: top[0], excluded: top[1], candidates, preset: activePreset };
 }

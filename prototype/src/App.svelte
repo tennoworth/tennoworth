@@ -205,6 +205,8 @@
     ducatsOnly: !!PRESETS[activePreset]?.ducatsOnly,
     minVol: PRESETS[activePreset]?.minVol ?? 0,
     minMedian: PRESETS[activePreset]?.minMedian ?? 0,
+    typesAny: PRESETS[activePreset]?.typesAny ?? [],
+    sparesOnly: !!PRESETS[activePreset]?.sparesOnly,
   });
   function applyPreset(name: string): void {
     const values = presetFilterValues(name);

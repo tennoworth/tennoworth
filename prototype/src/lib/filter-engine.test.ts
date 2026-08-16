@@ -5,6 +5,7 @@ import { computeResults, computeAvailableTags, computeEmptyReason } from './filt
 const baseFilters = () => ({
   minPrice: 0, minOwned: 1, typeFilter: 'all', hideAtLvl: 11,
   activeTags: new Set(), vaultOnly: false, ducatsOnly: false, minVol: 0, minMedian: 0,
+  typesAny: [], sparesOnly: false,
 });
 
 function rec(slug, overrides = {}) {
@@ -84,6 +85,48 @@ describe('computeResults', () => {
     const mkt = market({ hi: item({ avg: 100, low_sell: 100, vol: 20 }), lo: item({ avg: 10, low_sell: 10, vol: 20 }) });
     const out = computeResults(owned(rec('lo'), rec('hi')), mkt, baseFilters(), 0);
     expect(out.map((r) => r.slug)).toEqual(['hi', 'lo']);
+  });
+});
+
+describe('Spares preset (typesAny + sparesOnly)', () => {
+  const spares = () => ({ ...baseFilters(), typesAny: ['Mods', 'Arcanes'], sparesOnly: true });
+
+  it('keeps only Mods/Arcanes with at least one spare copy', () => {
+    const out = computeResults(
+      owned(
+        rec('hammer_shot', { count: 4, kept_lvl: 5 }),        // ranked copy owned → 4 spares
+        rec('acid_shells', { count: 3, kept_lvl: null }),     // no ranked copy → keep one → 2 spares
+        rec('lonely_mod', { count: 1, kept_lvl: null }),      // single unranked copy → 0 spares
+        rec('arcane_x', { count: 2, type: 'Arcanes' }),       // arcane counts too → 1 spare
+        rec('volt_prime_set', { count: 3, type: 'Warframes' }), // wrong type
+      ),
+      market({ hammer_shot: item(), acid_shells: item(), lonely_mod: item(), arcane_x: item(), volt_prime_set: item() }),
+      spares(),
+      0,
+    );
+    const bySlug = Object.fromEntries(out.map((r) => [r.slug, r]));
+    expect(Object.keys(bySlug).sort()).toEqual(['acid_shells', 'arcane_x', 'hammer_shot']);
+    expect(bySlug.hammer_shot.sellable).toBe(4);
+    expect(bySlug.acid_shells.sellable).toBe(2);
+    expect(bySlug.arcane_x.sellable).toBe(1);
+    // potential is spares × avg, ignoring the global reserve
+    expect(bySlug.hammer_shot.potential_plat).toBe(4 * 50);
+  });
+
+  it('never counts leveled (XP > 0, untradeable) copies as spares', () => {
+    const out = computeResults(
+      owned(rec('galv_x', { count: 3, kept_lvl: 10, leveled: 3 })),
+      market({ galv_x: item() }),
+      spares(),
+      0,
+    );
+    expect(out).toHaveLength(0);
+  });
+
+  it('reports "spares" as the empty reason when duplicates are what is missing', () => {
+    const o = owned(rec('a', { count: 1 }), rec('b', { count: 1 }));
+    const r = computeEmptyReason(o, market({ a: item(), b: item() }), spares(), 0, 'spares');
+    expect(r.kind).toBe('spares');
   });
 });
 

@@ -131,7 +131,7 @@
 
   // Preset-driven empty states reset the preset; hand-filter ones relax the
   // offending slider. A price slider can't rescue a "no vaulted parts" empty.
-  const PRESET_EMPTY_KINDS = new Set(['tag', 'vault', 'ducats', 'vol', 'median']);
+  const PRESET_EMPTY_KINDS = new Set(['tag', 'vault', 'ducats', 'vol', 'median', 'spares']);
   // One-shot quick-fix actions the empty state can offer.
   function relaxFilters({ kind }) {
     if (kind === 'price') minPrice = 1;
@@ -411,7 +411,7 @@
         <p class="muted">Most are 1-of-a-kind — set min-owned to 1 to include them.</p>
       </div>
       <button onclick={() => relaxFilters({ kind: 'owned' })}>Set min owned to 1</button>
-    {:else if emptyReason.kind === 'type'}
+    {:else if emptyReason.kind === 'type' && activePreset !== 'spares'}
       <div>
         <strong>Nothing in your inventory matches type “{typeFilter}”.</strong>
         <p class="muted">Switch back to All to see everything.</p>
@@ -435,6 +435,12 @@
         <p class="muted">Trending hides thin-volume rows and penny items so the Δ-sort surfaces real movers.</p>
       </div>
       <button onclick={() => relaxFilters({ kind: emptyReason.kind })}>Back to Default</button>
+    {:else if emptyReason.kind === 'spares' || (emptyReason.kind === 'type' && activePreset === 'spares')}
+      <div>
+        <strong>No spare mods or arcanes to sell.</strong>
+        <p class="muted">Spares are duplicate copies: every unranked copy when you own a ranked one, otherwise all but one. Nothing you own has a duplicate worth ≥ 3p right now.</p>
+      </div>
+      <button onclick={() => relaxFilters({ kind: 'spares' })}>Back to Default</button>
     {:else if emptyReason.kind === 'ducats'}
       <div>
         <strong>You own no prime parts with a ducat value.</strong>
