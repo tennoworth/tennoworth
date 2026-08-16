@@ -379,6 +379,61 @@ export async function desktopLiveTopPrices(queries: LiveTopQuery[]): Promise<Liv
   }
 }
 
+// ---- Price watches (desktop only) ----
+
+export interface Watch {
+  id: number;
+  slug: string;
+  name: string;
+  subtype: string | null;
+  rank: number | null;
+  /** 'sell' = fires when the lowest other ask ≤ threshold; 'buy' = when the highest other bid ≥ threshold. */
+  side: 'sell' | 'buy';
+  threshold: number;
+  created_at: string;
+  last_price: number | null;
+  /** Unix seconds. */
+  last_checked_at: number | null;
+  /** Unix seconds. */
+  last_fired_at: number | null;
+}
+
+export interface NewWatch {
+  slug: string;
+  name: string;
+  subtype?: string | null;
+  rank?: number | null;
+  side: 'sell' | 'buy';
+  threshold: number;
+}
+
+export interface WatchOutcome {
+  id: number;
+  slug: string;
+  name: string;
+  side: 'sell' | 'buy';
+  threshold: number;
+  price: number | null;
+  satisfied: boolean;
+  fire: boolean;
+}
+
+/** Rust emits this (a WatchOutcome) when a background pass notifies. */
+export const WATCH_FIRED_EVENT = 'watch-fired';
+
+export async function desktopListWatches(): Promise<Watch[]> {
+  try { return await resolveInvoke()<Watch[]>('list_watches'); } catch (e) { rethrowInvoke(e); }
+}
+export async function desktopAddWatch(watch: NewWatch): Promise<Watch[]> {
+  try { return await resolveInvoke()<Watch[]>('add_watch', { watch }); } catch (e) { rethrowInvoke(e); }
+}
+export async function desktopDeleteWatch(id: number): Promise<Watch[]> {
+  try { return await resolveInvoke()<Watch[]>('delete_watch', { id }); } catch (e) { rethrowInvoke(e); }
+}
+export async function desktopCheckWatchesNow(): Promise<WatchOutcome[]> {
+  try { return await resolveInvoke()<WatchOutcome[]>('check_watches_now'); } catch (e) { rethrowInvoke(e); }
+}
+
 /**
  * True inside the Tauri desktop webview. Keyed off `__TAURI_INTERNALS__` (the
  * runtime object Tauri v2 always injects), per the desktop spike — this is a

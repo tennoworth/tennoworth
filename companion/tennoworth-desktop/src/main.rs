@@ -35,6 +35,7 @@ mod sellables;
 mod snapshot;
 mod tray;
 mod update;
+mod watch;
 mod wfm_session;
 
 use std::io::Write;
@@ -115,6 +116,10 @@ fn main() {
             commands::market::refresh_market,
             commands::market::top_sellables,
             commands::market::live_top_prices,
+            commands::watch::list_watches,
+            commands::watch::add_watch,
+            commands::watch::delete_watch,
+            commands::watch::check_watches_now,
             commands::market::tray_state,
             update::check_update,
             update::update_status,
@@ -245,6 +250,13 @@ fn main() {
             // is logged and swallowed — window + notifications carry on.
             if let Err(e) = tray::init_tray(&app.handle().clone()) {
                 eprintln!("tennoworth: tray unavailable, continuing without it: {e}");
+            }
+
+            // Price-watch checker: a background pass every CHECK_INTERVAL
+            // over the user's watches (see watch.rs). Not in probe runs —
+            // the probe must not make WFM calls on a timer.
+            if !probe {
+                watch::start_checker(app.handle().clone());
             }
 
             // C5: launch update check, off the main thread so it can never

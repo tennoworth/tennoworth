@@ -8,6 +8,7 @@
   import { onMount, untrack } from 'svelte';
   import ListingReviewModal from './components/ListingReviewModal.svelte';
   import MyOrdersPanel from './components/MyOrdersPanel.svelte';
+  import WatchlistPanel from './components/WatchlistPanel.svelte';
   import MarketBrowser from './components/MarketBrowser.svelte';
   import DesktopUpdateBanner from './components/DesktopUpdateBanner.svelte';
   import WfmAuthDialogs from './components/WfmAuthDialogs.svelte';
@@ -124,9 +125,9 @@
   // reload lands the user back where they left off. Falls through to
   // 'sell' if the persisted view's data isn't available (Baro not
   // visiting; 'orders' is desktop-only — the hosted site is informational).
-  type View = 'sell' | 'sets' | 'relics' | 'baro' | 'routines' | 'orders' | 'install';
+  type View = 'sell' | 'sets' | 'relics' | 'baro' | 'routines' | 'orders' | 'watches' | 'install';
   const VALID_VIEWS: ReadonlySet<View> = new Set([
-    'sell', 'sets', 'relics', 'baro', 'routines', 'orders', 'install',
+    'sell', 'sets', 'relics', 'baro', 'routines', 'orders', 'watches', 'install',
   ]);
   let view = $state<View>(
     (() => {
@@ -145,7 +146,7 @@
   // against a stale localStorage value.
   let effectiveView = $derived.by<View>(() => {
     if (view === 'baro' && !showBaroCard) return 'sell';
-    if (view === 'orders' && !isDesktop) return 'sell';
+    if ((view === 'orders' || view === 'watches') && !isDesktop) return 'sell';
     return view;
   });
 
@@ -963,6 +964,9 @@
           <span>My orders</span>
           {#if pendingPlan && pendingRemaining > 0}<span class="badge warn">{pendingRemaining}</span>{/if}
         </button>
+        <button type="button" class="nav-item" class:active={effectiveView === 'watches'} onclick={() => setView('watches')}>
+          <span>Price watches</span>
+        </button>
       </div>
       {/if}
 
@@ -1313,6 +1317,13 @@
         ownedQty={ownedQtyForOrders}
         onauthrequired={(code) => wfmAuthDialogsRef.open(code)}
       />
+
+    {:else if effectiveView === 'watches'}
+      <section class="view-header">
+        <h2>Price watches</h2>
+        <p class="lede">Desktop notifications when an item hits your price — checked every 10 minutes against live warframe.market orders.</p>
+      </section>
+      <WatchlistPanel {market} />
 
     {:else if effectiveView === 'install'}
       <section class="view-header">

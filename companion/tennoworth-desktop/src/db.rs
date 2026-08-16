@@ -70,7 +70,63 @@ ALTER TABLE listing_log ADD COLUMN message TEXT;
 CREATE INDEX listing_log_slug_at ON listing_log(slug, listed_at);
 CREATE INDEX listing_log_order ON listing_log(order_id);
 "#,
+    // v3 — price watches. One row per "tell me when": `side` names which side
+    // of the book is watched — 'sell' fires when the lowest online ASK drops
+    // to `threshold` or below (a buying opportunity), 'buy' fires when the
+    // highest online BID reaches `threshold` or above (a selling opportunity).
+    // `last_*` are the checker's evidence trail (what it saw, when, when it
+    // last notified) so the UI can show "12p as of 3 min ago" without a
+    // network call, and re-arm rather than nag.
+    r#"
+CREATE TABLE watch (
+  id INTEGER PRIMARY KEY,
+  slug TEXT NOT NULL,
+  name TEXT NOT NULL,
+  subtype TEXT,
+  rank INTEGER,
+  side TEXT NOT NULL CHECK(side IN ('sell','buy')),
+  threshold INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  last_price INTEGER,
+  last_checked_at INTEGER,            -- unix seconds
+  last_fired_at INTEGER               -- unix seconds
+);
+CREATE INDEX watch_slug ON watch(slug);
+"#,
 ];
+
+/// A price watch, as stored and as handed to the SPA.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+pub struct Watch {
+    pub id: i64,
+    pub slug: String,
+    pub name: String,
+    pub subtype: Option<String>,
+    pub rank: Option<i64>,
+    /// 'sell' = watch the lowest ask (fires at or below threshold);
+    /// 'buy' = watch the highest bid (fires at or above threshold).
+    pub side: String,
+    pub threshold: i64,
+    pub created_at: String,
+    pub last_price: Option<i64>,
+    /// Unix seconds.
+    pub last_checked_at: Option<i64>,
+    /// Unix seconds.
+    pub last_fired_at: Option<i64>,
+}
+
+/// What the SPA sends to create a watch.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct NewWatch {
+    pub slug: String,
+    pub name: String,
+    #[serde(default)]
+    pub subtype: Option<String>,
+    #[serde(default)]
+    pub rank: Option<i64>,
+    pub side: String,
+    pub threshold: i64,
+}
 
 /// One aggregated inventory row for a snapshot: `slug` is the DE item path
 /// (`/Lotus/...`), `count` the total owned, `leveled` the number of owned copies
@@ -199,6 +255,69 @@ impl Db {
     pub fn delete_reserve(&self, slug: &str) -> rusqlite::Result<()> {
         let conn = guard(&self.conn);
         conn.execute("DELETE FROM reserve WHERE slug = ?1", [slug])?;
+        Ok(())
+    }
+
+    // ---- watches ----
+
+    pub fn list_watches(&self) -> rusqlite::Result<Vec<Watch>> {
+        let conn = guard(&self.conn);
+        let mut stmt = conn.prepare(
+            "SELECT id, slug, name, subtype, rank, side, threshold, created_at,
+                    last_price, last_checked_at, last_fired_at
+             FROM watch ORDER BY created_at DESC, id DESC",
+        )?;
+        let rows = stmt.query_map([], |r| {
+            Ok(Watch {
+                id: r.get(0)?,
+                slug: r.get(1)?,
+                name: r.get(2)?,
+                subtype: r.get(3)?,
+                rank: r.get(4)?,
+                side: r.get(5)?,
+                threshold: r.get(6)?,
+                created_at: r.get(7)?,
+                last_price: r.get(8)?,
+                last_checked_at: r.get(9)?,
+                last_fired_at: r.get(10)?,
+            })
+        })?;
+        rows.collect()
+    }
+
+    /// Insert a watch; returns its id. `created_at = None` stamps now (UTC) in SQL.
+    pub fn add_watch(&self, w: &NewWatch, created_at: Option<&str>) -> rusqlite::Result<i64> {
+        let conn = guard(&self.conn);
+        conn.execute(
+            "INSERT INTO watch (slug, name, subtype, rank, side, threshold, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, COALESCE(?7, strftime('%Y-%m-%dT%H:%M:%SZ','now')))",
+            (&w.slug, &w.name, &w.subtype, w.rank, &w.side, w.threshold, created_at),
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn delete_watch(&self, id: i64) -> rusqlite::Result<()> {
+        let conn = guard(&self.conn);
+        conn.execute("DELETE FROM watch WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    /// Record what a check saw (unix seconds). `fired_at` is set only when it
+    /// notified.
+    pub fn record_watch_check(
+        &self,
+        id: i64,
+        last_price: Option<i64>,
+        checked_at: i64,
+        fired_at: Option<i64>,
+    ) -> rusqlite::Result<()> {
+        let conn = guard(&self.conn);
+        conn.execute(
+            "UPDATE watch SET last_price = ?2, last_checked_at = ?3,
+                    last_fired_at = COALESCE(?4, last_fired_at)
+             WHERE id = ?1",
+            (id, last_price, checked_at, fired_at),
+        )?;
         Ok(())
     }
 
@@ -419,6 +538,7 @@ mod tests {
                 "setting".to_string(),
                 "snapshot".to_string(),
                 "snapshot_item".to_string(),
+                "watch".to_string(),
             ]
         );
     }
@@ -690,5 +810,37 @@ mod tests {
         assert_eq!(db.list_listing_log(10).unwrap().len(), 2);
 
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn watches_round_trip_and_record_checks() {
+        let db = Db::open_in_memory().unwrap();
+        let id = db
+            .add_watch(
+                &NewWatch { slug: "primed_flow".into(), name: "Primed Flow".into(), subtype: None, rank: Some(0), side: "sell".into(), threshold: 15 },
+                Some("2026-08-16T00:00:00Z"),
+            )
+            .unwrap();
+        db.add_watch(
+            &NewWatch { slug: "lith_c5_relic".into(), name: "Lith C5 Relic".into(), subtype: Some("intact".into()), rank: None, side: "buy".into(), threshold: 8 },
+            Some("2026-08-16T01:00:00Z"),
+        )
+        .unwrap();
+        let all = db.list_watches().unwrap();
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0].slug, "lith_c5_relic", "newest first");
+        assert_eq!(all[0].subtype.as_deref(), Some("intact"));
+        assert_eq!(all[1].id, id);
+        assert_eq!(all[1].last_checked_at, None);
+
+        db.record_watch_check(id, Some(12), 1_786_881_600, Some(1_786_881_600)).unwrap();
+        db.record_watch_check(id, Some(14), 1_786_882_200, None).unwrap();
+        let w = db.list_watches().unwrap().into_iter().find(|w| w.id == id).unwrap();
+        assert_eq!(w.last_price, Some(14));
+        assert_eq!(w.last_checked_at, Some(1_786_882_200));
+        assert_eq!(w.last_fired_at, Some(1_786_881_600), "fired_at is kept when a later check did not fire");
+
+        db.delete_watch(id).unwrap();
+        assert_eq!(db.list_watches().unwrap().len(), 1);
     }
 }
