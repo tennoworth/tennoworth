@@ -30,9 +30,9 @@ const ALLOWLIST = new Set([
   "companion/tennoworth-desktop/build.rs:12",
   "companion/tennoworth-desktop/build.rs:17",
   // The end-of-main .expect("error while running tauri application") — its
-  // line moved 252 -> 278 when the probe block (2a4ed76) landed above it;
-  // same site, drifted key.
-  "companion/tennoworth-desktop/src/main.rs:278",
+  // line drifts whenever setup() grows (252 -> 278 probe block, -> 294 UA
+  // identity + watch checker); same site, drifted key.
+  "companion/tennoworth-desktop/src/main.rs:294",
   "companion/tennoworth-desktop/src/probe.rs:308",
   "companion/wfm-core/src/auth.rs:125",
   "companion/wfm-core/src/scan.rs:91",
