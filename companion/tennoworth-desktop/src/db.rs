@@ -93,7 +93,37 @@ CREATE TABLE watch (
 );
 CREATE INDEX watch_slug ON watch(slug);
 "#,
+    // v4 — the trade ledger. One row per trade the game confirmed in EE.log
+    // (see eelog.rs), items as JSON — the ground truth for realised P&L and
+    // for auto-closing sold WFM listings. `log_stamp` + `at` dedupe a tailer
+    // restart re-reading the same trade.
+    r#"
+CREATE TABLE trade (
+  id INTEGER PRIMARY KEY,
+  at INTEGER NOT NULL,                -- unix seconds, when we saw it
+  partner TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK(kind IN ('sale','purchase','trade')),
+  plat INTEGER NOT NULL,
+  items TEXT NOT NULL,                -- JSON [{name, qty, direction}]
+  log_stamp TEXT,
+  wfm_closed INTEGER NOT NULL DEFAULT 0  -- listings adjusted after this trade
+);
+CREATE INDEX trade_at ON trade(at);
+"#,
 ];
+
+/// A ledger row, as handed to the SPA.
+#[derive(Debug, Clone, serde::Serialize, PartialEq, Eq)]
+pub struct TradeRow {
+    pub id: i64,
+    pub at: i64,
+    pub partner: String,
+    pub kind: String,
+    pub plat: i64,
+    pub items: Vec<crate::eelog::TradeItem>,
+    pub log_stamp: Option<String>,
+    pub wfm_closed: bool,
+}
 
 /// A price watch, as stored and as handed to the SPA.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
@@ -256,6 +286,61 @@ impl Db {
         let conn = guard(&self.conn);
         conn.execute("DELETE FROM reserve WHERE slug = ?1", [slug])?;
         Ok(())
+    }
+
+    // ---- trades (ledger) ----
+
+    /// Insert a confirmed trade; returns its id. Same (log_stamp, partner,
+    /// plat) within 10 minutes is the tailer re-reading a trade → returns
+    /// the existing id and inserts nothing.
+    pub fn insert_trade(&self, t: &crate::eelog::TradeEvent, at: i64) -> rusqlite::Result<i64> {
+        let conn = guard(&self.conn);
+        if let Some(stamp) = &t.log_stamp {
+            let dup: Option<i64> = conn
+                .query_row(
+                    "SELECT id FROM trade WHERE log_stamp = ?1 AND partner = ?2 AND plat = ?3 AND at >= ?4 ORDER BY id DESC LIMIT 1",
+                    (stamp, &t.partner, t.plat, at - 600),
+                    |r| r.get(0),
+                )
+                .optional()?;
+            if let Some(id) = dup {
+                return Ok(id);
+            }
+        }
+        let items = serde_json::to_string(&t.items).unwrap_or_else(|_| "[]".into());
+        conn.execute(
+            "INSERT INTO trade (at, partner, kind, plat, items, log_stamp) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            (at, &t.partner, &t.kind, t.plat, items, &t.log_stamp),
+        )?;
+        Ok(conn.last_insert_rowid())
+    }
+
+    pub fn mark_trade_wfm_closed(&self, id: i64) -> rusqlite::Result<()> {
+        let conn = guard(&self.conn);
+        conn.execute("UPDATE trade SET wfm_closed = 1 WHERE id = ?1", [id])?;
+        Ok(())
+    }
+
+    /// Newest first.
+    pub fn list_trades(&self, limit: i64) -> rusqlite::Result<Vec<TradeRow>> {
+        let conn = guard(&self.conn);
+        let mut stmt = conn.prepare(
+            "SELECT id, at, partner, kind, plat, items, log_stamp, wfm_closed FROM trade ORDER BY at DESC, id DESC LIMIT ?1",
+        )?;
+        let rows = stmt.query_map([limit], |r| {
+            let items_json: String = r.get(5)?;
+            Ok(TradeRow {
+                id: r.get(0)?,
+                at: r.get(1)?,
+                partner: r.get(2)?,
+                kind: r.get(3)?,
+                plat: r.get(4)?,
+                items: serde_json::from_str(&items_json).unwrap_or_default(),
+                log_stamp: r.get(6)?,
+                wfm_closed: r.get::<_, i64>(7)? != 0,
+            })
+        })?;
+        rows.collect()
     }
 
     // ---- watches ----
@@ -538,6 +623,7 @@ mod tests {
                 "setting".to_string(),
                 "snapshot".to_string(),
                 "snapshot_item".to_string(),
+                "trade".to_string(),
                 "watch".to_string(),
             ]
         );
@@ -842,5 +928,30 @@ mod tests {
 
         db.delete_watch(id).unwrap();
         assert_eq!(db.list_watches().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn trades_insert_dedupe_and_list_newest_first() {
+        use crate::eelog::{TradeEvent, TradeItem};
+        let db = Db::open_in_memory().unwrap();
+        let t = TradeEvent {
+            partner: "Buyer".into(), kind: "sale".into(), plat: 45,
+            items: vec![TradeItem { name: "Primed Flow".into(), qty: 1, direction: "given".into() }],
+            log_stamp: Some("1234.567".into()),
+        };
+        let a = db.insert_trade(&t, 1_786_881_600).unwrap();
+        // the tailer re-reads the same trade a few seconds later → same id
+        let b = db.insert_trade(&t, 1_786_881_605).unwrap();
+        assert_eq!(a, b);
+        // a genuinely later identical trade (next session) is a new row
+        let c = db.insert_trade(&t, 1_786_881_600 + 3600).unwrap();
+        assert_ne!(a, c);
+        db.mark_trade_wfm_closed(a).unwrap();
+        let rows = db.list_trades(10).unwrap();
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].id, c, "newest first");
+        assert!(!rows[0].wfm_closed);
+        assert!(rows[1].wfm_closed);
+        assert_eq!(rows[1].items[0].name, "Primed Flow");
     }
 }

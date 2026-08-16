@@ -28,11 +28,14 @@
 mod commands;
 mod db;
 mod definitions;
+mod eelog;
+mod eelog_state;
 mod keyring_store;
 mod market;
 mod probe;
 mod sellables;
 mod snapshot;
+mod trades;
 mod tray;
 mod update;
 mod watch;
@@ -120,6 +123,8 @@ fn main() {
             commands::watch::add_watch,
             commands::watch::delete_watch,
             commands::watch::check_watches_now,
+            commands::trades::list_trades,
+            commands::trades::eelog_status,
             commands::market::tray_state,
             update::check_update,
             update::update_status,
@@ -251,6 +256,16 @@ fn main() {
             if let Err(e) = tray::init_tray(&app.handle().clone()) {
                 eprintln!("tennoworth: tray unavailable, continuing without it: {e}");
             }
+
+            // EE.log tailer: trade detection → ledger + notification +
+            // auto-close of the sold WFM listing (see trades.rs). Read-only on
+            // the game's own log. Not in probe runs.
+            let ee_path = if probe { None } else { trades::start_tailer(app.handle().clone()) };
+            match &ee_path {
+                Some(p) => eprintln!("tennoworth: tailing EE.log at {}", p.display()),
+                None => eprintln!("tennoworth: EE.log not found — trade detection off (set TENNOWORTH_EELOG to override)"),
+            }
+            app.manage(eelog_state::EeLogState { path: ee_path });
 
             // Price-watch checker: a background pass every CHECK_INTERVAL
             // over the user's watches (see watch.rs). Not in probe runs —

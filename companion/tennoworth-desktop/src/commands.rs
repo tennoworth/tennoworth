@@ -9,4 +9,5 @@ pub mod listing;
 pub mod market;
 pub mod report;
 pub mod settings;
+pub mod trades;
 pub mod watch;

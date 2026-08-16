@@ -31,8 +31,8 @@ const ALLOWLIST = new Set([
   "companion/tennoworth-desktop/build.rs:17",
   // The end-of-main .expect("error while running tauri application") — its
   // line drifts whenever setup() grows (252 -> 278 probe block, -> 294 UA
-  // identity + watch checker); same site, drifted key.
-  "companion/tennoworth-desktop/src/main.rs:294",
+  // identity + watch checker, -> 309 EE.log tailer); same site, drifted key.
+  "companion/tennoworth-desktop/src/main.rs:309",
   "companion/tennoworth-desktop/src/probe.rs:308",
   "companion/wfm-core/src/auth.rs:125",
   "companion/wfm-core/src/scan.rs:91",
