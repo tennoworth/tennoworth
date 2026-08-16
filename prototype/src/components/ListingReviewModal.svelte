@@ -1,6 +1,10 @@
 <script lang="ts">
   import { untrack } from 'svelte';
-  import { DesktopCmdError, type Transport } from '../lib/transport';
+  import {
+    DesktopCmdError, desktopLiveTopPrices, isDesktopRuntime, LIVE_TOP_PROGRESS_EVENT,
+    type LiveTop, type Transport,
+  } from '../lib/transport';
+  import { listenForTauriEvent } from '../lib/desktop-update';
   import type { ItemResult } from '../lib/types';
   import { MAX_PLATINUM, MIN_PLATINUM, MAX_PLAN_ITEMS } from '../lib/limits';
   import { humanError } from '../lib/errors';
@@ -118,6 +122,70 @@
   });
 
   let selectedCount = $derived(plan.filter((r) => r.include).length);
+
+  // ---- Live prices (desktop only) ----
+  // The prefill comes from the 2-hourly snapshot. One click asks WFM for the
+  // ≤5 best ONLINE asks/bids for each selected row's exact tier (rank /
+  // relic refinement) — the price you'd actually be competing with right
+  // now. Paced at WFM's 3 req/s, so a big batch shows a counter.
+  const canLive = isDesktopRuntime();
+  type LiveState = 'idle' | 'running' | 'done' | 'error';
+  let liveState = $state<LiveState>('idle');
+  let liveProgress = $state({ done: 0, total: 0 });
+  let liveError = $state<string | null>(null);
+  let live = $state<Map<string, LiveTop>>(new Map());
+  let liveListenerArmed = false;
+
+  function liveKey(slug: string, rank: number, subtype: string | null): string {
+    return `${slug}|${rank}|${subtype ?? ''}`;
+  }
+  function liveFor(row: PlanRow): LiveTop | undefined {
+    return live.get(liveKey(row.slug, row.rank, row.subtype));
+  }
+
+  async function checkLivePrices(): Promise<void> {
+    const targets = plan.filter((r) => r.include);
+    if (targets.length === 0) return;
+    if (!liveListenerArmed) {
+      liveListenerArmed = true;
+      listenForTauriEvent<{ done: number; total: number }>(LIVE_TOP_PROGRESS_EVENT, (p) => {
+        liveProgress = p;
+      });
+    }
+    liveState = 'running';
+    liveError = null;
+    liveProgress = { done: 0, total: targets.length };
+    try {
+      const res = await desktopLiveTopPrices(
+        targets.map((r) => ({ slug: r.slug, rank: r.rank, subtype: r.subtype })),
+      );
+      const next = new Map(live);
+      for (const t of res) next.set(liveKey(t.slug, t.rank ?? 0, t.subtype ?? null), t);
+      live = next;
+      liveState = 'done';
+    } catch (e) {
+      liveState = 'error';
+      liveError = e instanceof DesktopCmdError ? e.message : humanError(e);
+    }
+  }
+
+  /** Set the row's price to the live lowest online ask (match, don't undercut). */
+  function useLive(i: number): void {
+    const t = liveFor(plan[i]);
+    if (t?.low_sell != null) plan[i].platinum = Math.max(MIN_PLATINUM, t.low_sell);
+  }
+  function useLiveAll(): void {
+    plan.forEach((_, i) => { if (plan[i].include) useLive(i); });
+  }
+  /** How the row's price sits against the live book: over the lowest ask
+   *  (won't sell first), under the top bid (leaving plat on the table), or ok. */
+  function liveVerdict(row: PlanRow): 'above' | 'below-bid' | 'ok' | null {
+    const t = liveFor(row);
+    if (!t || t.error) return null;
+    if (t.low_sell != null && row.platinum > t.low_sell) return 'above';
+    if (t.top_buy != null && row.platinum < t.top_buy) return 'below-bid';
+    return 'ok';
+  }
   let totalPlat = $derived(
     plan
       .filter((r) => r.include)
@@ -241,6 +309,29 @@
         <div class="bulkrow">
           <button class="ghost" onclick={() => setAll(true)}>Select all</button>
           <button class="ghost" onclick={() => setAll(false)}>Deselect all</button>
+          {#if canLive}
+            <span class="spacer"></span>
+            <button
+              class="ghost live-btn"
+              onclick={checkLivePrices}
+              disabled={liveState === 'running' || selectedCount === 0}
+              title="Ask warframe.market for the ≤5 best online asks and bids for each selected row's exact rank / refinement, right now. Paced to WFM's rate limit (~3 items per second)."
+            >
+              {#if liveState === 'running'}
+                Checking live prices… {liveProgress.done}/{liveProgress.total}
+              {:else if liveState === 'done'}
+                Re-check live prices
+              {:else}
+                Check live prices
+              {/if}
+            </button>
+            {#if liveState === 'done' && live.size > 0}
+              <button class="ghost" onclick={useLiveAll} title="Set every selected row's price to its live lowest online ask (match it — no undercutting).">Match lowest asks</button>
+            {/if}
+            {#if liveState === 'error' && liveError}
+              <span class="live-err">{liveError}</span>
+            {/if}
+          {/if}
         </div>
 
         <div class="scroll">
@@ -253,6 +344,7 @@
                 <th>Owned</th>
                 <th>Price (p)</th>
                 <th>Avg</th>
+                {#if canLive}<th title="Live lowest online ask / highest online bid for this exact rank or refinement (after “Check live prices”). Click a value to use it.">Live ask / bid</th>{/if}
                 <th title="Mod/arcane rank of the copies you're listing. 0 = unranked (dupe stacks). Ignored for items WFM doesn't rank.">Rank</th>
                 <th>Subtotal</th>
               </tr>
@@ -291,6 +383,28 @@
                     />
                   </td>
                   <td class="muted">{plat(row.avg)}</td>
+                  {#if canLive}
+                    {@const t = liveFor(row)}
+                    {@const v = liveVerdict(row)}
+                    <td class="live-cell" class:above={v === 'above'} class:belowbid={v === 'below-bid'}>
+                      {#if !t}
+                        <span class="muted">·</span>
+                      {:else if t.error}
+                        <span class="muted" title={t.error}>n/a</span>
+                      {:else}
+                        {#if t.low_sell != null}
+                          <button class="linkish" onclick={() => useLive(i)} disabled={!row.include}
+                            title={`Online asks: ${t.sells.join(', ')}p — click to price at ${t.low_sell}p`}>{t.low_sell}p</button>
+                        {:else}<span class="muted" title="No online sellers right now">no ask</span>{/if}
+                        <span class="muted"> / </span>
+                        {#if t.top_buy != null}
+                          <span title={`Online bids: ${t.buys.join(', ')}p`}>{t.top_buy}p</span>
+                        {:else}<span class="muted" title="No online buyers right now">no bid</span>{/if}
+                        {#if v === 'above'}<span class="verdict" title="Your price is above the lowest online ask — it won't be the first to sell.">▲</span>{/if}
+                        {#if v === 'below-bid'}<span class="verdict" title="A live buyer is bidding more than your price — you'd be leaving plat on the table.">▼</span>{/if}
+                      {/if}
+                    </td>
+                  {/if}
                   <td>
                     <input
                       type="number"
@@ -428,7 +542,25 @@
     display: flex;
     gap: 8px;
     padding: 8px 18px 0;
+    align-items: center;
+    flex-wrap: wrap;
   }
+  .bulkrow .spacer { flex: 1; }
+  .live-err { color: var(--bad); font-size: 12px; }
+  td.live-cell { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  td.live-cell.above .verdict { color: var(--warn); margin-left: 4px; }
+  td.live-cell.belowbid .verdict { color: var(--warn); margin-left: 4px; }
+  button.linkish {
+    background: none;
+    border: 0;
+    padding: 0;
+    color: var(--fg);
+    text-decoration: underline dotted;
+    cursor: pointer;
+    font: inherit;
+  }
+  button.linkish:hover:not(:disabled) { color: var(--accent, var(--fg)); }
+  button.linkish:disabled { cursor: default; text-decoration: none; color: var(--muted); }
   .scroll {
     overflow: auto;
     margin: 12px 0;

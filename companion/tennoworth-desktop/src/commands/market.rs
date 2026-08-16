@@ -1,14 +1,18 @@
 //! Market snapshot cache access + refresh, and the sellables ranking the SPA
 //! reads directly (the tray reads the same ranking via [`crate::tray`]).
 
-use tauri::{AppHandle, State};
+use std::sync::Arc;
 
+use tauri::{AppHandle, Emitter, State};
+
+use wfm_core::live_top::{fetch_live_tops, LiveTop, LiveTopQuery};
 use wfm_core::poison::guard;
 
 use crate::db::Db;
 use crate::market::{self, MarketCache, RefreshResult};
 use crate::sellables::{self, SellableRow};
 use crate::tray::{rebuild_tray, TrayState};
+use crate::wfm_session::{CmdError, WfmSession};
 
 /// The tray labels the last rebuild pushed + the last notification payload —
 /// evidence surface for the probe (the GTK menu isn't screenshot-able headless)
@@ -69,4 +73,47 @@ pub fn top_sellables(
     let mut rows = sellables::rank_sellables(&db, &market);
     rows.truncate(limit);
     rows
+}
+
+/// Progress event for [`live_top_prices`]: `{ done, total }` after each item.
+pub const EVENT_LIVE_TOP_PROGRESS: &str = "live-top-progress";
+
+#[derive(serde::Serialize, Clone)]
+struct LiveTopProgress {
+    done: usize,
+    total: usize,
+}
+
+/// Live top-of-book (≤5 best online asks/bids) for each query's exact tier,
+/// straight from WFM v2 `/orders/item/{slug}/top`. Public endpoint — works
+/// logged out; when a login is unlocked its platform is used so the prices
+/// match the market the user actually lists on, else `pc`. Paced at WFM's
+/// 3 req/s ceiling, so 50 items ≈ 17 s: the SPA listens for
+/// [`EVENT_LIVE_TOP_PROGRESS`] and shows a counter. Capped at 100 queries per
+/// call — a whole-inventory sweep is the scraper's job, not the UI's.
+#[tauri::command]
+pub async fn live_top_prices(
+    app: AppHandle,
+    session: State<'_, Arc<WfmSession>>,
+    queries: Vec<LiveTopQuery>,
+) -> Result<Vec<LiveTop>, CmdError> {
+    const MAX_QUERIES: usize = 100;
+    if queries.len() > MAX_QUERIES {
+        return Err(CmdError::of(
+            "too_many",
+            format!("{} items requested; the live-price check takes at most {MAX_QUERIES} at a time", queries.len()),
+        ));
+    }
+    let platform = session
+        .require_unlocked()
+        .map(|u| u.platform.clone())
+        .unwrap_or_else(|_| "pc".to_string());
+    tauri::async_runtime::spawn_blocking(move || {
+        fetch_live_tops(&platform, &queries, |done, total| {
+            let _ = app.emit(EVENT_LIVE_TOP_PROGRESS, LiveTopProgress { done, total });
+        })
+        .map_err(CmdError::wfm)
+    })
+    .await
+    .map_err(|e| CmdError::internal(format!("live price task failed to run: {e}")))?
 }

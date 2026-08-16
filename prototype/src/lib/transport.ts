@@ -337,6 +337,43 @@ export async function desktopTrySilentUnlock(): Promise<boolean> {
   }
 }
 
+// ---- Live top-of-book prices (desktop only; public WFM v2 endpoint) ----
+
+export interface LiveTopQuery {
+  slug: string;
+  rank?: number | null;
+  subtype?: string | null;
+}
+
+export interface LiveTop {
+  slug: string;
+  rank?: number | null;
+  subtype?: string | null;
+  /** ≤5 best online asks, cheapest first. */
+  sells: number[];
+  /** ≤5 best online bids, highest first. */
+  buys: number[];
+  low_sell: number | null;
+  top_buy: number | null;
+  /** Set when this one lookup failed; the row simply has no live data. */
+  error?: string | null;
+}
+
+/** Progress event the desktop emits per item during `desktopLiveTopPrices`. */
+export const LIVE_TOP_PROGRESS_EVENT = 'live-top-progress';
+
+/**
+ * Exact-tier live asks/bids for up to 100 items, paced at WFM's 3 req/s
+ * (≈17 s per 50) — listen on `LIVE_TOP_PROGRESS_EVENT` for `{done,total}`.
+ */
+export async function desktopLiveTopPrices(queries: LiveTopQuery[]): Promise<LiveTop[]> {
+  try {
+    return await resolveInvoke()<LiveTop[]>('live_top_prices', { queries });
+  } catch (e) {
+    rethrowInvoke(e);
+  }
+}
+
 /**
  * True inside the Tauri desktop webview. Keyed off `__TAURI_INTERNALS__` (the
  * runtime object Tauri v2 always injects), per the desktop spike — this is a

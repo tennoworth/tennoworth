@@ -114,6 +114,7 @@ fn main() {
             commands::market::cached_market,
             commands::market::refresh_market,
             commands::market::top_sellables,
+            commands::market::live_top_prices,
             commands::market::tray_state,
             update::check_update,
             update::update_status,

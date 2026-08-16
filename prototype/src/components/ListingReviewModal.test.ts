@@ -7,6 +7,7 @@ import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/sv
 import { afterEach } from 'vitest';
 import ListingReviewModal from './ListingReviewModal.svelte';
 import { DesktopCmdError, type Transport } from '../lib/transport';
+import { installTauri, removeTauri } from '../lib/test-utils';
 
 // globals: false in vitest.config.ts, so testing-library's auto-cleanup
 // does not run; unmount between tests or buttons accumulate in the DOM.
@@ -109,5 +110,56 @@ describe('ListingReviewModal', () => {
     await waitFor(() => expect(screen.getByText('connection refused')).toBeTruthy());
     await fireEvent.click(screen.getByText('Back to review'));
     expect(screen.getByRole('button', { name: /Send 2 listings/ })).toBeTruthy();
+  });
+
+  describe('live prices (desktop only)', () => {
+    afterEach(removeTauri);
+
+    it('is absent in the hosted build', () => {
+      openModal();
+      expect(screen.queryByRole('button', { name: /Check live prices/ })).toBeNull();
+    });
+
+    it('asks the desktop for each selected row\'s exact tier, renders ask/bid, and one click matches the ask', async () => {
+      const invoke = vi.fn(async (cmd: string, args: { queries: Array<{ slug: string; rank: number; subtype: string | null }> }) => {
+        expect(cmd).toBe('live_top_prices');
+        return args.queries.map((q) => ({
+          slug: q.slug, rank: q.rank, subtype: q.subtype,
+          sells: q.slug === 'accelerated_blast' ? [12, 14, 15] : [],
+          buys: q.slug === 'accelerated_blast' ? [9] : [30],
+          low_sell: q.slug === 'accelerated_blast' ? 12 : null,
+          top_buy: q.slug === 'accelerated_blast' ? 9 : 30,
+          error: null,
+        }));
+      });
+      installTauri(invoke, undefined);
+      openModal();
+      const btn = screen.getByRole('button', { name: /Check live prices/ });
+      await fireEvent.click(btn);
+      await waitFor(() => expect(invoke).toHaveBeenCalledTimes(1));
+      // exact-tier queries: rank 0 default, no subtype
+      expect(invoke.mock.calls[0][1].queries).toEqual([
+        { slug: 'accelerated_blast', rank: 0, subtype: null },
+        { slug: 'ash_prime_blueprint', rank: 0, subtype: null },
+      ]);
+      // ask rendered as a clickable price; the row with no online seller says so
+      const ask = await screen.findByRole('button', { name: '12p' });
+      expect(screen.getByText('no ask')).toBeTruthy();
+      // the prefilled 18p is above the 12p live ask → warned; click matches it
+      expect(screen.getByDisplayValue('18')).toBeTruthy();
+      await fireEvent.click(ask);
+      expect(screen.getByDisplayValue('12')).toBeTruthy();
+      // and the bulk "match lowest asks" control appeared
+      expect(screen.getByRole('button', { name: /Match lowest asks/ })).toBeTruthy();
+    });
+
+    it('surfaces a desktop error without losing the review', async () => {
+      const invoke = vi.fn(async () => { throw { code: 'wfm', message: 'HTTP 503' }; });
+      installTauri(invoke, undefined);
+      openModal();
+      await fireEvent.click(screen.getByRole('button', { name: /Check live prices/ }));
+      await screen.findByText(/HTTP 503/);
+      expect(screen.getByRole('button', { name: /Send 2 listings/ })).toBeTruthy();
+    });
   });
 });
