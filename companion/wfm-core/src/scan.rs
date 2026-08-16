@@ -424,11 +424,17 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
         let mut mbi = MEMORY_BASIC_INFORMATION::default();
         let mbi_size = std::mem::size_of::<MEMORY_BASIC_INFORMATION>();
 
-        // A zero-sized or wrapping region would make `next` never advance
-        // (infinite loop); a huge one would allocate a matching buffer and abort
-        // on OOM. Both are skipped — the same skip-don't-fail philosophy as the
-        // read path — which keeps the per-region allocation bounded.
-        const MAX_REGION_READ: usize = 64 * 1024 * 1024;
+        // Regions are read in fixed CHUNKs into one reused buffer, carrying a
+        // small overlap from the previous chunk so a pattern straddling a
+        // chunk boundary still matches — the same scheme as the Linux leg.
+        // This replaces a per-region `vec![0u8; RegionSize]` that both risked
+        // an OOM abort on a huge region AND, once capped at 64 MB, silently
+        // SKIPPED anything larger — a 64-bit game's heaps routinely exceed
+        // that, so a token living in one was simply never seen.
+        const CHUNK: usize = 4 * 1024 * 1024;
+        let overlap = 96;
+        let mut hay = vec![0u8; overlap + CHUNK];
+
         loop {
             let q = VirtualQueryEx(
                 handle,
@@ -440,21 +446,36 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
                 break;
             }
             let base = mbi.BaseAddress as usize;
-            let next = base + mbi.RegionSize;
+            let next = base.wrapping_add(mbi.RegionSize);
             let readable = mbi.State == MEM_COMMIT
                 && (mbi.Protect.0 & (PAGE_NOACCESS.0 | PAGE_GUARD.0)) == 0;
-            if readable && mbi.RegionSize > 0 && mbi.RegionSize <= MAX_REGION_READ {
-                let mut buf = vec![0u8; mbi.RegionSize];
-                let mut read_n: usize = 0;
-                let ok = ReadProcessMemory(
-                    handle,
-                    mbi.BaseAddress,
-                    buf.as_mut_ptr() as *mut _,
-                    mbi.RegionSize,
-                    Some(&mut read_n),
-                );
-                if ok.is_ok() && read_n > 0 {
-                    aggregate_match(&buf[..read_n], &pats, &mut counts);
+            // A zero-sized or wrapping region would make `next` never advance;
+            // it is skipped and the walk bails below.
+            if readable && next > base {
+                let end = next;
+                let mut offset = base;
+                let mut tail_len = 0usize;
+                while offset < end {
+                    let want = std::cmp::min(CHUNK, end - offset);
+                    let mut read_n: usize = 0;
+                    let ok = ReadProcessMemory(
+                        handle,
+                        offset as *const _,
+                        hay[tail_len..].as_mut_ptr() as *mut _,
+                        want,
+                        Some(&mut read_n),
+                    );
+                    // A short or failed read ends THIS region (a guard page or
+                    // decommit mid-region), never the walk — skip-don't-fail.
+                    if ok.is_err() || read_n == 0 {
+                        break;
+                    }
+                    let total = tail_len + read_n;
+                    aggregate_match(&hay[..total], &pats, &mut counts);
+                    let keep = std::cmp::min(overlap, read_n);
+                    hay.copy_within(total - keep..total, 0);
+                    tail_len = keep;
+                    offset += read_n;
                 }
             }
             addr = next;
