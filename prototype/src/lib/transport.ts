@@ -355,6 +355,11 @@ export interface LiveTop {
   buys: number[];
   low_sell: number | null;
   top_buy: number | null;
+  /** Your own order on this tier, if the desktop knew your username and it was
+   *  among the top ≤5 — excluded from `sells`/`buys`, so `low_sell` is the
+   *  best ask that is NOT yours. */
+  own_ask?: number | null;
+  own_bid?: number | null;
   /** Set when this one lookup failed; the row simply has no live data. */
   error?: string | null;
 }

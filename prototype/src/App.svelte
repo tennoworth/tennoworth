@@ -199,6 +199,18 @@
   // The filter cascade's inputs, bundled for lib/filter-engine.ts — the
   // hand-set sliders/chips plus whatever the active preset restricts
   // (vault-only, ducats-only, min-volume, min-median).
+  // Tradeable copies per slug|refinement from the latest scan — the My orders
+  // panel's "you list ×5 but own 2" / "not owned" checks. Null without a scan
+  // so those checks stay silent rather than calling every listing a ghost.
+  let ownedQtyForOrders = $derived.by((): Map<string, number> | null => {
+    if (!resolved.owned.size) return null;
+    const m = new Map<string, number>();
+    for (const rec of resolved.owned.values()) {
+      m.set(`${rec.slug}|${rec.subtype ?? ''}`, Math.max(0, rec.count - (rec.leveled ?? 0)));
+    }
+    return m;
+  });
+
   let filterState = $derived<FilterState>({
     minPrice, minOwned, typeFilter, hideAtLvl, activeTags,
     vaultOnly: !!PRESETS[activePreset]?.vaultOnly,
@@ -1298,6 +1310,7 @@
         {transport}
         {market}
         {sessionEpoch}
+        ownedQty={ownedQtyForOrders}
         onauthrequired={(code) => wfmAuthDialogsRef.open(code)}
       />
 

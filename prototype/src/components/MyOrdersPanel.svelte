@@ -1,9 +1,14 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import { DesktopCmdError, type Transport } from '../lib/transport';
-  import { MAX_PLATINUM } from '../lib/limits';
+  import {
+    DesktopCmdError, desktopLiveTopPrices, isDesktopRuntime, LIVE_TOP_PROGRESS_EVENT,
+    type LiveTop, type Transport,
+  } from '../lib/transport';
+  import { listenForTauriEvent } from '../lib/desktop-update';
+  import { MAX_PLATINUM, MIN_PLATINUM } from '../lib/limits';
   import { humanError } from '../lib/errors';
   import { selectDrifted, type DriftRow } from '../lib/order-drift';
+  import { assessListings, summarize, ownedKey, type HealthIssue } from '../lib/listing-health';
   import { LIQUID_VOL } from '../lib/sell-priority';
   import type { Market } from '../lib/types';
   import Toast from './Toast.svelte';
@@ -16,6 +21,8 @@
     visible: boolean;
     type?: 'sell' | 'buy';
     quantity?: number;
+    rank?: number;
+    subtype?: string | null;
     item?: { i18n?: { en?: { name?: string } }; en?: { name?: string }; name?: string; slug?: string };
     slug?: string;
     itemId?: string;
@@ -38,8 +45,11 @@
     /** Desktop lock-state rejection → parent raises the auth dialog (which
      *  tries the OS-keyring silent unlock before showing the passphrase). */
     onauthrequired?: (code: 'needs_login' | 'needs_unlock') => void;
+    /** Tradeable copies owned per the latest scan, keyed by `ownedKey(slug,
+     *  subtype)`. Null when there is no scan — the quantity checks stay off. */
+    ownedQty?: Map<string, number> | null;
   }
-  let { transport, market = null, sessionEpoch = 0, onauthrequired }: Props = $props();
+  let { transport, market = null, sessionEpoch = 0, onauthrequired, ownedQty = null }: Props = $props();
 
   type Phase = 'idle' | 'loading' | 'locked' | 'done' | 'error';
   let phase = $state<Phase>('idle');
@@ -282,6 +292,114 @@
     }
   }
 
+  // ---- Listing health (live top-of-book + owned quantities) ----
+  // "Check live" asks WFM for the exact-tier top-of-book of every SELL listing
+  // with the user's own order already excluded (wfm-core does that by
+  // username), then `assessListings` turns it plus the last scan's owned
+  // counts into concrete fixes. Desktop only: the hosted site has no IPC.
+  const canLive = isDesktopRuntime();
+  type LiveState = 'idle' | 'running' | 'done' | 'error';
+  let liveState = $state<LiveState>('idle');
+  let liveProgress = $state({ done: 0, total: 0 });
+  let liveError = $state<string | null>(null);
+  let live = $state<Map<string, LiveTop>>(new Map());
+  let liveListenerArmed = false;
+  let fixAllBusy = $state(false);
+
+  function liveKey(slug: string, rank: number, subtype: string | null): string {
+    return `${slug}|${rank}|${subtype ?? ''}`;
+  }
+  function liveForOrder(o: WfmOrder): LiveTop | null {
+    return live.get(liveKey(itemSlug(o), o.rank ?? 0, o.subtype ?? null)) ?? null;
+  }
+
+  async function checkLive(): Promise<void> {
+    const targets = orders.filter((o) => o.type !== 'buy' && itemSlug(o) !== '');
+    if (targets.length === 0) return;
+    if (!liveListenerArmed) {
+      liveListenerArmed = true;
+      listenForTauriEvent<{ done: number; total: number }>(LIVE_TOP_PROGRESS_EVENT, (p) => {
+        liveProgress = p;
+      });
+    }
+    liveState = 'running';
+    liveError = null;
+    liveProgress = { done: 0, total: targets.length };
+    try {
+      const res = await desktopLiveTopPrices(
+        targets.map((o) => ({ slug: itemSlug(o), rank: o.rank ?? 0, subtype: o.subtype ?? null })),
+      );
+      const next = new Map(live);
+      for (const t of res) next.set(liveKey(t.slug, t.rank ?? 0, t.subtype ?? null), t);
+      live = next;
+      liveState = 'done';
+    } catch (e) {
+      liveState = 'error';
+      liveError = e instanceof DesktopCmdError ? e.message : humanError(e);
+    }
+  }
+
+  let health = $derived.by((): HealthIssue[] => {
+    if (live.size === 0 && !ownedQty) return [];
+    return assessListings(
+      orders
+        .filter((o) => o.type !== 'buy')
+        .map((o) => {
+          const slug = itemSlug(o);
+          return {
+            id: o.id, slug, name: itemName(o),
+            platinum: o.platinum, quantity: o.quantity ?? 1, type: 'sell' as const,
+            live: slug ? liveForOrder(o) : null,
+            owned: ownedQty && slug ? (ownedQty.get(ownedKey(slug, o.subtype ?? null)) ?? 0) : null,
+          };
+        })
+        .filter((r) => r.slug !== ''),
+    );
+  });
+  let healthSummary = $derived(summarize(health));
+
+  async function applyFix(issue: HealthIssue): Promise<void> {
+    const o = orders.find((x) => x.id === issue.id);
+    if (!o) return;
+    markBusy(issue.id, true);
+    try {
+      if (issue.kind === 'overpriced' || issue.kind === 'underbid') {
+        const p = Math.min(MAX_PLATINUM, Math.max(MIN_PLATINUM, issue.suggested));
+        assertOrderOk(await transport.updateOrder(issue.id, { platinum: p }));
+        o.platinum = p;
+        pushToast(`${issue.name} repriced to ${p}p.`);
+      } else if (issue.kind === 'excess-qty') {
+        assertOrderOk(await transport.updateOrder(issue.id, { quantity: issue.suggested }));
+        o.quantity = issue.suggested;
+        pushToast(`${issue.name} quantity set to ${issue.suggested}.`);
+      } else if (issue.kind === 'not-owned') {
+        await transport.deleteOrder(issue.id);
+        orders = orders.filter((x) => x.id !== issue.id);
+        pushToast(`Deleted ${issue.name}.`);
+        return;
+      }
+      orders = [...orders];
+    } catch (e) {
+      pushToast(`Couldn't fix ${issue.name}: ${humanError(e)}`, 'error');
+    } finally {
+      markBusy(issue.id, false);
+    }
+  }
+
+  /** Apply every PRICE fix (match lowest ask / meet the bid). Quantity and
+   *  delete fixes stay one-click-each — those change what's for sale. */
+  async function fixAllPrices(): Promise<void> {
+    if (fixAllBusy) return;
+    fixAllBusy = true;
+    try {
+      for (const issue of health.filter((i) => i.kind === 'overpriced' || i.kind === 'underbid')) {
+        await applyFix(issue);
+      }
+    } finally {
+      fixAllBusy = false;
+    }
+  }
+
   // WFM order objects nest the item info — name lookup is defensive.
   function itemName(o: WfmOrder): string {
     return (
@@ -318,9 +436,65 @@
         disabled={bulkBusy || orders.every((o) => !o.visible)}
         title="Hide every listing from buyers"
       >All hidden</button>
+      {#if canLive}
+        <button
+          class="ghost"
+          onclick={checkLive}
+          disabled={liveState === 'running' || phase !== 'done' || orders.length === 0}
+          title="Ask warframe.market for the best online asks and bids on each of your sell listings' exact rank / refinement — your own order excluded — and flag what's worth fixing."
+        >
+          {#if liveState === 'running'}Checking… {liveProgress.done}/{liveProgress.total}
+          {:else if liveState === 'done'}Re-check live
+          {:else}Check live{/if}
+        </button>
+      {/if}
       <button class="ghost" onclick={loadOrders} disabled={phase === 'loading'}>Refresh</button>
     </div>
   </header>
+
+  {#if liveState === 'error' && liveError}
+    <div class="muted bad">Live check failed: {liveError}</div>
+  {/if}
+
+  {#if health.length > 0}
+    <div class="health">
+      <p class="health-lead">
+        <strong>Listing health:</strong>
+        {#if healthSummary.overpriced}<span class="chip warn">{healthSummary.overpriced} above the market</span>{/if}
+        {#if healthSummary.underbid}<span class="chip warn">{healthSummary.underbid} under a live bid</span>{/if}
+        {#if healthSummary.excessQty}<span class="chip">{healthSummary.excessQty} over-quantity</span>{/if}
+        {#if healthSummary.notOwned}<span class="chip bad">{healthSummary.notOwned} not owned</span>{/if}
+        {#if healthSummary.overpriced + healthSummary.underbid > 1}
+          <button class="tiny" onclick={fixAllPrices} disabled={fixAllBusy} title="Reprice every flagged listing: match the lowest other ask, or meet the higher bid. Quantity fixes and deletions stay one click each.">Fix all prices</button>
+        {/if}
+      </p>
+      <ul class="drift-list">
+        {#each health as h (h.id + h.kind)}
+          <li class="drift-row">
+            <span class="drift-name" title={h.slug}>{h.name}</span>
+            <span class="drift-move" title={h.why}>
+              {#if h.kind === 'overpriced' || h.kind === 'underbid'}
+                {h.current}p → <strong>{h.suggested}p</strong>
+                <span class="drift-kind {h.kind === 'overpriced' ? 'overpriced' : 'underpriced'}">{h.kind === 'overpriced' ? 'above lowest ask' : 'under a bid'}</span>
+              {:else if h.kind === 'excess-qty'}
+                ×{h.current} → <strong>×{h.suggested}</strong>
+                <span class="drift-kind">more listed than owned</span>
+              {:else}
+                ×{h.current}
+                <span class="drift-kind overpriced">not in your inventory</span>
+              {/if}
+            </span>
+            <button
+              class="tiny"
+              onclick={() => applyFix(h)}
+              disabled={busyIds.has(h.id)}
+              title={h.why}
+            >{h.kind === 'not-owned' ? 'Delete' : h.kind === 'excess-qty' ? 'Set qty' : 'Reprice'}</button>
+          </li>
+        {/each}
+      </ul>
+    </div>
+  {/if}
 
   {#if drifted.length > 0}
     <div class="drift">
@@ -513,6 +687,18 @@
     margin-bottom: 12px;
   }
   .drift-lead { margin: 0 0 8px; font-size: 12px; color: var(--muted); }
+  .health {
+    margin: 10px 0 0;
+    padding: 10px 12px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--panel-2);
+  }
+  .health-lead { margin: 0 0 8px; font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .health-lead strong { color: var(--fg); }
+  .chip { border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; font-size: 11px; color: var(--muted); }
+  .chip.warn { color: var(--warn); border-color: var(--warn); }
+  .chip.bad { color: var(--bad); border-color: var(--bad); }
   .drift-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
   .drift-row { display: flex; align-items: center; gap: 10px; font-size: 12px; }
   .drift-name {
