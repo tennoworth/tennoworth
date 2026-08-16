@@ -87,7 +87,9 @@ struct LiveTopProgress {
 /// Live top-of-book (≤5 best online asks/bids) for each query's exact tier,
 /// straight from WFM v2 `/orders/item/{slug}/top`. Public endpoint — works
 /// logged out; when a login is unlocked its platform is used so the prices
-/// match the market the user actually lists on, else `pc`. Paced at WFM's
+/// match the market the user actually lists on (else `pc`), and the user's
+/// own orders are reported separately (`own_ask` / `own_bid`) instead of
+/// being counted as competition. Paced at WFM's
 /// 3 req/s ceiling, so 50 items ≈ 17 s: the SPA listens for
 /// [`EVENT_LIVE_TOP_PROGRESS`] and shows a counter. Capped at 100 queries per
 /// call — a whole-inventory sweep is the scraper's job, not the UI's.
@@ -104,12 +106,14 @@ pub async fn live_top_prices(
             format!("{} items requested; the live-price check takes at most {MAX_QUERIES} at a time", queries.len()),
         ));
     }
-    let platform = session
+    // Logged in: use the login's market and keep the user's own orders out of
+    // the competition figures. Logged out: pc, everyone counts.
+    let (platform, me) = session
         .require_unlocked()
-        .map(|u| u.platform.clone())
-        .unwrap_or_else(|_| "pc".to_string());
+        .map(|u| (u.platform.clone(), Some(u.username.clone())))
+        .unwrap_or_else(|_| ("pc".to_string(), None));
     tauri::async_runtime::spawn_blocking(move || {
-        fetch_live_tops(&platform, &queries, |done, total| {
+        fetch_live_tops(&platform, me.as_deref(), &queries, |done, total| {
             let _ = app.emit(EVENT_LIVE_TOP_PROGRESS, LiveTopProgress { done, total });
         })
         .map_err(CmdError::wfm)

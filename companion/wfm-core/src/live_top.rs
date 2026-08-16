@@ -51,6 +51,15 @@ pub struct LiveTop {
     pub buys: Vec<u32>,
     pub low_sell: Option<u32>,
     pub top_buy: Option<u32>,
+    /// The caller's OWN ask/bid on this tier, when [`fetch_live_tops`] was
+    /// given a username and one of the ≤5 top orders is theirs. Those orders
+    /// are excluded from `sells` / `buys`, so `low_sell` is "the best ask that
+    /// is not mine" — the number a repricing decision actually needs (the
+    /// snapshot can't tell whose order is whose; this can).
+    #[serde(default)]
+    pub own_ask: Option<u32>,
+    #[serde(default)]
+    pub own_bid: Option<u32>,
     /// Set when this one lookup failed (item unknown to WFM, network blip);
     /// the batch keeps going and the UI shows the row as "no live data".
     #[serde(default)]
@@ -67,6 +76,8 @@ impl LiveTop {
             buys: vec![],
             low_sell: None,
             top_buy: None,
+            own_ask: None,
+            own_bid: None,
             error: Some(e),
         }
     }
@@ -91,27 +102,42 @@ fn top_url(q: &LiveTopQuery) -> String {
     url
 }
 
+/// Does this order belong to `me` (WFM in-game name, case-insensitive; the
+/// user's `slug` is its lowercase form so both are checked)?
+fn is_own_order(order: &serde_json::Value, me: Option<&str>) -> bool {
+    let Some(me) = me.filter(|m| !m.is_empty()) else { return false };
+    let user = order.get("user");
+    let by = |k: &str| user.and_then(|u| u.get(k)).and_then(|v| v.as_str());
+    by("ingameName").is_some_and(|n| n.eq_ignore_ascii_case(me))
+        || by("slug").is_some_and(|n| n.eq_ignore_ascii_case(me))
+}
+
 /// Parse WFM's `top` envelope: `{data:{sell:[{platinum,..}],buy:[...]}}`.
 /// Sorted defensively — WFM already returns best-first, but the contract is
-/// ours to keep, not theirs.
-pub fn parse_top(q: &LiveTopQuery, body: &serde_json::Value) -> Result<LiveTop> {
+/// ours to keep, not theirs. Orders by `me` are split out into `own_ask` /
+/// `own_bid` rather than counted as competition.
+pub fn parse_top(q: &LiveTopQuery, body: &serde_json::Value, me: Option<&str>) -> Result<LiveTop> {
     let data = wfm_client::unwrap_envelope(body);
-    let plats = |side: &str| -> Vec<u32> {
-        data.get(side)
-            .and_then(|v| v.as_array())
-            .map(|arr| {
-                arr.iter()
-                    .filter_map(|o| o.get("platinum").and_then(|p| p.as_u64()))
-                    .map(|p| p.min(u32::MAX as u64) as u32)
-                    .collect()
-            })
-            .unwrap_or_default()
-    };
     if data.get("sell").is_none() && data.get("buy").is_none() {
         bail!("unexpected /top shape for {}: no sell/buy arrays", q.slug);
     }
-    let mut sells = plats("sell");
-    let mut buys = plats("buy");
+    // (others' prices, my price if present)
+    let side = |name: &str| -> (Vec<u32>, Option<u32>) {
+        let mut others = Vec::new();
+        let mut mine = None;
+        for o in data.get(name).and_then(|v| v.as_array()).into_iter().flatten() {
+            let Some(p) = o.get("platinum").and_then(|p| p.as_u64()) else { continue };
+            let p = p.min(u32::MAX as u64) as u32;
+            if is_own_order(o, me) {
+                mine = Some(mine.map_or(p, |m: u32| m.min(p)));
+            } else {
+                others.push(p);
+            }
+        }
+        (others, mine)
+    };
+    let (mut sells, own_ask) = side("sell");
+    let (mut buys, own_bid) = side("buy");
     sells.sort_unstable();
     buys.sort_unstable_by(|a, b| b.cmp(a));
     Ok(LiveTop {
@@ -122,11 +148,13 @@ pub fn parse_top(q: &LiveTopQuery, body: &serde_json::Value) -> Result<LiveTop> 
         top_buy: buys.first().copied(),
         sells,
         buys,
+        own_ask,
+        own_bid,
         error: None,
     })
 }
 
-fn fetch_one(client: &Client, platform: &str, q: &LiveTopQuery) -> Result<LiveTop> {
+fn fetch_one(client: &Client, platform: &str, q: &LiveTopQuery, me: Option<&str>) -> Result<LiveTop> {
     let url = top_url(q);
     let resp = wfm_client::wfm_headers(client.get(&url), platform)
         .send()
@@ -136,15 +164,18 @@ fn fetch_one(client: &Client, platform: &str, q: &LiveTopQuery) -> Result<LiveTo
         bail!("{url}: HTTP {status}");
     }
     let body: serde_json::Value = resp.json().with_context(|| format!("{url}: JSON"))?;
-    parse_top(q, &body)
+    parse_top(q, &body, me)
 }
 
 /// Look up every query, paced at [`LIVE_TOP_SPACING`] start-to-start. Per-item
 /// failures are returned inline (`error` set), never propagated — a 50-item
-/// review must not lose 49 answers to one unknown slug. `on_progress` is
-/// called after each item with (done, total).
+/// review must not lose 49 answers to one unknown slug. `me` (the WFM
+/// in-game name, when logged in) keeps the user's own orders out of the
+/// competition figures. `on_progress` is called after each item with
+/// (done, total).
 pub fn fetch_live_tops(
     platform: &str,
+    me: Option<&str>,
     queries: &[LiveTopQuery],
     mut on_progress: impl FnMut(usize, usize),
 ) -> Result<Vec<LiveTop>> {
@@ -160,7 +191,7 @@ pub fn fetch_live_tops(
             }
         }
         last_start = Some(Instant::now());
-        let row = match fetch_one(&client, platform, q) {
+        let row = match fetch_one(&client, platform, q, me) {
             Ok(t) => t,
             Err(e) => LiveTop::failed(q, e.to_string()),
         };
@@ -196,7 +227,7 @@ mod tests {
         let body = json!({"apiVersion":"0.25.0","data":{
             "sell":[{"platinum":20},{"platinum":15},{"platinum":18}],
             "buy":[{"platinum":9},{"platinum":12}]}});
-        let t = parse_top(&q("primed_flow", Some(0), None), &body).unwrap();
+        let t = parse_top(&q("primed_flow", Some(0), None), &body, None).unwrap();
         assert_eq!(t.sells, vec![15, 18, 20]);
         assert_eq!(t.buys, vec![12, 9]);
         assert_eq!(t.low_sell, Some(15));
@@ -207,7 +238,7 @@ mod tests {
     #[test]
     fn empty_sides_are_none_not_zero() {
         let body = json!({"data":{"sell":[],"buy":[]}});
-        let t = parse_top(&q("thin", None, None), &body).unwrap();
+        let t = parse_top(&q("thin", None, None), &body, None).unwrap();
         assert_eq!(t.low_sell, None);
         assert_eq!(t.top_buy, None);
     }
@@ -215,6 +246,26 @@ mod tests {
     #[test]
     fn a_body_without_order_arrays_is_an_error_not_a_zero_price() {
         let body = json!({"data":{"nope":true}});
-        assert!(parse_top(&q("x", None, None), &body).is_err());
+        assert!(parse_top(&q("x", None, None), &body, None).is_err());
+    }
+
+    #[test]
+    fn my_own_orders_are_split_out_not_counted_as_competition() {
+        let body = json!({"data":{
+            "sell":[
+                {"platinum":12,"user":{"ingameName":"Prowly","slug":"prowly"}},
+                {"platinum":14,"user":{"ingameName":"Someone","slug":"someone"}}],
+            "buy":[
+                {"platinum":9,"user":{"ingameName":"Other","slug":"other"}},
+                {"platinum":8,"user":{"ingameName":"prowly","slug":"prowly"}}]}});
+        let t = parse_top(&q("primed_flow", Some(0), None), &body, Some("PROWLY")).unwrap();
+        assert_eq!(t.own_ask, Some(12));
+        assert_eq!(t.own_bid, Some(8));
+        assert_eq!(t.low_sell, Some(14), "the best ask that is NOT mine");
+        assert_eq!(t.top_buy, Some(9));
+        // no username → nothing is "mine"
+        let t2 = parse_top(&q("primed_flow", Some(0), None), &body, None).unwrap();
+        assert_eq!(t2.own_ask, None);
+        assert_eq!(t2.low_sell, Some(12));
     }
 }

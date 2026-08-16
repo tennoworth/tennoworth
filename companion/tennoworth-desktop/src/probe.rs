@@ -359,7 +359,7 @@ pub fn debug_seed_unlocked(session: State<'_, Arc<WfmSession>>) -> Result<(), Cm
         username: "probe".into(),
         platform: "pc".into(),
         catalog: Arc::new(BTreeMap::new()),
-        id_to_name: Arc::new(BTreeMap::new()),
+        id_to_item: Arc::new(BTreeMap::new()),
     });
     Ok(())
 }

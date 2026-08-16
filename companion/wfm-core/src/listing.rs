@@ -13,7 +13,7 @@ use std::thread;
 use std::time::Duration;
 
 use crate::auth::fetch_wfm_me;
-use crate::catalog::{fetch_wfm_catalog, WfmCatalogItem};
+use crate::catalog::{fetch_wfm_catalog, index_item_meta, ItemMeta, WfmCatalogItem};
 use crate::util::{browser_client, wfm_client};
 
 /// Shared with [`crate::plan::run_pending`] — both pace their WFM calls to
@@ -96,9 +96,9 @@ pub struct Unlocked {
     /// (no login on disk at startup, then a console login loaded late).
     pub platform: String,
     pub catalog: Arc<BTreeMap<String, WfmCatalogItem>>,
-    /// itemId → display name. Injected into the /orders response so the UI
-    /// doesn't show raw 24-char hex IDs.
-    pub id_to_name: Arc<BTreeMap<String, String>>,
+    /// itemId → {name, slug}. Injected into the /orders response so the UI
+    /// doesn't show raw 24-char hex IDs and can price-check by slug.
+    pub id_to_item: Arc<BTreeMap<String, ItemMeta>>,
 }
 
 /// Build the [`Unlocked`] bundle for an already-decrypted JWT: warm the WFM
@@ -116,17 +116,14 @@ pub struct Unlocked {
 pub fn warm_unlocked(jwt: String, platform: String) -> Result<Unlocked> {
     let http = browser_client(60)?;
     let catalog = fetch_wfm_catalog(&http, &platform)?;
-    let id_to_name: BTreeMap<String, String> = catalog
-        .values()
-        .map(|c| (c.item_id.clone(), c.display_name.clone()))
-        .collect();
+    let id_to_item = index_item_meta(&catalog);
     let username = fetch_wfm_me(&http, &jwt, &platform)?;
     Ok(Unlocked {
         jwt,
         username,
         platform,
         catalog: Arc::new(catalog),
-        id_to_name: Arc::new(id_to_name),
+        id_to_item: Arc::new(id_to_item),
     })
 }
 
@@ -165,7 +162,7 @@ pub fn list_user_orders(unlocked: &Unlocked) -> Result<serde_json::Value> {
     if !status.is_success() {
         bail!("WFM HTTP {status}: {body}");
     }
-    crate::catalog::enrich_orders_with_names(&mut body, &unlocked.id_to_name);
+    crate::catalog::enrich_orders_with_names(&mut body, &unlocked.id_to_item);
     Ok(body)
 }
 
