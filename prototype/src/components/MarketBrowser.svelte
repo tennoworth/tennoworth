@@ -7,6 +7,7 @@
     searchItems,
     topMovers,
     vaultedTop,
+    dispositionChanges,
     type BrowseRow,
   } from '../lib/market-browse';
   import { sparklinePoints } from '../lib/sparkline';
@@ -31,6 +32,15 @@
   let results = $derived(searchItems(market, index, query, 12));
   let movers = $derived(topMovers(market, index, { minVol: 20, minPrice: 10, limit: 8 }));
   let vaulted = $derived(vaultedTop(market, index, 12));
+  let dispoChanges = $derived(dispositionChanges(market, 12));
+  function dispoDelta(from: number, to: number): string {
+    const d = to - from;
+    return `${d > 0 ? '+' : ''}${d.toFixed(2)}`;
+  }
+  function seenDate(iso: string): string {
+    const t = Date.parse(iso);
+    return Number.isFinite(t) ? new Date(t).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+  }
 
   // Baro schedule. Schedule only: market.json carries activation/expiry/
   // location, never stock.
@@ -155,6 +165,24 @@
       <p class="muted empty">No vault data in this snapshot.</p>
     {/if}
   </div>
+
+  {#if dispoChanges.length}
+    <div class="card dispo" data-testid="dispo-changes">
+      <h3>Riven disposition changes <span class="muted">· last 90 days</span></h3>
+      <p class="muted lead">DE now only raises dispositions, so each change is a one-way price event for that weapon's rivens — and WFM reprices within a day. Dates are when our scrape first saw the new value.</p>
+      <div class="list two-col">
+        {#each dispoChanges as c (c.slug + c.seen_at)}
+          <div class="row dispo-row">
+            <span class="name">{c.name}</span>
+            <span class="dispo-move" class:up={c.to > c.from} class:down={c.to < c.from} title={`Disposition ${c.from.toFixed(2)} → ${c.to.toFixed(2)}`}>
+              {c.from.toFixed(2)} → <strong>{c.to.toFixed(2)}</strong> ({dispoDelta(c.from, c.to)})
+            </span>
+            <span class="muted seen">{seenDate(c.seen_at)}</span>
+          </div>
+        {/each}
+      </div>
+    </div>
+  {/if}
 
   {#if baro && baroState}
     <div class="card baro">
@@ -319,4 +347,10 @@
   .baro-label { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
   .baro-val { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
   .baro-body p { margin: 0; }
+  .dispo-row { display: flex; align-items: baseline; gap: 10px; }
+  .dispo-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dispo-move { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: nowrap; }
+  .dispo-move.up { color: var(--good); }
+  .dispo-move.down { color: var(--bad); }
+  .dispo-row .seen { font-size: 11px; white-space: nowrap; }
 </style>

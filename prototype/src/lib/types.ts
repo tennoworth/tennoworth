@@ -81,6 +81,28 @@ interface Baro {
 
 /** Full market.json shape. Optional fields cover older snapshots that
  *  pre-date a feature (vault status, relic rewards, etc.). */
+export interface RivenWeapon {
+  name: string;
+  disposition: number;
+  group?: string;
+  riven_type?: string;
+  req_mr?: number;
+}
+
+export interface RivenDispoChange {
+  slug: string;
+  name: string;
+  from: number;
+  to: number;
+  /** When the pipeline first saw the new value (ISO) — not DE's patch time. */
+  seen_at: string;
+}
+
+export interface RivenSurface {
+  weapons?: Record<string, RivenWeapon>;
+  changes?: RivenDispoChange[];
+}
+
 export interface Market {
   updated_at: string;
   platform: string;
@@ -94,6 +116,10 @@ export interface Market {
   relic_rewards?: Record<string, RelicReward[]>;
   vault_status?: Record<string, VaultStatus>;
   baro?: Baro | null;
+  /** Riven weapon dispositions from WFM's manifest + a rolling 90-day change
+   *  log the pipeline diffs on every run. DE only raises dispositions now, so
+   *  each change is a one-sided price event for that weapon's rivens. */
+  rivens?: RivenSurface | null;
   source?: string;
   // Per-surface fetch timestamps (ISO). On a CSV-only rebuild these can lag
   // `updated_at` — prices refreshed but the vendor surfaces (baro/relics/

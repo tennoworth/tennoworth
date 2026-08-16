@@ -114,6 +114,11 @@ pub struct Snapshot {
     pub vault_status: HashMap<String, String>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub baro: HashMap<String, serde_json::Value>,
+    /// `weapons: {slug: {name, disposition, group, riven_type, req_mr}}` +
+    /// `changes: [{slug, name, from, to, seen_at}]` (rolling 90 d) — see
+    /// `fetch::fetch_rivens`.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub rivens: HashMap<String, serde_json::Value>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub surface_fetched_at: HashMap<String, String>,
 }
@@ -132,6 +137,7 @@ pub fn assemble_snapshot(
     relic_rewards: HashMap<String, serde_json::Value>,
     vault_status: HashMap<String, String>,
     baro: HashMap<String, serde_json::Value>,
+    rivens: HashMap<String, serde_json::Value>,
     surface_fetched_at: HashMap<String, String>,
 ) -> Snapshot {
     Snapshot {
@@ -147,6 +153,7 @@ pub fn assemble_snapshot(
         relic_rewards,
         vault_status,
         baro,
+        rivens,
         surface_fetched_at,
     }
 }

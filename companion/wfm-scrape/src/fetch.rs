@@ -482,6 +482,134 @@ pub fn carry_baro_inventory(
     fresh.insert("inventory_for".into(), for_.clone());
 }
 
+pub const WFM_RIVEN_WEAPONS_URL: &str = "https://api.warframe.market/v2/riven/weapons";
+
+/// How long a disposition change stays in the snapshot's rolling change log.
+/// DE ships disposition passes with each Prime Access (~quarterly); 90 days
+/// keeps the last pass visible until the next one lands.
+pub const RIVEN_CHANGE_RETENTION_DAYS: i64 = 90;
+
+/// Fetch WFM's riven-weapon manifest and reduce it to
+/// `weapons: {slug: {name, disposition, group, riven_type, req_mr}}`, then
+/// diff dispositions against the prior snapshot's `rivens.weapons` into a
+/// rolling `changes: [{slug, name, from, to, seen_at}]` (newest first,
+/// bounded by [`RIVEN_CHANGE_RETENTION_DAYS`]).
+///
+/// Why: DE has stopped decreasing dispositions and only raises them (2024
+/// policy, restated in the 2025-26 workshops), so a change is a one-sided
+/// price event for anyone holding that weapon's rivens — and repricing on
+/// WFM lands within a day of the patch notes. The scrape runs every 2 h, so
+/// the log catches it the same day. `seen_at` is when WE first saw the new
+/// value, not DE's patch time.
+///
+/// Returns `{}` on fetch failure so reconcile falls back to the prior surface.
+pub fn fetch_rivens(
+    http: &dyn Http,
+    prior: Option<&HashMap<String, serde_json::Value>>,
+    now: DateTime<Utc>,
+) -> HashMap<String, serde_json::Value> {
+    let data = match http.get_json(WFM_RIVEN_WEAPONS_URL) {
+        Ok(b) => b,
+        Err(e) => {
+            eprintln!("  warning: could not fetch {WFM_RIVEN_WEAPONS_URL}: {e}");
+            return HashMap::new();
+        }
+    };
+    let arr = data
+        .get("data")
+        .and_then(|d| d.as_array())
+        .or_else(|| data.as_array());
+    let Some(arr) = arr else {
+        eprintln!("  warning: {WFM_RIVEN_WEAPONS_URL}: unexpected shape");
+        return HashMap::new();
+    };
+
+    let mut weapons = serde_json::Map::new();
+    for w in arr {
+        let Some(slug) = w.get("slug").and_then(|v| v.as_str()) else { continue };
+        let Some(dispo) = w.get("disposition").and_then(|v| v.as_f64()) else { continue };
+        let name = w
+            .get("i18n").and_then(|i| i.get("en")).and_then(|e| e.get("name")).and_then(|n| n.as_str())
+            .unwrap_or(slug);
+        let mut row = serde_json::Map::new();
+        row.insert("name".into(), serde_json::Value::String(name.into()));
+        row.insert("disposition".into(), serde_json::json!(dispo));
+        for (src, dst) in [("group", "group"), ("rivenType", "riven_type")] {
+            if let Some(v) = w.get(src).and_then(|v| v.as_str()) {
+                row.insert(dst.into(), serde_json::Value::String(v.into()));
+            }
+        }
+        if let Some(mr) = w.get("reqMasteryRank").and_then(|v| v.as_i64()) {
+            row.insert("req_mr".into(), serde_json::Value::from(mr));
+        }
+        weapons.insert(slug.to_string(), serde_json::Value::Object(row));
+    }
+    if weapons.is_empty() {
+        return HashMap::new();
+    }
+
+    // Diff against what the prior snapshot recorded.
+    let prior_weapons = prior
+        .and_then(|p| p.get("weapons"))
+        .and_then(|w| w.as_object());
+    let mut changes: Vec<serde_json::Value> = Vec::new();
+    if let Some(pw) = prior_weapons {
+        for (slug, row) in &weapons {
+            let Some(to) = row.get("disposition").and_then(|d| d.as_f64()) else { continue };
+            let Some(from) = pw.get(slug).and_then(|r| r.get("disposition")).and_then(|d| d.as_f64()) else { continue };
+            // Dispositions are quoted to 2 dp; anything under half a hundredth is
+            // float noise, not a change.
+            if (to - from).abs() < 0.005 {
+                continue;
+            }
+            changes.push(serde_json::json!({
+                "slug": slug,
+                "name": row.get("name").cloned().unwrap_or(serde_json::Value::String(slug.clone())),
+                "from": from,
+                "to": to,
+                "seen_at": clock::iso_z(now),
+            }));
+        }
+    }
+    // Carry the prior log forward, dropping entries past retention and any
+    // entry for a slug that just changed again (the new row supersedes it).
+    let cutoff = now - chrono::Duration::days(RIVEN_CHANGE_RETENTION_DAYS);
+    let changed_now: std::collections::HashSet<String> = changes
+        .iter()
+        .filter_map(|c| c.get("slug").and_then(|s| s.as_str()).map(String::from))
+        .collect();
+    if let Some(old) = prior.and_then(|p| p.get("changes")).and_then(|c| c.as_array()) {
+        for c in old {
+            let slug = c.get("slug").and_then(|s| s.as_str()).unwrap_or("");
+            if changed_now.contains(slug) {
+                continue;
+            }
+            let keep = c
+                .get("seen_at")
+                .and_then(|s| s.as_str())
+                .and_then(|s| DateTime::parse_from_rfc3339(s).ok())
+                .map(|t| t.with_timezone(&Utc) >= cutoff)
+                .unwrap_or(false);
+            if keep {
+                changes.push(c.clone());
+            }
+        }
+    }
+    changes.sort_by(|a, b| {
+        let sa = a.get("seen_at").and_then(|s| s.as_str()).unwrap_or("");
+        let sb = b.get("seen_at").and_then(|s| s.as_str()).unwrap_or("");
+        sb.cmp(sa).then_with(|| {
+            a.get("slug").and_then(|s| s.as_str()).unwrap_or("")
+                .cmp(b.get("slug").and_then(|s| s.as_str()).unwrap_or(""))
+        })
+    });
+
+    let mut out = HashMap::new();
+    out.insert("weapons".into(), serde_json::Value::Object(weapons));
+    out.insert("changes".into(), serde_json::Value::Array(changes));
+    out
+}
+
 pub const WFSTAT_ITEMS_URL: &str = "https://api.warframestat.us/items/";
 
 /// Reduce the warframestat bulk item list to the resolver's slim
@@ -644,6 +772,78 @@ mod tests {
         // Optional fields simply do not appear rather than defaulting to 0 —
         // a missing ducat cost is unknown, not free.
         assert!(inv[0].get("ducats").is_none());
+    }
+
+    fn riven_http(weapons: &[(&str, &str, f64)]) -> FixtureHttp {
+        let arr: Vec<serde_json::Value> = weapons
+            .iter()
+            .map(|(slug, name, d)| serde_json::json!({
+                "slug": slug, "disposition": d, "group": "primary", "rivenType": "rifle",
+                "reqMasteryRank": 8, "i18n": {"en": {"name": name}}
+            }))
+            .collect();
+        let mut r = HashMap::new();
+        r.insert(WFM_RIVEN_WEAPONS_URL.into(), serde_json::json!({"apiVersion": "0.25.0", "data": arr}));
+        FixtureHttp { responses: r }
+    }
+
+    fn rivens_surface(weapons: &[(&str, f64)], changes: serde_json::Value) -> HashMap<String, serde_json::Value> {
+        let mut w = serde_json::Map::new();
+        for (slug, d) in weapons {
+            w.insert(slug.to_string(), serde_json::json!({"name": slug, "disposition": d}));
+        }
+        let mut m = HashMap::new();
+        m.insert("weapons".into(), serde_json::Value::Object(w));
+        m.insert("changes".into(), changes);
+        m
+    }
+
+    #[test]
+    fn rivens_reduce_the_manifest_and_report_no_changes_without_a_prior() {
+        let now = clock::parse_isoformat_utc("2026-08-16T12:00:00Z").unwrap();
+        let got = fetch_rivens(&riven_http(&[("kulstar", "Kulstar", 1.3), ("braton", "Braton", 1.15)]), None, now);
+        let w = got.get("weapons").unwrap().as_object().unwrap();
+        assert_eq!(w.len(), 2);
+        assert_eq!(w["kulstar"]["name"], "Kulstar");
+        assert_eq!(w["kulstar"]["disposition"], 1.3);
+        assert_eq!(w["kulstar"]["group"], "primary");
+        assert_eq!(w["kulstar"]["riven_type"], "rifle");
+        assert_eq!(w["kulstar"]["req_mr"], 8);
+        assert_eq!(got.get("changes").unwrap().as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn rivens_diff_against_prior_and_carry_the_log_within_retention() {
+        let now = clock::parse_isoformat_utc("2026-08-16T12:00:00Z").unwrap();
+        let prior = rivens_surface(
+            &[("kulstar", 1.3), ("braton", 1.10), ("lato", 1.4)],
+            serde_json::json!([
+                // recent: kept
+                {"slug": "lato", "name": "Lato", "from": 1.35, "to": 1.4, "seen_at": "2026-07-01T00:00:00Z"},
+                // older than 90 d: dropped
+                {"slug": "burston", "name": "Burston", "from": 1.0, "to": 1.05, "seen_at": "2026-04-01T00:00:00Z"},
+                // superseded by a change seen now
+                {"slug": "braton", "name": "Braton", "from": 1.05, "to": 1.10, "seen_at": "2026-07-15T00:00:00Z"}
+            ]),
+        );
+        let got = fetch_rivens(
+            &riven_http(&[("kulstar", "Kulstar", 1.3), ("braton", "Braton", 1.15), ("lato", "Lato", 1.4)]),
+            Some(&prior),
+            now,
+        );
+        let ch = got.get("changes").unwrap().as_array().unwrap();
+        let slugs: Vec<&str> = ch.iter().map(|c| c["slug"].as_str().unwrap()).collect();
+        assert_eq!(slugs, vec!["braton", "lato"], "newest first; burston aged out; braton superseded");
+        assert_eq!(ch[0]["from"], 1.10);
+        assert_eq!(ch[0]["to"], 1.15);
+        assert_eq!(ch[0]["seen_at"], "2026-08-16T12:00:00Z");
+    }
+
+    #[test]
+    fn rivens_fetch_failure_is_an_empty_surface_for_reconcile_to_fall_back() {
+        let now = clock::parse_isoformat_utc("2026-08-16T12:00:00Z").unwrap();
+        let got = fetch_rivens(&FixtureHttp { responses: HashMap::new() }, None, now);
+        assert!(got.is_empty());
     }
 
     #[test]

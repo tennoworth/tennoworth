@@ -295,6 +295,15 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     let rr_old: Option<HashMap<String, serde_json::Value>> = prior.get("relic_rewards").and_then(|s| serde_json::from_value(s.clone()).ok());
     let vs_old: Option<HashMap<String, String>> = prior.get("vault_status").and_then(|s| serde_json::from_value(s.clone()).ok());
     let baro_old: Option<HashMap<String, serde_json::Value>> = prior.get("baro").and_then(|s| serde_json::from_value(s.clone()).ok());
+    let rivens_old: Option<HashMap<String, serde_json::Value>> = prior.get("rivens").and_then(|s| serde_json::from_value(s.clone()).ok());
+
+    eprintln!("Fetching riven dispositions...");
+    let rivens = fetch::fetch_rivens(http.as_ref(), rivens_old.as_ref(), now);
+    if let Some(ch) = rivens.get("changes").and_then(|c| c.as_array()) {
+        let today = ch.iter().filter(|c| c.get("seen_at").and_then(|s| s.as_str()) == Some(clock::iso_z(now).as_str())).count();
+        eprintln!("  {} weapons · {} changes in log ({} new this run)",
+            rivens.get("weapons").and_then(|w| w.as_object()).map(|w| w.len()).unwrap_or(0), ch.len(), today);
+    }
 
     let r_p2i = reconcile("path_to_info", path_to_info, p2i_old.as_ref(), prior_stamps.get("path_to_info").map(|s| s.as_str()), now, parents_complete, STALE_DAYS);
     let r_s2p = reconcile("set_to_parts", set_to_parts, s2p_old.as_ref(), prior_stamps.get("set_to_parts").map(|s| s.as_str()), now, parents_complete, STALE_DAYS);
@@ -307,6 +316,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     let mut baro = baro;
     fetch::carry_baro_inventory(&mut baro, baro_old.as_ref());
     let r_baro = reconcile("baro", baro, baro_old.as_ref(), prior_stamps.get("baro").map(|s| s.as_str()), now, true, STALE_DAYS);
+    let r_rivens = reconcile("rivens", rivens, rivens_old.as_ref(), prior_stamps.get("rivens").map(|s| s.as_str()), now, true, STALE_DAYS);
 
     for r in [&r_p2i, &r_s2p, &r_rr] {
         if let Some(w) = &r.stale_warning {
@@ -319,6 +329,9 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     if let Some(w) = &r_baro.stale_warning {
         eprintln!("{}", w.format());
     }
+    if let Some(w) = &r_rivens.stale_warning {
+        eprintln!("{}", w.format());
+    }
 
     let mut surface_fetched_at: HashMap<String, String> = HashMap::new();
     surface_fetched_at.insert("path_to_info".into(), r_p2i.fetched_at.clone());
@@ -326,6 +339,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     surface_fetched_at.insert("relic_rewards".into(), r_rr.fetched_at.clone());
     surface_fetched_at.insert("vault_status".into(), r_vs.fetched_at.clone());
     surface_fetched_at.insert("baro".into(), r_baro.fetched_at.clone());
+    surface_fetched_at.insert("rivens".into(), r_rivens.fetched_at.clone());
 
     eprintln!("Rendering {} CSV rows...", csv_path.display());
     let rows = csvin::read_csv_rows(&csv_path)?;
@@ -340,6 +354,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         r_rr.data,
         r_vs.data,
         r_baro.data,
+        r_rivens.data,
         surface_fetched_at,
     );
 

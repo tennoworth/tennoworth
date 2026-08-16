@@ -2,7 +2,7 @@
 // Everything here reads ONLY the baked market.json snapshot — no fetches, no
 // DOM — so the search / movers / vault joins stay unit-testable in isolation.
 
-import type { Market, MarketItemEntry, VaultStatus } from './types';
+import type { Market, MarketItemEntry, RivenDispoChange, VaultStatus } from './types';
 
 /** A single item row rendered by the browser (search, movers, vaulted). */
 export interface BrowseRow {
@@ -171,4 +171,16 @@ export function vaultedTop(
   }
   rows.sort((a, b) => b.avg - a.avg);
   return rows.slice(0, limit);
+}
+
+/** Disposition changes from the snapshot's rolling log, newest first, capped.
+ *  Raises and cuts are both kept — DE says it only raises now, but if a cut
+ *  ever ships, hiding it would be the wrong call. */
+export function dispositionChanges(market: Market | null | undefined, limit = 12): RivenDispoChange[] {
+  const ch = market?.rivens?.changes;
+  if (!Array.isArray(ch)) return [];
+  return [...ch]
+    .filter((c) => c && typeof c.slug === 'string' && Number.isFinite(c.from) && Number.isFinite(c.to))
+    .sort((a, b) => (b.seen_at ?? '').localeCompare(a.seen_at ?? '') || a.slug.localeCompare(b.slug))
+    .slice(0, limit);
 }

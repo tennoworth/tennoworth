@@ -7,7 +7,9 @@ import {
   searchItems,
   topMovers,
   vaultedTop,
+  dispositionChanges,
 } from './market-browse.js';
+import type { Market } from './types';
 
 // Minimal snapshot: catalog (name→slug), items (stats), vault_status.
 function fixture() {
@@ -170,6 +172,23 @@ describe('topMovers', () => {
 
   it('returns empty lists for a null snapshot', () => {
     expect(topMovers(null, buildBrowseIndex(null))).toEqual({ risers: [], fallers: [] });
+  });
+});
+
+describe('dispositionChanges', () => {
+  it('returns the log newest first, capped, dropping malformed rows', () => {
+    const market = { items: {}, rivens: { changes: [
+      { slug: 'braton', name: 'Braton', from: 1.1, to: 1.15, seen_at: '2026-08-16T12:00:00Z' },
+      { slug: 'lato', name: 'Lato', from: 1.35, to: 1.4, seen_at: '2026-07-01T00:00:00Z' },
+      { slug: 'kulstar', name: 'Kulstar', from: 1.3, to: 1.35, seen_at: '2026-08-16T12:00:00Z' },
+      { slug: 'bad', name: 'Bad', from: 'x', to: 1, seen_at: '2026-08-16T12:00:00Z' },
+    ] } } as unknown as Market;
+    expect(dispositionChanges(market).map((c) => c.slug)).toEqual(['braton', 'kulstar', 'lato']);
+    expect(dispositionChanges(market, 1).map((c) => c.slug)).toEqual(['braton']);
+  });
+  it('is empty without the surface', () => {
+    expect(dispositionChanges({ items: {} } as unknown as Market)).toEqual([]);
+    expect(dispositionChanges(null)).toEqual([]);
   });
 });
 
