@@ -993,7 +993,6 @@
     <span class="grow">TennoWorth is a fan project, not affiliated with Digital Extremes or warframe.market. Open source · MIT · data from warframe.market and warframestat.us.</span>
     {#if market?.updated_at}<span title="When the market snapshot was taken">Snapshot {snapshotStamp}</span>{/if}
     <a href="https://github.com/tennoworth/tennoworth" target="_blank" rel="noopener noreferrer">GitHub</a>
-    <a href="https://discord.gg/tennoworth" target="_blank" rel="noopener noreferrer">Discord</a>
     <a href="#trust">Trust &amp; safety</a>
     <span class="ver" title="build {APP_COMMIT}">{APP_COMMIT}</span>
   </footer>
