@@ -289,7 +289,7 @@
   }
   /* Freshness dot — same green/amber/red scale as the dashboard stats strip. */
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); display: inline-block; }
-  .dot.fresh { background: var(--good); box-shadow: 0 0 6px color-mix(in srgb, var(--good) 60%, transparent); }
+  .dot.fresh { background: var(--good); box-shadow: var(--glow); }
   .dot.aging { background: var(--warn); }
   .dot.stale { background: var(--bad); }
   .stale-note { margin: 0; color: var(--warn); font-size: 12.5px; }
@@ -297,7 +297,7 @@
   .card {
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     padding: 14px 16px;
     display: flex;
     flex-direction: column;
@@ -342,8 +342,8 @@
     gap: 8px;
     padding: 5px 6px;
     margin: 0 -6px;
-    border-top: 1px solid var(--hairline);
-    border-radius: 4px;
+    border-top: 1px var(--rule) var(--hairline);
+    border-radius: var(--radius-input);
     font-size: 13px;
   }
   .item:first-child { border-top: none; }
@@ -377,7 +377,7 @@
     background: transparent;
     color: var(--muted);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-ctl);
     padding: 1px 8px;
     font-size: 11px;
     cursor: pointer;
@@ -387,7 +387,7 @@
   .year-toggle:hover { color: var(--fg); }
 
   .trend {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     font-weight: 500;
     white-space: nowrap;
@@ -398,10 +398,10 @@
 
   /* Understated text tag, not a glow-pill — matches the repo's badge treatment. */
   .vault-badge {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
     border: 1px solid var(--border);
-    border-radius: 3px;
+    border-radius: var(--radius-tag);
     padding: 0 5px;
     white-space: nowrap;
     flex-shrink: 0;
@@ -418,7 +418,7 @@
   .baro-body p { margin: 0; }
   .dispo-row { display: flex; align-items: baseline; gap: 10px; }
   .dispo-row .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .dispo-move { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; white-space: nowrap; }
+  .dispo-move { font-family: var(--font-mono); font-size: 12px; white-space: nowrap; }
   .dispo-move.up { color: var(--good); }
   .dispo-move.down { color: var(--bad); }
   .dispo-row .seen { font-size: 11px; white-space: nowrap; }

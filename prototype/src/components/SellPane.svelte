@@ -495,7 +495,7 @@
   .card {
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     padding: 14px 16px;
     display: flex;
     flex-direction: column;
@@ -515,10 +515,10 @@
     color: var(--fg);
     background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius-input);
     padding: 5px 8px;
   }
-  code { background: var(--panel-2); padding: 1px 6px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.93em; }
+  code { background: var(--panel-2); padding: 1px 6px; border-radius: var(--radius-input); font-family: var(--font-mono); font-size: 0.93em; }
 
   /* Below this point: sell-view-exclusive, moved (not duplicated) from
      App.svelte — nothing else in the app used these selectors. */
@@ -532,7 +532,7 @@
     font-size: 11px;
     line-height: 1;
     color: var(--muted);
-    border: 1px solid var(--hairline);
+    border: 1px var(--rule) var(--hairline);
     cursor: help;
   }
   .lede-dot:hover, .lede-dot:focus-visible { color: var(--accent); border-color: var(--accent); }
@@ -545,7 +545,7 @@
     align-self: flex-start;
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-ctl);
     overflow: hidden;
   }
   .stat {
@@ -553,7 +553,7 @@
     display: flex;
     align-items: baseline;
     gap: 8px;
-    border-right: 1px solid var(--hairline);
+    border-right: 1px var(--rule) var(--hairline);
   }
   .stat:last-child { border-right: none; }
   .stat .k {
@@ -566,7 +566,7 @@
     gap: 6px;
   }
   .stat .v {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
     font-size: 13px;
     font-weight: 600;
@@ -596,7 +596,7 @@
     background: transparent;
     border: 1px solid var(--border);
     color: var(--muted);
-    border-radius: 5px;
+    border-radius: var(--radius-ctl);
     padding: 4px 12px;
     letter-spacing: 0.02em;
     cursor: pointer;
@@ -627,14 +627,14 @@
     color: var(--muted);
     padding: 4px 10px;
     border: 1px solid var(--border);
-    border-radius: 5px;
+    border-radius: var(--radius-ctl);
     user-select: none;
   }
   .filter-disclosure > summary:hover { color: var(--fg); background: var(--panel-2); }
   .filter-disclosure > summary::-webkit-details-marker { display: none; }
   .filter-disclosure > summary::before {
     content: '+';
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 13px;
     color: var(--muted);
     width: 10px;
@@ -657,9 +657,9 @@
     z-index: 15;
     background: var(--panel-2);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     padding: 12px;
-    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+    box-shadow: var(--shadow-pop);
   }
   .filters { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
   .filters label {
@@ -680,7 +680,7 @@
     background: var(--panel);
     border: 1px solid var(--border);
     border-left: 3px solid var(--accent);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     padding: 0 14px;
     position: relative;
   }
@@ -700,7 +700,7 @@
   .score-expander > summary::-webkit-details-marker { display: none; }
   .score-expander > summary::before {
     content: '+';
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     color: var(--muted);
     width: 10px;
     display: inline-block;
@@ -717,8 +717,8 @@
   .score-details code {
     background: var(--panel-2);
     padding: 1px 6px;
-    border-radius: 4px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    border-radius: var(--radius-input);
+    font-family: var(--font-mono);
     font-size: 0.93em;
     color: var(--fg);
   }
@@ -759,7 +759,7 @@
   .keep-nudge .kn-body { min-width: 0; }
   .keep-nudge strong { color: var(--fg); font-weight: 600; font-size: 13px; }
   .keep-nudge .muted { font-size: 12.5px; line-height: 1.5; }
-  .keep-nudge code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.93em; }
+  .keep-nudge code { font-family: var(--font-mono); font-size: 0.93em; }
   .keep-nudge .dismiss {
     background: transparent;
     border: none;
@@ -789,7 +789,7 @@
     background: transparent;
     color: var(--muted);
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius-input);
     padding: 4px 10px 4px 12px;
     font-size: 11px;
     letter-spacing: 0.02em;
@@ -816,7 +816,7 @@
     cursor: default;
   }
   .chip-count {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
     color: var(--muted);
   }
@@ -837,7 +837,7 @@
   .list-cta {
     margin-left: auto;
     background: var(--accent);
-    color: var(--bg);
+    color: var(--on-accent);
     border: 1px solid var(--accent);
     font-weight: 600;
   }
@@ -865,11 +865,11 @@
     align-items: center;
     gap: 12px;
     padding: 10px 0;
-    border-top: 1px solid var(--hairline);
+    border-top: 1px var(--rule) var(--hairline);
   }
   .pick-row:first-of-type { border-top: none; }
   .pick-rank {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     color: var(--muted);
     width: 14px;
@@ -921,7 +921,7 @@
     letter-spacing: 0.1em;
     text-transform: uppercase;
     border: 1px solid currentColor;
-    border-radius: 3px;
+    border-radius: var(--radius-tag);
     color: var(--warn);
   }
   .tag-or-note {
@@ -931,13 +931,13 @@
     color: var(--muted);
   }
   .pick-vol {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     color: var(--muted);
     margin-left: 2px;
   }
   .pick-score {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 14px;
     font-weight: 600;
     color: var(--fg);

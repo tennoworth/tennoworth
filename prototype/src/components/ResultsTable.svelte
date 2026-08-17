@@ -599,7 +599,7 @@
   .wrap {
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     /* Vertical: clip; Horizontal: scroll. Default `overflow: hidden`
        was clipping ~10 of 13 columns on tablet / phone widths — the
        table itself is intrinsically wide, so let the user scroll it
@@ -616,7 +616,7 @@
   .wrap::-webkit-scrollbar-track { background: transparent; }
   .wrap::-webkit-scrollbar-thumb {
     background: var(--border);
-    border-radius: 5px;
+    border-radius: var(--radius-ctl);
   }
   .wrap::-webkit-scrollbar-thumb:hover { background: var(--muted); }
   /* Keep the table from collapsing under flex / grid parents — without
@@ -677,7 +677,7 @@
   }
   table.comfortable th, table.comfortable td { padding: 8px; }
   td {
-    border-bottom: 1px solid var(--hairline);
+    border-bottom: 1px var(--rule) var(--hairline);
     font-size: 13px;
     color: var(--muted);
   }
@@ -685,7 +685,7 @@
      trader can scan down, not just read left-to-right. Item/badges/trend
      stay on the body sans stack. */
   td.right {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
   }
   th {
     background: var(--panel-2);
@@ -740,9 +740,9 @@
     width: 280px;
     background: var(--panel);
     border: 1px solid var(--accent);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     padding: 10px 12px;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+    box-shadow: var(--shadow-pop);
     font-size: 12px;
     font-weight: 400;
     color: var(--fg);
@@ -765,7 +765,7 @@
     min-width: 60px;
     font-weight: 600;
   }
-  th:hover { background: #1D2733; }
+  th:hover { background: var(--hover); }
   th.right, td.right { text-align: right; }
   th.right .hcontent { justify-content: flex-end; }
   th.active { color: var(--accent); }
@@ -816,7 +816,7 @@
     vertical-align: middle;
   }
   .trend {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     font-weight: 500;
   }
@@ -830,7 +830,7 @@
   .ask-avg {
     margin-left: 5px;
     font-size: 11px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     color: var(--accent);
   }
 
@@ -848,8 +848,8 @@
     text-transform: uppercase;
     border: 1px solid currentColor;
     color: var(--ducat);
-    border-radius: 3px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    border-radius: var(--radius-tag);
+    font-family: var(--font-mono);
     vertical-align: middle;
   }
 
@@ -867,7 +867,7 @@
     letter-spacing: 0.1em;
     text-transform: uppercase;
     border: 1px solid currentColor;
-    border-radius: 3px;
+    border-radius: var(--radius-tag);
     color: var(--muted);
     vertical-align: middle;
   }
@@ -900,7 +900,7 @@
     color: var(--accent);
     background: transparent;
     border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
-    border-radius: 5px;
+    border-radius: var(--radius-ctl);
     padding: 3px 10px;
     cursor: pointer;
   }
@@ -912,7 +912,7 @@
     justify-content: space-between;
     gap: 12px;
     padding: 10px 14px;
-    border-top: 1px solid var(--hairline);
+    border-top: 1px var(--rule) var(--hairline);
     flex-wrap: wrap;
   }
   .pager-controls {
@@ -928,7 +928,7 @@
     color: var(--fg);
     font-size: 12px;
     padding: 4px 10px;
-    border-radius: 5px;
+    border-radius: var(--radius-ctl);
     cursor: pointer;
     transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
   }
@@ -946,7 +946,7 @@
   .segmented {
     display: inline-flex;
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-ctl);
     overflow: hidden;
   }
   .seg-btn {
@@ -961,7 +961,7 @@
     cursor: pointer;
   }
   .seg-btn:first-child { border-left: none; }
-  .seg-btn:hover { color: var(--fg); background: #1D2733; }
+  .seg-btn:hover { color: var(--fg); background: var(--hover); }
   .seg-btn.active { color: var(--accent); background: var(--panel); font-weight: 600; }
 
   /* "+N" badge overflow — reuses the header info-popover's click/click-
@@ -986,7 +986,7 @@
     padding: 8px;
     background: var(--panel);
     border: 1px solid var(--accent);
-    border-radius: 8px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-pop);
   }
 </style>

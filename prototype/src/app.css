@@ -1,61 +1,263 @@
+/* ==========================================================================
+   Theme system — a LOOK × a MODE, keyed off two attributes on <html>:
+     html[data-look="yorha" | "corpus" | "vitruvian" | "baseline"]
+     html[data-mode="light" | "dark"]          (always the RESOLVED mode)
+   Stamped before first paint by public/theme-boot.js, kept current by
+   src/lib/theme.ts. Every colour in the app comes from the token names below;
+   a look = one token block (+ a dark block if it has one) + a short set of
+   structural rules scoped by the attribute. A look with no dark block simply
+   keeps its light tokens under data-mode=dark (Corpus, Vitruvian today).
+   Component <style> blocks must not hardcode colours or radii — they read
+   these tokens so every look can re-skin them.
+   ========================================================================== */
+
+/* ---------- self-hosted fonts (public/fonts, OFL — see LICENSES.md) -------- */
+@font-face { font-family: "Archivo Narrow"; font-style: normal; font-weight: 400 700; font-display: swap; src: url(/fonts/archivo-narrow-var-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 100 700; font-display: swap; src: url(/fonts/ibm-plex-sans-var-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(/fonts/ibm-plex-mono-400-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(/fonts/ibm-plex-mono-500-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 600; font-display: swap; src: url(/fonts/ibm-plex-mono-600-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Chakra Petch"; font-style: normal; font-weight: 500; font-display: swap; src: url(/fonts/chakra-petch-500-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Chakra Petch"; font-style: normal; font-weight: 600; font-display: swap; src: url(/fonts/chakra-petch-600-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Chakra Petch"; font-style: normal; font-weight: 700; font-display: swap; src: url(/fonts/chakra-petch-700-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Titillium Web"; font-style: normal; font-weight: 600; font-display: swap; src: url(/fonts/titillium-web-600-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: "Source Sans 3"; font-style: normal; font-weight: 200 900; font-display: swap; src: url(/fonts/source-sans-3-var-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+
+/* ---------- shared structural tokens (every look inherits, may override) --- */
 :root {
---bg: #0D1116;
---panel: #131920;
---panel-2: #182028;
-/* Container outlines only — brightened again 2026-07-24 (was #2E3B4B,
-   ~1.55:1 against --panel — under WCAG's 3:1 non-text minimum) to
-   ~3.2:1. Inner divisions (row separators, cell borders) use
-   --hairline instead. */
---border: #5A7288;
---hairline: #202A35;
---fg: #DAE3ED;
---muted: #8A98A8;
-/* Decorative only (nav group labels, version strings) — never for
-   real information; that floor is --muted. */
---faint: #596675;
---accent: #4E9EEA;
-/* Colourblind-safe teal/vermillion (was #56BB80/#D97680 — too close on
-   a red-green deficiency). Always pair with a redundant +/−/▲/▼ glyph,
-   never rely on hue alone. */
---good: #3FBF9B;
---warn: #C79A50;
---bad: #DE7A52;
-/* Warm ducat-coin tone — used only on the ducats column + ducat-deal
-   badge so the colour reads as a domain signal, not a generic accent. */
---ducat: #C79A50;
-font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-color-scheme: dark;
+  /* Type. --font-ui carries headings / tracked labels; looks that don't
+     distinguish (baseline) point it at the body stack. */
+  --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-ui: var(--font-body);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Radii ladder. Components pick the slot, never a px value. */
+  --radius-lg: 12px;      /* modal, showcase */
+  --radius-panel: 8px;    /* cards, popovers, tables */
+  --radius-ctl: 5px;      /* buttons, chips, segmented */
+  --radius-input: 4px;    /* text/number inputs, code */
+  --radius-tag: 3px;      /* status tags, badges */
+  --radius-pill: 999px;   /* the two ledger/orders pills */
+  /* Inner-divider style: `1px var(--rule) var(--hairline)`. Outer container
+     edges stay solid in every look. */
+  --rule: solid;
+  /* Popover / toast lift. Paper looks set it to none: depth = ink vs paper. */
+  --shadow-pop: 0 12px 28px rgba(0, 0, 0, 0.45);
+  /* Button + table-header hover fill, nav-item hover wash. Derived so a look
+     only has to set its surfaces. */
+  --hover: color-mix(in srgb, var(--fg) 6%, var(--panel-2));
+  --hover-tint: color-mix(in srgb, var(--fg) 4%, transparent);
+  /* Filled surfaces. --accent fills need --on-accent; the "one filled bar"
+     looks (title bars, active nav, primary CTA) use --ink-bar/--on-ink. In
+     looks without an ink bar both collapse onto the accent pair. */
+  --on-accent: var(--bg);
+  --ink-bar: var(--accent);
+  --on-ink: var(--on-accent);
+  --on-ink-muted: color-mix(in srgb, var(--on-ink) 72%, var(--ink-bar));
+  /* Ground texture ink (grids, lattices). Transparent = no texture. */
+  --grid: transparent;
+  /* Dimmed rows as a token, not opacity. */
+  --dim: var(--faint);
+  /* Freshness-dot halo; paper looks turn it off (no glow anywhere). */
+  --glow: 0 0 6px color-mix(in srgb, var(--good) 60%, transparent);
+  /* Modal backdrop. */
+  --scrim: rgba(0, 0, 0, 0.55);
 }
 
+/* ---------- baseline: the original dark dashboard (dark only) ------------- */
+html[data-look="baseline"] {
+  --bg: #0D1116;
+  --panel: #131920;
+  --panel-2: #182028;
+  /* Container outlines only — brightened 2026-07-24 to ~3.2:1 on --panel
+     (WCAG non-text minimum). Inner divisions use --hairline. */
+  --border: #5A7288;
+  --hairline: #202A35;
+  --fg: #DAE3ED;
+  --muted: #8A98A8;
+  /* Decorative only (nav group labels, version strings) — never for real
+     information; that floor is --muted. */
+  --faint: #596675;
+  --accent: #4E9EEA;
+  /* Colourblind-safe teal/vermillion; always paired with a +/−/▲/▼ glyph. */
+  --good: #3FBF9B;
+  --warn: #C79A50;
+  --bad: #DE7A52;
+  /* Warm ducat-coin tone — ducats column + ducat-deal badge only. */
+  --ducat: #C79A50;
+  color-scheme: dark;
+}
+
+/* ---------- yorha: paper & ink (default look; light) ----------------------- */
+/* `html:not([data-look])` = the boot script didn't run (desktop build before
+   main.ts applies the stored theme): still paint the default, never bare. */
+html:not([data-look]),
+html[data-look="yorha"] {
+  --bg: #CFCBB2;        /* page paper (NieR ground) */
+  --panel: #DBD7BF;     /* panel paper, half-step lighter */
+  --panel-2: #CBC6AC;   /* table header, inactive segments, hover, popovers */
+  --border: #706B57;    /* container outlines — 3.6:1 on panel */
+  --hairline: #B5B097;  /* inner dividers — always dotted here */
+  --fg: #46422F;        /* grey-brown ink */
+  --muted: #5F5A46;     /* 4.8:1 on panel */
+  --faint: #8B8670;     /* decorative only */
+  --accent: #46422F;    /* = ink; active state is inversion, not a hue */
+  --good: #2A6350;
+  --warn: #77541C;
+  --bad: #9E3D25;
+  --ducat: #77541C;
+  --ink-bar: #4B4739;   /* the one filled surface */
+  --on-ink: #DBD7BF;
+  --on-ink-muted: #CBC6AC;
+  --on-accent: #DBD7BF;
+  --pod-red: #B7412A;   /* decorative only, never text/data */
+  --grid: rgba(70, 66, 47, 0.07);
+  --hatch: rgba(70, 66, 47, 0.035);
+  --scrim: rgba(70, 66, 47, 0.45);
+  --font-ui: "Archivo Narrow", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --radius-lg: 0; --radius-panel: 0; --radius-ctl: 0; --radius-input: 0; --radius-tag: 0; --radius-pill: 0;
+  --rule: dotted;
+  --shadow-pop: none;
+  --hover: var(--panel-2);
+  --hover-tint: var(--panel-2);
+  --glow: none;
+  color-scheme: light;
+}
+/* yorha dark A: the same object with the roles swapped — ink becomes the
+   desk, paper becomes the ink AND the one filled bar. Warm brown-grey, never
+   blue-black; text capped ~10:1 so nothing glows. */
+html[data-look="yorha"][data-mode="dark"] {
+  --bg: #2A2823;
+  --panel: #34322B;
+  --panel-2: #3E3B33;
+  --border: #857F69;
+  --hairline: #4E4B41;
+  --fg: #D9D5BD;
+  --muted: #ABA68F;
+  --faint: #7A7562;
+  --accent: #D9D5BD;
+  --good: #75AB92;
+  --warn: #C29F62;
+  --bad: #D8886E;
+  --ducat: #C29F62;
+  --ink-bar: #CFCBB2;   /* the bar is now paper */
+  --on-ink: #2A2823;
+  --on-ink-muted: #3E3B33;
+  --on-accent: #2A2823;
+  --grid: rgba(217, 213, 189, 0.06);
+  --hatch: rgba(217, 213, 189, 0.025);
+  --scrim: rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}
+
+/* ---------- corpus: ledger terminal (light) -------------------------------- */
+html[data-look="corpus"] {
+  --bg: #E6EBF0;
+  --panel: #F3F6F9;
+  --panel-2: #E1E7ED;
+  --border: #748390;
+  --hairline: #CBD3DB;
+  --fg: #15202B;
+  --muted: #55636F;
+  --faint: #7F8B96;
+  --dim: #7F8B96;
+  --accent: #0A6893;    /* cold cyan-blue: links, active states, CTA fill */
+  --on-accent: #F3F6F9;
+  --good: #0F7A63;
+  --warn: #8B5D0E;
+  --bad: #B54017;
+  --ducat: #8B5D0E;
+  /* No ink bar in Corpus: title bars are raised panel-2 with a double rule.
+     Anything asking for the bar gets the accent fill. */
+  --ink-bar: #0A6893;
+  --on-ink: #F3F6F9;
+  --on-ink-muted: #C7DCE6;
+  --grid: #D6DDE4;
+  --cut: 11px;          /* chamfer size */
+  --scrim: rgba(21, 32, 43, 0.4);
+  --font-ui: "Chakra Petch", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --radius-lg: 0; --radius-panel: 0; --radius-ctl: 0; --radius-input: 0; --radius-tag: 0; --radius-pill: 0;
+  --shadow-pop: none;
+  --hover: var(--panel-2);
+  --hover-tint: var(--panel-2);
+  --glow: none;
+  color-scheme: light;
+}
+
+/* ---------- vitruvian: parchment + drafting ink (light) -------------------- */
+html[data-look="vitruvian"] {
+  --bg: #D9CBAA;
+  --panel: #E5DABE;
+  --panel-2: #D6C7A2;
+  --border: #83674A;
+  --hairline: #C3B18E;
+  --fg: #3A2A1B;
+  --muted: #665139;
+  --faint: #957F60;
+  --accent: #95491F;    /* burnt sienna — underscores, aug badge, rank numerals */
+  --on-accent: #E5DABE;
+  --good: #27587A;      /* Prussian-blue ink */
+  --warn: #7C5215;
+  --bad: #96321C;       /* red-ochre ink */
+  --ducat: #7C5215;
+  --ink-bar: #3A2A1B;
+  --on-ink: #E5DABE;
+  --on-ink-muted: #C9BB9C;
+  --tan: #D7B47F;       /* selection/highlight fill */
+  --sketch: #6E4A2E;    /* sparkline / drawn-line ink */
+  --scrim: rgba(58, 42, 27, 0.45);
+  --font-ui: "Titillium Web", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Source Sans 3", "Source Sans Pro", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --radius-lg: 2px; --radius-panel: 2px; --radius-ctl: 2px; --radius-input: 2px; --radius-tag: 2px; --radius-pill: 2px;
+  --shadow-pop: none;
+  --hover: var(--panel-2);
+  --hover-tint: var(--panel-2);
+  --glow: none;
+  color-scheme: light;
+}
+
+/* ==========================================================================
+   Base element styles (all looks)
+   ========================================================================== */
 * { box-sizing: border-box; }
 html, body, #app { height: 100%; margin: 0; }
 body {
-background: var(--bg);
-color: var(--fg);
-font-size: 14px;
-line-height: 1.5;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
 }
 a { color: var(--accent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button {
-font: inherit;
-color: var(--fg);
-background: var(--panel-2);
-border: 1px solid var(--border);
-border-radius: 5px;
-padding: 6px 12px;
-cursor: pointer;
+  font: inherit;
+  color: var(--fg);
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-ctl);
+  padding: 6px 12px;
+  cursor: pointer;
 }
-button:hover:not(:disabled) { background: #1D2733; }
+button:hover:not(:disabled) { background: var(--hover); }
 button:disabled { opacity: 0.5; cursor: not-allowed; }
 input[type="text"], input[type="number"] {
-font: inherit;
-color: var(--fg);
-background: var(--bg);
-border: 1px solid var(--border);
-border-radius: 4px;
-padding: 6px 10px;
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-input);
+  padding: 6px 10px;
 }
+input::placeholder { color: var(--faint); }
+/* Headings and tracked labels take the look's UI face. Baseline points
+   --font-ui at the body stack, so this is a no-op there. */
+h1, h2, h3, h4, th, .nav-label, .col-label, .clock-label, .baro-label,
+.stat .k, .dis-label { font-family: var(--font-ui); }
 
 /* Encrypted-dialog chrome. Global, not per-component, because the same
  dialog.cryptobox shell renders from two components — ExportImportDialogs in
@@ -69,13 +271,13 @@ dialog.cryptobox {
   background: var(--panel);
   color: var(--fg);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-panel);
   padding: 0;
   max-width: 420px;
   width: calc(100% - 32px);
 }
 dialog.cryptobox::backdrop {
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--scrim);
   backdrop-filter: blur(2px);
 }
 dialog.cryptobox form {
@@ -110,9 +312,9 @@ dialog.cryptobox select {
   color: var(--fg);
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: var(--radius-input);
   padding: 8px 10px;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
 }
 dialog.cryptobox input[type="password"]:focus,
 dialog.cryptobox input[type="email"]:focus,
@@ -125,7 +327,7 @@ dialog.cryptobox .err {
   background: color-mix(in srgb, var(--bad) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--bad) 40%, var(--border));
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-ctl);
 }
 dialog.cryptobox footer {
   display: flex;
@@ -159,3 +361,222 @@ dialog.cryptobox footer {
   line-height: 1.5;
 }
 
+/* Theme switcher (ThemeSwitcher.svelte owns its layout; the swatch tiles
+   need each look's tokens regardless of the current look, so they are
+   painted here from per-look literals rather than the live tokens). */
+.theme-swatch[data-swatch="yorha"]    { --sw-panel: #DBD7BF; --sw-bar: #4B4739; --sw-fg: #46422F; --sw-accent: #2A6350; --sw-border: #706B57; }
+.theme-swatch[data-swatch="corpus"]   { --sw-panel: #F3F6F9; --sw-bar: #E1E7ED; --sw-fg: #15202B; --sw-accent: #0A6893; --sw-border: #748390; }
+.theme-swatch[data-swatch="vitruvian"]{ --sw-panel: #E5DABE; --sw-bar: #3A2A1B; --sw-fg: #3A2A1B; --sw-accent: #95491F; --sw-border: #83674A; }
+.theme-swatch[data-swatch="baseline"] { --sw-panel: #131920; --sw-bar: #182028; --sw-fg: #DAE3ED; --sw-accent: #4E9EEA; --sw-border: #5A7288; }
+html[data-mode="dark"] .theme-swatch[data-swatch="yorha"] { --sw-panel: #34322B; --sw-bar: #CFCBB2; --sw-fg: #D9D5BD; --sw-accent: #75AB92; --sw-border: #857F69; }
+
+/* ==========================================================================
+   Per-look structural rules. Selectors mirror the component's own so the
+   leading html[data-look] wins on specificity (Svelte scopes with one real
+   class + :where()); app.css is also imported last, so ties go this way.
+   ========================================================================== */
+
+/* ---------- yorha ---------------------------------------------------------- */
+/* Schematic ground: 28px line grid in ink at ~7% plus a 9px diagonal hatch. */
+html[data-look="yorha"] body {
+  background-image:
+    repeating-linear-gradient(0deg, var(--grid) 0 1px, transparent 1px 28px),
+    repeating-linear-gradient(90deg, var(--grid) 0 1px, transparent 1px 28px),
+    repeating-linear-gradient(-45deg, var(--hatch) 0 1px, transparent 1px 9px);
+  font-size: 13.5px;
+}
+html[data-look="yorha"] a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--border); }
+html[data-look="yorha"] input[type="text"], html[data-look="yorha"] input[type="number"] { background: var(--panel); }
+html[data-look="yorha"][data-mode="dark"] input[type="text"],
+html[data-look="yorha"][data-mode="dark"] input[type="number"] { background: var(--bg); }
+html[data-look="yorha"] ::selection { background: var(--ink-bar); color: var(--on-ink); }
+/* Tracked condensed caps for the titles; weight 400–500, never bold. */
+html[data-look="yorha"] .view-header h2 { font: 400 24px/1.1 var(--font-ui); letter-spacing: 0.2em; text-transform: uppercase; }
+html[data-look="yorha"] main.landing > header h1 { font: 400 26px/1.1 var(--font-ui); letter-spacing: 0.22em; text-transform: uppercase; }
+html[data-look="yorha"] aside.sidebar .brand h1 { font: 500 15px/1.2 var(--font-ui); letter-spacing: 0.18em; text-transform: uppercase; }
+html[data-look="yorha"] .browser-head h2 { font: 400 15px/1.2 var(--font-ui); letter-spacing: 0.2em; color: var(--fg); }
+html[data-look="yorha"] .nav-label,
+html[data-look="yorha"] th,
+html[data-look="yorha"] .stat .k,
+html[data-look="yorha"] .col-label { font-weight: 500; letter-spacing: 0.14em; }
+/* Ink-bar inversion — the ONLY filled surface: active nav, active preset,
+   primary CTAs, panel title bars, dialog headers. */
+html[data-look="yorha"] .nav-item.active { background: var(--ink-bar); color: var(--on-ink); border-left-color: var(--ink-bar); }
+html[data-look="yorha"] .nav-item.active .badge { color: var(--on-ink); border-color: var(--on-ink); background: transparent; }
+html[data-look="yorha"] .nav-item.active .badge.warn { color: var(--on-ink); border-color: var(--on-ink); }
+html[data-look="yorha"] .nav-item.active .badge.here { color: var(--on-ink); border-color: var(--on-ink); }
+html[data-look="yorha"] .nav-item { border-left-width: 2px; }
+/* 6px outlined square before every nav label, filled when active. */
+html[data-look="yorha"] .nav-item > span:first-child::before {
+  content: ""; display: inline-block; width: 6px; height: 6px;
+  border: 1px solid currentColor; margin-right: 9px; vertical-align: 1px;
+}
+html[data-look="yorha"] .nav-item.active > span:first-child::before { background: currentColor; }
+html[data-look="yorha"] .preset.active { background: var(--ink-bar); color: var(--on-ink); border-color: var(--ink-bar); }
+html[data-look="yorha"] .preset.active::before { content: "■ "; font-size: 8px; vertical-align: 1px; }
+html[data-look="yorha"] .preset::before { content: "□ "; font-size: 8px; vertical-align: 1px; }
+html[data-look="yorha"] .list-cta,
+html[data-look="yorha"] .rp-primary,
+html[data-look="yorha"] .btn.primary { background: var(--ink-bar); color: var(--on-ink); border-color: var(--ink-bar); }
+html[data-look="yorha"] .list-cta:hover:not(:disabled),
+html[data-look="yorha"] .refresh-pop .rp-primary:hover:not(:disabled),
+html[data-look="yorha"] .btn.primary:hover { background: var(--fg); color: var(--panel); filter: none; }
+/* Card heads: the picks strip's head bar and any card whose first child is
+   its h3 (market browser cards) become full-width ink title bars. */
+html[data-look="yorha"] .picks-head { background: var(--ink-bar); color: var(--on-ink); border-bottom: 0; padding: 6px 16px; }
+html[data-look="yorha"] .picks-head h3, html[data-look="yorha"] .picks-title h3 { color: inherit; font: 500 12px/1.6 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
+html[data-look="yorha"] .picks-head .muted { color: var(--on-ink-muted); }
+html[data-look="yorha"] .card > h3:first-child {
+  margin: -14px -16px 0; padding: 5px 12px;
+  background: var(--ink-bar); color: var(--on-ink);
+  font: 500 12px/1.6 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase;
+}
+html[data-look="yorha"] .card > h3:first-child .muted { color: var(--on-ink-muted); text-transform: none; letter-spacing: 0; font-family: var(--font-body); }
+html[data-look="yorha"] .faq > h2 { background: var(--ink-bar); color: var(--on-ink); margin: -4px -18px 0; padding: 6px 12px; font: 500 12px/1.6 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
+html[data-look="yorha"] .modal > header, html[data-look="yorha"] dialog.cryptobox header { background: var(--ink-bar); color: var(--on-ink); border-bottom: 0; }
+html[data-look="yorha"] .modal > header h2, html[data-look="yorha"] dialog.cryptobox h3 { color: inherit; font-family: var(--font-ui); letter-spacing: 0.16em; font-weight: 500; }
+html[data-look="yorha"] .modal > header .x { color: var(--on-ink); border-color: var(--on-ink); }
+html[data-look="yorha"] dialog.cryptobox header { padding: 8px 12px; margin: -20px -20px 0; }
+html[data-look="yorha"] dialog.cryptobox header p { color: var(--on-ink-muted); }
+/* Segmented controls: dotted internal rules, paper active cell. */
+html[data-look="yorha"] .seg-btn { border-left-style: dotted; }
+html[data-look="yorha"] .seg-btn.active { color: var(--fg); background: var(--panel); }
+html[data-look="yorha"] th.active { color: var(--fg); }
+html[data-look="yorha"] .toolbar, html[data-look="yorha"] .picks-head { border-bottom-style: dotted; }
+/* Freshness dot = 7px outlined square, filled by state; the pod block. */
+html[data-look="yorha"] .dot { border-radius: 0; }
+html[data-look="yorha"] .lede-dot { border-radius: 0; }
+html[data-look="yorha"] .info-btn { border-radius: 0; }
+/* Mono status footer (the shell status strip lands in step 2; the rule is
+   ready so the element only has to exist). */
+html[data-look="yorha"] .statusbar {
+  border-top: 1px dotted var(--border); border-bottom: 1px dotted var(--border);
+  font-family: var(--font-mono); font-size: 11px; color: var(--muted); background: var(--panel);
+}
+html[data-look="yorha"] .pod { height: 14px; width: 96px; background: var(--pod-red); }
+
+/* ---------- corpus --------------------------------------------------------- */
+/* Ledger lattice: hard 24px lines, no wash. */
+html[data-look="corpus"] body {
+  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 24px 24px;
+  letter-spacing: 0.005em;
+  font-size: 13.5px;
+}
+html[data-look="corpus"] h1, html[data-look="corpus"] h2, html[data-look="corpus"] h3, html[data-look="corpus"] h4,
+html[data-look="corpus"] .nav-label, html[data-look="corpus"] th, html[data-look="corpus"] .stat .k,
+html[data-look="corpus"] .col-label { letter-spacing: 0.09em; text-transform: uppercase; }
+html[data-look="corpus"] .view-header h2 { font-weight: 600; letter-spacing: 0.06em; font-size: 17px; text-transform: uppercase; }
+html[data-look="corpus"] .hero h2 { text-transform: none; letter-spacing: 0.01em; }
+html[data-look="corpus"] main.landing > header h1 { font-weight: 700; letter-spacing: 0.1em; font-size: 20px; }
+html[data-look="corpus"] aside.sidebar .brand h1 { letter-spacing: 0.14em; font-size: 13px; }
+html[data-look="corpus"] button { letter-spacing: 0.03em; }
+/* Chamfered panels: clip the top-right and bottom-left corners at 45° and
+   redraw the 1px border along each cut with a corner-sized gradient (no
+   wrapper element needed). Containers that already scroll keep their
+   overflow; the clip only removes the two corners. */
+html[data-look="corpus"] .card,
+html[data-look="corpus"] .wrap,
+html[data-look="corpus"] .stats,
+html[data-look="corpus"] .faq,
+html[data-look="corpus"] .desktop-showcase,
+html[data-look="corpus"] .modal,
+html[data-look="corpus"] .toast {
+  position: relative;
+  clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+  background-image:
+    linear-gradient(to top right, transparent calc(50% - 0.7px), var(--border) calc(50% - 0.7px), var(--border) calc(50% + 0.7px), transparent calc(50% + 0.7px)),
+    linear-gradient(to top right, transparent calc(50% - 0.7px), var(--border) calc(50% - 0.7px), var(--border) calc(50% + 0.7px), transparent calc(50% + 0.7px));
+  background-repeat: no-repeat;
+  background-size: var(--cut) var(--cut), var(--cut) var(--cut);
+  background-position: top right, bottom left;
+}
+html[data-look="corpus"] .stats, html[data-look="corpus"] .toast { --cut: 6px; }
+/* The Corpus double rule under raised title bars and the table head. */
+html[data-look="corpus"] th { border-bottom: 3px double var(--border); }
+html[data-look="corpus"] .picks-head { border-bottom: 3px double var(--border); }
+html[data-look="corpus"] .card > h3:first-child { padding-bottom: 6px; border-bottom: 3px double var(--border); margin-bottom: 2px; }
+html[data-look="corpus"] .modal > header, html[data-look="corpus"] dialog.cryptobox header { border-bottom: 3px double var(--border); }
+html[data-look="corpus"] .faq > h2 { border-bottom: 3px double var(--border); }
+html[data-look="corpus"] .nav-item.active { border-left-width: 3px; }
+html[data-look="corpus"] .seg-btn.active { box-shadow: inset 0 -2px 0 var(--accent); }
+html[data-look="corpus"] .preset.active, html[data-look="corpus"] .chip.active { background: var(--panel-2); }
+html[data-look="corpus"] .dot { border-radius: 0; transform: rotate(45deg); width: 6px; height: 6px; }
+html[data-look="corpus"] .lede-dot, html[data-look="corpus"] .info-btn { border-radius: 0; }
+html[data-look="corpus"] .list-cta, html[data-look="corpus"] .rp-primary, html[data-look="corpus"] .btn.primary {
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+}
+
+/* ---------- vitruvian ------------------------------------------------------ */
+/* Ruled-paper ground plus one faint construction drawing, top right. */
+html[data-look="vitruvian"] body {
+  background-image:
+    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1440' height='900' viewBox='0 0 1440 900'><g fill='none' stroke='%233A2A1B' stroke-opacity='.075' stroke-width='1'><circle cx='1180' cy='420' r='330'/><rect x='902' y='120' width='556' height='556'/><line x1='902' y1='420' x2='1458' y2='420'/><line x1='1180' y1='120' x2='1180' y2='676'/><circle cx='1180' cy='420' r='233'/></g></svg>"),
+    repeating-linear-gradient(0deg, rgba(58, 42, 27, 0.045) 0 1px, transparent 1px 32px);
+  background-repeat: no-repeat, repeat;
+  background-position: top right, 0 0;
+}
+html[data-look="vitruvian"] a { color: var(--fg); text-decoration: none; border-bottom: 1px solid var(--hairline); }
+html[data-look="vitruvian"] h1, html[data-look="vitruvian"] h2, html[data-look="vitruvian"] h3, html[data-look="vitruvian"] h4,
+html[data-look="vitruvian"] .nav-label, html[data-look="vitruvian"] th, html[data-look="vitruvian"] .stat .k,
+html[data-look="vitruvian"] .col-label { font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
+html[data-look="vitruvian"] .view-header h2 { font: 600 24px/1.1 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
+html[data-look="vitruvian"] .hero h2 { text-transform: none; letter-spacing: 0.01em; }
+html[data-look="vitruvian"] main.landing > header h1 { font: 600 24px/1.1 var(--font-ui); letter-spacing: 0.16em; }
+html[data-look="vitruvian"] aside.sidebar .brand h1 { font: 600 16px/1.2 var(--font-ui); letter-spacing: 0.14em; }
+/* Corner ticks — 9px L-shapes in ink, 4px outside every container's border. */
+html[data-look="vitruvian"] .card,
+html[data-look="vitruvian"] .stats,
+html[data-look="vitruvian"] .faq,
+html[data-look="vitruvian"] .desktop-showcase,
+html[data-look="vitruvian"] .modal { position: relative; overflow: visible; }
+html[data-look="vitruvian"] .card::before, html[data-look="vitruvian"] .stats::before, html[data-look="vitruvian"] .faq::before,
+html[data-look="vitruvian"] .desktop-showcase::before, html[data-look="vitruvian"] .modal::before {
+  content: ""; position: absolute; left: -4px; top: -4px; width: 9px; height: 9px;
+  border-left: 1px solid var(--fg); border-top: 1px solid var(--fg); pointer-events: none;
+}
+html[data-look="vitruvian"] .card::after, html[data-look="vitruvian"] .stats::after, html[data-look="vitruvian"] .faq::after,
+html[data-look="vitruvian"] .desktop-showcase::after, html[data-look="vitruvian"] .modal::after {
+  content: ""; position: absolute; right: -4px; bottom: -4px; width: 9px; height: 9px;
+  border-right: 1px solid var(--fg); border-bottom: 1px solid var(--fg); pointer-events: none;
+}
+/* Ink title bar + tan underscore; sienna underscore = current. */
+html[data-look="vitruvian"] .picks-head { background: var(--ink-bar); color: var(--on-ink); border-bottom: 0; box-shadow: inset 0 -2px 0 var(--tan); }
+html[data-look="vitruvian"] .picks-head h3, html[data-look="vitruvian"] .picks-title h3 { color: inherit; }
+html[data-look="vitruvian"] .picks-head .muted { color: var(--on-ink-muted); }
+html[data-look="vitruvian"] .card > h3:first-child {
+  margin: -14px -16px 0; padding: 5px 12px;
+  background: var(--ink-bar); color: var(--on-ink); box-shadow: inset 0 -2px 0 var(--tan);
+  font: 600 12px/1.6 var(--font-ui); letter-spacing: 0.14em; text-transform: uppercase;
+}
+html[data-look="vitruvian"] .card > h3:first-child .muted { color: var(--on-ink-muted); text-transform: none; letter-spacing: 0; font-family: var(--font-body); }
+html[data-look="vitruvian"] .faq > h2 { background: var(--ink-bar); color: var(--on-ink); margin: -4px -18px 0; padding: 6px 12px; font: 600 12px/1.6 var(--font-ui); letter-spacing: 0.14em; box-shadow: inset 0 -2px 0 var(--tan); }
+html[data-look="vitruvian"] .modal > header, html[data-look="vitruvian"] dialog.cryptobox header { background: var(--ink-bar); color: var(--on-ink); border-bottom: 0; box-shadow: inset 0 -2px 0 var(--tan); }
+html[data-look="vitruvian"] .modal > header h2, html[data-look="vitruvian"] dialog.cryptobox h3 { color: inherit; }
+html[data-look="vitruvian"] .modal > header .x { color: var(--on-ink); border-color: var(--on-ink); }
+html[data-look="vitruvian"] dialog.cryptobox header { padding: 8px 12px; margin: -20px -20px 0; }
+html[data-look="vitruvian"] dialog.cryptobox header p { color: var(--on-ink-muted); }
+html[data-look="vitruvian"] .list-cta, html[data-look="vitruvian"] .rp-primary, html[data-look="vitruvian"] .btn.primary {
+  background: var(--ink-bar); color: var(--on-ink); border-color: var(--ink-bar); box-shadow: inset 0 -2px 0 var(--accent);
+}
+html[data-look="vitruvian"] .nav-item.active { background: var(--tan); color: var(--fg); border-left-color: var(--fg); font-weight: 600; }
+html[data-look="vitruvian"] .nav-item.active .badge { color: var(--fg); border-color: var(--fg); background: transparent; }
+html[data-look="vitruvian"] .nav-item > span:first-child::before { content: "◇"; font-size: 9px; margin-right: 9px; vertical-align: 1px; }
+html[data-look="vitruvian"] .nav-item.active > span:first-child::before { content: "◆"; }
+html[data-look="vitruvian"] .preset.active { background: var(--tan); color: var(--fg); border-color: var(--fg); font-weight: 600; }
+html[data-look="vitruvian"] .preset.active::before { content: "◆ "; font-size: 8px; }
+html[data-look="vitruvian"] th.active { color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
+html[data-look="vitruvian"] .seg-btn.active { color: var(--fg); background: var(--panel); box-shadow: inset 0 -2px 0 var(--accent); }
+html[data-look="vitruvian"] .view-header { position: relative; }
+html[data-look="vitruvian"] .view-header::after { content: ""; position: absolute; left: 0; bottom: -3px; width: 64px; border-bottom: 1px solid var(--accent); }
+html[data-look="vitruvian"] aside.sidebar .brand { position: relative; }
+html[data-look="vitruvian"] aside.sidebar .brand::after { content: ""; position: absolute; left: 18px; bottom: -1px; width: 36px; border-bottom: 1px solid var(--accent); }
+/* Drawn lines: sparklines stroke in sketch ink with round caps. */
+html[data-look="vitruvian"] .sparkline { color: var(--sketch); opacity: 1; }
+html[data-look="vitruvian"] .sparkline polyline { stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+html[data-look="vitruvian"] .pick-rank { font-family: var(--font-ui); font-weight: 600; color: var(--accent); }
+
+/* The showcase hero's accent wash is a baseline motif; the paper looks stay
+   flat (no glow anywhere). */
+html[data-look="yorha"] .hero, html[data-look="corpus"] .hero, html[data-look="vitruvian"] .hero { background: var(--panel-2); }
+html[data-look="yorha"] .hero h2 { font-weight: 500; letter-spacing: 0.04em; }

@@ -164,11 +164,11 @@
   h2 { margin: 0; font-size: 15px; }
   .lead { margin: 0; font-size: 12.5px; }
   .warn-line { border-left: 3px solid var(--warn); padding-left: 8px; }
-  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+  code { font-family: var(--font-mono); font-size: 11.5px; }
   .toggle { display: flex; align-items: center; gap: 8px; font-size: 12.5px; flex-wrap: wrap; }
   .toggle .hint { font-size: 11.5px; }
   .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
-  .tile { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--panel-2); }
+  .tile { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--panel-2); }
   .tile .k { font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
   .tile strong { font-size: 18px; font-variant-numeric: tabular-nums; }
   .byitem summary { cursor: pointer; font-size: 12.5px; }
@@ -178,8 +178,8 @@
   th { text-align: left; font-weight: 600; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--border); }
   td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
   .r { text-align: right; }
-  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .kind { font-size: 11px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--border); color: var(--muted); }
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .kind { font-size: 11px; padding: 1px 7px; border-radius: var(--radius-pill); border: 1px solid var(--border); color: var(--muted); }
   .kind.sale { color: var(--good); border-color: var(--good); }
   .kind.purchase { color: var(--warn); border-color: var(--warn); }
   .good { color: var(--good); }
@@ -187,6 +187,6 @@
   .muted { color: var(--muted); }
   .empty { padding: 10px 0; }
   .scroll { overflow: auto; }
-  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); padding: 4px 10px; border-radius: var(--radius-ctl); font-size: 12px; cursor: pointer; }
   button.ghost:hover:not(:disabled) { background: var(--panel-2); color: var(--fg); }
 </style>

@@ -16,6 +16,7 @@
   import ExportImportDialogs from './components/ExportImportDialogs.svelte';
   import SellPane from './components/SellPane.svelte';
   import DesktopShowcase from './components/DesktopShowcase.svelte';
+  import ThemeSwitcher from './components/ThemeSwitcher.svelte';
   import { flattenInventory, extractKeptLvls } from './lib/inventory';
   import { loadCatalogs, resolvePath, type Catalogs } from './lib/resolver';
   import { loadMarket, lookup } from './lib/market';
@@ -28,6 +29,7 @@
   import { deriveRelicPlan } from './lib/relic-planner';
   import { diffOwned } from './lib/storage';
   import type { StateStore } from './lib/state-store';
+  import type { ThemeController } from './lib/theme';
   import {
     createTransport, isDesktopRuntime,
     desktopWfmStatus, DesktopCmdError,
@@ -47,7 +49,8 @@
   // Selected + primed (scalar settings loaded into cache) in main.ts and passed
   // in, so the scalar-setting `$state` initializers below can read it
   // synchronously with no first-paint flash. Snapshot methods are async.
-  let { store }: { store: StateStore } = $props();
+  // `theme` is the boot-time ThemeController (src/lib/theme.ts) the switchers drive.
+  let { store, theme }: { store: StateStore; theme: ThemeController } = $props();
 
   type Phase = 'idle' | 'loading' | 'done' | 'error';
   let phase = $state<Phase>('idle');
@@ -839,19 +842,24 @@
 
 {#if phase !== 'done'}
 <main class="landing" data-testid={isDesktop ? 'desktop-mode' : undefined}>
-  <header>
-    <h1>TennoWorth</h1>
-    <p class="sub">
-      {#if isDesktop}
-        What's worth selling in Warframe right now — scan your account and
-        TennoWorth ranks your inventory by what to sell, joined to a live
-        warframe.market snapshot.
-      {:else}
-        What's worth selling in Warframe right now — search any item, spot the
-        movers, and see what's vaulted, straight from a live warframe.market
-        snapshot. No install, no login.
-      {/if}
-    </p>
+  <header class="landing-head">
+    <div class="landing-title">
+      <h1>TennoWorth</h1>
+      <p class="sub">
+        {#if isDesktop}
+          What's worth selling in Warframe right now — scan your account and
+          TennoWorth ranks your inventory by what to sell, joined to a live
+          warframe.market snapshot.
+        {:else}
+          What's worth selling in Warframe right now — search any item, spot the
+          movers, and see what's vaulted, straight from a live warframe.market
+          snapshot. No install, no login.
+        {/if}
+      </p>
+    </div>
+    <div class="landing-theme">
+      <ThemeSwitcher {theme} />
+    </div>
   </header>
 
   {@render generalBanners()}
@@ -1022,6 +1030,9 @@
         <button class="ghost" onclick={() => exportImportRef.pickImport()} title="Restore an encrypted snapshot exported from another device.">Restore</button>
         <button class="ghost" onclick={handleClear} title="Forget the saved inventory entirely.">Clear</button>
       </div>
+    </div>
+    <div class="theme-slot">
+      <ThemeSwitcher {theme} />
     </div>
   </aside>
 
@@ -1733,7 +1744,7 @@
   }
   aside.sidebar .brand {
     padding: 0 18px 14px;
-    border-bottom: 1px solid var(--hairline);
+    border-bottom: 1px var(--rule) var(--hairline);
     margin-bottom: 10px;
   }
   aside.sidebar .brand h1 {
@@ -1755,7 +1766,7 @@
   }
   .nav-group {
     padding: 6px 0;
-    border-bottom: 1px solid var(--hairline);
+    border-bottom: 1px var(--rule) var(--hairline);
   }
   .nav-group:last-child { border-bottom: none; }
   .nav-label {
@@ -1783,19 +1794,19 @@
     text-align: left;
     cursor: pointer;
   }
-  .nav-item:hover { color: var(--fg); background: rgba(255,255,255,0.02); }
+  .nav-item:hover { color: var(--fg); background: var(--hover-tint); }
   .nav-item.active {
     color: var(--fg);
     border-left-color: var(--accent);
     background: var(--panel-2);
   }
   .nav-item .badge {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
     color: var(--muted);
     background: var(--panel-2);
     border: 1px solid var(--border);
-    border-radius: 3px;
+    border-radius: var(--radius-tag);
     padding: 0 5px;
   }
   .nav-item.active .badge {
@@ -1814,7 +1825,7 @@
      bottom via margin-top:auto on the nav above. */
   .src-pin {
     padding: 12px 18px;
-    border-top: 1px solid var(--hairline);
+    border-top: 1px var(--rule) var(--hairline);
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -1837,7 +1848,7 @@
     color: var(--muted);
     background: transparent;
     border: 1px solid var(--border);
-    border-radius: 5px;
+    border-radius: var(--radius-ctl);
     padding: 3px 8px;
     cursor: pointer;
   }
@@ -1880,17 +1891,17 @@
     gap: 8px;
     background: var(--panel-2);
     border: 1px solid var(--accent);
-    border-radius: 8px;
-    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6);
+    border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-pop);
   }
   .refresh-pop .rp-lede { margin: 0; font-size: 12px; color: var(--fg); line-height: 1.45; }
   .refresh-pop .rp-primary {
     font-size: 12px;
     padding: 7px 10px;
-    color: var(--bg);
+    color: var(--on-accent);
     background: var(--accent);
     border: 1px solid var(--accent);
-    border-radius: 6px;
+    border-radius: var(--radius-ctl);
     cursor: pointer;
     font-weight: 600;
   }
@@ -1939,7 +1950,7 @@
       align-items: center;
       gap: 4px;
       border-bottom: none;
-      border-right: 1px solid var(--hairline);
+      border-right: 1px var(--rule) var(--hairline);
       padding: 0 8px;
     }
     .nav-group:last-child { border-right: none; }
@@ -1970,6 +1981,13 @@
     font-weight: 600;
     letter-spacing: -0.015em;
   }
+  /* Landing header: title block left, theme switcher top-right; the switcher
+     drops under the title on narrow viewports. */
+  .landing-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px 24px; flex-wrap: wrap; }
+  .landing-title { flex: 1 1 260px; min-width: 0; }
+  .landing-theme { flex: 0 0 auto; padding-top: 4px; }
+  /* Sidebar footer slot for the theme switcher, under the inventory pin. */
+  .theme-slot { padding: 10px 12px 0; border-top: 1px var(--rule) var(--hairline); }
   h2 { margin: 0 0 4px 0; font-size: 14px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
   h3 { margin: 0 0 4px 0; font-size: 14px; font-weight: 600; }
   .sub { color: var(--muted); margin: 6px 0 0 0; max-width: 64ch; font-size: 13px; }
@@ -1984,7 +2002,7 @@
   /* Upsell lead — separates the free market browser above from the desktop-app
      pitch below. A hairline + top padding, no box. */
   .upsell-lead {
-    border-top: 1px solid var(--hairline);
+    border-top: 1px var(--rule) var(--hairline);
     padding-top: 18px;
     margin-top: 4px;
   }
@@ -2007,9 +2025,9 @@
   .app-path {
     margin-top: 18px;
     padding: 12px 16px;
-    border: 1px solid var(--hairline);
+    border: 1px var(--rule) var(--hairline);
     border-left: 3px solid var(--accent);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     background: var(--panel);
     font-size: 13.5px;
     color: var(--muted);
@@ -2033,7 +2051,7 @@
   .card {
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     padding: 14px 16px;
     display: flex;
     flex-direction: column;
@@ -2068,7 +2086,7 @@
   .general-banner .gb-body { min-width: 0; }
   .general-banner .gb-body.gb-pre {
     white-space: pre-wrap;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 12px;
     line-height: 1.5;
   }
@@ -2094,7 +2112,7 @@
     color: var(--muted);
     font-size: 11px;
     padding: 2px 8px;
-    border-radius: 4px;
+    border-radius: var(--radius-input);
     cursor: pointer;
     white-space: nowrap;
   }
@@ -2126,7 +2144,7 @@
     padding: 4px 10px;
   }
   button.ghost:hover { background: var(--panel-2); color: var(--fg); }
-  code { background: var(--panel-2); padding: 1px 6px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.93em; }
+  code { background: var(--panel-2); padding: 1px 6px; border-radius: var(--radius-input); font-family: var(--font-mono); font-size: 0.93em; }
 
   /* Set-completion card — recommendation rows. Three reco kinds
      distinguished by a small uppercase pill so the user can scan and
@@ -2134,7 +2152,7 @@
      right-aligned headline number per row. */
   .set-recos { padding: 14px 16px; gap: 8px; }
   .reco {
-    border-top: 1px solid var(--hairline);
+    border-top: 1px var(--rule) var(--hairline);
     padding: 10px 0;
     align-items: center;
   }
@@ -2149,9 +2167,9 @@
     text-transform: uppercase;
     color: var(--muted);
     border: 1px solid var(--border);
-    border-radius: 3px;
+    border-radius: var(--radius-tag);
     padding: 1px 6px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
   }
   .kind-near-complete       { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, var(--border)); }
   .kind-complete-with-extras { color: var(--good);   border-color: color-mix(in srgb, var(--good)   40%, var(--border)); }
@@ -2159,9 +2177,9 @@
   .set-liq {
     font-size: 10px;
     letter-spacing: 0.04em;
-    border-radius: 3px;
+    border-radius: var(--radius-tag);
     padding: 1px 6px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
   }
   .set-liq.moving { color: var(--muted); }
   .set-liq.thin   { color: var(--warn); }
@@ -2174,7 +2192,7 @@
      "Complete Mesa Prime +95p" as a single declarative sentence rather
      than a verb-on-left / number-on-right two-column row. */
   .reco-net-inline {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 14px;
     font-weight: 600;
     color: var(--good);
@@ -2217,7 +2235,7 @@
     gap: 2px;
     background: var(--panel-2);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     padding: 12px 14px;
   }
   .clock-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
@@ -2259,7 +2277,7 @@
   .relic-card {
     background: var(--panel-2);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     padding: 12px 14px;
     display: flex;
     flex-direction: column;
@@ -2270,7 +2288,7 @@
   .relic-title a:hover { color: var(--accent); text-decoration: underline; }
   .small { font-size: 11px; }
   .relic-epp {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 22px;
     font-weight: 600;
     letter-spacing: -0.01em;
@@ -2301,7 +2319,7 @@
     grid-template-columns: 14px 1fr auto auto;
     gap: 6px;
     align-items: baseline;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
   }
   .reward-name { color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -2337,13 +2355,13 @@
     gap: 0;
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     padding: 4px 18px;
     margin-top: 8px;
   }
   .faq h2 { padding: 14px 0 8px; margin: 0; }
   .faq details {
-    border-top: 1px solid var(--hairline);
+    border-top: 1px var(--rule) var(--hairline);
     padding: 12px 0;
   }
   .faq details > summary {
@@ -2365,7 +2383,7 @@
     content: '+';
     position: absolute;
     right: 0;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     color: var(--muted);
     font-size: 14px;
     transition: transform 120ms ease, color 120ms ease;

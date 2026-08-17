@@ -216,16 +216,16 @@
     margin-top: 24px;
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     overflow: hidden;
   }
 
   .hero {
     padding: 36px 32px 28px;
     background:
-      radial-gradient(600px 200px at 85% -40px, rgba(78, 158, 234, 0.18), transparent 70%),
+      radial-gradient(600px 200px at 85% -40px, color-mix(in srgb, var(--accent) 18%, transparent), transparent 70%),
       var(--panel-2);
-    border-bottom: 1px solid var(--hairline);
+    border-bottom: 1px var(--rule) var(--hairline);
   }
   .hero h2 { margin: 0 0 8px; font-size: 24px; font-weight: 700; letter-spacing: -0.015em; }
   .hero .tag {
@@ -247,16 +247,16 @@
     font-weight: 600;
     font-size: 13.5px;
     padding: 10px 18px;
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     text-decoration: none;
     display: inline-block;
   }
-  .btn.primary { background: var(--accent); color: #fff; }
+  .btn.primary { background: var(--accent); color: var(--on-accent); }
   .btn.ghost { background: transparent; color: var(--fg); border: 1px solid var(--border); }
-  .btn.small { font-size: 11.5px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--muted); }
+  .btn.small { font-size: 11.5px; padding: 0 12px; border-radius: var(--radius-ctl); border: 1px solid var(--border); background: transparent; color: var(--muted); }
   .btn.small:hover { color: var(--accent); }
 
-  .hero-shot { margin-top: 24px; border: 1px solid var(--hairline); border-radius: 8px; overflow: hidden; }
+  .hero-shot { margin-top: 24px; border: 1px var(--rule) var(--hairline); border-radius: var(--radius-panel); overflow: hidden; }
   .hero-shot .shot { display: block; width: 100%; }
   /* The screenshot asset is a human follow-up; until it exists (or on a load
      failure) this placeholder carries the same chrome so the slot never
@@ -267,7 +267,7 @@
     font-size: 12px;
     text-align: center;
     padding: 46px 0;
-    font-family: ui-monospace, Menlo, monospace;
+    font-family: var(--font-mono);
     background: var(--panel-2);
   }
   .hero-shot .cap { padding: 8px 12px; font-size: 12px; color: var(--muted); }
@@ -282,7 +282,7 @@
   .feature h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
   .feature p { margin: 0; font-size: 13px; color: var(--fg); }
 
-  .block { padding: 24px 32px; border-top: 1px solid var(--hairline); }
+  .block { padding: 24px 32px; border-top: 1px var(--rule) var(--hairline); }
   .block h3 { margin: 0 0 12px; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
 
   .tabs {
@@ -291,7 +291,7 @@
     padding: 3px;
     background: var(--panel-2);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     margin-bottom: 14px;
   }
   .tabs button {
@@ -302,7 +302,7 @@
     font: inherit;
     font-size: 12.5px;
     padding: 5px 12px;
-    border-radius: 5px;
+    border-radius: var(--radius-ctl);
     cursor: pointer;
   }
   .tabs button:hover { color: var(--fg); }
@@ -317,9 +317,9 @@
     overflow-x: auto;
     background: var(--panel-2);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     padding: 12px 14px;
-    font-family: ui-monospace, Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 12.5px;
     color: var(--fg);
     white-space: pre;
@@ -331,7 +331,7 @@
   .steps { display: flex; flex-direction: column; gap: 12px; }
   .step { display: flex; gap: 14px; align-items: flex-start; }
   .step .n {
-    font-family: ui-monospace, Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 13px;
     letter-spacing: 0.05em;
     color: var(--accent);
@@ -343,10 +343,10 @@
   .step h4 { margin: 0 0 4px; font-size: 13.5px; font-weight: 600; }
   .step p { margin: 0; font-size: 13px; color: var(--fg); }
   .step p.muted { color: var(--muted); }
-  .step code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: 0.92em; }
+  .step code { background: var(--panel-2); padding: 1px 5px; border-radius: var(--radius-input); font-size: 0.92em; }
 
   table.cmp { width: 100%; border-collapse: collapse; font-size: 13px; }
-  table.cmp th, table.cmp td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--hairline); }
+  table.cmp th, table.cmp td { text-align: left; padding: 8px 12px; border-bottom: 1px var(--rule) var(--hairline); }
   table.cmp th { color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 11.5px; }
   table.cmp td.yes { color: var(--good); }
   table.cmp td.no { color: var(--faint); }
