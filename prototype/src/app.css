@@ -386,6 +386,184 @@ dialog.cryptobox footer {
   line-height: 1.5;
 }
 
+/* ==========================================================================
+   Flow v2 shared table anatomy — `.wrap.tw` panels and `table.tw`.
+   Global (not per-component) because the SAME row anatomy renders from
+   several components — the landing's search / movers / vaulted / hand-off
+   tables, the My orders fix-queue and orders tables — and Svelte's scoping
+   would force each to carry a copy that drifts. ResultsTable keeps its own
+   (richer) scoped copy; the `.tw` marker keeps these rules off it.
+   Heights: rail 32 · bar 40 · head 28 · row 32 · line 32; every inset on the
+   ladder; first/last cell carry the panel inset. Numbers are mono.
+   ========================================================================== */
+.wrap.tw {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  overflow: hidden;
+  min-width: 0;
+}
+.wrap.tw > .rail, .wrap.tw > .bar, .wrap.tw > .line, .wrap.tw > .foot {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 0 var(--inset);
+  white-space: nowrap;
+  min-width: 0;
+}
+.wrap.tw > .rail > *, .wrap.tw > .bar > *, .wrap.tw > .line > *, .wrap.tw > .foot > * { flex-shrink: 0; }
+.wrap.tw > .rail {
+  height: var(--rail);
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--muted);
+}
+.wrap.tw > .rail h3, .wrap.tw > .bar h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--fg); line-height: 1rem; }
+.wrap.tw > .bar { min-height: var(--bar); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+.wrap.tw > .line { height: var(--rail); border-top: 1px var(--rule) var(--hairline); font-size: 12px; color: var(--muted); }
+.wrap.tw > .foot { min-height: var(--bar); border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
+.wrap.tw .exp { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; min-width: 0; }
+.wrap.tw .grow { flex: 1 1 0; min-width: 0; }
+.wrap.tw .lbl { width: 3.25rem; flex: 0 0 auto; font-size: 10px; line-height: 1rem; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; color: var(--faint); font-family: var(--font-ui); }
+.wrap.tw .lbl.good { width: auto; color: var(--good); }
+.wrap.tw .lbl.bad { width: auto; color: var(--bad); }
+.wrap.tw .count { color: var(--muted); font-size: 12px; }
+.wrap.tw .count b { color: var(--fg); font-weight: 600; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.wrap.tw .input {
+  height: var(--ctl-lg);
+  padding: 0 var(--s3);
+  font-size: 13px;
+  min-width: 0;
+}
+.wrap.tw .input.grow { flex: 1 1 0; }
+.wrap.tw .scroll { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+.wrap.tw .body { padding: var(--s3) var(--inset); font-size: 12px; color: var(--muted); }
+.wrap.tw .body p { margin: 0; line-height: 1rem; }
+.wrap.tw .body p + p { margin-top: var(--s2); }
+
+table.tw {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.25rem;
+  font-variant-numeric: tabular-nums;
+}
+table.tw.fixed { table-layout: fixed; }
+table.tw th {
+  position: sticky; top: 0; z-index: 1;
+  height: var(--head);
+  padding: 0 var(--cell);
+  background: var(--panel-2);
+  font-family: var(--font-ui);
+  font-size: 10px; line-height: 1rem;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--muted); font-weight: 600;
+  text-align: right;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap; overflow: hidden; text-overflow: clip;
+}
+table.tw td {
+  height: var(--row);
+  padding: 0 var(--cell);
+  border-top: 1px var(--rule) var(--hairline);
+  text-align: right;
+  font-family: var(--font-mono);
+  color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+table.tw.comfortable td { height: var(--row-cf); }
+table.tw th:first-child, table.tw td:first-child { padding-left: var(--inset); }
+table.tw th:last-child, table.tw td:last-child { padding-right: var(--inset); }
+table.tw th.l, table.tw td.l { text-align: left; }
+table.tw td.l { font-family: var(--font-body); color: var(--fg); }
+table.tw:not(.fixed) th.l { width: 100%; min-width: 10rem; }
+table.tw tbody tr:first-child td { border-top: none; }
+table.tw tbody tr:hover td { background: var(--hover-tint); }
+table.tw td.l a { color: var(--fg); text-decoration: none; }
+table.tw td.l a:hover { color: var(--accent); text-decoration: underline; }
+table.tw td.score, table.tw td.strong { font-weight: 600; color: var(--fg); }
+table.tw td.fg { color: var(--fg); }
+table.tw th.sorted { color: var(--accent); }
+table.tw tr.dim td, table.tw tr.dim td.l, table.tw tr.dim td.l a { color: var(--muted); font-weight: 400; }
+table.tw td.act { text-align: right; overflow: visible; }
+table.tw td.reason { font-family: var(--font-body); text-align: left; color: var(--muted); font-size: 12px; }
+table.tw td.reason.warn { color: var(--warn); }
+table.tw td.reason.bad { color: var(--bad); }
+/* Ghost "your inventory" columns on the landing: faint, dashed lead rule. */
+table.tw th.ghost, table.tw td.ghost { color: var(--faint); }
+table.tw .g1 { border-left: 1px dashed var(--border); }
+/* Hand-off: the same columns, completed — accent wash + a solid lead rule. */
+table.tw th.you, table.tw td.you { background: color-mix(in srgb, var(--accent) 7%, transparent); color: var(--fg); }
+table.tw td.you.score { font-weight: 700; }
+table.tw th.you.y1, table.tw td.you.y1 { border-left: 1px solid var(--accent); }
+table.tw .up, table.tw .good { color: var(--good); }
+table.tw .down, table.tw .bad { color: var(--bad); }
+table.tw .flat, table.tw .muted { color: var(--muted); font-size: inherit; }
+table.tw .faint { color: var(--faint); }
+table.tw .ducat { color: var(--ducat); }
+table.tw .unit { color: var(--muted); font-size: 10px; margin-left: 1px; }
+table.tw .kept { color: var(--muted); font-size: 11px; margin-left: var(--s1); }
+table.tw td .type { font-family: var(--font-body); color: var(--good); }
+table.tw td .type.buy { color: var(--accent); }
+/* Sparklines: 60×18 in accent, inheriting the dim rule. */
+table.tw .spark, table.tw .sparkline { color: var(--accent); vertical-align: middle; }
+table.tw tr.dim .spark { color: var(--faint); }
+/* Inline status tags — outline in the tag's own colour, never a fill. */
+table.tw .tag {
+  display: inline-block;
+  height: 1rem; line-height: 0.875rem;
+  padding: 0 0.3rem; margin-left: var(--s2);
+  font-family: var(--font-mono);
+  font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+  border: 1px solid currentColor; border-radius: var(--radius-tag);
+  vertical-align: middle; color: var(--muted);
+}
+table.tw .tag.vaulted { color: var(--bad); }
+table.tw .tag.soon { color: var(--warn); }
+table.tw .tag.aug { color: var(--accent); }
+table.tw .tag.hold { color: var(--warn); }
+table.tw .tag.peak { color: var(--good); }
+table.tw .tag.deal { color: var(--ducat); }
+table.tw .tag.thin { color: var(--warn); }
+/* Vis pill in the orders table. */
+table.tw .vis { font: 600 10px/1rem var(--font-mono); border: 1px solid currentColor; border-radius: var(--radius-tag); padding: 0 var(--s1); color: var(--good); letter-spacing: 0.06em; }
+table.tw .vis.off { color: var(--muted); }
+/* Pending destructive row — the two-tap delete's armed state. */
+table.tw tr.confirming td { background: color-mix(in srgb, var(--bad) 6%, transparent); }
+table.tw tr.confirming td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
+table.tw tr.busy td { color: var(--faint); }
+
+/* Buttons on the three heights: .btn 28 · .btn.xs 24 · .btn.lg 32. */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s1);
+  height: var(--ctl); padding: 0 var(--s3);
+  font: inherit; font-size: 12px; line-height: 1;
+  color: var(--fg); background: var(--panel-2);
+  border: 1px solid var(--border); border-radius: var(--radius-ctl);
+  cursor: pointer; white-space: nowrap; text-decoration: none;
+}
+.btn:hover:not(:disabled) { background: var(--hover); color: var(--fg); }
+.btn.lg { height: var(--ctl-lg); font-size: 13px; padding: 0 var(--s4); }
+.btn.xs { height: var(--ctl-xs); font-size: 11px; padding: 0 var(--s2); }
+.btn.ghost { background: transparent; }
+.btn.ghost:hover:not(:disabled) { background: var(--panel-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); color: var(--on-accent); }
+.btn.x { background: transparent; border-color: transparent; color: var(--muted); padding: 0 var(--s1); font-size: 14px; }
+.btn.x:hover:not(:disabled) { color: var(--bad); background: transparent; }
+.btn.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--border)); }
+.btn.bad:hover:not(:disabled) { background: color-mix(in srgb, var(--bad) 12%, transparent); }
+.btn.link { background: transparent; border-color: transparent; color: var(--accent); padding: 0 var(--s1); }
+.btn.link:hover:not(:disabled) { text-decoration: underline; background: transparent; color: var(--accent); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+/* Segmented control on the 28px height. */
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-ctl); overflow: hidden; height: var(--ctl); }
+.seg > button { font: inherit; font-size: 12px; height: 100%; padding: 0 var(--s3); background: var(--panel-2); border: none; border-left: 1px solid var(--border); border-radius: 0; color: var(--muted); cursor: pointer; }
+.seg > button:first-child { border-left: none; }
+.seg > button:hover:not(:disabled) { color: var(--fg); background: var(--hover); }
+.seg > button.on { color: var(--accent); background: var(--panel); font-weight: 600; }
+
 /* Theme switcher (ThemeSwitcher.svelte owns its layout; the swatch tiles
    need each look's tokens regardless of the current look, so they are
    painted here from per-look literals rather than the live tokens). */
@@ -411,6 +589,7 @@ html[data-look="yorha"] body {
   font-size: 0.84375rem;
 }
 html[data-look="yorha"] a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--border); }
+html[data-look="yorha"] a.btn { border-bottom-style: solid; }
 html[data-look="yorha"] input[type="text"], html[data-look="yorha"] input[type="number"] { background: var(--panel); }
 html[data-look="yorha"][data-mode="dark"] input[type="text"],
 html[data-look="yorha"][data-mode="dark"] input[type="number"] { background: var(--bg); }
@@ -447,6 +626,17 @@ html[data-look="yorha"] .btn.primary { background: var(--ink-bar); color: var(--
 html[data-look="yorha"] .list-cta:hover:not(:disabled),
 html[data-look="yorha"] .refresh-pop .rp-primary:hover:not(:disabled),
 html[data-look="yorha"] .btn.primary:hover { background: var(--fg); color: var(--panel); filter: none; }
+/* Shared .wrap.tw rails are ink title bars too (same as .picks-head). */
+html[data-look="yorha"] .wrap.tw > .rail { background: var(--ink-bar); color: var(--on-ink-muted); border-bottom: 0; }
+html[data-look="yorha"] .wrap.tw > .rail h3 { color: var(--on-ink); font: 500 12px/1rem var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
+html[data-look="yorha"] .wrap.tw > .rail .exp, html[data-look="yorha"] .wrap.tw > .rail a, html[data-look="yorha"] .wrap.tw > .rail .btn.link { color: var(--on-ink-muted); border-bottom-color: var(--on-ink-muted); }
+html[data-look="yorha"] .wrap.tw > .rail .lbl.good, html[data-look="yorha"] .wrap.tw > .rail .lbl.bad { color: var(--on-ink); }
+html[data-look="yorha"] .wrap.tw > .rail .rail-toggle { color: var(--on-ink-muted); }
+html[data-look="yorha"] .wrap.tw > .rail .rail-toggle:hover { color: var(--on-ink); }
+html[data-look="yorha"] .wrap.tw > .bar { border-bottom-style: dotted; }
+html[data-look="yorha"] .wrap.tw .lbl { font-weight: 500; letter-spacing: 0.14em; }
+html[data-look="yorha"] .seg > button:not(:first-child) { border-left-style: dotted; }
+html[data-look="yorha"] .seg > button.on { color: var(--fg); background: var(--panel); }
 /* Card heads: the picks strip's head bar and any card whose first child is
    its h3 (market browser cards) become full-width ink title bars. */
 html[data-look="yorha"] .picks-head { background: var(--ink-bar); color: var(--on-ink); border-bottom: 0; padding: 6px 16px; }
@@ -529,6 +719,9 @@ html[data-look="corpus"] .stats, html[data-look="corpus"] .toast { --cut: 6px; }
 /* The Corpus double rule under raised title bars and the table head. */
 html[data-look="corpus"] th { border-bottom: 3px double var(--border); }
 html[data-look="corpus"] .picks-head { border-bottom: 3px double var(--border); }
+html[data-look="corpus"] .wrap.tw > .rail { border-bottom: 3px double var(--border); }
+html[data-look="corpus"] table.tw th { border-bottom: 3px double var(--border); }
+html[data-look="corpus"] .seg > button.on { box-shadow: inset 0 -2px 0 var(--accent); }
 html[data-look="corpus"] .card > h3:first-child { padding-bottom: 6px; border-bottom: 3px double var(--border); margin-bottom: 2px; }
 html[data-look="corpus"] .modal > header, html[data-look="corpus"] dialog.cryptobox header { border-bottom: 3px double var(--border); }
 html[data-look="corpus"] .faq > h2 { border-bottom: 3px double var(--border); }
@@ -578,6 +771,13 @@ html[data-look="vitruvian"] .desktop-showcase::after, html[data-look="vitruvian"
 html[data-look="vitruvian"] .picks-head { background: var(--ink-bar); color: var(--on-ink); border-bottom: 0; box-shadow: inset 0 -2px 0 var(--tan); }
 html[data-look="vitruvian"] .picks-head h3, html[data-look="vitruvian"] .picks-title h3 { color: inherit; }
 html[data-look="vitruvian"] .picks-head .muted, html[data-look="vitruvian"] .picks-head .rail-toggle, html[data-look="vitruvian"] .picks-head .link { color: var(--on-ink-muted); }
+html[data-look="vitruvian"] .wrap.tw > .rail { background: var(--ink-bar); color: var(--on-ink-muted); border-bottom: 0; box-shadow: inset 0 -2px 0 var(--tan); }
+html[data-look="vitruvian"] .wrap.tw > .rail h3 { color: var(--on-ink); }
+html[data-look="vitruvian"] .wrap.tw > .rail .exp, html[data-look="vitruvian"] .wrap.tw > .rail a, html[data-look="vitruvian"] .wrap.tw > .rail .rail-toggle { color: var(--on-ink-muted); border-bottom-color: var(--on-ink-muted); }
+html[data-look="vitruvian"] .wrap.tw > .rail .lbl.good, html[data-look="vitruvian"] .wrap.tw > .rail .lbl.bad { color: var(--on-ink); }
+html[data-look="vitruvian"] table.tw th.sorted { color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
+html[data-look="vitruvian"] .seg > button.on { color: var(--fg); background: var(--panel); box-shadow: inset 0 -2px 0 var(--accent); }
+html[data-look="vitruvian"] table.tw .spark { color: var(--sketch); }
 html[data-look="vitruvian"] .card > h3:first-child {
   margin: -14px -16px 0; padding: 5px 12px;
   background: var(--ink-bar); color: var(--on-ink); box-shadow: inset 0 -2px 0 var(--tan);

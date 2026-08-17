@@ -503,6 +503,14 @@
   // relic_rewards / vault_status). No runtime warframestat fetch — that
   // broke the resolver-only rule and vanished during warframestat
   // outages. Null until market loads, or when the bake came back empty.
+  // Footer stamp: the snapshot's own timestamp, in UTC so it matches the
+  // scraper's log lines.
+  let snapshotStamp = $derived.by(() => {
+    const t = Date.parse(market?.updated_at ?? '');
+    if (!Number.isFinite(t)) return '';
+    return new Date(t).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+  });
+
   let voidTrader = $derived.by(() => {
     const b = market?.baro;
     if (!b) return null;
@@ -912,20 +920,17 @@
 {#if phase !== 'done'}
 <main class="landing" data-testid={isDesktop ? 'desktop-mode' : undefined}>
   {@render statusStrip(false)}
+  <!-- One lede line under the strip (the strip's descriptor already says what
+       this is); the theme switcher rides its right end. The old pitch
+       paragraph / hero is gone — search is the first control. -->
   <header class="landing-head">
-    <div class="landing-title">
-      <p class="sub">
-        {#if isDesktop}
-          What's worth selling in Warframe right now — scan your account and
-          TennoWorth ranks your inventory by what to sell, joined to a live
-          warframe.market snapshot.
-        {:else}
-          What's worth selling in Warframe right now — search any item, spot the
-          movers, and see what's vaulted, straight from a live warframe.market
-          snapshot. No install, no login.
-        {/if}
-      </p>
-    </div>
+    <p class="lede">
+      {#if isDesktop}
+        Scan your account and TennoWorth ranks <em>your</em> inventory by what to sell — until then, look anything up below.
+      {:else}
+        What's worth selling in Warframe right now — search any item, spot the movers, see what's vaulted. No install, no login.
+      {/if}
+    </p>
     <div class="landing-theme">
       <ThemeSwitcher {theme} />
     </div>
@@ -958,17 +963,15 @@
     {/if}
 
     {#if market}
-      <MarketBrowser {market} staleness={marketStaleness} freshness={marketFreshness} loadHistory={() => transport.loadHistory()} />
-    {/if}
-
-    {#if !isDesktop}
-      <!-- Above-the-fold path to the desktop app: the site is informational,
-           so the one thing worth telling a first-time visitor right away is
-           that ranking YOUR inventory is the app's job. -->
-      <div class="app-path">
-        Want this ranked against <strong>your</strong> inventory?
-        <a href="#desktop">TennoWorth Desktop ↓</a>
-      </div>
+      {#if isDesktop}
+        <MarketBrowser {market} staleness={marketStaleness} freshness={marketFreshness} loadHistory={() => transport.loadHistory()} />
+      {:else}
+        <!-- Hosted: the browser hands the visitor off to the desktop app with
+             the same rows completed (DesktopShowcase renders inside the
+             browser's flow so it can use the browser's sample rows). -->
+        <MarketBrowser {market} staleness={marketStaleness} freshness={marketFreshness} loadHistory={() => transport.loadHistory()} handoff={handoffPanel} />
+      {/if}
+    {:else if !isDesktop}
       <DesktopShowcase />
     {/if}
   {/if}
@@ -986,10 +989,13 @@
 
   {@render faqContent()}
 
-  <footer>
-    <a href="#trust">Trust &amp; safety</a> · Open source · MIT · data from
-    warframe.market and warframestat.us
-    <span class="ver" title="build {APP_COMMIT}">· {APP_COMMIT}</span>
+  <footer class="sitefoot">
+    <span class="grow">TennoWorth is a fan project, not affiliated with Digital Extremes or warframe.market. Open source · MIT · data from warframe.market and warframestat.us.</span>
+    {#if market?.updated_at}<span title="When the market snapshot was taken">Snapshot {snapshotStamp}</span>{/if}
+    <a href="https://github.com/tennoworth/tennoworth" target="_blank" rel="noopener noreferrer">GitHub</a>
+    <a href="https://discord.gg/tennoworth" target="_blank" rel="noopener noreferrer">Discord</a>
+    <a href="#trust">Trust &amp; safety</a>
+    <span class="ver" title="build {APP_COMMIT}">{APP_COMMIT}</span>
   </footer>
 </main>
 {:else}
@@ -1486,8 +1492,12 @@
   </header>
 {/snippet}
 
+{#snippet handoffPanel(rows)}
+  <DesktopShowcase {rows} />
+{/snippet}
+
 {#snippet faqContent()}
-  <section class="faq">
+  <section class="faq" id="faq">
     <h2>FAQ</h2>
 
     <details>
@@ -1826,14 +1836,16 @@
 
 <style>
   main.landing {
-    /* Landing screen — the market browser, desktop-app showcase, and FAQ.
-       Centred, narrow, single-column. */
-    max-width: min(900px, calc(100vw - 32px));
+    /* Landing — a 76rem reading column (1216px at 1440 → 1292 at 1920 →
+       1368 at 2560): strip → lede → search → movers → vaulted + Baro →
+       hand-off → FAQ → footer, every block on the --stack rhythm. */
+    max-width: 76rem;
     margin: 0 auto;
-    padding: 32px 24px 48px;
+    padding: var(--s3) var(--gutter) var(--s6);
     display: flex;
     flex-direction: column;
-    gap: 20px;
+    gap: var(--stack);
+    min-width: 0;
   }
 
   /* Shell layout: a 40px status strip spanning both columns, then the
@@ -2180,9 +2192,10 @@
   }
   /* Landing header: title block left, theme switcher top-right; the switcher
      drops under the title on narrow viewports. */
-  .landing-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px 24px; flex-wrap: wrap; }
-  .landing-title { flex: 1 1 260px; min-width: 0; }
-  .landing-theme { flex: 0 0 auto; padding-top: 4px; }
+  .landing-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2) var(--s5); flex-wrap: wrap; min-height: var(--rail); }
+  .landing-head .lede { flex: 1 1 20rem; min-width: 0; margin: 0; font-size: 13px; line-height: 1.25rem; color: var(--muted); }
+  .landing-head .lede em { color: var(--fg); font-style: normal; font-weight: 600; }
+  .landing-theme { flex: 0 0 auto; }
   h2 { margin: 0 0 4px 0; font-size: 14px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
   h3 { margin: 0 0 4px 0; font-size: 14px; font-weight: 600; }
   .sub { color: var(--muted); margin: 6px 0 0 0; max-width: 64ch; font-size: 13px; }
@@ -2214,20 +2227,6 @@
     font-size: 12px;
     margin-top: 10px;
   }
-
-  /* Above-the-fold path from the market browser to the desktop showcase. */
-  .app-path {
-    margin-top: 18px;
-    padding: 12px 16px;
-    border: 1px var(--rule) var(--hairline);
-    border-left: 3px solid var(--accent);
-    border-radius: var(--radius-panel);
-    background: var(--panel);
-    font-size: 13.5px;
-    color: var(--muted);
-  }
-  .app-path a { color: var(--accent); text-decoration: none; font-weight: 600; margin-left: 6px; }
-  .app-path a:hover { text-decoration: underline; }
 
   .dot {
 
@@ -2554,6 +2553,12 @@
     margin-top: 8px;
   }
   .faq h2 { padding: 14px 0 8px; margin: 0; }
+  /* Landing: two columns of questions under the one head. Row heights follow
+     the tallest open answer in that row — acceptable for a FAQ. */
+  main.landing .faq { display: grid; grid-template-columns: 1fr 1fr; gap: 0 var(--s5); margin-top: calc(var(--s5) - var(--stack)); }
+  main.landing .faq > h2, main.landing .faq > .trust-lede { grid-column: 1 / -1; }
+  main.landing .faq details:nth-of-type(2) { border-top: 1px var(--rule) var(--hairline); }
+  @media (max-width: 720px) { main.landing .faq { grid-template-columns: 1fr; } }
   .faq details {
     border-top: 1px var(--rule) var(--hairline);
     padding: 12px 0;
@@ -2605,13 +2610,21 @@
     max-width: 72ch;
   }
 
-  footer {
-    color: var(--muted);
-    font-size: 11.5px;
-    text-align: center;
-    padding-top: 20px;
-    letter-spacing: 0.02em;
+  footer.sitefoot {
+    display: flex;
+    align-items: baseline;
+    gap: var(--s4);
+    flex-wrap: wrap;
+    padding: var(--s3) 0 var(--s5);
+    margin-top: calc(var(--s5) - var(--stack));
+    border-top: 1px var(--rule) var(--hairline);
+    color: var(--faint);
+    font-size: 11px;
+    line-height: 1rem;
   }
+  footer.sitefoot .grow { flex: 1 1 24rem; }
+  footer.sitefoot a { color: var(--muted); text-decoration: none; }
+  footer.sitefoot a:hover { color: var(--accent); }
 
   /* .cryptobox dialog styling moved to WfmAuthDialogs.svelte and
      ExportImportDialogs.svelte — no more dialog.cryptobox elements render
