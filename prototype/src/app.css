@@ -134,7 +134,6 @@ html[data-look="yorha"] {
   --on-ink: #DBD7BF;
   --on-ink-muted: #CBC6AC;
   --on-accent: #DBD7BF;
-  --pod-red: #B7412A;   /* decorative only, never text/data */
   --grid: rgba(70, 66, 47, 0.07);
   --hatch: rgba(70, 66, 47, 0.035);
   --scrim: rgba(70, 66, 47, 0.45);
@@ -281,8 +280,8 @@ input[type="text"], input[type="number"] {
 input::placeholder { color: var(--faint); }
 /* Headings and tracked labels take the look's UI face. Baseline points
    --font-ui at the body stack, so this is a no-op there. */
-h1, h2, h3, h4, th, .nav-label, .col-label, .clock-label, .baro-label,
-.stat .k, .summary .cell .k, .dis-label, .bar .lbl { font-family: var(--font-ui); }
+h1, h2, h3, h4, th, .nav-label, .clock-label,
+.summary .cell .k, .dis-label, .bar .lbl { font-family: var(--font-ui); }
 
 /* Encrypted-dialog chrome. Global, not per-component, because the same
  dialog.cryptobox shell renders from two components — ExportImportDialogs in
@@ -596,14 +595,10 @@ html[data-look="yorha"][data-mode="dark"] input[type="number"] { background: var
 html[data-look="yorha"] ::selection { background: var(--ink-bar); color: var(--on-ink); }
 /* Tracked condensed caps for the titles; weight 400–500, never bold. */
 html[data-look="yorha"] .view-header h2 { font: 400 24px/1.1 var(--font-ui); letter-spacing: 0.2em; text-transform: uppercase; }
-html[data-look="yorha"] main.landing > header h1 { font: 400 26px/1.1 var(--font-ui); letter-spacing: 0.22em; text-transform: uppercase; }
 html[data-look="yorha"] .statusbar .brand h1 { font: 500 15px/1.2 var(--font-ui); letter-spacing: 0.18em; text-transform: uppercase; }
-html[data-look="yorha"] .browser-head h2 { font: 400 15px/1.2 var(--font-ui); letter-spacing: 0.2em; color: var(--fg); }
 html[data-look="yorha"] .nav-label,
 html[data-look="yorha"] th,
-html[data-look="yorha"] .stat .k,
-html[data-look="yorha"] .summary .cell .k,
-html[data-look="yorha"] .col-label { font-weight: 500; letter-spacing: 0.14em; }
+html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.14em; }
 /* Ink-bar inversion — the ONLY filled surface: active nav, active preset,
    primary CTAs, panel title bars, dialog headers. */
 html[data-look="yorha"] .nav-item.active { background: var(--ink-bar); color: var(--on-ink); border-left-color: var(--ink-bar); }
@@ -640,7 +635,7 @@ html[data-look="yorha"] .seg > button.on { color: var(--fg); background: var(--p
 /* Card heads: the picks strip's head bar and any card whose first child is
    its h3 (market browser cards) become full-width ink title bars. */
 html[data-look="yorha"] .picks-head { background: var(--ink-bar); color: var(--on-ink); border-bottom: 0; padding: 6px 16px; }
-html[data-look="yorha"] .picks-head h3, html[data-look="yorha"] .picks-title h3 { color: inherit; font: 500 12px/1.6 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
+html[data-look="yorha"] .picks-head h3 { color: inherit; font: 500 12px/1.6 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
 html[data-look="yorha"] .picks-head .muted, html[data-look="yorha"] .picks-head .rail-toggle, html[data-look="yorha"] .picks-head .link { color: var(--on-ink-muted); }
 html[data-look="yorha"] .picks-head .rail-toggle:hover, html[data-look="yorha"] .picks-head .link:hover { color: var(--on-ink); }
 html[data-look="yorha"] .bar .lbl { font-weight: 500; letter-spacing: 0.14em; }
@@ -669,8 +664,8 @@ html[data-look="yorha"] dialog.cryptobox header :focus-visible { outline-color: 
 html[data-look="yorha"] .seg-btn { border-left-style: dotted; }
 html[data-look="yorha"] .seg-btn.active { color: var(--fg); background: var(--panel); }
 html[data-look="yorha"] th.active { color: var(--fg); }
-html[data-look="yorha"] .toolbar, html[data-look="yorha"] .picks-head { border-bottom-style: dotted; }
-/* Freshness dot = 7px outlined square, filled by state; the pod block. */
+html[data-look="yorha"] .picks-head { border-bottom-style: dotted; }
+/* Freshness dot = 7px outlined square, filled by state. */
 html[data-look="yorha"] .dot { border-radius: 0; }
 html[data-look="yorha"] .lede-dot { border-radius: 0; }
 html[data-look="yorha"] .info-btn { border-radius: 0; }
@@ -685,7 +680,6 @@ html[data-look="yorha"] .statusbar .brand .sub { font-family: var(--font-body); 
 html[data-look="yorha"] .statusbar .refresh-trigger { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; }
 /* Summary cells (view header): tracked caps keys, mono values. */
 html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.14em; }
-html[data-look="yorha"] .pod { height: 14px; width: 96px; background: var(--pod-red); }
 
 /* ---------- corpus --------------------------------------------------------- */
 /* Ledger lattice: hard 24px lines, no wash. */
@@ -696,11 +690,8 @@ html[data-look="corpus"] body {
   font-size: 0.84375rem;
 }
 html[data-look="corpus"] h1, html[data-look="corpus"] h2, html[data-look="corpus"] h3, html[data-look="corpus"] h4,
-html[data-look="corpus"] .nav-label, html[data-look="corpus"] th, html[data-look="corpus"] .stat .k,
-html[data-look="corpus"] .col-label { letter-spacing: 0.09em; text-transform: uppercase; }
+html[data-look="corpus"] .nav-label, html[data-look="corpus"] th { letter-spacing: 0.09em; text-transform: uppercase; }
 html[data-look="corpus"] .view-header h2 { font-weight: 600; letter-spacing: 0.06em; font-size: 17px; text-transform: uppercase; }
-html[data-look="corpus"] .hero h2 { text-transform: none; letter-spacing: 0.01em; }
-html[data-look="corpus"] main.landing > header h1 { font-weight: 700; letter-spacing: 0.1em; font-size: 20px; }
 html[data-look="corpus"] .statusbar .brand h1 { letter-spacing: 0.14em; font-size: 13px; }
 html[data-look="corpus"] button { letter-spacing: 0.03em; }
 /* Chamfered panels: clip the top-right and bottom-left corners at 45° and
@@ -709,9 +700,7 @@ html[data-look="corpus"] button { letter-spacing: 0.03em; }
    overflow; the clip only removes the two corners. */
 html[data-look="corpus"] .card,
 html[data-look="corpus"] .wrap,
-html[data-look="corpus"] .stats,
 html[data-look="corpus"] .faq,
-html[data-look="corpus"] .desktop-showcase,
 html[data-look="corpus"] .modal,
 html[data-look="corpus"] .toast {
   position: relative;
@@ -723,7 +712,7 @@ html[data-look="corpus"] .toast {
   background-size: var(--cut) var(--cut), var(--cut) var(--cut);
   background-position: top right, bottom left;
 }
-html[data-look="corpus"] .stats, html[data-look="corpus"] .toast { --cut: 6px; }
+html[data-look="corpus"] .toast { --cut: 6px; }
 /* The Corpus double rule under raised title bars and the table head. */
 html[data-look="corpus"] th { border-bottom: 3px double var(--border); }
 html[data-look="corpus"] .picks-head { border-bottom: 3px double var(--border); }
@@ -753,31 +742,24 @@ html[data-look="vitruvian"] body {
 }
 html[data-look="vitruvian"] a { color: var(--fg); text-decoration: none; border-bottom: 1px solid var(--hairline); }
 html[data-look="vitruvian"] h1, html[data-look="vitruvian"] h2, html[data-look="vitruvian"] h3, html[data-look="vitruvian"] h4,
-html[data-look="vitruvian"] .nav-label, html[data-look="vitruvian"] th, html[data-look="vitruvian"] .stat .k,
-html[data-look="vitruvian"] .col-label { font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
+html[data-look="vitruvian"] .nav-label, html[data-look="vitruvian"] th { font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
 html[data-look="vitruvian"] .view-header h2 { font: 600 24px/1.1 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
-html[data-look="vitruvian"] .hero h2 { text-transform: none; letter-spacing: 0.01em; }
-html[data-look="vitruvian"] main.landing > header h1 { font: 600 24px/1.1 var(--font-ui); letter-spacing: 0.16em; }
 html[data-look="vitruvian"] .statusbar .brand h1 { font: 600 16px/1.2 var(--font-ui); letter-spacing: 0.14em; }
 /* Corner ticks — 9px L-shapes in ink, 4px outside every container's border. */
 html[data-look="vitruvian"] .card,
-html[data-look="vitruvian"] .stats,
 html[data-look="vitruvian"] .faq,
-html[data-look="vitruvian"] .desktop-showcase,
 html[data-look="vitruvian"] .modal { position: relative; overflow: visible; }
-html[data-look="vitruvian"] .card::before, html[data-look="vitruvian"] .stats::before, html[data-look="vitruvian"] .faq::before,
-html[data-look="vitruvian"] .desktop-showcase::before, html[data-look="vitruvian"] .modal::before {
+html[data-look="vitruvian"] .card::before, html[data-look="vitruvian"] .faq::before, html[data-look="vitruvian"] .modal::before {
   content: ""; position: absolute; left: -4px; top: -4px; width: 9px; height: 9px;
   border-left: 1px solid var(--fg); border-top: 1px solid var(--fg); pointer-events: none;
 }
-html[data-look="vitruvian"] .card::after, html[data-look="vitruvian"] .stats::after, html[data-look="vitruvian"] .faq::after,
-html[data-look="vitruvian"] .desktop-showcase::after, html[data-look="vitruvian"] .modal::after {
+html[data-look="vitruvian"] .card::after, html[data-look="vitruvian"] .faq::after, html[data-look="vitruvian"] .modal::after {
   content: ""; position: absolute; right: -4px; bottom: -4px; width: 9px; height: 9px;
   border-right: 1px solid var(--fg); border-bottom: 1px solid var(--fg); pointer-events: none;
 }
 /* Ink title bar + tan underscore; sienna underscore = current. */
 html[data-look="vitruvian"] .picks-head { background: var(--ink-bar); color: var(--on-ink); border-bottom: 0; box-shadow: inset 0 -2px 0 var(--tan); }
-html[data-look="vitruvian"] .picks-head h3, html[data-look="vitruvian"] .picks-title h3 { color: inherit; }
+html[data-look="vitruvian"] .picks-head h3 { color: inherit; }
 html[data-look="vitruvian"] .picks-head .muted, html[data-look="vitruvian"] .picks-head .rail-toggle, html[data-look="vitruvian"] .picks-head .link { color: var(--on-ink-muted); }
 html[data-look="vitruvian"] .wrap.tw > .rail { background: var(--ink-bar); color: var(--on-ink-muted); border-bottom: 0; box-shadow: inset 0 -2px 0 var(--tan); }
 html[data-look="vitruvian"] .wrap.tw > .rail h3 { color: var(--on-ink); }
@@ -825,8 +807,3 @@ html[data-look="vitruvian"] .statusbar .brand::after { content: ""; position: ab
 html[data-look="vitruvian"] .sparkline { color: var(--sketch); opacity: 1; }
 html[data-look="vitruvian"] .sparkline polyline { stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
 html[data-look="vitruvian"] .pick-rank { font-family: var(--font-ui); font-weight: 600; color: var(--accent); }
-
-/* The showcase hero's accent wash is a baseline motif; the paper looks stay
-   flat (no glow anywhere). */
-html[data-look="yorha"] .hero, html[data-look="corpus"] .hero, html[data-look="vitruvian"] .hero { background: var(--panel-2); }
-html[data-look="yorha"] .hero h2 { font-weight: 500; letter-spacing: 0.04em; }
