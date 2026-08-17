@@ -434,6 +434,49 @@ export async function desktopCheckWatchesNow(): Promise<WatchOutcome[]> {
   try { return await resolveInvoke()<WatchOutcome[]>('check_watches_now'); } catch (e) { rethrowInvoke(e); }
 }
 
+// ---- Trade ledger (desktop only; EE.log detection) ----
+
+export interface TradeItem {
+  name: string;
+  qty: number;
+  direction: 'given' | 'received';
+}
+
+export interface TradeRow {
+  id: number;
+  /** Unix seconds. */
+  at: number;
+  partner: string;
+  kind: 'sale' | 'purchase' | 'trade';
+  plat: number;
+  items: TradeItem[];
+  log_stamp: string | null;
+  /** A WFM listing was adjusted after this trade. */
+  wfm_closed: boolean;
+}
+
+export interface EeLogStatus {
+  /** EE.log path being tailed, or null when the game's log wasn't found. */
+  path: string | null;
+  auto_close: boolean;
+}
+
+/** Rust emits this when EE.log confirms a trade. */
+export const TRADE_DETECTED_EVENT = 'trade-detected';
+export interface TradeDetected {
+  id: number;
+  trade: { partner: string; kind: TradeRow['kind']; plat: number; items: TradeItem[]; log_stamp: string | null };
+  /** [item name, new listing quantity (0 = deleted)] */
+  adjusted: Array<[string, number]>;
+}
+
+export async function desktopListTrades(limit = 200): Promise<TradeRow[]> {
+  try { return await resolveInvoke()<TradeRow[]>('list_trades', { limit }); } catch (e) { rethrowInvoke(e); }
+}
+export async function desktopEelogStatus(): Promise<EeLogStatus> {
+  try { return await resolveInvoke()<EeLogStatus>('eelog_status'); } catch (e) { rethrowInvoke(e); }
+}
+
 /**
  * True inside the Tauri desktop webview. Keyed off `__TAURI_INTERNALS__` (the
  * runtime object Tauri v2 always injects), per the desktop spike — this is a

@@ -43,7 +43,10 @@ export type SettingKey =
   | 'score-explainer-dismissed'
   | 'keep-copies-nudge-dismissed'
   | 'tray-toast-seen'
-  | 'sell-onboarding-dismissed';
+  | 'sell-onboarding-dismissed'
+  /** Desktop: EE.log sold-detection may adjust WFM listings ('on' | 'off'). The
+   *  Rust tailer reads the same `setting` row (trades.rs SETTING_AUTO_CLOSE). */
+  | 'auto-close-sold';
 
 // The historical localStorage key each setting has always used. Only the
 // browser store carries these `wfminv:…-vN` names (so existing data keeps
@@ -59,6 +62,7 @@ export const LOCAL_SETTING_KEYS: Record<SettingKey, string> = {
   'keep-copies-nudge-dismissed': 'wfminv:keep-copies-nudge-dismissed-v1',
   'tray-toast-seen': 'wfminv:tray-toast-seen-v1',
   'sell-onboarding-dismissed': 'wfminv:sell-onboarding-dismissed-v1',
+  'auto-close-sold': 'wfminv:auto-close-sold-v1',
 };
 
 // The SQLite `setting.key` the desktop store parks the reload-restore snapshot

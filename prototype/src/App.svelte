@@ -9,6 +9,7 @@
   import ListingReviewModal from './components/ListingReviewModal.svelte';
   import MyOrdersPanel from './components/MyOrdersPanel.svelte';
   import WatchlistPanel from './components/WatchlistPanel.svelte';
+  import LedgerPanel from './components/LedgerPanel.svelte';
   import MarketBrowser from './components/MarketBrowser.svelte';
   import DesktopUpdateBanner from './components/DesktopUpdateBanner.svelte';
   import WfmAuthDialogs from './components/WfmAuthDialogs.svelte';
@@ -125,9 +126,9 @@
   // reload lands the user back where they left off. Falls through to
   // 'sell' if the persisted view's data isn't available (Baro not
   // visiting; 'orders' is desktop-only — the hosted site is informational).
-  type View = 'sell' | 'sets' | 'relics' | 'baro' | 'routines' | 'orders' | 'watches' | 'install';
+  type View = 'sell' | 'sets' | 'relics' | 'baro' | 'routines' | 'orders' | 'watches' | 'ledger' | 'install';
   const VALID_VIEWS: ReadonlySet<View> = new Set([
-    'sell', 'sets', 'relics', 'baro', 'routines', 'orders', 'watches', 'install',
+    'sell', 'sets', 'relics', 'baro', 'routines', 'orders', 'watches', 'ledger', 'install',
   ]);
   let view = $state<View>(
     (() => {
@@ -146,7 +147,7 @@
   // against a stale localStorage value.
   let effectiveView = $derived.by<View>(() => {
     if (view === 'baro' && !showBaroCard) return 'sell';
-    if ((view === 'orders' || view === 'watches') && !isDesktop) return 'sell';
+    if ((view === 'orders' || view === 'watches' || view === 'ledger') && !isDesktop) return 'sell';
     return view;
   });
 
@@ -967,6 +968,9 @@
         <button type="button" class="nav-item" class:active={effectiveView === 'watches'} onclick={() => setView('watches')}>
           <span>Price watches</span>
         </button>
+        <button type="button" class="nav-item" class:active={effectiveView === 'ledger'} onclick={() => setView('ledger')}>
+          <span>Ledger</span>
+        </button>
       </div>
       {/if}
 
@@ -1324,6 +1328,13 @@
         <p class="lede">Desktop notifications when an item hits your price — checked every 10 minutes against live warframe.market orders.</p>
       </section>
       <WatchlistPanel {market} />
+
+    {:else if effectiveView === 'ledger'}
+      <section class="view-header">
+        <h2>Ledger</h2>
+        <p class="lede">Every trade the game confirmed, read from its own log — realised plat, not estimates.</p>
+      </section>
+      <LedgerPanel onsetautoclose={(on) => store.setSetting('auto-close-sold', on ? 'on' : 'off')} />
 
     {:else if effectiveView === 'install'}
       <section class="view-header">
