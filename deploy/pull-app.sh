@@ -37,6 +37,7 @@ BRANCH="${BRANCH:-main}"
 # Generated, box-owned, and newer than anything upstream. Preserved verbatim.
 LIVE_ARTIFACTS=(
   prototype/public/market.json
+  prototype/public/history.json
   prototype/public/wfstat-catalog.json
   wfm_results.csv
 )

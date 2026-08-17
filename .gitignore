@@ -54,6 +54,7 @@ wfm_inventory_sellable.csv
 /docs/improvements-plan.md
 /docs/suggestions-plan.md
 /docs/desktop-showcase-plan.md
+/docs/plan-2026-08-history-and-advisor.md
 /docs/windows-test-*.md
 # The production topology, admin access and hardening posture of the live box.
 # The deploy/ SCRIPTS stay tracked: refresh-market.yml runs run-scrape.sh, and
@@ -66,6 +67,9 @@ wfm_inventory_sellable.csv
 # — the MIN_ROWS=800 floor in run-scrape.sh still catches gross truncation,
 # and the box keeps its own copy on disk.
 /wfm_results.csv
+# Long price history (relics.run-derived). Box-only state, ~7 MB, rewritten
+# daily; served live by Caddy, never committed. See wfm-scrape/src/history.rs.
+/prototype/public/history.json
 
 # GPG secret material for the apt/dnf repos. The signing subkey lives only on
 # container 110; the primary key and revocation cert live offline. None of it

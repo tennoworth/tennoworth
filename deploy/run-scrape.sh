@@ -12,6 +12,8 @@
 # Environment (all optional):
 #   APP      repo root to run in          (default /srv/wfm/app — the LXC layout)
 #   SCRAPE_BIN  Rust pipeline binary      (default /srv/wfm/bin/wfm-scrape)
+#   HISTORY     1 (default) also refresh history.json from relics.run after the
+#               build; 0 skips it (the GitHub cron — stateless runner)
 set -euo pipefail
 
 APP="${APP:-/srv/wfm/app}"
@@ -45,3 +47,14 @@ fi
 # reader catching the gap sees new-catalog + old-market, never the reverse.
 "$SCRAPE_BIN" build
 echo "scrape complete: $now rows, $(date -Is)"
+
+# Long price history (relics.run → prototype/public/history.json). Box-only:
+# the artifact is its own state (only new days are fetched, normally one file
+# per day), so it must live where it persists — never on the stateless GitHub
+# runner (refresh-market.yml calls this script with HISTORY=0). A failure here
+# must not fail the scrape: history is a bonus surface, market.json is not.
+if [ "${HISTORY:-1}" = "1" ]; then
+  if ! "$SCRAPE_BIN" history; then
+    echo "history: update failed (market.json is unaffected); will retry on the next tick." >&2
+  fi
+fi

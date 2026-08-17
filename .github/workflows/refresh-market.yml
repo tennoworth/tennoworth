@@ -53,6 +53,9 @@ jobs:
         env:
           APP: ${{ github.workspace }}
           SCRAPE_BIN: ${{ github.workspace }}/bin/wfm-scrape
+          # history.json is box-only state (incremental over relics.run); a
+          # stateless runner would re-bootstrap ~1.4 GB every day.
+          HISTORY: "0"
         run: bash deploy/run-scrape.sh
 
       - name: Commit if changed

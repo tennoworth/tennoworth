@@ -30,10 +30,16 @@ use wfm_scrape::render::{self, assemble_snapshot, CatalogItemMeta};
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 2 {
-        eprintln!("usage: wfm-scrape build|scrape [--fixtures-dir <DIR>] [--now <ISO>]");
+        eprintln!("usage: wfm-scrape build|scrape|history [--fixtures-dir <DIR>] [--now <ISO>]");
         std::process::exit(1);
     }
     match args[1].as_str() {
+        "history" => {
+            if let Err(e) = run_history_cmd(&args) {
+                eprintln!("error: {e}");
+                std::process::exit(1);
+            }
+        }
         "build" => {
             let fixtures_dir = extract_flag(&args, "--fixtures-dir");
             let now_arg = extract_flag(&args, "--now");
@@ -127,6 +133,96 @@ fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
     if summary.kept == 0 {
         eprintln!("No items matched your criteria. Try lowering --min-volume.");
     }
+    Ok(())
+}
+
+/// `wfm-scrape history [--out <history.json>] [--market <market.json>]
+///                    [--days N] [--bootstrap-days N] [--now <ISO>]`
+///
+/// Box-only, run AFTER `build` (it joins relics.run's display names through
+/// the freshly written market.json catalog). The output file is also the
+/// state: only the days after the last stored one are fetched. See
+/// `history.rs` for the shape and the reasoning.
+fn run_history_cmd(args: &[String]) -> Result<(), String> {
+    use wfm_scrape::history::{update_history, History, DEFAULT_DAYS};
+
+    let now = extract_flag(args, "--now")
+        .map(|s| clock::parse_stamp(&s).ok_or_else(|| format!("invalid --now stamp: {s}")))
+        .unwrap_or_else(|| Ok(Utc::now()))?;
+    let root = find_root().ok();
+    let public = root.as_ref().map(|r| r.join("prototype").join("public"));
+    let out = extract_flag(args, "--out")
+        .map(PathBuf::from)
+        .or_else(|| public.as_ref().map(|p| p.join("history.json")))
+        .ok_or("--out is required outside the repo")?;
+    let market_path = extract_flag(args, "--market")
+        .map(PathBuf::from)
+        .or_else(|| public.as_ref().map(|p| p.join("market.json")))
+        .ok_or("--market is required outside the repo")?;
+    let days: usize = extract_flag(args, "--days")
+        .map(|s| s.parse().map_err(|_| format!("bad --days: {s}")))
+        .transpose()?
+        .unwrap_or(DEFAULT_DAYS);
+    let bootstrap_days: usize = extract_flag(args, "--bootstrap-days")
+        .map(|s| s.parse().map_err(|_| format!("bad --bootstrap-days: {s}")))
+        .transpose()?
+        .unwrap_or(days);
+
+    // Display name → slug from the market snapshot's catalog (name_lower → slug).
+    let market_raw = std::fs::read_to_string(&market_path).map_err(|e| format!("read {}: {e}", market_path.display()))?;
+    let market: serde_json::Value = serde_json::from_str(&market_raw).map_err(|e| format!("parse {}: {e}", market_path.display()))?;
+    let name_to_slug: HashMap<String, String> = market
+        .get("catalog")
+        .and_then(|c| c.as_object())
+        .map(|c| c.iter().filter_map(|(k, v)| v.as_str().map(|s| (k.to_lowercase(), s.to_string()))).collect())
+        .unwrap_or_default();
+    if name_to_slug.is_empty() {
+        return Err(format!("{} has no catalog — run `wfm-scrape build` first", market_path.display()));
+    }
+
+    let prior: Option<History> = std::fs::read_to_string(&out)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok());
+    match &prior {
+        Some(p) => eprintln!("history: prior {} → {} ({} items)", p.start, p.through.as_deref().unwrap_or("-"), p.items.len()),
+        None => eprintln!("history: no prior — bootstrapping up to {bootstrap_days} days (one relics.run file per day, ~4 MB each)"),
+    }
+
+    let client = reqwest::blocking::Client::builder()
+        .user_agent(wfm_client::user_agent("wfm-scrape", env!("CARGO_PKG_VERSION")))
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .map_err(|e| format!("build HTTP client: {e}"))?;
+    let http = LiveHttp { client };
+    let yesterday = now.date_naive() - chrono::Duration::days(1);
+    let (hist, summary) = update_history(
+        &http,
+        prior,
+        &name_to_slug,
+        yesterday,
+        &clock::iso_z(now),
+        days,
+        bootstrap_days,
+        &|ms| std::thread::sleep(std::time::Duration::from_millis(ms)),
+    );
+    eprintln!(
+        "history: fetched {} day(s), {} failed, {} items, {} relics.run names not in the catalog",
+        summary.fetched, summary.failed, summary.items, summary.unmatched_names
+    );
+    if summary.fetched == 0 {
+        // Nothing new (or only not-yet-published days) — the artifact is
+        // unchanged, so don't rewrite it and don't bump generated_at.
+        eprintln!("history: nothing new — not rewritten");
+        return Ok(());
+    }
+    let tmp = out.with_extension("json.tmp");
+    let json = serde_json::to_string(&hist).map_err(|e| format!("serialize: {e}"))?;
+    if let Some(parent) = out.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("mkdir: {e}"))?;
+    }
+    std::fs::write(&tmp, &json).map_err(|e| format!("write tmp: {e}"))?;
+    std::fs::rename(&tmp, &out).map_err(|e| format!("rename: {e}"))?;
+    eprintln!("Wrote {} ({} bytes, window {} → {}, data through {})", out.display(), json.len(), hist.start, hist.end_date().map(|d| d.to_string()).unwrap_or_default(), hist.through.as_deref().unwrap_or("-"));
     Ok(())
 }
 

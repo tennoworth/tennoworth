@@ -39,7 +39,8 @@
 	# purpose is fixing a broken scan WITHOUT a release, so it must be editable
 	# in place on the box. Served from dist/ it would need a web rebuild+deploy,
 	# which is the exact latency it exists to avoid.
-	@livedata path /market.json /wfstat-catalog.json /definitions.json
+	# history.json (relics.run-derived, box-only state) is live data too.
+	@livedata path /market.json /wfstat-catalog.json /definitions.json /history.json
 	handle @livedata {
 		root * /srv/wfm/app/prototype/public
 		header Cache-Control "public, max-age=300, must-revalidate"

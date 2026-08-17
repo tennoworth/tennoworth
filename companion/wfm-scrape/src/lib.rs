@@ -18,6 +18,7 @@ pub mod clock;
 pub mod coerce;
 pub mod csvin;
 pub mod fetch;
+pub mod history;
 pub mod http;
 pub mod orders;
 pub mod reconcile;
