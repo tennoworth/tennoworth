@@ -2617,7 +2617,7 @@
     padding: var(--s3) 0 var(--s5);
     margin-top: calc(var(--s5) - var(--stack));
     border-top: 1px var(--rule) var(--hairline);
-    color: var(--faint);
+    color: var(--muted); /* real information (licence, data sources) — --faint is decorative-only and lands at ~2.2:1 on the yorha ground */
     font-size: 11px;
     line-height: 1rem;
   }
