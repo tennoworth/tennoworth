@@ -2192,7 +2192,9 @@
   /* Landing header: title block left, theme switcher top-right; the switcher
      drops under the title on narrow viewports. */
   .landing-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2) var(--s5); flex-wrap: wrap; min-height: var(--rail); }
-  .landing-head .lede { flex: 1 1 20rem; min-width: 0; margin: 0; font-size: 13px; line-height: 1.25rem; color: var(--muted); }
+  /* --muted on the yorha ground is ~4.2:1, so the lede runs a step larger
+     than body text to stay comfortably legible. */
+  .landing-head .lede { flex: 1 1 20rem; min-width: 0; margin: 0; font-size: 14px; line-height: 1.375rem; color: var(--muted); }
   .landing-head .lede em { color: var(--fg); font-style: normal; font-weight: 600; }
   .landing-theme { flex: 0 0 auto; }
   h2 { margin: 0 0 4px 0; font-size: 14px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }

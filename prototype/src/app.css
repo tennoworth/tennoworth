@@ -424,7 +424,7 @@ dialog.cryptobox footer {
 .wrap.tw > .foot { min-height: var(--bar); border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
 .wrap.tw .exp { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; min-width: 0; }
 .wrap.tw .grow { flex: 1 1 0; min-width: 0; }
-.wrap.tw .lbl { width: 3.25rem; flex: 0 0 auto; font-size: 10px; line-height: 1rem; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; color: var(--faint); font-family: var(--font-ui); }
+.wrap.tw .lbl { width: 3.25rem; flex: 0 0 auto; font-size: 10px; line-height: 1rem; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; color: var(--muted); font-family: var(--font-ui); } /* Scope/Narrow/Show labels are information, so --muted not --faint */
 .wrap.tw .lbl.good { width: auto; color: var(--good); }
 .wrap.tw .lbl.bad { width: auto; color: var(--bad); }
 .wrap.tw .count { color: var(--muted); font-size: 12px; }
@@ -489,8 +489,11 @@ table.tw td.act { text-align: right; overflow: visible; }
 table.tw td.reason { font-family: var(--font-body); text-align: left; color: var(--muted); font-size: 12px; }
 table.tw td.reason.warn { color: var(--warn); }
 table.tw td.reason.bad { color: var(--bad); }
-/* Ghost "your inventory" columns on the landing: faint, dashed lead rule. */
-table.tw th.ghost, table.tw td.ghost { color: var(--faint); }
+/* Ghost "your inventory" columns on the landing: dashed lead rule; the heads
+   name real columns (Own/Score/Potential) so they read at --muted, only the
+   placeholder cells are decorative --faint. */
+table.tw th.ghost { color: var(--muted); }
+table.tw td.ghost { color: var(--faint); }
 table.tw .g1 { border-left: 1px dashed var(--border); }
 /* Hand-off: the same columns, completed — accent wash + a solid lead rule. */
 table.tw th.you, table.tw td.you { background: color-mix(in srgb, var(--accent) 7%, transparent); color: var(--fg); }
@@ -694,13 +697,43 @@ html[data-look="corpus"] .nav-label, html[data-look="corpus"] th { letter-spacin
 html[data-look="corpus"] .view-header h2 { font-weight: 600; letter-spacing: 0.06em; font-size: 17px; text-transform: uppercase; }
 html[data-look="corpus"] .statusbar .brand h1 { letter-spacing: 0.14em; font-size: 13px; }
 html[data-look="corpus"] button { letter-spacing: 0.03em; }
-/* Chamfered panels: clip the top-right and bottom-left corners at 45° and
-   redraw the 1px border along each cut with a corner-sized gradient (no
-   wrapper element needed). Containers that already scroll keep their
-   overflow; the clip only removes the two corners. */
+/* Chamfered panels: the top-right and bottom-left corners are cut at 45°.
+   Two ways, depending on whether the panel must let descendants escape:
+   - Panels whose control rows own popovers that overhang the panel edge
+     (results table Filters / badge overflow / column help, sell-pane cards)
+     get a corner triangle drawn by a ::before/::after pseudo — page ground
+     filled over the corner plus a 1px border along the cut. Nothing is
+     clipped, so the popovers stay visible even on a short panel.
+   - Panels that already clip their content (`.wrap.tw`, `.wrap.picks`,
+     `.modal`, `.toast` — all overflow:hidden) keep the clip-path, which is
+     genuinely transparent over the scrim / lattice, and redraw the border
+     along the cut with a corner-sized gradient. */
 html[data-look="corpus"] .card,
-html[data-look="corpus"] .wrap,
 html[data-look="corpus"] .faq,
+html[data-look="corpus"] .wrap:not(.tw):not(.picks) {
+  position: relative;
+  overflow: visible;
+}
+html[data-look="corpus"] .card::before, html[data-look="corpus"] .card::after,
+html[data-look="corpus"] .faq::before, html[data-look="corpus"] .faq::after,
+html[data-look="corpus"] .wrap:not(.tw):not(.picks)::before, html[data-look="corpus"] .wrap:not(.tw):not(.picks)::after {
+  content: "";
+  position: absolute;
+  width: var(--cut);
+  height: var(--cut);
+  z-index: 3;
+  pointer-events: none;
+}
+html[data-look="corpus"] .card::before, html[data-look="corpus"] .faq::before, html[data-look="corpus"] .wrap:not(.tw):not(.picks)::before {
+  top: -1px; right: -1px;
+  background: linear-gradient(to top right, transparent calc(50% - 0.7px), var(--border) calc(50% - 0.7px), var(--border) calc(50% + 0.7px), var(--bg) calc(50% + 0.7px));
+}
+html[data-look="corpus"] .card::after, html[data-look="corpus"] .faq::after, html[data-look="corpus"] .wrap:not(.tw):not(.picks)::after {
+  bottom: -1px; left: -1px;
+  background: linear-gradient(to bottom left, transparent calc(50% - 0.7px), var(--border) calc(50% - 0.7px), var(--border) calc(50% + 0.7px), var(--bg) calc(50% + 0.7px));
+}
+html[data-look="corpus"] .wrap.tw,
+html[data-look="corpus"] .wrap.picks,
 html[data-look="corpus"] .modal,
 html[data-look="corpus"] .toast {
   position: relative;

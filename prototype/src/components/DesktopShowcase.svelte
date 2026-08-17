@@ -285,7 +285,7 @@
     border-top: 1px var(--rule) var(--hairline);
     margin-top: auto;
   }
-  .cta .fine { color: var(--faint); font-size: 11px; line-height: 1rem; margin-left: auto; text-align: right; }
+  .cta .fine { color: var(--muted); /* informational — --faint is decorative-only */ font-size: 11px; line-height: 1rem; margin-left: auto; text-align: right; }
   .cmp { font-size: 12px; }
   .cmp td { height: 1.5rem; font-family: var(--font-body); color: var(--muted); }
   .cmp td.l { color: var(--fg); }
