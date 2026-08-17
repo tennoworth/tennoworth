@@ -419,178 +419,283 @@
       'unknown'
     );
   }
+
+  // ---- Show / Narrow controls on the orders table's bar ----
+  type Show = 'all' | 'sell' | 'buy' | 'hidden' | 'issues';
+  let show = $state<Show>('all');
+  let nameFilter = $state('');
+  // Orders with something in the fix queue (a live/scan health issue, or the
+  // snapshot-drift fallback), so the "Issues" segment narrows to them.
+  let issueIds = $derived.by(() => {
+    const ids = new Set<string>();
+    for (const h of health) ids.add(h.id);
+    if (live.size === 0) for (const d of drifted) ids.add(d.id);
+    return ids;
+  });
+  let counts = $derived({
+    all: orders.length,
+    sell: orders.filter((o) => o.type !== 'buy').length,
+    buy: orders.filter((o) => o.type === 'buy').length,
+    hidden: orders.filter((o) => !o.visible).length,
+    issues: issueIds.size,
+  });
+  let shown = $derived.by(() => {
+    const f = nameFilter.trim().toLowerCase();
+    return orders.filter((o) => {
+      if (show === 'sell' && o.type === 'buy') return false;
+      if (show === 'buy' && o.type !== 'buy') return false;
+      if (show === 'hidden' && o.visible) return false;
+      if (show === 'issues' && !issueIds.has(o.id)) return false;
+      return !f || itemName(o).toLowerCase().includes(f);
+    });
+  });
+  let listedValue = $derived(orders.filter((o) => o.type !== 'buy').reduce((a, o) => a + o.platinum * (o.quantity ?? 1), 0));
+
+  // The fix queue: live/scan health issues first, then (only while no live
+  // check has run) the snapshot-drift fallback for the remaining sell orders.
+  // Once a live check has run, Listing health covers the same orders with
+  // exact figures, so the two never show together.
+  type QueueRow =
+    | { key: string; id: string; name: string; slug: string; kind: 'health'; h: HealthIssue }
+    | { key: string; id: string; name: string; slug: string; kind: 'drift'; d: DriftRow };
+  let queue = $derived.by((): QueueRow[] => {
+    const rows: QueueRow[] = health.map((h) => ({ key: `h:${h.id}:${h.kind}`, id: h.id, name: h.name, slug: h.slug, kind: 'health', h }));
+    if (live.size === 0) {
+      for (const d of drifted) rows.push({ key: `d:${d.id}`, id: d.id, name: d.name, slug: d.slug, kind: 'drift', d });
+    }
+    return rows;
+  });
+  function orderById(id: string): WfmOrder | undefined {
+    return orders.find((o) => o.id === id);
+  }
+  function healthAction(h: HealthIssue): string {
+    return h.kind === 'not-owned' ? 'Delete' : h.kind === 'excess-qty' ? 'Set qty' : 'Reprice';
+  }
+  function driftWhy(d: DriftRow): string {
+    const pct = Math.round(d.delta_pct * 100);
+    return d.kind === 'overpriced'
+      ? `${pct}% above the last snapshot's clearing price — a starting point, not a quote${d.thin ? ' (thin book)' : ''}.`
+      : `${pct}% under the last snapshot's clearing price — you may be leaving plat on the table${d.thin ? ' (thin book)' : ''}.`;
+  }
 </script>
 
-<section class="card orders">
-  <header class="row">
-    <h2>My WFM listings</h2>
-    <div class="row gap-sm">
-      <span class="muted">
-        {#if phase === 'loading' || phase === 'idle'}Fetching orders…
-        {:else if phase === 'done'}{orders.length} active
-        {:else if phase === 'locked'}unlock required
-        {/if}
-      </span>
-      <button
-        class="tiny ghost"
-        onclick={() => bulkSetVisible(true)}
-        disabled={bulkBusy || orders.every((o) => o.visible)}
-        title="Make every listing visible to buyers"
-      >All visible</button>
-      <button
-        class="tiny ghost"
-        onclick={() => bulkSetVisible(false)}
-        disabled={bulkBusy || orders.every((o) => !o.visible)}
-        title="Hide every listing from buyers"
-      >All hidden</button>
-      {#if canLive}
-        <button
-          class="ghost"
-          onclick={checkLive}
-          disabled={liveState === 'running' || phase !== 'done' || orders.length === 0}
-          title="Ask warframe.market for the best online asks and bids on each of your sell listings' exact rank / refinement — your own order excluded — and flag what's worth fixing."
-        >
-          {#if liveState === 'running'}Checking… {liveProgress.done}/{liveProgress.total}
-          {:else if liveState === 'done'}Re-check live
-          {:else}Check live{/if}
-        </button>
+<!-- Slot 2: Listing health as a fix queue — one decision, one button per row.
+     Slot 3/4: controls row inside the orders table's border, then the table. -->
+<section class="wrap tw health" aria-label="Listing health">
+  <div class="bar">
+    <h3>Listing health</h3>
+    <span class="exp">
+      {#if phase === 'loading' || phase === 'idle'}Fetching orders…
+      {:else if phase === 'locked'}unlock required
+      {:else if phase === 'error'}couldn't load orders
+      {:else if queue.length > 0}{queue.length} of {orders.length} {orders.length === 1 ? 'listing needs' : 'listings need'} attention · fixes apply immediately
+      {:else if live.size > 0}no issues in {orders.length} {orders.length === 1 ? 'listing' : 'listings'} · checked against the live top-of-book
+      {:else if ownedQty}no issues in {orders.length} {orders.length === 1 ? 'listing' : 'listings'} · quantities checked against your last scan
+      {:else}nothing flagged yet{#if canLive} — check live to compare your asks with the online top-of-book{/if}
       {/if}
-      <button class="ghost" onclick={loadOrders} disabled={phase === 'loading'}>Refresh</button>
-    </div>
-  </header>
-
-  {#if liveState === 'error' && liveError}
-    <div class="muted bad">Live check failed: {liveError}</div>
-  {/if}
-
-  {#if health.length > 0}
-    <div class="health">
-      <p class="health-lead">
-        <strong>Listing health:</strong>
+    </span>
+    {#if health.length > 0}
+      <span class="chips">
         {#if healthSummary.overpriced}<span class="chip warn">{healthSummary.overpriced} above the market</span>{/if}
         {#if healthSummary.underbid}<span class="chip warn">{healthSummary.underbid} under a live bid</span>{/if}
         {#if healthSummary.excessQty}<span class="chip">{healthSummary.excessQty} over-quantity</span>{/if}
         {#if healthSummary.notOwned}<span class="chip bad">{healthSummary.notOwned} not owned</span>{/if}
-        {#if healthSummary.overpriced + healthSummary.underbid > 1}
-          <button class="tiny" onclick={fixAllPrices} disabled={fixAllBusy} title="Reprice every flagged listing: match the lowest other ask, or meet the higher bid. Quantity fixes and deletions stay one click each.">Fix all prices</button>
-        {/if}
-      </p>
-      <ul class="drift-list">
-        {#each health as h (h.id + h.kind)}
-          <li class="drift-row">
-            <span class="drift-name" title={h.slug}>{h.name}</span>
-            <span class="drift-move" title={h.why}>
-              {#if h.kind === 'overpriced' || h.kind === 'underbid'}
-                {h.current}p → <strong>{h.suggested}p</strong>
-                <span class="drift-kind {h.kind === 'overpriced' ? 'overpriced' : 'underpriced'}">{h.kind === 'overpriced' ? 'above lowest ask' : 'under a bid'}</span>
-              {:else if h.kind === 'excess-qty'}
-                ×{h.current} → <strong>×{h.suggested}</strong>
-                <span class="drift-kind">more listed than owned</span>
-              {:else}
-                ×{h.current}
-                <span class="drift-kind overpriced">not in your inventory</span>
-              {/if}
-            </span>
-            <button
-              class="tiny"
-              onclick={() => applyFix(h)}
-              disabled={busyIds.has(h.id)}
-              title={h.why}
-            >{h.kind === 'not-owned' ? 'Delete' : h.kind === 'excess-qty' ? 'Set qty' : 'Reprice'}</button>
-          </li>
-        {/each}
-      </ul>
-    </div>
+      </span>
+    {/if}
+    <span class="grow"></span>
+    {#if canLive}
+      <button
+        class="btn"
+        onclick={checkLive}
+        disabled={liveState === 'running' || phase !== 'done' || orders.length === 0}
+        title="Ask warframe.market for the best online asks and bids on each of your sell listings' exact rank / refinement — your own order excluded — and flag what's worth fixing."
+      >
+        {#if liveState === 'running'}Checking… {liveProgress.done}/{liveProgress.total}
+        {:else if liveState === 'done'}Re-check live
+        {:else}Check live{/if}
+      </button>
+    {/if}
+    {#if healthSummary.overpriced + healthSummary.underbid > 1}
+      <button class="btn primary" onclick={fixAllPrices} disabled={fixAllBusy} title="Reprice every flagged listing: match the lowest other ask, or meet the higher bid. Quantity fixes and deletions stay one click each.">Fix all prices</button>
+    {/if}
+  </div>
+
+  {#if liveState === 'error' && liveError}
+    <div class="line bad">Live check failed: {liveError}</div>
   {/if}
 
-  <!-- Snapshot-based drift is the offline fallback; once a live check has run,
-       Listing Health above covers the same orders with exact figures, so the
-       two never show together. -->
-  {#if drifted.length > 0 && live.size === 0}
-    <div class="drift">
-      <p class="drift-lead">
-        The market moved under {drifted.length}
-        {drifted.length === 1 ? 'listing' : 'listings'}. Prices come from the
-        last snapshot, so treat them as a starting point, not a quote{#if canLive} — or <button class="linkish" onclick={checkLive} disabled={liveState === 'running'}>check live</button> for exact figures{/if}.
-      </p>
-      <ul class="drift-list">
-        {#each drifted as d (d.id)}
-          <li class="drift-row">
-            <span class="drift-name" title={d.slug}>{d.name}</span>
-            <span class="drift-move">
-              {d.listed}p → <strong>{d.suggested}p</strong>
-              <span class="drift-kind {d.kind}">
-                {d.kind === 'overpriced' ? 'above market' : 'under market'}
-                ({Math.round(d.delta_pct * 100)}%)
-              </span>
-              {#if d.thin}
-                <span class="drift-thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor — thin books make this a weak signal.">thin</span>
-              {/if}
-            </span>
-            <button
-              class="tiny"
-              onclick={() => reprice(d)}
-              disabled={busyIds.has(d.id)}
-              title="Update this listing to {d.suggested}p on warframe.market"
-            >Reprice</button>
-          </li>
+  {#if queue.length > 0}
+    <div class="scroll">
+    <table class="tw fixed queue">
+      <colgroup>
+        <col style="width:16rem" />
+        <col style="width:3rem" />
+        <col style="width:4rem" />
+        <col style="width:4.5rem" />
+        <col style="width:4.5rem" />
+        <col />
+        <col style="width:6rem" />
+      </colgroup>
+      <thead><tr>
+        <th class="l">Item</th>
+        <th title="Listed quantity">Qty</th>
+        <th title="Your ask">Listed</th>
+        <th title="Lowest other online ask for this exact tier (live check)">Live ask</th>
+        <th title="Highest online bid for this exact tier (live check)">Live bid</th>
+        <th class="l">Why</th>
+        <th></th>
+      </tr></thead>
+      <tbody>
+        {#each queue as q (q.key)}
+          {@const o = orderById(q.id)}
+          {@const t = o ? liveForOrder(o) : null}
+          {@const busy = busyIds.has(q.id)}
+          <tr class:busy>
+            <td class="l" title={q.slug}>{q.name}</td>
+            <td>{o?.quantity ?? '?'}</td>
+            <td class="fg">{o?.platinum ?? '?'}<span class="unit">p</span></td>
+            <td>{#if t && !t.error && t.low_sell != null}{t.low_sell}<span class="unit">p</span>{:else}<span class="faint">—</span>{/if}</td>
+            <td>{#if t && !t.error && t.top_buy != null}{t.top_buy}<span class="unit">p</span>{:else}<span class="faint">—</span>{/if}</td>
+            {#if q.kind === 'health'}
+              <td class="reason" class:warn={q.h.kind === 'overpriced' || q.h.kind === 'underbid'} class:bad={q.h.kind === 'not-owned'} title={q.h.why}>
+                {#if q.h.kind === 'overpriced' || q.h.kind === 'underbid'}
+                  <span class="to">{q.h.current}p → <b>{q.h.suggested}p</b></span>
+                  {q.h.kind === 'overpriced' ? 'above the lowest other ask' : 'under a live bid'}
+                {:else if q.h.kind === 'excess-qty'}
+                  <span class="to">×{q.h.current} → <b>×{q.h.suggested}</b></span>
+                  more listed than owned
+                {:else}
+                  <span class="to">×{q.h.current}</span>
+                  not in your inventory
+                {/if}
+              </td>
+              <td class="act">
+                <button class="btn xs" class:bad={q.h.kind === 'not-owned'} onclick={() => applyFix(q.h)} disabled={busy} title={q.h.why}>{healthAction(q.h)}</button>
+              </td>
+            {:else}
+              <td class="reason" class:warn={q.d.kind === 'overpriced'} title={driftWhy(q.d)}>
+                <span class="to">{q.d.listed}p → <b>{q.d.suggested}p</b></span>
+                {q.d.kind === 'overpriced' ? 'above market' : 'under market'} ({Math.round(q.d.delta_pct * 100)}%, snapshot)
+                {#if q.d.thin}<span class="tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor — thin books make this a weak signal.">thin</span>{/if}
+              </td>
+              <td class="act">
+                <button class="btn xs" onclick={() => reprice(q.d)} disabled={busy} title="Update this listing to {q.d.suggested}p on warframe.market">Reprice</button>
+              </td>
+            {/if}
+          </tr>
         {/each}
-      </ul>
+      </tbody>
+    </table>
     </div>
+    {#if live.size === 0 && drifted.length > 0}
+      <div class="line">
+        <span class="exp">Snapshot rows compare against the last market snapshot (up to 2 h old) and can't tell whose order is whose{#if canLive}&nbsp;— <button class="linkish" onclick={checkLive} disabled={liveState === 'running'}>check live</button> for exact figures{/if}.</span>
+      </div>
+    {/if}
   {/if}
+</section>
+
+<section class="wrap tw orders" aria-label="My WFM listings">
+  <div class="bar">
+    <span class="lbl">Show</span>
+    <span class="seg" role="group" aria-label="Show">
+      <button class:on={show === 'all'} aria-pressed={show === 'all'} onclick={() => (show = 'all')}>All {counts.all}</button>
+      <button class:on={show === 'sell'} aria-pressed={show === 'sell'} onclick={() => (show = 'sell')}>Sell {counts.sell}</button>
+      <button class:on={show === 'buy'} aria-pressed={show === 'buy'} onclick={() => (show = 'buy')}>Buy {counts.buy}</button>
+      <button class:on={show === 'hidden'} aria-pressed={show === 'hidden'} onclick={() => (show = 'hidden')}>Hidden {counts.hidden}</button>
+      <button class:on={show === 'issues'} aria-pressed={show === 'issues'} onclick={() => (show = 'issues')}>Issues {counts.issues}</button>
+    </span>
+    <input class="input" type="text" placeholder="Filter by name…" bind:value={nameFilter} aria-label="Filter orders by name" />
+    <span class="grow"></span>
+    <span class="count">
+      {#if phase === 'loading' || phase === 'idle'}Fetching orders…
+      {:else if phase === 'done'}<b>{shown.length === orders.length ? orders.length : `${shown.length} of ${orders.length}`}</b> {orders.length === 1 ? 'order' : 'orders'}{#if listedValue > 0}&nbsp;· <b>{listedValue.toLocaleString()}</b>p listed{/if}
+      {:else if phase === 'locked'}unlock required
+      {/if}
+    </span>
+    <button
+      class="btn ghost"
+      onclick={() => bulkSetVisible(true)}
+      disabled={bulkBusy || orders.every((o) => o.visible)}
+      title="Make every listing visible to buyers"
+    >All visible</button>
+    <button
+      class="btn ghost"
+      onclick={() => bulkSetVisible(false)}
+      disabled={bulkBusy || orders.every((o) => !o.visible)}
+      title="Hide every listing from buyers"
+    >All hidden</button>
+    <button class="btn" onclick={loadOrders} disabled={phase === 'loading'}>Refresh</button>
+  </div>
 
   {#if phase === 'error'}
-    <div class="muted bad">Couldn't load orders: {error}</div>
+    <div class="line bad">Couldn't load orders: {error}</div>
   {:else if phase === 'locked'}
-    <div class="muted">Unlock warframe.market to see your orders.</div>
+    <div class="line"><span class="exp">Unlock warframe.market to see your orders.</span></div>
   {:else if phase === 'done' && orders.length === 0}
-    <div class="muted">No active listings.</div>
+    <div class="line"><span class="exp">No active listings.</span></div>
   {:else if orders.length > 0}
     <div class="scroll">
-      <table>
+      <table class="tw fixed">
+        <colgroup>
+          <col />
+          <col style="width:4rem" />
+          <col style="width:3rem" />
+          <col style="width:10rem" />
+          {#if live.size > 0}<col style="width:4.5rem" /><col style="width:4.5rem" />{/if}
+          <col style="width:4.5rem" />
+          <col style="width:6.5rem" />
+        </colgroup>
         <thead>
           <tr>
-            <th>Item</th>
+            <th class="l">Item</th>
             <th>Type</th>
             <th>Qty</th>
             <th>Price</th>
+            {#if live.size > 0}
+              <th title="Lowest other online ask for this exact tier">Live ask</th>
+              <th title="Highest online bid for this exact tier">Live bid</th>
+            {/if}
             <th>Visible</th>
             <th></th>
           </tr>
         </thead>
         <tbody>
-          {#each orders as o (o.id)}
+          {#each shown as o (o.id)}
             {@const busy = busyIds.has(o.id)}
-            <tr class:dim={busy} class:confirming={confirmId === o.id}>
-              <td>{itemName(o)}</td>
-              <td class:sell={o.type === 'sell'} class:buy={o.type === 'buy'}>
-                {o.type ?? '?'}
-              </td>
-              <td class="right">{o.quantity ?? '?'}</td>
-              <td class="right">
+            {@const t = live.size > 0 ? liveForOrder(o) : null}
+            <tr class:busy class:confirming={confirmId === o.id}>
+              <td class="l">{itemName(o)}</td>
+              <td><span class="type" class:buy={o.type === 'buy'}>{o.type ?? '?'}</span></td>
+              <td>{o.quantity ?? '?'}</td>
+              <td class="price">
                 {#if editingId === o.id}
-                  <input type="number" bind:value={editValue} min="1" max={MAX_PLATINUM} style="width:64px" />
-                  <button class="tiny" onclick={() => saveEdit(o)} disabled={busy}>save</button>
-                  <button class="tiny ghost" onclick={() => (editingId = null)}>×</button>
+                  <input type="number" bind:value={editValue} min="1" max={MAX_PLATINUM} aria-label="New price" />
+                  <button class="btn xs" onclick={() => saveEdit(o)} disabled={busy}>save</button>
+                  <button class="btn xs x" onclick={() => (editingId = null)} title="Cancel">×</button>
                 {:else}
-                  {o.platinum}p
-                  <button class="tiny ghost" onclick={() => startEdit(o)} disabled={busy} title="Edit price">✎</button>
+                  <span class="fg">{o.platinum}<span class="unit">p</span></span>
+                  <button class="btn xs ghost edit" onclick={() => startEdit(o)} disabled={busy} title="Edit price">✎</button>
                 {/if}
               </td>
+              {#if live.size > 0}
+                <td>{#if t && !t.error && t.low_sell != null}{t.low_sell}<span class="unit">p</span>{:else}<span class="faint">—</span>{/if}</td>
+                <td>{#if t && !t.error && t.top_buy != null}{t.top_buy}<span class="unit">p</span>{:else}<span class="faint">—</span>{/if}</td>
+              {/if}
               <td>
                 <button
-                  class="vis {o.visible ? 'on' : 'off'}"
+                  class="visbtn {o.visible ? 'on' : 'off'}"
                   onclick={() => toggleVisible(o)}
                   disabled={busy}
                   title={o.visible ? 'Click to make hidden' : 'Click to make visible'}
-                >{o.visible ? 'on' : 'off'}</button>
+                ><span class="vis" class:off={!o.visible}>{o.visible ? 'ON' : 'OFF'}</span></button>
               </td>
-              <td>
+              <td class="act">
                 {#if confirmId === o.id}
-                  <button class="confirm tiny bad" onclick={() => removeOne(o)} disabled={busy} title="Confirm delete">Confirm</button>
-                  <button class="tiny ghost" onclick={() => (confirmId = null)} title="Cancel">×</button>
+                  <button class="btn xs bad" onclick={() => removeOne(o)} disabled={busy} title="Confirm delete">Confirm</button>
+                  <button class="btn xs x" onclick={() => (confirmId = null)} title="Cancel">×</button>
                 {:else}
-                  <button class="tiny bad" onclick={() => removeOne(o)} disabled={busy} title="Delete">✕</button>
+                  <button class="btn xs x" onclick={() => removeOne(o)} disabled={busy} title="Delete" aria-label="Delete {itemName(o)}">✕</button>
                 {/if}
               </td>
             </tr>
@@ -598,139 +703,48 @@
         </tbody>
       </table>
     </div>
+    {#if shown.length === 0}
+      <div class="line"><span class="exp">No orders match.</span> <button class="btn xs ghost" onclick={() => { show = 'all'; nameFilter = ''; }}>Clear</button></div>
+    {/if}
   {/if}
 </section>
 
 <Toast {toasts} ondismiss={dismissToast} />
 
 <style>
-  .orders { gap: 10px; }
-  .orders h2 {
-    margin: 0;
-    font-size: 13px;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    color: var(--muted);
-    font-weight: 600;
+  /* Both panels stack on the workspace rhythm. */
+  .health { margin-bottom: var(--stack); }
+  /* Bars may wrap on a narrow desk (the seg + filter + three buttons). */
+  .bar { flex-wrap: wrap; row-gap: var(--s1); padding-top: var(--s1); padding-bottom: var(--s1); }
+  .chips { display: inline-flex; gap: var(--s1); }
+  .chip {
+    display: inline-flex; align-items: center;
+    height: var(--ctl-xs);
+    padding: 0 var(--s2);
+    font-size: 11px; color: var(--muted);
+    border: 1px solid var(--border); border-radius: var(--radius-tag);
   }
-  .scroll {
-    overflow: auto;
-    max-height: 360px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-ctl);
-  }
-  table {
-    width: 100%;
-    border-collapse: collapse;
-    font-variant-numeric: tabular-nums;
-  }
-  th, td {
-    padding: 6px 10px;
-    text-align: left;
-    border-bottom: 1px solid var(--border);
-    font-size: 12.5px;
-  }
-  th {
-    background: var(--panel-2);
-    color: var(--muted);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    font-size: 11px;
-    position: sticky;
-    top: 0;
-  }
-  td.right { text-align: right; }
-  td.sell { color: var(--good); font-weight: 500; }
-  td.buy { color: var(--accent); font-weight: 500; }
-  tr.dim { opacity: 0.5; }
-  /* Pending destructive row — the two-tap delete's armed state. The 6% tint is
-     faint by design; the 3px left border is the primary signal. */
-  tr.confirming {
-    background: color-mix(in srgb, var(--bad) 6%, transparent);
-    border-left: 3px solid var(--bad);
-  }
-  .confirm { color: var(--muted); font-size: 12px; white-space: nowrap; }
-  .vis {
-    appearance: none;
-    border: 1px solid var(--border);
-    background: var(--panel-2);
-    color: var(--muted);
-    font-size: 11px;
-    padding: 2px 8px;
-    border-radius: var(--radius-input);
-    cursor: pointer;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-  .vis.on { color: var(--good); border-color: color-mix(in srgb, var(--good) 60%, var(--border)); }
-  .vis.off { color: var(--muted); }
-  .vis:hover:not(:disabled) { background: var(--panel); }
-  .tiny {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--muted);
-    font-size: 11px;
-    padding: 1px 6px;
-    border-radius: var(--radius-input);
-    cursor: pointer;
-  }
-  .tiny:hover:not(:disabled) { color: var(--fg); }
-  .tiny.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--border)); }
-  .tiny.bad:hover:not(:disabled) { background: color-mix(in srgb, var(--bad) 12%, transparent); }
-  input[type="number"] {
-    font: inherit;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    color: var(--fg);
-    border-radius: var(--radius-input);
-    padding: 2px 4px;
-  }
-  .muted.bad { color: var(--bad); }
-  .drift {
-    border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--border));
-    background: color-mix(in srgb, var(--warn) 6%, transparent);
-    border-radius: var(--radius-ctl);
-    padding: 10px 12px;
-    margin-bottom: 12px;
-  }
-  .drift-lead { margin: 0 0 8px; font-size: 12px; color: var(--muted); }
-  button.linkish { background: none; border: 0; padding: 0; color: var(--fg); text-decoration: underline dotted; cursor: pointer; font: inherit; }
-  .health {
-    margin: 10px 0 0;
-    padding: 10px 12px;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-panel);
-    background: var(--panel-2);
-  }
-  .health-lead { margin: 0 0 8px; font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-  .health-lead strong { color: var(--fg); }
-  .chip { border: 1px solid var(--border); border-radius: var(--radius-pill); padding: 1px 8px; font-size: 11px; color: var(--muted); }
   .chip.warn { color: var(--warn); border-color: var(--warn); }
   .chip.bad { color: var(--bad); border-color: var(--bad); }
-  .drift-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
-  .drift-row { display: flex; align-items: center; gap: 10px; font-size: 12px; }
-  .drift-name {
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  .line.bad { color: var(--bad); }
+  .orders .input { width: 12rem; }
+  .queue { min-width: 48rem; }
+  .queue td.reason .to { font-family: var(--font-mono); color: var(--muted); margin-right: var(--s2); }
+  .queue td.reason .to b { color: var(--fg); font-weight: 600; }
+  /* Price cell: number + a quiet ✎; the inline editor swaps in at 24px. */
+  td.price { overflow: visible; }
+  td.price .edit { margin-left: var(--s1); color: var(--muted); border-color: transparent; }
+  td.price .edit:hover:not(:disabled) { color: var(--fg); border-color: var(--border); }
+  td.price input[type="number"] {
+    font: inherit; font-family: var(--font-mono); font-size: 12px;
+    height: var(--ctl-xs); width: 4.5rem; padding: 0 var(--s1);
+    background: var(--panel-2); color: var(--fg);
+    border: 1px solid var(--border); border-radius: var(--radius-input);
+    vertical-align: middle;
   }
-  .drift-move { flex: 0 0 auto; font-family: var(--font-mono); }
-  .drift-kind { color: var(--muted); font-family: inherit; }
-  .drift-kind.overpriced { color: var(--warn); }
-  .drift-thin {
-    padding: 1px 5px;
-    font-size: 9.5px;
-    font-weight: 600;
-    letter-spacing: .1em;
-    text-transform: uppercase;
-    border: 1px solid currentColor;
-    border-radius: var(--radius-tag);
-    color: var(--warn);
-    font-family: inherit;
-  }
+  /* Visible toggle: a bare button around the ON/OFF pill. */
+  .visbtn { appearance: none; background: transparent; border: none; padding: 0; height: var(--ctl-xs); cursor: pointer; }
+  .visbtn:hover:not(:disabled) { background: transparent; }
+  .visbtn:hover:not(:disabled) .vis { background: var(--panel-2); }
+  button.linkish { background: none; border: 0; padding: 0; color: var(--fg); text-decoration: underline dotted; cursor: pointer; font: inherit; }
 </style>
