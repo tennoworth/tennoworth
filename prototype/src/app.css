@@ -625,7 +625,7 @@ html[data-look="yorha"] .rp-primary,
 html[data-look="yorha"] .btn.primary { background: var(--ink-bar); color: var(--on-ink); border-color: var(--ink-bar); }
 html[data-look="yorha"] .list-cta:hover:not(:disabled),
 html[data-look="yorha"] .refresh-pop .rp-primary:hover:not(:disabled),
-html[data-look="yorha"] .btn.primary:hover { background: var(--fg); color: var(--panel); filter: none; }
+html[data-look="yorha"] .btn.primary:hover:not(:disabled) { background: var(--fg); color: var(--panel); filter: none; }
 /* Shared .wrap.tw rails are ink title bars too (same as .picks-head). */
 html[data-look="yorha"] .wrap.tw > .rail { background: var(--ink-bar); color: var(--on-ink-muted); border-bottom: 0; }
 html[data-look="yorha"] .wrap.tw > .rail h3 { color: var(--on-ink); font: 500 12px/1rem var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
@@ -657,6 +657,14 @@ html[data-look="yorha"] .modal > header h2, html[data-look="yorha"] dialog.crypt
 html[data-look="yorha"] .modal > header .x { color: var(--on-ink); border-color: var(--on-ink); }
 html[data-look="yorha"] dialog.cryptobox header { padding: 8px 12px; margin: -20px -20px 0; }
 html[data-look="yorha"] dialog.cryptobox header p { color: var(--on-ink-muted); }
+/* Focus ring on the ink surfaces: the global ring is --accent, which in this
+   look IS the ink (~1.1:1 on the bar) — paint it in the bar's foreground. */
+html[data-look="yorha"] .wrap.tw > .rail :focus-visible,
+html[data-look="yorha"] .picks-head :focus-visible,
+html[data-look="yorha"] .card > h3:first-child :focus-visible,
+html[data-look="yorha"] .faq > h2 :focus-visible,
+html[data-look="yorha"] .modal > header :focus-visible,
+html[data-look="yorha"] dialog.cryptobox header :focus-visible { outline-color: var(--on-ink); }
 /* Segmented controls: dotted internal rules, paper active cell. */
 html[data-look="yorha"] .seg-btn { border-left-style: dotted; }
 html[data-look="yorha"] .seg-btn.active { color: var(--fg); background: var(--panel); }
@@ -790,6 +798,14 @@ html[data-look="vitruvian"] .modal > header h2, html[data-look="vitruvian"] dial
 html[data-look="vitruvian"] .modal > header .x { color: var(--on-ink); border-color: var(--on-ink); }
 html[data-look="vitruvian"] dialog.cryptobox header { padding: 8px 12px; margin: -20px -20px 0; }
 html[data-look="vitruvian"] dialog.cryptobox header p { color: var(--on-ink-muted); }
+/* Focus ring on the ink surfaces: sienna on ink is ~2.1:1 — use the bar's
+   foreground instead. */
+html[data-look="vitruvian"] .wrap.tw > .rail :focus-visible,
+html[data-look="vitruvian"] .picks-head :focus-visible,
+html[data-look="vitruvian"] .card > h3:first-child :focus-visible,
+html[data-look="vitruvian"] .faq > h2 :focus-visible,
+html[data-look="vitruvian"] .modal > header :focus-visible,
+html[data-look="vitruvian"] dialog.cryptobox header :focus-visible { outline-color: var(--on-ink); }
 html[data-look="vitruvian"] .list-cta, html[data-look="vitruvian"] .rp-primary, html[data-look="vitruvian"] .btn.primary {
   background: var(--ink-bar); color: var(--on-ink); border-color: var(--ink-bar); box-shadow: inset 0 -2px 0 var(--accent);
 }
