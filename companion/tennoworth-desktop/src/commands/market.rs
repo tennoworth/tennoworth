@@ -75,6 +75,24 @@ pub fn top_sellables(
     rows
 }
 
+/// The cached history.json body (relics.run-derived, year-long daily medians),
+/// or null when never fetched. No network.
+#[tauri::command]
+pub fn cached_history(cache: State<'_, MarketCache>) -> Option<String> {
+    cache.cached_history()
+}
+
+/// Conditionally refresh history.json from tennoworth.app — same ETag cache
+/// routine as the market snapshot, on demand (the SPA asks when a 1-year
+/// surface is opened, not at boot: it is ~1 MB gzipped and optional).
+#[tauri::command]
+pub async fn refresh_history(cache: State<'_, MarketCache>) -> Result<RefreshResult, String> {
+    let dir = cache.dir();
+    tauri::async_runtime::spawn_blocking(move || market::refresh_history(&dir))
+        .await
+        .map_err(|e| format!("history refresh task failed to run: {e}"))
+}
+
 /// Progress event for [`live_top_prices`]: `{ done, total }` after each item.
 pub const EVENT_LIVE_TOP_PROGRESS: &str = "live-top-progress";
 

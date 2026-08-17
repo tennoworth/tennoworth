@@ -11,21 +11,46 @@
     type BrowseRow,
   } from '../lib/market-browse';
   import { sparklinePoints } from '../lib/sparkline';
+  import { weekly, yearStats, type History } from '../lib/history';
 
-  // Powered ONLY by the already-loaded market.json — no fetches here. App.svelte
-  // passes the snapshot plus its own freshness/staleness derivations so the
-  // status line stays a single source of truth with the dashboard.
+  // Powered by the already-loaded market.json — the only fetch this component
+  // can trigger is the optional year-long history, and only when the user
+  // flips the "1 year" toggle (App passes the transport's loader so the
+  // desktop keeps its egress in Rust).
   let {
     market,
     staleness = null,
     freshness = 'unknown',
+    loadHistory = null,
   }: {
     market: Market;
     staleness?: string | null;
     freshness?: 'fresh' | 'aging' | 'stale' | 'unknown';
+    loadHistory?: (() => Promise<History | null>) | null;
   } = $props();
 
   let query = $state('');
+
+  // ---- 1-year view (history.json, on demand) ----
+  let showYear = $state(false);
+  let history = $state<History | null>(null);
+  type HistState = 'idle' | 'loading' | 'ready' | 'unavailable';
+  let histState = $state<HistState>('idle');
+  async function toggleYear(): Promise<void> {
+    showYear = !showYear;
+    if (showYear && histState === 'idle' && loadHistory) {
+      histState = 'loading';
+      history = await loadHistory();
+      histState = history ? 'ready' : 'unavailable';
+    }
+  }
+  function yearFor(slug: string) {
+    const s = history?.items[slug];
+    if (!s) return null;
+    const stats = yearStats(s);
+    if (!stats) return null;
+    return { stats, spark: weekly(s, 52) };
+  }
 
   // Index + the standing reports are pure derivations of the snapshot.
   let index = $derived(buildBrowseIndex(market));
@@ -81,6 +106,14 @@
     <span class="market-status">
       <span class="dot {freshness}" role="img" aria-label="Market data: {freshnessLabel(freshness)}" title={freshnessLabel(freshness)}></span>
       Market snapshot {staleness ?? '—'}{freshness !== 'unknown' ? ` · ${freshness}` : ''}
+      {#if loadHistory}
+        <button class="year-toggle" class:on={showYear} onclick={toggleYear} aria-pressed={showYear}
+          title="Show each item's last year of daily prices (relics.run archive) instead of the last 7 days">
+          {histState === 'loading' ? 'Loading 1 year…' : '1 year'}
+        </button>
+        {#if showYear && histState === 'unavailable'}<span class="muted">· history unavailable right now</span>{/if}
+        {#if showYear && histState === 'ready' && history?.through}<span class="muted">· through {history.through}</span>{/if}
+      {/if}
     </span>
   </div>
 
@@ -96,18 +129,39 @@
       {:else if r.vault === 'vaulting-soon'}
         <span class="vault-badge soon" title="Vaulting soon — supply about to be capped">soon</span>
       {/if}
-      {#if r.deltaPct != null && Math.abs(r.deltaPct) >= 1}
-        {#if r.deltaPct > 0}
-          <span class="trend up" title="Latest median {r.deltaPct.toFixed(0)}% above the 90-day median">▲{r.deltaPct.toFixed(0)}%</span>
+      {#if showYear && histState === 'ready'}
+        {@const y = yearFor(r.slug)}
+        {#if y}
+          {#if y.stats.deltaPct != null && Math.abs(y.stats.deltaPct) >= 1}
+            {#if y.stats.deltaPct > 0}
+              <span class="trend up" title="Latest daily median {y.stats.deltaPct.toFixed(0)}% above where it was a year ago ({y.stats.baseline}p → {y.stats.latest}p; year low {y.stats.low}p, high {y.stats.high}p)">▲{y.stats.deltaPct.toFixed(0)}% 1y</span>
+            {:else}
+              <span class="trend down" title="Latest daily median {Math.abs(y.stats.deltaPct).toFixed(0)}% below where it was a year ago ({y.stats.baseline}p → {y.stats.latest}p; year low {y.stats.low}p, high {y.stats.high}p)">▼{Math.abs(y.stats.deltaPct).toFixed(0)}% 1y</span>
+            {/if}
+          {/if}
+          {#if sparklinePoints(y.spark, 84, 16)}
+            <svg class="sparkline year" viewBox="0 0 84 16" width="84" height="16" aria-hidden="true">
+              <title>Weekly medians over the last year: low {y.stats.low}p, high {y.stats.high}p, {y.stats.tradedDays} traded days</title>
+              <polyline points={sparklinePoints(y.spark, 84, 16)} fill="none" stroke="currentColor" stroke-width="1.5" />
+            </svg>
+          {/if}
         {:else}
-          <span class="trend down" title="Latest median {Math.abs(r.deltaPct).toFixed(0)}% below the 90-day median">▼{Math.abs(r.deltaPct).toFixed(0)}%</span>
+          <span class="muted thin" title="Fewer than 20 traded days in the last year">thin history</span>
         {/if}
-      {/if}
-      {#if sparklinePoints(r.medians_7d, 56, 16)}
-        <svg class="sparkline" viewBox="0 0 56 16" width="56" height="16" aria-hidden="true">
-          <title>7-day medians: {r.medians_7d?.join(', ')}</title>
-          <polyline points={sparklinePoints(r.medians_7d, 56, 16)} fill="none" stroke="currentColor" stroke-width="1.5" />
-        </svg>
+      {:else}
+        {#if r.deltaPct != null && Math.abs(r.deltaPct) >= 1}
+          {#if r.deltaPct > 0}
+            <span class="trend up" title="Latest median {r.deltaPct.toFixed(0)}% above the 90-day median">▲{r.deltaPct.toFixed(0)}%</span>
+          {:else}
+            <span class="trend down" title="Latest median {Math.abs(r.deltaPct).toFixed(0)}% below the 90-day median">▼{Math.abs(r.deltaPct).toFixed(0)}%</span>
+          {/if}
+        {/if}
+        {#if sparklinePoints(r.medians_7d, 56, 16)}
+          <svg class="sparkline" viewBox="0 0 56 16" width="56" height="16" aria-hidden="true">
+            <title>7-day medians: {r.medians_7d?.join(', ')}</title>
+            <polyline points={sparklinePoints(r.medians_7d, 56, 16)} fill="none" stroke="currentColor" stroke-width="1.5" />
+          </svg>
+        {/if}
       {/if}
       <span class="price" title="Average of recent WFM sales — list below it to sell faster">{plat(r.avg)}<span class="unit">p</span></span>
       <span class="vol" title="Trades completed in the last 48 hours">{r.vol.toLocaleString()}<span class="unit">/48h</span></span>
@@ -316,6 +370,21 @@
   .unit { color: var(--muted); font-size: 10px; margin-left: 1px; }
 
   .sparkline { color: var(--accent); flex-shrink: 0; vertical-align: middle; opacity: 0.85; }
+  .sparkline.year { opacity: 0.95; }
+  .thin { font-size: 11px; }
+  .year-toggle {
+    margin-left: 8px;
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 1px 8px;
+    font-size: 11px;
+    cursor: pointer;
+    font: inherit;
+  }
+  .year-toggle.on { color: var(--fg); border-color: var(--accent); }
+  .year-toggle:hover { color: var(--fg); }
 
   .trend {
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;

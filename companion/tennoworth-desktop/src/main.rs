@@ -119,6 +119,8 @@ fn main() {
             commands::market::refresh_market,
             commands::market::top_sellables,
             commands::market::live_top_prices,
+            commands::market::cached_history,
+            commands::market::refresh_history,
             commands::watch::list_watches,
             commands::watch::add_watch,
             commands::watch::delete_watch,

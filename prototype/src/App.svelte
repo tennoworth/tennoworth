@@ -881,7 +881,7 @@
     {/if}
 
     {#if market}
-      <MarketBrowser {market} staleness={marketStaleness} freshness={marketFreshness} />
+      <MarketBrowser {market} staleness={marketStaleness} freshness={marketFreshness} loadHistory={() => transport.loadHistory()} />
     {/if}
 
     {#if !isDesktop}

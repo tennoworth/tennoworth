@@ -23,15 +23,50 @@ use std::time::Duration;
 /// `TENNOWORTH_MARKET_URL` so the verification probe can point the fetch at a
 /// local mock (200/304) or an unreachable host (offline) without a live server.
 const MARKET_URL: &str = "https://tennoworth.app/market.json";
-const CACHE_FILE: &str = "market.json";
-const ETAG_FILE: &str = "market.etag";
+const HISTORY_URL: &str = "https://tennoworth.app/history.json";
 /// Short — a slow refresh must never make the app feel stuck. The bundled/cached
 /// copy is already on screen; this is a background top-up.
 pub(crate) const TIMEOUT: Duration = Duration::from_secs(10);
 
-fn market_url() -> String {
-    std::env::var("TENNOWORTH_MARKET_URL").unwrap_or_else(|_| MARKET_URL.to_string())
+/// One cached live-data artifact: where it comes from, what it's called on
+/// disk, and which top-level field proves a 200 body is a whole, valid file.
+#[derive(Debug, Clone, Copy)]
+pub struct ArtifactSpec {
+    pub cache_file: &'static str,
+    pub etag_file: &'static str,
+    /// Top-level string field a valid body MUST carry (`updated_at` for
+    /// market.json, `generated_at` for history.json).
+    pub stamp_key: &'static str,
+    /// Env var that overrides the URL (probes point it at a local mock).
+    pub url_env: &'static str,
+    pub default_url: &'static str,
 }
+
+impl ArtifactSpec {
+    fn url(&self) -> String {
+        std::env::var(self.url_env).unwrap_or_else(|_| self.default_url.to_string())
+    }
+}
+
+/// The 2-hourly market snapshot — the app's price source.
+pub const MARKET: ArtifactSpec = ArtifactSpec {
+    cache_file: "market.json",
+    etag_file: "market.etag",
+    stamp_key: "updated_at",
+    url_env: "TENNOWORTH_MARKET_URL",
+    default_url: MARKET_URL,
+};
+
+/// The year-long daily price history (relics.run-derived, built on the box —
+/// see wfm-scrape/src/history.rs). ~1 MB gzipped; fetched on demand, not at
+/// boot, and there is no bundled floor: absent = the 1y surfaces simply hide.
+pub const HISTORY: ArtifactSpec = ArtifactSpec {
+    cache_file: "history.json",
+    etag_file: "history.etag",
+    stamp_key: "generated_at",
+    url_env: "TENNOWORTH_HISTORY_URL",
+    default_url: HISTORY_URL,
+};
 
 /// The result the SPA acts on. `updated` is true only when a validated 200
 /// delivered a new snapshot (the SPA parses `body` and swaps it in if its
@@ -62,7 +97,12 @@ impl MarketCache {
     /// cache. No network — a fast local read the SPA does at boot to prefer the
     /// cache over the bundled floor.
     pub fn cached(&self) -> Option<String> {
-        read_cache(&self.dir)
+        read_cache(&self.dir, &MARKET)
+    }
+
+    /// The cached history body, if any. No network.
+    pub fn cached_history(&self) -> Option<String> {
+        read_cache(&self.dir, &HISTORY)
     }
 
     /// Cloneable owned dir, so the async command can hand it to `spawn_blocking`
@@ -72,26 +112,26 @@ impl MarketCache {
     }
 }
 
-fn cache_path(dir: &Path) -> PathBuf {
-    dir.join(CACHE_FILE)
+fn cache_path(dir: &Path, spec: &ArtifactSpec) -> PathBuf {
+    dir.join(spec.cache_file)
 }
-fn etag_path(dir: &Path) -> PathBuf {
-    dir.join(ETAG_FILE)
+fn etag_path(dir: &Path, spec: &ArtifactSpec) -> PathBuf {
+    dir.join(spec.etag_file)
 }
 
-fn read_cache(dir: &Path) -> Option<String> {
-    std::fs::read_to_string(cache_path(dir))
+fn read_cache(dir: &Path, spec: &ArtifactSpec) -> Option<String> {
+    std::fs::read_to_string(cache_path(dir, spec))
         .ok()
         .filter(|s| !s.is_empty())
 }
 
-/// Pull the top-level `updated_at` string out of a snapshot body. Doubles as the
-/// validity gate for a fetched 200: a truncated or non-JSON body (or one missing
-/// `updated_at`) returns None and is refused, so a bad response can never clobber
-/// a good cache.
-fn parse_updated_at(body: &str) -> Option<String> {
+/// Pull the artifact's top-level stamp string (`updated_at` / `generated_at`)
+/// out of a body. Doubles as the validity gate for a fetched 200: a truncated
+/// or non-JSON body (or one missing the stamp) returns None and is refused, so
+/// a bad response can never clobber a good cache.
+fn parse_stamp(body: &str, key: &str) -> Option<String> {
     let v: serde_json::Value = serde_json::from_str(body).ok()?;
-    v.get("updated_at")?.as_str().map(str::to_string)
+    v.get(key)?.as_str().map(str::to_string)
 }
 
 /// Atomic write (tmp + rename), matching the repo-wide atomic-write rule — a
@@ -107,8 +147,8 @@ pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 
 /// "Nothing changed" outcome: report the cache's `updated_at` (parsed lazily) and
 /// its ETag, no body. Covers 304, non-200, and every network/IO failure.
-fn keep_cache(dir: &Path, etag: Option<String>) -> RefreshResult {
-    let updated_at = read_cache(dir).as_deref().and_then(parse_updated_at);
+fn keep_cache(dir: &Path, spec: &ArtifactSpec, etag: Option<String>) -> RefreshResult {
+    let updated_at = read_cache(dir, spec).as_deref().and_then(|b| parse_stamp(b, spec.stamp_key));
     RefreshResult {
         updated: false,
         updated_at,
@@ -121,11 +161,16 @@ fn keep_cache(dir: &Path, etag: Option<String>) -> RefreshResult {
 /// degrades to `keep_cache`. Runs inside `spawn_blocking` (reqwest::blocking must
 /// not run on an async worker thread), the same pattern `scan_inventory` uses.
 pub fn refresh(dir: &Path) -> RefreshResult {
-    refresh_with(dir, &market_url())
+    refresh_artifact(dir, &MARKET, &MARKET.url())
 }
 
-fn refresh_with(dir: &Path, url: &str) -> RefreshResult {
-    let prior_etag = std::fs::read_to_string(etag_path(dir))
+/// Same routine for history.json (see [`HISTORY`]).
+pub fn refresh_history(dir: &Path) -> RefreshResult {
+    refresh_artifact(dir, &HISTORY, &HISTORY.url())
+}
+
+fn refresh_artifact(dir: &Path, spec: &ArtifactSpec, url: &str) -> RefreshResult {
+    let prior_etag = std::fs::read_to_string(etag_path(dir, spec))
         .ok()
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
@@ -137,8 +182,8 @@ fn refresh_with(dir: &Path, url: &str) -> RefreshResult {
     {
         Ok(c) => c,
         Err(e) => {
-            eprintln!("tennoworth: market refresh client build failed: {e}");
-            return keep_cache(dir, prior_etag);
+            eprintln!("tennoworth: {} refresh client build failed: {e}", spec.cache_file);
+            return keep_cache(dir, spec, prior_etag);
         }
     };
 
@@ -151,8 +196,8 @@ fn refresh_with(dir: &Path, url: &str) -> RefreshResult {
         Err(e) => {
             // Offline / DNS / timeout / connection refused — the common case, not
             // an error the user should ever see. Log and keep the existing copy.
-            eprintln!("tennoworth: market refresh request failed: {e}");
-            return keep_cache(dir, prior_etag);
+            eprintln!("tennoworth: {} refresh request failed: {e}", spec.cache_file);
+            return keep_cache(dir, spec, prior_etag);
         }
     };
 
@@ -166,11 +211,11 @@ fn refresh_with(dir: &Path, url: &str) -> RefreshResult {
             .and_then(|v| v.to_str().ok())
             .map(str::to_string)
             .or(prior_etag);
-        return keep_cache(dir, etag);
+        return keep_cache(dir, spec, etag);
     }
     if !status.is_success() {
-        eprintln!("tennoworth: market refresh got HTTP {status}");
-        return keep_cache(dir, prior_etag);
+        eprintln!("tennoworth: {} refresh got HTTP {status}", spec.cache_file);
+        return keep_cache(dir, spec, prior_etag);
     }
 
     let new_etag = resp
@@ -181,28 +226,29 @@ fn refresh_with(dir: &Path, url: &str) -> RefreshResult {
     let body = match resp.text() {
         Ok(b) => b,
         Err(e) => {
-            eprintln!("tennoworth: market refresh read body failed: {e}");
-            return keep_cache(dir, prior_etag);
+            eprintln!("tennoworth: {} refresh read body failed: {e}", spec.cache_file);
+            return keep_cache(dir, spec, prior_etag);
         }
     };
 
     // Validate before caching: a truncated or non-JSON 200 must not overwrite a
-    // good cache. parse_updated_at is the gate AND gives us the timestamp.
-    let updated_at = match parse_updated_at(&body) {
+    // good cache. parse_stamp is the gate AND gives us the timestamp.
+    let updated_at = match parse_stamp(&body, spec.stamp_key) {
         Some(u) => u,
         None => {
             eprintln!(
-                "tennoworth: market refresh body invalid (len {}); keeping cache",
+                "tennoworth: {} refresh body invalid (len {}); keeping cache",
+                spec.cache_file,
                 body.len()
             );
-            return keep_cache(dir, prior_etag);
+            return keep_cache(dir, spec, prior_etag);
         }
     };
 
-    if let Err(e) = write_atomic(&cache_path(dir), body.as_bytes()) {
+    if let Err(e) = write_atomic(&cache_path(dir, spec), body.as_bytes()) {
         // Couldn't persist, but the fetch succeeded — hand the SPA the fresh body
         // for THIS session anyway (next launch just re-fetches without the ETag).
-        eprintln!("tennoworth: market cache write failed: {e}");
+        eprintln!("tennoworth: {} cache write failed: {e}", spec.cache_file);
         return RefreshResult {
             updated: true,
             updated_at: Some(updated_at),
@@ -214,10 +260,10 @@ fn refresh_with(dir: &Path, url: &str) -> RefreshResult {
     // missing/removed ETag file just means a full (non-conditional) GET later.
     match &new_etag {
         Some(tag) => {
-            let _ = write_atomic(&etag_path(dir), tag.as_bytes());
+            let _ = write_atomic(&etag_path(dir, spec), tag.as_bytes());
         }
         None => {
-            let _ = std::fs::remove_file(etag_path(dir));
+            let _ = std::fs::remove_file(etag_path(dir, spec));
         }
     }
 
@@ -302,15 +348,26 @@ mod tests {
     }
 
     #[test]
+    fn history_spec_validates_on_generated_at_and_caches_beside_market() {
+        let dir = temp_dir();
+        assert!(read_cache(&dir, &HISTORY).is_none());
+        write_atomic(&cache_path(&dir, &HISTORY), br#"{"generated_at":"2026-08-17T06:00:00Z","items":{}}"#).unwrap();
+        assert_eq!(read_cache(&dir, &MARKET), None, "history and market caches are separate files");
+        let kept = keep_cache(&dir, &HISTORY, None);
+        assert_eq!(kept.updated_at.as_deref(), Some("2026-08-17T06:00:00Z"));
+        assert_eq!(parse_stamp(r#"{"updated_at":"x"}"#, HISTORY.stamp_key), None, "market's stamp is not history's");
+    }
+
+    #[test]
     fn parse_updated_at_extracts_the_field_and_rejects_garbage() {
         assert_eq!(
-            parse_updated_at(BODY).as_deref(),
+            parse_stamp(BODY, "updated_at").as_deref(),
             Some("2026-07-20T10:00:00Z")
         );
-        assert_eq!(parse_updated_at("{}"), None); // valid JSON, no field
-        assert_eq!(parse_updated_at("not json at all"), None);
-        assert_eq!(parse_updated_at(r#"{"updated_at":"trunc"#), None); // truncated
-        assert_eq!(parse_updated_at(r#"{"updated_at":123}"#), None); // wrong type
+        assert_eq!(parse_stamp("{}", "updated_at"), None); // valid JSON, no field
+        assert_eq!(parse_stamp("not json at all", "updated_at"), None);
+        assert_eq!(parse_stamp(r#"{"updated_at":"trunc"#, "updated_at"), None); // truncated
+        assert_eq!(parse_stamp(r#"{"updated_at":123}"#, "updated_at"), None); // wrong type
     }
 
     #[test]
@@ -331,20 +388,20 @@ mod tests {
         let (url, handle) = spawn_mock(2);
 
         // Launch 1: no cache, no prior ETag → unconditional GET → 200.
-        let r1 = refresh_with(&dir, &url);
+        let r1 = refresh_artifact(&dir, &MARKET, &url);
         assert!(r1.updated, "first fetch should report updated");
         assert_eq!(r1.updated_at.as_deref(), Some("2026-07-20T10:00:00Z"));
         assert_eq!(r1.etag.as_deref(), Some(ETAG));
         assert_eq!(r1.body.as_deref(), Some(BODY));
         // Cache + ETag persisted.
-        assert_eq!(read_cache(&dir).as_deref(), Some(BODY));
+        assert_eq!(read_cache(&dir, &MARKET).as_deref(), Some(BODY));
         assert_eq!(
-            std::fs::read_to_string(etag_path(&dir)).unwrap().trim(),
+            std::fs::read_to_string(etag_path(&dir, &MARKET)).unwrap().trim(),
             ETAG
         );
 
         // Launch 2: prior ETag on disk → conditional GET → 304 → keep cache.
-        let r2 = refresh_with(&dir, &url);
+        let r2 = refresh_artifact(&dir, &MARKET, &url);
         assert!(!r2.updated, "304 must not report updated");
         assert_eq!(r2.body, None, "304 sends no body — SPA keeps what it has");
         assert_eq!(
@@ -361,24 +418,24 @@ mod tests {
     #[test]
     fn offline_with_a_cache_keeps_the_cache_and_reports_its_timestamp() {
         let dir = temp_dir();
-        write_atomic(&cache_path(&dir), BODY.as_bytes()).unwrap();
-        write_atomic(&etag_path(&dir), ETAG.as_bytes()).unwrap();
+        write_atomic(&cache_path(&dir, &MARKET), BODY.as_bytes()).unwrap();
+        write_atomic(&etag_path(&dir, &MARKET), ETAG.as_bytes()).unwrap();
         // Port 1 refuses instantly — a deterministic "offline".
-        let r = refresh_with(&dir, "http://127.0.0.1:1/market.json");
+        let r = refresh_artifact(&dir, &MARKET, "http://127.0.0.1:1/market.json");
         assert!(!r.updated);
         assert_eq!(r.body, None);
         assert_eq!(r.updated_at.as_deref(), Some("2026-07-20T10:00:00Z"));
         // Cache untouched.
-        assert_eq!(read_cache(&dir).as_deref(), Some(BODY));
+        assert_eq!(read_cache(&dir, &MARKET).as_deref(), Some(BODY));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
     fn offline_with_no_cache_is_an_empty_noop() {
         let dir = temp_dir();
-        let r = refresh_with(&dir, "http://127.0.0.1:1/market.json");
+        let r = refresh_artifact(&dir, &MARKET, "http://127.0.0.1:1/market.json");
         assert_eq!(r, RefreshResult::default());
-        assert!(read_cache(&dir).is_none());
+        assert!(read_cache(&dir, &MARKET).is_none());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -387,9 +444,9 @@ mod tests {
         let dir = temp_dir();
         let cache = MarketCache::new(dir.clone());
         assert_eq!(cache.cached(), None);
-        write_atomic(&cache_path(&dir), b"").unwrap();
+        write_atomic(&cache_path(&dir, &MARKET), b"").unwrap();
         assert_eq!(cache.cached(), None, "empty cache file reads as absent");
-        write_atomic(&cache_path(&dir), BODY.as_bytes()).unwrap();
+        write_atomic(&cache_path(&dir, &MARKET), BODY.as_bytes()).unwrap();
         assert_eq!(cache.cached().as_deref(), Some(BODY));
         let _ = std::fs::remove_dir_all(&dir);
     }

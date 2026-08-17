@@ -14,6 +14,7 @@
 // `needs_login` / `needs_unlock` drive the SPA's login and passphrase dialogs.
 
 import type { PingResponse, PlanItemInput, OrderPatch, PendingPlan, PlanResponse, ItemResult, Market } from './types';
+import { isHistory, type History } from './history';
 
 /**
  * A desktop command rejection, rehydrated from the Rust CmdError
@@ -88,6 +89,14 @@ export interface Transport {
    * failure; a failed refresh returns `{ updated: false }`.
    */
   refreshMarket(): Promise<MarketRefreshResult>;
+  /**
+   * The year-long daily price history (`history.json`, built on the box from
+   * relics.run — see wfm-scrape/src/history.rs). On demand, never at boot:
+   * ~1 MB gzipped and optional. Hosted: same-origin fetch. Desktop: the Rust
+   * ETag cache (cached copy first, then a conditional refresh). `null` when
+   * unavailable — every 1-year surface simply hides.
+   */
+  loadHistory(): Promise<History | null>;
   /** Memory-scan the running game and return the parsed inventory object. */
   fetchInventory(): Promise<unknown>;
   submitPlan(items: PlanItemInput[]): Promise<PlanResponse>;
@@ -125,6 +134,16 @@ export class HostedTransport implements Transport {
   }
   async refreshMarket(): Promise<MarketRefreshResult> {
     return { updated: false, updatedAt: null, etag: null };
+  }
+  async loadHistory(): Promise<History | null> {
+    try {
+      const r = await fetch('/history.json', { cache: 'no-cache' });
+      if (!r.ok) return null;
+      const h = (await r.json()) as History;
+      return isHistory(h) ? h : null;
+    } catch {
+      return null;
+    }
   }
   async fetchInventory(): Promise<unknown> {
     throw new Error('This is the informational site — the desktop app is required to scan your account.');
@@ -218,6 +237,31 @@ export class TauriTransport implements Transport {
     }>('refresh_market');
     const market = r.updated && r.body ? (JSON.parse(r.body) as Market) : undefined;
     return { updated: !!r.updated, updatedAt: r.updated_at ?? null, etag: r.etag ?? null, market };
+  }
+
+  async loadHistory(): Promise<History | null> {
+    // Cached copy first (instant), then the conditional refresh; a refreshed
+    // body wins. Both are Rust-side; the webview never fetches third-party.
+    let best: History | null = null;
+    try {
+      const raw = await resolveInvoke()<string | null>('cached_history');
+      if (raw) {
+        const h = JSON.parse(raw) as History;
+        if (isHistory(h)) best = h;
+      }
+    } catch {
+      /* corrupt/absent cache → refresh decides */
+    }
+    try {
+      const r = await resolveInvoke()<{ updated: boolean; body: string | null }>('refresh_history');
+      if (r.updated && r.body) {
+        const h = JSON.parse(r.body) as History;
+        if (isHistory(h)) best = h;
+      }
+    } catch {
+      /* IPC fault: keep whatever the cache gave us */
+    }
+    return best;
   }
 
   async submitPlan(items: PlanItemInput[]): Promise<PlanResponse> {

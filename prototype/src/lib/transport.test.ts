@@ -58,6 +58,22 @@ describe('HostedTransport — the informational site has no interactive ops', ()
     });
   });
 
+  it('loadHistory() fetches same-origin /history.json and validates the shape', async () => {
+    const body = { generated_at: 'g', start: '2025-08-17', days: 365, items: {} };
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => body });
+    vi.stubGlobal('fetch', fetchMock);
+    try {
+      await expect(new HostedTransport().loadHistory()).resolves.toEqual(body);
+      expect(fetchMock.mock.calls[0][0]).toBe('/history.json');
+      fetchMock.mockResolvedValueOnce({ ok: false });
+      await expect(new HostedTransport().loadHistory()).resolves.toBeNull();
+      fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ nope: 1 }) });
+      await expect(new HostedTransport().loadHistory()).resolves.toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('interactive ops throw — the site is informational only', async () => {
     const t = new HostedTransport();
     await expect(t.fetchInventory()).rejects.toThrow(/informational site/);
@@ -155,6 +171,27 @@ describe('TauriTransport op → invoke mapping', () => {
     const invoke = vi.fn().mockResolvedValue('{not json');
     installTauri(invoke);
     await expect(new TauriTransport().loadCachedMarket()).resolves.toBeNull();
+  });
+
+  it('loadHistory() prefers a refreshed body over the cache and survives IPC faults', async () => {
+    const cached = '{"generated_at":"old","start":"2025-08-16","days":365,"items":{}}';
+    const fresh = '{"generated_at":"new","start":"2025-08-17","days":365,"items":{}}';
+    const invoke = vi.fn(async (cmd: string) => {
+      if (cmd === 'cached_history') return cached;
+      if (cmd === 'refresh_history') return { updated: true, body: fresh };
+      throw new Error(cmd);
+    });
+    installTauri(invoke);
+    await expect(new TauriTransport().loadHistory()).resolves.toMatchObject({ generated_at: 'new' });
+    // 304 path: cache wins
+    invoke.mockImplementation(async (cmd: string) => (cmd === 'cached_history' ? cached : { updated: false, body: null }));
+    await expect(new TauriTransport().loadHistory()).resolves.toMatchObject({ generated_at: 'old' });
+    // nothing anywhere
+    invoke.mockImplementation(async (cmd: string) => (cmd === 'cached_history' ? null : { updated: false, body: null }));
+    await expect(new TauriTransport().loadHistory()).resolves.toBeNull();
+    // IPC fault on refresh keeps the cache
+    invoke.mockImplementation(async (cmd: string) => { if (cmd === 'cached_history') return cached; throw new Error('ipc'); });
+    await expect(new TauriTransport().loadHistory()).resolves.toMatchObject({ generated_at: 'old' });
   });
 
   it('refreshMarket() on a 200 parses body into market and reports updated+etag', async () => {
