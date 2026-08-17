@@ -119,6 +119,11 @@ pub struct Snapshot {
     /// `fetch::fetch_rivens`.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub rivens: HashMap<String, serde_json::Value>,
+    /// `primes: {set_slug: {name, released, vaulted, vault_date, …}}` +
+    /// `resurgence: [{from, to, pack, frames}]` + `resurgence_current` — see
+    /// `fetch::fetch_calendar`.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub calendar: HashMap<String, serde_json::Value>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub surface_fetched_at: HashMap<String, String>,
 }
@@ -138,6 +143,7 @@ pub fn assemble_snapshot(
     vault_status: HashMap<String, String>,
     baro: HashMap<String, serde_json::Value>,
     rivens: HashMap<String, serde_json::Value>,
+    calendar: HashMap<String, serde_json::Value>,
     surface_fetched_at: HashMap<String, String>,
 ) -> Snapshot {
     Snapshot {
@@ -154,6 +160,7 @@ pub fn assemble_snapshot(
         vault_status,
         baro,
         rivens,
+        calendar,
         surface_fetched_at,
     }
 }

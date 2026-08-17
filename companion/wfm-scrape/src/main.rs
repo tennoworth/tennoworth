@@ -392,6 +392,15 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     let vs_old: Option<HashMap<String, String>> = prior.get("vault_status").and_then(|s| serde_json::from_value(s.clone()).ok());
     let baro_old: Option<HashMap<String, serde_json::Value>> = prior.get("baro").and_then(|s| serde_json::from_value(s.clone()).ok());
     let rivens_old: Option<HashMap<String, serde_json::Value>> = prior.get("rivens").and_then(|s| serde_json::from_value(s.clone()).ok());
+    let calendar_old: Option<HashMap<String, serde_json::Value>> = prior.get("calendar").and_then(|s| serde_json::from_value(s.clone()).ok());
+
+    eprintln!("Fetching prime release/vault dates + Resurgence rotations...");
+    let calendar = fetch::fetch_calendar(http.as_ref(), wfstat_raw.as_ref(), &catalog);
+    eprintln!(
+        "  {} primes dated · {} resurgence rotations",
+        calendar.get("primes").and_then(|p| p.as_object()).map(|p| p.len()).unwrap_or(0),
+        calendar.get("resurgence").and_then(|r| r.as_array()).map(|r| r.len()).unwrap_or(0)
+    );
 
     eprintln!("Fetching riven dispositions...");
     let rivens = fetch::fetch_rivens(http.as_ref(), rivens_old.as_ref(), now);
@@ -413,6 +422,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     fetch::carry_baro_inventory(&mut baro, baro_old.as_ref());
     let r_baro = reconcile("baro", baro, baro_old.as_ref(), prior_stamps.get("baro").map(|s| s.as_str()), now, true, STALE_DAYS);
     let r_rivens = reconcile("rivens", rivens, rivens_old.as_ref(), prior_stamps.get("rivens").map(|s| s.as_str()), now, true, STALE_DAYS);
+    let r_calendar = reconcile("calendar", calendar, calendar_old.as_ref(), prior_stamps.get("calendar").map(|s| s.as_str()), now, true, STALE_DAYS);
 
     for r in [&r_p2i, &r_s2p, &r_rr] {
         if let Some(w) = &r.stale_warning {
@@ -428,6 +438,9 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     if let Some(w) = &r_rivens.stale_warning {
         eprintln!("{}", w.format());
     }
+    if let Some(w) = &r_calendar.stale_warning {
+        eprintln!("{}", w.format());
+    }
 
     let mut surface_fetched_at: HashMap<String, String> = HashMap::new();
     surface_fetched_at.insert("path_to_info".into(), r_p2i.fetched_at.clone());
@@ -436,6 +449,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     surface_fetched_at.insert("vault_status".into(), r_vs.fetched_at.clone());
     surface_fetched_at.insert("baro".into(), r_baro.fetched_at.clone());
     surface_fetched_at.insert("rivens".into(), r_rivens.fetched_at.clone());
+    surface_fetched_at.insert("calendar".into(), r_calendar.fetched_at.clone());
 
     eprintln!("Rendering {} CSV rows...", csv_path.display());
     let rows = csvin::read_csv_rows(&csv_path)?;
@@ -451,6 +465,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         r_vs.data,
         r_baro.data,
         r_rivens.data,
+        r_calendar.data,
         surface_fetched_at,
     );
 

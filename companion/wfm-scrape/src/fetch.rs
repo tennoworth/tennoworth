@@ -610,6 +610,172 @@ pub fn fetch_rivens(
     out
 }
 
+pub const WFSTAT_VAULT_TRADER_URL: &str = "https://api.warframestat.us/pc/vaultTrader/";
+
+/// The price-shock calendar the hold/sell advisor reasons over, as one
+/// `calendar` surface in market.json:
+///
+/// - `primes: {set_slug: {name, released, vaulted, vault_date,
+///   est_vault_date}}` — per prime set, from warframestat's item catalog
+///   (WFCD warframe-items carries `releaseDate` / `vaultDate` /
+///   `estimatedVaultDate` / `vaulted`; the same payload the build already
+///   downloads for the resolver, so no extra request).
+/// - `resurgence: [{from, to, frames: [set_slug]}]` — every Prime Resurgence
+///   rotation warframestat knows (its `vaultTrader.schedule` is the full
+///   history since 2022, one entry per rotation with the pack name and its
+///   expiry; a rotation runs from the previous expiry to its own), plus
+///   `resurgence_current` for the one running now.
+///
+/// Why: a set's price has three predictable shocks — Prime Access release
+/// (day-1 flood), vaulting (supply cap, months-long ramp), and Resurgence
+/// (Varzia sells the relics again for four weeks → temporary flood). Dates
+/// make those computable per owned set instead of folklore.
+///
+/// Set names → WFM slugs via the catalog (`name_lower → slug`; a set is
+/// "<name> set"). Unmatched names are dropped and counted in the warning.
+pub fn fetch_calendar(
+    http: &dyn Http,
+    wfstat_raw: Option<&serde_json::Value>,
+    catalog: &HashMap<String, String>,
+) -> HashMap<String, serde_json::Value> {
+    let mut out = HashMap::new();
+
+    // ---- primes: release / vault dates ----
+    let mut primes = serde_json::Map::new();
+    let mut unmatched = 0usize;
+    if let Some(items) = wfstat_raw.and_then(|v| v.as_array()) {
+        for it in items {
+            let Some(name) = it.get("name").and_then(|n| n.as_str()) else { continue };
+            if !name.ends_with(" Prime") {
+                continue;
+            }
+            let Some(released) = it.get("releaseDate").and_then(|d| d.as_str()) else { continue };
+            let Some(slug) = catalog.get(&format!("{} set", name.to_lowercase())) else {
+                unmatched += 1;
+                continue;
+            };
+            let mut row = serde_json::Map::new();
+            row.insert("name".into(), serde_json::Value::String(name.into()));
+            row.insert("released".into(), serde_json::Value::String(released.into()));
+            row.insert(
+                "vaulted".into(),
+                serde_json::Value::Bool(it.get("vaulted").and_then(|v| v.as_bool()).unwrap_or(false)),
+            );
+            for (src, dst) in [("vaultDate", "vault_date"), ("estimatedVaultDate", "est_vault_date")] {
+                if let Some(d) = it.get(src).and_then(|d| d.as_str()) {
+                    row.insert(dst.into(), serde_json::Value::String(d.into()));
+                }
+            }
+            primes.insert(slug.clone(), serde_json::Value::Object(row));
+        }
+    }
+    if unmatched > 0 {
+        eprintln!("  calendar: {unmatched} primes with release dates have no WFM set in the catalog");
+    }
+    if !primes.is_empty() {
+        out.insert("primes".into(), serde_json::Value::Object(primes));
+    }
+
+    // ---- resurgence rotations ----
+    match http.get_json(WFSTAT_VAULT_TRADER_URL) {
+        Ok(vt) => {
+            let (rotations, current) = resurgence_rotations(&vt, catalog);
+            if !rotations.is_empty() {
+                out.insert("resurgence".into(), serde_json::Value::Array(rotations));
+            }
+            if let Some(c) = current {
+                out.insert("resurgence_current".into(), c);
+            }
+        }
+        Err(e) => eprintln!("  warning: could not fetch {WFSTAT_VAULT_TRADER_URL}: {e}"),
+    }
+    out
+}
+
+/// "M P V Revenant Baruuk Prime Dual Pack" → ["Revenant Prime", "Baruuk Prime"];
+/// "Nezha & Octavia Prime Dual Pack" → ["Nezha Prime", "Octavia Prime"];
+/// "M P V Oberon Prime Single Pack" → ["Oberon Prime"]. "Last Chance Item C"
+/// and anything else without "Prime" → [].
+pub fn frames_in_pack_name(name: &str) -> Vec<String> {
+    let mut s = name.trim();
+    for prefix in ["M P V ", "MPV "] {
+        if let Some(rest) = s.strip_prefix(prefix) {
+            s = rest;
+        }
+    }
+    for suffix in [" Dual Pack", " Single Pack", " Pack"] {
+        if let Some(rest) = s.strip_suffix(suffix) {
+            s = rest;
+        }
+    }
+    let Some(base) = s.strip_suffix(" Prime") else { return vec![] };
+    base.replace(" & ", " ")
+        .split_whitespace()
+        .filter(|w| !w.is_empty())
+        .map(|w| format!("{w} Prime"))
+        .collect()
+}
+
+/// Rotations from a `vaultTrader` payload: consecutive `schedule` entries
+/// bound each window (`from` = previous expiry or `initialStart`, `to` =
+/// own expiry). Returns (all rotations with ≥1 resolvable frame, the current
+/// one from activation/expiry).
+pub fn resurgence_rotations(
+    vt: &serde_json::Value,
+    catalog: &HashMap<String, String>,
+) -> (Vec<serde_json::Value>, Option<serde_json::Value>) {
+    let slugs_for = |pack: &str| -> Vec<serde_json::Value> {
+        frames_in_pack_name(pack)
+            .iter()
+            .filter_map(|f| catalog.get(&format!("{} set", f.to_lowercase())))
+            .map(|s| serde_json::Value::String(s.clone()))
+            .collect()
+    };
+    let mut rotations = Vec::new();
+    let mut prev_expiry: Option<String> = vt.get("initialStart").and_then(|s| s.as_str()).map(String::from);
+    if let Some(sched) = vt.get("schedule").and_then(|s| s.as_array()) {
+        for entry in sched {
+            let Some(expiry) = entry.get("expiry").and_then(|e| e.as_str()) else { continue };
+            let pack = entry.get("item").and_then(|i| i.as_str()).unwrap_or("");
+            let frames = slugs_for(pack);
+            if !frames.is_empty() {
+                if let Some(from) = &prev_expiry {
+                    rotations.push(serde_json::json!({
+                        "from": from,
+                        "to": expiry,
+                        "pack": pack,
+                        "frames": frames,
+                    }));
+                }
+            }
+            prev_expiry = Some(expiry.to_string());
+        }
+    }
+    let current = match (
+        vt.get("activation").and_then(|a| a.as_str()),
+        vt.get("expiry").and_then(|e| e.as_str()),
+    ) {
+        (Some(from), Some(to)) => {
+            // The current pack is whichever inventory entry names frames.
+            let mut frames: Vec<serde_json::Value> = Vec::new();
+            if let Some(inv) = vt.get("inventory").and_then(|i| i.as_array()) {
+                for e in inv {
+                    if let Some(item) = e.get("item").and_then(|i| i.as_str()) {
+                        for f in slugs_for(item) {
+                            if !frames.contains(&f) {
+                                frames.push(f);
+                            }
+                        }
+                    }
+                }
+            }
+            Some(serde_json::json!({ "from": from, "to": to, "frames": frames }))
+        }
+        _ => None,
+    };
+    (rotations, current)
+}
+
 pub const WFSTAT_ITEMS_URL: &str = "https://api.warframestat.us/items/";
 
 /// Reduce the warframestat bulk item list to the resolver's slim
@@ -844,6 +1010,71 @@ mod tests {
         let now = clock::parse_isoformat_utc("2026-08-16T12:00:00Z").unwrap();
         let got = fetch_rivens(&FixtureHttp { responses: HashMap::new() }, None, now);
         assert!(got.is_empty());
+    }
+
+    fn set_catalog() -> HashMap<String, String> {
+        let mut m = HashMap::new();
+        for n in ["revenant prime", "baruuk prime", "nezha prime", "octavia prime", "oberon prime", "gauss prime"] {
+            m.insert(format!("{n} set"), format!("{}_set", n.replace(' ', "_")));
+        }
+        m
+    }
+
+    #[test]
+    fn pack_names_resolve_to_frames() {
+        assert_eq!(frames_in_pack_name("M P V Revenant Baruuk Prime Dual Pack"), vec!["Revenant Prime", "Baruuk Prime"]);
+        assert_eq!(frames_in_pack_name("Nezha & Octavia Prime Dual Pack"), vec!["Nezha Prime", "Octavia Prime"]);
+        assert_eq!(frames_in_pack_name("M P V Oberon Prime Single Pack"), vec!["Oberon Prime"]);
+        assert!(frames_in_pack_name("Last Chance Item C").is_empty());
+        assert!(frames_in_pack_name("").is_empty());
+    }
+
+    #[test]
+    fn resurgence_rotations_bound_each_window_by_the_previous_expiry() {
+        let vt = serde_json::json!({
+            "activation": "2026-08-06T18:00:00.000Z",
+            "expiry": "2026-09-03T18:00:00.000Z",
+            "initialStart": "2022-09-09T15:42:24.266Z",
+            "inventory": [
+                {"item": "M P V Revenant Prime Single Pack", "ducats": 6},
+                {"item": "M P V Revenant Baruuk Prime Dual Pack", "ducats": 10}
+            ],
+            "schedule": [
+                {"expiry": "2022-11-03T18:00:00.000Z", "item": "M P V Oberon Prime Single Pack"},
+                {"expiry": "2022-12-01T19:00:00.000Z", "item": "Last Chance Item C"},
+                {"expiry": "2023-01-05T19:00:00.000Z", "item": "Nezha & Octavia Prime Dual Pack"},
+                {"expiry": "2023-02-02T19:00:00.000Z"}
+            ]
+        });
+        let (rot, cur) = resurgence_rotations(&vt, &set_catalog());
+        assert_eq!(rot.len(), 2, "unresolvable packs are skipped but still advance the window");
+        assert_eq!(rot[0]["from"], "2022-09-09T15:42:24.266Z");
+        assert_eq!(rot[0]["to"], "2022-11-03T18:00:00.000Z");
+        assert_eq!(rot[0]["frames"], serde_json::json!(["oberon_prime_set"]));
+        assert_eq!(rot[1]["from"], "2022-12-01T19:00:00.000Z", "the skipped rotation still bounds the next one");
+        assert_eq!(rot[1]["frames"], serde_json::json!(["nezha_prime_set", "octavia_prime_set"]));
+        let cur = cur.unwrap();
+        assert_eq!(cur["from"], "2026-08-06T18:00:00.000Z");
+        assert_eq!(cur["frames"], serde_json::json!(["revenant_prime_set", "baruuk_prime_set"]));
+    }
+
+    #[test]
+    fn calendar_primes_come_from_the_wfstat_payload_and_need_a_wfm_set() {
+        let raw = serde_json::json!([
+            {"name": "Gauss Prime", "category": "Warframes", "releaseDate": "2024-01-17", "vaulted": true, "vaultDate": "2025-12-10", "estimatedVaultDate": "2025-12-10"},
+            {"name": "Gauss Prime Helmet", "category": "Skins"},
+            {"name": "Unknown Prime", "category": "Warframes", "releaseDate": "2020-01-01"},
+            {"name": "Revenant Prime", "category": "Warframes", "releaseDate": "2022-08-30", "vaulted": false}
+        ]);
+        let http = FixtureHttp { responses: HashMap::new() }; // vaultTrader absent → warning, no rotations
+        let cal = fetch_calendar(&http, Some(&raw), &set_catalog());
+        let primes = cal["primes"].as_object().unwrap();
+        assert_eq!(primes.len(), 2);
+        assert_eq!(primes["gauss_prime_set"]["vault_date"], "2025-12-10");
+        assert_eq!(primes["gauss_prime_set"]["vaulted"], true);
+        assert_eq!(primes["revenant_prime_set"]["vaulted"], false);
+        assert!(primes["revenant_prime_set"].get("vault_date").is_none());
+        assert!(!cal.contains_key("resurgence"));
     }
 
     #[test]
