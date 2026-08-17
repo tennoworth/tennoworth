@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { untrack, type Snippet } from 'svelte';
   import { sparklinePoints } from '../lib/sparkline';
   import { wfmItemUrl, ownedBreakdown, LEVELED_NOTE_TITLE, keptNoteTitle } from '../lib/format';
 
@@ -40,6 +40,7 @@
     key: string;
     label: string;
     align: 'left' | 'right';
+    width: number;   // rem; 0 = takes the remainder
     noSort?: boolean;
   }
 
@@ -52,8 +53,38 @@
     // table-local filter is active, so the parent's "List on WFM" CTA can stage
     // exactly what the user sees instead of the unfiltered preset results.
     onfiltered?: (rows: Row[], filterActive: boolean) => void;
+    // Controls block inside the table border (Flow v2). Row A SCOPE = the
+    // parent's presets / type chips / Filters popover; row B NARROW = the
+    // name filter (ours) · the parent's active-filter chips · badge chips ·
+    // count · the parent's CTA. All optional so the table stands alone.
+    scope?: Snippet;
+    narrow?: Snippet;
+    cta?: Snippet;
+    // Top picks: rendered HERE (as a carved panel above the controls) so the
+    // pick rows share this table's <colgroup> and their numbers sit exactly
+    // over the columns below. The parent owns the pick set (snooze etc.) and
+    // supplies the rail copy and the per-row reason/actions cell.
+    picks?: Row[] | null;
+    picksHead?: Snippet;
+    pickReason?: Snippet<[Row]>;
+    picksEmpty?: Snippet;
+    // Rendered in place of the table body when `results` is empty (the parent's
+    // empty-state card), so the SCOPE/NARROW rows stay put and the presets stay
+    // reachable while the cascade yields nothing.
+    empty?: Snippet;
+    // Rendered between the picks panel and the results panel (the parent's
+    // score explainer), so it sits directly over the table it explains.
+    between?: Snippet;
   }
-  let { results, deltas = new Map(), visibleColumns = null, presetSort = null, onfiltered = undefined }: Props = $props();
+  let {
+    results, deltas = new Map(), visibleColumns = null, presetSort = null, onfiltered = undefined,
+    scope = undefined, narrow = undefined, cta = undefined,
+    picks = null, picksHead = undefined, pickReason = undefined, picksEmpty = undefined,
+    empty = undefined, between = undefined,
+  }: Props = $props();
+
+  // Picks panel collapse — session-only; the rail stays as a one-line reminder.
+  let picksOpen = $state(true);
 
   let sortKey = $state<string>('sell_score');
   let sortDir = $state(-1);
@@ -218,22 +249,26 @@
     delta_90d_pct:  { text: 'Latest daily median vs the 90-day median.', unit: '%', dir: '▲ = price rising into a peak (sell now); ▼ = sliding' },
   };
 
+  // Fixed-layout column widths (rem). Item takes the remainder — ≈214px at
+  // 1440 with the 216px sidebar and all 15 columns; wider on bigger desks
+  // (the root font steps at 1900/2500 widen the numeric block ~6% per step).
+  // Below `min-width` the panel scrolls sideways rather than squeezing Item.
   const ALL_COLUMNS: ColumnDef[] = [
-    { key: 'name',           label: 'Item',     align: 'left'  },
-    { key: 'owned',          label: 'Own',      align: 'right' },
-    { key: 'delta',          label: 'Δ',        align: 'right' },
-    { key: 'sell_score',     label: 'Score',    align: 'right' },
-    { key: 'avg_price',      label: 'Avg',      align: 'right' },
-    { key: 'low_sell',       label: 'Low sell', align: 'right' },
-    { key: 'top_buy',        label: 'Top buy',  align: 'right' },
-    { key: 'medians_7d',     label: 'Trend',    align: 'left',  noSort: true },
-    { key: 'delta_90d_pct',  label: 'Δ 90d',    align: 'right' },
-    { key: 'volume_48h',     label: 'Vol 48h',  align: 'right' },
-    { key: 'ratio',          label: 'Demand',   align: 'right' },
-    { key: 'ducats',         label: 'Ducats',   align: 'right' },
-    { key: 'plat_per_100d',  label: 'p/100d',   align: 'right' },
-    { key: 'raw_value',      label: 'Raw value', align: 'right' },
-    { key: 'potential_plat', label: 'Potential', align: 'right' },
+    { key: 'name',           label: 'Item',     align: 'left',  width: 0 },
+    { key: 'owned',          label: 'Own',      align: 'right', width: 6 },
+    { key: 'delta',          label: 'Δ',        align: 'right', width: 2.75 },
+    { key: 'sell_score',     label: 'Score',    align: 'right', width: 4 },
+    { key: 'avg_price',      label: 'Avg',      align: 'right', width: 3 },
+    { key: 'low_sell',       label: 'Low sell', align: 'right', width: 4.25 },
+    { key: 'top_buy',        label: 'Top buy',  align: 'right', width: 4 },
+    { key: 'medians_7d',     label: 'Trend',    align: 'left',  width: 4.5, noSort: true },
+    { key: 'delta_90d_pct',  label: 'Δ 90d',    align: 'right', width: 3.25 },
+    { key: 'volume_48h',     label: 'Vol 48h',  align: 'right', width: 3.75 },
+    { key: 'ratio',          label: 'Demand',   align: 'right', width: 3.75 },
+    { key: 'ducats',         label: 'Ducats',   align: 'right', width: 5.5 },
+    { key: 'plat_per_100d',  label: 'p/100d',   align: 'right', width: 3.5 },
+    { key: 'raw_value',      label: 'Raw value', align: 'right', width: 5.5 },
+    { key: 'potential_plat', label: 'Potential', align: 'right', width: 4.75 },
   ];
 
   // Ducat-deal threshold: anything below ~20p per 100 ducats is a row
@@ -254,6 +289,13 @@
     }
     return cols;
   });
+
+  // Pick rows fill the leading numeric columns and give the rest of the row to
+  // the reason line — at least three columns so the sentence has room, seven
+  // on the full 15-column set (Own · Δ · Score · Avg · Low sell · Top buy ·
+  // Trend stay comparable with the table below).
+  let reasonSpan = $derived(Math.max(3, columns.length - 8));
+  let pickCols = $derived(columns.slice(1, Math.max(1, columns.length - reasonSpan)));
 
   // A preset can carry a default sort (the Ducats preset ranks by plat-per-100-
   // ducats ascending — best ducat trades first). presetSort changes identity
@@ -359,15 +401,172 @@
   }
 </script>
 
-<div class="wrap">
-  <div class="toolbar">
+{#snippet colgroup()}
+  <colgroup>
+    {#each columns as col (col.key)}
+      <col style={col.width ? `width:${col.width}rem` : undefined} />
+    {/each}
+  </colgroup>
+{/snippet}
+
+<!-- One cell renderer for data rows AND pick rows, so the two tables can never
+     disagree about what a column shows. -->
+{#snippet cell(r: Row, col: ColumnDef, d: number)}
+  {#if col.key === 'name'}
+    {@const badges = rowBadges(r)}
+    {@const rowKey = r.key ?? r.slug}
+    <span class="name-clip">
+      <a
+        href={wfmItemUrl(r.slug)}
+        target="_blank"
+        rel="noopener noreferrer"
+        >{r.name || r.slug}</a
+      >
+      {#each badges.slice(0, BADGE_CAP) as b}
+        <span class="tag {b.cls}" title={b.title}>{b.label}</span>
+      {/each}
+      {#if badges.length > BADGE_CAP}
+        {@const hiddenCount = badges.length - BADGE_CAP}
+        <button
+          type="button"
+          class="tag badge-overflow-btn"
+          onclick={(e) => toggleBadgeOverflow(rowKey, e)}
+          aria-label="{hiddenCount} more badge{hiddenCount === 1 ? '' : 's'} for {r.name || r.slug}"
+        >+{hiddenCount}</button>
+      {/if}
+    </span>
+    {#if badges.length > BADGE_CAP && openBadgeOverflow === rowKey}
+      <span class="badge-overflow-popover" role="tooltip">
+        {#each badges.slice(BADGE_CAP) as b}
+          <span class="tag {b.cls}" title={b.title}>{b.label}</span>
+        {/each}
+      </span>
+    {/if}
+  {:else if col.key === 'owned'}
+    {fmt(r.owned, col.key)}
+    {#if r.sellable < r.owned}
+      {@const bd = ownedBreakdown(r.owned, r.sellable, r.leveled)}
+      <span class="kept-note">({#if bd.leveledPart > 0}<span class="leveled-note" title={LEVELED_NOTE_TITLE}>{bd.leveledPart} leveled</span>{/if}{#if bd.leveledPart > 0 && bd.keptPart > 0} · {/if}{#if bd.keptPart > 0}<span title={keptNoteTitle(bd.keptPart)}>{bd.keptPart} kept</span>{/if})</span>
+    {/if}
+  {:else if col.key === 'delta'}
+    {#if d > 0}
+      <span class="delta up">▲+{d}</span>
+    {:else if d < 0}
+      <span class="delta down">▼{Math.abs(d)}</span>
+    {:else}
+      <span class="delta zero">·</span>
+    {/if}
+  {:else if col.key === 'ducats'}
+    {#if r.ducats != null}
+      <span class="ducat-num">{r.ducats}</span>
+      {#if r.plat_per_100d != null && r.plat_per_100d <= DUCAT_DEAL_THRESHOLD}
+        <span class="ducat-badge" title="Listing's plat value is at or below 100 ducats — Baro is the better outlet for this row.">deal</span>
+      {/if}
+    {:else}
+      <span class="muted">—</span>
+    {/if}
+  {:else if col.key === 'plat_per_100d'}
+    {#if r.plat_per_100d != null}
+      <span class={r.plat_per_100d <= DUCAT_DEAL_THRESHOLD ? 'ducat-num' : ''}>{fmt(r.plat_per_100d, col.key)}</span>
+    {:else}
+      <span class="muted">—</span>
+    {/if}
+  {:else if col.key === 'raw_value'}
+    {#if r.raw_value > 0}
+      {fmt(r.raw_value, col.key)}
+      {#if r.low5_avg > 0}
+        <span class="ask-avg" title="Average of the ~5 cheapest live asks right now">@{fmt(r.low5_avg, 'plat_per_100d')}</span>
+      {/if}
+    {:else}
+      <span class="muted">—</span>
+    {/if}
+  {:else if col.key === 'medians_7d'}
+    {#if r.medians_7d && r.medians_7d.length >= 2}
+      <svg class="sparkline" viewBox="0 0 60 18" width="60" height="18" aria-hidden="true">
+        <title>last 7d medians: {r.medians_7d.join(', ')}</title>
+        <polyline points={sparklinePoints(r.medians_7d, 60, 18)} fill="none" stroke="currentColor" stroke-width="1.2" />
+      </svg>
+    {:else}
+      <span class="muted">—</span>
+    {/if}
+  {:else if col.key === 'delta_90d_pct'}
+    {#if r.delta_90d_pct == null}
+      <span class="muted">—</span>
+    {:else if r.delta_90d_pct >= 1}
+      <span class="trend up" title="Latest median {r.delta_90d_pct.toFixed(0)}% above 90d median — sell into the peak">▲{r.delta_90d_pct.toFixed(0)}%</span>
+    {:else if r.delta_90d_pct <= -1}
+      <span class="trend down" title="Latest median {Math.abs(r.delta_90d_pct).toFixed(0)}% below 90d median — price is sliding">▼{Math.abs(r.delta_90d_pct).toFixed(0)}%</span>
+    {:else}
+      <span class="trend flat" title="Within ±1% of 90d median">·</span>
+    {/if}
+  {:else}
+    {fmt((r as unknown as Record<string, unknown>)[col.key], col.key)}
+  {/if}
+{/snippet}
+
+{#if picks}
+  <!-- Top picks: carved panel; its rows run through the same colgroup as the
+       results table below (fixed layout, same widths) so Own · Δ · Score …
+       sit over the columns they compare with. -->
+  <section class="wrap picks" aria-label="Top picks">
+    <div class="rail picks-head">
+      {@render picksHead?.()}
+      <span class="grow"></span>
+      <button
+        type="button"
+        class="rail-toggle"
+        aria-expanded={picksOpen}
+        onclick={() => (picksOpen = !picksOpen)}
+      >{picksOpen ? 'collapse ▴' : 'expand ▾'}</button>
+    </div>
+    {#if picksOpen}
+      {#if picks.length > 0}
+        <div class="scroll">
+        <table class:comfortable={density === 'comfortable'} class="picks-table">
+          {@render colgroup()}
+          <tbody>
+            {#each picks as p, i (p.key ?? p.slug)}
+              <tr class="pick">
+                <td class="left col-name">
+                  <span class="pick-rank">{i + 1}</span>
+                  {@render cell(p, columns[0], rowDelta(p))}
+                </td>
+                {#each pickCols as col (col.key)}
+                  <td class="{col.align} col-{col.key}">{@render cell(p, col, rowDelta(p))}</td>
+                {/each}
+                <td class="left reason" colspan={reasonSpan}>{@render pickReason?.(p)}</td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
+        </div>
+      {:else}
+        <div class="picks-none">{@render picksEmpty?.()}</div>
+      {/if}
+    {/if}
+  </section>
+{/if}
+
+{@render between?.()}
+
+<div class="wrap results">
+  {#if scope}
+    <div class="bar raised scope-row">
+      <span class="lbl">Scope</span>
+      {@render scope()}
+    </div>
+  {/if}
+  <div class="bar narrow-row">
+    <span class="lbl">Narrow</span>
     <input
       type="text"
+      class="name-filter"
       placeholder="Filter by name… ( / )"
       bind:value={filter}
       bind:this={filterInput}
       oninput={() => (page = 0)}
     />
+    {@render narrow?.()}
     <div class="pill-filters">
       {#each PILL_DEFS as p (p.key)}
         {@const n = pillCounts.get(p.key) ?? 0}
@@ -383,17 +582,25 @@
         {/if}
       {/each}
     </div>
-    <div class="muted">
-      {sorted.length.toLocaleString()} {sorted.length === 1 ? 'row' : 'rows'} · sorted by
-      <strong>{columns.find((c) => c.key === sortKey)?.label}</strong>
+    <span class="grow"></span>
+    <div class="count" title="Sorted by {columns.find((c) => c.key === sortKey)?.label}, {sortDir === -1 ? 'descending' : 'ascending'}">
+      <b>{sorted.length.toLocaleString()}</b> {sorted.length === 1 ? 'row' : 'rows'} ·
+      <b>{columns.find((c) => c.key === sortKey)?.label}</b>
       {sortDir === -1 ? '↓' : '↑'}
+      {#if sorted.length > pageSize}· {(pageStart + 1).toLocaleString()}–{pageEnd.toLocaleString()}{/if}
     </div>
+    {@render cta?.()}
   </div>
 
+  {#if results.length === 0 && empty}
+    <div class="empty-slot">{@render empty()}</div>
+  {:else}
+  <div class="scroll">
   <table class:comfortable={density === 'comfortable'}>
+    {@render colgroup()}
     <thead>
       <tr>
-        {#each columns as col}
+        {#each columns as col (col.key)}
           <th
             onclick={() => setSort(col.key)}
             class={col.align}
@@ -434,102 +641,15 @@
       {#each paged as r (r.key ?? r.slug)}
         {@const d = rowDelta(r)}
         <tr class:row-dim={r.sellable <= 0}>
-          {#each columns as col}
-            <td class="{col.align} col-{col.key}">
-              {#if col.key === 'name'}
-                <a
-                  href={wfmItemUrl(r.slug)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  >{r.name || r.slug}</a
-                >
-                {@const badges = rowBadges(r)}
-                {#each badges.slice(0, BADGE_CAP) as b}
-                  <span class="tag {b.cls}" title={b.title}>{b.label}</span>
-                {/each}
-                {#if badges.length > BADGE_CAP}
-                  {@const rowKey = r.key ?? r.slug}
-                  {@const hiddenCount = badges.length - BADGE_CAP}
-                  <button
-                    type="button"
-                    class="tag badge-overflow-btn"
-                    onclick={(e) => toggleBadgeOverflow(rowKey, e)}
-                    aria-label="{hiddenCount} more badge{hiddenCount === 1 ? '' : 's'} for {r.name || r.slug}"
-                  >+{hiddenCount}</button>
-                  {#if openBadgeOverflow === rowKey}
-                    <span class="badge-overflow-popover" role="tooltip">
-                      {#each badges.slice(BADGE_CAP) as b}
-                        <span class="tag {b.cls}" title={b.title}>{b.label}</span>
-                      {/each}
-                    </span>
-                  {/if}
-                {/if}
-              {:else if col.key === 'owned'}
-                {fmt(r.owned, col.key)}
-                {#if r.sellable < r.owned}
-                  {@const bd = ownedBreakdown(r.owned, r.sellable, r.leveled)}
-                  <span class="kept-note">({#if bd.leveledPart > 0}<span class="leveled-note" title={LEVELED_NOTE_TITLE}>{bd.leveledPart} leveled</span>{/if}{#if bd.leveledPart > 0 && bd.keptPart > 0} · {/if}{#if bd.keptPart > 0}<span title={keptNoteTitle(bd.keptPart)}>{bd.keptPart} kept</span>{/if})</span>
-                {/if}
-              {:else if col.key === 'delta'}
-                {#if d > 0}
-                  <span class="delta up">▲+{d}</span>
-                {:else if d < 0}
-                  <span class="delta down">▼{Math.abs(d)}</span>
-                {:else}
-                  <span class="delta zero">·</span>
-                {/if}
-              {:else if col.key === 'ducats'}
-                {#if r.ducats != null}
-                  <span class="ducat-num">{r.ducats}</span>
-                  {#if r.plat_per_100d != null && r.plat_per_100d <= DUCAT_DEAL_THRESHOLD}
-                    <span class="ducat-badge" title="Listing's plat value is at or below 100 ducats — Baro is the better outlet for this row.">deal</span>
-                  {/if}
-                {:else}
-                  <span class="muted">—</span>
-                {/if}
-              {:else if col.key === 'plat_per_100d'}
-                {#if r.plat_per_100d != null}
-                  <span class={r.plat_per_100d <= DUCAT_DEAL_THRESHOLD ? 'ducat-num' : ''}>{fmt(r.plat_per_100d, col.key)}</span>
-                {:else}
-                  <span class="muted">—</span>
-                {/if}
-              {:else if col.key === 'raw_value'}
-                {#if r.raw_value > 0}
-                  {fmt(r.raw_value, col.key)}
-                  {#if r.low5_avg > 0}
-                    <span class="ask-avg" title="Average of the ~5 cheapest live asks right now">@{fmt(r.low5_avg, 'plat_per_100d')}</span>
-                  {/if}
-                {:else}
-                  <span class="muted">—</span>
-                {/if}
-              {:else if col.key === 'medians_7d'}
-                {#if r.medians_7d && r.medians_7d.length >= 2}
-                  <svg class="sparkline" viewBox="0 0 60 18" width="60" height="18" aria-hidden="true">
-                    <title>last 7d medians: {r.medians_7d.join(', ')}</title>
-                    <polyline points={sparklinePoints(r.medians_7d, 60, 18)} fill="none" stroke="currentColor" stroke-width="1.2" />
-                  </svg>
-                {:else}
-                  <span class="muted">—</span>
-                {/if}
-              {:else if col.key === 'delta_90d_pct'}
-                {#if r.delta_90d_pct == null}
-                  <span class="muted">—</span>
-                {:else if r.delta_90d_pct >= 1}
-                  <span class="trend up" title="Latest median {r.delta_90d_pct.toFixed(0)}% above 90d median — sell into the peak">▲{r.delta_90d_pct.toFixed(0)}%</span>
-                {:else if r.delta_90d_pct <= -1}
-                  <span class="trend down" title="Latest median {Math.abs(r.delta_90d_pct).toFixed(0)}% below 90d median — price is sliding">▼{Math.abs(r.delta_90d_pct).toFixed(0)}%</span>
-                {:else}
-                  <span class="trend flat" title="Within ±1% of 90d median">·</span>
-                {/if}
-              {:else}
-                {fmt((r as unknown as Record<string, unknown>)[col.key], col.key)}
-              {/if}
-            </td>
+          {#each columns as col (col.key)}
+            <td class="{col.align} col-{col.key}">{@render cell(r, col, d)}</td>
           {/each}
         </tr>
       {/each}
     </tbody>
   </table>
+  </div>
+  {/if}
 
   {#if sorted.length === 0 && filterActive}
     <div class="no-match">
@@ -600,39 +720,82 @@
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: var(--radius-panel);
-    /* Vertical: clip; Horizontal: scroll. Default `overflow: hidden`
-       was clipping ~10 of 13 columns on tablet / phone widths — the
-       table itself is intrinsically wide, so let the user scroll it
-       sideways rather than amputating columns. */
+  }
+  /* The picks table shares the results table's min-width so its columns stay
+     over the ones below at every width (both scroll from x=0 when narrow). */
+  .wrap.picks { margin-bottom: var(--stack); overflow: hidden; }
+  /* Horizontal scroll lives on the table's own scroller, not the panel, so
+     the control rows' popovers (Filters, badge chips) can escape the panel.
+     Below the table's min-width the user scrolls sideways rather than having
+     the Item column squeezed to nothing. */
+  .scroll {
     overflow-x: auto;
     overflow-y: hidden;
-    /* Make the horizontal scrollbar visible at rest so columns past the fold
-       (e.g. Potential on a laptop width) read as scrollable, not amputated.
-       Overlay scrollbars hide by default and made the table look clipped. */
     scrollbar-width: thin;
     scrollbar-color: var(--border) transparent;
   }
-  .wrap::-webkit-scrollbar { height: 9px; }
-  .wrap::-webkit-scrollbar-track { background: transparent; }
-  .wrap::-webkit-scrollbar-thumb {
-    background: var(--border);
-    border-radius: var(--radius-ctl);
-  }
-  .wrap::-webkit-scrollbar-thumb:hover { background: var(--muted); }
-  /* Keep the table from collapsing under flex / grid parents — without
-     this `table { width: 100% }` shrinks the columns into ellipsis-soup
-     instead of becoming scrollable. */
-  table { min-width: max-content; }
-  .toolbar {
+  .scroll::-webkit-scrollbar { height: 9px; }
+  .scroll::-webkit-scrollbar-track { background: transparent; }
+  .scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: var(--radius-ctl); }
+  .scroll::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+  /* ---- rails and bars (Flow v2 anatomy) ---- */
+  .rail, .bar {
     display: flex;
-    gap: 12px;
-    padding: 12px 14px;
     align-items: center;
-    justify-content: space-between;
+    gap: var(--s2);
+    padding: 0 var(--inset);
+    white-space: nowrap;
+  }
+  .rail {
+    height: var(--rail);
+    background: var(--panel-2);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .rail .grow, .bar .grow { flex: 1 1 0; min-width: 0; }
+  .rail-toggle {
+    font: inherit;
+    font-size: 11.5px;
+    color: var(--muted);
+    background: transparent;
+    border: none;
+    padding: 0 var(--s1);
+    height: var(--ctl-xs);
+    cursor: pointer;
+  }
+  .rail-toggle:hover { color: var(--accent); background: transparent; }
+  .picks-none { padding: var(--s2) var(--inset); font-size: 12.5px; color: var(--muted); }
+  .empty-slot { padding: var(--s3) var(--inset); }
+  /* Control rows: 40px, on the ladder; row A may wrap when an inventory carries
+     many type chips (min-height, not height), row B keeps to one line. */
+  .bar {
+    min-height: var(--bar);
+    padding-top: var(--s1);
+    padding-bottom: var(--s1);
     border-bottom: 1px solid var(--border);
     flex-wrap: wrap;
+    row-gap: var(--s1);
   }
-  .toolbar input { min-width: 260px; }
+  .bar.raised { background: var(--panel-2); border-bottom: 1px var(--rule) var(--hairline); }
+  .bar .lbl {
+    width: 3.25rem;
+    flex: 0 0 auto;
+    font-size: 10px;
+    line-height: 1rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--faint);
+  }
+  .name-filter {
+    height: var(--ctl-lg);
+    width: 10rem;
+    padding: 0 var(--s3);
+    font-size: 13px;
+  }
+  .count { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .count b { color: var(--fg); font-weight: 600; }
   /* Pill-filter chips reuse the badge palette (.tag.peak etc.) so the chip
      and the in-row pill it filters on read as the same object. */
   .pill-filters {
@@ -640,13 +803,15 @@
     gap: 6px;
     flex-wrap: wrap;
     align-items: center;
-    margin-right: auto;
   }
   .pill-chip {
     margin-left: 0;
     cursor: pointer;
     background: transparent;
     font-family: inherit;
+    height: var(--ctl);
+    display: inline-flex;
+    align-items: center;
     /* Filter chips share .tag's outline voice; inactive chips dim their
        outline so the active one reads by border weight, not by a fill. */
     border-color: color-mix(in srgb, currentColor 45%, transparent);
@@ -661,26 +826,34 @@
     opacity: 0.65;
     font-size: 9px;
   }
+
+  /* ---- the table: fixed layout, shared colgroup ---- */
   table {
     width: 100%;
+    min-width: 72rem;
+    table-layout: fixed;
     border-collapse: collapse;
     font-variant-numeric: tabular-nums;
   }
+  /* Presets with few columns don't need the full-width floor. */
   th, td {
-    /* Horizontal stays 8px (tightened from 12px so all 14 default columns
-       fit the capped content width without clipping "Potential" off the
-       right edge — still scrolls on narrow laptop widths). Vertical is the
-       density-toggle axis: 6px compact (new default, was a flat 8px),
-       8px comfortable (today's shipped row height). */
-    padding: 6px 8px;
+    padding: 0 var(--cell);
     text-align: left;
+    white-space: nowrap;
   }
-  table.comfortable th, table.comfortable td { padding: 8px; }
+  th:first-child, td:first-child { padding-left: var(--inset); }
+  th:last-child, td:last-child { padding-right: var(--inset); }
+  /* Rows are fixed 32px boxes (comfortable 36); the head is 28. */
   td {
+    height: var(--row);
     border-bottom: 1px var(--rule) var(--hairline);
     font-size: 13px;
     color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
+  table.comfortable td { height: var(--row-cf); }
+  tbody tr:last-child td { border-bottom: none; }
   /* Numeric columns render in tabular monospace so digits lock to a grid a
      trader can scan down, not just read left-to-right. Item/badges/trend
      stay on the body sans stack. */
@@ -688,6 +861,7 @@
     font-family: var(--font-mono);
   }
   th {
+    height: var(--head);
     background: var(--panel-2);
     border-bottom: 1px solid var(--border);
     font-size: 10px;
@@ -700,7 +874,24 @@
     user-select: none;
     position: sticky;
     top: 0;
+    z-index: 2;
   }
+  /* Item cell: the link + badges clip with an ellipsis inside an inner span so
+     the badge-overflow popover (a sibling) can escape the cell. */
+  td.col-name { position: relative; color: var(--fg); overflow: visible; }
+  .name-clip { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Pick rows: rank glyph, bold name, reason spanning the trailing columns
+     with the parent's List/× at its right end. */
+  .pick-rank {
+    float: left;
+    width: 1rem;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    line-height: var(--row);
+    color: var(--muted);
+  }
+  tr.pick td.col-name a { font-weight: 600; }
+  td.reason { font-family: inherit; overflow: hidden; }
   th .hcontent {
     display: inline-flex;
     align-items: center;
@@ -767,13 +958,18 @@
   }
   th:hover { background: var(--hover); }
   th.right, td.right { text-align: right; }
+  /* Column heads keep their width honest: the ? help affordance is drawn only
+     on hover / keyboard focus, floating left of the label. */
+  .info-btn { position: absolute; right: calc(100% + 4px); opacity: 0; pointer-events: none; }
+  th.left .info-btn { right: auto; left: calc(100% + 4px); }
+  th:hover .info-btn, th:focus-within .info-btn { opacity: 1; pointer-events: auto; }
+  th.left .hcontent { padding-right: 0; }
   th.right .hcontent { justify-content: flex-end; }
   th.active { color: var(--accent); }
   /* Hairline row dividers only (was additionally zebra-striped on even
      rows) — the hairline + this hover tint carry row separation on their
      own now that the header/panel borders read at proper contrast. */
   tbody tr:hover td { background: var(--panel-2); }
-  td.col-name { position: relative; color: var(--fg); }
   td.col-sell_score { color: var(--fg); font-weight: 600; }
   /* Rows with nothing left to sell (leveled gear ate the whole stack, or
      the "keep copies" reserve did) stay visible but recede — still useful
@@ -910,9 +1106,10 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 12px;
-    padding: 10px 14px;
-    border-top: 1px var(--rule) var(--hairline);
+    gap: var(--s3);
+    min-height: var(--bar);
+    padding: var(--s1) var(--inset);
+    border-top: 1px solid var(--border);
     flex-wrap: wrap;
   }
   .pager-controls {

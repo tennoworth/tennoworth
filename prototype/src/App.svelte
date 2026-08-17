@@ -101,8 +101,11 @@
       return Number.isFinite(n) && n >= 0 ? n : 0;
     })()
   );
+  // Takes the number input's event, or a plain number (the row-B "keep N
+  // copies ×" chip clears it without a synthetic event).
   function setReserveCopies(e) {
-    const n = Math.max(0, parseInt(e.currentTarget.value, 10) || 0);
+    const raw = typeof e === 'number' ? e : e.currentTarget.value;
+    const n = Math.max(0, parseInt(raw, 10) || 0);
     reserveCopies = n;
     void store.setSetting('reserve-copies', String(n));
   }

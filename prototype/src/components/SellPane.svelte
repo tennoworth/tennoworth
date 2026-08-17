@@ -149,6 +149,19 @@
     return `Clears around ${price}p at current demand.`;
   }
 
+  // Row B "active filter" chips — the Filters popover's state surfaced as
+  // removable chips so a narrowed table never reads as a mysteriously short
+  // one. Each × resets that one filter to its wide-open value.
+  let activeFilterChips = $derived.by(() => {
+    const out = [];
+    if (minPrice > 0) out.push({ key: 'price', label: `min avg ≥ ${minPrice}p`, clear: () => (minPrice = 0) });
+    if (minOwned > 1) out.push({ key: 'owned', label: `min owned ≥ ${minOwned}`, clear: () => (minOwned = 1) });
+    if (reserveCopies > 0) out.push({ key: 'reserve', label: `keep ${reserveCopies} ${reserveCopies === 1 ? 'copy' : 'copies'}`, clear: () => setReserveCopies(0) });
+    if (typeFilter !== 'all') out.push({ key: 'type', label: `type: ${TYPE_LABELS[typeFilter] ?? typeFilter}`, clear: () => (typeFilter = 'all') });
+    if (hideAtLvl < 11) out.push({ key: 'kept', label: `hide ranked ≥ ${hideAtLvl}`, clear: () => (hideAtLvl = 11) });
+    return out;
+  });
+
   // Preset-driven empty states reset the preset; hand-filter ones relax the
   // offending slider. A price slider can't rescue a "no vaulted parts" empty.
   const PRESET_EMPTY_KINDS = new Set(['tag', 'vault', 'ducats', 'vol', 'median', 'spares']);
@@ -253,66 +266,60 @@
   </div>
 {/if}
 
-{#if results.length > 0}
-  {#if allPicks.length > 0}
-    <section class="card picks">
-      <div class="picks-head">
-        <div class="picks-title">
-          <h3>Top picks</h3>
-          <span
-            class="muted"
-            title="Same Score as the table below — expected plat per day if listed. Picks also need at least 3 trades/48h (so a listing won't just sit) and {MIN_PICK_SCORE}p/day to clear the bar."
-          >Best sells right now, ranked by expected plat/day — patience listings excluded.</span>
-        </div>
-      </div>
-      <div class="picks-body">
-        {#each picks as p, i (p.key ?? p.slug)}
-          <div class="pick-row">
-            <span class="pick-rank">{i + 1}</span>
-            <div class="pick-main">
-              <a
-                class="pick-name"
-                href={wfmItemUrl(p.slug)}
-                target="_blank"
-                rel="noopener noreferrer"
-              >{p.name}</a>
-              <p class="pick-reason" class:hold={p.timing === 'hold'} class:peak={p.timing === 'peak'}>
-                {pickReason(p)}
-                <span class="pick-vol">({plat(p.volume_48h)} trades / 48h)</span>
-              </p>
-              {#if p.volume_48h < LIQUID_VOL}
-                <span class="pick-tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor — expect to wait for a buyer.">thin</span>
-              {/if}
-            </div>
-            <div class="pick-score">~{plat(p.sell_score)}<span class="unit">p/day</span></div>
-            <div class="pick-actions">
-              <button class="pick-list" onclick={() => openListingFlow(p)} aria-label="List {p.name} on WFM">List</button>
-              <button
-                type="button"
-                class="pick-snooze"
-                onclick={() => snoozePick(p.key ?? p.slug)}
-                aria-label="Hide {p.name} for this session"
-                title="Hide for this session"
-              >×</button>
-            </div>
-          </div>
-        {/each}
-        {#if picks.length === 0}
-          <p class="muted picks-all-snoozed">All picks snoozed for this session.</p>
-        {/if}
-      </div>
-    </section>
-  {:else}
-    <div class="card empty">
-      <div>
-        <strong>No picks clear the bar right now.</strong>
-        <p class="muted">Nothing owned trades often enough and scores high enough to headline — check the table below for the rest.</p>
-      </div>
+{#if results.length > 0 && allPicks.length === 0}
+  <div class="card empty">
+    <div>
+      <strong>No picks clear the bar right now.</strong>
+      <p class="muted">Nothing owned trades often enough and scores high enough to headline — check the table below for the rest.</p>
     </div>
-  {/if}
+  </div>
 {/if}
 
-<section class="sell-toolbar">
+<!-- Top picks rail copy: rendered inside ResultsTable's picks panel so the
+     pick rows share the table's colgroup (numbers line up with the columns). -->
+{#snippet picksHead()}
+  <h3>Top picks</h3>
+  <span
+    class="muted picks-exp"
+    title="Same Score as the table below — expected plat per day if listed. Picks also need at least 3 trades/48h (so a listing won't just sit) and {MIN_PICK_SCORE}p/day to clear the bar."
+  >Best sells right now, ranked by expected plat/day — patience listings excluded.</span>
+  <span class="grow"></span>
+  <span class="muted picks-count">
+    {picks.length} of {allPicks.length}
+    {#if snoozedPicks.size > 0}
+      · {snoozedPicks.size} snoozed <button type="button" class="link" onclick={() => (snoozedPicks = new Set())}>restore</button>
+    {/if}
+  </span>
+{/snippet}
+
+{#snippet pickReasonCell(p)}
+  <div class="rs" class:hold={p.timing === 'hold'} class:peak={p.timing === 'peak'}>
+    <span class="t">
+      {pickReason(p)}
+      <span class="pick-vol">({plat(p.volume_48h)} trades / 48h)</span>
+    </span>
+    {#if p.volume_48h < LIQUID_VOL}
+      <span class="pick-tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor — expect to wait for a buyer.">thin</span>
+    {/if}
+    <span class="pick-actions">
+      <button class="pick-list" onclick={() => openListingFlow(p)} aria-label="List {p.name} on WFM">List</button>
+      <button
+        type="button"
+        class="pick-snooze"
+        onclick={() => snoozePick(p.key ?? p.slug)}
+        aria-label="Hide {p.name} for this session"
+        title="Hide for this session"
+      >×</button>
+    </span>
+  </div>
+{/snippet}
+
+{#snippet picksEmpty()}
+  <p class="muted picks-all-snoozed">All picks snoozed for this session.</p>
+{/snippet}
+
+<!-- Row A · SCOPE: presets · type chips · Filters popover. -->
+{#snippet scopeRow()}
   <div class="toolbar-group presets-row">
     {#each Object.entries(PRESETS) as [name, preset]}
       <button
@@ -328,38 +335,12 @@
   <span class="muted preset-hint">
     {activePreset ? PRESETS[activePreset].hint : 'custom — saved preset cleared'}
   </span>
-      {#if availableTags.length > 0}
-        <div class="toolbar-divider" aria-hidden="true"></div>
-        <div class="toolbar-group tagchips">
-          {#each availableTags as [tag, count]}
-            <button
-              type="button"
-              class="chip"
-              class:active={activeTags.has(tag)}
-              class:zero={count === 0}
-              aria-pressed={activeTags.has(tag)}
-              onclick={() => toggleTag(tag)}
-              title={count === 0 ? `No matching rows pass the other filters` : `${count} row${count === 1 ? '' : 's'} carry this tag`}
-            >
-              {tag}
-              <span class="chip-count">{count}</span>
-            </button>
-          {/each}
-          {#if activeTags.size > 0}
-            <button type="button" class="chip-clear" onclick={() => (activeTags = new Set())}>
-              clear ({activeTags.size})
-            </button>
-          {/if}
-        </div>
-        {#if activeTags.size >= 2}
-          <p class="tag-or-note">Multiple tags OR together — a row shows if it carries any selected tag.</p>
-        {/if}
-      {/if}
-  <div class="toolbar-divider" aria-hidden="true"></div>
+  <span class="grow"></span>
   <details class="filter-disclosure" open={filtersOpen} ontoggle={toggleFiltersOpen}>
     <summary>
       <span class="dis-label">Filters</span>
-      <span class="muted small">price · owned · keep copies · type · upgraded mods</span>
+      {#if activeFilterChips.length > 0}<span class="dis-count">{activeFilterChips.length}</span>{/if}
+      <span class="muted small">▾</span>
     </summary>
     <div class="filters-panel">
       <div class="filters">
@@ -392,6 +373,49 @@
       </div>
     </div>
   </details>
+  {#if availableTags.length > 0}
+    <div class="toolbar-group tagchips">
+      {#each availableTags as [tag, count]}
+        <button
+          type="button"
+          class="chip"
+          class:active={activeTags.has(tag)}
+          class:zero={count === 0}
+          aria-pressed={activeTags.has(tag)}
+          onclick={() => toggleTag(tag)}
+          title={count === 0 ? `No matching rows pass the other filters` : `${count} row${count === 1 ? '' : 's'} carry this tag`}
+        >
+          {tag === 'arcane_enhancement' ? 'arcane' : tag}
+          <span class="chip-count">{count}</span>
+        </button>
+      {/each}
+      {#if activeTags.size > 0}
+        <button type="button" class="chip-clear" onclick={() => (activeTags = new Set())}>
+          clear ({activeTags.size})
+        </button>
+      {/if}
+    </div>
+    {#if activeTags.size >= 2}
+      <span class="tag-or-note">tags OR together</span>
+    {/if}
+  {/if}
+{/snippet}
+
+<!-- Row B · NARROW extras: the Filters popover's state as removable chips. -->
+{#snippet narrowChips()}
+  {#if activeFilterChips.length > 0}
+    <div class="toolbar-group active-filters">
+      {#each activeFilterChips as f (f.key)}
+        <button type="button" class="chip fchip" onclick={f.clear} title="Remove this filter">
+          {f.label}<span class="rm" aria-hidden="true">×</span>
+        </button>
+      {/each}
+    </div>
+    <div class="toolbar-divider" aria-hidden="true"></div>
+  {/if}
+{/snippet}
+
+{#snippet listCta()}
   {#if isDesktop}
     <button
       class="list-cta"
@@ -401,11 +425,12 @@
       title={listTitle}
     >{listLabel}</button>
   {/if}
-</section>
+{/snippet}
 
 {@render pendingBanner()}
 
-{#if results.length > 0}
+{#snippet scoreExplainer()}
+  {#if results.length > 0}
   <details
     class="score-expander"
     open={!scoreExplainerDismissed}
@@ -423,13 +448,13 @@
       explainer.
     </div>
   </details>
-{/if}
+  {/if}
+{/snippet}
 
-{#if results.length > 0}
-  <ResultsTable results={tableRows} {deltas} {visibleColumns} {presetSort}
-    onfiltered={(rows, active) => (tableView = { rows, active: active || changesOnly })} />
-{:else if emptyReason}
-  <div class="card empty">
+
+{#snippet emptyState()}
+  {#if emptyReason}
+  <div class="card empty flush">
     {#if emptyReason.kind === 'no-market'}
       <div>
         <strong>Nothing in this inventory has live market data.</strong>
@@ -501,7 +526,19 @@
       <button onclick={() => relaxFilters({ kind: 'tag' })}>Back to Default</button>
     {/if}
   </div>
-{/if}
+  {/if}
+{/snippet}
+
+<!-- Controls live inside the table border (row A SCOPE · row B NARROW); the
+     picks panel is rendered by the table so both share one colgroup. When the
+     cascade leaves nothing, the empty-state card takes the table body's place
+     and the presets stay reachable in row A. -->
+<ResultsTable results={tableRows} {deltas} {visibleColumns} {presetSort}
+  onfiltered={(rows, active) => (tableView = { rows, active: active || changesOnly })}
+  scope={scopeRow} narrow={narrowChips} cta={listCta}
+  picks={results.length > 0 && allPicks.length > 0 ? picks : null}
+  {picksHead} pickReason={pickReasonCell} {picksEmpty}
+  empty={emptyState} between={scoreExplainer} />
 
 <style>
   /* Duplicated from App.svelte's shared styling — Svelte scopes CSS
@@ -635,19 +672,13 @@
   }
   .lede-dot:hover, .lede-dot:focus-visible { color: var(--accent); border-color: var(--accent); }
 
-  /* Sell toolbar — presets, tag chips, and the Filters disclosure merged
-     into one borderless, wrapping strip so the workspace loses a card's
-     worth of vertical space and outline on every load. The primary CTA
-     anchors the end of this same line via margin-left:auto. */
-  .sell-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px 12px;
-    padding: 8px 2px;
-  }
+  /* Controls inside the table border (rendered through ResultsTable's SCOPE /
+     NARROW snippets). Groups wrap; heights are 28 (presets, chips). */
   .toolbar-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-  .toolbar-divider { width: 1px; height: 20px; background: var(--hairline); flex: 0 0 auto; }
+  .toolbar-divider { width: 1px; height: 1rem; background: var(--hairline); flex: 0 0 auto; margin: 0 var(--s1); }
+  .grow { flex: 1 1 0; min-width: 0; }
+  .link { font: inherit; color: var(--accent); background: transparent; border: none; padding: 0 var(--s1); cursor: pointer; }
+  .link:hover { text-decoration: underline; background: transparent; }
 
   /* Preset pills — one-click filter configurations. The active pill is
      accent-bordered AND carries a leading check mark so the selection
@@ -657,7 +688,8 @@
     border: 1px solid var(--border);
     color: var(--muted);
     border-radius: var(--radius-ctl);
-    padding: 4px 12px;
+    height: var(--ctl);
+    padding: 0 12px;
     letter-spacing: 0.02em;
     cursor: pointer;
     transition: color 120ms, border-color 120ms, background 120ms;
@@ -682,10 +714,11 @@
     list-style: none;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     font-size: 12px;
     color: var(--muted);
-    padding: 4px 10px;
+    height: var(--ctl);
+    padding: 0 10px;
     border: 1px solid var(--border);
     border-radius: var(--radius-ctl);
     user-select: none;
@@ -710,11 +743,24 @@
     font-size: 11px;
   }
   .filter-disclosure[open] > summary .dis-label { color: var(--accent); }
+  .dis-count {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--accent);
+    border: 1px solid currentColor;
+    border-radius: var(--radius-tag);
+    padding: 0 4px;
+    line-height: 14px;
+  }
+  /* The disclosure sits at the right end of the SCOPE row, so its panel
+     anchors to the right rail. */
   .filters-panel {
     position: absolute;
     top: calc(100% + 6px);
-    left: 0;
+    right: 0;
     z-index: 15;
+    width: max-content;
+    max-width: min(52rem, 80vw);
     background: var(--panel-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-panel);
@@ -838,19 +884,15 @@
      stay visible (strikethrough+muted) so vocabulary is discoverable.
      Chip row caps at ~96px (≈3 wrap rows on desktop, ≈4 on mobile) with
      internal vertical scroll. */
-  .tagchips {
-    gap: 6px;
-    align-items: flex-start;
-    max-height: 96px;
-    overflow-y: auto;
-    align-content: flex-start;
-  }
+  /* Type chips take their own line under the presets — real inventories carry
+     10–20 tags, which cannot share a 40px line with six presets. */
+  .tagchips { gap: 6px; flex: 1 1 100%; }
   .chip {
     background: transparent;
     color: var(--muted);
     border: 1px solid var(--border);
     border-radius: var(--radius-input);
-    padding: 4px 10px 4px 12px;
+    padding: 0 10px 0 12px;
     font-size: 11px;
     letter-spacing: 0.02em;
     cursor: pointer;
@@ -859,9 +901,9 @@
     align-items: center;
     font: inherit;
     line-height: 1.2;
-    /* Tap-target — old 21px height failed iOS HIG / WCAG ≥ 24px. 28px
-       leaves room without losing the pill aesthetic. */
-    min-height: 28px;
+    /* Tap-target — old 21px height failed iOS HIG / WCAG ≥ 24px. 28px is
+       the ladder's control height. */
+    height: var(--ctl);
     transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
   }
   .chip:hover { color: var(--fg); border-color: var(--accent); }
@@ -895,87 +937,34 @@
      margin-left:auto so it doesn't visually mix with the chip-style
      presets next to it. Same colour family as the accent. */
   .list-cta {
-    margin-left: auto;
+    height: var(--ctl-lg);
+    padding: 0 var(--s4);
     background: var(--accent);
     color: var(--on-accent);
     border: 1px solid var(--accent);
     font-weight: 600;
+    white-space: nowrap;
   }
   .list-cta:hover:not(:disabled) { filter: brightness(1.1); }
   .list-cta:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  /* Top picks strip. Same carved-panel shell as ResultsTable's .wrap — a
-     panel border with a raised (--panel-2) header bar — rather than the
-     uniform .card padding, so the picks' one-line "what qualifies" copy
-     reads as a fixed header over a list of rows. Rows are hairline-divided. */
-  .picks { padding: 0; overflow: hidden; }
-  .picks-head {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    padding: 12px 16px;
-    background: var(--panel-2);
-    border-bottom: 1px solid var(--border);
-  }
-  .picks-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-  .picks-title h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--fg); }
-  .picks-body { display: flex; flex-direction: column; padding: 0 16px; }
-  .pick-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 0;
-    border-top: 1px var(--rule) var(--hairline);
-  }
-  .pick-row:first-of-type { border-top: none; }
-  .pick-rank {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--muted);
-    width: 14px;
-    flex-shrink: 0;
-    text-align: right;
-  }
-  /* Single line per pick — the reason sentence truncates by default and
-     expands on hover/focus rather than wrapping, so a long sentence can't
-     push the row back to two lines. */
-  .pick-main { display: flex; flex-direction: row; align-items: baseline; gap: 10px; min-width: 0; flex: 1; }
-  .pick-name {
-    flex: 0 0 auto;
-    max-width: 220px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--fg);
-    text-decoration: none;
-    font-weight: 600;
-    font-size: 13px;
-  }
-  .pick-name:hover { color: var(--accent); text-decoration: underline; }
-  .pick-reason {
-    margin: 0;
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 12.5px;
-    color: var(--muted);
-    line-height: 1.5;
-  }
-  .pick-row:hover .pick-reason, .pick-row:focus-within .pick-reason {
-    white-space: normal;
-    overflow: visible;
-  }
+  /* Top picks — the rail copy and the per-row reason cell, rendered inside
+     ResultsTable's picks panel (rows share the table's colgroup). */
+  .picks-exp { font-size: 12px; }
+  .picks-count { font-size: 11.5px; white-space: nowrap; }
+  .picks-all-snoozed { margin: 0; }
+  /* Reason line: fixed 32px box, ellipsised, List/× at its right end. */
+  .rs { display: flex; align-items: center; gap: var(--s2); height: var(--row); font-size: 12.5px; color: var(--muted); }
+  .rs .t { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* Timing tint mirrors .tag.hold/.tag.peak in ResultsTable — same signal,
-     same colour, so the strip and the table below read as one vocabulary. */
-  .pick-reason.hold { color: var(--warn); }
-  .pick-reason.peak { color: var(--good); }
-  /* Thin-volume tag — a sibling of .pick-reason inside .pick-main so it stays
-     OUTSIDE the truncating <p> and is visible at a glance. */
+     same colour, so the picks and the table below read as one vocabulary. */
+  .rs.hold .t { color: var(--warn); }
+  .rs.peak .t { color: var(--good); }
+  .pick-vol { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-left: 2px; }
   .pick-tag {
     flex-shrink: 0;
-    padding: 1px 6px;
+    padding: 0 6px;
+    line-height: 14px;
     font-size: 9.5px;
     font-weight: 600;
     letter-spacing: 0.1em;
@@ -984,30 +973,8 @@
     border-radius: var(--radius-tag);
     color: var(--warn);
   }
-  .tag-or-note {
-    margin: 0;
-    flex-basis: 100%;
-    font-size: 11.5px;
-    color: var(--muted);
-  }
-  .pick-vol {
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--muted);
-    margin-left: 2px;
-  }
-  .pick-score {
-    font-family: var(--font-mono);
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--fg);
-    flex-shrink: 0;
-    text-align: right;
-    min-width: 64px;
-  }
-  .pick-score .unit { font-size: 11px; color: var(--muted); margin-left: 2px; }
-  .pick-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-  .pick-list { font-size: 12px; padding: 5px 12px; min-height: 24px; }
+  .pick-actions { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .pick-list { font-size: 12px; height: var(--ctl-xs); padding: 0 10px; }
   .pick-snooze {
     background: transparent;
     border: none;
@@ -1015,10 +982,10 @@
     font-size: 15px;
     line-height: 1;
     cursor: pointer;
-    padding: 4px 7px;
+    padding: 0 6px;
+    height: var(--ctl-xs);
     min-width: 24px;
-    min-height: 24px;
   }
   .pick-snooze:hover { color: var(--bad); }
-  .picks-all-snoozed { padding: 12px 0; margin: 0; }
+  .card.empty.flush { border: none; padding: var(--s2) 0; background: transparent; }
 </style>
