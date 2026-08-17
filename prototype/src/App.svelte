@@ -1430,18 +1430,18 @@
               : 'Load fresh inventory — re-fetch from the game. Export / Restore / Clear live in this menu too.'}
           >{pullingInventory ? 'Scanning…' : 'Refresh ▾'}</button>
           {#if refreshOpen}
-            <div class="refresh-pop" role="menu">
+            <div class="refresh-pop">
               <p class="rp-lede">Scan the running game — no file needed.</p>
               <button class="rp-primary" data-testid="desktop-scan" onclick={refreshFromGame} disabled={pullingInventory}>
                 {pullingInventory ? 'Scanning game…' : 'Scan game'}
               </button>
               <div class="rp-sep" aria-hidden="true"></div>
               {#if inventoryName}
-                <button class="rp-item" role="menuitem" onclick={() => { refreshOpen = false; exportImportRef.openExport(); }} title="Download an encrypted snapshot for another device or backup.">Export…</button>
+                <button class="rp-item" onclick={() => { refreshOpen = false; exportImportRef.openExport(); }} title="Download an encrypted snapshot for another device or backup.">Export…</button>
               {/if}
-              <button class="rp-item" role="menuitem" onclick={() => { refreshOpen = false; exportImportRef.pickImport(); }} title="Restore an encrypted snapshot exported from another device.">Restore…</button>
+              <button class="rp-item" onclick={() => { refreshOpen = false; exportImportRef.pickImport(); }} title="Restore an encrypted snapshot exported from another device.">Restore…</button>
               {#if inventoryName}
-                <button class="rp-item danger" role="menuitem" onclick={() => { refreshOpen = false; handleClear(); }} title="Forget the saved inventory entirely.">Clear</button>
+                <button class="rp-item danger" onclick={() => { refreshOpen = false; handleClear(); }} title="Forget the saved inventory entirely.">Clear</button>
               {/if}
               {#if unresolvedCount > 0}
                 <p class="rp-note" title="Breakdown: {unresolvedSummary}.">{unresolvedCount} items couldn't be price-matched (not shown) — usually untradeable blueprints, quest items and very new content; your sellable items aren't affected.</p>
