@@ -496,12 +496,15 @@
     </div>
   {/if}
 
-  {#if drifted.length > 0}
+  <!-- Snapshot-based drift is the offline fallback; once a live check has run,
+       Listing Health above covers the same orders with exact figures, so the
+       two never show together. -->
+  {#if drifted.length > 0 && live.size === 0}
     <div class="drift">
       <p class="drift-lead">
         The market moved under {drifted.length}
         {drifted.length === 1 ? 'listing' : 'listings'}. Prices come from the
-        last snapshot, so treat them as a starting point, not a quote.
+        last snapshot, so treat them as a starting point, not a quote{#if canLive} — or <button class="linkish" onclick={checkLive} disabled={liveState === 'running'}>check live</button> for exact figures{/if}.
       </p>
       <ul class="drift-list">
         {#each drifted as d (d.id)}
@@ -687,6 +690,7 @@
     margin-bottom: 12px;
   }
   .drift-lead { margin: 0 0 8px; font-size: 12px; color: var(--muted); }
+  button.linkish { background: none; border: 0; padding: 0; color: var(--fg); text-decoration: underline dotted; cursor: pointer; font: inherit; }
   .health {
     margin: 10px 0 0;
     padding: 10px 12px;
