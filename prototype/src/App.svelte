@@ -70,6 +70,12 @@
     unresolved: {},
   });
   let deltas = $state<Map<string, number>>(new Map());
+  // The snapshot the current scan was diffed against — kept for the session
+  // (same lifetime as `deltas`) so the Sell summary can say what changed since
+  // the last scan in the same units the table shows (sellable rows, potential
+  // plat), not just per-row counts. Null after a restore-from-storage boot,
+  // exactly like `deltas` is empty then.
+  let previousOwned = $state<Map<string, OwnedRecord> | null>(null);
   let results = $state<any[]>([]);
   // The Sell table pushes its filtered+sorted rows up here so the "List on WFM"
   // CTA stages exactly what the user sees (name filter + badge chips), not the
@@ -373,6 +379,7 @@
     lastUpdated = null;
     resolved = { owned: new Map(), unresolved: {} };
     deltas = new Map();
+    previousOwned = null;
     results = [];
     tableView = { rows: [], active: false };
     phase = 'idle';
@@ -442,6 +449,7 @@
       // Diff against the previously-saved snapshot before overwriting it.
       const previous = await store.loadSnapshot();
       deltas = diffOwned(previous?.owned, owned);
+      previousOwned = previous?.owned ?? null;
       resolved = { owned, unresolved };
       await store.saveSnapshot({ invName: name, owned });
       lastUpdated = Date.now();
@@ -630,6 +638,15 @@
 
   let marketStaleness = $derived(ago(market?.updated_at));
   let inventoryStaleness = $derived(ago(lastUpdated));
+  // Same buckets as the market dot, on the inventory's own clock: a scan is
+  // "fresh" for a day (inventories move slower than the order book).
+  let inventoryFreshness = $derived.by(() => {
+    if (!lastUpdated) return 'unknown';
+    const h = (Date.now() - lastUpdated) / 3.6e6;
+    if (h <= 24) return 'fresh';
+    if (h <= 24 * 7) return 'aging';
+    return 'stale';
+  });
 
   // A vendor surface (Baro schedule, relic drops, vault status, set maps) is
   // refreshed on a full scrape but NOT on a CSV-only rebuild — so it can lag
@@ -661,6 +678,53 @@
   // Total theoretical plat across visible results — for the stats strip.
   let totalPotential = $derived(
     results.reduce((s, r) => s + r.potential_plat, 0)
+  );
+
+  // Since-last-scan deltas for the Sell summary cells. The previous snapshot is
+  // pushed through the SAME filter cascade as the live one, so "Sellable ▲12"
+  // means twelve more rows under the current preset/filters — not a different
+  // definition of sellable. One extra computeResults per filter change; the
+  // cascade costs ~0.1 ms on a 2k-item inventory (measured 2026-08-01).
+  let prevSummary = $derived.by(() => {
+    if (!previousOwned || !market) return null;
+    const rows = computeFilteredResults(previousOwned, market, filterState, reserveCopies);
+    return {
+      owned: previousOwned.size,
+      sellable: rows.filter((r) => r.sellable > 0).length,
+      potential: rows.reduce((s, r) => s + r.potential_plat, 0),
+    };
+  });
+  // Row-level "what changed": keys new since the last scan, keys gone, keys
+  // whose count moved. `deltas` only covers keys present now (diffOwned walks
+  // the current map), so removals come from the previous map directly.
+  let sinceScan = $derived.by(() => {
+    if (!previousOwned) return null;
+    let added = 0, removed = 0, changed = 0;
+    for (const [key, d] of deltas) {
+      if (!previousOwned.has(key)) added += 1;
+      else if (d !== 0) changed += 1;
+    }
+    for (const key of previousOwned.keys()) if (!resolved.owned.has(key)) removed += 1;
+    return { added, removed, changed };
+  });
+
+  // Live-orders summary reported up by MyOrdersPanel once it has fetched
+  // (desktop only; null until the user has opened My orders this session, so
+  // the strip never triggers an auth prompt on its own). Feeds the strip's
+  // "N orders to fix →" cell and the Sell summary's Listed / Needs fixing.
+  let ordersSummary = $state<{ live: number; issues: number } | null>(null);
+  let ordersToFix = $derived((ordersSummary?.issues ?? 0) + (pendingPlan && pendingRemaining > 0 ? pendingRemaining : 0));
+
+  // WFM session state for the strip's end cell. Re-probed whenever the session
+  // epoch bumps (login/unlock) so the label follows the dialogs.
+  let wfmStatus = $state<{ logged_in: boolean; unlocked: boolean } | null>(null);
+  $effect(() => {
+    if (!isDesktop) return;
+    void sessionEpoch;
+    desktopWfmStatus().then((s) => { wfmStatus = s; }).catch(() => { wfmStatus = null; });
+  });
+  let wfmLabel = $derived(
+    !wfmStatus ? '—' : wfmStatus.unlocked ? 'session live' : wfmStatus.logged_in ? 'locked' : 'logged out',
   );
 
   // Friendly diagnosis of WHY the table is empty so we don't just shrug.
@@ -695,7 +759,9 @@
   async function handleImported({ invName, ts, ownedMap }) {
     inventoryName = invName;
     lastUpdated = ts;
-    deltas = diffOwned((await store.loadSnapshot())?.owned, ownedMap);
+    const previous = await store.loadSnapshot();
+    deltas = diffOwned(previous?.owned, ownedMap);
+    previousOwned = previous?.owned ?? null;
     resolved = { owned: ownedMap, unresolved: {} };
     if (!market) market = await loadBestMarket();
     await store.saveSnapshot({ invName: inventoryName, owned: ownedMap });
@@ -842,9 +908,9 @@
 
 {#if phase !== 'done'}
 <main class="landing" data-testid={isDesktop ? 'desktop-mode' : undefined}>
+  {@render statusStrip(false)}
   <header class="landing-head">
     <div class="landing-title">
-      <h1>TennoWorth</h1>
       <p class="sub">
         {#if isDesktop}
           What's worth selling in Warframe right now — scan your account and
@@ -925,14 +991,9 @@
 </main>
 {:else}
 <div class="shell">
+  {@render statusStrip(true)}
 
   <aside class="sidebar">
-    <div class="brand">
-      <h1>TennoWorth</h1>
-      <div class="sub">Windows + Linux · no Overwolf</div>
-      <div class="ver" title="build {APP_COMMIT}">{APP_COMMIT}</div>
-    </div>
-
     <nav>
       <div class="nav-group">
         <div class="nav-label">Trade</div>
@@ -990,49 +1051,9 @@
       </div>
     </nav>
 
-    <div class="src-pin">
-      <strong>{inventoryName}</strong>
-      {#if inventoryStaleness}
-        <span class="muted small">saved {inventoryStaleness}</span>
-      {/if}
-      {#if unresolvedCount > 0}
-        <span class="muted small" title="Breakdown: {unresolvedSummary}. Usually untradeable blueprints, quest items, and very new content — your sellable items aren't affected.">
-          {unresolvedCount} items couldn't be price-matched (not shown)
-        </span>
-      {/if}
-      <div class="src-pin-actions">
-        <div class="refresh-wrap">
-          <!-- Reflects the scan itself, not just the menu: refreshFromGame
-               closes the popover before awaiting, so the "Scanning game…"
-               label inside it vanished the moment it mattered and a ~10s scan
-               looked like a dead click. This trigger stays on screen. -->
-          <button
-            class="refresh-trigger"
-            class:busy={pullingInventory}
-            onclick={() => (refreshOpen = !refreshOpen)}
-            aria-expanded={refreshOpen}
-            aria-busy={pullingInventory}
-            disabled={pullingInventory}
-            title={pullingInventory
-              ? 'Reading the running game’s memory — this can take a few seconds.'
-              : 'Load fresh inventory — re-fetch from the game.'}
-          >{pullingInventory ? 'Scanning…' : 'Refresh ▾'}</button>
-          {#if refreshOpen}
-            <div class="refresh-pop">
-              <p class="rp-lede">Scan the running game — no file needed.</p>
-              <button class="rp-primary" data-testid="desktop-scan" onclick={refreshFromGame} disabled={pullingInventory}>
-                {pullingInventory ? 'Scanning game…' : 'Scan game'}
-              </button>
-            </div>
-          {/if}
-        </div>
-        <button class="ghost" onclick={() => exportImportRef.openExport()} title="Download an encrypted snapshot for another device or backup.">Export</button>
-        <button class="ghost" onclick={() => exportImportRef.pickImport()} title="Restore an encrypted snapshot exported from another device.">Restore</button>
-        <button class="ghost" onclick={handleClear} title="Forget the saved inventory entirely.">Clear</button>
-      </div>
-    </div>
-    <div class="theme-slot">
+    <div class="sfoot">
       <ThemeSwitcher {theme} />
+      <div class="ver" title="build {APP_COMMIT}">Windows + Linux · no Overwolf · {APP_COMMIT}</div>
     </div>
   </aside>
 
@@ -1045,6 +1066,7 @@
         bind:minPrice bind:minOwned bind:typeFilter bind:hideAtLvl bind:activeTags
         bind:tableView
         {resolved} {results} {deltas} {totalPotential}
+        {prevSummary} {sinceScan} {ordersSummary}
         {marketFreshness} {marketStaleness} {marketLoadError}
         {listableRows} {availableTags} {availableTypes}
         {visibleColumns} {presetSort} {emptyReason}
@@ -1331,6 +1353,7 @@
         {sessionEpoch}
         ownedQty={ownedQtyForOrders}
         onauthrequired={(code) => wfmAuthDialogsRef.open(code)}
+        onsummary={(s) => (ordersSummary = s)}
       />
 
     {:else if effectiveView === 'watches'}
@@ -1358,6 +1381,107 @@
   </main>
 </div>
 {/if}
+
+{#snippet statusStrip(inShell)}
+  <!-- Shell-level status strip: one 40px spine on the landing AND the
+       workspace. In the shell its brand cell sits exactly over the sidebar
+       column; the rest answers "is what I'm looking at still true?" —
+       inventory age, market age, orders to fix, Baro, WFM session. Rare
+       inventory actions (Export / Restore / Clear) live one click deeper in
+       the Refresh menu. -->
+  <header class="statusbar" class:shell-strip={inShell}>
+    <div class="brand">
+      <h1>TennoWorth</h1>
+      {#if !inShell}<span class="sub">warframe.market prices, ranked by what actually sells</span>{/if}
+    </div>
+    {#if isDesktop}
+      <div class="cell inv" title={unresolvedCount > 0 ? `${unresolvedCount} items couldn't be price-matched (${unresolvedSummary}) — usually untradeable blueprints, quest items and very new content.` : undefined}>
+        {#if inventoryName}
+          <span class="dot {inventoryFreshness}" role="img" aria-label="Inventory {inventoryFreshness}"></span>
+          <span>Inventory</span>
+          <b class="file" title={inventoryName}>{inventoryName}</b>
+          {#if inventoryStaleness}<span>·</span><b>{inventoryStaleness}</b>{/if}
+        {:else}
+          <span class="dot" aria-hidden="true"></span>
+          <span>No inventory yet</span>
+        {/if}
+        <div class="refresh-wrap">
+          <!-- Reflects the scan itself, not just the menu: refreshFromGame
+               closes the popover before awaiting, so the "Scanning game…"
+               label inside it vanished the moment it mattered and a ~10s scan
+               looked like a dead click. This trigger stays on screen. -->
+          <button
+            class="refresh-trigger"
+            class:busy={pullingInventory}
+            onclick={() => (refreshOpen = !refreshOpen)}
+            aria-expanded={refreshOpen}
+            aria-busy={pullingInventory}
+            disabled={pullingInventory}
+            title={pullingInventory
+              ? 'Reading the running game’s memory — this can take a few seconds.'
+              : 'Load fresh inventory — re-fetch from the game. Export / Restore / Clear live in this menu too.'}
+          >{pullingInventory ? 'Scanning…' : 'Refresh ▾'}</button>
+          {#if refreshOpen}
+            <div class="refresh-pop" role="menu">
+              <p class="rp-lede">Scan the running game — no file needed.</p>
+              <button class="rp-primary" data-testid="desktop-scan" onclick={refreshFromGame} disabled={pullingInventory}>
+                {pullingInventory ? 'Scanning game…' : 'Scan game'}
+              </button>
+              <div class="rp-sep" aria-hidden="true"></div>
+              {#if inventoryName}
+                <button class="rp-item" role="menuitem" onclick={() => { refreshOpen = false; exportImportRef.openExport(); }} title="Download an encrypted snapshot for another device or backup.">Export…</button>
+              {/if}
+              <button class="rp-item" role="menuitem" onclick={() => { refreshOpen = false; exportImportRef.pickImport(); }} title="Restore an encrypted snapshot exported from another device.">Restore…</button>
+              {#if inventoryName}
+                <button class="rp-item danger" role="menuitem" onclick={() => { refreshOpen = false; handleClear(); }} title="Forget the saved inventory entirely.">Clear</button>
+              {/if}
+              {#if unresolvedCount > 0}
+                <p class="rp-note" title="Breakdown: {unresolvedSummary}.">{unresolvedCount} items couldn't be price-matched (not shown) — usually untradeable blueprints, quest items and very new content; your sellable items aren't affected.</p>
+              {/if}
+            </div>
+          {/if}
+        </div>
+      </div>
+    {/if}
+    <div class="cell">
+      <span class="dot {marketFreshness}" role="img" aria-label="Market data {marketFreshness}"></span>
+      <span>Market</span>
+      <b>{marketStaleness ?? '—'}</b>
+      {#if marketFreshness !== 'unknown'}<span>· {marketFreshness}</span>{/if}
+    </div>
+    {#if inShell && isDesktop && ordersToFix > 0}
+      <div class="cell attn">
+        <b>{ordersToFix}</b>
+        <span>{ordersToFix === 1 ? 'order' : 'orders'} to fix</span>
+        <button type="button" class="link" onclick={() => setView('orders')} aria-label="Open My orders">→</button>
+      </div>
+    {/if}
+    {#if baroState && baroState.phase !== 'unknown'}
+      <div class="cell baro">
+        <span class="ducat" aria-hidden="true">⌬</span>
+        <span>{baroState.phase === 'here' ? 'Baro leaves in' : 'Baro arrives in'}</span>
+        <b>{humanWindow(baroState.windowMs)}</b>
+      </div>
+    {/if}
+    <span class="grow"></span>
+    {#if !inShell}
+      <nav class="cell end" aria-label="Site">
+        <a href="#faq">FAQ</a>
+        {#if !isDesktop}<a href="#desktop">Desktop app ↓</a>{/if}
+      </nav>
+    {:else if isDesktop}
+      <div class="cell end">
+        <span>WFM</span>
+        {#if wfmStatus && !wfmStatus.unlocked}
+          <button type="button" class="link" onclick={() => wfmAuthDialogsRef.open(wfmStatus.logged_in ? 'needs_unlock' : 'needs_login')}>{wfmLabel}</button>
+        {:else}
+          <b>{wfmLabel}</b>
+        {/if}
+        {#if ordersSummary}<span>· {ordersSummary.live} live</span>{/if}
+      </div>
+    {/if}
+  </header>
+{/snippet}
 
 {#snippet faqContent()}
   <section class="faq">
@@ -1709,54 +1833,126 @@
     gap: 20px;
   }
 
-  /* Shell layout: persistent left rail + workspace column. Sidebar is
-     220px (room for nav-item label + 3-digit badge); workspace fills
-     the rest. Content column caps at ~1680px (design spec), so the
-     shell is 220 + padding + 1680. */
+  /* Shell layout: a 40px status strip spanning both columns, then the
+     persistent left rail + workspace column. Sidebar is 13.5rem (216px —
+     room for nav-item label + 3-digit badge); workspace fills the rest.
+     The shell caps at 122.5rem (1960px at 16px root) and centres. */
   .shell {
     display: grid;
-    grid-template-columns: 220px 1fr;
-    max-width: min(1960px, 100vw);
+    grid-template-columns: var(--sidebar) minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    max-width: min(122.5rem, 100vw);
     margin: 0 auto;
     min-height: 100vh;
   }
 
   main.workspace {
-    padding: 24px 28px 48px;
+    padding: var(--s3) var(--s4) var(--s6);
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: var(--stack);
     min-width: 0;
   }
 
-  /* Sidebar — sticky to viewport; nav scrolls if it overflows.
-     `aside` is the persistent navigation surface; src-pin is the inventory
-     metadata footer (replace/export/clear). */
-  aside.sidebar {
+  /* ---- Status strip: one element on the landing and the shell ------- */
+  .statusbar {
+    display: flex;
+    align-items: stretch;
+    height: var(--strip);
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.75rem;
+    line-height: 1rem;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+  .statusbar > * { flex-shrink: 0; }
+  .statusbar .grow { flex: 1 1 0; min-width: 0; }
+  /* In the shell the strip is the y-origin: sticky above the sidebar and
+     the workspace, spanning both grid columns. */
+  .statusbar.shell-strip {
+    grid-column: 1 / -1;
     position: sticky;
     top: 0;
-    height: 100vh;
+    z-index: 20;
+  }
+  .statusbar .brand {
+    display: flex;
+    align-items: center;
+    gap: var(--s3);
+    padding: 0 var(--inset);
+    min-width: 0;
+  }
+  /* The brand cell IS the sidebar's top: same width, same right border, so
+     the top-left corner still says TennoWorth without a second brand block. */
+  .statusbar.shell-strip .brand {
+    width: var(--sidebar);
+    border-right: 1px solid var(--border);
+  }
+  .statusbar .brand h1 {
+    margin: 0;
+    font-size: 0.9375rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    line-height: 1.25rem;
+    color: var(--fg);
+  }
+  .statusbar .brand .sub {
+    color: var(--faint);
+    font-size: 0.6875rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .statusbar .cell {
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    padding: 0 var(--s3);
+    border-left: 1px var(--rule) var(--hairline);
+    min-width: 0;
+  }
+  .statusbar.shell-strip .brand + .cell { border-left: none; }
+  .statusbar .cell.end { padding-right: var(--inset); }
+  .statusbar .cell b {
+    color: var(--fg);
+    font-weight: 600;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+  .statusbar .cell.attn b { color: var(--warn); }
+  /* A long inventory filename must not push the WFM cell off the right rail. */
+  .statusbar .cell .file { max-width: 16rem; overflow: hidden; text-overflow: ellipsis; }
+  .statusbar .cell .ducat { color: var(--ducat); }
+  .statusbar .cell a { color: var(--accent); text-decoration: none; }
+  .statusbar .cell a + a { margin-left: var(--s2); }
+  .statusbar .cell .link {
+    font: inherit;
+    color: var(--accent);
+    background: transparent;
+    border: none;
+    padding: 0 var(--s1);
+    height: var(--ctl-xs);
+    cursor: pointer;
+  }
+  .statusbar .cell .link:hover { text-decoration: underline; background: transparent; }
+  /* Landing: same strip, framed as the first block of the reading column. */
+  main.landing > .statusbar {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-panel);
+  }
+  main.landing > .statusbar .brand { flex: 1 1 auto; }
+
+  /* Sidebar — nav only, sticky under the strip; the theme switcher and the
+     build string sit in its foot. */
+  aside.sidebar {
+    position: sticky;
+    top: var(--strip);
+    height: calc(100vh - var(--strip));
     border-right: 1px solid var(--border);
     background: var(--panel);
     display: flex;
     flex-direction: column;
-    padding: 18px 0;
-  }
-  aside.sidebar .brand {
-    padding: 0 18px 14px;
-    border-bottom: 1px var(--rule) var(--hairline);
-    margin-bottom: 10px;
-  }
-  aside.sidebar .brand h1 {
-    margin: 0;
-    font-size: 14px;
-    font-weight: 600;
-    letter-spacing: -0.005em;
-  }
-  aside.sidebar .brand .sub {
-    color: var(--faint);
-    font-size: 11px;
-    margin-top: 2px;
+    padding: var(--s2) 0 var(--s3);
   }
   aside.sidebar nav {
     flex: 1;
@@ -1765,7 +1961,7 @@
     flex-direction: column;
   }
   .nav-group {
-    padding: 6px 0;
+    padding: 0 0 var(--s2);
     border-bottom: 1px var(--rule) var(--hairline);
   }
   .nav-group:last-child { border-bottom: none; }
@@ -1775,7 +1971,7 @@
     text-transform: uppercase;
     color: var(--faint);
     font-weight: 600;
-    padding: 8px 18px 4px;
+    padding: var(--s2) var(--inset) var(--s1);
   }
   .nav-item {
     /* Native <button> reset → flat, full-width, transparent. The accent
@@ -1784,7 +1980,8 @@
     align-items: center;
     justify-content: space-between;
     width: 100%;
-    padding: 6px 18px;
+    height: var(--ctl);
+    padding: 0 var(--inset);
     font: inherit;
     font-size: 13px;
     color: var(--muted);
@@ -1821,39 +2018,30 @@
     letter-spacing: 0.04em;
   }
 
-  /* Sidebar footer — inventory source + Replace/Export/Clear. Pinned to
-     bottom via margin-top:auto on the nav above. */
-  .src-pin {
-    padding: 12px 18px;
+  /* Sidebar foot: theme switcher + build string. */
+  .sfoot {
+    padding: var(--s3) var(--s3) 0;
     border-top: 1px var(--rule) var(--hairline);
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: var(--s2);
   }
-  .src-pin strong {
-    font-size: 12px;
-    font-weight: 600;
-    word-break: break-all;
-  }
-  .src-pin .small { font-size: 11px; }
-  .src-pin-actions {
-    display: flex;
-    gap: 6px;
-    margin-top: 6px;
-    flex-wrap: wrap;
-  }
-  .src-pin-actions button {
+  .sfoot .ver { padding: 0 var(--s1); }
+
+  /* Refresh ▾ in the strip: a 24px control inside the 40px bar. */
+  .refresh-trigger {
     font: inherit;
-    font-size: 11px;
+    font-size: 0.6875rem;
+    height: var(--ctl-xs);
+    padding: 0 var(--s2);
     color: var(--muted);
     background: transparent;
     border: 1px solid var(--border);
     border-radius: var(--radius-ctl);
-    padding: 3px 8px;
     cursor: pointer;
+    margin-left: var(--s1);
   }
-  .src-pin-actions button:hover { color: var(--fg); border-color: var(--accent); }
-
+  .refresh-trigger:hover:not(:disabled) { color: var(--fg); border-color: var(--accent); background: transparent; }
   .refresh-wrap { position: relative; }
   /* The trigger is disabled mid-scan, and the global button:disabled rule
      dims it to 0.5 — which reads as "unavailable", the opposite of the
@@ -1870,25 +2058,21 @@
     border-color: var(--accent);
     cursor: progress;
   }
-  /* Sized and anchored to stay inside the 220px sidebar rail rather than
-     the trigger button's own box. `.refresh-trigger` is only as wide as
-     "Refresh ▾", so a popover anchored `left: 0` at its old 300px width
-     overflowed ~100px past the sidebar's right border, landing on top of
-     unrelated main-content UI. The negative `left` cancels `.src-pin`'s
-     18px inset so the popover's edges line up with the sidebar's own
-     edges instead of the button's — it opens as a contained dropdown,
-     never past the sidebar/main boundary. */
+  /* Opens downward from the strip as a contained menu: Scan (primary), then
+     the rare actions — Export / Restore / Clear — as plain menu items. */
   .refresh-pop {
     position: absolute;
-    bottom: calc(100% + 6px);
-    left: -10px;
+    top: calc(100% + 4px);
+    left: 0;
     z-index: 30;
-    width: 204px;
+    width: 15rem;
     max-width: 80vw;
-    padding: 12px;
+    padding: var(--s3);
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--s2);
+    white-space: normal;
+    text-align: left;
     background: var(--panel-2);
     border: 1px solid var(--accent);
     border-radius: var(--radius-panel);
@@ -1907,6 +2091,22 @@
   }
   .refresh-pop .rp-primary:hover:not(:disabled) { filter: brightness(1.08); }
   .refresh-pop .rp-primary:disabled { opacity: 0.6; cursor: default; }
+  .refresh-pop .rp-sep { border-top: 1px var(--rule) var(--hairline); margin: var(--s1) 0; }
+  .refresh-pop .rp-item {
+    font: inherit;
+    font-size: 12px;
+    text-align: left;
+    color: var(--fg);
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-ctl);
+    padding: var(--s1) var(--s2);
+    height: var(--ctl-xs);
+    cursor: pointer;
+  }
+  .refresh-pop .rp-item:hover { background: var(--hover); }
+  .refresh-pop .rp-item.danger:hover { color: var(--bad); }
+  .refresh-pop .rp-note { margin: var(--s1) 0 0; font-size: 11px; line-height: 1.45; color: var(--muted); }
 
   /* Workspace view header — h2 + a hover/focus info dot carrying the
      one-sentence lede, folded onto a single row (was h2 + a full lede
@@ -1925,10 +2125,9 @@
     color: var(--fg);
     margin: 0;
   }
-  /* Mobile: stack the shell. Sidebar becomes a horizontal scroll strip
-     at the top; src-pin moves under the nav and shows the inventory name
-     inline. Below ~900px the 220px rail eats too much of the workspace,
-     so the grid collapses. */
+  /* Mobile: stack the shell. The status strip wraps its cells; the sidebar
+     becomes a horizontal scroll strip under it. Below ~900px the 216px rail
+     eats too much of the workspace, so the grid collapses. */
   @media (max-width: 900px) {
     .shell { grid-template-columns: 1fr; }
     aside.sidebar {
@@ -1965,14 +2164,9 @@
       border-left: none;
       border-bottom-color: var(--accent);
     }
-    .src-pin {
-      flex-direction: row;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 8px 12px;
-      padding: 8px 16px;
-    }
-    .src-pin-actions { margin-top: 0; }
+    .statusbar { flex-wrap: wrap; height: auto; min-height: var(--strip); position: static; }
+    .statusbar.shell-strip .brand { width: auto; border-right: none; }
+    .sfoot { padding: var(--s2) var(--s3); }
     main.workspace { padding: 16px 16px 32px; }
   }
   header h1 {
@@ -1986,8 +2180,6 @@
   .landing-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px 24px; flex-wrap: wrap; }
   .landing-title { flex: 1 1 260px; min-width: 0; }
   .landing-theme { flex: 0 0 auto; padding-top: 4px; }
-  /* Sidebar footer slot for the theme switcher, under the inventory pin. */
-  .theme-slot { padding: 10px 12px 0; border-top: 1px var(--rule) var(--hairline); }
   h2 { margin: 0 0 4px 0; font-size: 14px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
   h3 { margin: 0 0 4px 0; font-size: 14px; font-weight: 600; }
   .sub { color: var(--muted); margin: 6px 0 0 0; max-width: 64ch; font-size: 13px; }
@@ -1997,7 +2189,6 @@
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.02em;
   }
-  aside.sidebar .brand .ver { margin-top: 4px; opacity: 0.75; }
 
   /* Upsell lead — separates the free market browser above from the desktop-app
      pitch below. A hairline + top padding, no box. */

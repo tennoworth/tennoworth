@@ -48,8 +48,12 @@
     /** Tradeable copies owned per the latest scan, keyed by `ownedKey(slug,
      *  subtype)`. Null when there is no scan — the quantity checks stay off. */
     ownedQty?: Map<string, number> | null;
+    /** Live-orders summary for the shell strip / Sell summary cells: fired
+     *  once orders are loaded (and whenever the count or the health issues
+     *  change); null while nothing is loaded so those cells stay hidden. */
+    onsummary?: (s: { live: number; issues: number } | null) => void;
   }
-  let { transport, market = null, sessionEpoch = 0, onauthrequired, ownedQty = null }: Props = $props();
+  let { transport, market = null, sessionEpoch = 0, onauthrequired, ownedQty = null, onsummary }: Props = $props();
 
   type Phase = 'idle' | 'loading' | 'locked' | 'done' | 'error';
   let phase = $state<Phase>('idle');
@@ -357,6 +361,9 @@
     );
   });
   let healthSummary = $derived(summarize(health));
+  $effect(() => {
+    onsummary?.(phase === 'done' ? { live: orders.length, issues: health.length } : null);
+  });
 
   async function applyFix(issue: HealthIssue): Promise<void> {
     const o = orders.find((x) => x.id === issue.id);

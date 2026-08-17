@@ -61,7 +61,32 @@
   --glow: 0 0 6px color-mix(in srgb, var(--good) 60%, transparent);
   /* Modal backdrop. */
   --scrim: rgba(0, 0, 0, 0.55);
+
+  /* Spacing ladder (Flow v2 / rhythm-v2). Every padding and gap in the shell
+     chrome sits on S = 4 8 12 16 24 32; rem-based so the root font-size steps
+     below scale the whole layout. */
+  --s1: 0.25rem; --s2: 0.5rem; --s3: 0.75rem; --s4: 1rem; --s5: 1.5rem; --s6: 2rem;
+  --inset: 1rem;      /* THE panel inset: bars, rails, panel bodies, first/last cell */
+  --gutter: 1.5rem;   /* landing column side padding */
+  --stack: 0.75rem;   /* 12px between sibling blocks */
+  --cell: 0.375rem;   /* 6px th/td gutter — only inside th/td */
+  /* Heights — all ×4; rows and bars ×8. Three control heights only. */
+  --ctl-xs: 1.5rem;   /* 24: buttons inside 32px rows/rails */
+  --ctl: 1.75rem;     /* 28: presets, chips, page buttons, nav items */
+  --ctl-lg: 2rem;     /* 32: inputs, primary CTA */
+  --row: 2rem;        /* 32 compact data row (comfortable 36) */
+  --row-cf: 2.25rem;
+  --head: 1.75rem;    /* 28 table head */
+  --rail: 2rem;       /* 32 title rail (text only) */
+  --bar: 2.5rem;      /* 40 bar that holds controls (control rows, pager) */
+  --strip: 2.5rem;    /* 40 shell-level status strip */
+  --sidebar: 13.5rem; /* 216 */
 }
+/* Root type scale: 16 → 17 (≥1900) → 18 (≥2500). Everything rem-based grows
+   ~6% per step, so a 1920 desk gets a wider Item column, not more columns. */
+html { font-size: 16px; }
+@media (min-width: 1900px) { html { font-size: 17px; } }
+@media (min-width: 2500px) { html { font-size: 18px; } }
 
 /* ---------- baseline: the original dark dashboard (dark only) ------------- */
 html[data-look="baseline"] {
@@ -229,7 +254,7 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-body);
-  font-size: 14px;
+  font-size: 0.875rem;
   line-height: 1.5;
 }
 a { color: var(--accent); }
@@ -257,7 +282,7 @@ input::placeholder { color: var(--faint); }
 /* Headings and tracked labels take the look's UI face. Baseline points
    --font-ui at the body stack, so this is a no-op there. */
 h1, h2, h3, h4, th, .nav-label, .col-label, .clock-label, .baro-label,
-.stat .k, .dis-label { font-family: var(--font-ui); }
+.stat .k, .summary .cell .k, .dis-label, .bar .lbl { font-family: var(--font-ui); }
 
 /* Encrypted-dialog chrome. Global, not per-component, because the same
  dialog.cryptobox shell renders from two components — ExportImportDialogs in
@@ -383,7 +408,7 @@ html[data-look="yorha"] body {
     repeating-linear-gradient(0deg, var(--grid) 0 1px, transparent 1px 28px),
     repeating-linear-gradient(90deg, var(--grid) 0 1px, transparent 1px 28px),
     repeating-linear-gradient(-45deg, var(--hatch) 0 1px, transparent 1px 9px);
-  font-size: 13.5px;
+  font-size: 0.84375rem;
 }
 html[data-look="yorha"] a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--border); }
 html[data-look="yorha"] input[type="text"], html[data-look="yorha"] input[type="number"] { background: var(--panel); }
@@ -393,11 +418,12 @@ html[data-look="yorha"] ::selection { background: var(--ink-bar); color: var(--o
 /* Tracked condensed caps for the titles; weight 400–500, never bold. */
 html[data-look="yorha"] .view-header h2 { font: 400 24px/1.1 var(--font-ui); letter-spacing: 0.2em; text-transform: uppercase; }
 html[data-look="yorha"] main.landing > header h1 { font: 400 26px/1.1 var(--font-ui); letter-spacing: 0.22em; text-transform: uppercase; }
-html[data-look="yorha"] aside.sidebar .brand h1 { font: 500 15px/1.2 var(--font-ui); letter-spacing: 0.18em; text-transform: uppercase; }
+html[data-look="yorha"] .statusbar .brand h1 { font: 500 15px/1.2 var(--font-ui); letter-spacing: 0.18em; text-transform: uppercase; }
 html[data-look="yorha"] .browser-head h2 { font: 400 15px/1.2 var(--font-ui); letter-spacing: 0.2em; color: var(--fg); }
 html[data-look="yorha"] .nav-label,
 html[data-look="yorha"] th,
 html[data-look="yorha"] .stat .k,
+html[data-look="yorha"] .summary .cell .k,
 html[data-look="yorha"] .col-label { font-weight: 500; letter-spacing: 0.14em; }
 /* Ink-bar inversion — the ONLY filled surface: active nav, active preset,
    primary CTAs, panel title bars, dialog headers. */
@@ -447,12 +473,17 @@ html[data-look="yorha"] .toolbar, html[data-look="yorha"] .picks-head { border-b
 html[data-look="yorha"] .dot { border-radius: 0; }
 html[data-look="yorha"] .lede-dot { border-radius: 0; }
 html[data-look="yorha"] .info-btn { border-radius: 0; }
-/* Mono status footer (the shell status strip lands in step 2; the rule is
-   ready so the element only has to exist). */
+/* Mono status strip: the deadpan NieR status line — mono, tracked caps for
+   the labels, dotted cell rules; the outer bottom edge stays solid. */
 html[data-look="yorha"] .statusbar {
-  border-top: 1px dotted var(--border); border-bottom: 1px dotted var(--border);
   font-family: var(--font-mono); font-size: 11px; color: var(--muted); background: var(--panel);
 }
+html[data-look="yorha"] .statusbar .cell > span:not(.dot):not(.ducat) { text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; }
+html[data-look="yorha"] .statusbar .cell b { font-weight: 500; }
+html[data-look="yorha"] .statusbar .brand .sub { font-family: var(--font-body); }
+html[data-look="yorha"] .statusbar .refresh-trigger { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; }
+/* Summary cells (view header): tracked caps keys, mono values. */
+html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.14em; }
 html[data-look="yorha"] .pod { height: 14px; width: 96px; background: var(--pod-red); }
 
 /* ---------- corpus --------------------------------------------------------- */
@@ -461,7 +492,7 @@ html[data-look="corpus"] body {
   background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
   background-size: 24px 24px;
   letter-spacing: 0.005em;
-  font-size: 13.5px;
+  font-size: 0.84375rem;
 }
 html[data-look="corpus"] h1, html[data-look="corpus"] h2, html[data-look="corpus"] h3, html[data-look="corpus"] h4,
 html[data-look="corpus"] .nav-label, html[data-look="corpus"] th, html[data-look="corpus"] .stat .k,
@@ -469,7 +500,7 @@ html[data-look="corpus"] .col-label { letter-spacing: 0.09em; text-transform: up
 html[data-look="corpus"] .view-header h2 { font-weight: 600; letter-spacing: 0.06em; font-size: 17px; text-transform: uppercase; }
 html[data-look="corpus"] .hero h2 { text-transform: none; letter-spacing: 0.01em; }
 html[data-look="corpus"] main.landing > header h1 { font-weight: 700; letter-spacing: 0.1em; font-size: 20px; }
-html[data-look="corpus"] aside.sidebar .brand h1 { letter-spacing: 0.14em; font-size: 13px; }
+html[data-look="corpus"] .statusbar .brand h1 { letter-spacing: 0.14em; font-size: 13px; }
 html[data-look="corpus"] button { letter-spacing: 0.03em; }
 /* Chamfered panels: clip the top-right and bottom-left corners at 45° and
    redraw the 1px border along each cut with a corner-sized gradient (no
@@ -523,7 +554,7 @@ html[data-look="vitruvian"] .col-label { font-weight: 600; letter-spacing: 0.12e
 html[data-look="vitruvian"] .view-header h2 { font: 600 24px/1.1 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
 html[data-look="vitruvian"] .hero h2 { text-transform: none; letter-spacing: 0.01em; }
 html[data-look="vitruvian"] main.landing > header h1 { font: 600 24px/1.1 var(--font-ui); letter-spacing: 0.16em; }
-html[data-look="vitruvian"] aside.sidebar .brand h1 { font: 600 16px/1.2 var(--font-ui); letter-spacing: 0.14em; }
+html[data-look="vitruvian"] .statusbar .brand h1 { font: 600 16px/1.2 var(--font-ui); letter-spacing: 0.14em; }
 /* Corner ticks — 9px L-shapes in ink, 4px outside every container's border. */
 html[data-look="vitruvian"] .card,
 html[data-look="vitruvian"] .stats,
@@ -569,8 +600,8 @@ html[data-look="vitruvian"] th.active { color: var(--fg); box-shadow: inset 0 -2
 html[data-look="vitruvian"] .seg-btn.active { color: var(--fg); background: var(--panel); box-shadow: inset 0 -2px 0 var(--accent); }
 html[data-look="vitruvian"] .view-header { position: relative; }
 html[data-look="vitruvian"] .view-header::after { content: ""; position: absolute; left: 0; bottom: -3px; width: 64px; border-bottom: 1px solid var(--accent); }
-html[data-look="vitruvian"] aside.sidebar .brand { position: relative; }
-html[data-look="vitruvian"] aside.sidebar .brand::after { content: ""; position: absolute; left: 18px; bottom: -1px; width: 36px; border-bottom: 1px solid var(--accent); }
+html[data-look="vitruvian"] .statusbar .brand { position: relative; }
+html[data-look="vitruvian"] .statusbar .brand::after { content: ""; position: absolute; left: 1rem; bottom: -1px; width: 36px; border-bottom: 1px solid var(--accent); }
 /* Drawn lines: sparklines stroke in sketch ink with round caps. */
 html[data-look="vitruvian"] .sparkline { color: var(--sketch); opacity: 1; }
 html[data-look="vitruvian"] .sparkline polyline { stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }

@@ -28,6 +28,7 @@
     tableView = $bindable(),
 
     resolved, results, deltas, totalPotential,
+    prevSummary = null, sinceScan = null, ordersSummary = null,
     marketFreshness, marketStaleness, marketLoadError,
     listableRows, availableTags, availableTypes,
     visibleColumns, presetSort, emptyReason,
@@ -45,6 +46,25 @@
   // EVERY render of this pane — including every keystroke in the name filter,
   // which cannot change the answer. $derived recomputes only when results does.
   let sellableCount = $derived(results.filter((r) => r.sellable > 0).length);
+
+  // Since-last-scan deltas for the summary cells. prevSummary is the previous
+  // snapshot pushed through the same filter cascade (App.svelte), so each Δ is
+  // in the cell's own units. Null (no previous scan this session) hides them.
+  let ownedDelta = $derived(prevSummary ? resolved.owned.size - prevSummary.owned : null);
+  let sellableDelta = $derived(prevSummary ? sellableCount - prevSummary.sellable : null);
+  let potentialDelta = $derived(prevSummary ? Math.round(totalPotential - prevSummary.potential) : null);
+  function fmtDelta(d, unit = '') {
+    if (d == null || d === 0) return null;
+    const n = Math.abs(d).toLocaleString(undefined, { maximumFractionDigits: 0 });
+    return `${d > 0 ? '▲' : '▼'}${n}${unit}`;
+  }
+  // "Changes only" — session-only view of the rows whose count moved since the
+  // last scan (the Δ column's non-zero rows). Not persisted: it is a glance,
+  // not a preference, and it means nothing after a reload (no deltas then).
+  let changesOnly = $state(false);
+  let tableRows = $derived(
+    changesOnly ? results.filter((r) => (deltas.get(r.key ?? r.slug) ?? 0) !== 0) : results,
+  );
 
   // Bulk "List on WFM" staging copy. listableRows is already the filtered (or
   // unfiltered) set minus relics (subtyped rows) and no-spare rows; the batch
@@ -150,6 +170,51 @@
     aria-label="About this view"
     title="Items in your inventory worth listing right now, ranked by sell score."
   >ⓘ</span>
+  <!-- Summary strip: totals with since-last-scan deltas; Listed / Needs fixing
+       appear once the orders panel has reported; the last cell is the
+       since-scan state with the session-only "Changes only" toggle. -->
+  <div class="summary" role="group" aria-label="Sell summary">
+    <div class="cell">
+      <span class="k">Owned</span>
+      <span class="v">{resolved.owned.size.toLocaleString()}</span>
+      {#if fmtDelta(ownedDelta)}<span class="d" class:up={ownedDelta > 0} class:down={ownedDelta < 0}>{fmtDelta(ownedDelta)}</span>{/if}
+    </div>
+    <div class="cell">
+      <span class="k">Sellable</span>
+      <span class="v">{sellableCount.toLocaleString()}</span>
+      {#if fmtDelta(sellableDelta)}<span class="d" class:up={sellableDelta > 0} class:down={sellableDelta < 0}>{fmtDelta(sellableDelta)}</span>{/if}
+    </div>
+    <div class="cell">
+      <span class="k">Potential</span>
+      <span class="v">{totalPotential.toLocaleString(undefined, { maximumFractionDigits: 0 })}<span class="unit">p</span></span>
+      {#if fmtDelta(potentialDelta)}<span class="d" class:up={potentialDelta > 0} class:down={potentialDelta < 0}>{fmtDelta(potentialDelta, 'p')}</span>{/if}
+    </div>
+    {#if ordersSummary}
+      <div class="cell">
+        <span class="k">Listed</span>
+        <span class="v">{ordersSummary.live.toLocaleString()}</span>
+      </div>
+      {#if ordersSummary.issues > 0}
+        <div class="cell attn">
+          <span class="k">Needs fixing</span>
+          <span class="v">{ordersSummary.issues.toLocaleString()}</span>
+        </div>
+      {/if}
+    {/if}
+    {#if sinceScan}
+      <div class="cell since">
+        <span>Since scan: <b>{sinceScan.added}</b> new · <b>{sinceScan.changed}</b> moved · <b>{sinceScan.removed}</b> gone</span>
+        <button
+          type="button"
+          class="changes-toggle"
+          class:on={changesOnly}
+          aria-pressed={changesOnly}
+          onclick={() => (changesOnly = !changesOnly)}
+          title="Show only rows whose count changed since the last scan (the Δ column's ▲/▼ rows)."
+        >{changesOnly ? '☑' : '☐'} Changes only</button>
+      </div>
+    {/if}
+  </div>
 </section>
 
 {#if !sellOnboardingDismissed}
@@ -179,31 +244,6 @@
     <button class="dismiss" onclick={dismissKeepCopiesNudge} aria-label="Dismiss">×</button>
   </div>
 {/if}
-
-<section class="stats">
-  <div class="stat">
-    <span class="k">Owned</span>
-    <span class="v">{resolved.owned.size.toLocaleString()}</span>
-  </div>
-  <div class="stat">
-    <span class="k">Sellable</span>
-    <span class="v">{sellableCount.toLocaleString()}</span>
-  </div>
-  <div class="stat">
-    <span class="k">Potential</span>
-    <span class="v">
-      {totalPotential.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-      <span class="unit">p</span>
-    </span>
-  </div>
-  <div class="stat right">
-    <span class="k">
-      <span class="dot {marketFreshness}" role="img" aria-label="Market data {marketFreshness}"></span>
-      Market data
-    </span>
-    <span class="v small">{marketStaleness ?? '—'}{marketFreshness !== 'unknown' ? ` · ${marketFreshness}` : ''}</span>
-  </div>
-</section>
 
 {#if marketLoadError}
   <div class="card warn-banner">⚠ {marketLoadError}</div>
@@ -386,8 +426,8 @@
 {/if}
 
 {#if results.length > 0}
-  <ResultsTable {results} {deltas} {visibleColumns} {presetSort}
-    onfiltered={(rows, active) => (tableView = { rows, active })} />
+  <ResultsTable results={tableRows} {deltas} {visibleColumns} {presetSort}
+    onfiltered={(rows, active) => (tableView = { rows, active: active || changesOnly })} />
 {:else if emptyReason}
   <div class="card empty">
     {#if emptyReason.kind === 'no-market'}
@@ -468,11 +508,13 @@
      per-component, and this codebase's existing extracted components
      already re-declare shared visual classes rather than promoting them
      to global CSS (see DesktopUpdateBanner.svelte). */
+  /* View header rail: title + the summary strip on one 32px rail. */
   .view-header {
     display: flex;
-    align-items: baseline;
-    gap: 8px;
-    min-height: 28px;
+    align-items: center;
+    gap: var(--s2);
+    min-height: var(--rail);
+    flex-wrap: wrap;
   }
   .view-header h2 {
     font-size: 20px;
@@ -481,17 +523,73 @@
     letter-spacing: -0.01em;
     color: var(--fg);
     margin: 0;
+    line-height: 1.5rem;
   }
-  .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--muted);
-    display: inline-block;
+  /* Summary strip — one outlined container, hairline dividers between cells;
+     the since-scan cell rides the right rail. */
+  .summary {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: stretch;
+    height: var(--rail);
+    margin-left: var(--s2);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-ctl);
+    overflow: hidden;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    min-width: 0;
   }
-  .dot.fresh   { background: var(--good); }
-  .dot.aging   { background: var(--warn); }
-  .dot.stale   { background: var(--bad); }
+  .summary .cell {
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    padding: 0 var(--s3);
+    border-left: 1px var(--rule) var(--hairline);
+  }
+  .summary .cell:first-child { border-left: none; }
+  .summary .cell .k {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .summary .cell .v {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1rem;
+    color: var(--fg);
+  }
+  .summary .cell .v .unit { font-size: 11px; color: var(--muted); margin-left: 1px; }
+  .summary .cell .d {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+    line-height: 1rem;
+  }
+  .summary .cell .d.up { color: var(--good); }
+  .summary .cell .d.down { color: var(--bad); }
+  .summary .cell.attn .v { color: var(--warn); }
+  .summary .cell.since { margin-left: auto; color: var(--muted); overflow: hidden; }
+  .summary .cell.since b { color: var(--fg); font-weight: 600; font-family: var(--font-mono); }
+  .changes-toggle {
+    font: inherit;
+    font-size: 11px;
+    height: var(--ctl-xs);
+    padding: 0 var(--s2);
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-ctl);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .changes-toggle:hover { color: var(--fg); background: var(--panel-2); }
+  .changes-toggle.on { color: var(--accent); border-color: var(--accent); background: transparent; }
   .card {
     background: var(--panel);
     border: 1px solid var(--border);
@@ -536,44 +634,6 @@
     cursor: help;
   }
   .lede-dot:hover, .lede-dot:focus-visible { color: var(--accent); border-color: var(--accent); }
-
-  /* Stats strip — segmented bordered box: one outlined container,
-     hairline dividers between cells. */
-  .stats {
-    display: inline-flex;
-    flex-wrap: wrap;
-    align-self: flex-start;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-ctl);
-    overflow: hidden;
-  }
-  .stat {
-    padding: 7px 16px;
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    border-right: 1px var(--rule) var(--hairline);
-  }
-  .stat:last-child { border-right: none; }
-  .stat .k {
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--muted);
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .stat .v {
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 1.3;
-  }
-  .stat .v.small { font-weight: 500; font-size: 12.5px; }
-  .stat .v .unit { font-size: 11px; color: var(--muted); margin-left: 2px; }
 
   /* Sell toolbar — presets, tag chips, and the Filters disclosure merged
      into one borderless, wrapping strip so the workspace loses a card's
