@@ -29,6 +29,7 @@ mod commands;
 mod db;
 mod definitions;
 mod eelog;
+mod ws_watch;
 mod eelog_state;
 mod keyring_store;
 mod market;
@@ -275,6 +276,9 @@ fn main() {
             // the probe must not make WFM calls on a timer.
             if !probe {
                 watch::start_checker(app.handle().clone());
+                // Fast path beside the poll: WFM's live order stream fires a
+                // matching watch in seconds (see ws_watch.rs).
+                ws_watch::start_stream(app.handle().clone());
             }
 
             // C5: launch update check, off the main thread so it can never
