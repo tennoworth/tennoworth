@@ -145,7 +145,7 @@ pub fn run_new_orders_stream(
     let mut req = WS_URL.into_client_request().context("ws request")?;
     req.headers_mut().insert(
         "Sec-WebSocket-Protocol",
-        "wfm".parse().expect("static header value"),
+        tungstenite::http::HeaderValue::from_static("wfm"),
     );
     req.headers_mut().insert(
         "User-Agent",
