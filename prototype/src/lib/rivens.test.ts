@@ -214,3 +214,19 @@ describe('dispoChangeFor / attributeForTag', () => {
     expect(attributeForTag('WeaponNopeMod', ATTRS)).toBeUndefined();
   });
 });
+
+describe('single-sign rule (curses store negative raws)', () => {
+  const attrs = [
+    { game_ref: '/Lotus/x/FireRate', slug: 'fire_rate', name: 'Fire Rate / Attack Speed', unit: 'percent' },
+  ];
+  it('formatRivenStat never doubles the minus on a negative curse raw', () => {
+    // -0.279 × 2^30 as the fingerprint would store it
+    const raw = Math.round(-0.279 * 1073741824);
+    const out = formatRivenStat('/Lotus/x/FireRate', raw, false, attrs as never);
+    expect(out).toBe('-27.9% Fire Rate / Attack Speed');
+  });
+  it('formatAuctionStat likewise for WFM-quoted negative values', () => {
+    const out = formatAuctionStat('fire_rate', -0.279, false, attrs as never);
+    expect(out).toBe('-27.9% Fire Rate / Attack Speed');
+  });
+});
