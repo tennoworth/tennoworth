@@ -36,8 +36,14 @@ characteristics:
      suites.
 
    The `release-desktop.yml` workflow builds the desktop app (Windows
-   installers + the Linux deb/rpm) on a `desktop-v*` tag and publishes the
-   AUR packages.
+   installers, the Linux deb/rpm/AppImage and the raw binary tarball),
+   publishes the versioned release and the updater manifest, and pushes
+   the AUR packages. It is triggered manually from `main` with a version,
+   never by a tag: the build jobs publish nothing, and a single job
+   verifies the complete artifact set before flipping one draft release
+   public. The `desktop-v*` tag is created **by** that workflow at the
+   commit it built, so a release tag can only ever name a verified build
+   of a `main` commit.
 
    Production serving is **not** GitHub-hosted: a self-hosted box (an
    unprivileged LXC, reached only through a Cloudflare Tunnel, fronted
@@ -62,9 +68,15 @@ characteristics:
   Rust process; the encrypted token lives on disk and is decrypted
   only in memory. Listing and order operations are relayed by
   wfm-core — the webview only sees results.
-- **Release binaries are reproducibly built in public CI.** You can
-  audit the workflow file, the source commit at the tag, and the
-  build logs. Linux packages are signed (see below).
+- **Release binaries are built in public, auditable CI — never on a
+  maintainer's machine.** You can read the workflow file, the source
+  commit at the tag, and the full build logs for the run that produced
+  every asset. What that is *not* is a **reproducible** build: the Rust
+  toolchain floats on `stable` and nothing verifies that a rebuild
+  produces byte-identical output, so you cannot independently recreate
+  an installer and diff it. Auditable, not reproducible — this used to
+  say "reproducibly built", which was a stronger promise than the
+  pipeline keeps. Linux packages are signed (see below).
 - **No telemetry, no analytics, no accounts.** Verify with your
   browser's network tab.
 
@@ -99,17 +111,54 @@ For each desktop release on GitHub:
 - **Windows** — the installer (`.exe` / `.msi`) is built in public CI
   from the tagged commit; download from the `desktop-v*` release and
   compare its SHA-256 with the `.sha256` file on the same release.
+  (Windows `.sha256` sidecars start with the first release after 0.3.8.
+  Up to and including 0.3.8 the installers shipped with only the
+  updater's `.sig`, and this section described a file that did not
+  exist — the Linux artifacts always had theirs.)
 - **Linux** — prefer your distro's signed repository (apt/dnf); the
   `.deb` / `.rpm` on the release are what the repo publisher consumes.
   The AUR `tennoworth-bin` package pins the checksum of its tarball.
+  `TennoWorth-x86_64.AppImage` has its own `.sha256` next to it.
+
+Every release also carries one `SHA256SUMS` file listing all of the
+above, for `sha256sum -c SHA256SUMS` in one go.
+
+The `.sha256` files are plain `sha256sum` output — the hash, then the
+filename it belongs to (Windows sidecars show a `*` before the name:
+that is `sha256sum`'s binary-mode marker, and `-c` understands it) —
+so the check is one command wherever you have `sha256sum` (Git Bash,
+WSL, or any Linux shell). Download the installer and its `.sha256`
+into the same directory, then:
 
 ```bash
-# Windows example — download both, then:
-sha256sum -c tennoworth-desktop-amd64.deb.sha256 2>/dev/null || true
+# Windows — the NSIS installer (substitute the version you downloaded):
+sha256sum -c TennoWorth_0.4.0_x64-setup.exe.sha256
+
+# Windows — the MSI, if you took that one instead:
+sha256sum -c TennoWorth_0.4.0_x64_en-US.msi.sha256
+
+# Linux — the .deb, if you are not using the apt repo:
+sha256sum -c tennoworth-desktop-amd64.deb.sha256
 ```
 
-If it prints `MISMATCH`, the file is corrupt or tampered — delete it and
-re-download. Don't run a binary that fails this check.
+In PowerShell with no `sha256sum` available, compare by eye instead
+(`Get-FileHash` prints the hash in upper case; the sidecar is lower
+case — only the hex digits matter):
+
+```powershell
+Get-FileHash .\TennoWorth_0.4.0_x64-setup.exe -Algorithm SHA256
+Get-Content .\TennoWorth_0.4.0_x64-setup.exe.sha256
+```
+
+`sha256sum -c` prints `OK` when the file matches. Anything else — a
+`FAILED` line, or two hashes that differ — means the file is corrupt or
+tampered: delete it and re-download. Don't run a binary that fails this
+check.
+
+(The `.sig` files next to the installers are a different thing: minisign
+signatures used by the in-app updater, verified against the public key
+compiled into the app. They are not something you check by hand — the
+`.sha256` is.)
 
 ## The Linux package signing key
 
