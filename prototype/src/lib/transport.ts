@@ -423,6 +423,46 @@ export async function desktopLiveTopPrices(queries: LiveTopQuery[]): Promise<Liv
   }
 }
 
+// ---- Riven auction comps (desktop only; WFM v1 auctions search) ----
+
+export interface RivenAuctionAttribute {
+  url_name: string;
+  value: number;
+  positive: boolean;
+}
+
+export interface RivenAuction {
+  id: string;
+  /** Effective ask: buyout for direct sells, else the starting bid. */
+  price: number;
+  buyout_price: number | null;
+  starting_price: number;
+  top_bid: number | null;
+  is_direct_sell: boolean;
+  owner: string | null;
+  owner_status: string | null;
+  mod_rank: number;
+  mastery_level: number;
+  re_rolls: number;
+  polarity: string | null;
+  name: string | null;
+  platform: string | null;
+  attributes: RivenAuctionAttribute[];
+}
+
+/**
+ * The ≤20 cheapest matching auctions for one weapon's rivens, from WFM's v1
+ * auctions search. The desktop paces calls through its shared 10/min auction
+ * gate, so rapid "Show comps" clicks queue politely instead of tripping WFM.
+ */
+export async function desktopRivenComps(weapon: string): Promise<RivenAuction[]> {
+  try {
+    return await resolveInvoke()<RivenAuction[]>('riven_comps', { weapon });
+  } catch (e) {
+    rethrowInvoke(e);
+  }
+}
+
 // ---- Price watches (desktop only) ----
 
 export interface Watch {

@@ -15,8 +15,10 @@
   import WfmAuthDialogs from './components/WfmAuthDialogs.svelte';
   import ExportImportDialogs from './components/ExportImportDialogs.svelte';
   import SellPane from './components/SellPane.svelte';
+  import RivensPanel from './components/RivensPanel.svelte';
   import DesktopShowcase from './components/DesktopShowcase.svelte';
   import { flattenInventory, extractKeptLvls } from './lib/inventory';
+  import { extractRivens, resolveRivens } from './lib/rivens';
   import { loadCatalogs, resolvePath, type Catalogs } from './lib/resolver';
   import { loadMarket, lookup } from './lib/market';
   import { sellableQty } from './lib/sell-priority';
@@ -33,6 +35,7 @@
     desktopWfmStatus, DesktopCmdError,
   } from './lib/transport';
   import type { Market, OwnedRecord } from './lib/types';
+  import type { OwnedRiven } from './lib/rivens';
   import { wfmItemUrl, baroLocation, humanWindow } from './lib/format';
   import { listenForTauriEvent, TRAY_HINT_EVENT } from './lib/desktop-update';
 
@@ -66,6 +69,11 @@
     owned: new Map(),
     unresolved: {},
   });
+  // Rivens parsed from the scanned inventory's Upgrades[] (raw, unresolved —
+  // the market join happens in the derived below so a restored snapshot
+  // resolves against the CURRENT snapshot).
+  let ownedRivens = $state<OwnedRiven[]>([]);
+  let resolvedRivens = $derived(resolveRivens(ownedRivens, market));
   let deltas = $state<Map<string, number>>(new Map());
   let results = $state<any[]>([]);
   // The Sell table pushes its filtered+sorted rows up here so the "List on WFM"
@@ -126,9 +134,9 @@
   // reload lands the user back where they left off. Falls through to
   // 'sell' if the persisted view's data isn't available (Baro not
   // visiting; 'orders' is desktop-only — the hosted site is informational).
-  type View = 'sell' | 'sets' | 'relics' | 'baro' | 'routines' | 'orders' | 'watches' | 'ledger' | 'install';
+  type View = 'sell' | 'sets' | 'relics' | 'rivens' | 'baro' | 'routines' | 'orders' | 'watches' | 'ledger' | 'install';
   const VALID_VIEWS: ReadonlySet<View> = new Set([
-    'sell', 'sets', 'relics', 'baro', 'routines', 'orders', 'watches', 'ledger', 'install',
+    'sell', 'sets', 'relics', 'rivens', 'baro', 'routines', 'orders', 'watches', 'ledger', 'install',
   ]);
   let view = $state<View>(
     (() => {
@@ -147,7 +155,7 @@
   // against a stale localStorage value.
   let effectiveView = $derived.by<View>(() => {
     if (view === 'baro' && !showBaroCard) return 'sell';
-    if ((view === 'orders' || view === 'watches' || view === 'ledger') && !isDesktop) return 'sell';
+    if ((view === 'orders' || view === 'watches' || view === 'ledger' || view === 'rivens') && !isDesktop) return 'sell';
     return view;
   });
 
@@ -323,6 +331,7 @@
           inventoryName = snap.invName;
           lastUpdated = snap.ts;
           resolved = { owned: snap.owned, unresolved: {} };
+          ownedRivens = snap.rivens ?? [];
           if (!market) {
             try {
               market = await loadBestMarket();
@@ -369,6 +378,7 @@
     inventoryName = null;
     lastUpdated = null;
     resolved = { owned: new Map(), unresolved: {} };
+    ownedRivens = [];
     deltas = new Map();
     results = [];
     tableView = { rows: [], active: false };
@@ -393,6 +403,7 @@
       }
 
       const keptLvls = extractKeptLvls(data);  // /Lotus/... → max lvl in Upgrades
+      ownedRivens = extractRivens(data);
       const owned = new Map();
       const unresolved = {};
       let flatCount = 0;
@@ -440,7 +451,7 @@
       const previous = await store.loadSnapshot();
       deltas = diffOwned(previous?.owned, owned);
       resolved = { owned, unresolved };
-      await store.saveSnapshot({ invName: name, owned });
+      await store.saveSnapshot({ invName: name, owned, rivens: ownedRivens });
       lastUpdated = Date.now();
 
       // No explicit recompute: the results $effect below tracks resolved +
@@ -947,6 +958,12 @@
             <span class="badge">{relicPlan.length}</span>
           </button>
         {/if}
+        {#if isDesktop && resolvedRivens.length > 0}
+          <button type="button" class="nav-item" class:active={effectiveView === 'rivens'} onclick={() => setView('rivens')}>
+            <span>Rivens</span>
+            <span class="badge">{resolvedRivens.length}</span>
+          </button>
+        {/if}
         {#if showBaroCard}
           <button type="button" class="nav-item baro-nav" class:active={effectiveView === 'baro'} onclick={() => setView('baro')}>
             <span>Baro</span>
@@ -1198,6 +1215,8 @@
         </div>
       {/if}
 
+    {:else if effectiveView === 'rivens'}
+      <RivensPanel {market} rivens={resolvedRivens} />
     {:else if effectiveView === 'baro'}
       <section class="view-header">
         <h2>Baro Ki'Teer</h2>
