@@ -1,14 +1,17 @@
 /* ==========================================================================
-   Theme system — a LOOK × a MODE, keyed off two attributes on <html>:
-     html[data-look="yorha" | "corpus" | "vitruvian" | "baseline"]
+   Theme system — one LOOK (yorha) × a MODE, keyed off two attributes on <html>:
+     html[data-look="yorha"]                   (always; the only look)
      html[data-mode="light" | "dark"]          (always the RESOLVED mode)
    Stamped before first paint by public/theme-boot.js, kept current by
    src/lib/theme.ts. Every colour in the app comes from the token names below;
-   a look = one token block (+ a dark block if it has one) + a short set of
-   structural rules scoped by the attribute. A look with no dark block simply
-   keeps its light tokens under data-mode=dark (Corpus, Vitruvian today).
+   the look = one light token block + one dark token block + a set of
+   structural rules scoped by the attribute. Yorha's light is "paper & ink";
+   its dark is "Oil & Rag", a warm brown-black workshop palette.
+   The three earlier looks (baseline, corpus, vitruvian) were retired in
+   2026-08 — yorha is THE theme, so the user picks a MODE, not a look. The
+   data-look attribute stays because the structural rules are scoped by it.
    Component <style> blocks must not hardcode colours or radii — they read
-   these tokens so every look can re-skin them.
+   these tokens so both modes can re-skin them.
    ========================================================================== */
 
 /* ---------- self-hosted fonts (public/fonts, OFL — see LICENSES.md) -------- */
@@ -17,16 +20,11 @@
 @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(/fonts/ibm-plex-mono-400-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(/fonts/ibm-plex-mono-500-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 600; font-display: swap; src: url(/fonts/ibm-plex-mono-600-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family: "Chakra Petch"; font-style: normal; font-weight: 500; font-display: swap; src: url(/fonts/chakra-petch-500-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family: "Chakra Petch"; font-style: normal; font-weight: 600; font-display: swap; src: url(/fonts/chakra-petch-600-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family: "Chakra Petch"; font-style: normal; font-weight: 700; font-display: swap; src: url(/fonts/chakra-petch-700-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family: "Titillium Web"; font-style: normal; font-weight: 600; font-display: swap; src: url(/fonts/titillium-web-600-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
-@font-face { font-family: "Source Sans 3"; font-style: normal; font-weight: 200 900; font-display: swap; src: url(/fonts/source-sans-3-var-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 
 /* ---------- shared structural tokens (every look inherits, may override) --- */
 :root {
-  /* Type. --font-ui carries headings / tracked labels; looks that don't
-     distinguish (baseline) point it at the body stack. */
+  /* Type. --font-ui carries headings / tracked labels; the fallback here
+     points it at the body stack, and the look overrides it. */
   --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-ui: var(--font-body);
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -88,30 +86,6 @@ html { font-size: 16px; }
 @media (min-width: 1900px) { html { font-size: 17px; } }
 @media (min-width: 2500px) { html { font-size: 18px; } }
 
-/* ---------- baseline: the original dark dashboard (dark only) ------------- */
-html[data-look="baseline"] {
-  --bg: #0D1116;
-  --panel: #131920;
-  --panel-2: #182028;
-  /* Container outlines only — brightened 2026-07-24 to ~3.2:1 on --panel
-     (WCAG non-text minimum). Inner divisions use --hairline. */
-  --border: #5A7288;
-  --hairline: #202A35;
-  --fg: #DAE3ED;
-  --muted: #8A98A8;
-  /* Decorative only (nav group labels, version strings) — never for real
-     information; that floor is --muted. */
-  --faint: #596675;
-  --accent: #4E9EEA;
-  /* Colourblind-safe teal/vermillion; always paired with a +/−/▲/▼ glyph. */
-  --good: #3FBF9B;
-  --warn: #C79A50;
-  --bad: #DE7A52;
-  /* Warm ducat-coin tone — ducats column + ducat-deal badge only. */
-  --ducat: #C79A50;
-  color-scheme: dark;
-}
-
 /* ---------- yorha: paper & ink (default look; light) ----------------------- */
 /* `html:not([data-look])` = the boot script didn't run (desktop build before
    main.ts applies the stored theme): still paint the default, never bare. */
@@ -148,100 +122,37 @@ html[data-look="yorha"] {
   --glow: none;
   color-scheme: light;
 }
-/* yorha dark A: the same object with the roles swapped — ink becomes the
-   desk, paper becomes the ink AND the one filled bar. Warm brown-grey, never
-   blue-black; text capped ~10:1 so nothing glows. */
+/* yorha dark — "Oil & Rag": the same object with the roles swapped, seen on a
+   workshop bench instead of a desk. Ground is a deep warm brown-black; the
+   paper becomes the ink AND the one filled bar. Never blue-black, never grey.
+   Every ratio below is measured (sRGB WCAG 2.x); the floors are fg ≥ 7:1 on
+   --bg/--panel/--panel-2, muted and the four status hues ≥ 4.5:1 on --panel,
+   border and faint ≥ 3:1. Text tops out ~10.4:1 so nothing glows. */
 html[data-look="yorha"][data-mode="dark"] {
-  --bg: #2A2823;
-  --panel: #34322B;
-  --panel-2: #3E3B33;
-  --border: #857F69;
-  --hairline: #4E4B41;
-  --fg: #D9D5BD;
-  --muted: #ABA68F;
-  --faint: #7A7562;
-  --accent: #D9D5BD;
-  --good: #75AB92;
-  --warn: #C29F62;
-  --bad: #D8886E;
-  --ducat: #C29F62;
-  --ink-bar: #CFCBB2;   /* the bar is now paper */
-  --on-ink: #2A2823;
-  --on-ink-muted: #3E3B33;
-  --on-accent: #2A2823;
-  --grid: rgba(217, 213, 189, 0.06);
-  --hatch: rgba(217, 213, 189, 0.025);
-  --scrim: rgba(0, 0, 0, 0.55);
+  --bg: #1E1913;        /* bench ground — warm brown-black */
+  --panel: #29231B;     /* panel, one step up */
+  --panel-2: #342D23;   /* table header, inactive segments, hover, popovers */
+  --border: #87775B;    /* container outlines — 3.6:1 on panel */
+  --hairline: #3D3527;  /* inner dividers — always dotted here */
+  --fg: #D3C7A6;        /* rag ink — 9.3:1 on panel, 10.4:1 on bg */
+  --muted: #A3977A;     /* 5.4:1 on panel */
+  --faint: #8A7F66;     /* decorative only — 3.9:1 on panel (also backs --dim) */
+  --accent: #D3C7A6;    /* = ink; active state is inversion, not a hue */
+  --good: #84AE85;      /* 6.2:1 on panel */
+  --warn: #CBA05A;      /* 6.5:1 on panel */
+  --bad: #CF8360;       /* 5.2:1 on panel */
+  --ducat: #CBA05A;
+  --ink-bar: #C0B187;   /* the bar is now rag */
+  --on-ink: #1E1913;
+  --on-ink-muted: #342D23;
+  --on-accent: #1E1913;
+  /* Same ground texture as light, in the palette's ink at the same alphas. */
+  --grid: rgba(211, 199, 166, 0.07);
+  --hatch: rgba(211, 199, 166, 0.035);
+  /* Light's scrim is its ink because that is the palette's darkest colour; in
+     dark that role falls to --bg (a light scrim cannot darken a modal). */
+  --scrim: rgba(30, 25, 19, 0.55);
   color-scheme: dark;
-}
-
-/* ---------- corpus: ledger terminal (light) -------------------------------- */
-html[data-look="corpus"] {
-  --bg: #E6EBF0;
-  --panel: #F3F6F9;
-  --panel-2: #E1E7ED;
-  --border: #748390;
-  --hairline: #CBD3DB;
-  --fg: #15202B;
-  --muted: #55636F;
-  --faint: #7F8B96;
-  --dim: #7F8B96;
-  --accent: #0A6893;    /* cold cyan-blue: links, active states, CTA fill */
-  --on-accent: #F3F6F9;
-  --good: #0F7A63;
-  --warn: #8B5D0E;
-  --bad: #B54017;
-  --ducat: #8B5D0E;
-  /* No ink bar in Corpus: title bars are raised panel-2 with a double rule.
-     Anything asking for the bar gets the accent fill. */
-  --ink-bar: #0A6893;
-  --on-ink: #F3F6F9;
-  --on-ink-muted: #C7DCE6;
-  --grid: #D6DDE4;
-  --cut: 11px;          /* chamfer size */
-  --scrim: rgba(21, 32, 43, 0.4);
-  --font-ui: "Chakra Petch", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-  --font-body: "IBM Plex Sans", ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --radius-lg: 0; --radius-panel: 0; --radius-ctl: 0; --radius-input: 0; --radius-tag: 0; --radius-pill: 0;
-  --shadow-pop: none;
-  --hover: var(--panel-2);
-  --hover-tint: var(--panel-2);
-  --glow: none;
-  color-scheme: light;
-}
-
-/* ---------- vitruvian: parchment + drafting ink (light) -------------------- */
-html[data-look="vitruvian"] {
-  --bg: #D9CBAA;
-  --panel: #E5DABE;
-  --panel-2: #D6C7A2;
-  --border: #83674A;
-  --hairline: #C3B18E;
-  --fg: #3A2A1B;
-  --muted: #665139;
-  --faint: #957F60;
-  --accent: #95491F;    /* burnt sienna — underscores, aug badge, rank numerals */
-  --on-accent: #E5DABE;
-  --good: #27587A;      /* Prussian-blue ink */
-  --warn: #7C5215;
-  --bad: #96321C;       /* red-ochre ink */
-  --ducat: #7C5215;
-  --ink-bar: #3A2A1B;
-  --on-ink: #E5DABE;
-  --on-ink-muted: #C9BB9C;
-  --tan: #D7B47F;       /* selection/highlight fill */
-  --sketch: #6E4A2E;    /* sparkline / drawn-line ink */
-  --scrim: rgba(58, 42, 27, 0.45);
-  --font-ui: "Titillium Web", "Segoe UI", system-ui, sans-serif;
-  --font-body: "Source Sans 3", "Source Sans Pro", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --radius-lg: 2px; --radius-panel: 2px; --radius-ctl: 2px; --radius-input: 2px; --radius-tag: 2px; --radius-pill: 2px;
-  --shadow-pop: none;
-  --hover: var(--panel-2);
-  --hover-tint: var(--panel-2);
-  --glow: none;
-  color-scheme: light;
 }
 
 /* ==========================================================================
@@ -566,15 +477,6 @@ table.tw tr.busy td { color: var(--faint); }
 .seg > button:hover:not(:disabled) { color: var(--fg); background: var(--hover); }
 .seg > button.on { color: var(--accent); background: var(--panel); font-weight: 600; }
 
-/* Theme switcher (ThemeSwitcher.svelte owns its layout; the swatch tiles
-   need each look's tokens regardless of the current look, so they are
-   painted here from per-look literals rather than the live tokens). */
-.theme-swatch[data-swatch="yorha"]    { --sw-panel: #DBD7BF; --sw-bar: #4B4739; --sw-fg: #46422F; --sw-accent: #2A6350; --sw-border: #706B57; }
-.theme-swatch[data-swatch="corpus"]   { --sw-panel: #F3F6F9; --sw-bar: #E1E7ED; --sw-fg: #15202B; --sw-accent: #0A6893; --sw-border: #748390; }
-.theme-swatch[data-swatch="vitruvian"]{ --sw-panel: #E5DABE; --sw-bar: #3A2A1B; --sw-fg: #3A2A1B; --sw-accent: #95491F; --sw-border: #83674A; }
-.theme-swatch[data-swatch="baseline"] { --sw-panel: #131920; --sw-bar: #182028; --sw-fg: #DAE3ED; --sw-accent: #4E9EEA; --sw-border: #5A7288; }
-html[data-mode="dark"] .theme-swatch[data-swatch="yorha"] { --sw-panel: #34322B; --sw-bar: #CFCBB2; --sw-fg: #D9D5BD; --sw-accent: #75AB92; --sw-border: #857F69; }
-
 /* ==========================================================================
    Per-look structural rules. Selectors mirror the component's own so the
    leading html[data-look] wins on specificity (Svelte scopes with one real
@@ -683,160 +585,3 @@ html[data-look="yorha"] .statusbar .brand .sub { font-family: var(--font-body); 
 html[data-look="yorha"] .statusbar .refresh-trigger { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; }
 /* Summary cells (view header): tracked caps keys, mono values. */
 html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.14em; }
-
-/* ---------- corpus --------------------------------------------------------- */
-/* Ledger lattice: hard 24px lines, no wash. */
-html[data-look="corpus"] body {
-  background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-  background-size: 24px 24px;
-  letter-spacing: 0.005em;
-  font-size: 0.84375rem;
-}
-html[data-look="corpus"] h1, html[data-look="corpus"] h2, html[data-look="corpus"] h3, html[data-look="corpus"] h4,
-html[data-look="corpus"] .nav-label, html[data-look="corpus"] th { letter-spacing: 0.09em; text-transform: uppercase; }
-html[data-look="corpus"] .view-header h2 { font-weight: 600; letter-spacing: 0.06em; font-size: 17px; text-transform: uppercase; }
-html[data-look="corpus"] .statusbar .brand h1 { letter-spacing: 0.14em; font-size: 13px; }
-html[data-look="corpus"] button { letter-spacing: 0.03em; }
-/* Chamfered panels: the top-right and bottom-left corners are cut at 45°.
-   Two ways, depending on whether the panel must let descendants escape:
-   - Panels whose control rows own popovers that overhang the panel edge
-     (results table Filters / badge overflow / column help, sell-pane cards)
-     get a corner triangle drawn by a ::before/::after pseudo — page ground
-     filled over the corner plus a 1px border along the cut. Nothing is
-     clipped, so the popovers stay visible even on a short panel.
-   - Panels that already clip their content (`.wrap.tw`, `.wrap.picks`,
-     `.modal`, `.toast` — all overflow:hidden) keep the clip-path, which is
-     genuinely transparent over the scrim / lattice, and redraw the border
-     along the cut with a corner-sized gradient. */
-html[data-look="corpus"] .card,
-html[data-look="corpus"] .faq,
-html[data-look="corpus"] .wrap:not(.tw):not(.picks) {
-  position: relative;
-  overflow: visible;
-}
-html[data-look="corpus"] .card::before, html[data-look="corpus"] .card::after,
-html[data-look="corpus"] .faq::before, html[data-look="corpus"] .faq::after,
-html[data-look="corpus"] .wrap:not(.tw):not(.picks)::before, html[data-look="corpus"] .wrap:not(.tw):not(.picks)::after {
-  content: "";
-  position: absolute;
-  width: var(--cut);
-  height: var(--cut);
-  z-index: 3;
-  pointer-events: none;
-}
-html[data-look="corpus"] .card::before, html[data-look="corpus"] .faq::before, html[data-look="corpus"] .wrap:not(.tw):not(.picks)::before {
-  top: -1px; right: -1px;
-  background: linear-gradient(to top right, transparent calc(50% - 0.7px), var(--border) calc(50% - 0.7px), var(--border) calc(50% + 0.7px), var(--bg) calc(50% + 0.7px));
-}
-html[data-look="corpus"] .card::after, html[data-look="corpus"] .faq::after, html[data-look="corpus"] .wrap:not(.tw):not(.picks)::after {
-  bottom: -1px; left: -1px;
-  background: linear-gradient(to bottom left, transparent calc(50% - 0.7px), var(--border) calc(50% - 0.7px), var(--border) calc(50% + 0.7px), var(--bg) calc(50% + 0.7px));
-}
-html[data-look="corpus"] .wrap.tw,
-html[data-look="corpus"] .wrap.picks,
-html[data-look="corpus"] .modal,
-html[data-look="corpus"] .toast {
-  position: relative;
-  clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
-  background-image:
-    linear-gradient(to top right, transparent calc(50% - 0.7px), var(--border) calc(50% - 0.7px), var(--border) calc(50% + 0.7px), transparent calc(50% + 0.7px)),
-    linear-gradient(to top right, transparent calc(50% - 0.7px), var(--border) calc(50% - 0.7px), var(--border) calc(50% + 0.7px), transparent calc(50% + 0.7px));
-  background-repeat: no-repeat;
-  background-size: var(--cut) var(--cut), var(--cut) var(--cut);
-  background-position: top right, bottom left;
-}
-html[data-look="corpus"] .toast { --cut: 6px; }
-/* The Corpus double rule under raised title bars and the table head. */
-html[data-look="corpus"] th { border-bottom: 3px double var(--border); }
-html[data-look="corpus"] .picks-head { border-bottom: 3px double var(--border); }
-html[data-look="corpus"] .wrap.tw > .rail { border-bottom: 3px double var(--border); }
-html[data-look="corpus"] table.tw th { border-bottom: 3px double var(--border); }
-html[data-look="corpus"] .seg > button.on { box-shadow: inset 0 -2px 0 var(--accent); }
-html[data-look="corpus"] .card > h3:first-child { padding-bottom: 6px; border-bottom: 3px double var(--border); margin-bottom: 2px; }
-html[data-look="corpus"] .modal > header, html[data-look="corpus"] dialog.cryptobox header { border-bottom: 3px double var(--border); }
-html[data-look="corpus"] .faq > h2 { border-bottom: 3px double var(--border); }
-html[data-look="corpus"] .nav-item.active { border-left-width: 3px; }
-html[data-look="corpus"] .seg-btn.active { box-shadow: inset 0 -2px 0 var(--accent); }
-html[data-look="corpus"] .preset.active, html[data-look="corpus"] .chip.active { background: var(--panel-2); }
-html[data-look="corpus"] .dot { border-radius: 0; transform: rotate(45deg); width: 6px; height: 6px; }
-html[data-look="corpus"] .lede-dot, html[data-look="corpus"] .info-btn { border-radius: 0; }
-html[data-look="corpus"] .list-cta, html[data-look="corpus"] .rp-primary, html[data-look="corpus"] .btn.primary {
-  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
-}
-
-/* ---------- vitruvian ------------------------------------------------------ */
-/* Ruled-paper ground plus one faint construction drawing, top right. */
-html[data-look="vitruvian"] body {
-  background-image:
-    url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='1440' height='900' viewBox='0 0 1440 900'><g fill='none' stroke='%233A2A1B' stroke-opacity='.075' stroke-width='1'><circle cx='1180' cy='420' r='330'/><rect x='902' y='120' width='556' height='556'/><line x1='902' y1='420' x2='1458' y2='420'/><line x1='1180' y1='120' x2='1180' y2='676'/><circle cx='1180' cy='420' r='233'/></g></svg>"),
-    repeating-linear-gradient(0deg, rgba(58, 42, 27, 0.045) 0 1px, transparent 1px 32px);
-  background-repeat: no-repeat, repeat;
-  background-position: top right, 0 0;
-}
-html[data-look="vitruvian"] a { color: var(--fg); text-decoration: none; border-bottom: 1px solid var(--hairline); }
-html[data-look="vitruvian"] h1, html[data-look="vitruvian"] h2, html[data-look="vitruvian"] h3, html[data-look="vitruvian"] h4,
-html[data-look="vitruvian"] .nav-label, html[data-look="vitruvian"] th { font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; }
-html[data-look="vitruvian"] .view-header h2 { font: 600 24px/1.1 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
-html[data-look="vitruvian"] .statusbar .brand h1 { font: 600 16px/1.2 var(--font-ui); letter-spacing: 0.14em; }
-/* Corner ticks — 9px L-shapes in ink, 4px outside every container's border. */
-html[data-look="vitruvian"] .card,
-html[data-look="vitruvian"] .faq,
-html[data-look="vitruvian"] .modal { position: relative; overflow: visible; }
-html[data-look="vitruvian"] .card::before, html[data-look="vitruvian"] .faq::before, html[data-look="vitruvian"] .modal::before {
-  content: ""; position: absolute; left: -4px; top: -4px; width: 9px; height: 9px;
-  border-left: 1px solid var(--fg); border-top: 1px solid var(--fg); pointer-events: none;
-}
-html[data-look="vitruvian"] .card::after, html[data-look="vitruvian"] .faq::after, html[data-look="vitruvian"] .modal::after {
-  content: ""; position: absolute; right: -4px; bottom: -4px; width: 9px; height: 9px;
-  border-right: 1px solid var(--fg); border-bottom: 1px solid var(--fg); pointer-events: none;
-}
-/* Ink title bar + tan underscore; sienna underscore = current. */
-html[data-look="vitruvian"] .picks-head { background: var(--ink-bar); color: var(--on-ink); border-bottom: 0; box-shadow: inset 0 -2px 0 var(--tan); }
-html[data-look="vitruvian"] .picks-head h3 { color: inherit; }
-html[data-look="vitruvian"] .picks-head .muted, html[data-look="vitruvian"] .picks-head .rail-toggle, html[data-look="vitruvian"] .picks-head .link { color: var(--on-ink-muted); }
-html[data-look="vitruvian"] .wrap.tw > .rail { background: var(--ink-bar); color: var(--on-ink-muted); border-bottom: 0; box-shadow: inset 0 -2px 0 var(--tan); }
-html[data-look="vitruvian"] .wrap.tw > .rail h3 { color: var(--on-ink); }
-html[data-look="vitruvian"] .wrap.tw > .rail .exp, html[data-look="vitruvian"] .wrap.tw > .rail a, html[data-look="vitruvian"] .wrap.tw > .rail .rail-toggle { color: var(--on-ink-muted); border-bottom-color: var(--on-ink-muted); }
-html[data-look="vitruvian"] .wrap.tw > .rail .lbl.good, html[data-look="vitruvian"] .wrap.tw > .rail .lbl.bad { color: var(--on-ink); }
-html[data-look="vitruvian"] table.tw th.sorted { color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
-html[data-look="vitruvian"] .seg > button.on { color: var(--fg); background: var(--panel); box-shadow: inset 0 -2px 0 var(--accent); }
-html[data-look="vitruvian"] table.tw .spark { color: var(--sketch); }
-html[data-look="vitruvian"] .card > h3:first-child {
-  margin: -14px -16px 0; padding: 5px 12px;
-  background: var(--ink-bar); color: var(--on-ink); box-shadow: inset 0 -2px 0 var(--tan);
-  font: 600 12px/1.6 var(--font-ui); letter-spacing: 0.14em; text-transform: uppercase;
-}
-html[data-look="vitruvian"] .card > h3:first-child .muted { color: var(--on-ink-muted); text-transform: none; letter-spacing: 0; font-family: var(--font-body); }
-html[data-look="vitruvian"] .faq > h2 { background: var(--ink-bar); color: var(--on-ink); margin: -4px -18px 0; padding: 6px 12px; font: 600 12px/1.6 var(--font-ui); letter-spacing: 0.14em; box-shadow: inset 0 -2px 0 var(--tan); }
-html[data-look="vitruvian"] .modal > header, html[data-look="vitruvian"] dialog.cryptobox header { background: var(--ink-bar); color: var(--on-ink); border-bottom: 0; box-shadow: inset 0 -2px 0 var(--tan); }
-html[data-look="vitruvian"] .modal > header h2, html[data-look="vitruvian"] dialog.cryptobox h3 { color: inherit; }
-html[data-look="vitruvian"] .modal > header .x { color: var(--on-ink); border-color: var(--on-ink); }
-html[data-look="vitruvian"] dialog.cryptobox header { padding: 8px 12px; margin: -20px -20px 0; }
-html[data-look="vitruvian"] dialog.cryptobox header p { color: var(--on-ink-muted); }
-/* Focus ring on the ink surfaces: sienna on ink is ~2.1:1 — use the bar's
-   foreground instead. */
-html[data-look="vitruvian"] .wrap.tw > .rail :focus-visible,
-html[data-look="vitruvian"] .picks-head :focus-visible,
-html[data-look="vitruvian"] .card > h3:first-child :focus-visible,
-html[data-look="vitruvian"] .faq > h2 :focus-visible,
-html[data-look="vitruvian"] .modal > header :focus-visible,
-html[data-look="vitruvian"] dialog.cryptobox header :focus-visible { outline-color: var(--on-ink); }
-html[data-look="vitruvian"] .list-cta, html[data-look="vitruvian"] .rp-primary, html[data-look="vitruvian"] .btn.primary {
-  background: var(--ink-bar); color: var(--on-ink); border-color: var(--ink-bar); box-shadow: inset 0 -2px 0 var(--accent);
-}
-html[data-look="vitruvian"] .nav-item.active { background: var(--tan); color: var(--fg); border-left-color: var(--fg); font-weight: 600; }
-html[data-look="vitruvian"] .nav-item.active .badge { color: var(--fg); border-color: var(--fg); background: transparent; }
-html[data-look="vitruvian"] .nav-item > span:first-child::before { content: "◇"; font-size: 9px; margin-right: 9px; vertical-align: 1px; }
-html[data-look="vitruvian"] .nav-item.active > span:first-child::before { content: "◆"; }
-html[data-look="vitruvian"] .preset.active { background: var(--tan); color: var(--fg); border-color: var(--fg); font-weight: 600; }
-html[data-look="vitruvian"] .preset.active::before { content: "◆ "; font-size: 8px; }
-html[data-look="vitruvian"] th.active { color: var(--fg); box-shadow: inset 0 -2px 0 var(--accent); }
-html[data-look="vitruvian"] .seg-btn.active { color: var(--fg); background: var(--panel); box-shadow: inset 0 -2px 0 var(--accent); }
-html[data-look="vitruvian"] .view-header { position: relative; }
-html[data-look="vitruvian"] .view-header::after { content: ""; position: absolute; left: 0; bottom: -3px; width: 64px; border-bottom: 1px solid var(--accent); }
-html[data-look="vitruvian"] .statusbar .brand { position: relative; }
-html[data-look="vitruvian"] .statusbar .brand::after { content: ""; position: absolute; left: 1rem; bottom: -1px; width: 36px; border-bottom: 1px solid var(--accent); }
-/* Drawn lines: sparklines stroke in sketch ink with round caps. */
-html[data-look="vitruvian"] .sparkline { color: var(--sketch); opacity: 1; }
-html[data-look="vitruvian"] .sparkline polyline { stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
-html[data-look="vitruvian"] .pick-rank { font-family: var(--font-ui); font-weight: 600; color: var(--accent); }
