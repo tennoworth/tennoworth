@@ -18,6 +18,7 @@
   import RivensPanel from './components/RivensPanel.svelte';
   import DesktopShowcase from './components/DesktopShowcase.svelte';
   import ThemeSwitcher from './components/ThemeSwitcher.svelte';
+  import SettingsPanel from './components/SettingsPanel.svelte';
   import { flattenInventory, extractKeptLvls } from './lib/inventory';
   import { extractRivens, resolveRivens } from './lib/rivens';
   import { adviseOwned } from './lib/advisor';
@@ -54,7 +55,8 @@
   // Selected + primed (scalar settings loaded into cache) in main.ts and passed
   // in, so the scalar-setting `$state` initializers below can read it
   // synchronously with no first-paint flash. Snapshot methods are async.
-  // `theme` is the boot-time ThemeController (src/lib/theme.ts) the switchers drive.
+  // `theme` is the boot-time ThemeController (src/lib/theme.ts) that the mode
+  // control in Settings → Appearance (and its footer twin) drives.
   let { store, theme }: { store: StateStore; theme: ThemeController } = $props();
 
   type Phase = 'idle' | 'loading' | 'done' | 'error';
@@ -148,9 +150,9 @@
   // reload lands the user back where they left off. Falls through to
   // 'sell' if the persisted view's data isn't available (Baro not
   // visiting; 'orders' is desktop-only — the hosted site is informational).
-  type View = 'sell' | 'sets' | 'relics' | 'rivens' | 'baro' | 'routines' | 'orders' | 'watches' | 'ledger' | 'install';
+  type View = 'sell' | 'sets' | 'relics' | 'rivens' | 'baro' | 'routines' | 'orders' | 'watches' | 'ledger' | 'install' | 'settings';
   const VALID_VIEWS: ReadonlySet<View> = new Set([
-    'sell', 'sets', 'relics', 'rivens', 'baro', 'routines', 'orders', 'watches', 'ledger', 'install',
+    'sell', 'sets', 'relics', 'rivens', 'baro', 'routines', 'orders', 'watches', 'ledger', 'install', 'settings',
   ]);
   let view = $state<View>(
     (() => {
@@ -960,8 +962,10 @@
 <main class="landing" data-testid={isDesktop ? 'desktop-mode' : undefined}>
   {@render statusStrip(false)}
   <!-- One lede line under the strip (the strip's descriptor already says what
-       this is); the theme switcher rides its right end. The old pitch
-       paragraph / hero is gone — search is the first control. -->
+       this is). The old pitch paragraph / hero is gone — search is the first
+       control. The theme switcher used to ride this line's right end; it now
+       lives in Settings → Appearance, with a quiet copy in the site footer for
+       visitors who never search their way into the shell. -->
   <header class="landing-head">
     <p class="lede">
       {#if isDesktop}
@@ -970,9 +974,6 @@
         What's worth selling in Warframe right now — search any item, spot the movers, see what's vaulted. No install, no login.
       {/if}
     </p>
-    <div class="landing-theme">
-      <ThemeSwitcher {theme} />
-    </div>
   </header>
 
   {@render generalBanners()}
@@ -1034,6 +1035,12 @@
     <a href="https://github.com/tennoworth/tennoworth" target="_blank" rel="noopener noreferrer">GitHub</a>
     <a href="#trust">Trust &amp; safety</a>
     <span class="ver" title="build {APP_COMMIT}">{APP_COMMIT}</span>
+    <!-- The theme control's home is Settings → Appearance, inside the shell.
+         A visitor who never searches never reaches the shell, so the mode
+         control also sits here — quiet, right-aligned, on the footer's own
+         type scale — rather than leaving the hosted site unable to override
+         the OS scheme. -->
+    <div class="foot-theme"><ThemeSwitcher {theme} compact label="Colour mode" /></div>
   </footer>
 </main>
 {:else}
@@ -1101,11 +1108,13 @@
         <button type="button" class="nav-item" class:active={effectiveView === 'install'} onclick={() => setView('install')}>
           <span>FAQ</span>
         </button>
+        <button type="button" class="nav-item" class:active={effectiveView === 'settings'} onclick={() => setView('settings')}>
+          <span>Settings</span>
+        </button>
       </div>
     </nav>
 
     <div class="sfoot">
-      <ThemeSwitcher {theme} />
       <div class="ver" title="build {APP_COMMIT}">Windows + Linux · no Overwolf · {APP_COMMIT}</div>
     </div>
   </aside>
@@ -1437,6 +1446,9 @@
         <p class="lede">Answers to common questions.</p>
       </section>
       {@render faqContent()}
+
+    {:else if effectiveView === 'settings'}
+      <SettingsPanel {theme} />
     {/if}
 
   </main>
@@ -2109,7 +2121,7 @@
     letter-spacing: 0.04em;
   }
 
-  /* Sidebar foot: theme switcher + build string. */
+  /* Sidebar foot: build string. (The theme control moved to Settings.) */
   .sfoot {
     padding: var(--s3) var(--s3) 0;
     border-top: 1px var(--rule) var(--hairline);
@@ -2273,7 +2285,6 @@
      than body text to stay comfortably legible. */
   .landing-head .lede { flex: 1 1 20rem; min-width: 0; margin: 0; font-size: 14px; line-height: 1.375rem; color: var(--muted); }
   .landing-head .lede em { color: var(--fg); font-style: normal; font-weight: 600; }
-  .landing-theme { flex: 0 0 auto; }
   h2 { margin: 0 0 4px 0; font-size: 14px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
   h3 { margin: 0 0 4px 0; font-size: 14px; font-weight: 600; }
   .sub { color: var(--muted); margin: 6px 0 0 0; max-width: 64ch; font-size: 13px; }
@@ -2722,6 +2733,9 @@
   footer.sitefoot .grow { flex: 1 1 24rem; }
   footer.sitefoot a { color: var(--muted); text-decoration: none; }
   footer.sitefoot a:hover { color: var(--accent); }
+  /* Mode control, last cell: pushed to the right end and baseline-aligned
+     with the rest of the row. */
+  footer.sitefoot .foot-theme { margin-left: auto; align-self: center; }
 
   /* .cryptobox dialog styling moved to WfmAuthDialogs.svelte and
      ExportImportDialogs.svelte — no more dialog.cryptobox elements render
