@@ -49,6 +49,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # A manual run is a BUILD SMOKE TEST, never a publish (see the tagName
+      # expression on the tauri-action step below). Restricting it to main on
+      # top of that is belt-and-braces: it states the intent in one readable
+      # place instead of leaving it implied by a template expression, and it
+      # fails in seconds rather than after an ~8-minute build.
+      - name: Guard — a manual run may only be dispatched from main
+        if: github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main'
+        shell: bash
+        run: |
+          echo "::error title=Dispatch from a non-main ref::This workflow was dispatched from ${{ github.ref }}. Manual runs are build-only smoke tests and are restricted to main; cut a release by tagging desktop-v<semver> on main."
+          exit 1
+
       - name: Refuse to build without the updater signing key
         shell: bash
         run: |
@@ -121,13 +133,27 @@ jobs:
       # `src-tauri` layout and no npm-side @tauri-apps/cli, so the action
       # installs its own CLI rather than shelling out to `bun tauri`. Local
       # builds still use `cargo tauri`; both drive the same tauri.conf.json.
+      #
+      # tagName is COMPUTED, and the empty branch is the load-bearing half.
+      # Every other versioned step in this workflow is gated on a desktop-v*
+      # ref; this one was not, so a workflow_dispatch from any branch rebuilt
+      # and overwrote desktop-latest — the release every installed Windows
+      # client reads latest.json from. One "let me just re-run the build" from
+      # a feature branch shipped that branch to every install.
+      #
+      # tauri-action treats an absent/empty tagName as "build, don't publish"
+      # (that is already how the linux-binary job below uses it), so a manual
+      # run compiles and then stops, and releaseName/releaseBody/prerelease
+      # below are inert on that path. The follow-up atomic-release rework
+      # removes the tag trigger entirely and replaces this with an explicit
+      # publish job; this is the minimal fix that closes the hole today.
       - uses: tauri-apps/tauri-action@v0
         id: tauri
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           projectPath: companion/tennoworth-desktop
-          tagName: desktop-latest
+          tagName: ${{ startsWith(github.ref, 'refs/tags/desktop-v') && 'desktop-latest' || '' }}
           releaseName: desktop-latest (auto-built)
           releaseBody: >
             Rolling desktop build. The in-app updater reads latest.json from
@@ -166,6 +192,27 @@ jobs:
             find companion/target/release/bundle -type f 2>/dev/null | head -20 || echo "(bundle dir absent)"
             exit 1
           fi
+
+          # SHA-256 sidecars for the Windows installers.
+          #
+          # SECURITY.md's "How to verify a release" has told Windows users to
+          # compare the .exe/.msi against "the .sha256 file on the same
+          # release" since it was written — and no such file was ever
+          # published: 0.3.7 and 0.3.8 shipped the installers with a .sig and
+          # nothing else. (The .sig is a minisign signature over the updater
+          # bundle, verifiable only by the app's baked-in pubkey; it is not
+          # something a user can check by hand.) The Linux job has emitted
+          # .sha256 sidecars for its tarball/deb/rpm all along; this brings
+          # Windows in line with both the Linux artifacts and the documented
+          # promise. They ride along in the `dist/*` glob below.
+          (
+            cd dist
+            for f in *.exe *.msi; do
+              [ -e "$f" ] || continue
+              sha256sum "$f" | tee "$f.sha256"
+            done
+          )
+          ls -la dist
 
       - name: Publish archival copies
         if: startsWith(github.ref, 'refs/tags/desktop-v')
