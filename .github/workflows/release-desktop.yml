@@ -338,26 +338,45 @@ jobs:
           sha256sum tennoworth-desktop-amd64.deb   | tee tennoworth-desktop-amd64.deb.sha256
           sha256sum tennoworth-desktop-x86_64.rpm  | tee tennoworth-desktop-x86_64.rpm.sha256
 
-      # The AppImage — staged toward AppImage-only Linux distribution. The
-      # first AppImage (2026-07) was withdrawn because its bundled ubuntu
-      # WebKitGTK aborted at EGL init on rolling Mesa; this one ships with the
-      # app forcing WEBKIT_DISABLE_DMABUF_RENDERER=1 in AppImage runs (see
-      # main.rs), which is the documented mitigation for that class. The
-      # deb/rpm/AUR channels keep publishing until the AppImage is validated
-      # on a rolling host; then they sunset. Fixed filename for the same
-      # reason as the deb/rpm: pullers and the updater manifest refer to it
-      # by name. The .sig is the tauri updater signature (createUpdaterArtifacts),
-      # which is what makes Linux self-update possible at all — the old
-      # repo-based flow never had it.
-      - name: Stage AppImage
+      # The AppImage — staged toward AppImage-only Linux distribution.
+      #
+      # THE LOAD-BEARING STEP IS THE libwayland STRIP. The first AppImage
+      # (2026-07) was withdrawn for "Could not create default EGL display:
+      # EGL_BAD_PARAMETER" on rolling Mesa. Root-caused 2026-08-20 by A/B on
+      # a Mesa 26.2 host: linuxdeploy bundles ubuntu-22.04's libwayland-
+      # client/cursor/egl/server, and host Mesa's Wayland-EGL platform
+      # rejects that 2022 client — remove the four libs and the identical
+      # bundle runs cleanly (WebKit itself was never the problem; a
+      # WEBKIT_DISABLE_DMABUF_RENDERER shim measurably did not help).
+      # libwayland has a stable ABI and every desktop Linux ships it, so
+      # using the host's is strictly more correct.
+      #
+      # Repacking invalidates the build-time updater signature, so the file
+      # is re-signed afterwards — the .sig MUST be generated from the
+      # repacked bytes or self-update rejects every download.
+      - name: Strip bundled libwayland and repack the AppImage
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           set -euo pipefail
           img=$(find companion/target/release/bundle/appimage -name '*.AppImage' | head -1)
           [ -n "$img" ] || { echo "::error title=Missing AppImage::tauri build did not emit an AppImage"; exit 1; }
-          cp "$img" dist/TennoWorth-x86_64.AppImage
-          [ -f "$img.sig" ] && cp "$img.sig" dist/TennoWorth-x86_64.AppImage.sig
+          chmod +x "$img"
+          "$img" --appimage-extract >/dev/null
+          removed=0
+          for f in libwayland-client.so.0 libwayland-cursor.so.0 libwayland-egl.so.1 libwayland-server.so.0; do
+            [ -f "squashfs-root/usr/lib/$f" ] && { rm "squashfs-root/usr/lib/$f"; removed=$((removed+1)); }
+          done
+          echo "stripped $removed bundled libwayland libs"
+          [ "$removed" -gt 0 ] || echo "::warning::no bundled libwayland found — linuxdeploy behavior changed, verify on a rolling host"
+          curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+          chmod +x appimagetool
+          APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 ./appimagetool -n squashfs-root dist/TennoWorth-x86_64.AppImage
+          bun x @tauri-apps/cli signer sign dist/TennoWorth-x86_64.AppImage
           cd dist
           sha256sum TennoWorth-x86_64.AppImage | tee TennoWorth-x86_64.AppImage.sha256
+          test -f TennoWorth-x86_64.AppImage.sig
 
       # The versioned desktop-v* release is the repo's "Latest release" badge —
       # the desktop app is the product (the standalone CLI companion no longer

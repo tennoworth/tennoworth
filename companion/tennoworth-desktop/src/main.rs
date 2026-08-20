@@ -85,21 +85,12 @@ fn main() {
     // Before any network call: every WFM request identifies as this app +
     // version (WFM's rules require a descriptive User-Agent).
     wfm_core::set_app_identity("tennoworth-desktop", env!("CARGO_PKG_VERSION"));
-    // AppImage mode ships a bundled WebKitGTK built on an older distro. On a
-    // rolling host that mismatch historically aborted at webview init
-    // ("Could not create default EGL display: EGL_BAD_PARAMETER" — a white
-    // window; the reason the first AppImage was withdrawn, see
-    // release-desktop.yml). Disabling WebKit's DMABUF renderer is the
-    // documented mitigation for exactly that class; scoped to AppImage runs
-    // (the env var APPIMAGE is set by the runtime) so package installs using
-    // the system WebKit keep the fast path. A user can override by exporting
-    // the variable themselves.
-    #[cfg(target_os = "linux")]
-    if std::env::var_os("APPIMAGE").is_some()
-        && std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none()
-    {
-        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
-    }
+    // No WebKit env shims for AppImage runs: the historical EGL abort on
+    // rolling Mesa was root-caused (2026-08-20) to the bundle carrying
+    // ubuntu's libwayland-* — fixed by stripping them at bundle time in
+    // release-desktop.yml. A WEBKIT_DISABLE_DMABUF_RENDERER=1 shim was tried
+    // here first and measurably did NOT help (same abort with it set), so it
+    // does not ship.
     let probe = std::env::var("TENNOWORTH_PROBE").ok().as_deref() == Some("1");
     let runtag = std::env::var("TENNOWORTH_RUNTAG").unwrap_or_else(|_| "na".into());
 
