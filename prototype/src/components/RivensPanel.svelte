@@ -177,7 +177,7 @@
                   disabled={!r.slug || compsBusy !== null}
                   title={r.slug ? 'Fetch the cheapest live auctions for this weapon (WFM caps at 10/min).' : 'Unknown weapon — no comps.'}
                 >
-                  {compsBusy === r.slug ? 'Fetching…' : openSlug === r.slug ? 'Hide comps' : 'Comps'}
+                  {r.slug != null && compsBusy === r.slug ? 'Fetching…' : r.slug != null && openSlug === r.slug ? 'Hide comps' : 'Comps'}
                 </button>
               </td>
             </tr>
