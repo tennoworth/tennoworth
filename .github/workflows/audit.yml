@@ -7,6 +7,13 @@ name: audit
 on:
   push:
     branches: [main, develop]
+  # Promotion PRs (develop → main): the main ruleset requires these jobs as
+  # status checks, and a push-event run on the head commit does not count for
+  # the PR's check rollup — the run must come from a pull_request event.
+  # Deliberately NO paths-ignore here: a required check that path-skips never
+  # reports, which deadlocks the merge on "expected" checks.
+  pull_request:
+    branches: [main]
     # The 2-hourly market-refresh bot commits touch only these three data
     # files; skip a full CI run for a data-only push (~85 wasted runs/week).
     paths-ignore:
