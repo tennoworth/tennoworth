@@ -5,10 +5,10 @@
   "bypass_actors": [],
   "conditions": {
     "ref_name": {
+      "exclude": [],
       "include": [
         "refs/heads/develop"
-      ],
-      "exclude": []
+      ]
     }
   },
   "rules": [
