@@ -1549,6 +1549,14 @@
         request and discarded — never printed, never saved, never sent anywhere
         else.
       </p>
+      <p>
+        For trade detection (the Ledger), the app also
+        <strong>reads the game's own text log</strong> (<code>EE.log</code>,
+        the file Warframe itself writes) — read-only tailing of a plain file,
+        the same thing WFInfo and AlecaFrame have done for years. It starts at
+        the end of the file, so nothing from before the app launched is ever
+        read, and if the log isn't there, trade detection is simply off.
+      </p>
     </details>
 
     <details>
@@ -1560,6 +1568,22 @@
         Windows' <code>ReadProcessMemory</code>. We do the same thing without
         the Overwolf middleman (and without being Windows-only). Nothing here
         modifies the game.
+      </p>
+    </details>
+
+    <details>
+      <summary>How it talks to warframe.market</summary>
+      <p>
+        Every request identifies itself as TennoWorth (name, version, and a
+        contact link in the <code>User-Agent</code> — warframe.market's API
+        rules require it, and we follow them). Traffic is polite by
+        construction: live price checks run at most ~3 requests per second in
+        short bursts of up to 100 items, price watches re-check every 10
+        minutes, and riven comps are capped at warframe.market's 10 searches
+        per minute. <strong>Order writes only ever happen when you click</strong>
+        — the app never auto-bids, never auto-undercuts, and never reprices
+        without you. The bots that instantly match every bid on
+        warframe.market are exactly what this app refuses to be.
       </p>
     </details>
 
