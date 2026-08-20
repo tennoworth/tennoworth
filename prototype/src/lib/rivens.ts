@@ -191,7 +191,10 @@ export function formatRivenStat(
   attrs: RivenAttribute[] | undefined,
 ): string {
   const attr = attributeForTag(tag, attrs);
-  const mult = rivenStatMultiplier(raw);
+  // Curses store their raw value ALREADY negative in the fingerprint, so the
+  // sign comes from the magnitude via abs() and the buff/curse flag — never
+  // both, or a curse renders "--27.9%".
+  const mult = Math.abs(rivenStatMultiplier(raw));
   const sign = positive ? '+' : '-';
   if (attr?.unit === 'percent') {
     return sign + (mult * 100).toFixed(1) + '% ' + attr.name;
@@ -226,9 +229,12 @@ export function formatAuctionStat(
   attrs: RivenAttribute[] | undefined,
 ): string {
   const attr = attrs?.find((a) => a.slug === urlName);
+  // Same single-sign rule as formatRivenStat: WFM quotes negative stats with
+  // the sign already on the value.
+  const mag = Math.abs(value);
   const sign = positive ? '+' : '-';
   if (attr?.unit === 'percent') {
-    return sign + (value * 100).toFixed(1) + '% ' + attr.name;
+    return sign + (mag * 100).toFixed(1) + '% ' + attr.name;
   }
-  return sign + value.toFixed(2) + ' ' + (attr?.name ?? urlName);
+  return sign + mag.toFixed(2) + ' ' + (attr?.name ?? urlName);
 }

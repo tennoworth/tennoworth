@@ -275,7 +275,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           projectPath: companion/tennoworth-desktop
-          args: --bundles deb,rpm
+          args: --bundles deb,rpm,appimage
 
       # Fails the release rather than shipping a binary that won't start on a
       # user's machine. 2.35 is what ubuntu-22.04 provides; anything higher
@@ -338,6 +338,27 @@ jobs:
           sha256sum tennoworth-desktop-amd64.deb   | tee tennoworth-desktop-amd64.deb.sha256
           sha256sum tennoworth-desktop-x86_64.rpm  | tee tennoworth-desktop-x86_64.rpm.sha256
 
+      # The AppImage — staged toward AppImage-only Linux distribution. The
+      # first AppImage (2026-07) was withdrawn because its bundled ubuntu
+      # WebKitGTK aborted at EGL init on rolling Mesa; this one ships with the
+      # app forcing WEBKIT_DISABLE_DMABUF_RENDERER=1 in AppImage runs (see
+      # main.rs), which is the documented mitigation for that class. The
+      # deb/rpm/AUR channels keep publishing until the AppImage is validated
+      # on a rolling host; then they sunset. Fixed filename for the same
+      # reason as the deb/rpm: pullers and the updater manifest refer to it
+      # by name. The .sig is the tauri updater signature (createUpdaterArtifacts),
+      # which is what makes Linux self-update possible at all — the old
+      # repo-based flow never had it.
+      - name: Stage AppImage
+        run: |
+          set -euo pipefail
+          img=$(find companion/target/release/bundle/appimage -name '*.AppImage' | head -1)
+          [ -n "$img" ] || { echo "::error title=Missing AppImage::tauri build did not emit an AppImage"; exit 1; }
+          cp "$img" dist/TennoWorth-x86_64.AppImage
+          [ -f "$img.sig" ] && cp "$img.sig" dist/TennoWorth-x86_64.AppImage.sig
+          cd dist
+          sha256sum TennoWorth-x86_64.AppImage | tee TennoWorth-x86_64.AppImage.sha256
+
       # The versioned desktop-v* release is the repo's "Latest release" badge —
       # the desktop app is the product (the standalone CLI companion no longer
       # exists, so there is no competing v* release stream).
@@ -353,6 +374,9 @@ jobs:
             dist/tennoworth-desktop-amd64.deb.sha256
             dist/tennoworth-desktop-x86_64.rpm
             dist/tennoworth-desktop-x86_64.rpm.sha256
+            dist/TennoWorth-x86_64.AppImage
+            dist/TennoWorth-x86_64.AppImage.sha256
+            dist/TennoWorth-x86_64.AppImage.sig
           draft: false
           prerelease: false
           make_latest: true
@@ -367,6 +391,38 @@ jobs:
             Windows installers and the updater manifest live on the rolling
             [desktop-latest](https://github.com/tennoworth/tennoworth/releases/tag/desktop-latest)
             release. Linux source builds: `packaging/aur/`.
+
+  # Linux self-update: put the AppImage on the rolling release and add the
+  # linux-x86_64 platform to latest.json. Runs AFTER both build jobs — the
+  # Windows tauri-action publishes/overwrites latest.json with only its own
+  # platforms, so patching must be sequenced behind it, not raced.
+  linux-updater-manifest:
+    needs: [build, linux-binary]
+    if: startsWith(github.ref, 'refs/tags/desktop-v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Add AppImage to desktop-latest and patch latest.json
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          src_tag="desktop-latest"
+          mkdir -p dist
+          gh release download "$GITHUB_REF_NAME" -p 'TennoWorth-x86_64.AppImage*' -D dist
+          gh release upload "$src_tag" dist/TennoWorth-x86_64.AppImage dist/TennoWorth-x86_64.AppImage.sig --clobber
+          gh release download "$src_tag" -p latest.json -D dist
+          sig=$(cat dist/TennoWorth-x86_64.AppImage.sig)
+          url="https://github.com/$GH_REPO/releases/download/$src_tag/TennoWorth-x86_64.AppImage"
+          python3 - "$sig" "$url" <<'PYEOF'
+          import json, sys
+          sig, url = sys.argv[1], sys.argv[2]
+          m = json.load(open('dist/latest.json'))
+          m.setdefault('platforms', {})['linux-x86_64'] = {'signature': sig, 'url': url}
+          json.dump(m, open('dist/latest.json', 'w'), indent=2)
+          print('platforms now:', sorted(m['platforms']))
+          PYEOF
+          gh release upload "$src_tag" dist/latest.json --clobber
 
   # AUR publish — the delivery channel Arch users actually install from. The
   # release jobs build things; this job ships the recipes. It exists because a

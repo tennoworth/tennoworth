@@ -29,6 +29,7 @@ mod commands;
 mod db;
 mod definitions;
 mod eelog;
+mod ws_watch;
 mod eelog_state;
 mod keyring_store;
 mod market;
@@ -84,6 +85,21 @@ fn main() {
     // Before any network call: every WFM request identifies as this app +
     // version (WFM's rules require a descriptive User-Agent).
     wfm_core::set_app_identity("tennoworth-desktop", env!("CARGO_PKG_VERSION"));
+    // AppImage mode ships a bundled WebKitGTK built on an older distro. On a
+    // rolling host that mismatch historically aborted at webview init
+    // ("Could not create default EGL display: EGL_BAD_PARAMETER" — a white
+    // window; the reason the first AppImage was withdrawn, see
+    // release-desktop.yml). Disabling WebKit's DMABUF renderer is the
+    // documented mitigation for exactly that class; scoped to AppImage runs
+    // (the env var APPIMAGE is set by the runtime) so package installs using
+    // the system WebKit keep the fast path. A user can override by exporting
+    // the variable themselves.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("APPIMAGE").is_some()
+        && std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none()
+    {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
     let probe = std::env::var("TENNOWORTH_PROBE").ok().as_deref() == Some("1");
     let runtag = std::env::var("TENNOWORTH_RUNTAG").unwrap_or_else(|_| "na".into());
 
@@ -275,6 +291,9 @@ fn main() {
             // the probe must not make WFM calls on a timer.
             if !probe {
                 watch::start_checker(app.handle().clone());
+                // Fast path beside the poll: WFM's live order stream fires a
+                // matching watch in seconds (see ws_watch.rs).
+                ws_watch::start_stream(app.handle().clone());
             }
 
             // C5: launch update check, off the main thread so it can never

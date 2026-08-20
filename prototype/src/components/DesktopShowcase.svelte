@@ -6,17 +6,17 @@
   // already in the app. No routing: this is an <section id="desktop"> the
   // upsell pitch links to with a same-page anchor.
 
-  type Os = 'windows' | 'debian' | 'fedora' | 'arch';
+  type Os = 'windows' | 'linux' | 'debian' | 'fedora' | 'arch';
   // Default the active tab to the visitor's OS so a Windows user lands on the
-  // Windows block and a Linux user on the apt block without a click. Fedora vs
-  // Debian/Arch can't be told apart from the UA, so Linux defaults to Debian.
+  // Windows block and a Linux user on the AppImage block without a click.
+  // The distro repo tabs stay for the transition; the AppImage is the lead.
   let activeOs = $state<Os>(detectOs());
-  const osOrder: Os[] = ['windows', 'debian', 'fedora', 'arch'];
+  const osOrder: Os[] = ['windows', 'linux', 'debian', 'fedora', 'arch'];
 
   function detectOs(): Os {
     try {
       const p = (navigator.platform || '').toLowerCase();
-      return p.includes('win') ? 'windows' : 'debian';
+      return p.includes('win') ? 'windows' : 'linux';
     } catch {
       return 'windows';
     }
@@ -26,6 +26,12 @@
   // two can't drift (the Windows row points at the releases page instead of a
   // one-liner; the app auto-updates from there).
   const install = {
+    linux: {
+      title: 'Linux',
+      note: 'One file, any distro, self-updating. First run: make it executable, then launch it like any app. (The apt/dnf/AUR packages below keep working during the transition.)',
+      cmd: 'curl -LO https://github.com/tennoworth/tennoworth/releases/latest/download/TennoWorth-x86_64.AppImage\nchmod +x TennoWorth-x86_64.AppImage\n./TennoWorth-x86_64.AppImage',
+      copiable: true,
+    },
     windows: {
       title: 'Windows',
       note: 'Download the installer (.exe or .msi) from the latest release. Unsigned, so SmartScreen warns — click More info → Run anyway. The app updates itself from there.',
