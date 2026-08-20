@@ -2474,15 +2474,20 @@
      lives in ResultsTable's scoped styles; Svelte styles don't cross
      component boundaries, so the small duplication is deliberate). */
   .advice-chip {
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 1px 8px;
-    font-size: 11px;
+    display: inline-block;
+    padding: 1px 6px;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border: 1px solid currentColor;
+    border-radius: var(--radius-tag);
     color: var(--muted);
     cursor: help;
+    white-space: nowrap;
   }
-  .advice-chip.advice-sell_now { color: var(--good); border-color: var(--good); }
-  .advice-chip.advice-hold { color: var(--warn); border-color: var(--warn); }
+  .advice-chip.advice-sell_now { color: var(--good); }
+  .advice-chip.advice-hold { color: var(--warn); }
 
   /* Baro card. Quiet by default (countdown mode); flips to a warm-gold
      border when Baro is actively visiting so the user can't miss the

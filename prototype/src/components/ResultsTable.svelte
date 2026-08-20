@@ -1216,15 +1216,22 @@
   }
   /* Advisor chip — mirror of App.svelte's .advice-chip (scoped styles
      don't cross components). */
+  /* Advisor verdicts share the .tag anatomy (currentColor border,
+     --radius-tag, uppercase micro-label) so every look restyles them for
+     free — a rounded pill here would be the one pill in the app. */
   .advice-chip {
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    padding: 1px 8px;
-    font-size: 11px;
+    display: inline-block;
+    padding: 1px 6px;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    border: 1px solid currentColor;
+    border-radius: var(--radius-tag);
     color: var(--muted);
     cursor: help;
     white-space: nowrap;
   }
-  .advice-chip.advice-sell_now { color: var(--good); border-color: var(--good); }
-  .advice-chip.advice-hold { color: var(--warn); border-color: var(--warn); }
+  .advice-chip.advice-sell_now { color: var(--good); }
+  .advice-chip.advice-hold { color: var(--warn); }
 </style>
