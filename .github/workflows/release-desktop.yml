@@ -40,8 +40,6 @@ name: release-desktop
 # libwayland step for why the first one was withdrawn and what fixed it. The
 # comment that used to sit here saying "No AppImage, deliberately" outlived the
 # decision it described.
-#
-# Plan and rationale: docs/release-plan-2026-08.md
 # ---------------------------------------------------------------------------
 
 on:
@@ -105,7 +103,8 @@ jobs:
           # Strict X.Y.Z. Prerelease suffixes are rejected by policy, not by
           # accident: the updater has ONE endpoint, and semver orders
           # 0.4.0-beta.1 above 0.3.8, so a prerelease published today would be
-          # offered to every stable install. See docs/release-plan-2026-08.md.
+          # offered to every stable install. Prereleases wait for a separate
+          # beta updater endpoint.
           if ! printf '%s' "$VERSION" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
             echo "::error title=Not a version::'$VERSION' is not a strict X.Y.Z semver. Prerelease and build-metadata suffixes are not supported until a separate beta updater endpoint exists."
             exit 1
