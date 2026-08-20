@@ -54,9 +54,14 @@ The desktop app is the product. Install it per platform:
   [latest release](https://github.com/tennoworth/tennoworth/releases/latest).
   Unsigned, so SmartScreen warns on first run (see
   [`SECURITY.md`](SECURITY.md)). The app updates itself from there.
-- **Linux** — your distro's own package manager, from signed repositories.
-  Updates arrive with the rest of your system; the in-app updater deliberately
-  stays quiet on Linux.
+- **Linux** — a single-file **AppImage** from the
+  [latest release](https://github.com/tennoworth/tennoworth/releases):
+  download `TennoWorth-x86_64.AppImage`, `chmod +x`, run. It self-updates
+  in place through the same signed updater feed as Windows.
+
+  The signed apt/dnf repositories and the AUR packages below keep working
+  during the transition, but the AppImage is where Linux distribution is
+  heading — one artifact instead of three packaging pipelines.
 
 **Debian / Ubuntu**
 
@@ -81,12 +86,14 @@ sudo dnf install tennoworth
 The key fingerprint is published in [`SECURITY.md`](SECURITY.md) — worth
 checking before you trust a key you downloaded over the network.
 
-There is intentionally **no Linux AppImage**. It bundled the build machine's
-ubuntu-22.04 WebKitGTK, which aborts at `EGL_BAD_PARAMETER` against a
-rolling-release Mesa and shows a white window — inherent to shipping a
-GPU-dependent stack built on another distro, not a bug a flag fixes. The deb
-and rpm avoid this precisely because they *depend on* your system WebKitGTK
-rather than carrying their own, exactly as the AUR packages do.
+A note of history on the AppImage: the first one (2026-07) was withdrawn
+because its bundled ubuntu-22.04 WebKitGTK aborted at `EGL_BAD_PARAMETER`
+against rolling-release Mesa — a white window. The current AppImage ships
+with WebKit's DMABUF renderer disabled in AppImage runs (the documented
+mitigation for exactly that failure), and the repos stay published until the
+new artifact has proven itself on rolling hosts. If you hit a white window
+anyway, `WEBKIT_DISABLE_COMPOSITING_MODE=1` is the bigger hammer — and the
+deb/rpm/AUR installs (system WebKit) remain immune.
 
 Note the package is named `tenno-worth` internally (Tauri derives it from the
 product name and offers no override), but both packages declare

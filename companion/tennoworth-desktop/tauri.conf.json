@@ -17,7 +17,13 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "msi", "deb", "rpm"],
+    "targets": [
+      "nsis",
+      "msi",
+      "deb",
+      "rpm",
+      "appimage"
+    ],
     "publisher": "TennoWorth",
     "copyright": "MIT licensed — https://github.com/tennoworth/tennoworth",
     "homepage": "https://tennoworth.app",
@@ -28,16 +34,24 @@
     "createUpdaterArtifacts": true,
     "linux": {
       "deb": {
-        "depends": ["libcap2-bin"],
-        "provides": ["tennoworth"],
+        "depends": [
+          "libcap2-bin"
+        ],
+        "provides": [
+          "tennoworth"
+        ],
         "section": "games",
         "priority": "optional",
         "postInstallScript": "scripts/postinstall.sh"
       },
       "rpm": {
         "release": "1",
-        "depends": ["libcap"],
-        "provides": ["tennoworth"],
+        "depends": [
+          "libcap"
+        ],
+        "provides": [
+          "tennoworth"
+        ],
         "postInstallScript": "scripts/postinstall.sh"
       }
     },
