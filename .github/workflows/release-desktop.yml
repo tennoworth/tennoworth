@@ -74,14 +74,17 @@ jobs:
       version: ${{ steps.check.outputs.version }}
       sha: ${{ steps.check.outputs.sha }}
       tag: ${{ steps.check.outputs.tag }}
+      notes: ${{ steps.notes.outputs.body }}
     steps:
       # The ref is not just a convention here: `publish` creates the tag at the
       # SHA this job captured, so allowing a dispatch from a feature branch
       # would mean tagging a release at a commit that was never on main.
       - name: Guard — releases are cut from main only
         if: github.ref != 'refs/heads/main'
+        env:
+          REF: ${{ github.ref }}
         run: |
-          echo "::error title=Wrong ref::release-desktop was dispatched from ${{ github.ref }}. A release is cut from refs/heads/main only — the tag is created at the commit this run captures."
+          echo "::error title=Wrong ref::release-desktop was dispatched from $REF. A release is cut from refs/heads/main only — the tag is created at the commit this run captures."
           exit 1
 
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -102,6 +105,21 @@ jobs:
         env:
           VERSION: ${{ inputs.version }}
         run: bun scripts/release.ts check --release "$VERSION"
+
+      # The CHANGELOG section for this version IS the release body. `prepare`
+      # opened it; a missing or empty section fails here, before any build,
+      # rather than shipping boilerplate notes.
+      - name: Release notes from CHANGELOG.md
+        id: notes
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          {
+            echo "body<<NOTES_EOF"
+            bun scripts/release.ts notes "$VERSION"
+            echo "NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Validate the tag and the release history
         id: check
@@ -129,7 +147,7 @@ jobs:
           # happened or a previous run died between tagging and publishing —
           # both need a human, not a silent overwrite.
           if gh api "repos/$GH_REPO/git/ref/tags/$tag" >/dev/null 2>&1; then
-            echo "::error title=Tag exists::$tag already exists. Delete it deliberately (it is protected by the 'Desktop release tags' ruleset) or pick the next version."
+            echo "::error title=Tag exists::$tag already exists. If a previous run died after tagging, use 'Re-run failed jobs' on THAT run (publish is idempotent); otherwise this version is taken — pick the next one. The tag cannot be deleted: the 'Desktop release tags' ruleset has no bypass actors."
             exit 1
           fi
 
@@ -272,6 +290,13 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ needs.preflight.outputs.sha }}
+
+      - name: Refuse to build without the updater signing key
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error title=No updater signing key::TAURI_SIGNING_PRIVATE_KEY is not set. Generate the keypair offline (the maintainer signing runbook §9) and add it as a repo secret. Publishing unsigned bundles would produce a latest.json no installed app can ever accept."
+            exit 1
+          fi
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
@@ -416,9 +441,12 @@ jobs:
   # The atomic moment. Nothing before this job has written anything visible;
   # nothing after it can make the release less complete than it already is.
   #
-  # `environment: desktop-release` is the hook for a human approval gate and
-  # for scoping the signing secrets — configure required reviewers on it in
-  # repo settings if a release should never go out unattended.
+  # `environment: desktop-release` is the hook for a human approval gate —
+  # configure required reviewers on it in repo settings if a release should
+  # never go out unattended. It gates the flip, not the builds: the updater
+  # signing secrets are consumed by the build jobs above, which declare no
+  # environment, so they must stay repository secrets (moving them into this
+  # environment would fail both builds at their signing-key guard).
   publish:
     needs: [preflight, build-windows, build-linux]
     runs-on: ubuntu-latest
@@ -431,6 +459,7 @@ jobs:
       VERSION: ${{ needs.preflight.outputs.version }}
       TAG: ${{ needs.preflight.outputs.tag }}
       SHA: ${{ needs.preflight.outputs.sha }}
+      NOTES: ${{ needs.preflight.outputs.notes }}
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -561,9 +590,24 @@ jobs:
       # an output of a verified build, at the SHA preflight captured. The
       # "Desktop release tags" ruleset makes it undeletable and immovable once
       # it exists (docs/github-rulesets/desktop-release-tags.json).
+      #
+      # Idempotent, because "Re-run failed jobs" restarts this job from its
+      # first step: a tag that already exists is fine if it is OURS (it
+      # dereferences to this run's SHA) and a hard stop otherwise. The ruleset
+      # has no bypass actors, so a wedged tag could not be deleted anyway.
       - name: Create the annotated tag
         run: |
           set -euo pipefail
+          if ref_sha=$(gh api "repos/$GH_REPO/git/ref/tags/$TAG" --jq .object.sha 2>/dev/null); then
+            # Annotated tag: the ref points at a tag object; resolve it to the commit.
+            target=$(gh api "repos/$GH_REPO/git/tags/$ref_sha" --jq .object.sha 2>/dev/null || echo "$ref_sha")
+            if [ "$target" = "$SHA" ]; then
+              echo "$TAG already exists at $SHA — re-run, keeping it."
+              exit 0
+            fi
+            echo "::error title=Tag mismatch::$TAG exists at $target, not at $SHA. That is a different release; refusing to continue."
+            exit 1
+          fi
           tag_object=$(gh api "repos/$GH_REPO/git/tags" -X POST \
             -f tag="$TAG" \
             -f message="TennoWorth desktop $VERSION" \
@@ -578,14 +622,17 @@ jobs:
       # Draft first, assets second, public third. Between these two steps the
       # release exists but is invisible to everyone except repo writers, which
       # is exactly the window the old two-job flow published into.
+      #
+      # Body = the CHANGELOG section preflight extracted, then a fixed footer
+      # telling users how to verify what they download. Idempotent like the
+      # tag step: an existing draft (from a re-run) is reused, and --clobber
+      # makes the upload safe to repeat.
       - name: Create the draft release and upload every asset
         run: |
           set -euo pipefail
-          gh release create "$TAG" \
-            --draft \
-            --title "$TAG" \
-            --target "$SHA" \
-            --notes "$(cat <<'EOF'
+          notes_file=$(mktemp)
+          printf '%s\n\n---\n\n' "$NOTES" > "$notes_file"
+          cat >> "$notes_file" <<'EOF'
           **Windows** — download `TennoWorth_<version>_x64-setup.exe` (or the `.msi`) and
           verify it against the matching `.sha256`. The in-app updater handles
           later versions on its own.
@@ -597,11 +644,23 @@ jobs:
           builder consumes. `TennoWorth-x86_64.AppImage` is self-updating and
           resolves libwayland from the host.
 
-          `SHA256SUMS` covers every asset; per-file `.sha256` sidecars are next
-          to each one. `.sig` files are minisign signatures for the in-app
-          updater, not user-facing checksums — see `SECURITY.md`.
+          `SHA256SUMS` lists every downloadable asset; per-file `.sha256`
+          sidecars sit next to each one. `.sig` files are minisign signatures
+          for the in-app updater, not user-facing checksums — see `SECURITY.md`.
           EOF
-          )"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG already exists — re-run, reusing it."
+          else
+            gh release create "$TAG" \
+              --draft \
+              --title "$TAG" \
+              --target "$SHA" \
+              --notes-file "$notes_file"
+          fi
+          # Never the updater manifest: its URLs point at the rolling tag (see
+          # the assembly step). On a re-run it can be sitting in dist/ via
+          # merge-multiple, downloaded from this job's own earlier artifact.
+          rm -f dist/latest.json
           gh release upload "$TAG" dist/* --clobber
           echo "draft $TAG carries:"
           gh release view "$TAG" --json assets --jq '.assets[].name'

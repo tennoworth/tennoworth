@@ -196,7 +196,19 @@ function cmdCheck(argv: string[]) {
 
   const published = publishedVersions();
   if (published.length === 0) {
-    console.log("no published desktop-v* releases visible — skipping the history check.");
+    if (expected !== null) {
+      // At release time an empty list is far more likely a failed
+      // `ls-remote` than a repo with no releases; proceeding would silently
+      // drop the monotonicity guard for exactly the run that needs it.
+      console.error(
+        "no published desktop-v* releases visible. On a PR that is fine; for a release it " +
+          "means the tag lookup failed (or this really is the first release — then tag " +
+          "desktop-v0.0.0 on the initial commit to seed the history).",
+      );
+      bad = true;
+    } else {
+      console.log("no published desktop-v* releases visible — skipping the history check.");
+    }
   } else {
     const newest = published[published.length - 1];
     const cmp = compareVersions(version, newest);

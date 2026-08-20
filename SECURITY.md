@@ -118,11 +118,17 @@ For each desktop release on GitHub:
 - **Linux** — prefer your distro's signed repository (apt/dnf); the
   `.deb` / `.rpm` on the release are what the repo publisher consumes.
   The AUR `tennoworth-bin` package pins the checksum of its tarball.
+  `TennoWorth-x86_64.AppImage` has its own `.sha256` next to it.
+
+Every release also carries one `SHA256SUMS` file listing all of the
+above, for `sha256sum -c SHA256SUMS` in one go.
 
 The `.sha256` files are plain `sha256sum` output — the hash, then the
-filename it belongs to — so the check is one command wherever you have
-`sha256sum` (Git Bash, WSL, or any Linux shell). Download the installer
-and its `.sha256` into the same directory, then:
+filename it belongs to (Windows sidecars show a `*` before the name:
+that is `sha256sum`'s binary-mode marker, and `-c` understands it) —
+so the check is one command wherever you have `sha256sum` (Git Bash,
+WSL, or any Linux shell). Download the installer and its `.sha256`
+into the same directory, then:
 
 ```bash
 # Windows — the NSIS installer (substitute the version you downloaded):
@@ -135,7 +141,9 @@ sha256sum -c TennoWorth_0.4.0_x64_en-US.msi.sha256
 sha256sum -c tennoworth-desktop-amd64.deb.sha256
 ```
 
-In PowerShell with no `sha256sum` available, compare by eye instead:
+In PowerShell with no `sha256sum` available, compare by eye instead
+(`Get-FileHash` prints the hash in upper case; the sidecar is lower
+case — only the hex digits matter):
 
 ```powershell
 Get-FileHash .\TennoWorth_0.4.0_x64-setup.exe -Algorithm SHA256
