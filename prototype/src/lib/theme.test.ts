@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { LocalStorageStateStore, LOCAL_SETTING_KEYS } from './state-store';
-import { initTheme, readThemePrefs, resolveMode, LOOKS, DEFAULT_LOOK } from './theme';
-// The pre-paint boot script, as text: it must know the same ids/keys the app
+import { initTheme, readThemePref, resolveMode, LOOK, DEFAULT_MODE_PREF } from './theme';
+// The pre-paint boot script, as text: it must know the same key the app
 // persists, and nothing else can pin that (it's a classic script, not a module).
 import bootScript from '../../public/theme-boot.js?raw';
 
@@ -29,12 +29,11 @@ beforeEach(() => {
 });
 
 describe('theme prefs', () => {
-  it('falls back to the defaults for missing or unknown values', () => {
+  it('falls back to the default for a missing or unknown value', () => {
     const store = new LocalStorageStateStore();
-    expect(readThemePrefs(store)).toEqual({ look: DEFAULT_LOOK, mode: 'system' });
-    localStorage.setItem(LOCAL_SETTING_KEYS['theme.look'], 'not-a-look');
+    expect(readThemePref(store)).toBe(DEFAULT_MODE_PREF);
     localStorage.setItem(LOCAL_SETTING_KEYS['theme.mode'], 'sepia');
-    expect(readThemePrefs(store)).toEqual({ look: DEFAULT_LOOK, mode: 'system' });
+    expect(readThemePref(store)).toBe(DEFAULT_MODE_PREF);
   });
 
   it('resolves system to the OS scheme, pins otherwise', () => {
@@ -47,18 +46,28 @@ describe('theme prefs', () => {
 });
 
 describe('initTheme', () => {
-  it('stamps <html> from the store and persists changes through it', async () => {
+  it('stamps <html> from the store and persists changes through it', () => {
     stubMatchMedia(false);
-    localStorage.setItem(LOCAL_SETTING_KEYS['theme.look'], 'corpus');
     const store = new LocalStorageStateStore();
     const t = initTheme(store);
-    expect(document.documentElement.dataset.look).toBe('corpus');
+    expect(document.documentElement.dataset.look).toBe(LOOK);
     expect(document.documentElement.dataset.mode).toBe('light');
     t.setModePref('dark');
-    t.setLook('vitruvian');
-    expect(document.documentElement.dataset).toMatchObject({ look: 'vitruvian', mode: 'dark' });
-    expect(localStorage.getItem(LOCAL_SETTING_KEYS['theme.look'])).toBe('vitruvian');
+    expect(document.documentElement.dataset).toMatchObject({ look: LOOK, mode: 'dark' });
+    expect(t.modePref).toBe('dark');
     expect(localStorage.getItem(LOCAL_SETTING_KEYS['theme.mode'])).toBe('dark');
+    t.destroy();
+  });
+
+  // The four-look era persisted `wfminv:theme-look-v1`. Nothing reads it now;
+  // a returning user carrying 'corpus' must simply get yorha, never a throw.
+  it('ignores a stale look preference from the retired picker', () => {
+    stubMatchMedia(false);
+    localStorage.setItem('wfminv:theme-look-v1', 'corpus');
+    const store = new LocalStorageStateStore();
+    const t = initTheme(store);
+    expect(document.documentElement.dataset.look).toBe(LOOK);
+    expect(Object.keys(LOCAL_SETTING_KEYS)).not.toContain('theme.look');
     t.destroy();
   });
 
@@ -75,14 +84,10 @@ describe('initTheme', () => {
     t.destroy();
   });
 
-  it('every look declares at least one mode and the boot script knows the same ids', () => {
-    const boot = bootScript;
-    for (const l of LOOKS) {
-      expect(l.modes.length).toBeGreaterThan(0);
-      // The pre-paint script must accept exactly the ids the app persists.
-      expect(boot).toContain(`'${l.id}'`);
-    }
-    expect(boot).toContain(LOCAL_SETTING_KEYS['theme.look']);
-    expect(boot).toContain(LOCAL_SETTING_KEYS['theme.mode']);
+  it('the boot script stamps the same look and reads the same key', () => {
+    expect(bootScript).toContain(`'${LOOK}'`);
+    expect(bootScript).toContain(LOCAL_SETTING_KEYS['theme.mode']);
+    // …and no longer looks a look up.
+    expect(bootScript).not.toContain(`getItem('wfminv:theme-look-v1')`);
   });
 });
