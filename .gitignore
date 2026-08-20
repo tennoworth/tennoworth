@@ -55,6 +55,7 @@ wfm_inventory_sellable.csv
 /docs/suggestions-plan.md
 /docs/desktop-showcase-plan.md
 /docs/plan-2026-08-history-and-advisor.md
+/docs/release-plan-2026-08.md
 /docs/windows-test-*.md
 # The production topology, admin access and hardening posture of the live box.
 # The deploy/ SCRIPTS stay tracked: refresh-market.yml runs run-scrape.sh, and

@@ -1,10 +1,8 @@
 # Changelog
 
-Desktop releases. Versions are `desktop-v<version>` tags; see
-`docs/release-plan-2026-08.md` for what patch / minor / major mean here
-(pre-1.0: patch = fixes, dependency bumps and internal work; minor =
-user-facing features, new distribution channels and compatibility breaks;
-major is reserved for 1.0).
+Desktop releases. Versions are `desktop-v<version>` tags. Pre-1.0: patch =
+fixes, dependency bumps and internal work; minor = user-facing features, new
+distribution channels and compatibility breaks; major is reserved for 1.0.
 
 `bun scripts/release.ts prepare <bump>` opens a section here; fill it in
 before merging the bump. `bun scripts/release.ts notes` reads it back for the

@@ -40,8 +40,6 @@ name: release-desktop
 # libwayland step for why the first one was withdrawn and what fixed it. The
 # comment that used to sit here saying "No AppImage, deliberately" outlived the
 # decision it described.
-#
-# Plan and rationale: docs/release-plan-2026-08.md
 # ---------------------------------------------------------------------------
 
 on:

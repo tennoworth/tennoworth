@@ -8,7 +8,7 @@
 // them unbuildable from source for every Arch user (`cargo build --frozen`
 // refuses to rewrite a lock).
 //
-// After phase 3 of docs/release-plan-2026-08.md the pins are:
+// The pins are:
 //
 //   companion/tennoworth-desktop/Cargo.toml   AUTHORITATIVE. CARGO_PKG_VERSION,
 //                                             what the app reports and what the
@@ -235,7 +235,7 @@ function cmdCheck(argv: string[]) {
 function nextVersion(current: string, bump: string): string {
   if (SEMVER.test(bump)) return bump;
   const [major, minor, patch] = current.split(".").map(Number);
-  // Pre-1.0 policy (docs/release-plan-2026-08.md): patch = fixes, deps,
+  // Pre-1.0 policy (also stated in CHANGELOG.md's header): patch = fixes, deps,
   // internal changes; minor = user-facing features, new channels, and
   // compatibility breaks; major is reserved for 1.0.
   switch (bump) {
@@ -297,8 +297,9 @@ function cmdPrepare(argv: string[]) {
   if (!existsSync(join(ROOT, CHANGELOG))) {
     write(
       CHANGELOG,
-      `# Changelog\n\nDesktop releases. Versions are \`desktop-v<version>\` tags;\n` +
-        `see docs/release-plan-2026-08.md for what patch / minor / major mean here.\n\n` +
+      `# Changelog\n\nDesktop releases. Versions are \`desktop-v<version>\` tags. Pre-1.0: patch =\n` +
+        `fixes, dependency bumps and internal work; minor = user-facing features, new\n` +
+        `distribution channels and compatibility breaks; major is reserved for 1.0.\n\n` +
         section,
     );
   } else {
