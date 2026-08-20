@@ -164,12 +164,17 @@ Small, low-risk, shippable before the pipeline rewrite. Branch:
   cannot touch the updater manifest. A separate guard step additionally refuses
   a dispatch from any ref other than `main`, so the intent is explicit rather
   than implied by a template expression.
-- **Rulesets.** `docs/github-rulesets/` is committed. Only
-  `desktop-release-tags.json` (deletion + non-fast-forward protection on
-  `refs/tags/desktop-v*`) is applied — a published release tag must never move
-  or vanish under a pinned PKGBUILD checksum. The two branch rulesets stay as
-  drafts: applying `main-production.json` requires the `probe-smoke` status
-  check to exist under that exact name and would block this very work.
+- **Rulesets.** `docs/github-rulesets/` is committed as the reviewable source
+  of what the repo enforces. All three were **already applied** when this work
+  started — `Desktop release tags` (21067950), `Integration branch (develop)`
+  (21067958) and `Production branch (main)` (21067966), all `active`, each
+  matching the committed JSON. The tag ruleset is the load-bearing one: a
+  published release tag must never move or vanish under a `PKGBUILD` that pins
+  a checksum against the artifacts it names.
+
+  One drift to close by hand: phase 3 adds a `version-pins` status check, and
+  the committed `main-production.json` lists it. The **live** ruleset does not
+  yet — add it in repo settings, or `PATCH` the ruleset, once phase 3 merges.
 
 The tag→main check (defect 3) is deliberately *not* patched into the tag-driven
 flow, because phase 2 removes the tag trigger entirely and makes the ref
@@ -233,13 +238,21 @@ version:
 - `prepare <minor|patch|major|X.Y.Z>` — bump `Cargo.toml`, refresh
   `Cargo.lock`'s own-package entry, bump both `PKGBUILD` `pkgver`s, open a
   `CHANGELOG.md` section.
-- `check` — validate that every pin agrees, that the version is strict semver,
-  and that it is monotonic against the newest `desktop-v*` tag. Non-zero exit on
-  drift.
+- `check [--release X.Y.Z]` — validate that every pin agrees, that the version
+  is strict semver, and that it is not **behind** the newest published
+  `desktop-v*`. Non-zero exit on drift.
+
+  The monotonic rule is split deliberately. On a PR the repo legitimately sits
+  *at* the newest published version between releases, so requiring strictly
+  greater there would fail every ordinary PR; only "behind" is drift.
+  `--release` is the release run itself, where equal is also wrong — the
+  updater only ever offers a strictly greater version, so republishing
+  produces a release nobody is offered. Same script, one extra assertion.
 - `notes` — emit the changelog section for the release body.
 
-`check` is wired into PR CI (`audit.yml`) so drift fails a PR rather than a
-release, and into the new workflow's `preflight`.
+`check` is wired into PR CI as the `version-pins` job in `audit.yml` so drift
+fails a PR rather than a release, and `check --release` replaces the bespoke
+pin validation in the new workflow's `preflight`.
 
 Two pins are then deleted rather than automated:
 

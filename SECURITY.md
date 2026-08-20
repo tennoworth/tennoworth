@@ -36,8 +36,14 @@ characteristics:
      suites.
 
    The `release-desktop.yml` workflow builds the desktop app (Windows
-   installers + the Linux deb/rpm) on a `desktop-v*` tag and publishes the
-   AUR packages.
+   installers, the Linux deb/rpm/AppImage and the raw binary tarball),
+   publishes the versioned release and the updater manifest, and pushes
+   the AUR packages. It is triggered manually from `main` with a version,
+   never by a tag: the build jobs publish nothing, and a single job
+   verifies the complete artifact set before flipping one draft release
+   public. The `desktop-v*` tag is created **by** that workflow at the
+   commit it built, so a release tag can only ever name a verified build
+   of a `main` commit.
 
    Production serving is **not** GitHub-hosted: a self-hosted box (an
    unprivileged LXC, reached only through a Cloudflare Tunnel, fronted
