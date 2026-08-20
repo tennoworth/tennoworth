@@ -27,6 +27,7 @@ pub mod poison;
 pub mod platform;
 pub mod scan;
 pub mod util;
+pub mod ws;
 
 // WFM is behind Cloudflare with bot protection. A non-browser UA gets a 1015
 // rate-limit error or a JS challenge before our request ever reaches the API.

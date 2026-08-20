@@ -14,18 +14,18 @@
   // information but they aren't the pitch. Anchor: <section id="desktop">.
   let { rows = [] }: { rows?: HandoffRow[] } = $props();
 
-  type Os = 'windows' | 'debian' | 'fedora' | 'arch';
+  type Os = 'windows' | 'linux' | 'debian' | 'fedora' | 'arch';
   // Default the active tab to the visitor's OS so a Windows user lands on the
-  // Windows block and a Linux user on the apt block without a click. Fedora vs
-  // Debian/Arch can't be told apart from the UA, so Linux defaults to Debian.
+  // Windows block and a Linux user on the AppImage block without a click.
+  // The distro repo tabs stay for the transition; the AppImage is the lead.
   let activeOs = $state<Os>(detectOs());
-  const osOrder: Os[] = ['windows', 'debian', 'fedora', 'arch'];
+  const osOrder: Os[] = ['windows', 'linux', 'debian', 'fedora', 'arch'];
   let installOpen = $state(false);
 
   function detectOs(): Os {
     try {
       const p = (navigator.platform || '').toLowerCase();
-      return p.includes('win') ? 'windows' : 'debian';
+      return p.includes('win') ? 'windows' : 'linux';
     } catch {
       return 'windows';
     }
@@ -41,6 +41,12 @@
   // two can't drift (the Windows row points at the releases page instead of a
   // one-liner; the app auto-updates from there).
   const install = {
+    linux: {
+      title: 'Linux',
+      note: 'One file, any distro, self-updating. First run: make it executable, then launch it like any app. (The apt/dnf/AUR packages below keep working during the transition.)',
+      cmd: 'curl -LO https://github.com/tennoworth/tennoworth/releases/latest/download/TennoWorth-x86_64.AppImage\nchmod +x TennoWorth-x86_64.AppImage\n./TennoWorth-x86_64.AppImage',
+      copiable: true,
+    },
     windows: {
       title: 'Windows',
       note: 'Download the installer (.exe or .msi) from the latest release. Unsigned, so SmartScreen warns — click More info → Run anyway. The app updates itself from there.',
@@ -173,7 +179,7 @@
       </div>
       <div class="cta">
         <a class="btn lg primary" href={RELEASES} target="_blank" rel="noopener noreferrer">Windows .msi</a>
-        <button type="button" class="btn lg" onclick={() => openInstall(activeOs === 'windows' ? 'debian' : activeOs)} aria-expanded={installOpen} aria-controls="desktop-install">Linux · apt / dnf / AUR</button>
+        <button type="button" class="btn lg" onclick={() => openInstall(activeOs === 'windows' ? 'linux' : activeOs)} aria-expanded={installOpen} aria-controls="desktop-install">Linux · AppImage</button>
         <span class="fine">free · open source · reads memory only<br />unsigned Windows build — see Install &amp; verify</span>
       </div>
     </div>
@@ -192,7 +198,7 @@
   <details class="install" id="desktop-install" bind:open={installOpen}>
     <summary>
       <span class="lbl">Install &amp; verify</span>
-      <span class="exp">Windows .msi · Debian/Ubuntu apt · Fedora dnf · Arch AUR · first run · how to check the build</span>
+      <span class="exp">Windows .msi · Linux AppImage · Debian/Ubuntu apt · Fedora dnf · Arch AUR · first run · how to check the build</span>
     </summary>
     <div class="install-body">
       <div class="seg" role="tablist" aria-label="Operating system">

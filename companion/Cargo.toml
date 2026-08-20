@@ -36,6 +36,8 @@ base64 = "0.22"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking", "gzip", "json", "cookies"] }
+# Blocking WebSocket client for WFM's live order stream (rustls to match reqwest).
+tungstenite = { version = "0.24", default-features = false, features = ["rustls-tls-webpki-roots", "handshake"] }
 
 # Shared by every member.
 [profile.release]

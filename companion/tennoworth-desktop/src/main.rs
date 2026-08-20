@@ -29,6 +29,7 @@ mod commands;
 mod db;
 mod definitions;
 mod eelog;
+mod ws_watch;
 mod eelog_state;
 mod keyring_store;
 mod market;
@@ -84,6 +85,12 @@ fn main() {
     // Before any network call: every WFM request identifies as this app +
     // version (WFM's rules require a descriptive User-Agent).
     wfm_core::set_app_identity("tennoworth-desktop", env!("CARGO_PKG_VERSION"));
+    // No WebKit env shims for AppImage runs: the historical EGL abort on
+    // rolling Mesa was root-caused (2026-08-20) to the bundle carrying
+    // ubuntu's libwayland-* — fixed by stripping them at bundle time in
+    // release-desktop.yml. A WEBKIT_DISABLE_DMABUF_RENDERER=1 shim was tried
+    // here first and measurably did NOT help (same abort with it set), so it
+    // does not ship.
     let probe = std::env::var("TENNOWORTH_PROBE").ok().as_deref() == Some("1");
     let runtag = std::env::var("TENNOWORTH_RUNTAG").unwrap_or_else(|_| "na".into());
 
@@ -275,6 +282,9 @@ fn main() {
             // the probe must not make WFM calls on a timer.
             if !probe {
                 watch::start_checker(app.handle().clone());
+                // Fast path beside the poll: WFM's live order stream fires a
+                // matching watch in seconds (see ws_watch.rs).
+                ws_watch::start_stream(app.handle().clone());
             }
 
             // C5: launch update check, off the main thread so it can never
