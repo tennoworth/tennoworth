@@ -305,7 +305,13 @@ function cmdPrepare(argv: string[]) {
     const existing = read(CHANGELOG);
     const firstSection = existing.indexOf("\n## ");
     const at = firstSection === -1 ? existing.length : firstSection + 1;
-    write(CHANGELOG, existing.slice(0, at) + section + existing.slice(at));
+    // Appending after prose (no section yet) needs a separating blank line;
+    // inserting before an existing section already sits on one.
+    let head = existing.slice(0, at);
+    if (firstSection === -1 && !head.endsWith("\n\n")) {
+      head = head.replace(/\n*$/, "\n\n");
+    }
+    write(CHANGELOG, head + section + existing.slice(at));
   }
   console.log(`${CHANGELOG}: opened a section for ${next} — fill it in.`);
 
