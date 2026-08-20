@@ -87,6 +87,9 @@ export interface RivenWeapon {
   group?: string;
   riven_type?: string;
   req_mr?: number;
+  /** The weapon's in-game `/Lotus/...` path — how a scanned riven's `compat`
+   *  fingerprint field resolves to this slug. */
+  game_ref?: string;
 }
 
 export interface RivenDispoChange {
@@ -98,9 +101,65 @@ export interface RivenDispoChange {
   seen_at: string;
 }
 
+/** One stat of WFM's `/riven/attributes` manifest, keyed by the fingerprint's
+ *  DE tag (`game_ref`). `unit === 'percent'` stats display ×100. */
+export interface RivenAttribute {
+  game_ref: string;
+  slug: string;
+  name: string;
+  unit?: string;
+}
+
 export interface RivenSurface {
   weapons?: Record<string, RivenWeapon>;
   changes?: RivenDispoChange[];
+  attributes?: RivenAttribute[];
+}
+
+/** One price band from DE's weekly riven stats file, per weapon × reroll-state. */
+export interface RivenStatTier {
+  avg: number;
+  median: number;
+  min: number;
+  max: number;
+  stddev: number;
+  pop: number;
+}
+
+/** DE weekly riven prices (`market.riven_stats`), keyed by WFM slug. Only the
+ *  reroll-states DE actually observed appear. */
+export interface RivenStatsSurface {
+  [slug: string]: {
+    name: string;
+    unrolled?: RivenStatTier;
+    rolled?: RivenStatTier;
+  };
+}
+
+/** One dated prime from the calendar surface, keyed by its WFM set slug.
+ *  Dates are ISO days; `est_vault_date` is the cadence estimate when DE
+ *  hasn't vaulted it yet (and equals `vault_date` once it has). */
+export interface CalendarPrime {
+  name: string;
+  released?: string;
+  vaulted: boolean;
+  vault_date?: string;
+  est_vault_date?: string;
+}
+
+/** One 28-day Prime Resurgence rotation (Varzia reprinting those primes'
+ *  relics). `frames` are WFM set slugs. */
+export interface ResurgenceRotation {
+  from: string;
+  to: string;
+  frames: string[];
+  pack?: string;
+}
+
+export interface CalendarSurface {
+  primes?: Record<string, CalendarPrime>;
+  resurgence_current?: ResurgenceRotation | null;
+  resurgence?: ResurgenceRotation[];
 }
 
 export interface Market {
@@ -120,6 +179,12 @@ export interface Market {
    *  log the pipeline diffs on every run. DE only raises dispositions now, so
    *  each change is a one-sided price event for that weapon's rivens. */
   rivens?: RivenSurface | null;
+  /** DE's weekly riven price bands per weapon × reroll-state (see
+   *  `fetch_riven_stats` in wfm-scrape). Absent on older snapshots. */
+  riven_stats?: RivenStatsSurface | null;
+  /** Prime release/vault dates + Resurgence rotations (see `fetch_calendar`
+   *  in wfm-scrape). Absent on older snapshots. */
+  calendar?: CalendarSurface | null;
   source?: string;
   // Per-surface fetch timestamps (ISO). On a CSV-only rebuild these can lag
   // `updated_at` — prices refreshed but the vendor surfaces (baro/relics/

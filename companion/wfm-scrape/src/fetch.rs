@@ -19,6 +19,16 @@ const VAULT_SOON_DAYS: i64 = 60;
 /// Narrow GET interface so every fetch stage is testable offline.
 pub trait Http {
     fn get_json(&self, url: &str) -> Result<serde_json::Value, String>;
+    /// Raw-text GET for non-JSON endpoints (DE's weekly riven stats file is a
+    /// JS object literal). The default impl serves a JSON *string* fixture -
+    /// how tests stand in for a raw body without a second trait method.
+    fn get_text(&self, url: &str) -> Result<String, String> {
+        self.get_json(url).and_then(|v| {
+            v.as_str()
+                .map(String::from)
+                .ok_or_else(|| format!("{url}: expected a string fixture"))
+        })
+    }
 }
 
 /// Live implementation using `wfm_client`.
@@ -41,6 +51,22 @@ impl Http for LiveHttp {
             return Err(format!("{url}: HTTP {status}: {body}"));
         }
         serde_json::from_str(&body).map_err(|e| format!("{url}: JSON parse: {e}"))
+    }
+
+    fn get_text(&self, url: &str) -> Result<String, String> {
+        let resp = self
+            .client
+            .get(url)
+            .send()
+            .map_err(|e| format!("{url}: {e}"))?;
+        let status = resp.status();
+        let body = resp
+            .text()
+            .map_err(|e| format!("{url}: read body: {e}"))?;
+        if !status.is_success() {
+            return Err(format!("{url}: HTTP {status}: {body}"));
+        }
+        Ok(body)
     }
 }
 
@@ -542,6 +568,11 @@ pub fn fetch_rivens(
         if let Some(mr) = w.get("reqMasteryRank").and_then(|v| v.as_i64()) {
             row.insert("req_mr".into(), serde_json::Value::from(mr));
         }
+        // The weapon's in-game path — the SPA maps a scanned riven's `compat`
+        // fingerprint field to this slug through it.
+        if let Some(gr) = w.get("gameRef").and_then(|v| v.as_str()) {
+            row.insert("game_ref".into(), serde_json::Value::String(gr.into()));
+        }
         weapons.insert(slug.to_string(), serde_json::Value::Object(row));
     }
     if weapons.is_empty() {
@@ -604,10 +635,286 @@ pub fn fetch_rivens(
         })
     });
 
+    // The stat-name/unit manifest (`/v2/riven/attributes`). A scanned
+    // riven's fingerprint names stats by DE tag (`WeaponCritDamageMod`); this
+    // maps that tag (game_ref) to a display name + whether it is a percent
+    // stat, so the Rivens view can render the raw fingerprint value as
+    // "+95.3% crit damage" instead of a bare integer.
+    let mut attributes: Vec<serde_json::Value> = Vec::new();
+    if let Ok(data) = http.get_json(WFM_RIVEN_ATTRIBUTES_URL) {
+        let arr = data.get("data").and_then(|d| d.as_array()).or_else(|| data.as_array());
+        if let Some(arr) = arr {
+            for a in arr {
+                let Some(gr) = a.get("gameRef").and_then(|v| v.as_str()) else { continue };
+                let mut row = serde_json::Map::new();
+                row.insert("game_ref".into(), serde_json::Value::String(gr.into()));
+                if let Some(slug) = a.get("slug").and_then(|v| v.as_str()) {
+                    row.insert("slug".into(), serde_json::Value::String(slug.into()));
+                }
+                if let Some(name) = a.get("i18n").and_then(|i| i.get("en")).and_then(|e| e.get("name")).and_then(|n| n.as_str()) {
+                    row.insert("name".into(), serde_json::Value::String(name.into()));
+                }
+                if let Some(unit) = a.get("unit").and_then(|v| v.as_str()) {
+                    row.insert("unit".into(), serde_json::Value::String(unit.into()));
+                }
+                attributes.push(serde_json::Value::Object(row));
+            }
+        }
+    } else {
+        eprintln!("  warning: could not fetch {WFM_RIVEN_ATTRIBUTES_URL}");
+    }
+
     let mut out = HashMap::new();
     out.insert("weapons".into(), serde_json::Value::Object(weapons));
     out.insert("changes".into(), serde_json::Value::Array(changes));
+    if !attributes.is_empty() {
+        out.insert("attributes".into(), serde_json::Value::Array(attributes));
+    }
     out
+}
+
+pub const WFM_RIVEN_ATTRIBUTES_URL: &str = "https://api.warframe.market/v2/riven/attributes";
+
+/// DE's weekly riven price statistics, published every Monday as a JS object
+/// literal (NOT JSON: unquoted keys, single-quoted strings), keyed by weapon
+/// display name x `rerolled`. ~150 KB; the only stats that actually sample
+/// riven auctions — WFM's `/statistics` has no riven rows at all.
+pub const DE_WEEKLY_RIVENS_URL: &str = "https://www-static.warframe.com/repos/weeklyRivensPC.json";
+
+/// One row of `DE_WEEKLY_RIVENS_URL`: one weapon x reroll-state's price band.
+/// Generic rows (`compatibility: null` — "Rifle Riven Mod") carry no weapon
+/// and are dropped by `fetch_riven_stats`.
+#[derive(Debug, Clone, PartialEq)]
+pub struct WeeklyRivenRow {
+    pub item_type: String,
+    pub compatibility: Option<String>,
+    pub rerolled: bool,
+    pub avg: f64,
+    pub stddev: f64,
+    pub min: f64,
+    pub max: f64,
+    pub pop: u64,
+    pub median: f64,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum JsTok {
+    LBrace,
+    RBrace,
+    LBracket,
+    RBracket,
+    Comma,
+    Colon,
+    Str(String),
+    /// unquoted key or the bare literals true/false/null
+    Ident(String),
+    Num(f64),
+}
+
+fn tokenize_js_literal(text: &str) -> Result<Vec<JsTok>, String> {
+    let b = text.as_bytes();
+    let mut i = 0usize;
+    let mut out = Vec::new();
+    while i < b.len() {
+        let c = b[i] as char;
+        match c {
+            ' ' | '\t' | '\r' | '\n' => i += 1,
+            '{' => { out.push(JsTok::LBrace); i += 1; }
+            '}' => { out.push(JsTok::RBrace); i += 1; }
+            '[' => { out.push(JsTok::LBracket); i += 1; }
+            ']' => { out.push(JsTok::RBracket); i += 1; }
+            ',' => { out.push(JsTok::Comma); i += 1; }
+            ':' => { out.push(JsTok::Colon); i += 1; }
+            '\'' => {
+                let mut s = String::new();
+                i += 1;
+                loop {
+                    if i >= b.len() {
+                        return Err(format!("unterminated string at byte {i}"));
+                    }
+                    let ch = b[i] as char;
+                    if ch == '\\' {
+                        i += 1;
+                        if i >= b.len() {
+                            return Err(format!("unterminated escape at byte {i}"));
+                        }
+                        s.push(b[i] as char);
+                        i += 1;
+                    } else if ch == '\'' {
+                        i += 1;
+                        break;
+                    } else {
+                        s.push(ch);
+                        i += 1;
+                    }
+                }
+                out.push(JsTok::Str(s));
+            }
+            '0'..='9' | '-' => {
+                let start = i;
+                while i < b.len()
+                    && (b[i].is_ascii_digit()
+                        || matches!(b[i], b'.' | b'-' | b'+' | b'e' | b'E'))
+                {
+                    i += 1;
+                }
+                let num = &text[start..i];
+                let v: f64 = num
+                    .parse()
+                    .map_err(|_| format!("bad number in {DE_WEEKLY_RIVENS_URL}: {num:?}"))?;
+                out.push(JsTok::Num(v));
+            }
+            c if c.is_ascii_alphabetic() || c == '_' => {
+                let start = i;
+                while i < b.len() && (b[i].is_ascii_alphanumeric() || b[i] == b'_') {
+                    i += 1;
+                }
+                out.push(JsTok::Ident(text[start..i].to_string()));
+            }
+            other => return Err(format!("unexpected char {other:?} at byte {i}")),
+        }
+    }
+    Ok(out)
+}
+
+/// Recursive-descent parse of the JS-literal subset DE actually emits: objects,
+/// arrays, strings, numbers, `null`, booleans. Anything else is an error — a
+/// shape change upstream should fail the surface loudly, not silently zero it.
+fn js_literal_to_json(tokens: &[JsTok], pos: &mut usize) -> Result<serde_json::Value, String> {
+    let Some(tok) = tokens.get(*pos) else {
+        return Err(format!("unexpected end of {DE_WEEKLY_RIVENS_URL}"));
+    };
+    *pos += 1;
+    match tok {
+        JsTok::LBrace => {
+            let mut map = serde_json::Map::new();
+            loop {
+                if matches!(tokens.get(*pos), Some(JsTok::RBrace)) {
+                    *pos += 1;
+                    break;
+                }
+                let key = match tokens.get(*pos) {
+                    Some(JsTok::Str(s)) | Some(JsTok::Ident(s)) => s.clone(),
+                    _ => return Err(format!("expected object key at token {}", *pos)),
+                };
+                *pos += 1;
+                if !matches!(tokens.get(*pos), Some(JsTok::Colon)) {
+                    return Err(format!("expected ':' after {key:?}"));
+                }
+                *pos += 1;
+                let value = js_literal_to_json(tokens, pos)?;
+                map.insert(key, value);
+                if matches!(tokens.get(*pos), Some(JsTok::Comma)) {
+                    *pos += 1;
+                }
+            }
+            Ok(serde_json::Value::Object(map))
+        }
+        JsTok::LBracket => {
+            let mut arr = Vec::new();
+            loop {
+                if matches!(tokens.get(*pos), Some(JsTok::RBracket)) {
+                    *pos += 1;
+                    break;
+                }
+                arr.push(js_literal_to_json(tokens, pos)?);
+                match tokens.get(*pos) {
+                    Some(JsTok::Comma) => *pos += 1,
+                    Some(JsTok::RBracket) => {
+                        *pos += 1;
+                        break;
+                    }
+                    _ => return Err(format!("expected ',' or ']' at token {}", *pos)),
+                }
+            }
+            Ok(serde_json::Value::Array(arr))
+        }
+        JsTok::Str(s) => Ok(serde_json::Value::String(s.clone())),
+        JsTok::Num(n) => Ok(serde_json::Value::from(*n)),
+        JsTok::Ident(id) => match id.as_str() {
+            "true" => Ok(serde_json::Value::Bool(true)),
+            "false" => Ok(serde_json::Value::Bool(false)),
+            "null" => Ok(serde_json::Value::Null),
+            other => Err(format!("unexpected identifier {other:?}")),
+        },
+        _ => Err(format!("unexpected token at position {}", *pos)),
+    }
+}
+
+/// Parse the full `DE_WEEKLY_RIVENS_URL` body into rows. Rows missing the
+/// price fields are dropped (a shape change upstream surfaces as a count
+/// drop, which the build logs).
+fn parse_weekly_rivens(text: &str) -> Result<Vec<WeeklyRivenRow>, String> {
+    let tokens = tokenize_js_literal(text)?;
+    let mut pos = 0usize;
+    let value = js_literal_to_json(&tokens, &mut pos)?;
+    let arr = value.as_array().ok_or_else(|| format!("{DE_WEEKLY_RIVENS_URL}: not an array"))?;
+    let mut rows = Vec::new();
+    for v in arr {
+        let Some(obj) = v.as_object() else { continue };
+        let f = |k: &str| obj.get(k).and_then(|v| v.as_f64());
+        let Some(avg) = f("avg") else { continue };
+        let Some(median) = f("median") else { continue };
+        rows.push(WeeklyRivenRow {
+            item_type: obj.get("itemType").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+            compatibility: obj.get("compatibility").and_then(|v| v.as_str()).map(String::from),
+            rerolled: obj.get("rerolled").and_then(|v| v.as_bool()).unwrap_or(false),
+            avg,
+            stddev: f("stddev").unwrap_or(0.0),
+            min: f("min").unwrap_or(0.0),
+            max: f("max").unwrap_or(0.0),
+            // as_u64() is None for the f64 the JS literal produces (10 → 10.0)
+            pop: obj.get("pop").and_then(|v| v.as_f64()).map(|f| f as u64).unwrap_or(0),
+            median,
+        });
+    }
+    Ok(rows)
+}
+
+/// Build the `riven_stats` surface: DE's weekly price bands per weapon x
+/// reroll-state, keyed by WFM slug (`unrolled` / `rolled` tiers, each
+/// `{avg, median, min, max, stddev, pop}`). `weapons_by_name` maps
+/// display-name-lower -> slug from the riven-weapons manifest (the same source
+/// the disposition surface uses), so DE's names join without a second
+/// request. Returns the unmatched-name count for the build log. `{}` + 0 on
+/// fetch/parse failure so reconcile falls back to the prior surface.
+pub fn fetch_riven_stats(
+    http: &dyn Http,
+    weapons_by_name: &HashMap<String, String>,
+) -> (HashMap<String, serde_json::Value>, usize) {
+    let text = match http.get_text(DE_WEEKLY_RIVENS_URL) {
+        Ok(t) => t,
+        Err(e) => {
+            eprintln!("  warning: could not fetch {DE_WEEKLY_RIVENS_URL}: {e}");
+            return (HashMap::new(), 0);
+        }
+    };
+    let rows = match parse_weekly_rivens(&text) {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("  warning: {DE_WEEKLY_RIVENS_URL}: {e}");
+            return (HashMap::new(), 0);
+        }
+    };
+    let mut stats: HashMap<String, serde_json::Value> = HashMap::new();
+    let mut unmatched = 0usize;
+    for row in rows {
+        let Some(weapon) = row.compatibility else { continue };
+        let Some(slug) = weapons_by_name.get(&weapon.to_lowercase()) else {
+            unmatched += 1;
+            continue;
+        };
+        let tier_key = if row.rerolled { "rolled" } else { "unrolled" };
+        let tier = serde_json::json!({
+            "avg": row.avg, "median": row.median, "min": row.min, "max": row.max,
+            "stddev": row.stddev, "pop": row.pop,
+        });
+        let entry = stats
+            .entry(slug.clone())
+            .or_insert_with(|| serde_json::json!({ "name": weapon }));
+        entry[tier_key] = tier;
+    }
+    (stats, unmatched)
 }
 
 pub const WFSTAT_VAULT_TRADER_URL: &str = "https://api.warframestat.us/pc/vaultTrader/";
@@ -945,7 +1252,8 @@ mod tests {
             .iter()
             .map(|(slug, name, d)| serde_json::json!({
                 "slug": slug, "disposition": d, "group": "primary", "rivenType": "rifle",
-                "reqMasteryRank": 8, "i18n": {"en": {"name": name}}
+                "reqMasteryRank": 8, "gameRef": format!("/Lotus/Weapons/{slug}"),
+                "i18n": {"en": {"name": name}}
             }))
             .collect();
         let mut r = HashMap::new();
@@ -1010,6 +1318,125 @@ mod tests {
         let now = clock::parse_isoformat_utc("2026-08-16T12:00:00Z").unwrap();
         let got = fetch_rivens(&FixtureHttp { responses: HashMap::new() }, None, now);
         assert!(got.is_empty());
+    }
+
+    #[test]
+    fn rivens_carry_game_ref_and_the_attributes_manifest() {
+        // The riven-weapons fixture does not serve /riven/attributes, so the
+        // surface is built without it and the call still succeeds.
+        let now = clock::parse_isoformat_utc("2026-08-16T12:00:00Z").unwrap();
+        let got = fetch_rivens(&riven_http(&[("kulstar", "Kulstar", 1.3)]), None, now);
+        let w = got.get("weapons").unwrap().as_object().unwrap();
+        assert_eq!(w["kulstar"]["game_ref"], "/Lotus/Weapons/kulstar");
+
+        // Serve the attributes manifest and re-run: the surface gains it.
+        let mut r = HashMap::new();
+        r.insert(
+            WFM_RIVEN_ATTRIBUTES_URL.into(),
+            serde_json::json!({"data": [
+                {"gameRef": "WeaponCritDamageMod", "slug": "critical_damage",
+                 "i18n": {"en": {"name": "Critical Damage"}}, "unit": "percent"},
+                {"gameRef": "WeaponPunctureDepthMod", "slug": "punch_through",
+                 "i18n": {"en": {"name": "Punch Through"}}}
+            ]}),
+        );
+        let mut weapons = serde_json::Map::new();
+        weapons.insert(
+            "kulstar".into(),
+            serde_json::json!({"slug": "kulstar", "name": "Kulstar", "disposition": 1.3}),
+        );
+        r.insert(
+            WFM_RIVEN_WEAPONS_URL.into(),
+            serde_json::json!({"data": [
+                {"slug": "kulstar", "disposition": 1.3, "gameRef": "/Lotus/x",
+                 "i18n": {"en": {"name": "Kulstar"}}}
+            ]}),
+        );
+        let got2 = fetch_rivens(&FixtureHttp { responses: r }, None, now);
+        let attrs = got2.get("attributes").unwrap().as_array().unwrap();
+        assert_eq!(attrs.len(), 2);
+        assert_eq!(attrs[0]["game_ref"], "WeaponCritDamageMod");
+        assert_eq!(attrs[0]["unit"], "percent");
+        assert!(attrs[1].get("unit").is_none(), "non-percent stats carry no unit");
+    }
+
+    fn weekly_http(body: &str) -> FixtureHttp {
+        // The DE file is a JS literal; the raw-text fetch stands in for it as
+        // a JSON string fixture (see Http::get_text's default impl).
+        let mut r = HashMap::new();
+        r.insert(DE_WEEKLY_RIVENS_URL.into(), serde_json::Value::String(body.into()));
+        FixtureHttp { responses: r }
+    }
+
+    fn weapons_by_name() -> HashMap<String, String> {
+        let mut m = HashMap::new();
+        m.insert("acceltra".into(), "acceltra".into());
+        m.insert("ack & brunt".into(), "ack_brunt".into());
+        m.insert("ax-52".into(), "ax_52".into());
+        m
+    }
+
+    #[test]
+    fn weekly_rivens_parses_the_js_object_literal() {
+        let body = r#"[
+            { itemType: 'Rifle Riven Mod', compatibility: null, rerolled: false,
+              avg: 68.39, stddev: 250.66, min: 3, max: 2000, pop: 15, median: 10 },
+            { itemType: 'Rifle Riven Mod', compatibility: 'AX-52', rerolled: true,
+              avg: 204.69, stddev: 387.32, min: 2, max: 2069, pop: 6, median: 75 },
+            { itemType: 'Rifle Riven Mod', compatibility: 'Acceltra', rerolled: false,
+              avg: 41.75, stddev: 45.23, min: 5, max: 400, pop: 10, median: 35 }
+        ]"#;
+        let rows = parse_weekly_rivens(body).unwrap();
+        assert_eq!(rows.len(), 3);
+        assert_eq!(rows[0].compatibility, None);
+        assert_eq!(rows[1].compatibility.as_deref(), Some("AX-52"));
+        assert!(rows[1].rerolled);
+        assert_eq!(rows[1].median, 75.0);
+        assert_eq!(rows[2].pop, 10);
+    }
+
+    #[test]
+    fn weekly_rivens_rejects_garbage_loudly() {
+        assert!(parse_weekly_rivens("not js at all").is_err());
+        // Missing colon between key and value.
+        assert!(parse_weekly_rivens("[{itemType 'x'}]").is_err());
+        // Two values in an array without a separator.
+        assert!(parse_weekly_rivens("[1 2]").is_err());
+    }
+
+    #[test]
+    fn riven_stats_reduce_by_weapon_and_reroll_state_with_drop_counting() {
+        let body = r#"[
+            { itemType: 'Rifle Riven Mod', compatibility: 'Acceltra', rerolled: false,
+              avg: 41.75, stddev: 45.23, min: 5, max: 400, pop: 10, median: 35 },
+            { itemType: 'Rifle Riven Mod', compatibility: 'Acceltra', rerolled: true,
+              avg: 266.72, stddev: 580.64, min: 5, max: 4600, pop: 12, median: 100 },
+            { itemType: 'Rifle Riven Mod', compatibility: 'AX-52', rerolled: false,
+              avg: 87.2, stddev: 300.77, min: 5, max: 3000, pop: 10, median: 30 },
+            { itemType: 'Rifle Riven Mod', compatibility: 'NotARealWeapon', rerolled: false,
+              avg: 1.0, stddev: 0.5, min: 1, max: 2, pop: 1, median: 1 },
+            { itemType: 'Melee Riven Mod', compatibility: null, rerolled: false,
+              avg: 52.85, stddev: 274.96, min: 2, max: 2300, pop: 8, median: 7 }
+        ]"#;
+        let (stats, unmatched) = fetch_riven_stats(&weekly_http(body), &weapons_by_name());
+        assert_eq!(unmatched, 1, "only the unknown weapon counts");
+        let acceltra = stats.get("acceltra").unwrap();
+        assert_eq!(acceltra["name"], "Acceltra");
+        assert_eq!(acceltra["unrolled"]["median"], 35.0);
+        assert_eq!(acceltra["rolled"]["median"], 100.0);
+        assert_eq!(acceltra["rolled"]["pop"], 12);
+        assert_eq!(acceltra["unrolled"]["avg"], 41.75);
+        let ax = stats.get("ax_52").unwrap();
+        assert!(ax.get("rolled").is_none(), "no rolled rows for AX-52");
+        assert_eq!(ax["unrolled"]["min"], 5.0);
+        assert!(stats.get("ack_brunt").is_none());
+    }
+
+    #[test]
+    fn riven_stats_fetch_failure_is_empty_for_reconcile_to_fall_back() {
+        let (stats, unmatched) = fetch_riven_stats(&FixtureHttp { responses: HashMap::new() }, &weapons_by_name());
+        assert!(stats.is_empty());
+        assert_eq!(unmatched, 0);
     }
 
     fn set_catalog() -> HashMap<String, String> {

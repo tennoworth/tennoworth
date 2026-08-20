@@ -15,9 +15,13 @@
   import WfmAuthDialogs from './components/WfmAuthDialogs.svelte';
   import ExportImportDialogs from './components/ExportImportDialogs.svelte';
   import SellPane from './components/SellPane.svelte';
+  import RivensPanel from './components/RivensPanel.svelte';
   import DesktopShowcase from './components/DesktopShowcase.svelte';
   import ThemeSwitcher from './components/ThemeSwitcher.svelte';
   import { flattenInventory, extractKeptLvls } from './lib/inventory';
+  import { extractRivens, resolveRivens } from './lib/rivens';
+  import { adviseOwned } from './lib/advisor';
+  import type { History } from './lib/history';
   import { loadCatalogs, resolvePath, type Catalogs } from './lib/resolver';
   import { loadMarket, lookup } from './lib/market';
   import { sellableQty } from './lib/sell-priority';
@@ -35,6 +39,7 @@
     desktopWfmStatus, DesktopCmdError,
   } from './lib/transport';
   import type { Market, OwnedRecord } from './lib/types';
+  import type { OwnedRiven } from './lib/rivens';
   import { wfmItemUrl, baroLocation, humanWindow } from './lib/format';
   import { listenForTauriEvent, TRAY_HINT_EVENT } from './lib/desktop-update';
 
@@ -69,6 +74,11 @@
     owned: new Map(),
     unresolved: {},
   });
+  // Rivens parsed from the scanned inventory's Upgrades[] (raw, unresolved —
+  // the market join happens in the derived below so a restored snapshot
+  // resolves against the CURRENT snapshot).
+  let ownedRivens = $state<OwnedRiven[]>([]);
+  let resolvedRivens = $derived(resolveRivens(ownedRivens, market));
   let deltas = $state<Map<string, number>>(new Map());
   // The snapshot the current scan was diffed against — kept for the session
   // (same lifetime as `deltas`) so the Sell summary can say what changed since
@@ -138,9 +148,9 @@
   // reload lands the user back where they left off. Falls through to
   // 'sell' if the persisted view's data isn't available (Baro not
   // visiting; 'orders' is desktop-only — the hosted site is informational).
-  type View = 'sell' | 'sets' | 'relics' | 'baro' | 'routines' | 'orders' | 'watches' | 'ledger' | 'install';
+  type View = 'sell' | 'sets' | 'relics' | 'rivens' | 'baro' | 'routines' | 'orders' | 'watches' | 'ledger' | 'install';
   const VALID_VIEWS: ReadonlySet<View> = new Set([
-    'sell', 'sets', 'relics', 'baro', 'routines', 'orders', 'watches', 'ledger', 'install',
+    'sell', 'sets', 'relics', 'rivens', 'baro', 'routines', 'orders', 'watches', 'ledger', 'install',
   ]);
   let view = $state<View>(
     (() => {
@@ -159,7 +169,7 @@
   // against a stale localStorage value.
   let effectiveView = $derived.by<View>(() => {
     if (view === 'baro' && !showBaroCard) return 'sell';
-    if ((view === 'orders' || view === 'watches' || view === 'ledger') && !isDesktop) return 'sell';
+    if ((view === 'orders' || view === 'watches' || view === 'ledger' || view === 'rivens') && !isDesktop) return 'sell';
     return view;
   });
 
@@ -233,6 +243,32 @@
     minMedian: PRESETS[activePreset]?.minMedian ?? 0,
     typesAny: PRESETS[activePreset]?.typesAny ?? [],
     sparesOnly: !!PRESETS[activePreset]?.sparesOnly,
+    adviceOnly: !!PRESETS[activePreset]?.adviceOnly,
+  });
+
+  // ---- Hold-or-sell advisor inputs ----
+  // The year-long history loads once, on demand, the first time a surface
+  // that uses advice opens (the Hold/Sell preset or the Set picks view) —
+  // same lazy pattern as the market browser's 1-year toggle. Verdicts
+  // degrade gracefully to the calendar-only rules until it lands.
+  let advisorHistory = $state<History | null>(null);
+  let advisorHistoryState = $state<'idle' | 'loading' | 'done'>('idle');
+  $effect(() => {
+    const wanted = activePreset === 'holdsell' || effectiveView === 'sets';
+    if (wanted && advisorHistoryState === 'idle') {
+      advisorHistoryState = 'loading';
+      transport.loadHistory().then((h) => {
+        advisorHistory = h;
+        advisorHistoryState = 'done';
+      }).catch(() => { advisorHistoryState = 'done'; });
+    }
+  });
+  // Verdicts per owned slug (calendar-dated primes only). Cheap: one
+  // set_to_parts index + a rule walk per owned slug.
+  let adviceMap = $derived.by(() => {
+    if (!resolved.owned.size || !market?.calendar?.primes) return new Map();
+    const slugs = [...resolved.owned.values()].map((r) => r.slug);
+    return adviseOwned(slugs, market, advisorHistory, Date.now());
   });
   function applyPreset(name: string): void {
     const values = presetFilterValues(name);
@@ -335,6 +371,7 @@
           inventoryName = snap.invName;
           lastUpdated = snap.ts;
           resolved = { owned: snap.owned, unresolved: {} };
+          ownedRivens = snap.rivens ?? [];
           if (!market) {
             try {
               market = await loadBestMarket();
@@ -381,6 +418,7 @@
     inventoryName = null;
     lastUpdated = null;
     resolved = { owned: new Map(), unresolved: {} };
+    ownedRivens = [];
     deltas = new Map();
     previousOwned = null;
     results = [];
@@ -406,6 +444,7 @@
       }
 
       const keptLvls = extractKeptLvls(data);  // /Lotus/... → max lvl in Upgrades
+      ownedRivens = extractRivens(data);
       const owned = new Map();
       const unresolved = {};
       let flatCount = 0;
@@ -454,7 +493,7 @@
       deltas = diffOwned(previous?.owned, owned);
       previousOwned = previous?.owned ?? null;
       resolved = { owned, unresolved };
-      await store.saveSnapshot({ invName: name, owned });
+      await store.saveSnapshot({ invName: name, owned, rivens: ownedRivens });
       lastUpdated = Date.now();
 
       // No explicit recompute: the results $effect below tracks resolved +
@@ -485,7 +524,7 @@
   $effect(() => {
     filterState; reserveCopies;                   // track filter changes
     if (resolved.owned.size && market) {          // track owned + market readiness
-      results = computeFilteredResults(resolved.owned, market, filterState, reserveCopies);
+      results = computeFilteredResults(resolved.owned, market, filterState, reserveCopies, adviceMap);
     }
   });
 
@@ -594,7 +633,7 @@
   // went. Sorted by count desc, then alphabetical.
   let availableTags = $derived.by(() => {
     if (!resolved.owned.size || !market) return [];
-    return computeAvailableTags(resolved.owned, market, filterState);
+    return computeAvailableTags(resolved.owned, market, filterState, adviceMap);
   });
 
   // Auto-derived options for the type dropdown: every category that has at
@@ -740,7 +779,7 @@
 
   // Friendly diagnosis of WHY the table is empty so we don't just shrug.
   let emptyReason = $derived.by(() =>
-    computeEmptyReason(resolved.owned, market, filterState, results.length, activePreset)
+    computeEmptyReason(resolved.owned, market, filterState, results.length, activePreset, adviceMap)
   );
 
   // Scan is the only inventory source — the refresh pop is a single action.
@@ -1024,6 +1063,12 @@
             <span class="badge">{relicPlan.length}</span>
           </button>
         {/if}
+        {#if isDesktop && resolvedRivens.length > 0}
+          <button type="button" class="nav-item" class:active={effectiveView === 'rivens'} onclick={() => setView('rivens')}>
+            <span>Rivens</span>
+            <span class="badge">{resolvedRivens.length}</span>
+          </button>
+        {/if}
         {#if showBaroCard}
           <button type="button" class="nav-item baro-nav" class:active={effectiveView === 'baro'} onclick={() => setView('baro')}>
             <span>Baro</span>
@@ -1112,6 +1157,12 @@
                     rel="noopener noreferrer"
                   >{r.set_name}</a>
                   <span class="reco-net-inline">+{r.net_plat}p</span>
+                  {#if adviceMap.get(r.set_slug)}
+                    {@const av = adviceMap.get(r.set_slug)}
+                    <span class="advice-chip advice-{av.advice}" title={av.reasons.join(' · ')}>
+                      {av.advice === 'sell_now' ? 'sell now' : av.advice}
+                    </span>
+                  {/if}
                   <span class="kind kind-{r.kind}">
                     {#if r.kind === 'near-complete'}
                       own {r.parts.filter((p) => p.count > 0).length}/{r.parts.length}
@@ -1239,6 +1290,8 @@
         </div>
       {/if}
 
+    {:else if effectiveView === 'rivens'}
+      <RivensPanel {market} rivens={resolvedRivens} />
     {:else if effectiveView === 'baro'}
       <section class="view-header">
         <h2>Baro Ki'Teer</h2>
@@ -1643,6 +1696,14 @@
         request and discarded — never printed, never saved, never sent anywhere
         else.
       </p>
+      <p>
+        For trade detection (the Ledger), the app also
+        <strong>reads the game's own text log</strong> (<code>EE.log</code>,
+        the file Warframe itself writes) — read-only tailing of a plain file,
+        the same thing WFInfo and AlecaFrame have done for years. It starts at
+        the end of the file, so nothing from before the app launched is ever
+        read, and if the log isn't there, trade detection is simply off.
+      </p>
     </details>
 
     <details>
@@ -1654,6 +1715,22 @@
         Windows' <code>ReadProcessMemory</code>. We do the same thing without
         the Overwolf middleman (and without being Windows-only). Nothing here
         modifies the game.
+      </p>
+    </details>
+
+    <details>
+      <summary>How it talks to warframe.market</summary>
+      <p>
+        Every request identifies itself as TennoWorth (name, version, and a
+        contact link in the <code>User-Agent</code> — warframe.market's API
+        rules require it, and we follow them). Traffic is polite by
+        construction: live price checks run at most ~3 requests per second in
+        short bursts of up to 100 items, price watches re-check every 10
+        minutes, and riven comps are capped at warframe.market's 10 searches
+        per minute. <strong>Order writes only ever happen when you click</strong>
+        — the app never auto-bids, never auto-undercuts, and never reprices
+        without you. The bots that instantly match every bid on
+        warframe.market are exactly what this app refuses to be.
       </p>
     </details>
 
@@ -2392,6 +2469,20 @@
     color: var(--good);
     margin-left: 4px;
   }
+
+  /* Advisor chips — shared shape with the table's advice column (its copy
+     lives in ResultsTable's scoped styles; Svelte styles don't cross
+     component boundaries, so the small duplication is deliberate). */
+  .advice-chip {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 8px;
+    font-size: 11px;
+    color: var(--muted);
+    cursor: help;
+  }
+  .advice-chip.advice-sell_now { color: var(--good); border-color: var(--good); }
+  .advice-chip.advice-hold { color: var(--warn); border-color: var(--warn); }
 
   /* Baro card. Quiet by default (countdown mode); flips to a warm-gold
      border when Baro is actively visiting so the user can't miss the

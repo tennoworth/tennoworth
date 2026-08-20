@@ -90,14 +90,14 @@ describe('LocalStorageStateStore — key/shape parity with the pre-store code', 
     }
   });
 
-  it('snapshot round-trips through the historical wfminv:last-owned-v5 key', async () => {
+  it('snapshot round-trips through the historical wfminv:last-owned-v6 key', async () => {
     const s = new LocalStorageStateStore();
     const owned = new Map([
       ['vitality|', { count: 51, name: 'Vitality', type: 'Mods', slug: 'vitality', subtype: null, kept_lvl: null, leveled: 0 }],
     ]);
     await s.saveSnapshot({ invName: 'inventory.json', owned });
     // Written under the exact key storage.ts uses.
-    expect(localStorage.getItem('wfminv:last-owned-v5')).not.toBeNull();
+    expect(localStorage.getItem('wfminv:last-owned-v6')).not.toBeNull();
     const got = await s.loadSnapshot();
     expect(got.invName).toBe('inventory.json');
     expect(got.owned).toBeInstanceOf(Map);

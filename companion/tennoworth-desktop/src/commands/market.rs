@@ -7,6 +7,7 @@ use tauri::{AppHandle, Emitter, State};
 
 use wfm_core::live_top::{fetch_live_tops, LiveTop, LiveTopQuery};
 use wfm_core::poison::guard;
+use wfm_core::rivens::{fetch_riven_comps, RivenAuction};
 
 use crate::db::Db;
 use crate::market::{self, MarketCache, RefreshResult};
@@ -138,4 +139,28 @@ pub async fn live_top_prices(
     })
     .await
     .map_err(|e| CmdError::internal(format!("live price task failed to run: {e}")))?
+}
+
+/// The ≤20 cheapest matching auctions for one weapon's rivens, straight from
+/// WFM's v1 `/auctions/search` (public endpoint — works logged out; a login
+/// only chooses the market platform). The shared 10/min auction cap is
+/// enforced inside `wfm_core::rivens`, so rapid "Show comps" clicks pace
+/// themselves instead of tripping WFM's budget.
+#[tauri::command]
+pub async fn riven_comps(
+    session: State<'_, Arc<WfmSession>>,
+    weapon: String,
+) -> Result<Vec<RivenAuction>, CmdError> {
+    if weapon.is_empty() || weapon.len() > 80 {
+        return Err(CmdError::of("bad_weapon", "invalid weapon slug"));
+    }
+    let platform = session
+        .require_unlocked()
+        .map(|u| u.platform.clone())
+        .unwrap_or_else(|_| "pc".to_string());
+    tauri::async_runtime::spawn_blocking(move || {
+        fetch_riven_comps(&platform, &weapon).map_err(CmdError::wfm)
+    })
+    .await
+    .map_err(|e| CmdError::internal(format!("riven comps task failed to run: {e}")))?
 }

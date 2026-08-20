@@ -40,12 +40,39 @@ describe('saveSnapshot / loadSnapshot', () => {
     expect(got.owned.get('broken_war|').leveled).toBe(2);
   });
 
+  it('round-trips the parsed rivens list', () => {
+    const owned = new Map([['x', { count: 1, name: 'X', type: 'Misc' }]]);
+    const rivens = [
+      {
+        path: '/Lotus/Upgrades/Mods/Randomized/LotusShotgunRandomModRare',
+        compat: '/Lotus/Weapons/Infested/LongGuns/InfArmCannon/InfArmCannon',
+        slug: null, weaponName: null,
+        rerolls: 2, lvl: 0, pol: 'AP_TACTIC',
+        buffs: [{ tag: 'WeaponDamageAmountMod', value: 847570554 }],
+        curses: [], veiled: false,
+      },
+    ];
+    saveSnapshot({ invName: 'inventory.json', owned, rivens });
+    const got = loadSnapshot();
+    expect(got.rivens).toHaveLength(1);
+    expect(got.rivens[0].compat).toBe('/Lotus/Weapons/Infested/LongGuns/InfArmCannon/InfArmCannon');
+    expect(got.rivens[0].buffs[0].tag).toBe('WeaponDamageAmountMod');
+  });
+
+  it('older snapshots without rivens load as an empty list', () => {
+    localStorage.setItem('wfminv:last-owned-v6', JSON.stringify({
+      ts: 1, invName: 'old', owned: [['x', { count: 1 }]],
+    }));
+    const got = loadSnapshot();
+    expect(got.rivens).toEqual([]);
+  });
+
   it('returns null when nothing was saved', () => {
     expect(loadSnapshot()).toBeNull();
   });
 
   it('returns null on corrupted storage rather than throwing', () => {
-    localStorage.setItem('wfminv:last-owned-v5', '{garbage');
+    localStorage.setItem('wfminv:last-owned-v6', '{garbage');
     expect(loadSnapshot()).toBeNull();
   });
 

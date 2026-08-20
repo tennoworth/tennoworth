@@ -16,19 +16,31 @@
 // pull — the same silent-danger shape as the v3→v4 kept_lvl bug, but here it
 // risks listing a copy that can't actually be traded. Old v4 snapshots are
 // silently invalidated; reloading the inventory recomputes `leveled` fresh.
+//
+// v6: also persist `rivens` (the parsed riven list from Upgrades[]). The
+// Rivens view needs the fingerprints — extracting them again on reload would
+// require the raw 2 MB inventory, which the snapshot deliberately doesn't
+// keep. Persisted unresolved (compat path, no slug) and resolved against the
+// current market at render. Old v5 snapshots are silently invalidated;
+// reloading the inventory recomputes `rivens` fresh.
+import type { OwnedRiven } from './rivens';
 import type { OwnedRecord } from './types';
 
-const KEY = 'wfminv:last-owned-v5';
+const KEY = 'wfminv:last-owned-v6';
 
 export interface Snapshot {
   ts: number;
   invName: string;
   owned: Map<string, OwnedRecord>;
+  rivens: OwnedRiven[];
 }
 
 export interface SaveSnapshotInput {
   invName: string;
   owned: Map<string, OwnedRecord>;
+  /** Parsed rivens from the scanned inventory; absent on older callers
+   *  (and older snapshots) means no rivens saved yet. */
+  rivens?: OwnedRiven[];
 }
 
 // The single source of truth for the on-the-wire snapshot shape: the
@@ -41,9 +53,9 @@ export interface SaveSnapshotInput {
 // forget the export, and every export silently loses it — discovered only by
 // a user importing on another machine and finding data missing.
 export function buildSnapshotPayload(
-  { invName, owned }: SaveSnapshotInput,
+  { invName, owned, rivens }: SaveSnapshotInput,
   ts: number,
-): { ts: number; invName: string; owned: Array<[string, Record<string, unknown>]> } {
+): { ts: number; invName: string; owned: Array<[string, Record<string, unknown>]>; rivens: OwnedRiven[] } {
   return {
     ts,
     invName,
@@ -59,6 +71,7 @@ export function buildSnapshotPayload(
         leveled: rec.leveled ?? 0,
       },
     ]),
+    rivens: rivens ?? [],
   };
 }
 
@@ -73,6 +86,7 @@ export function deserializeSnapshot(raw: string | null): Snapshot | null {
     ts: p.ts,
     invName: p.invName,
     owned: new Map<string, OwnedRecord>(p.owned),
+    rivens: Array.isArray(p.rivens) ? (p.rivens as OwnedRiven[]) : [],
   };
 }
 

@@ -108,7 +108,9 @@ production (auto-deploys), and promotion is fast-forward only.
 
 ## Ban risk
 
-The desktop app only reads game memory — it never writes, never injects.
+The desktop app only reads: game memory for the inventory scan, and the
+game's own text log (`EE.log`) for trade detection. It never writes to the
+game, never injects.
 **We can't promise it's ban-safe.** Equivalent tools
 ([warframe-api-helper](https://github.com/Sainan/warframe-api-helper) and
 AlecaFrame via Overwolf) have run for years with no documented bans, but DE
