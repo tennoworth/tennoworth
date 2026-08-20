@@ -144,7 +144,7 @@ jobs:
       # tauri-action treats an absent/empty tagName as "build, don't publish"
       # (that is already how the linux-binary job below uses it), so a manual
       # run compiles and then stops, and releaseName/releaseBody/prerelease
-      # below are inert on that path. Phase 2 of docs/release-plan-2026-08.md
+      # below are inert on that path. The follow-up atomic-release rework
       # removes the tag trigger entirely and replaces this with an explicit
       # publish job; this is the minimal fix that closes the hole today.
       - uses: tauri-apps/tauri-action@v0
