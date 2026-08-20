@@ -82,16 +82,23 @@ impl UpdateState {
 /// any builder failure — including a non-https override, which the plugin
 /// rejects in release builds.
 /// Linux installs come from distro packaging (AUR), which owns updating — and
-/// Tauri's updater only ever supported the AppImage bundle on Linux, which we
-/// deliberately stopped publishing: bundling Ubuntu-era WebKitGTK against a
-/// rolling-release host aborts at EGL init before the webview paints. Checking
-/// anyway would show a banner whose Install button could never work.
+/// Tauri's Linux updater only supports the AppImage bundle. In an AppImage
+/// run (the runtime sets `APPIMAGE`) self-update works and latest.json
+/// carries a linux-x86_64 entry, so the check is real. A deb/rpm/AUR install
+/// keeps updates with the package manager — a banner whose Install button
+/// can't work is worse than silence.
+///
+/// (History: the first AppImage was withdrawn for an EGL abort on rolling
+/// Mesa. Root cause found 2026-08-20: the bundle carried ubuntu-22.04's
+/// libwayland-*, which host Mesa's Wayland-EGL platform rejects — fixed at
+/// bundle time in release-desktop.yml by stripping those libs, verified on
+/// Mesa 26.2. The WebKit stack itself was never the problem.)
 ///
 /// The `TENNOWORTH_UPDATE_URL` override still forces a real check, so probe.rs
 /// can exercise the full flow on the Linux CI runner.
 #[cfg(target_os = "linux")]
 fn updates_owned_by_packager() -> bool {
-    std::env::var_os("TENNOWORTH_UPDATE_URL").is_none()
+    std::env::var_os("APPIMAGE").is_none() && std::env::var_os("TENNOWORTH_UPDATE_URL").is_none()
 }
 
 #[cfg(not(target_os = "linux"))]
