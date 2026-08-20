@@ -193,6 +193,27 @@ jobs:
             exit 1
           fi
 
+          # SHA-256 sidecars for the Windows installers.
+          #
+          # SECURITY.md's "How to verify a release" has told Windows users to
+          # compare the .exe/.msi against "the .sha256 file on the same
+          # release" since it was written — and no such file was ever
+          # published: 0.3.7 and 0.3.8 shipped the installers with a .sig and
+          # nothing else. (The .sig is a minisign signature over the updater
+          # bundle, verifiable only by the app's baked-in pubkey; it is not
+          # something a user can check by hand.) The Linux job has emitted
+          # .sha256 sidecars for its tarball/deb/rpm all along; this brings
+          # Windows in line with both the Linux artifacts and the documented
+          # promise. They ride along in the `dist/*` glob below.
+          (
+            cd dist
+            for f in *.exe *.msi; do
+              [ -e "$f" ] || continue
+              sha256sum "$f" | tee "$f.sha256"
+            done
+          )
+          ls -la dist
+
       - name: Publish archival copies
         if: startsWith(github.ref, 'refs/tags/desktop-v')
         uses: softprops/action-gh-release@v2
