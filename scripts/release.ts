@@ -115,7 +115,14 @@ function publishedVersions(): string[] {
 
   const git = (args: string[]) => {
     try {
-      return execFileSync("git", args, { cwd: ROOT, encoding: "utf8" });
+      // stderr ignored: a missing remote is an expected miss on the way to
+      // the next candidate, not something to print git's four-line
+      // "Could not read from remote repository" complaint about.
+      return execFileSync("git", args, {
+        cwd: ROOT,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"],
+      });
     } catch {
       return "";
     }
@@ -123,9 +130,11 @@ function publishedVersions(): string[] {
 
   let versions = collect(git(["tag", "--list", "desktop-v*"]));
   if (versions.length === 0) {
-    // `github` is this repo's GitHub remote (`origin` is a local mirror), so
-    // try both rather than assuming either name.
-    for (const remote of ["github", "origin"]) {
+    // CI checks out at depth 1 with no tags, so ask the remote instead of
+    // making every consumer deepen its checkout. `origin` first because that
+    // is what actions/checkout sets up; a local clone may instead call the
+    // GitHub remote `github` (with `origin` pointing at a private mirror).
+    for (const remote of ["origin", "github"]) {
       versions = collect(git(["ls-remote", "--tags", remote, "desktop-v*"]));
       if (versions.length > 0) break;
     }
