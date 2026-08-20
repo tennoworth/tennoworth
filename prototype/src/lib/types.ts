@@ -136,6 +136,32 @@ export interface RivenStatsSurface {
   };
 }
 
+/** One dated prime from the calendar surface, keyed by its WFM set slug.
+ *  Dates are ISO days; `est_vault_date` is the cadence estimate when DE
+ *  hasn't vaulted it yet (and equals `vault_date` once it has). */
+export interface CalendarPrime {
+  name: string;
+  released?: string;
+  vaulted: boolean;
+  vault_date?: string;
+  est_vault_date?: string;
+}
+
+/** One 28-day Prime Resurgence rotation (Varzia reprinting those primes'
+ *  relics). `frames` are WFM set slugs. */
+export interface ResurgenceRotation {
+  from: string;
+  to: string;
+  frames: string[];
+  pack?: string;
+}
+
+export interface CalendarSurface {
+  primes?: Record<string, CalendarPrime>;
+  resurgence_current?: ResurgenceRotation | null;
+  resurgence?: ResurgenceRotation[];
+}
+
 export interface Market {
   updated_at: string;
   platform: string;
@@ -156,6 +182,9 @@ export interface Market {
   /** DE's weekly riven price bands per weapon × reroll-state (see
    *  `fetch_riven_stats` in wfm-scrape). Absent on older snapshots. */
   riven_stats?: RivenStatsSurface | null;
+  /** Prime release/vault dates + Resurgence rotations (see `fetch_calendar`
+   *  in wfm-scrape). Absent on older snapshots. */
+  calendar?: CalendarSurface | null;
   source?: string;
   // Per-surface fetch timestamps (ISO). On a CSV-only rebuild these can lag
   // `updated_at` — prices refreshed but the vendor surfaces (baro/relics/

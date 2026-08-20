@@ -21,6 +21,9 @@ export interface Preset {
   /** Spares mode: rows are duplicate mods/arcanes, and "sellable" means the
    *  copies you'd otherwise dissolve (see `spareQty`), not owned − reserve. */
   sparesOnly?: boolean;
+  /** Hold/Sell mode: only rows the advisor has a verdict for (calendar-dated
+   *  primes) — see `lib/advisor.ts`. */
+  adviceOnly?: boolean;
   defaultSort?: { key: string; dir: number };
 }
 
@@ -60,6 +63,13 @@ export const PRESETS: Record<string, Preset> = {
     label: 'Sets', hint: 'only set-tagged rows',
     columns: ['name', 'owned', 'sell_score', 'low_sell', 'top_buy', 'potential_plat'],
     defaultSort: { key: 'sell_score', dir: -1 },
+  },
+  holdsell: {
+    minPrice: 0, hideAtLvl: 11, typeFilter: 'all', activeTags: [],
+    label: 'Hold / Sell', hint: 'calendar-timed advice for your primes — release decay, Resurgence floods, post-vault ramps; hover a chip for the numbers',
+    columns: ['name', 'owned', 'advice', 'low_sell', 'medians_7d', 'volume_48h', 'potential_plat'],
+    adviceOnly: true,
+    defaultSort: { key: 'advice', dir: -1 },
   },
   vault: {
     minPrice: 0, hideAtLvl: 11, typeFilter: 'all', activeTags: [],

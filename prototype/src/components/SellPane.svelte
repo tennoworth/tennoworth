@@ -131,7 +131,7 @@
 
   // Preset-driven empty states reset the preset; hand-filter ones relax the
   // offending slider. A price slider can't rescue a "no vaulted parts" empty.
-  const PRESET_EMPTY_KINDS = new Set(['tag', 'vault', 'ducats', 'vol', 'median', 'spares']);
+  const PRESET_EMPTY_KINDS = new Set(['tag', 'vault', 'ducats', 'vol', 'median', 'spares', 'advice']);
   // One-shot quick-fix actions the empty state can offer.
   function relaxFilters({ kind }) {
     if (kind === 'price') minPrice = 1;
@@ -441,6 +441,12 @@
         <p class="muted">Spares are duplicate copies: every unranked copy when you own a ranked one, otherwise all but one. Nothing you own has a duplicate worth ≥ 3p right now.</p>
       </div>
       <button onclick={() => relaxFilters({ kind: 'spares' })}>Back to Default</button>
+    {:else if emptyReason.kind === 'advice'}
+      <div>
+        <strong>Nothing you own has calendar-timed advice.</strong>
+        <p class="muted">Hold / Sell covers primes with release and vault dates — parts, blueprints, and sets. Relics, mods, and non-prime gear have no calendar to time against.</p>
+      </div>
+      <button onclick={() => relaxFilters({ kind: 'advice' })}>Back to Default</button>
     {:else if emptyReason.kind === 'ducats'}
       <div>
         <strong>You own no prime parts with a ducat value.</strong>

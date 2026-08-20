@@ -9,6 +9,7 @@
 
 import { lookup } from './market';
 import { clearingPrice, scoreRow, bandSignal, sellableQty, spareQty, LIQUID_VOL } from './sell-priority';
+import type { Verdict } from './advisor';
 import type { Market, MarketItemEntry, OwnedRecord } from './types';
 
 export interface FilterState {
@@ -26,6 +27,8 @@ export interface FilterState {
   typesAny: string[];
   /** Preset-only: Spares mode (see `spareQty`). */
   sparesOnly: boolean;
+  /** Preset-only: only rows the advisor has a verdict for. */
+  adviceOnly: boolean;
 }
 
 export interface EmptyReason {
@@ -44,6 +47,10 @@ function passesOwned(rec: OwnedRecord, f: FilterState): boolean {
 function passesType(rec: OwnedRecord, f: FilterState): boolean {
   if (f.typesAny.length > 0 && !f.typesAny.includes(rec.type)) return false;
   return f.typeFilter === 'all' || rec.type === f.typeFilter;
+}
+function passesAdvice(rec: OwnedRecord, f: FilterState, advice?: Map<string, Verdict>): boolean {
+  if (!f.adviceOnly) return true;
+  return !!advice?.has(rec.slug);
 }
 function passesSpares(rec: OwnedRecord, f: FilterState): boolean {
   if (!f.sparesOnly) return true;
@@ -79,7 +86,7 @@ function passesMedian(m: MarketItemEntry, f: FilterState): boolean {
 
 // Row enrichment: score, timing, ducat-trade math. Runs only for rows that
 // already passed every clause above.
-function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Market, reserveCopies: number, sparesOnly = false) {
+function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Market, reserveCopies: number, sparesOnly = false, verdict?: Verdict) {
   const sellable = sparesOnly
     ? spareQty(rec.count, rec.kept_lvl, rec.leveled ?? 0)
     : sellableQty(rec.count, reserveCopies, rec.leveled ?? 0);
@@ -176,6 +183,9 @@ function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Mar
     tags,
     is_augment: tags.includes('augment'),
     vault_status: market.vault_status?.[rec.slug] ?? null,
+    // Advisor verdict for calendar-dated primes; null on everything else.
+    advice: verdict?.advice ?? null,
+    advice_reasons: verdict?.reasons ?? [],
   };
 }
 
@@ -185,6 +195,7 @@ export function computeResults(
   market: Market | null | undefined,
   filters: FilterState,
   reserveCopies: number,
+  advice?: Map<string, Verdict>,
 ) {
   const out: ReturnType<typeof buildRow>[] = [];
   for (const [key, rec] of owned) {
@@ -200,7 +211,8 @@ export function computeResults(
     if (!passesVol(m, filters)) continue;
     if (!passesMedian(m, filters)) continue;
     if (!passesSpares(rec, filters)) continue;
-    out.push(buildRow(key, rec, m, market, reserveCopies, filters.sparesOnly));
+    if (!passesAdvice(rec, filters, advice)) continue;
+    out.push(buildRow(key, rec, m, market, reserveCopies, filters.sparesOnly, advice?.get(rec.slug)));
   }
   out.sort((a, b) => b.sell_score - a.sell_score);
   return out;
@@ -213,6 +225,7 @@ export function computeAvailableTags(
   owned: Map<string, OwnedRecord>,
   market: Market | null | undefined,
   filters: FilterState,
+  advice?: Map<string, Verdict>,
 ): Array<[string, number]> {
   const counts = new Map<string, number>();
   for (const rec of owned.values()) {
@@ -227,6 +240,7 @@ export function computeAvailableTags(
     if (!passesVol(m, filters)) continue;
     if (!passesMedian(m, filters)) continue;
     if (!passesSpares(rec, filters)) continue;
+    if (!passesAdvice(rec, filters, advice)) continue;
     for (const t of m.tags || []) counts.set(t, (counts.get(t) || 0) + 1);
   }
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
@@ -242,10 +256,11 @@ export function computeEmptyReason(
   filters: FilterState,
   resultsLength: number,
   activePreset: string | null,
+  advice?: Map<string, Verdict>,
 ): EmptyReason | null {
   if (resultsLength > 0 || !owned.size) return null;
   let candidates = 0, byPrice = 0, byOwned = 0, byType = 0, byKept = 0,
-      byTag = 0, byVault = 0, byDucats = 0, byVol = 0, byMedian = 0, bySpares = 0;
+      byTag = 0, byVault = 0, byDucats = 0, byVol = 0, byMedian = 0, bySpares = 0, byAdvice = 0;
   for (const rec of owned.values()) {
     const m = lookup(market, rec.slug);
     if (!m) continue;
@@ -260,12 +275,13 @@ export function computeEmptyReason(
     if (!passesVol(m, filters)) byVol += 1;
     if (!passesMedian(m, filters)) byMedian += 1;
     if (!passesSpares(rec, filters)) bySpares += 1;
+    if (!passesAdvice(rec, filters, advice)) byAdvice += 1;
   }
   if (candidates === 0) return { kind: 'no-market', candidates };
   const top = ([
     ['price', byPrice], ['owned', byOwned], ['type', byType], ['kept', byKept],
     ['tag', byTag], ['vault', byVault], ['ducats', byDucats], ['vol', byVol], ['median', byMedian],
-    ['spares', bySpares],
+    ['spares', bySpares], ['advice', byAdvice],
   ] as Array<[string, number]>).sort((a, b) => b[1] - a[1])[0];
   return { kind: top[0], excluded: top[1], candidates, preset: activePreset };
 }

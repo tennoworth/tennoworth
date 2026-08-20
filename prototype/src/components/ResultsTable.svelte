@@ -26,6 +26,9 @@
     potential_plat: number;
     raw_value: number;
     sell_score: number;
+    /** Advisor verdict for calendar-dated primes; null elsewhere. */
+    advice?: 'sell_now' | 'hold' | 'neutral' | null;
+    advice_reasons?: string[];
     patience: boolean;
     timing: 'hold' | 'peak' | 'neutral';
     medians_7d: number[];
@@ -216,6 +219,7 @@
     plat_per_100d:  { text: 'Plat cost per 100 ducats of value. “Deal” badge fires below 20.', unit: 'plat / 100 ducats', dir: 'lower = better ducat trade than WFM' },
     medians_7d:     { text: 'Sparkline of the last 7 days of daily median price. Hover the line for the raw values.' },
     delta_90d_pct:  { text: 'Latest daily median vs the 90-day median.', unit: '%', dir: '▲ = price rising into a peak (sell now); ▼ = sliding' },
+    advice:         { text: 'Hold-or-sell call from the prime calendar (release decay, Resurgence reprints, post-vault ramps) plus the year of price history. Hover a chip for the exact numbers behind it. Advice only — nothing is automated.', dir: 'sell now = timing favors listing; hold = the ramp is still ahead' },
   };
 
   const ALL_COLUMNS: ColumnDef[] = [
@@ -230,6 +234,7 @@
     { key: 'delta_90d_pct',  label: 'Δ 90d',    align: 'right' },
     { key: 'volume_48h',     label: 'Vol 48h',  align: 'right' },
     { key: 'ratio',          label: 'Demand',   align: 'right' },
+    { key: 'advice',         label: 'Advice',   align: 'left'  },
     { key: 'ducats',         label: 'Ducats',   align: 'right' },
     { key: 'plat_per_100d',  label: 'p/100d',   align: 'right' },
     { key: 'raw_value',      label: 'Raw value', align: 'right' },
@@ -248,6 +253,9 @@
   // workflow's signal columns come first).
   let columns: ColumnDef[] = $derived.by(() => {
     let cols = hasDeltas ? ALL_COLUMNS : ALL_COLUMNS.filter((c) => c.key !== 'delta');
+    // The advice column earns its width only when some row has a verdict
+    // (calendar-dated primes) — same drop-when-absent shape as delta.
+    if (!results.some((r) => r.advice)) cols = cols.filter((c) => c.key !== 'advice');
     if (Array.isArray(visibleColumns) && visibleColumns.length > 0) {
       const byKey = new Map(cols.map((c) => [c.key, c]));
       cols = visibleColumns.map((k) => byKey.get(k)).filter((c): c is ColumnDef => Boolean(c));
@@ -315,10 +323,22 @@
     return rows;
   });
 
+  // Advice sorts by urgency, not alphabetically ("hold" < "neutral" <
+  // "sell_now" would bury the actionable rows).
+  const ADVICE_RANK: Record<string, number> = { sell_now: 3, hold: 2, neutral: 1 };
+  function sortValue(r: unknown): unknown {
+    if (sortKey === 'delta') return rowDelta(r as never);
+    if (sortKey === 'advice') {
+      const a = (r as { advice?: string | null }).advice;
+      return a ? ADVICE_RANK[a] ?? null : null;
+    }
+    return (r as Record<string, unknown>)[sortKey];
+  }
+
   let sorted = $derived.by(() => {
     return [...filtered].sort((a, b) => {
-      const av = sortKey === 'delta' ? rowDelta(a) : (a as unknown as Record<string, unknown>)[sortKey];
-      const bv = sortKey === 'delta' ? rowDelta(b) : (b as unknown as Record<string, unknown>)[sortKey];
+      const av = sortValue(a);
+      const bv = sortValue(b);
       // Push nulls to the bottom regardless of sort direction — ducats /
       // p/100d are sparse, and a column full of "—" at the top is useless.
       if (av == null && bv == null) return 0;
@@ -477,6 +497,14 @@
                   <span class="delta down">▼{Math.abs(d)}</span>
                 {:else}
                   <span class="delta zero">·</span>
+                {/if}
+              {:else if col.key === 'advice'}
+                {#if r.advice}
+                  <span class="advice-chip advice-{r.advice}" title={(r.advice_reasons ?? []).join(' · ')}>
+                    {r.advice === 'sell_now' ? 'sell now' : r.advice}
+                  </span>
+                {:else}
+                  <span class="muted">·</span>
                 {/if}
               {:else if col.key === 'ducats'}
                 {#if r.ducats != null}
@@ -989,4 +1017,17 @@
     border-radius: 8px;
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   }
+  /* Advisor chip — mirror of App.svelte's .advice-chip (scoped styles
+     don't cross components). */
+  .advice-chip {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 1px 8px;
+    font-size: 11px;
+    color: var(--muted);
+    cursor: help;
+    white-space: nowrap;
+  }
+  .advice-chip.advice-sell_now { color: var(--good); border-color: var(--good); }
+  .advice-chip.advice-hold { color: var(--warn); border-color: var(--warn); }
 </style>

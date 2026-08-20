@@ -5,7 +5,7 @@ import { computeResults, computeAvailableTags, computeEmptyReason } from './filt
 const baseFilters = () => ({
   minPrice: 0, minOwned: 1, typeFilter: 'all', hideAtLvl: 11,
   activeTags: new Set(), vaultOnly: false, ducatsOnly: false, minVol: 0, minMedian: 0,
-  typesAny: [], sparesOnly: false,
+  typesAny: [], sparesOnly: false, adviceOnly: false,
 });
 
 function rec(slug, overrides = {}) {
@@ -127,6 +127,36 @@ describe('Spares preset (typesAny + sparesOnly)', () => {
     const o = owned(rec('a', { count: 1 }), rec('b', { count: 1 }));
     const r = computeEmptyReason(o, market({ a: item(), b: item() }), spares(), 0, 'spares');
     expect(r.kind).toBe('spares');
+  });
+});
+
+describe('Hold/Sell preset (adviceOnly)', () => {
+  it('keeps only rows with a verdict and attaches it to the row', () => {
+    const advice = new Map([
+      ['gauss_prime_chassis', { advice: 'hold', reasons: ['vaulted 71 d ago'] }],
+    ]);
+    const out = computeResults(
+      owned(rec('gauss_prime_chassis'), rec('ash_prime_blueprint')),
+      market({ gauss_prime_chassis: item(), ash_prime_blueprint: item() }),
+      { ...baseFilters(), adviceOnly: true },
+      0,
+      advice,
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].slug).toBe('gauss_prime_chassis');
+    expect(out[0].advice).toBe('hold');
+    expect(out[0].advice_reasons).toEqual(['vaulted 71 d ago']);
+  });
+
+  it('reports "advice" as the empty reason when no verdicts exist', () => {
+    const o = owned(rec('a'), rec('b'));
+    const r = computeEmptyReason(o, market({ a: item(), b: item() }), { ...baseFilters(), adviceOnly: true }, 0, 'holdsell', new Map());
+    expect(r.kind).toBe('advice');
+  });
+
+  it('rows outside the preset still carry no verdict noise', () => {
+    const out = computeResults(owned(rec('a')), market({ a: item() }), baseFilters(), 0);
+    expect(out[0].advice).toBeNull();
   });
 });
 
