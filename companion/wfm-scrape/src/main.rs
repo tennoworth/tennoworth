@@ -393,6 +393,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     let baro_old: Option<HashMap<String, serde_json::Value>> = prior.get("baro").and_then(|s| serde_json::from_value(s.clone()).ok());
     let rivens_old: Option<HashMap<String, serde_json::Value>> = prior.get("rivens").and_then(|s| serde_json::from_value(s.clone()).ok());
     let calendar_old: Option<HashMap<String, serde_json::Value>> = prior.get("calendar").and_then(|s| serde_json::from_value(s.clone()).ok());
+    let riven_stats_old: Option<HashMap<String, serde_json::Value>> = prior.get("riven_stats").and_then(|s| serde_json::from_value(s.clone()).ok());
 
     eprintln!("Fetching prime release/vault dates + Resurgence rotations...");
     let calendar = fetch::fetch_calendar(http.as_ref(), wfstat_raw.as_ref(), &catalog);
@@ -410,6 +411,25 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
             rivens.get("weapons").and_then(|w| w.as_object()).map(|w| w.len()).unwrap_or(0), ch.len(), today);
     }
 
+    eprintln!("Fetching DE weekly riven stats...");
+    // DE names the weapons by display name; the riven-weapons manifest already
+    // fetched above maps those to slugs — no second request.
+    let weapons_by_name: HashMap<String, String> = rivens
+        .get("weapons")
+        .and_then(|w| w.as_object())
+        .map(|w| {
+            w.iter()
+                .filter_map(|(slug, row)| {
+                    row.get("name")
+                        .and_then(|n| n.as_str())
+                        .map(|n| (n.to_lowercase(), slug.clone()))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let (riven_stats, unmatched_stats) = fetch::fetch_riven_stats(http.as_ref(), &weapons_by_name);
+    eprintln!("  {} weapons · {unmatched_stats} DE rows without a WFM slug", riven_stats.len());
+
     let r_p2i = reconcile("path_to_info", path_to_info, p2i_old.as_ref(), prior_stamps.get("path_to_info").map(|s| s.as_str()), now, parents_complete, STALE_DAYS);
     let r_s2p = reconcile("set_to_parts", set_to_parts, s2p_old.as_ref(), prior_stamps.get("set_to_parts").map(|s| s.as_str()), now, parents_complete, STALE_DAYS);
     let r_rr = reconcile("relic_rewards", relic_rewards, rr_old.as_ref(), prior_stamps.get("relic_rewards").map(|s| s.as_str()), now, true, STALE_DAYS);
@@ -423,6 +443,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     let r_baro = reconcile("baro", baro, baro_old.as_ref(), prior_stamps.get("baro").map(|s| s.as_str()), now, true, STALE_DAYS);
     let r_rivens = reconcile("rivens", rivens, rivens_old.as_ref(), prior_stamps.get("rivens").map(|s| s.as_str()), now, true, STALE_DAYS);
     let r_calendar = reconcile("calendar", calendar, calendar_old.as_ref(), prior_stamps.get("calendar").map(|s| s.as_str()), now, true, STALE_DAYS);
+    let r_riven_stats = reconcile("riven_stats", riven_stats, riven_stats_old.as_ref(), prior_stamps.get("riven_stats").map(|s| s.as_str()), now, true, STALE_DAYS);
 
     for r in [&r_p2i, &r_s2p, &r_rr] {
         if let Some(w) = &r.stale_warning {
@@ -441,6 +462,9 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     if let Some(w) = &r_calendar.stale_warning {
         eprintln!("{}", w.format());
     }
+    if let Some(w) = &r_riven_stats.stale_warning {
+        eprintln!("{}", w.format());
+    }
 
     let mut surface_fetched_at: HashMap<String, String> = HashMap::new();
     surface_fetched_at.insert("path_to_info".into(), r_p2i.fetched_at.clone());
@@ -450,6 +474,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     surface_fetched_at.insert("baro".into(), r_baro.fetched_at.clone());
     surface_fetched_at.insert("rivens".into(), r_rivens.fetched_at.clone());
     surface_fetched_at.insert("calendar".into(), r_calendar.fetched_at.clone());
+    surface_fetched_at.insert("riven_stats".into(), r_riven_stats.fetched_at.clone());
 
     eprintln!("Rendering {} CSV rows...", csv_path.display());
     let rows = csvin::read_csv_rows(&csv_path)?;
@@ -466,6 +491,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         r_baro.data,
         r_rivens.data,
         r_calendar.data,
+        r_riven_stats.data,
         surface_fetched_at,
     );
 

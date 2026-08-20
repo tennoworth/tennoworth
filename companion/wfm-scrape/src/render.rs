@@ -124,6 +124,10 @@ pub struct Snapshot {
     /// `fetch::fetch_calendar`.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub calendar: HashMap<String, serde_json::Value>,
+    /// `{slug: {name, unrolled?, rolled?}}` — DE's weekly riven price bands
+    /// per weapon × reroll-state — see `fetch::fetch_riven_stats`.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub riven_stats: HashMap<String, serde_json::Value>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub surface_fetched_at: HashMap<String, String>,
 }
@@ -144,6 +148,7 @@ pub fn assemble_snapshot(
     baro: HashMap<String, serde_json::Value>,
     rivens: HashMap<String, serde_json::Value>,
     calendar: HashMap<String, serde_json::Value>,
+    riven_stats: HashMap<String, serde_json::Value>,
     surface_fetched_at: HashMap<String, String>,
 ) -> Snapshot {
     Snapshot {
@@ -161,6 +166,7 @@ pub fn assemble_snapshot(
         baro,
         rivens,
         calendar,
+        riven_stats,
         surface_fetched_at,
     }
 }
