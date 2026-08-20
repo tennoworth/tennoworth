@@ -87,13 +87,21 @@ The key fingerprint is published in [`SECURITY.md`](SECURITY.md) — worth
 checking before you trust a key you downloaded over the network.
 
 A note of history on the AppImage: the first one (2026-07) was withdrawn
-because its bundled ubuntu-22.04 WebKitGTK aborted at `EGL_BAD_PARAMETER`
-against rolling-release Mesa — a white window. The current AppImage ships
-with WebKit's DMABUF renderer disabled in AppImage runs (the documented
-mitigation for exactly that failure), and the repos stay published until the
-new artifact has proven itself on rolling hosts. If you hit a white window
-anyway, `WEBKIT_DISABLE_COMPOSITING_MODE=1` is the bigger hammer — and the
-deb/rpm/AUR installs (system WebKit) remain immune.
+because it aborted at `Could not create default EGL display:
+EGL_BAD_PARAMETER` against rolling-release Mesa — a white window, before the
+webview painted. WebKit was never the cause. Root-caused on 2026-08-20 by
+A/B on a Mesa 26.2 host: the AppImage bundled ubuntu-22.04's libwayland
+client/cursor/egl/server, and the host's Wayland-EGL platform rejects that
+2022 client. The build now strips those four libraries and repacks, so the
+AppImage uses the host's libwayland (a stable ABI that every desktop Linux
+ships) — and the identical bundle runs cleanly. Disabling WebKit's DMABUF
+renderer was tried first and measurably did not help; if you see that
+mitigation recommended anywhere for this symptom, it is not the fix.
+
+The repos stay published until the AppImage has proven itself on rolling
+hosts. If you hit a white window anyway, `WEBKIT_DISABLE_COMPOSITING_MODE=1`
+is the bigger hammer — and the deb/rpm/AUR installs (system WebKit) remain
+immune.
 
 Note the package is named `tenno-worth` internally (Tauri derives it from the
 product name and offers no override), but both packages declare

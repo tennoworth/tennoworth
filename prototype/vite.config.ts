@@ -5,11 +5,12 @@ import { execSync } from 'node:child_process';
 // Build commit, baked in and shown in the footer. The web app is continuously
 // deployed with no release tags, so the commit is the ONLY meaningful
 // identifier — there is deliberately no __APP_VERSION__ define, and
-// package.json's version is never displayed. That version still tracks the
-// desktop release (the release gate checks it) so the two don't read as
-// different products, but nothing here consumes it: the footer shows the
-// commit, because the web app ships continuously and a desktop version number
-// pinned to it would be a lie about when this build was made.
+// package.json carries no version field at all (it used to mirror the desktop
+// version; nothing consumed it, and it was the pin that drifted, so it was
+// removed — the desktop version lives in companion/tennoworth-desktop/
+// Cargo.toml alone). The footer shows the commit, because the web app ships
+// continuously and a desktop version number pinned to it would be a lie about
+// when this build was made.
 // git is present in CI (build-web checks out the repo) and local dev; the box
 // never builds, so it just serves what CI baked. 'dev' is the fallback when
 // git isn't reachable.

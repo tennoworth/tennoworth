@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "TennoWorth",
-  "version": "0.3.8",
   "identifier": "app.tennoworth.desktop",
   "build": {
     "frontendDist": "../../prototype/dist-desktop",

@@ -46,6 +46,9 @@
             "context": "panic-site-gate"
           },
           {
+            "context": "version-pins"
+          },
+          {
             "context": "probe-smoke"
           }
         ]
