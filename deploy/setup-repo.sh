@@ -1,9 +1,24 @@
 #!/bin/sh
-# One-time bootstrap for the signed apt + dnf repositories on the box.
-# Idempotent — safe to re-run. Run as root on the web host, AFTER the signing
-# subkey is imported (see the deploy runbook "Package repositories").
+# RETIRED — do not run this on a new box.
 #
-# Why the box signs rather than CI: a repo-signing key in GitHub Actions
+# One-time bootstrap for the signed apt + dnf repositories. Linux is
+# AppImage-only as of the release after 0.5.0, so no new deb or rpm is ever
+# built and this script has nothing to bootstrap for. It is kept, unmodified
+# below this header, for exactly two reasons:
+#
+#   1. The repositories it created are STILL SERVED, frozen at their last
+#      published version, so that nobody who ran `apt install tennoworth` gets
+#      a 404 or a broken index. This file is the only record of how that tree
+#      is laid out, what `SignWith` key it uses, and what the served
+#      tennoworth.repo says — all of which you need to reason about the frozen
+#      repos or to eventually take them down cleanly.
+#   2. The GPG-handling notes in it (the /etc/rpm/macros discovery, the
+#      passphrase probe) were expensive to find and are worth keeping.
+#
+# The publisher that fed these repos, deploy/pull-packages.sh, is now a no-op
+# stub — see its header. SECURITY.md documents the frozen repos and the key.
+#
+# Why the box signed rather than CI: a repo-signing key in GitHub Actions
 # secrets would let anyone who compromises the workflow serve trusted packages
 # to every user who added our repo. The private subkey lives only here; the
 # primary key never left the maintainer's laptop.
@@ -97,4 +112,5 @@ chown -R wfm:wfm "$REPO"
 chmod -R a+rX "$REPO"
 
 echo "Repo skeleton ready at $REPO"
-echo "Next: run /srv/wfm/pull-packages.sh to publish the current release."
+echo "NOTE: this script is retired — there is no longer a package to publish"
+echo "into it. Linux ships as an AppImage only."

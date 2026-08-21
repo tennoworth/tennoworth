@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Update the box's repo checkout at /srv/wfm/app.
 #
-# The other three pullers (pull-web.sh, pull-scrape.sh, pull-packages.sh) cover
-# the built bundle, the wfm-scrape binary and the deb/rpm. NOTHING covers the
-# checkout itself, so deploy/run-scrape.sh and the systemd units only move when
+# The other pullers (pull-web.sh, pull-scrape.sh) cover the built bundle and
+# the wfm-scrape binary; pull-packages.sh covered the deb/rpm and is now a
+# retired no-op stub. NOTHING covers the checkout itself, so
+# deploy/run-scrape.sh and the systemd units only move when
 # a human moves them — which is how the box sat on a phase-3 commit while main
 # was many commits ahead.
 #
