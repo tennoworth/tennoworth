@@ -54,37 +54,30 @@ The desktop app is the product. Install it per platform:
   [latest release](https://github.com/tennoworth/tennoworth/releases/latest).
   Unsigned, so SmartScreen warns on first run (see
   [`SECURITY.md`](SECURITY.md)). The app updates itself from there.
-- **Linux** — a single-file **AppImage** from the
-  [latest release](https://github.com/tennoworth/tennoworth/releases):
-  download `TennoWorth-x86_64.AppImage`, `chmod +x`, run. It self-updates
-  in place through the same signed updater feed as Windows.
+- **Linux** — a single-file **AppImage**, and nothing else:
 
-  The signed apt/dnf repositories and the AUR packages below keep working
-  during the transition, but the AppImage is where Linux distribution is
-  heading — one artifact instead of three packaging pipelines.
+  ```bash
+  curl -LO https://github.com/tennoworth/tennoworth/releases/latest/download/TennoWorth-x86_64.AppImage
+  chmod +x TennoWorth-x86_64.AppImage
+  ./TennoWorth-x86_64.AppImage
+  ```
 
-**Debian / Ubuntu**
+  It runs on any distro and self-updates in place through the same signed
+  updater feed as Windows. Verify it first if you like — every release
+  carries `TennoWorth-x86_64.AppImage.sha256` next to it; see
+  [`SECURITY.md`](SECURITY.md).
 
-```bash
-curl -fsSL https://tennoworth.app/tennoworth-archive-keyring.asc \
-  | sudo tee /etc/apt/keyrings/tennoworth.asc > /dev/null
-echo "deb [signed-by=/etc/apt/keyrings/tennoworth.asc] https://tennoworth.app/apt stable main" \
-  | sudo tee /etc/apt/sources.list.d/tennoworth.list > /dev/null
-sudo apt update && sudo apt install tennoworth
-```
+**Coming from apt, dnf or the AUR?** Those channels are retired. The `.deb`
+and `.rpm` packages, the repositories at `tennoworth.app/apt` and `/rpm`, and
+the `tennoworth` / `tennoworth-bin` AUR packages are gone from the release.
+Nothing you have installed breaks: the repositories stay served and signed,
+frozen at their last published version, and simply never offer another update.
+Take the AppImage above, then remove the old package and its repo entry.
 
-**Fedora**
-
-```bash
-sudo dnf config-manager --add-repo https://tennoworth.app/rpm/tennoworth.repo
-sudo dnf install tennoworth
-```
-
-**Arch** — [`packaging/aur/`](packaging/aur/): `tennoworth` builds from source,
-`tennoworth-bin` uses the prebuilt binary.
-
-The key fingerprint is published in [`SECURITY.md`](SECURITY.md) — worth
-checking before you trust a key you downloaded over the network.
+Why: the AppImage is the only Linux channel that can update itself — the
+Tauri updater turns itself on when `$APPIMAGE` is set, and a distro package
+can't self-update without fighting the package manager. Four delivery
+channels for one platform was three more than could be kept correct.
 
 A note of history on the AppImage: the first one (2026-07) was withdrawn
 because it aborted at `Could not create default EGL display:
@@ -98,14 +91,11 @@ ships) — and the identical bundle runs cleanly. Disabling WebKit's DMABUF
 renderer was tried first and measurably did not help; if you see that
 mitigation recommended anywhere for this symptom, it is not the fix.
 
-The repos stay published until the AppImage has proven itself on rolling
-hosts. If you hit a white window anyway, `WEBKIT_DISABLE_COMPOSITING_MODE=1`
-is the bigger hammer — and the deb/rpm/AUR installs (system WebKit) remain
-immune.
-
-Note the package is named `tenno-worth` internally (Tauri derives it from the
-product name and offers no override), but both packages declare
-`Provides: tennoworth`, so `apt install tennoworth` resolves correctly.
+The fixed AppImage has shipped in 0.4.0 and 0.5.0, which is what made
+consolidating onto it defensible. If you still hit a white window,
+`WEBKIT_DISABLE_COMPOSITING_MODE=1` is the bigger hammer — please open an
+issue if you need it, since there is no longer a system-WebKit package to
+fall back to.
 
 ## Develop
 

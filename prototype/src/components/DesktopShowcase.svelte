@@ -14,12 +14,13 @@
   // information but they aren't the pitch. Anchor: <section id="desktop">.
   let { rows = [] }: { rows?: HandoffRow[] } = $props();
 
-  type Os = 'windows' | 'linux' | 'debian' | 'fedora' | 'arch';
+  // Two platforms, two tabs. The per-distro tabs (Debian/Fedora/Arch) went
+  // when the apt, dnf and AUR channels were retired — Linux is the AppImage.
+  type Os = 'windows' | 'linux';
   // Default the active tab to the visitor's OS so a Windows user lands on the
   // Windows block and a Linux user on the AppImage block without a click.
-  // The distro repo tabs stay for the transition; the AppImage is the lead.
   let activeOs = $state<Os>(detectOs());
-  const osOrder: Os[] = ['windows', 'linux', 'debian', 'fedora', 'arch'];
+  const osOrder: Os[] = ['windows', 'linux'];
   let installOpen = $state(false);
 
   function detectOs(): Os {
@@ -43,7 +44,7 @@
   const install = {
     linux: {
       title: 'Linux',
-      note: 'One file, any distro, self-updating. First run: make it executable, then launch it like any app. (The apt/dnf/AUR packages below keep working during the transition.)',
+      note: 'One file, any distro, self-updating. First run: make it executable, then launch it like any app.',
       cmd: 'curl -LO https://github.com/tennoworth/tennoworth/releases/latest/download/TennoWorth-x86_64.AppImage\nchmod +x TennoWorth-x86_64.AppImage\n./TennoWorth-x86_64.AppImage',
       copiable: true,
     },
@@ -52,24 +53,6 @@
       note: 'Download the installer (.exe or .msi) from the latest release. Unsigned, so SmartScreen warns — click More info → Run anyway. The app updates itself from there.',
       cmd: 'Download from the latest release — https://github.com/tennoworth/tennoworth/releases',
       copiable: false,
-    },
-    debian: {
-      title: 'Debian / Ubuntu',
-      note: 'The signed apt repository. Updates arrive with the rest of your system.',
-      cmd: 'curl -fsSL https://tennoworth.app/tennoworth-archive-keyring.asc | sudo tee /etc/apt/keyrings/tennoworth.asc > /dev/null\necho "deb [signed-by=/etc/apt/keyrings/tennoworth.asc] https://tennoworth.app/apt stable main" | sudo tee /etc/apt/sources.list.d/tennoworth.list > /dev/null\nsudo apt update && sudo apt install tennoworth',
-      copiable: true,
-    },
-    fedora: {
-      title: 'Fedora',
-      note: 'The signed dnf repository. Updates arrive with the rest of your system.',
-      cmd: 'sudo dnf config-manager --add-repo https://tennoworth.app/rpm/tennoworth.repo\nsudo dnf install tennoworth',
-      copiable: true,
-    },
-    arch: {
-      title: 'Arch',
-      note: 'From the AUR. tennoworth builds from source; tennoworth-bin uses the prebuilt binary.',
-      cmd: 'paru -S tennoworth',
-      copiable: true,
     },
   } as const;
 
@@ -83,10 +66,20 @@
   // The Linux ptrace grant lives on the scan step — it's the one thing that
   // trips a first-time Linux user up. Kept separate from the step body so the
   // code block renders as copyable, not inline prose. Only shown on the Linux
-  // install tabs — it doesn't apply to Windows.
-  const PTRACE_NOTE = 'Linux: grant ptrace once so no sudo is needed per scan:';
-  const PTRACE_CMD = 'sudo setcap cap_sys_ptrace=eip /usr/bin/tennoworth-desktop';
-  const isLinux = $derived(activeOs !== 'windows');
+  // tab — it doesn't apply to Windows.
+  //
+  // This used to be `setcap cap_sys_ptrace=eip /usr/bin/tennoworth-desktop`,
+  // which was a deb/rpm/AUR install path: there is no /usr/bin binary any
+  // more, and file capabilities are ignored on the AppImage's nosuid FUSE
+  // mount anyway. What is left is the yama scope, which is what actually
+  // refuses the read on a default Debian/Ubuntu/Arch box (scope 1 allows
+  // tracing descendants only, and the game is Steam's child, not ours). The
+  // app itself prints the precise diagnosis — including the scope it found —
+  // when a scan is refused; this is the common fix, stated once.
+  const PTRACE_NOTE =
+    'Linux: if the scan says “Permission denied”, reading the game’s memory needs ptrace. Allow it for this session (resets on reboot):';
+  const PTRACE_CMD = 'sudo sysctl kernel.yama.ptrace_scope=0';
+  const isLinux = $derived(activeOs === 'linux');
 
   const compare = [
     { what: 'Prices, trends, vault status', site: 'ok', app: 'ok' },
@@ -198,7 +191,7 @@
   <details class="install" id="desktop-install" bind:open={installOpen}>
     <summary>
       <span class="lbl">Install &amp; verify</span>
-      <span class="exp">Windows .msi · Linux AppImage · Debian/Ubuntu apt · Fedora dnf · Arch AUR · first run · how to check the build</span>
+      <span class="exp">Windows .msi · Linux AppImage · first run · how to check the build</span>
     </summary>
     <div class="install-body">
       <div class="seg" role="tablist" aria-label="Operating system">
@@ -236,6 +229,13 @@
           {/if}
         </div>
         <p class="note">{install[activeOs].note}</p>
+        {#if isLinux}
+          <p class="note">
+            Installed from apt, dnf or the AUR? Those channels are retired — the AppImage is the only
+            one that updates itself. Nothing breaks: the repositories stay served and signed, frozen
+            at their last published version. Take the AppImage above, then remove the old package.
+          </p>
+        {/if}
       </div>
 
       <h4>First run</h4>
@@ -260,11 +260,11 @@
 
       <h4>Verify</h4>
       <p class="note">
-        Every release is built in public CI from the tagged commit and ships checksums, so you can
-        confirm your download matches. The apt and dnf repositories are signed
-        (<a href="/tennoworth-archive-keyring.asc">archive key</a>). The Windows build is
-        <strong>unsigned</strong> — no paid certificate — so SmartScreen warns once; the app only ever
-        reads the running game's memory and nothing leaves your machine. Full detail in
+        Every release is built in public CI from the tagged commit and ships a .sha256 file
+        next to each download, so you can confirm what you got matches. Updates are signed: the app
+        verifies each one against a key compiled into the running binary before installing it. The
+        Windows build is <strong>unsigned</strong> — no paid certificate — so SmartScreen warns once;
+        the app only ever reads the running game's memory and nothing leaves your machine. Full detail in
         <a href="https://github.com/tennoworth/tennoworth/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer">SECURITY.md</a>.
       </p>
     </div>

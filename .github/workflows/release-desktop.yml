@@ -1,10 +1,10 @@
 name: release-desktop
 
 # Builds, signs and publishes the Tauri desktop app + the `latest.json`
-# manifest the in-app updater reads, plus the Linux deb/rpm/AppImage and the
-# two AUR packages. The desktop app is the only interactive product, so this is
-# the repo's single versioned release stream (the old CLI release workflow was
-# removed with the CLI).
+# manifest the in-app updater reads. Two platforms, two artifacts: the Windows
+# installers and ONE Linux AppImage. The desktop app is the only interactive
+# product, so this is the repo's single versioned release stream (the old CLI
+# release workflow was removed with the CLI).
 #
 # ---------------------------------------------------------------------------
 # HOW TO CUT A RELEASE
@@ -23,8 +23,8 @@ name: release-desktop
 # into a DRAFT release, and flips one `--draft=false`. Before that flip there is
 # no tag and no visible release; after it, everything is there. The old flow
 # published from two racing jobs at `draft: false`, so a release went public with
-# a partial asset set and the `aur` job could still fail afterwards (0.3.5, run
-# 30806615370).
+# a partial asset set and a trailing publish job could still fail afterwards
+# (0.3.5, run 30806615370).
 #
 # Bundle layout, in publish order:
 #
@@ -34,12 +34,15 @@ name: release-desktop
 #   build-linux      ─┘ every output uploaded as a workflow artifact
 #   publish          verify inventory + signatures, tag, draft, upload, flip
 #   desktop-latest   refresh the legacy rolling updater endpoint
-#   aur              push both PKGBUILDs to aur.archlinux.org
 #
-# The AppImage is BACK and is a first-class artifact — see build-linux's
-# libwayland step for why the first one was withdrawn and what fixed it. The
-# comment that used to sit here saying "No AppImage, deliberately" outlived the
-# decision it described.
+# LINUX IS APPIMAGE ONLY. That is the state, not a direction of travel: the
+# deb/rpm bundles, the self-hosted apt/dnf repositories and the two AUR
+# packages were all retired, and the jobs and steps that produced them are
+# gone from this file. The AppImage is the only Linux channel that self-updates
+# (the Tauri updater enables itself when $APPIMAGE is set — see update.rs), so
+# it was the only one worth keeping, and four delivery channels for one
+# platform was three too many to keep correct. See build-linux's libwayland
+# step for why the first AppImage was withdrawn in 2026-07 and what fixed it.
 # ---------------------------------------------------------------------------
 
 on:
@@ -57,9 +60,9 @@ permissions:
   contents: read
 
 # Two releases must never interleave: they would fight over the same
-# `desktop-latest` assets and the same AUR repos. cancel-in-progress is false
-# on purpose — cancelling a run that has already flipped the draft would leave
-# the rolling endpoint and the AUR behind the published release.
+# `desktop-latest` assets. cancel-in-progress is false on purpose — cancelling
+# a run that has already flipped the draft would leave the rolling updater
+# endpoint behind the published release.
 concurrency:
   group: desktop-release
   cancel-in-progress: false
@@ -162,13 +165,14 @@ jobs:
           echo "sha=$sha"        >> "$GITHUB_OUTPUT"
           echo "Releasing $tag from $sha"
 
-      # Cargo.lock is part of what ships, not a local cache: the AUR source
-      # package builds the tag's tarball with `cargo build --frozen`, which
-      # aborts rather than re-resolve a lock. Every build in this repo has
-      # network access and quietly re-resolves it instead, so a version bump
-      # that edits Cargo.toml alone is green everywhere and broken only on
-      # users' machines — how 0.3.5 and 0.3.6 both shipped unbuildable from
-      # source. This is the AUR's refusal, run before anything is built.
+      # Cargo.lock is part of what ships, not a local cache. Every build in
+      # this repo has network access and quietly re-resolves a stale lock, so a
+      # version bump that edits Cargo.toml alone is green everywhere and wrong
+      # in the tag — how 0.3.5 and 0.3.6 both shipped a lock naming the
+      # PREVIOUS version, unbuildable from source with `cargo build --frozen`
+      # (which is what any from-source packager does; it was the retired AUR
+      # source package that found it). `--locked` reproduces that refusal here,
+      # before anything is built, and keeps the lock an honest version pin.
       - name: Gate — Cargo.lock already matches the manifests
         working-directory: companion
         run: cargo fetch --locked
@@ -313,7 +317,6 @@ jobs:
       # tauri-build embeds the SPA at compile time from frontendDist, and plain
       # `cargo build` does not run tauri.conf.json's beforeBuildCommand the way
       # `cargo tauri build` does — so the frontend is built explicitly here.
-      # packaging/aur/PKGBUILD does the same thing for the same reason.
       - name: Build frontend
         working-directory: prototype
         run: |
@@ -321,19 +324,20 @@ jobs:
           bun run build:desktop
 
       # `tauri build` rather than `cargo build`: it produces the same binary at
-      # target/release/tennoworth-desktop (so the glibc check and the tarball
-      # below are unchanged) AND emits the deb/rpm the apt/dnf repos are built
-      # from, plus the AppImage.
+      # target/release/tennoworth-desktop (so the glibc check below is
+      # unchanged) AND emits the AppImage, which is the whole Linux release.
       #
-      # The deb/rpm do NOT bundle WebKitGTK; they declare a dependency on the
-      # system one. The AppImage does bundle a runtime, which is why it needs
-      # the libwayland surgery further down.
+      # ONE bundle, deliberately. `deb,rpm` used to be here to feed the
+      # self-hosted apt/dnf repositories; those are retired, so building them
+      # would produce artifacts nothing consumes. The AppImage bundles its own
+      # WebKitGTK runtime, which is why it needs the libwayland surgery below —
+      # the deb/rpm used the system one and never did.
       - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           projectPath: companion/tennoworth-desktop
-          args: --bundles deb,rpm,appimage
+          args: --bundles appimage
 
       # Fails the release rather than shipping a binary that won't start on a
       # user's machine. 2.35 is what ubuntu-22.04 provides; anything higher
@@ -351,51 +355,6 @@ jobs:
           fi
           ldd "$bin" | grep -E 'webkit2gtk|libgtk-3' || true
 
-      # One self-contained tarball: binary + desktop entry + icons. The -bin
-      # PKGBUILD needs all three (without the .desktop and icons the app gets a
-      # generic WM avatar in the taskbar), and shipping them together beats
-      # either duplicating them into the AUR repo or making the package pull
-      # the whole source tarball just to extract a few PNGs.
-      - name: Stage artifact
-        run: |
-          set -euo pipefail
-          stage="tennoworth-desktop-linux-x86_64"
-          mkdir -p "dist/$stage/icons"
-          cp companion/target/release/tennoworth-desktop "dist/$stage/"
-          cp packaging/aur/tennoworth/tennoworth.desktop "dist/$stage/"
-          for f in 32x32.png 64x64.png 128x128.png 128x128@2x.png icon.png; do
-            cp "companion/tennoworth-desktop/icons/$f" "dist/$stage/icons/"
-          done
-          cp LICENSE "dist/$stage/"
-          tar -C dist -czf "dist/$stage.tar.gz" "$stage"
-          rm -rf "dist/$stage"
-          cd dist && sha256sum "$stage.tar.gz" | tee "$stage.tar.gz.sha256"
-
-      # The deb/rpm the self-hosted apt and dnf repos are built from. Names are
-      # normalised to fixed filenames because deploy/pull-packages.sh on the box
-      # fetches them by name from the release — Tauri's own names embed the
-      # version (TennoWorth_0.3.3_amd64.deb), which would make the puller need
-      # to know the version before it can fetch it.
-      #
-      # Package name inside the deb/rpm is `tenno-worth` (Tauri kebab-cases
-      # productName and offers no override); both declare `Provides: tennoworth`
-      # so `apt install tennoworth` still resolves. Don't "fix" the filenames to
-      # match the provide — the puller matches on these.
-      - name: Stage Linux packages
-        run: |
-          set -euo pipefail
-          deb=$(find companion/target/release/bundle/deb -name '*.deb' | head -1)
-          rpm=$(find companion/target/release/bundle/rpm -name '*.rpm' | head -1)
-          [ -n "$deb" ] && [ -n "$rpm" ] || {
-            echo "::error title=Missing Linux bundle::tauri build did not emit a deb and an rpm"
-            exit 1
-          }
-          cp "$deb" dist/tennoworth-desktop-amd64.deb
-          cp "$rpm" dist/tennoworth-desktop-x86_64.rpm
-          cd dist
-          sha256sum tennoworth-desktop-amd64.deb   | tee tennoworth-desktop-amd64.deb.sha256
-          sha256sum tennoworth-desktop-x86_64.rpm  | tee tennoworth-desktop-x86_64.rpm.sha256
-
       # THE LOAD-BEARING STEP IS THE libwayland STRIP. The first AppImage
       # (2026-07) was withdrawn for "Could not create default EGL display:
       # EGL_BAD_PARAMETER" on rolling Mesa. Root-caused 2026-08-20 by A/B on
@@ -410,9 +369,14 @@ jobs:
       # Repacking invalidates the build-time updater signature, so the file
       # is re-signed afterwards — the .sig MUST be generated from the
       # repacked bytes or self-update rejects every download.
+      #
+      # This step also creates dist/. It used to inherit the directory from the
+      # deb/rpm/tarball staging steps that ran before it; they are gone, so it
+      # makes its own.
       - name: Strip bundled libwayland and repack the AppImage
         run: |
           set -euo pipefail
+          mkdir -p dist
           img=$(find companion/target/release/bundle/appimage -name '*.AppImage' | head -1)
           [ -n "$img" ] || { echo "::error title=Missing AppImage::tauri build did not emit an AppImage"; exit 1; }
           chmod +x "$img"
@@ -467,10 +431,10 @@ jobs:
           merge-multiple: true
 
       # Refuses to publish an incomplete release instead of publishing one and
-      # patching it. Every name here is depended on by something: the box's
-      # deploy/pull-packages.sh fetches the deb/rpm by exact name, the AUR
-      # -bin PKGBUILD pins a checksum against the tarball, and the updater
-      # needs each .sig.
+      # patching it. Every name here is depended on by something: the updater
+      # needs each .sig, SECURITY.md tells users to check each .sha256, and the
+      # AppImage's filename is unversioned because desktop-latest serves it
+      # under that exact name.
       - name: Verify the inventory is complete
         run: |
           set -euo pipefail
@@ -483,12 +447,6 @@ jobs:
             "TennoWorth_${VERSION}_x64_en-US.msi" \
             "TennoWorth_${VERSION}_x64_en-US.msi.sig" \
             "TennoWorth_${VERSION}_x64_en-US.msi.sha256" \
-            tennoworth-desktop-linux-x86_64.tar.gz \
-            tennoworth-desktop-linux-x86_64.tar.gz.sha256 \
-            tennoworth-desktop-amd64.deb \
-            tennoworth-desktop-amd64.deb.sha256 \
-            tennoworth-desktop-x86_64.rpm \
-            tennoworth-desktop-x86_64.rpm.sha256 \
             TennoWorth-x86_64.AppImage \
             TennoWorth-x86_64.AppImage.sha256 \
             TennoWorth-x86_64.AppImage.sig ; do
@@ -515,8 +473,9 @@ jobs:
           ls -la
 
       # One file listing every asset, next to the per-file sidecars. The
-      # sidecars stay: SECURITY.md's instructions use them, and the aur job
-      # cross-checks the tarball against its own .sha256.
+      # sidecars stay: SECURITY.md's instructions use them, and `sha256sum -c`
+      # against a one-line sidecar is a shorter thing to ask of a user than
+      # against a file naming assets they did not download.
       - name: Assemble SHA256SUMS
         working-directory: dist
         run: |
@@ -637,12 +596,11 @@ jobs:
           verify it against the matching `.sha256`. The in-app updater handles
           later versions on its own.
 
-          **Linux** — prefer the signed apt/dnf repositories at
-          <https://tennoworth.app/apt> and `/rpm`, or the AUR (`tennoworth`
-          builds from source, `tennoworth-bin` from the tarball here). The
-          `.deb`/`.rpm` on this release are the immutable source the repo
-          builder consumes. `TennoWorth-x86_64.AppImage` is self-updating and
-          resolves libwayland from the host.
+          **Linux** — one artifact: `TennoWorth-x86_64.AppImage`. Download it,
+          verify it against `TennoWorth-x86_64.AppImage.sha256`, `chmod +x`,
+          run. It self-updates in place and resolves libwayland from the host.
+          The apt/dnf repositories and the AUR packages are retired and frozen
+          at their last published version — see `SECURITY.md`.
 
           `SHA256SUMS` lists every downloadable asset; per-file `.sha256`
           sidecars sit next to each one. `.sig` files are minisign signatures
@@ -751,130 +709,3 @@ jobs:
                                              gh release delete-asset desktop-latest "$asset" --yes ;;
               esac
             done
-
-  # AUR publish — the delivery channel Arch users actually install from. The
-  # build jobs build things; this job ships the recipes. It exists because a
-  # version bump used to stop at the repo: the PKGBUILDs said 0.3.4 while
-  # aur.archlinux.org sat at 0.3.1 for three releases, because "push to the
-  # AUR" was a manual step nobody remembered.
-  #
-  # `needs: publish` is load-bearing, not just order: both checksums are
-  # computed from artifacts on the PUBLISHED release, so running any earlier
-  # would pin URLs that do not resolve yet. Under the old flow this job could
-  # fail after the release was already public (0.3.5, run 30806615370); it
-  # still can fail, but now it fails after a release that is complete and
-  # correct, and re-running it is the whole fix.
-  aur:
-    needs: [preflight, publish]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    env:
-      # Absent ('') → the keyed steps no-op and the release still ships, with
-      # a notice. The AUR key is account-specific (aur.archlinux.org
-      # authenticates per maintainer account), so a repo or fork without the
-      # maintainer's key must not fail a desktop build.
-      AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-      VERSION: ${{ needs.preflight.outputs.version }}
-    steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
-        with:
-          ref: ${{ needs.preflight.outputs.sha }}
-
-      - name: Skip AUR publish — no key configured
-        if: env.AUR_SSH_PRIVATE_KEY == ''
-        run: |
-          echo "::notice title=AUR publish skipped::AUR_SSH_PRIVATE_KEY is not configured — aur.archlinux.org packages were NOT updated for this release. See packaging/aur/README.md."
-
-      - name: Install AUR SSH key, pinning the host key
-        if: env.AUR_SSH_PRIVATE_KEY != ''
-        shell: bash
-        run: |
-          set -euo pipefail
-          install -m700 -d "$HOME/.ssh"
-          # Pinned ed25519, not accept-new: aur.archlinux.org publishes its
-          # fingerprints, and a MITM between the runner and the AUR would
-          # otherwise quietly install a different host key.
-          printf '%s\n' 'aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN' > "$HOME/.ssh/known_hosts"
-          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > "$HOME/.ssh/aur"
-          chmod 600 "$HOME/.ssh/aur"
-          # Fail with a readable message instead of ssh's cryptic
-          # "error in libcrypto" if the key is malformed (e.g. the secret
-          # lost its trailing newline). ssh-keygen -lf parses the key; a bad
-          # one never reaches the AUR.
-          ssh-keygen -lf "$HOME/.ssh/aur" >/dev/null
-          echo "GIT_SSH_COMMAND=ssh -i $HOME/.ssh/aur -o IdentitiesOnly=yes" >> "$GITHUB_ENV"
-
-      - name: Publish both packages to the AUR
-        if: env.AUR_SSH_PRIVATE_KEY != ''
-        shell: bash
-        run: |
-          set -euo pipefail
-          ver="$VERSION"
-          repo="$GITHUB_REPOSITORY"
-
-          # Checksums are computed at publish time from the exact artifacts the
-          # tag carries, so they cannot go stale between a bump and a push. The
-          # bin tarball's hash is cross-checked against the .sha256 the
-          # release published — a release that disagrees with its own
-          # attestation is failed loudly, not pinned.
-          bin_sha=$(curl -fsSL "https://github.com/$repo/releases/download/desktop-v$ver/tennoworth-desktop-linux-x86_64.tar.gz" | sha256sum | cut -d' ' -f1)
-          src_sha=$(curl -fsSL "https://github.com/$repo/archive/refs/tags/desktop-v$ver.tar.gz" | sha256sum | cut -d' ' -f1)
-          published_bin_sha=$(curl -fsSL "https://github.com/$repo/releases/download/desktop-v$ver/tennoworth-desktop-linux-x86_64.tar.gz.sha256" | awk '{print $1}')
-          if [ "$bin_sha" != "$published_bin_sha" ]; then
-            echo "::error title=Checksum mismatch::bin tarball hashes $bin_sha (computed) and $published_bin_sha (release .sha256) disagree. Refusing to pin."
-            exit 1
-          fi
-          echo "bin=$bin_sha src=$src_sha (bin cross-checked against the release's own .sha256)"
-
-          mkdir -p "$RUNNER_TEMP/aur"
-          for spec in "tennoworth:$src_sha" "tennoworth-bin:$bin_sha"; do
-            pkg="${spec%%:*}"
-            sha="${spec##*:}"
-            git clone "ssh://aur@aur.archlinux.org/$pkg.git" "$RUNNER_TEMP/aur/$pkg"
-            # Sync the AUR tree to the repo's, not just copy over it: a file
-            # removed from the recipe must disappear from the AUR too. The
-            # -not -path excludes both `.git` itself and everything under it.
-            find "$RUNNER_TEMP/aur/$pkg" -mindepth 1 -not -path '*/.git' -not -path '*/.git/*' -delete
-            cp -r "packaging/aur/$pkg/." "$RUNNER_TEMP/aur/$pkg/"
-            # The repo's PKGBUILD carries 'SKIP' as a parse placeholder (see
-            # packaging/aur/README.md); the AUR copy gets the real checksum.
-            sed -i "s/sha256sums=('SKIP')/sha256sums=('$sha')/" "$RUNNER_TEMP/aur/$pkg/PKGBUILD"
-            # .SRCINFO is generated in a throwaway Arch container, never
-            # written by hand: makepkg is Arch-only, and the AUR rejects a push
-            # whose .SRCINFO disagrees with its PKGBUILD.
-            #
-            # makepkg refuses to run as root, so it drops to a throwaway
-            # `builder` whose uid MUST match the owner of the bind mount. A bare
-            # `useradd` lands on uid 1000 while the runner's checkout is owned by
-            # 1001, and makepkg's first act is to check $BUILDDIR — which
-            # defaults to the PKGBUILD dir — for write permission, aborting with
-            # `You do not have write permission for the directory $BUILDDIR
-            # (/pkg)`. That failed on every release ever cut; it stayed invisible
-            # because the clone above never got past `Permission denied
-            # (publickey)` until the AUR key was replaced, so the job had never
-            # once reached this line. Reproduced locally against a mount chowned
-            # to 1001, and verified fixed the same way.
-            #
-            # Deriving the uid (rather than chowning /pkg to builder) keeps the
-            # host ownership intact — chowning would hand the directory to a uid
-            # the runner does not own, and the `git add`/`commit` below would
-            # then trip git's dubious-ownership guard.
-            #
-            # The `> .SRCINFO` redirect still runs as root INSIDE the container,
-            # landing a world-readable file the runner can read.
-            docker run --rm -v "$RUNNER_TEMP/aur/$pkg:/pkg" -w /pkg archlinux:latest \
-              sh -c 'uid=$(stat -c %u /pkg); useradd -m -u "$uid" builder; su builder -c "cd /pkg && makepkg --printsrcinfo" > .SRCINFO'
-            grep -q "sha256sums = $sha" "$RUNNER_TEMP/aur/$pkg/.SRCINFO" || {
-              echo "::error title=.SRCINFO mismatch::$pkg's generated .SRCINFO does not carry checksum $sha. Aborting before push."
-              exit 1
-            }
-            (
-              cd "$RUNNER_TEMP/aur/$pkg"
-              git add -A
-              git -c user.name="$GITHUB_ACTOR" -c user.email="$GITHUB_ACTOR@users.noreply.github.com" \
-                commit -m "$pkg $ver"
-              git push origin HEAD
-            )
-            echo "::notice title=AUR published::$pkg $ver pushed to aur.archlinux.org"
-          done

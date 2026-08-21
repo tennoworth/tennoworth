@@ -5,10 +5,11 @@
 // release-time guard as the only enforcement. Drift was silent and surfaced on
 // user machines: 0.3.3 sat under a 0.3.6 desktop for three releases, and 0.3.5
 // and 0.3.6 both shipped a Cargo.lock naming the previous version, which made
-// them unbuildable from source for every Arch user (`cargo build --frozen`
-// refuses to rewrite a lock).
+// them unbuildable from source (`cargo build --frozen` refuses to rewrite a
+// lock — the retired AUR source package was where that surfaced).
 //
-// The pins are:
+// Two pins remain; the two AUR PKGBUILDs were dropped when Linux became
+// AppImage-only:
 //
 //   companion/tennoworth-desktop/Cargo.toml   AUTHORITATIVE. CARGO_PKG_VERSION,
 //                                             what the app reports and what the
@@ -17,8 +18,6 @@
 //                                             tauri.conf.json) what Tauri writes
 //                                             into the bundle.
 //   companion/Cargo.lock                      derived, machine-written
-//   packaging/aur/tennoworth/PKGBUILD         written by `prepare`
-//   packaging/aur/tennoworth-bin/PKGBUILD     written by `prepare`
 //
 // Usage:
 //   bun scripts/release.ts prepare <major|minor|patch|X.Y.Z>
@@ -32,10 +31,6 @@ const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
 
 const CARGO_TOML = "companion/tennoworth-desktop/Cargo.toml";
 const CARGO_LOCK = "companion/Cargo.lock";
-const PKGBUILDS = [
-  "packaging/aur/tennoworth/PKGBUILD",
-  "packaging/aur/tennoworth-bin/PKGBUILD",
-];
 const CHANGELOG = "CHANGELOG.md";
 
 // Strict X.Y.Z with no leading zeros. Prerelease and build-metadata suffixes
@@ -76,18 +71,11 @@ function cargoLockVersion(): string {
   return m[1];
 }
 
-function pkgbuildVersion(rel: string): string {
-  const m = read(rel).match(/^pkgver=(.+)$/m);
-  if (!m) fail(`no pkgver= found in ${rel}`);
-  return m[1].trim();
-}
-
 /** Every pin, as `{ where, version }`, with Cargo.toml first. */
 function allPins(): { where: string; version: string }[] {
   return [
     { where: CARGO_TOML, version: cargoTomlVersion() },
     { where: CARGO_LOCK, version: cargoLockVersion() },
-    ...PKGBUILDS.map((p) => ({ where: p, version: pkgbuildVersion(p) })),
   ];
 }
 
@@ -282,24 +270,12 @@ function cmdPrepare(argv: string[]) {
   // Cargo.lock — `cargo update --workspace` rewrites only the workspace
   // members' own entries, leaving every dependency resolution alone. This is
   // the step that was missing when 0.3.5 and 0.3.6 shipped a lock naming the
-  // previous version, which the AUR source package's --frozen build refuses.
+  // previous version, which any --frozen build from source refuses.
   console.log("refreshing Cargo.lock (cargo update --workspace)…");
   execFileSync("cargo", ["update", "--workspace"], {
     cwd: join(ROOT, "companion"),
     stdio: "inherit",
   });
-
-  // Both PKGBUILDs. pkgrel resets to 1: it counts packaging-only rebuilds of
-  // the SAME upstream version, so a new pkgver always starts over.
-  for (const rel of PKGBUILDS) {
-    write(
-      rel,
-      read(rel)
-        .replace(/^pkgver=.*$/m, `pkgver=${next}`)
-        .replace(/^pkgrel=.*$/m, "pkgrel=1"),
-    );
-    console.log(`${rel}: pkgver=${next}`);
-  }
 
   // CHANGELOG section, opened for the human to fill in. `notes` reads it back
   // for the release body, so an empty section is a visible reminder rather
