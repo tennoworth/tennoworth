@@ -91,28 +91,32 @@
   }
 </script>
 
-<section class="card rivens" data-testid="rivens-view">
-  <header class="row">
-    <h2>Rivens</h2>
-    <span class="muted">{rivens.length} owned</span>
-  </header>
-
-  <p class="muted lead">
-    Your rivens against DE's weekly market band for the weapon (rolled vs unrolled) and the
-    live comparables on warframe.market. No "this riven is worth N" — the band, the
-    disposition trend, and the cheapest real auctions are the evidence.
-    {#if rivenStatsAge}<span class="muted">· band data {rivenStatsAge}</span>{/if}
-  </p>
+<section class="wrap tw rivens" data-testid="rivens-view">
+  <div class="bar">
+    <h3>Rivens</h3>
+    <span class="exp">DE's weekly band, the disposition trend, and live comparables — no single "worth N" number.</span>
+    <span class="grow"></span>
+    <span class="count"><b>{rivens.length}</b> owned{#if rivenStatsAge}&nbsp;· band data {rivenStatsAge}{/if}</span>
+  </div>
 
   {#if sorted.length === 0}
-    <div class="muted empty">No rivens in your scanned inventory. Crack some relics or buy veiled ones.</div>
+    <div class="line"><span class="exp">No rivens in your scanned inventory. Crack some relics or buy veiled ones.</span></div>
   {:else}
     <div class="scroll">
-      <table>
+      <table class="tw">
+        <colgroup>
+          <col style="width:11rem" />
+          <col />
+          <col style="width:3.5rem" />
+          <col style="width:3.5rem" />
+          <col style="width:7rem" />
+          <col style="width:13rem" />
+          <col style="width:6rem" />
+        </colgroup>
         <thead>
           <tr>
-            <th>Weapon</th><th>Stats</th><th class="num">Rolls</th><th class="num">Rank</th>
-            <th>Dispo</th><th class="num">DE weekly</th><th></th>
+            <th class="l">Weapon</th><th class="l">Stats</th><th>Rolls</th><th>Rank</th>
+            <th class="l">Dispo</th><th>DE weekly</th><th></th>
           </tr>
         </thead>
         <tbody>
@@ -120,7 +124,7 @@
             {@const change = dispoChangeFor(r.slug, market?.rivens)}
             {@const band = bandText(r)}
             <tr>
-              <td>
+              <td class="l">
                 <div class="weapon">
                   {#if r.veiled}
                     <span class="veiled" title="Veiled riven — the stats are revealed by installing and completing its challenge.">Veiled</span>
@@ -130,7 +134,7 @@
                   {/if}
                 </div>
               </td>
-              <td>
+              <td class="l">
                 <div class="stats" title={r.veiled ? 'Veiled — stats hidden until revealed.' : statLines(r).join('\n')}>
                   {#if r.veiled}
                     <span class="muted">challenge to reveal</span>
@@ -141,9 +145,9 @@
                   {/if}
                 </div>
               </td>
-              <td class="num mono">{r.veiled ? '—' : r.rerolls}</td>
-              <td class="num mono">{r.veiled ? '—' : r.lvl}</td>
-              <td>
+              <td>{r.veiled ? '—' : r.rerolls}</td>
+              <td>{r.veiled ? '—' : r.lvl}</td>
+              <td class="l">
                 {#if r.slug && market?.rivens?.weapons?.[r.slug]}
                   <span class="mono">{market.rivens.weapons[r.slug].disposition.toFixed(2)}</span>
                   {#if change}
@@ -155,7 +159,7 @@
                   <span class="muted">—</span>
                 {/if}
               </td>
-              <td class="num">
+              <td>
                 {#if band}
                   <div class="band" title={band.note}>
                     <span class="mono">{band.price}</span>
@@ -168,7 +172,7 @@
               </td>
               <td>
                 <button
-                  class="tiny ghost"
+                  class="btn ghost"
                   onclick={() => showComps(r)}
                   disabled={!r.slug || compsBusy !== null}
                   title={r.slug ? 'Fetch the cheapest live auctions for this weapon (WFM caps at 10/min).' : 'Unknown weapon — no comps.'}
@@ -227,38 +231,28 @@
 </section>
 
 <style>
-  .rivens { display: flex; flex-direction: column; gap: 10px; }
-  .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  h2 { margin: 0; font-size: 15px; }
-  .lead { margin: 0; font-size: 12.5px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { text-align: left; font-weight: 600; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--border); }
-  td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-  .num { text-align: right; }
-  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .weapon { display: flex; align-items: center; gap: 6px; }
+  /* Shell + table come from the shared .wrap.tw / table.tw anatomy in
+     app.css; only riven-specific content styles live here. */
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .weapon { display: flex; align-items: center; gap: var(--s1); }
   .pol { color: var(--muted); font-size: 12px; }
   .veiled { color: var(--muted); font-style: italic; }
-  .stats { display: flex; flex-wrap: wrap; gap: 2px 12px; max-width: 420px; }
+  /* Stats wrap to several lines; td height acts as a minimum in tables. */
+  .stats { display: flex; flex-wrap: wrap; gap: 2px var(--s3); max-width: 420px; padding: var(--s1) 0; font-family: var(--font-body); color: var(--fg); }
   .stat { white-space: nowrap; }
-  .dispo-move { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; color: var(--good); margin-left: 6px; }
+  .dispo-move { font-family: var(--font-mono); font-size: 11px; color: var(--good); margin-left: var(--s1); }
   .band { white-space: nowrap; }
   .small { font-size: 11px; }
   .muted { color: var(--muted); }
   .bad { color: var(--bad); }
-  .empty { padding: 10px 0; }
-  .scroll { overflow: auto; }
-  .comps-row td { background: var(--panel-2); }
-  .comps { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow: auto; }
-  .comp { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
-  .comp-head { display: flex; align-items: baseline; gap: 10px; }
+  /* Comps expand as an inset drawer under the row, on the panel-2 ground. */
+  .comps-row td { background: var(--panel-2); height: auto; text-align: left; }
+  .comps { display: flex; flex-direction: column; gap: var(--s1); max-height: 320px; overflow: auto; padding: var(--s1) 0; }
+  .comp { border: 1px solid var(--border); border-radius: var(--radius-ctl); padding: var(--s2); display: flex; flex-direction: column; gap: 4px; background: var(--panel); }
+  .comp-head { display: flex; align-items: baseline; gap: var(--s2); }
   .comp .price { font-weight: 700; font-size: 14px; }
-  .comp-owner { margin-left: auto; white-space: nowrap; }
-  .comp-detail { display: flex; gap: 10px; flex-wrap: wrap; }
-  .comp-stats { display: flex; flex-wrap: wrap; gap: 2px 12px; }
+  .comp-owner { margin-left: auto; white-space: nowrap; font-family: var(--font-mono); }
+  .comp-detail { display: flex; gap: var(--s2); flex-wrap: wrap; }
+  .comp-stats { display: flex; flex-wrap: wrap; gap: 2px 12px; font-family: var(--font-body); color: var(--fg); }
   .riven-name { font-style: italic; }
-  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; }
-  button.ghost:hover:not(:disabled) { background: var(--panel-2); color: var(--fg); }
-  button.tiny { padding: 2px 8px; font-size: 11px; }
-  button:disabled { opacity: .5; cursor: default; }
 </style>

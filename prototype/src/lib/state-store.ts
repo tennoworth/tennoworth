@@ -4,9 +4,10 @@
 // same runtime sniff the transport uses — see `createStateStore()`.
 //
 // It covers EXACTLY the state the SPA persists today, no more:
-//   - seven scalar settings (reserve-copies, filters-open, view,
+//   - the scalar settings (reserve-copies, filters-open, view,
 //     score-explainer-dismissed, keep-copies-nudge-dismissed,
-//     tray-toast-seen, sell-onboarding-dismissed), each a short string;
+//     tray-toast-seen, sell-onboarding-dismissed, auto-close-sold,
+//     theme.mode), each a short string;
 //   - the last-owned inventory snapshot (the reload-restore copy).
 //
 // The desktop `snapshot` / `snapshot_item` history tables are a separate
@@ -46,7 +47,13 @@ export type SettingKey =
   | 'sell-onboarding-dismissed'
   /** Desktop: EE.log sold-detection may adjust WFM listings ('on' | 'off'). The
    *  Rust tailer reads the same `setting` row (trades.rs SETTING_AUTO_CLOSE). */
-  | 'auto-close-sold';
+  | 'auto-close-sold'
+  /** Visual theme: `theme.mode` = 'system' | 'light' | 'dark'. Also read RAW
+   *  from localStorage by public/theme-boot.js before first paint (the one
+   *  sanctioned raw read) — keep the key name below in step with it.
+   *  (`theme.look` retired 2026-08 with the four-look picker: yorha is the
+   *  only look. Old `wfminv:theme-look-v1` values are simply never read.) */
+  | 'theme.mode';
 
 // The historical localStorage key each setting has always used. Only the
 // browser store carries these `wfminv:…-vN` names (so existing data keeps
@@ -63,6 +70,7 @@ export const LOCAL_SETTING_KEYS: Record<SettingKey, string> = {
   'tray-toast-seen': 'wfminv:tray-toast-seen-v1',
   'sell-onboarding-dismissed': 'wfminv:sell-onboarding-dismissed-v1',
   'auto-close-sold': 'wfminv:auto-close-sold-v1',
+  'theme.mode': 'wfminv:theme-mode-v1',
 };
 
 // The SQLite `setting.key` the desktop store parks the reload-restore snapshot

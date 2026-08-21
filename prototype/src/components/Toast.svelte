@@ -44,9 +44,9 @@
     background: var(--panel-2);
     border: 1px solid var(--border);
     border-left: 3px solid var(--accent);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     padding: 10px 12px;
-    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--shadow-pop);
     font-size: 12.5px;
     line-height: 1.5;
     color: var(--fg);

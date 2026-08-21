@@ -243,24 +243,24 @@
   .suggest {
     position: absolute; top: 100%; left: 0; right: 0; z-index: 3;
     margin: 2px 0 0; padding: 4px; list-style: none;
-    background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
-    box-shadow: 0 6px 20px rgba(0,0,0,.18);
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-panel);
+    box-shadow: var(--shadow-pop);
   }
   .suggest li button {
     width: 100%; display: flex; justify-content: space-between; gap: 10px;
-    background: none; border: 0; padding: 6px 8px; color: var(--fg); cursor: pointer; text-align: left; font: inherit; border-radius: 6px;
+    background: none; border: 0; padding: 6px 8px; color: var(--fg); cursor: pointer; text-align: left; font: inherit; border-radius: var(--radius-ctl);
   }
   .suggest li button:hover { background: var(--panel-2); }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th { text-align: left; font-weight: 600; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--border); }
   td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .good { color: var(--good); font-weight: 600; }
   .bad { color: var(--bad); }
   .muted { color: var(--muted); }
   .empty { padding: 10px 0; }
   .scroll { overflow: auto; }
-  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); padding: 4px 10px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); padding: 4px 10px; border-radius: var(--radius-ctl); font-size: 12px; cursor: pointer; }
   button.ghost:hover:not(:disabled) { background: var(--panel-2); color: var(--fg); }
   button.tiny { padding: 2px 8px; font-size: 11px; }
 </style>
