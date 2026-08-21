@@ -340,9 +340,20 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
 }
 
 // Turn a /proc/<pid>/mem open failure into actionable guidance. Permission
-// denied is the common case (no CAP_SYS_PTRACE) and we lead with the
-// grant-once setcap path so users never need sudo again; anything else
+// denied is the common case (no permission to ptrace the game); anything else
 // usually means the PID exited between lookup and read.
+//
+// The remedy depends on HOW the app is running, which is why this branches:
+//
+//   AppImage (the only Linux channel we ship) — `setcap` is useless here. The
+//     runtime mounts the payload on a fresh nosuid FUSE mount per launch, and
+//     the kernel ignores file capabilities on nosuid mounts; even if it did
+//     not, `current_exe()` is a /tmp/.mount_* path that ceases to exist when
+//     the app closes, so the grant could not outlive one run. The honest fix
+//     is to relax Yama.
+//
+//   Anything else (cargo run, a distro package built from source) — the
+//     per-binary capability is still the tightest grant available, so keep it.
 #[cfg(target_os = "linux")]
 fn ptrace_open_error(mem_path: &str, pid: u32, e: std::io::Error) -> anyhow::Error {
     if e.kind() != std::io::ErrorKind::PermissionDenied {
@@ -351,44 +362,70 @@ fn ptrace_open_error(mem_path: &str, pid: u32, e: std::io::Error) -> anyhow::Err
              PID {pid} may have exited — restart Warframe past the title screen and retry."
         );
     }
-    let bin = std::env::current_exe()
+    // Set by the AppImage runtime to the path of the .AppImage itself — the
+    // same signal update.rs uses to decide whether self-update can work.
+    let appimage = std::env::var_os("APPIMAGE").and_then(|p| p.to_str().map(str::to_owned));
+    let scope = std::fs::read_to_string("/proc/sys/kernel/yama/ptrace_scope")
         .ok()
-        .and_then(|p| p.to_str().map(str::to_owned))
-        .unwrap_or_else(|| "tennoworth-desktop".to_string());
-    let mut msg = format!(
-        "Permission denied reading {mem_path} — reading the game's memory needs CAP_SYS_PTRACE.\n\
-         Grant it once (no sudo needed afterwards):\n  \
-         sudo setcap cap_sys_ptrace=eip \"{bin}\"\n  \
-         {bin}\n\
-         Or run this one invocation with sudo:\n  \
-         sudo {bin}\n\
-         Note: re-installing or rebuilding the binary clears the capability — re-run setcap after an upgrade."
-    );
-    // Whether the capability is needed is decided by kernel.yama.ptrace_scope,
+        .map(|s| s.trim().to_owned());
+
+    let mut msg = match &appimage {
+        Some(img) => format!(
+            "Permission denied reading {mem_path} — reading the game's memory needs \
+             permission to ptrace it.\n\
+             `setcap` does not work for an AppImage: it runs from a temporary mount that \
+             ignores file capabilities, and the path changes every launch.\n\
+             Allow same-user ptrace instead:\n  \
+             sudo sysctl kernel.yama.ptrace_scope=0\n\
+             To keep it across reboots:\n  \
+             echo 'kernel.yama.ptrace_scope=0' | sudo tee /etc/sysctl.d/10-tennoworth.conf\n\
+             Or run this one launch with sudo:\n  \
+             sudo \"{img}\""
+        ),
+        None => {
+            let bin = std::env::current_exe()
+                .ok()
+                .and_then(|p| p.to_str().map(str::to_owned))
+                .unwrap_or_else(|| "tennoworth-desktop".to_string());
+            format!(
+                "Permission denied reading {mem_path} — reading the game's memory needs CAP_SYS_PTRACE.\n\
+                 Grant it once (no sudo needed afterwards):\n  \
+                 sudo setcap cap_sys_ptrace=eip \"{bin}\"\n  \
+                 {bin}\n\
+                 Or run this one invocation with sudo:\n  \
+                 sudo {bin}\n\
+                 Note: re-installing or rebuilding the binary clears the capability — re-run setcap after an upgrade."
+            )
+        }
+    };
+
+    // Whether any of this is needed is decided by kernel.yama.ptrace_scope,
     // NOT by Proton-vs-native (a myth this message used to leave standing: at
     // scope 1 the game is a child of Steam, not of us, so a non-descendant
     // tracer is refused however the game was launched). Name the scope we
     // actually found so the user can tell "expected" from "misconfigured".
-    match std::fs::read_to_string("/proc/sys/kernel/yama/ptrace_scope") {
-        Ok(s) if s.trim() == "3" => msg.push_str(
-            "\n\nkernel.yama.ptrace_scope is 3 (ptrace disabled) — setcap alone won't help.\n\
-             Lower it until reboot:\n  sudo sysctl kernel.yama.ptrace_scope=1",
+    match scope.as_deref() {
+        // Yama makes 3 a one-way door: the sysctl write is rejected for the
+        // rest of the uptime, so telling anyone to lower it now is a dead end.
+        // The only route is config plus a reboot.
+        Some("3") => msg.push_str(
+            "\n\nkernel.yama.ptrace_scope is 3 (ptrace disabled). This cannot be lowered \
+             while the machine is running — the sysctl write is refused once it reaches 3.\n\
+             Set it for the next boot and reboot:\n  \
+             echo 'kernel.yama.ptrace_scope=0' | sudo tee /etc/sysctl.d/10-tennoworth.conf",
         ),
-        Ok(s) if s.trim() == "0" => msg.push_str(
+        Some("0") => msg.push_str(
             "\n\nkernel.yama.ptrace_scope is 0, so this normally would not be needed —\n\
              the game may be running as a different user (a separate Steam or\n\
-             Flatpak account), which the capability also covers.",
+             Flatpak account), which same-user ptrace does not cover.",
         ),
-        Ok(s) => {
-            let scope = s.trim();
-            msg.push_str(&format!(
-                "\n\nkernel.yama.ptrace_scope is {scope}: only a process's own descendants\n\
-                 may read its memory, and the game is a child of Steam, not of us.\n\
-                 That is the usual desktop default, so this step is expected here —\n\
-                 it is not caused by Proton, and a native launch behaves the same."
-            ));
-        }
-        Err(_) => {}
+        Some(s) => msg.push_str(&format!(
+            "\n\nkernel.yama.ptrace_scope is {s}: only a process's own descendants\n\
+             may read its memory, and the game is a child of Steam, not of us.\n\
+             That is the usual desktop default, so this step is expected here —\n\
+             it is not caused by Proton, and a native launch behaves the same."
+        )),
+        None => {}
     }
     anyhow!(msg)
 }
