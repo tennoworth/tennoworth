@@ -94,7 +94,7 @@
   .card {
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     padding: 14px 16px;
     display: flex;
     flex-direction: column;

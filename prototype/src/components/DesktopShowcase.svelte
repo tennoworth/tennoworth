@@ -1,10 +1,18 @@
 <script lang="ts">
   import CopyBtn from './CopyBtn.svelte';
+  import { plat, wfmItemUrl } from '../lib/format';
+  import { sparklinePoints } from '../lib/sparkline';
+  import type { HandoffRow } from '../lib/market-browse';
 
-  // The desktop-app showcase on the informational landing. Rendered only on
-  // the hosted site ({#if !isDesktop} in App.svelte) — a desktop user is
-  // already in the app. No routing: this is an <section id="desktop"> the
-  // upsell pitch links to with a same-page anchor.
+  // The hand-off panel on the informational landing (hosted site only —
+  // {#if !isDesktop} in App.svelte; a desktop user is already in the app).
+  // Flow v2: instead of a prose showcase, the SAME rows the visitor just read
+  // in the search table, now with Own · Score · Potential filled (sample owned
+  // counts, everything else from the snapshot), beside a site-vs-app table and
+  // the two install buttons. The install commands, first-run notes and the
+  // verify/signature information live under one disclosure — they carry
+  // information but they aren't the pitch. Anchor: <section id="desktop">.
+  let { rows = [] }: { rows?: HandoffRow[] } = $props();
 
   type Os = 'windows' | 'linux' | 'debian' | 'fedora' | 'arch';
   // Default the active tab to the visitor's OS so a Windows user lands on the
@@ -12,6 +20,7 @@
   // The distro repo tabs stay for the transition; the AppImage is the lead.
   let activeOs = $state<Os>(detectOs());
   const osOrder: Os[] = ['windows', 'linux', 'debian', 'fedora', 'arch'];
+  let installOpen = $state(false);
 
   function detectOs(): Os {
     try {
@@ -21,6 +30,12 @@
       return 'windows';
     }
   }
+  function openInstall(os: Os): void {
+    activeOs = os;
+    installOpen = true;
+  }
+
+  const RELEASES = 'https://github.com/tennoworth/tennoworth/releases';
 
   // Install blocks — keep the commands byte-identical to README.md's, so the
   // two can't drift (the Windows row points at the releases page instead of a
@@ -58,17 +73,10 @@
     },
   } as const;
 
-  const feature = [
-    { title: 'Scan the game', body: 'One click reads the running game\u2019s memory \u2014 no file, no terminal, no copy-paste.' },
-    { title: 'Ranked sell list', body: 'Your items scored by expected plat, not raw averages \u2014 preset filters for vaulted, ducats, and more.' },
-    { title: 'List on WFM', body: 'Review and price a batch, post hidden, then manage your orders in-app.' },
-    { title: 'No Overwolf, no accounts', body: 'Reads memory locally; logs into warframe.market only when you list. Nothing is uploaded to us.' },
-  ] as const;
-
   const firstRun = [
-    { n: '01', title: 'Install and launch', body: 'Open Warframe and get past the login screen \u2014 the credentials the scan needs are in memory by then.' },
-    { n: '02', title: 'Scan inventory', body: 'Click Scan inventory in the app. It reads the running game\u2019s memory and loads your items.' },
-    { n: '03', title: 'See what to sell', body: 'Your ranked sell list is ready \u2014 filter by vaulted, ducats, presets, and your own price and quantity edits.' },
+    { n: '01', title: 'Install and launch', body: 'Open Warframe and get past the login screen — the credentials the scan needs are in memory by then.' },
+    { n: '02', title: 'Scan inventory', body: 'Click Scan inventory in the app. It reads the running game’s memory and loads your items.' },
+    { n: '03', title: 'See what to sell', body: 'Your ranked sell list is ready — filter by vaulted, ducats, presets, and your own price and quantity edits.' },
     { n: '04', title: 'List on warframe.market (optional)', body: 'Log in once in-app (token encrypted on your machine) to post listings and manage orders.' },
   ] as const;
 
@@ -80,281 +88,256 @@
   const PTRACE_CMD = 'sudo setcap cap_sys_ptrace=eip /usr/bin/tennoworth-desktop';
   const isLinux = $derived(activeOs !== 'windows');
 
-  // Screenshot slot: the real asset is a human follow-up, so the <img> loads
-  // it when it exists and the onerror drops back to the placeholder.
-  let shotFailed = $state(false);
+  const compare = [
+    { what: 'Prices, trends, vault status', site: 'ok', app: 'ok' },
+    { what: 'Your inventory, ranked', site: '—', app: 'ok scan' },
+    { what: 'Top picks · sets · relics · spares', site: '—', app: 'ok' },
+    { what: 'List & manage WFM orders', site: '—', app: 'ok' },
+    { what: 'Listing health, live top-of-book', site: '—', app: 'ok' },
+    { what: 'Login', site: 'none', app: 'only to list' },
+    { what: 'Where your data lives', site: 'nowhere', app: 'your machine' },
+    { what: 'Overwolf', site: '—', app: 'never' },
+  ] as const;
 </script>
 
-<section id="desktop" class="desktop-showcase">
+{#snippet mark(v: string)}
+  {#if v === 'ok'}<span class="ok">✓</span>
+  {:else if v === 'ok scan'}<span class="ok">✓</span> scan
+  {:else if v === '—'}<span class="no">—</span>
+  {:else}{v}{/if}
+{/snippet}
 
-  <div class="hero">
-    <div class="tag">TennoWorth Desktop</div>
-    <h2>Your sell list, without a terminal.</h2>
-    <p class="sub">
-      Scan the running game, and TennoWorth ranks <em>your</em> inventory by what
-      to sell right now — the same prices and vault data as this site, joined to
-      what you actually own. Review, price, and post to warframe.market in one
-      place. Windows + Linux, no Overwolf, no accounts.
-    </p>
-    <div class="ctas">
-      <a
-        class="btn primary"
-        href="https://github.com/tennoworth/tennoworth/releases"
-        target="_blank"
-        rel="noopener noreferrer"
-      >Download for Windows</a>
-      <a class="btn ghost" href="#desktop-install">Linux — apt / dnf / AUR</a>
-    </div>
-    <p class="trust">Reads memory only · open source · nothing leaves your machine</p>
-    <div class="hero-shot">
-      {#if shotFailed}
-        <div class="frame-fallback">screenshot: the app's ranked sell list</div>
-      {:else}
-        <img
-          class="shot"
-          src="screenshots/desktop-sell-list.png"
-          alt="Screenshot of TennoWorth Desktop's ranked sell list"
-          loading="lazy"
-          onerror={() => (shotFailed = true)}
-        />
-      {/if}
-      <div class="cap">The market browser you're using now, plus your inventory ranked by expected plat.</div>
-    </div>
+<section id="desktop" class="wrap tw handoff" aria-label="TennoWorth Desktop">
+  <div class="rail">
+    <h3>Own any of this? The desktop app fills in the rest.</h3>
+    <span class="exp">Same rows — plus what you own, what it's worth to <em>you</em>, and one-click listing on warframe.market.</span>
   </div>
 
-  <div class="features">
-    {#each feature as f (f.title)}
-      <div class="feature">
-        <h3>{f.title}</h3>
-        <p>{f.body}</p>
-      </div>
-    {/each}
-  </div>
-
-  <div class="block" id="desktop-install">
-    <h3>Install</h3>
-    <div class="tabs" role="tablist" aria-label="Operating system">
-      {#each osOrder as key (key)}
-        <button
-          role="tab"
-          id="tab-{key}"
-          aria-controls="panel-install"
-          aria-selected={activeOs === key}
-          tabindex={activeOs === key ? 0 : -1}
-          onclick={() => (activeOs = key)}
-          onkeydown={(e) => {
-            // Arrow-key navigation between tabs (WAI-ARIA tabs pattern).
-            const idx = osOrder.indexOf(activeOs);
-            let next = null;
-            if (e.key === 'ArrowRight') next = osOrder[(idx + 1) % osOrder.length];
-            if (e.key === 'ArrowLeft') next = osOrder[(idx - 1 + osOrder.length) % osOrder.length];
-            if (next) {
-              e.preventDefault();
-              activeOs = next;
-              document.getElementById(`tab-${next}`)?.focus();
-            }
-          }}
-        >{install[key].title}</button>
-      {/each}
-    </div>
-    <div role="tabpanel" id="panel-install" aria-labelledby="tab-{activeOs}">
-    {#if install[activeOs].copiable}
-      <div class="snippet-row">
-        <pre class="snippet"><code>{install[activeOs].cmd}</code></pre>
-        <CopyBtn text={install[activeOs].cmd} />
-      </div>
-    {:else}
-      <div class="snippet-row">
-        <pre class="snippet"><code>{install[activeOs].cmd}</code></pre>
-        <a
-          class="btn small"
-          href="https://github.com/tennoworth/tennoworth/releases"
-          target="_blank"
-          rel="noopener noreferrer"
-        >Open releases ↗</a>
-      </div>
-    {/if}
-    <p class="install-note">{install[activeOs].note}</p>
-    </div>
-  </div>
-
-  <div class="block">
-    <h3>First run</h3>
-    <div class="steps">
-      {#each firstRun as s (s.n)}
-        <div class="step">
-          <span class="n">{s.n}</span>
-          <div class="body">
-            <h4>{s.title}</h4>
-            <p>{s.body}</p>
-            {#if s.n === '02' && isLinux}
-              <p class="muted">{PTRACE_NOTE}</p>
-              <div class="snippet-row inline">
-                <pre class="snippet"><code>{PTRACE_CMD}</code></pre>
-                <CopyBtn text={PTRACE_CMD} />
-              </div>
-            {/if}
-          </div>
+  <div class="hbody">
+    <div class="rows">
+      {#if rows.length}
+        <div class="scroll">
+        <table class="tw fixed">
+          <colgroup>
+            <col />
+            <col style="width:3.75rem" />
+            <col style="width:4.75rem" />
+            <col style="width:3.5rem" />
+            <col style="width:4.25rem" />
+            <col style="width:4rem" />
+            <col style="width:3.5rem" />
+            <col style="width:4rem" />
+            <col style="width:5.25rem" />
+            <col style="width:4rem" />
+          </colgroup>
+          <thead><tr>
+            <th class="l">Item</th>
+            <th>Δ 90d</th>
+            <th>Trend</th>
+            <th>Avg</th>
+            <th>Low sell</th>
+            <th>Vol 48h</th>
+            <th class="you y1" title="How many you own — read from your inventory by the scan">Own</th>
+            <th class="you" title="Expected plat per day if you listed: min(owned, vol 48h ÷ 2) × price">Score</th>
+            <th class="you" title="Owned × Avg">Potential</th>
+            <th class="you"></th>
+          </tr></thead>
+          <tbody>
+            {#each rows as r (r.slug)}
+              <tr>
+                <td class="l">
+                  <a href={wfmItemUrl(r.slug)} target="_blank" rel="noopener noreferrer">{r.name}</a>
+                  {#if r.vault === 'vaulted'}<span class="tag vaulted">vaulted</span>{:else if r.vault === 'vaulting-soon'}<span class="tag soon">soon</span>{/if}
+                </td>
+                <td>
+                  {#if r.deltaPct != null && Math.abs(r.deltaPct) >= 1}
+                    {#if r.deltaPct > 0}<span class="up">▲{r.deltaPct.toFixed(0)}%</span>{:else}<span class="down">▼{Math.abs(r.deltaPct).toFixed(0)}%</span>{/if}
+                  {:else}<span class="flat">·</span>{/if}
+                </td>
+                <td>
+                  {#if sparklinePoints(r.medians_7d, 60, 18)}
+                    <svg class="spark" viewBox="0 0 60 18" width="60" height="18" aria-hidden="true">
+                      <polyline points={sparklinePoints(r.medians_7d, 60, 18)} fill="none" stroke="currentColor" stroke-width="1.25" />
+                    </svg>
+                  {:else}<span class="faint">—</span>{/if}
+                </td>
+                <td class="fg">{plat(r.avg)}</td>
+                <td>{plat(r.lowSell)}</td>
+                <td>{r.vol.toLocaleString()}</td>
+                <td class="you y1">{r.owned}</td>
+                <td class="you score">{r.score.toLocaleString()}</td>
+                <td class="you">{r.potential.toLocaleString()}<span class="unit">p</span></td>
+                <td class="you act"><span class="btn xs" aria-hidden="true">List</span></td>
+              </tr>
+            {/each}
+          </tbody>
+        </table>
         </div>
-      {/each}
+      {/if}
+      <div class="line">
+        <span class="exp">Score = min(owned, vol 48h ÷ 2) × price — plat you can realistically move per day. Owned counts here are sample values; the desktop app scans the running game and fills these. Nothing is uploaded; no WFM login until you list.</span>
+      </div>
+      <div class="cta">
+        <a class="btn lg primary" href={RELEASES} target="_blank" rel="noopener noreferrer">Windows .msi</a>
+        <button type="button" class="btn lg" onclick={() => openInstall(activeOs === 'windows' ? 'linux' : activeOs)} aria-expanded={installOpen} aria-controls="desktop-install">Linux · AppImage</button>
+        <span class="fine">free · open source · reads memory only<br />unsigned Windows build — see Install &amp; verify</span>
+      </div>
     </div>
-  </div>
 
-  <div class="block">
-    <h3>Site vs Desktop app</h3>
-    <table class="cmp">
-      <thead>
-        <tr><th></th><th>This site</th><th>Desktop app</th></tr>
-      </thead>
+    <table class="tw fixed cmp" aria-label="This site versus the desktop app">
+      <colgroup><col /><col style="width:4.25rem" /><col style="width:6.25rem" /></colgroup>
+      <thead><tr><th class="l">&nbsp;</th><th>This site</th><th>Desktop app</th></tr></thead>
       <tbody>
-        <tr><td>Market data, trends, vault status</td><td class="yes">✓</td><td class="yes">✓</td></tr>
-        <tr><td>Your inventory ranked</td><td class="no">—</td><td class="yes">✓ scan</td></tr>
-        <tr><td>List on WFM / manage orders</td><td class="no">—</td><td class="yes">✓</td></tr>
-        <tr><td>Login</td><td>no accounts</td><td class="yes">in-app (warframe.market)</td></tr>
+        {#each compare as c (c.what)}
+          <tr><td class="l">{c.what}</td><td>{@render mark(c.site)}</td><td>{@render mark(c.app)}</td></tr>
+        {/each}
       </tbody>
     </table>
   </div>
 
+  <details class="install" id="desktop-install" bind:open={installOpen}>
+    <summary>
+      <span class="lbl">Install &amp; verify</span>
+      <span class="exp">Windows .msi · Linux AppImage · Debian/Ubuntu apt · Fedora dnf · Arch AUR · first run · how to check the build</span>
+    </summary>
+    <div class="install-body">
+      <div class="seg" role="tablist" aria-label="Operating system">
+        {#each osOrder as key (key)}
+          <button
+            role="tab"
+            id="tab-{key}"
+            aria-controls="panel-install"
+            aria-selected={activeOs === key}
+            class:on={activeOs === key}
+            tabindex={activeOs === key ? 0 : -1}
+            onclick={() => (activeOs = key)}
+            onkeydown={(e) => {
+              // Arrow-key navigation between tabs (WAI-ARIA tabs pattern).
+              const idx = osOrder.indexOf(activeOs);
+              let next = null;
+              if (e.key === 'ArrowRight') next = osOrder[(idx + 1) % osOrder.length];
+              if (e.key === 'ArrowLeft') next = osOrder[(idx - 1 + osOrder.length) % osOrder.length];
+              if (next) {
+                e.preventDefault();
+                activeOs = next;
+                document.getElementById(`tab-${next}`)?.focus();
+              }
+            }}
+          >{install[key].title}</button>
+        {/each}
+      </div>
+      <div role="tabpanel" id="panel-install" aria-labelledby="tab-{activeOs}">
+        <div class="snippet-row">
+          <pre class="snippet"><code>{install[activeOs].cmd}</code></pre>
+          {#if install[activeOs].copiable}
+            <CopyBtn text={install[activeOs].cmd} />
+          {:else}
+            <a class="btn" href={RELEASES} target="_blank" rel="noopener noreferrer">Open releases ↗</a>
+          {/if}
+        </div>
+        <p class="note">{install[activeOs].note}</p>
+      </div>
+
+      <h4>First run</h4>
+      <ol class="steps">
+        {#each firstRun as s (s.n)}
+          <li>
+            <span class="n">{s.n}</span>
+            <div class="sbody">
+              <strong>{s.title}</strong>
+              <p>{s.body}</p>
+              {#if s.n === '02' && isLinux}
+                <p class="note">{PTRACE_NOTE}</p>
+                <div class="snippet-row inline">
+                  <pre class="snippet"><code>{PTRACE_CMD}</code></pre>
+                  <CopyBtn text={PTRACE_CMD} />
+                </div>
+              {/if}
+            </div>
+          </li>
+        {/each}
+      </ol>
+
+      <h4>Verify</h4>
+      <p class="note">
+        Every release is built in public CI from the tagged commit and ships checksums, so you can
+        confirm your download matches. The apt and dnf repositories are signed
+        (<a href="/tennoworth-archive-keyring.asc">archive key</a>). The Windows build is
+        <strong>unsigned</strong> — no paid certificate — so SmartScreen warns once; the app only ever
+        reads the running game's memory and nothing leaves your machine. Full detail in
+        <a href="https://github.com/tennoworth/tennoworth/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer">SECURITY.md</a>.
+      </p>
+    </div>
+  </details>
 </section>
 
 <style>
-  .desktop-showcase {
-    margin-top: 24px;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 12px;
-    overflow: hidden;
+  .handoff { scroll-margin-top: var(--s3); }
+  /* Rows + CTA on the left, the comparison table in a 24rem right column. */
+  .hbody { display: grid; grid-template-columns: minmax(0, 1fr) 24rem; }
+  .rows { border-right: 1px var(--rule) var(--hairline); min-width: 0; display: flex; flex-direction: column; }
+  .rows .scroll { overflow-x: auto; }
+  .rows table { min-width: 44rem; }
+  .rows .line {
+    display: flex; align-items: center; gap: var(--s2);
+    min-height: var(--rail); padding: var(--s2) var(--inset);
+    border-top: 1px var(--rule) var(--hairline);
+    font-size: 12px; line-height: 1rem; color: var(--muted);
+  }
+  .rows .line .exp { white-space: normal; }
+  .cta {
+    display: flex; align-items: center; gap: var(--s2);
+    padding: var(--s3) var(--inset);
+    border-top: 1px var(--rule) var(--hairline);
+    margin-top: auto;
+  }
+  .cta .fine { color: var(--muted); /* informational — --faint is decorative-only */ font-size: 11px; line-height: 1rem; margin-left: auto; text-align: right; }
+  .cmp { font-size: 12px; }
+  .cmp td { height: 1.5rem; font-family: var(--font-body); color: var(--muted); }
+  .cmp td.l { color: var(--fg); }
+  .cmp .ok { color: var(--good); }
+  .cmp .no { color: var(--faint); }
+  @media (max-width: 900px) {
+    .hbody { grid-template-columns: 1fr; }
+    .rows { border-right: none; border-bottom: 1px var(--rule) var(--hairline); }
   }
 
-  .hero {
-    padding: 36px 32px 28px;
-    background:
-      radial-gradient(600px 200px at 85% -40px, rgba(78, 158, 234, 0.18), transparent 70%),
-      var(--panel-2);
-    border-bottom: 1px solid var(--hairline);
+  /* Install & verify: one disclosure under the panel. */
+  .install { border-top: 1px solid var(--border); }
+  .install > summary {
+    display: flex; align-items: center; gap: var(--s2);
+    height: var(--rail); padding: 0 var(--inset);
+    cursor: pointer; list-style: none; user-select: none;
+    font-size: 12px; color: var(--muted); white-space: nowrap;
   }
-  .hero h2 { margin: 0 0 8px; font-size: 24px; font-weight: 700; letter-spacing: -0.015em; }
-  .hero .tag {
-    color: var(--accent);
-    font-size: 12px;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    font-weight: 600;
+  .install > summary::-webkit-details-marker { display: none; }
+  .install > summary::after {
+    content: '+'; margin-left: auto; font-family: var(--font-mono); color: var(--muted);
   }
-  .hero .sub { color: var(--muted); max-width: 62ch; font-size: 14px; margin: 10px 0 0; }
-  .hero .ctas { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 20px; }
-  .hero .trust { margin: 12px 0 0; color: var(--muted); font-size: 12px; }
-
-  .btn {
-    appearance: none;
-    border: none;
-    cursor: pointer;
-    font: inherit;
-    font-weight: 600;
-    font-size: 13.5px;
-    padding: 10px 18px;
-    border-radius: 8px;
-    text-decoration: none;
-    display: inline-block;
-  }
-  .btn.primary { background: var(--accent); color: #fff; }
-  .btn.ghost { background: transparent; color: var(--fg); border: 1px solid var(--border); }
-  .btn.small { font-size: 11.5px; padding: 0 12px; border-radius: 6px; border: 1px solid var(--border); background: transparent; color: var(--muted); }
-  .btn.small:hover { color: var(--accent); }
-
-  .hero-shot { margin-top: 24px; border: 1px solid var(--hairline); border-radius: 8px; overflow: hidden; }
-  .hero-shot .shot { display: block; width: 100%; }
-  /* The screenshot asset is a human follow-up; until it exists (or on a load
-     failure) this placeholder carries the same chrome so the slot never
-     renders unstyled. */
-  .hero-shot .frame-fallback {
-    display: block;
-    color: var(--faint);
-    font-size: 12px;
-    text-align: center;
-    padding: 46px 0;
-    font-family: ui-monospace, Menlo, monospace;
-    background: var(--panel-2);
-  }
-  .hero-shot .cap { padding: 8px 12px; font-size: 12px; color: var(--muted); }
-
-  .features {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 1px;
-    background: var(--hairline);
-  }
-  .feature { background: var(--panel); padding: 20px; }
-  .feature h3 { margin: 0 0 6px; font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
-  .feature p { margin: 0; font-size: 13px; color: var(--fg); }
-
-  .block { padding: 24px 32px; border-top: 1px solid var(--hairline); }
-  .block h3 { margin: 0 0 12px; font-size: 14px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
-
-  .tabs {
-    display: inline-flex;
-    gap: 4px;
-    padding: 3px;
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    margin-bottom: 14px;
-  }
-  .tabs button {
-    appearance: none;
-    border: none;
-    background: transparent;
-    color: var(--muted);
-    font: inherit;
-    font-size: 12.5px;
-    padding: 5px 12px;
-    border-radius: 5px;
-    cursor: pointer;
-  }
-  .tabs button:hover { color: var(--fg); }
-  .tabs button[aria-selected="true"] { background: var(--panel); color: var(--fg); box-shadow: 0 0 0 1px var(--border); }
-
-  .snippet-row { display: flex; gap: 6px; align-items: stretch; margin-bottom: 10px; }
-  .snippet-row.inline { margin: 8px 0 0; max-width: 560px; }
-  .snippet-row.inline .snippet { padding: 8px 10px; font-size: 12px; white-space: nowrap; }
+  .install[open] > summary::after { content: '−'; color: var(--accent); }
+  .install > summary:hover { color: var(--fg); }
+  .install > summary .lbl { width: auto; color: var(--fg); }
+  .install-body { padding: var(--s3) var(--inset) var(--s4); border-top: 1px var(--rule) var(--hairline); display: flex; flex-direction: column; gap: var(--s3); }
+  .install-body .seg { align-self: flex-start; }
+  .install-body h4 { margin: var(--s2) 0 0; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .snippet-row { display: flex; gap: var(--s2); align-items: stretch; }
+  .snippet-row.inline { margin: var(--s2) 0 0; max-width: 34rem; }
+  .snippet-row.inline .snippet { padding: var(--s1) var(--s2); font-size: 12px; white-space: nowrap; }
   .snippet {
-    flex: 1;
-    min-width: 0;
-    overflow-x: auto;
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px 14px;
-    font-family: ui-monospace, Menlo, monospace;
-    font-size: 12.5px;
-    color: var(--fg);
-    white-space: pre;
-    margin: 0;
+    flex: 1; min-width: 0; overflow-x: auto; margin: 0;
+    background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius-input);
+    padding: var(--s2) var(--s3);
+    font-family: var(--font-mono); font-size: 12px; color: var(--fg); white-space: pre;
   }
   .snippet code { background: transparent; padding: 0; font-size: inherit; }
-  .install-note { margin: 10px 0 0; font-size: 12.5px; color: var(--muted); }
-
-  .steps { display: flex; flex-direction: column; gap: 12px; }
-  .step { display: flex; gap: 14px; align-items: flex-start; }
-  .step .n {
-    font-family: ui-monospace, Menlo, monospace;
-    font-size: 13px;
-    letter-spacing: 0.05em;
-    color: var(--accent);
-    font-weight: 600;
-    padding-top: 2px;
-    min-width: 26px;
-  }
-  .step .body { min-width: 0; }
-  .step h4 { margin: 0 0 4px; font-size: 13.5px; font-weight: 600; }
-  .step p { margin: 0; font-size: 13px; color: var(--fg); }
-  .step p.muted { color: var(--muted); }
-  .step code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: 0.92em; }
-
-  table.cmp { width: 100%; border-collapse: collapse; font-size: 13px; }
-  table.cmp th, table.cmp td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--hairline); }
-  table.cmp th { color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; font-size: 11.5px; }
-  table.cmp td.yes { color: var(--good); }
-  table.cmp td.no { color: var(--faint); }
-  table.cmp tr:last-child td { border-bottom: none; }
+  .note { margin: 0; font-size: 12px; line-height: 1rem; color: var(--muted); max-width: 72ch; }
+  .note a { color: var(--accent); }
+  .note strong { color: var(--fg); }
+  .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2) var(--s5); }
+  .steps li { display: flex; gap: var(--s3); align-items: flex-start; }
+  .steps .n { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.05em; color: var(--accent); font-weight: 600; min-width: 1.5rem; line-height: 1.25rem; }
+  .sbody { min-width: 0; }
+  .sbody strong { font-size: 13px; font-weight: 600; line-height: 1.25rem; }
+  .sbody p { margin: 0; font-size: 12px; line-height: 1rem; color: var(--muted); }
+  @media (max-width: 720px) { .steps { grid-template-columns: 1fr; } }
 </style>

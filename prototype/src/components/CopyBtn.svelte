@@ -33,7 +33,7 @@
     appearance: none;
     background: var(--panel-2);
     border: 1px solid var(--border);
-    border-radius: 6px;
+    border-radius: var(--radius-ctl);
     color: var(--muted);
     font-size: 11.5px;
     padding: 0 10px;
@@ -42,5 +42,5 @@
     transition: color 120ms ease, background 120ms ease;
   }
   .copybtn:hover { color: var(--accent); background: var(--panel); }
-  .copybtn.copied { color: var(--ok, #7dd97d); }
+  .copybtn.copied { color: var(--good); }
 </style>

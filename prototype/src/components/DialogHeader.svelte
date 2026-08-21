@@ -42,7 +42,7 @@
     line-height: 1;
     width: 26px;
     height: 26px;
-    border-radius: 6px;
+    border-radius: var(--radius-ctl);
     cursor: pointer;
   }
   .x:hover {

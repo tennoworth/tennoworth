@@ -8,6 +8,7 @@ import {
   topMovers,
   vaultedTop,
   dispositionChanges,
+  handoffSample,
 } from './market-browse.js';
 import type { Market } from './types';
 
@@ -215,5 +216,28 @@ describe('vaultedTop', () => {
   it('returns [] when vault_status is absent', () => {
     expect(vaultedTop({ items: {} }, idx)).toEqual([]);
     expect(vaultedTop(null, idx)).toEqual([]);
+  });
+});
+
+describe('handoffSample', () => {
+  const m = fixture();
+  const idx = buildBrowseIndex(m);
+
+  it('picks three distinct liquid rows — one vaulted first — with sample owned counts and derived score/potential', () => {
+    const rows = handoffSample(m, idx);
+    expect(rows.length).toBe(3);
+    expect(new Set(rows.map((r) => r.slug)).size).toBe(3);
+    expect(rows[0].slug).toBe('rare_thing'); // highest-avg vaulted row
+    expect(rows.map((r) => r.owned)).toEqual([3, 1, 2]);
+    for (const r of rows) {
+      expect(r.vol).toBeGreaterThanOrEqual(10);
+      expect(r.score).toBe(Math.round(Math.min(r.owned, r.vol / 2) * r.avg));
+      expect(r.potential).toBe(Math.round(r.owned * r.avg));
+    }
+  });
+
+  it('is deterministic and returns [] without items', () => {
+    expect(handoffSample(m, idx).map((r) => r.slug)).toEqual(handoffSample(m, idx).map((r) => r.slug));
+    expect(handoffSample(null, buildBrowseIndex(null))).toEqual([]);
   });
 });

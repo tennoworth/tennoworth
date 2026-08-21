@@ -28,6 +28,7 @@
     tableView = $bindable(),
 
     resolved, results, deltas, totalPotential,
+    prevSummary = null, sinceScan = null, ordersSummary = null,
     marketFreshness, marketStaleness, marketLoadError,
     listableRows, availableTags, availableTypes,
     visibleColumns, presetSort, emptyReason,
@@ -45,6 +46,25 @@
   // EVERY render of this pane — including every keystroke in the name filter,
   // which cannot change the answer. $derived recomputes only when results does.
   let sellableCount = $derived(results.filter((r) => r.sellable > 0).length);
+
+  // Since-last-scan deltas for the summary cells. prevSummary is the previous
+  // snapshot pushed through the same filter cascade (App.svelte), so each Δ is
+  // in the cell's own units. Null (no previous scan this session) hides them.
+  let ownedDelta = $derived(prevSummary ? resolved.owned.size - prevSummary.owned : null);
+  let sellableDelta = $derived(prevSummary ? sellableCount - prevSummary.sellable : null);
+  let potentialDelta = $derived(prevSummary ? Math.round(totalPotential - prevSummary.potential) : null);
+  function fmtDelta(d, unit = '') {
+    if (d == null || d === 0) return null;
+    const n = Math.abs(d).toLocaleString(undefined, { maximumFractionDigits: 0 });
+    return `${d > 0 ? '▲' : '▼'}${n}${unit}`;
+  }
+  // "Changes only" — session-only view of the rows whose count moved since the
+  // last scan (the Δ column's non-zero rows). Not persisted: it is a glance,
+  // not a preference, and it means nothing after a reload (no deltas then).
+  let changesOnly = $state(false);
+  let tableRows = $derived(
+    changesOnly ? results.filter((r) => (deltas.get(r.key ?? r.slug) ?? 0) !== 0) : results,
+  );
 
   // Bulk "List on WFM" staging copy. listableRows is already the filtered (or
   // unfiltered) set minus relics (subtyped rows) and no-spare rows; the batch
@@ -129,6 +149,19 @@
     return `Clears around ${price}p at current demand.`;
   }
 
+  // Row B "active filter" chips — the Filters popover's state surfaced as
+  // removable chips so a narrowed table never reads as a mysteriously short
+  // one. Each × resets that one filter to its wide-open value.
+  let activeFilterChips = $derived.by(() => {
+    const out = [];
+    if (minPrice > 0) out.push({ key: 'price', label: `min avg ≥ ${minPrice}p`, clear: () => (minPrice = 0) });
+    if (minOwned > 1) out.push({ key: 'owned', label: `min owned ≥ ${minOwned}`, clear: () => (minOwned = 1) });
+    if (reserveCopies > 0) out.push({ key: 'reserve', label: `keep ${reserveCopies} ${reserveCopies === 1 ? 'copy' : 'copies'}`, clear: () => setReserveCopies(0) });
+    if (typeFilter !== 'all') out.push({ key: 'type', label: `type: ${TYPE_LABELS[typeFilter] ?? typeFilter}`, clear: () => (typeFilter = 'all') });
+    if (hideAtLvl < 11) out.push({ key: 'kept', label: `hide ranked ≥ ${hideAtLvl}`, clear: () => (hideAtLvl = 11) });
+    return out;
+  });
+
   // Preset-driven empty states reset the preset; hand-filter ones relax the
   // offending slider. A price slider can't rescue a "no vaulted parts" empty.
   const PRESET_EMPTY_KINDS = new Set(['tag', 'vault', 'ducats', 'vol', 'median', 'spares', 'advice']);
@@ -150,6 +183,51 @@
     aria-label="About this view"
     title="Items in your inventory worth listing right now, ranked by sell score."
   >ⓘ</span>
+  <!-- Summary strip: totals with since-last-scan deltas; Listed / Needs fixing
+       appear once the orders panel has reported; the last cell is the
+       since-scan state with the session-only "Changes only" toggle. -->
+  <div class="summary" role="group" aria-label="Sell summary">
+    <div class="cell">
+      <span class="k">Owned</span>
+      <span class="v">{resolved.owned.size.toLocaleString()}</span>
+      {#if fmtDelta(ownedDelta)}<span class="d" class:up={ownedDelta > 0} class:down={ownedDelta < 0}>{fmtDelta(ownedDelta)}</span>{/if}
+    </div>
+    <div class="cell">
+      <span class="k">Sellable</span>
+      <span class="v">{sellableCount.toLocaleString()}</span>
+      {#if fmtDelta(sellableDelta)}<span class="d" class:up={sellableDelta > 0} class:down={sellableDelta < 0}>{fmtDelta(sellableDelta)}</span>{/if}
+    </div>
+    <div class="cell">
+      <span class="k">Potential</span>
+      <span class="v">{totalPotential.toLocaleString(undefined, { maximumFractionDigits: 0 })}<span class="unit">p</span></span>
+      {#if fmtDelta(potentialDelta)}<span class="d" class:up={potentialDelta > 0} class:down={potentialDelta < 0}>{fmtDelta(potentialDelta, 'p')}</span>{/if}
+    </div>
+    {#if ordersSummary}
+      <div class="cell">
+        <span class="k">Listed</span>
+        <span class="v">{ordersSummary.live.toLocaleString()}</span>
+      </div>
+      {#if ordersSummary.issues > 0}
+        <div class="cell attn">
+          <span class="k">Needs fixing</span>
+          <span class="v">{ordersSummary.issues.toLocaleString()}</span>
+        </div>
+      {/if}
+    {/if}
+    {#if sinceScan}
+      <div class="cell since">
+        <span>Since scan: <b>{sinceScan.added}</b> new · <b>{sinceScan.changed}</b> moved · <b>{sinceScan.removed}</b> gone</span>
+        <button
+          type="button"
+          class="changes-toggle"
+          class:on={changesOnly}
+          aria-pressed={changesOnly}
+          onclick={() => (changesOnly = !changesOnly)}
+          title="Show only rows whose count changed since the last scan (the Δ column's ▲/▼ rows)."
+        >{changesOnly ? '☑' : '☐'} Changes only</button>
+      </div>
+    {/if}
+  </div>
 </section>
 
 {#if !sellOnboardingDismissed}
@@ -180,31 +258,6 @@
   </div>
 {/if}
 
-<section class="stats">
-  <div class="stat">
-    <span class="k">Owned</span>
-    <span class="v">{resolved.owned.size.toLocaleString()}</span>
-  </div>
-  <div class="stat">
-    <span class="k">Sellable</span>
-    <span class="v">{sellableCount.toLocaleString()}</span>
-  </div>
-  <div class="stat">
-    <span class="k">Potential</span>
-    <span class="v">
-      {totalPotential.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-      <span class="unit">p</span>
-    </span>
-  </div>
-  <div class="stat right">
-    <span class="k">
-      <span class="dot {marketFreshness}" role="img" aria-label="Market data {marketFreshness}"></span>
-      Market data
-    </span>
-    <span class="v small">{marketStaleness ?? '—'}{marketFreshness !== 'unknown' ? ` · ${marketFreshness}` : ''}</span>
-  </div>
-</section>
-
 {#if marketLoadError}
   <div class="card warn-banner">⚠ {marketLoadError}</div>
 {:else if marketFreshness === 'stale'}
@@ -213,66 +266,60 @@
   </div>
 {/if}
 
-{#if results.length > 0}
-  {#if allPicks.length > 0}
-    <section class="card picks">
-      <div class="picks-head">
-        <div class="picks-title">
-          <h3>Top picks</h3>
-          <span
-            class="muted"
-            title="Same Score as the table below — expected plat per day if listed. Picks also need at least 3 trades/48h (so a listing won't just sit) and {MIN_PICK_SCORE}p/day to clear the bar."
-          >Best sells right now, ranked by expected plat/day — patience listings excluded.</span>
-        </div>
-      </div>
-      <div class="picks-body">
-        {#each picks as p, i (p.key ?? p.slug)}
-          <div class="pick-row">
-            <span class="pick-rank">{i + 1}</span>
-            <div class="pick-main">
-              <a
-                class="pick-name"
-                href={wfmItemUrl(p.slug)}
-                target="_blank"
-                rel="noopener noreferrer"
-              >{p.name}</a>
-              <p class="pick-reason" class:hold={p.timing === 'hold'} class:peak={p.timing === 'peak'}>
-                {pickReason(p)}
-                <span class="pick-vol">({plat(p.volume_48h)} trades / 48h)</span>
-              </p>
-              {#if p.volume_48h < LIQUID_VOL}
-                <span class="pick-tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor — expect to wait for a buyer.">thin</span>
-              {/if}
-            </div>
-            <div class="pick-score">~{plat(p.sell_score)}<span class="unit">p/day</span></div>
-            <div class="pick-actions">
-              <button class="pick-list" onclick={() => openListingFlow(p)} aria-label="List {p.name} on WFM">List</button>
-              <button
-                type="button"
-                class="pick-snooze"
-                onclick={() => snoozePick(p.key ?? p.slug)}
-                aria-label="Hide {p.name} for this session"
-                title="Hide for this session"
-              >×</button>
-            </div>
-          </div>
-        {/each}
-        {#if picks.length === 0}
-          <p class="muted picks-all-snoozed">All picks snoozed for this session.</p>
-        {/if}
-      </div>
-    </section>
-  {:else}
-    <div class="card empty">
-      <div>
-        <strong>No picks clear the bar right now.</strong>
-        <p class="muted">Nothing owned trades often enough and scores high enough to headline — check the table below for the rest.</p>
-      </div>
+{#if results.length > 0 && allPicks.length === 0}
+  <div class="card empty">
+    <div>
+      <strong>No picks clear the bar right now.</strong>
+      <p class="muted">Nothing owned trades often enough and scores high enough to headline — check the table below for the rest.</p>
     </div>
-  {/if}
+  </div>
 {/if}
 
-<section class="sell-toolbar">
+<!-- Top picks rail copy: rendered inside ResultsTable's picks panel so the
+     pick rows share the table's colgroup (numbers line up with the columns). -->
+{#snippet picksHead()}
+  <h3>Top picks</h3>
+  <span
+    class="muted picks-exp"
+    title="Same Score as the table below — expected plat per day if listed. Picks also need at least 3 trades/48h (so a listing won't just sit) and {MIN_PICK_SCORE}p/day to clear the bar."
+  >Best sells right now, ranked by expected plat/day — patience listings excluded.</span>
+  <span class="grow"></span>
+  <span class="muted picks-count">
+    {picks.length} of {allPicks.length}
+    {#if snoozedPicks.size > 0}
+      · {snoozedPicks.size} snoozed <button type="button" class="link" onclick={() => (snoozedPicks = new Set())}>restore</button>
+    {/if}
+  </span>
+{/snippet}
+
+{#snippet pickReasonCell(p)}
+  <div class="rs" class:hold={p.timing === 'hold'} class:peak={p.timing === 'peak'}>
+    <span class="t">
+      {pickReason(p)}
+      <span class="pick-vol">({plat(p.volume_48h)} trades / 48h)</span>
+    </span>
+    {#if p.volume_48h < LIQUID_VOL}
+      <span class="pick-tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor — expect to wait for a buyer.">thin</span>
+    {/if}
+    <span class="pick-actions">
+      <button class="pick-list" onclick={() => openListingFlow(p)} aria-label="List {p.name} on WFM">List</button>
+      <button
+        type="button"
+        class="pick-snooze"
+        onclick={() => snoozePick(p.key ?? p.slug)}
+        aria-label="Hide {p.name} for this session"
+        title="Hide for this session"
+      >×</button>
+    </span>
+  </div>
+{/snippet}
+
+{#snippet picksEmpty()}
+  <p class="muted picks-all-snoozed">All picks snoozed for this session.</p>
+{/snippet}
+
+<!-- Row A · SCOPE: presets · type chips · Filters popover. -->
+{#snippet scopeRow()}
   <div class="toolbar-group presets-row">
     {#each Object.entries(PRESETS) as [name, preset]}
       <button
@@ -288,38 +335,12 @@
   <span class="muted preset-hint">
     {activePreset ? PRESETS[activePreset].hint : 'custom — saved preset cleared'}
   </span>
-      {#if availableTags.length > 0}
-        <div class="toolbar-divider" aria-hidden="true"></div>
-        <div class="toolbar-group tagchips">
-          {#each availableTags as [tag, count]}
-            <button
-              type="button"
-              class="chip"
-              class:active={activeTags.has(tag)}
-              class:zero={count === 0}
-              aria-pressed={activeTags.has(tag)}
-              onclick={() => toggleTag(tag)}
-              title={count === 0 ? `No matching rows pass the other filters` : `${count} row${count === 1 ? '' : 's'} carry this tag`}
-            >
-              {tag}
-              <span class="chip-count">{count}</span>
-            </button>
-          {/each}
-          {#if activeTags.size > 0}
-            <button type="button" class="chip-clear" onclick={() => (activeTags = new Set())}>
-              clear ({activeTags.size})
-            </button>
-          {/if}
-        </div>
-        {#if activeTags.size >= 2}
-          <p class="tag-or-note">Multiple tags OR together — a row shows if it carries any selected tag.</p>
-        {/if}
-      {/if}
-  <div class="toolbar-divider" aria-hidden="true"></div>
+  <span class="grow"></span>
   <details class="filter-disclosure" open={filtersOpen} ontoggle={toggleFiltersOpen}>
     <summary>
       <span class="dis-label">Filters</span>
-      <span class="muted small">price · owned · keep copies · type · upgraded mods</span>
+      {#if activeFilterChips.length > 0}<span class="dis-count">{activeFilterChips.length}</span>{/if}
+      <span class="muted small">▾</span>
     </summary>
     <div class="filters-panel">
       <div class="filters">
@@ -352,6 +373,49 @@
       </div>
     </div>
   </details>
+  {#if availableTags.length > 0}
+    <div class="toolbar-group tagchips">
+      {#each availableTags as [tag, count]}
+        <button
+          type="button"
+          class="chip"
+          class:active={activeTags.has(tag)}
+          class:zero={count === 0}
+          aria-pressed={activeTags.has(tag)}
+          onclick={() => toggleTag(tag)}
+          title={count === 0 ? `No matching rows pass the other filters` : `${count} row${count === 1 ? '' : 's'} carry this tag`}
+        >
+          {tag === 'arcane_enhancement' ? 'arcane' : tag}
+          <span class="chip-count">{count}</span>
+        </button>
+      {/each}
+      {#if activeTags.size > 0}
+        <button type="button" class="chip-clear" onclick={() => (activeTags = new Set())}>
+          clear ({activeTags.size})
+        </button>
+      {/if}
+    </div>
+    {#if activeTags.size >= 2}
+      <span class="tag-or-note">tags OR together</span>
+    {/if}
+  {/if}
+{/snippet}
+
+<!-- Row B · NARROW extras: the Filters popover's state as removable chips. -->
+{#snippet narrowChips()}
+  {#if activeFilterChips.length > 0}
+    <div class="toolbar-group active-filters">
+      {#each activeFilterChips as f (f.key)}
+        <button type="button" class="chip fchip" onclick={f.clear} title="Remove this filter">
+          {f.label}<span class="rm" aria-hidden="true">×</span>
+        </button>
+      {/each}
+    </div>
+    <div class="toolbar-divider" aria-hidden="true"></div>
+  {/if}
+{/snippet}
+
+{#snippet listCta()}
   {#if isDesktop}
     <button
       class="list-cta"
@@ -361,11 +425,12 @@
       title={listTitle}
     >{listLabel}</button>
   {/if}
-</section>
+{/snippet}
 
 {@render pendingBanner()}
 
-{#if results.length > 0}
+{#snippet scoreExplainer()}
+  {#if results.length > 0}
   <details
     class="score-expander"
     open={!scoreExplainerDismissed}
@@ -383,13 +448,13 @@
       explainer.
     </div>
   </details>
-{/if}
+  {/if}
+{/snippet}
 
-{#if results.length > 0}
-  <ResultsTable {results} {deltas} {visibleColumns} {presetSort}
-    onfiltered={(rows, active) => (tableView = { rows, active })} />
-{:else if emptyReason}
-  <div class="card empty">
+
+{#snippet emptyState()}
+  {#if emptyReason}
+  <div class="card empty flush">
     {#if emptyReason.kind === 'no-market'}
       <div>
         <strong>Nothing in this inventory has live market data.</strong>
@@ -467,18 +532,32 @@
       <button onclick={() => relaxFilters({ kind: 'tag' })}>Back to Default</button>
     {/if}
   </div>
-{/if}
+  {/if}
+{/snippet}
+
+<!-- Controls live inside the table border (row A SCOPE · row B NARROW); the
+     picks panel is rendered by the table so both share one colgroup. When the
+     cascade leaves nothing, the empty-state card takes the table body's place
+     and the presets stay reachable in row A. -->
+<ResultsTable results={tableRows} {deltas} {visibleColumns} {presetSort}
+  onfiltered={(rows, active) => (tableView = { rows, active: active || changesOnly })}
+  scope={scopeRow} narrow={narrowChips} cta={listCta}
+  picks={results.length > 0 && allPicks.length > 0 ? picks : null}
+  {picksHead} pickReason={pickReasonCell} {picksEmpty}
+  empty={emptyState} between={scoreExplainer} />
 
 <style>
   /* Duplicated from App.svelte's shared styling — Svelte scopes CSS
      per-component, and this codebase's existing extracted components
      already re-declare shared visual classes rather than promoting them
      to global CSS (see DesktopUpdateBanner.svelte). */
+  /* View header rail: title + the summary strip on one 32px rail. */
   .view-header {
     display: flex;
-    align-items: baseline;
-    gap: 8px;
-    min-height: 28px;
+    align-items: center;
+    gap: var(--s2);
+    min-height: var(--rail);
+    flex-wrap: wrap;
   }
   .view-header h2 {
     font-size: 20px;
@@ -487,21 +566,77 @@
     letter-spacing: -0.01em;
     color: var(--fg);
     margin: 0;
+    line-height: 1.5rem;
   }
-  .dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--muted);
-    display: inline-block;
+  /* Summary strip — one outlined container, hairline dividers between cells;
+     the since-scan cell rides the right rail. */
+  .summary {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: stretch;
+    height: var(--rail);
+    margin-left: var(--s2);
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-ctl);
+    overflow: hidden;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    min-width: 0;
   }
-  .dot.fresh   { background: var(--good); }
-  .dot.aging   { background: var(--warn); }
-  .dot.stale   { background: var(--bad); }
+  .summary .cell {
+    display: flex;
+    align-items: center;
+    gap: var(--s2);
+    padding: 0 var(--s3);
+    border-left: 1px var(--rule) var(--hairline);
+  }
+  .summary .cell:first-child { border-left: none; }
+  .summary .cell .k {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 600;
+  }
+  .summary .cell .v {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1rem;
+    color: var(--fg);
+  }
+  .summary .cell .v .unit { font-size: 11px; color: var(--muted); margin-left: 1px; }
+  .summary .cell .d {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 11px;
+    line-height: 1rem;
+  }
+  .summary .cell .d.up { color: var(--good); }
+  .summary .cell .d.down { color: var(--bad); }
+  .summary .cell.attn .v { color: var(--warn); }
+  .summary .cell.since { margin-left: auto; color: var(--muted); overflow: hidden; }
+  .summary .cell.since b { color: var(--fg); font-weight: 600; font-family: var(--font-mono); }
+  .changes-toggle {
+    font: inherit;
+    font-size: 11px;
+    height: var(--ctl-xs);
+    padding: 0 var(--s2);
+    color: var(--muted);
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: var(--radius-ctl);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .changes-toggle:hover { color: var(--fg); background: var(--panel-2); }
+  .changes-toggle.on { color: var(--accent); border-color: var(--accent); background: transparent; }
   .card {
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     padding: 14px 16px;
     display: flex;
     flex-direction: column;
@@ -521,10 +656,10 @@
     color: var(--fg);
     background: var(--bg);
     border: 1px solid var(--border);
-    border-radius: 4px;
+    border-radius: var(--radius-input);
     padding: 5px 8px;
   }
-  code { background: var(--panel-2); padding: 1px 6px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.93em; }
+  code { background: var(--panel-2); padding: 1px 6px; border-radius: var(--radius-input); font-family: var(--font-mono); font-size: 0.93em; }
 
   /* Below this point: sell-view-exclusive, moved (not duplicated) from
      App.svelte — nothing else in the app used these selectors. */
@@ -538,62 +673,18 @@
     font-size: 11px;
     line-height: 1;
     color: var(--muted);
-    border: 1px solid var(--hairline);
+    border: 1px var(--rule) var(--hairline);
     cursor: help;
   }
   .lede-dot:hover, .lede-dot:focus-visible { color: var(--accent); border-color: var(--accent); }
 
-  /* Stats strip — segmented bordered box: one outlined container,
-     hairline dividers between cells. */
-  .stats {
-    display: inline-flex;
-    flex-wrap: wrap;
-    align-self: flex-start;
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    overflow: hidden;
-  }
-  .stat {
-    padding: 7px 16px;
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    border-right: 1px solid var(--hairline);
-  }
-  .stat:last-child { border-right: none; }
-  .stat .k {
-    font-size: 11px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--muted);
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-  }
-  .stat .v {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-variant-numeric: tabular-nums;
-    font-size: 13px;
-    font-weight: 600;
-    line-height: 1.3;
-  }
-  .stat .v.small { font-weight: 500; font-size: 12.5px; }
-  .stat .v .unit { font-size: 11px; color: var(--muted); margin-left: 2px; }
-
-  /* Sell toolbar — presets, tag chips, and the Filters disclosure merged
-     into one borderless, wrapping strip so the workspace loses a card's
-     worth of vertical space and outline on every load. The primary CTA
-     anchors the end of this same line via margin-left:auto. */
-  .sell-toolbar {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 10px 12px;
-    padding: 8px 2px;
-  }
+  /* Controls inside the table border (rendered through ResultsTable's SCOPE /
+     NARROW snippets). Groups wrap; heights are 28 (presets, chips). */
   .toolbar-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-  .toolbar-divider { width: 1px; height: 20px; background: var(--hairline); flex: 0 0 auto; }
+  .toolbar-divider { width: 1px; height: 1rem; background: var(--hairline); flex: 0 0 auto; margin: 0 var(--s1); }
+  .grow { flex: 1 1 0; min-width: 0; }
+  .link { font: inherit; color: var(--accent); background: transparent; border: none; padding: 0 var(--s1); cursor: pointer; }
+  .link:hover { text-decoration: underline; background: transparent; }
 
   /* Preset pills — one-click filter configurations. The active pill is
      accent-bordered AND carries a leading check mark so the selection
@@ -602,8 +693,9 @@
     background: transparent;
     border: 1px solid var(--border);
     color: var(--muted);
-    border-radius: 5px;
-    padding: 4px 12px;
+    border-radius: var(--radius-ctl);
+    height: var(--ctl);
+    padding: 0 12px;
     letter-spacing: 0.02em;
     cursor: pointer;
     transition: color 120ms, border-color 120ms, background 120ms;
@@ -628,19 +720,20 @@
     list-style: none;
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     font-size: 12px;
     color: var(--muted);
-    padding: 4px 10px;
+    height: var(--ctl);
+    padding: 0 10px;
     border: 1px solid var(--border);
-    border-radius: 5px;
+    border-radius: var(--radius-ctl);
     user-select: none;
   }
   .filter-disclosure > summary:hover { color: var(--fg); background: var(--panel-2); }
   .filter-disclosure > summary::-webkit-details-marker { display: none; }
   .filter-disclosure > summary::before {
     content: '+';
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 13px;
     color: var(--muted);
     width: 10px;
@@ -656,16 +749,29 @@
     font-size: 11px;
   }
   .filter-disclosure[open] > summary .dis-label { color: var(--accent); }
+  .dis-count {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    color: var(--accent);
+    border: 1px solid currentColor;
+    border-radius: var(--radius-tag);
+    padding: 0 4px;
+    line-height: 14px;
+  }
+  /* The disclosure sits at the right end of the SCOPE row, so its panel
+     anchors to the right rail. */
   .filters-panel {
     position: absolute;
     top: calc(100% + 6px);
-    left: 0;
+    right: 0;
     z-index: 15;
+    width: max-content;
+    max-width: min(52rem, 80vw);
     background: var(--panel-2);
     border: 1px solid var(--border);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     padding: 12px;
-    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+    box-shadow: var(--shadow-pop);
   }
   .filters { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
   .filters label {
@@ -686,7 +792,7 @@
     background: var(--panel);
     border: 1px solid var(--border);
     border-left: 3px solid var(--accent);
-    border-radius: 8px;
+    border-radius: var(--radius-panel);
     padding: 0 14px;
     position: relative;
   }
@@ -706,7 +812,7 @@
   .score-expander > summary::-webkit-details-marker { display: none; }
   .score-expander > summary::before {
     content: '+';
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     color: var(--muted);
     width: 10px;
     display: inline-block;
@@ -723,8 +829,8 @@
   .score-details code {
     background: var(--panel-2);
     padding: 1px 6px;
-    border-radius: 4px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    border-radius: var(--radius-input);
+    font-family: var(--font-mono);
     font-size: 0.93em;
     color: var(--fg);
   }
@@ -765,7 +871,7 @@
   .keep-nudge .kn-body { min-width: 0; }
   .keep-nudge strong { color: var(--fg); font-weight: 600; font-size: 13px; }
   .keep-nudge .muted { font-size: 12.5px; line-height: 1.5; }
-  .keep-nudge code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.93em; }
+  .keep-nudge code { font-family: var(--font-mono); font-size: 0.93em; }
   .keep-nudge .dismiss {
     background: transparent;
     border: none;
@@ -784,19 +890,15 @@
      stay visible (strikethrough+muted) so vocabulary is discoverable.
      Chip row caps at ~96px (≈3 wrap rows on desktop, ≈4 on mobile) with
      internal vertical scroll. */
-  .tagchips {
-    gap: 6px;
-    align-items: flex-start;
-    max-height: 96px;
-    overflow-y: auto;
-    align-content: flex-start;
-  }
+  /* Type chips take their own line under the presets — real inventories carry
+     10–20 tags, which cannot share a 40px line with six presets. */
+  .tagchips { gap: 6px; flex: 1 1 100%; }
   .chip {
     background: transparent;
     color: var(--muted);
     border: 1px solid var(--border);
-    border-radius: 4px;
-    padding: 4px 10px 4px 12px;
+    border-radius: var(--radius-input);
+    padding: 0 10px 0 12px;
     font-size: 11px;
     letter-spacing: 0.02em;
     cursor: pointer;
@@ -805,9 +907,9 @@
     align-items: center;
     font: inherit;
     line-height: 1.2;
-    /* Tap-target — old 21px height failed iOS HIG / WCAG ≥ 24px. 28px
-       leaves room without losing the pill aesthetic. */
-    min-height: 28px;
+    /* Tap-target — old 21px height failed iOS HIG / WCAG ≥ 24px. 28px is
+       the ladder's control height. */
+    height: var(--ctl);
     transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
   }
   .chip:hover { color: var(--fg); border-color: var(--accent); }
@@ -822,7 +924,7 @@
     cursor: default;
   }
   .chip-count {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 10px;
     color: var(--muted);
   }
@@ -841,119 +943,44 @@
      margin-left:auto so it doesn't visually mix with the chip-style
      presets next to it. Same colour family as the accent. */
   .list-cta {
-    margin-left: auto;
+    height: var(--ctl-lg);
+    padding: 0 var(--s4);
     background: var(--accent);
-    color: var(--bg);
+    color: var(--on-accent);
     border: 1px solid var(--accent);
     font-weight: 600;
+    white-space: nowrap;
   }
   .list-cta:hover:not(:disabled) { filter: brightness(1.1); }
   .list-cta:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  /* Top picks strip. Same carved-panel shell as ResultsTable's .wrap — a
-     panel border with a raised (--panel-2) header bar — rather than the
-     uniform .card padding, so the picks' one-line "what qualifies" copy
-     reads as a fixed header over a list of rows. Rows are hairline-divided. */
-  .picks { padding: 0; overflow: hidden; }
-  .picks-head {
-    display: flex;
-    align-items: baseline;
-    gap: 10px;
-    padding: 12px 16px;
-    background: var(--panel-2);
-    border-bottom: 1px solid var(--border);
-  }
-  .picks-title { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
-  .picks-title h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--fg); }
-  .picks-body { display: flex; flex-direction: column; padding: 0 16px; }
-  .pick-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 0;
-    border-top: 1px solid var(--hairline);
-  }
-  .pick-row:first-of-type { border-top: none; }
-  .pick-rank {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 11px;
-    color: var(--muted);
-    width: 14px;
-    flex-shrink: 0;
-    text-align: right;
-  }
-  /* Single line per pick — the reason sentence truncates by default and
-     expands on hover/focus rather than wrapping, so a long sentence can't
-     push the row back to two lines. */
-  .pick-main { display: flex; flex-direction: row; align-items: baseline; gap: 10px; min-width: 0; flex: 1; }
-  .pick-name {
-    flex: 0 0 auto;
-    max-width: 220px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    color: var(--fg);
-    text-decoration: none;
-    font-weight: 600;
-    font-size: 13px;
-  }
-  .pick-name:hover { color: var(--accent); text-decoration: underline; }
-  .pick-reason {
-    margin: 0;
-    flex: 1 1 auto;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 12.5px;
-    color: var(--muted);
-    line-height: 1.5;
-  }
-  .pick-row:hover .pick-reason, .pick-row:focus-within .pick-reason {
-    white-space: normal;
-    overflow: visible;
-  }
+  /* Top picks — the rail copy and the per-row reason cell, rendered inside
+     ResultsTable's picks panel (rows share the table's colgroup). */
+  .picks-exp { font-size: 12px; }
+  .picks-count { font-size: 11.5px; white-space: nowrap; }
+  .picks-all-snoozed { margin: 0; }
+  /* Reason line: fixed 32px box, ellipsised, List/× at its right end. */
+  .rs { display: flex; align-items: center; gap: var(--s2); height: var(--row); font-size: 12.5px; color: var(--muted); }
+  .rs .t { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* Timing tint mirrors .tag.hold/.tag.peak in ResultsTable — same signal,
-     same colour, so the strip and the table below read as one vocabulary. */
-  .pick-reason.hold { color: var(--warn); }
-  .pick-reason.peak { color: var(--good); }
-  /* Thin-volume tag — a sibling of .pick-reason inside .pick-main so it stays
-     OUTSIDE the truncating <p> and is visible at a glance. */
+     same colour, so the picks and the table below read as one vocabulary. */
+  .rs.hold .t { color: var(--warn); }
+  .rs.peak .t { color: var(--good); }
+  .pick-vol { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-left: 2px; }
   .pick-tag {
     flex-shrink: 0;
-    padding: 1px 6px;
+    padding: 0 6px;
+    line-height: 14px;
     font-size: 9.5px;
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
     border: 1px solid currentColor;
-    border-radius: 3px;
+    border-radius: var(--radius-tag);
     color: var(--warn);
   }
-  .tag-or-note {
-    margin: 0;
-    flex-basis: 100%;
-    font-size: 11.5px;
-    color: var(--muted);
-  }
-  .pick-vol {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 11px;
-    color: var(--muted);
-    margin-left: 2px;
-  }
-  .pick-score {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--fg);
-    flex-shrink: 0;
-    text-align: right;
-    min-width: 64px;
-  }
-  .pick-score .unit { font-size: 11px; color: var(--muted); margin-left: 2px; }
-  .pick-actions { display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
-  .pick-list { font-size: 12px; padding: 5px 12px; min-height: 24px; }
+  .pick-actions { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .pick-list { font-size: 12px; height: var(--ctl-xs); padding: 0 10px; }
   .pick-snooze {
     background: transparent;
     border: none;
@@ -961,10 +988,10 @@
     font-size: 15px;
     line-height: 1;
     cursor: pointer;
-    padding: 4px 7px;
+    padding: 0 6px;
+    height: var(--ctl-xs);
     min-width: 24px;
-    min-height: 24px;
   }
   .pick-snooze:hover { color: var(--bad); }
-  .picks-all-snoozed { padding: 12px 0; margin: 0; }
+  .card.empty.flush { border: none; padding: var(--s2) 0; background: transparent; }
 </style>

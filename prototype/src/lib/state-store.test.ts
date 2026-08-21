@@ -48,6 +48,7 @@ describe('LocalStorageStateStore — key/shape parity with the pre-store code', 
     ['tray-toast-seen', 'wfminv:tray-toast-seen-v1', '1'],
     ['sell-onboarding-dismissed', 'wfminv:sell-onboarding-dismissed-v1', '1'],
     ['auto-close-sold', 'wfminv:auto-close-sold-v1', 'off'],
+    ['theme.mode', 'wfminv:theme-mode-v1', 'dark'],
   ];
 
   // Drift-proof gate: the fixture and LOCAL_SETTING_KEYS must agree, or the
