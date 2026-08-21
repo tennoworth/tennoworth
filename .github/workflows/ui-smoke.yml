@@ -41,7 +41,7 @@ jobs:
       # The desktop binary embeds the SPA at compile time (frontendDist) and
       # plain `cargo build` does not run tauri.conf.json's beforeBuildCommand
       # the way `tauri build` does - build the frontend explicitly first,
-      # exactly like release-desktop.yml and the AUR PKGBUILD do.
+      # exactly like release-desktop.yml does.
       - name: Build frontend (dist-desktop)
         working-directory: prototype
         run: |
