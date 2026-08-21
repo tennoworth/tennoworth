@@ -11,6 +11,25 @@ release body.
 Nothing is backfilled: releases up to and including 0.3.8 predate this file,
 and their notes live on the GitHub releases themselves.
 
+## 0.5.0 — 2026-08-21
+
+A visual overhaul: TennoWorth now has one theme in two modes, and the theme
+control has moved somewhere sensible.
+
+- **One theme, light and dark.** The paper-and-ink look is now the whole
+  design — square corners, dotted rules, no glow, and an active state that
+  inverts rather than changing colour. Its dark mode is new: a deep warm
+  brown-black that keeps the same character with the lights off.
+- **Corpus, Vitruvian and Baseline are gone.** Four half-finished looks made
+  every screen a compromise; one look done properly is better. If you were on
+  one of them, you'll land on the new theme automatically.
+- **Theme selection moved to Settings → Appearance**, along with a new
+  Settings view. Light, Dark, or System — System follows your OS and changes
+  with it. It used to sit in the sidebar and on the landing page, which is not
+  where a preference belongs.
+- **The app is lighter.** Dropping the retired looks removed three token sets,
+  their structural rules, and five bundled fonts.
+
 ## 0.4.0 — 2026-08-21
 
 The app itself is unchanged since 0.3.8 — this release is about how releases
