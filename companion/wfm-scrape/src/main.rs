@@ -397,6 +397,15 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         eprintln!("  ducats: {applied} slugs from DE ({disagreed} disagreed with WFM's value)");
     }
 
+    // Build costs, keyed by the item produced. Only available when the recipes
+    // manifest came through this cycle; reconcile preserves it otherwise.
+    let recipes_surface = de_recipes
+        .map(|r| de_extract::recipes_from_export(r, &path_to_info))
+        .unwrap_or_default();
+    if !recipes_surface.is_empty() {
+        eprintln!("  recipes: {} buildable items costed", recipes_surface.len());
+    }
+
     // Relic rewards. DE's table beats the drop-table scrape on two counts: all
     // four refinements instead of intact only, and correct rarity labels (the
     // old source calls 25.33% drops "Uncommon"). Falls back when the manifest
@@ -423,9 +432,16 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
             build.rewards
         }
         _ => {
-            eprintln!("Fetching relic drop tables (Intact)...");
+            // DE's manifests were skipped or unavailable this cycle. The old
+            // drop-table scrape stays as the fallback rather than being
+            // deleted outright: it is the only other source of a relic table,
+            // and losing relics entirely on a DE outage would be a worse
+            // regression than serving intact-only odds for one cycle. It is
+            // no longer on the happy path, so its rarity mislabelling and
+            // intact-only coverage stop being what users normally see.
+            eprintln!("Fetching relic drop tables (fallback — DE unavailable)...");
             let r = fetch::fetch_relic_rewards(http.as_ref(), &catalog);
-            eprintln!("  {} relics with reward data", r.len());
+            eprintln!("  {} relics with reward data (intact only)", r.len());
             r
         }
     };
@@ -493,6 +509,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     let rivens_old: Option<HashMap<String, serde_json::Value>> = prior.get("rivens").and_then(|s| serde_json::from_value(s.clone()).ok());
     let calendar_old: Option<HashMap<String, serde_json::Value>> = prior.get("calendar").and_then(|s| serde_json::from_value(s.clone()).ok());
     let riven_stats_old: Option<HashMap<String, serde_json::Value>> = prior.get("riven_stats").and_then(|s| serde_json::from_value(s.clone()).ok());
+    let recipes_old: Option<HashMap<String, serde_json::Value>> = prior.get("recipes").and_then(|s| serde_json::from_value(s.clone()).ok());
 
     eprintln!("Fetching prime release/vault dates + Resurgence rotations...");
     let calendar = fetch::fetch_calendar(http.as_ref(), wfstat_raw.as_ref(), &catalog);
@@ -573,6 +590,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     let r_rivens = reconcile("rivens", rivens, rivens_old.as_ref(), prior_stamps.get("rivens").map(|s| s.as_str()), now, true, STALE_DAYS);
     let r_calendar = reconcile("calendar", calendar, calendar_old.as_ref(), prior_stamps.get("calendar").map(|s| s.as_str()), now, true, STALE_DAYS);
     let r_riven_stats = reconcile("riven_stats", riven_stats, riven_stats_old.as_ref(), prior_stamps.get("riven_stats").map(|s| s.as_str()), now, true, STALE_DAYS);
+    let r_recipes = reconcile("recipes", recipes_surface, recipes_old.as_ref(), prior_stamps.get("recipes").map(|s| s.as_str()), now, true, STALE_DAYS);
 
     for r in [&r_p2i, &r_s2p, &r_rr] {
         if let Some(w) = &r.stale_warning {
@@ -594,6 +612,9 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     if let Some(w) = &r_riven_stats.stale_warning {
         eprintln!("{}", w.format());
     }
+    if let Some(w) = &r_recipes.stale_warning {
+        eprintln!("{}", w.format());
+    }
 
     let mut surface_fetched_at: HashMap<String, String> = HashMap::new();
     surface_fetched_at.insert("path_to_info".into(), r_p2i.fetched_at.clone());
@@ -604,6 +625,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     surface_fetched_at.insert("rivens".into(), r_rivens.fetched_at.clone());
     surface_fetched_at.insert("calendar".into(), r_calendar.fetched_at.clone());
     surface_fetched_at.insert("riven_stats".into(), r_riven_stats.fetched_at.clone());
+    surface_fetched_at.insert("recipes".into(), r_recipes.fetched_at.clone());
 
     eprintln!("Rendering {} CSV rows...", csv_path.display());
     let rows = csvin::read_csv_rows(&csv_path)?;
@@ -643,6 +665,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         r_rivens.data,
         r_calendar.data,
         r_riven_stats.data,
+        r_recipes.data,
         surface_fetched_at,
     );
     snapshot.de = Some(de_surface);

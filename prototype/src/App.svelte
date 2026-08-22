@@ -40,6 +40,8 @@
   import type { OwnedRiven } from './lib/rivens';
   import { wfmItemUrl, baroLocation, humanWindow } from './lib/format';
   import BaroBoard from './components/BaroBoard.svelte';
+  import BuildVsBuy from './components/BuildVsBuy.svelte';
+  import RefinementLadder from './components/RefinementLadder.svelte';
   import { listenForTauriEvent, TRAY_HINT_EVENT } from './lib/desktop-update';
 
   // Desktop (Tauri) vs hosted informational (browser) is decided ONCE at boot.
@@ -1157,6 +1159,22 @@
                     <strong>{r.extras_plat}p</strong>.
                   {/if}
                 </p>
+                <!-- The third option the spread above cannot express: buy only
+                     what you lack and foundry the rest. Only for sets you are
+                     actually assembling — on a spares play there is nothing to
+                     build. -->
+                {#if r.kind === 'near-complete' && market?.set_to_parts?.[r.set_slug]}
+                  <details class="build-vs-buy">
+                    <summary>build it or buy it</summary>
+                    <BuildVsBuy
+                      setSlug={r.set_slug}
+                      setName={r.set_name}
+                      parts={market.set_to_parts[r.set_slug].parts}
+                      market={market}
+                      owned={resolved.owned}
+                    />
+                  </details>
+                {/if}
               </div>
             </div>
           {/each}
@@ -1175,9 +1193,9 @@
         <h2>Relic planner</h2>
         <p class="lede">
           {#if relicPlan.length > relicVisible.length}
-            Top {relicVisible.length} of {relicPlan.length} relics you own, ranked by expected plat per crack (Intact state).
+            Top {relicVisible.length} of {relicPlan.length} relics you own, ranked by expected plat per solo crack (Intact); the ladder shows what refining would add.
           {:else}
-            Your {relicPlan.length} relic{relicPlan.length === 1 ? '' : 's'} ranked by expected plat per crack (Intact state).
+            Your {relicPlan.length} relic{relicPlan.length === 1 ? '' : 's'} ranked by expected plat per solo crack (Intact); the ladder shows what refining would add.
           {/if}
           {#if relicSurfaceAge}
             <span class="muted">· ⚠ drop-table data {relicSurfaceAge}</span>
@@ -1217,6 +1235,9 @@
                     >or sell: {p.sell_now.toFixed(0)}p ea</span>
                   {/if}
                 </div>
+                {#if p.decision}
+                  <RefinementLadder decision={p.decision} />
+                {/if}
                 <details class="relic-rewards">
                   <summary>top drops</summary>
                   <ul>
@@ -2351,6 +2372,9 @@
      (expected plat per crack); the moving-rewards fraction flags traps
      where a high-EPP relic has dead reward markets. */
   .relic-planner { padding: 14px 16px; gap: 12px; }
+  .build-vs-buy { margin-top: 8px; }
+  .build-vs-buy > summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
+  .build-vs-buy[open] > summary { margin-bottom: 8px; }
   .relic-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);

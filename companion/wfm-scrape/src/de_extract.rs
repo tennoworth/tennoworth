@@ -242,6 +242,89 @@ pub fn relic_rewards_from_de(
 }
 
 // ---------------------------------------------------------------------------
+// Recipes — what building a thing actually costs
+// ---------------------------------------------------------------------------
+
+/// Build costs, keyed by the slug of the item the recipe PRODUCES.
+///
+/// Keyed on the result rather than the blueprint because the question is "what
+/// does it cost me to end up with a Nova Prime Chassis", and the answer has to
+/// be reachable from the part the user is looking at.
+///
+/// `ingredients` keep their display name even when they do not resolve to a
+/// market slug — Orokin Cells and Argon Crystals are the majority of a build
+/// and are not tradeable, so a consumer must be able to show them as an
+/// unchecked requirement rather than pretend the build is free.
+pub fn recipes_from_export(
+    recipes: &Value,
+    path_to_info: &HashMap<String, Value>,
+) -> HashMap<String, Value> {
+    let alias = recipe_alias(recipes);
+    let mut out = HashMap::new();
+
+    for row in manifest_rows_for(recipes, "ExportRecipes_en.json") {
+        let Some(result) = row.get("resultType").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        // Only recipes whose product we can price are useful here.
+        let Some(info) = resolve_path(result, path_to_info, &alias) else {
+            continue;
+        };
+        let Some(slug) = info.get("slug").and_then(|v| v.as_str()) else { continue };
+
+        let mut entry = serde_json::Map::new();
+        for (src, dst) in [
+            ("buildPrice", "build_price"),
+            ("buildTime", "build_time"),
+            ("skipBuildTimePrice", "rush_price"),
+        ] {
+            if let Some(v) = row.get(src).and_then(|v| v.as_i64()) {
+                entry.insert(dst.into(), Value::from(v));
+            }
+        }
+
+        let ingredients: Vec<Value> = row
+            .get("ingredients")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|ing| {
+                        let path = ing.get("ItemType").and_then(|v| v.as_str())?;
+                        let count = ing.get("ItemCount").and_then(|v| v.as_i64()).unwrap_or(1);
+                        let hit = resolve_path(path, path_to_info, &alias);
+                        let mut row = serde_json::Map::new();
+                        row.insert(
+                            "name".into(),
+                            Value::String(
+                                hit.and_then(|i| i.get("name"))
+                                    .and_then(|v| v.as_str())
+                                    .map(String::from)
+                                    .unwrap_or_else(|| readable_from_path(path)),
+                            ),
+                        );
+                        row.insert("count".into(), Value::from(count));
+                        // Absent slug is meaningful: the ingredient cannot be
+                        // bought, so a build plan must list it, not cost it.
+                        if let Some(s) = hit.and_then(|i| i.get("slug")).and_then(|v| v.as_str()) {
+                            row.insert("slug".into(), Value::String(s.to_string()));
+                        }
+                        Some(Value::Object(row))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        if !ingredients.is_empty() {
+            entry.insert("ingredients".into(), Value::Array(ingredients));
+        }
+        if entry.is_empty() {
+            continue;
+        }
+        out.insert(slug.to_string(), Value::Object(entry));
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
 // Dispositions
 // ---------------------------------------------------------------------------
 
@@ -475,7 +558,10 @@ mod tests {
         serde_json::json!({"ExportRecipes": [
             {"uniqueName": "/Lotus/Types/Recipes/WarframeRecipes/OberonPrimeSystemsBlueprint",
              "resultType": "/Lotus/Types/Recipes/WarframeRecipes/OberonPrimeSystemsComponent",
-             "primeSellingPrice": 15},
+             "primeSellingPrice": 15, "buildPrice": 15000, "buildTime": 43200,
+             "skipBuildTimePrice": 25,
+             "ingredients": [{"ItemType": "/Lotus/Types/Items/MiscItems/OrokinCell",
+                              "ItemCount": 2, "ProductCategory": "MiscItems"}]},
             {"uniqueName": "/Lotus/Types/Recipes/WarframeRecipes/NovaPrimeChassisBlueprint",
              "resultType": "/Lotus/Types/Recipes/WarframeRecipes/NovaPrimeChassisComponent",
              "primeSellingPrice": 100},
@@ -561,6 +647,39 @@ mod tests {
         assert_eq!(rows[0]["chances"]["radiant"], 16.67);
         assert_eq!(rows[0]["chances"]["intact"], 25.33);
         assert_eq!(build.unresolved, 1);
+    }
+
+    #[test]
+    fn recipes_key_on_the_item_produced_not_the_blueprint() {
+        // "What does it cost me to end up with a Volt Prime Chassis" has to be
+        // reachable from the part the user is looking at.
+        let r = recipes_from_export(&recipes(), &p2i());
+        let entry = r
+            .get("oberon_prime_systems_blueprint")
+            .expect("keyed by the produced item's slug");
+        assert_eq!(entry["build_price"], 15000);
+        assert_eq!(entry["build_time"], 43200);
+        assert_eq!(entry["rush_price"], 25);
+    }
+
+    #[test]
+    fn recipe_ingredients_keep_untradeable_items_visible_but_unpriced() {
+        let r = recipes_from_export(&recipes(), &p2i());
+        let ing = r["oberon_prime_systems_blueprint"]["ingredients"].as_array().unwrap();
+        assert_eq!(ing.len(), 1);
+        // Orokin Cell has no market slug. It must still be listed, or a build
+        // plan silently claims a build is free when it is not.
+        assert_eq!(ing[0]["name"], "Orokin Cell");
+        assert_eq!(ing[0]["count"], 2);
+        assert!(ing[0].get("slug").is_none());
+    }
+
+    #[test]
+    fn recipes_skip_products_we_cannot_price() {
+        // Forma resolves to nothing, so it contributes no row rather than a
+        // row with no slug.
+        let r = recipes_from_export(&recipes(), &p2i());
+        assert!(!r.keys().any(|k| k.contains("forma")));
     }
 
     #[test]

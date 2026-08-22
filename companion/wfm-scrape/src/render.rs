@@ -128,6 +128,10 @@ pub struct Snapshot {
     /// per weapon × reroll-state — see `fetch::fetch_riven_stats`.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub riven_stats: HashMap<String, serde_json::Value>,
+    /// `{slug: {build_price, build_time, rush_price, ingredients[]}}` keyed by
+    /// the item the recipe PRODUCES — see `de_extract::recipes_from_export`.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub recipes: HashMap<String, serde_json::Value>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub surface_fetched_at: HashMap<String, String>,
     /// Digital Extremes provenance + the worldState-only surfaces.
@@ -176,6 +180,7 @@ pub fn assemble_snapshot(
     rivens: HashMap<String, serde_json::Value>,
     calendar: HashMap<String, serde_json::Value>,
     riven_stats: HashMap<String, serde_json::Value>,
+    recipes: HashMap<String, serde_json::Value>,
     surface_fetched_at: HashMap<String, String>,
 ) -> Snapshot {
     Snapshot {
@@ -197,6 +202,7 @@ pub fn assemble_snapshot(
         rivens,
         calendar,
         riven_stats,
+        recipes,
         surface_fetched_at,
     }
 }

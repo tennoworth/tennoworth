@@ -211,6 +211,28 @@ export interface Market {
   /** Digital Extremes provenance + the surfaces only worldState provides.
    *  Absent on snapshots built before the DE ingest landed (2026-08). */
   de?: DeSurface | null;
+  /** Build costs from DE's recipe tree, keyed by the slug of the item the
+   *  recipe PRODUCES. Absent on older snapshots. */
+  recipes?: Record<string, RecipeEntry> | null;
+}
+
+/** One ingredient line. **No `slug` means it cannot be bought** — resources
+ *  like Orokin Cells, which a build plan must list as an unchecked
+ *  requirement rather than cost. */
+export interface RecipeIngredientEntry {
+  name: string;
+  count: number;
+  slug?: string;
+}
+
+export interface RecipeEntry {
+  /** Credits the foundry charges. */
+  build_price?: number;
+  /** Foundry time in seconds. */
+  build_time?: number;
+  /** Plat to skip the wait. */
+  rush_price?: number;
+  ingredients?: RecipeIngredientEntry[];
 }
 
 /** One announced Prime Vault rotation. `items` are DE `/Lotus/...` paths —
