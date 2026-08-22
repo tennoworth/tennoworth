@@ -17,6 +17,7 @@
   import SellPane from './components/SellPane.svelte';
   import RivensPanel from './components/RivensPanel.svelte';
   import DesktopShowcase from './components/DesktopShowcase.svelte';
+  import FeatureRail from './components/FeatureRail.svelte';
   import ThemeSwitcher from './components/ThemeSwitcher.svelte';
   import SettingsPanel from './components/SettingsPanel.svelte';
   import { flattenInventory, extractKeptLvls } from './lib/inventory';
@@ -971,7 +972,7 @@
       {#if isDesktop}
         Scan your account and TennoWorth ranks <em>your</em> inventory by what to sell — until then, look anything up below.
       {:else}
-        What's worth selling in Warframe right now — search any item, spot the movers, see what's vaulted. No install, no login.
+        What's worth selling in Warframe right now — search any item, spot the movers, see what's vaulted. No install. No login. No Overwolf.
       {/if}
     </p>
   </header>
@@ -1025,6 +1026,17 @@
         </button>
       </div>
     </div>
+  {/if}
+
+  <!-- The hosted landing reads as a price-lookup tool: search, movers,
+       vaulted, hand-off. Nothing above this reveals that the app also does
+       set picks, relics, rivens, watches, the ledger, orders and the
+       advisor. The rail is that reveal — one miniature per surface, built
+       from sample data rather than screenshots so it re-skins with the
+       theme and can never go stale. Hosted only: a desktop visitor has the
+       real thing in the sidebar. -->
+  {#if !isDesktop}
+    <FeatureRail />
   {/if}
 
   {@render faqContent()}
