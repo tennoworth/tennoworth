@@ -108,6 +108,26 @@ describe('vaultAffects', () => {
     expect(hits).not.toContain('bo_prime_set');
   });
 
+  it('matches a name whose ampersand DE spells out', () => {
+    // Cobra & Crane Prime is MPVCobraAndCranePrimeSinglePack. Treating "&" as
+    // punctuation drops the word and the two sides stop lining up — a silent
+    // miss on a set the user really does hold.
+    const market = {
+      calendar: {
+        primes: {
+          cobra_and_crane_prime_set: { name: 'Cobra & Crane Prime', vaulted: true },
+        },
+      },
+    } as unknown as Market;
+    const pack: VaultRotation = {
+      activation: '2026-08-28T18:00:00Z',
+      items: ['/Lotus/Types/StoreItems/Packages/MegaPrimeVault/MPVCobraAndCranePrimeSinglePack'],
+    };
+    expect(vaultAffects(pack, market, owned(['cobra_and_crane_prime_set']))).toEqual([
+      'cobra_and_crane_prime_set',
+    ]);
+  });
+
   it('is empty without an inventory or a prime calendar', () => {
     expect(vaultAffects(rotation, MARKET, null)).toEqual([]);
     expect(vaultAffects(rotation, { items: {} } as unknown as Market, owned(['x']))).toEqual([]);

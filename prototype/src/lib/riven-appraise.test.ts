@@ -73,10 +73,20 @@ describe('placementOf', () => {
     expect(placementOf(500, dist2)).toBe('upper');
   });
 
-  it('handles a market where mean and median coincide', () => {
+  it('calls an at-the-median offer typical, even on a flat market', () => {
+    // With avg == median, falling through to the skew branch called the most
+    // ordinary price on the weapon "above the average" — wrong, and the
+    // opposite of useful.
     const flat = distributionOf(tier({ avg: 100, median: 100, min: 90, max: 110 }))!;
-    expect(placementOf(100, flat)).toBe('upper');
+    expect(placementOf(100, flat)).toBe('middle');
+    expect(judgeOffer(100, flat)).toBe('fair');
     expect(placementOf(95, flat)).toBe('bottom');
+    expect(placementOf(105, flat)).toBe('upper');
+  });
+
+  it('calls an at-the-median offer typical on a left-skewed market too', () => {
+    const left = distributionOf(tier({ avg: 80, median: 100, min: 40, max: 120 }))!;
+    expect(placementOf(100, left)).toBe('middle');
   });
 });
 
@@ -125,30 +135,24 @@ describe('rerollCost', () => {
 describe('rerollRead', () => {
   const dist = distributionOf(tier({}))!;
 
-  it('leans against rerolling something already above the median', () => {
+  it('reports the cost and the median, and nothing else', () => {
     const r = rerollRead(400, dist, 3);
-    expect(r.lean).toBe('reroll-likely-loses');
-    expect(r.aboveMedian).toBe(true);
     expect(r.kuva).toBe(1400);
+    expect(r.median).toBe(195);
+    expect(r.aboveMedian).toBe(true);
   });
 
-  it('leans toward rerolling something well below it', () => {
-    expect(rerollRead(40, dist, 0).lean).toBe('reroll-likely-gains');
+  it('states the comparison as a fact about two published numbers', () => {
+    expect(rerollRead(40, dist, 0).aboveMedian).toBe(false);
+    expect(rerollRead(195, dist, 0).aboveMedian).toBe(false);
   });
 
-  it('refuses to pick a side inside a 20% band around the median', () => {
-    // Quoting a direction on a 2p difference over a 195p median would be
-    // noise dressed as advice.
-    expect(rerollRead(197, dist, 0).lean).toBe('coin-flip');
-    expect(rerollRead(180, dist, 0).lean).toBe('coin-flip');
-  });
-
-  it('exposes no probability at all', () => {
-    // The sold distribution is not the possible distribution, and five summary
-    // statistics cannot give a defensible tail probability on a skewed market.
-    // If a percentage ever reappears on this type, the model came back.
+  it('exposes no probability and no direction', () => {
+    // A "lean" is a probability claim wearing different clothes: a reroll
+    // draws from the POSSIBLE rolls while DE publishes the SOLD ones. If a
+    // fourth field ever appears on this type, a model came back.
     const r = rerollRead(300, dist, 1);
-    expect(Object.keys(r).sort()).toEqual(['aboveMedian', 'kuva', 'lean', 'median']);
+    expect(Object.keys(r).sort()).toEqual(['aboveMedian', 'kuva', 'median']);
   });
 });
 
@@ -207,7 +211,7 @@ describe('appraise', () => {
     expect(a.placement).toBe('upper');
     expect(a.verdict).toBe('above');
     expect(a.reroll?.kuva).toBe(3150);
-    expect(a.reroll?.lean).toBe('reroll-likely-loses');
+    expect(a.reroll?.aboveMedian).toBe(true);
   });
 
   it('ignores a nonsense price rather than producing NaN', () => {

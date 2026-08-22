@@ -69,7 +69,8 @@ export function distributionOf(tier: RivenStatTier | null | undefined): Distribu
  * Ratio of mean to median — how far a few large sales drag the average.
  *
  * Above `SKEWED` the average is not a typical price and the median is the
- * number to quote. Riven markets are routinely 3× or worse.
+ * number to quote. Riven markets are routinely 3× or worse. The threshold is a
+ * product judgement — see `LOWBALL_FRACTION`.
  */
 export const SKEWED = 1.5;
 
@@ -90,14 +91,31 @@ export function placementOf(price: number, dist: Distribution): Placement {
   if (dist.min > 0 && price < dist.min) return 'below-observed';
   if (dist.max > 0 && price > dist.max) return 'above-observed';
   if (price < dist.median) return 'bottom';
+  // An offer AT the median is the typical price by definition. It has to be
+  // tested before the skew branch: on a flat market where the average equals
+  // the median, falling through would call the most ordinary price on the
+  // weapon "above the average", which is both wrong and the opposite of
+  // useful.
+  if (price === dist.median) return 'middle';
   // On a skewed market the average sits above the median, so "between them" is
-  // a real band. Where the two coincide (or invert on a left-skewed sample),
-  // anything at or above the median counts as upper.
+  // a real band. On a flat or left-skewed one there is no such band and
+  // anything past the median is the upper part of the range.
   if (dist.avg > dist.median && price < dist.avg) return 'middle';
   return 'upper';
 }
 
 export type PriceVerdict = 'below' | 'fair' | 'above' | 'outlier';
+
+/**
+ * How far under the median an offer has to sit before it is a lowball rather
+ * than ordinary haggling.
+ *
+ * A PRODUCT judgement, not something DE's statistics imply — stated plainly
+ * because the rest of this module is careful about that distinction. Same goes
+ * for `SKEWED`. Both are tuneable opinions about presentation; neither is
+ * dressed up as a derived quantity.
+ */
+export const LOWBALL_FRACTION = 0.75;
 
 /** How an offer reads against the weapon's own market. */
 export function judgeOffer(price: number, dist: Distribution): PriceVerdict {
@@ -105,7 +123,7 @@ export function judgeOffer(price: number, dist: Distribution): PriceVerdict {
     case 'below-observed':
       return 'below';
     case 'bottom':
-      return price < dist.median * 0.75 ? 'below' : 'fair';
+      return price < dist.median * LOWBALL_FRACTION ? 'below' : 'fair';
     case 'middle':
       return 'fair';
     case 'upper':
@@ -115,36 +133,34 @@ export function judgeOffer(price: number, dist: Distribution): PriceVerdict {
   }
 }
 
+/**
+ * What can be said about rerolling, which is less than you would like.
+ *
+ * There is no probability here and no direction either. An earlier version
+ * returned a "lean" — likely gains / likely loses / coin flip — and that was
+ * still a probability claim wearing different clothes: a reroll draws from the
+ * set of POSSIBLE rolls while DE publishes the SOLD ones, so no comparison
+ * against the sold median establishes what a new roll will do. The band width
+ * that separated the three cases was arbitrary on top of that.
+ *
+ * So this reports two facts and stops: what the spin costs, and where the
+ * offer sits relative to the weapon's median. The reader draws the inference.
+ */
 export interface RerollRead {
   /** Kuva this spin costs. */
   kuva: number;
-  /** The weapon's median trade — what a redraw is drawing against. */
+  /** The weapon's median trade. */
   median: number;
-  /** Whether the offer already beats the median. */
+  /** Whether the offer is above that median. A fact about two published
+   *  numbers, not a forecast. */
   aboveMedian: boolean;
-  /**
-   * Deliberately NOT a probability.
-   *
-   * A reroll redraws from the distribution of *possible* rolls, and DE
-   * publishes the distribution of *sold* ones — which is biased toward rolls
-   * good enough that somebody listed them. Even with the right sample, five
-   * summary statistics cannot give a defensible tail probability on a
-   * distribution this skewed. So this is the qualitative read the data does
-   * support, and no percentage is shown anywhere.
-   */
-  lean: 'reroll-likely-loses' | 'reroll-likely-gains' | 'coin-flip';
 }
 
 export function rerollRead(price: number, dist: Distribution, rerolls: number): RerollRead {
-  const aboveMedian = price > dist.median;
-  // A 20% band around the median is "about the same" — quoting a direction on
-  // a 2p difference over a 195p median would be noise dressed as advice.
-  const near = Math.abs(price - dist.median) <= dist.median * 0.2;
   return {
     kuva: rerollCost(rerolls),
     median: dist.median,
-    aboveMedian,
-    lean: near ? 'coin-flip' : aboveMedian ? 'reroll-likely-loses' : 'reroll-likely-gains',
+    aboveMedian: price > dist.median,
   };
 }
 

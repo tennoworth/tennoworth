@@ -103,20 +103,14 @@
     {/if}
 
     {#if result.reroll && offer != null}
-      <!-- No percentage anywhere, on purpose: a reroll draws from the set of
-           POSSIBLE rolls while DE publishes the SOLD ones, and five summary
-           statistics cannot give a defensible tail probability on a market
-           this skewed. The direction is all the data supports. -->
+      <!-- Two facts, no forecast. A reroll draws from the set of POSSIBLE
+           rolls while DE publishes the SOLD ones, so nothing here — not a
+           percentage, not even a "likely" — can say what a new roll will do.
+           The reader draws the inference. -->
       <p class="read">
-        Rerolling costs <strong>{result.reroll.kuva.toLocaleString()}</strong> kuva and redraws
-        against a median of <strong>{result.reroll.median.toFixed(0)}p</strong> —
-        {#if result.reroll.lean === 'reroll-likely-loses'}
-          <span class="bad">you are already above it</span>.
-        {:else if result.reroll.lean === 'reroll-likely-gains'}
-          <span class="good">you are below it</span>.
-        {:else}
-          about where you are now.
-        {/if}
+        Rerolling costs <strong>{result.reroll.kuva.toLocaleString()}</strong> kuva. This weapon's
+        median trade is <strong>{result.reroll.median.toFixed(0)}p</strong>; your offer is
+        {result.reroll.aboveMedian ? 'above' : 'at or below'} it.
       </p>
     {/if}
 
@@ -199,12 +193,6 @@
   }
   .warnish {
     color: var(--warn);
-  }
-  .good {
-    color: var(--good);
-  }
-  .bad {
-    color: var(--bad);
   }
   .caveats {
     margin: 0;

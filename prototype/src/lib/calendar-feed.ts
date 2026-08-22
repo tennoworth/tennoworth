@@ -49,6 +49,12 @@ export interface CalendarItem {
 function words(s: string): string[] {
   return (
     s
+      // "&" is spelled out in DE's identifiers — Cobra & Crane Prime is
+      // MPVCobraAndCranePrimeSinglePack — so dropping the symbol as
+      // punctuation loses the word entirely and the two sides stop lining up.
+      // Two of the 159 current prime names hit this: Cobra & Crane and
+      // Silva & Aegis.
+      .replace(/&/g, ' and ')
       // Acronym → word: MPVRevenant → MPV Revenant. Needed first, and easy to
       // miss — without it the leading `MPV` fuses onto the frame name and
       // nothing ever matches.
