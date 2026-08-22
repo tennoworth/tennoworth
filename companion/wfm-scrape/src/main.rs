@@ -383,6 +383,10 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // blueprint you trade), so it resolves through path_to_info the same way
     // relic rewards do. Only applied when the manifest actually came through
     // this cycle — a skipped manifest must not blank a good value.
+    // Always present when DE is reachable — see `de::ALWAYS_FETCH`. Ducats are
+    // an override on `meta_by_slug`, which is rebuilt from warframe.market
+    // every cycle, so there is nothing for reconcile to carry: a skipped
+    // recipes manifest means the catalogue simply keeps WFM's ducat value.
     let de_recipes = de_snap.manifests.get("ExportRecipes_en.json");
     if let Some(recipes) = de_recipes {
         let by_unique = de_extract::ducats_from_recipes(recipes);
@@ -471,6 +475,10 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // an intact-only one on every warm cycle. A skip must emit EMPTY so
     // reconcile carries the DE-derived surface forward; only an unreachable DE
     // justifies the fallback.
+    //
+    // `de_recipes` is always present when DE is reachable (ExportRecipes is in
+    // ALWAYS_FETCH precisely because this surface depends on it), so the
+    // (Some, None) case below means DE is down, not that a cache went stale.
     let relic_rewards = match (
         de_snap.manifests.get("ExportRelicArcane_en.json"),
         de_recipes,

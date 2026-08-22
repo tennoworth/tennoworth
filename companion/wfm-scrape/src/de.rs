@@ -85,14 +85,29 @@ pub const WANTED_MANIFESTS: &[&str] = &[
 
 /// Manifests fetched every cycle regardless of their hash.
 ///
-/// The hash-skip is only safe for a manifest whose derived surface can be
-/// CARRIED — one where an empty result lets `reconcile` keep the prior value.
-/// Dispositions cannot: they are applied as an override on top of the riven
-/// surface, which is refetched from warframe.market every cycle, so skipping
-/// the weapons manifest silently reverts every disposition to WFM's lagging
-/// mirror on the very next run. ExportWeapons is ~600 KB; correctness is worth
-/// more than the saving.
-pub const ALWAYS_FETCH: &[&str] = &["ExportWeapons_en.json"];
+/// THE RULE: a manifest may only be skipped when everything derived from it is
+/// a standalone surface that `reconcile` can carry. Two things disqualify one,
+/// and both bit us:
+///
+/// 1. **It feeds an override on a surface rebuilt every cycle.** Dispositions
+///    are applied on top of the riven surface (refetched from warframe.market
+///    each run) and ducats on top of the item catalogue (likewise). There is
+///    nothing to carry — the host surface arrives fresh and simply loses the
+///    override — so skipping reverts dispositions to WFM's lagging mirror and
+///    ducats to WFM's value, silently, on the very next cycle. The fixture
+///    disagrees by design: WFM says 45 for a Volt Prime Chassis Blueprint,
+///    DE says 65.
+/// 2. **Another surface depends on it.** Relic rewards need `ExportRecipes`
+///    to resolve blueprint paths. Caching the two independently means a cycle
+///    where only the relic hash moved has no recipes to build with — and the
+///    code would fall through to the legacy intact-only source. Keeping the
+///    shared dependency always-present removes the hazard rather than
+///    coordinating two caches.
+///
+/// Together these are ~1.9 MB a cycle against a scrape that already runs for
+/// half an hour. Correctness is worth more than the saving; the 3.2 MB relic
+/// manifest, which is a standalone carryable surface, still skips.
+pub const ALWAYS_FETCH: &[&str] = &["ExportWeapons_en.json", "ExportRecipes_en.json"];
 
 // ---------------------------------------------------------------------------
 // Index

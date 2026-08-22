@@ -265,8 +265,9 @@ fn build_skips_manifests_whose_hash_has_not_moved() {
     assert!(second.status.success());
     let second_err = String::from_utf8_lossy(&second.stderr).to_string();
     assert!(
-        second_err.contains("5 skipped as unchanged") && second_err.contains("1 fetched"),
-        "a warm run skips the five carryable manifests and still pulls ExportWeapons:\n{second_err}"
+        second_err.contains("4 skipped as unchanged") && second_err.contains("2 fetched"),
+        "a warm run skips the four carryable manifests and still pulls the two \
+         whose data cannot be carried:\n{second_err}"
     );
 
     // And the surfaces those manifests feed must survive the skip rather than
@@ -293,11 +294,25 @@ fn build_skips_manifests_whose_hash_has_not_moved() {
     );
     assert_eq!(chassis["rarity"], "Common", "DE's rarity, not the drop table's mislabel");
 
-    // Dispositions cannot be carried — they are an override on a surface that
-    // is refetched every cycle — so their manifest must be fetched every time.
+    // Dispositions and ducats cannot be carried — both are overrides on
+    // surfaces that are refetched every cycle — so their manifests must be
+    // pulled every time.
     assert!(
         second_err.contains("dispositions:"),
         "ExportWeapons must be refetched even when unchanged:\n{second_err}"
+    );
+    assert!(
+        second_err.contains("ducats:"),
+        "ExportRecipes must be refetched even when unchanged:\n{second_err}"
+    );
+
+    // The assertion the first warm-cycle test was missing. The fixture makes
+    // the two sources disagree on purpose: warframe.market says a Volt Prime
+    // Chassis Blueprint is 45 ducats, DE's recipe says 65. If the warm cycle
+    // ever reverts to 45, the DE override was silently lost.
+    assert_eq!(
+        snap["items"]["volt_prime_chassis_blueprint"]["ducats"], 65,
+        "a warm cycle must keep DE's ducat value, not revert to WFM's"
     );
 
     let _ = std::fs::remove_dir_all(&dir);
