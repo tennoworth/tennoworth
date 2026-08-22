@@ -8,6 +8,7 @@
 // how they combine and report the clauses.
 
 import { lookup } from './market';
+import { readDemand } from './demand';
 import { clearingPrice, scoreRow, bandSignal, sellableQty, spareQty, LIQUID_VOL } from './sell-priority';
 import type { Verdict } from './advisor';
 import type { Market, MarketItemEntry, OwnedRecord } from './types';
@@ -186,6 +187,16 @@ function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Mar
     // Advisor verdict for calendar-dated primes; null on everything else.
     advice: verdict?.advice ?? null,
     advice_reasons: verdict?.reasons ?? [],
+    // DE usage telemetry fused with the live market signal. Deliberately
+    // presentational for now: it breaks the tie between two rows that look
+    // identical on price and spread, but it does NOT move sell_score —
+    // that scoring is mirrored in the Rust market-math crate and gated on a
+    // shared fixture, so changing it is a coordinated change of its own.
+    demand: readDemand(rec.slug, market, {
+      vol: m.vol,
+      price: clearingPrice(m),
+      baseline: median_90d || null,
+    }),
   };
 }
 

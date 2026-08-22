@@ -1,4 +1,5 @@
 <script lang="ts">
+  import RivenOffer from './RivenOffer.svelte';
   import { DesktopCmdError, desktopRivenComps, type RivenAuction } from '../lib/transport';
   import { humanError } from '../lib/errors';
   import { humanWindow } from '../lib/format';
@@ -166,6 +167,13 @@
                     {#if band.range}<span class="muted small"> {band.range}</span>{/if}
                     <span class="muted small"> · {band.note}</span>
                   </div>
+                  <!-- Still no "this riven is worth N": the offer comes from
+                       the user, and we supply the arithmetic against DE's
+                       distribution — percentile, reroll odds and cost. -->
+                  <details class="offer-check">
+                    <summary>check an offer</summary>
+                    <RivenOffer riven={r} market={market} />
+                  </details>
                 {:else}
                   <span class="muted">—</span>
                 {/if}
@@ -242,6 +250,8 @@
   .stat { white-space: nowrap; }
   .dispo-move { font-family: var(--font-mono); font-size: 11px; color: var(--good); margin-left: var(--s1); }
   .band { white-space: nowrap; }
+  .offer-check { margin-top: 4px; white-space: normal; text-align: left; }
+  .offer-check > summary { cursor: pointer; color: var(--muted); font-size: 0.75rem; }
   .small { font-size: 11px; }
   .muted { color: var(--muted); }
   .bad { color: var(--bad); }

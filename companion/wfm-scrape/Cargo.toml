@@ -16,3 +16,5 @@ reqwest = { workspace = true }
 # Needed for the injected clock: ISO stamps, fromisoformat-style parsing of
 # WFCD vault dates, and the vaulting-soon horizon arithmetic.
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+lzma-rs = { version = "0.3.0", default-features = false }
+base64.workspace = true
