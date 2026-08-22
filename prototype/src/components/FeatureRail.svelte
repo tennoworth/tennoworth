@@ -33,7 +33,7 @@
       id: 'sell',
       title: 'Sell',
       blurb:
-        'Your inventory ranked by expected plat per day rather than sticker price — a 300p item nobody buys sits below a 20p one that clears twice a day.',
+        'Your inventory ranked by a prioritization score from price, likely sell-through, and bounded DE usage — actual platinum totals stay unweighted.',
     },
     {
       id: 'sets',
@@ -104,8 +104,8 @@
   }
 
   // ---- sample rows, one shape per surface -------------------------------
-  // Score = min(own, vol 48h ÷ 2) × clearing price, the definition the
-  // hand-off panel and the Sell view both state.
+  // Invented prioritization scores for the miniature; the real Sell view
+  // derives them from price, turnover, and bounded DE usage.
   const sell = [
     { item: 'Ash Prime Systems', tag: 'vaulted', own: 2, score: 76, avg: 38 },
     { item: 'Primed Continuity', tag: 'peak', own: 1, score: 61, avg: 61 },
@@ -210,7 +210,7 @@
                 <thead><tr>
                   <th class="l">Item</th>
                   <th>Own</th>
-                  <th title="Expected plat per day: min(owned, vol 48h ÷ 2) × clearing price">Score</th>
+                  <th title="Prioritization score from price, likely sell-through, and bounded DE usage; not expected plat/day">Score</th>
                   <th>Avg</th>
                 </tr></thead>
                 <tbody>

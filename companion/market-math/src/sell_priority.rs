@@ -23,6 +23,34 @@ pub const LIQUID_VOL: f64 = 5.0;
 /// At/under this 48 h volume a listing barely moves — flagged `patience`.
 /// Mirrors `PATIENCE_VOL` in sell-priority.ts.
 const PATIENCE_VOL: f64 = 3.0;
+pub const DEAD_SHARE: f64 = 0.15;
+pub const POPULAR_SHARE: f64 = 1.0;
+
+pub fn liquidity_weight(usage_share: Option<f64>) -> f64 {
+    let Some(share) = usage_share.filter(|share| share.is_finite() && *share >= 0.0) else {
+        return 1.0;
+    };
+    if share < DEAD_SHARE {
+        0.75
+    } else if share >= POPULAR_SHARE {
+        1.25
+    } else {
+        0.75 + ((share - DEAD_SHARE) / (POPULAR_SHARE - DEAD_SHARE)) * 0.5
+    }
+}
+
+pub fn usage_weight_tier(usage_share: Option<f64>) -> &'static str {
+    let Some(share) = usage_share.filter(|share| share.is_finite() && *share >= 0.0) else {
+        return "neutral";
+    };
+    if share < DEAD_SHARE {
+        "low"
+    } else if share >= POPULAR_SHARE {
+        "popular"
+    } else {
+        "typical"
+    }
+}
 
 /// The market fields the score reads — the Rust counterpart of TS's
 /// `Pick<MarketItemEntry, 'vol' | 'low_sell' | 'avg' | 'median_now' |
@@ -37,8 +65,8 @@ pub struct PricedEntry {
     pub median_90d: f64,
 }
 
-/// Output of [`score_row`]: the liquidity-discounted expected daily take, plus
-/// the `patience` flag for barely-moving books.
+/// Output of [`score_row`]: the sell prioritization score plus the `patience`
+/// flag for barely-moving books.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SellScore {
     pub sell_score: f64,
@@ -100,17 +128,26 @@ pub fn clearing_price(m: &PricedEntry) -> f64 {
     low_sell
 }
 
-/// The sell score for one owned row: `min(owned, vol/2 floored at 0.05) ×
-/// clearing_price`. `owned` is the *sellable* quantity (post-reserve). 1:1
+/// The neutral sell score for one owned row. `score_row_weighted` applies the
+/// bounded usage multiplier used by product ranking. `owned` is the sellable
+/// quantity (post-reserve). 1:1
 /// with `scoreRow` in sell-priority.ts — the no-market-entry case (TS `!m`
 /// → `{0, false}`) is the caller's job here (callers skip unresolvable rows).
 pub fn score_row(owned: f64, m: &PricedEntry) -> SellScore {
+    score_row_weighted(owned, m, None)
+}
+
+pub fn score_row_weighted(
+    owned: f64,
+    m: &PricedEntry,
+    usage_share: Option<f64>,
+) -> SellScore {
     let vol = truthy(m.vol);
     let price = clearing_price(m);
     let daily_sales = (vol / 2.0).max(0.05);
     let units_today = owned.min(daily_sales);
     SellScore {
-        sell_score: units_today * price,
+        sell_score: units_today * price * liquidity_weight(usage_share),
         patience: vol < PATIENCE_VOL,
     }
 }
@@ -123,6 +160,13 @@ mod tests {
     // suites move together.
     fn m(vol: f64, low_sell: f64, avg: f64, median_now: f64, median_90d: f64) -> PricedEntry {
         PricedEntry { vol, low_sell, avg, median_now, median_90d }
+    }
+
+    #[test]
+    fn invalid_usage_is_neutral() {
+        for share in [Some(-1.0), Some(f64::NAN), Some(f64::INFINITY), None] {
+            assert_eq!(liquidity_weight(share), 1.0);
+        }
     }
 
     // ---- score_row --------------------------------------------------------

@@ -37,7 +37,7 @@ const BUNDLED_CATALOG: &str = include_str!("../../../prototype/public/wfstat-cat
 
 /// One ranked sellable row — the shape the tray label and the notification both
 /// read, and what `top_sellables` returns to the SPA. `price` is the clamped
-/// clearing price; `score` is the liquidity-discounted sell score.
+/// clearing price; `score` is the usage-weighted prioritization score.
 #[derive(serde::Serialize, Debug, Clone, PartialEq)]
 pub struct SellableRow {
     pub name: String,
@@ -89,6 +89,18 @@ struct PathInfo {
     slug: String,
 }
 
+#[derive(Deserialize)]
+struct SetPart {
+    #[serde(default)]
+    slug: String,
+}
+
+#[derive(Deserialize)]
+struct SetEntry {
+    #[serde(default)]
+    parts: Vec<SetPart>,
+}
+
 /// The three maps the join needs from a market snapshot, ignoring the rest.
 #[derive(Deserialize)]
 pub struct MarketData {
@@ -100,6 +112,12 @@ pub struct MarketData {
     /// DE path → {name, slug} — prime parts pre-baked by the scraper.
     #[serde(default)]
     path_to_info: HashMap<String, PathInfo>,
+    #[serde(default)]
+    usage: HashMap<String, serde_json::Value>,
+    #[serde(default)]
+    set_to_parts: HashMap<String, SetEntry>,
+    #[serde(skip)]
+    usage_parent_by_part: HashMap<String, Option<String>>,
 }
 
 #[derive(Deserialize)]
@@ -124,7 +142,8 @@ impl MarketData {
     /// tennoworth.app) if present and parseable, else the compile-time bundle.
     pub fn load(cache: &MarketCache) -> MarketData {
         if let Some(body) = cache.cached() {
-            if let Ok(m) = serde_json::from_str::<MarketData>(&body) {
+            if let Ok(mut m) = serde_json::from_str::<MarketData>(&body) {
+                m.build_usage_parent_index();
                 return m;
             }
         }
@@ -132,11 +151,44 @@ impl MarketData {
     }
 
     fn bundled() -> MarketData {
-        serde_json::from_str(BUNDLED_MARKET).unwrap_or(MarketData {
+        let mut market = serde_json::from_str(BUNDLED_MARKET).unwrap_or(MarketData {
             items: HashMap::new(),
             catalog: HashMap::new(),
             path_to_info: HashMap::new(),
-        })
+            usage: HashMap::new(),
+            set_to_parts: HashMap::new(),
+            usage_parent_by_part: HashMap::new(),
+        });
+        market.build_usage_parent_index();
+        market
+    }
+
+    fn build_usage_parent_index(&mut self) {
+        let mut index: HashMap<String, Option<String>> = HashMap::new();
+        for (parent, set) in &self.set_to_parts {
+            for part in &set.parts {
+                if part.slug.is_empty() { continue; }
+                match index.get(&part.slug) {
+                    None => { index.insert(part.slug.clone(), Some(parent.clone())); }
+                    Some(Some(existing)) if existing != parent => { index.insert(part.slug.clone(), None); }
+                    _ => {}
+                }
+            }
+        }
+        self.usage_parent_by_part = index;
+    }
+
+    fn usage_share(&self, slug: &str) -> Option<f64> {
+        self.usage_resolution(slug).map(|(_, share, _)| share)
+    }
+
+    fn usage_resolution(&self, slug: &str) -> Option<(String, f64, bool)> {
+        if let Some(direct) = self.usage.get(slug) {
+            return valid_usage_share(direct).map(|share| (slug.to_string(), share, false));
+        }
+        let parent = self.usage_parent_by_part.get(slug)?.as_deref()?;
+        let share = self.usage.get(parent).and_then(valid_usage_share)?;
+        Some((parent.to_string(), share, true))
     }
 
     /// Resolve a DE item path to `(display name, WFM slug)`, or `None` when the
@@ -182,6 +234,22 @@ impl MarketData {
             .unwrap_or_else(|| slug_guess(&info.name));
         Some((info.name.clone(), slug))
     }
+}
+
+fn valid_usage_share(value: &serde_json::Value) -> Option<f64> {
+    let row = value.as_object()?;
+    if row.get("name").and_then(|v| v.as_str()).filter(|s| !s.is_empty()).is_none()
+        || row.get("category").and_then(|v| v.as_str()).filter(|s| !s.is_empty()).is_none()
+        || row.get("year").and_then(|v| v.as_u64()).filter(|year| *year > 0).is_none()
+        || row.get("peak_mr").and_then(|v| v.as_f64()).filter(|v| v.is_finite() && *v >= 0.0).is_none()
+    {
+        return None;
+    }
+    let by_mr = row.get("by_mr").and_then(|v| v.as_array()).filter(|values| !values.is_empty())?;
+    if !by_mr.iter().all(|value| value.as_f64().is_some_and(|v| v.is_finite() && v >= 0.0)) {
+        return None;
+    }
+    row.get("share").and_then(|v| v.as_f64()).filter(|v| v.is_finite() && *v >= 0.0)
 }
 
 /// De-camel a path basename into a display-name guess, trimming Blueprint /
@@ -245,7 +313,7 @@ fn reserve_copies(db: &Db) -> i64 {
         .unwrap_or(0)
 }
 
-/// Rank every sellable item in the latest snapshot, highest sell score first.
+/// Rank every sellable item in the latest snapshot, highest prioritization score first.
 /// Items resolving to the same slug (rare) are aggregated. Rows with no market
 /// entry, nothing left after the reserve, or a zero score are dropped. Sorted
 /// by score desc, then slug asc for a deterministic order (the SPA uses
@@ -276,7 +344,11 @@ pub fn rank_sellables(db: &Db, market: &MarketData) -> Vec<SellableRow> {
             continue;
         }
         let priced = entry.priced();
-        let score = sell_priority::score_row(sellable as f64, &priced);
+        let score = sell_priority::score_row_weighted(
+            sellable as f64,
+            &priced,
+            market.usage_share(&slug),
+        );
         if score.sell_score <= 0.0 {
             continue;
         }
@@ -379,6 +451,101 @@ mod tests {
             order, fx.expected_order,
             "Rust ranking diverged from the golden order (and thus sell-priority.ts)"
         );
+    }
+
+    #[derive(Deserialize)]
+    struct WeightedCase {
+        id: String,
+        count: i64,
+        reserve: i64,
+        leveled: i64,
+        market: PMarket,
+        #[serde(default)]
+        usage_share: serde_json::Value,
+        expected_base_score: f64,
+        expected_weight: f64,
+        expected_score: f64,
+        expected_tier: String,
+    }
+    #[derive(Deserialize)]
+    struct WeightedFixture {
+        cases: Vec<WeightedCase>,
+        expected_order: Vec<String>,
+    }
+
+    fn fixture_share(value: &serde_json::Value) -> Option<f64> {
+        match value {
+            serde_json::Value::Number(value) => value.as_f64(),
+            serde_json::Value::String(value) if value == "NaN" => Some(f64::NAN),
+            serde_json::Value::String(value) if value == "Infinity" => Some(f64::INFINITY),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn weighted_score_matches_ts_on_shared_fixture() {
+        let raw = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/usage-weighted-score/cases.json"
+        ));
+        let fixture: WeightedFixture = serde_json::from_str(raw).unwrap();
+        let mut ranked = Vec::new();
+        for test_case in fixture.cases {
+            let sellable = sell_priority::sellable_qty(
+                test_case.count, test_case.reserve, test_case.leveled,
+            );
+            let priced = PricedEntry {
+                vol: test_case.market.vol,
+                low_sell: test_case.market.low_sell,
+                avg: test_case.market.avg,
+                median_now: test_case.market.median_now,
+                median_90d: test_case.market.median_90d,
+            };
+            let share = fixture_share(&test_case.usage_share);
+            let base = sell_priority::score_row(sellable as f64, &priced).sell_score;
+            let weighted = sell_priority::score_row_weighted(sellable as f64, &priced, share).sell_score;
+            let weight = sell_priority::liquidity_weight(share);
+            let tier = sell_priority::usage_weight_tier(share);
+            assert_eq!(base, test_case.expected_base_score, "{} base", test_case.id);
+            assert_eq!(weight, test_case.expected_weight, "{} weight", test_case.id);
+            assert_eq!(weighted, test_case.expected_score, "{} score", test_case.id);
+            assert_eq!(tier, test_case.expected_tier, "{} tier", test_case.id);
+            if sellable > 0 { ranked.push((test_case.id, weighted)); }
+        }
+        ranked.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap().then_with(|| a.0.cmp(&b.0)));
+        assert_eq!(ranked.into_iter().map(|row| row.0).collect::<Vec<_>>(), fixture.expected_order);
+    }
+
+    #[derive(Deserialize)]
+    struct ResolutionCase {
+        slug: String,
+        expected_source: Option<String>,
+        expected_inherited: Option<bool>,
+        expected_share: Option<f64>,
+    }
+    #[derive(Deserialize)]
+    struct ResolutionFixture {
+        cases: Vec<ResolutionCase>,
+    }
+
+    #[test]
+    fn usage_resolution_matches_ts_on_shared_fixture() {
+        let raw = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/usage-resolution/cases.json"
+        ));
+        let mut market: MarketData = serde_json::from_str(raw).unwrap();
+        let fixture: ResolutionFixture = serde_json::from_str(raw).unwrap();
+        market.build_usage_parent_index();
+        assert_eq!(market.usage_parent_by_part.get("ambiguous_part"), Some(&None));
+        for test_case in fixture.cases {
+            let hit = market.usage_resolution(&test_case.slug);
+            assert_eq!(hit.as_ref().map(|row| row.0.clone()), test_case.expected_source, "{} source", test_case.slug);
+            if let Some((_, share, inherited)) = hit {
+                assert_eq!(Some(inherited), test_case.expected_inherited, "{} inherited", test_case.slug);
+                assert_eq!(Some(share), test_case.expected_share, "{} share", test_case.slug);
+            }
+        }
     }
 
     // ---- name-guess parity (Rust consumer side) ----------------------------

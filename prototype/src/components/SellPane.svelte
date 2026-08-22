@@ -181,7 +181,7 @@
     class="lede-dot"
     role="img"
     aria-label="About this view"
-    title="Items in your inventory worth listing right now, ranked by sell score."
+    title="Items in your inventory worth listing right now, ranked by prioritization score."
   >ⓘ</span>
   <!-- Summary strip: totals with since-last-scan deltas; Listed / Needs fixing
        appear once the orders panel has reported; the last cell is the
@@ -235,8 +235,8 @@
     <div class="so-body">
       <strong>How Sell works</strong>
       <p class="muted">
-        Your inventory is ranked by expected plat per day — what to list right
-        now. Review the prices, then <strong>List on WFM</strong> posts them
+        Your inventory is ranked by a prioritization score — what to list right
+        now from price, turnover, and bounded DE usage. Review the prices, then <strong>List on WFM</strong> posts them
         hidden so no buyer sees them until you flip them visible in
         <strong>My orders</strong>.
       </p>
@@ -281,8 +281,8 @@
   <h3>Top picks</h3>
   <span
     class="muted picks-exp"
-    title="Same Score as the table below — expected plat per day if listed. Picks also need at least 3 trades/48h (so a listing won't just sit) and {MIN_PICK_SCORE}p/day to clear the bar."
-  >Best sells right now, ranked by expected plat/day — patience listings excluded.</span>
+    title="Same prioritization Score as the table below — price × likely sell-through × a bounded DE usage weight. It is not expected plat/day. Picks also need at least 3 trades/48h and {MIN_PICK_SCORE} score points to clear the bar."
+  >Best sells right now, ranked by prioritization score — patience listings excluded.</span>
   <span class="grow"></span>
   <span class="muted picks-count">
     {picks.length} of {allPicks.length}
@@ -438,11 +438,13 @@
   >
     <summary>About the “Score” column</summary>
     <div class="score-details">
-      Expected plat <strong>per day</strong> if you listed everything —
-      <code>min(owned, vol_48h / 2) × clearing price</code>, where clearing
+      A <strong>prioritization score</strong>, not expected plat/day —
+      <code>min(sellable owned, max(0.05, vol_48h / 2)) × clearing price × usage weight</code>.
+      The DE usage weight is bounded from 0.75× to 1.25×; missing or invalid
+      usage is neutral. Clearing
       price is the lowest live ask, clamped up to the 90-day median when the
       ask is a lone troll undercut (so one 1p listing can't crater a row).
-      Higher = better, uncapped. Items below <strong>3 trades / 48 h</strong>
+      Higher means list sooner. Actual platinum totals remain unweighted. Items below <strong>3 trades / 48 h</strong>
       get a “patience” tag instead of a near-zero score.
       Click <code>?</code> on any column header for the same kind of
       explainer.

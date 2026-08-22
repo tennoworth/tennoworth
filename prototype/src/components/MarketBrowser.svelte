@@ -302,7 +302,7 @@
             <th title="Live buyers ÷ live sellers — > 1 means buyers outnumber sellers">Demand</th>
             <th title="Ducat value at Baro Ki’Teer">Ducats</th>
             <th class="ghost g1" title="How many you own — filled by the desktop scan">Own</th>
-            <th class="ghost" title="Expected plat per day if you listed — filled by the desktop scan">Score</th>
+            <th class="ghost" title="Prioritization score from price, likely sell-through, and bounded DE usage — filled by the desktop scan">Score</th>
             <th class="ghost" title="Owned × Avg — filled by the desktop scan">Potential</th>
           </tr></thead>
           <tbody>

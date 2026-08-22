@@ -11,6 +11,8 @@ import {
   handoffSample,
 } from './market-browse.js';
 import type { Market } from './types';
+import { usageFor } from './demand';
+import { scoreRow } from './sell-priority';
 
 // Minimal snapshot: catalog (name→slug), items (stats), vault_status.
 function fixture() {
@@ -231,7 +233,11 @@ describe('handoffSample', () => {
     expect(rows.map((r) => r.owned)).toEqual([3, 1, 2]);
     for (const r of rows) {
       expect(r.vol).toBeGreaterThanOrEqual(10);
-      expect(r.score).toBe(Math.round(Math.min(r.owned, r.vol / 2) * r.avg));
+      expect(r.score).toBe(Math.round(scoreRow({
+        owned: r.owned,
+        m: m.items[r.slug],
+        usageShare: usageFor(r.slug, m)?.entry.share,
+      }).sell_score));
       expect(r.potential).toBe(Math.round(r.owned * r.avg));
     }
   });

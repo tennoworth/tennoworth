@@ -91,7 +91,17 @@ function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Mar
   const sellable = sparesOnly
     ? spareQty(rec.count, rec.kept_lvl, rec.leveled ?? 0)
     : sellableQty(rec.count, reserveCopies, rec.leveled ?? 0);
-  const { sell_score, patience } = scoreRow({ owned: sellable, m });
+  const row_price = clearingPrice(m);
+  const demand = readDemand(rec.slug, market, {
+    vol: m.vol,
+    price: row_price,
+    baseline: m.median_90d || null,
+  });
+  const { sell_score, patience } = scoreRow({
+    owned: sellable,
+    m,
+    usageShare: demand.usage?.share,
+  });
   // ducats live on `m` because WFM is authoritative for the value —
   // warframestat's bulk /items/ endpoint doesn't carry it. Relics get
   // null so we don't suggest "Baro this" on a non-ducat trade.
@@ -101,7 +111,6 @@ function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Mar
   // when no ducats data. Uses the clamped clearing price, not raw low_sell —
   // a single 1p troll ask made a stable 38p part read as a "feed it to
   // Baro" deal.
-  const row_price = clearingPrice(m);
   const plat_per_100d = ducats && ducats > 0 && row_price > 0 ? (row_price * 100) / ducats : null;
   // 90d trend signal. `median_90d` is what experienced WFM traders price
   // against (48h avg is noisy on low-volume items). We compute Δ% vs the
@@ -159,7 +168,7 @@ function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Mar
     // The sanity-clamped ask (what the score already prices at) — the
     // listing modal prefills from this, not raw low_sell, so a lone
     // fantasy ask can't become the suggested price.
-    clearing_price: clearingPrice(m),
+    clearing_price: row_price,
     low5_avg: m.low5_avg || 0,
     top_buy: m.top_buy,
     volume_48h: m.vol,
@@ -187,16 +196,8 @@ function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Mar
     // Advisor verdict for calendar-dated primes; null on everything else.
     advice: verdict?.advice ?? null,
     advice_reasons: verdict?.reasons ?? [],
-    // DE usage telemetry fused with the live market signal. Deliberately
-    // presentational for now: it breaks the tie between two rows that look
-    // identical on price and spread, but it does NOT move sell_score —
-    // that scoring is mirrored in the Rust market-math crate and gated on a
-    // shared fixture, so changing it is a coordinated change of its own.
-    demand: readDemand(rec.slug, market, {
-      vol: m.vol,
-      price: clearingPrice(m),
-      baseline: median_90d || null,
-    }),
+    // Resolved once per row and reused by both scoring and DemandCell.
+    demand,
   };
 }
 

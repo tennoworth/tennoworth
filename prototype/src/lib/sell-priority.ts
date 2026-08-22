@@ -1,19 +1,18 @@
 // Sell-priority scoring.
 //
 // The naive "potential plat" column (owned × avg) overstates: it assumes
-// every copy you own clears at the average price, instantly. In reality a
-// 200p item that sells once a week pays out far less today than a 30p item
-// that turns over ten times a day. This module estimates **what you'd
-// actually receive per day if you listed everything**, which is the question
-// the product positioning ("what to sell right now") wants answered.
+// every copy you own clears at the average price, instantly. This module
+// produces a prioritization score from price, likely sell-through, and a
+// deliberately bounded usage signal. It is not a plat/day forecast.
 //
 // Formula:
 //   price        = clearingPrice(m)                        // clamped, see below
 //   daily_sales  = max(0.05, vol_48h / 2)                  // floor so dead items still rank, just low
 //   units_today  = min(owned, daily_sales)                 // can't realise more than the market absorbs
-//   sell_score   = units_today × price
+//   base_score   = units_today × price
+//   sell_score   = base_score × usage weight               // bounded 0.75× … 1.25×
 //
-// `patience` flag = true when vol_48h < 2 — these listings exist for the
+// `patience` flag = true when vol_48h < 3 — these listings exist for the
 // item but it barely moves. The flag is the ONLY mitigation for dead
 // items: the volume floor (0.05) deliberately keeps them ranked, so a
 // dead item with a sane clearing price can still appear high when you
@@ -31,6 +30,7 @@ type PricedEntry = Pick<
 export interface SellScoreInput {
   owned: number;
   m: PricedEntry;
+  usageShare?: unknown;
 }
 
 export interface SellScoreOutput {
@@ -43,6 +43,24 @@ export interface SellScoreOutput {
 // the patience tag, and the UI's trend badges (via LIQUID_VOL export).
 export const LIQUID_VOL = 5;
 const PATIENCE_VOL = 3;
+export const DEAD_SHARE = 0.15;
+export const POPULAR_SHARE = 1.0;
+
+export type UsageWeightTier = 'low' | 'typical' | 'popular' | 'neutral';
+
+export function usageWeight(share: unknown): number {
+  if (typeof share !== 'number' || !Number.isFinite(share) || share < 0) return 1;
+  if (share < DEAD_SHARE) return 0.75;
+  if (share >= POPULAR_SHARE) return 1.25;
+  return 0.75 + ((share - DEAD_SHARE) / (POPULAR_SHARE - DEAD_SHARE)) * 0.5;
+}
+
+export function usageWeightTier(share: unknown): UsageWeightTier {
+  if (typeof share !== 'number' || !Number.isFinite(share) || share < 0) return 'neutral';
+  if (share < DEAD_SHARE) return 'low';
+  if (share >= POPULAR_SHARE) return 'popular';
+  return 'typical';
+}
 
 // "Keep copies" reserve — N copies of every owned item held back from ever
 // being listed, so the user can't sell their only copy of something by
@@ -116,14 +134,14 @@ export function clearingPrice(m: PricedEntry): number {
   return lowSell;
 }
 
-export function scoreRow({ owned, m }: SellScoreInput): SellScoreOutput {
+export function scoreRow({ owned, m, usageShare }: SellScoreInput): SellScoreOutput {
   if (!m) return { sell_score: 0, patience: false };
   const vol = Number(m.vol) || 0;
   const price = clearingPrice(m);
   const dailySales = Math.max(0.05, vol / 2);
   const unitsToday = Math.min(owned, dailySales);
   return {
-    sell_score: unitsToday * price,
+    sell_score: unitsToday * price * usageWeight(usageShare),
     // Was vol < 2, which vol-2 items dodged while still barely moving.
     patience: vol < PATIENCE_VOL,
   };
@@ -182,10 +200,10 @@ export function bandSignal({ price, donchTop, donchBot, lowSell, topBuy }: BandS
 
 // "Top picks" strip — the best rows to act on right now, out of everything
 // already scored above. `MIN_PICK_SCORE` is a first-pass guess, not a
-// measured threshold: 20 plat/day filters out the long tail of items that
+// threshold: 20 score points filters out the long tail of items that
 // technically clear sell_score > 0 but aren't worth a user's attention.
-// Tune once we have usage data.
-export const MIN_PICK_SCORE = 20; // tunable floor, plat/day — first-pass guess, not measured
+// Tune from observed ranking quality rather than treating it as currency.
+export const MIN_PICK_SCORE = 20; // tunable prioritization floor
 export const MAX_PICKS = 5;
 
 // Only the fields selectPicks actually reads. Generic-constrained so the

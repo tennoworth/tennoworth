@@ -18,6 +18,9 @@
 //     record so a reader knows how fresh it is.
 
 import type { Market } from './types';
+import { DEAD_SHARE, usageWeight } from './sell-priority';
+
+export { DEAD_SHARE, POPULAR_SHARE } from './sell-priority';
 
 export interface UsageEntry {
   name: string;
@@ -33,6 +36,43 @@ export interface UsageEntry {
 
 export type UsageSurface = Record<string, UsageEntry>;
 
+export type UsageParentIndex = Map<string, string | null>;
+
+function validUsage(value: unknown): value is UsageEntry {
+  if (!value || typeof value !== 'object') return false;
+  const row = value as Partial<UsageEntry>;
+  return typeof row.name === 'string' && row.name.length > 0
+    && typeof row.category === 'string' && row.category.length > 0
+    && Number.isInteger(row.year) && (row.year ?? 0) > 0
+    && typeof row.share === 'number' && Number.isFinite(row.share) && row.share >= 0
+    && typeof row.peak_mr === 'number' && Number.isFinite(row.peak_mr) && row.peak_mr >= 0
+    && Array.isArray(row.by_mr) && row.by_mr.length > 0
+    && row.by_mr.every((value) => typeof value === 'number' && Number.isFinite(value) && value >= 0);
+}
+
+export function buildUsageParentIndex(market: Market | null | undefined): UsageParentIndex {
+  const index: UsageParentIndex = new Map();
+  for (const [parent, set] of Object.entries(market?.set_to_parts ?? {})) {
+    for (const part of set?.parts ?? []) {
+      if (!part?.slug) continue;
+      if (!index.has(part.slug)) index.set(part.slug, parent);
+      else if (index.get(part.slug) !== parent) index.set(part.slug, null);
+    }
+  }
+  return index;
+}
+
+const parentIndexCache = new WeakMap<Market, UsageParentIndex>();
+
+function parentIndexFor(market: Market): UsageParentIndex {
+  let index = parentIndexCache.get(market);
+  if (!index) {
+    index = buildUsageParentIndex(market);
+    parentIndexCache.set(market, index);
+  }
+  return index;
+}
+
 /**
  * Usage for a slug, following a part up to its parent set when needed.
  *
@@ -43,20 +83,19 @@ export function usageFor(
   slug: string,
   market: Market | null | undefined,
 ): { entry: UsageEntry; inherited: boolean } | null {
-  const usage = market?.usage as UsageSurface | undefined | null;
+  if (!market) return null;
+  const usage = market.usage as UsageSurface | undefined | null;
   if (!usage) return null;
 
-  const direct = usage[slug];
-  if (direct) return { entry: direct, inherited: false };
+  if (Object.hasOwn(usage, slug)) {
+    const direct = usage[slug];
+    return validUsage(direct) ? { entry: direct, inherited: false } : null;
+  }
 
-  // Walk up: which set lists this slug as one of its parts?
-  const sets = market?.set_to_parts;
-  if (sets) {
-    for (const [setSlug, set] of Object.entries(sets)) {
-      if (!set?.parts?.some((p) => p.slug === slug)) continue;
-      const parent = usage[setSlug];
-      if (parent) return { entry: parent, inherited: true };
-    }
+  const parentSlug = parentIndexFor(market).get(slug);
+  if (parentSlug) {
+    const parent = usage[parentSlug];
+    if (validUsage(parent)) return { entry: parent, inherited: true };
   }
   return null;
 }
@@ -64,12 +103,6 @@ export function usageFor(
 /** Share at or above which an item counts as genuinely popular within its
  *  category. Categories hold 113–233 items, so an even split would be well
  *  under 1% — a whole percent is a real signal. */
-export const POPULAR_SHARE = 1.0;
-
-/** Below this, the parent is effectively unplayed and its parts move slowly
- *  regardless of what the spread says. */
-export const DEAD_SHARE = 0.15;
-
 /** 48h trades below which the market side of the signal is too thin to lean
  *  on. Matches the threshold the relic planner uses. */
 export const THIN_VOLUME = 5;
@@ -170,10 +203,5 @@ export function readDemand(
  * are neither rewarded nor punished.
  */
 export function liquidityWeight(usage: UsageEntry | null): number {
-  if (!usage) return 1;
-  if (usage.share >= POPULAR_SHARE) return 1.25;
-  if (usage.share < DEAD_SHARE) return 0.75;
-  // Linear between the two thresholds.
-  const t = (usage.share - DEAD_SHARE) / (POPULAR_SHARE - DEAD_SHARE);
-  return 0.75 + t * 0.5;
+  return usageWeight(usage?.share);
 }

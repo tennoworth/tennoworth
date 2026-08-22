@@ -1,0 +1,23 @@
+{
+  "_comment": "Shared deterministic usage resolution: valid direct wins; one valid parent inherits; malformed and missing are neutral; a part in multiple sets is ambiguous and never inherits an arbitrary parent.",
+  "usage": {
+    "direct_item": {"name":"Direct", "category":"Primary", "year":2025, "share":1.2, "peak_mr":12, "by_mr":[0,1]},
+    "parent_a": {"name":"Parent A", "category":"Warframes", "year":2025, "share":0.2, "peak_mr":8, "by_mr":[1,2]},
+    "parent_b": {"name":"Parent B", "category":"Warframes", "year":2025, "share":0.8, "peak_mr":10, "by_mr":[2,1]},
+    "malformed_item": {"name":"Malformed", "category":"Primary", "year":2025, "share":"bad", "peak_mr":5, "by_mr":[1]},
+    "malformed_parent": {"name":"Malformed Parent", "category":"Primary", "year":2025, "share":0.4, "peak_mr":5, "by_mr":[1,"bad"]}
+  },
+  "set_to_parts": {
+    "parent_a": {"parts":[{"slug":"inherited_part"},{"slug":"ambiguous_part"},{"slug":"direct_item"},{"slug":"malformed_item"}]},
+    "parent_b": {"parts":[{"slug":"ambiguous_part"}]},
+    "malformed_parent": {"parts":[{"slug":"malformed_parent_part"}]}
+  },
+  "cases": [
+    {"slug":"direct_item", "expected_source":"direct_item", "expected_inherited":false, "expected_share":1.2},
+    {"slug":"inherited_part", "expected_source":"parent_a", "expected_inherited":true, "expected_share":0.2},
+    {"slug":"missing", "expected_source":null},
+    {"slug":"malformed_item", "expected_source":null},
+    {"slug":"malformed_parent_part", "expected_source":null},
+    {"slug":"ambiguous_part", "expected_source":null}
+  ]
+}
