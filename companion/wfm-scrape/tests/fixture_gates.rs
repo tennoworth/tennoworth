@@ -192,3 +192,142 @@ fn scrape_limit_truncates_after_filter() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+// ---- DE gate: Public Export + worldState surfaces --------------------------
+
+/// The DE ingest is a *replacement* for two upstreams, so the gate asserts the
+/// things that would silently regress: the four refinement variants collapsing
+/// to one relic, rarity labels being DE's (the old source mislabels the common
+/// tier), untradeable rewards staying unresolved rather than being forced to a
+/// slug, and Baro's manifest arriving with prices.
+#[test]
+fn build_uses_de_export_and_world_state() {
+    let dir = stage_fixtures("convert");
+    let out = run(
+        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"],
+        &dir,
+    );
+    assert!(out.status.success(), "build failed:\n{}", String::from_utf8_lossy(&out.stderr));
+    let snap: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+
+    let de = snap.get("de").expect("de surface written");
+    assert_eq!(de["hashes"].as_object().unwrap().len(), 6, "all indexed manifests recorded");
+    assert_eq!(de["world_ok"], true);
+    assert_eq!(de["vault_rotation"].as_array().unwrap().len(), 1, "announced vault rotation");
+    assert_eq!(de["deals"][0]["discount"], 40, "Darvo's daily deal");
+
+    // One relic, not four: Bronze/Silver/Gold/Platinum are refinement variants
+    // of the same relic and carry identical reward lists.
+    let relics = snap["relic_rewards"].as_object().unwrap();
+    assert_eq!(relics.len(), 1, "refinement variants must collapse");
+    let rewards = relics["lith_v1_relic"].as_array().unwrap();
+    assert_eq!(rewards.len(), 2, "Forma is untradeable and must stay unresolved");
+
+    let chassis = rewards.iter().find(|r| r["reward_slug"] == "volt_prime_chassis_blueprint").unwrap();
+    assert_eq!(chassis["rarity"], "Common", "DE's rarity, not the drop table's mislabel");
+    assert_eq!(chassis["chance"], 25.33, "bare `chance` stays intact for existing consumers");
+    assert_eq!(chassis["chances"]["radiant"], 16.67, "all four refinements present");
+    assert_eq!(chassis["chances"]["intact"], 25.33);
+
+    // Baro comes from worldState, so his stock is present with prices.
+    let baro = &snap["baro"];
+    assert_eq!(baro["location"], "Pluto Relay");
+    assert_eq!(baro["character"], "Baro'Ki Teel");
+    let inv = baro["inventory"].as_array().unwrap();
+    assert_eq!(inv.len(), 2);
+    assert_eq!(inv[0]["ducats"], 375);
+    assert_eq!(inv[0]["credits"], 120000);
+    assert_eq!(inv[0]["slug"], "volt_prime_chassis_blueprint");
+    // A cosmetic has no market slug. It must stay readable and unpriced —
+    // never given a slug it does not have, which would show a wrong price.
+    assert!(inv[1].get("slug").is_none(), "cosmetics must not be assigned a slug");
+    assert_eq!(inv[1]["item"], "Kiteer Sekhara");
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The content hash is the whole economy of this integration: a cycle where
+/// nothing changed must fetch the 490-byte index and nothing else.
+#[test]
+fn build_skips_manifests_whose_hash_has_not_moved() {
+    let dir = stage_fixtures("convert");
+    let args = ["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"];
+
+    let first = run(&args, &dir);
+    assert!(first.status.success());
+    let first_err = String::from_utf8_lossy(&first.stderr).to_string();
+    assert!(first_err.contains("6 changed"), "cold run pulls everything:\n{first_err}");
+
+    // Feed the snapshot we just wrote back in as the prior one.
+    std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
+    let second = run(&args, &dir);
+    assert!(second.status.success());
+    let second_err = String::from_utf8_lossy(&second.stderr).to_string();
+    assert!(
+        second_err.contains("0 changed") && second_err.contains("6 skipped"),
+        "warm run must skip every unchanged manifest:\n{second_err}"
+    );
+
+    // And the surfaces those manifests feed must survive the skip rather than
+    // blanking — that is what reconcile is for.
+    let snap: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert!(
+        !snap["relic_rewards"].as_object().unwrap().is_empty(),
+        "a skipped manifest must not blank the surface it feeds"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Live check against DE, opt-in.
+///
+/// The fixture gates prove our parsing; this proves the *contract* — that the
+/// index is still LZMA-alone at that URL, that the hash is still part of the
+/// manifest path, and that worldState still answers where it moved to. Five
+/// of the endpoints the community wiki documents are already dead, so this is
+/// the test that tells us when ours joins them.
+///
+/// Ignored by default: it hits the network and must never gate CI or a
+/// release. Run it deliberately:
+///   cargo test --package wfm-scrape -- --ignored de_endpoints_are_still_alive
+#[test]
+#[ignore = "hits Digital Extremes' live endpoints"]
+fn de_endpoints_are_still_alive() {
+    use wfm_scrape::de;
+    use wfm_scrape::fetch::{Http, LiveHttp};
+
+    let client = reqwest::blocking::Client::builder()
+        .user_agent(wfm_client::user_agent("wfm-scrape", env!("CARGO_PKG_VERSION")))
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .expect("build client");
+    let http = LiveHttp { client };
+
+    let raw = http.get_bytes(de::DE_INDEX_URL).expect("index fetch");
+    let text = de::decode_lzma_alone(&raw).expect("index is still LZMA-alone");
+    let index = de::parse_index(&text);
+    assert!(index.len() >= 10, "index shrank unexpectedly: {} entries", index.len());
+
+    for name in de::WANTED_MANIFESTS {
+        assert!(index.contains_key(*name), "{name} vanished from DE's index");
+    }
+
+    // One manifest, hash and all — the bare filename 404s, so this also proves
+    // the hashed path still works.
+    let entry = &index["ExportWeapons_en.json"];
+    let body = http.get_text(&entry.url()).expect("manifest fetch");
+    let doc = de::parse_manifest(&body).expect("manifest parse");
+    let rows = de::manifest_rows_for(&doc, "ExportWeapons_en.json");
+    // Guards the two-array trap: ExportWeapons_en.json also carries
+    // ExportRailjackWeapons (~143 rows), which sorts first.
+    assert!(rows.len() > 500, "only {} weapons — wrong array?", rows.len());
+    assert!(
+        rows.iter().any(|r| r.get("omegaAttenuation").and_then(|v| v.as_f64()).is_some_and(|d| d > 0.0)),
+        "no dispositions in ExportWeapons — the field was renamed"
+    );
+
+    let world = de::fetch_world_state(&http).expect("worldState fetch");
+    assert!(world.get("VoidTraders").is_some(), "worldState lost VoidTraders");
+}

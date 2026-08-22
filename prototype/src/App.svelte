@@ -39,6 +39,7 @@
   import type { Market, OwnedRecord } from './lib/types';
   import type { OwnedRiven } from './lib/rivens';
   import { wfmItemUrl, baroLocation, humanWindow } from './lib/format';
+  import BaroBoard from './components/BaroBoard.svelte';
   import { listenForTauriEvent, TRAY_HINT_EVENT } from './lib/desktop-update';
 
   // Desktop (Tauri) vs hosted informational (browser) is decided ONCE at boot.
@@ -1290,6 +1291,16 @@
           </div>
         </div>
       </section>
+
+      <!-- His actual stock, priced. Only rendered when the snapshot carries a
+           manifest: worldState publishes one from announcement, but a snapshot
+           built before that switch (or carried through a DE outage) may not
+           have it, and an empty table would read as "he is selling nothing". -->
+      {#if voidTrader?.inventory?.length}
+        <section class="card">
+          <BaroBoard market={market} baro={voidTrader} ducatsHeld={ducatStats.total} />
+        </section>
+      {/if}
 
     {:else if effectiveView === 'routines'}
       <section class="view-header">

@@ -1,0 +1,652 @@
+//! Turning DE's manifests and worldState into market.json surfaces.
+//!
+//! [`crate::de`] is transport and parsing; this module is the join. It exists
+//! separately because the join is where the risk lives: DE speaks
+//! `/Lotus/...` uniqueNames and warframe.market speaks slugs, and a silent
+//! mismatch shows a user the wrong price — worse than showing none. Every
+//! resolver here therefore returns `Option` and the callers count the misses.
+
+use std::collections::HashMap;
+
+use serde_json::Value;
+
+use crate::de::{de_millis, manifest_rows_for, relay_name};
+
+// ---------------------------------------------------------------------------
+// Path resolution
+// ---------------------------------------------------------------------------
+
+/// Blueprint uniqueName → the component it builds.
+///
+/// This is the alias that closes most of the join. Relic tables reference
+/// `.../OberonPrimeSystemsBlueprint`; the item catalogue knows
+/// `.../OberonPrimeSystemsComponent`. `ExportRecipes.resultType` is the link,
+/// and it lifts reward-path resolution from 69% to 87% (the rest — Forma,
+/// Kuva, Exilus adapters, Kubrow collars — are genuinely untradeable and
+/// *should* stay unresolved).
+pub fn recipe_alias(recipes: &Value) -> HashMap<String, String> {
+    let mut out = HashMap::new();
+    for row in manifest_rows_for(recipes, "ExportRecipes_en.json") {
+        let (Some(u), Some(r)) = (
+            row.get("uniqueName").and_then(|v| v.as_str()),
+            row.get("resultType").and_then(|v| v.as_str()),
+        ) else {
+            continue;
+        };
+        out.insert(u.to_string(), r.to_string());
+    }
+    out
+}
+
+/// Resolve a DE path to the pipeline's existing `path_to_info` entry.
+///
+/// Tries the path as given, then with the store alias stripped, then through
+/// the recipe alias. Returns `None` rather than guessing.
+pub fn resolve_path<'a>(
+    unique: &str,
+    path_to_info: &'a HashMap<String, Value>,
+    alias: &HashMap<String, String>,
+) -> Option<&'a Value> {
+    let direct = unique.to_string();
+    let stripped = unique
+        .strip_prefix("/Lotus/StoreItems")
+        .map(|rest| format!("/Lotus{rest}"))
+        .unwrap_or_else(|| direct.clone());
+
+    for key in [&direct, &stripped] {
+        if let Some(v) = path_to_info.get(key) {
+            return Some(v);
+        }
+    }
+    for key in [&direct, &stripped] {
+        if let Some(target) = alias.get(key) {
+            if let Some(v) = path_to_info.get(target) {
+                return Some(v);
+            }
+        }
+    }
+    None
+}
+
+// ---------------------------------------------------------------------------
+// Ducats
+// ---------------------------------------------------------------------------
+
+/// The five ducat tiers DE actually uses. A value outside this set means the
+/// parse is wrong, not that a sixth tier appeared.
+pub const DUCAT_TIERS: &[i64] = &[15, 25, 45, 65, 100];
+
+/// `uniqueName → ducat value`, first-party.
+///
+/// `primeSellingPrice` sits on the **recipe** (the blueprint you trade), not on
+/// its `resultType` — Nova Prime Blueprint is 45 while the frame it builds has
+/// no ducat value at all. Keying on the recipe is therefore correct, and it is
+/// the difference between a right and a wrong number.
+///
+/// Values off the known tiers are dropped with a warning rather than trusted.
+pub fn ducats_from_recipes(recipes: &Value) -> HashMap<String, i64> {
+    let mut out = HashMap::new();
+    let mut odd = 0usize;
+    for row in manifest_rows_for(recipes, "ExportRecipes_en.json") {
+        let Some(unique) = row.get("uniqueName").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let Some(price) = row.get("primeSellingPrice").and_then(|v| v.as_i64()) else {
+            continue;
+        };
+        if !DUCAT_TIERS.contains(&price) {
+            odd += 1;
+            continue;
+        }
+        out.insert(unique.to_string(), price);
+    }
+    if odd > 0 {
+        eprintln!("  warning: {odd} recipes carried a ducat value off the known tiers — dropped");
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
+// Relic rewards
+// ---------------------------------------------------------------------------
+
+/// Per-slot drop chance by rarity and refinement.
+///
+/// **These are ours, not DE's.** The export ships four uniqueName variants per
+/// relic (Bronze / Silver / Gold / Platinum = intact / exceptional / flawless /
+/// radiant), but their reward lists are byte-identical — refinement changes the
+/// odds, not the contents, and DE does not publish the odds. So the four tiers
+/// are derived here from the long-standing published table. If DE ever changes
+/// it, this constant goes silently wrong; it is the one number in the relic
+/// path worth re-checking on a major update.
+///
+/// Order is [intact, exceptional, flawless, radiant].
+pub const REFINEMENT_CHANCE: &[(&str, [f64; 4])] = &[
+    ("COMMON", [25.33, 23.33, 20.00, 16.67]),
+    ("UNCOMMON", [11.00, 13.00, 17.00, 20.00]),
+    ("RARE", [2.00, 4.00, 6.00, 10.00]),
+];
+
+pub const REFINEMENTS: [&str; 4] = ["intact", "exceptional", "flawless", "radiant"];
+
+fn chances_for(rarity: &str) -> Option<[f64; 4]> {
+    REFINEMENT_CHANCE
+        .iter()
+        .find(|(r, _)| r.eq_ignore_ascii_case(rarity))
+        .map(|(_, c)| *c)
+}
+
+/// "Lith H2 Relic" → `lith_h2_relic`, the slug the rest of the app keys on.
+pub fn relic_slug(name: &str) -> Option<String> {
+    let lower = name.trim().to_lowercase();
+    let stem = lower.strip_suffix(" relic")?;
+    if stem.is_empty() {
+        return None;
+    }
+    Some(format!("{}_relic", stem.replace(' ', "_")))
+}
+
+/// Title-case DE's SCREAMING rarity so the surface keeps the casing the SPA
+/// already renders.
+fn pretty_rarity(r: &str) -> String {
+    let lower = r.to_lowercase();
+    let mut c = lower.chars();
+    match c.next() {
+        Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+        None => lower,
+    }
+}
+
+/// Result of building the relic surface, so the caller can report the misses
+/// instead of hiding them.
+#[derive(Debug, Default)]
+pub struct RelicBuild {
+    pub rewards: HashMap<String, Value>,
+    pub resolved: usize,
+    pub unresolved: usize,
+    /// A few unresolved paths, for the run report.
+    pub samples: Vec<String>,
+}
+
+/// Build `relic_rewards` from `ExportRelicArcane`, with all four refinements.
+///
+/// Two things this fixes versus the drop-table source it replaces: coverage of
+/// every refinement rather than intact only, and **correct rarity labels** —
+/// the old source labels 25.33% drops "Uncommon", which is the common tier.
+pub fn relic_rewards_from_de(
+    relics: &Value,
+    recipes: &Value,
+    path_to_info: &HashMap<String, Value>,
+) -> RelicBuild {
+    let alias = recipe_alias(recipes);
+    let mut build = RelicBuild::default();
+
+    for row in manifest_rows_for(relics, "ExportRelicArcane_en.json") {
+        let Some(name) = row.get("name").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let Some(slug) = relic_slug(name) else { continue };
+        // The four refinement variants carry identical reward lists, so the
+        // first one wins and the rest are skipped rather than merged.
+        if build.rewards.contains_key(&slug) {
+            continue;
+        }
+        let Some(rewards) = row.get("relicRewards").and_then(|v| v.as_array()) else {
+            continue;
+        };
+
+        let mut out = Vec::new();
+        for rw in rewards {
+            let Some(path) = rw.get("rewardName").and_then(|v| v.as_str()) else {
+                continue;
+            };
+            let rarity = rw.get("rarity").and_then(|v| v.as_str()).unwrap_or("");
+            let Some(chances) = chances_for(rarity) else { continue };
+
+            let Some(info) = resolve_path(path, path_to_info, &alias) else {
+                build.unresolved += 1;
+                if build.samples.len() < 8 {
+                    build.samples.push(path.to_string());
+                }
+                continue;
+            };
+            let (Some(reward_slug), Some(reward_name)) = (
+                info.get("slug").and_then(|v| v.as_str()),
+                info.get("name").and_then(|v| v.as_str()),
+            ) else {
+                build.unresolved += 1;
+                continue;
+            };
+            build.resolved += 1;
+
+            let mut by_refinement = serde_json::Map::new();
+            for (i, key) in REFINEMENTS.iter().enumerate() {
+                by_refinement.insert((*key).to_string(), Value::from(chances[i]));
+            }
+            out.push(serde_json::json!({
+                "reward_slug": reward_slug,
+                "reward_name": reward_name,
+                "rarity": pretty_rarity(rarity),
+                // Intact stays the bare `chance` so consumers written against
+                // the old single-tier surface keep working unchanged.
+                "chance": chances[0],
+                "chances": Value::Object(by_refinement),
+                "item_count": rw.get("itemCount").and_then(|v| v.as_i64()).unwrap_or(1),
+            }));
+        }
+        if !out.is_empty() {
+            build.rewards.insert(slug, Value::Array(out));
+        }
+    }
+    build
+}
+
+// ---------------------------------------------------------------------------
+// Dispositions
+// ---------------------------------------------------------------------------
+
+/// Lowercased weapon display name → riven disposition.
+///
+/// `omegaAttenuation` is the disposition, 0.50–1.55. Joining by display name
+/// rather than uniqueName is deliberate: the riven surface is already keyed by
+/// WFM slug via display name, so this drops straight in beside it.
+pub fn dispositions_from_weapons(weapons: &Value) -> HashMap<String, f64> {
+    let mut out = HashMap::new();
+    for row in manifest_rows_for(weapons, "ExportWeapons_en.json") {
+        let (Some(name), Some(dispo)) = (
+            row.get("name").and_then(|v| v.as_str()),
+            row.get("omegaAttenuation").and_then(|v| v.as_f64()),
+        ) else {
+            continue;
+        };
+        // 0 shows up on non-riven-able entries; the real floor is 0.5.
+        if dispo <= 0.0 {
+            continue;
+        }
+        out.insert(name.to_lowercase(), dispo);
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
+// worldState → Baro
+// ---------------------------------------------------------------------------
+
+/// Build the `baro` surface from worldState.
+///
+/// The upgrade over the drop-in it replaces: worldState carries the manifest
+/// **from announcement**, so the stock is known days before he lands, where the
+/// old source returned an empty list between visits and published no schedule
+/// at all. Rows keep the same `{item, ducats, credits}` shape the SPA already
+/// renders, and gain `unique` so a consumer can join without a name match.
+///
+/// Cosmetics and bundles resolve to no slug. They are kept with a name and no
+/// price rather than dropped — a missing row reads as "he isn't selling it".
+pub fn baro_from_world(
+    world: &Value,
+    path_to_info: &HashMap<String, Value>,
+    alias: &HashMap<String, String>,
+    iso: impl Fn(i64) -> String,
+) -> HashMap<String, Value> {
+    let mut out = HashMap::new();
+    let Some(trader) = world.get("VoidTraders").and_then(|v| v.as_array()).and_then(|a| a.first())
+    else {
+        return out;
+    };
+    let (Some(activation), Some(expiry)) = (
+        de_millis(trader.get("Activation")),
+        de_millis(trader.get("Expiry")),
+    ) else {
+        return out;
+    };
+    let node = trader.get("Node").and_then(|v| v.as_str()).unwrap_or("");
+
+    let activation_iso = iso(activation);
+    out.insert("activation".into(), Value::String(activation_iso.clone()));
+    out.insert("expiry".into(), Value::String(iso(expiry)));
+    out.insert("location".into(), Value::String(relay_name(node)));
+    if let Some(ch) = trader.get("Character").and_then(|v| v.as_str()) {
+        out.insert("character".into(), Value::String(ch.to_string()));
+    }
+
+    let mut inventory = Vec::new();
+    for entry in trader.get("Manifest").and_then(|v| v.as_array()).unwrap_or(&Vec::new()) {
+        let Some(path) = entry.get("ItemType").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let info = resolve_path(path, path_to_info, alias);
+        let name = info
+            .and_then(|i| i.get("name"))
+            .and_then(|v| v.as_str())
+            .map(String::from)
+            .unwrap_or_else(|| readable_from_path(path));
+
+        let mut row = serde_json::Map::new();
+        row.insert("item".into(), Value::String(name));
+        row.insert("unique".into(), Value::String(path.to_string()));
+        if let Some(slug) = info.and_then(|i| i.get("slug")).and_then(|v| v.as_str()) {
+            row.insert("slug".into(), Value::String(slug.to_string()));
+        }
+        if let Some(d) = entry.get("PrimePrice").and_then(|v| v.as_i64()) {
+            row.insert("ducats".into(), Value::from(d));
+        }
+        if let Some(c) = entry.get("RegularPrice").and_then(|v| v.as_i64()) {
+            row.insert("credits".into(), Value::from(c));
+        }
+        inventory.push(Value::Object(row));
+    }
+
+    if !inventory.is_empty() {
+        out.insert("inventory".into(), Value::Array(inventory));
+        out.insert("inventory_for".into(), Value::String(activation_iso));
+    }
+    out
+}
+
+/// Last-resort display name: split the final path segment on camel case.
+///
+/// Only used for items with no catalogue entry (cosmetics, bundles). Better
+/// than showing a raw `/Lotus/...` path, and honest that it is derived — the
+/// row carries no slug and therefore no price.
+fn readable_from_path(path: &str) -> String {
+    let seg = path.rsplit('/').next().unwrap_or(path);
+    let mut out = String::new();
+    for (i, ch) in seg.chars().enumerate() {
+        if i > 0 && ch.is_uppercase() && !out.ends_with(' ') {
+            out.push(' ');
+        }
+        out.push(ch);
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
+// worldState → vault rotation
+// ---------------------------------------------------------------------------
+
+/// Prime Vault rotation, announced rather than estimated.
+///
+/// The surface it supplements derives `vaulting-soon` from an estimated vault
+/// date. When DE has actually announced a rotation, this is the real thing —
+/// which matters because an unvaulting is the most expensive surprise in prime
+/// trading, and the estimate can be weeks out.
+pub fn vault_rotation_from_world(world: &Value, iso: impl Fn(i64) -> String) -> Vec<Value> {
+    let mut out = Vec::new();
+    for trader in world.get("PrimeVaultTraders").and_then(|v| v.as_array()).unwrap_or(&Vec::new()) {
+        let Some(activation) = de_millis(trader.get("Activation")) else {
+            continue;
+        };
+        let items: Vec<Value> = trader
+            .get("Manifest")
+            .and_then(|v| v.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|e| e.get("ItemType").and_then(|v| v.as_str()))
+                    .map(|s| Value::String(s.to_string()))
+                    .collect()
+            })
+            .unwrap_or_default();
+        if items.is_empty() {
+            continue;
+        }
+        let mut row = serde_json::Map::new();
+        row.insert("activation".into(), Value::String(iso(activation)));
+        if let Some(e) = de_millis(trader.get("Expiry")) {
+            row.insert("expiry".into(), Value::String(iso(e)));
+        }
+        row.insert("items".into(), Value::Array(items));
+        out.push(Value::Object(row));
+    }
+    out
+}
+
+// ---------------------------------------------------------------------------
+// worldState → dated events
+// ---------------------------------------------------------------------------
+
+/// Dated, price-relevant events: Darvo's daily deal and the void trader window.
+///
+/// Deliberately narrow. `Goals`/`Events` reward tables vary by event type and
+/// several carry no usable table at all, so parsing them into "this item is
+/// about to be given away" is a separate piece of work with its own failure
+/// modes — better absent than wrong.
+pub fn deals_from_world(
+    world: &Value,
+    path_to_info: &HashMap<String, Value>,
+    alias: &HashMap<String, String>,
+    iso: impl Fn(i64) -> String,
+) -> Vec<Value> {
+    let mut out = Vec::new();
+    for deal in world.get("DailyDeals").and_then(|v| v.as_array()).unwrap_or(&Vec::new()) {
+        let Some(path) = deal.get("StoreItem").and_then(|v| v.as_str()) else {
+            continue;
+        };
+        let Some(expiry) = de_millis(deal.get("Expiry")) else { continue };
+        let info = resolve_path(path, path_to_info, alias);
+        let mut row = serde_json::Map::new();
+        row.insert(
+            "item".into(),
+            Value::String(
+                info.and_then(|i| i.get("name"))
+                    .and_then(|v| v.as_str())
+                    .map(String::from)
+                    .unwrap_or_else(|| readable_from_path(path)),
+            ),
+        );
+        row.insert("expiry".into(), Value::String(iso(expiry)));
+        for (src, dst) in [
+            ("Discount", "discount"),
+            ("OriginalPrice", "original_price"),
+            ("SalePrice", "sale_price"),
+            ("AmountTotal", "stock"),
+            ("AmountSold", "sold"),
+        ] {
+            if let Some(v) = deal.get(src).and_then(|v| v.as_i64()) {
+                row.insert(dst.into(), Value::from(v));
+            }
+        }
+        out.push(Value::Object(row));
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn iso(ms: i64) -> String {
+        format!("ms:{ms}")
+    }
+
+    fn p2i() -> HashMap<String, Value> {
+        let mut m = HashMap::new();
+        m.insert(
+            "/Lotus/Types/Recipes/WarframeRecipes/OberonPrimeSystemsComponent".to_string(),
+            serde_json::json!({"name": "Oberon Prime Systems Blueprint", "slug": "oberon_prime_systems_blueprint"}),
+        );
+        m.insert(
+            "/Lotus/Upgrades/Mods/Pistol/Expert/WeaponReloadSpeedModExpert".to_string(),
+            serde_json::json!({"name": "Primed Quickdraw", "slug": "primed_quickdraw"}),
+        );
+        m
+    }
+
+    fn recipes() -> Value {
+        serde_json::json!({"ExportRecipes": [
+            {"uniqueName": "/Lotus/Types/Recipes/WarframeRecipes/OberonPrimeSystemsBlueprint",
+             "resultType": "/Lotus/Types/Recipes/WarframeRecipes/OberonPrimeSystemsComponent",
+             "primeSellingPrice": 15},
+            {"uniqueName": "/Lotus/Types/Recipes/WarframeRecipes/NovaPrimeChassisBlueprint",
+             "resultType": "/Lotus/Types/Recipes/WarframeRecipes/NovaPrimeChassisComponent",
+             "primeSellingPrice": 100},
+            {"uniqueName": "/Lotus/Types/Recipes/Components/FormaBlueprint",
+             "resultType": "/Lotus/Types/Recipes/Components/Forma"}
+        ]})
+    }
+
+    #[test]
+    fn ducats_key_on_the_recipe_not_its_result() {
+        // Nova Prime Chassis Blueprint is 100 ducats; the component it builds
+        // has no ducat value. Keying the wrong one is a wrong number, silently.
+        let d = ducats_from_recipes(&recipes());
+        assert_eq!(
+            d.get("/Lotus/Types/Recipes/WarframeRecipes/NovaPrimeChassisBlueprint"),
+            Some(&100)
+        );
+        assert!(!d.contains_key("/Lotus/Types/Recipes/WarframeRecipes/NovaPrimeChassisComponent"));
+    }
+
+    #[test]
+    fn ducats_reject_values_off_the_known_tiers() {
+        let odd = serde_json::json!({"ExportRecipes": [
+            {"uniqueName": "/a", "primeSellingPrice": 37}
+        ]});
+        assert!(ducats_from_recipes(&odd).is_empty());
+    }
+
+    #[test]
+    fn resolve_path_walks_store_alias_then_recipe_alias() {
+        let info = p2i();
+        let alias = recipe_alias(&recipes());
+        // The path relic tables actually use: store alias + blueprint name.
+        let hit = resolve_path(
+            "/Lotus/StoreItems/Types/Recipes/WarframeRecipes/OberonPrimeSystemsBlueprint",
+            &info,
+            &alias,
+        );
+        assert_eq!(hit.unwrap()["slug"], "oberon_prime_systems_blueprint");
+    }
+
+    #[test]
+    fn resolve_path_returns_none_rather_than_guessing() {
+        let info = p2i();
+        let alias = recipe_alias(&recipes());
+        assert!(resolve_path("/Lotus/Types/Recipes/Components/FormaBlueprint", &info, &alias).is_none());
+    }
+
+    #[test]
+    fn relic_slug_matches_the_existing_key_shape() {
+        assert_eq!(relic_slug("Lith H2 Relic").as_deref(), Some("lith_h2_relic"));
+        assert_eq!(relic_slug("Axi A1 Relic").as_deref(), Some("axi_a1_relic"));
+        assert_eq!(relic_slug("Not A Thing"), None);
+    }
+
+    #[test]
+    fn relic_rewards_carry_four_refinements_and_correct_rarity() {
+        let relics = serde_json::json!({"ExportRelicArcane": [
+            {"name": "Lith H2 Relic",
+             "uniqueName": "/Lotus/Types/Game/Projections/T1VoidProjectionXBronze",
+             "relicRewards": [
+               {"rewardName": "/Lotus/StoreItems/Types/Recipes/WarframeRecipes/OberonPrimeSystemsBlueprint",
+                "rarity": "COMMON", "tier": 0, "itemCount": 1},
+               {"rewardName": "/Lotus/Types/Recipes/Components/FormaBlueprint",
+                "rarity": "COMMON", "tier": 0, "itemCount": 1}
+             ]},
+            // The Gold variant is the same relic at a different refinement and
+            // must not double the reward list.
+            {"name": "Lith H2 Relic",
+             "uniqueName": "/Lotus/Types/Game/Projections/T1VoidProjectionXGold",
+             "relicRewards": [
+               {"rewardName": "/Lotus/StoreItems/Types/Recipes/WarframeRecipes/OberonPrimeSystemsBlueprint",
+                "rarity": "COMMON", "tier": 0, "itemCount": 1}
+             ]}
+        ]});
+        let build = relic_rewards_from_de(&relics, &recipes(), &p2i());
+
+        assert_eq!(build.rewards.len(), 1, "the four variants are one relic");
+        let rows = build.rewards["lith_h2_relic"].as_array().unwrap();
+        assert_eq!(rows.len(), 1, "Forma is untradeable and stays unresolved");
+        assert_eq!(rows[0]["rarity"], "Common", "not the old source's 'Uncommon'");
+        assert_eq!(rows[0]["chance"], 25.33, "bare `chance` stays intact for old consumers");
+        assert_eq!(rows[0]["chances"]["radiant"], 16.67);
+        assert_eq!(rows[0]["chances"]["intact"], 25.33);
+        assert_eq!(build.unresolved, 1);
+    }
+
+    #[test]
+    fn dispositions_skip_non_riven_weapons() {
+        let w = serde_json::json!({"ExportWeapons": [
+            {"name": "Kuva Nukor", "omegaAttenuation": 0.7},
+            {"name": "Prisma Grakata", "omegaAttenuation": 1.3},
+            {"name": "Some Fixture", "omegaAttenuation": 0.0}
+        ]});
+        let d = dispositions_from_weapons(&w);
+        assert_eq!(d.len(), 2);
+        assert_eq!(d["kuva nukor"], 0.7);
+    }
+
+    fn world() -> Value {
+        serde_json::json!({
+          "VoidTraders": [{
+            "Activation": {"$date": {"$numberLong": "1787317200000"}},
+            "Expiry": {"$date": {"$numberLong": "1787490000000"}},
+            "Character": "Baro'Ki Teel",
+            "Node": "PlutoHUB",
+            "Manifest": [
+              {"ItemType": "/Lotus/StoreItems/Upgrades/Mods/Pistol/Expert/WeaponReloadSpeedModExpert",
+               "PrimePrice": 375, "RegularPrice": 120000},
+              {"ItemType": "/Lotus/StoreItems/Types/StoreItems/CreditBundles/KiteerSekhara",
+               "PrimePrice": 200, "RegularPrice": 50000}
+            ]
+          }],
+          "PrimeVaultTraders": [{
+            "Activation": {"$date": {"$numberLong": "1786039200000"}},
+            "Manifest": [{"ItemType": "/Lotus/Types/StoreItems/Packages/MPVRevenantPrimeSinglePack",
+                          "PrimePrice": 0}]
+          }],
+          "DailyDeals": [{
+            "StoreItem": "/Lotus/Weapons/Tenno/Pistol/RevolverPistol",
+            "Expiry": {"$date": {"$numberLong": "1787410800000"}},
+            "Discount": 40, "OriginalPrice": 190, "SalePrice": 114,
+            "AmountTotal": 100, "AmountSold": 13
+          }]
+        })
+    }
+
+    #[test]
+    fn baro_keeps_the_existing_shape_and_prices_the_manifest() {
+        let alias = recipe_alias(&recipes());
+        let b = baro_from_world(&world(), &p2i(), &alias, iso);
+        assert_eq!(b["location"], "Pluto Relay");
+        assert_eq!(b["activation"], "ms:1787317200000");
+        let inv = b["inventory"].as_array().unwrap();
+        assert_eq!(inv.len(), 2);
+        assert_eq!(inv[0]["item"], "Primed Quickdraw");
+        assert_eq!(inv[0]["slug"], "primed_quickdraw");
+        assert_eq!(inv[0]["ducats"], 375);
+        assert_eq!(inv[0]["credits"], 120000);
+    }
+
+    #[test]
+    fn baro_keeps_unpriceable_cosmetics_without_inventing_a_slug() {
+        let alias = recipe_alias(&recipes());
+        let b = baro_from_world(&world(), &p2i(), &alias, iso);
+        let inv = b["inventory"].as_array().unwrap();
+        // Readable, but explicitly no slug — so nothing downstream can price it.
+        assert_eq!(inv[1]["item"], "Kiteer Sekhara");
+        assert!(inv[1].get("slug").is_none());
+    }
+
+    #[test]
+    fn baro_is_empty_when_worldstate_has_no_trader() {
+        let empty = serde_json::json!({"VoidTraders": []});
+        assert!(baro_from_world(&empty, &p2i(), &HashMap::new(), iso).is_empty());
+    }
+
+    #[test]
+    fn vault_rotation_reads_the_announced_manifest() {
+        let v = vault_rotation_from_world(&world(), iso);
+        assert_eq!(v.len(), 1);
+        assert_eq!(v[0]["items"].as_array().unwrap().len(), 1);
+        assert_eq!(v[0]["activation"], "ms:1786039200000");
+    }
+
+    #[test]
+    fn deals_carry_the_discount_fields() {
+        let d = deals_from_world(&world(), &p2i(), &HashMap::new(), iso);
+        assert_eq!(d.len(), 1);
+        assert_eq!(d[0]["discount"], 40);
+        assert_eq!(d[0]["sale_price"], 114);
+        assert_eq!(d[0]["item"], "Revolver Pistol");
+    }
+}

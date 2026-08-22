@@ -21,6 +21,15 @@ pub fn parse_stamp(s: &str) -> Option<DateTime<Utc>> {
         .map(|n| Utc.from_utc_datetime(&n))
 }
 
+/// Epoch milliseconds → UTC. DE's worldState stamps every window
+/// (`Activation`, `Expiry`) as millis inside a Mongo-flavoured wrapper; once
+/// [`crate::de::de_millis`] has unwrapped it, this is the only conversion
+/// needed. Out-of-range values clamp to the epoch rather than panicking — a
+/// garbage timestamp should render as obviously wrong, not take down a build.
+pub fn from_millis(ms: i64) -> DateTime<Utc> {
+    DateTime::<Utc>::from_timestamp_millis(ms).unwrap_or(DateTime::UNIX_EPOCH)
+}
+
 /// Mirror of the `datetime.fromisoformat` subset the converter feeds it
 /// (WFCD `estimatedVaultDate`, after the caller's `Z` → `+00:00` rewrite):
 /// RFC 3339 with offset, naive datetime with optional fraction (T or space
@@ -91,5 +100,21 @@ mod tests {
     fn isoformat_rejects_garbage_like_python_valueerror() {
         assert_eq!(parse_isoformat_utc("soon"), None);
         assert_eq!(parse_isoformat_utc(""), None);
+    }
+}
+
+#[cfg(test)]
+mod de_millis_tests {
+    use super::*;
+
+    #[test]
+    fn from_millis_matches_a_known_worldstate_stamp() {
+        // Baro's Activation from the 2026-08 worldState probe.
+        assert_eq!(iso_z(from_millis(1787317200000)), "2026-08-21T13:00:00Z");
+    }
+
+    #[test]
+    fn from_millis_clamps_instead_of_panicking() {
+        assert_eq!(from_millis(i64::MAX), DateTime::UNIX_EPOCH);
     }
 }

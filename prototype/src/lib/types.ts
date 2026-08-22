@@ -43,12 +43,21 @@ interface SetEntry {
   parts: Array<{ slug: string; component_name: string }>;
 }
 
-/** Single drop entry on a relic, from drops.warframestat.us. */
+/** Single drop entry on a relic, from DE's `ExportRelicArcane`. */
 interface RelicReward {
   reward_slug: string;
   reward_name: string;
   rarity: string;
+  /** Intact drop chance, kept as a bare number so consumers written against
+   *  the older single-tier surface keep working. Prefer `chances`. */
   chance: number;
+  /** Drop chance at each refinement. Derived, not published: DE ships four
+   *  uniqueName variants per relic whose reward lists are identical, so
+   *  refinement changes the odds and not the contents, and the odds come from
+   *  the pipeline's rarity table. Absent on snapshots built before 2026-08. */
+  chances?: Record<'intact' | 'exceptional' | 'flawless' | 'radiant', number>;
+  /** How many copies drop. Effectively always 1 for prime parts. */
+  item_count?: number;
 }
 
 /** Prime-part vault state — `vaulted` and `vaulting-soon` are sell-signals. */
@@ -62,12 +71,21 @@ export interface BaroStock {
   item: string;
   ducats?: number;
   credits?: number;
+  /** WFM slug, when the line is a tradeable item. **Absent means unpriceable**
+   *  — cosmetics and bundles have no market listing, and a consumer must show
+   *  them without a price rather than treating a missing price as zero. */
+  slug?: string;
+  /** DE's `/Lotus/...` path for the line, so a consumer can join without a
+   *  display-name match. */
+  unique?: string;
 }
 
 interface Baro {
   activation: string;
   expiry: string;
   location: string;
+  /** "Baro'Ki Teel". Present only on worldState-sourced snapshots. */
+  character?: string;
   /** What he is selling. Only obtainable during his ~48h visit — the upstream
    *  endpoint returns an empty list between visits and publishes no schedule or
    *  history — so the scraper carries the last captured list forward. That
@@ -190,6 +208,41 @@ export interface Market {
   // `updated_at` — prices refreshed but the vendor surfaces (baro/relics/
   // vault/sets) did not. Lets the UI flag a stale schedule/vault surface.
   surface_fetched_at?: Record<string, string>;
+  /** Digital Extremes provenance + the surfaces only worldState provides.
+   *  Absent on snapshots built before the DE ingest landed (2026-08). */
+  de?: DeSurface | null;
+}
+
+/** One announced Prime Vault rotation. `items` are DE `/Lotus/...` paths —
+ *  bundle SKUs, so most have no WFM slug; the value is the *dates*. */
+export interface VaultRotation {
+  activation: string;
+  expiry?: string;
+  items: string[];
+}
+
+/** Darvo's daily deal. */
+export interface DailyDeal {
+  item: string;
+  expiry: string;
+  discount?: number;
+  original_price?: number;
+  sale_price?: number;
+  stock?: number;
+  sold?: number;
+}
+
+export interface DeSurface {
+  /** Export manifest basename → content hash. Provenance: it says exactly
+   *  which build of DE's data every derived surface came from. */
+  hashes?: Record<string, string>;
+  /** Manifests whose hash moved on the last cycle — a patch-day signal. */
+  changed?: string[];
+  /** Whether worldState answered. `false` means baro / vault_rotation / deals
+   *  are carried over and should be labelled stale. */
+  world_ok?: boolean;
+  vault_rotation?: VaultRotation[];
+  deals?: DailyDeal[];
 }
 
 // -------- inventory.json --------
