@@ -188,12 +188,38 @@
     </table>
   </div>
 
-  <details class="install" id="desktop-install" bind:open={installOpen}>
+  <!-- The single biggest objection, answered where the decision is made.
+       The FAQ entry below stays canonical and longer; this is the short,
+       collapsed version so it can't be missed by someone who reads the CTA
+       and leaves. Keep the two consistent — and with SECURITY.md's
+       "What we cannot promise". -->
+  <details class="disc safety">
+    <summary>
+      <span class="lbl">Is this safe?</span>
+      <span class="exp">Can I get banned? — the honest answer</span>
+    </summary>
+    <div class="disc-body">
+      <p class="note">
+        The app only ever <strong>reads</strong> the running game's memory: the
+        <code>accountId</code> and <code>nonce</code> your client already obtained at login, used
+        for the same inventory call the game client makes. It never writes to the game, never
+        injects code, and never touches anti-cheat.
+      </p>
+      <p class="note">
+        We still <strong>can't promise it's ban-safe</strong> — no third-party tool honestly can.
+        Equivalent tools have run for years with no documented bans, but Digital Extremes has
+        never formally blessed the category. Use it at your own risk.
+        <a href="#faq">Full answer in the FAQ ↓</a>
+      </p>
+    </div>
+  </details>
+
+  <details class="disc install" id="desktop-install" bind:open={installOpen}>
     <summary>
       <span class="lbl">Install &amp; verify</span>
       <span class="exp">Windows .msi · Linux AppImage · first run · how to check the build</span>
     </summary>
-    <div class="install-body">
+    <div class="disc-body">
       <div class="seg" role="tablist" aria-label="Operating system">
         {#each osOrder as key (key)}
           <button
@@ -302,24 +328,30 @@
     .rows { border-right: none; border-bottom: 1px var(--rule) var(--hairline); }
   }
 
-  /* Install & verify: one disclosure under the panel. */
-  .install { border-top: 1px solid var(--border); }
-  .install > summary {
+  /* Two disclosures under the panel: the ban answer, then install & verify.
+     Same rail chrome, so they read as one pair of quiet rows rather than
+     two different widgets. */
+  .disc { border-top: 1px solid var(--border); }
+  .disc > summary {
     display: flex; align-items: center; gap: var(--s2);
-    height: var(--rail); padding: 0 var(--inset);
+    min-height: var(--rail); padding: 0 var(--inset);
     cursor: pointer; list-style: none; user-select: none;
     font-size: 12px; color: var(--muted); white-space: nowrap;
   }
-  .install > summary::-webkit-details-marker { display: none; }
-  .install > summary::after {
+  .disc > summary::-webkit-details-marker { display: none; }
+  .disc > summary::after {
     content: '+'; margin-left: auto; font-family: var(--font-mono); color: var(--muted);
   }
-  .install[open] > summary::after { content: '−'; color: var(--accent); }
-  .install > summary:hover { color: var(--fg); }
-  .install > summary .lbl { width: auto; color: var(--fg); }
-  .install-body { padding: var(--s3) var(--inset) var(--s4); border-top: 1px var(--rule) var(--hairline); display: flex; flex-direction: column; gap: var(--s3); }
-  .install-body .seg { align-self: flex-start; }
-  .install-body h4 { margin: var(--s2) 0 0; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .disc[open] > summary::after { content: '−'; color: var(--accent); }
+  .disc > summary:hover { color: var(--fg); }
+  .disc > summary .lbl { width: auto; color: var(--fg); }
+  .disc-body { padding: var(--s3) var(--inset) var(--s4); border-top: 1px var(--rule) var(--hairline); display: flex; flex-direction: column; gap: var(--s3); }
+  .disc-body .seg { align-self: flex-start; }
+  .disc-body h4 { margin: var(--s2) 0 0; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .safety .note code { font-size: 11px; }
+  /* The summary's one-line exp must be allowed to ellipsize on narrow
+     viewports rather than push the +/- marker off the rail. */
+  .disc > summary .exp { white-space: nowrap; }
   .snippet-row { display: flex; gap: var(--s2); align-items: stretch; }
   .snippet-row.inline { margin: var(--s2) 0 0; max-width: 34rem; }
   .snippet-row.inline .snippet { padding: var(--s1) var(--s2); font-size: 12px; white-space: nowrap; }
