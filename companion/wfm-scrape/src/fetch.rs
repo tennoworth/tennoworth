@@ -563,11 +563,11 @@ pub const RIVEN_CHANGE_RETENTION_DAYS: i64 = 90;
 /// value, not DE's patch time.
 ///
 /// Returns `{}` on fetch failure so reconcile falls back to the prior surface.
-pub fn fetch_rivens(
-    http: &dyn Http,
-    prior: Option<&HashMap<String, serde_json::Value>>,
-    now: DateTime<Utc>,
-) -> HashMap<String, serde_json::Value> {
+/// The riven weapons manifest: slug → {name, disposition, group, riven_type,
+/// req_mr, game_ref}. Dispositions here are warframe.market's MIRROR of DE's;
+/// the caller overrides them from `ExportWeapons` and only then computes the
+/// change log — see `riven_change_log` for why the order matters.
+pub fn fetch_rivens(http: &dyn Http) -> HashMap<String, serde_json::Value> {
     let data = match http.get_json(WFM_RIVEN_WEAPONS_URL) {
         Ok(b) => b,
         Err(e) => {
@@ -613,17 +613,83 @@ pub fn fetch_rivens(
         return HashMap::new();
     }
 
-    // Diff against what the prior snapshot recorded.
+    // NOTE: the disposition change log is NOT computed here. It has to diff
+    // the values that actually get PUBLISHED, and the DE override is applied
+    // by the caller after this returns — see `riven_change_log`.
+
+    // The stat-name/unit manifest (`/v2/riven/attributes`). A scanned
+    // riven's fingerprint names stats by DE tag (`WeaponCritDamageMod`); this
+    // maps that tag (game_ref) to a display name + whether it is a percent
+    // stat, so the Rivens view can render the raw fingerprint value as
+    // "+95.3% crit damage" instead of a bare integer.
+    let mut attributes: Vec<serde_json::Value> = Vec::new();
+    if let Ok(data) = http.get_json(WFM_RIVEN_ATTRIBUTES_URL) {
+        let arr = data.get("data").and_then(|d| d.as_array()).or_else(|| data.as_array());
+        if let Some(arr) = arr {
+            for a in arr {
+                let Some(gr) = a.get("gameRef").and_then(|v| v.as_str()) else { continue };
+                let mut row = serde_json::Map::new();
+                row.insert("game_ref".into(), serde_json::Value::String(gr.into()));
+                if let Some(slug) = a.get("slug").and_then(|v| v.as_str()) {
+                    row.insert("slug".into(), serde_json::Value::String(slug.into()));
+                }
+                if let Some(name) = a.get("i18n").and_then(|i| i.get("en")).and_then(|e| e.get("name")).and_then(|n| n.as_str()) {
+                    row.insert("name".into(), serde_json::Value::String(name.into()));
+                }
+                if let Some(unit) = a.get("unit").and_then(|v| v.as_str()) {
+                    row.insert("unit".into(), serde_json::Value::String(unit.into()));
+                }
+                attributes.push(serde_json::Value::Object(row));
+            }
+        }
+    } else {
+        eprintln!("  warning: could not fetch {WFM_RIVEN_ATTRIBUTES_URL}");
+    }
+
+    let mut out = HashMap::new();
+    out.insert("weapons".into(), serde_json::Value::Object(weapons));
+    if !attributes.is_empty() {
+        out.insert("attributes".into(), serde_json::Value::Array(attributes));
+    }
+    out
+}
+
+/// The rolling disposition change log, diffed against the FINAL published
+/// weapons map.
+///
+/// This used to live inside `fetch_rivens`, which made it diff
+/// warframe.market's fresh mirror against the prior snapshot's STORED values —
+/// and those are DE's, because the caller overrides them afterwards. The
+/// result was wrong in both directions at once:
+///
+/// - **Phantom changes.** WFM's mirror lags DE. Every cycle where it still
+///   disagreed logged a change from DE's stored value to WFM's stale one, and
+///   then the override rewrote the value back to DE's. Nothing had changed;
+///   the log said something had.
+/// - **Missed changes.** A genuine DE disposition move is applied by the
+///   override *after* the diff ran, so it never appeared in the log at all.
+///
+/// Diffing the published values against the previously published values is the
+/// only comparison that means anything: the log describes what the snapshot
+/// says, not what one upstream happened to report mid-pipeline.
+pub fn riven_change_log(
+    weapons: &serde_json::Map<String, serde_json::Value>,
+    prior: Option<&HashMap<String, serde_json::Value>>,
+    now: DateTime<Utc>,
+) -> Vec<serde_json::Value> {
     let prior_weapons = prior
         .and_then(|p| p.get("weapons"))
         .and_then(|w| w.as_object());
     let mut changes: Vec<serde_json::Value> = Vec::new();
     if let Some(pw) = prior_weapons {
-        for (slug, row) in &weapons {
+        for (slug, row) in weapons {
             let Some(to) = row.get("disposition").and_then(|d| d.as_f64()) else { continue };
-            let Some(from) = pw.get(slug).and_then(|r| r.get("disposition")).and_then(|d| d.as_f64()) else { continue };
-            // Dispositions are quoted to 2 dp; anything under half a hundredth is
-            // float noise, not a change.
+            let Some(from) = pw.get(slug).and_then(|r| r.get("disposition")).and_then(|d| d.as_f64())
+            else {
+                continue;
+            };
+            // Dispositions are quoted to 2 dp; anything under half a hundredth
+            // is float noise, not a change.
             if (to - from).abs() < 0.005 {
                 continue;
             }
@@ -668,43 +734,7 @@ pub fn fetch_rivens(
                 .cmp(b.get("slug").and_then(|s| s.as_str()).unwrap_or(""))
         })
     });
-
-    // The stat-name/unit manifest (`/v2/riven/attributes`). A scanned
-    // riven's fingerprint names stats by DE tag (`WeaponCritDamageMod`); this
-    // maps that tag (game_ref) to a display name + whether it is a percent
-    // stat, so the Rivens view can render the raw fingerprint value as
-    // "+95.3% crit damage" instead of a bare integer.
-    let mut attributes: Vec<serde_json::Value> = Vec::new();
-    if let Ok(data) = http.get_json(WFM_RIVEN_ATTRIBUTES_URL) {
-        let arr = data.get("data").and_then(|d| d.as_array()).or_else(|| data.as_array());
-        if let Some(arr) = arr {
-            for a in arr {
-                let Some(gr) = a.get("gameRef").and_then(|v| v.as_str()) else { continue };
-                let mut row = serde_json::Map::new();
-                row.insert("game_ref".into(), serde_json::Value::String(gr.into()));
-                if let Some(slug) = a.get("slug").and_then(|v| v.as_str()) {
-                    row.insert("slug".into(), serde_json::Value::String(slug.into()));
-                }
-                if let Some(name) = a.get("i18n").and_then(|i| i.get("en")).and_then(|e| e.get("name")).and_then(|n| n.as_str()) {
-                    row.insert("name".into(), serde_json::Value::String(name.into()));
-                }
-                if let Some(unit) = a.get("unit").and_then(|v| v.as_str()) {
-                    row.insert("unit".into(), serde_json::Value::String(unit.into()));
-                }
-                attributes.push(serde_json::Value::Object(row));
-            }
-        }
-    } else {
-        eprintln!("  warning: could not fetch {WFM_RIVEN_ATTRIBUTES_URL}");
-    }
-
-    let mut out = HashMap::new();
-    out.insert("weapons".into(), serde_json::Value::Object(weapons));
-    out.insert("changes".into(), serde_json::Value::Array(changes));
-    if !attributes.is_empty() {
-        out.insert("attributes".into(), serde_json::Value::Array(attributes));
-    }
-    out
+    changes
 }
 
 pub const WFM_RIVEN_ATTRIBUTES_URL: &str = "https://api.warframe.market/v2/riven/attributes";
@@ -1374,7 +1404,7 @@ mod tests {
     #[test]
     fn rivens_reduce_the_manifest_and_report_no_changes_without_a_prior() {
         let now = clock::parse_isoformat_utc("2026-08-16T12:00:00Z").unwrap();
-        let got = fetch_rivens(&riven_http(&[("kulstar", "Kulstar", 1.3), ("braton", "Braton", 1.15)]), None, now);
+        let got = fetch_rivens(&riven_http(&[("kulstar", "Kulstar", 1.3), ("braton", "Braton", 1.15)]));
         let w = got.get("weapons").unwrap().as_object().unwrap();
         assert_eq!(w.len(), 2);
         assert_eq!(w["kulstar"]["name"], "Kulstar");
@@ -1382,7 +1412,11 @@ mod tests {
         assert_eq!(w["kulstar"]["group"], "primary");
         assert_eq!(w["kulstar"]["riven_type"], "rifle");
         assert_eq!(w["kulstar"]["req_mr"], 8);
-        assert_eq!(got.get("changes").unwrap().as_array().unwrap().len(), 0);
+        // The fetch no longer computes the log at all — the caller does, after
+        // applying DE's dispositions. See `riven_change_log`.
+        assert!(got.get("changes").is_none());
+        let changes = riven_change_log(got["weapons"].as_object().unwrap(), None, now);
+        assert!(changes.is_empty(), "no prior means no changes");
     }
 
     #[test]
@@ -1399,12 +1433,12 @@ mod tests {
                 {"slug": "braton", "name": "Braton", "from": 1.05, "to": 1.10, "seen_at": "2026-07-15T00:00:00Z"}
             ]),
         );
-        let got = fetch_rivens(
-            &riven_http(&[("kulstar", "Kulstar", 1.3), ("braton", "Braton", 1.15), ("lato", "Lato", 1.4)]),
-            Some(&prior),
-            now,
-        );
-        let ch = got.get("changes").unwrap().as_array().unwrap();
+        let got = fetch_rivens(&riven_http(&[
+            ("kulstar", "Kulstar", 1.3),
+            ("braton", "Braton", 1.15),
+            ("lato", "Lato", 1.4),
+        ]));
+        let ch = riven_change_log(got["weapons"].as_object().unwrap(), Some(&prior), now);
         let slugs: Vec<&str> = ch.iter().map(|c| c["slug"].as_str().unwrap()).collect();
         assert_eq!(slugs, vec!["braton", "lato"], "newest first; burston aged out; braton superseded");
         assert_eq!(ch[0]["from"], 1.10);
@@ -1413,9 +1447,48 @@ mod tests {
     }
 
     #[test]
-    fn rivens_fetch_failure_is_an_empty_surface_for_reconcile_to_fall_back() {
+    fn riven_change_log_diffs_published_values_not_the_wfm_mirror() {
+        // The bug: the log used to be computed inside the fetch, so it diffed
+        // warframe.market's fresh mirror against the prior snapshot's STORED
+        // values — which are DE's, because the override lands afterwards.
+        //
+        // Here WFM still reports the OLD 1.30 while DE has already moved
+        // Kulstar to 1.15, and the prior snapshot recorded DE's old 1.30.
+        // Diffing the mirror would log 1.30 → 1.30 (nothing) and then publish
+        // 1.15 unannounced; diffing what we actually publish logs the real move.
         let now = clock::parse_isoformat_utc("2026-08-16T12:00:00Z").unwrap();
-        let got = fetch_rivens(&FixtureHttp { responses: HashMap::new() }, None, now);
+        let prior = rivens_surface(&[("kulstar", 1.30)], serde_json::json!([]));
+
+        let mut published = serde_json::Map::new();
+        published.insert(
+            "kulstar".into(),
+            serde_json::json!({"name": "Kulstar", "disposition": 1.15}),
+        );
+        let ch = riven_change_log(&published, Some(&prior), now);
+        assert_eq!(ch.len(), 1, "the real DE move is logged");
+        assert_eq!(ch[0]["from"], 1.30);
+        assert_eq!(ch[0]["to"], 1.15);
+    }
+
+    #[test]
+    fn riven_change_log_reports_nothing_when_the_published_value_is_unchanged() {
+        // The other half: on a carry cycle the published value equals the prior
+        // one even though WFM's mirror disagrees. No change occurred, so none
+        // may be logged — a phantom entry here would tell users a disposition
+        // moved when it did not.
+        let now = clock::parse_isoformat_utc("2026-08-16T12:00:00Z").unwrap();
+        let prior = rivens_surface(&[("kulstar", 1.15)], serde_json::json!([]));
+        let mut published = serde_json::Map::new();
+        published.insert(
+            "kulstar".into(),
+            serde_json::json!({"name": "Kulstar", "disposition": 1.15}),
+        );
+        assert!(riven_change_log(&published, Some(&prior), now).is_empty());
+    }
+
+    #[test]
+    fn rivens_fetch_failure_is_an_empty_surface_for_reconcile_to_fall_back() {
+        let got = fetch_rivens(&FixtureHttp { responses: HashMap::new() });
         assert!(got.is_empty());
     }
 
@@ -1423,8 +1496,7 @@ mod tests {
     fn rivens_carry_game_ref_and_the_attributes_manifest() {
         // The riven-weapons fixture does not serve /riven/attributes, so the
         // surface is built without it and the call still succeeds.
-        let now = clock::parse_isoformat_utc("2026-08-16T12:00:00Z").unwrap();
-        let got = fetch_rivens(&riven_http(&[("kulstar", "Kulstar", 1.3)]), None, now);
+        let got = fetch_rivens(&riven_http(&[("kulstar", "Kulstar", 1.3)]));
         let w = got.get("weapons").unwrap().as_object().unwrap();
         assert_eq!(w["kulstar"]["game_ref"], "/Lotus/Weapons/kulstar");
 
@@ -1451,7 +1523,7 @@ mod tests {
                  "i18n": {"en": {"name": "Kulstar"}}}
             ]}),
         );
-        let got2 = fetch_rivens(&FixtureHttp { responses: r }, None, now);
+        let got2 = fetch_rivens(&FixtureHttp { responses: r });
         let attrs = got2.get("attributes").unwrap().as_array().unwrap();
         assert_eq!(attrs.len(), 2);
         assert_eq!(attrs[0]["game_ref"], "WeaponCritDamageMod");

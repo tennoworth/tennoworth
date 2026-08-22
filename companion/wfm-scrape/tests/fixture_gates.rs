@@ -755,3 +755,44 @@ fn every_de_surface_carries_when_a_manifest_parses_to_nothing() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The disposition change log must diff PUBLISHED values, not WFM's mirror.
+///
+/// The fixture makes the two sources disagree the way they do in production:
+/// warframe.market still reports Volt Prime at 1.30 while DE's ExportWeapons
+/// has moved it to 1.15. The snapshot publishes DE's value, so:
+///
+/// - a cycle whose published value matches the prior one logs NOTHING, even
+///   though the mirror disagrees with both;
+/// - computing the log before the override instead would diff 1.30 against the
+///   stored 1.15 every single cycle and announce a disposition change that
+///   never happened.
+#[test]
+fn the_disposition_log_reports_no_change_when_only_the_mirror_disagrees() {
+    let dir = stage_fixtures("convert");
+    let args = ["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"];
+
+    assert!(run(&args, &dir).status.success());
+    let first: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(
+        first["rivens"]["weapons"]["volt_prime"]["disposition"], 1.15,
+        "DE's value is what gets published, not WFM's 1.30"
+    );
+
+    // Feed that snapshot back in and run again. Nothing moved, so nothing may
+    // be logged — the mirror still says 1.30 and must not provoke an entry.
+    std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
+    assert!(run(&args, &dir).status.success());
+    let second: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+
+    assert_eq!(second["rivens"]["weapons"]["volt_prime"]["disposition"], 1.15);
+    let changes = second["rivens"]["changes"].as_array().cloned().unwrap_or_default();
+    assert!(
+        !changes.iter().any(|c| c["slug"] == "volt_prime"),
+        "a lagging mirror must not manufacture a disposition change: {changes:?}"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

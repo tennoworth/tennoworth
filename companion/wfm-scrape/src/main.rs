@@ -664,7 +664,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     );
 
     eprintln!("Fetching riven dispositions...");
-    let mut rivens = fetch::fetch_rivens(http.as_ref(), rivens_old.as_ref(), now);
+    let mut rivens = fetch::fetch_rivens(http.as_ref());
     // DE is the authority on dispositions; warframe.market mirrors them and
     // lags. Overriding here (rather than replacing the fetch) keeps WFM's
     // group/riven_type/req_mr metadata, which DE does not publish, and lets
@@ -724,6 +724,17 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
             }
         }
         eprintln!("  dispositions: {matched} matched to DE ({moved} differed from WFM's mirror)");
+    }
+    // The change log LAST, diffing what we are about to publish against what we
+    // published before. Computing it inside the fetch made it diff WFM's
+    // mirror against DE's stored values, which logged a phantom change every
+    // time the mirror lagged and missed every real one, because the override
+    // lands after the fetch.
+    if let Some(weapons) = rivens.get("weapons").and_then(|w| w.as_object()).cloned() {
+        let changes = fetch::riven_change_log(&weapons, rivens_old.as_ref(), now);
+        if !changes.is_empty() {
+            rivens.insert("changes".into(), serde_json::Value::Array(changes));
+        }
     }
     let rivens = rivens;
     if let Some(ch) = rivens.get("changes").and_then(|c| c.as_array()) {
