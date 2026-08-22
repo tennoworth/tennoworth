@@ -476,6 +476,9 @@ fn reward_items(
     alias: &HashMap<String, String>,
 ) -> Option<(Vec<Value>, bool, i64)> {
     let obj = reward.as_object()?;
+    let recognized = ["credits", "items", "countedItems"]
+        .iter().any(|key| obj.contains_key(*key));
+    if !recognized { return None; }
     let credits = match obj.get("credits") {
         Some(value) => value.as_i64().filter(|value| *value >= 0)?,
         None => 0,
@@ -517,7 +520,6 @@ fn reward_items(
         let quantity = item.get("ItemCount").and_then(|v| v.as_i64())?;
         if !push(unique, quantity) { return None; }
     }
-    if out.is_empty() && credits == 0 { return None; }
     Some((out, complete, credits))
 }
 
@@ -1088,6 +1090,15 @@ mod tests {
         let rejected = event_rewards_from_world_child(&empty_reward, "Goals", &HashMap::new(), &HashMap::new(), |ms| ms.to_string());
         assert!(rejected.rows.is_empty());
         assert_eq!(rejected.invalid_rows, 1);
+
+        let explicit_zero = serde_json::json!({"Goals":[{
+            "_id":{"$oid":"zero"}, "Activation":1, "Expiry":2, "Tag":"ZeroGoal",
+            "Reward":{"credits":0,"items":[],"countedItems":[]}
+        }]});
+        let accepted = event_rewards_from_world_child(&explicit_zero, "Goals", &HashMap::new(), &HashMap::new(), |ms| ms.to_string());
+        assert_eq!(accepted.invalid_rows, 0);
+        assert_eq!(accepted.rows["zero"]["completeness"], "complete");
+        assert_eq!(accepted.rows["zero"]["groups"][0]["rewards"].as_array().unwrap().len(), 0);
     }
 
     #[test]
