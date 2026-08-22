@@ -214,6 +214,8 @@ fn build_uses_de_export_and_world_state() {
     let de = snap.get("de").expect("de surface written");
     assert_eq!(de["hashes"].as_object().unwrap().len(), 6, "all indexed manifests recorded");
     assert_eq!(de["world_ok"], true);
+    assert_eq!(de["dispositions"]["volt_prime"], 1.15, "only DE-matched dispositions are provenance");
+    assert_eq!(de["child_fetched_at"]["world_state"], "2026-07-01T12:00:00Z");
     assert_eq!(de["vault_rotation"].as_array().unwrap().len(), 1, "announced vault rotation");
     assert_eq!(de["deals"][0]["discount"], 40, "Darvo's daily deal");
 
@@ -747,6 +749,11 @@ fn every_de_surface_carries_when_a_manifest_parses_to_nothing() {
         snap["de"]["ducats"]["volt_prime_chassis_blueprint"], 65,
         "and so must their provenance, or the NEXT cycle has nothing to carry"
     );
+    assert_eq!(
+        snap["de"]["dispositions"]["volt_prime"], 1.15,
+        "disposition carry must use exact DE provenance, not every prior WFM row"
+    );
+    assert_eq!(snap["rivens"]["weapons"]["volt_prime"]["disposition"], 1.15);
     let rewards = snap["relic_rewards"]["lith_v1_relic"].as_array().unwrap();
     assert!(
         rewards.iter().any(|r| r["chances"]["radiant"] == 16.67),

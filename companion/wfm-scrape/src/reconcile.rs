@@ -5,13 +5,17 @@
 //! preserve-on-empty rule — all of which live here as a single tested unit.
 //!
 //! RULES (contract, not opinion):
-//! 1. Empty fresh + prior exists → keep prior data + prior stamp.
-//! 2. Partial fetch (complete=false) + prior exists → merge fresh over
+//! 1. Unavailable, unchanged, or invalid observations keep prior data and its
+//!    data timestamp. These states are distinct in provenance even though the
+//!    data transition is the same.
+//! 2. A usable partial fetch with prior data merges fresh over
 //!    prior (old entries the fresh fetch didn't cover are kept), stamp
 //!    NOW. Whole-surface stamp on partial merge is INTENTIONAL — retained
 //!    entries were just re-validated as still-best-known.
-//! 3. Otherwise → return fresh, stamp NOW.
-//! 4. wfstat-catalog.json is a file-level unit, not a surface: if the
+//! 3. Authoritative empty is data. It clears a prior surface and stamps NOW;
+//!    it must never fall into preserve-on-empty.
+//! 4. Otherwise → return usable data, stamp NOW.
+//! 5. wfstat-catalog.json is a file-level unit, not a surface: if the
 //!    bulk /items/ fetch returns empty, the prior FILE is kept as-is. We
 //!    represent that here as an `Option` — the caller reads the file,
 //!    passes `Some(prior_content)`, and receives `None` to signal "write
@@ -23,6 +27,47 @@ use std::hash::Hash;
 use chrono::{DateTime, Utc};
 
 use crate::clock;
+
+/// What the upstream observation actually established.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Observation<T> {
+    /// The request could not be made or did not receive a response.
+    Unavailable,
+    /// A content hash or cache validator proved the prior data is current.
+    Unchanged,
+    /// A response arrived but could not be trusted (malformed or all-invalid).
+    Invalid,
+    /// Valid data. `complete=false` means some independently fetched children
+    /// failed and prior keys may be retained.
+    Usable { data: T, complete: bool },
+    /// A valid response explicitly asserted that the surface has no rows.
+    AuthoritativeEmpty,
+}
+
+impl<T> Observation<T> {
+    pub fn usable(data: T) -> Self {
+        Self::Usable { data, complete: true }
+    }
+
+    pub fn partial(data: T) -> Self {
+        Self::Usable { data, complete: false }
+    }
+}
+
+/// Exact reason the published value looks the way it does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Disposition {
+    PublishedFresh,
+    MergedPartial,
+    ClearedAuthoritativeEmpty,
+    PreservedUnavailable,
+    PreservedUnchanged,
+    PreservedInvalid,
+    EmptyUnavailable,
+    EmptyUnchanged,
+    EmptyInvalid,
+}
 
 /// One stale-period warning generated when a kept surface exceeds the
 /// threshold. Printed but non-fatal; the binary uses it to alert that the
@@ -47,6 +92,11 @@ impl StaleWarning {
 pub struct Reconciled<T> {
     pub data: T,
     pub fetched_at: String,
+    /// Time this upstream was observed, even when the data timestamp remains
+    /// old. Keeping this separate prevents a successful hash check from making
+    /// carried child data look freshly fetched.
+    pub observed_at: String,
+    pub disposition: Disposition,
     pub stale_warning: Option<StaleWarning>,
     pub recovered: usize,
 }
@@ -112,23 +162,22 @@ impl Mergeable for serde_json::Value {
 /// assigned `fetched_at` stamp and any stale warning.
 ///
 /// `name` — surface key in `surface_fetched_at` ("path_to_info", etc.).
-/// `fresh` — just-fetched data (may be empty on fetch failure).
+/// `observation` — the classified upstream result. Empty is meaningful only
+///   when explicitly classified as [`Observation::AuthoritativeEmpty`].
 /// `prior` — data from the prior snapshot (may be `None` if no prior).
 /// `prior_stamp` — the stamp from the prior snapshot's `surface_fetched_at`.
 /// `now` — the injected clock (same one flowing through render).
-/// `complete` — whether ALL upstream endpoints succeeded (true) or any
-///   failed (false). Drives the partial-merge path.
 /// `stale_days` — threshold for stale warnings (Python uses 7).
-pub fn reconcile<T: Mergeable>(
+pub fn reconcile<T: Mergeable + Default>(
     name: &str,
-    fresh: T,
+    observation: Observation<T>,
     prior: Option<&T>,
     prior_stamp: Option<&str>,
     now: DateTime<Utc>,
-    complete: bool,
     stale_days: i64,
 ) -> Reconciled<T> {
-    if fresh.is_empty() {
+    let observed_at = clock::iso_z(now);
+    let preserve = |disposition: Disposition| {
         if let Some(old) = prior {
             let kept_since = prior_stamp.unwrap_or("");
             let stamp = if kept_since.is_empty() { clock::iso_z(now) } else { kept_since.to_string() };
@@ -143,33 +192,75 @@ pub fn reconcile<T: Mergeable>(
                     None
                 }
             });
-            return Reconciled {
+            Reconciled {
                 data: old.clone(),
                 fetched_at: stamp,
+                observed_at: observed_at.clone(),
+                disposition,
                 stale_warning,
                 recovered: 0,
+            }
+        } else {
+            let empty_disposition = match disposition {
+                Disposition::PreservedUnavailable => Disposition::EmptyUnavailable,
+                Disposition::PreservedUnchanged => Disposition::EmptyUnchanged,
+                Disposition::PreservedInvalid => Disposition::EmptyInvalid,
+                other => other,
             };
+            Reconciled {
+                data: T::default(),
+                fetched_at: observed_at.clone(),
+                observed_at: observed_at.clone(),
+                disposition: empty_disposition,
+                stale_warning: None,
+                recovered: 0,
+            }
         }
-    }
+    };
 
-    if !complete {
-        if let Some(old) = prior {
+    match observation {
+        Observation::Unavailable => preserve(Disposition::PreservedUnavailable),
+        Observation::Unchanged => preserve(Disposition::PreservedUnchanged),
+        Observation::Invalid => preserve(Disposition::PreservedInvalid),
+        Observation::AuthoritativeEmpty => Reconciled {
+            data: T::default(),
+            fetched_at: observed_at.clone(),
+            observed_at,
+            disposition: Disposition::ClearedAuthoritativeEmpty,
+            stale_warning: None,
+            recovered: 0,
+        },
+        Observation::Usable { data: fresh, complete: false } => {
+          if let Some(old) = prior {
             let merged = T::merge(old, &fresh);
             let recovered = merged.len().saturating_sub(fresh.len());
-            return Reconciled {
+            Reconciled {
                 data: merged,
                 fetched_at: clock::iso_z(now),
+                observed_at,
+                disposition: Disposition::MergedPartial,
                 stale_warning: None,
                 recovered,
-            };
+            }
+          } else {
+            Reconciled {
+                data: fresh,
+                fetched_at: clock::iso_z(now),
+                observed_at,
+                disposition: Disposition::MergedPartial,
+                stale_warning: None,
+                recovered: 0,
+            }
+          }
         }
-    }
-
-    Reconciled {
-        fetched_at: clock::iso_z(now),
-        stale_warning: None,
-        recovered: 0,
-        data: fresh,
+        Observation::Usable { data, complete: true } => Reconciled {
+            fetched_at: clock::iso_z(now),
+            observed_at,
+            disposition: Disposition::PublishedFresh,
+            stale_warning: None,
+            recovered: 0,
+            data,
+        },
     }
 }
 
@@ -184,6 +275,25 @@ mod tests {
 
     fn hm<V: Clone>(pairs: &[(&str, V)]) -> HashMap<String, V> {
         pairs.iter().map(|(k, v)| (k.to_string(), v.clone())).collect()
+    }
+
+    fn reconcile<T: Mergeable + Default>(
+        name: &str,
+        fresh: T,
+        prior: Option<&T>,
+        prior_stamp: Option<&str>,
+        now: DateTime<Utc>,
+        complete: bool,
+        stale_days: i64,
+    ) -> Reconciled<T> {
+        let observation = if fresh.is_empty() {
+            Observation::Unavailable
+        } else if complete {
+            Observation::usable(fresh)
+        } else {
+            Observation::partial(fresh)
+        };
+        super::reconcile(name, observation, prior, prior_stamp, now, stale_days)
     }
 
     // ---- Rule 1: empty fresh + prior exists → keep prior ----------------
@@ -297,5 +407,42 @@ mod tests {
 
         let r = reconcile("baro", fresh.clone(), Some(&prior), None, now, true, 7);
         assert_eq!(r.data, fresh);
+    }
+
+    #[test]
+    fn authoritative_empty_clears_prior_and_stamps_now() {
+        let prior = hm(&[("old", 1)]);
+        let now = utc(2026, 7, 1, 0, 0, 0);
+        let r = super::reconcile(
+            "events",
+            Observation::<HashMap<String, i32>>::AuthoritativeEmpty,
+            Some(&prior),
+            Some("2026-06-01T00:00:00Z"),
+            now,
+            7,
+        );
+        assert!(r.data.is_empty());
+        assert_eq!(r.fetched_at, "2026-07-01T00:00:00Z");
+        assert_eq!(r.disposition, Disposition::ClearedAuthoritativeEmpty);
+    }
+
+    #[test]
+    fn preserve_states_have_distinct_provenance() {
+        let prior = hm(&[("old", 1)]);
+        let now = utc(2026, 7, 1, 0, 0, 0);
+        let cases = [
+            (Observation::Unavailable, Disposition::PreservedUnavailable),
+            (Observation::Unchanged, Disposition::PreservedUnchanged),
+            (Observation::Invalid, Disposition::PreservedInvalid),
+        ];
+        for (observation, expected) in cases {
+            let r = super::reconcile(
+                "surface", observation, Some(&prior), Some("2026-06-01T00:00:00Z"), now, 7,
+            );
+            assert_eq!(r.data, prior);
+            assert_eq!(r.fetched_at, "2026-06-01T00:00:00Z");
+            assert_eq!(r.observed_at, "2026-07-01T00:00:00Z");
+            assert_eq!(r.disposition, expected);
+        }
     }
 }

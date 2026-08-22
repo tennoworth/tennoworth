@@ -139,9 +139,20 @@ pub struct Snapshot {
     pub usage: HashMap<String, serde_json::Value>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub surface_fetched_at: HashMap<String, String>,
+    /// Observation provenance is separate from data freshness: an unchanged
+    /// hash check is fresh evidence about old data, while an outage is not.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub surface_provenance: HashMap<String, SurfaceProvenance>,
     /// Digital Extremes provenance + the worldState-only surfaces.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub de: Option<DeSurface>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SurfaceProvenance {
+    pub disposition: crate::reconcile::Disposition,
+    pub observed_at: String,
+    pub data_fetched_at: String,
 }
 
 /// What one cycle took from DE, and what only DE can give.
@@ -160,6 +171,10 @@ pub struct DeSurface {
     pub changed: Vec<String>,
     /// Whether worldState answered. False means Baro/vault/deals are stale.
     pub world_ok: bool,
+    /// Child timestamps do not inherit their parent's freshness. A successful
+    /// PC weekly-riven fetch must not make a failed Switch child look current.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub child_fetched_at: std::collections::BTreeMap<String, String>,
     /// Announced Prime Vault rotations — the real thing, not the estimate.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub vault_rotation: Vec<serde_json::Value>,
@@ -175,6 +190,10 @@ pub struct DeSurface {
     /// also stamp stale WFM values over fresh, legitimately-corrected ones.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub ducats: std::collections::BTreeMap<String, i64>,
+    /// Only slugs whose disposition was matched to DE. This prevents an
+    /// outage from treating every value in WFM's mirror as first-party.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub dispositions: std::collections::BTreeMap<String, f64>,
 }
 
 /// Assemble a [`Snapshot`] from rendered items + catalog + all surfaces.
@@ -220,6 +239,7 @@ pub fn assemble_snapshot(
         recipes,
         usage,
         surface_fetched_at,
+        surface_provenance: HashMap::new(),
     }
 }
 

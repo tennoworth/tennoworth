@@ -743,7 +743,7 @@ pub const WFM_RIVEN_ATTRIBUTES_URL: &str = "https://api.warframe.market/v2/riven
 /// literal (NOT JSON: unquoted keys, single-quoted strings), keyed by weapon
 /// display name x `rerolled`. ~150 KB; the only stats that actually sample
 /// riven auctions — WFM's `/statistics` has no riven rows at all.
-pub const DE_WEEKLY_RIVENS_URL: &str = "https://www-static.warframe.com/repos/weeklyRivensPC.json";
+pub use crate::de::DE_WEEKLY_RIVENS_URL;
 
 /// The same file per platform. Console riven markets diverge sharply from PC's
 /// — different populations, different metas, and far smaller samples — and DE
@@ -752,11 +752,7 @@ pub const DE_WEEKLY_RIVENS_URL: &str = "https://www-static.warframe.com/repos/we
 /// PC stays the primary surface (`unrolled`/`rolled` at the top level); the
 /// consoles ride along under `platforms` so a consumer that only knows about
 /// PC keeps working untouched.
-pub const DE_WEEKLY_RIVEN_PLATFORMS: &[(&str, &str)] = &[
-    ("ps4", "https://www-static.warframe.com/repos/weeklyRivensPS4.json"),
-    ("xb1", "https://www-static.warframe.com/repos/weeklyRivensXB1.json"),
-    ("swi", "https://www-static.warframe.com/repos/weeklyRivensSWI.json"),
-];
+pub use crate::de::DE_WEEKLY_RIVEN_PLATFORMS;
 
 /// One row of `DE_WEEKLY_RIVENS_URL`: one weapon x reroll-state's price band.
 /// Generic rows (`compatibility: null` — "Rifle Riven Mod") carry no weapon
@@ -958,22 +954,23 @@ fn parse_weekly_rivens(text: &str) -> Result<Vec<WeeklyRivenRow>, String> {
 pub fn fetch_riven_stats(
     http: &dyn Http,
     weapons_by_name: &HashMap<String, String>,
-) -> (HashMap<String, serde_json::Value>, usize) {
+) -> (HashMap<String, serde_json::Value>, usize, Vec<String>) {
     let text = match http.get_text(DE_WEEKLY_RIVENS_URL) {
         Ok(t) => t,
         Err(e) => {
             eprintln!("  warning: could not fetch {DE_WEEKLY_RIVENS_URL}: {e}");
-            return (HashMap::new(), 0);
+            return (HashMap::new(), 0, Vec::new());
         }
     };
     let rows = match parse_weekly_rivens(&text) {
         Ok(r) => r,
         Err(e) => {
             eprintln!("  warning: {DE_WEEKLY_RIVENS_URL}: {e}");
-            return (HashMap::new(), 0);
+            return (HashMap::new(), 0, Vec::new());
         }
     };
     let mut stats: HashMap<String, serde_json::Value> = HashMap::new();
+    let mut fetched_children = vec!["pc".to_string()];
     let mut unmatched = 0usize;
     for row in rows {
         let Some(weapon) = row.compatibility else { continue };
@@ -1008,6 +1005,7 @@ pub fn fetch_riven_stats(
                 continue;
             }
         };
+        fetched_children.push((*platform).to_string());
         for row in rows {
             let Some(weapon) = row.compatibility else { continue };
             let Some(slug) = weapons_by_name.get(&weapon.to_lowercase()) else { continue };
@@ -1031,7 +1029,7 @@ pub fn fetch_riven_stats(
         }
     }
 
-    (stats, unmatched)
+    (stats, unmatched, fetched_children)
 }
 
 pub const WFSTAT_VAULT_TRADER_URL: &str = "https://api.warframestat.us/pc/vaultTrader/";
@@ -1589,7 +1587,7 @@ mod tests {
             { itemType: 'Melee Riven Mod', compatibility: null, rerolled: false,
               avg: 52.85, stddev: 274.96, min: 2, max: 2300, pop: 8, median: 7 }
         ]"#;
-        let (stats, unmatched) = fetch_riven_stats(&weekly_http(body), &weapons_by_name());
+        let (stats, unmatched, _) = fetch_riven_stats(&weekly_http(body), &weapons_by_name());
         assert_eq!(unmatched, 1, "only the unknown weapon counts");
         let acceltra = stats.get("acceltra").unwrap();
         assert_eq!(acceltra["name"], "Acceltra");
@@ -1621,7 +1619,7 @@ mod tests {
             DE_WEEKLY_RIVEN_PLATFORMS[0].1.into(),
             serde_json::Value::String(ps4.into()),
         );
-        let (stats, _) = fetch_riven_stats(&FixtureHttp { responses: r }, &weapons_by_name());
+        let (stats, _, _) = fetch_riven_stats(&FixtureHttp { responses: r }, &weapons_by_name());
 
         let acceltra = stats.get("acceltra").unwrap();
         // PC keeps its place at the top level, untouched.
@@ -1644,7 +1642,8 @@ mod tests {
             { itemType: 'Rifle Riven Mod', compatibility: 'Acceltra', rerolled: false,
               avg: 41.75, stddev: 45.23, min: 5, max: 400, pop: 10, median: 35 }
         ]"#;
-        let (stats, _) = fetch_riven_stats(&weekly_http(pc), &weapons_by_name());
+        let (stats, _, children) = fetch_riven_stats(&weekly_http(pc), &weapons_by_name());
+        assert_eq!(children, vec!["pc"]);
         let acceltra = stats.get("acceltra").unwrap();
         assert_eq!(acceltra["unrolled"]["median"], 35.0);
         assert!(acceltra.get("platforms").is_none());
@@ -1652,9 +1651,10 @@ mod tests {
 
     #[test]
     fn riven_stats_fetch_failure_is_empty_for_reconcile_to_fall_back() {
-        let (stats, unmatched) = fetch_riven_stats(&FixtureHttp { responses: HashMap::new() }, &weapons_by_name());
+        let (stats, unmatched, children) = fetch_riven_stats(&FixtureHttp { responses: HashMap::new() }, &weapons_by_name());
         assert!(stats.is_empty());
         assert_eq!(unmatched, 0);
+        assert!(children.is_empty());
     }
 
     fn set_catalog() -> HashMap<String, String> {

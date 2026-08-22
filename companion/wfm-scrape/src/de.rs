@@ -72,6 +72,17 @@ pub fn usage_url(year: u16) -> String {
 /// which is now a 404. `?platform=` returns 409 — cross-play unified it.
 pub const DE_WORLD_STATE_URL: &str = "https://api.warframe.com/cdn/worldState.php";
 
+/// DE's weekly riven price statistics. PC is the product's primary market;
+/// console children are optional comparison data and are not reconciled into
+/// PC when one child fails.
+pub const DE_WEEKLY_RIVENS_URL: &str =
+    "https://www-static.warframe.com/repos/weeklyRivensPC.json";
+pub const DE_WEEKLY_RIVEN_PLATFORMS: &[(&str, &str)] = &[
+    ("ps4", "https://www-static.warframe.com/repos/weeklyRivensPS4.json"),
+    ("xb1", "https://www-static.warframe.com/repos/weeklyRivensXB1.json"),
+    ("swi", "https://www-static.warframe.com/repos/weeklyRivensSWI.json"),
+];
+
 /// Manifest basenames we actually read. The index lists 16; pulling only these
 /// keeps a cold sync to ~8 MB instead of ~14 MB.
 pub const WANTED_MANIFESTS: &[&str] = &[
