@@ -912,11 +912,10 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
                 None => Observation::Invalid,
                 Some(rows) if rows.is_empty() => Observation::AuthoritativeEmpty,
                 Some(_) if build.rows.is_empty() => Observation::Invalid,
-                // Unsupported Jobs/announcement rows are outside this fixed-
-                // reward surface. They make an all-unknown child invalid, but
-                // must not retain vanished fixed goals when supported rows are
-                // otherwise complete.
-                Some(_) if build.invalid_rows > 0 => Observation::partial(build.rows),
+                // A child is the freshness unit. Stamping retained rows fresh
+                // after any malformed sibling would overstate what this poll
+                // established, so mixed payloads preserve the whole prior.
+                Some(_) if build.invalid_rows > 0 => Observation::Invalid,
                 Some(_) => Observation::usable(build.rows),
             },
             Observation::Unchanged | Observation::AuthoritativeEmpty => Observation::Invalid,

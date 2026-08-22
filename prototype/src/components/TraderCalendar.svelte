@@ -48,7 +48,7 @@
   <section class="cal">
     <h3>What's coming</h3>
     <ul>
-      {#each items as item (item.kind + item.at + item.title)}
+      {#each items as item (item.id ?? item.kind + item.at + item.title)}
         <li class:hot={item.affects.length > 0 && (item.affectsKnown || item.reach === 'partial-hits')}>
           <span class="when">{when(item)}</span>
           <span class="what">
@@ -76,7 +76,7 @@
                 >reach unknown</span
               >
             {/if}
-            {#if item.stale}<span class="stale"> · reward data stale</span>{/if}
+            {#if item.stale}<span class="stale"> · reward data {item.dataAgeDays === undefined ? 'age unknown' : `${item.dataAgeDays}d old`}</span>{/if}
           </span>
         </li>
       {/each}

@@ -84,6 +84,7 @@ const EVENT_MARKET = {
         groups: [{
           kind: 'milestone',
           threshold: 100,
+          credits: 50000,
           rewards: [
             { unique: '/Lotus/RevenantPrimeSet', name: 'Revenant Prime Set', slug: 'revenant_prime_set', quantity: 1 },
             { unique: '/Lotus/Unknown', name: 'Unknown Reward', quantity: 1 },
@@ -226,6 +227,26 @@ describe('buildCalendar', () => {
     ]);
   });
 
+  it('carries the stable id and counts credits as a fixed reward', () => {
+    const event = buildCalendar(EVENT_MARKET, owned([]), NOW)
+      .find((item) => item.title === 'Milestone Goal')!;
+    expect(event.id).toBe('partial');
+    expect(event.detail).toContain('50,000 credits');
+  });
+
+  it('keeps unsupported dated rows visible with unknown reach', () => {
+    const market = structuredClone(EVENT_MARKET) as Market;
+    market.event_rewards!.goals!.unknown = {
+      id: 'unknown', source: 'goal', title: 'Jobs Goal',
+      starts_at: '2026-08-26T00:00:00Z', ends_at: '2026-09-01T00:00:00Z',
+      completeness: 'unknown', groups: [],
+    };
+    const row = buildCalendar(market, owned([]), NOW).find((item) => item.id === 'unknown')!;
+    expect(row.reach).toBe('unknown');
+    expect(row.affectsKnown).toBe(false);
+    expect(row.detail).toBe('fixed rewards unknown');
+  });
+
   it('never turns partial coverage into false reassurance', () => {
     const miss = buildCalendar(EVENT_MARKET, owned(['something_else']), NOW);
     expect(miss.find((item) => item.title === 'Community Goal')?.reach).toBe('none');
@@ -256,6 +277,7 @@ describe('buildCalendar', () => {
     const rows = buildCalendar(market, owned([]), NOW);
     expect(rows.find((item) => item.title === 'Community Goal')?.stale).toBe(false);
     expect(rows.find((item) => item.title === 'Event Reward')?.stale).toBe(true);
+    expect(rows.find((item) => item.title === 'Event Reward')?.dataAgeDays).toBe(21);
   });
 });
 

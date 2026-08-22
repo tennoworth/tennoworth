@@ -347,8 +347,11 @@ fn event_reward_fixture_keeps_groups_and_reconciles_goals_independently() {
     assert_eq!(goal["groups"][0]["threshold"], 5.0);
     assert_eq!(goal["groups"][2]["kind"], "final");
     assert_eq!(goal["completeness"], "partial");
+    assert_eq!(goal["groups"][1]["credits"], 50_000);
+    assert_eq!(first["event_rewards"]["goals"]["redacted-goal-jobs"]["completeness"], "unknown");
+    assert_eq!(first["event_rewards"]["events"]["redacted-announcement"]["title"], "Redacted announcement");
     assert_eq!(first["surface_provenance"]["world.goals"]["disposition"], "published_fresh");
-    assert_eq!(first["surface_provenance"]["world.events"]["disposition"], "empty_invalid");
+    assert_eq!(first["surface_provenance"]["world.events"]["disposition"], "published_fresh");
     let mut prior = first;
     prior["event_rewards"]["events"]["prior-event"] = serde_json::json!({
         "id":"prior-event", "source":"event", "title":"Prior fixed event",
@@ -361,12 +364,15 @@ fn event_reward_fixture_keeps_groups_and_reconciles_goals_independently() {
     prior["de"]["child_fetched_at"]["world.events"] = serde_json::json!("2026-06-01T12:00:00Z");
     std::fs::write(dir.join("prior-market.json"), serde_json::to_vec(&prior).unwrap()).unwrap();
 
-    responses["https://api.warframe.com/cdn/worldState.php"]["Goals"] = serde_json::json!([{"bad":true}]);
+    let mut changed = observed["Goals"][1].clone();
+    changed["Tag"] = serde_json::json!("ShouldNotPublish");
+    responses["https://api.warframe.com/cdn/worldState.php"]["Goals"] = serde_json::json!([changed, {"bad":true}]);
     responses["https://api.warframe.com/cdn/worldState.php"].as_object_mut().unwrap().remove("Events");
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
     assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-02T12:00:00Z"], &dir).status.success());
     let second: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
     assert_eq!(second["event_rewards"]["goals"]["redacted-goal-milestones"]["groups"][0]["kind"], "milestone");
+    assert_eq!(second["event_rewards"]["goals"]["redacted-goal-bonus"]["title"], "Observed Bonus Shape");
     assert_eq!(second["event_rewards"]["events"]["prior-event"]["title"], "Prior fixed event");
     assert_eq!(second["surface_provenance"]["world.goals"]["disposition"], "preserved_invalid");
     assert_eq!(second["surface_provenance"]["world.goals"]["data_fetched_at"], "2026-07-01T12:00:00Z");

@@ -16,6 +16,8 @@ export type CalendarKind = 'baro' | 'vault' | 'deal' | 'event';
 export type CalendarReach = 'scan' | 'none' | 'hits' | 'partial-hits' | 'unknown';
 
 export interface CalendarItem {
+  /** Stable upstream ID where one exists. */
+  id?: string;
   kind: CalendarKind;
   /** When it starts (ISO). */
   at: string;
@@ -32,6 +34,7 @@ export interface CalendarItem {
   affectsKnown: boolean;
   reach?: CalendarReach;
   stale?: boolean;
+  dataAgeDays?: number;
 }
 
 /**
@@ -199,10 +202,17 @@ function eventItems(
   return rows.map((event: EventRewardEntry) => {
     const stamp = market?.surface_provenance?.[`world.${event.source}s`]?.data_fetched_at;
     const stampMs = stamp ? Date.parse(stamp) : NaN;
-    const stale = !Number.isFinite(stampMs) || now - stampMs > 7 * 86_400_000;
+    const dataAgeDays = Number.isFinite(stampMs)
+      ? Math.max(0, Math.floor((now - stampMs) / 86_400_000))
+      : undefined;
+    const stale = dataAgeDays === undefined || dataAgeDays > 7;
     const slugs = new Set<string>();
     let rewardCount = 0;
+    let credits = 0;
     for (const group of event.groups ?? []) {
+      if (typeof group.credits === 'number' && Number.isFinite(group.credits) && group.credits > 0) {
+        credits += group.credits;
+      }
       for (const reward of group.rewards ?? []) {
         rewardCount += 1;
         if (reward.slug) slugs.add(reward.slug);
@@ -210,21 +220,31 @@ function eventItems(
     }
     const affects = owned ? [...slugs].filter((slug) => held.has(slug)) : [];
     const complete = event.completeness === 'complete';
-    const reach: CalendarReach = !owned
+    const unknown = event.completeness === 'unknown';
+    const reach: CalendarReach = unknown
+      ? 'unknown'
+      : !owned
       ? 'scan'
       : affects.length > 0
         ? complete ? 'hits' : 'partial-hits'
         : complete ? 'none' : 'unknown';
+    const rewardParts: string[] = [];
+    if (rewardCount > 0) rewardParts.push(`${rewardCount} item reward${rewardCount === 1 ? '' : 's'}`);
+    if (credits > 0) rewardParts.push(`${credits.toLocaleString('en-US')} credits`);
     return {
+      id: event.id,
       kind: 'event' as const,
       at: event.starts_at,
       until: event.ends_at,
       title: event.title,
-      detail: `${rewardCount} fixed reward${rewardCount === 1 ? '' : 's'}${complete ? '' : ' · partial coverage'}`,
+      detail: unknown
+        ? 'fixed rewards unknown'
+        : `${rewardParts.join(' · ')}${complete ? '' : ' · partial coverage'}`,
       affects,
       affectsKnown: reach === 'hits' || reach === 'none',
       reach,
       stale,
+      dataAgeDays,
     };
   });
 }

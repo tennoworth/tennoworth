@@ -243,6 +243,7 @@ export interface EventRewardItem {
 export interface EventRewardGroup {
   kind: 'milestone' | 'final' | 'bonus';
   threshold?: number;
+  credits?: number;
   rewards: EventRewardItem[];
 }
 
@@ -252,7 +253,7 @@ export interface EventRewardEntry {
   title: string;
   starts_at: string;
   ends_at: string;
-  completeness: 'complete' | 'partial';
+  completeness: 'complete' | 'partial' | 'unknown';
   groups: EventRewardGroup[];
 }
 
