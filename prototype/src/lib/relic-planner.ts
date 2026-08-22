@@ -73,13 +73,16 @@ export function deriveRelicPlan(
     let epp = 0;
     let movingCount = 0;
     const rewardRows: RelicPlanReward[] = [];
-    for (const r of dropTable) {
+    for (const r of dropTable as RelicRewardRow[]) {
       const me = market.items?.[r.reward_slug];
       // clearingPrice floors at 1p, which would price an unlisted reward as
       // if someone were selling it. See `hasRealPrice`.
       const price = hasRealPrice(me) ? clearingPrice(me!) : 0;
       const vol = me?.vol || 0;
-      epp += (r.chance / 100) * price;
+      // item_count, not a bare price: a reward that drops in twos is worth
+      // twice as much. The refinement ladder always counted it; this line did
+      // not, so the headline EPP and the ladder disagreed on multi-item rewards.
+      epp += (r.chance / 100) * price * (r.item_count ?? 1);
       if (vol >= MOVING_THRESHOLD) movingCount += 1;
       rewardRows.push({
         slug: r.reward_slug,

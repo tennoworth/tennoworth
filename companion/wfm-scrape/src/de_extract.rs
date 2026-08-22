@@ -245,29 +245,48 @@ pub fn relic_rewards_from_de(
 // Recipes — what building a thing actually costs
 // ---------------------------------------------------------------------------
 
-/// Build costs, keyed by the slug of the item the recipe PRODUCES.
+/// Build costs, keyed by the slug of the TRADEABLE item each recipe belongs to.
 ///
-/// Keyed on the result rather than the blueprint because the question is "what
-/// does it cost me to end up with a Nova Prime Chassis", and the answer has to
-/// be reachable from the part the user is looking at.
+/// Two shapes, and missing the second one silently undercounts every build:
+///
+/// - A component recipe produces the component the user holds, so its
+///   `resultType` resolves and that is the key.
+/// - A **final assembly** recipe (`NovaPrimeBlueprint`) produces the finished
+///   Warframe — `/Lotus/Powersuits/AntiMatter/NovaPrime` — which the item
+///   catalogue does not carry at all, because you cannot trade a built frame.
+///   Its tradeable identity is the blueprint you feed it, which is the
+///   recipe's own `uniqueName`. Without that fallback the last and most
+///   expensive step of a build (25k credits, 3 days, 50p to rush on Nova)
+///   vanishes and the plan reads cheaper than it is. The fallback also lifts
+///   coverage from 157 recipes to 312.
 ///
 /// `ingredients` keep their display name even when they do not resolve to a
 /// market slug — Orokin Cells and Argon Crystals are the majority of a build
 /// and are not tradeable, so a consumer must be able to show them as an
 /// unchecked requirement rather than pretend the build is free.
+///
+/// Returns the map plus a count of key collisions. `path_to_info` is not
+/// guaranteed one-to-one, so two recipes could in principle land on one slug;
+/// the FIRST wins and the caller reports the rest rather than letting a later
+/// row silently replace an earlier one. (Zero collisions were observed against
+/// the live export when this was written.)
 pub fn recipes_from_export(
     recipes: &Value,
     path_to_info: &HashMap<String, Value>,
-) -> HashMap<String, Value> {
+) -> (HashMap<String, Value>, usize) {
     let alias = recipe_alias(recipes);
-    let mut out = HashMap::new();
+    let mut out: HashMap<String, Value> = HashMap::new();
+    let mut collisions = 0usize;
 
     for row in manifest_rows_for(recipes, "ExportRecipes_en.json") {
-        let Some(result) = row.get("resultType").and_then(|v| v.as_str()) else {
-            continue;
-        };
-        // Only recipes whose product we can price are useful here.
-        let Some(info) = resolve_path(result, path_to_info, &alias) else {
+        let unique = row.get("uniqueName").and_then(|v| v.as_str()).unwrap_or("");
+        let result = row.get("resultType").and_then(|v| v.as_str()).unwrap_or("");
+        // Product first (component recipes), then the recipe's own blueprint
+        // (final assembly). Only recipes tied to something we can price are
+        // useful here.
+        let Some(info) = resolve_path(result, path_to_info, &alias)
+            .or_else(|| resolve_path(unique, path_to_info, &alias))
+        else {
             continue;
         };
         let Some(slug) = info.get("slug").and_then(|v| v.as_str()) else { continue };
@@ -319,9 +338,13 @@ pub fn recipes_from_export(
         if entry.is_empty() {
             continue;
         }
+        if out.contains_key(slug) {
+            collisions += 1;
+            continue;
+        }
         out.insert(slug.to_string(), Value::Object(entry));
     }
-    out
+    (out, collisions)
 }
 
 // ---------------------------------------------------------------------------
@@ -653,7 +676,8 @@ mod tests {
     fn recipes_key_on_the_item_produced_not_the_blueprint() {
         // "What does it cost me to end up with a Volt Prime Chassis" has to be
         // reachable from the part the user is looking at.
-        let r = recipes_from_export(&recipes(), &p2i());
+        let (r, collisions) = recipes_from_export(&recipes(), &p2i());
+        assert_eq!(collisions, 0);
         let entry = r
             .get("oberon_prime_systems_blueprint")
             .expect("keyed by the produced item's slug");
@@ -664,7 +688,7 @@ mod tests {
 
     #[test]
     fn recipe_ingredients_keep_untradeable_items_visible_but_unpriced() {
-        let r = recipes_from_export(&recipes(), &p2i());
+        let (r, _) = recipes_from_export(&recipes(), &p2i());
         let ing = r["oberon_prime_systems_blueprint"]["ingredients"].as_array().unwrap();
         assert_eq!(ing.len(), 1);
         // Orokin Cell has no market slug. It must still be listed, or a build
@@ -678,8 +702,50 @@ mod tests {
     fn recipes_skip_products_we_cannot_price() {
         // Forma resolves to nothing, so it contributes no row rather than a
         // row with no slug.
-        let r = recipes_from_export(&recipes(), &p2i());
+        let (r, _) = recipes_from_export(&recipes(), &p2i());
         assert!(!r.keys().any(|k| k.contains("forma")));
+    }
+
+    #[test]
+    fn final_assembly_recipes_key_on_the_blueprint_you_trade() {
+        // A finished Warframe is not a tradeable item, so its recipe's
+        // resultType resolves to nothing. Its identity is the blueprint —
+        // and without this the last and most expensive step of every build
+        // silently vanished from the cost.
+        let mut info = p2i();
+        info.insert(
+            "/Lotus/Types/Recipes/WarframeRecipes/NovaPrimeBlueprint".to_string(),
+            serde_json::json!({"name": "Nova Prime Blueprint", "slug": "nova_prime_blueprint"}),
+        );
+        let recipes = serde_json::json!({"ExportRecipes": [
+            {"uniqueName": "/Lotus/Types/Recipes/WarframeRecipes/NovaPrimeBlueprint",
+             "resultType": "/Lotus/Powersuits/AntiMatter/NovaPrime",
+             "buildPrice": 25000, "buildTime": 259200, "skipBuildTimePrice": 50}
+        ]});
+        let (r, _) = recipes_from_export(&recipes, &info);
+        let entry = r.get("nova_prime_blueprint").expect("final assembly is costed");
+        assert_eq!(entry["build_price"], 25000);
+        assert_eq!(entry["rush_price"], 50);
+    }
+
+    #[test]
+    fn colliding_recipes_keep_the_first_and_are_counted() {
+        let mut info = p2i();
+        info.insert(
+            "/a".to_string(),
+            serde_json::json!({"name": "A", "slug": "same_slug"}),
+        );
+        info.insert(
+            "/b".to_string(),
+            serde_json::json!({"name": "B", "slug": "same_slug"}),
+        );
+        let recipes = serde_json::json!({"ExportRecipes": [
+            {"uniqueName": "/r1", "resultType": "/a", "buildPrice": 15000},
+            {"uniqueName": "/r2", "resultType": "/b", "buildPrice": 5000}
+        ]});
+        let (r, collisions) = recipes_from_export(&recipes, &info);
+        assert_eq!(collisions, 1, "the second is reported, not silently applied");
+        assert_eq!(r["same_slug"]["build_price"], 15000, "first wins, deterministically");
     }
 
     #[test]

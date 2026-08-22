@@ -90,12 +90,24 @@
         {#each plan.paths as path (path.kind)}
           <tr class:best={best?.kind === path.kind}>
             <th scope="row">{LABEL[path.kind]}</th>
-            <td class="num">{path.plat < 0 ? `+${-path.plat}p` : `${Math.round(path.plat)}p`}</td>
-            <td class="num muted">{credits(path.credits)}</td>
-            <td class="num muted">{humanBuildTime(path.seconds)}</td>
+            <td class="num">
+              <!-- An unknown total renders as unknown. Printing the partial sum
+                   with a warning underneath still asserts a number the data
+                   cannot support, which is the failure this panel exists to
+                   avoid. -->
+              {#if !path.platKnown && path.kind !== 'sell-spares'}
+                <span class="unknown" title="A part has no market price.">—</span>
+              {:else if path.plat < 0}
+                {path.platKnown ? '' : '≥ '}+{Math.round(-path.plat)}p
+              {:else}
+                {Math.round(path.plat)}p
+              {/if}
+            </td>
+            <td class="num muted">{path.recipesKnown ? credits(path.credits) : '?'}</td>
+            <td class="num muted">{path.recipesKnown ? humanBuildTime(path.seconds) : '?'}</td>
             <td class="muted">{OUTCOME[path.kind]}</td>
             <td class="num">
-              {#if path.kind === 'sell-spares' || plan.setPrice == null}
+              {#if path.kind === 'sell-spares' || plan.setPrice == null || !path.platKnown}
                 —
               {:else if path.savingVsSet > 0}
                 <span class="good">−{Math.round(path.savingVsSet)}p</span>
@@ -117,6 +129,13 @@
         .filter((m) => m.price == null)
         .map((m) => m.name)
         .join(', ')} has no market price, so any comparison would be a guess.
+    </p>
+  {/if}
+
+  {#if !plan.paths.find((p) => p.kind === 'buy-parts-build')?.recipesKnown}
+    <p class="note">
+      No recipe data for this set in the current snapshot, so credits and foundry
+      time are unknown rather than zero.
     </p>
   {/if}
 
@@ -198,5 +217,9 @@
   }
   .bad {
     color: var(--bad);
+  }
+  .unknown {
+    color: var(--faint);
+    cursor: help;
   }
 </style>

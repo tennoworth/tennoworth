@@ -42,6 +42,13 @@ export interface BuildPath {
   unverified: RecipeIngredient[];
   /** Plat saved against buying the set outright. Negative means it costs more. */
   savingVsSet: number;
+  /** Whether `plat` is a real total. False when the path depends on a part the
+   *  snapshot cannot price — the caller must show "—", not the partial sum.
+   *  A warning next to an asserted number does not undo the number. */
+  platKnown: boolean;
+  /** Whether the recipe tree covered this path. False means credits and time
+   *  are unknown, not zero and instant. */
+  recipesKnown: boolean;
 }
 
 function priceOf(market: Market | null | undefined, slug: string | undefined): number | null {
@@ -57,6 +64,26 @@ function priceOf(market: Market | null | undefined, slug: string | undefined): n
 export interface SetPart {
   slug: string;
   component_name: string;
+}
+
+/**
+ * How many of a slug the user holds, across every subtype.
+ *
+ * The owned map is keyed `${slug}|${subtype ?? ''}`, NOT by bare slug — relics
+ * exist as four refinements under one slug and each needs its own row. A bare
+ * `owned.get(slug)` therefore silently misses everything, which for this module
+ * meant telling people to buy parts they already had.
+ */
+export function ownedCount(
+  owned: Map<string, OwnedRecord> | null | undefined,
+  slug: string,
+): number {
+  if (!owned) return 0;
+  let total = 0;
+  for (const rec of owned.values()) {
+    if (rec.slug === slug) total += rec.count;
+  }
+  return total;
 }
 
 export interface BuildPlan {
@@ -94,7 +121,7 @@ export function planBuild(
   const missing: BuildPlan['missing'] = [];
 
   for (const part of parts) {
-    const held = owned?.get(part.slug)?.count ?? 0;
+    const held = ownedCount(owned, part.slug);
     if (held > 0) {
       have.push({ slug: part.slug, name: part.component_name, count: held });
     } else {
@@ -110,15 +137,19 @@ export function planBuild(
   const incomplete = missing.some((m) => m.price == null);
   const partsCost = missing.reduce((sum, m) => sum + (m.price ?? 0), 0);
 
-  // Build cost is the sum over every part's recipe plus the set's own, since
-  // each component is separately foundried.
+  // Sum over the PARTS only. The final-assembly recipe is keyed under the
+  // blueprint — which is itself a part — because a built frame is not a
+  // tradeable item and has no slug of its own. Adding `setSlug` here as well
+  // would double-count that step the moment anything is keyed under it.
   let credits = 0;
   let seconds = 0;
   let rush = 0;
+  let covered = 0;
   const unverified: RecipeIngredient[] = [];
-  for (const slug of [...parts.map((p) => p.slug), setSlug]) {
+  for (const slug of parts.map((p) => p.slug)) {
     const recipe = recipes?.[slug];
     if (!recipe) continue;
+    covered += 1;
     credits += recipe.build_price ?? 0;
     seconds += recipe.build_time ?? 0;
     rush += recipe.rush_price ?? 0;
@@ -129,6 +160,7 @@ export function planBuild(
     }
   }
 
+  const recipesKnown = covered > 0;
   const paths: BuildPath[] = [];
   if (setPrice != null) {
     paths.push({
@@ -138,6 +170,8 @@ export function planBuild(
       seconds: 0,
       unverified: [],
       savingVsSet: 0,
+      platKnown: true,
+      recipesKnown: true,
     });
   }
   paths.push({
@@ -147,6 +181,8 @@ export function planBuild(
     seconds,
     unverified,
     savingVsSet: setPrice == null ? 0 : setPrice - partsCost,
+    platKnown: !incomplete,
+    recipesKnown,
   });
   if (rush > 0) {
     paths.push({
@@ -156,16 +192,25 @@ export function planBuild(
       seconds: 0,
       unverified,
       savingVsSet: setPrice == null ? 0 : setPrice - (partsCost + rush),
+      platKnown: !incomplete,
+      recipesKnown,
     });
   }
 
   // The fourth option only exists if you hold spares, and it is the one the
   // other three hide: you may not want the frame at all.
-  const spareValue = have.reduce((sum, h) => {
-    const p = priceOf(market, h.slug) ?? 0;
+  let spareValue = 0;
+  let sparesPriced = true;
+  for (const h of have) {
     const spares = Math.max(0, h.count - 1);
-    return sum + p * spares;
-  }, 0);
+    if (spares === 0) continue;
+    const p = priceOf(market, h.slug);
+    if (p == null) {
+      sparesPriced = false;
+      continue;
+    }
+    spareValue += p * spares;
+  }
   if (spareValue > 0) {
     paths.push({
       kind: 'sell-spares',
@@ -174,6 +219,10 @@ export function planBuild(
       seconds: 0,
       unverified: [],
       savingVsSet: 0,
+      // An unpriced spare is left out of the total, so the figure is a floor
+      // rather than the answer — say so instead of overstating precision.
+      platKnown: sparesPriced,
+      recipesKnown: true,
     });
   }
 

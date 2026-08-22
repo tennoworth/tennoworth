@@ -399,11 +399,17 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
 
     // Build costs, keyed by the item produced. Only available when the recipes
     // manifest came through this cycle; reconcile preserves it otherwise.
-    let recipes_surface = de_recipes
+    let (recipes_surface, recipe_collisions) = de_recipes
         .map(|r| de_extract::recipes_from_export(r, &path_to_info))
         .unwrap_or_default();
     if !recipes_surface.is_empty() {
         eprintln!("  recipes: {} buildable items costed", recipes_surface.len());
+        if recipe_collisions > 0 {
+            eprintln!(
+                "  warning: {recipe_collisions} recipes collided on an already-taken slug \
+                 (first kept) — path_to_info is not one-to-one"
+            );
+        }
     }
 
     // Relic rewards. DE's table beats the drop-table scrape on two counts: all

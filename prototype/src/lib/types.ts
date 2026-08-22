@@ -151,6 +151,13 @@ export interface RivenStatsSurface {
     name: string;
     unrolled?: RivenStatTier;
     rolled?: RivenStatTier;
+    /** The same bands on PS4 / Xbox / Switch, where DE published them
+     *  alongside a weapon PC also saw. Console riven markets diverge sharply
+     *  from PC's and their samples are far smaller — read the `pop` before
+     *  reading the median. Absent on older snapshots. */
+    platforms?: Partial<
+      Record<'ps4' | 'xb1' | 'swi', { unrolled?: RivenStatTier; rolled?: RivenStatTier }>
+    >;
   };
 }
 

@@ -76,12 +76,15 @@ export function evAt(
   market: Market | null | undefined,
   refinement: Refinement,
 ): number | null {
+  if (!rewards.length) return null;
   let ev = 0;
-  let answered = false;
   for (const r of rewards) {
     const chance = chanceAt(r, refinement);
-    if (chance == null) continue;
-    answered = true;
+    // EVERY row has to answer, not merely one of them. A table where half the
+    // rows carry a radiant chance and half do not cannot be summed: skipping
+    // the silent rows would drop their contribution and report the remainder
+    // as a confident total — a 100p reward quietly worth 0.
+    if (chance == null) return null;
     const entry: MarketItemEntry | undefined = market?.items?.[r.reward_slug];
     // An unlisted reward contributes nothing. Without this it would contribute
     // clearingPrice's 1p floor, quietly inflating every relic whose table is
@@ -90,7 +93,7 @@ export function evAt(
     ev += (chance / 100) * price * (r.item_count ?? 1);
   }
   // `!(ev >= 0)` also rejects NaN, which a malformed chance could produce.
-  if (!answered || !(ev >= 0)) return null;
+  if (!(ev >= 0)) return null;
   return ev;
 }
 

@@ -715,6 +715,19 @@ pub const WFM_RIVEN_ATTRIBUTES_URL: &str = "https://api.warframe.market/v2/riven
 /// riven auctions — WFM's `/statistics` has no riven rows at all.
 pub const DE_WEEKLY_RIVENS_URL: &str = "https://www-static.warframe.com/repos/weeklyRivensPC.json";
 
+/// The same file per platform. Console riven markets diverge sharply from PC's
+/// — different populations, different metas, and far smaller samples — and DE
+/// publishes all four while nothing in the ecosystem compares them.
+///
+/// PC stays the primary surface (`unrolled`/`rolled` at the top level); the
+/// consoles ride along under `platforms` so a consumer that only knows about
+/// PC keeps working untouched.
+pub const DE_WEEKLY_RIVEN_PLATFORMS: &[(&str, &str)] = &[
+    ("ps4", "https://www-static.warframe.com/repos/weeklyRivensPS4.json"),
+    ("xb1", "https://www-static.warframe.com/repos/weeklyRivensXB1.json"),
+    ("swi", "https://www-static.warframe.com/repos/weeklyRivensSWI.json"),
+];
+
 /// One row of `DE_WEEKLY_RIVENS_URL`: one weapon x reroll-state's price band.
 /// Generic rows (`compatibility: null` — "Rifle Riven Mod") carry no weapon
 /// and are dropped by `fetch_riven_stats`.
@@ -948,6 +961,46 @@ pub fn fetch_riven_stats(
             .or_insert_with(|| serde_json::json!({ "name": weapon }));
         entry[tier_key] = tier;
     }
+
+    // Consoles, folded in under `platforms`. A platform that fails to fetch or
+    // parse is skipped with a warning rather than failing the surface — PC is
+    // what the app actually prices against, and losing it to a Switch outage
+    // would be absurd.
+    for (platform, url) in DE_WEEKLY_RIVEN_PLATFORMS {
+        let Ok(text) = http.get_text(url) else {
+            eprintln!("  warning: could not fetch {url}");
+            continue;
+        };
+        let rows = match parse_weekly_rivens(&text) {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("  warning: {url}: {e}");
+                continue;
+            }
+        };
+        for row in rows {
+            let Some(weapon) = row.compatibility else { continue };
+            let Some(slug) = weapons_by_name.get(&weapon.to_lowercase()) else { continue };
+            // Only alongside a weapon PC already knows. A console-only row has
+            // no PC baseline to compare against, which is the only reason to
+            // carry it.
+            let Some(entry) = stats.get_mut(slug) else { continue };
+            let tier_key = if row.rerolled { "rolled" } else { "unrolled" };
+            let tier = serde_json::json!({
+                "avg": row.avg, "median": row.median, "min": row.min, "max": row.max,
+                "stddev": row.stddev, "pop": row.pop,
+            });
+            if !entry.get("platforms").map(|p| p.is_object()).unwrap_or(false) {
+                entry["platforms"] = serde_json::json!({});
+            }
+            let plat = &mut entry["platforms"][*platform];
+            if !plat.is_object() {
+                *plat = serde_json::json!({});
+            }
+            plat[tier_key] = tier;
+        }
+    }
+
     (stats, unmatched)
 }
 
@@ -1476,6 +1529,53 @@ mod tests {
         assert!(ax.get("rolled").is_none(), "no rolled rows for AX-52");
         assert_eq!(ax["unrolled"]["min"], 5.0);
         assert!(stats.get("ack_brunt").is_none());
+    }
+
+    #[test]
+    fn riven_stats_fold_consoles_under_platforms_without_disturbing_pc() {
+        let pc = r#"[
+            { itemType: 'Rifle Riven Mod', compatibility: 'Acceltra', rerolled: false,
+              avg: 41.75, stddev: 45.23, min: 5, max: 400, pop: 10, median: 35 }
+        ]"#;
+        let ps4 = r#"[
+            { itemType: 'Rifle Riven Mod', compatibility: 'Acceltra', rerolled: false,
+              avg: 88.0, stddev: 60.0, min: 10, max: 500, pop: 30, median: 75 },
+            { itemType: 'Rifle Riven Mod', compatibility: 'Ack & Brunt', rerolled: false,
+              avg: 9.0, stddev: 2.0, min: 7, max: 14, pop: 3, median: 9 }
+        ]"#;
+        let mut r = HashMap::new();
+        r.insert(DE_WEEKLY_RIVENS_URL.into(), serde_json::Value::String(pc.into()));
+        r.insert(
+            DE_WEEKLY_RIVEN_PLATFORMS[0].1.into(),
+            serde_json::Value::String(ps4.into()),
+        );
+        let (stats, _) = fetch_riven_stats(&FixtureHttp { responses: r }, &weapons_by_name());
+
+        let acceltra = stats.get("acceltra").unwrap();
+        // PC keeps its place at the top level, untouched.
+        assert_eq!(acceltra["unrolled"]["median"], 35.0);
+        // The console rides along underneath — console riven prices diverge
+        // sharply from PC's, which is the whole point of carrying them.
+        assert_eq!(acceltra["platforms"]["ps4"]["unrolled"]["median"], 75.0);
+        assert_eq!(acceltra["platforms"]["ps4"]["unrolled"]["pop"], 30);
+
+        // A weapon only the console saw has no PC baseline to compare against,
+        // so it contributes nothing rather than a lone console-only row.
+        assert!(stats.get("ack_brunt").is_none());
+    }
+
+    #[test]
+    fn riven_stats_survive_one_platform_failing() {
+        // A Switch outage must not cost us PC, which is what we actually price
+        // against.
+        let pc = r#"[
+            { itemType: 'Rifle Riven Mod', compatibility: 'Acceltra', rerolled: false,
+              avg: 41.75, stddev: 45.23, min: 5, max: 400, pop: 10, median: 35 }
+        ]"#;
+        let (stats, _) = fetch_riven_stats(&weekly_http(pc), &weapons_by_name());
+        let acceltra = stats.get("acceltra").unwrap();
+        assert_eq!(acceltra["unrolled"]["median"], 35.0);
+        assert!(acceltra.get("platforms").is_none());
     }
 
     #[test]

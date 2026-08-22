@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { cheapestPath, humanBuildTime, planBuild, type RecipeEntry } from './build-cost';
+import {
+  cheapestPath,
+  humanBuildTime,
+  ownedCount,
+  planBuild,
+  type RecipeEntry,
+} from './build-cost';
 import type { Market, MarketItemEntry, OwnedRecord } from './types';
 
 function entry(over: Partial<MarketItemEntry>): MarketItemEntry {
@@ -38,12 +44,22 @@ const RECIPES: Record<string, RecipeEntry> = {
     rush_price: 25,
     ingredients: [{ name: 'Argon Crystal', count: 1 }],
   },
-  nova_prime_set: { build_price: 25000, build_time: 259200, rush_price: 50 },
+  // Final assembly is keyed on the BLUEPRINT, not on the set: a built frame is
+  // not a tradeable item, so the recipe's identity is the blueprint you feed
+  // it. Keying this on `nova_prime_set` is what the pipeline used to do, and it
+  // meant the step never appeared in any plan.
+  nova_prime_blueprint: { build_price: 25000, build_time: 259200, rush_price: 50 },
 };
 
+/** Keyed exactly as App.svelte keys it: `${slug}|${subtype ?? ''}`. Building
+ *  bare-slug keys here masked a real bug — the lookup never matched in the
+ *  live UI and the plan told people to buy parts they already owned. */
 function ownedMap(entries: Array<[string, number]>): Map<string, OwnedRecord> {
   return new Map(
-    entries.map(([slug, count]) => [slug, { slug, name: slug, count } as unknown as OwnedRecord]),
+    entries.map(([slug, count]) => [
+      `${slug}|`,
+      { slug, name: slug, count, subtype: null } as unknown as OwnedRecord,
+    ]),
   );
 }
 
@@ -87,7 +103,8 @@ describe('planBuild', () => {
   it('sums credits and foundry time across every recipe in the set', () => {
     const plan = planBuild('nova_prime_set', 'Nova Prime', PARTS, MARKET, null, RECIPES);
     const build = plan.paths.find((p) => p.kind === 'buy-parts-build')!;
-    // three components at 15k + the set at 25k
+    // three components at 15k + the final assembly at 25k, the latter reached
+    // through the blueprint part rather than the set slug
     expect(build.credits).toBe(70000);
     expect(build.seconds).toBe(43200 * 3 + 259200);
   });
@@ -104,6 +121,18 @@ describe('planBuild', () => {
     const rush = plan.paths.find((p) => p.kind === 'buy-parts-rush')!;
     expect(rush.plat - build.plat).toBe(125); // 25 × 3 + 50
     expect(rush.seconds).toBe(0);
+  });
+
+  it('counts a slug held across several subtypes', () => {
+    // Relics live as four refinements under one slug; a part held twice over
+    // must not read as held once.
+    const owned = new Map([
+      ['axi_a1_relic|intact', { slug: 'axi_a1_relic', name: 'x', count: 2, subtype: 'intact' }],
+      ['axi_a1_relic|radiant', { slug: 'axi_a1_relic', name: 'x', count: 3, subtype: 'radiant' }],
+    ] as unknown as Array<[string, OwnedRecord]>);
+    expect(ownedCount(owned, 'axi_a1_relic')).toBe(5);
+    expect(ownedCount(owned, 'nothing')).toBe(0);
+    expect(ownedCount(null, 'axi_a1_relic')).toBe(0);
   });
 
   it('offers selling spares, which the other paths hide', () => {
