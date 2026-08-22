@@ -166,6 +166,15 @@ pub struct DeSurface {
     /// Darvo's daily deal.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deals: Vec<serde_json::Value>,
+    /// `{slug: ducats}` for exactly the slugs DE's recipe tree set.
+    ///
+    /// This is PROVENANCE, and it is load-bearing. Ducats are an override on a
+    /// catalogue rebuilt from warframe.market every cycle, so when the recipes
+    /// manifest fails the override has to be re-applied from the prior
+    /// snapshot — and without knowing which values were DE's, that carry would
+    /// also stamp stale WFM values over fresh, legitimately-corrected ones.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub ducats: std::collections::BTreeMap<String, i64>,
 }
 
 /// Assemble a [`Snapshot`] from rendered items + catalog + all surfaces.

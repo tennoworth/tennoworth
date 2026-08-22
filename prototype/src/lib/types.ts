@@ -286,6 +286,10 @@ export interface DeSurface {
   world_ok?: boolean;
   vault_rotation?: VaultRotation[];
   deals?: DailyDeal[];
+  /** `{slug: ducats}` for exactly the slugs DE's recipe tree set — provenance,
+   *  so a later pipeline run can tell its own overrides from warframe.market's
+   *  values. Consumers read `items[slug].ducats`, not this. */
+  ducats?: Record<string, number>;
 }
 
 // -------- inventory.json --------

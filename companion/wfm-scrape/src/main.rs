@@ -391,26 +391,30 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // values. The failure path therefore re-applies the last known-good
     // override from the prior snapshot.
     let de_recipes = de_snap.manifests.get("ExportRecipes_en.json");
+    // Slugs DE set, this cycle or carried from the last one. Written into the
+    // snapshot as provenance so a later failure knows which values were ours.
+    let mut de_ducats: std::collections::BTreeMap<String, i64> = std::collections::BTreeMap::new();
+
     if de_recipes.is_none() {
-        let prior_items = prior.get("items").and_then(|i| i.as_object());
+        // Carry ONLY the values DE previously set. Copying every prior ducat
+        // would stamp stale numbers over fresh, legitimately-corrected WFM
+        // ones — trading a known bug for a subtler one.
+        let prior_de_ducats: std::collections::BTreeMap<String, i64> = prior
+            .get("de")
+            .and_then(|d| d.get("ducats"))
+            .and_then(|m| m.as_object())
+            .map(|m| m.iter().filter_map(|(k, v)| v.as_i64().map(|n| (k.clone(), n))).collect())
+            .unwrap_or_default();
         let mut carried = 0usize;
-        if let Some(prior_items) = prior_items {
-            for (slug, meta) in meta_by_slug.iter_mut() {
-                let Some(prior_ducats) = prior_items
-                    .get(slug)
-                    .and_then(|it| it.get("ducats"))
-                    .and_then(|d| d.as_i64())
-                else {
-                    continue;
-                };
-                if meta.ducats != Some(prior_ducats) {
-                    meta.ducats = Some(prior_ducats);
-                    carried += 1;
-                }
+        for (slug, ducats) in &prior_de_ducats {
+            if let Some(meta) = meta_by_slug.get_mut(slug) {
+                meta.ducats = Some(*ducats);
+                carried += 1;
             }
         }
+        de_ducats = prior_de_ducats;
         eprintln!(
-            "  ducats: recipes manifest unavailable — carried {carried} values from the prior snapshot"
+            "  ducats: recipes manifest unavailable — carried {carried} DE values from the prior snapshot"
         );
     }
     if let Some(recipes) = de_recipes {
@@ -428,6 +432,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
                     disagreed += 1;
                 }
                 meta.ducats = Some(*ducats);
+                de_ducats.insert(slug.to_string(), *ducats);
                 applied += 1;
             }
         }
@@ -507,6 +512,10 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // Reaching for the legacy source in those cases produces a NON-EMPTY
     // intact-only table, and a non-empty surface is exactly what stops
     // reconcile preserving the good one.
+    let prior_has_relics = prior
+        .get("relic_rewards")
+        .and_then(|r| r.as_object())
+        .is_some_and(|r| !r.is_empty());
     let relic_rewards = match (
         de_snap.manifests.get("ExportRelicArcane_en.json"),
         de_recipes,
@@ -527,23 +536,26 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
             );
             build.rewards
         }
-        _ if de_snap.index_ok => {
-            // Skipped as unchanged, or one of the two manifests failed. Either
-            // way the prior DE surface is the best answer available, and only
-            // an empty result lets reconcile keep it.
+        // Skipped as unchanged, or a manifest failed — but ONLY when there is
+        // actually a prior surface to carry. Emitting empty with nothing
+        // behind it publishes no relic data at all, which is worse than the
+        // legacy table: reconcile can only preserve something that exists.
+        // A cold build whose manifest fails lands in the fallback below.
+        _ if de_snap.index_ok && prior_has_relics => {
             eprintln!("Relic tables not rebuilt this cycle — carrying the prior DE surface");
             HashMap::new()
         }
         _ => {
-            // DE is unreachable outright. The old drop-table scrape stays as
-            // the fallback rather than being deleted: it is the only other
-            // source of a relic table, and losing relics entirely would be a
-            // worse regression than intact-only odds. It is off the happy
-            // path, so its rarity mislabelling and intact-only coverage stop
-            // being what users normally see. Note this OVERWRITES a carried DE
-            // surface — acceptable only because DE being gone means we have no
-            // way to refresh the good one either.
-            eprintln!("Fetching relic drop tables (fallback — DE unreachable)...");
+            // Either DE is unreachable outright, or a manifest failed on a
+            // build with no prior relic data to fall back on. The old
+            // drop-table scrape stays as the fallback rather than being
+            // deleted: it is the only other source of a relic table, and
+            // losing relics entirely would be a worse regression than
+            // intact-only odds. It is off the happy path, so its rarity
+            // mislabelling and intact-only coverage stop being what users
+            // normally see. It only ever overwrites a DE surface when there
+            // is no DE surface to protect.
+            eprintln!("Fetching relic drop tables (fallback — no DE data available)...");
             let r = fetch::fetch_relic_rewards(http.as_ref(), &catalog);
             eprintln!("  {} relics with reward data (intact only)", r.len());
             r
@@ -774,6 +786,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
             Some(w) => de_extract::deals_from_world(w, &path_to_info_for_de, &de_alias, |ms| clock::iso_z(clock::from_millis(ms))),
             None => carried("deals"),
         },
+        ducats: de_ducats,
     };
 
     let mut snapshot = assemble_snapshot(

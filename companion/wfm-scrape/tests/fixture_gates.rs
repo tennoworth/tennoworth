@@ -384,6 +384,114 @@ fn a_failed_recipes_manifest_preserves_both_de_overrides() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A recipes failure on a COLD build must still publish a relic table.
+///
+/// The carry-on-failure rule has a hole at the start of time: reconcile can
+/// only preserve something that already exists, so emitting empty with no
+/// prior snapshot behind it publishes no relic data at all — strictly worse
+/// than the legacy intact-only table the fallback was keeping in reserve. The
+/// other failure test always seeds a good prior, so it cannot see this.
+#[test]
+fn a_failed_recipes_manifest_on_a_cold_build_falls_back_rather_than_publishing_nothing() {
+    let dir = stage_fixtures("convert");
+
+    // No prior-market.json at all, and the recipes manifest unavailable.
+    let _ = std::fs::remove_file(dir.join("prior-market.json"));
+    let resp_path = dir.join("fixture_responses.json");
+    let mut responses: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_slice(&std::fs::read(&resp_path).unwrap()).unwrap();
+    let recipes_key = responses
+        .keys()
+        .find(|k| k.contains("ExportRecipes_en.json"))
+        .cloned()
+        .expect("the fixture serves a recipes manifest");
+    responses.remove(&recipes_key);
+    std::fs::write(&resp_path, serde_json::to_vec(&responses).unwrap()).unwrap();
+
+    let out = run(
+        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"],
+        &dir,
+    );
+    assert!(out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+    assert!(
+        stderr.contains("fallback — no DE data available"),
+        "a cold build with a failed manifest must reach for the fallback:\n{stderr}"
+    );
+
+    let snap: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert!(
+        !snap["relic_rewards"].as_object().unwrap().is_empty(),
+        "some relic data beats none when there is nothing to carry"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The ducat carry must touch only the values DE set.
+///
+/// Copying every prior ducat would stamp a stale number over a fresh,
+/// legitimately-corrected warframe.market one — a subtler bug than the
+/// revert it was written to prevent.
+#[test]
+fn the_ducat_carry_leaves_wfm_sourced_values_alone() {
+    let dir = stage_fixtures("convert");
+    let args = ["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"];
+
+    assert!(run(&args, &dir).status.success());
+    let good: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    // DE set this one; provenance records it.
+    assert_eq!(good["de"]["ducats"]["volt_prime_chassis_blueprint"], 65);
+    // This one DE never touched — no recipe produces it — so it must be absent
+    // from provenance even though it carries a WFM ducat value.
+    assert!(
+        good["de"]["ducats"].get("primed_continuity").is_none(),
+        "provenance must list only what DE set"
+    );
+
+    // Seed the prior, then move WFM's value for the untouched item and make
+    // the recipes manifest fail.
+    std::fs::write(
+        dir.join("prior-market.json"),
+        serde_json::to_vec(&good).unwrap(),
+    )
+    .unwrap();
+
+    let resp_path = dir.join("fixture_responses.json");
+    let mut responses: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_slice(&std::fs::read(&resp_path).unwrap()).unwrap();
+    let recipes_key = responses.keys().find(|k| k.contains("ExportRecipes_en.json")).cloned().unwrap();
+    responses.remove(&recipes_key);
+    let items = responses
+        .get_mut("https://api.warframe.market/v2/items")
+        .and_then(|v| v.get_mut("data"))
+        .and_then(|v| v.as_array_mut())
+        .unwrap();
+    for it in items.iter_mut() {
+        if it["slug"] == "primed_continuity" {
+            it["ducats"] = serde_json::json!(7);
+        }
+    }
+    std::fs::write(&resp_path, serde_json::to_vec(&responses).unwrap()).unwrap();
+
+    assert!(run(&args, &dir).status.success());
+    let snap: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+
+    assert_eq!(
+        snap["items"]["volt_prime_chassis_blueprint"]["ducats"], 65,
+        "DE's value is carried through the failure"
+    );
+    assert_eq!(
+        snap["items"]["primed_continuity"]["ducats"], 7,
+        "a fresh WFM correction must survive the carry, not be overwritten by the prior"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// A manifest we failed to read must NOT have its hash recorded.
 ///
 /// Recording it would tell the next cycle we already hold that manifest, and
