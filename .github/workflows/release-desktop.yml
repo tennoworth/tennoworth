@@ -1,44 +1,188 @@
 name: release-desktop
 
 # Builds, signs and publishes the Tauri desktop app + the `latest.json`
-# manifest the in-app updater reads, plus the Linux deb/rpm and the two AUR
-# packages. The desktop app is the only interactive product, so this is the
-# repo's single versioned release stream (the old CLI release workflow was
-# removed with the CLI).
+# manifest the in-app updater reads. Two platforms, two artifacts: the Windows
+# installers and ONE Linux AppImage. The desktop app is the only interactive
+# product, so this is the repo's single versioned release stream (the old CLI
+# release workflow was removed with the CLI).
 #
-# Cut a release by tagging `desktop-v<semver>` on main. The tag must match
-# `tauri.conf.json`'s version or the guard below fails the run: the updater
-# compares the manifest version against the version compiled into the app,
-# so a tag/config mismatch ships a manifest that either can't install or
-# offers a phantom upgrade.
+# ---------------------------------------------------------------------------
+# HOW TO CUT A RELEASE
 #
-# The same tag also publishes packaging/aur/ to aur.archlinux.org via the
-# `aur` job — that is the channel Arch users actually install from, and before
-# the job existed a bump stopped at the repo: AUR sat at 0.3.1 while the repo
-# shipped 0.3.4 (see the job's comment).
+#   Actions → release-desktop → Run workflow, from `main`, version = X.Y.Z
+#
+# There is deliberately NO tag trigger. The tag is no longer the *input* to a
+# release — it is an *output*, created by this workflow at the exact `main`
+# commit it captured and built. That closes three holes at once: a tag can no
+# longer point at a non-main commit, a half-finished release can no longer
+# leave a tag behind, and "re-run the release" is a well-defined operation
+# rather than a delete-and-retag dance.
+#
+# THE RELEASE BECOMES PUBLIC EXACTLY ONCE. Builds publish nothing; they hand
+# every artifact to the `publish` job, which verifies the full inventory, uploads
+# into a DRAFT release, and flips one `--draft=false`. Before that flip there is
+# no tag and no visible release; after it, everything is there. The old flow
+# published from two racing jobs at `draft: false`, so a release went public with
+# a partial asset set and a trailing publish job could still fail afterwards
+# (0.3.5, run 30806615370).
+#
+# Bundle layout, in publish order:
+#
+#   preflight        validate the version against every pin, the tag, the
+#                    published history and Cargo.lock. Capture the main SHA.
+#   build-windows    ─┐ parallel, contents: read, publish nothing
+#   build-linux      ─┘ every output uploaded as a workflow artifact
+#   publish          verify inventory + signatures, tag, draft, upload, flip
+#   desktop-latest   refresh the legacy rolling updater endpoint
+#
+# LINUX IS APPIMAGE ONLY. That is the state, not a direction of travel: the
+# deb/rpm bundles, the self-hosted apt/dnf repositories and the two AUR
+# packages were all retired, and the jobs and steps that produced them are
+# gone from this file. The AppImage is the only Linux channel that self-updates
+# (the Tauri updater enables itself when $APPIMAGE is set — see update.rs), so
+# it was the only one worth keeping, and four delivery channels for one
+# platform was three too many to keep correct. See build-linux's libwayland
+# step for why the first AppImage was withdrawn in 2026-07 and what fixed it.
+# ---------------------------------------------------------------------------
 
 on:
-  push:
-    tags: ['desktop-v*']
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, X.Y.Z (no leading v, no prerelease suffix)'
+        required: true
+        type: string
 
+# Read by default. Only `publish` and `desktop-latest` get write, and only
+# because they create the tag and the release assets. A build job that can
+# write to the repo is a build job that can publish half a release.
 permissions:
-  contents: write
+  contents: read
+
+# Two releases must never interleave: they would fight over the same
+# `desktop-latest` assets. cancel-in-progress is false on purpose — cancelling
+# a run that has already flipped the draft would leave the rolling updater
+# endpoint behind the published release.
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
 
 jobs:
-  # Windows only. Linux is built by the `linux-binary` job below, which emits
-  # the deb/rpm the self-hosted apt and dnf repos are served from, alongside
-  # packaging/aur/PKGBUILD for source builds.
-  #
-  # No AppImage, deliberately: the one this workflow used to publish bundled
-  # ubuntu-22.04's WebKitGTK and aborted at `Could not create default EGL
-  # display: EGL_BAD_PARAMETER` against a rolling-release host's Mesa — a white
-  # window, before the webview paints. That is inherent to shipping a
-  # GPU-dependent stack built on an old distro, not something a flag fixes.
-  # Tauri's Linux updater only ever supported AppImage, so Linux self-update
-  # goes through the distro repos instead.
-  build:
+  # Everything that can be known before a single byte is compiled. A release
+  # that is going to fail on a version mismatch should fail in 30 seconds, not
+  # after two ~8-minute builds.
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      sha: ${{ steps.check.outputs.sha }}
+      tag: ${{ steps.check.outputs.tag }}
+      notes: ${{ steps.notes.outputs.body }}
+    steps:
+      # The ref is not just a convention here: `publish` creates the tag at the
+      # SHA this job captured, so allowing a dispatch from a feature branch
+      # would mean tagging a release at a commit that was never on main.
+      - name: Guard — releases are cut from main only
+        if: github.ref != 'refs/heads/main'
+        env:
+          REF: ${{ github.ref }}
+        run: |
+          echo "::error title=Wrong ref::release-desktop was dispatched from $REF. A release is cut from refs/heads/main only — the tag is created at the commit this run captures."
+          exit 1
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+
+      - uses: ./.github/actions/setup-rust
+
+      # The SAME check that runs on every PR (audit.yml), given the version
+      # this run was asked for. On a PR it asserts the pins agree with each
+      # other and are not behind what is published; `--release` additionally
+      # asserts they equal the requested version and are strictly ahead of it,
+      # because the updater only ever offers a greater version.
+      #
+      # Sharing one implementation is the point: a release-time-only guard is
+      # a guard that first tells you about drift when you are trying to ship.
+      - name: Version pins agree with the requested release
+        env:
+          VERSION: ${{ inputs.version }}
+        run: bun scripts/release.ts check --release "$VERSION"
+
+      # The CHANGELOG section for this version IS the release body. `prepare`
+      # opened it; a missing or empty section fails here, before any build,
+      # rather than shipping boilerplate notes.
+      - name: Release notes from CHANGELOG.md
+        id: notes
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          {
+            echo "body<<NOTES_EOF"
+            bun scripts/release.ts notes "$VERSION"
+            echo "NOTES_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Validate the tag and the release history
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          # Via env, never interpolated into the script body: a
+          # workflow_dispatch input is attacker-influenced text as far as the
+          # shell is concerned.
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+
+          # Re-asserted here because everything below builds a ref name out of
+          # it. release.ts has already rejected anything that is not strict
+          # X.Y.Z; this is the guard that keeps THIS script's string handling
+          # honest.
+          if ! printf '%s' "$VERSION" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+            echo "::error title=Not a version::'$VERSION' is not a strict X.Y.Z semver."
+            exit 1
+          fi
+          tag="desktop-v$VERSION"
+
+          # The tag must not exist. If it does, either the release already
+          # happened or a previous run died between tagging and publishing —
+          # both need a human, not a silent overwrite.
+          if gh api "repos/$GH_REPO/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo "::error title=Tag exists::$tag already exists. If a previous run died after tagging, use 'Re-run failed jobs' on THAT run (publish is idempotent); otherwise this version is taken — pick the next one. The tag cannot be deleted: the 'Desktop release tags' ruleset has no bypass actors."
+            exit 1
+          fi
+
+          # Monotonicity is the previous step's job (release.ts --release
+          # compares against every published desktop-v* tag, sorted by version
+          # rather than by creation date). Duplicating it here would be a
+          # second implementation to keep in step.
+
+          sha=$(git rev-parse HEAD)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag"        >> "$GITHUB_OUTPUT"
+          echo "sha=$sha"        >> "$GITHUB_OUTPUT"
+          echo "Releasing $tag from $sha"
+
+      # Cargo.lock is part of what ships, not a local cache. Every build in
+      # this repo has network access and quietly re-resolves a stale lock, so a
+      # version bump that edits Cargo.toml alone is green everywhere and wrong
+      # in the tag — how 0.3.5 and 0.3.6 both shipped a lock naming the
+      # PREVIOUS version, unbuildable from source with `cargo build --frozen`
+      # (which is what any from-source packager does; it was the retired AUR
+      # source package that found it). `--locked` reproduces that refusal here,
+      # before anything is built, and keeps the lock an honest version pin.
+      - name: Gate — Cargo.lock already matches the manifests
+        working-directory: companion
+        run: cargo fetch --locked
+
+  # Windows. Publishes NOTHING — every output leaves as a workflow artifact.
+  build-windows:
+    needs: preflight
     runs-on: windows-latest
+    permissions:
+      contents: read
     env:
       # Generated offline by a human, never in CI, never committed — see
       # the maintainer signing runbook §9. Absent secrets make `tauri build` fail
@@ -47,7 +191,11 @@ jobs:
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
+      # Pinned to the SHA preflight captured, not to whatever main points at
+      # now: a push landing mid-release must not end up inside the build.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.preflight.outputs.sha }}
 
       - name: Refuse to build without the updater signing key
         shell: bash
@@ -57,47 +205,9 @@ jobs:
             exit 1
           fi
 
-      # Four versions must agree, and nothing else enforces it:
-      #   - the tag          → names the release
-      #   - tauri.conf.json  → the version written into latest.json
-      #   - Cargo.toml       → CARGO_PKG_VERSION, what the running app reports
-      #                        as "you have vX" and compares against
-      #   - package.json     → consumed by nothing, but left behind it reads as
-      #                        a different product; a comment asking for it was
-      #                        the only guard and it sat at 0.3.3 under a 0.3.6
-      #                        desktop until 0.3.7
-      # Drift is silent and only surfaces on user machines, as an update that
-      # installs but never seems to take effect (manifest newer than config)
-      # or one that's never offered at all (config ahead of manifest).
-      - name: Check tag, tauri.conf.json, Cargo.toml and package.json versions agree
-        if: startsWith(github.ref, 'refs/tags/desktop-v')
-        shell: bash
-        run: |
-          set -euo pipefail
-          tag_version="${GITHUB_REF_NAME#desktop-v}"
-          conf_version=$(grep -m1 '"version"' companion/tennoworth-desktop/tauri.conf.json | cut -d'"' -f4)
-          cargo_version=$(grep -m1 '^version' companion/tennoworth-desktop/Cargo.toml | cut -d'"' -f2)
-          pkg_version=$(jq -r .version prototype/package.json)
-          if [ "$tag_version" != "$conf_version" ] || [ "$tag_version" != "$cargo_version" ] \
-             || [ "$tag_version" != "$pkg_version" ]; then
-            echo "::error title=Version mismatch::tag=desktop-v$tag_version tauri.conf.json=$conf_version Cargo.toml=$cargo_version prototype/package.json=$pkg_version — all four must match."
-            exit 1
-          fi
-          echo "Version $conf_version confirmed across tag, tauri.conf.json, Cargo.toml and package.json."
-
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
       - uses: ./.github/actions/setup-rust
-
-      # A fourth place the version lives, and the one the guard above can't
-      # see: Cargo.lock records tennoworth-desktop's own version too. This
-      # workflow's build has network access and re-resolves the lock in place,
-      # so the tag's tarball can ship a lock that names the previous version —
-      # unbuildable by the AUR source package, which builds --frozen. 0.3.5 and
-      # 0.3.6 both shipped that way, green here, broken for every Arch user.
-      - name: Gate — Cargo.lock already matches the manifests
-        working-directory: companion
-        run: cargo fetch --locked
 
       # tauri.conf.json's beforeBuildCommand runs `bun run build:desktop`, so
       # the SPA's deps must exist before tauri-action invokes the build.
@@ -105,135 +215,85 @@ jobs:
         working-directory: prototype
         run: bun install --frozen-lockfile
 
-      # Publishes to the FIXED `desktop-latest` tag, not GitHub's floating
-      # "latest release". GitHub's notion of latest is repo-wide, and the
-      # versioned desktop-v* tags need to be pin-able without the rolling tag
-      # moving under them. A fixed tag makes the two release streams
-      # independent, and matches the existing web-latest / scrape-latest
-      # convention (.github/actions/publish-rolling-release). tauri.conf.json's
-      # updater endpoint must keep pointing at this exact tag.
-      #
-      # prerelease keeps the rolling desktop build out of the repo's "Latest
-      # release" badge, which belongs to the versioned desktop-v* tag (see the
-      # "Publish to the versioned release" step — that one is make_latest).
+      # No tagName, no release inputs: the action builds and stops. Publishing
+      # is the `publish` job's single responsibility.
       #
       # projectPath is the dir holding tauri.conf.json — this repo has no
       # `src-tauri` layout and no npm-side @tauri-apps/cli, so the action
       # installs its own CLI rather than shelling out to `bun tauri`. Local
       # builds still use `cargo tauri`; both drive the same tauri.conf.json.
-      - uses: tauri-apps/tauri-action@v0
+      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         id: tauri
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # The action reads this even on the build-only path. Under this job's
+          # `contents: read` it cannot create or modify a release, so it is
+          # scoped to what the action actually needs here.
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           projectPath: companion/tennoworth-desktop
-          tagName: desktop-latest
-          releaseName: desktop-latest (auto-built)
-          releaseBody: >
-            Rolling desktop build. The in-app updater reads latest.json from
-            this release. Not a version release — see desktop-v* tags for the
-            versioned desktop app.
-          releaseDraft: false
-          prerelease: true
-          # Windows builds both MSI and NSIS; the updater manifest can only
-          # name one. NSIS is what the desktop app's install flow assumes
-          # (passive install, self-restart).
-          updaterJsonPreferNsis: true
+          args: --bundles nsis
 
-      # Windows artifacts also go to the IMMUTABLE tagged release, not just the
-      # rolling one. Without this there is no way to pin, re-download or roll
-      # back a specific Windows version: desktop-latest is overwritten every
-      # build, so a superseded installer is simply gone. (The Linux job already
-      # publishes to the tag; this brings Windows in line.)
-      - name: Archive artifacts on the versioned release
-        if: startsWith(github.ref, 'refs/tags/desktop-v')
+      - name: Stage Windows artifacts
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p dist
           # Collect from the bundle tree by RELATIVE path rather than from
           # tauri-action's `artifactPaths` output. That output is in native
-          # Windows form (D:\a\...\TennoWorth.msi) and Git Bash could not stat
+          # Windows form (D:\a\...\TennoWorth.exe) and Git Bash could not stat
           # it even after converting to forward slashes, so every file looked
           # missing. A relative find from the workspace avoids the drive-letter
           # translation question altogether.
           find companion/target/release/bundle -type f \
-            \( -name '*.msi' -o -name '*.exe' -o -name '*.sig' \) \
+            \( -name '*.exe' -o -name '*.sig' \) \
             -exec cp -v {} dist/ \;
-          ls -la dist
           if [ -z "$(ls -A dist 2>/dev/null)" ]; then
-            echo "::error title=Nothing archived::No installers found under companion/target/release/bundle. The versioned release would ship empty, leaving this build unpinnable."
+            echo "::error title=Nothing built::No installers found under companion/target/release/bundle."
             find companion/target/release/bundle -type f 2>/dev/null | head -20 || echo "(bundle dir absent)"
             exit 1
           fi
 
-      - name: Publish archival copies
-        if: startsWith(github.ref, 'refs/tags/desktop-v')
-        uses: softprops/action-gh-release@v2
+          # No per-file .sha256 sidecars on Windows: SHA256SUMS on the release
+          # covers the installer, and `sha256sum --ignore-missing -c SHA256SUMS`
+          # is the single instruction SECURITY.md now gives. Two files saying
+          # the same hash was one file too many.
+          ls -la dist
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          files: dist/*
-          draft: false
-          prerelease: false
-          # make_latest:true on BOTH versioned-tag publishes: they target the
-          # same desktop-v* release from two parallel jobs (this one on the
-          # Windows build, the Linux one below), and whichever runs last wins
-          # the release's state. Both must assert Latest, or the last writer
-          # with make_latest:false would demote the badge.
-          make_latest: true
+          name: windows-bundles
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
 
-      # Stale-asset cleanup runs AFTER the upload, never before.
-      #
-      # It used to run first, which meant desktop-latest sat empty for the whole
-      # ~8-minute build and latest.json 404'd for every client that checked in
-      # that window — trading the stale-asset bug for a worse one. Cleaning up
-      # afterwards means the previous release stays intact and servable right up
-      # until the new one replaces it, and clients only ever see a complete
-      # manifest: the old version during the build, the new one after.
-      - name: Remove superseded assets from the rolling release
-        if: startsWith(github.ref, 'refs/tags/desktop-v')
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          ver="${GITHUB_REF_NAME#desktop-v}"
-          gh release view desktop-latest --repo "$GITHUB_REPOSITORY" \
-            --json assets --jq '.assets[].name' | while read -r asset; do
-              [ -z "$asset" ] && continue
-              case "$asset" in
-                latest.json)  echo "keep (manifest): $asset" ;;
-                *"$ver"*)     echo "keep (current):  $asset" ;;
-                *)            echo "remove (stale):  $asset"
-                              gh release delete-asset desktop-latest "$asset" \
-                                --repo "$GITHUB_REPOSITORY" --yes ;;
-              esac
-            done
-
-  # Raw Linux binary for the AUR `tennoworth-bin` package. Deliberately NOT an
-  # AppImage: bundling a GPU-dependent stack is exactly what made 0.3.0 paint a
-  # white window. This ships one dynamically-linked executable that resolves
-  # webkit2gtk/gtk3 from the user's own system at runtime, same as the
-  # source-built package — it only skips the compile.
+  # Linux. Publishes NOTHING — every output leaves as a workflow artifact.
   #
   # ubuntu-22.04 is load-bearing, not incidental: glibc is backward- but not
   # forward-compatible, so the build host's glibc becomes the floor for every
   # user. 22.04's 2.35 runs everywhere current; a binary built on a rolling
   # distro would demand a glibc most users don't have yet. Same reasoning as
   # build-scrape.yml's Linux leg.
-  #
-  # Publishes to the VERSIONED tag, never to rolling desktop-latest: a PKGBUILD
-  # pins a sha256, so its source URL has to be immutable. An asset that gets
-  # overwritten by the next release would break every installed package's
-  # checksum the moment a new version ships.
-  linux-binary:
-    if: startsWith(github.ref, 'refs/tags/desktop-v')
+  build-linux:
+    needs: preflight
     runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ needs.preflight.outputs.sha }}
 
-      - uses: oven-sh/setup-bun@v2
+      - name: Refuse to build without the updater signing key
+        run: |
+          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
+            echo "::error title=No updater signing key::TAURI_SIGNING_PRIVATE_KEY is not set. Generate the keypair offline (the maintainer signing runbook §9) and add it as a repo secret. Publishing unsigned bundles would produce a latest.json no installed app can ever accept."
+            exit 1
+          fi
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
       - uses: ./.github/actions/setup-rust
 
@@ -248,7 +308,6 @@ jobs:
       # tauri-build embeds the SPA at compile time from frontendDist, and plain
       # `cargo build` does not run tauri.conf.json's beforeBuildCommand the way
       # `cargo tauri build` does — so the frontend is built explicitly here.
-      # packaging/aur/PKGBUILD does the same thing for the same reason.
       - name: Build frontend
         working-directory: prototype
         run: |
@@ -256,26 +315,20 @@ jobs:
           bun run build:desktop
 
       # `tauri build` rather than `cargo build`: it produces the same binary at
-      # target/release/tennoworth-desktop (so the glibc check and the tarball
-      # below are unchanged) AND emits the deb/rpm the apt/dnf repos are built
-      # from. No tagName here, so the action builds without publishing —
-      # artifacts are staged and released explicitly further down.
+      # target/release/tennoworth-desktop (so the glibc check below is
+      # unchanged) AND emits the AppImage, which is the whole Linux release.
       #
-      # These bundles do NOT bundle WebKitGTK; they declare a dependency on the
-      # system one, which is why they are safe where the old AppImage was not
-      # (that bundled ubuntu-22.04's WebKit and died at EGL init on rolling
-      # Mesa — see the comment at the top of this file).
-      - uses: tauri-apps/tauri-action@v0
+      # ONE bundle, deliberately. `deb,rpm` used to be here to feed the
+      # self-hosted apt/dnf repositories; those are retired, so building them
+      # would produce artifacts nothing consumes. The AppImage bundles its own
+      # WebKitGTK runtime, which is why it needs the libwayland surgery below —
+      # the deb/rpm used the system one and never did.
+      - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # bundle.createUpdaterArtifacts is on globally; without the key the
-          # bundler logs a signing error even though Linux ships no updater
-          # format. Passing it keeps the log clean and the failure meaningful.
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          GITHUB_TOKEN: ${{ github.token }}
         with:
           projectPath: companion/tennoworth-desktop
-          args: --bundles deb,rpm,appimage
+          args: --bundles appimage
 
       # Fails the release rather than shipping a binary that won't start on a
       # user's machine. 2.35 is what ubuntu-22.04 provides; anything higher
@@ -293,53 +346,6 @@ jobs:
           fi
           ldd "$bin" | grep -E 'webkit2gtk|libgtk-3' || true
 
-      # One self-contained tarball: binary + desktop entry + icons. The -bin
-      # PKGBUILD needs all three (without the .desktop and icons the app gets a
-      # generic WM avatar in the taskbar), and shipping them together beats
-      # either duplicating them into the AUR repo or making the package pull
-      # the whole source tarball just to extract a few PNGs.
-      - name: Stage artifact
-        run: |
-          set -euo pipefail
-          stage="tennoworth-desktop-linux-x86_64"
-          mkdir -p "dist/$stage/icons"
-          cp companion/target/release/tennoworth-desktop "dist/$stage/"
-          cp packaging/aur/tennoworth/tennoworth.desktop "dist/$stage/"
-          for f in 32x32.png 64x64.png 128x128.png 128x128@2x.png icon.png; do
-            cp "companion/tennoworth-desktop/icons/$f" "dist/$stage/icons/"
-          done
-          cp LICENSE "dist/$stage/"
-          tar -C dist -czf "dist/$stage.tar.gz" "$stage"
-          rm -rf "dist/$stage"
-          cd dist && sha256sum "$stage.tar.gz" | tee "$stage.tar.gz.sha256"
-
-      # The deb/rpm the self-hosted apt and dnf repos are built from. Names are
-      # normalised to fixed filenames because deploy/pull-packages.sh on the box
-      # fetches them by name from the release — Tauri's own names embed the
-      # version (TennoWorth_0.3.3_amd64.deb), which would make the puller need
-      # to know the version before it can fetch it.
-      #
-      # Package name inside the deb/rpm is `tenno-worth` (Tauri kebab-cases
-      # productName and offers no override); both declare `Provides: tennoworth`
-      # so `apt install tennoworth` still resolves. Don't "fix" the filenames to
-      # match the provide — the puller matches on these.
-      - name: Stage Linux packages
-        run: |
-          set -euo pipefail
-          deb=$(find companion/target/release/bundle/deb -name '*.deb' | head -1)
-          rpm=$(find companion/target/release/bundle/rpm -name '*.rpm' | head -1)
-          [ -n "$deb" ] && [ -n "$rpm" ] || {
-            echo "::error title=Missing Linux bundle::tauri build did not emit a deb and an rpm"
-            exit 1
-          }
-          cp "$deb" dist/tennoworth-desktop-amd64.deb
-          cp "$rpm" dist/tennoworth-desktop-x86_64.rpm
-          cd dist
-          sha256sum tennoworth-desktop-amd64.deb   | tee tennoworth-desktop-amd64.deb.sha256
-          sha256sum tennoworth-desktop-x86_64.rpm  | tee tennoworth-desktop-x86_64.rpm.sha256
-
-      # The AppImage — staged toward AppImage-only Linux distribution.
-      #
       # THE LOAD-BEARING STEP IS THE libwayland STRIP. The first AppImage
       # (2026-07) was withdrawn for "Could not create default EGL display:
       # EGL_BAD_PARAMETER" on rolling Mesa. Root-caused 2026-08-20 by A/B on
@@ -354,12 +360,14 @@ jobs:
       # Repacking invalidates the build-time updater signature, so the file
       # is re-signed afterwards — the .sig MUST be generated from the
       # repacked bytes or self-update rejects every download.
+      #
+      # This step also creates dist/. It used to inherit the directory from the
+      # deb/rpm/tarball staging steps that ran before it; they are gone, so it
+      # makes its own.
       - name: Strip bundled libwayland and repack the AppImage
-        env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
           set -euo pipefail
+          mkdir -p dist
           img=$(find companion/target/release/bundle/appimage -name '*.AppImage' | head -1)
           [ -n "$img" ] || { echo "::error title=Missing AppImage::tauri build did not emit an AppImage"; exit 1; }
           chmod +x "$img"
@@ -378,202 +386,323 @@ jobs:
           sha256sum TennoWorth-x86_64.AppImage | tee TennoWorth-x86_64.AppImage.sha256
           test -f TennoWorth-x86_64.AppImage.sig
 
-      # The versioned desktop-v* release is the repo's "Latest release" badge —
-      # the desktop app is the product (the standalone CLI companion no longer
-      # exists, so there is no competing v* release stream).
-      - name: Publish to the versioned release
-        uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
-          files: |
-            dist/tennoworth-desktop-linux-x86_64.tar.gz
-            dist/tennoworth-desktop-linux-x86_64.tar.gz.sha256
-            dist/tennoworth-desktop-amd64.deb
-            dist/tennoworth-desktop-amd64.deb.sha256
-            dist/tennoworth-desktop-x86_64.rpm
-            dist/tennoworth-desktop-x86_64.rpm.sha256
-            dist/TennoWorth-x86_64.AppImage
-            dist/TennoWorth-x86_64.AppImage.sha256
-            dist/TennoWorth-x86_64.AppImage.sig
-          draft: false
-          prerelease: false
-          make_latest: true
-          body: |
-            Linux binary for the AUR `tennoworth-bin` package, dynamically
-            linked against system webkit2gtk/gtk3 (glibc floor 2.35).
+          name: linux-bundles
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
 
-            `.deb` and `.rpm` are pulled by the box and republished into the
-            signed apt/dnf repos at https://tennoworth.app/apt and /rpm — they
-            are here so the repo builder has an immutable, versioned source.
-
-            Windows installers and the updater manifest live on the rolling
-            [desktop-latest](https://github.com/tennoworth/tennoworth/releases/tag/desktop-latest)
-            release. Linux source builds: `packaging/aur/`.
-
-  # Linux self-update: put the AppImage on the rolling release and add the
-  # linux-x86_64 platform to latest.json. Runs AFTER both build jobs — the
-  # Windows tauri-action publishes/overwrites latest.json with only its own
-  # platforms, so patching must be sequenced behind it, not raced.
-  linux-updater-manifest:
-    needs: [build, linux-binary]
-    if: startsWith(github.ref, 'refs/tags/desktop-v')
-    runs-on: ubuntu-latest
-    steps:
-      - name: Add AppImage to desktop-latest and patch latest.json
-        env:
-          GH_TOKEN: ${{ github.token }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          src_tag="desktop-latest"
-          mkdir -p dist
-          gh release download "$GITHUB_REF_NAME" -p 'TennoWorth-x86_64.AppImage*' -D dist
-          gh release upload "$src_tag" dist/TennoWorth-x86_64.AppImage dist/TennoWorth-x86_64.AppImage.sig --clobber
-          gh release download "$src_tag" -p latest.json -D dist
-          sig=$(cat dist/TennoWorth-x86_64.AppImage.sig)
-          url="https://github.com/$GH_REPO/releases/download/$src_tag/TennoWorth-x86_64.AppImage"
-          python3 - "$sig" "$url" <<'PYEOF'
-          import json, sys
-          sig, url = sys.argv[1], sys.argv[2]
-          m = json.load(open('dist/latest.json'))
-          m.setdefault('platforms', {})['linux-x86_64'] = {'signature': sig, 'url': url}
-          json.dump(m, open('dist/latest.json', 'w'), indent=2)
-          print('platforms now:', sorted(m['platforms']))
-          PYEOF
-          gh release upload "$src_tag" dist/latest.json --clobber
-
-  # AUR publish — the delivery channel Arch users actually install from. The
-  # release jobs build things; this job ships the recipes. It exists because a
-  # `desktop-v*` bump used to stop at the repo: the PKGBUILDs said 0.3.4 while
-  # aur.archlinux.org sat at 0.3.1 for three releases, because "push to the
-  # AUR" was a manual step nobody remembered.
+  # The atomic moment. Nothing before this job has written anything visible;
+  # nothing after it can make the release less complete than it already is.
   #
-  # `needs: linux-binary` is load-bearing, not just order: the tennoworth-bin
-  # checksum is computed from the tarball that job uploads, so publishing first
-  # would pin a URL that does not exist yet.
-  aur:
-    needs: linux-binary
-    if: startsWith(github.ref, 'refs/tags/desktop-v')
+  # `environment: desktop-release` is the hook for a human approval gate —
+  # configure required reviewers on it in repo settings if a release should
+  # never go out unattended. It gates the flip, not the builds: the updater
+  # signing secrets are consumed by the build jobs above, which declare no
+  # environment, so they must stay repository secrets (moving them into this
+  # environment would fail both builds at their signing-key guard).
+  publish:
+    needs: [preflight, build-windows, build-linux]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    environment: desktop-release
     env:
-      # Absent ('') → the keyed steps no-op and the release still ships, with
-      # a notice. The AUR key is account-specific (aur.archlinux.org
-      # authenticates per maintainer account), so a repo or fork without the
-      # maintainer's key must not fail a desktop build.
-      AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      VERSION: ${{ needs.preflight.outputs.version }}
+      TAG: ${{ needs.preflight.outputs.tag }}
+      SHA: ${{ needs.preflight.outputs.sha }}
+      NOTES: ${{ needs.preflight.outputs.notes }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: dist
+          merge-multiple: true
 
-      - name: Skip AUR publish — no key configured
-        if: env.AUR_SSH_PRIVATE_KEY == ''
-        run: |
-          echo "::notice title=AUR publish skipped::AUR_SSH_PRIVATE_KEY is not configured — aur.archlinux.org packages were NOT updated for this release. See packaging/aur/README.md."
-
-      - name: Gate — both PKGBUILDs must carry the tag's version
-        if: env.AUR_SSH_PRIVATE_KEY != ''
-        shell: bash
+      # Refuses to publish an incomplete release instead of publishing one and
+      # patching it. Every name here is depended on by something: the updater
+      # needs each .sig, SECURITY.md tells Linux users to check the AppImage's
+      # .sha256, and the AppImage's filename is unversioned because
+      # desktop-latest serves it under that exact name.
+      - name: Verify the inventory is complete
         run: |
           set -euo pipefail
-          tag_version="${GITHUB_REF_NAME#desktop-v}"
-          for pkg in tennoworth tennoworth-bin; do
-            pkgver=$(grep -m1 '^pkgver=' "packaging/aur/$pkg/PKGBUILD" | cut -d= -f2)
-            if [ "$tag_version" != "$pkgver" ]; then
-              echo "::error title=AUR pkgver mismatch::packaging/aur/$pkg/PKGBUILD says pkgver=$pkgver but the tag is desktop-v$tag_version. Bump pkgver in both PKGBUILDs in the same commit as the desktop version bump, BEFORE tagging."
-              exit 1
+          cd dist
+          missing=0
+          for f in \
+            "TennoWorth_${VERSION}_x64-setup.exe" \
+            "TennoWorth_${VERSION}_x64-setup.exe.sig" \
+            TennoWorth-x86_64.AppImage \
+            TennoWorth-x86_64.AppImage.sha256 \
+            TennoWorth-x86_64.AppImage.sig ; do
+            if [ ! -s "$f" ]; then
+              echo "::error title=Missing artifact::$f is absent or empty. Refusing to publish a partial release."
+              missing=1
             fi
           done
-          echo "pkgver=$tag_version confirmed across both PKGBUILDs."
+          [ "$missing" -eq 0 ] || { ls -la; exit 1; }
 
-      - name: Install AUR SSH key, pinning the host key
-        if: env.AUR_SSH_PRIVATE_KEY != ''
-        shell: bash
+          # Every updater-facing artifact must carry a NON-EMPTY signature. An
+          # empty .sig publishes a manifest no installed app can ever accept,
+          # and the failure surfaces on user machines, not here.
+          for f in *.sig; do
+            [ -s "$f" ] || { echo "::error title=Empty signature::$f is empty."; exit 1; }
+          done
+
+          # The AppImage sidecar is what SECURITY.md tells Linux users to
+          # trust. Verify it against the bytes about to be uploaded rather than
+          # assuming the build wrote it correctly. Windows ships no sidecars —
+          # SHA256SUMS, assembled below, is the only checksum file there.
+          for f in *.sha256; do
+            sha256sum -c "$f"
+          done
+          ls -la
+
+      # One file listing every asset. This is the ONLY checksum file for
+      # Windows now; Linux keeps its AppImage sidecar because the AppImage is
+      # also served, unversioned, from the rolling release. `sha256sum -c`
+      # against this file needs --ignore-missing unless you downloaded every
+      # asset it names — SECURITY.md spells that out.
+      - name: Assemble SHA256SUMS
+        working-directory: dist
         run: |
           set -euo pipefail
-          install -m700 -d "$HOME/.ssh"
-          # Pinned ed25519, not accept-new: aur.archlinux.org publishes its
-          # fingerprints, and a MITM between the runner and the AUR would
-          # otherwise quietly install a different host key.
-          printf '%s\n' 'aur.archlinux.org ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEuBKrPzbawxA/k2g6NcyV5jmqwJ2s+zpgZGZ7tpLIcN' > "$HOME/.ssh/known_hosts"
-          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > "$HOME/.ssh/aur"
-          chmod 600 "$HOME/.ssh/aur"
-          # Fail with a readable message instead of ssh's cryptic
-          # "error in libcrypto" if the key is malformed (e.g. the secret
-          # lost its trailing newline). ssh-keygen -lf parses the key; a bad
-          # one never reaches the AUR.
-          ssh-keygen -lf "$HOME/.ssh/aur" >/dev/null
-          echo "GIT_SSH_COMMAND=ssh -i $HOME/.ssh/aur -o IdentitiesOnly=yes" >> "$GITHUB_ENV"
+          find . -maxdepth 1 -type f ! -name '*.sha256' ! -name 'SHA256SUMS' -printf '%f\n' \
+            | sort | xargs sha256sum > SHA256SUMS
+          cat SHA256SUMS
 
-      - name: Publish both packages to the AUR
-        if: env.AUR_SSH_PRIVATE_KEY != ''
-        shell: bash
+      # The manifest the in-app updater reads. Platform keys are exactly the
+      # set the old tauri-action + patch-script pair produced:
+      #
+      #   windows-x86_64        NSIS setup .exe (updaterJsonPreferNsis behavior:
+      #   windows-x86_64-nsis   the generic key aliases NSIS, because that is
+      #                         what the app's install flow assumes — passive
+      #                         install, self-restart)
+      # There is deliberately NO windows-x86_64-msi key. The MSI is retired,
+      # and an already-installed MSI client is not stranded by its absence:
+      # tauri-plugin-updater looks up [`{os}-{arch}-{installer}`, `{os}-{arch}`]
+      # in that order (updater.rs, `get_urls`), so a client asking for
+      # windows-x86_64-msi falls through to windows-x86_64 and gets the NSIS
+      # .exe. It then picks the install flow by SNIFFING THE DOWNLOADED BYTES
+      # (`infer::app::is_exe`), not from the key or the URL, so it runs the
+      # NSIS path correctly. Publishing a -msi key pointing at an .exe would
+      # work too, but it would be a key that lies about its contents.
+      #   linux-x86_64          the repacked, re-signed AppImage
+      #
+      # URLs point at the ROLLING desktop-latest tag, not at this release: the
+      # endpoint baked into every shipped binary is
+      # releases/download/desktop-latest/latest.json, and an updater that
+      # fetched from there but downloaded from a versioned tag would be reading
+      # two different sources. The desktop-latest job below puts these exact
+      # files there. For the same reason latest.json is NOT attached to the
+      # versioned release — its URLs would go stale the next time
+      # desktop-latest is refreshed, which is the opposite of what an immutable
+      # release should carry.
+      - name: Assemble latest.json
         run: |
           set -euo pipefail
-          ver="${GITHUB_REF_NAME#desktop-v}"
-          repo="$GITHUB_REPOSITORY"
+          python3 - <<'PY'
+          import json, os, datetime
+          v    = os.environ['VERSION']
+          repo = os.environ['GH_REPO']
+          base = f'https://github.com/{repo}/releases/download/desktop-latest'
 
-          # Checksums are computed at publish time from the exact artifacts the
-          # tag carries, so they cannot go stale between a bump and a push. The
-          # bin tarball's hash is cross-checked against the .sha256 the
-          # linux-binary job uploaded — a release that disagrees with its own
-          # attestation is failed loudly, not pinned.
-          bin_sha=$(curl -fsSL "https://github.com/$repo/releases/download/desktop-v$ver/tennoworth-desktop-linux-x86_64.tar.gz" | sha256sum | cut -d' ' -f1)
-          src_sha=$(curl -fsSL "https://github.com/$repo/archive/refs/tags/desktop-v$ver.tar.gz" | sha256sum | cut -d' ' -f1)
-          published_bin_sha=$(curl -fsSL "https://github.com/$repo/releases/download/desktop-v$ver/tennoworth-desktop-linux-x86_64.tar.gz.sha256" | awk '{print $1}')
-          if [ "$bin_sha" != "$published_bin_sha" ]; then
-            echo "::error title=Checksum mismatch::bin tarball hashes $bin_sha (computed) and $published_bin_sha (release .sha256) disagree. Refusing to pin."
+          def sig(name):
+              with open(f'dist/{name}.sig') as fh:
+                  return fh.read().strip()
+
+          nsis = f'TennoWorth_{v}_x64-setup.exe'
+          app  = 'TennoWorth-x86_64.AppImage'
+
+          win_nsis = {'signature': sig(nsis), 'url': f'{base}/{nsis}'}
+          manifest = {
+              'version': v,
+              # What the update banner shows the user. The old manifest carried
+              # the rolling release's boilerplate ("Not a version release…"),
+              # which read as nonsense inside the app.
+              'notes': f'TennoWorth desktop {v} — '
+                       f'https://github.com/{repo}/releases/tag/desktop-v{v}',
+              'pub_date': datetime.datetime.now(datetime.timezone.utc)
+                              .isoformat(timespec='milliseconds')
+                              .replace('+00:00', 'Z'),
+              'platforms': {
+                  'windows-x86_64':      win_nsis,
+                  'windows-x86_64-nsis': win_nsis,
+                  'linux-x86_64':        {'signature': sig(app), 'url': f'{base}/{app}'},
+              },
+          }
+          os.makedirs('manifest', exist_ok=True)
+          with open('manifest/latest.json', 'w') as fh:
+              json.dump(manifest, fh, indent=2)
+          print('platforms:', sorted(manifest['platforms']))
+          PY
+          cat manifest/latest.json
+
+      # Annotated, and created here rather than pushed by a human: the tag is
+      # an output of a verified build, at the SHA preflight captured. The
+      # "Desktop release tags" ruleset makes it undeletable and immovable once
+      # it exists (docs/github-rulesets/desktop-release-tags.json).
+      #
+      # Idempotent, because "Re-run failed jobs" restarts this job from its
+      # first step: a tag that already exists is fine if it is OURS (it
+      # dereferences to this run's SHA) and a hard stop otherwise. The ruleset
+      # has no bypass actors, so a wedged tag could not be deleted anyway.
+      - name: Create the annotated tag
+        run: |
+          set -euo pipefail
+          if ref_sha=$(gh api "repos/$GH_REPO/git/ref/tags/$TAG" --jq .object.sha 2>/dev/null); then
+            # Annotated tag: the ref points at a tag object; resolve it to the commit.
+            target=$(gh api "repos/$GH_REPO/git/tags/$ref_sha" --jq .object.sha 2>/dev/null || echo "$ref_sha")
+            if [ "$target" = "$SHA" ]; then
+              echo "$TAG already exists at $SHA — re-run, keeping it."
+              exit 0
+            fi
+            echo "::error title=Tag mismatch::$TAG exists at $target, not at $SHA. That is a different release; refusing to continue."
             exit 1
           fi
-          echo "bin=$bin_sha src=$src_sha (bin cross-checked against the release's own .sha256)"
+          tag_object=$(gh api "repos/$GH_REPO/git/tags" -X POST \
+            -f tag="$TAG" \
+            -f message="TennoWorth desktop $VERSION" \
+            -f object="$SHA" \
+            -f type=commit \
+            --jq .sha)
+          gh api "repos/$GH_REPO/git/refs" -X POST \
+            -f ref="refs/tags/$TAG" \
+            -f sha="$tag_object" >/dev/null
+          echo "created $TAG at $SHA"
 
-          mkdir -p "$RUNNER_TEMP/aur"
-          for spec in "tennoworth:$src_sha" "tennoworth-bin:$bin_sha"; do
-            pkg="${spec%%:*}"
-            sha="${spec##*:}"
-            git clone "ssh://aur@aur.archlinux.org/$pkg.git" "$RUNNER_TEMP/aur/$pkg"
-            # Sync the AUR tree to the repo's, not just copy over it: a file
-            # removed from the recipe must disappear from the AUR too. The
-            # -not -path excludes both `.git` itself and everything under it.
-            find "$RUNNER_TEMP/aur/$pkg" -mindepth 1 -not -path '*/.git' -not -path '*/.git/*' -delete
-            cp -r "packaging/aur/$pkg/." "$RUNNER_TEMP/aur/$pkg/"
-            # The repo's PKGBUILD carries 'SKIP' as a parse placeholder (see
-            # packaging/aur/README.md); the AUR copy gets the real checksum.
-            sed -i "s/sha256sums=('SKIP')/sha256sums=('$sha')/" "$RUNNER_TEMP/aur/$pkg/PKGBUILD"
-            # .SRCINFO is generated in a throwaway Arch container, never
-            # written by hand: makepkg is Arch-only, and the AUR rejects a push
-            # whose .SRCINFO disagrees with its PKGBUILD.
-            #
-            # makepkg refuses to run as root, so it drops to a throwaway
-            # `builder` whose uid MUST match the owner of the bind mount. A bare
-            # `useradd` lands on uid 1000 while the runner's checkout is owned by
-            # 1001, and makepkg's first act is to check $BUILDDIR — which
-            # defaults to the PKGBUILD dir — for write permission, aborting with
-            # `You do not have write permission for the directory $BUILDDIR
-            # (/pkg)`. That failed on every release ever cut; it stayed invisible
-            # because the clone above never got past `Permission denied
-            # (publickey)` until the AUR key was replaced, so the job had never
-            # once reached this line. Reproduced locally against a mount chowned
-            # to 1001, and verified fixed the same way.
-            #
-            # Deriving the uid (rather than chowning /pkg to builder) keeps the
-            # host ownership intact — chowning would hand the directory to a uid
-            # the runner does not own, and the `git add`/`commit` below would
-            # then trip git's dubious-ownership guard.
-            #
-            # The `> .SRCINFO` redirect still runs as root INSIDE the container,
-            # landing a world-readable file the runner can read.
-            docker run --rm -v "$RUNNER_TEMP/aur/$pkg:/pkg" -w /pkg archlinux:latest \
-              sh -c 'uid=$(stat -c %u /pkg); useradd -m -u "$uid" builder; su builder -c "cd /pkg && makepkg --printsrcinfo" > .SRCINFO'
-            grep -q "sha256sums = $sha" "$RUNNER_TEMP/aur/$pkg/.SRCINFO" || {
-              echo "::error title=.SRCINFO mismatch::$pkg's generated .SRCINFO does not carry checksum $sha. Aborting before push."
-              exit 1
-            }
-            (
-              cd "$RUNNER_TEMP/aur/$pkg"
-              git add -A
-              git -c user.name="$GITHUB_ACTOR" -c user.email="$GITHUB_ACTOR@users.noreply.github.com" \
-                commit -m "$pkg $ver"
-              git push origin HEAD
-            )
-            echo "::notice title=AUR published::$pkg $ver pushed to aur.archlinux.org"
-          done
+      # Draft first, assets second, public third. Between these two steps the
+      # release exists but is invisible to everyone except repo writers, which
+      # is exactly the window the old two-job flow published into.
+      #
+      # Body = the CHANGELOG section preflight extracted, then a fixed footer
+      # telling users how to verify what they download. Idempotent like the
+      # tag step: an existing draft (from a re-run) is reused, and --clobber
+      # makes the upload safe to repeat.
+      - name: Create the draft release and upload every asset
+        run: |
+          set -euo pipefail
+          notes_file=$(mktemp)
+          printf '%s\n\n---\n\n' "$NOTES" > "$notes_file"
+          cat >> "$notes_file" <<'EOF'
+          **Windows** — one artifact: `TennoWorth_<version>_x64-setup.exe`.
+          Download it and verify it against `SHA256SUMS`. The in-app updater
+          handles later versions on its own. The `.msi` is retired as of this
+          release; an existing MSI install still receives updates, and they
+          arrive as the `.exe` installer.
+
+          **Linux** — one artifact: `TennoWorth-x86_64.AppImage`. Download it,
+          verify it against `TennoWorth-x86_64.AppImage.sha256`, `chmod +x`,
+          run. It self-updates in place and resolves libwayland from the host.
+          The apt/dnf repositories and the AUR packages are retired and frozen
+          at their last published version — see `SECURITY.md`.
+
+          `SHA256SUMS` lists every downloadable asset — verify with
+          `sha256sum --ignore-missing -c SHA256SUMS`. The AppImage additionally
+          carries its own `.sha256` sidecar. `.sig` files are minisign
+          signatures for the in-app updater, not user-facing checksums — see
+          `SECURITY.md`.
+          EOF
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "release $TAG already exists — re-run, reusing it."
+          else
+            gh release create "$TAG" \
+              --draft \
+              --title "$TAG" \
+              --target "$SHA" \
+              --notes-file "$notes_file"
+          fi
+          # Never the updater manifest: its URLs point at the rolling tag (see
+          # the assembly step). On a re-run it can be sitting in dist/ via
+          # merge-multiple, downloaded from this job's own earlier artifact.
+          rm -f dist/latest.json
+          gh release upload "$TAG" dist/* --clobber
+          echo "draft $TAG carries:"
+          gh release view "$TAG" --json assets --jq '.assets[].name'
+
+      # THE flip. One command, one moment, everything already in place.
+      - name: Publish
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG" --draft=false --prerelease=false --latest
+          echo "::notice title=Released::$TAG is public."
+
+      # Handed to the desktop-latest job rather than attached to the release —
+      # see the assembly step for why a versioned release must not carry a
+      # manifest full of rolling-tag URLs.
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: updater-manifest
+          path: manifest/latest.json
+          if-no-files-found: error
+          retention-days: 7
+
+  # The legacy updater bridge. `desktop-latest` is a FIXED tag, not GitHub's
+  # floating "latest release": the endpoint is compiled into every shipped
+  # binary, so the tag can never be renamed or deleted without stranding
+  # installs. It is marked prerelease so the rolling build stays out of the
+  # repo's "Latest release" badge, which belongs to the versioned tag.
+  #
+  # Runs after `publish`, never beside it: the versioned release is the record,
+  # this is a convenience mirror of it for already-installed clients.
+  desktop-latest:
+    needs: [preflight, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      VERSION: ${{ needs.preflight.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Refresh the rolling updater release
+        run: |
+          set -euo pipefail
+          tag=desktop-latest
+          gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" \
+            --prerelease \
+            --title "$tag (auto-built)" \
+            --notes "Rolling desktop build. The in-app updater reads latest.json from this release. Not a version release — see desktop-v* tags for the versioned desktop app."
+
+          # Assets first, manifest LAST. A client that checks in mid-refresh
+          # must never read a manifest naming a file that is not there yet;
+          # reading the previous complete manifest is always safe.
+          gh release upload "$tag" --clobber \
+            "dist/TennoWorth_${VERSION}_x64-setup.exe" \
+            "dist/TennoWorth_${VERSION}_x64-setup.exe.sig" \
+            dist/TennoWorth-x86_64.AppImage \
+            dist/TennoWorth-x86_64.AppImage.sig
+          gh release upload "$tag" --clobber dist/latest.json
+
+      # Stale-asset cleanup runs AFTER the upload, never before.
+      #
+      # It used to run first, which meant desktop-latest sat empty for the whole
+      # ~8-minute build and latest.json 404'd for every client that checked in
+      # that window — trading the stale-asset bug for a worse one. Cleaning up
+      # afterwards means the previous release stays intact and servable right up
+      # until the new one replaces it, and clients only ever see a complete
+      # manifest: the old version during the build, the new one after.
+      #
+      # The AppImage is named without a version, so it is kept by name rather
+      # than by the version match — it was just overwritten above.
+      - name: Remove superseded assets from the rolling release
+        run: |
+          set -euo pipefail
+          gh release view desktop-latest --json assets --jq '.assets[].name' | while read -r asset; do
+              [ -z "$asset" ] && continue
+              case "$asset" in
+                latest.json)                 echo "keep (manifest):  $asset" ;;
+                TennoWorth-x86_64.AppImage|TennoWorth-x86_64.AppImage.sig)
+                                             echo "keep (unversioned): $asset" ;;
+                *"$VERSION"*)                echo "keep (current):   $asset" ;;
+                *)                           echo "remove (stale):   $asset"
+                                             gh release delete-asset desktop-latest "$asset" --yes ;;
+              esac
+            done

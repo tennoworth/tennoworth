@@ -71,13 +71,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-rust
-      # Cargo.lock is part of what ships, not a local cache: the AUR source
-      # package builds the tag's tarball with `cargo build --frozen`, which
-      # aborts rather than rewrite the lock. Every build in this repo has
-      # network access and quietly re-resolves it instead, so a version bump
-      # that edits Cargo.toml alone is green here and broken only on users'
-      # machines — how 0.3.5 and 0.3.6 both shipped unbuildable from source.
-      # This is the AUR's refusal, run on every push where it's cheap to fix.
+      # Cargo.lock is part of what ships, not a local cache: anyone building
+      # the tag from source runs `cargo build --frozen`, which aborts rather
+      # than rewrite the lock. Every build in this repo has network access and
+      # quietly re-resolves it instead, so a version bump that edits Cargo.toml
+      # alone is green here and wrong in the tag — how 0.3.5 and 0.3.6 both
+      # shipped unbuildable from source (the retired AUR source package was
+      # where that surfaced). Run on every push, where it's cheap to fix.
       - name: Gate — Cargo.lock already matches the manifests
         run: cargo fetch --locked
       # tennoworth-desktop (Tauri v2) links the Linux GUI stack; without these
@@ -94,6 +94,25 @@ jobs:
       # stale artifact cannot green them.
       - name: cargo test
         run: cargo test
+
+  # The desktop version is pinned in two places (Cargo.toml and Cargo.lock's
+  # own entry — the two AUR PKGBUILDs went with the AUR packages when Linux
+  # became AppImage-only). Until this job existed the only thing that checked
+  # them was the release workflow, so drift was discovered while shipping:
+  # package.json sat at 0.3.3 under a 0.3.6 desktop for three releases, and
+  # 0.3.5 and 0.3.6 both shipped a Cargo.lock naming the previous version —
+  # unbuildable from source, because a --frozen build never rewrites a lock.
+  #
+  # Same script the release's preflight runs, minus --release: on a PR the repo
+  # legitimately sits AT the newest published version between releases, so only
+  # "behind" is drift.
+  version-pins:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - name: Version pins agree
+        run: bun scripts/release.ts check
 
   # Unwrap/expect in production code is a crash (Tauri does not catch command
   # panics) plus a poisoned mutex; the allowlist in scripts/check-panic-sites.ts

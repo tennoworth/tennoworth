@@ -35,9 +35,14 @@ characteristics:
      (`bun audit`, `cargo audit`) plus the JS and Rust test
      suites.
 
-   The `release-desktop.yml` workflow builds the desktop app (Windows
-   installers + the Linux deb/rpm) on a `desktop-v*` tag and publishes the
-   AUR packages.
+   The `release-desktop.yml` workflow builds the desktop app (the Windows
+   installers and the Linux AppImage) and publishes the versioned release
+   and the updater manifest. It is triggered manually from `main` with a version,
+   never by a tag: the build jobs publish nothing, and a single job
+   verifies the complete artifact set before flipping one draft release
+   public. The `desktop-v*` tag is created **by** that workflow at the
+   commit it built, so a release tag can only ever name a verified build
+   of a `main` commit.
 
    Production serving is **not** GitHub-hosted: a self-hosted box (an
    unprivileged LXC, reached only through a Cloudflare Tunnel, fronted
@@ -62,9 +67,15 @@ characteristics:
   Rust process; the encrypted token lives on disk and is decrypted
   only in memory. Listing and order operations are relayed by
   wfm-core — the webview only sees results.
-- **Release binaries are reproducibly built in public CI.** You can
-  audit the workflow file, the source commit at the tag, and the
-  build logs. Linux packages are signed (see below).
+- **Release binaries are built in public, auditable CI — never on a
+  maintainer's machine.** You can read the workflow file, the source
+  commit at the tag, and the full build logs for the run that produced
+  every asset. What that is *not* is a **reproducible** build: the Rust
+  toolchain floats on `stable` and nothing verifies that a rebuild
+  produces byte-identical output, so you cannot independently recreate
+  an installer and diff it. Auditable, not reproducible — this used to
+  say "reproducibly built", which was a stronger promise than the
+  pipeline keeps. Linux packages are signed (see below).
 - **No telemetry, no analytics, no accounts.** Verify with your
   browser's network tab.
 
@@ -96,27 +107,91 @@ rewritten before it ships.
 
 For each desktop release on GitHub:
 
-- **Windows** — the installer (`.exe` / `.msi`) is built in public CI
-  from the tagged commit; download from the `desktop-v*` release and
-  compare its SHA-256 with the `.sha256` file on the same release.
-- **Linux** — prefer your distro's signed repository (apt/dnf); the
-  `.deb` / `.rpm` on the release are what the repo publisher consumes.
-  The AUR `tennoworth-bin` package pins the checksum of its tarball.
+- **Windows** — there is one installer,
+  `TennoWorth_<version>_x64-setup.exe`, built in public CI from the
+  tagged commit; download it from the `desktop-v*` release and check its
+  SHA-256 against the `SHA256SUMS` file on the same release. (The `.msi`
+  is retired; releases up to 0.6.0 also carried one, alongside per-file
+  `.sha256` sidecars for both. Those sidecars are gone from later
+  releases — `SHA256SUMS` carries the same hashes.)
+- **Linux** — there is one artifact, `TennoWorth-x86_64.AppImage`,
+  built in the same public CI from the same tagged commit. Download it
+  and its `.sha256` from the `desktop-v*` release and check them
+  together (`sha256sum -c TennoWorth-x86_64.AppImage.sha256`), then
+  `chmod +x` and run. From then on the app updates itself: it fetches
+  the manifest, verifies the new AppImage's minisign `.sig` against the
+  public key compiled into the running binary, and replaces itself in
+  place. A download that fails that signature check is never installed.
+
+Every release carries one `SHA256SUMS` file listing every asset on it.
+Because it names assets you probably did not download, check it with
+`--ignore-missing`, which skips the ones you do not have instead of
+reporting them as failures.
+
+`SHA256SUMS` and the AppImage's `.sha256` are both plain `sha256sum`
+output — the hash, then the filename it belongs to (a `*` before the
+name is `sha256sum`'s binary-mode marker, and `-c` understands it) — so
+the check is one command wherever you have `sha256sum` (Git Bash, WSL,
+or any Linux shell). Download the installer and the checksum file into
+the same directory, then:
 
 ```bash
-# Windows example — download both, then:
-sha256sum -c tennoworth-desktop-amd64.deb.sha256 2>/dev/null || true
+# Windows — the NSIS installer, against the release's SHA256SUMS:
+sha256sum --ignore-missing -c SHA256SUMS
+
+# Linux — the AppImage, against its own sidecar:
+sha256sum -c TennoWorth-x86_64.AppImage.sha256
+
+# …or the AppImage against SHA256SUMS, same as Windows:
+sha256sum --ignore-missing -c SHA256SUMS
 ```
 
-If it prints `MISMATCH`, the file is corrupt or tampered — delete it and
-re-download. Don't run a binary that fails this check.
+In PowerShell with no `sha256sum` available, compare by eye instead
+(`Get-FileHash` prints the hash in upper case; `SHA256SUMS` is lower
+case — only the hex digits matter):
 
-## The Linux package signing key
+```powershell
+Get-FileHash .\TennoWorth_0.6.1_x64-setup.exe -Algorithm SHA256
+Select-String -Path .\SHA256SUMS -Pattern 'x64-setup\.exe'
+```
 
-The apt and dnf repositories at `https://tennoworth.app/apt` and `/rpm` are
-GPG-signed. If you installed via `apt` or `dnf`, your package manager already
-verifies every package and index against this key on every update — there is
-no separate checksum step to run.
+`sha256sum -c` prints `OK` when the file matches. Anything else — a
+`FAILED` line, or two hashes that differ — means the file is corrupt or
+tampered: delete it and re-download. Don't run a binary that fails this
+check.
+
+(The `.sig` files next to the installers are a different thing: minisign
+signatures used by the in-app updater, verified against the public key
+compiled into the app. They are not something you check by hand —
+`SHA256SUMS` is.)
+
+## The Linux package repositories — historical
+
+**Linux ships as an AppImage only.** The `.deb` and `.rpm` packages, the
+signed apt and dnf repositories at `https://tennoworth.app/apt` and `/rpm`,
+and the two AUR packages (`tennoworth`, `tennoworth-bin`) are all retired.
+The AppImage is the only Linux channel that self-updates, which is why it is
+the one that was kept.
+
+If you installed from apt, dnf or the AUR, **nothing breaks and nothing
+disappears.** The repositories stay online, signed and valid — they are simply
+**frozen at their last published version and will never offer another update.**
+Switch to the AppImage when convenient:
+
+```bash
+curl -LO https://github.com/tennoworth/tennoworth/releases/latest/download/TennoWorth-x86_64.AppImage
+chmod +x TennoWorth-x86_64.AppImage
+./TennoWorth-x86_64.AppImage
+```
+
+and then remove the old package (`sudo apt remove tennoworth`, `sudo dnf
+remove tennoworth`, or `paru -R tennoworth`) plus the repository entry it
+came from.
+
+The rest of this section describes the key those frozen repositories are
+signed with. It is kept because they are still served and your package
+manager still verifies against it — not because anything new is signed with
+it.
 
 ```
 Key:         TennoWorth Packages <pmbaprow@gmail.com>
@@ -137,7 +212,7 @@ How the key is handled, so you can judge what a compromise would cost:
 - The **primary key** only certifies. It has never been on an
   internet-connected server and is not used to sign packages.
 - A separate **signing subkey** (`F226 2474 2E2D 5D74`, expires 2028-07-31)
-  is the only key material on the server that publishes the repositories.
+  was the only key material on the server that served the repositories.
   If that box were compromised, the subkey can be revoked and rotated without
   users re-importing anything, because the primary they trust is unchanged.
 - A revocation certificate exists offline. If you ever see a revocation for
@@ -145,8 +220,10 @@ How the key is handled, so you can judge what a compromise would cost:
 
 Signing covers the repository, not the identity of the author — it proves a
 package came from whoever controls this key and was not altered in transit.
-Note this is entirely separate from Windows code signing, which we do **not**
-do; see "What we cannot promise".
+It has nothing to do with the AppImage, which is verified by its `.sha256`
+and, for updates, by the minisign key compiled into the app. Note both are
+entirely separate from Windows code signing, which we do **not** do; see
+"What we cannot promise".
 
 ## How to verify the web app
 

@@ -6,11 +6,16 @@
 # relay.
 [package]
 name = "tennoworth-desktop"
-# Keep in lockstep with tauri.conf.json's version and the desktop-v* tag:
-# this is CARGO_PKG_VERSION, what update.rs reports as the installed version
-# and what the updater compares against latest.json. release-desktop.yml
-# fails the build if the three ever drift apart.
-version = "0.3.8"
+# THE authoritative version for the desktop app. This is CARGO_PKG_VERSION —
+# what update.rs reports as the installed version and what the updater
+# compares against latest.json — and, with no `version` key in
+# tauri.conf.json, it is also what Tauri writes into the bundle, the installer
+# filenames and the manifest.
+#
+# Do not edit by hand: `bun scripts/release.ts prepare <bump>` writes this and
+# the pin derived from it (Cargo.lock's own entry) in one go, and
+# `bun scripts/release.ts check` fails a PR if the two drift apart.
+version = "0.6.0"
 edition = "2021"
 description = "TennoWorth desktop shell (Tauri v2). Webview loads the SPA; wfm-core invoked via Tauri commands (health, scan_inventory)."
 license = "MIT"

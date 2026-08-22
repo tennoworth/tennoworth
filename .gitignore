@@ -55,6 +55,7 @@ wfm_inventory_sellable.csv
 /docs/suggestions-plan.md
 /docs/desktop-showcase-plan.md
 /docs/plan-2026-08-history-and-advisor.md
+/docs/release-plan-2026-08.md
 /docs/windows-test-*.md
 # The production topology, admin access and hardening posture of the live box.
 # The deploy/ SCRIPTS stay tracked: refresh-market.yml runs run-scrape.sh, and
@@ -71,7 +72,10 @@ wfm_inventory_sellable.csv
 # daily; served live by Caddy, never committed. See wfm-scrape/src/history.rs.
 /prototype/public/history.json
 
-# GPG secret material for the apt/dnf repos. The signing subkey lives only on
+# GPG secret material for the (now frozen, still served) apt/dnf repos. Linux
+# is AppImage-only, so nothing new is signed with this key — but the key still
+# has to stay out of git for as long as those repos are served.
+# The signing subkey lives only on
 # container 110; the primary key and revocation cert live offline. None of it
 # belongs in git — a committed signing key lets anyone serve trusted packages
 # to every user who added our repo. The PUBLIC key is deliberately not matched

@@ -1,7 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "TennoWorth",
-  "version": "0.3.8",
   "identifier": "app.tennoworth.desktop",
   "build": {
     "frontendDist": "../../prototype/dist-desktop",
@@ -19,9 +18,6 @@
     "active": true,
     "targets": [
       "nsis",
-      "msi",
-      "deb",
-      "rpm",
       "appimage"
     ],
     "publisher": "TennoWorth",
@@ -32,29 +28,6 @@
     "shortDescription": "Warframe inventory + market dashboard — see what's worth selling right now",
     "longDescription": "TennoWorth reads your Warframe inventory from the running game and ranks it against live warframe.market data, so you can see what is actually worth selling right now. Works on Linux and Windows with no Overwolf and no account. Scanning requires the game to be running; listing on warframe.market is optional.",
     "createUpdaterArtifacts": true,
-    "linux": {
-      "deb": {
-        "depends": [
-          "libcap2-bin"
-        ],
-        "provides": [
-          "tennoworth"
-        ],
-        "section": "games",
-        "priority": "optional",
-        "postInstallScript": "scripts/postinstall.sh"
-      },
-      "rpm": {
-        "release": "1",
-        "depends": [
-          "libcap"
-        ],
-        "provides": [
-          "tennoworth"
-        ],
-        "postInstallScript": "scripts/postinstall.sh"
-      }
-    },
     "icon": [
       "icons/128x128@2x.png",
       "icons/128x128.png",

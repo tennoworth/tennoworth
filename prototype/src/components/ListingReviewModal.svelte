@@ -511,7 +511,7 @@
   .backdrop {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.55);
+    background: var(--scrim);
     backdrop-filter: blur(2px);
     display: grid;
     place-items: center;
@@ -521,7 +521,7 @@
   .modal {
     background: var(--panel);
     border: 1px solid var(--border);
-    border-radius: 12px;
+    border-radius: var(--radius-lg);
     width: min(900px, 100%);
     max-height: 88vh;
     display: flex;
@@ -594,7 +594,7 @@
   .item-name { color: var(--fg); }
   .item-slug {
     color: var(--muted);
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 11px;
     margin-left: 6px;
   }
@@ -605,13 +605,13 @@
   .kept-note { color: var(--muted); }
   input[type="number"] {
     font: inherit;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-mono);
     font-size: 12.5px;
     width: 64px;
     background: var(--panel-2);
     border: 1px solid var(--border);
     color: var(--fg);
-    border-radius: 5px;
+    border-radius: var(--radius-ctl);
     padding: 3px 6px;
   }
   input[type="number"]:disabled { opacity: 0.4; }
@@ -640,7 +640,7 @@
     color: var(--muted);
     border: 1px solid var(--border);
     padding: 4px 10px;
-    border-radius: 6px;
+    border-radius: var(--radius-ctl);
     font-size: 12px;
     cursor: pointer;
   }
