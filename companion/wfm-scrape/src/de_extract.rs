@@ -462,6 +462,140 @@ fn round4(v: f64) -> f64 {
 // worldState → Baro
 // ---------------------------------------------------------------------------
 
+#[derive(Debug, Default)]
+pub struct EventRewardBuild {
+    pub rows: std::collections::BTreeMap<String, Value>,
+    pub raw_rows: usize,
+    pub invalid_rows: usize,
+    pub unknown_rows: usize,
+}
+
+fn reward_items(
+    reward: &Value,
+    path_to_info: &HashMap<String, Value>,
+    alias: &HashMap<String, String>,
+) -> Option<(Vec<Value>, bool)> {
+    let obj = reward.as_object()?;
+    let items: &[Value] = match obj.get("items") {
+        Some(value) => value.as_array()?.as_slice(),
+        None => &[],
+    };
+    let counted: &[Value] = match obj.get("countedItems") {
+        Some(value) => value.as_array()?.as_slice(),
+        None => &[],
+    };
+    let mut out = Vec::new();
+    let mut complete = true;
+    let mut push = |unique: &str, quantity: i64| {
+        if quantity <= 0 { return false; }
+        let mut row = serde_json::Map::new();
+        row.insert("unique".into(), Value::String(unique.to_string()));
+        row.insert("quantity".into(), Value::from(quantity));
+        if let Some(info) = resolve_path(unique, path_to_info, alias) {
+            if let Some(name) = info.get("name").and_then(|v| v.as_str()) {
+                row.insert("name".into(), Value::String(name.to_string()));
+            }
+            if let Some(slug) = info.get("slug").and_then(|v| v.as_str()) {
+                row.insert("slug".into(), Value::String(slug.to_string()));
+            }
+        } else {
+            complete = false;
+            row.insert("name".into(), Value::String(readable_from_path(unique)));
+        }
+        out.push(Value::Object(row));
+        true
+    };
+    for item in items {
+        if !item.as_str().is_some_and(|path| push(path, 1)) { return None; }
+    }
+    for item in counted {
+        let unique = item.get("ItemType").and_then(|v| v.as_str())?;
+        let quantity = item.get("ItemCount").and_then(|v| v.as_i64())?;
+        if !push(unique, quantity) { return None; }
+    }
+    Some((out, complete))
+}
+
+fn world_id(row: &Value, source: &str) -> String {
+    if let Some(id) = row.get("_id").and_then(|v| v.get("$oid")).and_then(|v| v.as_str()) {
+        return id.to_string();
+    }
+    let tag = row.get("Tag").or_else(|| row.get("Prop")).and_then(|v| v.as_str()).unwrap_or("untagged");
+    let start = de_millis(row.get("Activation").or_else(|| row.get("EventStartDate"))).unwrap_or(0);
+    let end = de_millis(row.get("Expiry").or_else(|| row.get("EventEndDate"))).unwrap_or(0);
+    format!("{source}:{tag}:{start}:{end}")
+}
+
+/// Extract only reward containers observed live on 2026-08-22: Goals.Reward,
+/// Goals.BonusReward, and paired InterimGoals/InterimRewards. Events were
+/// announcement rows with no reward-bearing field, so they remain unknown
+/// rather than being interpreted from an unobserved community schema.
+pub fn event_rewards_from_world_child(
+    world: &Value,
+    key: &str,
+    path_to_info: &HashMap<String, Value>,
+    alias: &HashMap<String, String>,
+    iso: impl Fn(i64) -> String,
+) -> EventRewardBuild {
+    let mut build = EventRewardBuild::default();
+    let Some(rows) = world.get(key).and_then(|v| v.as_array()) else { return build };
+    build.raw_rows = rows.len();
+    if key != "Goals" {
+        build.unknown_rows = rows.len();
+        return build;
+    }
+    for row in rows {
+        let Some(obj) = row.as_object() else { build.invalid_rows += 1; continue };
+        let Some(start) = de_millis(obj.get("Activation")) else { build.invalid_rows += 1; continue };
+        let Some(end) = de_millis(obj.get("Expiry")) else { build.invalid_rows += 1; continue };
+        if end <= start { build.invalid_rows += 1; continue }
+        let mut groups = Vec::new();
+        let mut complete = true;
+        let mut malformed = false;
+
+        if obj.contains_key("InterimGoals") || obj.contains_key("InterimRewards") {
+            match (
+                obj.get("InterimGoals").and_then(|v| v.as_array()),
+                obj.get("InterimRewards").and_then(|v| v.as_array()),
+            ) {
+                (Some(goals), Some(rewards)) if goals.len() == rewards.len() => {
+                    for (threshold, reward) in goals.iter().zip(rewards) {
+                        let Some(threshold) = threshold.as_f64() else { malformed = true; break };
+                        let Some((items, resolved)) = reward_items(reward, path_to_info, alias) else { malformed = true; break };
+                        complete &= resolved;
+                        groups.push(serde_json::json!({"kind":"milestone","threshold":threshold,"rewards":items}));
+                    }
+                }
+                _ => malformed = true,
+            }
+        }
+        for (field, kind) in [("Reward", "final"), ("BonusReward", "bonus")] {
+            if let Some(reward) = obj.get(field) {
+                let Some((items, resolved)) = reward_items(reward, path_to_info, alias) else { malformed = true; break };
+                complete &= resolved;
+                groups.push(serde_json::json!({"kind":kind,"rewards":items}));
+            }
+        }
+        if malformed { build.invalid_rows += 1; continue }
+        if groups.is_empty() { build.unknown_rows += 1; continue }
+
+        let id = world_id(row, "goal");
+        let title = obj.get("Tag").or_else(|| obj.get("Desc")).and_then(|v| v.as_str())
+            .map(readable_from_path).unwrap_or_else(|| "Warframe event".into());
+        build.rows.insert(id.clone(), serde_json::json!({
+            "id": id, "source": "goal", "title": title,
+            "starts_at": iso(start), "ends_at": iso(end),
+            "completeness": if complete { "complete" } else { "partial" },
+            "groups": groups,
+        }));
+    }
+    build
+}
+
+// ---------------------------------------------------------------------------
+// worldState → Baro
+// ---------------------------------------------------------------------------
+
 /// Build the `baro` surface from worldState.
 ///
 /// The upgrade over the drop-in it replaces: worldState carries the manifest
@@ -538,7 +672,7 @@ pub fn baro_from_world(
 /// Only used for items with no catalogue entry (cosmetics, bundles). Better
 /// than showing a raw `/Lotus/...` path, and honest that it is derived — the
 /// row carries no slug and therefore no price.
-fn readable_from_path(path: &str) -> String {
+pub fn readable_from_path(path: &str) -> String {
     let seg = path.rsplit('/').next().unwrap_or(path);
     let mut out = String::new();
     for (i, ch) in seg.chars().enumerate() {
@@ -870,6 +1004,32 @@ mod tests {
         let (u, n) = usage_from_export(&serde_json::json!({"nope": 1}), 2025, &HashMap::new());
         assert!(u.is_empty());
         assert_eq!(n, 0);
+    }
+
+    #[test]
+    fn live_shape_fixture_preserves_goal_reward_groups() {
+        let world: Value = serde_json::from_str(include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"), "/../../tests/fixtures/de-events/world-shapes.json"
+        ))).unwrap();
+        let p2i = HashMap::from([
+            ("/Lotus/Weapons/TestFinalWeapon".into(), serde_json::json!({"name":"Test Final Weapon","slug":"test_final_weapon"})),
+            ("/Lotus/Upgrades/Mods/TestMilestoneMod".into(), serde_json::json!({"name":"Test Milestone Mod","slug":"test_milestone_mod"})),
+        ]);
+        let goals = event_rewards_from_world_child(&world, "Goals", &p2i, &HashMap::new(), |ms| ms.to_string());
+        assert_eq!(goals.raw_rows, 3);
+        assert_eq!(goals.rows.len(), 2);
+        assert_eq!(goals.unknown_rows, 1, "Jobs reward tables are observed but not fixed containers");
+        let first = &goals.rows["redacted-goal-milestones"];
+        assert_eq!(first["groups"].as_array().unwrap().len(), 3);
+        assert_eq!(first["groups"][0]["kind"], "milestone");
+        assert_eq!(first["groups"][0]["threshold"], 5.0);
+        assert_eq!(first["groups"][2]["kind"], "final");
+        assert_eq!(first["groups"][2]["rewards"][0]["slug"], "test_final_weapon");
+        assert_eq!(first["completeness"], "partial", "an unresolved token keeps reach conservative");
+
+        let events = event_rewards_from_world_child(&world, "Events", &p2i, &HashMap::new(), |ms| ms.to_string());
+        assert!(events.rows.is_empty());
+        assert_eq!(events.unknown_rows, 1, "live Events were announcements, not reward rows");
     }
 
     #[test]

@@ -126,6 +126,16 @@ impl<K: Clone + Eq + Hash, V: Clone> Mergeable for HashMap<K, V> {
     }
 }
 
+impl<K: Clone + Ord, V: Clone> Mergeable for std::collections::BTreeMap<K, V> {
+    fn is_empty(&self) -> bool { self.is_empty() }
+    fn len(&self) -> usize { self.len() }
+    fn merge(old: &Self, fresh: &Self) -> Self {
+        let mut merged = old.clone();
+        for (key, value) in fresh { merged.insert(key.clone(), value.clone()); }
+        merged
+    }
+}
+
 impl Mergeable for serde_json::Value {
     fn is_empty(&self) -> bool {
         match self {

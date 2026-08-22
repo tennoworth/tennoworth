@@ -224,6 +224,41 @@ export interface Market {
   /** DE's annual usage telemetry, keyed by the PARENT's slug (a part inherits
    *  its set's figure — see `lib/demand.ts`). Absent on older snapshots. */
   usage?: Record<string, UsageRecord> | null;
+  event_rewards?: EventRewardsSurface | null;
+  surface_provenance?: Record<string, {
+    disposition: string;
+    attempted_at: string;
+    data_fetched_at: string;
+    source?: string;
+  }>;
+}
+
+export interface EventRewardItem {
+  unique: string;
+  name: string;
+  slug?: string;
+  quantity: number;
+}
+
+export interface EventRewardGroup {
+  kind: 'milestone' | 'final' | 'bonus';
+  threshold?: number;
+  rewards: EventRewardItem[];
+}
+
+export interface EventRewardEntry {
+  id: string;
+  source: 'goal' | 'event';
+  title: string;
+  starts_at: string;
+  ends_at: string;
+  completeness: 'complete' | 'partial';
+  groups: EventRewardGroup[];
+}
+
+export interface EventRewardsSurface {
+  goals?: Record<string, EventRewardEntry>;
+  events?: Record<string, EventRewardEntry>;
 }
 
 /** One item's share of its category's usage, with its Mastery-Rank curve.

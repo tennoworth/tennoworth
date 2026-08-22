@@ -687,6 +687,12 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     let deals_old: Option<Vec<serde_json::Value>> = prior_de
         .and_then(|d| d.get("deals"))
         .and_then(|v| serde_json::from_value(v.clone()).ok());
+    let goals_old: Option<std::collections::BTreeMap<String, serde_json::Value>> = prior
+        .get("event_rewards").and_then(|v| v.get("goals"))
+        .and_then(|v| serde_json::from_value(v.clone()).ok());
+    let events_old: Option<std::collections::BTreeMap<String, serde_json::Value>> = prior
+        .get("event_rewards").and_then(|v| v.get("events"))
+        .and_then(|v| serde_json::from_value(v.clone()).ok());
     let prior_child_stamps: std::collections::BTreeMap<String, String> = prior_de
         .and_then(|d| d.get("child_fetched_at"))
         .and_then(|v| serde_json::from_value(v.clone()).ok())
@@ -886,6 +892,44 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         now,
         STALE_DAYS,
     );
+    let goal_build = de_world
+        .map(|world| de_extract::event_rewards_from_world_child(
+            world, "Goals", &path_to_info_for_de, &de_alias,
+            |ms| clock::iso_z(clock::from_millis(ms)),
+        ))
+        .unwrap_or_default();
+    let event_build = de_world
+        .map(|world| de_extract::event_rewards_from_world_child(
+            world, "Events", &path_to_info_for_de, &de_alias,
+            |ms| clock::iso_z(clock::from_millis(ms)),
+        ))
+        .unwrap_or_default();
+    let child_observation = |key: &str, build: de_extract::EventRewardBuild| {
+        match &de_world_observation {
+            Observation::Unavailable => Observation::Unavailable,
+            Observation::Invalid => Observation::Invalid,
+            Observation::Usable { data: world, .. } => match world.get(key).and_then(|v| v.as_array()) {
+                None => Observation::Invalid,
+                Some(rows) if rows.is_empty() => Observation::AuthoritativeEmpty,
+                Some(_) if build.rows.is_empty() => Observation::Invalid,
+                // Unsupported Jobs/announcement rows are outside this fixed-
+                // reward surface. They make an all-unknown child invalid, but
+                // must not retain vanished fixed goals when supported rows are
+                // otherwise complete.
+                Some(_) if build.invalid_rows > 0 => Observation::partial(build.rows),
+                Some(_) => Observation::usable(build.rows),
+            },
+            Observation::Unchanged | Observation::AuthoritativeEmpty => Observation::Invalid,
+        }
+    };
+    let r_world_goals = reconcile(
+        "world.goals", child_observation("Goals", goal_build), goals_old.as_ref(),
+        prior_child_stamps.get("world.goals").map(|s| s.as_str()), now, STALE_DAYS,
+    );
+    let r_world_events = reconcile(
+        "world.events", child_observation("Events", event_build), events_old.as_ref(),
+        prior_child_stamps.get("world.events").map(|s| s.as_str()), now, STALE_DAYS,
+    );
 
     for r in [&r_p2i, &r_s2p, &r_rr] {
         if let Some(w) = &r.stale_warning {
@@ -949,6 +993,8 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     provenance!("usage", r_usage);
     provenance!("world.vault_rotation", r_world_vault);
     provenance!("world.deals", r_world_deals);
+    provenance!("world.goals", r_world_goals);
+    provenance!("world.events", r_world_events);
     if let Some(p) = surface_provenance.get_mut("relic_rewards") {
         p.source = Some(relic_source.to_string());
     }
@@ -998,6 +1044,8 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
             let mut stamps = prior_child_stamps;
             stamps.insert("world.vault_rotation".into(), r_world_vault.fetched_at.clone());
             stamps.insert("world.deals".into(), r_world_deals.fetched_at.clone());
+            stamps.insert("world.goals".into(), r_world_goals.fetched_at.clone());
+            stamps.insert("world.events".into(), r_world_events.fetched_at.clone());
             stamps.insert("de.dispositions".into(), disposition_fetched_at);
             for (child, outcome) in &riven_stats_children {
                 if matches!(outcome, fetch::RivenChildOutcome::Usable | fetch::RivenChildOutcome::AuthoritativeEmpty) {
@@ -1030,6 +1078,10 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     );
     snapshot.de = Some(de_surface);
     snapshot.surface_provenance = surface_provenance;
+    snapshot.event_rewards = render::EventRewardsSurface {
+        goals: r_world_goals.data,
+        events: r_world_events.data,
+    };
 
     // market.json is written LAST — it's the generation anchor the browser app
     // joins everything through (items[slug], catalog, path_to_info, baro), while

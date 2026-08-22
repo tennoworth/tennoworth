@@ -143,9 +143,23 @@ pub struct Snapshot {
     /// hash check is fresh evidence about old data, while an outage is not.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub surface_provenance: HashMap<String, SurfaceProvenance>,
+    #[serde(default, skip_serializing_if = "EventRewardsSurface::is_empty")]
+    pub event_rewards: EventRewardsSurface,
     /// Digital Extremes provenance + the worldState-only surfaces.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub de: Option<DeSurface>,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct EventRewardsSurface {
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub goals: std::collections::BTreeMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub events: std::collections::BTreeMap<String, serde_json::Value>,
+}
+
+impl EventRewardsSurface {
+    pub fn is_empty(&self) -> bool { self.goals.is_empty() && self.events.is_empty() }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -243,6 +257,7 @@ pub fn assemble_snapshot(
         usage,
         surface_fetched_at,
         surface_provenance: HashMap::new(),
+        event_rewards: EventRewardsSurface::default(),
     }
 }
 
