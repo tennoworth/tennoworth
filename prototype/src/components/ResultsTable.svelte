@@ -258,10 +258,23 @@
     advice:         { text: 'Hold-or-sell call from the prime calendar (release decay, Resurgence reprints, post-vault ramps) plus the year of price history. Hover a chip for the exact numbers behind it. Advice only — nothing is automated.', dir: 'sell now = timing favors listing; hold = the ramp is still ahead' },
   };
 
-  // Fixed-layout column widths (rem). Item takes the remainder — ≈214px at
-  // 1440 with the 216px sidebar and all 15 columns; wider on bigger desks
-  // (the root font steps at 1900/2500 widen the numeric block ~6% per step).
-  // Below `min-width` the panel scrolls sideways rather than squeezing Item.
+  // Fixed-layout column widths (rem). Item takes the remainder, down to the
+  // 8.5rem floor that `min-width` buys it; wider on bigger desks (the root
+  // font steps at 1900/2500 widen the numeric block ~6% per step). Below
+  // `min-width` the panel scrolls sideways rather than squeezing Item.
+  //
+  // "Played" is the sixteenth column, and the fifteen before it had already
+  // spent the 1440 budget: 63.5rem of fixed columns left Item ~208px and the
+  // table fit a 1224px content area exactly. At 71rem it no longer fits, so
+  // the no-preset view now scrolls sideways at 1440 and Item sits on its
+  // floor at 136px. That is the trade this design already declares — scroll,
+  // don't squeeze the item name — but it is a REAL change: the everything
+  // view used to fit that screen and now does not. Every preset shows a
+  // subset and is unaffected.
+  //
+  // ResultsTable.test.ts holds the sum and `min-width` together so the next
+  // column has to move the floor deliberately rather than silently eating
+  // the item name.
   const ALL_COLUMNS: ColumnDef[] = [
     { key: 'name',           label: 'Item',     align: 'left',  width: 0 },
     { key: 'owned',          label: 'Own',      align: 'right', width: 6 },
@@ -274,7 +287,7 @@
     { key: 'delta_90d_pct',  label: 'Δ 90d',    align: 'right', width: 3.25 },
     { key: 'volume_48h',     label: 'Vol 48h',  align: 'right', width: 3.75 },
     { key: 'ratio',          label: 'Demand',   align: 'right', width: 3.75 },
-    { key: 'usage',          label: 'Played',   align: 'left',  width: 4.5, noSort: true },
+    { key: 'usage',          label: 'Played',   align: 'left',  width: 7.5, noSort: true },
     { key: 'advice',         label: 'Advice',   align: 'left',  width: 5 },
     { key: 'ducats',         label: 'Ducats',   align: 'right', width: 5.5 },
     { key: 'plat_per_100d',  label: 'p/100d',   align: 'right', width: 3.5 },
@@ -305,8 +318,8 @@
   });
 
   // Pick rows fill the leading numeric columns and give the rest of the row to
-  // the reason line — at least three columns so the sentence has room, seven
-  // on the full 15-column set (Own · Δ · Score · Avg · Low sell · Top buy ·
+  // the reason line — at least three columns so the sentence has room, eight
+  // on the full 16-column set (Own · Δ · Score · Avg · Low sell · Top buy ·
   // Trend stay comparable with the table below).
   let reasonSpan = $derived(Math.max(3, columns.length - 8));
   let pickCols = $derived(columns.slice(1, Math.max(1, columns.length - reasonSpan)));
@@ -868,7 +881,7 @@
   /* ---- the table: fixed layout, shared colgroup ---- */
   table {
     width: 100%;
-    min-width: 72rem;
+    min-width: 79.5rem;
     table-layout: fixed;
     border-collapse: collapse;
     font-variant-numeric: tabular-nums;
