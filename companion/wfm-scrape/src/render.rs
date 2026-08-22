@@ -151,8 +151,10 @@ pub struct Snapshot {
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct SurfaceProvenance {
     pub disposition: crate::reconcile::Disposition,
-    pub observed_at: String,
+    pub attempted_at: String,
     pub data_fetched_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 /// What one cycle took from DE, and what only DE can give.
@@ -169,7 +171,8 @@ pub struct DeSurface {
     /// Manifests whose hash moved this cycle — a patch-day signal in itself.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub changed: Vec<String>,
-    /// Whether worldState answered. False means Baro/vault/deals are stale.
+    /// Whether worldState answered with an object. This does not describe
+    /// individual children, and Baro may still be fresh from warframestat.
     pub world_ok: bool,
     /// Child timestamps do not inherit their parent's freshness. A successful
     /// PC weekly-riven fetch must not make a failed Switch child look current.

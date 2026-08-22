@@ -1032,6 +1032,37 @@ pub fn fetch_riven_stats(
     (stats, unmatched, fetched_children)
 }
 
+/// Retain only failed console children while replacing the successful PC
+/// baseline. Iterating fresh PC slugs prevents a stale console-only weapon from
+/// being resurrected after it disappears from the primary feed.
+pub fn carry_failed_riven_platforms(
+    fresh: &mut HashMap<String, serde_json::Value>,
+    prior: Option<&HashMap<String, serde_json::Value>>,
+    fetched_children: &[String],
+) {
+    let Some(prior) = prior else { return };
+    for (platform, _) in DE_WEEKLY_RIVEN_PLATFORMS {
+        if fetched_children.iter().any(|child| child == platform) {
+            continue;
+        }
+        for (slug, row) in fresh.iter_mut() {
+            let Some(old_platform) = prior
+                .get(slug)
+                .and_then(|old| old.get("platforms"))
+                .and_then(|p| p.get(*platform))
+                .cloned()
+            else { continue };
+            let Some(obj) = row.as_object_mut() else { continue };
+            let platforms = obj
+                .entry("platforms")
+                .or_insert_with(|| serde_json::json!({}));
+            if let Some(map) = platforms.as_object_mut() {
+                map.insert((*platform).to_string(), old_platform);
+            }
+        }
+    }
+}
+
 pub const WFSTAT_VAULT_TRADER_URL: &str = "https://api.warframestat.us/pc/vaultTrader/";
 
 /// The price-shock calendar the hold/sell advisor reasons over, as one
@@ -1655,6 +1686,25 @@ mod tests {
         assert!(stats.is_empty());
         assert_eq!(unmatched, 0);
         assert!(children.is_empty());
+    }
+
+    #[test]
+    fn failed_console_carries_only_onto_fresh_pc_weapons() {
+        let prior = HashMap::from([
+            ("kept".into(), serde_json::json!({"name":"Kept","unrolled":{"median":10},"platforms":{"swi":{"unrolled":{"median":20}}}})),
+            ("gone".into(), serde_json::json!({"name":"Gone","platforms":{"swi":{"unrolled":{"median":30}}}})),
+        ]);
+        let mut fresh = HashMap::from([
+            ("kept".into(), serde_json::json!({"name":"Kept","unrolled":{"median":11}})),
+        ]);
+        carry_failed_riven_platforms(&mut fresh, Some(&prior), &["pc".into()]);
+        assert_eq!(fresh["kept"]["platforms"]["swi"]["unrolled"]["median"], 20);
+        assert!(!fresh.contains_key("gone"), "console-only stale weapons stay gone");
+
+        let mut cleared = fresh.clone();
+        cleared.get_mut("kept").unwrap().as_object_mut().unwrap().remove("platforms");
+        carry_failed_riven_platforms(&mut cleared, Some(&prior), &["pc".into(), "swi".into()]);
+        assert!(cleared["kept"].get("platforms").is_none(), "valid empty Switch data clears prior");
     }
 
     fn set_catalog() -> HashMap<String, String> {

@@ -24,6 +24,7 @@ use std::collections::{BTreeMap, HashMap};
 use serde_json::Value;
 
 use crate::fetch::Http;
+use crate::reconcile::Observation;
 
 // ---------------------------------------------------------------------------
 // Endpoints
@@ -421,6 +422,30 @@ pub fn fetch_world_state(http: &dyn Http) -> Option<Value> {
     }
 }
 
+/// Classify one independently reconciled worldState array from its raw shape
+/// and validated extraction. Only a literal array can clear prior data, and a
+/// nonempty array that yielded no valid rows is invalid rather than empty.
+pub fn world_array_observation(
+    world: Option<&Value>,
+    key: &str,
+    extracted: Vec<Value>,
+) -> Observation<Vec<Value>> {
+    let Some(world) = world else { return Observation::Unavailable };
+    let Some(raw) = world.get(key) else { return Observation::Invalid };
+    let Some(rows) = raw.as_array() else { return Observation::Invalid };
+    if rows.is_empty() {
+        return Observation::AuthoritativeEmpty;
+    }
+    if extracted.is_empty() {
+        return Observation::Invalid;
+    }
+    if extracted.len() < rows.len() {
+        Observation::partial(extracted)
+    } else {
+        Observation::usable(extracted)
+    }
+}
+
 // ---------------------------------------------------------------------------
 // worldState helpers
 // ---------------------------------------------------------------------------
@@ -573,6 +598,20 @@ mod tests {
     fn relay_name_passes_unknown_nodes_through() {
         assert_eq!(relay_name("PlutoHUB"), "Pluto Relay");
         assert_eq!(relay_name("SomeNewHUB"), "SomeNewHUB");
+    }
+
+    #[test]
+    fn world_children_only_clear_on_a_literal_valid_empty_array() {
+        assert!(matches!(world_array_observation(None, "Events", vec![]), Observation::Unavailable));
+        for world in [serde_json::json!({}), serde_json::json!({"Events": null}), serde_json::json!({"Events": {}})] {
+            assert!(matches!(world_array_observation(Some(&world), "Events", vec![]), Observation::Invalid));
+        }
+        let empty = serde_json::json!({"Events": []});
+        assert!(matches!(world_array_observation(Some(&empty), "Events", vec![]), Observation::AuthoritativeEmpty));
+        let all_bad = serde_json::json!({"Events": [{"bad": true}]});
+        assert!(matches!(world_array_observation(Some(&all_bad), "Events", vec![]), Observation::Invalid));
+        let mixed = serde_json::json!({"Events": [{"ok": true}, {"bad": true}]});
+        assert!(matches!(world_array_observation(Some(&mixed), "Events", vec![serde_json::json!({"ok": true})]), Observation::Usable { complete: false, .. }));
     }
 
     #[test]
