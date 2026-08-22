@@ -4,7 +4,7 @@ import {
   baroPhase,
   byPlatPerDucat,
   currentPrice,
-  ducatGap,
+  ducatBasket,
   priceManifest,
   stockIsCurrent,
   type BaroRow,
@@ -109,7 +109,7 @@ describe('byPlatPerDucat', () => {
   });
 });
 
-describe('ducatGap', () => {
+describe('ducatBasket', () => {
   const rows = [
     { item: 'A', ducats: 350, platPerDucat: 0.41, baseline: 128, verdict: 'flip' },
     { item: 'B', ducats: 500, platPerDucat: 0.34, baseline: 151, verdict: 'flip' },
@@ -118,21 +118,32 @@ describe('ducatGap', () => {
   ] as BaroRow[];
 
   it('counts only what the board actually recommends buying', () => {
-    // D is thin and must not inflate the shortfall.
-    expect(ducatGap(rows, 0).needed).toBe(1225);
+    // D is thin and must not inflate the basket.
+    expect(ducatBasket(rows, 0).needed).toBe(1225);
+    expect(ducatBasket(rows, 0).count).toBe(3);
   });
 
-  it('fills the basket best-value first', () => {
-    const gap = ducatGap(rows, 900);
-    expect(gap.affordable).toBe(2);
-    expect(gap.short).toBe(325);
+  it('reports coverage from scrapping, best value first', () => {
+    const b = ducatBasket(rows, 900);
+    expect(b.coveredByScrapping).toBe(2);
   });
 
-  it('reports no shortfall once the basket is covered', () => {
-    const gap = ducatGap(rows, 2000);
-    expect(gap.short).toBe(0);
-    expect(gap.affordable).toBe(3);
-    expect(gap.resale).toBe(383);
+  it('reports full coverage when the spares would pay for everything', () => {
+    const b = ducatBasket(rows, 2000);
+    expect(b.coveredByScrapping).toBe(3);
+    expect(b.resale).toBe(383);
+  });
+
+  it('exposes no notion of a balance we cannot observe', () => {
+    // Ducats are account state, never visible to an inventory scan. If an
+    // "affordable" or "short" field reappears, something is pretending to
+    // know a balance again — and the scrap planner will double-count.
+    expect(Object.keys(ducatBasket(rows, 500)).sort()).toEqual([
+      'count',
+      'coveredByScrapping',
+      'needed',
+      'resale',
+    ]);
   });
 });
 

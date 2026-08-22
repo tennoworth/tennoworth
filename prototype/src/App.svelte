@@ -1320,7 +1320,7 @@
            have it, and an empty table would read as "he is selling nothing". -->
       {#if voidTrader?.inventory?.length}
         <section class="card">
-          <BaroBoard market={market} baro={voidTrader} ducatsHeld={ducatStats.total} owned={resolved.owned} />
+          <BaroBoard market={market} baro={voidTrader} owned={resolved.owned} />
         </section>
       {/if}
 

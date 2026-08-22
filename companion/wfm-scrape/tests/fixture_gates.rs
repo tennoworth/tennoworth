@@ -257,7 +257,7 @@ fn build_skips_manifests_whose_hash_has_not_moved() {
     let first = run(&args, &dir);
     assert!(first.status.success());
     let first_err = String::from_utf8_lossy(&first.stderr).to_string();
-    assert!(first_err.contains("6 changed"), "cold run pulls everything:\n{first_err}");
+    assert!(first_err.contains("6 fetched"), "cold run pulls everything:\n{first_err}");
 
     // Feed the snapshot we just wrote back in as the prior one.
     std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
@@ -265,8 +265,8 @@ fn build_skips_manifests_whose_hash_has_not_moved() {
     assert!(second.status.success());
     let second_err = String::from_utf8_lossy(&second.stderr).to_string();
     assert!(
-        second_err.contains("0 changed") && second_err.contains("6 skipped"),
-        "warm run must skip every unchanged manifest:\n{second_err}"
+        second_err.contains("5 skipped as unchanged") && second_err.contains("1 fetched"),
+        "a warm run skips the five carryable manifests and still pulls ExportWeapons:\n{second_err}"
     );
 
     // And the surfaces those manifests feed must survive the skip rather than
@@ -278,7 +278,80 @@ fn build_skips_manifests_whose_hash_has_not_moved() {
         "a skipped manifest must not blank the surface it feeds"
     );
 
+    // The bug this test missed the first time: non-empty is not enough. A warm
+    // cycle used to fall back to the legacy intact-only scrape, quietly
+    // replacing four-refinement DE data with a worse surface on EVERY run
+    // after the first. The refinement ladder is the proof it is still DE's.
+    let rewards = snap["relic_rewards"]["lith_v1_relic"].as_array().unwrap();
+    let chassis = rewards
+        .iter()
+        .find(|r| r["reward_slug"] == "volt_prime_chassis_blueprint")
+        .expect("the DE-derived reward survived the skip");
+    assert_eq!(
+        chassis["chances"]["radiant"], 16.67,
+        "a skipped manifest must not downgrade the surface to the legacy source"
+    );
+    assert_eq!(chassis["rarity"], "Common", "DE's rarity, not the drop table's mislabel");
+
+    // Dispositions cannot be carried — they are an override on a surface that
+    // is refetched every cycle — so their manifest must be fetched every time.
+    assert!(
+        second_err.contains("dispositions:"),
+        "ExportWeapons must be refetched even when unchanged:\n{second_err}"
+    );
+
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A manifest we failed to read must NOT have its hash recorded.
+///
+/// Recording it would tell the next cycle we already hold that manifest, and
+/// the failure would never be retried — a transient 500 would freeze a surface
+/// until DE happened to change the file.
+#[test]
+fn a_failed_manifest_does_not_record_its_hash() {
+    use wfm_scrape::de;
+    use wfm_scrape::fetch::{FixtureHttp, Http};
+
+    // The index names ExportRecipes, but no fixture answers for its URL.
+    let index_text = "ExportRecipes_en.json!00_abc\n";
+    let compressed = {
+        // Round-trip through the same decoder the pipeline uses, so this test
+        // cannot pass against a bad stream.
+        let raw = std::process::Command::new("python3")
+            .args([
+                "-c",
+                "import lzma,base64,sys; sys.stdout.write(base64.b64encode(lzma.compress(b'ExportRecipes_en.json!00_abc\\n', format=lzma.FORMAT_ALONE)).decode())",
+            ])
+            .output()
+            .expect("python3 for the fixture");
+        String::from_utf8(raw.stdout).unwrap()
+    };
+    assert!(de::decode_lzma_alone(
+        &{
+            use base64::Engine as _;
+            base64::engine::general_purpose::STANDARD.decode(&compressed).unwrap()
+        }
+    )
+    .unwrap()
+    .contains("ExportRecipes"));
+
+    let mut responses = std::collections::HashMap::new();
+    responses.insert(
+        de::DE_INDEX_URL.to_string(),
+        serde_json::Value::String(format!("base64:{compressed}")),
+    );
+    let http = FixtureHttp { responses };
+    let _ = index_text;
+
+    let snap = de::fetch_export(&http, &std::collections::BTreeMap::new());
+    assert!(snap.index_ok, "the index itself parsed");
+    assert!(
+        !snap.hashes.contains_key("ExportRecipes_en.json"),
+        "a manifest we could not read must stay un-held so the next cycle retries"
+    );
+    assert!(!snap.skipped("ExportRecipes_en.json"), "a failure is not a skip");
+    let _ = http.get_text(de::DE_INDEX_URL);
 }
 
 /// Live check against DE, opt-in.

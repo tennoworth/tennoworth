@@ -83,6 +83,17 @@ pub const WANTED_MANIFESTS: &[&str] = &[
     "ExportResources_en.json",
 ];
 
+/// Manifests fetched every cycle regardless of their hash.
+///
+/// The hash-skip is only safe for a manifest whose derived surface can be
+/// CARRIED — one where an empty result lets `reconcile` keep the prior value.
+/// Dispositions cannot: they are applied as an override on top of the riven
+/// surface, which is refetched from warframe.market every cycle, so skipping
+/// the weapons manifest silently reverts every disposition to WFM's lagging
+/// mirror on the very next run. ExportWeapons is ~600 KB; correctness is worth
+/// more than the saving.
+pub const ALWAYS_FETCH: &[&str] = &["ExportWeapons_en.json"];
+
 // ---------------------------------------------------------------------------
 // Index
 // ---------------------------------------------------------------------------
@@ -264,13 +275,30 @@ pub fn manifest_rows(doc: &Value) -> &[Value] {
 /// reconciles against the prior snapshot rather than failing the build.
 #[derive(Debug, Default)]
 pub struct DeSnapshot {
-    /// basename → content hash, as published this cycle.
+    /// basename → content hash, for manifests we can prove we hold. A manifest
+    /// that failed to fetch or parse is ABSENT here even though the index
+    /// named it — recording its hash would tell the next cycle we already have
+    /// it and the failure would never be retried.
     pub hashes: BTreeMap<String, String>,
     /// Manifests actually fetched this cycle (skipped ones are absent).
     pub manifests: HashMap<String, Value>,
     /// Basenames whose hash moved since the prior cycle.
     pub changed: Vec<String>,
+    /// Whether the index itself came back. False means DE is unreachable and
+    /// the caller must fall back rather than carry — the distinction between
+    /// "nothing changed" and "we could not look" is the whole safety of the
+    /// skip.
+    pub index_ok: bool,
     pub world: Option<Value>,
+}
+
+impl DeSnapshot {
+    /// True when the manifest was deliberately skipped as unchanged — the
+    /// caller should emit an empty surface and let `reconcile` carry the prior
+    /// DE-derived one, NOT fall back to another source.
+    pub fn skipped(&self, name: &str) -> bool {
+        self.index_ok && !self.manifests.contains_key(name) && self.hashes.contains_key(name)
+    }
 }
 
 /// Fetch the index and whichever wanted manifests moved since `prior_hashes`.
@@ -303,21 +331,39 @@ pub fn fetch_export(
         eprintln!("  warning: {DE_INDEX_URL}: index parsed to zero entries");
         return snap;
     }
-    snap.hashes = index.iter().map(|(k, v)| (k.clone(), v.hash.clone())).collect();
+    snap.index_ok = true;
+    // Hashes for manifests we are not fetching at all pass through untouched —
+    // they are provenance only. The wanted ones are recorded below, and only
+    // once we actually hold them.
+    snap.hashes = index
+        .iter()
+        .filter(|(k, _)| !WANTED_MANIFESTS.contains(&k.as_str()))
+        .map(|(k, v)| (k.clone(), v.hash.clone()))
+        .collect();
 
     for name in WANTED_MANIFESTS {
         let Some(entry) = index.get(*name) else {
             eprintln!("  warning: {name} is not in DE's index this cycle");
             continue;
         };
-        if prior_hashes.get(*name) == Some(&entry.hash) {
-            continue; // unchanged — the skip that makes this cheap
+        let unchanged = prior_hashes.get(*name) == Some(&entry.hash);
+        if unchanged && !ALWAYS_FETCH.contains(name) {
+            // The skip that makes this cheap. Recording the hash marks it held,
+            // which is what `skipped()` keys off.
+            snap.hashes.insert((*name).to_string(), entry.hash.clone());
+            continue;
         }
-        snap.changed.push((*name).to_string());
+        if !unchanged {
+            snap.changed.push((*name).to_string());
+        }
         match http.get_text(&entry.url()) {
             Ok(body) => match parse_manifest(&body) {
                 Ok(doc) => {
                     snap.manifests.insert((*name).to_string(), doc);
+                    // Recorded ONLY on success. A hash written for a manifest
+                    // we failed to read would tell the next cycle we already
+                    // have it, and the failure would never be retried.
+                    snap.hashes.insert((*name).to_string(), entry.hash.clone());
                 }
                 Err(e) => eprintln!("  warning: {name}: {e}"),
             },

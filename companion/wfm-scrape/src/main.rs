@@ -359,12 +359,20 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     if de_snap.hashes.is_empty() {
         eprintln!("  unavailable — DE surfaces fall back to the prior snapshot");
     } else {
+        // Fetched vs skipped, counted from what we actually hold — the old
+        // line derived "skipped" from the changed count, which reported the
+        // always-fetch manifests as skipped when they had just been pulled.
+        let skipped = de::WANTED_MANIFESTS.iter().filter(|n| de_snap.skipped(n)).count();
         eprintln!(
-            "  {} manifests indexed · {} changed ({}) · {} skipped",
+            "  {} manifests indexed · {} fetched ({}) · {} skipped as unchanged",
             de_snap.hashes.len(),
-            de_snap.changed.len(),
-            if de_snap.changed.is_empty() { "none".to_string() } else { de_snap.changed.join(", ") },
-            de::WANTED_MANIFESTS.len().saturating_sub(de_snap.changed.len()),
+            de_snap.manifests.len(),
+            if de_snap.changed.is_empty() {
+                "unchanged but always-fetch".to_string()
+            } else {
+                de_snap.changed.join(", ")
+            },
+            skipped,
         );
     }
 
@@ -399,6 +407,8 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
 
     // Build costs, keyed by the item produced. Only available when the recipes
     // manifest came through this cycle; reconcile preserves it otherwise.
+    // An empty map here is correct on a skipped cycle: reconcile carries the
+    // prior recipes forward, and there is no legacy source to be tempted by.
     let (recipes_surface, recipe_collisions) = de_recipes
         .map(|r| de_extract::recipes_from_export(r, &path_to_info))
         .unwrap_or_default();
@@ -453,13 +463,22 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
 
     // Relic rewards. DE's table beats the drop-table scrape on two counts: all
     // four refinements instead of intact only, and correct rarity labels (the
-    // old source calls 25.33% drops "Uncommon"). Falls back when the manifest
-    // was skipped or unavailable, and reconcile preserves the prior surface if
-    // both are empty.
+    // old source calls 25.33% drops "Uncommon").
+    //
+    // The three cases below are NOT interchangeable, and conflating two of
+    // them was a real bug: when the manifest is skipped as unchanged, falling
+    // back to the legacy scrape overwrites a good four-refinement surface with
+    // an intact-only one on every warm cycle. A skip must emit EMPTY so
+    // reconcile carries the DE-derived surface forward; only an unreachable DE
+    // justifies the fallback.
     let relic_rewards = match (
         de_snap.manifests.get("ExportRelicArcane_en.json"),
         de_recipes,
     ) {
+        _ if de_snap.skipped("ExportRelicArcane_en.json") => {
+            eprintln!("Relic tables unchanged — carrying the prior DE surface");
+            HashMap::new()
+        }
         (Some(relics), Some(recipes)) => {
             eprintln!("Building relic tables from DE Public Export...");
             let build = de_extract::relic_rewards_from_de(relics, recipes, &path_to_info);
@@ -684,6 +703,21 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // it is compared against the fresh index so unchanged manifests are never
     // refetched. Carried forward verbatim when DE was unreachable, so an
     // outage does not force a full re-download on recovery.
+    //
+    // The worldState-derived rows are CARRIED on an outage rather than
+    // emptied. This block is assigned after `assemble_snapshot`, so it never
+    // passes through reconcile and nothing else would preserve it — a single
+    // failed poll would silently drop an announced vault rotation, which is
+    // exactly the event the feature exists to warn about. `world_ok: false`
+    // tells the UI the rows are stale.
+    let prior_de = prior.get("de");
+    let carried = |key: &str| -> Vec<serde_json::Value> {
+        prior_de
+            .and_then(|d| d.get(key))
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default()
+    };
     let de_surface = render::DeSurface {
         hashes: if de_snap.hashes.is_empty() {
             prior_de_hashes.clone()
@@ -692,14 +726,14 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         },
         changed: de_snap.changed.clone(),
         world_ok: de_world.is_some(),
-        vault_rotation: de_world
-            .as_ref()
-            .map(|w| de_extract::vault_rotation_from_world(w, |ms| clock::iso_z(clock::from_millis(ms))))
-            .unwrap_or_default(),
-        deals: de_world
-            .as_ref()
-            .map(|w| de_extract::deals_from_world(w, &path_to_info_for_de, &de_alias, |ms| clock::iso_z(clock::from_millis(ms))))
-            .unwrap_or_default(),
+        vault_rotation: match de_world.as_ref() {
+            Some(w) => de_extract::vault_rotation_from_world(w, |ms| clock::iso_z(clock::from_millis(ms))),
+            None => carried("vault_rotation"),
+        },
+        deals: match de_world.as_ref() {
+            Some(w) => de_extract::deals_from_world(w, &path_to_info_for_de, &de_alias, |ms| clock::iso_z(clock::from_millis(ms))),
+            None => carried("deals"),
+        },
     };
 
     let mut snapshot = assemble_snapshot(

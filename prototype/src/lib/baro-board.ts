@@ -122,44 +122,55 @@ export function byPlatPerDucat(rows: BaroRow[]): BaroRow[] {
     return a.item.localeCompare(b.item);
   });
 }
-
-export interface DucatGap {
-  /** Ducats needed for everything worth buying. */
+export interface DucatBasket {
+  /** Ducats the worthwhile items cost, all together. */
   needed: number;
-  /** How many rows the held ducats already cover, best-value first. */
-  affordable: number;
-  /** Shortfall against the whole worthwhile basket, 0 when it is covered. */
-  short: number;
-  /** What the worthwhile basket resells for at its 90-day baseline. */
+  /** How many items that is. */
+  count: number;
+  /** How many of them scrapping every spare part would cover, best value
+   *  first. */
+  coveredByScrapping: number;
+  /** What the basket resells for at 90-day baselines. */
   resale: number;
 }
 
 /**
- * What the current ducat balance actually buys this rotation.
+ * What his stock costs, and how far your spare parts would go toward it.
  *
- * "Worthwhile" is flip-or-hold: skip and thin rows are excluded from the
- * basket because recommending them would inflate the shortfall with things the
- * board just told the user not to buy.
+ * **There is no ducat balance here, because we cannot see one.** Ducats are
+ * account state, not an item, so an inventory scan never observes them — the
+ * only ducat figure a scan can derive is what your spare prime parts would
+ * yield IF you scrapped them. An earlier version passed that potential in as
+ * `ducatsHeld` and treated it as money already banked, then went on to propose
+ * scrapping those very same parts to cover the remainder: the same ducats
+ * counted twice, and a plan wrong in the user's favour.
+ *
+ * So this takes the potential explicitly and reports COVERAGE, never
+ * affordability.
+ *
+ * "Worthwhile" is flip-or-hold: skip and thin rows are excluded, because
+ * sizing the basket with items the board just told the user not to buy would
+ * inflate it.
  */
-export function ducatGap(rows: BaroRow[], ducatsHeld: number): DucatGap {
+export function ducatBasket(rows: BaroRow[], scrapPotential: number): DucatBasket {
   const basket = byPlatPerDucat(rows).filter(
     (r) => (r.verdict === 'flip' || r.verdict === 'hold') && (r.ducats ?? 0) > 0,
   );
   const needed = basket.reduce((sum, r) => sum + (r.ducats ?? 0), 0);
 
   let spent = 0;
-  let affordable = 0;
+  let coveredByScrapping = 0;
   for (const r of basket) {
     const cost = r.ducats ?? 0;
-    if (spent + cost > ducatsHeld) break;
+    if (spent + cost > scrapPotential) break;
     spent += cost;
-    affordable += 1;
+    coveredByScrapping += 1;
   }
   const resale = basket.reduce((sum, r) => sum + (r.baseline ?? r.price ?? 0), 0);
   return {
     needed,
-    affordable,
-    short: Math.max(0, needed - ducatsHeld),
+    count: basket.length,
+    coveredByScrapping,
     resale: Math.round(resale),
   };
 }

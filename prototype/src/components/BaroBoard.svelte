@@ -8,7 +8,7 @@
   //
   // Sorted by plat-per-ducat, because "what are my ducats worth this rotation"
   // is the question, and his shelf order answers a different one.
-  import { byPlatPerDucat, ducatGap, priceManifest, stockIsCurrent } from '../lib/baro-board';
+  import { byPlatPerDucat, ducatBasket, priceManifest, stockIsCurrent } from '../lib/baro-board';
   import type { BaroVerdict } from '../lib/baro-board';
   import { planDucats, scrapCandidates } from '../lib/ducat-plan';
   import { glyphFor } from '../lib/glyphs';
@@ -18,16 +18,17 @@
   let {
     market,
     baro,
-    ducatsHeld = 0,
     owned = null,
   }: {
     market: Market | null;
     baro: NonNullable<Market['baro']> | null;
-    /** Ducats the user actually holds. 0 on the web app, where there is no
-     *  inventory — the gap strip hides itself rather than reading as "you have
-     *  nothing". */
-    ducatsHeld?: number;
-    /** Scanned inventory, for the shortfall plan. Absent on the web app. */
+    /** Scanned inventory. Absent on the web app, where the board still prices
+     *  his stock but can say nothing about what the reader can afford.
+     *
+     *  There is deliberately no `ducatsHeld`: ducats are account state and an
+     *  inventory scan cannot see them. The only honest figure is what the
+     *  user's spare parts would YIELD, derived below — and it must never be
+     *  presented as a balance, or the scrap plan double-counts it. */
     owned?: Map<string, OwnedRecord> | null;
   } = $props();
 
@@ -35,11 +36,15 @@
 
   let current = $derived(stockIsCurrent(baro?.inventory_for, baro?.activation));
   let rows = $derived(byPlatPerDucat(priceManifest(baro?.inventory ?? [], market)));
-  let gap = $derived(ducatGap(rows, ducatsHeld));
-  // What to scrap to close the gap. Only computed when there IS a gap and an
-  // inventory to close it from.
+  // Everything the user could feed the kiosk, and what that would yield. This
+  // is a POTENTIAL, not a balance.
+  let candidates = $derived(owned ? scrapCandidates(owned, market) : []);
+  let scrapPotential = $derived(candidates.reduce((sum, c) => sum + c.totalDucats, 0));
+  let basket = $derived(ducatBasket(rows, scrapPotential));
+  // What to scrap to pay for the basket. Sized against the basket itself, not
+  // against a shortfall computed from a balance we do not have.
   let scrapPlan = $derived(
-    gap.short > 0 && owned ? planDucats(scrapCandidates(owned, market), gap.short) : null,
+    owned && basket.needed > 0 ? planDucats(candidates, basket.needed) : null,
   );
 
   // Skip and unpriced rows are collapsed by default. They are not hidden —
@@ -86,18 +91,24 @@
     </p>
   </header>
 
-  {#if ducatsHeld > 0 && gap.needed > 0}
+  {#if basket.needed > 0}
     <p class="gap">
-      You hold <strong>{ducatsHeld.toLocaleString()}</strong> ducats — enough for
-      <strong>{gap.affordable}</strong> of the {rows.filter((r) => r.verdict === 'flip' || r.verdict === 'hold').length}
-      worth buying.
-      {#if gap.short > 0}
-        <span class="short">{gap.short.toLocaleString()} short</span> of the full basket,
-      {:else}
-        The full basket is covered,
+      The <strong>{basket.count}</strong>
+      {basket.count === 1 ? 'item' : 'items'} worth buying cost
+      <strong>{basket.needed.toLocaleString()}</strong> ducats and resell for about
+      <strong>{basket.resale.toLocaleString()}p</strong> at 90-day medians.
+      {#if owned}
+        Scrapping every spare prime part you hold would yield
+        <strong>{scrapPotential.toLocaleString()}</strong> ducats — enough for
+        <strong>{basket.coveredByScrapping}</strong> of them.
       {/if}
-      which resells for about <strong>{gap.resale.toLocaleString()}p</strong> at 90-day medians.
     </p>
+    {#if owned}
+      <p class="sub">
+        We can't see your ducat balance — it's account state, not an item — so this is what
+        your spares are worth, not what you can afford today.
+      </p>
+    {/if}
   {/if}
 
   <div class="scroll">
@@ -138,7 +149,7 @@
 
   {#if scrapPlan && scrapPlan.picks.length}
     <details class="scrap">
-      <summary>close the {gap.short.toLocaleString()}-ducat gap</summary>
+      <summary>what to scrap for {basket.needed.toLocaleString()} ducats</summary>
       <p class="sub">
         Ranked by ducats gained per plat given up — scrapping a 65-ducat part
         worth 18p to save a 45-ducat part worth 3p is the trade to avoid.
