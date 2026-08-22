@@ -16,6 +16,8 @@
 
 pub mod clock;
 pub mod coerce;
+pub mod de;
+pub mod de_extract;
 pub mod csvin;
 pub mod fetch;
 pub mod history;

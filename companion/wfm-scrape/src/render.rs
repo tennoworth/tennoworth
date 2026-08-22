@@ -128,8 +128,53 @@ pub struct Snapshot {
     /// per weapon × reroll-state — see `fetch::fetch_riven_stats`.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub riven_stats: HashMap<String, serde_json::Value>,
+    /// `{slug: {build_price, build_time, rush_price, ingredients[]}}` keyed by
+    /// the item the recipe PRODUCES — see `de_extract::recipes_from_export`.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub recipes: HashMap<String, serde_json::Value>,
+    /// `{slug: {name, category, year, share, peak_mr, by_mr[]}}` — DE's annual
+    /// usage telemetry, keyed by the PARENT's slug. See
+    /// `de_extract::usage_from_export`.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub usage: HashMap<String, serde_json::Value>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub surface_fetched_at: HashMap<String, String>,
+    /// Digital Extremes provenance + the worldState-only surfaces.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub de: Option<DeSurface>,
+}
+
+/// What one cycle took from DE, and what only DE can give.
+///
+/// `hashes` is provenance AND mechanism: next cycle compares it against a
+/// freshly fetched 490-byte index and refetches only what moved. It is carried
+/// forward verbatim when DE is unreachable, so an outage costs one skipped
+/// cycle rather than a full re-download on recovery.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct DeSurface {
+    /// Export manifest basename → content hash, as published this cycle.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub hashes: std::collections::BTreeMap<String, String>,
+    /// Manifests whose hash moved this cycle — a patch-day signal in itself.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub changed: Vec<String>,
+    /// Whether worldState answered. False means Baro/vault/deals are stale.
+    pub world_ok: bool,
+    /// Announced Prime Vault rotations — the real thing, not the estimate.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub vault_rotation: Vec<serde_json::Value>,
+    /// Darvo's daily deal.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub deals: Vec<serde_json::Value>,
+    /// `{slug: ducats}` for exactly the slugs DE's recipe tree set.
+    ///
+    /// This is PROVENANCE, and it is load-bearing. Ducats are an override on a
+    /// catalogue rebuilt from warframe.market every cycle, so when the recipes
+    /// manifest fails the override has to be re-applied from the prior
+    /// snapshot — and without knowing which values were DE's, that carry would
+    /// also stamp stale WFM values over fresh, legitimately-corrected ones.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub ducats: std::collections::BTreeMap<String, i64>,
 }
 
 /// Assemble a [`Snapshot`] from rendered items + catalog + all surfaces.
@@ -149,6 +194,8 @@ pub fn assemble_snapshot(
     rivens: HashMap<String, serde_json::Value>,
     calendar: HashMap<String, serde_json::Value>,
     riven_stats: HashMap<String, serde_json::Value>,
+    recipes: HashMap<String, serde_json::Value>,
+    usage: HashMap<String, serde_json::Value>,
     surface_fetched_at: HashMap<String, String>,
 ) -> Snapshot {
     Snapshot {
@@ -157,6 +204,9 @@ pub fn assemble_snapshot(
         item_count: items.len(),
         catalog_count: catalog.len(),
         source: "bootstrap from wfm_results.csv + /v2/items".to_string(),
+        // Set by the caller after assembly — DE's surfaces are built from
+        // manifests that may legitimately be absent this cycle.
+        de: None,
         catalog,
         items,
         path_to_info,
@@ -167,6 +217,8 @@ pub fn assemble_snapshot(
         rivens,
         calendar,
         riven_stats,
+        recipes,
+        usage,
         surface_fetched_at,
     }
 }

@@ -84,6 +84,25 @@ export function spareQty(count: number, keptLvl: number | null, leveled = 0): nu
 //    the closed trades are the evidence; cap at 1.5× median. Liquid items
 //    keep their ask — there the book is real information.
 // No ask at all → median, then avg, floor 1.
+/**
+ * Whether an entry carries any real price signal at all.
+ *
+ * `clearingPrice` deliberately floors at 1p so a sell score never divides by
+ * nothing — but that floor is a lie to any caller asking "what is this worth",
+ * because an item nobody has ever listed comes back as 1p rather than as
+ * unknown. Callers that must not invent a price (relic EV, build-vs-buy) test
+ * this first and treat a false as "cannot price", not as "cheap".
+ */
+export function hasRealPrice(m: PricedEntry | undefined | null): boolean {
+  if (!m) return false;
+  return (
+    (Number(m.low_sell) || 0) > 0 ||
+    (Number(m.median_now) || 0) > 0 ||
+    (Number(m.median_90d) || 0) > 0 ||
+    (Number(m.avg) || 0) > 0
+  );
+}
+
 export function clearingPrice(m: PricedEntry): number {
   const lowSell = Number(m?.low_sell) || 0;
   const median = Number(m?.median_now) || Number(m?.median_90d) || 0;
