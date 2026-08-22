@@ -731,9 +731,12 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
             }
         }
     }
+    let prior_coverage_ok = prior_de_dispositions.is_empty()
+        || joined_dispositions.len() * 100 >= prior_de_dispositions.len() * 80;
     let joined_usable = !de_dispos.is_empty()
         && !joined_dispositions.is_empty()
-        && joined_dispositions.len() * 100 >= de_dispos.len() * 80;
+        && joined_dispositions.len() * 100 >= de_dispos.len() * 80
+        && prior_coverage_ok;
     let disposition_state = match de_snap.outcome("ExportWeapons_en.json") {
         de::ManifestOutcome::Usable if joined_usable => wfm_scrape::reconcile::Disposition::PublishedFresh,
         de::ManifestOutcome::Usable | de::ManifestOutcome::Invalid => wfm_scrape::reconcile::Disposition::PreservedInvalid,
@@ -741,7 +744,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         de::ManifestOutcome::Unavailable => wfm_scrape::reconcile::Disposition::PreservedUnavailable,
     };
     if !joined_usable && !de_dispos.is_empty() {
-        eprintln!("  warning: only {}/{} DE dispositions joined to WFM slugs — preserving prior exact provenance", joined_dispositions.len(), de_dispos.len());
+        eprintln!("  warning: {}/{} DE dispositions joined (prior exact set {}) — preserving prior exact provenance", joined_dispositions.len(), de_dispos.len(), prior_de_dispositions.len());
     }
     let mut de_dispositions = if joined_usable { joined_dispositions } else { std::collections::BTreeMap::new() };
     if !joined_usable {

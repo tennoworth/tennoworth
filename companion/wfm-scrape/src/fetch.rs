@@ -994,6 +994,10 @@ pub fn fetch_riven_stats(
         outcomes.insert("pc".into(), RivenChildOutcome::Invalid);
         return (HashMap::new(), 0, outcomes);
     }
+    if rows.len() < raw_count {
+        outcomes.insert("pc".into(), RivenChildOutcome::Invalid);
+        return (HashMap::new(), 0, outcomes);
+    }
     let mut stats: HashMap<String, serde_json::Value> = HashMap::new();
     let mut unmatched = 0usize;
     for row in rows {
@@ -1036,6 +1040,10 @@ pub fn fetch_riven_stats(
             continue;
         }
         if rows.is_empty() {
+            outcomes.insert((*platform).to_string(), RivenChildOutcome::Invalid);
+            continue;
+        }
+        if rows.len() < raw_count {
             outcomes.insert((*platform).to_string(), RivenChildOutcome::Invalid);
             continue;
         }

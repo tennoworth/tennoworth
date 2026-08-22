@@ -333,6 +333,7 @@ fn riven_children_keep_failed_console_data_and_its_own_stamp() {
     let mut responses: serde_json::Map<String, serde_json::Value> =
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
     let row = |median: i64| format!("[{{ itemType: 'Rifle Riven Mod', compatibility: 'Volt Prime', rerolled: false, avg: {median}, stddev: 1, min: 1, max: 30, pop: 4, median: {median} }}]");
+    let mixed = |median: i64| row(median).replacen(']', ", { bad: true }]", 1);
     responses.insert(de::DE_WEEKLY_RIVENS_URL.into(), serde_json::Value::String(row(10)));
     responses.insert(de::DE_WEEKLY_RIVEN_PLATFORMS[2].1.into(), serde_json::Value::String(row(20)));
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
@@ -340,7 +341,7 @@ fn riven_children_keep_failed_console_data_and_its_own_stamp() {
     std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
 
     responses.insert(de::DE_WEEKLY_RIVENS_URL.into(), serde_json::Value::String(row(11)));
-    responses.insert(de::DE_WEEKLY_RIVEN_PLATFORMS[2].1.into(), serde_json::Value::String("[{ bad: true }]".into()));
+    responses.insert(de::DE_WEEKLY_RIVEN_PLATFORMS[2].1.into(), serde_json::Value::String(mixed(99)));
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
     assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-02T12:00:00Z"], &dir).status.success());
     let snap: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
@@ -350,7 +351,7 @@ fn riven_children_keep_failed_console_data_and_its_own_stamp() {
     assert_eq!(snap["de"]["child_fetched_at"]["riven_stats.swi"], "2026-07-01T12:00:00Z");
 
     std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
-    responses.insert(de::DE_WEEKLY_RIVENS_URL.into(), serde_json::Value::String("[{ bad: true }]".into()));
+    responses.insert(de::DE_WEEKLY_RIVENS_URL.into(), serde_json::Value::String(mixed(99)));
     responses.insert(de::DE_WEEKLY_RIVEN_PLATFORMS[2].1.into(), serde_json::Value::String(row(99)));
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
     assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-03T12:00:00Z"], &dir).status.success());
@@ -934,6 +935,18 @@ fn all_unmatched_dispositions_preserve_prior_joined_slug_provenance() {
     assert_eq!(snap["rivens"]["weapons"]["beta"]["disposition"], 1.2);
     assert_eq!(snap["de"]["dispositions"].as_object().unwrap().len(), 3);
     assert_eq!(snap["surface_provenance"]["de.dispositions"]["disposition"], "preserved_invalid");
+
+    std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
+    responses[&weapons_key]["ExportWeapons"] = serde_json::json!([
+        {"name":"Volt Prime","omegaAttenuation":1.9,"uniqueName":"/Lotus/Volt"}
+    ]);
+    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
+    assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-03T12:00:00Z"], &dir).status.success());
+    let truncated: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(truncated["rivens"]["weapons"]["volt_prime"]["disposition"], 1.15, "fully joinable truncation preserves prior");
+    assert_eq!(truncated["rivens"]["weapons"]["alpha"]["disposition"], 1.1);
+    assert_eq!(truncated["de"]["dispositions"].as_object().unwrap().len(), 3);
+    assert_eq!(truncated["surface_provenance"]["de.dispositions"]["disposition"], "preserved_invalid");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
