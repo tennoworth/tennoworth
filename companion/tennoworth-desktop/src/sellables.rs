@@ -23,7 +23,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::sync::OnceLock;
 
 use market_math::sell_priority::{self, PricedEntry};
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 
 use crate::db::Db;
 use crate::market::MarketCache;
@@ -101,20 +101,28 @@ struct SetEntry {
     parts: Vec<SetPart>,
 }
 
+fn null_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de> + Default,
+{
+    Ok(Option::<T>::deserialize(deserializer)?.unwrap_or_default())
+}
+
 /// The three maps the join needs from a market snapshot, ignoring the rest.
 #[derive(Deserialize)]
 pub struct MarketData {
     #[serde(default)]
     items: HashMap<String, MarketEntry>,
     /// name (lowercased) → WFM slug.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_default")]
     catalog: HashMap<String, String>,
     /// DE path → {name, slug} — prime parts pre-baked by the scraper.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_default")]
     path_to_info: HashMap<String, PathInfo>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_default")]
     usage: HashMap<String, serde_json::Value>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_default")]
     set_to_parts: HashMap<String, SetEntry>,
     #[serde(skip)]
     usage_parent_by_part: HashMap<String, Option<String>>,
@@ -546,6 +554,34 @@ mod tests {
                 assert_eq!(Some(share), test_case.expected_share, "{} share", test_case.slug);
             }
         }
+    }
+
+    #[test]
+    fn load_keeps_current_items_when_auxiliary_surfaces_are_null() {
+        let dir = std::env::temp_dir().join(format!(
+            "tennoworth-sellables-null-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("market.json"),
+            r#"{"items":{"current_only":{"vol":10,"low_sell":12}},"catalog":null,"path_to_info":null,"usage":null,"set_to_parts":null}"#,
+        )
+        .unwrap();
+
+        let market = MarketData::load(&MarketCache::new(dir.clone()));
+        assert!(market.items.contains_key("current_only"));
+        assert!(market.catalog.is_empty());
+        assert!(market.path_to_info.is_empty());
+        assert!(market.usage.is_empty());
+        assert!(market.set_to_parts.is_empty());
+        assert!(market.usage_parent_by_part.is_empty());
+
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     // ---- name-guess parity (Rust consumer side) ----------------------------

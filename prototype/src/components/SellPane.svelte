@@ -445,7 +445,7 @@
       price is the lowest live ask, clamped up to the 90-day median when the
       ask is a lone troll undercut (so one 1p listing can't crater a row).
       Higher means list sooner. Actual platinum totals remain unweighted. Items below <strong>3 trades / 48 h</strong>
-      get a “patience” tag instead of a near-zero score.
+      keep their computed score and receive a “patience” tag, but are excluded from Top Picks.
       Click <code>?</code> on any column header for the same kind of
       explainer.
     </div>
