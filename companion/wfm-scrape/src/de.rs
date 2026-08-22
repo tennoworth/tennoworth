@@ -107,6 +107,12 @@ pub const WANTED_MANIFESTS: &[&str] = &[
 /// Together these are ~1.9 MB a cycle against a scrape that already runs for
 /// half an hour. Correctness is worth more than the saving; the 3.2 MB relic
 /// manifest, which is a standalone carryable surface, still skips.
+///
+/// **This list guarantees an ATTEMPT, not a result.** The index can answer
+/// while a manifest 500s, so every consumer must still handle the manifest
+/// being absent — for an override that means re-applying the last known-good
+/// value from the prior snapshot, never silently reverting to the other
+/// source.
 pub const ALWAYS_FETCH: &[&str] = &["ExportWeapons_en.json", "ExportRecipes_en.json"];
 
 // ---------------------------------------------------------------------------

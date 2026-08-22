@@ -383,11 +383,36 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // blueprint you trade), so it resolves through path_to_info the same way
     // relic rewards do. Only applied when the manifest actually came through
     // this cycle — a skipped manifest must not blank a good value.
-    // Always present when DE is reachable — see `de::ALWAYS_FETCH`. Ducats are
-    // an override on `meta_by_slug`, which is rebuilt from warframe.market
-    // every cycle, so there is nothing for reconcile to carry: a skipped
-    // recipes manifest means the catalogue simply keeps WFM's ducat value.
+    // ALWAYS_FETCH guarantees we ATTEMPT this manifest every cycle. It does not
+    // guarantee we get it: the index can answer while the manifest itself 500s.
+    // Ducats are an override on `meta_by_slug`, which is rebuilt from
+    // warframe.market every cycle, so reconcile has nothing to carry and a
+    // failed fetch would silently drop the whole catalogue back to WFM's
+    // values. The failure path therefore re-applies the last known-good
+    // override from the prior snapshot.
     let de_recipes = de_snap.manifests.get("ExportRecipes_en.json");
+    if de_recipes.is_none() {
+        let prior_items = prior.get("items").and_then(|i| i.as_object());
+        let mut carried = 0usize;
+        if let Some(prior_items) = prior_items {
+            for (slug, meta) in meta_by_slug.iter_mut() {
+                let Some(prior_ducats) = prior_items
+                    .get(slug)
+                    .and_then(|it| it.get("ducats"))
+                    .and_then(|d| d.as_i64())
+                else {
+                    continue;
+                };
+                if meta.ducats != Some(prior_ducats) {
+                    meta.ducats = Some(prior_ducats);
+                    carried += 1;
+                }
+            }
+        }
+        eprintln!(
+            "  ducats: recipes manifest unavailable — carried {carried} values from the prior snapshot"
+        );
+    }
     if let Some(recipes) = de_recipes {
         let by_unique = de_extract::ducats_from_recipes(recipes);
         let alias = de_extract::recipe_alias(recipes);
@@ -476,17 +501,16 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // reconcile carries the DE-derived surface forward; only an unreachable DE
     // justifies the fallback.
     //
-    // `de_recipes` is always present when DE is reachable (ExportRecipes is in
-    // ALWAYS_FETCH precisely because this surface depends on it), so the
-    // (Some, None) case below means DE is down, not that a cache went stale.
+    // The fallback fires ONLY when DE is unreachable outright. Any other
+    // shortfall — a skipped manifest, or one that failed to fetch or parse —
+    // emits EMPTY so reconcile carries the DE-derived surface forward.
+    // Reaching for the legacy source in those cases produces a NON-EMPTY
+    // intact-only table, and a non-empty surface is exactly what stops
+    // reconcile preserving the good one.
     let relic_rewards = match (
         de_snap.manifests.get("ExportRelicArcane_en.json"),
         de_recipes,
     ) {
-        _ if de_snap.skipped("ExportRelicArcane_en.json") => {
-            eprintln!("Relic tables unchanged — carrying the prior DE surface");
-            HashMap::new()
-        }
         (Some(relics), Some(recipes)) => {
             eprintln!("Building relic tables from DE Public Export...");
             let build = de_extract::relic_rewards_from_de(relics, recipes, &path_to_info);
@@ -503,15 +527,23 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
             );
             build.rewards
         }
+        _ if de_snap.index_ok => {
+            // Skipped as unchanged, or one of the two manifests failed. Either
+            // way the prior DE surface is the best answer available, and only
+            // an empty result lets reconcile keep it.
+            eprintln!("Relic tables not rebuilt this cycle — carrying the prior DE surface");
+            HashMap::new()
+        }
         _ => {
-            // DE's manifests were skipped or unavailable this cycle. The old
-            // drop-table scrape stays as the fallback rather than being
-            // deleted outright: it is the only other source of a relic table,
-            // and losing relics entirely on a DE outage would be a worse
-            // regression than serving intact-only odds for one cycle. It is
-            // no longer on the happy path, so its rarity mislabelling and
-            // intact-only coverage stop being what users normally see.
-            eprintln!("Fetching relic drop tables (fallback — DE unavailable)...");
+            // DE is unreachable outright. The old drop-table scrape stays as
+            // the fallback rather than being deleted: it is the only other
+            // source of a relic table, and losing relics entirely would be a
+            // worse regression than intact-only odds. It is off the happy
+            // path, so its rarity mislabelling and intact-only coverage stop
+            // being what users normally see. Note this OVERWRITES a carried DE
+            // surface — acceptable only because DE being gone means we have no
+            // way to refresh the good one either.
+            eprintln!("Fetching relic drop tables (fallback — DE unreachable)...");
             let r = fetch::fetch_relic_rewards(http.as_ref(), &catalog);
             eprintln!("  {} relics with reward data (intact only)", r.len());
             r

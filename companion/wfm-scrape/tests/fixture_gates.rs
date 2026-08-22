@@ -318,6 +318,72 @@ fn build_skips_manifests_whose_hash_has_not_moved() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// A failed ExportRecipes fetch must not undo either DE override.
+///
+/// `ALWAYS_FETCH` guarantees the manifest is ATTEMPTED, not that it arrives —
+/// the index can answer while the manifest itself 500s. In that state the
+/// ducat override has no fresh source and the relic table cannot be rebuilt,
+/// and the naive handling of both is a silent downgrade: ducats revert to
+/// warframe.market's values, and the legacy relic scrape returns a NON-EMPTY
+/// intact-only table, which is precisely what stops reconcile from preserving
+/// the good one.
+#[test]
+fn a_failed_recipes_manifest_preserves_both_de_overrides() {
+    let dir = stage_fixtures("convert");
+    let args = ["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"];
+
+    // A good cycle first, so there is a prior snapshot holding DE's values.
+    assert!(run(&args, &dir).status.success());
+    std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
+
+    let good: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(good["items"]["volt_prime_chassis_blueprint"]["ducats"], 65);
+
+    // Now make ONLY the recipes manifest unavailable, leaving the index intact.
+    let resp_path = dir.join("fixture_responses.json");
+    let mut responses: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_slice(&std::fs::read(&resp_path).unwrap()).unwrap();
+    let recipes_key = responses
+        .keys()
+        .find(|k| k.contains("ExportRecipes_en.json"))
+        .cloned()
+        .expect("the fixture serves a recipes manifest");
+    responses.remove(&recipes_key);
+    std::fs::write(&resp_path, serde_json::to_vec(&responses).unwrap()).unwrap();
+
+    let out = run(&args, &dir);
+    assert!(out.status.success(), "a failed manifest must not fail the build");
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+    assert!(
+        stderr.contains("recipes manifest unavailable"),
+        "the failure should be reported, not swallowed:\n{stderr}"
+    );
+
+    let snap: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+
+    // WFM says 45 for this item; DE said 65. A failed fetch must keep 65.
+    assert_eq!(
+        snap["items"]["volt_prime_chassis_blueprint"]["ducats"], 65,
+        "a failed recipes fetch must not revert ducats to WFM's value"
+    );
+
+    // And the relic table must still be DE's four-refinement one, not the
+    // legacy intact-only scrape.
+    let rewards = snap["relic_rewards"]["lith_v1_relic"].as_array().unwrap();
+    let chassis = rewards
+        .iter()
+        .find(|r| r["reward_slug"] == "volt_prime_chassis_blueprint")
+        .expect("the DE-derived reward survived");
+    assert_eq!(
+        chassis["chances"]["radiant"], 16.67,
+        "a failed recipes fetch must not downgrade relics to the legacy source"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// A manifest we failed to read must NOT have its hash recorded.
 ///
 /// Recording it would tell the next cycle we already hold that manifest, and
