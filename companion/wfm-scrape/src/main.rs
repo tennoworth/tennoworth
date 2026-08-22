@@ -395,7 +395,26 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // snapshot as provenance so a later failure knows which values were ours.
     let mut de_ducats: std::collections::BTreeMap<String, i64> = std::collections::BTreeMap::new();
 
-    if de_recipes.is_none() {
+    // Built first so the same "did it actually produce anything" test that
+    // governs relics governs this too — a manifest can parse and resolve
+    // nothing, and treating arrival as success is precisely the mistake that
+    // took four review rounds to stop making.
+    let fresh_ducats: HashMap<String, i64> = de_recipes
+        .map(|recipes| {
+            let by_unique = de_extract::ducats_from_recipes(recipes);
+            let alias = de_extract::recipe_alias(recipes);
+            by_unique
+                .iter()
+                .filter_map(|(unique, ducats)| {
+                    let info = de_extract::resolve_path(unique, &path_to_info, &alias)?;
+                    let slug = info.get("slug").and_then(|s| s.as_str())?;
+                    Some((slug.to_string(), *ducats))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
+    if fresh_ducats.is_empty() {
         // Carry ONLY the values DE previously set. Copying every prior ducat
         // would stamp stale numbers over fresh, legitimately-corrected WFM
         // ones — trading a known bug for a subtler one.
@@ -414,25 +433,18 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         }
         de_ducats = prior_de_ducats;
         eprintln!(
-            "  ducats: recipes manifest unavailable — carried {carried} DE values from the prior snapshot"
+            "  ducats: no DE values this cycle — carried {carried} from the prior snapshot"
         );
-    }
-    if let Some(recipes) = de_recipes {
-        let by_unique = de_extract::ducats_from_recipes(recipes);
-        let alias = de_extract::recipe_alias(recipes);
+    } else {
         let mut applied = 0usize;
         let mut disagreed = 0usize;
-        for (unique, ducats) in &by_unique {
-            let Some(info) = de_extract::resolve_path(unique, &path_to_info, &alias) else {
-                continue;
-            };
-            let Some(slug) = info.get("slug").and_then(|s| s.as_str()) else { continue };
+        for (slug, ducats) in &fresh_ducats {
             if let Some(meta) = meta_by_slug.get_mut(slug) {
                 if meta.ducats.is_some_and(|d| d != *ducats && d != 0) {
                     disagreed += 1;
                 }
                 meta.ducats = Some(*ducats);
-                de_ducats.insert(slug.to_string(), *ducats);
+                de_ducats.insert(slug.clone(), *ducats);
                 applied += 1;
             }
         }
@@ -512,11 +524,31 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // Reaching for the legacy source in those cases produces a NON-EMPTY
     // intact-only table, and a non-empty surface is exactly what stops
     // reconcile preserving the good one.
+    // Relic rewards, as ONE policy rather than a chain of special cases.
+    //
+    // Four rounds of review found four adjacent holes here, each because a
+    // condition covered the state it was written for and not its neighbours.
+    // The inputs are: did DE's manifests arrive, did they yield rows, and is
+    // there a prior surface to fall back on. Those collapse to three outcomes,
+    // in strict priority:
+    //
+    //   1. Fresh DE rows          → publish them.
+    //   2. Otherwise, prior rows  → publish EMPTY, so reconcile carries them.
+    //   3. Otherwise              → the legacy scrape; something beats nothing.
+    //
+    // The invariant that ties it together: **never publish an empty relic
+    // surface while any source could produce one.** Empty is only ever a
+    // deliberate instruction to reconcile, never an outcome.
+    //
+    // Note that "DE's manifests arrived" is not the same as "DE produced
+    // rows": a manifest can parse cleanly and still resolve nothing usable,
+    // which is the case that slipped through the previous fix.
     let prior_has_relics = prior
         .get("relic_rewards")
         .and_then(|r| r.as_object())
         .is_some_and(|r| !r.is_empty());
-    let relic_rewards = match (
+
+    let fresh_relics = match (
         de_snap.manifests.get("ExportRelicArcane_en.json"),
         de_recipes,
     ) {
@@ -536,30 +568,26 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
             );
             build.rewards
         }
-        // Skipped as unchanged, or a manifest failed — but ONLY when there is
-        // actually a prior surface to carry. Emitting empty with nothing
-        // behind it publishes no relic data at all, which is worse than the
-        // legacy table: reconcile can only preserve something that exists.
-        // A cold build whose manifest fails lands in the fallback below.
-        _ if de_snap.index_ok && prior_has_relics => {
-            eprintln!("Relic tables not rebuilt this cycle — carrying the prior DE surface");
-            HashMap::new()
-        }
-        _ => {
-            // Either DE is unreachable outright, or a manifest failed on a
-            // build with no prior relic data to fall back on. The old
-            // drop-table scrape stays as the fallback rather than being
-            // deleted: it is the only other source of a relic table, and
-            // losing relics entirely would be a worse regression than
-            // intact-only odds. It is off the happy path, so its rarity
-            // mislabelling and intact-only coverage stop being what users
-            // normally see. It only ever overwrites a DE surface when there
-            // is no DE surface to protect.
-            eprintln!("Fetching relic drop tables (fallback — no DE data available)...");
-            let r = fetch::fetch_relic_rewards(http.as_ref(), &catalog);
-            eprintln!("  {} relics with reward data (intact only)", r.len());
-            r
-        }
+        _ => HashMap::new(),
+    };
+
+    let relic_rewards = if !fresh_relics.is_empty() {
+        fresh_relics
+    } else if prior_has_relics {
+        eprintln!("Relic tables not rebuilt this cycle — carrying the prior DE surface");
+        HashMap::new()
+    } else {
+        // No DE rows and nothing to carry. The old drop-table scrape stays as
+        // the fallback rather than being deleted: it is the only other source
+        // of a relic table, and losing relics entirely would be a worse
+        // regression than intact-only odds. It is off the happy path, so its
+        // rarity mislabelling and intact-only coverage stop being what users
+        // normally see — and it can only ever overwrite a DE surface when
+        // there is no DE surface to protect.
+        eprintln!("Fetching relic drop tables (fallback — no DE data available)...");
+        let r = fetch::fetch_relic_rewards(http.as_ref(), &catalog);
+        eprintln!("  {} relics with reward data (intact only)", r.len());
+        r
     };
 
     eprintln!("Fetching prime vault status...");
@@ -642,8 +670,40 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // group/riven_type/req_mr metadata, which DE does not publish, and lets
     // the existing 90-day change log diff against the authoritative value.
     // Applied only when the weapons manifest actually came through this cycle.
-    if let Some(weapons) = de_snap.manifests.get("ExportWeapons_en.json") {
-        let de_dispos = de_extract::dispositions_from_weapons(weapons);
+    // Same rule again: a weapons manifest that parses but yields no
+    // dispositions must not silently leave every value at warframe.market's
+    // lagging mirror. When there is nothing fresh, re-apply the prior
+    // snapshot's — which were DE's — so the override survives.
+    let de_dispos = de_snap
+        .manifests
+        .get("ExportWeapons_en.json")
+        .map(de_extract::dispositions_from_weapons)
+        .unwrap_or_default();
+    if de_dispos.is_empty() {
+        let mut carried = 0usize;
+        if let Some(prior_weapons) = rivens_old
+            .as_ref()
+            .and_then(|r| r.get("weapons"))
+            .and_then(|w| w.as_object())
+        {
+            if let Some(map) = rivens.get_mut("weapons").and_then(|w| w.as_object_mut()) {
+                for (slug, row) in map.iter_mut() {
+                    let Some(prior_dispo) = prior_weapons
+                        .get(slug)
+                        .and_then(|w| w.get("disposition"))
+                        .and_then(|d| d.as_f64())
+                    else {
+                        continue;
+                    };
+                    if let Some(obj) = row.as_object_mut() {
+                        obj.insert("disposition".into(), serde_json::json!(prior_dispo));
+                        carried += 1;
+                    }
+                }
+            }
+        }
+        eprintln!("  dispositions: none from DE this cycle — carried {carried} from the prior snapshot");
+    } else {
         let mut moved = 0usize;
         let mut matched = 0usize;
         if let Some(map) = rivens.get_mut("weapons").and_then(|w| w.as_object_mut()) {

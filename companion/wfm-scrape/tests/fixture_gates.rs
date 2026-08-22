@@ -356,7 +356,7 @@ fn a_failed_recipes_manifest_preserves_both_de_overrides() {
     assert!(out.status.success(), "a failed manifest must not fail the build");
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
     assert!(
-        stderr.contains("recipes manifest unavailable"),
+        stderr.contains("ducats: no DE values this cycle"),
         "the failure should be reported, not swallowed:\n{stderr}"
     );
 
@@ -492,6 +492,105 @@ fn the_ducat_carry_leaves_wfm_sourced_values_alone() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Manifests that parse but yield nothing must not publish an empty table.
+///
+/// The case the previous three fixes all missed: DE's manifests can arrive
+/// intact and still resolve no usable rows — every reward path pointing at
+/// something the catalogue does not carry. "Did the manifest arrive" is not
+/// "did it produce rows", and treating them as the same published an empty
+/// relic surface on a cold build while the legacy table sat unused.
+#[test]
+fn de_manifests_that_yield_no_rows_fall_back_rather_than_publishing_empty() {
+    let dir = stage_fixtures("convert");
+    let _ = std::fs::remove_file(dir.join("prior-market.json"));
+
+    // A well-formed relic manifest whose every reward points at an item the
+    // catalogue has never heard of: it parses, and it resolves to nothing.
+    let resp_path = dir.join("fixture_responses.json");
+    let mut responses: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_slice(&std::fs::read(&resp_path).unwrap()).unwrap();
+    let relic_key = responses
+        .keys()
+        .find(|k| k.contains("ExportRelicArcane_en.json"))
+        .cloned()
+        .expect("the fixture serves a relic manifest");
+    responses.insert(
+        relic_key,
+        serde_json::json!({"ExportRelicArcane": [{
+            "name": "Lith V1 Relic",
+            "uniqueName": "/Lotus/Types/Game/Projections/T1VoidProjectionGhostA",
+            "relicRewards": [
+                {"rewardName": "/Lotus/Types/Recipes/NoSuchThingAtAll",
+                 "rarity": "COMMON", "tier": 0, "itemCount": 1}
+            ]
+        }]}),
+    );
+    std::fs::write(&resp_path, serde_json::to_vec(&responses).unwrap()).unwrap();
+
+    let out = run(
+        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"],
+        &dir,
+    );
+    assert!(out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+    assert!(
+        stderr.contains("fallback — no DE data available"),
+        "a manifest that resolves nothing must reach the fallback:\n{stderr}"
+    );
+
+    let snap: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert!(
+        !snap["relic_rewards"].as_object().unwrap().is_empty(),
+        "never publish an empty relic surface while any source could produce one"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The same case, but WITH a prior surface: carry it, do not downgrade.
+#[test]
+fn de_manifests_that_yield_no_rows_carry_a_prior_surface_rather_than_downgrading() {
+    let dir = stage_fixtures("convert");
+    let args = ["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"];
+
+    assert!(run(&args, &dir).status.success());
+    std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
+
+    let resp_path = dir.join("fixture_responses.json");
+    let mut responses: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_slice(&std::fs::read(&resp_path).unwrap()).unwrap();
+    let relic_key = responses.keys().find(|k| k.contains("ExportRelicArcane_en.json")).cloned().unwrap();
+    responses.insert(
+        relic_key,
+        serde_json::json!({"ExportRelicArcane": [{
+            "name": "Lith V1 Relic",
+            "uniqueName": "/Lotus/Types/Game/Projections/T1VoidProjectionGhostB",
+            "relicRewards": [
+                {"rewardName": "/Lotus/Types/Recipes/NoSuchThingAtAll",
+                 "rarity": "COMMON", "tier": 0, "itemCount": 1}
+            ]
+        }]}),
+    );
+    std::fs::write(&resp_path, serde_json::to_vec(&responses).unwrap()).unwrap();
+
+    assert!(run(&args, &dir).status.success());
+    let snap: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+
+    let rewards = snap["relic_rewards"]["lith_v1_relic"].as_array().unwrap();
+    let chassis = rewards
+        .iter()
+        .find(|r| r["reward_slug"] == "volt_prime_chassis_blueprint")
+        .expect("the prior DE surface was carried");
+    assert_eq!(
+        chassis["chances"]["radiant"], 16.67,
+        "a manifest yielding nothing must carry the prior surface, not downgrade to legacy"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// A manifest we failed to read must NOT have its hash recorded.
 ///
 /// Recording it would tell the next cycle we already hold that manifest, and
@@ -592,4 +691,67 @@ fn de_endpoints_are_still_alive() {
 
     let world = de::fetch_world_state(&http).expect("worldState fetch");
     assert!(world.get("VoidTraders").is_some(), "worldState lost VoidTraders");
+}
+
+/// Every DE-derived surface must survive a manifest that parses but is empty.
+///
+/// This is the rule the previous five rounds kept rediscovering one surface at
+/// a time: **"the manifest arrived" is not "the manifest produced anything"**,
+/// and each override — ducats, dispositions, relics — has to carry its prior
+/// value when the fresh build comes back empty. Asserting all three together
+/// is the point; testing them one at a time is how the hole kept moving.
+#[test]
+fn every_de_surface_carries_when_a_manifest_parses_to_nothing() {
+    let dir = stage_fixtures("convert");
+    let args = ["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"];
+
+    assert!(run(&args, &dir).status.success());
+    std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
+    let good: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(good["items"]["volt_prime_chassis_blueprint"]["ducats"], 65);
+
+    // Well-formed, correctly-keyed, and empty.
+    let resp_path = dir.join("fixture_responses.json");
+    let mut responses: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_slice(&std::fs::read(&resp_path).unwrap()).unwrap();
+    for (basename, key) in [
+        ("ExportRecipes_en.json", "ExportRecipes"),
+        ("ExportWeapons_en.json", "ExportWeapons"),
+        ("ExportRelicArcane_en.json", "ExportRelicArcane"),
+    ] {
+        let url = responses.keys().find(|k| k.contains(basename)).cloned().unwrap();
+        responses.insert(url, serde_json::json!({ key: [] }));
+    }
+    std::fs::write(&resp_path, serde_json::to_vec(&responses).unwrap()).unwrap();
+
+    let out = run(&args, &dir);
+    assert!(out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr).to_string();
+    for expected in [
+        "ducats: no DE values this cycle",
+        "dispositions: none from DE this cycle",
+        "Relic tables not rebuilt this cycle",
+    ] {
+        assert!(stderr.contains(expected), "missing `{expected}` in:\n{stderr}");
+    }
+
+    let snap: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+
+    assert_eq!(
+        snap["items"]["volt_prime_chassis_blueprint"]["ducats"], 65,
+        "ducats must survive an empty recipes manifest"
+    );
+    assert_eq!(
+        snap["de"]["ducats"]["volt_prime_chassis_blueprint"], 65,
+        "and so must their provenance, or the NEXT cycle has nothing to carry"
+    );
+    let rewards = snap["relic_rewards"]["lith_v1_relic"].as_array().unwrap();
+    assert!(
+        rewards.iter().any(|r| r["chances"]["radiant"] == 16.67),
+        "relics must survive an empty relic manifest"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
 }
