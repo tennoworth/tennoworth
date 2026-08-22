@@ -5,11 +5,11 @@ import {
   distributionOf,
   judgeOffer,
   MIN_POPULATION,
-  normalCdf,
-  percentileOf,
+  placementOf,
   rerollCost,
   rerolledDiscount,
-  rerollOutcome,
+  rerollRead,
+  skewOf,
 } from './riven-appraise';
 import type { RivenStatTier } from './types';
 
@@ -25,27 +25,25 @@ function tier(over: Partial<RivenStatTier>): RivenStatTier {
   } as RivenStatTier;
 }
 
-describe('normalCdf', () => {
-  it('is a proper CDF at the landmarks', () => {
-    expect(normalCdf(0)).toBeCloseTo(0.5, 4);
-    expect(normalCdf(1.96)).toBeCloseTo(0.975, 3);
-    expect(normalCdf(-1.96)).toBeCloseTo(0.025, 3);
-  });
-});
+/**
+ * The distribution that broke the previous implementation: 90 sales at 10p and
+ * 10 at 1,000p. A normal fit to its mean and standard deviation called a 10p
+ * offer the 37th percentile, gave a reroll a 63% chance of beating it, and
+ * priced the losing outcomes at MINUS 194p — below a stated minimum of 10.
+ */
+const SKEWED_MARKET = tier({ avg: 109, median: 10, min: 10, max: 1000, stddev: 297, pop: 100 });
 
 describe('distributionOf', () => {
   it('rejects a sample too thin to be a distribution', () => {
-    // DE's weekly file happily reports pop: 1. A median of one sale is an
-    // anecdote, and pricing against it would be worse than saying nothing.
     expect(distributionOf(tier({ pop: MIN_POPULATION - 1 }))).toBeNull();
-  });
-
-  it('rejects a zero standard deviation, which cannot place anything', () => {
-    expect(distributionOf(tier({ stddev: 0 }))).toBeNull();
   });
 
   it('accepts a real sample', () => {
     expect(distributionOf(tier({}))?.pop).toBe(1204);
+  });
+
+  it('no longer requires a standard deviation, which nothing reads now', () => {
+    expect(distributionOf(tier({ stddev: 0 }))).not.toBeNull();
   });
 
   it('is null rather than throwing on a missing tier', () => {
@@ -54,37 +52,59 @@ describe('distributionOf', () => {
   });
 });
 
-describe('percentileOf', () => {
+describe('placementOf', () => {
   const dist = distributionOf(tier({}))!;
 
-  it('puts the mean at the middle', () => {
-    expect(percentileOf(210, dist)).toBe(50);
+  it('places against the landmarks DE actually publishes', () => {
+    expect(placementOf(3, dist)).toBe('below-observed');
+    expect(placementOf(100, dist)).toBe('bottom');
+    expect(placementOf(200, dist)).toBe('middle'); // median 195, avg 210
+    expect(placementOf(400, dist)).toBe('upper');
+    expect(placementOf(2000, dist)).toBe('above-observed');
   });
 
-  it('rises with price', () => {
-    expect(percentileOf(330, dist)).toBeGreaterThan(percentileOf(210, dist));
-    expect(percentileOf(90, dist)).toBeLessThan(percentileOf(210, dist));
+  it('never claims a band the skewed market contradicts', () => {
+    // 10p is the cheapest sale observed, and 90% of trades were at it. The old
+    // normal fit called this the 37th percentile; the landmark answer is
+    // simply "at the bottom", which is true.
+    const dist2 = distributionOf(SKEWED_MARKET)!;
+    expect(placementOf(10, dist2)).toBe('middle');
+    expect(placementOf(9, dist2)).toBe('below-observed');
+    expect(placementOf(500, dist2)).toBe('upper');
   });
 
-  it('clamps rather than reporting an impossible percentile', () => {
-    expect(percentileOf(100000, dist)).toBe(100);
-    expect(percentileOf(0, dist)).toBeGreaterThanOrEqual(0);
+  it('handles a market where mean and median coincide', () => {
+    const flat = distributionOf(tier({ avg: 100, median: 100, min: 90, max: 110 }))!;
+    expect(placementOf(100, flat)).toBe('upper');
+    expect(placementOf(95, flat)).toBe('bottom');
+  });
+});
+
+describe('skewOf', () => {
+  it('measures how far large sales drag the average', () => {
+    expect(skewOf(distributionOf(SKEWED_MARKET)!)).toBeCloseTo(10.9, 1);
+    expect(skewOf(distributionOf(tier({}))!)).toBeCloseTo(1.08, 2);
   });
 });
 
 describe('judgeOffer', () => {
   const dist = distributionOf(tier({}))!;
 
-  it('calls a mean-ish offer fair', () => {
-    expect(judgeOffer(210, dist)).toBe('fair');
+  it('calls a median-ish offer fair', () => {
+    expect(judgeOffer(195, dist)).toBe('fair');
+    expect(judgeOffer(200, dist)).toBe('fair');
   });
 
-  it('calls a lowball low and a premium high', () => {
+  it('calls a real lowball low', () => {
     expect(judgeOffer(60, dist)).toBe('below');
-    expect(judgeOffer(400, dist)).toBe('above');
   });
 
-  it('flags a price above anything DE observed as an outlier, not merely high', () => {
+  it('does not call a slightly-under-median offer a lowball', () => {
+    expect(judgeOffer(180, dist)).toBe('fair');
+  });
+
+  it('calls an above-average offer high, and one past the range an outlier', () => {
+    expect(judgeOffer(400, dist)).toBe('above');
     expect(judgeOffer(1500, dist)).toBe('outlier');
   });
 });
@@ -102,38 +122,33 @@ describe('rerollCost', () => {
   });
 });
 
-describe('rerollOutcome', () => {
+describe('rerollRead', () => {
   const dist = distributionOf(tier({}))!;
 
-  it('is a coin flip at the mean', () => {
-    const o = rerollOutcome(210, dist, 0);
-    expect(o.pBetter).toBeCloseTo(0.5, 2);
-    expect(o.expectedChange).toBeCloseTo(0, 6);
+  it('leans against rerolling something already above the median', () => {
+    const r = rerollRead(400, dist, 3);
+    expect(r.lean).toBe('reroll-likely-loses');
+    expect(r.aboveMedian).toBe(true);
+    expect(r.kuva).toBe(1400);
   });
 
-  it('goes negative above the mean — the thing players get wrong', () => {
-    const o = rerollOutcome(400, dist, 3);
-    expect(o.pBetter).toBeLessThan(0.1);
-    expect(o.expectedChange).toBeLessThan(0);
-    expect(o.kuva).toBe(1400);
+  it('leans toward rerolling something well below it', () => {
+    expect(rerollRead(40, dist, 0).lean).toBe('reroll-likely-gains');
   });
 
-  it('goes positive below the mean', () => {
-    const o = rerollOutcome(40, dist, 0);
-    expect(o.pBetter).toBeGreaterThan(0.85);
-    expect(o.expectedChange).toBeGreaterThan(0);
+  it('refuses to pick a side inside a 20% band around the median', () => {
+    // Quoting a direction on a 2p difference over a 195p median would be
+    // noise dressed as advice.
+    expect(rerollRead(197, dist, 0).lean).toBe('coin-flip');
+    expect(rerollRead(180, dist, 0).lean).toBe('coin-flip');
   });
 
-  it('brackets the current price with the two conditional means', () => {
-    const o = rerollOutcome(210, dist, 0);
-    expect(o.meanIfBetter).toBeGreaterThan(210);
-    expect(o.meanIfWorse).toBeLessThan(210);
-  });
-
-  it('stays finite at an absurd price where the tail probability underflows', () => {
-    const o = rerollOutcome(1_000_000, dist, 0);
-    expect(Number.isFinite(o.meanIfBetter)).toBe(true);
-    expect(Number.isFinite(o.meanIfWorse)).toBe(true);
+  it('exposes no probability at all', () => {
+    // The sold distribution is not the possible distribution, and five summary
+    // statistics cannot give a defensible tail probability on a skewed market.
+    // If a percentage ever reappears on this type, the model came back.
+    const r = rerollRead(300, dist, 1);
+    expect(Object.keys(r).sort()).toEqual(['aboveMedian', 'kuva', 'lean', 'median']);
   });
 });
 
@@ -153,13 +168,12 @@ describe('appraise', () => {
   it('explains a thin sample instead of pricing against it', () => {
     const a = appraise(200, tier({ pop: 4 }), 0);
     expect(a.unavailable).toBe('thin-sample');
-    expect(a.percentile).toBeNull();
+    expect(a.placement).toBeNull();
     expect(a.caveats[0]).toContain('4 trades');
   });
 
   it('distinguishes no data from a thin sample', () => {
-    const a = appraise(200, tier({ pop: 0 }), 0);
-    expect(a.unavailable).toBe('no-data');
+    expect(appraise(200, tier({ pop: 0 }), 0).unavailable).toBe('no-data');
   });
 
   it('returns the distribution with no verdict when no price is supplied', () => {
@@ -170,23 +184,35 @@ describe('appraise', () => {
   });
 
   it('always carries the caveat that stat quality is not modelled', () => {
-    // The whole design rests on being honest about this; if the caveat ever
-    // stops shipping, the feature has quietly become a guess-o-matic.
     const a = appraise(250, tier({}), 2);
     expect(a.caveats.some((c) => c.includes('Stat desirability is not modelled'))).toBe(true);
     expect(a.caveats.some((c) => c.includes('1204 trades'))).toBe(true);
   });
 
+  it('warns when the average is not a typical price', () => {
+    const a = appraise(10, SKEWED_MARKET, 0);
+    expect(a.skewed).toBe(true);
+    expect(a.caveats.some((c) => c.includes('read the median'))).toBe(true);
+  });
+
+  it('never reports a negative or impossible price on the skewed market', () => {
+    // The regression this rewrite exists for.
+    const a = appraise(10, SKEWED_MARKET, 0);
+    const numbers = [a.dist!.median, a.dist!.avg, a.dist!.min, a.reroll!.median, a.reroll!.kuva];
+    for (const n of numbers) expect(n).toBeGreaterThanOrEqual(0);
+  });
+
   it('appraises a supplied offer end to end', () => {
     const a = appraise(340, tier({}), 8);
-    expect(a.percentile).toBeGreaterThan(50);
+    expect(a.placement).toBe('upper');
     expect(a.verdict).toBe('above');
     expect(a.reroll?.kuva).toBe(3150);
+    expect(a.reroll?.lean).toBe('reroll-likely-loses');
   });
 
   it('ignores a nonsense price rather than producing NaN', () => {
     const a = appraise(0, tier({}), 0);
-    expect(a.percentile).toBeNull();
+    expect(a.placement).toBeNull();
     expect(a.reroll).toBeNull();
   });
 });

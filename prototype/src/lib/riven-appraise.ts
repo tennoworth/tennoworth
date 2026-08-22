@@ -1,22 +1,24 @@
 // Riven appraisal, and the reroll decision.
 //
 // WHAT THIS DELIBERATELY DOES NOT DO: guess what a riven is worth from its
-// stats. Doing that needs per-stat roll ranges and a model of which stats
-// buyers want, and we have neither — DE's export publishes dispositions, not
-// roll ranges. Every "riven price checker" that shows you a confident number
-// is guessing, which is why nobody trusts them.
+// stats. That needs per-stat roll ranges and a model of which stats buyers
+// want, and we have neither — DE publishes dispositions, not roll ranges. It
+// is why no riven price checker is trusted.
 //
-// What we DO have is better than a guess and nobody surfaces it: DE publishes
-// the actual trade distribution per weapon per reroll-state — average, median,
-// min, max, standard deviation and the population behind them. So this module
-// answers the questions that distribution can genuinely answer:
+// WHAT IT ALSO NO LONGER DOES: fit a normal distribution to DE's summary
+// statistics. The first version of this module did, and it was wrong in the
+// way that matters. Riven prices are bounded below at zero and heavily
+// right-skewed — a weapon with 90 sales at 10p and 10 at 1,000p has a mean of
+// 109 and a standard deviation of 297 — and a normal fit to those two numbers
+// reported a 10p offer as the 37th percentile with a 63% chance that a reroll
+// beats it, and priced the losing outcomes at MINUS 194p. Every one of those
+// numbers is impossible or backwards. Five summary statistics do not identify
+// a distribution this skewed, and no parametric fit rescues that.
 //
-//   "Someone offered me 200p. Where does that sit for this weapon?"
-//   "If I reroll, what are the odds I beat what I have?"
-//   "Do rerolled rivens on this weapon trade below unrolled ones?"
-//
-// The price comes from the user (an offer, or their own estimate). We supply
-// the distribution and the arithmetic.
+// So this module reports only what those five numbers actually support: where
+// an offer sits against the landmarks DE gives us (min, median, average, max),
+// how skewed the market is, and what rerolling costs. The price still comes
+// from the USER — an offer they received, or their own estimate.
 
 import type { RivenStatTier } from './types';
 
@@ -28,38 +30,14 @@ export const MIN_POPULATION = 12;
 /**
  * Kuva per reroll. Climbs with the reroll count and caps.
  *
- * In-game values, and they are the reason "just reroll it" is not free advice:
- * a riven at cap costs 3,500 kuva a spin.
+ * In-game values, and the reason "just reroll it" is not free advice: a riven
+ * at cap costs 3,500 kuva a spin.
  */
 export const REROLL_KUVA = [900, 1000, 1200, 1400, 1700, 2000, 2350, 2750, 3150, 3500] as const;
 
 export function rerollCost(rerolls: number): number {
   const i = Math.max(0, Math.floor(rerolls));
   return REROLL_KUVA[Math.min(i, REROLL_KUVA.length - 1)];
-}
-
-/** Abramowitz & Stegun 7.1.26 — good to ~1e-7, which is far past what a
- *  price distribution built from a few hundred trades can justify. */
-function erf(x: number): number {
-  const sign = x < 0 ? -1 : 1;
-  const a = Math.abs(x);
-  const t = 1 / (1 + 0.3275911 * a);
-  const y =
-    1 -
-    ((((1.061405429 * t - 1.453152027) * t + 1.421413741) * t - 0.284496736) * t + 0.254829592) *
-      t *
-      Math.exp(-a * a);
-  return sign * y;
-}
-
-/** Standard normal CDF. */
-export function normalCdf(z: number): number {
-  return 0.5 * (1 + erf(z / Math.SQRT2));
-}
-
-/** Standard normal PDF. */
-function normalPdf(z: number): number {
-  return Math.exp(-0.5 * z * z) / Math.sqrt(2 * Math.PI);
 }
 
 export interface Distribution {
@@ -75,88 +53,98 @@ export interface Distribution {
 export function distributionOf(tier: RivenStatTier | null | undefined): Distribution | null {
   if (!tier) return null;
   const pop = Number(tier.pop) || 0;
-  const stddev = Number(tier.stddev) || 0;
   const median = Number(tier.median) || 0;
-  const avg = Number(tier.avg) || 0;
-  if (pop < MIN_POPULATION || median <= 0 || stddev <= 0) return null;
+  if (pop < MIN_POPULATION || median <= 0) return null;
   return {
     median,
-    avg,
+    avg: Number(tier.avg) || 0,
     min: Number(tier.min) || 0,
     max: Number(tier.max) || 0,
-    stddev,
+    stddev: Number(tier.stddev) || 0,
     pop,
   };
 }
 
 /**
- * Where a price sits in the weapon's distribution, 0–100.
+ * Ratio of mean to median — how far a few large sales drag the average.
  *
- * Normal approximation around the MEAN, not the median — the mean is what the
- * standard deviation is defined against, and riven prices are right-skewed so
- * the two differ. Reported to the nearest whole percent because a decimal
- * would imply precision this sample does not have.
+ * Above `SKEWED` the average is not a typical price and the median is the
+ * number to quote. Riven markets are routinely 3× or worse.
  */
-export function percentileOf(price: number, dist: Distribution): number {
-  const z = (price - dist.avg) / dist.stddev;
-  return Math.round(Math.min(100, Math.max(0, normalCdf(z) * 100)));
+export const SKEWED = 1.5;
+
+export function skewOf(dist: Distribution): number | null {
+  return dist.median > 0 && dist.avg > 0 ? dist.avg / dist.median : null;
+}
+
+/** Where an offer sits against the landmarks DE actually publishes. No model,
+ *  no interpolation — each of these is directly checkable against the feed. */
+export type Placement =
+  | 'below-observed' //  under the cheapest sale DE saw
+  | 'bottom' //          between the minimum and the median
+  | 'middle' //          between the median and the average
+  | 'upper' //           above the average, still within the observed range
+  | 'above-observed'; //  over the dearest sale DE saw
+
+export function placementOf(price: number, dist: Distribution): Placement {
+  if (dist.min > 0 && price < dist.min) return 'below-observed';
+  if (dist.max > 0 && price > dist.max) return 'above-observed';
+  if (price < dist.median) return 'bottom';
+  // On a skewed market the average sits above the median, so "between them" is
+  // a real band. Where the two coincide (or invert on a left-skewed sample),
+  // anything at or above the median counts as upper.
+  if (dist.avg > dist.median && price < dist.avg) return 'middle';
+  return 'upper';
 }
 
 export type PriceVerdict = 'below' | 'fair' | 'above' | 'outlier';
 
 /** How an offer reads against the weapon's own market. */
 export function judgeOffer(price: number, dist: Distribution): PriceVerdict {
-  if (dist.max > 0 && price > dist.max) return 'outlier';
-  const p = percentileOf(price, dist);
-  if (p < 35) return 'below';
-  if (p > 65) return 'above';
-  return 'fair';
+  switch (placementOf(price, dist)) {
+    case 'below-observed':
+      return 'below';
+    case 'bottom':
+      return price < dist.median * 0.75 ? 'below' : 'fair';
+    case 'middle':
+      return 'fair';
+    case 'upper':
+      return 'above';
+    case 'above-observed':
+      return 'outlier';
+  }
 }
 
-export interface RerollOutcome {
-  /** Chance the next roll is worth more than what you hold. */
-  pBetter: number;
-  /** Average price of the outcomes that beat what you hold. */
-  meanIfBetter: number;
-  /** Average price of the outcomes that do not. */
-  meanIfWorse: number;
-  /** Expected change in plat from one spin. Usually negative above the mean —
-   *  that is the point. */
-  expectedChange: number;
+export interface RerollRead {
   /** Kuva this spin costs. */
   kuva: number;
+  /** The weapon's median trade — what a redraw is drawing against. */
+  median: number;
+  /** Whether the offer already beats the median. */
+  aboveMedian: boolean;
+  /**
+   * Deliberately NOT a probability.
+   *
+   * A reroll redraws from the distribution of *possible* rolls, and DE
+   * publishes the distribution of *sold* ones — which is biased toward rolls
+   * good enough that somebody listed them. Even with the right sample, five
+   * summary statistics cannot give a defensible tail probability on a
+   * distribution this skewed. So this is the qualitative read the data does
+   * support, and no percentage is shown anywhere.
+   */
+  lean: 'reroll-likely-loses' | 'reroll-likely-gains' | 'coin-flip';
 }
 
-/**
- * One reroll, modelled as redrawing from the same weapon's distribution.
- *
- * The approximation is stated because it matters: a reroll does not sample the
- * *sold* distribution, it samples the *possible* one, and the sold distribution
- * is biased toward rolls good enough that somebody listed them. So this
- * flatters rerolling slightly. It is still the right shape — the expected
- * change goes negative once you are above the mean, which is the thing players
- * get wrong.
- */
-export function rerollOutcome(
-  currentPrice: number,
-  dist: Distribution,
-  rerolls: number,
-): RerollOutcome {
-  const z = (currentPrice - dist.avg) / dist.stddev;
-  const pWorse = normalCdf(z);
-  const pBetter = 1 - pWorse;
-
-  // Truncated normal means. E[X | X > c] = μ + σ·φ(z)/(1−Φ(z)).
-  const phi = normalPdf(z);
-  const meanIfBetter = pBetter > 1e-9 ? dist.avg + (dist.stddev * phi) / pBetter : currentPrice;
-  const meanIfWorse = pWorse > 1e-9 ? dist.avg - (dist.stddev * phi) / pWorse : currentPrice;
-
+export function rerollRead(price: number, dist: Distribution, rerolls: number): RerollRead {
+  const aboveMedian = price > dist.median;
+  // A 20% band around the median is "about the same" — quoting a direction on
+  // a 2p difference over a 195p median would be noise dressed as advice.
+  const near = Math.abs(price - dist.median) <= dist.median * 0.2;
   return {
-    pBetter,
-    meanIfBetter,
-    meanIfWorse,
-    expectedChange: dist.avg - currentPrice,
     kuva: rerollCost(rerolls),
+    median: dist.median,
+    aboveMedian,
+    lean: near ? 'coin-flip' : aboveMedian ? 'reroll-likely-loses' : 'reroll-likely-gains',
   };
 }
 
@@ -165,8 +153,8 @@ export function rerollOutcome(
  *
  * Straight out of DE's feed, which splits `rerolled` — and nothing in the
  * ecosystem surfaces it. Buyers pay for reroll headroom, so an unrolled riven
- * of the same apparent quality is usually worth more. Returns null when either
- * side is too thin to compare, rather than a percentage built on two sales.
+ * of the same apparent quality is usually worth more. Medians, not means,
+ * because these markets are skewed. Null when either side is too thin.
  */
 export function rerolledDiscount(
   unrolled: RivenStatTier | null | undefined,
@@ -182,9 +170,12 @@ export interface Appraisal {
   dist: Distribution | null;
   /** Why there is no distribution, when there isn't one. */
   unavailable?: 'no-data' | 'thin-sample';
-  percentile: number | null;
+  placement: Placement | null;
   verdict: PriceVerdict | null;
-  reroll: RerollOutcome | null;
+  reroll: RerollRead | null;
+  /** True when the average is dragged well above the median — the average is
+   *  then not a typical price and the UI must lead with the median. */
+  skewed: boolean;
   /** Notes the UI must show alongside any number — the limits of the model. */
   caveats: string[];
 }
@@ -192,8 +183,7 @@ export interface Appraisal {
 /**
  * Appraise an offer against a weapon's distribution.
  *
- * `price` is supplied by the user — an offer they received, or their own
- * estimate. We do not invent it, and the caveats say so.
+ * `price` is supplied by the user. We do not invent it, and the caveats say so.
  */
 export function appraise(
   price: number | null,
@@ -201,16 +191,16 @@ export function appraise(
   rerolls: number,
 ): Appraisal {
   const dist = distributionOf(tier);
-  const caveats: string[] = [];
 
   if (!dist) {
     const pop = Number(tier?.pop) || 0;
     return {
       dist: null,
       unavailable: pop > 0 ? 'thin-sample' : 'no-data',
-      percentile: null,
+      placement: null,
       verdict: null,
       reroll: null,
+      skewed: false,
       caveats:
         pop > 0
           ? [`Only ${pop} trade${pop === 1 ? '' : 's'} observed — too few to place a price against.`]
@@ -218,20 +208,29 @@ export function appraise(
     };
   }
 
-  caveats.push(
+  const skew = skewOf(dist);
+  const skewed = skew != null && skew >= SKEWED;
+
+  const caveats = [
     `Based on ${dist.pop} trades DE observed this week — the weapon's market, not this riven's stats.`,
-  );
-  caveats.push('Stat desirability is not modelled; a god roll and a junk roll sit in the same band.');
+    'Stat desirability is not modelled; a god roll and a junk roll sit in the same band.',
+  ];
+  if (skewed) {
+    caveats.push(
+      `A few large sales pull the average (${dist.avg.toFixed(0)}p) well above the median (${dist.median.toFixed(0)}p) — read the median.`,
+    );
+  }
 
   if (price == null || !(price > 0)) {
-    return { dist, percentile: null, verdict: null, reroll: null, caveats };
+    return { dist, placement: null, verdict: null, reroll: null, skewed, caveats };
   }
 
   return {
     dist,
-    percentile: percentileOf(price, dist),
+    placement: placementOf(price, dist),
     verdict: judgeOffer(price, dist),
-    reroll: rerollOutcome(price, dist, rerolls),
+    reroll: rerollRead(price, dist, rerolls),
+    skewed,
     caveats,
   };
 }

@@ -6,11 +6,7 @@
   // arithmetic against DE's weekly distribution for the weapon — where the
   // offer sits, what a reroll would cost, and the odds it improves on what
   // they hold. Every number carries the population it came from.
-  import {
-    appraise,
-    rerolledDiscount,
-    type PriceVerdict,
-  } from '../lib/riven-appraise';
+  import { appraise, rerolledDiscount, type PriceVerdict } from '../lib/riven-appraise';
   import { bandForRiven } from '../lib/rivens';
   import type { OwnedRiven } from '../lib/rivens';
   import type { Market } from '../lib/types';
@@ -36,6 +32,17 @@
 
   let entry = $derived(riven.slug ? market?.riven_stats?.[riven.slug] : undefined);
   let discount = $derived(rerolledDiscount(entry?.unrolled, entry?.rolled));
+
+  const PLACEMENT_TEXT: Record<
+    NonNullable<ReturnType<typeof appraise>['placement']>,
+    string
+  > = {
+    'below-observed': 'Under the cheapest sale DE recorded',
+    bottom: 'Below the median',
+    middle: 'Between median and average',
+    upper: 'Above the average',
+    'above-observed': 'Over the dearest sale DE recorded',
+  };
 
   const VERDICT_TEXT: Record<PriceVerdict, string> = {
     below: 'below this weapon’s market',
@@ -89,23 +96,33 @@
       <span>{result.dist.max.toFixed(0)}p</span>
     </div>
 
-    {#if offer != null && result.percentile != null && result.verdict}
+    {#if offer != null && result.placement && result.verdict}
       <p class="read">
-        <strong>{result.percentile}th percentile</strong> — {VERDICT_TEXT[result.verdict]}.
+        <strong>{PLACEMENT_TEXT[result.placement]}</strong> — {VERDICT_TEXT[result.verdict]}.
       </p>
     {/if}
 
     {#if result.reroll && offer != null}
+      <!-- No percentage anywhere, on purpose: a reroll draws from the set of
+           POSSIBLE rolls while DE publishes the SOLD ones, and five summary
+           statistics cannot give a defensible tail probability on a market
+           this skewed. The direction is all the data supports. -->
       <p class="read">
-        Rerolling costs <strong>{result.reroll.kuva.toLocaleString()}</strong> kuva.
-        <strong>{pct(result.reroll.pBetter)}</strong> chance of beating {offer}p
-        (averaging {result.reroll.meanIfBetter.toFixed(0)}p when it does,
-        {result.reroll.meanIfWorse.toFixed(0)}p when it doesn’t) —
-        {#if result.reroll.expectedChange < 0}
-          expected change <span class="bad">{result.reroll.expectedChange.toFixed(0)}p</span>.
+        Rerolling costs <strong>{result.reroll.kuva.toLocaleString()}</strong> kuva and redraws
+        against a median of <strong>{result.reroll.median.toFixed(0)}p</strong> —
+        {#if result.reroll.lean === 'reroll-likely-loses'}
+          <span class="bad">you are already above it</span>.
+        {:else if result.reroll.lean === 'reroll-likely-gains'}
+          <span class="good">you are below it</span>.
         {:else}
-          expected change <span class="good">+{result.reroll.expectedChange.toFixed(0)}p</span>.
+          about where you are now.
         {/if}
+      </p>
+    {/if}
+
+    {#if result.skewed}
+      <p class="note warnish">
+        A few large sales pull this weapon's average well above its median. Read the median.
       </p>
     {/if}
 
@@ -179,6 +196,9 @@
   }
   .read strong {
     color: var(--fg);
+  }
+  .warnish {
+    color: var(--warn);
   }
   .good {
     color: var(--good);

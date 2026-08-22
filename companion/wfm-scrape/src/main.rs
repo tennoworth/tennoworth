@@ -418,14 +418,21 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     let usage_old: Option<HashMap<String, serde_json::Value>> =
         prior.get("usage").and_then(|s| serde_json::from_value(s.clone()).ok());
     let newest_usage_year = de::DE_USAGE_YEARS.iter().copied().max().unwrap_or(0);
+    // The MINIMUM year across the carried map, not the first entry's: reading
+    // one arbitrary HashMap entry would call a mixed-year map current on a coin
+    // flip. A carried map that is empty yields 0 and refetches, which is the
+    // right answer — an empty surface is not a current one.
     let have_year = usage_old
         .as_ref()
-        .and_then(|u| u.values().next())
-        .and_then(|v| v.get("year"))
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0) as u16;
+        .map(|u| {
+            u.values()
+                .map(|v| v.get("year").and_then(|y| y.as_u64()).unwrap_or(0))
+                .min()
+                .unwrap_or(0) as u16
+        })
+        .unwrap_or(0);
 
-    let usage = if have_year >= newest_usage_year && usage_old.is_some() {
+    let usage = if have_year >= newest_usage_year {
         eprintln!("Usage telemetry: {newest_usage_year} already in the snapshot — not refetched");
         HashMap::new()
     } else {
