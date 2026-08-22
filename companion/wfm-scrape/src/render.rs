@@ -132,6 +132,11 @@ pub struct Snapshot {
     /// the item the recipe PRODUCES — see `de_extract::recipes_from_export`.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub recipes: HashMap<String, serde_json::Value>,
+    /// `{slug: {name, category, year, share, peak_mr, by_mr[]}}` — DE's annual
+    /// usage telemetry, keyed by the PARENT's slug. See
+    /// `de_extract::usage_from_export`.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub usage: HashMap<String, serde_json::Value>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub surface_fetched_at: HashMap<String, String>,
     /// Digital Extremes provenance + the worldState-only surfaces.
@@ -181,6 +186,7 @@ pub fn assemble_snapshot(
     calendar: HashMap<String, serde_json::Value>,
     riven_stats: HashMap<String, serde_json::Value>,
     recipes: HashMap<String, serde_json::Value>,
+    usage: HashMap<String, serde_json::Value>,
     surface_fetched_at: HashMap<String, String>,
 ) -> Snapshot {
     Snapshot {
@@ -203,6 +209,7 @@ pub fn assemble_snapshot(
         calendar,
         riven_stats,
         recipes,
+        usage,
         surface_fetched_at,
     }
 }

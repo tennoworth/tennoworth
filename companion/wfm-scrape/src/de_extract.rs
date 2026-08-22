@@ -375,6 +375,90 @@ pub fn dispositions_from_weapons(weapons: &Value) -> HashMap<String, f64> {
 }
 
 // ---------------------------------------------------------------------------
+// Usage telemetry
+// ---------------------------------------------------------------------------
+
+/// Highest Mastery Rank bucket DE reports.
+pub const MAX_MR: usize = 33;
+
+/// Usage share per item, with its Mastery-Rank curve.
+///
+/// Answers the question price alone cannot: a part that is cheap and heavily
+/// played sells today, while a part that is cheap and unplayed sits in your
+/// listings for a month looking identical in every metric the app currently
+/// shows.
+///
+/// Keyed by the WFM slug the display name resolves to. DE names the frame or
+/// weapon ("Braton Prime"), and warframe.market lists the SET
+/// ("Braton Prime Set"), so both spellings are tried — and the value is
+/// therefore the PARENT's usage, which a consumer propagates to its parts.
+/// Nothing is emitted for a name that does not resolve; a renamed weapon
+/// misses rather than being guessed at.
+///
+/// Values are percentages of that category's total usage, rounded to four
+/// decimals: the source is a fraction with far more digits than a telemetry
+/// sample justifies, and the rounding keeps the surface from bloating
+/// market.json with noise.
+pub fn usage_from_export(
+    doc: &Value,
+    year: u16,
+    catalog: &HashMap<String, String>,
+) -> (HashMap<String, Value>, usize) {
+    let mut out = HashMap::new();
+    let mut unmatched = 0usize;
+
+    let Some(all) = doc.get("ALL").and_then(|v| v.as_object()) else {
+        return (out, 0);
+    };
+
+    for (category, items) in all {
+        let Some(items) = items.as_object() else { continue };
+        for (name, buckets) in items {
+            let lower = name.to_lowercase();
+            // DE says "Braton Prime"; WFM lists "Braton Prime Set".
+            let Some(slug) = catalog
+                .get(&lower)
+                .or_else(|| catalog.get(&format!("{lower} set")))
+            else {
+                unmatched += 1;
+                continue;
+            };
+            let Some(buckets) = buckets.as_object() else { continue };
+            let Some(share) = buckets.get("ALL").and_then(|v| v.as_f64()) else { continue };
+
+            let mut by_mr = Vec::with_capacity(MAX_MR + 1);
+            let mut peak_mr = 0usize;
+            let mut peak = f64::NEG_INFINITY;
+            for mr in 0..=MAX_MR {
+                let v = buckets.get(&mr.to_string()).and_then(|v| v.as_f64()).unwrap_or(0.0);
+                if v > peak {
+                    peak = v;
+                    peak_mr = mr;
+                }
+                by_mr.push(Value::from(round4(v * 100.0)));
+            }
+
+            out.insert(
+                (*slug).clone(),
+                serde_json::json!({
+                    "name": name,
+                    "category": category,
+                    "year": year,
+                    "share": round4(share * 100.0),
+                    "peak_mr": peak_mr,
+                    "by_mr": by_mr,
+                }),
+            );
+        }
+    }
+    (out, unmatched)
+}
+
+fn round4(v: f64) -> f64 {
+    (v * 10_000.0).round() / 10_000.0
+}
+
+// ---------------------------------------------------------------------------
 // worldState → Baro
 // ---------------------------------------------------------------------------
 
@@ -746,6 +830,46 @@ mod tests {
         let (r, collisions) = recipes_from_export(&recipes, &info);
         assert_eq!(collisions, 1, "the second is reported, not silently applied");
         assert_eq!(r["same_slug"]["build_price"], 15000, "first wins, deterministically");
+    }
+
+    #[test]
+    fn usage_joins_through_the_set_name_wfm_actually_lists() {
+        // DE says "Braton Prime"; warframe.market lists "Braton Prime Set".
+        let mut catalog = HashMap::new();
+        catalog.insert("braton prime set".to_string(), "braton_prime_set".to_string());
+        catalog.insert("torid".to_string(), "torid".to_string());
+
+        let mut buckets = serde_json::Map::new();
+        buckets.insert("ALL".into(), Value::from(0.0342));
+        for mr in 0..=MAX_MR {
+            // Peaks at MR 10 — a starter-tier weapon's audience.
+            let v = if mr == 10 { 0.09 } else { 0.001 };
+            buckets.insert(mr.to_string(), Value::from(v));
+        }
+        let doc = serde_json::json!({"ALL": {
+            "Primary": {
+                "Braton Prime": Value::Object(buckets),
+                "Torid": {"ALL": 0.0962},
+                "SomeRenamedGun": {"ALL": 0.01}
+            }
+        }});
+
+        let (u, unmatched) = usage_from_export(&doc, 2025, &catalog);
+        assert_eq!(unmatched, 1, "a name that does not resolve misses, it is not guessed");
+        let braton = &u["braton_prime_set"];
+        assert_eq!(braton["share"], 3.42, "stored as a percentage");
+        assert_eq!(braton["peak_mr"], 10);
+        assert_eq!(braton["category"], "Primary");
+        assert_eq!(braton["year"], 2025);
+        assert_eq!(braton["by_mr"].as_array().unwrap().len(), MAX_MR + 1);
+        assert_eq!(u["torid"]["share"], 9.62);
+    }
+
+    #[test]
+    fn usage_is_empty_rather_than_wrong_on_an_unexpected_shape() {
+        let (u, n) = usage_from_export(&serde_json::json!({"nope": 1}), 2025, &HashMap::new());
+        assert!(u.is_empty());
+        assert_eq!(n, 0);
     }
 
     #[test]

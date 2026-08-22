@@ -412,6 +412,38 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         }
     }
 
+    // Usage telemetry. Annual, so it is fetched once and then carried: the
+    // prior snapshot's copy is reused unless it is absent or names an older
+    // year than the newest DE has published. Nothing here is per-cycle work.
+    let usage_old: Option<HashMap<String, serde_json::Value>> =
+        prior.get("usage").and_then(|s| serde_json::from_value(s.clone()).ok());
+    let newest_usage_year = de::DE_USAGE_YEARS.iter().copied().max().unwrap_or(0);
+    let have_year = usage_old
+        .as_ref()
+        .and_then(|u| u.values().next())
+        .and_then(|v| v.get("year"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0) as u16;
+
+    let usage = if have_year >= newest_usage_year && usage_old.is_some() {
+        eprintln!("Usage telemetry: {newest_usage_year} already in the snapshot — not refetched");
+        HashMap::new()
+    } else {
+        eprintln!("Fetching DE usage telemetry ({newest_usage_year})...");
+        match http.get_json(&de::usage_url(newest_usage_year)) {
+            Ok(doc) => {
+                let (u, unmatched) =
+                    de_extract::usage_from_export(&doc, newest_usage_year, &catalog);
+                eprintln!("  {} items joined · {unmatched} names without a WFM listing", u.len());
+                u
+            }
+            Err(e) => {
+                eprintln!("  warning: {e}");
+                HashMap::new()
+            }
+        }
+    };
+
     // Relic rewards. DE's table beats the drop-table scrape on two counts: all
     // four refinements instead of intact only, and correct rarity labels (the
     // old source calls 25.33% drops "Uncommon"). Falls back when the manifest
@@ -597,6 +629,9 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     let r_calendar = reconcile("calendar", calendar, calendar_old.as_ref(), prior_stamps.get("calendar").map(|s| s.as_str()), now, true, STALE_DAYS);
     let r_riven_stats = reconcile("riven_stats", riven_stats, riven_stats_old.as_ref(), prior_stamps.get("riven_stats").map(|s| s.as_str()), now, true, STALE_DAYS);
     let r_recipes = reconcile("recipes", recipes_surface, recipes_old.as_ref(), prior_stamps.get("recipes").map(|s| s.as_str()), now, true, STALE_DAYS);
+    // Annual data: an empty fetch means "already current", not "lost", and
+    // reconcile's preserve-on-empty is exactly the right behaviour.
+    let r_usage = reconcile("usage", usage, usage_old.as_ref(), prior_stamps.get("usage").map(|s| s.as_str()), now, true, STALE_DAYS);
 
     for r in [&r_p2i, &r_s2p, &r_rr] {
         if let Some(w) = &r.stale_warning {
@@ -632,6 +667,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     surface_fetched_at.insert("calendar".into(), r_calendar.fetched_at.clone());
     surface_fetched_at.insert("riven_stats".into(), r_riven_stats.fetched_at.clone());
     surface_fetched_at.insert("recipes".into(), r_recipes.fetched_at.clone());
+    surface_fetched_at.insert("usage".into(), r_usage.fetched_at.clone());
 
     eprintln!("Rendering {} CSV rows...", csv_path.display());
     let rows = csvin::read_csv_rows(&csv_path)?;
@@ -672,6 +708,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         r_calendar.data,
         r_riven_stats.data,
         r_recipes.data,
+        r_usage.data,
         surface_fetched_at,
     );
     snapshot.de = Some(de_surface);

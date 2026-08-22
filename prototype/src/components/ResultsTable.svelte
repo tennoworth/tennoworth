@@ -1,4 +1,6 @@
 <script lang="ts">
+  import DemandCell from './DemandCell.svelte';
+  import type { DemandRead } from '../lib/demand';
   import { untrack } from 'svelte';
   import { sparklinePoints } from '../lib/sparkline';
   import { wfmItemUrl, ownedBreakdown, LEVELED_NOTE_TITLE, keptNoteTitle } from '../lib/format';
@@ -37,6 +39,9 @@
     tags: string[];
     is_augment: boolean;
     vault_status: 'vaulted' | 'vaulting-soon' | 'available' | null;
+    /** DE usage telemetry fused with the live market signal. Absent on
+     *  snapshots built before the usage surface landed. */
+    demand?: DemandRead;
   }
 
   interface ColumnDef {
@@ -234,6 +239,7 @@
     { key: 'delta_90d_pct',  label: 'Δ 90d',    align: 'right' },
     { key: 'volume_48h',     label: 'Vol 48h',  align: 'right' },
     { key: 'ratio',          label: 'Demand',   align: 'right' },
+    { key: 'usage',          label: 'Played',   align: 'left', noSort: true },
     { key: 'advice',         label: 'Advice',   align: 'left'  },
     { key: 'ducats',         label: 'Ducats',   align: 'right' },
     { key: 'plat_per_100d',  label: 'p/100d',   align: 'right' },
@@ -456,7 +462,12 @@
         <tr class:row-dim={r.sellable <= 0}>
           {#each columns as col}
             <td class="{col.align} col-{col.key}">
-              {#if col.key === 'name'}
+              {#if col.key === 'usage'}
+                <!-- Usage share + liquidity read. Sits beside price because
+                     its only job is to separate two rows that look identical
+                     on price and spread. -->
+                {#if r.demand}<DemandCell demand={r.demand} />{:else}<span class="muted">—</span>{/if}
+              {:else if col.key === 'name'}
                 <a
                   href={wfmItemUrl(r.slug)}
                   target="_blank"

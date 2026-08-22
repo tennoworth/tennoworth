@@ -44,6 +44,30 @@ pub const DE_MANIFEST_BASE: &str = "https://content.warframe.com/PublicExport/Ma
 pub const DE_ORIGIN_INDEX_URL: &str =
     "https://origin.warframe.com/origin/00000000/PublicExport/index_en.txt.lzma";
 
+/// DE's annual usage telemetry: what players actually equip, by Mastery Rank.
+///
+/// Six years of it, one static file per year, and nothing in the trading
+/// ecosystem reads it. Shape is
+/// `{"ALL": {category: {item_name: {"ALL": share, "0".."33": share}}}}` where
+/// the numeric keys are Mastery Rank buckets and every value is a fraction of
+/// that category's total usage.
+///
+/// Keyed by DISPLAY NAME, not uniqueName — so it joins through the item
+/// catalogue rather than the `/Lotus/...` map, and a renamed weapon simply
+/// misses. Annual, so it is fetched once and cached, never per cycle. The
+/// current year is published in arrears: 2026's file did not exist in
+/// 2026-08, which is why the caller must label the year it is showing.
+pub const DE_USAGE_URL_TEMPLATE: &str =
+    "https://www-static.warframe.com/repos/WarframeUsageData{year}.json";
+
+/// Years DE has actually published. Probed 2026-08-22: 2020 through 2025
+/// exist, 2026 is a 404.
+pub const DE_USAGE_YEARS: &[u16] = &[2020, 2021, 2022, 2023, 2024, 2025];
+
+pub fn usage_url(year: u16) -> String {
+    DE_USAGE_URL_TEMPLATE.replace("{year}", &year.to_string())
+}
+
 /// Live game state. Moved here from `content.warframe.com/dynamic/worldState.php`,
 /// which is now a 404. `?platform=` returns 409 — cross-play unified it.
 pub const DE_WORLD_STATE_URL: &str = "https://api.warframe.com/cdn/worldState.php";
@@ -457,6 +481,14 @@ mod tests {
         assert_eq!(de_millis(bare.get("Activation")), Some(1787317200000));
 
         assert_eq!(de_millis(None), None);
+    }
+
+    #[test]
+    fn usage_url_builds_the_year_file() {
+        assert_eq!(
+            usage_url(2025),
+            "https://www-static.warframe.com/repos/WarframeUsageData2025.json"
+        );
     }
 
     #[test]

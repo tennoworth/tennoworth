@@ -221,6 +221,20 @@ export interface Market {
   /** Build costs from DE's recipe tree, keyed by the slug of the item the
    *  recipe PRODUCES. Absent on older snapshots. */
   recipes?: Record<string, RecipeEntry> | null;
+  /** DE's annual usage telemetry, keyed by the PARENT's slug (a part inherits
+   *  its set's figure — see `lib/demand.ts`). Absent on older snapshots. */
+  usage?: Record<string, UsageRecord> | null;
+}
+
+/** One item's share of its category's usage, with its Mastery-Rank curve.
+ *  Percentages, and `year` says how fresh: DE publishes annually, in arrears. */
+export interface UsageRecord {
+  name: string;
+  category: string;
+  year: number;
+  share: number;
+  peak_mr: number;
+  by_mr: number[];
 }
 
 /** One ingredient line. **No `slug` means it cannot be bought** — resources
