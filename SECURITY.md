@@ -107,13 +107,13 @@ rewritten before it ships.
 
 For each desktop release on GitHub:
 
-- **Windows** — the installer (`.exe` / `.msi`) is built in public CI
-  from the tagged commit; download from the `desktop-v*` release and
-  compare its SHA-256 with the `.sha256` file on the same release.
-  (Windows `.sha256` sidecars start with the first release after 0.3.8.
-  Up to and including 0.3.8 the installers shipped with only the
-  updater's `.sig`, and this section described a file that did not
-  exist — the Linux artifacts always had theirs.)
+- **Windows** — there is one installer,
+  `TennoWorth_<version>_x64-setup.exe`, built in public CI from the
+  tagged commit; download it from the `desktop-v*` release and check its
+  SHA-256 against the `SHA256SUMS` file on the same release. (The `.msi`
+  is retired; releases up to 0.6.0 also carried one, alongside per-file
+  `.sha256` sidecars for both. Those sidecars are gone from later
+  releases — `SHA256SUMS` carries the same hashes.)
 - **Linux** — there is one artifact, `TennoWorth-x86_64.AppImage`,
   built in the same public CI from the same tagged commit. Download it
   and its `.sha256` from the `desktop-v*` release and check them
@@ -123,34 +123,36 @@ For each desktop release on GitHub:
   public key compiled into the running binary, and replaces itself in
   place. A download that fails that signature check is never installed.
 
-Every release also carries one `SHA256SUMS` file listing all of the
-above, for `sha256sum -c SHA256SUMS` in one go.
+Every release carries one `SHA256SUMS` file listing every asset on it.
+Because it names assets you probably did not download, check it with
+`--ignore-missing`, which skips the ones you do not have instead of
+reporting them as failures.
 
-The `.sha256` files are plain `sha256sum` output — the hash, then the
-filename it belongs to (Windows sidecars show a `*` before the name:
-that is `sha256sum`'s binary-mode marker, and `-c` understands it) —
-so the check is one command wherever you have `sha256sum` (Git Bash,
-WSL, or any Linux shell). Download the installer and its `.sha256`
-into the same directory, then:
+`SHA256SUMS` and the AppImage's `.sha256` are both plain `sha256sum`
+output — the hash, then the filename it belongs to (a `*` before the
+name is `sha256sum`'s binary-mode marker, and `-c` understands it) — so
+the check is one command wherever you have `sha256sum` (Git Bash, WSL,
+or any Linux shell). Download the installer and the checksum file into
+the same directory, then:
 
 ```bash
-# Windows — the NSIS installer (substitute the version you downloaded):
-sha256sum -c TennoWorth_0.4.0_x64-setup.exe.sha256
+# Windows — the NSIS installer, against the release's SHA256SUMS:
+sha256sum --ignore-missing -c SHA256SUMS
 
-# Windows — the MSI, if you took that one instead:
-sha256sum -c TennoWorth_0.4.0_x64_en-US.msi.sha256
-
-# Linux — the AppImage:
+# Linux — the AppImage, against its own sidecar:
 sha256sum -c TennoWorth-x86_64.AppImage.sha256
+
+# …or the AppImage against SHA256SUMS, same as Windows:
+sha256sum --ignore-missing -c SHA256SUMS
 ```
 
 In PowerShell with no `sha256sum` available, compare by eye instead
-(`Get-FileHash` prints the hash in upper case; the sidecar is lower
+(`Get-FileHash` prints the hash in upper case; `SHA256SUMS` is lower
 case — only the hex digits matter):
 
 ```powershell
-Get-FileHash .\TennoWorth_0.4.0_x64-setup.exe -Algorithm SHA256
-Get-Content .\TennoWorth_0.4.0_x64-setup.exe.sha256
+Get-FileHash .\TennoWorth_0.6.1_x64-setup.exe -Algorithm SHA256
+Select-String -Path .\SHA256SUMS -Pattern 'x64-setup\.exe'
 ```
 
 `sha256sum -c` prints `OK` when the file matches. Anything else — a
@@ -160,8 +162,8 @@ check.
 
 (The `.sig` files next to the installers are a different thing: minisign
 signatures used by the in-app updater, verified against the public key
-compiled into the app. They are not something you check by hand — the
-`.sha256` is.)
+compiled into the app. They are not something you check by hand —
+`SHA256SUMS` is.)
 
 ## The Linux package repositories — historical
 

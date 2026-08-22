@@ -11,6 +11,26 @@ release body.
 Nothing is backfilled: releases up to and including 0.3.8 predate this file,
 and their notes live on the GitHub releases themselves.
 
+## Unreleased
+
+*Fold this into the next version's section when you run `release.ts prepare`.*
+
+**Windows is now one installer, and the release carries one checksum file.**
+
+- **The `.msi` is retired.** Every release shipped two Windows installers that
+  did the same job; the NSIS `.exe` is the one the in-app updater uses, and it
+  is the smaller of the two. Nothing is lost by dropping the other. If you
+  installed from the MSI, you keep receiving updates — the updater falls back
+  to the generic Windows entry on its own, and they arrive as the `.exe`
+  installer.
+- **Windows `.sha256` sidecars are gone.** `SHA256SUMS` on the release lists
+  the same hash. Verify with `sha256sum --ignore-missing -c SHA256SUMS` — the
+  `--ignore-missing` is what lets you check one downloaded file against a list
+  naming all of them. The AppImage keeps its own `.sha256` sidecar, because it
+  is also served unversioned from the rolling updater release.
+- Together these take a release from twelve assets down to seven, of which two
+  are the source archives GitHub attaches on its own.
+
 ## 0.6.0 — 2026-08-22
 
 **Linux is now distributed as an AppImage, and only as an AppImage.** If you
