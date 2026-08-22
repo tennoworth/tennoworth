@@ -11,6 +11,28 @@ release body.
 Nothing is backfilled: releases up to and including 0.3.8 predate this file,
 and their notes live on the GitHub releases themselves.
 
+## 0.6.0 — 2026-08-22
+
+**Linux is now distributed as an AppImage, and only as an AppImage.** If you
+installed from the apt or dnf repository, or from the AUR, read this.
+
+- **The `.deb` and `.rpm` are gone, and so are the two AUR packages.** The
+  AppImage is the only Linux build that can update itself — Tauri's updater
+  never supported the others — so every Linux user was choosing between a
+  package that goes stale silently and one that doesn't. One channel that
+  works beats four that half-work.
+- **Nothing you installed will break.** The apt and dnf repositories stay
+  online and keep serving 0.5.0; the AUR packages still build 0.5.0. They
+  simply stop receiving new versions. **To keep getting updates, download
+  `TennoWorth-x86_64.AppImage` from this release** — it self-updates from
+  then on.
+- **The memory-scan permission hint was wrong for AppImage users** and now
+  isn't. `setcap` cannot work there: the AppImage runs from a temporary mount
+  that ignores file capabilities, and the path changes every launch. The app
+  now tells you to allow same-user ptrace instead, with the line to make it
+  survive a reboot. It also no longer suggests a command the kernel refuses
+  outright when `ptrace_scope` is 3.
+
 ## 0.5.0 — 2026-08-21
 
 A visual overhaul: TennoWorth now has one theme in two modes, and the theme
