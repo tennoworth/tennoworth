@@ -231,7 +231,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           projectPath: companion/tennoworth-desktop
-          args: --bundles nsis,msi
+          args: --bundles nsis
 
       - name: Stage Windows artifacts
         shell: bash
@@ -240,12 +240,12 @@ jobs:
           mkdir -p dist
           # Collect from the bundle tree by RELATIVE path rather than from
           # tauri-action's `artifactPaths` output. That output is in native
-          # Windows form (D:\a\...\TennoWorth.msi) and Git Bash could not stat
+          # Windows form (D:\a\...\TennoWorth.exe) and Git Bash could not stat
           # it even after converting to forward slashes, so every file looked
           # missing. A relative find from the workspace avoids the drive-letter
           # translation question altogether.
           find companion/target/release/bundle -type f \
-            \( -name '*.msi' -o -name '*.exe' -o -name '*.sig' \) \
+            \( -name '*.exe' -o -name '*.sig' \) \
             -exec cp -v {} dist/ \;
           if [ -z "$(ls -A dist 2>/dev/null)" ]; then
             echo "::error title=Nothing built::No installers found under companion/target/release/bundle."
@@ -253,19 +253,10 @@ jobs:
             exit 1
           fi
 
-          # SHA-256 sidecars. SECURITY.md's "How to verify a release" tells
-          # Windows users to check these; before 0.4.0 they did not exist and
-          # the installers shipped with only a .sig, which is a minisign
-          # signature for the updater and not something a user can verify by
-          # hand. sha256sum (not certutil) so the format matches the Linux
-          # sidecars and one instruction covers every platform.
-          (
-            cd dist
-            for f in *.exe *.msi; do
-              [ -e "$f" ] || continue
-              sha256sum "$f" | tee "$f.sha256"
-            done
-          )
+          # No per-file .sha256 sidecars on Windows: SHA256SUMS on the release
+          # covers the installer, and `sha256sum --ignore-missing -c SHA256SUMS`
+          # is the single instruction SECURITY.md now gives. Two files saying
+          # the same hash was one file too many.
           ls -la dist
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -432,9 +423,9 @@ jobs:
 
       # Refuses to publish an incomplete release instead of publishing one and
       # patching it. Every name here is depended on by something: the updater
-      # needs each .sig, SECURITY.md tells users to check each .sha256, and the
-      # AppImage's filename is unversioned because desktop-latest serves it
-      # under that exact name.
+      # needs each .sig, SECURITY.md tells Linux users to check the AppImage's
+      # .sha256, and the AppImage's filename is unversioned because
+      # desktop-latest serves it under that exact name.
       - name: Verify the inventory is complete
         run: |
           set -euo pipefail
@@ -443,10 +434,6 @@ jobs:
           for f in \
             "TennoWorth_${VERSION}_x64-setup.exe" \
             "TennoWorth_${VERSION}_x64-setup.exe.sig" \
-            "TennoWorth_${VERSION}_x64-setup.exe.sha256" \
-            "TennoWorth_${VERSION}_x64_en-US.msi" \
-            "TennoWorth_${VERSION}_x64_en-US.msi.sig" \
-            "TennoWorth_${VERSION}_x64_en-US.msi.sha256" \
             TennoWorth-x86_64.AppImage \
             TennoWorth-x86_64.AppImage.sha256 \
             TennoWorth-x86_64.AppImage.sig ; do
@@ -464,18 +451,20 @@ jobs:
             [ -s "$f" ] || { echo "::error title=Empty signature::$f is empty."; exit 1; }
           done
 
-          # The sidecars are what SECURITY.md tells users to trust. Verify them
-          # against the bytes about to be uploaded rather than assuming the
-          # build wrote them correctly.
+          # The AppImage sidecar is what SECURITY.md tells Linux users to
+          # trust. Verify it against the bytes about to be uploaded rather than
+          # assuming the build wrote it correctly. Windows ships no sidecars —
+          # SHA256SUMS, assembled below, is the only checksum file there.
           for f in *.sha256; do
             sha256sum -c "$f"
           done
           ls -la
 
-      # One file listing every asset, next to the per-file sidecars. The
-      # sidecars stay: SECURITY.md's instructions use them, and `sha256sum -c`
-      # against a one-line sidecar is a shorter thing to ask of a user than
-      # against a file naming assets they did not download.
+      # One file listing every asset. This is the ONLY checksum file for
+      # Windows now; Linux keeps its AppImage sidecar because the AppImage is
+      # also served, unversioned, from the rolling release. `sha256sum -c`
+      # against this file needs --ignore-missing unless you downloaded every
+      # asset it names — SECURITY.md spells that out.
       - name: Assemble SHA256SUMS
         working-directory: dist
         run: |
@@ -491,7 +480,15 @@ jobs:
       #   windows-x86_64-nsis   the generic key aliases NSIS, because that is
       #                         what the app's install flow assumes — passive
       #                         install, self-restart)
-      #   windows-x86_64-msi    the MSI, for anyone pinned to it
+      # There is deliberately NO windows-x86_64-msi key. The MSI is retired,
+      # and an already-installed MSI client is not stranded by its absence:
+      # tauri-plugin-updater looks up [`{os}-{arch}-{installer}`, `{os}-{arch}`]
+      # in that order (updater.rs, `get_urls`), so a client asking for
+      # windows-x86_64-msi falls through to windows-x86_64 and gets the NSIS
+      # .exe. It then picks the install flow by SNIFFING THE DOWNLOADED BYTES
+      # (`infer::app::is_exe`), not from the key or the URL, so it runs the
+      # NSIS path correctly. Publishing a -msi key pointing at an .exe would
+      # work too, but it would be a key that lies about its contents.
       #   linux-x86_64          the repacked, re-signed AppImage
       #
       # URLs point at the ROLLING desktop-latest tag, not at this release: the
@@ -517,7 +514,6 @@ jobs:
                   return fh.read().strip()
 
           nsis = f'TennoWorth_{v}_x64-setup.exe'
-          msi  = f'TennoWorth_{v}_x64_en-US.msi'
           app  = 'TennoWorth-x86_64.AppImage'
 
           win_nsis = {'signature': sig(nsis), 'url': f'{base}/{nsis}'}
@@ -534,7 +530,6 @@ jobs:
               'platforms': {
                   'windows-x86_64':      win_nsis,
                   'windows-x86_64-nsis': win_nsis,
-                  'windows-x86_64-msi':  {'signature': sig(msi), 'url': f'{base}/{msi}'},
                   'linux-x86_64':        {'signature': sig(app), 'url': f'{base}/{app}'},
               },
           }
@@ -592,9 +587,11 @@ jobs:
           notes_file=$(mktemp)
           printf '%s\n\n---\n\n' "$NOTES" > "$notes_file"
           cat >> "$notes_file" <<'EOF'
-          **Windows** — download `TennoWorth_<version>_x64-setup.exe` (or the `.msi`) and
-          verify it against the matching `.sha256`. The in-app updater handles
-          later versions on its own.
+          **Windows** — one artifact: `TennoWorth_<version>_x64-setup.exe`.
+          Download it and verify it against `SHA256SUMS`. The in-app updater
+          handles later versions on its own. The `.msi` is retired as of this
+          release; an existing MSI install still receives updates, and they
+          arrive as the `.exe` installer.
 
           **Linux** — one artifact: `TennoWorth-x86_64.AppImage`. Download it,
           verify it against `TennoWorth-x86_64.AppImage.sha256`, `chmod +x`,
@@ -602,9 +599,11 @@ jobs:
           The apt/dnf repositories and the AUR packages are retired and frozen
           at their last published version — see `SECURITY.md`.
 
-          `SHA256SUMS` lists every downloadable asset; per-file `.sha256`
-          sidecars sit next to each one. `.sig` files are minisign signatures
-          for the in-app updater, not user-facing checksums — see `SECURITY.md`.
+          `SHA256SUMS` lists every downloadable asset — verify with
+          `sha256sum --ignore-missing -c SHA256SUMS`. The AppImage additionally
+          carries its own `.sha256` sidecar. `.sig` files are minisign
+          signatures for the in-app updater, not user-facing checksums — see
+          `SECURITY.md`.
           EOF
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "release $TAG already exists — re-run, reusing it."
@@ -678,8 +677,6 @@ jobs:
           gh release upload "$tag" --clobber \
             "dist/TennoWorth_${VERSION}_x64-setup.exe" \
             "dist/TennoWorth_${VERSION}_x64-setup.exe.sig" \
-            "dist/TennoWorth_${VERSION}_x64_en-US.msi" \
-            "dist/TennoWorth_${VERSION}_x64_en-US.msi.sig" \
             dist/TennoWorth-x86_64.AppImage \
             dist/TennoWorth-x86_64.AppImage.sig
           gh release upload "$tag" --clobber dist/latest.json

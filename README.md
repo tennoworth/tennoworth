@@ -50,8 +50,8 @@ Warframe (running)  ──►  desktop app (Tauri)  ──►  "what to sell"
 
 The desktop app is the product. Install it per platform:
 
-- **Windows** — an installer (`.exe`) or `.msi` from the
-  [latest release](https://github.com/tennoworth/tennoworth/releases/latest).
+- **Windows** — a single installer, `TennoWorth_<version>_x64-setup.exe`, from
+  the [latest release](https://github.com/tennoworth/tennoworth/releases/latest).
   Unsigned, so SmartScreen warns on first run (see
   [`SECURITY.md`](SECURITY.md)). The app updates itself from there.
 - **Linux** — a single-file **AppImage**, and nothing else:

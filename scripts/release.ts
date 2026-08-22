@@ -235,9 +235,17 @@ function cmdCheck(argv: string[]) {
 function nextVersion(current: string, bump: string): string {
   if (SEMVER.test(bump)) return bump;
   const [major, minor, patch] = current.split(".").map(Number);
-  // Pre-1.0 policy (also stated in CHANGELOG.md's header): patch = fixes, deps,
-  // internal changes; minor = user-facing features, new channels, and
-  // compatibility breaks; major is reserved for 1.0.
+  // Pre-1.0 policy (stated in full in CHANGELOG.md's header). The minor digit
+  // is deliberately expensive: 1.0 has to mean something, so it is not a
+  // counter of how much work happened.
+  //   patch  the default — fixes, deps, internal work, AND ordinary features
+  //          and UI work. A new view is a patch.
+  //   minor  only when the product changes shape: a distribution channel
+  //          added/removed, a persisted-format or updater change, package
+  //          identity, or a compatibility break.
+  //   major  1.0 only.
+  // Also: a change confined to prototype/ ships to tennoworth.app via
+  // continuous deployment and needs no desktop release at all.
   switch (bump) {
     case "major":
       return `${major + 1}.0.0`;
