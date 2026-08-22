@@ -41,6 +41,7 @@
   import { wfmItemUrl, baroLocation, humanWindow } from './lib/format';
   import BaroBoard from './components/BaroBoard.svelte';
   import BuildVsBuy from './components/BuildVsBuy.svelte';
+  import TraderCalendar from './components/TraderCalendar.svelte';
   import RefinementLadder from './components/RefinementLadder.svelte';
   import { listenForTauriEvent, TRAY_HINT_EVENT } from './lib/desktop-update';
 
@@ -1319,9 +1320,16 @@
            have it, and an empty table would read as "he is selling nothing". -->
       {#if voidTrader?.inventory?.length}
         <section class="card">
-          <BaroBoard market={market} baro={voidTrader} ducatsHeld={ducatStats.total} />
+          <BaroBoard market={market} baro={voidTrader} ducatsHeld={ducatStats.total} owned={resolved.owned} />
         </section>
       {/if}
+
+      <!-- Vault rotations and Darvo, from the same worldState poll. An
+           unvaulting is the most expensive surprise in prime trading and it is
+           announced days ahead. -->
+      <section class="card">
+        <TraderCalendar market={market} owned={resolved.owned} />
+      </section>
 
     {:else if effectiveView === 'routines'}
       <section class="view-header">
