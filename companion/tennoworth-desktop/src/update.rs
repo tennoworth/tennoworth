@@ -81,12 +81,15 @@ impl UpdateState {
 /// controlled endpoint (the market.rs `TENNOWORTH_MARKET_URL` pattern). None on
 /// any builder failure — including a non-https override, which the plugin
 /// rejects in release builds.
-/// Linux installs come from distro packaging (AUR), which owns updating — and
-/// Tauri's Linux updater only supports the AppImage bundle. In an AppImage
-/// run (the runtime sets `APPIMAGE`) self-update works and latest.json
-/// carries a linux-x86_64 entry, so the check is real. A deb/rpm/AUR install
-/// keeps updates with the package manager — a banner whose Install button
-/// can't work is worse than silence.
+/// Tauri's Linux updater only supports the AppImage bundle, and that is
+/// precisely why the AppImage is now the ONLY Linux channel we ship: it is the
+/// one that can replace itself. In an AppImage run (the runtime sets
+/// `APPIMAGE`) self-update works and latest.json carries a linux-x86_64 entry,
+/// so the check is real. Any other Linux run — a `cargo run` dev build, an
+/// extracted bundle, or a leftover install from the retired deb/rpm/AUR
+/// packages — cannot self-update, and a banner whose Install button can't work
+/// is worse than silence. The name of this predicate is now a slight misnomer:
+/// there is no packager left, only "something other than an AppImage".
 ///
 /// (History: the first AppImage was withdrawn for an EGL abort on rolling
 /// Mesa. Root cause found 2026-08-20: the bundle carried ubuntu-22.04's

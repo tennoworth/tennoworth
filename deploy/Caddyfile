@@ -47,6 +47,16 @@
 		file_server
 	}
 
+	# RETIRED BUT STILL SERVED. Linux is AppImage-only; nothing publishes into
+	# the apt/dnf repos any more (deploy/pull-packages.sh is a no-op stub). The
+	# two routes below stay because REMOVING them is what would break people:
+	# an existing `apt install tennoworth` user would get index.html with a 200
+	# from the SPA catch-all instead of InRelease, which apt reports as a
+	# corrupt repository rather than as "this repo is gone". Left as-is, their
+	# package manager keeps verifying a valid signed tree that simply never
+	# offers a new version. Take these down only together with /srv/wfm/repo,
+	# and only after the change has been announced.
+
 	# The repo signing key. It needs its OWN handle, not the SPA catch-all:
 	# that ends in `try_files {path} /index.html`, so a miss would return
 	# index.html with status 200. The documented install line is
@@ -63,9 +73,10 @@
 		file_server
 	}
 
-	# Signed apt + dnf repositories, published by wfm-repo-pull.timer. Served
-	# from a separate root; the URL path already carries the /apt or /rpm
-	# prefix, so root + path resolves without a strip_prefix.
+	# Signed apt + dnf repositories. FROZEN — wfm-repo-pull.timer no longer
+	# publishes into them (see the retirement note above). Served from a
+	# separate root; the URL path already carries the /apt or /rpm prefix, so
+	# root + path resolves without a strip_prefix.
 	#
 	# No file_server `browse` — apt and dnf fetch exact paths (dists/…/InRelease,
 	# repodata/repomd.xml) and never need an index. Directory listings would only
