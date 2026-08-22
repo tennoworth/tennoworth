@@ -80,6 +80,34 @@ describe('vaultAffects', () => {
     expect(vaultAffects(rotation, MARKET, owned(['volt_prime_set']))).toEqual([]);
   });
 
+  it('does not flag a prime whose name is a substring of the one in the pack', () => {
+    // Seven real prime names are letter-substrings of another: Bronco Prime
+    // inside Akbronco Prime, Bo Prime inside Limbo Prime, Lex inside Aklex,
+    // and four more. A raw containment test flags every one of them.
+    const market = {
+      calendar: {
+        primes: {
+          bronco_prime_set: { name: 'Bronco Prime', vaulted: true },
+          akbronco_prime_set: { name: 'Akbronco Prime', vaulted: true },
+          bo_prime_set: { name: 'Bo Prime', vaulted: true },
+          limbo_prime_set: { name: 'Limbo Prime', vaulted: true },
+        },
+      },
+    } as unknown as Market;
+    const pack: VaultRotation = {
+      activation: '2026-08-28T18:00:00Z',
+      items: [
+        '/Lotus/Types/StoreItems/Packages/MegaPrimeVault/MPVAkbroncoPrimeSinglePack',
+        '/Lotus/Types/StoreItems/Packages/MegaPrimeVault/MPVLimboPrimeSinglePack',
+      ],
+    };
+    const held = owned(['bronco_prime_set', 'bo_prime_set', 'akbronco_prime_set']);
+    const hits = vaultAffects(pack, market, held);
+    expect(hits).toEqual(['akbronco_prime_set']);
+    expect(hits).not.toContain('bronco_prime_set');
+    expect(hits).not.toContain('bo_prime_set');
+  });
+
   it('is empty without an inventory or a prime calendar', () => {
     expect(vaultAffects(rotation, MARKET, null)).toEqual([]);
     expect(vaultAffects(rotation, { items: {} } as unknown as Market, owned(['x']))).toEqual([]);

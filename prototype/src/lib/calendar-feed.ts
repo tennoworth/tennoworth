@@ -32,22 +32,56 @@ export interface CalendarItem {
   affectsKnown: boolean;
 }
 
-/** Strip everything but letters, lowercased — for comparing a Prime Vault
- *  bundle SKU (`MPVRevenantPrimeSinglePack`) against a set name
- *  ("Revenant Prime"). Both sides are normalised, so the match is a
- *  containment test on letters alone rather than a guess at DE's naming. */
-function letters(s: string): string {
-  return s.toLowerCase().replace(/[^a-z]/g, '');
+/**
+ * Split an identifier into lowercase words.
+ *
+ * Bundle SKUs are CamelCase with no separators
+ * (`MPVRevenantPrimeSinglePack` → mpv, revenant, prime, single, pack); set
+ * names are already spaced ("Revenant Prime" → revenant, prime). Reducing both
+ * to word lists is what makes the comparison safe.
+ *
+ * A raw letters-only containment test — which this used to be — produces real
+ * false positives, because seven prime names are letter-substrings of another:
+ * Bo Prime inside Limbo Prime, Bronco Prime inside Akbronco Prime, Lex Prime
+ * inside Aklex Prime, and four more. Tokenising kills all of them, since
+ * "akbronco" is one word and never equals "bronco".
+ */
+function words(s: string): string[] {
+  return (
+    s
+      // Acronym → word: MPVRevenant → MPV Revenant. Needed first, and easy to
+      // miss — without it the leading `MPV` fuses onto the frame name and
+      // nothing ever matches.
+      .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+      // word → Word: AkbroncoPrime → Akbronco Prime.
+      .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter(Boolean)
+  );
+}
+
+/** Whether `needle` appears as a contiguous run of whole words in `haystack`. */
+function containsWords(haystack: string[], needle: string[]): boolean {
+  if (!needle.length || needle.length > haystack.length) return false;
+  outer: for (let i = 0; i + needle.length <= haystack.length; i += 1) {
+    for (let j = 0; j < needle.length; j += 1) {
+      if (haystack[i + j] !== needle[j]) continue outer;
+    }
+    return true;
+  }
+  return false;
 }
 
 /**
  * Which owned sets a Prime Vault rotation covers.
  *
  * Rotation manifests are bundle SKUs with no market slug, so the only signal
- * is the name embedded in the path. A set matches when its name's letters
- * appear in a SKU's letters — exact containment, no fuzzy scoring. Anything
- * short of that is left out, because telling somebody their Nidus Prime is
- * about to be unvaulted when it isn't is worse than saying nothing.
+ * is the name embedded in the path. A set matches when its name appears as a
+ * contiguous run of whole WORDS in the SKU — never a raw substring, which
+ * would flag a held Bronco Prime on an Akbronco Prime pack. No fuzzy scoring
+ * either: telling somebody their Nidus Prime is about to be unvaulted when it
+ * isn't is worse than saying nothing.
  */
 export function vaultAffects(
   rotation: VaultRotation,
@@ -57,16 +91,16 @@ export function vaultAffects(
   const primes = market?.calendar?.primes;
   if (!primes || !owned) return [];
 
-  const skus = rotation.items.map(letters);
+  const skus = rotation.items.map(words);
   const heldSlugs = new Set<string>();
   for (const rec of owned.values()) heldSlugs.add(rec.slug);
 
   const hits: string[] = [];
   for (const [setSlug, prime] of Object.entries(primes)) {
     if (!prime?.name) continue;
-    const needle = letters(prime.name);
-    if (needle.length < 6) continue; // too short to match safely
-    if (!skus.some((s) => s.includes(needle))) continue;
+    const needle = words(prime.name);
+    if (!needle.length) continue;
+    if (!skus.some((sku) => containsWords(sku, needle))) continue;
 
     // Held either as the assembled set or as any of its parts.
     if (heldSlugs.has(setSlug)) {
