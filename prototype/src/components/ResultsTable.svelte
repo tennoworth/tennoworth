@@ -259,22 +259,23 @@
   };
 
   // Fixed-layout column widths (rem). Item takes the remainder, down to the
-  // 8.5rem floor that `min-width` buys it; wider on bigger desks (the root
-  // font steps at 1900/2500 widen the numeric block ~6% per step). Below
-  // `min-width` the panel scrolls sideways rather than squeezing Item.
+  // ITEM_FLOOR_REM floor that `floorRem` buys it; wider on bigger desks (the
+  // root font steps at 1900/2500 widen the numeric block ~6% per step). Below
+  // the floor the panel scrolls sideways rather than squeezing Item — and the
+  // floor is derived per view, so a preset only ever pays for the columns it
+  // actually renders.
   //
   // "Played" is the sixteenth column, and the fifteen before it had already
   // spent the 1440 budget: 63.5rem of fixed columns left Item ~208px and the
   // table fit a 1224px content area exactly. At 71rem it no longer fits, so
-  // the no-preset view now scrolls sideways at 1440 and Item sits on its
-  // floor at 136px. That is the trade this design already declares — scroll,
-  // don't squeeze the item name — but it is a REAL change: the everything
-  // view used to fit that screen and now does not. Every preset shows a
-  // subset and is unaffected.
+  // the no-preset view scrolls sideways at 1440 and Item sits on its floor at
+  // 136px. That is the trade this design already declares — scroll, don't
+  // squeeze the item name — but it is a REAL change for that view, and that
+  // view only: every preset renders a subset and its floor shrinks with it.
   //
-  // ResultsTable.test.ts holds the sum and `min-width` together so the next
-  // column has to move the floor deliberately rather than silently eating
-  // the item name.
+  // ResultsTable.test.ts holds the widths, the floor and each preset together
+  // so the next column has to move the budget deliberately rather than
+  // silently eating the item name or taxing views that never show it.
   const ALL_COLUMNS: ColumnDef[] = [
     { key: 'name',           label: 'Item',     align: 'left',  width: 0 },
     { key: 'owned',          label: 'Own',      align: 'right', width: 6 },
@@ -316,6 +317,24 @@
     }
     return cols;
   });
+
+  /** Width the Item column keeps once every other visible column is paid for.
+   *  Item is the one column a trader cannot do without, so it gets a floor
+   *  rather than the leftovers. */
+  const ITEM_FLOOR_REM = 8.5;
+
+  // The table's horizontal floor, derived from the columns ACTUALLY on screen.
+  //
+  // This used to be a flat `min-width` in the stylesheet, which meant a
+  // six-column preset carried the sixteen-column view's floor and scrolled
+  // sideways for columns it does not render — the exact thing the "presets
+  // with few columns don't need the full-width floor" comment said was not
+  // happening. Both tables take the same value, from the same `columns` that
+  // feeds the shared colgroup, so the picks table stays aligned over the rows
+  // beneath it at every width.
+  let floorRem = $derived(
+    columns.reduce((sum, c) => sum + (c.width ?? 0), 0) + ITEM_FLOOR_REM,
+  );
 
   // Pick rows fill the leading numeric columns and give the rest of the row to
   // the reason line — at least three columns so the sentence has room, eight
@@ -573,7 +592,7 @@
     {#if picksOpen}
       {#if picks.length > 0}
         <div class="scroll">
-        <table class:comfortable={density === 'comfortable'} class="picks-table">
+        <table class:comfortable={density === 'comfortable'} class="picks-table" style="min-width:{floorRem}rem">
           {@render colgroup()}
           <tbody>
             {#each picks as p, i (p.key ?? p.slug)}
@@ -647,7 +666,7 @@
     <div class="empty-slot">{@render empty()}</div>
   {:else}
   <div class="scroll">
-  <table class:comfortable={density === 'comfortable'}>
+  <table class:comfortable={density === 'comfortable'} style="min-width:{floorRem}rem">
     {@render colgroup()}
     <thead>
       <tr>
@@ -879,14 +898,15 @@
   }
 
   /* ---- the table: fixed layout, shared colgroup ---- */
+  /* `min-width` is set inline from `floorRem`, not here: presets with few
+     columns don't need the full-width floor, and a static value in this rule
+     handed every one of them the sixteen-column view's. */
   table {
     width: 100%;
-    min-width: 79.5rem;
     table-layout: fixed;
     border-collapse: collapse;
     font-variant-numeric: tabular-nums;
   }
-  /* Presets with few columns don't need the full-width floor. */
   th, td {
     padding: 0 var(--cell);
     text-align: left;
