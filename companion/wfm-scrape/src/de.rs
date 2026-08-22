@@ -315,6 +315,9 @@ pub struct DeSnapshot {
     pub hashes: BTreeMap<String, String>,
     /// Manifests actually fetched this cycle (skipped ones are absent).
     pub manifests: HashMap<String, Value>,
+    /// Per-manifest transport/parse evidence. A parse failure must not collapse
+    /// into the same absence as a request failure.
+    pub outcomes: HashMap<String, ManifestOutcome>,
     /// Basenames whose hash moved since the prior cycle.
     pub changed: Vec<String>,
     /// Whether the index itself came back. False means DE is unreachable and
@@ -325,12 +328,24 @@ pub struct DeSnapshot {
     pub world: Option<Value>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ManifestOutcome {
+    Unavailable,
+    Unchanged,
+    Invalid,
+    Usable,
+}
+
 impl DeSnapshot {
     /// True when the manifest was deliberately skipped as unchanged — the
     /// caller should emit an empty surface and let `reconcile` carry the prior
     /// DE-derived one, NOT fall back to another source.
     pub fn skipped(&self, name: &str) -> bool {
         self.index_ok && !self.manifests.contains_key(name) && self.hashes.contains_key(name)
+    }
+
+    pub fn outcome(&self, name: &str) -> ManifestOutcome {
+        self.outcomes.get(name).copied().unwrap_or(ManifestOutcome::Unavailable)
     }
 }
 
@@ -377,6 +392,7 @@ pub fn fetch_export(
     for name in WANTED_MANIFESTS {
         let Some(entry) = index.get(*name) else {
             eprintln!("  warning: {name} is not in DE's index this cycle");
+            snap.outcomes.insert((*name).to_string(), ManifestOutcome::Unavailable);
             continue;
         };
         let unchanged = prior_hashes.get(*name) == Some(&entry.hash);
@@ -384,6 +400,7 @@ pub fn fetch_export(
             // The skip that makes this cheap. Recording the hash marks it held,
             // which is what `skipped()` keys off.
             snap.hashes.insert((*name).to_string(), entry.hash.clone());
+            snap.outcomes.insert((*name).to_string(), ManifestOutcome::Unchanged);
             continue;
         }
         if !unchanged {
@@ -393,14 +410,21 @@ pub fn fetch_export(
             Ok(body) => match parse_manifest(&body) {
                 Ok(doc) => {
                     snap.manifests.insert((*name).to_string(), doc);
+                    snap.outcomes.insert((*name).to_string(), ManifestOutcome::Usable);
                     // Recorded ONLY on success. A hash written for a manifest
                     // we failed to read would tell the next cycle we already
                     // have it, and the failure would never be retried.
                     snap.hashes.insert((*name).to_string(), entry.hash.clone());
                 }
-                Err(e) => eprintln!("  warning: {name}: {e}"),
+                Err(e) => {
+                    snap.outcomes.insert((*name).to_string(), ManifestOutcome::Invalid);
+                    eprintln!("  warning: {name}: {e}");
+                }
             },
-            Err(e) => eprintln!("  warning: could not fetch {name}: {e}"),
+            Err(e) => {
+                snap.outcomes.insert((*name).to_string(), ManifestOutcome::Unavailable);
+                eprintln!("  warning: could not fetch {name}: {e}");
+            }
         }
     }
     snap
@@ -408,16 +432,16 @@ pub fn fetch_export(
 
 /// Fetch worldState. Returns `None` on any failure — the caller keeps the
 /// prior surface and marks it stale.
-pub fn fetch_world_state(http: &dyn Http) -> Option<Value> {
+pub fn fetch_world_state(http: &dyn Http) -> Observation<Value> {
     match http.get_json(DE_WORLD_STATE_URL) {
-        Ok(v) if v.is_object() => Some(v),
+        Ok(v) if v.is_object() => Observation::usable(v),
         Ok(_) => {
             eprintln!("  warning: {DE_WORLD_STATE_URL}: not a JSON object");
-            None
+            Observation::Invalid
         }
         Err(e) => {
             eprintln!("  warning: could not fetch {DE_WORLD_STATE_URL}: {e}");
-            None
+            Observation::Unavailable
         }
     }
 }
@@ -440,7 +464,9 @@ pub fn world_array_observation(
         return Observation::Invalid;
     }
     if extracted.len() < rows.len() {
-        Observation::partial(extracted)
+        // Vec has no stable-key merge contract. Publishing only the valid
+        // subset would silently delete prior rows, so preserve the whole child.
+        Observation::Invalid
     } else {
         Observation::usable(extracted)
     }
@@ -611,7 +637,7 @@ mod tests {
         let all_bad = serde_json::json!({"Events": [{"bad": true}]});
         assert!(matches!(world_array_observation(Some(&all_bad), "Events", vec![]), Observation::Invalid));
         let mixed = serde_json::json!({"Events": [{"ok": true}, {"bad": true}]});
-        assert!(matches!(world_array_observation(Some(&mixed), "Events", vec![serde_json::json!({"ok": true})]), Observation::Usable { complete: false, .. }));
+        assert!(matches!(world_array_observation(Some(&mixed), "Events", vec![serde_json::json!({"ok": true})]), Observation::Invalid));
     }
 
     #[test]

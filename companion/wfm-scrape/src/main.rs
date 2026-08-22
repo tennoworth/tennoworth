@@ -377,7 +377,11 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     }
 
     eprintln!("Fetching DE worldState...");
-    let de_world = de::fetch_world_state(http.as_ref());
+    let de_world_observation = de::fetch_world_state(http.as_ref());
+    let de_world = match &de_world_observation {
+        Observation::Usable { data, .. } => Some(data),
+        _ => None,
+    };
 
     // Ducats, first-party. `primeSellingPrice` keys on the recipe (the
     // blueprint you trade), so it resolves through path_to_info the same way
@@ -460,12 +464,12 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         .unwrap_or_default();
     let recipes_observation = if !recipes_surface.is_empty() {
         Observation::usable(recipes_surface)
-    } else if de_recipes.is_some() {
-        Observation::Invalid
-    } else if de_snap.skipped("ExportRecipes_en.json") {
-        Observation::Unchanged
     } else {
-        Observation::Unavailable
+        match de_snap.outcome("ExportRecipes_en.json") {
+            de::ManifestOutcome::Unchanged => Observation::Unchanged,
+            de::ManifestOutcome::Unavailable => Observation::Unavailable,
+            de::ManifestOutcome::Invalid | de::ManifestOutcome::Usable => Observation::Invalid,
+        }
     };
     if let Observation::Usable { data: recipes, .. } = &recipes_observation {
         eprintln!("  recipes: {} buildable items costed", recipes.len());
@@ -584,12 +588,14 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         (Observation::usable(fresh_relics), "de_public_export")
     } else if prior_has_relics {
         eprintln!("Relic tables not rebuilt this cycle — carrying the prior DE surface");
-        let state = if de_snap.skipped("ExportRelicArcane_en.json") {
-            Observation::Unchanged
-        } else if de_snap.manifests.contains_key("ExportRelicArcane_en.json") && de_recipes.is_some() {
-            Observation::Invalid
-        } else {
-            Observation::Unavailable
+        let state = match (
+            de_snap.outcome("ExportRelicArcane_en.json"),
+            de_snap.outcome("ExportRecipes_en.json"),
+        ) {
+            (de::ManifestOutcome::Invalid, _) | (_, de::ManifestOutcome::Invalid) => Observation::Invalid,
+            (de::ManifestOutcome::Unavailable, _) | (_, de::ManifestOutcome::Unavailable) => Observation::Unavailable,
+            (de::ManifestOutcome::Unchanged, de::ManifestOutcome::Usable | de::ManifestOutcome::Unchanged) => Observation::Unchanged,
+            _ => Observation::Invalid,
         };
         (state, "de_public_export")
     } else {
@@ -705,7 +711,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // dispositions must not silently leave every value at warframe.market's
     // lagging mirror. When there is nothing fresh, re-apply the prior
     // snapshot's — which were DE's — so the override survives.
-    let mut de_dispos = de_snap
+    let de_dispos = de_snap
         .manifests
         .get("ExportWeapons_en.json")
         .map(de_extract::dispositions_from_weapons)
@@ -716,24 +722,29 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         .and_then(|m| m.as_object())
         .map(|m| m.iter().filter_map(|(k, v)| v.as_f64().map(|n| (k.clone(), n))).collect())
         .unwrap_or_default();
-    let dispositions_truncated = prior_de_dispositions.len() >= 4
-        && !de_dispos.is_empty()
-        && de_dispos.len() * 2 < prior_de_dispositions.len();
-    if dispositions_truncated {
-        eprintln!("  warning: DE dispositions shrank implausibly ({} vs prior {}) — preserving prior", de_dispos.len(), prior_de_dispositions.len());
-        de_dispos.clear();
+    let mut joined_dispositions = std::collections::BTreeMap::new();
+    if let Some(map) = rivens.get("weapons").and_then(|w| w.as_object()) {
+        for (slug, row) in map {
+            let Some(name) = row.get("name").and_then(|n| n.as_str()).map(|n| n.to_lowercase()) else { continue };
+            if let Some(value) = de_dispos.get(&name) {
+                joined_dispositions.insert(slug.clone(), *value);
+            }
+        }
     }
-    let disposition_state = if !de_dispos.is_empty() {
-        wfm_scrape::reconcile::Disposition::PublishedFresh
-    } else if dispositions_truncated || de_snap.manifests.contains_key("ExportWeapons_en.json") {
-        wfm_scrape::reconcile::Disposition::PreservedInvalid
-    } else if de_snap.skipped("ExportWeapons_en.json") {
-        wfm_scrape::reconcile::Disposition::PreservedUnchanged
-    } else {
-        wfm_scrape::reconcile::Disposition::PreservedUnavailable
+    let joined_usable = !de_dispos.is_empty()
+        && !joined_dispositions.is_empty()
+        && joined_dispositions.len() * 100 >= de_dispos.len() * 80;
+    let disposition_state = match de_snap.outcome("ExportWeapons_en.json") {
+        de::ManifestOutcome::Usable if joined_usable => wfm_scrape::reconcile::Disposition::PublishedFresh,
+        de::ManifestOutcome::Usable | de::ManifestOutcome::Invalid => wfm_scrape::reconcile::Disposition::PreservedInvalid,
+        de::ManifestOutcome::Unchanged => wfm_scrape::reconcile::Disposition::PreservedUnchanged,
+        de::ManifestOutcome::Unavailable => wfm_scrape::reconcile::Disposition::PreservedUnavailable,
     };
-    let mut de_dispositions = std::collections::BTreeMap::new();
-    if de_dispos.is_empty() {
+    if !joined_usable && !de_dispos.is_empty() {
+        eprintln!("  warning: only {}/{} DE dispositions joined to WFM slugs — preserving prior exact provenance", joined_dispositions.len(), de_dispos.len());
+    }
+    let mut de_dispositions = if joined_usable { joined_dispositions } else { std::collections::BTreeMap::new() };
+    if !joined_usable {
         let mut carried = 0usize;
         if let Some(map) = rivens.get_mut("weapons").and_then(|w| w.as_object_mut()) {
             for (slug, prior_dispo) in &prior_de_dispositions {
@@ -749,26 +760,19 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         eprintln!("  dispositions: none from DE this cycle — carried {carried} from the prior snapshot");
     } else {
         let mut moved = 0usize;
-        let mut matched = 0usize;
         if let Some(map) = rivens.get_mut("weapons").and_then(|w| w.as_object_mut()) {
-            for (slug, row) in map.iter_mut() {
-                let Some(name) = row.get("name").and_then(|n| n.as_str()).map(|n| n.to_lowercase())
-                else {
-                    continue;
-                };
-                let Some(de_dispo) = de_dispos.get(&name) else { continue };
-                matched += 1;
+            for (slug, de_dispo) in &de_dispositions {
+                let Some(row) = map.get_mut(slug) else { continue };
                 let was = row.get("disposition").and_then(|d| d.as_f64());
                 if was != Some(*de_dispo) {
                     moved += 1;
                 }
                 if let Some(obj) = row.as_object_mut() {
                     obj.insert("disposition".into(), serde_json::json!(de_dispo));
-                    de_dispositions.insert(slug.clone(), *de_dispo);
                 }
             }
         }
-        eprintln!("  dispositions: {matched} matched to DE ({moved} differed from WFM's mirror)");
+        eprintln!("  dispositions: {} matched to DE ({moved} differed from WFM's mirror)", de_dispositions.len());
     }
     // The change log LAST, diffing what we are about to publish against what we
     // published before. Computing it inside the fetch made it diff WFM's
@@ -806,8 +810,11 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         .unwrap_or_default();
     let (mut riven_stats, unmatched_stats, riven_stats_children) =
         fetch::fetch_riven_stats(http.as_ref(), &weapons_by_name);
-    let pc_riven_stats_ok = riven_stats_children.iter().any(|child| child == "pc");
-    if pc_riven_stats_ok {
+    let pc_riven_stats_state = riven_stats_children
+        .get("pc")
+        .copied()
+        .unwrap_or(fetch::RivenChildOutcome::Unavailable);
+    if pc_riven_stats_state == fetch::RivenChildOutcome::Usable {
         fetch::carry_failed_riven_platforms(&mut riven_stats, riven_stats_old.as_ref(), &riven_stats_children);
     }
     eprintln!("  {} weapons · {unmatched_stats} DE rows without a WFM slug", riven_stats.len());
@@ -831,12 +838,11 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     let r_baro = reconcile("baro", baro_observation, baro_old.as_ref(), prior_stamps.get("baro").map(|s| s.as_str()), now, STALE_DAYS);
     let r_rivens = reconcile("rivens", observation(rivens, true), rivens_old.as_ref(), prior_stamps.get("rivens").map(|s| s.as_str()), now, STALE_DAYS);
     let r_calendar = reconcile("calendar", observation(calendar, true), calendar_old.as_ref(), prior_stamps.get("calendar").map(|s| s.as_str()), now, STALE_DAYS);
-    let riven_stats_observation = if !pc_riven_stats_ok {
-        Observation::Unavailable
-    } else if riven_stats.is_empty() {
-        Observation::AuthoritativeEmpty
-    } else {
-        Observation::usable(riven_stats)
+    let riven_stats_observation = match pc_riven_stats_state {
+        fetch::RivenChildOutcome::Unavailable => Observation::Unavailable,
+        fetch::RivenChildOutcome::Invalid => Observation::Invalid,
+        fetch::RivenChildOutcome::AuthoritativeEmpty => Observation::AuthoritativeEmpty,
+        fetch::RivenChildOutcome::Usable => Observation::usable(riven_stats),
     };
     let r_riven_stats = reconcile("riven_stats", riven_stats_observation, riven_stats_old.as_ref(), prior_stamps.get("riven_stats").map(|s| s.as_str()), now, STALE_DAYS);
     let r_recipes = reconcile("recipes", recipes_observation, recipes_old.as_ref(), prior_stamps.get("recipes").map(|s| s.as_str()), now, STALE_DAYS);
@@ -849,9 +855,21 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         .as_ref()
         .map(|w| de_extract::deals_from_world(w, &path_to_info_for_de, &de_alias, |ms| clock::iso_z(clock::from_millis(ms))))
         .unwrap_or_default();
+    let world_vault_observation = match &de_world_observation {
+        Observation::Unavailable => Observation::Unavailable,
+        Observation::Invalid => Observation::Invalid,
+        Observation::Usable { .. } => de::world_array_observation(de_world, "PrimeVaultTraders", fresh_vault_rotation),
+        Observation::Unchanged | Observation::AuthoritativeEmpty => Observation::Invalid,
+    };
+    let world_deals_observation = match &de_world_observation {
+        Observation::Unavailable => Observation::Unavailable,
+        Observation::Invalid => Observation::Invalid,
+        Observation::Usable { .. } => de::world_array_observation(de_world, "DailyDeals", fresh_deals),
+        Observation::Unchanged | Observation::AuthoritativeEmpty => Observation::Invalid,
+    };
     let r_world_vault = reconcile(
         "world.vault_rotation",
-        de::world_array_observation(de_world.as_ref(), "PrimeVaultTraders", fresh_vault_rotation),
+        world_vault_observation,
         vault_rotation_old.as_ref(),
         prior_child_stamps.get("world.vault_rotation").map(|s| s.as_str()),
         now,
@@ -859,7 +877,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     );
     let r_world_deals = reconcile(
         "world.deals",
-        de::world_array_observation(de_world.as_ref(), "DailyDeals", fresh_deals),
+        world_deals_observation,
         deals_old.as_ref(),
         prior_child_stamps.get("world.deals").map(|s| s.as_str()),
         now,
@@ -972,14 +990,16 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
             de_snap.hashes.clone()
         },
         changed: de_snap.changed.clone(),
-        world_ok: de_world.is_some(),
+        world_ok: matches!(de_world_observation, Observation::Usable { .. }),
         child_fetched_at: {
             let mut stamps = prior_child_stamps;
             stamps.insert("world.vault_rotation".into(), r_world_vault.fetched_at.clone());
             stamps.insert("world.deals".into(), r_world_deals.fetched_at.clone());
             stamps.insert("de.dispositions".into(), disposition_fetched_at);
-            for child in &riven_stats_children {
-                stamps.insert(format!("riven_stats.{child}"), clock::iso_z(now));
+            for (child, outcome) in &riven_stats_children {
+                if matches!(outcome, fetch::RivenChildOutcome::Usable | fetch::RivenChildOutcome::AuthoritativeEmpty) {
+                    stamps.insert(format!("riven_stats.{child}"), clock::iso_z(now));
+                }
             }
             stamps
         },

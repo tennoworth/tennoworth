@@ -270,6 +270,7 @@ fn world_children_reconcile_independently_and_only_literal_empty_clears() {
         .unwrap()
         .as_object_mut()
         .unwrap();
+    let valid_deal = world["DailyDeals"].as_array().unwrap()[0].clone();
     world.remove("DailyDeals");
     world.insert("PrimeVaultTraders".into(), serde_json::json!([]));
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
@@ -287,6 +288,41 @@ fn world_children_reconcile_independently_and_only_literal_empty_clears() {
     assert_eq!(snap["de"]["child_fetched_at"]["world.vault_rotation"], "2026-07-02T12:00:00Z");
     assert_eq!(snap["surface_provenance"]["world.deals"]["disposition"], "preserved_invalid");
     assert_eq!(snap["surface_provenance"]["world.vault_rotation"]["disposition"], "cleared_authoritative_empty");
+
+    std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
+    let world = responses
+        .get_mut("https://api.warframe.com/cdn/worldState.php")
+        .unwrap()
+        .as_object_mut()
+        .unwrap();
+    world.insert("DailyDeals".into(), serde_json::json!([valid_deal, {"bad": true}]));
+    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
+    assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-03T12:00:00Z"], &dir).status.success());
+    let third: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(third["surface_provenance"]["world.deals"]["disposition"], "preserved_invalid");
+    assert_eq!(third["de"]["child_fetched_at"]["world.deals"], "2026-07-01T12:00:00Z");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn malformed_manifest_and_non_object_world_keep_invalid_provenance() {
+    let dir = stage_fixtures("convert");
+    assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"], &dir).status.success());
+    std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
+    let path = dir.join("fixture_responses.json");
+    let mut responses: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    let recipes = responses.keys().find(|key| key.contains("ExportRecipes_en.json")).cloned().unwrap();
+    responses.insert(recipes, serde_json::Value::String("not json".into()));
+    responses.insert("https://api.warframe.com/cdn/worldState.php".into(), serde_json::json!([]));
+    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
+    assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-02T12:00:00Z"], &dir).status.success());
+    let snap: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(snap["surface_provenance"]["recipes"]["disposition"], "preserved_invalid");
+    assert_eq!(snap["surface_provenance"]["relic_rewards"]["disposition"], "preserved_invalid");
+    assert_eq!(snap["surface_provenance"]["world.deals"]["disposition"], "preserved_invalid");
+    assert_eq!(snap["surface_provenance"]["world.vault_rotation"]["disposition"], "preserved_invalid");
+    assert_eq!(snap["de"]["world_ok"], false);
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -304,7 +340,7 @@ fn riven_children_keep_failed_console_data_and_its_own_stamp() {
     std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
 
     responses.insert(de::DE_WEEKLY_RIVENS_URL.into(), serde_json::Value::String(row(11)));
-    responses.remove(de::DE_WEEKLY_RIVEN_PLATFORMS[2].1);
+    responses.insert(de::DE_WEEKLY_RIVEN_PLATFORMS[2].1.into(), serde_json::Value::String("[{ bad: true }]".into()));
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
     assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-02T12:00:00Z"], &dir).status.success());
     let snap: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
@@ -312,6 +348,17 @@ fn riven_children_keep_failed_console_data_and_its_own_stamp() {
     assert_eq!(snap["riven_stats"]["volt_prime"]["platforms"]["swi"]["unrolled"]["median"], 20.0);
     assert_eq!(snap["de"]["child_fetched_at"]["riven_stats.pc"], "2026-07-02T12:00:00Z");
     assert_eq!(snap["de"]["child_fetched_at"]["riven_stats.swi"], "2026-07-01T12:00:00Z");
+
+    std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
+    responses.insert(de::DE_WEEKLY_RIVENS_URL.into(), serde_json::Value::String("[{ bad: true }]".into()));
+    responses.insert(de::DE_WEEKLY_RIVEN_PLATFORMS[2].1.into(), serde_json::Value::String(row(99)));
+    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
+    assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-03T12:00:00Z"], &dir).status.success());
+    let third: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(third["riven_stats"]["volt_prime"]["unrolled"]["median"], 11.0, "invalid PC preserves the entire prior surface");
+    assert_eq!(third["riven_stats"]["volt_prime"]["platforms"]["swi"]["unrolled"]["median"], 20.0);
+    assert_eq!(third["de"]["child_fetched_at"]["riven_stats.pc"], "2026-07-02T12:00:00Z");
+    assert_eq!(third["surface_provenance"]["riven_stats"]["disposition"], "preserved_invalid");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -432,6 +479,7 @@ fn a_failed_recipes_manifest_preserves_both_de_overrides() {
     let snap: serde_json::Value =
         serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
     assert_eq!(snap["surface_provenance"]["recipes"]["disposition"], "preserved_unavailable");
+    assert_eq!(snap["surface_provenance"]["relic_rewards"]["disposition"], "preserved_unavailable", "a skipped relic still depends on the failed recipes manifest");
 
     // WFM says 45 for this item; DE said 65. A failed fetch must keep 65.
     assert_eq!(
@@ -762,7 +810,10 @@ fn de_endpoints_are_still_alive() {
         "no dispositions in ExportWeapons — the field was renamed"
     );
 
-    let world = de::fetch_world_state(&http).expect("worldState fetch");
+    let world = match de::fetch_world_state(&http) {
+        wfm_scrape::reconcile::Observation::Usable { data, .. } => data,
+        other => panic!("worldState was not usable: {other:?}"),
+    };
     assert!(world.get("VoidTraders").is_some(), "worldState lost VoidTraders");
 }
 
@@ -847,6 +898,42 @@ fn every_de_surface_carries_when_a_manifest_parses_to_nothing() {
         "relics must survive an empty relic manifest"
     );
 
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn all_unmatched_dispositions_preserve_prior_joined_slug_provenance() {
+    let dir = stage_fixtures("convert");
+    let path = dir.join("fixture_responses.json");
+    let mut responses: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    let wfm = responses["https://api.warframe.market/v2/riven/weapons"]["data"].as_array_mut().unwrap();
+    for (slug, name, disposition) in [("alpha", "Alpha", 0.2), ("beta", "Beta", 0.3)] {
+        wfm.push(serde_json::json!({"slug":slug,"disposition":disposition,"gameRef":format!("/Lotus/{slug}"),"group":"rifle","i18n":{"en":{"name":name}}}));
+    }
+    let weapons_key = responses.keys().find(|key| key.contains("ExportWeapons_en.json")).cloned().unwrap();
+    let de_rows = responses[&weapons_key]["ExportWeapons"].as_array_mut().unwrap();
+    de_rows.push(serde_json::json!({"name":"Alpha","omegaAttenuation":1.1,"uniqueName":"/Lotus/Alpha"}));
+    de_rows.push(serde_json::json!({"name":"Beta","omegaAttenuation":1.2,"uniqueName":"/Lotus/Beta"}));
+    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
+    assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"], &dir).status.success());
+    std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
+
+    let wfm = responses["https://api.warframe.market/v2/riven/weapons"]["data"].as_array_mut().unwrap();
+    wfm[1]["disposition"] = serde_json::json!(0.8);
+    wfm[2]["disposition"] = serde_json::json!(0.9);
+    responses[&weapons_key]["ExportWeapons"] = serde_json::json!([
+        {"name":"Missing One","omegaAttenuation":1.3,"uniqueName":"/Lotus/M1"},
+        {"name":"Missing Two","omegaAttenuation":1.4,"uniqueName":"/Lotus/M2"},
+        {"name":"Missing Three","omegaAttenuation":1.5,"uniqueName":"/Lotus/M3"}
+    ]);
+    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
+    assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-02T12:00:00Z"], &dir).status.success());
+    let snap: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(snap["rivens"]["weapons"]["alpha"]["disposition"], 1.1);
+    assert_eq!(snap["rivens"]["weapons"]["beta"]["disposition"], 1.2);
+    assert_eq!(snap["de"]["dispositions"].as_object().unwrap().len(), 3);
+    assert_eq!(snap["surface_provenance"]["de.dispositions"]["disposition"], "preserved_invalid");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
