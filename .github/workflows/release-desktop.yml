@@ -480,14 +480,15 @@ jobs:
       #   windows-x86_64-nsis   the generic key aliases NSIS, because that is
       #                         what the app's install flow assumes — passive
       #                         install, self-restart)
-      #   windows-x86_64-msi    kept as an ALIAS onto the NSIS .exe. The MSI
-      #                         is no longer built, but an already-installed
-      #                         MSI client still asks for this key, and a
-      #                         missing key means its updater silently finds
-      #                         nothing forever. Tauri's Windows updater picks
-      #                         its install flow from the downloaded file's
-      #                         extension, so serving the .exe here migrates
-      #                         those installs instead of stranding them.
+      # There is deliberately NO windows-x86_64-msi key. The MSI is retired,
+      # and an already-installed MSI client is not stranded by its absence:
+      # tauri-plugin-updater looks up [`{os}-{arch}-{installer}`, `{os}-{arch}`]
+      # in that order (updater.rs, `get_urls`), so a client asking for
+      # windows-x86_64-msi falls through to windows-x86_64 and gets the NSIS
+      # .exe. It then picks the install flow by SNIFFING THE DOWNLOADED BYTES
+      # (`infer::app::is_exe`), not from the key or the URL, so it runs the
+      # NSIS path correctly. Publishing a -msi key pointing at an .exe would
+      # work too, but it would be a key that lies about its contents.
       #   linux-x86_64          the repacked, re-signed AppImage
       #
       # URLs point at the ROLLING desktop-latest tag, not at this release: the
@@ -529,7 +530,6 @@ jobs:
               'platforms': {
                   'windows-x86_64':      win_nsis,
                   'windows-x86_64-nsis': win_nsis,
-                  'windows-x86_64-msi':  win_nsis,
                   'linux-x86_64':        {'signature': sig(app), 'url': f'{base}/{app}'},
               },
           }

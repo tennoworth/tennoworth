@@ -20,8 +20,9 @@ and their notes live on the GitHub releases themselves.
 - **The `.msi` is retired.** Every release shipped two Windows installers that
   did the same job; the NSIS `.exe` is the one the in-app updater uses, and it
   is the smaller of the two. Nothing is lost by dropping the other. If you
-  installed from the MSI, you keep receiving updates — they now arrive as the
-  `.exe` installer, which the updater handles on its own.
+  installed from the MSI, you keep receiving updates — the updater falls back
+  to the generic Windows entry on its own, and they arrive as the `.exe`
+  installer.
 - **Windows `.sha256` sidecars are gone.** `SHA256SUMS` on the release lists
   the same hash. Verify with `sha256sum --ignore-missing -c SHA256SUMS` — the
   `--ignore-missing` is what lets you check one downloaded file against a list
