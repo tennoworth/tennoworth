@@ -1,8 +1,27 @@
 # Changelog
 
-Desktop releases. Versions are `desktop-v<version>` tags. Pre-1.0: patch =
-fixes, dependency bumps and internal work; minor = user-facing features, new
-distribution channels and compatibility breaks; major is reserved for 1.0.
+Desktop releases. Versions are `desktop-v<version>` tags.
+
+**Pre-1.0 the minor digit is spent sparingly, because 1.0 has to mean
+something.** It is not a counter of how much work happened.
+
+- **patch** — the default, and where nearly everything belongs: bug fixes,
+  dependency bumps, internal work, and ordinary user-facing features and UI
+  work. A new view or a reworked screen is a patch.
+- **minor** — reserved for changes to *what the product is or what it is
+  compatible with*: a distribution channel added or removed, a persisted
+  database / inventory / export format change, an updater or package-identity
+  change, a whole-product overhaul, or anything that breaks compatibility.
+  If you cannot name the thing that changed shape, it is a patch.
+- **major** — 1.0 only, and only when the compatibility contract below is one
+  the maintainer is willing to stand behind: database migrations, export
+  formats, updater continuity, package identity, supported operating systems.
+
+**Not every change needs a release at all.** The web app is continuously
+deployed from `main` and identifies itself by build commit, not by this
+version — a change confined to `prototype/` reaches tennoworth.app on
+promotion and needs no desktop release. Cut one when desktop users have a
+reason to update.
 
 `bun scripts/release.ts prepare <bump>` opens a section here; fill it in
 before merging the bump. `bun scripts/release.ts notes` reads it back for the
