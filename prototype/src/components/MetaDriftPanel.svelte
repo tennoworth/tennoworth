@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Market } from '../lib/types';
-  import { buildMetaDrift, type OnlyRow } from '../lib/meta-drift';
+  import { buildMetaDrift, formatDeltaPp, type OnlyRow } from '../lib/meta-drift';
 
   let { market }: { market: Market | null | undefined } = $props();
   let model = $derived(buildMetaDrift(market));
@@ -16,8 +16,8 @@
   let currentOnly = $derived((model?.onlyCurrent ?? []).filter(matches));
   let priorOnly = $derived((model?.onlyPrior ?? []).filter(matches));
 
-  function pp(value: number): string {
-    return `${value >= 0 ? '+' : ''}${value.toFixed(2)} pp`;
+  function metric(value: number | null, suffix = ''): string {
+    return value === null ? '—' : `${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}${suffix}`;
   }
 </script>
 
@@ -51,7 +51,7 @@
         <thead><tr><th class="l">Name</th><th class="l">Category</th><th>{model.priorYear}</th><th>{model.currentYear}</th><th>Δ share</th><th>Low sell</th><th>Vol 48h</th></tr></thead>
         <tbody>
           {#each driftRows as row (row.slug)}
-            <tr><td class="l">{row.name}</td><td class="l">{row.category}</td><td>{row.priorShare.toFixed(2)}%</td><td>{row.currentShare.toFixed(2)}%</td><td class:up={row.deltaPp >= 0} class:down={row.deltaPp < 0}><strong>{pp(row.deltaPp)}</strong></td><td>{row.lowSell.toFixed(0)}p</td><td>{row.volume48h.toLocaleString()}</td></tr>
+            <tr><td class="l">{row.name}</td><td class="l">{row.category}</td><td>{row.priorShare.toFixed(2)}%</td><td>{row.currentShare.toFixed(2)}%</td><td class:up={row.deltaPp >= 0} class:down={row.deltaPp < 0}><strong>{formatDeltaPp(row.deltaPp)}</strong></td><td>{metric(row.lowSell, 'p')}</td><td>{metric(row.volume48h)}</td></tr>
           {:else}<tr><td colspan="7" class="empty">No matching {tab}.</td></tr>{/each}
         </tbody>
       </table>
@@ -71,7 +71,7 @@
     <div class="scroll"><table class="tw fixed">
       <colgroup><col /><col style="width:8rem" /><col style="width:5rem" /><col style="width:5rem" /><col style="width:5rem" /></colgroup>
       <thead><tr><th class="l">Name</th><th class="l">Category</th><th>Share</th><th>Low sell</th><th>Vol 48h</th></tr></thead>
-      <tbody>{#each rows as row (row.slug)}<tr><td class="l">{row.name}</td><td class="l">{row.category}</td><td>{row.share.toFixed(2)}%</td><td>{row.lowSell.toFixed(0)}p</td><td>{row.volume48h.toLocaleString()}</td></tr>{:else}<tr><td colspan="5" class="empty">No matching items.</td></tr>{/each}</tbody>
+      <tbody>{#each rows as row (row.slug)}<tr><td class="l">{row.name}</td><td class="l">{row.category}</td><td>{row.share.toFixed(2)}%</td><td>{metric(row.lowSell, 'p')}</td><td>{metric(row.volume48h)}</td></tr>{:else}<tr><td colspan="5" class="empty">No matching items.</td></tr>{/each}</tbody>
     </table></div>
   </div>
 {/snippet}
@@ -90,8 +90,14 @@
   h4 { margin: 0; padding: .6rem 1rem; font-size: .8rem; }
   .empty { text-align: center; padding: 1rem; color: var(--muted); }
   @media (max-width: 700px) {
-    .rail { flex-wrap: wrap; }
-    .rail .exp { width: 100%; white-space: normal; overflow: visible; }
+    .wrap.tw.meta-drift > .rail {
+      flex-wrap: wrap;
+      height: auto;
+      min-height: var(--rail);
+      padding-top: .5rem;
+      padding-bottom: .5rem;
+    }
+    .wrap.tw.meta-drift > .rail .exp { width: 100%; white-space: normal; overflow: visible; }
     .controls { align-items: stretch; flex-wrap: wrap; }
     .tabs { width: 100%; overflow-x: auto; }
     input { margin-left: 0; flex: 1 1 10rem; min-width: 0; }

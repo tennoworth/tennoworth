@@ -13,8 +13,8 @@ const market = {
   usage_history: {
     years: [2023, 2025],
     by_year: {
-      2023: { gain: row('Gain Gear', 'Primary', 1), loss: row('Loss Gear', 'Secondary', 4), old_item: row('Old Gear', 'Primary', 1) },
-      2025: { gain: row('Gain Gear', 'Primary', 2.5), loss: row('Loss Gear', 'Secondary', 1), new_item: row('New Gear', 'Primary', 3) },
+      2023: { gain: row('Gain Gear', 'Primary', 1), loss: row('Loss Gear', 'Secondary', 4), tiny: row('Tiny Gear', 'Primary', 1), old_item: row('Old Gear', 'Primary', 1), old_missing: row('Old Missing Market', 'Primary', 1) },
+      2025: { gain: row('Gain Gear', 'Primary', 2.5), loss: row('Loss Gear', 'Secondary', 1), tiny: row('Tiny Gear', 'Primary', 1.0001), new_item: row('New Gear', 'Primary', 3), new_missing: row('New Missing Market', 'Primary', 1) },
     },
   },
 } as any;
@@ -24,8 +24,10 @@ describe('MetaDriftPanel', () => {
     render(MetaDriftPanel, { props: { market } });
     expect(screen.getByText('DE equip share · 2023 → 2025 (2024 unavailable)')).toBeTruthy();
     expect(screen.getByText('+1.50 pp')).toBeTruthy();
+    expect(screen.getByText('+0.0001 pp')).toBeTruthy();
     expect(screen.getByText('18p')).toBeTruthy();
     expect(screen.getByText('44')).toBeTruthy();
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2);
   });
 
   it('filters categories/search and exposes loss and only-in-year tabs', async () => {
@@ -40,7 +42,9 @@ describe('MetaDriftPanel', () => {
     expect(screen.getByText('Only in 2023 data')).toBeTruthy();
     await fireEvent.input(screen.getByLabelText('Search meta drift'), { target: { value: 'new' } });
     expect(screen.getByText('New Gear')).toBeTruthy();
+    expect(screen.getByText('New Missing Market')).toBeTruthy();
     expect(screen.queryByText('Old Gear')).toBeNull();
+    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2);
   });
 
   it('quietly renders nothing for old one-year snapshots', () => {

@@ -1100,5 +1100,81 @@ fn annual_usage_history_retries_gaps_and_never_refetches_valid_years() {
     assert_eq!(second_snap["usage_history"]["by_year"]["2023"], first_snap["usage_history"]["by_year"]["2023"]);
     assert_eq!(second_snap["usage_history"]["by_year"]["2025"], first_snap["usage_history"]["by_year"]["2025"]);
     assert_eq!(second_snap["usage"]["primed_continuity"]["year"], 2025);
+
+    let mut missing_rich = second_snap.clone();
+    missing_rich.as_object_mut().unwrap().remove("usage");
+    std::fs::write(
+        dir.join("prior-market.json"),
+        serde_json::to_vec(&missing_rich).unwrap(),
+    )
+    .unwrap();
+    responses.insert(de::usage_url(2025), usage_doc(0.3, 0.4));
+    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
+    let repaired_missing = run(
+        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-03T12:00:00Z"],
+        &dir,
+    );
+    assert!(
+        repaired_missing.status.success(),
+        "{}",
+        String::from_utf8_lossy(&repaired_missing.stderr)
+    );
+    assert!(String::from_utf8_lossy(&repaired_missing.stderr)
+        .contains("Fetching DE usage telemetry (2025) to repair rich usage"));
+    let repaired_missing_snap: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(
+        repaired_missing_snap["usage"]["primed_continuity"]["year"],
+        2025
+    );
+    assert_eq!(
+        repaired_missing_snap["usage_history"]["by_year"]["2025"],
+        second_snap["usage_history"]["by_year"]["2025"]
+    );
+
+    let mut older_rich = repaired_missing_snap.clone();
+    for row in older_rich["usage"].as_object_mut().unwrap().values_mut() {
+        row["year"] = serde_json::json!(2024);
+    }
+    std::fs::write(
+        dir.join("prior-market.json"),
+        serde_json::to_vec(&older_rich).unwrap(),
+    )
+    .unwrap();
+    let repaired_older = run(
+        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-04T12:00:00Z"],
+        &dir,
+    );
+    assert!(
+        repaired_older.status.success(),
+        "{}",
+        String::from_utf8_lossy(&repaired_older.stderr)
+    );
+    assert!(String::from_utf8_lossy(&repaired_older.stderr)
+        .contains("Fetching DE usage telemetry (2025) to repair rich usage"));
+    let repaired_older_snap: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(
+        repaired_older_snap["usage"]["primed_continuity"]["year"],
+        2025
+    );
+
+    std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
+    responses.insert(de::usage_url(2025), serde_json::json!({"broken": true}));
+    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
+    let warm = run(
+        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-05T12:00:00Z"],
+        &dir,
+    );
+    assert!(
+        warm.status.success(),
+        "{}",
+        String::from_utf8_lossy(&warm.stderr)
+    );
+    assert!(String::from_utf8_lossy(&warm.stderr)
+        .contains("2025 already in the snapshot — not refetched"));
+    let warm_snap: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(warm_snap["usage"]["primed_continuity"]["year"], 2025);
     let _ = std::fs::remove_dir_all(dir);
 }

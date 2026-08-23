@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildMetaDrift } from './meta-drift';
+import { buildMetaDrift, formatDeltaPp } from './meta-drift';
 
 function market(by_year: Record<number, Record<string, unknown>>, years = [2023, 2025]) {
   return {
@@ -29,14 +29,23 @@ describe('meta drift model', () => {
 
   it('never zero-fills missing items and excludes category changes', () => {
     const model = buildMetaDrift(market({
-      2023: { only_old: row('Only Old', 'Primary', 2), changed: row('Changed', 'Primary', 1) },
-      2025: { only_new: row('Only New', 'Primary', 3), changed: row('Changed', 'Secondary', 2) },
+      2023: { only_old: row('Only Old', 'Primary', 2), changed: row('Changed', 'Primary', 1), no_market: row('No Market', 'Primary', 1) },
+      2025: { only_new: row('Only New', 'Primary', 3), changed: row('Changed', 'Secondary', 2), no_market: row('No Market', 'Primary', 2) },
     }))!;
-    expect(model.gains).toEqual([]);
+    expect(model.gains).toHaveLength(1);
+    expect(model.gains[0]).toMatchObject({ slug: 'no_market', lowSell: null, volume48h: null });
     expect(model.losses).toEqual([]);
     expect(model.onlyCurrent.map((r) => r.slug)).toEqual(['only_new']);
     expect(model.onlyPrior.map((r) => r.slug)).toEqual(['only_old']);
+    expect(model.onlyPrior[0]).toMatchObject({ lowSell: null, volume48h: null });
     expect(model.categoryChanges).toBe(1);
+  });
+
+  it('formats every nonzero round4 delta visibly and switches precision at 0.01 pp', () => {
+    expect(formatDeltaPp(0.0001)).toBe('+0.0001 pp');
+    expect(formatDeltaPp(-0.0099)).toBe('-0.0099 pp');
+    expect(formatDeltaPp(0.01)).toBe('+0.01 pp');
+    expect(formatDeltaPp(-0.01)).toBe('-0.01 pp');
   });
 
   it('rejects nonfinite and negative rows and is quiet with fewer than two valid years', () => {

@@ -13,8 +13,8 @@ export interface DriftRow {
   priorShare: number;
   currentShare: number;
   deltaPp: number;
-  lowSell: number;
-  volume48h: number;
+  lowSell: number | null;
+  volume48h: number | null;
 }
 
 export interface OnlyRow {
@@ -23,8 +23,8 @@ export interface OnlyRow {
   category: string;
   year: number;
   share: number;
-  lowSell: number;
-  volume48h: number;
+  lowSell: number | null;
+  volume48h: number | null;
 }
 
 export interface MetaDriftModel {
@@ -48,12 +48,17 @@ function validRow(value: unknown): UsageHistoryRow | null {
   return { name: row.name, category: row.category, share: row.share };
 }
 
-function marketFields(market: Market, slug: string): { lowSell: number; volume48h: number } {
+function marketFields(market: Market, slug: string): { lowSell: number | null; volume48h: number | null } {
   const item = market.items?.[slug];
   return {
-    lowSell: typeof item?.low_sell === 'number' && Number.isFinite(item.low_sell) && item.low_sell >= 0 ? item.low_sell : 0,
-    volume48h: typeof item?.vol === 'number' && Number.isFinite(item.vol) && item.vol >= 0 ? item.vol : 0,
+    lowSell: typeof item?.low_sell === 'number' && Number.isFinite(item.low_sell) && item.low_sell >= 0 ? item.low_sell : null,
+    volume48h: typeof item?.vol === 'number' && Number.isFinite(item.vol) && item.vol >= 0 ? item.vol : null,
   };
+}
+
+export function formatDeltaPp(value: number): string {
+  const decimals = Math.abs(value) < 0.01 ? 4 : 2;
+  return `${value > 0 ? '+' : ''}${value.toFixed(decimals)} pp`;
 }
 
 function availableYears(market: Market): Array<{ year: number; rows: Record<string, unknown> }> {

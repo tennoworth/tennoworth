@@ -534,13 +534,28 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         usage_history.by_year.entry(year).or_insert(compact);
     }
 
+    let prior_usage_year = usage_old
+        .as_ref()
+        .and_then(compact_prior_usage)
+        .map(|row| row.0);
+    let rich_repair_year = usage_history
+        .by_year
+        .keys()
+        .next_back()
+        .copied()
+        .filter(|year| prior_usage_year != Some(*year));
     let mut fresh_rich_usage = std::collections::BTreeMap::new();
     for year in de::DE_USAGE_YEARS {
-        if usage_history.by_year.contains_key(year) {
+        let has_compact = usage_history.by_year.contains_key(year);
+        if has_compact && rich_repair_year != Some(*year) {
             eprintln!("Usage telemetry: {year} already in the snapshot — not refetched");
             continue;
         }
-        eprintln!("Fetching DE usage telemetry ({year})...");
+        if has_compact {
+            eprintln!("Fetching DE usage telemetry ({year}) to repair rich usage...");
+        } else {
+            eprintln!("Fetching DE usage telemetry ({year})...");
+        }
         match http.get_json(&de::usage_url(*year)) {
             Ok(doc) => {
                 let (compact, accepted, unmatched) =
@@ -551,7 +566,9 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
                 );
                 if valid_compact_usage(&compact) {
                     let (rich, _) = de_extract::usage_from_export(&doc, *year, &catalog);
-                    usage_history.by_year.insert(*year, compact);
+                    if !has_compact {
+                        usage_history.by_year.insert(*year, compact);
+                    }
                     fresh_rich_usage.insert(*year, rich);
                 } else {
                     eprintln!("  warning: {year} usage shape had no joinable valid rows");
@@ -562,7 +579,6 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     }
     usage_history.years = usage_history.by_year.keys().copied().collect();
     let newest_usage_year = usage_history.years.last().copied().unwrap_or(0);
-    let prior_usage_year = usage_old.as_ref().and_then(compact_prior_usage).map(|row| row.0);
     let usage_observation = if let Some(rich) = fresh_rich_usage.remove(&newest_usage_year) {
         Observation::usable(rich)
     } else if prior_usage_year == Some(newest_usage_year) {
