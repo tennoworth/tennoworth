@@ -64,6 +64,41 @@ fn compact_prior_usage(
     valid_compact_usage(&compact).then_some((year, compact))
 }
 
+fn rich_prior_usage_year(rows: &HashMap<String, serde_json::Value>) -> Option<u16> {
+    let mut common_year = None;
+    if rows.is_empty() {
+        return None;
+    }
+    for row in rows.values() {
+        let name = row.get("name").and_then(|value| value.as_str())?;
+        let category = row.get("category").and_then(|value| value.as_str())?;
+        let year = u16::try_from(row.get("year").and_then(|value| value.as_u64())?).ok()?;
+        let share = row.get("share").and_then(|value| value.as_f64())?;
+        let peak_mr = row.get("peak_mr").and_then(|value| value.as_f64())?;
+        let by_mr = row.get("by_mr").and_then(|value| value.as_array())?;
+        if name.is_empty()
+            || category.is_empty()
+            || !de::DE_USAGE_YEARS.contains(&year)
+            || !share.is_finite()
+            || share < 0.0
+            || !peak_mr.is_finite()
+            || peak_mr < 0.0
+            || by_mr.is_empty()
+            || !by_mr.iter().all(|value| {
+                value
+                    .as_f64()
+                    .is_some_and(|value| value.is_finite() && value >= 0.0)
+            })
+        {
+            return None;
+        }
+        if common_year.replace(year).is_some_and(|prior| prior != year) {
+            return None;
+        }
+    }
+    common_year
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 2 {
@@ -536,8 +571,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
 
     let prior_usage_year = usage_old
         .as_ref()
-        .and_then(compact_prior_usage)
-        .map(|row| row.0);
+        .and_then(rich_prior_usage_year);
     let rich_repair_year = usage_history
         .by_year
         .keys()

@@ -1159,11 +1159,44 @@ fn annual_usage_history_retries_gaps_and_never_refetches_valid_years() {
         2025
     );
 
+    let mut invalid_rich = repaired_older_snap.clone();
+    invalid_rich["usage"]["primed_continuity"]["by_mr"] = serde_json::json!([]);
+    invalid_rich["usage"]["volt_prime_set"]["peak_mr"] = serde_json::json!(-1);
+    std::fs::write(
+        dir.join("prior-market.json"),
+        serde_json::to_vec(&invalid_rich).unwrap(),
+    )
+    .unwrap();
+    let repaired_invalid = run(
+        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-05T12:00:00Z"],
+        &dir,
+    );
+    assert!(
+        repaired_invalid.status.success(),
+        "{}",
+        String::from_utf8_lossy(&repaired_invalid.stderr)
+    );
+    assert!(String::from_utf8_lossy(&repaired_invalid.stderr)
+        .contains("Fetching DE usage telemetry (2025) to repair rich usage"));
+    let repaired_invalid_snap: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(
+        repaired_invalid_snap["usage_history"]["by_year"]["2025"],
+        repaired_older_snap["usage_history"]["by_year"]["2025"]
+    );
+    assert!(!repaired_invalid_snap["usage"]["primed_continuity"]["by_mr"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    assert!(repaired_invalid_snap["usage"]["volt_prime_set"]["peak_mr"]
+        .as_f64()
+        .is_some_and(|value| value >= 0.0));
+
     std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
     responses.insert(de::usage_url(2025), serde_json::json!({"broken": true}));
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
     let warm = run(
-        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-05T12:00:00Z"],
+        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-06T12:00:00Z"],
         &dir,
     );
     assert!(
