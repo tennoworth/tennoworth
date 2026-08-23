@@ -1,0 +1,48 @@
+{
+  "_comment": "Redacted from the live DE worldState host response on 2026-08-22. Paths, wrappers, container names, and grouping are shape-faithful; IDs and dates are synthetic. Events had no reward-bearing fields in any of 36 observed rows.",
+  "Goals": [
+    {
+      "_id": {"$oid": "redacted-goal-milestones"},
+      "Activation": {"$date": {"$numberLong": "1780000000000"}},
+      "Expiry": {"$date": {"$numberLong": "1781000000000"}},
+      "Tag": "ObservedMilestoneShape",
+      "Desc": "/Lotus/Language/Events/ObservedMilestoneName",
+      "Goal": 100,
+      "InterimGoals": [5, 25],
+      "InterimRewards": [
+        {"credits": 0, "xp": 0, "items": ["/Lotus/StoreItems/Upgrades/Mods/TestMilestoneMod"], "countedItems": []},
+        {"credits": 50000, "items": [], "countedItems": [{"ItemType": "/Lotus/Types/Items/MiscItems/TestToken", "ItemCount": 25}]}
+      ],
+      "Reward": {"credits": 0, "xp": 0, "items": ["/Lotus/StoreItems/Weapons/TestFinalWeapon"], "countedItems": []}
+    },
+    {
+      "_id": {"$oid": "redacted-goal-bonus"},
+      "Activation": {"$date": {"$numberLong": "1782000000000"}},
+      "Expiry": {"$date": {"$numberLong": "1783000000000"}},
+      "Tag": "ObservedBonusShape",
+      "Desc": "/Lotus/Language/Events/ObservedBonusName",
+      "Goal": 100,
+      "Reward": {"credits": 50000, "items": ["/Lotus/StoreItems/Types/StoreItems/AvatarImages/TestGlyph"], "countedItems": []},
+      "BonusReward": {"credits": 50000, "items": [], "countedItems": [{"ItemType": "/Lotus/Types/Items/MiscItems/TestToken", "ItemCount": 100}]}
+    },
+    {
+      "_id": {"$oid": "redacted-goal-jobs"},
+      "Activation": {"$date": {"$numberLong": "1784000000000"}},
+      "Expiry": {"$date": {"$numberLong": "1785000000000"}},
+      "Tag": "ObservedJobsShape",
+      "Desc": "/Lotus/Language/Events/ObservedJobsName",
+      "Jobs": [{"jobType": "/Lotus/Types/Gameplay/Jobs/Test", "rewards": "/Lotus/Types/Game/MissionDecks/TestRewards"}]
+    }
+  ],
+  "Events": [
+    {
+      "_id": {"$oid": "redacted-announcement"},
+      "Messages": [{"LanguageCode": "en", "Message": "Redacted announcement"}],
+      "Prop": "RedactedEvent",
+      "Date": {"$date": {"$numberLong": "1780000000000"}},
+      "EventStartDate": {"$date": {"$numberLong": "1780100000000"}},
+      "EventEndDate": {"$date": {"$numberLong": "1780200000000"}},
+      "Community": true
+    }
+  ]
+}

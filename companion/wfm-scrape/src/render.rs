@@ -137,11 +137,52 @@ pub struct Snapshot {
     /// `de_extract::usage_from_export`.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub usage: HashMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "UsageHistorySurface::is_empty")]
+    pub usage_history: UsageHistorySurface,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub surface_fetched_at: HashMap<String, String>,
+    /// Observation provenance is separate from data freshness: an unchanged
+    /// hash check is fresh evidence about old data, while an outage is not.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub surface_provenance: HashMap<String, SurfaceProvenance>,
+    #[serde(default, skip_serializing_if = "EventRewardsSurface::is_empty")]
+    pub event_rewards: EventRewardsSurface,
     /// Digital Extremes provenance + the worldState-only surfaces.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub de: Option<DeSurface>,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct UsageHistorySurface {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub years: Vec<u16>,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub by_year: std::collections::BTreeMap<u16, HashMap<String, serde_json::Value>>,
+}
+
+impl UsageHistorySurface {
+    pub fn is_empty(&self) -> bool { self.years.is_empty() || self.by_year.is_empty() }
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct EventRewardsSurface {
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub goals: std::collections::BTreeMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub events: std::collections::BTreeMap<String, serde_json::Value>,
+}
+
+impl EventRewardsSurface {
+    pub fn is_empty(&self) -> bool { self.goals.is_empty() && self.events.is_empty() }
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct SurfaceProvenance {
+    pub disposition: crate::reconcile::Disposition,
+    pub attempted_at: String,
+    pub data_fetched_at: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
 }
 
 /// What one cycle took from DE, and what only DE can give.
@@ -158,8 +199,13 @@ pub struct DeSurface {
     /// Manifests whose hash moved this cycle — a patch-day signal in itself.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub changed: Vec<String>,
-    /// Whether worldState answered. False means Baro/vault/deals are stale.
+    /// Whether worldState answered with an object. This does not describe
+    /// individual children, and Baro may still be fresh from warframestat.
     pub world_ok: bool,
+    /// Child timestamps do not inherit their parent's freshness. A successful
+    /// PC weekly-riven fetch must not make a failed Switch child look current.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub child_fetched_at: std::collections::BTreeMap<String, String>,
     /// Announced Prime Vault rotations — the real thing, not the estimate.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub vault_rotation: Vec<serde_json::Value>,
@@ -175,6 +221,10 @@ pub struct DeSurface {
     /// also stamp stale WFM values over fresh, legitimately-corrected ones.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub ducats: std::collections::BTreeMap<String, i64>,
+    /// Only slugs whose disposition was matched to DE. This prevents an
+    /// outage from treating every value in WFM's mirror as first-party.
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub dispositions: std::collections::BTreeMap<String, f64>,
 }
 
 /// Assemble a [`Snapshot`] from rendered items + catalog + all surfaces.
@@ -196,6 +246,7 @@ pub fn assemble_snapshot(
     riven_stats: HashMap<String, serde_json::Value>,
     recipes: HashMap<String, serde_json::Value>,
     usage: HashMap<String, serde_json::Value>,
+    usage_history: UsageHistorySurface,
     surface_fetched_at: HashMap<String, String>,
 ) -> Snapshot {
     Snapshot {
@@ -219,7 +270,10 @@ pub fn assemble_snapshot(
         riven_stats,
         recipes,
         usage,
+        usage_history,
         surface_fetched_at,
+        surface_provenance: HashMap::new(),
+        event_rewards: EventRewardsSurface::default(),
     }
 }
 

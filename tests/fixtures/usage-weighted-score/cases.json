@@ -1,0 +1,18 @@
+{
+  "_comment": "Cross-language weighted sell score. Base uses the unchanged sell-priority formula; usage_share strings NaN/Infinity are decoded as nonfinite by both consumers. Scores are unique except the deliberate equal-base flip pair.",
+  "cases": [
+    {"id":"flip_base_leader", "count":1, "reserve":0, "leveled":0, "market":{"vol":10,"low_sell":100,"avg":100,"median_now":100,"median_90d":100}, "usage_share":0.10, "expected_base_score":100, "expected_weight":0.75, "expected_score":75, "expected_tier":"low"},
+    {"id":"flip_usage_winner", "count":1, "reserve":0, "leveled":0, "market":{"vol":10,"low_sell":100,"avg":100,"median_now":100,"median_90d":100}, "usage_share":1.20, "expected_base_score":100, "expected_weight":1.25, "expected_score":125, "expected_tier":"popular"},
+    {"id":"boundary_dead", "count":1, "reserve":0, "leveled":0, "market":{"vol":10,"low_sell":80,"avg":80,"median_now":80,"median_90d":80}, "usage_share":0.15, "expected_base_score":80, "expected_weight":0.75, "expected_score":60, "expected_tier":"typical"},
+    {"id":"midpoint", "count":1, "reserve":0, "leveled":0, "market":{"vol":10,"low_sell":50,"avg":50,"median_now":50,"median_90d":50}, "usage_share":0.575, "expected_base_score":50, "expected_weight":1, "expected_score":50, "expected_tier":"typical"},
+    {"id":"boundary_popular", "count":1, "reserve":0, "leveled":0, "market":{"vol":10,"low_sell":36,"avg":36,"median_now":36,"median_90d":36}, "usage_share":1.0, "expected_base_score":36, "expected_weight":1.25, "expected_score":45, "expected_tier":"popular"},
+    {"id":"missing", "count":1, "reserve":0, "leveled":0, "market":{"vol":10,"low_sell":40,"avg":40,"median_now":40,"median_90d":40}, "expected_base_score":40, "expected_weight":1, "expected_score":40, "expected_tier":"neutral"},
+    {"id":"null", "count":1, "reserve":0, "leveled":0, "market":{"vol":10,"low_sell":39,"avg":39,"median_now":39,"median_90d":39}, "usage_share":null, "expected_base_score":39, "expected_weight":1, "expected_score":39, "expected_tier":"neutral"},
+    {"id":"malformed", "count":1, "reserve":0, "leveled":0, "market":{"vol":10,"low_sell":38,"avg":38,"median_now":38,"median_90d":38}, "usage_share":"bad", "expected_base_score":38, "expected_weight":1, "expected_score":38, "expected_tier":"neutral"},
+    {"id":"negative", "count":1, "reserve":0, "leveled":0, "market":{"vol":10,"low_sell":37,"avg":37,"median_now":37,"median_90d":37}, "usage_share":-1, "expected_base_score":37, "expected_weight":1, "expected_score":37, "expected_tier":"neutral"},
+    {"id":"nan", "count":1, "reserve":0, "leveled":0, "market":{"vol":10,"low_sell":35,"avg":35,"median_now":35,"median_90d":35}, "usage_share":"NaN", "expected_base_score":35, "expected_weight":1, "expected_score":35, "expected_tier":"neutral"},
+    {"id":"infinity", "count":1, "reserve":0, "leveled":0, "market":{"vol":10,"low_sell":34,"avg":34,"median_now":34,"median_90d":34}, "usage_share":"Infinity", "expected_base_score":34, "expected_weight":1, "expected_score":34, "expected_tier":"neutral"},
+    {"id":"reserve_zeroes", "count":2, "reserve":5, "leveled":0, "market":{"vol":50,"low_sell":40,"avg":40,"median_now":40,"median_90d":40}, "usage_share":2, "expected_base_score":0, "expected_weight":1.25, "expected_score":0, "expected_tier":"popular"}
+  ],
+  "expected_order": ["flip_usage_winner", "flip_base_leader", "boundary_dead", "midpoint", "boundary_popular", "missing", "null", "malformed", "negative", "nan", "infinity"]
+}

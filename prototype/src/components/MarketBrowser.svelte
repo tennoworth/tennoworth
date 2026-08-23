@@ -14,6 +14,7 @@
   } from '../lib/market-browse';
   import { sparklinePoints } from '../lib/sparkline';
   import { weekly, yearStats, type History } from '../lib/history';
+  import MetaDriftPanel from './MetaDriftPanel.svelte';
 
   // Powered by the already-loaded market.json — the only fetch this component
   // can trigger is the optional year-long history, and only when the user
@@ -302,7 +303,7 @@
             <th title="Live buyers ÷ live sellers — > 1 means buyers outnumber sellers">Demand</th>
             <th title="Ducat value at Baro Ki’Teer">Ducats</th>
             <th class="ghost g1" title="How many you own — filled by the desktop scan">Own</th>
-            <th class="ghost" title="Expected plat per day if you listed — filled by the desktop scan">Score</th>
+            <th class="ghost" title="Prioritization score from price, likely sell-through, and bounded DE usage — filled by the desktop scan">Score</th>
             <th class="ghost" title="Owned × Avg — filled by the desktop scan">Potential</th>
           </tr></thead>
           <tbody>
@@ -444,6 +445,8 @@
       </table>
     </section>
   {/if}
+
+  <MetaDriftPanel {market} />
 
   <!-- 5. HAND-OFF: the same rows, completed by the desktop app (hosted only) -->
   {#if handoff}

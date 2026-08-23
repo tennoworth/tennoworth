@@ -25,8 +25,79 @@ const STALE_DAYS: i64 = 7;
 use wfm_scrape::csvin;
 use wfm_scrape::fetch::{self, FixtureHttp, Http, LiveHttp};
 use wfm_scrape::{de, de_extract};
-use wfm_scrape::reconcile::reconcile;
+use wfm_scrape::reconcile::{reconcile, Observation};
 use wfm_scrape::render::{self, assemble_snapshot, CatalogItemMeta};
+
+fn valid_compact_usage(rows: &HashMap<String, serde_json::Value>) -> bool {
+    !rows.is_empty() && rows.values().all(|row| {
+        row.get("name").and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty())
+            && row.get("category").and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty())
+            && row.get("share").and_then(|v| v.as_f64()).is_some_and(|v| v.is_finite() && v >= 0.0)
+            && row.get("by_mr").is_none()
+    })
+}
+
+fn compact_prior_usage(
+    rows: &HashMap<String, serde_json::Value>,
+) -> Option<(u16, HashMap<String, serde_json::Value>)> {
+    let year = rows.values().next()?.get("year")?.as_u64()? as u16;
+    if !de::DE_USAGE_YEARS.contains(&year) {
+        return None;
+    }
+    let mut compact = HashMap::new();
+    for (slug, row) in rows {
+        if row.get("year").and_then(|v| v.as_u64()) != Some(year as u64) {
+            return None;
+        }
+        let name = row.get("name").and_then(|v| v.as_str())?;
+        let category = row.get("category").and_then(|v| v.as_str())?;
+        let share = row.get("share").and_then(|v| v.as_f64())?;
+        if name.is_empty() || category.is_empty() || !share.is_finite() || share < 0.0 {
+            return None;
+        }
+        compact.insert(slug.clone(), serde_json::json!({
+            "name": name,
+            "category": category,
+            "share": share,
+        }));
+    }
+    valid_compact_usage(&compact).then_some((year, compact))
+}
+
+fn rich_prior_usage_year(rows: &HashMap<String, serde_json::Value>) -> Option<u16> {
+    let mut common_year = None;
+    if rows.is_empty() {
+        return None;
+    }
+    for row in rows.values() {
+        let name = row.get("name").and_then(|value| value.as_str())?;
+        let category = row.get("category").and_then(|value| value.as_str())?;
+        let year = u16::try_from(row.get("year").and_then(|value| value.as_u64())?).ok()?;
+        let share = row.get("share").and_then(|value| value.as_f64())?;
+        let peak_mr = row.get("peak_mr").and_then(|value| value.as_f64())?;
+        let by_mr = row.get("by_mr").and_then(|value| value.as_array())?;
+        if name.is_empty()
+            || category.is_empty()
+            || !de::DE_USAGE_YEARS.contains(&year)
+            || !share.is_finite()
+            || share < 0.0
+            || !peak_mr.is_finite()
+            || peak_mr < 0.0
+            || by_mr.is_empty()
+            || !by_mr.iter().all(|value| {
+                value
+                    .as_f64()
+                    .is_some_and(|value| value.is_finite() && value >= 0.0)
+            })
+        {
+            return None;
+        }
+        if common_year.replace(year).is_some_and(|prior| prior != year) {
+            return None;
+        }
+    }
+    common_year
+}
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -377,7 +448,11 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     }
 
     eprintln!("Fetching DE worldState...");
-    let de_world = de::fetch_world_state(http.as_ref());
+    let de_world_observation = de::fetch_world_state(http.as_ref());
+    let de_world = match &de_world_observation {
+        Observation::Usable { data, .. } => Some(data),
+        _ => None,
+    };
 
     // Ducats, first-party. `primeSellingPrice` keys on the recipe (the
     // blueprint you trade), so it resolves through path_to_info the same way
@@ -458,8 +533,17 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     let (recipes_surface, recipe_collisions) = de_recipes
         .map(|r| de_extract::recipes_from_export(r, &path_to_info))
         .unwrap_or_default();
-    if !recipes_surface.is_empty() {
-        eprintln!("  recipes: {} buildable items costed", recipes_surface.len());
+    let recipes_observation = if !recipes_surface.is_empty() {
+        Observation::usable(recipes_surface)
+    } else {
+        match de_snap.outcome("ExportRecipes_en.json") {
+            de::ManifestOutcome::Unchanged => Observation::Unchanged,
+            de::ManifestOutcome::Unavailable => Observation::Unavailable,
+            de::ManifestOutcome::Invalid | de::ManifestOutcome::Usable => Observation::Invalid,
+        }
+    };
+    if let Observation::Usable { data: recipes, .. } = &recipes_observation {
+        eprintln!("  recipes: {} buildable items costed", recipes.len());
         if recipe_collisions > 0 {
             eprintln!(
                 "  warning: {recipe_collisions} recipes collided on an already-taken slug \
@@ -468,43 +552,73 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         }
     }
 
-    // Usage telemetry. Annual, so it is fetched once and then carried: the
-    // prior snapshot's copy is reused unless it is absent or names an older
-    // year than the newest DE has published. Nothing here is per-cycle work.
+    // Annual usage history is immutable. Keep every valid prior year, request
+    // only missing published candidates, and leave failed years absent so the
+    // next cycle retries them. DE publishes these files in arrears; never
+    // manufacture a current-year candidate.
     let usage_old: Option<HashMap<String, serde_json::Value>> =
         prior.get("usage").and_then(|s| serde_json::from_value(s.clone()).ok());
-    let newest_usage_year = de::DE_USAGE_YEARS.iter().copied().max().unwrap_or(0);
-    // The MINIMUM year across the carried map, not the first entry's: reading
-    // one arbitrary HashMap entry would call a mixed-year map current on a coin
-    // flip. A carried map that is empty yields 0 and refetches, which is the
-    // right answer — an empty surface is not a current one.
-    let have_year = usage_old
-        .as_ref()
-        .map(|u| {
-            u.values()
-                .map(|v| v.get("year").and_then(|y| y.as_u64()).unwrap_or(0))
-                .min()
-                .unwrap_or(0) as u16
-        })
-        .unwrap_or(0);
+    let mut usage_history: render::UsageHistorySurface = prior
+        .get("usage_history")
+        .and_then(|value| serde_json::from_value(value.clone()).ok())
+        .unwrap_or_default();
+    usage_history.by_year.retain(|year, rows| {
+        de::DE_USAGE_YEARS.contains(year) && valid_compact_usage(rows)
+    });
+    if let Some((year, compact)) = usage_old.as_ref().and_then(compact_prior_usage) {
+        usage_history.by_year.entry(year).or_insert(compact);
+    }
 
-    let usage = if have_year >= newest_usage_year {
-        eprintln!("Usage telemetry: {newest_usage_year} already in the snapshot — not refetched");
-        HashMap::new()
-    } else {
-        eprintln!("Fetching DE usage telemetry ({newest_usage_year})...");
-        match http.get_json(&de::usage_url(newest_usage_year)) {
-            Ok(doc) => {
-                let (u, unmatched) =
-                    de_extract::usage_from_export(&doc, newest_usage_year, &catalog);
-                eprintln!("  {} items joined · {unmatched} names without a WFM listing", u.len());
-                u
-            }
-            Err(e) => {
-                eprintln!("  warning: {e}");
-                HashMap::new()
-            }
+    let prior_usage_year = usage_old
+        .as_ref()
+        .and_then(rich_prior_usage_year);
+    let rich_repair_year = usage_history
+        .by_year
+        .keys()
+        .next_back()
+        .copied()
+        .filter(|year| prior_usage_year != Some(*year));
+    let mut fresh_rich_usage = std::collections::BTreeMap::new();
+    for year in de::DE_USAGE_YEARS {
+        let has_compact = usage_history.by_year.contains_key(year);
+        if has_compact && rich_repair_year != Some(*year) {
+            eprintln!("Usage telemetry: {year} already in the snapshot — not refetched");
+            continue;
         }
+        if has_compact {
+            eprintln!("Fetching DE usage telemetry ({year}) to repair rich usage...");
+        } else {
+            eprintln!("Fetching DE usage telemetry ({year})...");
+        }
+        match http.get_json(&de::usage_url(*year)) {
+            Ok(doc) => {
+                let (compact, accepted, unmatched) =
+                    de_extract::usage_history_from_export(&doc, &catalog);
+                eprintln!(
+                    "  {year}: {} joined · {unmatched} unmatched · {accepted} valid rows",
+                    compact.len()
+                );
+                if valid_compact_usage(&compact) {
+                    let (rich, _) = de_extract::usage_from_export(&doc, *year, &catalog);
+                    if !has_compact {
+                        usage_history.by_year.insert(*year, compact);
+                    }
+                    fresh_rich_usage.insert(*year, rich);
+                } else {
+                    eprintln!("  warning: {year} usage shape had no joinable valid rows");
+                }
+            }
+            Err(e) => eprintln!("  warning: {year}: {e}"),
+        }
+    }
+    usage_history.years = usage_history.by_year.keys().copied().collect();
+    let newest_usage_year = usage_history.years.last().copied().unwrap_or(0);
+    let usage_observation = if let Some(rich) = fresh_rich_usage.remove(&newest_usage_year) {
+        Observation::usable(rich)
+    } else if prior_usage_year == Some(newest_usage_year) {
+        Observation::Unchanged
+    } else {
+        Observation::Unavailable
     };
 
     // Relic rewards. DE's table beats the drop-table scrape on two counts: all
@@ -571,11 +685,20 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         _ => HashMap::new(),
     };
 
-    let relic_rewards = if !fresh_relics.is_empty() {
-        fresh_relics
+    let (relic_observation, relic_source) = if !fresh_relics.is_empty() {
+        (Observation::usable(fresh_relics), "de_public_export")
     } else if prior_has_relics {
         eprintln!("Relic tables not rebuilt this cycle — carrying the prior DE surface");
-        HashMap::new()
+        let state = match (
+            de_snap.outcome("ExportRelicArcane_en.json"),
+            de_snap.outcome("ExportRecipes_en.json"),
+        ) {
+            (de::ManifestOutcome::Invalid, _) | (_, de::ManifestOutcome::Invalid) => Observation::Invalid,
+            (de::ManifestOutcome::Unavailable, _) | (_, de::ManifestOutcome::Unavailable) => Observation::Unavailable,
+            (de::ManifestOutcome::Unchanged, de::ManifestOutcome::Usable | de::ManifestOutcome::Unchanged) => Observation::Unchanged,
+            _ => Observation::Invalid,
+        };
+        (state, "de_public_export")
     } else {
         // No DE rows and nothing to carry. The old drop-table scrape stays as
         // the fallback rather than being deleted: it is the only other source
@@ -587,7 +710,11 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         eprintln!("Fetching relic drop tables (fallback — no DE data available)...");
         let r = fetch::fetch_relic_rewards(http.as_ref(), &catalog);
         eprintln!("  {} relics with reward data (intact only)", r.len());
-        r
+        if r.is_empty() {
+            (Observation::Unavailable, "legacy_drop_table")
+        } else {
+            (Observation::usable(r), "legacy_drop_table")
+        }
     };
 
     eprintln!("Fetching prime vault status...");
@@ -605,13 +732,13 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // days before he lands — the old source returned an empty list between
     // visits and published no schedule at all.
     let de_alias = de_recipes.map(de_extract::recipe_alias).unwrap_or_default();
-    let baro = de_world
+    let de_baro = de_world
         .as_ref()
         .map(|w| de_extract::baro_from_world(w, &path_to_info, &de_alias, |ms| clock::iso_z(clock::from_millis(ms))))
-        .filter(|b| !b.is_empty())
-        .unwrap_or_else(|| {
+        .filter(|b| !b.is_empty());
+    let (baro, baro_source) = de_baro.map(|b| (b, "de_world_state")).unwrap_or_else(|| {
             eprintln!("  worldState had no trader — falling back to warframestat");
-            fetch::fetch_baro(http.as_ref())
+            (fetch::fetch_baro(http.as_ref()), "warframestat")
         });
     eprintln!(
         "  baro: {} · {} items",
@@ -654,6 +781,23 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     let calendar_old: Option<HashMap<String, serde_json::Value>> = prior.get("calendar").and_then(|s| serde_json::from_value(s.clone()).ok());
     let riven_stats_old: Option<HashMap<String, serde_json::Value>> = prior.get("riven_stats").and_then(|s| serde_json::from_value(s.clone()).ok());
     let recipes_old: Option<HashMap<String, serde_json::Value>> = prior.get("recipes").and_then(|s| serde_json::from_value(s.clone()).ok());
+    let prior_de = prior.get("de");
+    let vault_rotation_old: Option<Vec<serde_json::Value>> = prior_de
+        .and_then(|d| d.get("vault_rotation"))
+        .and_then(|v| serde_json::from_value(v.clone()).ok());
+    let deals_old: Option<Vec<serde_json::Value>> = prior_de
+        .and_then(|d| d.get("deals"))
+        .and_then(|v| serde_json::from_value(v.clone()).ok());
+    let goals_old: Option<std::collections::BTreeMap<String, serde_json::Value>> = prior
+        .get("event_rewards").and_then(|v| v.get("goals"))
+        .and_then(|v| serde_json::from_value(v.clone()).ok());
+    let events_old: Option<std::collections::BTreeMap<String, serde_json::Value>> = prior
+        .get("event_rewards").and_then(|v| v.get("events"))
+        .and_then(|v| serde_json::from_value(v.clone()).ok());
+    let prior_child_stamps: std::collections::BTreeMap<String, String> = prior_de
+        .and_then(|d| d.get("child_fetched_at"))
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
 
     eprintln!("Fetching prime release/vault dates + Resurgence rotations...");
     let calendar = fetch::fetch_calendar(http.as_ref(), wfstat_raw.as_ref(), &catalog);
@@ -679,24 +823,45 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         .get("ExportWeapons_en.json")
         .map(de_extract::dispositions_from_weapons)
         .unwrap_or_default();
-    if de_dispos.is_empty() {
+    let prior_de_dispositions: std::collections::BTreeMap<String, f64> = prior
+        .get("de")
+        .and_then(|d| d.get("dispositions"))
+        .and_then(|m| m.as_object())
+        .map(|m| m.iter().filter_map(|(k, v)| v.as_f64().map(|n| (k.clone(), n))).collect())
+        .unwrap_or_default();
+    let mut joined_dispositions = std::collections::BTreeMap::new();
+    if let Some(map) = rivens.get("weapons").and_then(|w| w.as_object()) {
+        for (slug, row) in map {
+            let Some(name) = row.get("name").and_then(|n| n.as_str()).map(|n| n.to_lowercase()) else { continue };
+            if let Some(value) = de_dispos.get(&name) {
+                joined_dispositions.insert(slug.clone(), *value);
+            }
+        }
+    }
+    let prior_coverage_ok = prior_de_dispositions.is_empty()
+        || joined_dispositions.len() * 100 >= prior_de_dispositions.len() * 80;
+    let joined_usable = !de_dispos.is_empty()
+        && !joined_dispositions.is_empty()
+        && joined_dispositions.len() * 100 >= de_dispos.len() * 80
+        && prior_coverage_ok;
+    let disposition_state = match de_snap.outcome("ExportWeapons_en.json") {
+        de::ManifestOutcome::Usable if joined_usable => wfm_scrape::reconcile::Disposition::PublishedFresh,
+        de::ManifestOutcome::Usable | de::ManifestOutcome::Invalid => wfm_scrape::reconcile::Disposition::PreservedInvalid,
+        de::ManifestOutcome::Unchanged => wfm_scrape::reconcile::Disposition::PreservedUnchanged,
+        de::ManifestOutcome::Unavailable => wfm_scrape::reconcile::Disposition::PreservedUnavailable,
+    };
+    if !joined_usable && !de_dispos.is_empty() {
+        eprintln!("  warning: {}/{} DE dispositions joined (prior exact set {}) — preserving prior exact provenance", joined_dispositions.len(), de_dispos.len(), prior_de_dispositions.len());
+    }
+    let mut de_dispositions = if joined_usable { joined_dispositions } else { std::collections::BTreeMap::new() };
+    if !joined_usable {
         let mut carried = 0usize;
-        if let Some(prior_weapons) = rivens_old
-            .as_ref()
-            .and_then(|r| r.get("weapons"))
-            .and_then(|w| w.as_object())
-        {
-            if let Some(map) = rivens.get_mut("weapons").and_then(|w| w.as_object_mut()) {
-                for (slug, row) in map.iter_mut() {
-                    let Some(prior_dispo) = prior_weapons
-                        .get(slug)
-                        .and_then(|w| w.get("disposition"))
-                        .and_then(|d| d.as_f64())
-                    else {
-                        continue;
-                    };
+        if let Some(map) = rivens.get_mut("weapons").and_then(|w| w.as_object_mut()) {
+            for (slug, prior_dispo) in &prior_de_dispositions {
+                if let Some(row) = map.get_mut(slug) {
                     if let Some(obj) = row.as_object_mut() {
-                        obj.insert("disposition".into(), serde_json::json!(prior_dispo));
+                        obj.insert("disposition".into(), serde_json::json!(*prior_dispo));
+                        de_dispositions.insert(slug.clone(), *prior_dispo);
                         carried += 1;
                     }
                 }
@@ -705,15 +870,9 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         eprintln!("  dispositions: none from DE this cycle — carried {carried} from the prior snapshot");
     } else {
         let mut moved = 0usize;
-        let mut matched = 0usize;
         if let Some(map) = rivens.get_mut("weapons").and_then(|w| w.as_object_mut()) {
-            for row in map.values_mut() {
-                let Some(name) = row.get("name").and_then(|n| n.as_str()).map(|n| n.to_lowercase())
-                else {
-                    continue;
-                };
-                let Some(de_dispo) = de_dispos.get(&name) else { continue };
-                matched += 1;
+            for (slug, de_dispo) in &de_dispositions {
+                let Some(row) = map.get_mut(slug) else { continue };
                 let was = row.get("disposition").and_then(|d| d.as_f64());
                 if was != Some(*de_dispo) {
                     moved += 1;
@@ -723,7 +882,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
                 }
             }
         }
-        eprintln!("  dispositions: {matched} matched to DE ({moved} differed from WFM's mirror)");
+        eprintln!("  dispositions: {} matched to DE ({moved} differed from WFM's mirror)", de_dispositions.len());
     }
     // The change log LAST, diffing what we are about to publish against what we
     // published before. Computing it inside the fetch made it diff WFM's
@@ -759,28 +918,118 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
                 .collect()
         })
         .unwrap_or_default();
-    let (riven_stats, unmatched_stats) = fetch::fetch_riven_stats(http.as_ref(), &weapons_by_name);
+    let (mut riven_stats, unmatched_stats, riven_stats_children) =
+        fetch::fetch_riven_stats(http.as_ref(), &weapons_by_name);
+    let pc_riven_stats_state = riven_stats_children
+        .get("pc")
+        .copied()
+        .unwrap_or(fetch::RivenChildOutcome::Unavailable);
+    if pc_riven_stats_state == fetch::RivenChildOutcome::Usable {
+        fetch::carry_failed_riven_platforms(&mut riven_stats, riven_stats_old.as_ref(), &riven_stats_children);
+    }
     eprintln!("  {} weapons · {unmatched_stats} DE rows without a WFM slug", riven_stats.len());
 
     let path_to_info_for_de = path_to_info.clone();
-    let r_p2i = reconcile("path_to_info", path_to_info, p2i_old.as_ref(), prior_stamps.get("path_to_info").map(|s| s.as_str()), now, parents_complete, STALE_DAYS);
-    let r_s2p = reconcile("set_to_parts", set_to_parts, s2p_old.as_ref(), prior_stamps.get("set_to_parts").map(|s| s.as_str()), now, parents_complete, STALE_DAYS);
-    let r_rr = reconcile("relic_rewards", relic_rewards, rr_old.as_ref(), prior_stamps.get("relic_rewards").map(|s| s.as_str()), now, true, STALE_DAYS);
-    let r_vs = reconcile("vault_status", vault_status, vs_old.as_ref(), prior_stamps.get("vault_status").map(|s| s.as_str()), now, vault_complete, STALE_DAYS);
+    let observation = |data: HashMap<String, serde_json::Value>, complete| {
+        if data.is_empty() { Observation::Unavailable } else if complete { Observation::usable(data) } else { Observation::partial(data) }
+    };
+    let r_p2i = reconcile("path_to_info", observation(path_to_info, parents_complete), p2i_old.as_ref(), prior_stamps.get("path_to_info").map(|s| s.as_str()), now, STALE_DAYS);
+    let r_s2p = reconcile("set_to_parts", observation(set_to_parts, parents_complete), s2p_old.as_ref(), prior_stamps.get("set_to_parts").map(|s| s.as_str()), now, STALE_DAYS);
+    let r_rr = reconcile("relic_rewards", relic_observation, rr_old.as_ref(), prior_stamps.get("relic_rewards").map(|s| s.as_str()), now, STALE_DAYS);
+    let vault_observation = if vault_status.is_empty() { Observation::Unavailable } else if vault_complete { Observation::usable(vault_status) } else { Observation::partial(vault_status) };
+    let r_vs = reconcile("vault_status", vault_observation, vs_old.as_ref(), prior_stamps.get("vault_status").map(|s| s.as_str()), now, STALE_DAYS);
     // Before reconcile, not after: reconcile only falls back to the prior value
     // when the whole surface is empty, and Baro's never is (schedule fields keep
     // arriving between visits). His inventory is capturable only during the 48h
     // he is present, so it has to be carried across explicitly.
     let mut baro = baro;
     fetch::carry_baro_inventory(&mut baro, baro_old.as_ref());
-    let r_baro = reconcile("baro", baro, baro_old.as_ref(), prior_stamps.get("baro").map(|s| s.as_str()), now, true, STALE_DAYS);
-    let r_rivens = reconcile("rivens", rivens, rivens_old.as_ref(), prior_stamps.get("rivens").map(|s| s.as_str()), now, true, STALE_DAYS);
-    let r_calendar = reconcile("calendar", calendar, calendar_old.as_ref(), prior_stamps.get("calendar").map(|s| s.as_str()), now, true, STALE_DAYS);
-    let r_riven_stats = reconcile("riven_stats", riven_stats, riven_stats_old.as_ref(), prior_stamps.get("riven_stats").map(|s| s.as_str()), now, true, STALE_DAYS);
-    let r_recipes = reconcile("recipes", recipes_surface, recipes_old.as_ref(), prior_stamps.get("recipes").map(|s| s.as_str()), now, true, STALE_DAYS);
-    // Annual data: an empty fetch means "already current", not "lost", and
-    // reconcile's preserve-on-empty is exactly the right behaviour.
-    let r_usage = reconcile("usage", usage, usage_old.as_ref(), prior_stamps.get("usage").map(|s| s.as_str()), now, true, STALE_DAYS);
+    let baro_observation = if baro.is_empty() { Observation::Unavailable } else { Observation::usable(baro) };
+    let r_baro = reconcile("baro", baro_observation, baro_old.as_ref(), prior_stamps.get("baro").map(|s| s.as_str()), now, STALE_DAYS);
+    let r_rivens = reconcile("rivens", observation(rivens, true), rivens_old.as_ref(), prior_stamps.get("rivens").map(|s| s.as_str()), now, STALE_DAYS);
+    let r_calendar = reconcile("calendar", observation(calendar, true), calendar_old.as_ref(), prior_stamps.get("calendar").map(|s| s.as_str()), now, STALE_DAYS);
+    let riven_stats_observation = match pc_riven_stats_state {
+        fetch::RivenChildOutcome::Unavailable => Observation::Unavailable,
+        fetch::RivenChildOutcome::Invalid => Observation::Invalid,
+        fetch::RivenChildOutcome::AuthoritativeEmpty => Observation::AuthoritativeEmpty,
+        fetch::RivenChildOutcome::Usable => Observation::usable(riven_stats),
+    };
+    let r_riven_stats = reconcile("riven_stats", riven_stats_observation, riven_stats_old.as_ref(), prior_stamps.get("riven_stats").map(|s| s.as_str()), now, STALE_DAYS);
+    let r_recipes = reconcile("recipes", recipes_observation, recipes_old.as_ref(), prior_stamps.get("recipes").map(|s| s.as_str()), now, STALE_DAYS);
+    let r_usage = reconcile("usage", usage_observation, usage_old.as_ref(), prior_stamps.get("usage").map(|s| s.as_str()), now, STALE_DAYS);
+    let fresh_vault_rotation = de_world
+        .as_ref()
+        .map(|w| de_extract::vault_rotation_from_world(w, |ms| clock::iso_z(clock::from_millis(ms))))
+        .unwrap_or_default();
+    let fresh_deals = de_world
+        .as_ref()
+        .map(|w| de_extract::deals_from_world(w, &path_to_info_for_de, &de_alias, |ms| clock::iso_z(clock::from_millis(ms))))
+        .unwrap_or_default();
+    let world_vault_observation = match &de_world_observation {
+        Observation::Unavailable => Observation::Unavailable,
+        Observation::Invalid => Observation::Invalid,
+        Observation::Usable { .. } => de::world_array_observation(de_world, "PrimeVaultTraders", fresh_vault_rotation),
+        Observation::Unchanged | Observation::AuthoritativeEmpty => Observation::Invalid,
+    };
+    let world_deals_observation = match &de_world_observation {
+        Observation::Unavailable => Observation::Unavailable,
+        Observation::Invalid => Observation::Invalid,
+        Observation::Usable { .. } => de::world_array_observation(de_world, "DailyDeals", fresh_deals),
+        Observation::Unchanged | Observation::AuthoritativeEmpty => Observation::Invalid,
+    };
+    let r_world_vault = reconcile(
+        "world.vault_rotation",
+        world_vault_observation,
+        vault_rotation_old.as_ref(),
+        prior_child_stamps.get("world.vault_rotation").map(|s| s.as_str()),
+        now,
+        STALE_DAYS,
+    );
+    let r_world_deals = reconcile(
+        "world.deals",
+        world_deals_observation,
+        deals_old.as_ref(),
+        prior_child_stamps.get("world.deals").map(|s| s.as_str()),
+        now,
+        STALE_DAYS,
+    );
+    let goal_build = de_world
+        .map(|world| de_extract::event_rewards_from_world_child(
+            world, "Goals", &path_to_info_for_de, &de_alias,
+            |ms| clock::iso_z(clock::from_millis(ms)),
+        ))
+        .unwrap_or_default();
+    let event_build = de_world
+        .map(|world| de_extract::event_rewards_from_world_child(
+            world, "Events", &path_to_info_for_de, &de_alias,
+            |ms| clock::iso_z(clock::from_millis(ms)),
+        ))
+        .unwrap_or_default();
+    let child_observation = |key: &str, build: de_extract::EventRewardBuild| {
+        match &de_world_observation {
+            Observation::Unavailable => Observation::Unavailable,
+            Observation::Invalid => Observation::Invalid,
+            Observation::Usable { data: world, .. } => match world.get(key).and_then(|v| v.as_array()) {
+                None => Observation::Invalid,
+                Some(rows) if rows.is_empty() => Observation::AuthoritativeEmpty,
+                Some(_) if build.rows.is_empty() => Observation::Invalid,
+                // A child is the freshness unit. Stamping retained rows fresh
+                // after any malformed sibling would overstate what this poll
+                // established, so mixed payloads preserve the whole prior.
+                Some(_) if build.invalid_rows > 0 => Observation::Invalid,
+                Some(_) => Observation::usable(build.rows),
+            },
+            Observation::Unchanged | Observation::AuthoritativeEmpty => Observation::Invalid,
+        }
+    };
+    let r_world_goals = reconcile(
+        "world.goals", child_observation("Goals", goal_build), goals_old.as_ref(),
+        prior_child_stamps.get("world.goals").map(|s| s.as_str()), now, STALE_DAYS,
+    );
+    let r_world_events = reconcile(
+        "world.events", child_observation("Events", event_build), events_old.as_ref(),
+        prior_child_stamps.get("world.events").map(|s| s.as_str()), now, STALE_DAYS,
+    );
 
     for r in [&r_p2i, &r_s2p, &r_rr] {
         if let Some(w) = &r.stale_warning {
@@ -818,6 +1067,56 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     surface_fetched_at.insert("recipes".into(), r_recipes.fetched_at.clone());
     surface_fetched_at.insert("usage".into(), r_usage.fetched_at.clone());
 
+    let mut surface_provenance = HashMap::new();
+    macro_rules! provenance {
+        ($name:literal, $result:expr) => {
+            surface_provenance.insert(
+                $name.to_string(),
+                render::SurfaceProvenance {
+                    disposition: $result.disposition,
+                    attempted_at: $result.attempted_at.clone(),
+                    data_fetched_at: $result.fetched_at.clone(),
+                    source: None,
+                },
+            );
+        };
+    }
+    provenance!("path_to_info", r_p2i);
+    provenance!("set_to_parts", r_s2p);
+    provenance!("relic_rewards", r_rr);
+    provenance!("vault_status", r_vs);
+    provenance!("baro", r_baro);
+    provenance!("rivens", r_rivens);
+    provenance!("calendar", r_calendar);
+    provenance!("riven_stats", r_riven_stats);
+    provenance!("recipes", r_recipes);
+    provenance!("usage", r_usage);
+    provenance!("world.vault_rotation", r_world_vault);
+    provenance!("world.deals", r_world_deals);
+    provenance!("world.goals", r_world_goals);
+    provenance!("world.events", r_world_events);
+    if let Some(p) = surface_provenance.get_mut("relic_rewards") {
+        p.source = Some(relic_source.to_string());
+    }
+    if let Some(p) = surface_provenance.get_mut("baro") {
+        p.source = Some(baro_source.to_string());
+    }
+    let prior_disposition_stamp = prior_child_stamps
+        .get("de.dispositions")
+        .cloned()
+        .unwrap_or_else(|| clock::iso_z(now));
+    let disposition_fetched_at = if disposition_state == wfm_scrape::reconcile::Disposition::PublishedFresh {
+        clock::iso_z(now)
+    } else {
+        prior_disposition_stamp
+    };
+    surface_provenance.insert("de.dispositions".into(), render::SurfaceProvenance {
+        disposition: disposition_state,
+        attempted_at: clock::iso_z(now),
+        data_fetched_at: disposition_fetched_at.clone(),
+        source: Some("de_public_export".into()),
+    });
+
     eprintln!("Rendering {} CSV rows...", csv_path.display());
     let rows = csvin::read_csv_rows(&csv_path)?;
     let items = render::render_items(&rows, &meta_by_slug);
@@ -833,14 +1132,6 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // failed poll would silently drop an announced vault rotation, which is
     // exactly the event the feature exists to warn about. `world_ok: false`
     // tells the UI the rows are stale.
-    let prior_de = prior.get("de");
-    let carried = |key: &str| -> Vec<serde_json::Value> {
-        prior_de
-            .and_then(|d| d.get(key))
-            .and_then(|v| v.as_array())
-            .cloned()
-            .unwrap_or_default()
-    };
     let de_surface = render::DeSurface {
         hashes: if de_snap.hashes.is_empty() {
             prior_de_hashes.clone()
@@ -848,16 +1139,25 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
             de_snap.hashes.clone()
         },
         changed: de_snap.changed.clone(),
-        world_ok: de_world.is_some(),
-        vault_rotation: match de_world.as_ref() {
-            Some(w) => de_extract::vault_rotation_from_world(w, |ms| clock::iso_z(clock::from_millis(ms))),
-            None => carried("vault_rotation"),
+        world_ok: matches!(de_world_observation, Observation::Usable { .. }),
+        child_fetched_at: {
+            let mut stamps = prior_child_stamps;
+            stamps.insert("world.vault_rotation".into(), r_world_vault.fetched_at.clone());
+            stamps.insert("world.deals".into(), r_world_deals.fetched_at.clone());
+            stamps.insert("world.goals".into(), r_world_goals.fetched_at.clone());
+            stamps.insert("world.events".into(), r_world_events.fetched_at.clone());
+            stamps.insert("de.dispositions".into(), disposition_fetched_at);
+            for (child, outcome) in &riven_stats_children {
+                if matches!(outcome, fetch::RivenChildOutcome::Usable | fetch::RivenChildOutcome::AuthoritativeEmpty) {
+                    stamps.insert(format!("riven_stats.{child}"), clock::iso_z(now));
+                }
+            }
+            stamps
         },
-        deals: match de_world.as_ref() {
-            Some(w) => de_extract::deals_from_world(w, &path_to_info_for_de, &de_alias, |ms| clock::iso_z(clock::from_millis(ms))),
-            None => carried("deals"),
-        },
+        vault_rotation: r_world_vault.data,
+        deals: r_world_deals.data,
         ducats: de_ducats,
+        dispositions: de_dispositions,
     };
 
     let mut snapshot = assemble_snapshot(
@@ -874,9 +1174,15 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         r_riven_stats.data,
         r_recipes.data,
         r_usage.data,
+        usage_history,
         surface_fetched_at,
     );
     snapshot.de = Some(de_surface);
+    snapshot.surface_provenance = surface_provenance;
+    snapshot.event_rewards = render::EventRewardsSurface {
+        goals: r_world_goals.data,
+        events: r_world_events.data,
+    };
 
     // market.json is written LAST — it's the generation anchor the browser app
     // joins everything through (items[slug], catalog, path_to_info, baro), while

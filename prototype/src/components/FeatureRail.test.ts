@@ -33,7 +33,7 @@ describe('FeatureRail', () => {
     // Sell leads.
     expect(selected().textContent?.trim()).toBe('Sell');
     expect(screen.getAllByRole('tabpanel')).toHaveLength(1);
-    expect(screen.getByRole('tabpanel').textContent).toContain('expected plat per day');
+    expect(screen.getByRole('tabpanel').textContent).toContain('prioritization score');
     // The Sell miniature's own columns, not another tab's.
     expect(screen.getByRole('columnheader', { name: 'Score' })).toBeDefined();
 

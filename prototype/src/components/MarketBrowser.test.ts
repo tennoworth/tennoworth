@@ -61,3 +61,19 @@ describe('MarketBrowser 1-year view', () => {
     expect(screen.queryByRole('button', { name: '1 year' })).toBeNull();
   });
 });
+
+it('hosts Meta Drift below the market reports when annual usage is present', () => {
+  const withUsage = {
+    ...market,
+    usage_history: {
+      years: [2023, 2025],
+      by_year: {
+        2023: { primed_flow: { name: 'Primed Flow', category: 'Mods', share: 1 } },
+        2025: { primed_flow: { name: 'Primed Flow', category: 'Mods', share: 2 } },
+      },
+    },
+  } as unknown as Market;
+  render(MarketBrowser, { props: { market: withUsage } });
+  expect(screen.getByTestId('meta-drift')).toBeTruthy();
+  expect(screen.getByText('+1.00 pp')).toBeTruthy();
+});

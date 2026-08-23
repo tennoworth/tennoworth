@@ -27,6 +27,7 @@
     baro: 'ducat',
     vault: 'relic',
     deal: 'credit',
+    event: 'unknown',
   };
 
   /** "in 3d", "in 4h", "18h left" — relative, because every one of these is a
@@ -47,8 +48,8 @@
   <section class="cal">
     <h3>What's coming</h3>
     <ul>
-      {#each items as item (item.kind + item.at + item.title)}
-        <li class:hot={item.affectsKnown && item.affects.length > 0}>
+      {#each items as item (item.id ?? item.kind + item.at + item.title)}
+        <li class:hot={item.affects.length > 0 && (item.affectsKnown || item.reach === 'partial-hits')}>
           <span class="when">{when(item)}</span>
           <span class="what">
             <Glyph name={glyphFor(GLYPH[item.kind])} />
@@ -56,13 +57,26 @@
             {#if item.detail}<span class="detail">· {item.detail}</span>{/if}
           </span>
           <span class="hits">
-            {#if item.affectsKnown && item.affects.length}
+            {#if item.kind === 'event' && item.reach === 'scan'}
+              scan to check
+            {:else if item.kind === 'event' && item.reach === 'partial-hits'}
+              affects at least {item.affects.length} you hold
+            {:else if item.kind === 'event' && item.reach === 'hits'}
+              affects {item.affects.length} you hold
+            {:else if item.kind === 'event' && item.reach === 'none'}
+              none you hold
+            {:else if item.kind === 'event' && item.reach === 'unknown'}
+              <span class="unknown" title="Some fixed rewards could not be matched to market items."
+                >reach unknown</span
+              >
+            {:else if item.affectsKnown && item.affects.length}
               affects {item.affects.length} you hold
             {:else if !item.affectsKnown}
               <span class="unknown" title="No scanned inventory, so we can't say what this touches."
                 >reach unknown</span
               >
             {/if}
+            {#if item.stale}<span class="stale"> · reward data {item.dataAgeDays === undefined ? 'age unknown' : `${item.dataAgeDays}d old`}</span>{/if}
           </span>
         </li>
       {/each}
@@ -123,5 +137,22 @@
   }
   .unknown {
     cursor: help;
+  }
+  .stale {
+    color: var(--warn);
+  }
+  @media (max-width: 42rem) {
+    li {
+      display: grid;
+      grid-template-columns: 4.5rem minmax(0, 1fr);
+      column-gap: 0.5rem;
+    }
+    .what {
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+    .hits {
+      grid-column: 2;
+    }
   }
 </style>

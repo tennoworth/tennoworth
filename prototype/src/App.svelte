@@ -23,6 +23,7 @@
   import { flattenInventory, extractKeptLvls } from './lib/inventory';
   import { extractRivens, resolveRivens } from './lib/rivens';
   import { adviseOwned } from './lib/advisor';
+  import { buildMetaDrift } from './lib/meta-drift';
   import type { History } from './lib/history';
   import { loadCatalogs, resolvePath, type Catalogs } from './lib/resolver';
   import { loadMarket, lookup } from './lib/market';
@@ -46,6 +47,7 @@
   import BaroBoard from './components/BaroBoard.svelte';
   import BuildVsBuy from './components/BuildVsBuy.svelte';
   import TraderCalendar from './components/TraderCalendar.svelte';
+  import MetaDriftPanel from './components/MetaDriftPanel.svelte';
   import RefinementLadder from './components/RefinementLadder.svelte';
   import { listenForTauriEvent, TRAY_HINT_EVENT } from './lib/desktop-update';
 
@@ -155,9 +157,9 @@
   // reload lands the user back where they left off. Falls through to
   // 'sell' if the persisted view's data isn't available (Baro not
   // visiting; 'orders' is desktop-only — the hosted site is informational).
-  type View = 'sell' | 'sets' | 'relics' | 'rivens' | 'baro' | 'routines' | 'orders' | 'watches' | 'ledger' | 'install' | 'settings';
+  type View = 'sell' | 'sets' | 'relics' | 'rivens' | 'baro' | 'routines' | 'meta' | 'orders' | 'watches' | 'ledger' | 'install' | 'settings';
   const VALID_VIEWS: ReadonlySet<View> = new Set([
-    'sell', 'sets', 'relics', 'rivens', 'baro', 'routines', 'orders', 'watches', 'ledger', 'install', 'settings',
+    'sell', 'sets', 'relics', 'rivens', 'baro', 'routines', 'meta', 'orders', 'watches', 'ledger', 'install', 'settings',
   ]);
   let view = $state<View>(
     (() => {
@@ -176,6 +178,7 @@
   // against a stale localStorage value.
   let effectiveView = $derived.by<View>(() => {
     if (view === 'baro' && !showBaroCard) return 'sell';
+    if (view === 'meta' && !buildMetaDrift(market)) return 'sell';
     if ((view === 'orders' || view === 'watches' || view === 'ledger' || view === 'rivens') && !isDesktop) return 'sell';
     return view;
   });
@@ -1101,6 +1104,11 @@
         <button type="button" class="nav-item" class:active={effectiveView === 'routines'} onclick={() => setView('routines')}>
           <span>Routines</span>
         </button>
+        {#if buildMetaDrift(market)}
+          <button type="button" class="nav-item" class:active={effectiveView === 'meta'} onclick={() => setView('meta')}>
+            <span>Meta Drift</span>
+          </button>
+        {/if}
       </div>
 
       {#if isDesktop}
@@ -1463,6 +1471,8 @@
       </section>
       </details>
 
+    {:else if effectiveView === 'meta'}
+      <MetaDriftPanel {market} />
     {:else if effectiveView === 'orders'}
       <section class="view-header">
         <h2>My orders</h2>

@@ -59,6 +59,49 @@ const MARKET: Market = {
   },
 } as unknown as Market;
 
+const EVENT_MARKET = {
+  event_rewards: {
+    goals: {
+      complete: {
+        id: 'complete',
+        source: 'goal',
+        title: 'Community Goal',
+        starts_at: '2026-08-24T00:00:00Z',
+        ends_at: '2026-08-30T00:00:00Z',
+        completeness: 'complete',
+        groups: [{
+          kind: 'final',
+          rewards: [{ unique: '/Lotus/PrimedFury', name: 'Primed Fury', slug: 'primed_fury', quantity: 1 }],
+        }],
+      },
+      partial: {
+        id: 'partial',
+        source: 'goal',
+        title: 'Milestone Goal',
+        starts_at: '2026-08-25T00:00:00Z',
+        ends_at: '2026-08-31T00:00:00Z',
+        completeness: 'partial',
+        groups: [{
+          kind: 'milestone',
+          threshold: 100,
+          credits: 50000,
+          rewards: [
+            { unique: '/Lotus/RevenantPrimeSet', name: 'Revenant Prime Set', slug: 'revenant_prime_set', quantity: 1 },
+            { unique: '/Lotus/Unknown', name: 'Unknown Reward', quantity: 1 },
+          ],
+        }],
+      },
+    },
+  },
+  surface_provenance: {
+    'world.goals': {
+      disposition: 'used_current',
+      attempted_at: '2026-08-22T00:00:00Z',
+      data_fetched_at: '2026-08-22T00:00:00Z',
+    },
+  },
+} as unknown as Market;
+
 describe('vaultAffects', () => {
   const rotation = MARKET.de!.vault_rotation![0] as VaultRotation;
 
@@ -174,6 +217,67 @@ describe('buildCalendar', () => {
   it('is empty rather than throwing on a snapshot with none of this', () => {
     expect(buildCalendar({ items: {} } as unknown as Market, null, NOW)).toEqual([]);
     expect(buildCalendar(null, null, NOW)).toEqual([]);
+  });
+
+  it('uses explicit event dates and asks for a scan when inventory is absent', () => {
+    const events = buildCalendar(EVENT_MARKET, null, NOW);
+    expect(events.map((item) => [item.title, item.at, item.until, item.reach])).toEqual([
+      ['Community Goal', '2026-08-24T00:00:00Z', '2026-08-30T00:00:00Z', 'scan'],
+      ['Milestone Goal', '2026-08-25T00:00:00Z', '2026-08-31T00:00:00Z', 'scan'],
+    ]);
+  });
+
+  it('carries the stable id and counts credits as a fixed reward', () => {
+    const event = buildCalendar(EVENT_MARKET, owned([]), NOW)
+      .find((item) => item.title === 'Milestone Goal')!;
+    expect(event.id).toBe('partial');
+    expect(event.detail).toContain('50,000 credits');
+  });
+
+  it('keeps unsupported dated rows visible with unknown reach', () => {
+    const market = structuredClone(EVENT_MARKET) as Market;
+    market.event_rewards!.goals!.unknown = {
+      id: 'unknown', source: 'goal', title: 'Jobs Goal',
+      starts_at: '2026-08-26T00:00:00Z', ends_at: '2026-09-01T00:00:00Z',
+      completeness: 'unknown', groups: [],
+    };
+    const row = buildCalendar(market, owned([]), NOW).find((item) => item.id === 'unknown')!;
+    expect(row.reach).toBe('unknown');
+    expect(row.affectsKnown).toBe(false);
+    expect(row.detail).toBe('fixed rewards unknown');
+  });
+
+  it('never turns partial coverage into false reassurance', () => {
+    const miss = buildCalendar(EVENT_MARKET, owned(['something_else']), NOW);
+    expect(miss.find((item) => item.title === 'Community Goal')?.reach).toBe('none');
+    expect(miss.find((item) => item.title === 'Milestone Goal')?.reach).toBe('unknown');
+
+    const hit = buildCalendar(EVENT_MARKET, owned(['revenant_prime_set']), NOW)
+      .find((item) => item.title === 'Milestone Goal')!;
+    expect(hit.reach).toBe('partial-hits');
+    expect(hit.affectsKnown).toBe(false);
+    expect(affecting([hit])).toEqual([hit]);
+  });
+
+  it('flags each source against its own freshness stamp', () => {
+    const market = structuredClone(EVENT_MARKET) as Market;
+    market.event_rewards!.events = {
+      event: {
+        ...market.event_rewards!.goals!.complete,
+        id: 'event',
+        source: 'event',
+        title: 'Event Reward',
+      },
+    };
+    market.surface_provenance!['world.events'] = {
+      disposition: 'carried_prior',
+      attempted_at: '2026-08-22T00:00:00Z',
+      data_fetched_at: '2026-08-01T00:00:00Z',
+    };
+    const rows = buildCalendar(market, owned([]), NOW);
+    expect(rows.find((item) => item.title === 'Community Goal')?.stale).toBe(false);
+    expect(rows.find((item) => item.title === 'Event Reward')?.stale).toBe(true);
+    expect(rows.find((item) => item.title === 'Event Reward')?.dataAgeDays).toBe(21);
   });
 });
 

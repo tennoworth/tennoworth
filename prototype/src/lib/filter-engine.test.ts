@@ -86,6 +86,22 @@ describe('computeResults', () => {
     const out = computeResults(owned(rec('lo'), rec('hi')), mkt, baseFilters(), 0);
     expect(out.map((r) => r.slug)).toEqual(['hi', 'lo']);
   });
+
+  it('uses usage to flip equal-base rows without weighting actual totals', () => {
+    const usage = (share) => ({
+      name: 'Test', category: 'Primary', year: 2025, share, peak_mr: 10, by_mr: [1],
+    });
+    const mkt = market(
+      { low: item({ avg: 100, low_sell: 100, vol: 10 }), popular: item({ avg: 100, low_sell: 100, vol: 10 }) },
+      { usage: { low: usage(0.1), popular: usage(1.2) } },
+    );
+    const out = computeResults(owned(rec('low'), rec('popular')), mkt, baseFilters(), 0);
+    expect(out.map((row) => [row.slug, row.sell_score])).toEqual([
+      ['popular', 125], ['low', 75],
+    ]);
+    expect(out.map((row) => row.potential_plat)).toEqual([100, 100]);
+    expect(out.map((row) => row.raw_value)).toEqual([100, 100]);
+  });
 });
 
 describe('Spares preset (typesAny + sparesOnly)', () => {

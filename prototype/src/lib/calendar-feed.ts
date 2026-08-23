@@ -6,16 +6,18 @@
 // an unvaulting is the single most expensive surprise in prime trading — and
 // knowing about them before they land is the entire value.
 //
-// Event reward tables are deliberately NOT parsed here. `Goals`/`Events` vary
-// by event type and several carry no usable table at all, so turning them into
-// "this item is about to be given away" is a separate piece of work with its
-// own failure modes. Absent beats wrong.
+// Event rows are limited to fixed reward containers observed in DE's live
+// Goals shape. Bounty deck references and announcement-only Events remain
+// unknown; absent still beats inventing a guaranteed basket.
 
-import type { DailyDeal, Market, OwnedRecord, VaultRotation } from './types';
+import type { DailyDeal, EventRewardEntry, Market, OwnedRecord, VaultRotation } from './types';
 
-export type CalendarKind = 'baro' | 'vault' | 'deal';
+export type CalendarKind = 'baro' | 'vault' | 'deal' | 'event';
+export type CalendarReach = 'scan' | 'none' | 'hits' | 'partial-hits' | 'unknown';
 
 export interface CalendarItem {
+  /** Stable upstream ID where one exists. */
+  id?: string;
   kind: CalendarKind;
   /** When it starts (ISO). */
   at: string;
@@ -30,6 +32,9 @@ export interface CalendarItem {
   /** False when the event's contents cannot be resolved to slugs at all, so
    *  an empty `affects` must not read as "this doesn't touch you". */
   affectsKnown: boolean;
+  reach?: CalendarReach;
+  stale?: boolean;
+  dataAgeDays?: number;
 }
 
 /**
@@ -184,6 +189,66 @@ function dealItems(market: Market | null | undefined): CalendarItem[] {
   }));
 }
 
+function eventItems(
+  market: Market | null | undefined,
+  owned: Map<string, OwnedRecord> | null | undefined,
+  now: number,
+): CalendarItem[] {
+  const surface = market?.event_rewards;
+  if (!surface) return [];
+  const held = new Set<string>();
+  if (owned) for (const record of owned.values()) held.add(record.slug);
+  const rows = [...Object.values(surface.goals ?? {}), ...Object.values(surface.events ?? {})];
+  return rows.map((event: EventRewardEntry) => {
+    const stamp = market?.surface_provenance?.[`world.${event.source}s`]?.data_fetched_at;
+    const stampMs = stamp ? Date.parse(stamp) : NaN;
+    const dataAgeDays = Number.isFinite(stampMs)
+      ? Math.max(0, Math.floor((now - stampMs) / 86_400_000))
+      : undefined;
+    const stale = dataAgeDays === undefined || dataAgeDays > 7;
+    const slugs = new Set<string>();
+    let rewardCount = 0;
+    let credits = 0;
+    for (const group of event.groups ?? []) {
+      if (typeof group.credits === 'number' && Number.isFinite(group.credits) && group.credits > 0) {
+        credits += group.credits;
+      }
+      for (const reward of group.rewards ?? []) {
+        rewardCount += 1;
+        if (reward.slug) slugs.add(reward.slug);
+      }
+    }
+    const affects = owned ? [...slugs].filter((slug) => held.has(slug)) : [];
+    const complete = event.completeness === 'complete';
+    const unknown = event.completeness === 'unknown';
+    const reach: CalendarReach = unknown
+      ? 'unknown'
+      : !owned
+      ? 'scan'
+      : affects.length > 0
+        ? complete ? 'hits' : 'partial-hits'
+        : complete ? 'none' : 'unknown';
+    const rewardParts: string[] = [];
+    if (rewardCount > 0) rewardParts.push(`${rewardCount} item reward${rewardCount === 1 ? '' : 's'}`);
+    if (credits > 0) rewardParts.push(`${credits.toLocaleString('en-US')} credits`);
+    return {
+      id: event.id,
+      kind: 'event' as const,
+      at: event.starts_at,
+      until: event.ends_at,
+      title: event.title,
+      detail: unknown
+        ? 'fixed rewards unknown'
+        : `${rewardParts.join(' · ')}${complete ? '' : ' · partial coverage'}`,
+      affects,
+      affectsKnown: reach === 'hits' || reach === 'none',
+      reach,
+      stale,
+      dataAgeDays,
+    };
+  });
+}
+
 /**
  * Everything dated, soonest first.
  *
@@ -195,7 +260,12 @@ export function buildCalendar(
   owned: Map<string, OwnedRecord> | null | undefined,
   now: number,
 ): CalendarItem[] {
-  const items = [...baroItems(market, owned), ...vaultItems(market, owned), ...dealItems(market)];
+  const items = [
+    ...baroItems(market, owned),
+    ...vaultItems(market, owned),
+    ...dealItems(market),
+    ...eventItems(market, owned, now),
+  ];
   return items
     .filter((i) => {
       const end = i.until ? Date.parse(i.until) : Date.parse(i.at);
@@ -208,5 +278,5 @@ export function buildCalendar(
  *  subset. Rows whose reach is unknown are excluded rather than assumed
  *  harmless. */
 export function affecting(items: CalendarItem[]): CalendarItem[] {
-  return items.filter((i) => i.affectsKnown && i.affects.length > 0);
+  return items.filter((i) => i.affects.length > 0 && (i.affectsKnown || i.reach === 'partial-hits'));
 }

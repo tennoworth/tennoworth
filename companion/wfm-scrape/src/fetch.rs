@@ -743,7 +743,7 @@ pub const WFM_RIVEN_ATTRIBUTES_URL: &str = "https://api.warframe.market/v2/riven
 /// literal (NOT JSON: unquoted keys, single-quoted strings), keyed by weapon
 /// display name x `rerolled`. ~150 KB; the only stats that actually sample
 /// riven auctions — WFM's `/statistics` has no riven rows at all.
-pub const DE_WEEKLY_RIVENS_URL: &str = "https://www-static.warframe.com/repos/weeklyRivensPC.json";
+pub use crate::de::DE_WEEKLY_RIVENS_URL;
 
 /// The same file per platform. Console riven markets diverge sharply from PC's
 /// — different populations, different metas, and far smaller samples — and DE
@@ -752,11 +752,7 @@ pub const DE_WEEKLY_RIVENS_URL: &str = "https://www-static.warframe.com/repos/we
 /// PC stays the primary surface (`unrolled`/`rolled` at the top level); the
 /// consoles ride along under `platforms` so a consumer that only knows about
 /// PC keeps working untouched.
-pub const DE_WEEKLY_RIVEN_PLATFORMS: &[(&str, &str)] = &[
-    ("ps4", "https://www-static.warframe.com/repos/weeklyRivensPS4.json"),
-    ("xb1", "https://www-static.warframe.com/repos/weeklyRivensXB1.json"),
-    ("swi", "https://www-static.warframe.com/repos/weeklyRivensSWI.json"),
-];
+pub use crate::de::DE_WEEKLY_RIVEN_PLATFORMS;
 
 /// One row of `DE_WEEKLY_RIVENS_URL`: one weapon x reroll-state's price band.
 /// Generic rows (`compatibility: null` — "Rifle Riven Mod") carry no weapon
@@ -921,11 +917,12 @@ fn js_literal_to_json(tokens: &[JsTok], pos: &mut usize) -> Result<serde_json::V
 /// Parse the full `DE_WEEKLY_RIVENS_URL` body into rows. Rows missing the
 /// price fields are dropped (a shape change upstream surfaces as a count
 /// drop, which the build logs).
-fn parse_weekly_rivens(text: &str) -> Result<Vec<WeeklyRivenRow>, String> {
+fn parse_weekly_rivens_counted(text: &str) -> Result<(Vec<WeeklyRivenRow>, usize), String> {
     let tokens = tokenize_js_literal(text)?;
     let mut pos = 0usize;
     let value = js_literal_to_json(&tokens, &mut pos)?;
     let arr = value.as_array().ok_or_else(|| format!("{DE_WEEKLY_RIVENS_URL}: not an array"))?;
+    let raw_count = arr.len();
     let mut rows = Vec::new();
     for v in arr {
         let Some(obj) = v.as_object() else { continue };
@@ -945,7 +942,20 @@ fn parse_weekly_rivens(text: &str) -> Result<Vec<WeeklyRivenRow>, String> {
             median,
         });
     }
-    Ok(rows)
+    Ok((rows, raw_count))
+}
+
+#[cfg(test)]
+fn parse_weekly_rivens(text: &str) -> Result<Vec<WeeklyRivenRow>, String> {
+    parse_weekly_rivens_counted(text).map(|(rows, _)| rows)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RivenChildOutcome {
+    Unavailable,
+    Invalid,
+    AuthoritativeEmpty,
+    Usable,
 }
 
 /// Build the `riven_stats` surface: DE's weekly price bands per weapon x
@@ -958,21 +968,36 @@ fn parse_weekly_rivens(text: &str) -> Result<Vec<WeeklyRivenRow>, String> {
 pub fn fetch_riven_stats(
     http: &dyn Http,
     weapons_by_name: &HashMap<String, String>,
-) -> (HashMap<String, serde_json::Value>, usize) {
+) -> (HashMap<String, serde_json::Value>, usize, HashMap<String, RivenChildOutcome>) {
+    let mut outcomes = HashMap::new();
     let text = match http.get_text(DE_WEEKLY_RIVENS_URL) {
         Ok(t) => t,
         Err(e) => {
             eprintln!("  warning: could not fetch {DE_WEEKLY_RIVENS_URL}: {e}");
-            return (HashMap::new(), 0);
+            outcomes.insert("pc".into(), RivenChildOutcome::Unavailable);
+            return (HashMap::new(), 0, outcomes);
         }
     };
-    let rows = match parse_weekly_rivens(&text) {
+    let (rows, raw_count) = match parse_weekly_rivens_counted(&text) {
         Ok(r) => r,
         Err(e) => {
             eprintln!("  warning: {DE_WEEKLY_RIVENS_URL}: {e}");
-            return (HashMap::new(), 0);
+            outcomes.insert("pc".into(), RivenChildOutcome::Invalid);
+            return (HashMap::new(), 0, outcomes);
         }
     };
+    if raw_count == 0 {
+        outcomes.insert("pc".into(), RivenChildOutcome::AuthoritativeEmpty);
+        return (HashMap::new(), 0, outcomes);
+    }
+    if rows.is_empty() {
+        outcomes.insert("pc".into(), RivenChildOutcome::Invalid);
+        return (HashMap::new(), 0, outcomes);
+    }
+    if rows.len() < raw_count {
+        outcomes.insert("pc".into(), RivenChildOutcome::Invalid);
+        return (HashMap::new(), 0, outcomes);
+    }
     let mut stats: HashMap<String, serde_json::Value> = HashMap::new();
     let mut unmatched = 0usize;
     for row in rows {
@@ -998,16 +1023,31 @@ pub fn fetch_riven_stats(
     // would be absurd.
     for (platform, url) in DE_WEEKLY_RIVEN_PLATFORMS {
         let Ok(text) = http.get_text(url) else {
+            outcomes.insert((*platform).to_string(), RivenChildOutcome::Unavailable);
             eprintln!("  warning: could not fetch {url}");
             continue;
         };
-        let rows = match parse_weekly_rivens(&text) {
+        let (rows, raw_count) = match parse_weekly_rivens_counted(&text) {
             Ok(r) => r,
             Err(e) => {
+                outcomes.insert((*platform).to_string(), RivenChildOutcome::Invalid);
                 eprintln!("  warning: {url}: {e}");
                 continue;
             }
         };
+        if raw_count == 0 {
+            outcomes.insert((*platform).to_string(), RivenChildOutcome::AuthoritativeEmpty);
+            continue;
+        }
+        if rows.is_empty() {
+            outcomes.insert((*platform).to_string(), RivenChildOutcome::Invalid);
+            continue;
+        }
+        if rows.len() < raw_count {
+            outcomes.insert((*platform).to_string(), RivenChildOutcome::Invalid);
+            continue;
+        }
+        let mut joined = 0usize;
         for row in rows {
             let Some(weapon) = row.compatibility else { continue };
             let Some(slug) = weapons_by_name.get(&weapon.to_lowercase()) else { continue };
@@ -1028,10 +1068,51 @@ pub fn fetch_riven_stats(
                 *plat = serde_json::json!({});
             }
             plat[tier_key] = tier;
+            joined += 1;
         }
+        outcomes.insert(
+            (*platform).to_string(),
+            if joined == 0 { RivenChildOutcome::Invalid } else { RivenChildOutcome::Usable },
+        );
     }
 
-    (stats, unmatched)
+    if stats.is_empty() {
+        outcomes.insert("pc".into(), RivenChildOutcome::Invalid);
+    } else {
+        outcomes.insert("pc".into(), RivenChildOutcome::Usable);
+    }
+    (stats, unmatched, outcomes)
+}
+
+/// Retain only failed console children while replacing the successful PC
+/// baseline. Iterating fresh PC slugs prevents a stale console-only weapon from
+/// being resurrected after it disappears from the primary feed.
+pub fn carry_failed_riven_platforms(
+    fresh: &mut HashMap<String, serde_json::Value>,
+    prior: Option<&HashMap<String, serde_json::Value>>,
+    outcomes: &HashMap<String, RivenChildOutcome>,
+) {
+    let Some(prior) = prior else { return };
+    for (platform, _) in DE_WEEKLY_RIVEN_PLATFORMS {
+        if matches!(outcomes.get(*platform), Some(RivenChildOutcome::Usable | RivenChildOutcome::AuthoritativeEmpty)) {
+            continue;
+        }
+        for (slug, row) in fresh.iter_mut() {
+            let Some(old_platform) = prior
+                .get(slug)
+                .and_then(|old| old.get("platforms"))
+                .and_then(|p| p.get(*platform))
+                .cloned()
+            else { continue };
+            let Some(obj) = row.as_object_mut() else { continue };
+            let platforms = obj
+                .entry("platforms")
+                .or_insert_with(|| serde_json::json!({}));
+            if let Some(map) = platforms.as_object_mut() {
+                map.insert((*platform).to_string(), old_platform);
+            }
+        }
+    }
 }
 
 pub const WFSTAT_VAULT_TRADER_URL: &str = "https://api.warframestat.us/pc/vaultTrader/";
@@ -1589,7 +1670,7 @@ mod tests {
             { itemType: 'Melee Riven Mod', compatibility: null, rerolled: false,
               avg: 52.85, stddev: 274.96, min: 2, max: 2300, pop: 8, median: 7 }
         ]"#;
-        let (stats, unmatched) = fetch_riven_stats(&weekly_http(body), &weapons_by_name());
+        let (stats, unmatched, _) = fetch_riven_stats(&weekly_http(body), &weapons_by_name());
         assert_eq!(unmatched, 1, "only the unknown weapon counts");
         let acceltra = stats.get("acceltra").unwrap();
         assert_eq!(acceltra["name"], "Acceltra");
@@ -1621,7 +1702,7 @@ mod tests {
             DE_WEEKLY_RIVEN_PLATFORMS[0].1.into(),
             serde_json::Value::String(ps4.into()),
         );
-        let (stats, _) = fetch_riven_stats(&FixtureHttp { responses: r }, &weapons_by_name());
+        let (stats, _, _) = fetch_riven_stats(&FixtureHttp { responses: r }, &weapons_by_name());
 
         let acceltra = stats.get("acceltra").unwrap();
         // PC keeps its place at the top level, untouched.
@@ -1644,7 +1725,9 @@ mod tests {
             { itemType: 'Rifle Riven Mod', compatibility: 'Acceltra', rerolled: false,
               avg: 41.75, stddev: 45.23, min: 5, max: 400, pop: 10, median: 35 }
         ]"#;
-        let (stats, _) = fetch_riven_stats(&weekly_http(pc), &weapons_by_name());
+        let (stats, _, children) = fetch_riven_stats(&weekly_http(pc), &weapons_by_name());
+        assert_eq!(children["pc"], RivenChildOutcome::Usable);
+        assert_eq!(children["swi"], RivenChildOutcome::Unavailable);
         let acceltra = stats.get("acceltra").unwrap();
         assert_eq!(acceltra["unrolled"]["median"], 35.0);
         assert!(acceltra.get("platforms").is_none());
@@ -1652,9 +1735,37 @@ mod tests {
 
     #[test]
     fn riven_stats_fetch_failure_is_empty_for_reconcile_to_fall_back() {
-        let (stats, unmatched) = fetch_riven_stats(&FixtureHttp { responses: HashMap::new() }, &weapons_by_name());
+        let (stats, unmatched, children) = fetch_riven_stats(&FixtureHttp { responses: HashMap::new() }, &weapons_by_name());
         assert!(stats.is_empty());
         assert_eq!(unmatched, 0);
+        assert_eq!(children["pc"], RivenChildOutcome::Unavailable);
+    }
+
+    #[test]
+    fn failed_console_carries_only_onto_fresh_pc_weapons() {
+        let prior = HashMap::from([
+            ("kept".into(), serde_json::json!({"name":"Kept","unrolled":{"median":10},"platforms":{"swi":{"unrolled":{"median":20}}}})),
+            ("gone".into(), serde_json::json!({"name":"Gone","platforms":{"swi":{"unrolled":{"median":30}}}})),
+        ]);
+        let mut fresh = HashMap::from([
+            ("kept".into(), serde_json::json!({"name":"Kept","unrolled":{"median":11}})),
+        ]);
+        let failed = HashMap::from([
+            ("pc".into(), RivenChildOutcome::Usable),
+            ("swi".into(), RivenChildOutcome::Invalid),
+        ]);
+        carry_failed_riven_platforms(&mut fresh, Some(&prior), &failed);
+        assert_eq!(fresh["kept"]["platforms"]["swi"]["unrolled"]["median"], 20);
+        assert!(!fresh.contains_key("gone"), "console-only stale weapons stay gone");
+
+        let mut cleared = fresh.clone();
+        cleared.get_mut("kept").unwrap().as_object_mut().unwrap().remove("platforms");
+        let cleared_outcomes = HashMap::from([
+            ("pc".into(), RivenChildOutcome::Usable),
+            ("swi".into(), RivenChildOutcome::AuthoritativeEmpty),
+        ]);
+        carry_failed_riven_platforms(&mut cleared, Some(&prior), &cleared_outcomes);
+        assert!(cleared["kept"].get("platforms").is_none(), "valid empty Switch data clears prior");
     }
 
     fn set_catalog() -> HashMap<String, String> {

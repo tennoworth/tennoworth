@@ -131,7 +131,7 @@
             <th>Low sell</th>
             <th>Vol 48h</th>
             <th class="you y1" title="How many you own — read from your inventory by the scan">Own</th>
-            <th class="you" title="Expected plat per day if you listed: min(owned, vol 48h ÷ 2) × price">Score</th>
+            <th class="you" title="Prioritization score: price × likely sell-through × bounded DE usage; not expected plat/day">Score</th>
             <th class="you" title="Owned × Avg">Potential</th>
             <th class="you"></th>
           </tr></thead>
@@ -168,7 +168,7 @@
         </div>
       {/if}
       <div class="line">
-        <span class="exp">Score = min(owned, vol 48h ÷ 2) × price — plat you can realistically move per day. Owned counts here are sample values; the desktop app scans the running game and fills these. Nothing is uploaded; no WFM login until you list.</span>
+        <span class="exp">Score prioritizes what to list from price, likely sell-through, and a bounded DE usage weight — it is not expected plat/day. Potential remains the unweighted stack value. Owned counts here are sample values; the desktop app scans the running game and fills these. Nothing is uploaded; no WFM login until you list.</span>
       </div>
       <div class="cta">
         <a class="btn lg primary" href={RELEASES} target="_blank" rel="noopener noreferrer">Windows .msi</a>

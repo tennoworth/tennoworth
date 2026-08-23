@@ -3,6 +3,8 @@
 // DOM — so the search / movers / vault joins stay unit-testable in isolation.
 
 import type { Market, MarketItemEntry, RivenDispoChange, VaultStatus } from './types';
+import { usageFor } from './demand';
+import { scoreRow } from './sell-priority';
 
 /** A single item row rendered by the browser (search, movers, vaulted). */
 export interface BrowseRow {
@@ -197,8 +199,8 @@ export function dispositionChanges(market: Market | null | undefined, limit = 12
 
 /** A hand-off row: a market row plus the three numbers only the desktop app can
  *  fill (owned · score · potential), with SAMPLE owned counts so the landing
- *  can show what a completed row looks like. Score follows the app's rule of
- *  thumb — min(owned, vol 48h ÷ 2) × price — and potential is owned × avg. */
+ *  can show what a completed row looks like. Score follows the app's bounded
+ *  price × turnover × usage prioritization; potential remains owned × avg. */
 export interface HandoffRow extends BrowseRow {
   owned: number;
   score: number;
@@ -238,10 +240,15 @@ export function handoffSample(
   const OWNED = [3, 1, 2];
   return picks.map((r, i) => {
     const owned = OWNED[i] ?? 1;
+    const usage = usageFor(r.slug, market);
     return {
       ...r,
       owned,
-      score: Math.round(Math.min(owned, r.vol / 2) * r.avg),
+      score: Math.round(scoreRow({
+        owned,
+        m: items[r.slug],
+        usageShare: usage?.entry.share,
+      }).sell_score),
       potential: Math.round(owned * r.avg),
     };
   });

@@ -250,7 +250,7 @@
     ratio:          { text: 'Live buyers ÷ live sellers — a rough demand signal.', unit: 'ratio', dir: '> 1 = buyers outnumber sellers' },
     potential_plat: { text: 'Owned × Avg. Optimistic — selling N copies usually clears below the average.', unit: 'plat', dir: 'upper bound, not realistic' },
     raw_value:      { text: 'Owned × the average of the ~5 cheapest live asks (the highlighted @ price). What the stack is worth at current listings — no liquidity discount; one troll listing barely moves it.', unit: 'plat', dir: 'falls back to Owned × Avg until the next scrape adds ask-depth data' },
-    sell_score:     { text: 'Expected plat per day if you listed everything. min(owned, vol_48h / 2) × clearing price, where clearing price = lowest live ask, clamped up to the 90-day median when the ask is a lone troll undercut. Items below 2 trades / 48 h get a "patience" tag instead.', unit: 'plat / day', dir: 'higher = better; uncapped' },
+    sell_score:     { text: 'Prioritization score, not expected plat/day. Base = min(sellable owned, max(0.05, vol_48h / 2)) × clearing price; DE usage then applies a bounded 0.75×–1.25× weight. Missing or invalid usage is neutral. Items below 3 trades / 48 h get a "patience" tag.', unit: 'score points', dir: 'higher = list sooner; actual plat totals stay unweighted' },
     ducats:         { text: 'Ducat value at Baro Ki’Teer.', unit: 'ducats', dir: 'only prime parts have a non-zero value' },
     plat_per_100d:  { text: 'Plat cost per 100 ducats of value. “Deal” badge fires below 20.', unit: 'plat / 100 ducats', dir: 'lower = better ducat trade than WFM' },
     medians_7d:     { text: 'Sparkline of the last 7 days of daily median price. Hover the line for the raw values.' },
