@@ -224,6 +224,9 @@ export interface Market {
   /** DE's annual usage telemetry, keyed by the PARENT's slug (a part inherits
    *  its set's figure — see `lib/demand.ts`). Absent on older snapshots. */
   usage?: Record<string, UsageRecord> | null;
+  /** Compact immutable annual history for same-category percentage-point
+   *  comparisons. Historical rows intentionally omit Mastery-Rank curves. */
+  usage_history?: UsageHistorySurface | null;
   event_rewards?: EventRewardsSurface | null;
   surface_provenance?: Record<string, {
     disposition: string;
@@ -271,6 +274,17 @@ export interface UsageRecord {
   share: number;
   peak_mr: number;
   by_mr: number[];
+}
+
+export interface UsageHistoryRecord {
+  name: string;
+  category: string;
+  share: number;
+}
+
+export interface UsageHistorySurface {
+  years: number[];
+  by_year: Record<string | number, Record<string, UsageHistoryRecord>>;
 }
 
 /** One ingredient line. **No `slug` means it cannot be bought** — resources

@@ -414,6 +414,10 @@ pub fn usage_from_export(
     for (category, items) in all {
         let Some(items) = items.as_object() else { continue };
         for (name, buckets) in items {
+            let Some(buckets) = buckets.as_object() else { continue };
+            let Some(share) = buckets.get("ALL").and_then(|v| v.as_f64())
+                .filter(|share| share.is_finite() && *share >= 0.0)
+            else { continue };
             let lower = name.to_lowercase();
             // DE says "Braton Prime"; WFM lists "Braton Prime Set".
             let Some(slug) = catalog
@@ -423,14 +427,16 @@ pub fn usage_from_export(
                 unmatched += 1;
                 continue;
             };
-            let Some(buckets) = buckets.as_object() else { continue };
-            let Some(share) = buckets.get("ALL").and_then(|v| v.as_f64()) else { continue };
 
             let mut by_mr = Vec::with_capacity(MAX_MR + 1);
             let mut peak_mr = 0usize;
             let mut peak = f64::NEG_INFINITY;
             for mr in 0..=MAX_MR {
-                let v = buckets.get(&mr.to_string()).and_then(|v| v.as_f64()).unwrap_or(0.0);
+                let v = buckets
+                    .get(&mr.to_string())
+                    .and_then(|v| v.as_f64())
+                    .filter(|v| v.is_finite() && *v >= 0.0)
+                    .unwrap_or(0.0);
                 if v > peak {
                     peak = v;
                     peak_mr = mr;
@@ -452,6 +458,48 @@ pub fn usage_from_export(
         }
     }
     (out, unmatched)
+}
+
+/// Compact annual usage row for longitudinal comparisons. Historical years
+/// deliberately omit the 34-element MR curve; the newest rich `usage` surface
+/// remains the place for that detail.
+pub fn usage_history_from_export(
+    doc: &Value,
+    catalog: &HashMap<String, String>,
+) -> (HashMap<String, Value>, usize, usize) {
+    let mut out = HashMap::new();
+    let mut accepted = 0usize;
+    let mut unmatched = 0usize;
+    let Some(all) = doc.get("ALL").and_then(|v| v.as_object()) else {
+        return (out, accepted, unmatched);
+    };
+    for (category, items) in all {
+        let Some(items) = items.as_object() else { continue };
+        for (name, buckets) in items {
+            let Some(buckets) = buckets.as_object() else { continue };
+            let Some(share) = buckets.get("ALL").and_then(|v| v.as_f64())
+                .filter(|share| share.is_finite() && *share >= 0.0)
+            else { continue };
+            accepted += 1;
+            let lower = name.to_lowercase();
+            let Some(slug) = catalog
+                .get(&lower)
+                .or_else(|| catalog.get(&format!("{lower} set")))
+            else {
+                unmatched += 1;
+                continue;
+            };
+            out.insert(
+                (*slug).clone(),
+                serde_json::json!({
+                    "name": name,
+                    "category": category,
+                    "share": round4(share * 100.0),
+                }),
+            );
+        }
+    }
+    (out, accepted, unmatched)
 }
 
 fn round4(v: f64) -> f64 {
@@ -1045,6 +1093,27 @@ mod tests {
         let (u, n) = usage_from_export(&serde_json::json!({"nope": 1}), 2025, &HashMap::new());
         assert!(u.is_empty());
         assert_eq!(n, 0);
+    }
+
+    #[test]
+    fn compact_usage_is_strict_and_omits_mastery_buckets() {
+        let catalog = HashMap::from([
+            ("direct".into(), "direct".into()),
+            ("parent set".into(), "parent_set".into()),
+        ]);
+        let doc = serde_json::json!({"ALL":{"Primary":{
+            "Direct":{"ALL":0.1,"0":0.2},
+            "Parent":{"ALL":0.2},
+            "Missing":{"ALL":0.3},
+            "Negative":{"ALL":-0.1},
+            "Malformed":{"ALL":"bad"}
+        }}});
+        let (rows, accepted, unmatched) = usage_history_from_export(&doc, &catalog);
+        assert_eq!(accepted, 3);
+        assert_eq!(unmatched, 1);
+        assert_eq!(rows["direct"], serde_json::json!({"name":"Direct","category":"Primary","share":10.0}));
+        assert_eq!(rows["parent_set"]["share"], 20.0);
+        assert!(rows.values().all(|row| row.get("by_mr").is_none()));
     }
 
     #[test]

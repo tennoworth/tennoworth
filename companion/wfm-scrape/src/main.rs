@@ -28,6 +28,42 @@ use wfm_scrape::{de, de_extract};
 use wfm_scrape::reconcile::{reconcile, Observation};
 use wfm_scrape::render::{self, assemble_snapshot, CatalogItemMeta};
 
+fn valid_compact_usage(rows: &HashMap<String, serde_json::Value>) -> bool {
+    !rows.is_empty() && rows.values().all(|row| {
+        row.get("name").and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty())
+            && row.get("category").and_then(|v| v.as_str()).is_some_and(|v| !v.is_empty())
+            && row.get("share").and_then(|v| v.as_f64()).is_some_and(|v| v.is_finite() && v >= 0.0)
+            && row.get("by_mr").is_none()
+    })
+}
+
+fn compact_prior_usage(
+    rows: &HashMap<String, serde_json::Value>,
+) -> Option<(u16, HashMap<String, serde_json::Value>)> {
+    let year = rows.values().next()?.get("year")?.as_u64()? as u16;
+    if !de::DE_USAGE_YEARS.contains(&year) {
+        return None;
+    }
+    let mut compact = HashMap::new();
+    for (slug, row) in rows {
+        if row.get("year").and_then(|v| v.as_u64()) != Some(year as u64) {
+            return None;
+        }
+        let name = row.get("name").and_then(|v| v.as_str())?;
+        let category = row.get("category").and_then(|v| v.as_str())?;
+        let share = row.get("share").and_then(|v| v.as_f64())?;
+        if name.is_empty() || category.is_empty() || !share.is_finite() || share < 0.0 {
+            return None;
+        }
+        compact.insert(slug.clone(), serde_json::json!({
+            "name": name,
+            "category": category,
+            "share": share,
+        }));
+    }
+    valid_compact_usage(&compact).then_some((year, compact))
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     if args.len() < 2 {
@@ -481,43 +517,58 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         }
     }
 
-    // Usage telemetry. Annual, so it is fetched once and then carried: the
-    // prior snapshot's copy is reused unless it is absent or names an older
-    // year than the newest DE has published. Nothing here is per-cycle work.
+    // Annual usage history is immutable. Keep every valid prior year, request
+    // only missing published candidates, and leave failed years absent so the
+    // next cycle retries them. DE publishes these files in arrears; never
+    // manufacture a current-year candidate.
     let usage_old: Option<HashMap<String, serde_json::Value>> =
         prior.get("usage").and_then(|s| serde_json::from_value(s.clone()).ok());
-    let newest_usage_year = de::DE_USAGE_YEARS.iter().copied().max().unwrap_or(0);
-    // The MINIMUM year across the carried map, not the first entry's: reading
-    // one arbitrary HashMap entry would call a mixed-year map current on a coin
-    // flip. A carried map that is empty yields 0 and refetches, which is the
-    // right answer — an empty surface is not a current one.
-    let have_year = usage_old
-        .as_ref()
-        .map(|u| {
-            u.values()
-                .map(|v| v.get("year").and_then(|y| y.as_u64()).unwrap_or(0))
-                .min()
-                .unwrap_or(0) as u16
-        })
-        .unwrap_or(0);
+    let mut usage_history: render::UsageHistorySurface = prior
+        .get("usage_history")
+        .and_then(|value| serde_json::from_value(value.clone()).ok())
+        .unwrap_or_default();
+    usage_history.by_year.retain(|year, rows| {
+        de::DE_USAGE_YEARS.contains(year) && valid_compact_usage(rows)
+    });
+    if let Some((year, compact)) = usage_old.as_ref().and_then(compact_prior_usage) {
+        usage_history.by_year.entry(year).or_insert(compact);
+    }
 
-    let usage_observation = if have_year >= newest_usage_year {
-        eprintln!("Usage telemetry: {newest_usage_year} already in the snapshot — not refetched");
+    let mut fresh_rich_usage = std::collections::BTreeMap::new();
+    for year in de::DE_USAGE_YEARS {
+        if usage_history.by_year.contains_key(year) {
+            eprintln!("Usage telemetry: {year} already in the snapshot — not refetched");
+            continue;
+        }
+        eprintln!("Fetching DE usage telemetry ({year})...");
+        match http.get_json(&de::usage_url(*year)) {
+            Ok(doc) => {
+                let (compact, accepted, unmatched) =
+                    de_extract::usage_history_from_export(&doc, &catalog);
+                eprintln!(
+                    "  {year}: {} joined · {unmatched} unmatched · {accepted} valid rows",
+                    compact.len()
+                );
+                if valid_compact_usage(&compact) {
+                    let (rich, _) = de_extract::usage_from_export(&doc, *year, &catalog);
+                    usage_history.by_year.insert(*year, compact);
+                    fresh_rich_usage.insert(*year, rich);
+                } else {
+                    eprintln!("  warning: {year} usage shape had no joinable valid rows");
+                }
+            }
+            Err(e) => eprintln!("  warning: {year}: {e}"),
+        }
+    }
+    usage_history.years = usage_history.by_year.keys().copied().collect();
+    let newest_usage_year = usage_history.years.last().copied().unwrap_or(0);
+    let prior_usage_year = usage_old.as_ref().and_then(compact_prior_usage).map(|row| row.0);
+    let usage_observation = if let Some(rich) = fresh_rich_usage.remove(&newest_usage_year) {
+        Observation::usable(rich)
+    } else if prior_usage_year == Some(newest_usage_year) {
         Observation::Unchanged
     } else {
-        eprintln!("Fetching DE usage telemetry ({newest_usage_year})...");
-        match http.get_json(&de::usage_url(newest_usage_year)) {
-            Ok(doc) => {
-                let (u, unmatched) =
-                    de_extract::usage_from_export(&doc, newest_usage_year, &catalog);
-                eprintln!("  {} items joined · {unmatched} names without a WFM listing", u.len());
-                if u.is_empty() { Observation::Invalid } else { Observation::usable(u) }
-            }
-            Err(e) => {
-                eprintln!("  warning: {e}");
-                Observation::Unavailable
-            }
-        }
+        Observation::Unavailable
     };
 
     // Relic rewards. DE's table beats the drop-table scrape on two counts: all
@@ -1073,6 +1124,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         r_riven_stats.data,
         r_recipes.data,
         r_usage.data,
+        usage_history,
         surface_fetched_at,
     );
     snapshot.de = Some(de_surface);

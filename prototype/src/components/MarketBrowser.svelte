@@ -14,6 +14,7 @@
   } from '../lib/market-browse';
   import { sparklinePoints } from '../lib/sparkline';
   import { weekly, yearStats, type History } from '../lib/history';
+  import MetaDriftPanel from './MetaDriftPanel.svelte';
 
   // Powered by the already-loaded market.json — the only fetch this component
   // can trigger is the optional year-long history, and only when the user
@@ -444,6 +445,8 @@
       </table>
     </section>
   {/if}
+
+  <MetaDriftPanel {market} />
 
   <!-- 5. HAND-OFF: the same rows, completed by the desktop app (hosted only) -->
   {#if handoff}

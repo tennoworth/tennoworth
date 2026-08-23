@@ -137,6 +137,8 @@ pub struct Snapshot {
     /// `de_extract::usage_from_export`.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub usage: HashMap<String, serde_json::Value>,
+    #[serde(default, skip_serializing_if = "UsageHistorySurface::is_empty")]
+    pub usage_history: UsageHistorySurface,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub surface_fetched_at: HashMap<String, String>,
     /// Observation provenance is separate from data freshness: an unchanged
@@ -148,6 +150,18 @@ pub struct Snapshot {
     /// Digital Extremes provenance + the worldState-only surfaces.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub de: Option<DeSurface>,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct UsageHistorySurface {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub years: Vec<u16>,
+    #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub by_year: std::collections::BTreeMap<u16, HashMap<String, serde_json::Value>>,
+}
+
+impl UsageHistorySurface {
+    pub fn is_empty(&self) -> bool { self.years.is_empty() || self.by_year.is_empty() }
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -232,6 +246,7 @@ pub fn assemble_snapshot(
     riven_stats: HashMap<String, serde_json::Value>,
     recipes: HashMap<String, serde_json::Value>,
     usage: HashMap<String, serde_json::Value>,
+    usage_history: UsageHistorySurface,
     surface_fetched_at: HashMap<String, String>,
 ) -> Snapshot {
     Snapshot {
@@ -255,6 +270,7 @@ pub fn assemble_snapshot(
         riven_stats,
         recipes,
         usage,
+        usage_history,
         surface_fetched_at,
         surface_provenance: HashMap::new(),
         event_rewards: EventRewardsSurface::default(),

@@ -1054,3 +1054,51 @@ fn the_disposition_log_reports_no_change_when_only_the_mirror_disagrees() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn annual_usage_history_retries_gaps_and_never_refetches_valid_years() {
+    let dir = stage_fixtures("convert");
+    let path = dir.join("fixture_responses.json");
+    let mut responses: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    let usage_doc = |direct: f64, parent: f64| serde_json::json!({"ALL": {
+        "Warframes": {
+            "Primed Continuity": {"ALL": direct, "0": direct},
+            "Volt Prime": {"ALL": parent, "0": parent},
+            "Unlisted Future Gear": {"ALL": 0.01, "0": 0.01},
+            "Negative": {"ALL": -1}
+        }
+    }});
+    responses.insert(de::usage_url(2023), usage_doc(0.1, 0.2));
+    responses.insert(de::usage_url(2024), serde_json::json!({"ALL": []}));
+    responses.insert(de::usage_url(2025), usage_doc(0.3, 0.4));
+    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
+
+    let first = run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"], &dir);
+    assert!(first.status.success(), "{}", String::from_utf8_lossy(&first.stderr));
+    let first_snap: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(first_snap["usage_history"]["years"], serde_json::json!([2023, 2025]));
+    assert_eq!(first_snap["usage_history"]["by_year"]["2023"]["primed_continuity"]["share"], 10.0);
+    assert_eq!(first_snap["usage_history"]["by_year"]["2023"]["volt_prime_set"]["share"], 20.0);
+    assert!(first_snap["usage_history"]["by_year"]["2023"]["primed_continuity"].get("by_mr").is_none());
+    assert_eq!(first_snap["usage"]["primed_continuity"]["year"], 2025);
+    assert!(first_snap["usage"]["primed_continuity"]["by_mr"].is_array());
+
+    std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
+    responses.insert(de::usage_url(2023), serde_json::json!({"broken": true}));
+    responses.insert(de::usage_url(2024), usage_doc(0.2, 0.25));
+    responses.insert(de::usage_url(2025), serde_json::json!({"broken": true}));
+    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
+
+    let second = run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-02T12:00:00Z"], &dir);
+    assert!(second.status.success(), "{}", String::from_utf8_lossy(&second.stderr));
+    let stderr = String::from_utf8_lossy(&second.stderr);
+    assert!(stderr.contains("2023 already in the snapshot — not refetched"));
+    assert!(stderr.contains("2025 already in the snapshot — not refetched"));
+    let second_snap: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(second_snap["usage_history"]["years"], serde_json::json!([2023, 2024, 2025]));
+    assert_eq!(second_snap["usage_history"]["by_year"]["2023"], first_snap["usage_history"]["by_year"]["2023"]);
+    assert_eq!(second_snap["usage_history"]["by_year"]["2025"], first_snap["usage_history"]["by_year"]["2025"]);
+    assert_eq!(second_snap["usage"]["primed_continuity"]["year"], 2025);
+    let _ = std::fs::remove_dir_all(dir);
+}
