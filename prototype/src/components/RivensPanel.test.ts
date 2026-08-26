@@ -62,8 +62,8 @@ const AUCTIONS = [
     mod_rank: 0, mastery_level: 12, re_rolls: 0, polarity: 'madurai',
     name: 'arma-purado', platform: 'pc',
     attributes: [
-      { url_name: 'critical_damage', value: 2.8, positive: true },
-      { url_name: 'status_duration', value: 0.9, positive: false },
+      { url_name: 'critical_damage', value: 88, positive: true },
+      { url_name: 'status_duration', value: 40, positive: false },
     ],
   },
   {
@@ -121,8 +121,9 @@ describe('RivensPanel', () => {
     await waitFor(() => expect(invoke).toHaveBeenCalledWith('riven_comps', { weapon: 'acceltra' }));
     // auction rows: price + converted attribute lines
     await screen.findByText('35p');
-    expect(screen.getByText('+280.0% Critical Damage')).toBeTruthy();
-    expect(screen.getByText('-90.0% Status Duration')).toBeTruthy();
+    expect(screen.getByText('+88.0% Critical Damage')).toBeTruthy();
+    expect(screen.getByText('-40.0% Status Duration')).toBeTruthy();
+    expect(screen.getByText('95% similar')).toBeTruthy();
     expect(screen.getByText('5 rerolls')).toBeTruthy();
     expect(screen.getByText(/Eleven041110/)).toBeTruthy();
   });

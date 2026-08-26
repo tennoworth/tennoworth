@@ -40,7 +40,7 @@ interface PathInfo {
 /** Set slug → constituent parts, baked from warframestat parent walk. */
 interface SetEntry {
   name: string;
-  parts: Array<{ slug: string; component_name: string }>;
+  parts: Array<{ slug: string; component_name: string; quantity?: number }>;
 }
 
 /** Single drop entry on a relic, from DE's `ExportRelicArcane`. */

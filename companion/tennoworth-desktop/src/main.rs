@@ -155,6 +155,7 @@ fn main() {
             commands::listing::bulk_visibility,
             commands::assistant::ask_assistant,
             commands::report::report_scan_issue,
+            commands::report::open_external_url,
             probe::debug_write_login,
             probe::debug_seed_unlocked,
             probe::debug_post_scan,

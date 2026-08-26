@@ -27,8 +27,8 @@ pub const COMPS_LIMIT: usize = 20;
 
 pub const AUCTIONS_SEARCH_URL: &str = "https://api.warframe.market/v1/auctions/search";
 
-/// One attribute line of a riven auction. `value` is WFM's own conversion —
-/// the multiplier (2.8 means +280% for a percent stat).
+/// One attribute line of a riven auction. WFM sends percent attributes in
+/// display units (`83.1` means `+83.1%`) and scalar attributes as their scalar.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RivenAuctionAttribute {
     pub url_name: String,
@@ -219,8 +219,8 @@ mod tests {
                 "mod_rank": 0, "mastery_level": 15, "re_rolls": 3,
                 "polarity": "madurai", "name": "arma-purado",
                 "attributes": [
-                    {"value": 2.8, "positive": true, "url_name": "magazine_capacity"},
-                    {"value": 4.7, "positive": true, "url_name": "cold_damage"}
+                    {"value": 28.0, "positive": true, "url_name": "magazine_capacity"},
+                    {"value": 47.0, "positive": true, "url_name": "cold_damage"}
                 ]
             }
         })

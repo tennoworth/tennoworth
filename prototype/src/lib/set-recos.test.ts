@@ -102,6 +102,48 @@ describe('deriveSetRecos', () => {
     expect(recos[0].extras_plat).toBe(20);
   });
 
+  it('counts duplicate components required by the blueprint before recommending a flip', () => {
+    const kogake = {
+      kogake_prime_set: {
+        name: 'Kogake Prime',
+        parts: [
+          { slug: 'kogake_prime_blueprint', component_name: 'Blueprint', quantity: 1 },
+          { slug: 'kogake_prime_boot', component_name: 'Boot', quantity: 2 },
+          { slug: 'kogake_prime_gauntlet', component_name: 'Gauntlet', quantity: 2 },
+        ],
+      },
+    };
+    const prices = {
+      kogake_prime_set: { low_sell: 85 },
+      kogake_prime_blueprint: { low_sell: 7 },
+      kogake_prime_boot: { low_sell: 5 },
+      kogake_prime_gauntlet: { low_sell: 25 },
+    };
+
+    // One blueprint means four units are missing (2 boots + 2 gauntlets), not
+    // two distinct rows. It is nowhere near complete and must not be pitched
+    // as a 56p flip.
+    expect(deriveSetRecos(
+      owned(['kogake_prime_blueprint', 1]),
+      market({ items: prices, sets: kogake }),
+    )).toEqual([]);
+
+    const recos = deriveSetRecos(
+      owned(
+        ['kogake_prime_blueprint', 1],
+        ['kogake_prime_boot', 1],
+        ['kogake_prime_gauntlet', 2],
+      ),
+      market({ items: prices, sets: kogake }),
+    );
+    expect(recos).toHaveLength(1);
+    expect(recos[0].missing).toEqual([
+      { slug: 'kogake_prime_boot', name: 'Boot', quantity: 1, low_sell: 5 },
+    ]);
+    expect(recos[0].missing_cost).toBe(5);
+    expect(recos[0].net_plat).toBe(80);
+  });
+
   it('skips relic refinements when summing owned parts', () => {
     const ownedMap = new Map();
     ownedMap.set('axi_k2_relic|intact', { slug: 'axi_k2_relic', subtype: 'intact', count: 10, name: 'Axi K2 (Intact)' });

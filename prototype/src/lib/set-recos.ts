@@ -2,7 +2,7 @@
 // against the market.set_to_parts map (which the scraper bakes from the
 // warframestat parent walk). Three reco kinds, in display priority:
 //
-//   1. `near-complete` — own ≥ (N-1) of N parts, missing 1 or 2.
+//   1. `near-complete` — missing at most 2 required component units.
 //      Action: buy the missing part(s), sell as a full set.
 //      Net = set_low_sell − sum(low_sell of missing parts).
 //      Worth surfacing when Net > sum(low_sell of parts you already own)
@@ -26,6 +26,7 @@ interface SetRecoPart {
   slug: string;
   name: string;
   count: number;
+  required: number;
   low_sell: number;
 }
 
@@ -37,7 +38,7 @@ export interface SetReco {
   set_vol?: number;           // 48h closed-trade volume of the assembled set
   parts: SetRecoPart[];
   parts_low_sell?: number;
-  missing?: Array<{ slug: string; name: string; low_sell: number }>;
+  missing?: Array<{ slug: string; name: string; quantity: number; low_sell: number }>;
   missing_cost?: number;
   extras?: number;
   extras_plat?: number;
@@ -67,35 +68,37 @@ export function deriveSetRecos(
     const setEntry = market.items?.[setSlug];
 
     // For each part: count owned + low_sell price.
-    let ownedDistinct = 0;
-    let totalOwned = 0;
+    let ownedRequiredUnits = 0;
+    let requiredUnits = 0;
     let extraCopies = 0;
     let extrasPlat = 0;
     let partsLowSellSum = 0;     // value if you sold the parts individually
-    const missing: Array<{ slug: string; name: string; low_sell: number }> = [];
+    const missing: Array<{ slug: string; name: string; quantity: number; low_sell: number }> = [];
     const partRows: SetRecoPart[] = [];
     for (const p of parts) {
       const cnt = ownedBySlug.get(p.slug) || 0;
+      const required = Math.max(1, Math.floor(Number(p.quantity) || 1));
       const me = market.items?.[p.slug];
       const lowSell = me?.low_sell || 0;
-      partsLowSellSum += lowSell;
-      partRows.push({ slug: p.slug, name: p.component_name, count: cnt, low_sell: lowSell });
-      if (cnt > 0) {
-        ownedDistinct += 1;
-        totalOwned += cnt;
-        if (cnt > 1) {
-          extraCopies += cnt - 1;
-          extrasPlat += (cnt - 1) * lowSell;
-        }
-      } else {
-        missing.push({ slug: p.slug, name: p.component_name, low_sell: lowSell });
+      const ownedForSet = Math.min(cnt, required);
+      const shortfall = Math.max(0, required - cnt);
+      requiredUnits += required;
+      ownedRequiredUnits += ownedForSet;
+      partsLowSellSum += ownedForSet * lowSell;
+      partRows.push({ slug: p.slug, name: p.component_name, count: cnt, required, low_sell: lowSell });
+      if (cnt > required) {
+        extraCopies += cnt - required;
+        extrasPlat += (cnt - required) * lowSell;
+      }
+      if (shortfall > 0) {
+        missing.push({ slug: p.slug, name: p.component_name, quantity: shortfall, low_sell: lowSell });
       }
     }
-    if (ownedDistinct === 0) continue;
+    if (ownedRequiredUnits === 0) continue;
 
     const setLowSell = setEntry?.low_sell || 0;
     const setVol = setEntry?.vol || 0;
-    const complete = ownedDistinct === parts.length;
+    const complete = ownedRequiredUnits === requiredUnits;
 
     if (complete) {
       // Only surface when there's actually something to list. A complete
@@ -116,19 +119,19 @@ export function deriveSetRecos(
           net_plat: extrasPlat,
         });
       }
-    } else if (missing.length <= 2 && setLowSell > 0) {
-      const missingCost = missing.reduce((s, p) => s + p.low_sell, 0);
+    } else if (requiredUnits - ownedRequiredUnits <= 2 && setLowSell > 0) {
+      const missingCost = missing.reduce((s, p) => s + p.quantity * p.low_sell, 0);
       const net = setLowSell - missingCost;
       // Only show when flipping is meaningfully better than just selling
       // the parts you already own.
-      if (net > partsLowSellSum - missingCost) {
+      if (net > partsLowSellSum) {
         out.push({
           kind: 'near-complete',
           set_slug: setSlug,
           set_name: info.name,
           set_low_sell: setLowSell,
           set_vol: setVol,
-          parts_low_sell: partsLowSellSum - missingCost, // value of parts you already own
+          parts_low_sell: partsLowSellSum,
           parts: partRows,
           missing,
           missing_cost: missingCost,

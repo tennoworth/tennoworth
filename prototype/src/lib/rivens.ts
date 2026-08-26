@@ -220,8 +220,8 @@ export function polaritySymbol(pol: string | null): string {
   return POLARITY_SYMBOLS[pol] ?? pol;
 }
 
-/** Human stat line for a WFM auction attribute — the auction's `value` is
- *  already converted (multiplier scale), so only the percent ×100 applies. */
+/** Human stat line for a WFM auction attribute. WFM already sends percent
+ *  values in display units (`83.1` means `83.1%`), unlike inventory Q30. */
 export function formatAuctionStat(
   urlName: string,
   value: number,
@@ -234,7 +234,54 @@ export function formatAuctionStat(
   const mag = Math.abs(value);
   const sign = positive ? '+' : '-';
   if (attr?.unit === 'percent') {
-    return sign + (mag * 100).toFixed(1) + '% ' + attr.name;
+    return sign + mag.toFixed(1) + '% ' + attr.name;
   }
   return sign + mag.toFixed(2) + ' ' + (attr?.name ?? urlName);
+}
+
+interface AuctionStatLike {
+  url_name: string;
+  value: number;
+  positive: boolean;
+}
+
+/** Similarity of a live auction to the owned roll, from 0–100. Every signed
+ * stat in the union gets one vote; a matching stat earns the ratio of the
+ * smaller magnitude to the larger. Thus different/missing stats earn zero,
+ * while the same stat at nearly the same roll approaches 100. */
+export function rivenSimilarity(
+  riven: Pick<OwnedRiven, 'buffs' | 'curses'>,
+  auction: AuctionStatLike[],
+  attrs: RivenAttribute[] | undefined,
+): number | null {
+  const owned = new Map<string, number>();
+  const addOwned = (stat: RivenFingerprintStat, positive: boolean): void => {
+    const attr = attributeForTag(stat.tag, attrs);
+    if (!attr) return;
+    const mult = Math.abs(rivenStatMultiplier(stat.value));
+    const value = attr.unit === 'percent' ? mult * 100 : mult;
+    // Q30 decoding leaves harmless tails (90 becomes 89.99999996). Similarity
+    // compares what the UI can display, not invisible fixed-point noise.
+    owned.set(`${positive ? '+' : '-'}:${attr.slug}`, Math.round(value * 1_000_000) / 1_000_000);
+  };
+  riven.buffs.forEach((stat) => addOwned(stat, true));
+  riven.curses.forEach((stat) => addOwned(stat, false));
+
+  const comparable = new Map<string, number>();
+  for (const stat of auction) {
+    if (!Number.isFinite(stat.value)) continue;
+    comparable.set(`${stat.positive ? '+' : '-'}:${stat.url_name}`, Math.abs(stat.value));
+  }
+  const keys = new Set([...owned.keys(), ...comparable.keys()]);
+  if (keys.size === 0 || owned.size === 0 || comparable.size === 0) return null;
+
+  let score = 0;
+  for (const key of keys) {
+    const a = owned.get(key);
+    const b = comparable.get(key);
+    if (a === undefined || b === undefined) continue;
+    const high = Math.max(a, b);
+    score += high === 0 ? 1 : Math.min(a, b) / high;
+  }
+  return Math.round((score / keys.size) * 100);
 }

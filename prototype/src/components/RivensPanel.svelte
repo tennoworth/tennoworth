@@ -9,6 +9,7 @@
     formatAuctionStat,
     formatRivenStat,
     polaritySymbol,
+    rivenSimilarity,
     type OwnedRiven,
   } from '../lib/rivens';
   import type { Market, RivenAttribute } from '../lib/types';
@@ -201,6 +202,7 @@
                   {:else}
                     <div class="comps">
                       {#each compsCache.get(r.slug) ?? [] as a (a.id)}
+                        {@const similarity = rivenSimilarity(r, a.attributes, attrs)}
                         <div class="comp">
                           <div class="comp-head">
                             <span class="mono price">{a.price}p</span>
@@ -210,6 +212,9 @@
                               {#if a.top_bid != null} · top bid {a.top_bid}p{/if}
                             </span>
                             <span class="comp-owner" title="WFM status">{a.owner ?? 'unknown'}{#if a.owner_status} · {a.owner_status}{/if}</span>
+                            {#if similarity != null}
+                              <span class="similarity" title="Same signed stats plus closeness of each stat value">{similarity}% similar</span>
+                            {/if}
                           </div>
                           <div class="comp-detail muted small">
                             {#if a.name}<span class="riven-name" title="The riven's rolled name">{a.name}</span>{/if}
@@ -255,6 +260,7 @@
   .small { font-size: 11px; }
   .muted { color: var(--muted); }
   .bad { color: var(--bad); }
+  .similarity { color: var(--accent); border: 1px solid var(--accent); border-radius: var(--radius-ctl); padding: 1px 5px; font: 600 11px var(--font-mono); white-space: nowrap; }
   /* Comps expand as an inset drawer under the row, on the panel-2 ground. */
   .comps-row td { background: var(--panel-2); height: auto; text-align: left; }
   .comps { display: flex; flex-direction: column; gap: var(--s1); max-height: 320px; overflow: auto; padding: var(--s1) 0; }
