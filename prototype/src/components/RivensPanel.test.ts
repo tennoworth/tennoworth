@@ -91,9 +91,9 @@ describe('RivensPanel', () => {
     // resolved weapon name + polarity glyph
     await screen.findByText('Acceltra');
     expect(screen.getByText('V')).toBeTruthy(); // AP_ATTACK = Madurai
-    // stat lines (percent stats from the fingerprint, Q30 conversion)
-    expect(screen.getByText('+88.7% Critical Damage')).toBeTruthy();
-    expect(screen.getByText('-44.0% Status Duration')).toBeTruthy();
+    // The fingerprint proves stat identity, not the final in-game value.
+    expect(screen.getByText('+Critical Damage')).toBeTruthy();
+    expect(screen.getByText('-Status Duration')).toBeTruthy();
     // DE weekly band: rerolled → rolled tier median 100p, n=12
     expect(screen.getByText('100p')).toBeTruthy();
     expect(screen.getByText(/rolled · n=12/)).toBeTruthy();
@@ -123,7 +123,7 @@ describe('RivensPanel', () => {
     await screen.findByText('35p');
     expect(screen.getByText('+88.0% Critical Damage')).toBeTruthy();
     expect(screen.getByText('-40.0% Status Duration')).toBeTruthy();
-    expect(screen.getByText('95% similar')).toBeTruthy();
+    expect(screen.getByText('100% stat match')).toBeTruthy();
     expect(screen.getByText('5 rerolls')).toBeTruthy();
     expect(screen.getByText(/Eleven041110/)).toBeTruthy();
   });

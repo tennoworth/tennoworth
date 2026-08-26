@@ -4,9 +4,8 @@
 //
 //   1. `near-complete` — missing at most 2 required component units.
 //      Action: buy the missing part(s), sell as a full set.
-//      Net = set_low_sell − sum(low_sell of missing parts).
-//      Worth surfacing when Net > sum(low_sell of parts you already own)
-//      — i.e. flipping is genuinely better than selling-as-parts.
+//      Uplift = set_low_sell − missing-part asks − owned-part asks.
+//      Worth surfacing when that ask-to-ask uplift is positive.
 //
 //   2. `complete-with-extras` — own every part AND extras of one or more.
 //      Each "extra copy" of a part is sellable as that part.
@@ -35,11 +34,13 @@ export interface SetReco {
   set_slug: string;
   set_name: string;
   set_low_sell?: number;
+  set_top_buy?: number;
   set_vol?: number;           // 48h closed-trade volume of the assembled set
   parts: SetRecoPart[];
   parts_low_sell?: number;
   missing?: Array<{ slug: string; name: string; quantity: number; low_sell: number }>;
   missing_cost?: number;
+  instant_uplift?: number;
   extras?: number;
   extras_plat?: number;
   net_plat: number;
@@ -97,6 +98,7 @@ export function deriveSetRecos(
     if (ownedRequiredUnits === 0) continue;
 
     const setLowSell = setEntry?.low_sell || 0;
+    const setTopBuy = setEntry?.top_buy || 0;
     const setVol = setEntry?.vol || 0;
     const complete = ownedRequiredUnits === requiredUnits;
 
@@ -119,23 +121,27 @@ export function deriveSetRecos(
           net_plat: extrasPlat,
         });
       }
-    } else if (requiredUnits - ownedRequiredUnits <= 2 && setLowSell > 0) {
+    } else if (
+      requiredUnits - ownedRequiredUnits <= 2
+      && setLowSell > 0
+      && missing.every((part) => part.low_sell > 0)
+    ) {
       const missingCost = missing.reduce((s, p) => s + p.quantity * p.low_sell, 0);
-      const net = setLowSell - missingCost;
-      // Only show when flipping is meaningfully better than just selling
-      // the parts you already own.
-      if (net > partsLowSellSum) {
+      const uplift = setLowSell - missingCost - partsLowSellSum;
+      if (uplift > 0) {
         out.push({
           kind: 'near-complete',
           set_slug: setSlug,
           set_name: info.name,
           set_low_sell: setLowSell,
+          set_top_buy: setTopBuy || undefined,
           set_vol: setVol,
           parts_low_sell: partsLowSellSum,
           parts: partRows,
           missing,
           missing_cost: missingCost,
-          net_plat: net,
+          instant_uplift: setTopBuy > 0 ? setTopBuy - missingCost - partsLowSellSum : undefined,
+          net_plat: uplift,
         });
       }
     } else if (extraCopies > 0) {

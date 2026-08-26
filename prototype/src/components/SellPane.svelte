@@ -706,10 +706,8 @@
   }
   .preset:hover { color: var(--fg); background: var(--panel-2); }
   .preset.active {
-    color: var(--on-accent);
-    background: var(--accent);
+    color: var(--accent);
     border-color: var(--accent);
-    font-weight: 600;
   }
   .preset.active::before { content: '✓ '; }
   .preset-hint { font-size: 11.5px; }

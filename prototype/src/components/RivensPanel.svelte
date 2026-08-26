@@ -87,8 +87,8 @@
   }
 
   function statLines(r: OwnedRiven): string[] {
-    const lines = r.buffs.map((s) => formatRivenStat(s.tag, s.value, true, attrs));
-    lines.push(...r.curses.map((s) => formatRivenStat(s.tag, s.value, false, attrs)));
+    const lines = r.buffs.map((s) => formatRivenStat(s.tag, true, attrs));
+    lines.push(...r.curses.map((s) => formatRivenStat(s.tag, false, attrs)));
     return lines;
   }
 </script>
@@ -137,7 +137,7 @@
                 </div>
               </td>
               <td class="l">
-                <div class="stats" title={r.veiled ? 'Veiled — stats hidden until revealed.' : statLines(r).join('\n')}>
+                <div class="stats" title={r.veiled ? 'Veiled — stats hidden until revealed.' : 'Stat names from the inventory fingerprint. Exact values require DE’s full Riven formula and are not guessed.'}>
                   {#if r.veiled}
                     <span class="muted">challenge to reveal</span>
                   {:else}
@@ -213,7 +213,7 @@
                             </span>
                             <span class="comp-owner" title="WFM status">{a.owner ?? 'unknown'}{#if a.owner_status} · {a.owner_status}{/if}</span>
                             {#if similarity != null}
-                              <span class="similarity" title="Same signed stats plus closeness of each stat value">{similarity}% similar</span>
+                              <span class="similarity" title="Matching signed stat names only; roll strength is not compared">{similarity}% stat match</span>
                             {/if}
                           </div>
                           <div class="comp-detail muted small">

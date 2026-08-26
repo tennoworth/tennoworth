@@ -48,9 +48,8 @@ describe('deriveSetRecos', () => {
   });
 
   it('flags a near-complete set (missing 1 part) when flipping beats selling parts', () => {
-    // Own 3 of 4 parts (missing systems). Set sells for 90p, missing
-    // costs 18p, owned-parts value 5+10+15 = 30p. Flip net = 90-18=72;
-    // versus selling parts as-is = 30p. Flip wins.
+    // Own 3 of 4 parts (missing systems). Set ask 90p − missing ask 18p
+    // − owned-parts asks 30p = 42p potential uplift.
     const recos = deriveSetRecos(
       owned(['mesa_prime_blueprint', 1], ['mesa_prime_chassis_blueprint', 1], ['mesa_prime_neuroptics_blueprint', 1]),
       market({ items: MESA_PRICES, sets: MESA_SET }),
@@ -60,7 +59,7 @@ describe('deriveSetRecos', () => {
     expect(recos[0].set_name).toBe('Mesa Prime');
     expect(recos[0].missing.map((p) => p.slug)).toEqual(['mesa_prime_systems_blueprint']);
     expect(recos[0].missing_cost).toBe(18);
-    expect(recos[0].net_plat).toBe(72);
+    expect(recos[0].net_plat).toBe(42);
   });
 
   it('suppresses near-complete when set has no live price', () => {
@@ -114,7 +113,7 @@ describe('deriveSetRecos', () => {
       },
     };
     const prices = {
-      kogake_prime_set: { low_sell: 85 },
+      kogake_prime_set: { low_sell: 85, top_buy: 65 },
       kogake_prime_blueprint: { low_sell: 7 },
       kogake_prime_boot: { low_sell: 5 },
       kogake_prime_gauntlet: { low_sell: 25 },
@@ -141,7 +140,16 @@ describe('deriveSetRecos', () => {
       { slug: 'kogake_prime_boot', name: 'Boot', quantity: 1, low_sell: 5 },
     ]);
     expect(recos[0].missing_cost).toBe(5);
-    expect(recos[0].net_plat).toBe(80);
+    expect(recos[0].net_plat).toBe(18);
+    expect(recos[0].instant_uplift).toBe(-2);
+  });
+
+  it('does not invent a free missing part when its ask is unavailable', () => {
+    const prices = { ...MESA_PRICES, mesa_prime_systems_blueprint: { low_sell: 0 } };
+    expect(deriveSetRecos(
+      owned(['mesa_prime_blueprint', 1], ['mesa_prime_chassis_blueprint', 1], ['mesa_prime_neuroptics_blueprint', 1]),
+      market({ items: prices, sets: MESA_SET }),
+    )).toEqual([]);
   });
 
   it('skips relic refinements when summing owned parts', () => {
