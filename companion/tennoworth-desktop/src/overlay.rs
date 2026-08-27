@@ -410,6 +410,91 @@ pub fn current_overlay_result(state: State<'_, OverlayState>) -> Option<RelicOve
 }
 
 #[tauri::command]
+pub fn preview_relic_overlay(
+    app: AppHandle,
+    state: State<'_, OverlayState>,
+) -> Result<(), String> {
+    let monitor = app
+        .primary_monitor()
+        .map_err(|e| format!("reading primary monitor: {e}"))?
+        .ok_or_else(|| "no primary monitor is available".to_string())?;
+    let monitor_size = monitor.size();
+    let monitor_position = monitor.position();
+    let width = (monitor_size.width as f64 * 0.52).round().max(720.0) as u32;
+    let height = 150u32;
+    let x = monitor_position.x + (monitor_size.width.saturating_sub(width) / 2) as i32;
+    let y = monitor_position.y + (monitor_size.height as f64 * 0.48).round() as i32;
+    let names = [
+        ("Forma Blueprint", None, None, true, false),
+        ("Lavos Prime Chassis Blueprint", Some(12), Some(15), false, true),
+        ("Dual Zoren Prime Handle", Some(24), Some(45), true, true),
+        ("Revenant Prime Systems Blueprint", Some(8), Some(15), false, false),
+    ];
+    let slots = names
+        .into_iter()
+        .enumerate()
+        .map(|(index, (name, platinum, ducats, best_platinum, best_ducats))| {
+            RelicOverlaySlot {
+                index,
+                box_: OverlayBox {
+                    x: index as f64 * 0.25,
+                    y: 0.05,
+                    width: 0.25,
+                    height: 0.9,
+                },
+                raw_text: name.into(),
+                name: Some(name.into()),
+                slug: None,
+                confidence: 1.0,
+                cached_platinum: platinum,
+                live_platinum: None,
+                ducats,
+                owned: None,
+                best_platinum,
+                best_ducats,
+            }
+        })
+        .collect();
+    let capture_id = format!("preview-{}", unix_millis());
+    let result = RelicOverlayResult {
+        capture_id: capture_id.clone(),
+        captured_at: unix_millis().to_string(),
+        scale: state
+            .settings
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .scale,
+        slots,
+    };
+    *state
+        .current_result
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Some(result.clone());
+    *state
+        .current_capture
+        .lock()
+        .unwrap_or_else(|e| e.into_inner()) = Some(capture_id.clone());
+    show_overlay(&app, x, y, width, height)?;
+    push_overlay_result(&app, &result)?;
+    state.set_status(&app, "showing", Some("overlay preview".into()));
+    let app_for_hide = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_secs(8));
+        let state = app_for_hide.state::<OverlayState>();
+        let current = state
+            .current_capture
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone();
+        if current.as_deref() == Some(&capture_id) {
+            hide_overlay(&app_for_hide);
+            state.set_status(&app_for_hide, "watching", None);
+        }
+    });
+    Ok(())
+}
+
+#[tauri::command]
 pub fn setup_overlay_capture(
     app: AppHandle,
     state: State<'_, OverlayState>,
@@ -1707,7 +1792,7 @@ fn capture_and_recognize(
         );
         return Err(error);
     }
-    if let Err(error) = app.emit_to("relic-overlay", EVENT_UPDATE, &result) {
+    if let Err(error) = push_overlay_result(app, &result) {
         let error = format!("cached_overlay_display_failed: {error}");
         timings.total_ms = elapsed_ms(run_started);
         write_run_diagnostics(run_dir.as_deref(), &timings, Some(&result));
@@ -1766,7 +1851,7 @@ fn capture_and_recognize(
                         .current_result
                         .lock()
                         .unwrap_or_else(|e| e.into_inner()) = Some(result.clone());
-                    let _ = app.emit_to("relic-overlay", EVENT_UPDATE, &result);
+                    let _ = push_overlay_result(app, &result);
                 }
             }
         }
@@ -1826,6 +1911,9 @@ fn show_overlay_on_main_thread(
 ) -> Result<(), String> {
     let window = ensure_overlay_window(app)?;
     window
+        .set_always_on_top(true)
+        .map_err(|e| format!("making overlay topmost: {e}"))?;
+    window
         .set_focusable(false)
         .map_err(|e| format!("making overlay non-activating: {e}"))?;
     configure_linux_overlay_focus(&window)?;
@@ -1836,6 +1924,11 @@ fn show_overlay_on_main_thread(
         .set_position(PhysicalPosition::new(x, y))
         .map_err(|e| format!("positioning overlay: {e}"))?;
     window.show().map_err(|e| format!("showing overlay: {e}"))?;
+    // A hidden topmost window can lose its z-band while a borderless game is
+    // active. Reassert after mapping without activating or stealing focus.
+    window
+        .set_always_on_top(true)
+        .map_err(|e| format!("raising overlay above the game: {e}"))?;
     window
         .set_ignore_cursor_events(true)
         .map_err(|e| format!("making overlay click-through: {e}"))?;
@@ -1866,6 +1959,33 @@ fn ensure_overlay_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String
     Ok(window)
 }
 
+fn push_overlay_result(app: &AppHandle, result: &RelicOverlayResult) -> Result<(), String> {
+    let event_error = app
+        .emit_to("relic-overlay", EVENT_UPDATE, result)
+        .err()
+        .map(|error| error.to_string());
+    let eval_error = app
+        .get_webview_window("relic-overlay")
+        .ok_or_else(|| "overlay window is missing".to_string())
+        .and_then(|window| {
+            let payload = serde_json::to_string(result)
+                .map_err(|error| format!("encoding overlay result: {error}"))?;
+            window
+                .eval(&format!(
+                    "window.__TENNOWORTH_RELIC_OVERLAY_UPDATE__?.({payload})"
+                ))
+                .map_err(|error| format!("updating overlay webview: {error}"))
+        })
+        .err();
+    if let Some(eval_error) = eval_error {
+        return Err(format!(
+            "cached_overlay_display_failed: bridge={eval_error}; event={}",
+            event_error.unwrap_or_else(|| "sent (listener delivery unverified)".into())
+        ));
+    }
+    Ok(())
+}
+
 pub fn prewarm_overlay_window(app: &AppHandle) {
     if let Err(error) = ensure_overlay_window(app) {
         eprintln!("tennoworth: could not prewarm relic overlay: {error}");
@@ -1894,6 +2014,7 @@ fn configure_linux_overlay_focus(_window: &tauri::WebviewWindow) -> Result<(), S
 fn hide_overlay(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("relic-overlay") {
         let _ = app.emit_to("relic-overlay", EVENT_HIDE, ());
+        let _ = window.eval("window.__TENNOWORTH_RELIC_OVERLAY_HIDE__?.()");
         let _ = window.hide();
     }
     if let Some(state) = app.try_state::<OverlayState>() {

@@ -7,6 +7,8 @@
   let result = $state<RelicOverlayResult | null>(null);
 
   onMount(() => {
+    window.__TENNOWORTH_RELIC_OVERLAY_UPDATE__ = (next) => { result = next; };
+    window.__TENNOWORTH_RELIC_OVERLAY_HIDE__ = () => { result = null; };
     resolveInvoke()<RelicOverlayResult | null>('current_overlay_result')
       .then((current) => { if (current) result = current; })
       .catch(() => {});
@@ -16,6 +18,10 @@
     listenForTauriEvent('relic-overlay:hide', () => {
       result = null;
     });
+    return () => {
+      delete window.__TENNOWORTH_RELIC_OVERLAY_UPDATE__;
+      delete window.__TENNOWORTH_RELIC_OVERLAY_HIDE__;
+    };
   });
 
   const price = (slot: RelicOverlayResult['slots'][number]) =>
@@ -57,7 +63,7 @@
 <style>
   :global(html), :global(body), :global(#app) { width: 100%; height: 100%; margin: 0; background: transparent !important; overflow: hidden; }
   .overlay { position: fixed; inset: 0; pointer-events: none; font-family: var(--font-ui, system-ui, sans-serif); color: #edf2f4; }
-  .reward { position: absolute; padding: 0 8px; transform: translateY(8px); }
+  .reward { position: absolute; box-sizing: border-box; padding: 0 8px; transform: translateY(8px); }
   .inner { position: relative; max-width: 250px; min-height: 66px; margin: auto; padding: 9px 11px; border: 1px solid #66808f; border-radius: 7px; background: #091117e8; box-shadow: 0 6px 22px #000a; backdrop-filter: blur(5px); transform-origin: top center; }
   .reward.best .inner { border-color: #e6b85c; box-shadow: 0 0 22px #e6b85c55, 0 6px 22px #000a; }
   .reward.uncertain .inner { border-color: #ee8f70; }

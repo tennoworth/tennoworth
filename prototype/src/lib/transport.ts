@@ -118,6 +118,7 @@ export interface Transport {
   updateOverlaySettings(settings: OverlaySettings): Promise<OverlaySettings>;
   overlayStatus(): Promise<OverlayStatus>;
   setupOverlayCapture(): Promise<OverlayStatus>;
+  previewRelicOverlay(): Promise<void>;
   scanOverlayNow(): Promise<void>;
   openOverlayDiagnostics(): Promise<void>;
   clearOverlayDiagnostics(): Promise<void>;
@@ -140,6 +141,9 @@ export class HostedTransport implements Transport {
     return { state: 'disabled', backend: 'unsupported', placement: 'side-panel', ocrReady: false };
   }
   async setupOverlayCapture(): Promise<OverlayStatus> {
+    throw new Error('The in-game overlay is available in the desktop app.');
+  }
+  async previewRelicOverlay(): Promise<void> {
     throw new Error('The in-game overlay is available in the desktop app.');
   }
   async scanOverlayNow(): Promise<void> {
@@ -260,6 +264,10 @@ export class TauriTransport implements Transport {
 
   async setupOverlayCapture(): Promise<OverlayStatus> {
     return await resolveInvoke()<OverlayStatus>('setup_overlay_capture');
+  }
+
+  async previewRelicOverlay(): Promise<void> {
+    await resolveInvoke()<void>('preview_relic_overlay');
   }
 
   async scanOverlayNow(): Promise<void> {

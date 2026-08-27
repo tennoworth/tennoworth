@@ -487,6 +487,13 @@ export interface RelicOverlayResult {
   }>;
 }
 
+declare global {
+  interface Window {
+    __TENNOWORTH_RELIC_OVERLAY_UPDATE__?: (result: RelicOverlayResult) => void;
+    __TENNOWORTH_RELIC_OVERLAY_HIDE__?: () => void;
+  }
+}
+
 /** Plan items submitted to wfm-core via `submit_plan`. */
 export interface PlanItemInput {
   slug: string;

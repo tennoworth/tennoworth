@@ -169,6 +169,7 @@ fn main() {
             overlay::update_overlay_settings,
             overlay::overlay_status,
             overlay::current_overlay_result,
+            overlay::preview_relic_overlay,
             overlay::setup_overlay_capture,
             overlay::scan_overlay_now,
             overlay::open_overlay_diagnostics,

@@ -66,6 +66,17 @@
     }
   }
 
+  async function previewOverlay() {
+    if (!transport) return;
+    overlayError = '';
+    try {
+      await transport.previewRelicOverlay();
+      overlayStatus = await transport.overlayStatus();
+    } catch (error) {
+      overlayError = error instanceof Error ? error.message : String(error);
+    }
+  }
+
   async function diagnosticsAction(action: 'open' | 'clear') {
     if (!transport) return;
     overlayError = '';
@@ -142,6 +153,7 @@
             </div>
           {/if}
           <div class="overlay-actions">
+            <button onclick={previewOverlay} disabled={!overlay.enabled || savingOverlay}>Preview overlay</button>
             <button onclick={testOverlay} disabled={!overlay.enabled || savingOverlay}>Scan reward screen now</button>
             {#if overlayStatus}<span class="status"><i class="status-dot {overlayStatus.state}"></i>{overlayStatus.state.replaceAll('-', ' ')} · {overlayStatus.backend} · {overlayStatus.ocrReady ? 'OCR ready' : 'OCR unavailable'}</span>{/if}
           </div>
