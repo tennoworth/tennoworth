@@ -25,6 +25,12 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       - uses: ./.github/actions/setup-rust
 
+      - name: Expose hosted vcpkg installation to Cargo
+        shell: pwsh
+        run: |
+          if (-not $env:VCPKG_INSTALLATION_ROOT) { throw 'GitHub runner vcpkg installation was not found' }
+          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
       - name: Install static OCR runtime and pinned English model
         shell: bash
         run: |
