@@ -178,6 +178,10 @@ impl OcrWorker {
                     let data = path.to_str().ok_or_else(|| {
                         "ocr_unavailable: tessdata path is not valid UTF-8".to_string()
                     })?;
+                    // Tauri canonicalizes bundled resources to a Windows verbatim
+                    // path. Tesseract's C API cannot open the `\\?\` form.
+                    #[cfg(target_os = "windows")]
+                    let data = data.strip_prefix(r"\\?\").unwrap_or(data);
                     leptess::LepTess::new(Some(data), "eng").map_err(|e| {
                         format!(
                             "ocr_unavailable: starting Tesseract with bundled eng.traineddata: {e}"
