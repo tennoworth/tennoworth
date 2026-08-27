@@ -13,7 +13,7 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{mpsc, LazyLock, Mutex, RwLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use image::{DynamicImage, ImageFormat, RgbaImage};
+use image::{imageops::FilterType, DynamicImage, ImageFormat, RgbaImage};
 use serde::{Deserialize, Serialize};
 use tauri::{
     AppHandle, Emitter, Manager, PhysicalPosition, PhysicalSize, State, WebviewUrl,
@@ -35,6 +35,12 @@ const DEFAULT_REWARD_MARKER: &str = "Got rewards";
 const REWARD_CLOSE_MARKER: &str = "Relic reward screen shut down";
 const REWARD_SLOT_MARKER: &str = "ProjectionRewardChoice.lua: Missing icon data!";
 const RECOMMENDATION_CONFIDENCE: f64 = 0.9;
+// Warframe sizes this part of the reward UI from the viewport height. Keeping
+// these dimensions height-relative makes the same layout work on 16:10 and
+// ultrawide displays instead of stretching the card grid with the viewport.
+const REWARD_SLOT_SPACING_PER_HEIGHT: f64 = 0.221;
+const REWARD_CARD_WIDTH_PER_HEIGHT: f64 = 0.226;
+const REWARD_TITLE_TARGET_WIDTH: u32 = 256;
 static REWARD_MARKERS: LazyLock<RwLock<Vec<String>>> =
     LazyLock::new(|| RwLock::new(vec![DEFAULT_REWARD_MARKER.into()]));
 
@@ -828,6 +834,18 @@ fn pixel_rect(image: &RgbaImage, rect: NormalizedRect) -> (u32, u32, u32, u32) {
 fn encode_crop(image: &RgbaImage, rect: NormalizedRect) -> Result<Vec<u8>, String> {
     let (x, y, width, height) = pixel_rect(image, rect);
     let mut crop = image::imageops::crop_imm(image, x, y, width, height).to_image();
+    // Give Tesseract roughly the same glyph size at 720p, 1080p, 1440p and 4K.
+    // This also bounds the amount of pixel data sent through Leptonica at 4K.
+    let target_height =
+        ((height as f64 * REWARD_TITLE_TARGET_WIDTH as f64 / width as f64).round() as u32).max(1);
+    if crop.width() != REWARD_TITLE_TARGET_WIDTH {
+        crop = image::imageops::resize(
+            &crop,
+            REWARD_TITLE_TARGET_WIDTH,
+            target_height,
+            FilterType::Triangle,
+        );
+    }
     // Reward labels are white over translucent cards whose gold/white item art
     // frequently merges into the glyphs. Per-channel thresholding preserves
     // the bright label edges while discarding most of that background noise.
@@ -1143,7 +1161,7 @@ fn read_centered_reward_layout(
     let mut crop_number = 0usize;
     let matching_started = Instant::now();
     let slot_before = timings.slot_ocr_ms;
-    let result = layout_from_reward_header(catalog, &mut diagnostic, &mut |slot| {
+    let result = layout_from_reward_header(frame, catalog, &mut diagnostic, &mut |slot| {
         let current_crop = crop_number;
         crop_number += 1;
         let png = match encode_crop(&frame.image, slot.title) {
@@ -1206,8 +1224,9 @@ fn reward_header_visible(frame: &CapturedFrame, lines: &[TsvLine]) -> bool {
     header.contains("fissure") && header.contains("reward")
 }
 
-fn reward_header_layout(count: usize) -> RewardLayout {
-    let spacing = 0.119;
+fn reward_header_layout(frame: &CapturedFrame, count: usize) -> RewardLayout {
+    let spacing = REWARD_SLOT_SPACING_PER_HEIGHT * frame.height as f64 / frame.width as f64;
+    let width = REWARD_CARD_WIDTH_PER_HEIGHT * frame.height as f64 / frame.width as f64;
     let offsets = (0..count).map(|index| index as f64 - (count as f64 - 1.0) / 2.0);
     let slots = offsets
         .enumerate()
@@ -1216,15 +1235,15 @@ fn reward_header_layout(count: usize) -> RewardLayout {
             RewardSlotRect {
                 index,
                 card: NormalizedRect {
-                    x: center - 0.061,
+                    x: center - width / 2.0,
                     y: 0.22,
-                    width: 0.122,
+                    width,
                     height: 0.25,
                 },
                 title: NormalizedRect {
-                    x: center - 0.061,
+                    x: center - width / 2.0,
                     y: 0.35,
-                    width: 0.122,
+                    width,
                     height: 0.11,
                 },
             }
@@ -1237,7 +1256,115 @@ fn reward_header_layout(count: usize) -> RewardLayout {
     }
 }
 
+fn vertical_reward_edge_profile(frame: &CapturedFrame) -> Vec<f64> {
+    let image = &frame.image;
+    let mut profile = vec![0.0; image.width() as usize];
+    let top = (image.height() as f64 * 0.20).round() as u32;
+    let bottom = (image.height() as f64 * 0.48).round() as u32;
+    for x in 2..image.width().saturating_sub(2) {
+        let mut strength = 0.0;
+        for y in (top..bottom).step_by(2) {
+            let left = image.get_pixel(x - 2, y).0;
+            let right = image.get_pixel(x + 2, y).0;
+            let left_luma = u32::from(left[0]) + u32::from(left[1]) + u32::from(left[2]);
+            let right_luma = u32::from(right[0]) + u32::from(right[1]) + u32::from(right[2]);
+            strength += left_luma.abs_diff(right_luma) as f64;
+        }
+        profile[x as usize] = strength;
+    }
+    profile
+}
+
+fn local_edge_strength(profile: &[f64], x: f64) -> f64 {
+    let center = x.round() as isize;
+    (-3..=3)
+        .filter_map(|offset| profile.get((center + offset).max(0) as usize))
+        .copied()
+        .fold(0.0, f64::max)
+}
+
+/// Recover the horizontal card grid without invoking OCR. Card borders form a
+/// repeated set of long vertical edges, so a small projection over the reward
+/// band can adjust the center and spacing before title crops are made.
+fn detected_reward_header_layout(frame: &CapturedFrame, count: usize) -> Option<RewardLayout> {
+    if !(3..=4).contains(&count) {
+        return None;
+    }
+    let profile = vertical_reward_edge_profile(frame);
+    let search_left = (frame.width as f64 * 0.18).round() as usize;
+    let search_right = (frame.width as f64 * 0.82).round() as usize;
+    let background = profile.get(search_left..search_right)?;
+    let mean = background.iter().sum::<f64>() / background.len().max(1) as f64;
+    let variance = background
+        .iter()
+        .map(|value| (value - mean).powi(2))
+        .sum::<f64>()
+        / background.len().max(1) as f64;
+    let deviation = variance.sqrt().max(1.0);
+
+    let height = frame.height as f64;
+    let nominal_spacing = REWARD_SLOT_SPACING_PER_HEIGHT * height;
+    let width_ratio = REWARD_CARD_WIDTH_PER_HEIGHT / REWARD_SLOT_SPACING_PER_HEIGHT;
+    let step = (height / 600.0).round().max(1.0);
+    let center = frame.width as f64 / 2.0;
+    let mut best: Option<(f64, f64)> = None;
+    let spacing_min = nominal_spacing * 0.82;
+    let spacing_max = nominal_spacing * 1.18;
+    let mut spacing = spacing_min;
+    while spacing <= spacing_max {
+        let width = spacing * width_ratio;
+        let score = (0..count)
+            .flat_map(|index| {
+                let offset = index as f64 - (count as f64 - 1.0) / 2.0;
+                let card_center = center + offset * spacing;
+                [card_center - width / 2.0, card_center + width / 2.0]
+            })
+            .map(|edge| local_edge_strength(&profile, edge))
+            .sum::<f64>()
+            / (count * 2) as f64;
+        if best.is_none_or(|(best_score, _)| score > best_score) {
+            best = Some((score, spacing));
+        }
+        spacing += step;
+    }
+    let (score, spacing) = best?;
+    let confidence = (score - mean) / deviation;
+    if confidence < 0.8 {
+        return None;
+    }
+    let width = spacing * width_ratio;
+    let slots = (0..count)
+        .map(|index| {
+            let offset = index as f64 - (count as f64 - 1.0) / 2.0;
+            let card_center = center + offset * spacing;
+            let x = ((card_center - width / 2.0) / frame.width as f64).max(0.0);
+            let normalized_width = (width / frame.width as f64).min(1.0 - x);
+            RewardSlotRect {
+                index,
+                card: NormalizedRect {
+                    x,
+                    y: 0.22,
+                    width: normalized_width,
+                    height: 0.25,
+                },
+                title: NormalizedRect {
+                    x,
+                    y: 0.35,
+                    width: normalized_width,
+                    height: 0.11,
+                },
+            }
+        })
+        .collect();
+    Some(RewardLayout {
+        count,
+        confidence,
+        slots,
+    })
+}
+
 fn layout_from_reward_header(
+    frame: &CapturedFrame,
     catalog: &[OverlayCatalogItem],
     diagnostic: &mut Vec<String>,
     read_crop: &mut impl FnMut(&RewardSlotRect) -> String,
@@ -1246,7 +1373,12 @@ fn layout_from_reward_header(
     // Four-slot geometry also covers the centered two-slot row; three-slot
     // geometry likewise covers a centered solo reward.
     for count in [4, 3] {
-        let mut layout = reward_header_layout(count);
+        let mut layout = detected_reward_header_layout(frame, count)
+            .unwrap_or_else(|| reward_header_layout(frame, count));
+        diagnostic.push(format!(
+            "header grid {count} geometry confidence={:.2}",
+            layout.confidence
+        ));
         let mut matches = Vec::new();
         let mut confidence_sum = 0.0;
         for slot in &layout.slots {
@@ -1324,7 +1456,7 @@ fn layout_from_lines(
         .min();
     let Some(anchor_y) = anchor_y else {
         let result = has_reward_header
-            .then(|| layout_from_reward_header(catalog, &mut diagnostic, &mut read_crop))
+            .then(|| layout_from_reward_header(frame, catalog, &mut diagnostic, &mut read_crop))
             .flatten();
         if let Some(dir) = debug_dir {
             let _ = std::fs::write(dir.join("ocr.txt"), diagnostic.join("\n"));
@@ -1357,7 +1489,7 @@ fn layout_from_lines(
     if row.is_empty() || (expected_slots == 0 && row.len() > 4) {
         diagnostic.push(format!("dynamic title row had {} candidates", row.len()));
         let result = has_reward_header
-            .then(|| layout_from_reward_header(catalog, &mut diagnostic, &mut read_crop))
+            .then(|| layout_from_reward_header(frame, catalog, &mut diagnostic, &mut read_crop))
             .flatten();
         if let Some(dir) = debug_dir {
             let _ = std::fs::write(dir.join("ocr.txt"), diagnostic.join("\n"));
@@ -2365,6 +2497,86 @@ mod tests {
                 / count as f64;
             assert!((average_center - 0.5).abs() < 0.001);
         }
+    }
+
+    #[test]
+    fn reward_grid_uses_viewport_height_across_aspect_ratios() {
+        let frame_16_9 = CapturedFrame {
+            image: RgbaImage::new(2560, 1440),
+            x: 0,
+            y: 0,
+            width: 2560,
+            height: 1440,
+        };
+        let frame_ultrawide = CapturedFrame {
+            image: RgbaImage::new(3440, 1440),
+            x: 0,
+            y: 0,
+            width: 3440,
+            height: 1440,
+        };
+        let spacing = |layout: &RewardLayout, width: u32| {
+            let center = |index: usize| {
+                let title = layout.slots[index].title;
+                (title.x + title.width / 2.0) * width as f64
+            };
+            center(1) - center(0)
+        };
+        let standard = reward_header_layout(&frame_16_9, 4);
+        let ultrawide = reward_header_layout(&frame_ultrawide, 4);
+        assert!((spacing(&standard, 2560) - spacing(&ultrawide, 3440)).abs() < 0.01);
+        assert!((spacing(&standard, 2560) - 1440.0 * REWARD_SLOT_SPACING_PER_HEIGHT).abs() < 0.01);
+    }
+
+    #[test]
+    fn reward_title_crops_are_normalized_for_ocr() {
+        let image = RgbaImage::new(512, 100);
+        let png = encode_crop(
+            &image,
+            NormalizedRect {
+                x: 0.0,
+                y: 0.0,
+                width: 1.0,
+                height: 1.0,
+            },
+        )
+        .unwrap();
+        let decoded = image::load_from_memory(&png).unwrap();
+        assert_eq!(decoded.width(), REWARD_TITLE_TARGET_WIDTH);
+        assert_eq!(decoded.height(), 50);
+    }
+
+    #[test]
+    fn repeated_card_edges_recover_a_shifted_reward_grid() {
+        let mut image = RgbaImage::new(2560, 1440);
+        let center = 1280.0;
+        let spacing = 330.0;
+        let width = spacing * REWARD_CARD_WIDTH_PER_HEIGHT / REWARD_SLOT_SPACING_PER_HEIGHT;
+        for index in 0..4 {
+            let offset = index as f64 - 1.5;
+            let card_center = center + offset * spacing;
+            for edge in [card_center - width / 2.0, card_center + width / 2.0] {
+                let x = edge.round() as u32;
+                for y in 288..692 {
+                    image.put_pixel(x, y, image::Rgba([220, 220, 220, 255]));
+                }
+            }
+        }
+        let frame = CapturedFrame {
+            image,
+            x: 0,
+            y: 0,
+            width: 2560,
+            height: 1440,
+        };
+        let layout = detected_reward_header_layout(&frame, 4).expect("detect reward grid");
+        let centers: Vec<f64> = layout
+            .slots
+            .iter()
+            .map(|slot| (slot.title.x + slot.title.width / 2.0) * frame.width as f64)
+            .collect();
+        assert!((centers[0] - (center - 1.5 * spacing)).abs() < 5.0);
+        assert!((centers[3] - (center + 1.5 * spacing)).abs() < 5.0);
     }
 
     #[test]
