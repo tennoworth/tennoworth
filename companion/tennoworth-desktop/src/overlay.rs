@@ -746,7 +746,16 @@ fn pixel_rect(image: &RgbaImage, rect: NormalizedRect) -> (u32, u32, u32, u32) {
 
 fn encode_crop(image: &RgbaImage, rect: NormalizedRect) -> Result<Vec<u8>, String> {
     let (x, y, width, height) = pixel_rect(image, rect);
-    let crop = image::imageops::crop_imm(image, x, y, width, height).to_image();
+    let mut crop = image::imageops::crop_imm(image, x, y, width, height).to_image();
+    // Reward labels are white over translucent cards whose gold/white item art
+    // frequently merges into the glyphs. Per-channel thresholding preserves
+    // the bright label edges while discarding most of that background noise.
+    for pixel in crop.pixels_mut() {
+        for channel in &mut pixel.0[..3] {
+            *channel = if *channel >= 178 { 255 } else { 0 };
+        }
+        pixel.0[3] = 255;
+    }
     let mut cursor = Cursor::new(Vec::new());
     DynamicImage::ImageRgba8(crop)
         .write_to(&mut cursor, ImageFormat::Png)
@@ -1054,6 +1063,93 @@ fn expected_reward_layout(frame: &CapturedFrame, expected_slots: usize) -> Rewar
     }
 }
 
+fn reward_header_visible(frame: &CapturedFrame, lines: &[TsvLine]) -> bool {
+    let header = lines
+        .iter()
+        .filter(|line| line.y + line.height / 2 <= frame.height / 5)
+        .map(|line| normalize(&line.text))
+        .collect::<Vec<_>>()
+        .join("");
+    header.contains("fissure") && header.contains("reward")
+}
+
+fn reward_header_layout(count: usize) -> RewardLayout {
+    let spacing = 0.119;
+    let offsets = (0..count).map(|index| index as f64 - (count as f64 - 1.0) / 2.0);
+    let slots = offsets
+        .enumerate()
+        .map(|(index, offset)| {
+            let center = 0.5 + offset * spacing;
+            RewardSlotRect {
+                index,
+                card: NormalizedRect {
+                    x: center - 0.061,
+                    y: 0.22,
+                    width: 0.122,
+                    height: 0.25,
+                },
+                title: NormalizedRect {
+                    x: center - 0.061,
+                    y: 0.35,
+                    width: 0.122,
+                    height: 0.11,
+                },
+            }
+        })
+        .collect();
+    RewardLayout {
+        count,
+        confidence: 0.0,
+        slots,
+    }
+}
+
+fn layout_from_reward_header(
+    catalog: &[OverlayCatalogItem],
+    diagnostic: &mut Vec<String>,
+    read_crop: &mut impl FnMut(&RewardSlotRect) -> String,
+) -> Option<LayoutRead> {
+    let mut best: Option<(usize, f64, LayoutRead)> = None;
+    // Four-slot geometry also covers the centered two-slot row; three-slot
+    // geometry likewise covers a centered solo reward.
+    for count in [4, 3] {
+        let mut layout = reward_header_layout(count);
+        let mut matches = Vec::new();
+        let mut confidence_sum = 0.0;
+        for slot in &layout.slots {
+            let text = read_crop(slot);
+            let found = match_ocr_lines(&text, catalog)
+                .into_iter()
+                .max_by(|a, b| a.confidence.total_cmp(&b.confidence));
+            diagnostic.push(format!(
+                "header grid {count} slot {} ocr={:?} match={:?}",
+                slot.index,
+                text.trim(),
+                found
+                    .as_ref()
+                    .map(|candidate| (&candidate.item.name, candidate.confidence))
+            ));
+            if let Some(found) = found {
+                confidence_sum += found.confidence;
+                matches.push((slot.index, found));
+            }
+        }
+        if matches.is_empty() {
+            continue;
+        }
+        layout.confidence = matches.len() as f64 / count as f64;
+        let candidate = LayoutRead { layout, matches };
+        let score = (candidate.matches.len(), confidence_sum);
+        if best
+            .as_ref()
+            .is_none_or(|(matches, confidence, _)| score > (*matches, *confidence))
+        {
+            best = Some((score.0, score.1, candidate));
+        }
+    }
+    best.map(|(_, _, read)| read)
+}
+
 /// The post-OCR half of read_dynamic_layout: find the reward band from the
 /// sparse-TSV lines, recover the slot grid, and match each slot crop against
 /// the catalog. Pure (the crop reader is injected) so the corpus gate can feed
@@ -1071,6 +1167,7 @@ fn layout_from_lines(
     mut read_crop: impl FnMut(&RewardSlotRect) -> String,
 ) -> Option<LayoutRead> {
     let mut diagnostic = Vec::new();
+    let has_reward_header = reward_header_visible(frame, lines);
     let anchors: Vec<(&TsvLine, FoundMatch)> = lines
         .iter()
         .filter(|line| {
@@ -1091,7 +1188,16 @@ fn layout_from_lines(
     let anchor_y = anchors
         .iter()
         .map(|(line, _)| line.y + line.height / 2)
-        .min()?;
+        .min();
+    let Some(anchor_y) = anchor_y else {
+        let result = has_reward_header
+            .then(|| layout_from_reward_header(catalog, &mut diagnostic, &mut read_crop))
+            .flatten();
+        if let Some(dir) = debug_dir {
+            let _ = std::fs::write(dir.join("ocr.txt"), diagnostic.join("\n"));
+        }
+        return result;
+    };
     let y_tolerance = (frame.height as f64 * 0.025).round() as u32;
     let mut row: Vec<&TsvLine> = lines
         .iter()
@@ -1117,10 +1223,13 @@ fn layout_from_lines(
     });
     if row.is_empty() || (expected_slots == 0 && row.len() > 4) {
         diagnostic.push(format!("dynamic title row had {} candidates", row.len()));
+        let result = has_reward_header
+            .then(|| layout_from_reward_header(catalog, &mut diagnostic, &mut read_crop))
+            .flatten();
         if let Some(dir) = debug_dir {
             let _ = std::fs::write(dir.join("ocr.txt"), diagnostic.join("\n"));
         }
-        return None;
+        return result;
     }
 
     let observed_centers: Vec<f64> = row
@@ -2060,6 +2169,81 @@ mod tests {
                 / count as f64;
             assert!((average_center - 0.5).abs() < 0.001);
         }
+    }
+
+    #[test]
+    fn fragmented_reward_header_falls_back_to_centered_title_crops() {
+        let frame = CapturedFrame {
+            image: RgbaImage::new(1898, 1024),
+            x: 0,
+            y: 0,
+            width: 1898,
+            height: 1024,
+        };
+        let lines = vec![TsvLine {
+            x: 388,
+            y: 66,
+            width: 372,
+            height: 52,
+            text: "FISSURE/REWARDS".into(),
+        }];
+        let candidates = vec![
+            OverlayCatalogItem {
+                name: "Wisp Prime Neuroptics Blueprint".into(),
+                slug: Some("wisp_prime_neuroptics_blueprint".into()),
+            },
+            OverlayCatalogItem {
+                name: "Lavos Prime Chassis Blueprint".into(),
+                slug: Some("lavos_prime_chassis_blueprint".into()),
+            },
+            OverlayCatalogItem {
+                name: "Protea Prime Chassis Blueprint".into(),
+                slug: Some("protea_prime_chassis_blueprint".into()),
+            },
+            OverlayCatalogItem {
+                name: "Dethcube Prime Cerebrum".into(),
+                slug: Some("dethcube_prime_cerebrum".into()),
+            },
+        ];
+        let names = [
+            "Wisp Prime Neuroptics Blueprint",
+            "Lavos Prime Chassis Blueprint",
+            "Protea Prime Chassis Blueprint",
+            "Dethcube Prime Cerebrum",
+        ];
+        let read = layout_from_lines(&frame, &lines, &candidates, 0, None, |slot| {
+            let center = slot.title.x + slot.title.width / 2.0;
+            [0.3215, 0.4405, 0.5595, 0.6785]
+                .iter()
+                .position(|expected| (center - expected).abs() < 0.001)
+                .map(|index| names[index].to_string())
+                .unwrap_or_else(|| "screen noise".into())
+        })
+        .expect("the reward header should activate centered crop fallback");
+        assert_eq!(read.layout.count, 4);
+        assert_eq!(read.matches.len(), 4);
+    }
+
+    #[test]
+    fn centered_crop_fallback_requires_the_reward_header() {
+        let frame = CapturedFrame {
+            image: RgbaImage::new(1898, 1024),
+            x: 0,
+            y: 0,
+            width: 1898,
+            height: 1024,
+        };
+        let lines = vec![TsvLine {
+            x: 388,
+            y: 66,
+            width: 372,
+            height: 52,
+            text: "MISSION COMPLETE".into(),
+        }];
+        assert!(layout_from_lines(&frame, &lines, &catalog(), 0, None, |_| {
+            "Paris Prime Blueprint".into()
+        })
+        .is_none());
     }
 
     #[test]
