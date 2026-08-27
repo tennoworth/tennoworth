@@ -41,6 +41,7 @@ const RECOMMENDATION_CONFIDENCE: f64 = 0.9;
 const REWARD_SLOT_SPACING_PER_HEIGHT: f64 = 0.221;
 const REWARD_CARD_WIDTH_PER_HEIGHT: f64 = 0.226;
 const REWARD_TITLE_TARGET_WIDTH: u32 = 256;
+const WARFRAME_DESIGN_ASPECT: f64 = 16.0 / 9.0;
 static REWARD_MARKERS: LazyLock<RwLock<Vec<String>>> =
     LazyLock::new(|| RwLock::new(vec![DEFAULT_REWARD_MARKER.into()]));
 
@@ -1224,9 +1225,20 @@ fn reward_header_visible(frame: &CapturedFrame, lines: &[TsvLine]) -> bool {
     header.contains("fissure") && header.contains("reward")
 }
 
+fn reward_design_viewport(frame: &CapturedFrame) -> (f64, f64) {
+    let design_height = (frame.width as f64 / WARFRAME_DESIGN_ASPECT).min(frame.height as f64);
+    let top = (frame.height as f64 - design_height) / 2.0;
+    (top, design_height)
+}
+
 fn reward_header_layout(frame: &CapturedFrame, count: usize) -> RewardLayout {
-    let spacing = REWARD_SLOT_SPACING_PER_HEIGHT * frame.height as f64 / frame.width as f64;
-    let width = REWARD_CARD_WIDTH_PER_HEIGHT * frame.height as f64 / frame.width as f64;
+    let (design_top, design_height) = reward_design_viewport(frame);
+    let spacing = REWARD_SLOT_SPACING_PER_HEIGHT * design_height / frame.width as f64;
+    let width = REWARD_CARD_WIDTH_PER_HEIGHT * design_height / frame.width as f64;
+    let card_y = (design_top + design_height * 0.22) / frame.height as f64;
+    let card_height = design_height * 0.25 / frame.height as f64;
+    let title_y = (design_top + design_height * 0.35) / frame.height as f64;
+    let title_height = design_height * 0.11 / frame.height as f64;
     let offsets = (0..count).map(|index| index as f64 - (count as f64 - 1.0) / 2.0);
     let slots = offsets
         .enumerate()
@@ -1236,15 +1248,15 @@ fn reward_header_layout(frame: &CapturedFrame, count: usize) -> RewardLayout {
                 index,
                 card: NormalizedRect {
                     x: center - width / 2.0,
-                    y: 0.22,
+                    y: card_y,
                     width,
-                    height: 0.25,
+                    height: card_height,
                 },
                 title: NormalizedRect {
                     x: center - width / 2.0,
-                    y: 0.35,
+                    y: title_y,
                     width,
-                    height: 0.11,
+                    height: title_height,
                 },
             }
         })
@@ -1259,8 +1271,9 @@ fn reward_header_layout(frame: &CapturedFrame, count: usize) -> RewardLayout {
 fn vertical_reward_edge_profile(frame: &CapturedFrame) -> Vec<f64> {
     let image = &frame.image;
     let mut profile = vec![0.0; image.width() as usize];
-    let top = (image.height() as f64 * 0.20).round() as u32;
-    let bottom = (image.height() as f64 * 0.48).round() as u32;
+    let (design_top, design_height) = reward_design_viewport(frame);
+    let top = (design_top + design_height * 0.20).round() as u32;
+    let bottom = (design_top + design_height * 0.48).round() as u32;
     for x in 2..image.width().saturating_sub(2) {
         let mut strength = 0.0;
         for y in (top..bottom).step_by(2) {
@@ -1302,10 +1315,10 @@ fn detected_reward_header_layout(frame: &CapturedFrame, count: usize) -> Option<
         / background.len().max(1) as f64;
     let deviation = variance.sqrt().max(1.0);
 
-    let height = frame.height as f64;
-    let nominal_spacing = REWARD_SLOT_SPACING_PER_HEIGHT * height;
+    let (design_top, design_height) = reward_design_viewport(frame);
+    let nominal_spacing = REWARD_SLOT_SPACING_PER_HEIGHT * design_height;
     let width_ratio = REWARD_CARD_WIDTH_PER_HEIGHT / REWARD_SLOT_SPACING_PER_HEIGHT;
-    let step = (height / 600.0).round().max(1.0);
+    let step = (design_height / 600.0).round().max(1.0);
     let center = frame.width as f64 / 2.0;
     let mut best: Option<(f64, f64)> = None;
     let spacing_min = nominal_spacing * 0.82;
@@ -1333,6 +1346,10 @@ fn detected_reward_header_layout(frame: &CapturedFrame, count: usize) -> Option<
         return None;
     }
     let width = spacing * width_ratio;
+    let card_y = (design_top + design_height * 0.22) / frame.height as f64;
+    let card_height = design_height * 0.25 / frame.height as f64;
+    let title_y = (design_top + design_height * 0.35) / frame.height as f64;
+    let title_height = design_height * 0.11 / frame.height as f64;
     let slots = (0..count)
         .map(|index| {
             let offset = index as f64 - (count as f64 - 1.0) / 2.0;
@@ -1343,15 +1360,15 @@ fn detected_reward_header_layout(frame: &CapturedFrame, count: usize) -> Option<
                 index,
                 card: NormalizedRect {
                     x,
-                    y: 0.22,
+                    y: card_y,
                     width: normalized_width,
-                    height: 0.25,
+                    height: card_height,
                 },
                 title: NormalizedRect {
                     x,
-                    y: 0.35,
+                    y: title_y,
                     width: normalized_width,
-                    height: 0.11,
+                    height: title_height,
                 },
             }
         })
@@ -2515,6 +2532,13 @@ mod tests {
             width: 3440,
             height: 1440,
         };
+        let frame_narrow = CapturedFrame {
+            image: RgbaImage::new(795, 632),
+            x: 0,
+            y: 0,
+            width: 795,
+            height: 632,
+        };
         let spacing = |layout: &RewardLayout, width: u32| {
             let center = |index: usize| {
                 let title = layout.slots[index].title;
@@ -2524,8 +2548,16 @@ mod tests {
         };
         let standard = reward_header_layout(&frame_16_9, 4);
         let ultrawide = reward_header_layout(&frame_ultrawide, 4);
+        let narrow = reward_header_layout(&frame_narrow, 4);
         assert!((spacing(&standard, 2560) - spacing(&ultrawide, 3440)).abs() < 0.01);
         assert!((spacing(&standard, 2560) - 1440.0 * REWARD_SLOT_SPACING_PER_HEIGHT).abs() < 0.01);
+        let narrow_design_height = 795.0 / WARFRAME_DESIGN_ASPECT;
+        assert!(
+            (spacing(&narrow, 795) - narrow_design_height * REWARD_SLOT_SPACING_PER_HEIGHT).abs()
+                < 0.01
+        );
+        let narrow_title_top = narrow.slots[0].title.y * frame_narrow.height as f64;
+        assert!((narrow_title_top - 249.0).abs() < 1.0);
     }
 
     #[test]
