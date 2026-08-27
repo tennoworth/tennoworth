@@ -214,7 +214,11 @@ fn main() {
                             std::fs::write(path, &evidence)?;
                         }
                         print!("{evidence}");
-                        std::process::exit(0);
+                        // Let Tauri unwind its Windows plugins and the OCR worker
+                        // cleanly. A hard process exit from inside setup trips a
+                        // Windows fast-fail (0xc0000409) in the installed build.
+                        app.exit(0);
+                        return Ok(());
                     }
                     Err(error) => return Err(error.into()),
                 }
