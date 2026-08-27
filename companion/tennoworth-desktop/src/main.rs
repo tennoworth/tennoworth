@@ -285,6 +285,7 @@ fn main() {
                 b = b.additional_browser_args("--disable-gpu --no-first-run --disable-extensions");
             }
             let w = b.build()?;
+            overlay::prewarm_overlay_window(&app.handle().clone());
 
             // Desktop window lifecycle: closing the window HIDES it to the tray
             // instead of quitting — only the tray's "Quit" (app.exit) actually

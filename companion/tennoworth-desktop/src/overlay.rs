@@ -664,10 +664,6 @@ pub fn trigger_capture(app: &AppHandle, source: &str) -> Result<(), String> {
     std::thread::Builder::new()
         .name("relic-capture".into())
         .spawn(move || {
-            // EE.log announces the reward screen before it writes the one
-            // marker per choice. Let that short burst settle so both the
-            // automatic and retry paths see the final 1-4 slot count.
-            std::thread::sleep(Duration::from_millis(350));
             if let Err(error) = capture_and_recognize(&app, &source, triggered_at) {
                 eprintln!("tennoworth: relic scan ({source}) failed: {error}");
                 app.state::<OverlayState>()
@@ -795,7 +791,12 @@ fn diagnostics_attempt_dir(run_dir: Option<&Path>, attempt: usize) -> Option<Pat
 
 fn write_scan_frame_debug(run_dir: Option<&Path>, attempt: usize, frame: &CapturedFrame) {
     if let Some(dir) = diagnostics_attempt_dir(run_dir, attempt) {
-        let _ = frame.image.save(dir.join("warframe.png"));
+        let image = frame.image.clone();
+        let _ = std::thread::Builder::new()
+            .name("relic-diagnostics".into())
+            .spawn(move || {
+                let _ = image.save(dir.join("warframe.png"));
+            });
     }
 }
 
@@ -1033,6 +1034,53 @@ fn read_expected_layout(
         ));
     }
     Ok(LayoutRead { layout, matches })
+}
+
+fn centered_layout_is_complete(read: &LayoutRead) -> bool {
+    let indices: Vec<usize> = read.matches.iter().map(|(index, _)| *index).collect();
+    match read.layout.count {
+        // Warframe centers two rewards in the inner positions of its four-card
+        // row, and a solo reward in the middle position of its three-card row.
+        4 => indices == [0, 1, 2, 3] || indices == [1, 2],
+        3 => indices == [0, 1, 2] || indices == [1],
+        _ => false,
+    }
+}
+
+fn read_centered_reward_layout(
+    ocr: &OcrWorker,
+    frame: &CapturedFrame,
+    catalog: &[OverlayCatalogItem],
+    debug_dir: Option<&Path>,
+    timings: &mut OverlayStageTimings,
+) -> Result<LayoutRead, String> {
+    let mut diagnostic = Vec::new();
+    let mut crop_number = 0usize;
+    let matching_started = Instant::now();
+    let slot_before = timings.slot_ocr_ms;
+    let result = layout_from_reward_header(catalog, &mut diagnostic, &mut |slot| {
+        let current_crop = crop_number;
+        crop_number += 1;
+        let png = match encode_crop(&frame.image, slot.title) {
+            Ok(png) => png,
+            Err(_) => return String::new(),
+        };
+        if let Some(dir) = debug_dir {
+            let _ = std::fs::write(dir.join(format!("fast-slot-{current_crop}.png")), &png);
+        }
+        let started = Instant::now();
+        let text = ocr.recognize(png, OcrMode::SingleLine).unwrap_or_default();
+        timings.slot_ocr_ms += elapsed_ms(started);
+        text
+    });
+    timings.matching_ms += elapsed_ms(matching_started)
+        .saturating_sub(timings.slot_ocr_ms.saturating_sub(slot_before));
+    if let Some(dir) = debug_dir {
+        let _ = std::fs::write(dir.join("centered-fast-path.txt"), diagnostic.join("\n"));
+    }
+    result.filter(centered_layout_is_complete).ok_or_else(|| {
+        "centered_reward_incomplete: fixed reward crops did not form a complete row".into()
+    })
 }
 
 fn expected_reward_layout(frame: &CapturedFrame, expected_slots: usize) -> RewardLayout {
@@ -1528,7 +1576,20 @@ fn capture_and_recognize(
                 timings.capture_ms += elapsed_ms(capture_started);
                 write_scan_frame_debug(run_dir.as_deref(), attempt, &frame);
                 let debug_dir = diagnostics_attempt_dir(run_dir.as_deref(), attempt);
-                if (1..=4).contains(&expected_slots) {
+                match read_centered_reward_layout(
+                    &state.ocr,
+                    &frame,
+                    &catalog,
+                    debug_dir.as_deref(),
+                    &mut timings,
+                ) {
+                    Ok(read) => {
+                        recognized = Some((frame, read));
+                        break;
+                    }
+                    Err(error) => last_error = Some(error),
+                }
+                if recognized.is_none() && (1..=4).contains(&expected_slots) {
                     match read_expected_layout(
                         &state.ocr,
                         &frame,
@@ -1544,7 +1605,10 @@ fn capture_and_recognize(
                         Err(error) => last_error = Some(error),
                     }
                 }
-                if recognized.is_none() {
+                // Full-frame sparse OCR is the compatibility fallback, not the
+                // normal hot path. Run it once only after the inexpensive
+                // centered crops have had time to catch a drawing transition.
+                if recognized.is_none() && attempt == 2 {
                     match read_dynamic_layout(
                         &state.ocr,
                         &frame,
@@ -1576,7 +1640,7 @@ fn capture_and_recognize(
             }
         }
         if attempt < 2 {
-            std::thread::sleep(Duration::from_millis(250));
+            std::thread::sleep(Duration::from_millis(if attempt == 0 { 75 } else { 125 }));
         }
     }
     let Some((frame, read)) = recognized else {
@@ -1760,6 +1824,25 @@ fn show_overlay_on_main_thread(
     width: u32,
     height: u32,
 ) -> Result<(), String> {
+    let window = ensure_overlay_window(app)?;
+    window
+        .set_focusable(false)
+        .map_err(|e| format!("making overlay non-activating: {e}"))?;
+    configure_linux_overlay_focus(&window)?;
+    window
+        .set_size(PhysicalSize::new(width, height))
+        .map_err(|e| format!("sizing overlay: {e}"))?;
+    window
+        .set_position(PhysicalPosition::new(x, y))
+        .map_err(|e| format!("positioning overlay: {e}"))?;
+    window.show().map_err(|e| format!("showing overlay: {e}"))?;
+    window
+        .set_ignore_cursor_events(true)
+        .map_err(|e| format!("making overlay click-through: {e}"))?;
+    Ok(())
+}
+
+fn ensure_overlay_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {
     let window = match app.get_webview_window("relic-overlay") {
         Some(window) => window,
         None => WebviewWindowBuilder::new(
@@ -1780,21 +1863,13 @@ fn show_overlay_on_main_thread(
         .build()
         .map_err(|e| format!("creating overlay window: {e}"))?,
     };
-    window
-        .set_focusable(false)
-        .map_err(|e| format!("making overlay non-activating: {e}"))?;
-    configure_linux_overlay_focus(&window)?;
-    window
-        .set_size(PhysicalSize::new(width, height))
-        .map_err(|e| format!("sizing overlay: {e}"))?;
-    window
-        .set_position(PhysicalPosition::new(x, y))
-        .map_err(|e| format!("positioning overlay: {e}"))?;
-    window.show().map_err(|e| format!("showing overlay: {e}"))?;
-    window
-        .set_ignore_cursor_events(true)
-        .map_err(|e| format!("making overlay click-through: {e}"))?;
-    Ok(())
+    Ok(window)
+}
+
+pub fn prewarm_overlay_window(app: &AppHandle) {
+    if let Err(error) = ensure_overlay_window(app) {
+        eprintln!("tennoworth: could not prewarm relic overlay: {error}");
+    }
 }
 
 #[cfg(target_os = "linux")]
