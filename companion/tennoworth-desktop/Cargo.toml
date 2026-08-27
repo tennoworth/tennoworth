@@ -51,6 +51,9 @@ tauri-plugin-single-instance = "2"
 # before. The URL is built and opened in Rust, where the version/platform it
 # reports already live.
 tauri-plugin-opener = "2"
+# Rust owns the global fallback shortcut so the hidden overlay window needs no
+# global-shortcut capability.
+tauri-plugin-global-shortcut = "2"
 serde = { workspace = true }
 serde_json = { workspace = true }
 wfm-core = { path = "../wfm-core" }
@@ -80,3 +83,13 @@ zeroize = "1"
 keyring = { version = "3", features = ["windows-native", "sync-secret-service", "crypto-rust"] }
 # Encoding for the keyring entry value.
 base64 = { workspace = true }
+# Relic reward capture and local OCR. Release/test workflows provide the native
+# Tesseract + Leptonica runtime and stage the English model as an app resource.
+xcap = "0.8"
+image = { version = "0.25", default-features = false, features = ["png"] }
+leptess = "0.14"
+strsim = "0.11"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Keep the passive overlay from accepting focus when GTK maps it.
+gtk = "0.18"

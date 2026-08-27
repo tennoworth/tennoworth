@@ -13,7 +13,7 @@
 // {code, message} CmdError which surfaces here as DesktopCmdError —
 // `needs_login` / `needs_unlock` drive the SPA's login and passphrase dialogs.
 
-import type { PingResponse, PlanItemInput, OrderPatch, PendingPlan, PlanResponse, ItemResult, Market } from './types';
+import type { PingResponse, PlanItemInput, OrderPatch, PendingPlan, PlanResponse, ItemResult, Market, OverlaySettings, OverlayStatus } from './types';
 import { isHistory, type History } from './history';
 
 /**
@@ -114,6 +114,13 @@ export interface Transport {
    * leaving a dead button.
    */
   reportScanIssue(error: string | null): Promise<ScanReport>;
+  getOverlaySettings(): Promise<OverlaySettings>;
+  updateOverlaySettings(settings: OverlaySettings): Promise<OverlaySettings>;
+  overlayStatus(): Promise<OverlayStatus>;
+  setupOverlayCapture(): Promise<OverlayStatus>;
+  scanOverlayNow(): Promise<void>;
+  openOverlayDiagnostics(): Promise<void>;
+  clearOverlayDiagnostics(): Promise<void>;
 }
 
 /**
@@ -123,6 +130,27 @@ export interface Transport {
  * throws rather than pretending a capability that would require the desktop app.
  */
 export class HostedTransport implements Transport {
+  async getOverlaySettings(): Promise<OverlaySettings> {
+    return { enabled: false, autoDetect: true, shortcut: 'Ctrl+Shift+O', scale: 1, livePrices: true, showOwned: true, diagnostics: false };
+  }
+  async updateOverlaySettings(): Promise<OverlaySettings> {
+    throw new Error('The in-game overlay is available in the desktop app.');
+  }
+  async overlayStatus(): Promise<OverlayStatus> {
+    return { state: 'disabled', backend: 'unsupported', placement: 'side-panel', ocrReady: false };
+  }
+  async setupOverlayCapture(): Promise<OverlayStatus> {
+    throw new Error('The in-game overlay is available in the desktop app.');
+  }
+  async scanOverlayNow(): Promise<void> {
+    throw new Error('The in-game overlay is available in the desktop app.');
+  }
+  async openOverlayDiagnostics(): Promise<void> {
+    throw new Error('The in-game overlay is available in the desktop app.');
+  }
+  async clearOverlayDiagnostics(): Promise<void> {
+    throw new Error('The in-game overlay is available in the desktop app.');
+  }
   async reportScanIssue(): Promise<ScanReport> {
     throw new Error('This is the informational site — the desktop app is required for account features.');
   }
@@ -218,6 +246,31 @@ export function installDesktopExternalLinkHandler(root: Document = document): ()
  * caller can branch on `needs_login` / `needs_unlock`.
  */
 export class TauriTransport implements Transport {
+  async getOverlaySettings(): Promise<OverlaySettings> {
+    return await resolveInvoke()<OverlaySettings>('get_overlay_settings');
+  }
+
+  async updateOverlaySettings(settings: OverlaySettings): Promise<OverlaySettings> {
+    return await resolveInvoke()<OverlaySettings>('update_overlay_settings', { settings });
+  }
+
+  async overlayStatus(): Promise<OverlayStatus> {
+    return await resolveInvoke()<OverlayStatus>('overlay_status');
+  }
+
+  async setupOverlayCapture(): Promise<OverlayStatus> {
+    return await resolveInvoke()<OverlayStatus>('setup_overlay_capture');
+  }
+
+  async scanOverlayNow(): Promise<void> {
+    await resolveInvoke()<void>('scan_overlay_now');
+  }
+  async openOverlayDiagnostics(): Promise<void> {
+    await resolveInvoke()<void>('open_overlay_diagnostics');
+  }
+  async clearOverlayDiagnostics(): Promise<void> {
+    await resolveInvoke()<void>('clear_overlay_diagnostics');
+  }
   async reportScanIssue(error: string | null): Promise<ScanReport> {
     return await resolveInvoke()<ScanReport>('report_scan_issue', { error });
   }

@@ -1516,7 +1516,7 @@
       {@render faqContent()}
 
     {:else if effectiveView === 'settings'}
-      <SettingsPanel {theme} />
+      <SettingsPanel {theme} {transport} {isDesktop} />
     {/if}
 
   </main>
@@ -1783,6 +1783,14 @@
         the same thing WFInfo and AlecaFrame have done for years. It starts at
         the end of the file, so nothing from before the app launched is ever
         read, and if the log isn't there, trade detection is simply off.
+      </p>
+      <p>
+        If you explicitly enable the relic reward overlay, a reward log line or
+        your retry shortcut captures the Warframe window and runs English OCR
+        locally. The frame is cropped and held only in memory—never saved or
+        uploaded. The overlay can use the existing cached snapshot offline;
+        optional live pricing sends only the matched public item slug to
+        warframe.market.
       </p>
     </details>
 

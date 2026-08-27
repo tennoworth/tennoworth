@@ -1,0 +1,49 @@
+{
+  "captureId": "fixture-1",
+  "capturedAt": "2026-08-23T12:00:00Z",
+  "scale": 1.0,
+  "slots": [
+    {
+      "index": 0,
+      "box": { "x": 0.0, "y": 0.67, "width": 0.3333, "height": 0.18 },
+      "rawText": "Paris Prime Blueprint",
+      "name": "Paris Prime Blueprint",
+      "slug": "paris_prime_blueprint",
+      "confidence": 1.0,
+      "cachedPlatinum": 18,
+      "livePlatinum": 20,
+      "ducats": 45,
+      "owned": 2,
+      "bestPlatinum": false,
+      "bestDucats": false
+    },
+    {
+      "index": 1,
+      "box": { "x": 0.3333, "y": 0.67, "width": 0.3333, "height": 0.18 },
+      "rawText": "Wisp Prime Systems Blueprint",
+      "name": "Wisp Prime Systems Blueprint",
+      "slug": "wisp_prime_systems_blueprint",
+      "confidence": 0.98,
+      "cachedPlatinum": 40,
+      "livePlatinum": 42,
+      "ducats": 100,
+      "owned": 0,
+      "bestPlatinum": true,
+      "bestDucats": true
+    },
+    {
+      "index": 2,
+      "box": { "x": 0.6666, "y": 0.67, "width": 0.3333, "height": 0.18 },
+      "rawText": "Glaive Prirne Blueprint",
+      "name": "Glaive Prime Blueprint",
+      "slug": "glaive_prime_blueprint",
+      "confidence": 0.87,
+      "cachedPlatinum": 180,
+      "livePlatinum": null,
+      "ducats": 15,
+      "owned": null,
+      "bestPlatinum": false,
+      "bestDucats": false
+    }
+  ]
+}

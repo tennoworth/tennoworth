@@ -429,6 +429,64 @@ export interface PingResponse {
   assistant?: boolean;
 }
 
+export interface OverlaySettings {
+  enabled: boolean;
+  autoDetect: boolean;
+  shortcut: string;
+  scale: number;
+  livePrices: boolean;
+  showOwned: boolean;
+  diagnostics: boolean;
+}
+
+export interface OverlayStageTimings {
+  captureMs: number;
+  sparseOcrMs: number;
+  slotOcrMs: number;
+  matchingMs: number;
+  cachedDisplayMs: number;
+  livePriceRefreshMs: number;
+  totalMs: number;
+}
+
+export interface OverlayLastRun {
+  outcome: string;
+  triggerSource: string;
+  expectedSlots: number;
+  recognizedSlots: number;
+  timings: OverlayStageTimings;
+  diagnosticsDirectory?: string;
+}
+
+export interface OverlayStatus {
+  state: 'disabled' | 'waiting-for-game' | 'needs-permission' | 'watching' | 'recognizing' | 'showing' | 'error';
+  backend: 'windows-window' | 'x11-window' | 'wayland-xwayland' | 'unsupported';
+  placement: 'anchored' | 'side-panel';
+  ocrReady: boolean;
+  lastRun?: OverlayLastRun;
+  message?: string;
+}
+
+export interface RelicOverlayResult {
+  captureId: string;
+  capturedAt: string;
+  scale: number;
+  slots: Array<{
+    index: number;
+    box: { x: number; y: number; width: number; height: number };
+    rawText: string;
+    name?: string;
+    slug?: string;
+    confidence: number;
+    cachedPlatinum?: number;
+    livePlatinum?: number;
+    ducats?: number;
+    owned?: number;
+    bestPlatinum: boolean;
+    bestDucats: boolean;
+  }>;
+}
+
 /** Plan items submitted to wfm-core via `submit_plan`. */
 export interface PlanItemInput {
   slug: string;

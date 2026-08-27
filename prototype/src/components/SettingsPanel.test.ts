@@ -6,6 +6,8 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { render, screen, fireEvent, cleanup } from '@testing-library/svelte';
 import SettingsPanel from './SettingsPanel.svelte';
 import type { ModePref, ThemeController } from '../lib/theme';
+import type { Transport } from '../lib/transport';
+import type { OverlaySettings } from '../lib/types';
 
 afterEach(cleanup);
 
@@ -53,5 +55,34 @@ describe('SettingsPanel', () => {
     render(SettingsPanel, { props: { theme } });
     expect(screen.queryByRole('radiogroup', { name: 'Look' })).toBeNull();
     expect(screen.getAllByRole('radio')).toHaveLength(3);
+  });
+
+  it('requires an explicit desktop opt-in and persists it through the transport', async () => {
+    const { theme } = fakeTheme();
+    const settings: OverlaySettings = {
+      enabled: false, autoDetect: true, shortcut: 'Ctrl+Shift+O', scale: 1,
+      livePrices: true, showOwned: true,
+      diagnostics: false,
+    };
+    const updateOverlaySettings = vi.fn(async (next: OverlaySettings) => next);
+    const transport = {
+      getOverlaySettings: vi.fn(async () => settings),
+      updateOverlaySettings,
+      overlayStatus: vi.fn(async () => ({ state: 'disabled', backend: 'x11-window', placement: 'anchored', ocrReady: true })),
+      setupOverlayCapture: vi.fn(async () => ({ state: 'watching', backend: 'x11-window', placement: 'anchored', ocrReady: true })),
+      scanOverlayNow: vi.fn(async () => {}),
+    } as unknown as Transport;
+    render(SettingsPanel, { props: { theme, transport, isDesktop: true } });
+
+    const consent = await screen.findByRole('checkbox', { name: /Enable local screen recognition/ });
+    expect((consent as HTMLInputElement).checked).toBe(false);
+    await fireEvent.click(consent);
+    expect(updateOverlaySettings).toHaveBeenCalledWith({ ...settings, enabled: true });
+
+    const diagnostics = screen.getByRole('checkbox', { name: /Save local recognition diagnostics/ });
+    await fireEvent.click(diagnostics);
+    expect(await screen.findByText(/Diagnostic captures may contain player or game information/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open diagnostics' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Clear diagnostics' })).toBeTruthy();
   });
 });

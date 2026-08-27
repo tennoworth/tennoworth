@@ -67,6 +67,14 @@ characteristics:
   Rust process; the encrypted token lives on disk and is decrypted
   only in memory. Listing and order operations are relayed by
   wfm-core — the webview only sees results.
+- **Relic reward screenshots stay local and ephemeral.** The overlay is off by
+  default. After the user enables it, a reward log marker or retry shortcut
+  captures the Warframe window into memory, crops the reward band, and runs
+  bundled English Tesseract OCR in-process. Frames are not saved by default and
+  are never uploaded. Explicit local diagnostics retain at most ten runs in the
+  app cache after warning that captures may contain player/game information.
+  Optional live pricing sends only resolved public item slugs to
+  warframe.market; cached prices work offline.
 - **Release binaries are built in public, auditable CI — never on a
   maintainer's machine.** You can read the workflow file, the source
   commit at the tag, and the full build logs for the run that produced
