@@ -37,8 +37,8 @@ pub struct StatsDay {
     /// Tri-state, faithfully mirroring the Python dict semantics:
     /// - `None`          — key absent: an untiered item (weapon/set/relic)
     /// - `Some(None)`    — key present but null: counts as rank-0 AND marks
-    ///                     the item as tiered (Python: `"mod_rank" in d` is
-    ///                     true, `(d.get("mod_rank") or 0) == 0` keeps it)
+    ///   the item as tiered (Python: `"mod_rank" in d` is true,
+    ///   `(d.get("mod_rank") or 0) == 0` keeps it)
     /// - `Some(Some(n))` — a real rank tier
     pub mod_rank: Option<Option<i64>>,
 }

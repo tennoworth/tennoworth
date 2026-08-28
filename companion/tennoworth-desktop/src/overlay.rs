@@ -2300,7 +2300,7 @@ fn push_overlay_result(app: &AppHandle, result: &RelicOverlayResult) -> Result<(
             let payload = serde_json::to_string(result)
                 .map_err(|error| format!("encoding overlay result: {error}"))?;
             window
-                .eval(&format!(
+                .eval(format!(
                     "window.__TENNOWORTH_RELIC_OVERLAY_UPDATE__?.({payload})"
                 ))
                 .map_err(|error| format!("updating overlay webview: {error}"))
@@ -3024,11 +3024,15 @@ mod tests {
     #[test]
     fn settings_validation_clamps_scale_and_refuses_empty_shortcuts() {
         assert!(!OverlaySettings::default().diagnostics);
-        let mut settings = OverlaySettings::default();
-        settings.scale = 9.0;
+        let settings = OverlaySettings {
+            scale: 9.0,
+            ..OverlaySettings::default()
+        };
         assert_eq!(validate_settings(settings).unwrap().scale, 1.5);
-        let mut settings = OverlaySettings::default();
-        settings.shortcut = "   ".into();
+        let settings = OverlaySettings {
+            shortcut: "   ".into(),
+            ..OverlaySettings::default()
+        };
         assert!(validate_settings(settings).is_err());
     }
 
