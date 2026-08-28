@@ -135,7 +135,7 @@ jobs:
           "$img" --appimage-extract >/dev/null
           test "$(find squashfs-root/usr/lib -name eng.traineddata | wc -l)" -eq 1
           test -n "$(find squashfs-root/usr/lib -maxdepth 1 -name 'libtesseract.so*' -print -quit)"
-          test -n "$(find squashfs-root/usr/lib -maxdepth 1 -name 'libleptonica.so*' -print -quit)"
+          test -n "$(find squashfs-root/usr/lib -maxdepth 1 \( -name 'libleptonica.so*' -o -name 'liblept.so*' \) -print -quit)"
           probe_out="$RUNNER_TEMP/ocr-linux-boot-probe.txt"
           xvfb-run -a env -u WAYLAND_DISPLAY XDG_SESSION_TYPE=x11 \
             TENNOWORTH_OCR_BOOT_PROBE=1 TENNOWORTH_OCR_BOOT_PROBE_OUT="$probe_out" \
