@@ -1198,7 +1198,7 @@
                   {/if}
                   <span class="kind kind-{r.kind}">
                     {#if r.kind === 'near-complete'}
-                      own {r.parts.filter((p) => p.count > 0).length}/{r.parts.length}
+                      own {r.parts.reduce((n, p) => n + Math.min(p.count, p.required), 0)}/{r.parts.reduce((n, p) => n + p.required, 0)}
                     {:else if r.kind === 'complete-with-extras'}
                       {r.extras} spare{r.extras === 1 ? '' : 's'} + full set
                     {:else}
@@ -1217,11 +1217,17 @@
                 </div>
                 <p class="reco-detail muted">
                   {#if r.kind === 'near-complete'}
-                    {@const ownedCount = r.parts.filter((p) => p.count > 0).length}
-                    Buy {r.missing.map((m) => m.name).join(' + ')} for
-                    <strong class="bad-text">{r.missing_cost}p</strong>, sell as a set for
-                    <strong class="good-text">{r.set_low_sell}p</strong>
-                    (vs. {r.parts_low_sell}p selling the {ownedCount} part{ownedCount === 1 ? '' : 's'} individually).
+                    {@const ownedCount = r.parts.reduce((n, p) => n + Math.min(p.count, p.required), 0)}
+                    Buy {r.missing.map((m) => `${m.quantity > 1 ? `${m.quantity}× ` : ''}${m.name}`).join(' + ')} at current asks for
+                    <strong class="bad-text">{r.missing_cost}p</strong>, then list the set at the current lowest ask,
+                    <strong class="good-text">{r.set_low_sell}p</strong>.
+                    That is <strong class="good-text">+{r.net_plat}p potential uplift</strong> versus listing your
+                    {ownedCount} owned part{ownedCount === 1 ? '' : 's'} for {r.parts_low_sell}p.
+                    {#if r.set_top_buy !== undefined && r.instant_uplift !== undefined}
+                      Selling instantly to the {r.set_top_buy}p top bid would be
+                      <strong class:good-text={r.instant_uplift >= 0} class:bad-text={r.instant_uplift < 0}>{r.instant_uplift >= 0 ? '+' : '−'}{Math.abs(r.instant_uplift)}p</strong>
+                      versus those parts.
+                    {/if}
                   {:else if r.kind === 'complete-with-extras'}
                     You hold a full set plus {r.extras} spare blueprint{r.extras === 1 ? '' : 's'}.
                     List the extras at <strong>{r.extras_plat}p</strong>.
@@ -1510,7 +1516,7 @@
       {@render faqContent()}
 
     {:else if effectiveView === 'settings'}
-      <SettingsPanel {theme} />
+      <SettingsPanel {theme} {transport} {isDesktop} />
     {/if}
 
   </main>
@@ -1778,6 +1784,14 @@
         the end of the file, so nothing from before the app launched is ever
         read, and if the log isn't there, trade detection is simply off.
       </p>
+      <p>
+        If you explicitly enable the relic reward overlay, a reward log line or
+        your retry shortcut captures the Warframe window and runs English OCR
+        locally. The frame is cropped and held only in memory—never saved or
+        uploaded. The overlay can use the existing cached snapshot offline;
+        optional live pricing sends only the matched public item slug to
+        warframe.market.
+      </p>
     </details>
 
     <details>
@@ -2008,7 +2022,10 @@
     grid-template-rows: auto 1fr;
     max-width: min(122.5rem, 100vw);
     margin: 0 auto;
-    min-height: 100vh;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
   }
 
   main.workspace {
@@ -2017,6 +2034,9 @@
     flex-direction: column;
     gap: var(--stack);
     min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
   }
 
   /* ---- Status strip: one element on the landing and the shell ------- */
@@ -2294,7 +2314,13 @@
      becomes a horizontal scroll strip under it. Below ~900px the 216px rail
      eats too much of the workspace, so the grid collapses. */
   @media (max-width: 900px) {
-    .shell { grid-template-columns: 1fr; }
+    .shell {
+      grid-template-columns: 1fr;
+      height: auto;
+      min-height: 100vh;
+      min-height: 100dvh;
+      overflow: visible;
+    }
     aside.sidebar {
       position: static;
       height: auto;
@@ -2332,7 +2358,7 @@
     .statusbar { flex-wrap: wrap; height: auto; min-height: var(--strip); position: static; }
     .statusbar.shell-strip .brand { width: auto; border-right: none; }
     .sfoot { padding: var(--s2) var(--s3); }
-    main.workspace { padding: 16px 16px 32px; }
+    main.workspace { padding: 16px 16px 32px; overflow: visible; }
   }
   header h1 {
     margin: 0;

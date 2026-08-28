@@ -40,7 +40,7 @@ interface PathInfo {
 /** Set slug → constituent parts, baked from warframestat parent walk. */
 interface SetEntry {
   name: string;
-  parts: Array<{ slug: string; component_name: string }>;
+  parts: Array<{ slug: string; component_name: string; quantity?: number }>;
 }
 
 /** Single drop entry on a relic, from DE's `ExportRelicArcane`. */
@@ -427,6 +427,71 @@ export interface PingResponse {
   ok: boolean;
   platform?: string;
   assistant?: boolean;
+}
+
+export interface OverlaySettings {
+  enabled: boolean;
+  autoDetect: boolean;
+  shortcut: string;
+  scale: number;
+  livePrices: boolean;
+  showOwned: boolean;
+  diagnostics: boolean;
+}
+
+export interface OverlayStageTimings {
+  captureMs: number;
+  sparseOcrMs: number;
+  slotOcrMs: number;
+  matchingMs: number;
+  cachedDisplayMs: number;
+  livePriceRefreshMs: number;
+  totalMs: number;
+}
+
+export interface OverlayLastRun {
+  outcome: string;
+  triggerSource: string;
+  expectedSlots: number;
+  recognizedSlots: number;
+  timings: OverlayStageTimings;
+  diagnosticsDirectory?: string;
+}
+
+export interface OverlayStatus {
+  state: 'disabled' | 'waiting-for-game' | 'needs-permission' | 'watching' | 'recognizing' | 'showing' | 'error';
+  backend: 'windows-window' | 'x11-window' | 'wayland-xwayland' | 'unsupported';
+  placement: 'anchored' | 'side-panel';
+  ocrReady: boolean;
+  lastRun?: OverlayLastRun;
+  message?: string;
+}
+
+export interface RelicOverlayResult {
+  captureId: string;
+  capturedAt: string;
+  scale: number;
+  slots: Array<{
+    index: number;
+    box: { x: number; y: number; width: number; height: number };
+    rawText: string;
+    name?: string;
+    slug?: string;
+    confidence: number;
+    cachedPlatinum?: number;
+    livePlatinum?: number;
+    ducats?: number;
+    owned?: number;
+    bestPlatinum: boolean;
+    bestDucats: boolean;
+  }>;
+}
+
+declare global {
+  interface Window {
+    __TENNOWORTH_RELIC_OVERLAY_UPDATE__?: (result: RelicOverlayResult) => void;
+    __TENNOWORTH_RELIC_OVERLAY_HIDE__?: () => void;
+  }
 }
 
 /** Plan items submitted to wfm-core via `submit_plan`. */

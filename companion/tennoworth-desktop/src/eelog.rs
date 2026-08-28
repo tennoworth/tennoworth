@@ -10,7 +10,7 @@
 //!
 //! Layout: [`parse_trade_dialog`] and [`TradeMachine`] are pure and tested
 //! against captured line shapes; [`locate_log`] knows the Windows and
-//! Steam/Proton paths; [`tail_forever`] is the loop that polls the file
+//! Steam/Proton paths; [`tail_forever_with_lines`] is the loop that polls the file
 //! and hands confirmed trades to a callback.
 
 use std::io::{Read, Seek, SeekFrom};
@@ -284,7 +284,12 @@ pub fn parse_steam_library_paths(vdf: &str) -> Vec<String> {
 /// re-announced), poll every `poll`, handle truncation (game restart writes a
 /// fresh file) by re-seeking to 0. Each confirmed trade goes to `on_trade`.
 /// Blocking — run on its own thread.
-pub fn tail_forever(path: &Path, poll: Duration, mut on_trade: impl FnMut(TradeEvent)) {
+pub fn tail_forever_with_lines(
+    path: &Path,
+    poll: Duration,
+    mut on_line: impl FnMut(&str),
+    mut on_trade: impl FnMut(TradeEvent),
+) {
     let mut machine = TradeMachine::new();
     let mut offset: u64 = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     let mut remainder = String::new();
@@ -319,10 +324,37 @@ pub fn tail_forever(path: &Path, poll: Duration, mut on_trade: impl FnMut(TradeE
         let lines: Vec<String> = complete.lines().map(|l| l.trim_end_matches('\r').to_string()).collect();
         remainder = rest.to_string();
         for line in lines {
+            on_line(&line);
             if let Some(t) = machine.feed(&line, now_ms) {
                 on_trade(t);
             }
         }
+    }
+}
+
+/// Poll a bounded snapshot independently from the streaming tailer's offset.
+/// Proton can replace EE.log and leave a long-lived offset past new events.
+pub fn watch_recent_text(path: &Path, poll: Duration, mut on_text: impl FnMut(&str)) {
+    const WINDOW: u64 = 128 * 1024;
+    let mut previous = None;
+    loop {
+        std::thread::sleep(poll);
+        let Ok(meta) = std::fs::metadata(path) else { continue };
+        let signature = (meta.len(), meta.modified().ok());
+        if previous.as_ref() == Some(&signature) { continue; }
+        previous = Some(signature);
+        let Ok(mut file) = std::fs::File::open(path) else { continue };
+        let start = meta.len().saturating_sub(WINDOW);
+        if file.seek(SeekFrom::Start(start)).is_err() { continue; }
+        let mut bytes = Vec::with_capacity((meta.len() - start) as usize);
+        if file.read_to_end(&mut bytes).is_err() { continue; }
+        let text = String::from_utf8_lossy(&bytes);
+        let text = if start > 0 {
+            text.split_once('\n').map(|(_, rest)| rest).unwrap_or("")
+        } else {
+            &text
+        };
+        on_text(text);
     }
 }
 

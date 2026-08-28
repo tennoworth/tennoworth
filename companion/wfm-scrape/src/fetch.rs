@@ -283,7 +283,16 @@ fn absorb_parent(
             serde_json::json!({"name": display_name, "slug": slug, "category": parent_cat}),
         );
         if set_slug != Some(&slug) {
-            this_set_parts.push(serde_json::json!({"slug": slug, "component_name": cn}));
+            let quantity = comp
+                .get("itemCount")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(1)
+                .max(1);
+            this_set_parts.push(serde_json::json!({
+                "slug": slug,
+                "component_name": cn,
+                "quantity": quantity,
+            }));
         }
     }
     if let (Some(ss), false) = (set_slug, this_set_parts.is_empty()) {
@@ -1927,7 +1936,7 @@ mod tests {
         let items = serde_json::json!([
             {"name": "Excalibur", "category": "Warframes", "components": []},
             {"name": "Carrier Prime", "category": "Sentinels", "components": [
-                {"uniqueName": "/Lotus/Types/Sentinels/CarrierPrime/Cerebrum", "name": "Cerebrum"}
+                {"uniqueName": "/Lotus/Types/Sentinels/CarrierPrime/Cerebrum", "name": "Cerebrum", "itemCount": 2}
             ]}
         ]);
         let (p2i, s2p, complete) =
@@ -1944,6 +1953,7 @@ mod tests {
         let set = s2p.get("carrier_prime_set").expect("sentinel set built");
         assert_eq!(set.get("name").unwrap(), "Carrier Prime");
         assert_eq!(set.get("parts").unwrap().as_array().unwrap().len(), 1);
+        assert_eq!(set["parts"][0]["quantity"], 2);
     }
 
     #[test]

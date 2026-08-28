@@ -50,6 +50,34 @@ and their notes live on the GitHub releases themselves.
 - Together these take a release from twelve assets down to seven, of which two
   are the source archives GitHub attaches on its own.
 
+**Relic reward recognition is available as an opt-in local overlay.**
+
+- TennoWorth can watch `EE.log` for reward-screen timing, capture the Warframe
+  window, recognize one to four English reward names locally with Tesseract,
+  and place market and owned-count context over the choices. A manual
+  `Ctrl+Shift+O` fallback is available when the log marker is missing or late.
+- Recognition now reports capture, OCR, layout, and catalog-match failures
+  separately. Uncertain matches may be shown, but are never marked as the best
+  pick. Cached results appear first while optional live prices refresh.
+- Optional diagnostics retain only the newest ten local runs and can include
+  the captured reward area, name crops, OCR output, layout, results, and stage
+  timings. Nothing is uploaded automatically, and diagnostics stay off by
+  default because captures may contain player or game information.
+- The initial supported capture paths are native window capture on Windows and
+  X11, including XWayland sessions. Native Wayland capture and exclusive
+  fullscreen are not supported yet.
+
+**Inventory recommendations and desktop behavior are more accurate.**
+
+- Set recipes preserve required duplicate components, fixing recommendations
+  such as Kogake Prime needing two boots and two gauntlets. Set economics now
+  distinguish current asks from instant-sale bids and explain the comparison.
+- Desktop links open through the operating system with an HTTPS host allowlist.
+- Riven cards no longer present unsupported values; comparisons are limited to
+  the stat information supplied by the source data.
+- The desktop workspace scrolls independently again without breaking the
+  document-scrolling layout used on narrow screens.
+
 ## 0.6.0 — 2026-08-22
 
 **Linux is now distributed as an AppImage, and only as an AppImage.** If you
@@ -110,4 +138,3 @@ are built and how you can verify them.
 - **The verification instructions in `SECURITY.md` were corrected**, including
   a stale claim that builds were reproducible. They are publicly auditable CI
   builds; the docs now say so.
-

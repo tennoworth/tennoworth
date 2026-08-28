@@ -1,4 +1,5 @@
 {
-  "_comment": "Scan definitions for the TennoWorth desktop app (C7). Every pattern field is OPTIONAL and absent means 'use the version compiled into the app'. This file exists so a DE parameter rename can be fixed without cutting a release: edit it on the box (it is served live from prototype/public/, see the @livedata block in deploy/Caddyfile) and clients pick it up on their next start. A pattern that does not compile, is over 512 bytes, or has too few capture groups is refused per-field and the built-in is kept, so a bad edit here cannot brick scanning. Capture-group contract: cred_pattern needs 2 (accountId, nonce), build_pattern and ct_pattern need 1 each.",
-  "version": 1
+  "_comment": "Desktop hotfix definitions. Pattern fields and reward_log_markers are optional; invalid values keep the compiled defaults. Capture groups: cred_pattern needs 2 (accountId, nonce), build_pattern and ct_pattern need 1. Reward markers are matched against local EE.log lines and may contain 1–8 strings of at most 120 bytes.",
+  "version": 2,
+  "reward_log_markers": ["Got rewards"]
 }

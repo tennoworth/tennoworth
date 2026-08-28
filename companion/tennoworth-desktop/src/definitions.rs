@@ -23,6 +23,15 @@ use std::path::{Path, PathBuf};
 use wfm_core::scan::{install_patterns, patterns_from_definitions, ScanDefinitions};
 
 use crate::market::{write_atomic, TIMEOUT};
+use crate::overlay::install_reward_markers;
+
+#[derive(serde::Deserialize)]
+struct DesktopDefinitions {
+    #[serde(flatten)]
+    scan: ScanDefinitions,
+    #[serde(default)]
+    reward_log_markers: Vec<String>,
+}
 
 /// Same origin as the market snapshot — no new third-party egress, so
 /// SECURITY.md's audited list is unchanged. Overridable for the probe/tests.
@@ -76,16 +85,20 @@ fn refresh_and_install_with(dir: &Path, url: &str) -> DefinitionsOutcome {
         return DefinitionsOutcome::default();
     };
 
-    let defs: ScanDefinitions = match serde_json::from_str(&raw) {
+    let defs: DesktopDefinitions = match serde_json::from_str(&raw) {
         Ok(d) => d,
         Err(e) => {
             eprintln!("tennoworth: definitions parse failed ({e}); keeping built-in patterns");
-            return DefinitionsOutcome { installed: false, fetched, rejected: vec![] };
+            return DefinitionsOutcome {
+                installed: false,
+                fetched,
+                rejected: vec![],
+            };
         }
     };
 
-    let (patterns, rejections) = patterns_from_definitions(&defs);
-    let rejected: Vec<String> = rejections
+    let (patterns, rejections) = patterns_from_definitions(&defs.scan);
+    let mut rejected: Vec<String> = rejections
         .iter()
         .map(|r| format!("{}: {}", r.field, r.reason))
         .collect();
@@ -95,7 +108,15 @@ fn refresh_and_install_with(dir: &Path, url: &str) -> DefinitionsOutcome {
         eprintln!("tennoworth: definitions rejected {line}");
     }
     install_patterns(patterns);
-    DefinitionsOutcome { installed: true, fetched, rejected }
+    if let Err(reason) = install_reward_markers(&defs.reward_log_markers) {
+        eprintln!("tennoworth: definitions rejected reward_log_markers: {reason}");
+        rejected.push(format!("reward_log_markers: {reason}"));
+    }
+    DefinitionsOutcome {
+        installed: true,
+        fetched,
+        rejected,
+    }
 }
 
 fn read_cache(dir: &Path) -> Option<String> {
@@ -143,8 +164,11 @@ fn fetch(dir: &Path, url: &str) -> Option<String> {
 
     // Validate before caching, so a truncated 200 cannot poison the cache for
     // every future offline start.
-    if serde_json::from_str::<ScanDefinitions>(&body).is_err() {
-        eprintln!("tennoworth: definitions body invalid (len {}); keeping cache", body.len());
+    if serde_json::from_str::<DesktopDefinitions>(&body).is_err() {
+        eprintln!(
+            "tennoworth: definitions body invalid (len {}); keeping cache",
+            body.len()
+        );
         return None;
     }
 
@@ -182,7 +206,11 @@ mod tests {
     }
 
     /// Serves one response then exits, like market.rs's mock.
-    fn serve_once(body: &'static str, status_line: &'static str, etag: Option<&'static str>) -> String {
+    fn serve_once(
+        body: &'static str,
+        status_line: &'static str,
+        etag: Option<&'static str>,
+    ) -> String {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let url = format!("http://{}/definitions.json", listener.local_addr().unwrap());
         std::thread::spawn(move || {

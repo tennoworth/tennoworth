@@ -69,13 +69,21 @@ pub fn own_sell_orders(body: &serde_json::Value) -> Vec<OwnSellOrder> {
         Some(a) => a.iter().collect(),
         None => data
             .as_array()
-            .map(|a| a.iter().filter(|o| o.get("type").and_then(|t| t.as_str()) == Some("sell")).collect())
+            .map(|a| {
+                a.iter()
+                    .filter(|o| o.get("type").and_then(|t| t.as_str()) == Some("sell"))
+                    .collect()
+            })
             .unwrap_or_default(),
     };
     arr.into_iter()
         .filter_map(|o| {
             let id = o.get("id")?.as_str()?.to_string();
-            let slug = o.get("item").and_then(|i| i.get("slug")).and_then(|s| s.as_str())?.to_string();
+            let slug = o
+                .get("item")
+                .and_then(|i| i.get("slug"))
+                .and_then(|s| s.as_str())?
+                .to_string();
             let quantity = o.get("quantity").and_then(|q| q.as_i64()).unwrap_or(1);
             Some(OwnSellOrder { id, slug, quantity })
         })
@@ -94,14 +102,27 @@ pub fn plan_adjustments(
         return vec![];
     }
     let mut out = Vec::new();
-    for TradeItem { name, qty, direction } in &trade.items {
+    for TradeItem {
+        name,
+        qty,
+        direction,
+    } in &trade.items
+    {
         if direction != "given" {
             continue;
         }
-        let Some(slug) = names.get(&name.to_lowercase()) else { continue };
+        let Some(slug) = names.get(&name.to_lowercase()) else {
+            continue;
+        };
         // Adjust the LARGEST matching listing (one listing per item is the
         // norm; if there are several, the biggest is the one being sold from).
-        let Some(order) = orders.iter().filter(|o| &o.slug == slug).max_by_key(|o| o.quantity) else { continue };
+        let Some(order) = orders
+            .iter()
+            .filter(|o| &o.slug == slug)
+            .max_by_key(|o| o.quantity)
+        else {
+            continue;
+        };
         let new_qty = (order.quantity - qty).max(0);
         out.push((order.clone(), new_qty));
     }
@@ -141,7 +162,12 @@ pub fn handle_trade(app: &AppHandle, trade: TradeEvent) {
                             update_order(
                                 &unlocked,
                                 &order.id,
-                                &UpdateRequest { platinum: None, quantity: Some(new_qty as u32), visible: None, rank: None },
+                                &UpdateRequest {
+                                    platinum: None,
+                                    quantity: Some(new_qty as u32),
+                                    visible: None,
+                                    rank: None,
+                                },
                             )
                             .map(|_| ())
                         };
@@ -150,12 +176,16 @@ pub fn handle_trade(app: &AppHandle, trade: TradeEvent) {
                                 let name = trade
                                     .items
                                     .iter()
-                                    .find(|i| names.get(&i.name.to_lowercase()) == Some(&order.slug))
+                                    .find(|i| {
+                                        names.get(&i.name.to_lowercase()) == Some(&order.slug)
+                                    })
                                     .map(|i| i.name.clone())
                                     .unwrap_or_else(|| order.slug.clone());
                                 adjusted.push((name, new_qty));
                             }
-                            Err(e) => eprintln!("tennoworth: auto-close of {} failed: {e}", order.slug),
+                            Err(e) => {
+                                eprintln!("tennoworth: auto-close of {} failed: {e}", order.slug)
+                            }
                         }
                     }
                     if !adjusted.is_empty() {
@@ -176,18 +206,47 @@ pub fn handle_trade(app: &AppHandle, trade: TradeEvent) {
     let what: Vec<String> = trade
         .items
         .iter()
-        .filter(|i| if trade.kind == "purchase" { i.direction == "received" } else { i.direction == "given" })
-        .map(|i| if i.qty > 1 { format!("{} ×{}", i.name, i.qty) } else { i.name.clone() })
+        .filter(|i| {
+            if trade.kind == "purchase" {
+                i.direction == "received"
+            } else {
+                i.direction == "given"
+            }
+        })
+        .map(|i| {
+            if i.qty > 1 {
+                format!("{} ×{}", i.name, i.qty)
+            } else {
+                i.name.clone()
+            }
+        })
         .collect();
     let mut body = format!("{} — with {}", what.join(", "), trade.partner);
     if !adjusted.is_empty() {
         let n = adjusted.len();
-        body.push_str(&format!(" · {} WFM listing{} updated", n, if n == 1 { "" } else { "s" }));
+        body.push_str(&format!(
+            " · {} WFM listing{} updated",
+            n,
+            if n == 1 { "" } else { "s" }
+        ));
     }
-    if let Err(e) = app.notification().builder().title(&title).body(&body).show() {
+    if let Err(e) = app
+        .notification()
+        .builder()
+        .title(&title)
+        .body(&body)
+        .show()
+    {
         eprintln!("tennoworth: trade notification failed: {e}");
     }
-    let _ = app.emit(EVENT_TRADE_DETECTED, TradeDetected { id, trade, adjusted });
+    let _ = app.emit(
+        EVENT_TRADE_DETECTED,
+        TradeDetected {
+            id,
+            trade,
+            adjusted,
+        },
+    );
 }
 
 /// Start tailing EE.log if it can be found. Silent no-op otherwise (the SPA
@@ -195,13 +254,38 @@ pub fn handle_trade(app: &AppHandle, trade: TradeEvent) {
 pub fn start_tailer(app: AppHandle) -> Option<std::path::PathBuf> {
     let path = crate::eelog::locate_log()?;
     let p = path.clone();
+    let reward_path = path.clone();
+    let reward_app = app.clone();
     let spawned = std::thread::Builder::new()
         .name("eelog-tailer".into())
         .spawn(move || {
-            crate::eelog::tail_forever(&p, std::time::Duration::from_secs(2), |t| handle_trade(&app, t));
+            let overlay_app = app.clone();
+            crate::eelog::tail_forever_with_lines(
+                &p,
+                // Reward choices live for only 15 seconds. A two-second poll
+                // let the retry hotkey beat the automatic trigger and start a
+                // scan before the four slot markers had arrived.
+                std::time::Duration::from_millis(250),
+                move |line| crate::overlay::handle_log_line(&overlay_app, line),
+                |trade| handle_trade(&app, trade),
+            );
         });
     match spawned {
-        Ok(_) => Some(path),
+        Ok(_) => {
+            if let Err(error) = std::thread::Builder::new()
+                .name("reward-log-watcher".into())
+                .spawn(move || {
+                    crate::eelog::watch_recent_text(
+                        &reward_path,
+                        std::time::Duration::from_millis(250),
+                        move |text| crate::overlay::handle_log_snapshot(&reward_app, text),
+                    );
+                })
+            {
+                eprintln!("tennoworth: reward log watcher failed to start: {error}");
+            }
+            Some(path)
+        }
         Err(e) => {
             eprintln!("tennoworth: eelog tailer thread failed to start: {e}");
             None
@@ -220,21 +304,50 @@ mod tests {
         m
     }
     fn order(id: &str, slug: &str, q: i64) -> OwnSellOrder {
-        OwnSellOrder { id: id.into(), slug: slug.into(), quantity: q }
+        OwnSellOrder {
+            id: id.into(),
+            slug: slug.into(),
+            quantity: q,
+        }
     }
     fn sale(items: Vec<(&str, i64, &str)>) -> TradeEvent {
         TradeEvent {
-            partner: "Buyer".into(), kind: "sale".into(), plat: 40,
-            items: items.into_iter().map(|(n, q, d)| TradeItem { name: n.into(), qty: q, direction: d.into() }).collect(),
+            partner: "Buyer".into(),
+            kind: "sale".into(),
+            plat: 40,
+            items: items
+                .into_iter()
+                .map(|(n, q, d)| TradeItem {
+                    name: n.into(),
+                    qty: q,
+                    direction: d.into(),
+                })
+                .collect(),
             log_stamp: None,
         }
     }
 
     #[test]
     fn a_sale_decrements_the_matching_listing_and_deletes_at_zero() {
-        let orders = vec![order("o1", "primed_flow", 3), order("o2", "lith_c5_relic", 1)];
-        let plan = plan_adjustments(&sale(vec![("Primed Flow", 1, "given"), ("Lith C5 Relic", 1, "given")]), &names(), &orders);
-        assert_eq!(plan, vec![(order("o1", "primed_flow", 3), 2), (order("o2", "lith_c5_relic", 1), 0)]);
+        let orders = vec![
+            order("o1", "primed_flow", 3),
+            order("o2", "lith_c5_relic", 1),
+        ];
+        let plan = plan_adjustments(
+            &sale(vec![
+                ("Primed Flow", 1, "given"),
+                ("Lith C5 Relic", 1, "given"),
+            ]),
+            &names(),
+            &orders,
+        );
+        assert_eq!(
+            plan,
+            vec![
+                (order("o1", "primed_flow", 3), 2),
+                (order("o2", "lith_c5_relic", 1), 0)
+            ]
+        );
     }
 
     #[test]
@@ -243,9 +356,21 @@ mod tests {
         let mut t = sale(vec![("Primed Flow", 1, "given")]);
         t.kind = "purchase".into();
         assert!(plan_adjustments(&t, &names(), &orders).is_empty());
-        assert!(plan_adjustments(&sale(vec![("Primed Flow", 1, "received")]), &names(), &orders).is_empty());
-        assert!(plan_adjustments(&sale(vec![("Some Unlisted Thing", 1, "given")]), &names(), &orders).is_empty());
-        assert!(plan_adjustments(&sale(vec![("Primed Flow", 1, "given")]), &names(), &[]).is_empty());
+        assert!(plan_adjustments(
+            &sale(vec![("Primed Flow", 1, "received")]),
+            &names(),
+            &orders
+        )
+        .is_empty());
+        assert!(plan_adjustments(
+            &sale(vec![("Some Unlisted Thing", 1, "given")]),
+            &names(),
+            &orders
+        )
+        .is_empty());
+        assert!(
+            plan_adjustments(&sale(vec![("Primed Flow", 1, "given")]), &names(), &[]).is_empty()
+        );
     }
 
     #[test]

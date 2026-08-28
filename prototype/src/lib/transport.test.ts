@@ -11,6 +11,7 @@ import {
   desktopWfmLogin,
   desktopWfmUnlock,
   desktopTrySilentUnlock,
+  installDesktopExternalLinkHandler,
 } from './transport.js';
 
 // The desktop sniff and TauriTransport read the Tauri globals; install/remove
@@ -276,6 +277,32 @@ describe('TauriTransport op → invoke mapping', () => {
     const res = await new TauriTransport().bulkVisibility(['o1'], true);
     expect(invoke).toHaveBeenCalledWith('bulk_visibility', { orderIds: ['o1'], visible: true });
     expect(res).toEqual({ results: [{ order_id: 'o1', status: 'ok', message: null }] });
+  });
+});
+
+describe('desktop external links', () => {
+  it('routes target=_blank HTTPS anchors through the system-browser command', async () => {
+    const invoke = vi.fn().mockResolvedValue(true);
+    installTauri(invoke);
+    const a = document.createElement('a');
+    a.href = 'https://warframe.market/items/kogake_prime_set';
+    a.target = '_blank';
+    a.textContent = 'Kogake Prime';
+    document.body.append(a);
+    const remove = installDesktopExternalLinkHandler();
+    a.click();
+    await Promise.resolve();
+    expect(invoke).toHaveBeenCalledWith('open_external_url', {
+      url: 'https://warframe.market/items/kogake_prime_set',
+    });
+    remove();
+    a.remove();
+  });
+
+  it('leaves hosted links alone', () => {
+    removeTauri();
+    const remove = installDesktopExternalLinkHandler();
+    expect(remove).toBeTypeOf('function');
   });
 });
 

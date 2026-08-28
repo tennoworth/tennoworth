@@ -1,11 +1,13 @@
 import { mount } from 'svelte';
 import App from './App.svelte';
+import RelicOverlay from './components/RelicOverlay.svelte';
 // Imported AFTER App so the global stylesheet lands last in the bundle: the
 // per-look structural rules in app.css rely on winning specificity ties with
 // component-scoped rules.
 import './app.css';
 import { createStateStore } from './lib/state-store';
 import { initTheme } from './lib/theme';
+import { installDesktopExternalLinkHandler } from './lib/transport';
 
 // Dev-only design-review seam: `?preview-desktop` on a `vite dev` origin
 // installs a stub Tauri runtime BEFORE anything sniffs for it, so the
@@ -23,6 +25,9 @@ if (import.meta.env.DEV && new URLSearchParams(location.search).has('preview-des
     top_sellables: [], list_watches: [], list_listing_log: [], list_snapshots: [],
     ledger_rows: [], list_trades: [],
     try_silent_unlock: false,
+    get_overlay_settings: { enabled: false, autoDetect: true, shortcut: 'Ctrl+Shift+O', scale: 1, livePrices: true, showOwned: true, diagnostics: false },
+    overlay_status: { state: 'disabled', backend: 'x11-window', placement: 'anchored', ocrReady: true },
+    setup_overlay_capture: { state: 'watching', backend: 'x11-window', placement: 'anchored', ocrReady: true },
   };
   // The desktop store keeps settings + the reload-restore snapshot in SQLite
   // via get_setting/set_setting; back those onto localStorage so a seeded
@@ -31,6 +36,7 @@ if (import.meta.env.DEV && new URLSearchParams(location.search).has('preview-des
     if (cmd === 'get_setting') return Promise.resolve(localStorage.getItem(String(args?.key)));
     if (cmd === 'set_setting') { localStorage.setItem(String(args?.key), String(args?.value)); return Promise.resolve(null); }
     if (cmd === 'delete_setting') { localStorage.removeItem(String(args?.key)); return Promise.resolve(null); }
+    if (cmd === 'update_overlay_settings') return Promise.resolve(args?.settings ?? null);
     return Promise.resolve(cmd in empties ? empties[cmd] : null);
   };
   const w = globalThis as Record<string, unknown>;
@@ -40,14 +46,16 @@ if (import.meta.env.DEV && new URLSearchParams(location.search).has('preview-des
 
 const target = document.getElementById('app');
 if (!target) throw new Error('#app mount target missing in index.html');
+installDesktopExternalLinkHandler();
 
 // Pick the persistence backend (localStorage vs SQLite-over-IPC) and prime its
 // scalar-settings cache BEFORE mounting, so App can read them synchronously at
 // component init with no default-value flash — in the browser and the desktop
 // build alike. hydrate() never rejects; if it somehow did we still mount rather
 // than leave a blank window.
+const overlaySurface = new URLSearchParams(location.search).get('surface') === 'relic-overlay';
 const store = createStateStore();
-const app = store.hydrate().then(() => {
+const app = overlaySurface ? Promise.resolve(mount(RelicOverlay, { target })) : store.hydrate().then(() => {
   // public/theme-boot.js already stamped the browser's stored theme before
   // first paint; this re-applies from the store (the desktop build keeps
   // settings in SQLite, which the boot script can't see) and starts following

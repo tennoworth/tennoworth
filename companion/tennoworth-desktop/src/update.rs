@@ -145,6 +145,10 @@ pub async fn check(app: &AppHandle) -> UpdateStatus {
         ..Default::default()
     };
     let state = app.state::<UpdateState>();
+    if option_env!("TENNOWORTH_OCR_TEST_BUILD") == Some("1") {
+        state.store(status.clone(), None);
+        return status;
+    }
     if updates_owned_by_packager() {
         eprintln!("tennoworth: update check skipped — Linux updates come from the package manager");
         state.store(status.clone(), None);

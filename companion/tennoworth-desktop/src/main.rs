@@ -33,6 +33,7 @@ mod ws_watch;
 mod eelog_state;
 mod keyring_store;
 mod market;
+mod overlay;
 mod probe;
 mod sellables;
 mod snapshot;
@@ -46,6 +47,7 @@ use std::io::Write;
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, OnceLock};
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_global_shortcut::ShortcutState;
 
 use db::Db;
 use market::MarketCache;
@@ -108,6 +110,13 @@ fn main() {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_global_shortcut::Builder::new()
+            .with_handler(|app, _shortcut, event| {
+                if event.state() == ShortcutState::Pressed {
+                    let _ = overlay::trigger_capture(app, "hotkey");
+                }
+            })
+            .build())
         .manage(tray::TrayState::default())
         .manage(update::UpdateState::default())
         .manage(Arc::new(WfmSession::new()))
@@ -155,6 +164,17 @@ fn main() {
             commands::listing::bulk_visibility,
             commands::assistant::ask_assistant,
             commands::report::report_scan_issue,
+            commands::report::open_external_url,
+            overlay::get_overlay_settings,
+            overlay::update_overlay_settings,
+            overlay::overlay_status,
+            overlay::current_overlay_result,
+            overlay::preview_relic_overlay,
+            overlay::setup_overlay_capture,
+            overlay::scan_overlay_now,
+            overlay::open_overlay_diagnostics,
+            overlay::clear_overlay_diagnostics,
+            overlay::ocr_boot_probe,
             probe::debug_write_login,
             probe::debug_seed_unlocked,
             probe::debug_post_scan,
@@ -176,6 +196,34 @@ fn main() {
             let store = Db::open(&db_path)
                 .map_err(|e| format!("opening state DB {}: {e}", db_path.display()))?;
             app.manage(store);
+
+            let overlay_state =
+                overlay::OverlayState::new(&app.handle().clone(), &app.state::<Db>());
+            app.manage(overlay_state);
+            overlay::register_configured_shortcut(&app.handle().clone());
+
+            if std::env::var_os("TENNOWORTH_OCR_BOOT_PROBE").is_some() {
+                match overlay::ocr_boot_probe(app.state::<overlay::OverlayState>()) {
+                    Ok(()) => {
+                        let evidence = format!(
+                            "OCR_BOOT_PROBE_OK backend={}\n",
+                            overlay::capture_backend_name()
+                        );
+                        if let Some(path) =
+                            std::env::var_os("TENNOWORTH_OCR_BOOT_PROBE_OUT")
+                        {
+                            std::fs::write(path, &evidence)?;
+                        }
+                        print!("{evidence}");
+                        // Let Tauri unwind its Windows plugins and the OCR worker
+                        // cleanly. A hard process exit from inside setup trips a
+                        // Windows fast-fail (0xc0000409) in the installed build.
+                        app.handle().exit(0);
+                        return Ok(());
+                    }
+                    Err(error) => return Err(error.into()),
+                }
+            }
 
             // Probe boot mode: verify the Rust boot path - DB, market cache,
             // definitions fetch - then exit BEFORE the webview exists. The
@@ -238,6 +286,7 @@ fn main() {
                 b = b.additional_browser_args("--disable-gpu --no-first-run --disable-extensions");
             }
             let w = b.build()?;
+            overlay::prewarm_overlay_window(&app.handle().clone());
 
             // Desktop window lifecycle: closing the window HIDES it to the tray
             // instead of quitting — only the tray's "Quit" (app.exit) actually
