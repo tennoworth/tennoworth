@@ -87,6 +87,11 @@ and their notes live on the GitHub releases themselves.
 
 *Fold this into the next version's section when you run `release.ts prepare`.*
 
+- Trade detection no longer guesses which warframe.market listing to adjust
+  when EE.log omits a mod rank or item subtype, or when multiple listings share
+  an item slug. Unambiguous untiered sales continue to reduce or close their
+  matching listing automatically.
+
 ## 0.6.0 — 2026-08-22
 
 **Linux is now distributed as an AppImage, and only as an AppImage.** If you

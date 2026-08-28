@@ -7,10 +7,11 @@
 //! listing's quantity by the number sold (deleting it when that reaches
 //! zero), only on `sell` orders whose item name matches an item we gave away
 //! in a trade where we received plat, and never touches price or visibility.
-//! A wrong match can therefore cost at most one listing that the user would
-//! have had to fix anyway; it can never list something new.
+//! EE.log does not identify rank or subtype, so ranked mods/arcanes and relic
+//! refinements are never adjusted automatically. Untiered items are adjusted
+//! only when exactly one matching sell order exists.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter, Manager};
@@ -50,6 +51,18 @@ pub fn name_to_slug(unlocked: &Unlocked) -> BTreeMap<String, String> {
         .catalog
         .iter()
         .map(|(slug, c)| (c.display_name.to_lowercase(), slug.clone()))
+        .collect()
+}
+
+/// Slugs whose WFM order identity includes information EE.log does not carry.
+/// Guessing here can decrement a different mod rank or relic refinement than
+/// the one the player actually traded, so these are never auto-adjusted.
+fn tiered_slugs(unlocked: &Unlocked) -> BTreeSet<String> {
+    unlocked
+        .catalog
+        .iter()
+        .filter(|(_, item)| item.max_rank.is_some() || !item.subtypes.is_empty())
+        .map(|(slug, _)| slug.clone())
         .collect()
 }
 
@@ -97,11 +110,13 @@ pub fn plan_adjustments(
     trade: &TradeEvent,
     names: &BTreeMap<String, String>,
     orders: &[OwnSellOrder],
+    tiered: &BTreeSet<String>,
 ) -> Vec<(OwnSellOrder, i64)> {
     if trade.kind != "sale" {
         return vec![];
     }
-    let mut out = Vec::new();
+
+    let mut sold_by_slug = BTreeMap::<String, i64>::new();
     for TradeItem {
         name,
         qty,
@@ -114,19 +129,23 @@ pub fn plan_adjustments(
         let Some(slug) = names.get(&name.to_lowercase()) else {
             continue;
         };
-        // Adjust the LARGEST matching listing (one listing per item is the
-        // norm; if there are several, the biggest is the one being sold from).
-        let Some(order) = orders
-            .iter()
-            .filter(|o| &o.slug == slug)
-            .max_by_key(|o| o.quantity)
-        else {
+        if tiered.contains(slug) {
             continue;
-        };
-        let new_qty = (order.quantity - qty).max(0);
-        out.push((order.clone(), new_qty));
+        }
+        *sold_by_slug.entry(slug.clone()).or_default() += qty;
     }
-    out
+
+    sold_by_slug
+        .into_iter()
+        .filter_map(|(slug, sold)| {
+            let mut matching = orders.iter().filter(|order| order.slug == slug);
+            let order = matching.next()?;
+            if matching.next().is_some() {
+                return None;
+            }
+            Some((order.clone(), (order.quantity - sold).max(0)))
+        })
+        .collect()
 }
 
 /// Record + notify + adjust. Blocking; called from the tailer thread.
@@ -155,7 +174,8 @@ pub fn handle_trade(app: &AppHandle, trade: TradeEvent) {
                 Ok(body) => {
                     let orders = own_sell_orders(&body);
                     let names = name_to_slug(&unlocked);
-                    for (order, new_qty) in plan_adjustments(&trade, &names, &orders) {
+                    let tiered = tiered_slugs(&unlocked);
+                    for (order, new_qty) in plan_adjustments(&trade, &names, &orders, &tiered) {
                         let res = if new_qty == 0 {
                             delete_order(&unlocked, &order.id).map(|_| ())
                         } else {
@@ -296,12 +316,18 @@ pub fn start_tailer(app: AppHandle) -> Option<std::path::PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wfm_core::catalog::WfmCatalogItem;
 
     fn names() -> BTreeMap<String, String> {
         let mut m = BTreeMap::new();
         m.insert("primed flow".into(), "primed_flow".into());
         m.insert("lith c5 relic".into(), "lith_c5_relic".into());
+        m.insert("loki prime set".into(), "loki_prime_set".into());
+        m.insert("ash prime set".into(), "ash_prime_set".into());
         m
+    }
+    fn untiered() -> BTreeSet<String> {
+        BTreeSet::new()
     }
     fn order(id: &str, slug: &str, q: i64) -> OwnSellOrder {
         OwnSellOrder {
@@ -330,22 +356,23 @@ mod tests {
     #[test]
     fn a_sale_decrements_the_matching_listing_and_deletes_at_zero() {
         let orders = vec![
-            order("o1", "primed_flow", 3),
-            order("o2", "lith_c5_relic", 1),
+            order("o1", "loki_prime_set", 3),
+            order("o2", "ash_prime_set", 1),
         ];
         let plan = plan_adjustments(
             &sale(vec![
-                ("Primed Flow", 1, "given"),
-                ("Lith C5 Relic", 1, "given"),
+                ("Loki Prime Set", 1, "given"),
+                ("Ash Prime Set", 1, "given"),
             ]),
             &names(),
             &orders,
+            &untiered(),
         );
         assert_eq!(
             plan,
             vec![
-                (order("o1", "primed_flow", 3), 2),
-                (order("o2", "lith_c5_relic", 1), 0)
+                (order("o2", "ash_prime_set", 1), 0),
+                (order("o1", "loki_prime_set", 3), 2),
             ]
         );
     }
@@ -355,29 +382,120 @@ mod tests {
         let orders = vec![order("o1", "primed_flow", 3)];
         let mut t = sale(vec![("Primed Flow", 1, "given")]);
         t.kind = "purchase".into();
-        assert!(plan_adjustments(&t, &names(), &orders).is_empty());
+        assert!(plan_adjustments(&t, &names(), &orders, &untiered()).is_empty());
         assert!(plan_adjustments(
             &sale(vec![("Primed Flow", 1, "received")]),
             &names(),
-            &orders
+            &orders,
+            &untiered(),
         )
         .is_empty());
         assert!(plan_adjustments(
             &sale(vec![("Some Unlisted Thing", 1, "given")]),
             &names(),
-            &orders
+            &orders,
+            &untiered(),
         )
         .is_empty());
-        assert!(
-            plan_adjustments(&sale(vec![("Primed Flow", 1, "given")]), &names(), &[]).is_empty()
+        assert!(plan_adjustments(
+            &sale(vec![("Primed Flow", 1, "given")]),
+            &names(),
+            &[],
+            &untiered(),
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn multiple_orders_for_one_slug_are_ambiguous_and_adjust_nothing() {
+        let orders = vec![
+            order("o1", "loki_prime_set", 1),
+            order("o2", "loki_prime_set", 4),
+        ];
+        let plan = plan_adjustments(
+            &sale(vec![("Loki Prime Set", 1, "given")]),
+            &names(),
+            &orders,
+            &untiered(),
+        );
+        assert!(plan.is_empty());
+    }
+
+    #[test]
+    fn ranked_and_subtyped_items_are_never_inferred_from_a_name_only_trade() {
+        let orders = vec![
+            order("rank-0", "primed_flow", 3),
+            order("radiant", "lith_c5_relic", 2),
+        ];
+        let tiered = BTreeSet::from(["primed_flow".into(), "lith_c5_relic".into()]);
+        let plan = plan_adjustments(
+            &sale(vec![
+                ("Primed Flow", 1, "given"),
+                ("Lith C5 Relic", 1, "given"),
+            ]),
+            &names(),
+            &orders,
+            &tiered,
+        );
+        assert!(plan.is_empty());
+    }
+
+    #[test]
+    fn catalog_metadata_marks_ranked_and_subtyped_items_as_tiered() {
+        let mut catalog = BTreeMap::new();
+        catalog.insert(
+            "primed_flow".into(),
+            WfmCatalogItem {
+                item_id: "mod".into(),
+                display_name: "Primed Flow".into(),
+                max_rank: Some(10),
+                subtypes: vec![],
+            },
+        );
+        catalog.insert(
+            "lith_c5_relic".into(),
+            WfmCatalogItem {
+                item_id: "relic".into(),
+                display_name: "Lith C5 Relic".into(),
+                max_rank: None,
+                subtypes: vec!["intact".into(), "radiant".into()],
+            },
+        );
+        catalog.insert(
+            "loki_prime_set".into(),
+            WfmCatalogItem {
+                item_id: "set".into(),
+                display_name: "Loki Prime Set".into(),
+                max_rank: None,
+                subtypes: vec![],
+            },
+        );
+        let unlocked = Unlocked {
+            jwt: "test".into(),
+            username: "test".into(),
+            platform: "pc".into(),
+            catalog: Arc::new(catalog),
+            id_to_item: Arc::new(BTreeMap::new()),
+        };
+        assert_eq!(
+            tiered_slugs(&unlocked),
+            BTreeSet::from(["lith_c5_relic".into(), "primed_flow".into()]),
         );
     }
 
     #[test]
-    fn selling_more_than_listed_floors_at_delete_and_picks_the_largest_listing() {
-        let orders = vec![order("o1", "primed_flow", 1), order("o2", "primed_flow", 4)];
-        let plan = plan_adjustments(&sale(vec![("primed flow", 9, "given")]), &names(), &orders);
-        assert_eq!(plan, vec![(order("o2", "primed_flow", 4), 0)]);
+    fn repeated_trade_lines_are_aggregated_before_one_adjustment() {
+        let orders = vec![order("o1", "loki_prime_set", 5)];
+        let plan = plan_adjustments(
+            &sale(vec![
+                ("Loki Prime Set", 1, "given"),
+                ("Loki Prime Set", 2, "given"),
+            ]),
+            &names(),
+            &orders,
+            &untiered(),
+        );
+        assert_eq!(plan, vec![(order("o1", "loki_prime_set", 5), 2)]);
     }
 
     #[test]
