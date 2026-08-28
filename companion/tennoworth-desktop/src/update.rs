@@ -5,18 +5,19 @@
 //!
 //! Failure posture mirrors market.rs: `check` never panics and never returns
 //! Err. Offline, DNS failure, HTTP error, a malformed/truncated manifest, an
-//! unsupported platform, or a bad endpoint override all degrade to "no update
-//! available" (logged to stderr) — an update check must never crash the app or
-//! block launch. A bad *bundle signature* surfaces later, in `install_pending`:
+//! a bad endpoint override all degrade to "no update available" (logged to
+//! stderr) — an update check must never crash the app or block launch. An
+//! install that cannot self-update is reported explicitly instead of being
+//! presented as current. A bad *bundle signature* surfaces later, in `install_pending`:
 //! the plugin verifies the minisign signature against the pubkey in
 //! tauri.conf.json after download and refuses to install on mismatch, which
 //! reaches the user as a plain error banner while the running app stays intact.
 
 use std::sync::Mutex;
 use std::time::Duration;
-use wfm_core::poison::guard;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_updater::{Update, UpdaterExt};
+use wfm_core::poison::guard;
 
 /// Emitted to the webview whenever a launch, manual, or periodic check finds an
 /// update. The SPA also reads `update_status` at mount, so a listener
@@ -33,9 +34,18 @@ const CHECK_TIMEOUT: Duration = Duration::from_secs(15);
 pub struct UpdateStatus {
     pub checked: bool,
     pub available: bool,
+    pub support: UpdateSupport,
     pub current_version: String,
     pub version: Option<String>,
     pub notes: Option<String>,
+}
+
+#[derive(serde::Serialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum UpdateSupport {
+    Supported,
+    AppimageRequired,
+    DisabledTestBuild,
 }
 
 impl Default for UpdateStatus {
@@ -43,6 +53,7 @@ impl Default for UpdateStatus {
         Self {
             checked: false,
             available: false,
+            support: update_support(),
             current_version: env!("CARGO_PKG_VERSION").to_string(),
             version: None,
             notes: None,
@@ -87,9 +98,8 @@ impl UpdateState {
 /// `APPIMAGE`) self-update works and latest.json carries a linux-x86_64 entry,
 /// so the check is real. Any other Linux run — a `cargo run` dev build, an
 /// extracted bundle, or a leftover install from the retired deb/rpm/AUR
-/// packages — cannot self-update, and a banner whose Install button can't work
-/// is worse than silence. The name of this predicate is now a slight misnomer:
-/// there is no packager left, only "something other than an AppImage".
+/// packages — cannot self-update. The explicit support state lets Settings
+/// explain that instead of claiming a skipped check found the current version.
 ///
 /// (History: the first AppImage was withdrawn for an EGL abort on rolling
 /// Mesa. Root cause found 2026-08-20: the bundle carried ubuntu-22.04's
@@ -99,14 +109,28 @@ impl UpdateState {
 ///
 /// The `TENNOWORTH_UPDATE_URL` override still forces a real check, so probe.rs
 /// can exercise the full flow on the Linux CI runner.
-#[cfg(target_os = "linux")]
-fn updates_owned_by_packager() -> bool {
-    std::env::var_os("APPIMAGE").is_none() && std::env::var_os("TENNOWORTH_UPDATE_URL").is_none()
+fn classify_update_support(
+    linux: bool,
+    appimage: bool,
+    endpoint_override: bool,
+    test_build: bool,
+) -> UpdateSupport {
+    if test_build {
+        UpdateSupport::DisabledTestBuild
+    } else if linux && !appimage && !endpoint_override {
+        UpdateSupport::AppimageRequired
+    } else {
+        UpdateSupport::Supported
+    }
 }
 
-#[cfg(not(target_os = "linux"))]
-fn updates_owned_by_packager() -> bool {
-    false
+fn update_support() -> UpdateSupport {
+    classify_update_support(
+        cfg!(target_os = "linux"),
+        std::env::var_os("APPIMAGE").is_some(),
+        std::env::var_os("TENNOWORTH_UPDATE_URL").is_some(),
+        option_env!("TENNOWORTH_OCR_TEST_BUILD") == Some("1"),
+    )
 }
 
 fn build_updater(app: &AppHandle) -> Option<tauri_plugin_updater::Updater> {
@@ -145,12 +169,16 @@ pub async fn check(app: &AppHandle) -> UpdateStatus {
         ..Default::default()
     };
     let state = app.state::<UpdateState>();
-    if option_env!("TENNOWORTH_OCR_TEST_BUILD") == Some("1") {
-        state.store(status.clone(), None);
-        return status;
-    }
-    if updates_owned_by_packager() {
-        eprintln!("tennoworth: update check skipped — Linux updates come from the package manager");
+    if status.support != UpdateSupport::Supported {
+        match status.support {
+            UpdateSupport::AppimageRequired => eprintln!(
+                "tennoworth: update check skipped — this Linux install is not an AppImage"
+            ),
+            UpdateSupport::DisabledTestBuild => {
+                eprintln!("tennoworth: update check skipped — disabled in OCR test builds")
+            }
+            UpdateSupport::Supported => unreachable!(),
+        }
         state.store(status.clone(), None);
         return status;
     }
@@ -236,4 +264,52 @@ pub async fn install_update(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn restart_app(app: AppHandle) {
     app.restart()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn update_support_distinguishes_appimage_windows_and_test_builds() {
+        assert_eq!(
+            classify_update_support(true, false, false, false),
+            UpdateSupport::AppimageRequired
+        );
+        assert_eq!(
+            classify_update_support(true, true, false, false),
+            UpdateSupport::Supported
+        );
+        assert_eq!(
+            classify_update_support(false, false, false, false),
+            UpdateSupport::Supported
+        );
+        assert_eq!(
+            classify_update_support(true, false, true, false),
+            UpdateSupport::Supported
+        );
+        assert_eq!(
+            classify_update_support(false, false, false, true),
+            UpdateSupport::DisabledTestBuild
+        );
+
+        let expected: Vec<String> =
+            serde_json::from_str(include_str!("../../../tests/fixtures/update-support.json"))
+                .unwrap();
+        let actual = [
+            UpdateSupport::Supported,
+            UpdateSupport::AppimageRequired,
+            UpdateSupport::DisabledTestBuild,
+        ]
+        .into_iter()
+        .map(|support| {
+            serde_json::to_value(support)
+                .unwrap()
+                .as_str()
+                .unwrap()
+                .to_string()
+        })
+        .collect::<Vec<_>>();
+        assert_eq!(actual, expected);
+    }
 }
