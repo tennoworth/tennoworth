@@ -255,7 +255,7 @@ pub fn per_trade_for(quantity: u32) -> u32 {
     }
     let start = quantity.min(MAX_PER_TRADE);
     for d in (1..=start).rev() {
-        if quantity % d == 0 {
+        if quantity.is_multiple_of(d) {
             return d;
         }
     }

@@ -115,7 +115,7 @@ fn main() {
         "build" => {
             let fixtures_dir = extract_flag(&args, "--fixtures-dir");
             let now_arg = extract_flag(&args, "--now");
-            let fixtures_path = fixtures_dir.as_deref().map(|s| std::path::Path::new(s));
+            let fixtures_path = fixtures_dir.as_deref().map(std::path::Path::new);
             if let Err(e) = run_build(fixtures_path, now_arg.as_deref()) {
                 eprintln!("error: {e}");
                 std::process::exit(1);
