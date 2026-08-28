@@ -63,7 +63,7 @@
 </div>
 
 <style>
-  :global(html), :global(body), :global(#app) { width: 100%; height: 100%; margin: 0; background: transparent !important; overflow: hidden; }
+  :global(html.relic-overlay-surface), :global(html.relic-overlay-surface body), :global(html.relic-overlay-surface #app) { width: 100%; height: 100%; margin: 0; background: transparent !important; overflow: hidden; }
   .overlay { position: fixed; inset: 0; pointer-events: none; font-family: var(--font-ui, system-ui, sans-serif); color: #edf2f4; }
   .reward { position: absolute; box-sizing: border-box; padding: 0 8px; transform: translateY(8px); }
   .inner { position: relative; max-width: 250px; min-height: 66px; margin: auto; padding: 9px 11px; border: 1px solid #66808f; border-radius: 7px; background: #091117e8; box-shadow: 0 6px 22px #000a; backdrop-filter: blur(5px); transform-origin: top center; }
