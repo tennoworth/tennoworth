@@ -10,6 +10,7 @@ name: release-desktop
 # HOW TO CUT A RELEASE
 #
 #   Actions → release-desktop → Run workflow, from `main`, version = X.Y.Z
+#   Policy and release decision: docs/releasing.md
 #
 # There is deliberately NO tag trigger. The tag is no longer the *input* to a
 # release — it is an *output*, created by this workflow at the exact `main`
