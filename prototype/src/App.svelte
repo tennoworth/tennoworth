@@ -26,7 +26,7 @@
   import { buildMetaDrift } from './lib/meta-drift';
   import type { History } from './lib/history';
   import { loadCatalogs, resolvePath, type Catalogs } from './lib/resolver';
-  import { loadMarket, lookup } from './lib/market';
+  import { loadMarket, lookup, startMarketRefreshLoop, type MarketRefreshLoop } from './lib/market';
   import { sellableQty } from './lib/sell-priority';
   import { computeResults as computeFilteredResults, computeAvailableTags, computeEmptyReason, type FilterState } from './lib/filter-engine';
   import { PRESETS, presetFilterValues, presetStillMatches } from './lib/presets';
@@ -336,6 +336,17 @@
     }
   }
 
+  let marketRefreshLoop: MarketRefreshLoop | null = null;
+  onMount(() => {
+    if (!isDesktop) return;
+    const loop = startMarketRefreshLoop(refreshMarketInBackground);
+    marketRefreshLoop = loop;
+    return () => {
+      if (marketRefreshLoop === loop) marketRefreshLoop = null;
+      loop.stop();
+    };
+  });
+
   onMount(() => {
     if (!isDesktop) return;
     return listenForTauriEvent(TRAY_HINT_EVENT, () => {
@@ -416,12 +427,10 @@
       }
     }
 
-    // Desktop only: keep the bundled/cached snapshot fresh from tennoworth.app.
-    // Fire-and-forget AFTER the copy above is on screen — the refresh must never
-    // block app start (the hosted build skips this: it already gets fresh data
-    // same-origin from the box). Runs even if the loads above failed, so an
-    // offline-first-launch can still recover once the network returns.
-    if (isDesktop) void refreshMarketInBackground();
+    // Desktop only: start after the bundled/cached copy is on screen. The loop
+    // retries on reconnect and every 30 minutes, so an offline launch recovers
+    // without restarting; hosted builds already fetch same-origin from the box.
+    marketRefreshLoop?.trigger();
   });
 
   function handleClear() {
