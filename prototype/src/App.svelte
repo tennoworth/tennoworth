@@ -2014,7 +2014,10 @@
     grid-template-rows: auto 1fr;
     max-width: min(122.5rem, 100vw);
     margin: 0 auto;
-    min-height: 100vh;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
   }
 
   main.workspace {
@@ -2023,6 +2026,9 @@
     flex-direction: column;
     gap: var(--stack);
     min-width: 0;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
   }
 
   /* ---- Status strip: one element on the landing and the shell ------- */
@@ -2300,7 +2306,13 @@
      becomes a horizontal scroll strip under it. Below ~900px the 216px rail
      eats too much of the workspace, so the grid collapses. */
   @media (max-width: 900px) {
-    .shell { grid-template-columns: 1fr; }
+    .shell {
+      grid-template-columns: 1fr;
+      height: auto;
+      min-height: 100vh;
+      min-height: 100dvh;
+      overflow: visible;
+    }
     aside.sidebar {
       position: static;
       height: auto;
@@ -2338,7 +2350,7 @@
     .statusbar { flex-wrap: wrap; height: auto; min-height: var(--strip); position: static; }
     .statusbar.shell-strip .brand { width: auto; border-right: none; }
     .sfoot { padding: var(--s2) var(--s3); }
-    main.workspace { padding: 16px 16px 32px; }
+    main.workspace { padding: 16px 16px 32px; overflow: visible; }
   }
   header h1 {
     margin: 0;
