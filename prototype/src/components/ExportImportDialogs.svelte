@@ -11,6 +11,7 @@
   // import reports the decoded snapshot back via `onimport` — App.svelte owns
   // what importing means for its own state (resolved/deltas/market/phase/
   // store.saveSnapshot), the same split as WfmAuthDialogs' onunlocked.
+  import { tick } from 'svelte';
   import { encryptPayload, decryptPayload } from '../lib/crypto';
   import { buildSnapshotPayload } from '../lib/storage';
 
@@ -23,8 +24,8 @@
 
   let exportDialog = $state();
   let importDialog = $state();
-  let exportPassInput: HTMLInputElement | undefined;
-  let importPassInput: HTMLInputElement | undefined;
+  let exportPassInput = $state<HTMLInputElement>();
+  let importPassInput = $state<HTMLInputElement>();
   let exportPass = $state('');
   let exportConfirm = $state('');
   let exportBusy = $state(false);
@@ -32,7 +33,17 @@
   let importBlob = $state(null);
   let importName = $state('');
   let importBusy = $state(false);
+  let importConfirming = $state(false);
+  let restoreWarning = $state<HTMLElement>();
   let cryptoError = $state(null);
+
+  $effect(() => {
+    if (importConfirming) {
+      // The passphrase field leaves the DOM at this point. Move focus to the
+      // warning so keyboard and screen-reader users do not lose their place.
+      void tick().then(() => restoreWarning?.focus());
+    }
+  });
 
   export function openExport() {
     cryptoError = null;
@@ -51,6 +62,11 @@
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
+    importConfirming = false;
+    importBlob = null;
+    importName = '';
+    importPass = '';
+    cryptoError = null;
     try {
       const text = await file.text();
       const blob = JSON.parse(text);
@@ -62,7 +78,6 @@
       }
       importBlob = blob;
       importName = file.name;
-      importPass = '';
       importDialog?.showModal();
       importPassInput?.focus();
     } catch (err) {
@@ -108,19 +123,40 @@
     }
   }
 
-  async function performImport(e) {
+  function resetImport() {
+    importConfirming = false;
+    importBlob = null;
+    importName = '';
+    importPass = '';
+    cryptoError = null;
+  }
+
+  function closeImport() {
+    resetImport();
+    importDialog?.close();
+  }
+
+  function editImport() {
+    importConfirming = false;
+    void tick().then(() => importPassInput?.focus());
+  }
+
+  function requestImport(e) {
     e?.preventDefault();
     cryptoError = null;
-    // Restore replaces the current inventory. Warn before overwriting a
-    // non-empty one — a wrong backup silently destroying a scan is the worst
-    // failure this dialog can cause.
-    const currentCount = owned?.size ?? 0;
-    if (currentCount > 0) {
-      const ok = confirm(
-        `This restores a snapshot from ${importName}, replacing your current ${currentCount}-item inventory. Continue?`
-      );
-      if (!ok) return;
+    if ((owned?.size ?? 0) > 0) {
+      // Do not decrypt until the destructive consequence has been confirmed
+      // inside the app. Keeping this as a distinct state also prevents the
+      // selected file or passphrase changing underneath the confirmation.
+      importConfirming = true;
+      return;
     }
+    performImport();
+  }
+
+  async function performImport() {
+    cryptoError = null;
+    importConfirming = false;
     importBusy = true;
     try {
       const payload = await decryptPayload(importBlob, importPass);
@@ -144,7 +180,7 @@
         ])
       );
       await onimport({ invName: payload.invName || 'imported.json', ts: payload.ts || Date.now(), ownedMap });
-      importDialog?.close();
+      closeImport();
     } catch (err) {
       cryptoError = err.message || String(err);
     } finally {
@@ -185,7 +221,7 @@
       />
     </label>
     {#if cryptoError}
-      <div class="err">{cryptoError}</div>
+      <div class="err" role="alert">{cryptoError}</div>
     {/if}
     <footer>
       <button type="button" class="ghost" onclick={() => exportDialog?.close()}>Cancel</button>
@@ -194,47 +230,76 @@
   </form>
 </dialog>
 
-<dialog bind:this={importDialog} class="cryptobox">
-  <form onsubmit={performImport}>
+<dialog bind:this={importDialog} class="cryptobox" onclose={resetImport}>
+  <form onsubmit={requestImport}>
     <header>
       <h3>Restore encrypted snapshot</h3>
-      <p class="muted">
-        Pick a <code>wfminv-*.json</code> backup exported from another device,
-        then enter the passphrase you used when exporting it.
-      </p>
-    </header>
-    <label>
-      Backup file
-      <button type="button" class="ghost" onclick={pickImport}>Choose file…</button>
-      {#if importBlob}
-        <span class="muted small file-name">{importName} — selected, ready to decrypt</span>
+      {#if importConfirming}
+        <p class="muted">Review the restore before changing your inventory.</p>
+      {:else}
+        <p class="muted">
+          Pick a <code>wfminv-*.json</code> backup exported from another device,
+          then enter the passphrase you used when exporting it.
+        </p>
       {/if}
-    </label>
-    <input
-      bind:this={importFileInput}
-      type="file"
-      accept="application/json,.json"
-      onchange={onImportPicked}
-      style="display:none"
-    />
-    <label>
-      Passphrase
+    </header>
+    {#if importConfirming}
+      <section
+        class="restore-warning"
+        aria-labelledby="restore-warning-title"
+        tabindex="-1"
+        bind:this={restoreWarning}
+      >
+        <strong id="restore-warning-title">Replace current inventory?</strong>
+        <p>
+          Restoring <span class="file-name">{importName}</span> will replace your
+          current {owned?.size ?? 0}-item inventory after the backup is decrypted
+          and validated successfully.
+        </p>
+        <p>This cannot be undone unless you have another exported backup.</p>
+      </section>
+      <footer>
+        <button type="button" class="ghost" onclick={editImport}>Back</button>
+        <button type="button" class="danger" disabled={importBusy} onclick={performImport}>
+          {importBusy ? 'Decrypting…' : 'Confirm restore'}
+        </button>
+      </footer>
+    {:else}
+      <label>
+        Backup file
+        <button type="button" class="ghost" onclick={pickImport}>Choose file…</button>
+        {#if importBlob}
+          <span class="muted small file-name">{importName} — selected, ready to decrypt</span>
+        {/if}
+      </label>
       <input
-        type="password"
-        autocomplete="current-password"
-        bind:value={importPass}
-        placeholder="Type the passphrase this file was exported with."
-        required
-        bind:this={importPassInput}
+        bind:this={importFileInput}
+        type="file"
+        accept="application/json,.json"
+        onchange={onImportPicked}
+        style="display:none"
       />
-    </label>
-    {#if cryptoError}
-      <div class="err">{cryptoError}</div>
+      <label>
+        Passphrase
+        <input
+          type="password"
+          autocomplete="current-password"
+          bind:value={importPass}
+          placeholder="Type the passphrase this file was exported with."
+          required
+          bind:this={importPassInput}
+        />
+      </label>
+      {#if cryptoError}
+        <div class="err" role="alert">{cryptoError}</div>
+      {/if}
+      <footer>
+        <button type="button" class="ghost" onclick={closeImport}>Cancel</button>
+        <button type="submit" disabled={importBusy || !importBlob}>
+          {importBusy ? 'Decrypting…' : (owned?.size ?? 0) > 0 ? 'Review restore' : 'Decrypt'}
+        </button>
+      </footer>
     {/if}
-    <footer>
-      <button type="button" class="ghost" onclick={() => importDialog?.close()}>Cancel</button>
-      <button type="submit" disabled={importBusy || !importBlob}>{importBusy ? 'Decrypting…' : 'Decrypt'}</button>
-    </footer>
   </form>
 </dialog>
 
@@ -246,4 +311,14 @@
   label { gap: 8px; }
   label .ghost { width: max-content; }
   .file-name { font-size: 12px; }
+  .restore-warning {
+    color: var(--fg);
+    background: color-mix(in srgb, var(--bad) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bad) 40%, var(--border));
+    border-radius: var(--radius-ctl);
+    padding: 12px;
+  }
+  .restore-warning strong { color: var(--bad); }
+  .restore-warning p { margin: 8px 0 0; font-size: 12.5px; line-height: 1.5; }
+  button.danger { color: var(--bad); border-color: var(--bad); }
 </style>

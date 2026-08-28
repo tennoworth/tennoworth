@@ -100,6 +100,8 @@ and their notes live on the GitHub releases themselves.
   every 30 minutes, allowing offline launches to recover without an app restart.
 - Settings now shows the warframe.market session state and provides a confirmed
   logout that removes saved credentials and interrupted listing batches from the device.
+- Restoring an encrypted inventory backup now uses an in-app review step and
+  cannot decrypt or replace a non-empty inventory before explicit confirmation.
 
 ## 0.6.0 — 2026-08-22
 
