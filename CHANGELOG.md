@@ -96,6 +96,8 @@ and their notes live on the GitHub releases themselves.
   updates after repeatedly opening those surfaces.
 - Manual update checks now explain when a Linux install cannot self-update and
   needs the AppImage, instead of incorrectly reporting that install as current.
+- The desktop market snapshot now refreshes after network reconnection and
+  every 30 minutes, allowing offline launches to recover without an app restart.
 
 ## 0.6.0 — 2026-08-22
 
