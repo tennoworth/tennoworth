@@ -1,133 +1,248 @@
 # TennoWorth
 
-A cross-platform **Windows + Linux** Warframe inventory + market dashboard.
-It answers one question better than anything else: **what should I sell right
-now?**
+**A Windows and Linux Warframe inventory dashboard built around one decision: what is worth selling now?**
 
-Your inventory is read locally by the desktop app (it memory-scans the running
-game — nothing is uploaded, no account login to *us*). It joins your inventory
-against a live warframe.market price snapshot and ranks your items by expected
-plat, not by a raw average price. Runs on Steam Deck.
+TennoWorth joins the inventory for your current Warframe session with
+warframe.market prices, Digital Extremes drop tables, vault rotations, usage
+history, and world-state data. It then turns that data into sell priorities,
+set-completion plays, relic expected value, Riven context, and listing health.
 
-The opt-in relic reward overlay recognizes the reward screen locally and puts
-platinum, ducats, owned count, confidence, and a conservative best-pick marker
-beside each choice. Captured frames stay in memory; only item slugs are used
-for optional live warframe.market price requests.
+- **Use the market browser:** [tennoworth.app](https://tennoworth.app) — search,
+  prices, volume, trends, vault status, Baro, and market context in a static web
+  app. No account or install.
+- **Use your own inventory:** install the desktop app from the
+  [latest release](https://github.com/tennoworth/tennoworth/releases/latest).
+  The inventory scan and account-specific tools are desktop-only.
 
-**Try the informational site** at **[tennoworth.app](https://tennoworth.app)** —
-a full market browser: prices, 48-hour volume, 7-day trend sparklines, vaulted
-items, and the Baro countdown, straight from a snapshot refreshed every 2
-hours. No download, no login, no account. Want *your* inventory ranked? That's
-the desktop app.
+> [!WARNING]
+> TennoWorth reads the running game's memory. It never writes to the game,
+> injects code, or automates gameplay, but Digital Extremes has not formally
+> approved this category of third-party tool. Ban safety cannot be guaranteed.
+> Read [Security and trust](#security-and-trust) before using the scan.
 
-<p align="center">
-  <img src="docs/img/market-browser.png" alt="TennoWorth market browser: top movers, vaulted &amp; valuable items, and Baro countdown from a live warframe.market snapshot" width="820">
-</p>
+## What it does
 
-Search any tradeable item for its price, volume, and trend — no download, no
-login:
+### Decide what to sell
 
-<p align="center">
-  <img src="docs/img/search.png" alt="Searching &quot;primed&quot; returns every matching item with price, 48-hour volume, and a 7-day sparkline" width="820">
-</p>
+- Ranks owned items with a prioritization score based on price, likely
+  sell-through, and a bounded DE usage signal. The displayed platinum total is
+  still the ordinary, unweighted value of the sellable stack.
+- Separates low asks, top buys, 48-hour volume, 7- and 90-day movement, vault
+  state, ducat value, owned count, and reserved copies instead of collapsing
+  them into one unexplained number.
+- Provides focused views for spare mods and Arcanes, ducat fodder, movers,
+  sets, hold/sell timing, and vaulted or soon-to-vault items.
+- Compares scans so newly acquired and recently removed sellables are visible.
 
-## How it works
+### Find the better play
 
-```
-Warframe (running)  ──►  desktop app (Tauri)  ──►  "what to sell"
-                            │  reads game memory    │
-                            │  wfm-core              └──► create/edit
-                            ▼                              WFM listings
-                       market.json
-                       (refreshed on a cron)
-```
+- **Set picks:** identifies complete and nearly complete Prime sets, prices the
+  missing parts, compares the assembled set with its individual parts, and can
+  compare building a missing component with buying it.
+- **Relic planner:** ranks owned relics by expected platinum per solo crack,
+  compares intact sale value, and shows the value added by each refinement.
+- **Rivens:** shows scanned stats, rank, rerolls, current disposition and its
+  movement, DE's weekly price band, live auction comparables, and offer math.
+- **Market timing:** combines Prime release/vault/Resurgence history, annual
+  usage changes, current events, Baro's schedule and inventory, and trader
+  rotations. Advice remains advice; TennoWorth does not trade automatically.
 
-- **`companion/`** — a Rust workspace. `wfm-core` is the reusable core (scan,
-  inventory fetch, WFM auth with encrypted JWT, listings, pending plans);
-  `tennoworth-desktop` is the Tauri v2 app that drives it over IPC — the only
-  adapter. PC-only by nature — it reads game memory. See
-  [`companion/README.md`](companion/README.md).
-- **`prototype/`** — the Svelte web app, deployed as the informational site.
-  No backend, no accounts, no data leaves your machine.
-  `prototype/public/market.json` is the shared price snapshot.
+### Manage the sale
 
-## Desktop app
+- Reviews and edits a batch before creating warframe.market listings. Failed or
+  interrupted batches are persisted and can be resumed.
+- Shows live orders, quantity mismatches, and listings that have fallen behind
+  the current top of book; supports repricing, visibility changes, and removal.
+- Watches target prices in the background and sends desktop notifications. A
+  live order stream supplies the fast path, with a periodic check as fallback.
+- Reads confirmed trades from `EE.log` into a local platinum ledger and can
+  shrink or close the matching listing after a sale.
+- Offers an opt-in relic reward overlay. A bounded local capture is OCR'd after
+  a reward event or shortcut and annotated with platinum, ducats, owned count,
+  and recognition confidence. It does not click or choose a reward.
 
-The desktop app is the product. Install it per platform:
+The hosted site exposes the public-data tools and a guided product preview. It
+cannot scan inventory, sign in to warframe.market, create listings, watch
+prices in the background, or read `EE.log`.
 
-- **Windows** — a single installer, `TennoWorth_<version>_x64-setup.exe`, from
-  the [latest release](https://github.com/tennoworth/tennoworth/releases/latest).
-  Unsigned, so SmartScreen warns on first run (see
-  [`SECURITY.md`](SECURITY.md)). The app updates itself from there.
-- **Linux** — a single-file **AppImage**, and nothing else:
+## Install
 
-  ```bash
-  curl -LO https://github.com/tennoworth/tennoworth/releases/latest/download/TennoWorth-x86_64.AppImage
-  chmod +x TennoWorth-x86_64.AppImage
-  ./TennoWorth-x86_64.AppImage
-  ```
+### Windows
 
-  It runs on any distro and self-updates in place through the same signed
-  updater feed as Windows. Verify it first if you like — every release
-  carries `TennoWorth-x86_64.AppImage.sha256` next to it; see
-  [`SECURITY.md`](SECURITY.md).
+Download `TennoWorth_<version>_x64-setup.exe` from the
+[latest GitHub release](https://github.com/tennoworth/tennoworth/releases/latest).
+The installer is not code-signed, so Windows SmartScreen may require
+**More info → Run anyway** on first launch. The retired `.msi` is not produced
+by current builds.
 
-**Coming from apt, dnf or the AUR?** Those channels are retired. The `.deb`
-and `.rpm` packages, the repositories at `tennoworth.app/apt` and `/rpm`, and
-the `tennoworth` / `tennoworth-bin` AUR packages are gone from the release.
-Nothing you have installed breaks: the repositories stay served and signed,
-frozen at their last published version, and simply never offer another update.
-Take the AppImage above, then remove the old package and its repo entry.
+### Linux
 
-Why: the AppImage is the only Linux channel that can update itself — the
-Tauri updater turns itself on when `$APPIMAGE` is set, and a distro package
-can't self-update without fighting the package manager. Four delivery
-channels for one platform was three more than could be kept correct.
-
-A note of history on the AppImage: the first one (2026-07) was withdrawn
-because it aborted at `Could not create default EGL display:
-EGL_BAD_PARAMETER` against rolling-release Mesa — a white window, before the
-webview painted. WebKit was never the cause. Root-caused on 2026-08-20 by
-A/B on a Mesa 26.2 host: the AppImage bundled ubuntu-22.04's libwayland
-client/cursor/egl/server, and the host's Wayland-EGL platform rejects that
-2022 client. The build now strips those four libraries and repacks, so the
-AppImage uses the host's libwayland (a stable ABI that every desktop Linux
-ships) — and the identical bundle runs cleanly. Disabling WebKit's DMABUF
-renderer was tried first and measurably did not help; if you see that
-mitigation recommended anywhere for this symptom, it is not the fix.
-
-The fixed AppImage has shipped in 0.4.0 and 0.5.0, which is what made
-consolidating onto it defensible. If you still hit a white window,
-`WEBKIT_DISABLE_COMPOSITING_MODE=1` is the bigger hammer — please open an
-issue if you need it, since there is no longer a system-WebKit package to
-fall back to.
-
-## Develop
+Linux is distributed as one self-updating AppImage:
 
 ```bash
-cd prototype && bun install && bun run dev   # http://127.0.0.1:5173
+curl -LO https://github.com/tennoworth/tennoworth/releases/latest/download/TennoWorth-x86_64.AppImage
+curl -LO https://github.com/tennoworth/tennoworth/releases/latest/download/TennoWorth-x86_64.AppImage.sha256
+sha256sum -c TennoWorth-x86_64.AppImage.sha256
+chmod +x TennoWorth-x86_64.AppImage
+./TennoWorth-x86_64.AppImage
 ```
 
-Security posture and threat model: [`SECURITY.md`](SECURITY.md).
+The apt, dnf, and AUR channels are retired and frozen at their last published
+version. They do not receive current releases.
 
-### Branching
+Linux kernels commonly restrict reading another process even when both belong
+to the same user. If the app reports a ptrace permission error, it will include
+the detected policy and an actionable command. For a temporary, reboot-scoped
+change:
 
-This repository uses a develop-then-main promotion model — `develop` is the
-integration branch (feature branches merge here, CI runs here), `main` is
-production (auto-deploys), and promotion is fast-forward only.
+```bash
+sudo sysctl kernel.yama.ptrace_scope=0
+```
 
-## Ban risk
+That relaxes same-user ptrace protection system-wide until reboot; do not apply
+it without understanding the trade-off. File capabilities are appropriate for
+a locally built binary, but do not work on the AppImage's `nosuid` mount.
 
-The desktop app only reads: game memory for the inventory scan, the game's own
-text log (`EE.log`) for trade/reward detection, and—only after explicit opt-in—a
-bounded screenshot of the Warframe window for local reward OCR. It never
-writes to the game or injects code.
-**We can't promise it's ban-safe.** Other read-only inventory tools have run
-for years with no documented bans, but DE has never formally blessed this
-category of tool. **Use at your own risk; no warranty.**
+The optional reward overlay works with Borderless Fullscreen or Windowed mode.
+Windows and X11 use direct window capture. Wayland currently requires Warframe
+to run through XWayland; the overlay does not use a capture portal yet. Settings
+reports the active capture backend and whether OCR is ready.
 
-For a detailed breakdown of what the desktop app reads and what never leaves
-your machine, see the in-app 'Trust & safety' section.
+## First run
+
+1. Start Warframe and continue past its login screen.
+2. Open TennoWorth and select **Scan inventory**.
+3. Review the ranked Sell view, then explore Set picks, Relics, Rivens, Baro,
+   routines, and market-timing views as they apply to the scanned inventory.
+4. Optional: use **List on WFM**. TennoWorth asks for warframe.market
+   credentials only when an authenticated feature needs them.
+
+Closing the main window hides the desktop app to the system tray so price
+watches and trade detection can continue. Quit it from the tray to stop the
+process.
+
+## Security and trust
+
+```text
+Warframe process ── read-only memory scan ──► desktop app ──► DE inventory API
+Warframe EE.log  ── read-only tail ─────────►      │
+reward screen    ── opt-in local capture ───►      │
+                                                   ├── local SQLite state
+warframe.market ── public market data ───────►      ├── sell/relic/set decisions
+DE public data  ── drop tables + world state ►      └── optional WFM orders
+                         │
+                         └──► static market snapshot ──► tennoworth.app
+```
+
+- TennoWorth has no user-account backend, telemetry collector, or inventory
+  upload service. The hosted site is static and never receives inventory.
+- The desktop scan extracts the session values needed to request inventory
+  from Digital Extremes. The resulting inventory, snapshots, settings, watches,
+  ledger, and pending listing plans remain in local application storage.
+- A warframe.market login is optional. Its bearer token is encrypted at rest
+  with AES-256-GCM using a PBKDF2-derived key. Remember-on-device stores the
+  derived unlock key—not the passphrase—in the operating system keyring.
+- Reward captures stay in memory unless the user explicitly enables local
+  diagnostics, which writes recent captures under the app cache directory.
+  Nothing is uploaded automatically. Optional live overlay pricing sends
+  resolved item identifiers to warframe.market, not captured frames.
+- Market and Digital Extremes data is fetched by the project pipeline and
+  published as static JSON; visitors do not scrape upstream services.
+
+The complete threat model, release-checksum instructions, cryptographic
+details, and explicit non-promises live in [`SECURITY.md`](SECURITY.md).
+
+## How the repository is organized
+
+| Path | Purpose |
+|---|---|
+| [`prototype/`](prototype/) | Svelte 5 + Vite SPA used by both the hosted informational site and the Tauri webview. |
+| [`companion/`](companion/) | Rust workspace containing the Tauri desktop app, inventory/WFM core, shared market math and client code, and the market pipeline. |
+| [`prototype/public/market.json`](prototype/public/market.json) | Shared generated snapshot consumed by the site and bundled as the desktop fallback. |
+| [`scripts/`](scripts/) | TypeScript maintenance gates plus the Linux desktop smoke script. |
+| [`tests/fixtures/`](tests/fixtures/) | Cross-language parity and pipeline regression fixtures. |
+| [`deploy/`](deploy/) | Self-host deployment kit for the site and scheduled market refresh. |
+| [`.github/workflows/`](.github/workflows/) | Web, scraper, desktop release, smoke, and audit automation. |
+
+The Rust workspace contains five crates:
+
+| Crate | Role |
+|---|---|
+| `tennoworth-desktop` | Tauri v2 shell, local SQLite state, tray, notifications, overlay, update flow, and IPC commands. |
+| `wfm-core` | Inventory scan/fetch, encrypted WFM session, listings, orders, and recoverable batch plans. |
+| `market-math` | Pure market heuristics shared by the desktop path and parity-tested against the SPA. |
+| `wfm-client` | Shared warframe.market transport primitives and request policy. |
+| `wfm-scrape` | Host pipeline that scrapes market data and builds `market.json` plus `wfstat-catalog.json`. |
+
+## Development
+
+The web app requires [Bun](https://bun.sh/):
+
+```bash
+cd prototype
+bun install --frozen-lockfile
+bun run dev
+```
+
+The development server listens on `http://127.0.0.1:5173`. It runs in hosted
+mode, so desktop-only IPC features are intentionally unavailable.
+
+To build and run the desktop app, build the desktop SPA **before** Cargo; Tauri
+embeds that directory into the binary:
+
+```bash
+cd prototype
+bun install --frozen-lockfile
+bun run build:desktop
+
+cd ../companion
+cargo build -p tennoworth-desktop
+```
+
+On Linux, install the Tauri/WebKitGTK and Tesseract development packages for
+your distribution first. A locally built binary can receive the narrower
+ptrace capability; rebuilding replaces the file and removes it, so repeat this
+after every build, then launch the binary directly:
+
+```bash
+sudo setcap cap_sys_ptrace=eip target/debug/tennoworth-desktop
+./target/debug/tennoworth-desktop
+```
+
+On Windows, launch `target/debug/tennoworth-desktop.exe` after the build; no
+ptrace capability step is needed.
+
+Useful local checks mirror the repository's CI surfaces:
+
+```bash
+cd prototype
+bun run test
+bun run check
+bun run knip
+
+cd ../companion
+cargo test
+cargo audit --deny warnings
+
+cd ..
+bun scripts/sync-csp.ts --check
+bun scripts/check-panic-sites.ts
+bash scripts/probe-smoke-linux.sh
+```
+
+The Linux probe needs `xvfb-run`; the desktop Rust build needs the native
+WebKitGTK/GTK/AppIndicator/Tesseract toolchain. Windows builds and smoke tests
+run natively in CI.
+
+## Branches and releases
+
+`develop` is the integration branch. `main` is production and deploys the web
+app; production promotion is fast-forward only. Desktop releases are built
+from `main` and tagged `desktop-v<version>`. The site and market/scraper
+artifacts use rolling release tags and are not desktop versions.
+
+See [`CHANGELOG.md`](CHANGELOG.md) for desktop release history and
+[`docs/releasing.md`](docs/releasing.md) for the release policy and procedure.
 
 Feature-branch Windows OCR installers are tested with the
 [`docs/ocr-windows-test-runbook.md`](docs/ocr-windows-test-runbook.md); they
@@ -135,4 +250,5 @@ use a separate app identity and do not replace production TennoWorth.
 
 ## License
 
-MIT.
+[MIT](LICENSE). TennoWorth is a fan project and is not affiliated with Digital
+Extremes or warframe.market.
