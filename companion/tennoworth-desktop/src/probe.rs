@@ -146,7 +146,7 @@ const PROBE_JS: &str = r#"(function(){
     .then(function(){ return invk('health').then(function(v){ R.invokeHealth = v; }); })
     // C5 update check, endpoint overridden via TENNOWORTH_UPDATE_URL (offline
     // run: https to a refused port; malformed run: live JSON of the wrong
-    // shape). Must resolve to {checked:true, available:false} — never reject.
+    // shape). Must resolve to checked with an explicit support state — never reject.
     .then(function(){ return invk('check_update').then(function(v){ R.updateCheck = v; }); })
     .then(function(){ return invk('update_status').then(function(v){ R.updateStatus = v; }); })
     // The SPA's own mount handshake should have surfaced the banner iff an

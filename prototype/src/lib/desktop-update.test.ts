@@ -1,6 +1,7 @@
 // @ts-nocheck — vitest fixtures; the module's TS contract is exercised by tsc.
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { installTauri, removeTauri } from './test-utils.js';
+import updateSupportFixture from '../../../tests/fixtures/update-support.json';
 import {
   updateStatus,
   checkUpdate,
@@ -8,6 +9,7 @@ import {
   restartApp,
   onUpdateAvailable,
   UPDATE_CHECK_INTERVAL_MS,
+  UPDATE_SUPPORT,
 } from './desktop-update.js';
 
 
@@ -19,12 +21,17 @@ afterEach(() => {
 const NO_UPDATE = {
   checked: true,
   available: false,
+  support: 'supported',
   current_version: '0.1.0',
   version: null,
   notes: null,
 };
 
 describe('command mapping', () => {
+  it('keeps updater support states aligned with Rust', () => {
+    expect([...UPDATE_SUPPORT]).toEqual(updateSupportFixture);
+  });
+
   it('checks for updates every half hour', () => {
     expect(UPDATE_CHECK_INTERVAL_MS).toBe(1_800_000);
   });

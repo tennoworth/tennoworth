@@ -142,8 +142,12 @@
           </button>
           {#if checkedUpdate?.available}
             <span class="status">Version {checkedUpdate.version} is available.</span>
-          {:else if checkedUpdate?.checked}
+          {:else if checkedUpdate?.checked && checkedUpdate.support === 'supported'}
             <span class="status">You’re up to date · v{checkedUpdate.current_version}</span>
+          {:else if checkedUpdate?.checked && checkedUpdate.support === 'appimage_required'}
+            <span class="status">This install can’t update itself. Download and run the TennoWorth AppImage to receive updates.</span>
+          {:else if checkedUpdate?.checked && checkedUpdate.support === 'disabled_test_build'}
+            <span class="status">Updates are disabled in this test build.</span>
           {/if}
         </div>
         {#if updateError}<p class="error" role="alert">{updateError}</p>{/if}
