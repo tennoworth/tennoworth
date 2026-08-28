@@ -226,3 +226,10 @@ bundle under Xvfb, and uploads `tennoworth-ocr-test-linux` for physical testing.
 No Warframe process or EE.log installation was present on this Linux host, so
 physical XWayland capture, focus/click-through behavior, automatic triggering,
 and reward-screen geometry remain to be tested with the uploaded Linux bundle.
+
+Ubuntu 22.04 then exposed that xcap 0.8's PipeWire 0.9 bindings assume newer
+system headers. The branch moved to xcap 0.9.8, whose PipeWire 0.10 bindings
+retain an Ubuntu-compatible baseline. The `Window` capture API used by the
+overlay is unchanged, but because this also updates the Windows backend, run
+one four-slot Windows reward-screen regression before treating the earlier
+physical result as final.

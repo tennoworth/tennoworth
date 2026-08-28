@@ -85,7 +85,7 @@ keyring = { version = "3", features = ["windows-native", "sync-secret-service", 
 base64 = { workspace = true }
 # Relic reward capture and local OCR. Release/test workflows provide the native
 # Tesseract + Leptonica runtime and stage the English model as an app resource.
-xcap = "0.8"
+xcap = "0.9.8"
 image = { version = "0.25", default-features = false, features = ["png"] }
 leptess = "0.14"
 strsim = "0.11"
