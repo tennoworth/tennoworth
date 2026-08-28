@@ -28,6 +28,7 @@ wfm_inventory_sellable.csv
 /docs/mockups/
 /.research/
 /.planning/
+/companion/tennoworth-desktop/resources/tessdata/eng.traineddata
 /.loop-journal.md
 /docs/onboarding-friction.md
 /docs/rust-port-phase3.md

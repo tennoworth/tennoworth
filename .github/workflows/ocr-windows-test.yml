@@ -75,7 +75,7 @@ jobs:
           if ($evidence -notmatch '^OCR_BOOT_PROBE_OK backend=windows-window') { throw "Unexpected OCR probe output: $evidence" }
 
       - name: Upload test installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: tennoworth-ocr-test-windows
           path: companion/target/release/bundle/nsis/*-setup.exe
@@ -145,7 +145,7 @@ jobs:
 
       - name: Upload Linux test bundle
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: tennoworth-ocr-test-linux
           path: companion/target/release/bundle/appimage/*.AppImage
