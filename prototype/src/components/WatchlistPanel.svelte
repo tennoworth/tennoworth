@@ -55,7 +55,7 @@
 
   onMount(() => {
     void load();
-    listenForTauriEvent<WatchOutcome>(WATCH_FIRED_EVENT, (o) => {
+    return listenForTauriEvent<WatchOutcome>(WATCH_FIRED_EVENT, (o) => {
       const next = new Map(lastOutcomes);
       next.set(o.id, o);
       lastOutcomes = next;

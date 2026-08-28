@@ -44,4 +44,34 @@ describe('listenForTauriEvent', () => {
     expect(() => listenForTauriEvent(TRAY_HINT_EVENT, () => {})).not.toThrow();
     await Promise.resolve(); // let the rejection settle — must not surface
   });
+
+  it('unregisters exactly once after registration completes', async () => {
+    const unlisten = vi.fn();
+    installTauri(vi.fn(), vi.fn(() => Promise.resolve(unlisten)));
+    const stop = listenForTauriEvent(TRAY_HINT_EVENT, () => {});
+    await Promise.resolve();
+    stop();
+    stop();
+    expect(unlisten).toHaveBeenCalledTimes(1);
+  });
+
+  it('handles unmount before registration resolves and ignores late events', async () => {
+    let resolveRegistration;
+    let handler;
+    const unlisten = vi.fn();
+    const registration = new Promise((resolve) => { resolveRegistration = resolve; });
+    installTauri(vi.fn(), vi.fn((_name, h) => {
+      handler = h;
+      return registration;
+    }));
+    const seen = [];
+    const stop = listenForTauriEvent(TRAY_HINT_EVENT, (payload) => seen.push(payload));
+    stop();
+    handler({ payload: { late: true } });
+    resolveRegistration(unlisten);
+    await registration;
+    await Promise.resolve();
+    expect(seen).toEqual([]);
+    expect(unlisten).toHaveBeenCalledTimes(1);
+  });
 });

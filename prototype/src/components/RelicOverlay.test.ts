@@ -10,6 +10,22 @@ afterEach(() => {
 });
 
 describe('RelicOverlay', () => {
+  it('unregisters both overlay listeners on unmount', async () => {
+    const unlistenUpdate = vi.fn();
+    const unlistenHide = vi.fn();
+    const listen = vi.fn()
+      .mockResolvedValueOnce(unlistenUpdate)
+      .mockResolvedValueOnce(unlistenHide);
+    installTauri(vi.fn(async () => null), listen);
+    const overlay = render(RelicOverlay);
+    await waitFor(() => expect(listen).toHaveBeenCalledTimes(2));
+    overlay.unmount();
+    await waitFor(() => {
+      expect(unlistenUpdate).toHaveBeenCalledTimes(1);
+      expect(unlistenHide).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('renders the shared result contract and does not recommend an uncertain expensive match', async () => {
     const handlers: Record<string, (event: { payload: unknown }) => void> = {};
     installTauri(vi.fn(async () => null), vi.fn((name, handler) => {

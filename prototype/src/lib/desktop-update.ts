@@ -52,21 +52,54 @@ export const TRAY_HINT_EVENT = 'tray-hint';
  * mount also pulls `updateStatus()` — an emit that beat the listener is never
  * lost, and a check that finishes after mount still lands here.
  */
-export function onUpdateAvailable(cb: (s: UpdateStatus) => void): void {
-  listenForTauriEvent('update-available', cb);
+export function onUpdateAvailable(cb: (s: UpdateStatus) => void): () => void {
+  return listenForTauriEvent('update-available', cb);
 }
 
 /**
  * Register a Rust-emitted event listener. Best-effort: the hosted build has no
  * Tauri event API, so a missing `__TAURI__.event.listen` is a silent no-op and
  * a rejected registration is swallowed — both are the expected shape for the
- * "desktop enhancement in a browser app" split this app lives in.
+ * "desktop enhancement in a browser app" split this app lives in. The returned
+ * function is safe to call before asynchronous registration finishes.
  */
-export function listenForTauriEvent<T>(event: string, cb: (payload: T) => void): void {
+export function listenForTauriEvent<T>(event: string, cb: (payload: T) => void): () => void {
   const w = globalThis as unknown as {
-    __TAURI__?: { event?: { listen?: (name: string, handler: (e: { payload: T }) => void) => Promise<unknown> } };
+    __TAURI__?: {
+      event?: {
+        listen?: (
+          name: string,
+          handler: (e: { payload: T }) => void,
+        ) => Promise<unknown>;
+      };
+    };
   };
   const listen = w.__TAURI__?.event?.listen;
-  if (!listen) return;
-  void listen(event, (e) => cb(e.payload)).catch(() => {});
+  if (!listen) return () => {};
+
+  let disposed = false;
+  let unlisten: (() => void) | undefined;
+  void listen(event, (e) => {
+    if (!disposed) cb(e.payload);
+  })
+    .then((registered) => {
+      if (typeof registered !== 'function') return;
+      if (disposed) {
+        registered();
+      } else {
+        unlisten = registered as () => void;
+      }
+    })
+    .catch(() => {});
+
+  return () => {
+    if (disposed) return;
+    disposed = true;
+    try {
+      unlisten?.();
+    } catch {
+      // Teardown is best-effort for the same reason registration is.
+    }
+    unlisten = undefined;
+  };
 }

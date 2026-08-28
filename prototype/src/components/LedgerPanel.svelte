@@ -45,7 +45,7 @@
 
   onMount(() => {
     void load();
-    listenForTauriEvent<TradeDetected>(TRADE_DETECTED_EVENT, (d) => {
+    return listenForTauriEvent<TradeDetected>(TRADE_DETECTED_EVENT, (d) => {
       const kind = d.trade.kind;
       const head = kind === 'sale' ? `Sold for ${d.trade.plat}p` : kind === 'purchase' ? `Bought for ${d.trade.plat}p` : 'Trade completed';
       const adj = d.adjusted.length ? ` · ${d.adjusted.length} listing${d.adjusted.length === 1 ? '' : 's'} updated` : '';

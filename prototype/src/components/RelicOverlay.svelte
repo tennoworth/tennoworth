@@ -12,13 +12,15 @@
     resolveInvoke()<RelicOverlayResult | null>('current_overlay_result')
       .then((current) => { if (current) result = current; })
       .catch(() => {});
-    listenForTauriEvent<RelicOverlayResult>('relic-overlay:update', (payload) => {
+    const unlistenUpdate = listenForTauriEvent<RelicOverlayResult>('relic-overlay:update', (payload) => {
       result = payload;
     });
-    listenForTauriEvent('relic-overlay:hide', () => {
+    const unlistenHide = listenForTauriEvent('relic-overlay:hide', () => {
       result = null;
     });
     return () => {
+      unlistenUpdate();
+      unlistenHide();
       delete window.__TENNOWORTH_RELIC_OVERLAY_UPDATE__;
       delete window.__TENNOWORTH_RELIC_OVERLAY_HIDE__;
     };

@@ -22,7 +22,7 @@
     // Listen for launch/manual pushes AND pull the stored status (its emit may
     // have beaten this listener). Best-effort — a failure here must never
     // disturb boot, and "no update" needs no UI at all.
-    onUpdateAvailable((s) => {
+    const unlisten = onUpdateAvailable((s) => {
       if (s.available) {
         updateInfo = s;
         updateDismissed = false;
@@ -49,7 +49,10 @@
     };
     void readStoredStatus();
     const timer = window.setInterval(() => { void checkNow(); }, UPDATE_CHECK_INTERVAL_MS);
-    return () => window.clearInterval(timer);
+    return () => {
+      window.clearInterval(timer);
+      unlisten();
+    };
   });
 
   // Explicit confirmation is THE gate: install_update rejects on a download
