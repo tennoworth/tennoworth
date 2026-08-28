@@ -115,6 +115,17 @@ describe('ListingReviewModal', () => {
   describe('live prices (desktop only)', () => {
     afterEach(removeTauri);
 
+    it('unregisters a lazily armed progress listener on unmount', async () => {
+      const unlisten = vi.fn();
+      const listen = vi.fn().mockResolvedValue(unlisten);
+      installTauri(vi.fn().mockResolvedValue([]), listen);
+      const modal = openModal();
+      await fireEvent.click(screen.getByRole('button', { name: /Check live prices/ }));
+      await waitFor(() => expect(listen).toHaveBeenCalledTimes(1));
+      modal.unmount();
+      await waitFor(() => expect(unlisten).toHaveBeenCalledTimes(1));
+    });
+
     it('is absent in the hosted build', () => {
       openModal();
       expect(screen.queryByRole('button', { name: /Check live prices/ })).toBeNull();

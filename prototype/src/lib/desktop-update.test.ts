@@ -63,17 +63,21 @@ describe('command mapping', () => {
 describe('onUpdateAvailable', () => {
   it('registers on the update-available event and forwards the payload', async () => {
     const handlers = {};
+    const unlisten = vi.fn();
     const listen = vi.fn((name, h) => {
       handlers[name] = h;
-      return Promise.resolve(() => {});
+      return Promise.resolve(unlisten);
     });
     installTauri(vi.fn(), listen);
     const seen = [];
-    onUpdateAvailable((s) => seen.push(s));
+    const stop = onUpdateAvailable((s) => seen.push(s));
     expect(listen).toHaveBeenCalledTimes(1);
     const status = { ...NO_UPDATE, available: true, version: '0.2.0' };
     handlers['update-available']({ payload: status });
     expect(seen).toEqual([status]);
+    await Promise.resolve();
+    stop();
+    expect(unlisten).toHaveBeenCalledTimes(1);
   });
 
   it('is a no-op without the event API (never throws)', () => {

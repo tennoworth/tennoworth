@@ -91,6 +91,9 @@ and their notes live on the GitHub releases themselves.
   when EE.log omits a mod rank or item subtype, or when multiple listings share
   an item slug. Unambiguous untiered sales continue to reduce or close their
   matching listing automatically.
+- Desktop event subscriptions now detach when panels, dialogs, update banners,
+  or the relic overlay unmount, preventing duplicate notifications and progress
+  updates after repeatedly opening those surfaces.
 
 ## 0.6.0 — 2026-08-22
 

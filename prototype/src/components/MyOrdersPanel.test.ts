@@ -30,6 +30,19 @@ function makeTransport(overrides: Partial<Transport> = {}) {
 }
 
 describe('MyOrdersPanel listing health', () => {
+  it('unregisters a lazily armed live-progress listener on unmount', async () => {
+    const unlisten = vi.fn();
+    const listen = vi.fn().mockResolvedValue(unlisten);
+    const invoke = vi.fn().mockResolvedValue([]);
+    installTauri(invoke, listen);
+    const panel = render(MyOrdersPanel, { props: { transport: makeTransport() } });
+    await screen.findByText('Primed Flow');
+    await fireEvent.click(screen.getByRole('button', { name: 'Check live' }));
+    await waitFor(() => expect(listen).toHaveBeenCalledTimes(1));
+    panel.unmount();
+    await waitFor(() => expect(unlisten).toHaveBeenCalledTimes(1));
+  });
+
   it('flags a listing the last scan says you no longer own, and Delete removes it', async () => {
     const transport = makeTransport();
     const ownedQty = new Map([['primed_flow|', 1], ['ash_prime_blueprint|', 0]]);

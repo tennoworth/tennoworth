@@ -74,6 +74,7 @@
   let toasts = $state<ToastMsg[]>([]);
   let toastSeq = 0;
   const toastTimers = new Map<number, number>();
+  let unlistenLiveProgress = () => {};
 
   function pushToast(text: string, kind: 'error' | 'success' = 'success'): void {
     const id = ++toastSeq;
@@ -91,6 +92,7 @@
   }
 
   onDestroy(() => {
+    unlistenLiveProgress();
     for (const timer of toastTimers.values()) window.clearTimeout(timer);
     toastTimers.clear();
   });
@@ -322,7 +324,7 @@
     if (targets.length === 0) return;
     if (!liveListenerArmed) {
       liveListenerArmed = true;
-      listenForTauriEvent<{ done: number; total: number }>(LIVE_TOP_PROGRESS_EVENT, (p) => {
+      unlistenLiveProgress = listenForTauriEvent<{ done: number; total: number }>(LIVE_TOP_PROGRESS_EVENT, (p) => {
         liveProgress = p;
       });
     }

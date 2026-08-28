@@ -336,6 +336,16 @@
     }
   }
 
+  onMount(() => {
+    if (!isDesktop) return;
+    return listenForTauriEvent(TRAY_HINT_EVENT, () => {
+      if (store.getSetting('tray-toast-seen') !== '1') {
+        trayHint = true;
+        void store.setSetting('tray-toast-seen', '1');
+      }
+    });
+  });
+
   // Restore the last snapshot exactly once after mount. Using onMount (not
   // $effect) is critical: $effect tracks any state read inside its body as
   // a dependency, so writing `resolved` here and then reading it via
@@ -361,15 +371,6 @@
       } catch (e) {
         console.error('desktop pending-plan check failed', e);
       }
-      // Tray hint: when the window is closed to the tray, surface the once-ever
-      // "still running in the tray" banner. Listeners are best-effort in the
-      // hosted build (no event API), so this is a no-op there.
-      listenForTauriEvent(TRAY_HINT_EVENT, () => {
-        if (store.getSetting('tray-toast-seen') !== '1') {
-          trayHint = true;
-          void store.setSetting('tray-toast-seen', '1');
-        }
-      });
     }
 
     // Desktop only: restore the last inventory snapshot. The hosted site is
