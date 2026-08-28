@@ -30,9 +30,7 @@ release body.
 Nothing is backfilled: releases up to and including 0.3.8 predate this file,
 and their notes live on the GitHub releases themselves.
 
-## Unreleased
-
-*Fold this into the next version's section when you run `release.ts prepare`.*
+## 0.6.1 — 2026-08-28
 
 **Windows is now one installer, and the release carries one checksum file.**
 
@@ -77,6 +75,10 @@ and their notes live on the GitHub releases themselves.
   the stat information supplied by the source data.
 - The desktop workspace scrolls independently again without breaking the
   document-scrolling layout used on narrow screens.
+
+## Unreleased
+
+*Fold this into the next version's section when you run `release.ts prepare`.*
 
 ## 0.6.0 — 2026-08-22
 
