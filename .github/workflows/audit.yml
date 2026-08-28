@@ -20,9 +20,50 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
+  # A skipped job reports success, while a skipped workflow can leave a
+  # required check permanently pending. Classify inside the workflow so every
+  # PR still gets a completed gate, but irrelevant builds never start.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      rust: ${{ steps.filter.outputs.rust }}
+      version: ${{ steps.filter.outputs.version }}
+      panic: ${{ steps.filter.outputs.panic }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'prototype/**'
+              - 'scripts/sync-csp.ts'
+              - '.github/workflows/audit.yml'
+            rust:
+              - 'companion/**'
+              - '.github/actions/setup-rust/**'
+              - '.github/workflows/audit.yml'
+            version:
+              - 'CHANGELOG.md'
+              - 'companion/Cargo.lock'
+              - 'companion/tennoworth-desktop/Cargo.toml'
+              - 'scripts/release.ts'
+              - '.github/workflows/release-desktop.yml'
+              - '.github/workflows/audit.yml'
+            panic:
+              - 'companion/**'
+              - 'scripts/check-panic-sites.ts'
+              - '.github/workflows/audit.yml'
+
   bun-audit:
+    needs: changes
+    if: >-
+      needs.changes.outputs.frontend == 'true' ||
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -47,6 +88,10 @@ jobs:
         run: bun run build
 
   cargo-audit:
+    needs: changes
+    if: >-
+      needs.changes.outputs.rust == 'true' ||
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -64,6 +109,10 @@ jobs:
         run: cargo audit --deny warnings
 
   cargo-test:
+    needs: changes
+    if: >-
+      needs.changes.outputs.rust == 'true' ||
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -107,6 +156,10 @@ jobs:
   # legitimately sits AT the newest published version between releases, so only
   # "behind" is drift.
   version-pins:
+    needs: changes
+    if: >-
+      needs.changes.outputs.version == 'true' ||
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -119,9 +172,27 @@ jobs:
   # holds the ~8 sites that are unreachable by construction. Fails on any NEW
   # site outside it - fix the site, or add it with a why-comment, never silently.
   panic-site-gate:
+    needs: changes
+    if: >-
+      needs.changes.outputs.panic == 'true' ||
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
       - name: No new production unwrap()/expect() outside the allowlist
         run: bun scripts/check-panic-sites.ts
+
+  # This is the required audit status. It runs even when a prerequisite is
+  # skipped and fails only when a relevant job failed or was cancelled.
+  audit-gate:
+    if: ${{ always() }}
+    needs: [changes, bun-audit, cargo-audit, cargo-test, version-pins, panic-site-gate]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every applicable check to pass
+        env:
+          NEEDS: ${{ toJson(needs) }}
+        run: |
+          echo "$NEEDS" | jq .
+          echo "$NEEDS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")'

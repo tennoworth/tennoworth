@@ -29,6 +29,26 @@ function makeInvoke(store: { watches: unknown[] }) {
 }
 
 describe('WatchlistPanel', () => {
+  it('unregisters its event listener across unmount and remount', async () => {
+    const store = { watches: [] as unknown[] };
+    const unlistenFirst = vi.fn();
+    const unlistenSecond = vi.fn();
+    const listen = vi.fn()
+      .mockResolvedValueOnce(unlistenFirst)
+      .mockResolvedValueOnce(unlistenSecond);
+    installTauri(makeInvoke(store), listen);
+
+    const first = render(WatchlistPanel, { props: { market } });
+    await waitFor(() => expect(listen).toHaveBeenCalledTimes(1));
+    first.unmount();
+    await waitFor(() => expect(unlistenFirst).toHaveBeenCalledTimes(1));
+
+    const second = render(WatchlistPanel, { props: { market } });
+    await waitFor(() => expect(listen).toHaveBeenCalledTimes(2));
+    second.unmount();
+    await waitFor(() => expect(unlistenSecond).toHaveBeenCalledTimes(1));
+  });
+
   it('adds a watch for the picked item at the chosen threshold, then removes it', async () => {
     const store = { watches: [] as unknown[] };
     const invoke = makeInvoke(store);

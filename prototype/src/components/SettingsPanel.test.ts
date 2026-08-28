@@ -94,7 +94,7 @@ describe('SettingsPanel', () => {
     const { theme } = fakeTheme();
     const invoke = vi.fn(async (command: string) => {
       if (command === 'check_update') {
-        return { checked: true, available: false, current_version: '0.6.1', version: null, notes: null };
+        return { checked: true, available: false, support: 'supported', current_version: '0.6.1', version: null, notes: null };
       }
       throw new Error(`unexpected command: ${command}`);
     });
@@ -104,5 +104,91 @@ describe('SettingsPanel', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
     expect(invoke).toHaveBeenCalledWith('check_update');
     expect(await screen.findByText('You’re up to date · v0.6.1')).toBeTruthy();
+  });
+
+  it('does not call an unsupported non-AppImage Linux install up to date', async () => {
+    const { theme } = fakeTheme();
+    installTauri(vi.fn().mockResolvedValue({
+      checked: true,
+      available: false,
+      support: 'appimage_required',
+      current_version: '0.6.1',
+      version: null,
+      notes: null,
+    }), undefined);
+    render(SettingsPanel, { props: { theme, isDesktop: true } });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    expect(await screen.findByText(/This install can’t update itself/)).toBeTruthy();
+    expect(screen.queryByText(/You’re up to date/)).toBeNull();
+  });
+
+  it('labels the branch-only OCR package as a test build', async () => {
+    const { theme } = fakeTheme();
+    installTauri(vi.fn().mockResolvedValue({
+      checked: true,
+      available: false,
+      support: 'disabled_test_build',
+      current_version: '0.6.1',
+      version: null,
+      notes: null,
+    }), undefined);
+    render(SettingsPanel, { props: { theme, isDesktop: true } });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    expect(await screen.findByText('Updates are disabled in this test build.')).toBeTruthy();
+    expect(screen.queryByText(/You’re up to date/)).toBeNull();
+  });
+
+  it('requires confirmation before logging out of warframe.market', async () => {
+    const { theme } = fakeTheme();
+    const onwfmlogout = vi.fn().mockResolvedValue(undefined);
+    render(SettingsPanel, {
+      props: {
+        theme,
+        isDesktop: true,
+        wfmStatus: { logged_in: true, unlocked: true },
+        onwfmlogout,
+      },
+    });
+
+    expect(screen.getByText('Signed in · session unlocked')).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Log out' }));
+    expect(onwfmlogout).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole('button', { name: 'Confirm log out' }));
+    expect(onwfmlogout).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the logout confirmation open when removing the login fails', async () => {
+    const { theme } = fakeTheme();
+    const onwfmlogout = vi.fn().mockRejectedValue(new Error('permission denied'));
+    render(SettingsPanel, {
+      props: {
+        theme,
+        isDesktop: true,
+        wfmStatus: { logged_in: true, unlocked: false },
+        onwfmlogout,
+      },
+    });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Log out' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Confirm log out' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('Couldn’t log out: permission denied');
+    expect(screen.getByRole('button', { name: 'Confirm log out' })).toBeTruthy();
+  });
+
+  it('distinguishes locked and signed-out session states', async () => {
+    const { theme } = fakeTheme();
+    render(SettingsPanel, {
+      props: { theme, isDesktop: true, wfmStatus: { logged_in: true, unlocked: false } },
+    });
+    expect(screen.getByText('Signed in · session locked')).toBeTruthy();
+
+    cleanup();
+    render(SettingsPanel, {
+      props: { theme, isDesktop: true, wfmStatus: { logged_in: false, unlocked: false } },
+    });
+    expect(screen.getByText('Not signed in')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Log out' })).toBeNull();
   });
 });

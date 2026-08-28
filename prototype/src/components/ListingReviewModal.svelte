@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
   import {
     DesktopCmdError, desktopLiveTopPrices, isDesktopRuntime, LIVE_TOP_PROGRESS_EVENT,
     type LiveTop, type Transport,
@@ -135,6 +135,9 @@
   let liveError = $state<string | null>(null);
   let live = $state<Map<string, LiveTop>>(new Map());
   let liveListenerArmed = false;
+  let unlistenLiveProgress = () => {};
+
+  onDestroy(() => unlistenLiveProgress());
 
   function liveKey(slug: string, rank: number, subtype: string | null): string {
     return `${slug}|${rank}|${subtype ?? ''}`;
@@ -148,7 +151,7 @@
     if (targets.length === 0) return;
     if (!liveListenerArmed) {
       liveListenerArmed = true;
-      listenForTauriEvent<{ done: number; total: number }>(LIVE_TOP_PROGRESS_EVENT, (p) => {
+      unlistenLiveProgress = listenForTauriEvent<{ done: number; total: number }>(LIVE_TOP_PROGRESS_EVENT, (p) => {
         liveProgress = p;
       });
     }

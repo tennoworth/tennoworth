@@ -1,6 +1,5 @@
 import { mount } from 'svelte';
 import App from './App.svelte';
-import RelicOverlay from './components/RelicOverlay.svelte';
 // Imported AFTER App so the global stylesheet lands last in the bundle: the
 // per-look structural rules in app.css rely on winning specificity ties with
 // component-scoped rules.
@@ -54,13 +53,19 @@ installDesktopExternalLinkHandler();
 // build alike. hydrate() never rejects; if it somehow did we still mount rather
 // than leave a blank window.
 const overlaySurface = new URLSearchParams(location.search).get('surface') === 'relic-overlay';
+document.documentElement.classList.toggle('relic-overlay-surface', overlaySurface);
 const store = createStateStore();
-const app = overlaySurface ? Promise.resolve(mount(RelicOverlay, { target })) : store.hydrate().then(() => {
-  // public/theme-boot.js already stamped the browser's stored theme before
-  // first paint; this re-applies from the store (the desktop build keeps
-  // settings in SQLite, which the boot script can't see) and starts following
-  // the OS scheme. Before mount, so the theme never changes under the UI.
-  const theme = initTheme(store);
-  return mount(App, { target, props: { store, theme } });
-});
+// Keep the overlay's transparent, scroll-locked document CSS out of the hosted
+// page's initial bundle. A conditional mount does not isolate a static import's
+// component CSS: Svelte still emits it globally even when that branch never runs.
+const app = overlaySurface
+  ? import('./components/RelicOverlay.svelte').then(({ default: RelicOverlay }) => mount(RelicOverlay, { target }))
+  : store.hydrate().then(() => {
+    // public/theme-boot.js already stamped the browser's stored theme before
+    // first paint; this re-applies from the store (the desktop build keeps
+    // settings in SQLite, which the boot script can't see) and starts following
+    // the OS scheme. Before mount, so the theme never changes under the UI.
+    const theme = initTheme(store);
+    return mount(App, { target, props: { store, theme } });
+  });
 export default app;

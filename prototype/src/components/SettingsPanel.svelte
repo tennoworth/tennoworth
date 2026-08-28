@@ -9,7 +9,7 @@
   import ThemeSwitcher from './ThemeSwitcher.svelte';
   import { onMount } from 'svelte';
   import type { ThemeController } from '../lib/theme';
-  import type { Transport } from '../lib/transport';
+  import type { DesktopWfmStatus, Transport } from '../lib/transport';
   import type { OverlaySettings, OverlayStatus } from '../lib/types';
   import { checkUpdate, type UpdateStatus } from '../lib/desktop-update';
   import { humanError } from '../lib/errors';
@@ -19,8 +19,10 @@
     theme: ThemeController;
     transport?: Transport;
     isDesktop?: boolean;
+    wfmStatus?: DesktopWfmStatus | null;
+    onwfmlogout?: () => Promise<void>;
   }
-  let { theme, transport, isDesktop = false }: Props = $props();
+  let { theme, transport, isDesktop = false, wfmStatus = null, onwfmlogout }: Props = $props();
 
   let overlay = $state<OverlaySettings | null>(null);
   let overlayStatus = $state<OverlayStatus | null>(null);
@@ -29,6 +31,16 @@
   let checkingUpdate = $state(false);
   let checkedUpdate = $state<UpdateStatus | null>(null);
   let updateError = $state('');
+  let confirmingLogout = $state(false);
+  let loggingOut = $state(false);
+  let logoutError = $state('');
+
+  $effect(() => {
+    void wfmStatus?.logged_in;
+    void wfmStatus?.unlocked;
+    confirmingLogout = false;
+    logoutError = '';
+  });
 
   onMount(() => {
     if (!isDesktop || !transport) return;
@@ -105,6 +117,24 @@
       checkingUpdate = false;
     }
   }
+
+  async function logOutWfm() {
+    if (!onwfmlogout || loggingOut) return;
+    if (!confirmingLogout) {
+      confirmingLogout = true;
+      return;
+    }
+    logoutError = '';
+    loggingOut = true;
+    try {
+      await onwfmlogout();
+      confirmingLogout = false;
+    } catch (error) {
+      logoutError = humanError(error);
+    } finally {
+      loggingOut = false;
+    }
+  }
 </script>
 
 <section class="view-header">
@@ -133,6 +163,31 @@
   </section>
 
   {#if isDesktop}
+    <section class="wrap tw" aria-labelledby="set-wfm-account">
+      <div class="rail"><h3 id="set-wfm-account">warframe.market account</h3></div>
+      <div class="sbody">
+        <div class="overlay-actions">
+          <span class="status">
+            {#if !wfmStatus}Checking session…
+            {:else if wfmStatus.unlocked}Signed in · session unlocked
+            {:else if wfmStatus.logged_in}Signed in · session locked
+            {:else}Not signed in
+            {/if}
+          </span>
+          {#if wfmStatus?.logged_in || wfmStatus?.unlocked}
+            <button class:danger={confirmingLogout} onclick={logOutWfm} disabled={loggingOut}>
+              {loggingOut ? 'Logging out…' : confirmingLogout ? 'Confirm log out' : 'Log out'}
+            </button>
+            {#if confirmingLogout}
+              <button class="ghost" onclick={() => { confirmingLogout = false; logoutError = ''; }} disabled={loggingOut}>Cancel</button>
+            {/if}
+          {/if}
+        </div>
+        {#if logoutError}<p class="error" role="alert">Couldn’t log out: {logoutError}</p>{/if}
+        <p class="exp">Logging out removes the encrypted login saved on this device, forgets its remembered unlock key, and discards any interrupted local listing batch. Your listings on warframe.market are not changed.</p>
+      </div>
+    </section>
+
     <section class="wrap tw" aria-labelledby="set-updates">
       <div class="rail"><h3 id="set-updates">Updates</h3></div>
       <div class="sbody">
@@ -142,8 +197,12 @@
           </button>
           {#if checkedUpdate?.available}
             <span class="status">Version {checkedUpdate.version} is available.</span>
-          {:else if checkedUpdate?.checked}
+          {:else if checkedUpdate?.checked && checkedUpdate.support === 'supported'}
             <span class="status">You’re up to date · v{checkedUpdate.current_version}</span>
+          {:else if checkedUpdate?.checked && checkedUpdate.support === 'appimage_required'}
+            <span class="status">This install can’t update itself. Download and run the TennoWorth AppImage to receive updates.</span>
+          {:else if checkedUpdate?.checked && checkedUpdate.support === 'disabled_test_build'}
+            <span class="status">Updates are disabled in this test build.</span>
           {/if}
         </div>
         {#if updateError}<p class="error" role="alert">{updateError}</p>{/if}
@@ -278,4 +337,5 @@
   .status-dot.error { background:var(--bad); }
   .error { margin:0; color:var(--bad); font-size:12px; }
   .warning { margin:0; color:var(--warn, #b7791f); font-size:12px; line-height:1rem; }
+  button.danger { color:var(--bad); border-color:var(--bad); }
 </style>

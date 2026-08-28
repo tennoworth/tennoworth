@@ -101,9 +101,9 @@ rewritten before it ships.
 ## What we cannot promise
 
 - **We cannot promise this is ban-safe.** The desktop app reads game
-  process memory. Equivalent tools (Sainan's `warframe-api-helper`,
-  AlecaFrame via Overwolf) have run for years without documented
-  bans, but Digital Extremes has never formally blessed the category.
+  process memory. Other read-only inventory tools have run for years without
+  documented bans, but Digital Extremes has never formally blessed the
+  category.
 - **We cannot promise warframe.market won't change.** The scraping
   workflow and the listing endpoints depend on undocumented
   community-API behavior.

@@ -144,22 +144,48 @@ impl WfmSession {
         (self.jwt_path.exists(), self.is_unlocked())
     }
 
-    /// Lock the session and scrub the in-memory JWT. Does NOT delete the on-disk
-    /// login — the user can re-unlock with their passphrase. Best-effort scrub:
+    /// Log out, scrub the in-memory JWT, and remove the encrypted login saved on
+    /// this device. Best-effort scrub:
     /// if a listing call is in flight it holds a clone of the Arc, so we can't be
     /// the sole owner; dropping still frees the plaintext, just without an
     /// explicit overwrite first. Also forgets the remembered device key —
     /// an explicit logout that silently re-unlocked itself wouldn't be one.
-    pub fn logout(&self) {
+    pub fn logout(&self) -> Result<(), CmdError> {
+        let _logout_guard = self
+            .begin_plan()
+            .ok_or_else(|| CmdError::of(
+                "busy",
+                "Wait for the active listing batch to finish before logging out.",
+            ))?;
+        match fs::remove_file(&self.pending_path) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(CmdError::internal(format!(
+                    "could not discard the interrupted listing batch at {}: {error}",
+                    self.pending_path.display()
+                )))
+            }
+        }
+        if let Err(error) = fs::remove_file(&self.jwt_path) {
+            if error.kind() != std::io::ErrorKind::NotFound {
+                return Err(CmdError::internal(format!(
+                    "could not remove the saved warframe.market login at {}: {error}",
+                    self.jwt_path.display()
+                )));
+            }
+        }
         let mut guard = guard(&self.inner);
         if let Some(arc) = guard.take() {
             if let Ok(mut unlocked) = Arc::try_unwrap(arc) {
                 unlocked.jwt.zeroize();
             }
         }
+        drop(guard);
         if self.use_keyring {
             crate::keyring_store::forget_key();
         }
+        Ok(())
     }
 
     /// The unlocked credentials, or a typed error WITHOUT attempting an unlock —
@@ -455,11 +481,10 @@ pub async fn try_silent_unlock(session: State<'_, Arc<WfmSession>>) -> Result<bo
         .map_err(|e| CmdError::internal(format!("silent-unlock task failed to run: {e}")))
 }
 
-/// Lock the session and scrub the in-memory JWT. The on-disk envelope stays —
-/// re-unlocking needs only the passphrase, not a fresh WFM login.
+/// Log out and remove both the live session and its encrypted on-disk login.
 #[tauri::command]
-pub fn wfm_logout(session: State<'_, Arc<WfmSession>>) {
-    session.logout();
+pub fn wfm_logout(session: State<'_, Arc<WfmSession>>) -> Result<(), CmdError> {
+    session.logout()
 }
 
 #[cfg(test)]
@@ -589,16 +614,74 @@ mod tests {
     }
 
     #[test]
-    fn logout_locks_the_session() {
+    fn logout_clears_the_session_and_saved_login() {
         let path = tmp_path("logout");
-        let _ = fs::remove_file(&path);
-        let s = session_with(path);
+        let pending = path.with_extension("pending.json");
+        fs::write(&path, b"encrypted login placeholder").unwrap();
+        fs::write(&pending, b"pending listing placeholder").unwrap();
+        let s = session_with(path.clone());
         s.debug_set_unlocked(dummy_unlocked());
         assert!(s.is_unlocked());
-        s.logout();
+        s.logout().unwrap();
         assert!(!s.is_unlocked());
-        // After logout with no file on disk, listing steers back to login.
+        assert!(!path.exists());
+        assert!(!pending.exists());
+        assert_eq!(s.auth_status(), (false, false));
         assert_eq!(s.require_unlocked().err().expect("expected a typed error").code, "needs_login");
+    }
+
+    #[test]
+    fn logout_reports_when_the_saved_login_cannot_be_removed() {
+        let path = tmp_path("logout-remove-error");
+        let pending = path.with_extension("pending.json");
+        fs::create_dir(&path).unwrap();
+        fs::write(&pending, b"pending listing placeholder").unwrap();
+        let s = session_with(path.clone());
+        s.debug_set_unlocked(dummy_unlocked());
+
+        let error = s.logout().unwrap_err();
+
+        assert_eq!(error.code, "internal");
+        assert!(error.message.contains("could not remove the saved warframe.market login"));
+        assert!(s.is_unlocked());
+        assert!(path.exists());
+        assert!(!pending.exists());
+        fs::remove_dir(&path).unwrap();
+    }
+
+    #[test]
+    fn logout_keeps_the_login_live_when_the_pending_batch_cannot_be_removed() {
+        let path = tmp_path("logout-pending-error");
+        let pending = path.with_extension("pending.json");
+        fs::write(&path, b"encrypted login placeholder").unwrap();
+        fs::create_dir(&pending).unwrap();
+        let s = session_with(path.clone());
+        s.debug_set_unlocked(dummy_unlocked());
+
+        let error = s.logout().unwrap_err();
+
+        assert_eq!(error.code, "internal");
+        assert!(error.message.contains("could not discard the interrupted listing batch"));
+        assert!(s.is_unlocked());
+        assert!(path.exists());
+        fs::remove_dir(&pending).unwrap();
+        fs::remove_file(&path).unwrap();
+    }
+
+    #[test]
+    fn logout_refuses_to_interrupt_an_active_listing_batch() {
+        let path = tmp_path("logout-busy");
+        fs::write(&path, b"encrypted login placeholder").unwrap();
+        let s = session_with(path.clone());
+        s.debug_set_unlocked(dummy_unlocked());
+        let _plan = s.begin_plan().expect("listing batch should start");
+
+        let error = s.logout().unwrap_err();
+
+        assert_eq!(error.code, "busy");
+        assert!(s.is_unlocked());
+        assert!(path.exists());
+        fs::remove_file(&path).unwrap();
     }
 
     #[test]

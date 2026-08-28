@@ -26,9 +26,37 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 jobs:
+  # Keep the workflow present for every PR: job-level skipping still produces a
+  # completed required gate, unlike workflow-level path filters.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      desktop: ${{ steps.filter.outputs.desktop }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
+        id: filter
+        with:
+          filters: |
+            desktop:
+              - 'companion/Cargo.lock'
+              - 'companion/Cargo.toml'
+              - 'companion/tennoworth-desktop/**'
+              - 'companion/wfm-client/**'
+              - 'companion/wfm-core/**'
+              - 'prototype/**'
+              - 'scripts/check-probe-report.ts'
+              - '.github/actions/setup-rust/**'
+              - '.github/workflows/ui-smoke.yml'
+
   probe-smoke:
+    needs: changes
+    if: >-
+      needs.changes.outputs.desktop == 'true' ||
+      github.event_name == 'workflow_dispatch'
     runs-on: windows-latest
     timeout-minutes: 60
     env:
@@ -110,3 +138,17 @@ jobs:
             ${{ runner.temp }}/probe-report.json
             ${{ runner.temp }}/probe-stdout.log
           if-no-files-found: ignore
+
+  # The required status for this workflow. A skipped probe is intentional for
+  # unrelated changes; a failed or cancelled relevant probe blocks promotion.
+  ui-gate:
+    if: ${{ always() }}
+    needs: [changes, probe-smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the applicable probe to pass
+        env:
+          NEEDS: ${{ toJson(needs) }}
+        run: |
+          echo "$NEEDS" | jq .
+          echo "$NEEDS" | jq -e 'all(.[]; .result == "success" or .result == "skipped")'

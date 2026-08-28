@@ -89,7 +89,6 @@
     { what: 'Listing health, live top-of-book', site: '—', app: 'ok' },
     { what: 'Login', site: 'none', app: 'only to list' },
     { what: 'Where your data lives', site: 'nowhere', app: 'your machine' },
-    { what: 'Overwolf', site: '—', app: 'never' },
   ] as const;
 </script>
 
