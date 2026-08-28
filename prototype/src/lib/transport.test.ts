@@ -8,6 +8,7 @@ import {
   TauriTransport,
   DesktopCmdError,
   desktopWfmStatus,
+  desktopWfmLogout,
   desktopWfmLogin,
   desktopWfmUnlock,
   desktopTrySilentUnlock,
@@ -312,6 +313,13 @@ describe('desktop WFM auth ops', () => {
     installTauri(invoke);
     await expect(desktopWfmStatus()).resolves.toEqual({ logged_in: true, unlocked: false });
     expect(invoke).toHaveBeenCalledWith('wfm_auth_status');
+  });
+
+  it('desktopWfmLogout() invokes wfm_logout and resolves void', async () => {
+    const invoke = vi.fn().mockResolvedValue(null);
+    installTauri(invoke);
+    await expect(desktopWfmLogout()).resolves.toBeUndefined();
+    expect(invoke).toHaveBeenCalledWith('wfm_logout');
   });
 
   it('desktopWfmLogin() passes credentials through and resolves void', async () => {
