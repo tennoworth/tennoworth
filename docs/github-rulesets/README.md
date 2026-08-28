@@ -19,4 +19,4 @@ Ids: `gh api repos/tennoworth/tennoworth/rulesets --jq '.[]|"\(.id) \(.name)"'`.
 |---|---|---|
 | `desktop-release-tags.json` | Desktop release tags | `desktop-v*` tags can be neither deleted nor moved. No bypass actors: a wedged release is recovered by re-running its `publish` job, never by retagging. |
 | `develop-integration.json` | Integration branch (develop) | Integration branch rules. |
-| `main-production.json` | Production branch (main) | PR + 1 approval + required checks (`bun-audit`, `cargo-audit`, `cargo-test`, `panic-site-gate`, `version-pins`, `probe-smoke`). Repository admins may bypass: the maintainer cannot approve their own promotion PRs, while contributors' PRs still need the maintainer's review. |
+| `main-production.json` | Production branch (main) | PR + 1 approval + required completion gates (`audit-gate`, `ui-gate`). Each gate verifies its applicable checks and accepts intentionally skipped work, so documentation-only changes do not consume desktop or Rust runners. Repository admins may bypass: the maintainer cannot approve their own promotion PRs, while contributors' PRs still need the maintainer's review. |

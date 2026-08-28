@@ -52,22 +52,10 @@
         "do_not_enforce_on_create": false,
         "required_status_checks": [
           {
-            "context": "bun-audit"
+            "context": "audit-gate"
           },
           {
-            "context": "cargo-audit"
-          },
-          {
-            "context": "cargo-test"
-          },
-          {
-            "context": "panic-site-gate"
-          },
-          {
-            "context": "version-pins"
-          },
-          {
-            "context": "probe-smoke"
+            "context": "ui-gate"
           }
         ]
       }
