@@ -9,6 +9,11 @@ game — nothing is uploaded, no account login to *us*). It joins your inventory
 against a live warframe.market price snapshot and ranks your items by expected
 plat, not by a raw average price. Runs on Steam Deck.
 
+The opt-in relic reward overlay recognizes the reward screen locally and puts
+platinum, ducats, owned count, confidence, and a conservative best-pick marker
+beside each choice. Captured frames stay in memory; only item slugs are used
+for optional live warframe.market price requests.
+
 **Try the informational site** at **[tennoworth.app](https://tennoworth.app)** —
 a full market browser: prices, 48-hour volume, 7-day trend sparklines, vaulted
 items, and the Baro countdown, straight from a snapshot refreshed every 2
@@ -113,9 +118,10 @@ production (auto-deploys), and promotion is fast-forward only.
 
 ## Ban risk
 
-The desktop app only reads: game memory for the inventory scan, and the
-game's own text log (`EE.log`) for trade detection. It never writes to the
-game, never injects.
+The desktop app only reads: game memory for the inventory scan, the game's own
+text log (`EE.log`) for trade/reward detection, and—only after explicit opt-in—a
+bounded screenshot of the Warframe window for local reward OCR. It never
+writes to the game or injects code.
 **We can't promise it's ban-safe.** Equivalent tools
 ([warframe-api-helper](https://github.com/Sainan/warframe-api-helper) and
 AlecaFrame via Overwolf) have run for years with no documented bans, but DE
@@ -124,6 +130,10 @@ warranty.**
 
 For a detailed breakdown of what the desktop app reads and what never leaves
 your machine, see the in-app 'Trust & safety' section.
+
+Feature-branch Windows OCR installers are tested with the
+[`docs/ocr-windows-test-runbook.md`](docs/ocr-windows-test-runbook.md); they
+use a separate app identity and do not replace production TennoWorth.
 
 ## License
 
