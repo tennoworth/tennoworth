@@ -6,6 +6,7 @@ import App from './App.svelte';
 import './app.css';
 import { createStateStore } from './lib/state-store';
 import { initTheme } from './lib/theme';
+import { installDesktopExternalLinkHandler } from './lib/transport';
 
 // Dev-only design-review seam: `?preview-desktop` on a `vite dev` origin
 // installs a stub Tauri runtime BEFORE anything sniffs for it, so the
@@ -40,6 +41,7 @@ if (import.meta.env.DEV && new URLSearchParams(location.search).has('preview-des
 
 const target = document.getElementById('app');
 if (!target) throw new Error('#app mount target missing in index.html');
+installDesktopExternalLinkHandler();
 
 // Pick the persistence backend (localStorage vs SQLite-over-IPC) and prime its
 // scalar-settings cache BEFORE mounting, so App can read them synchronously at

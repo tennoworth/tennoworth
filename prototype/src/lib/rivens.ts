@@ -13,8 +13,8 @@ import type {
   RivenWeapon,
 } from './types';
 
-/** One stat line of a riven fingerprint — DE's raw int32 value, which encodes
- *  the multiplier as value × 2^30 (see rivenStatMultiplier). */
+/** One stat line of a riven fingerprint. `value` is a Q30 roll fraction used
+ *  as one input to DE's final stat formula; it is not the displayed stat. */
 export interface RivenFingerprintStat {
   tag: string;
   value: number;
@@ -51,12 +51,6 @@ interface RivenFingerprint {
 }
 
 const RIVEN_PATH_PREFIX = '/Lotus/Upgrades/Mods/Randomized/';
-
-/** DE stores riven stat values as Q30 fixed-point (value × 2^30); dividing
- *  recovers the multiplier (percent stats display ×100). */
-export function rivenStatMultiplier(raw: number): number {
-  return raw / 1073741824;
-}
 
 function parseFingerprint(raw: string | null | undefined): RivenFingerprint {
   if (!raw) return {};
@@ -181,25 +175,17 @@ export function attributeForTag(
   return attrs?.find((a) => a.game_ref === tag);
 }
 
-/** Human stat line: "+95.3% critical damage" for a percent stat, else the raw
- *  multiplier ("+1.50 punch through"). `positive` is whether the line is a
- *  buff (fingerprint buffs are positive, curses negative). */
+/** Human stat name from the fingerprint. Exact values cannot be recovered
+ * from the roll fraction alone: DE's formula also needs the Riven class,
+ * weapon disposition, rank, stat-count weights, and per-stat base values. */
 export function formatRivenStat(
   tag: string,
-  raw: number,
   positive: boolean,
   attrs: RivenAttribute[] | undefined,
 ): string {
   const attr = attributeForTag(tag, attrs);
-  // Curses store their raw value ALREADY negative in the fingerprint, so the
-  // sign comes from the magnitude via abs() and the buff/curse flag — never
-  // both, or a curse renders "--27.9%".
-  const mult = Math.abs(rivenStatMultiplier(raw));
   const sign = positive ? '+' : '-';
-  if (attr?.unit === 'percent') {
-    return sign + (mult * 100).toFixed(1) + '% ' + attr.name;
-  }
-  return sign + mult.toFixed(2) + ' ' + (attr?.name ?? tag);
+  return sign + (attr?.name ?? tag);
 }
 
 /** DE's internal polarity codes → the glyph riven tools use. The full table:
@@ -220,8 +206,8 @@ export function polaritySymbol(pol: string | null): string {
   return POLARITY_SYMBOLS[pol] ?? pol;
 }
 
-/** Human stat line for a WFM auction attribute — the auction's `value` is
- *  already converted (multiplier scale), so only the percent ×100 applies. */
+/** Human stat line for a WFM auction attribute. WFM already sends percent
+ *  values in display units (`83.1` means `83.1%`), unlike inventory Q30. */
 export function formatAuctionStat(
   urlName: string,
   value: number,
@@ -234,7 +220,40 @@ export function formatAuctionStat(
   const mag = Math.abs(value);
   const sign = positive ? '+' : '-';
   if (attr?.unit === 'percent') {
-    return sign + (mag * 100).toFixed(1) + '% ' + attr.name;
+    return sign + mag.toFixed(1) + '% ' + attr.name;
   }
   return sign + mag.toFixed(2) + ' ' + (attr?.name ?? urlName);
+}
+
+interface AuctionStatLike {
+  url_name: string;
+  value: number;
+  positive: boolean;
+}
+
+/** Signed-stat Jaccard similarity, from 0–100. This compares which effects the
+ * two Rivens have, not roll strength—the inventory fingerprint alone cannot
+ * supply a final display value honestly. */
+export function rivenSimilarity(
+  riven: Pick<OwnedRiven, 'buffs' | 'curses'>,
+  auction: AuctionStatLike[],
+  attrs: RivenAttribute[] | undefined,
+): number | null {
+  const owned = new Set<string>();
+  const addOwned = (stat: RivenFingerprintStat, positive: boolean): void => {
+    const attr = attributeForTag(stat.tag, attrs);
+    if (!attr) return;
+    owned.add(`${positive ? '+' : '-'}:${attr.slug}`);
+  };
+  riven.buffs.forEach((stat) => addOwned(stat, true));
+  riven.curses.forEach((stat) => addOwned(stat, false));
+
+  const comparable = new Set<string>();
+  for (const stat of auction) {
+    comparable.add(`${stat.positive ? '+' : '-'}:${stat.url_name}`);
+  }
+  const keys = new Set([...owned, ...comparable]);
+  if (keys.size === 0 || owned.size === 0 || comparable.size === 0) return null;
+  const matches = [...owned].filter((key) => comparable.has(key)).length;
+  return Math.round((matches / keys.size) * 100);
 }

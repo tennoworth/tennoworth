@@ -8,8 +8,8 @@ import {
   extractRivens,
   formatAuctionStat,
   formatRivenStat,
+  rivenSimilarity,
   resolveRivens,
-  rivenStatMultiplier,
 } from './rivens.js';
 
 // Real fingerprint shapes from a DE inventory: a revealed shotgun riven, a
@@ -103,31 +103,20 @@ describe('extractRivens', () => {
   });
 });
 
-describe('rivenStatMultiplier', () => {
-  it('recovers the multiplier from the raw int32 (Q30 fixed-point)', () => {
-    expect(rivenStatMultiplier(1073741824)).toBe(1);
-    expect(rivenStatMultiplier(847570554)).toBeCloseTo(0.7894, 3);
-  });
-});
-
 describe('formatRivenStat', () => {
-  it('renders percent stats as signed percentages', () => {
-    expect(formatRivenStat('WeaponCritDamageMod', 952698242, true, ATTRS)).toBe('+88.7% Critical Damage');
-    expect(formatRivenStat('WeaponProcTimeMod', 472179622, false, ATTRS)).toBe('-44.0% Status Duration');
-  });
-
-  it('renders non-percent stats as the raw multiplier', () => {
-    expect(formatRivenStat('WeaponPunctureDepthMod', 1610612736, true, ATTRS)).toBe('+1.50 Punch Through');
+  it('renders signed stat names without inventing values from roll seeds', () => {
+    expect(formatRivenStat('WeaponCritDamageMod', true, ATTRS)).toBe('+Critical Damage');
+    expect(formatRivenStat('WeaponProcTimeMod', false, ATTRS)).toBe('-Status Duration');
   });
 
   it('falls back to the tag when the attribute is unknown', () => {
-    expect(formatRivenStat('WeaponMysteryMod', 1073741824, true, ATTRS)).toBe('+1.00 WeaponMysteryMod');
+    expect(formatRivenStat('WeaponMysteryMod', true, ATTRS)).toBe('+WeaponMysteryMod');
   });
 
   it('formats auction values by url_name with the same unit rule', () => {
-    expect(formatAuctionStat('critical_damage', 2.8, true, ATTRS)).toBe('+280.0% Critical Damage');
+    expect(formatAuctionStat('critical_damage', 280, true, ATTRS)).toBe('+280.0% Critical Damage');
     expect(formatAuctionStat('punch_through', 1.5, false, ATTRS)).toBe('-1.50 Punch Through');
-    expect(formatAuctionStat('status_duration', 0.9, false, ATTRS)).toBe('-90.0% Status Duration');
+    expect(formatAuctionStat('status_duration', 90, false, ATTRS)).toBe('-90.0% Status Duration');
   });
 });
 
@@ -215,18 +204,44 @@ describe('dispoChangeFor / attributeForTag', () => {
   });
 });
 
-describe('single-sign rule (curses store negative raws)', () => {
+describe('auction single-sign rule', () => {
   const attrs = [
     { game_ref: '/Lotus/x/FireRate', slug: 'fire_rate', name: 'Fire Rate / Attack Speed', unit: 'percent' },
   ];
-  it('formatRivenStat never doubles the minus on a negative curse raw', () => {
-    // -0.279 × 2^30 as the fingerprint would store it
-    const raw = Math.round(-0.279 * 1073741824);
-    const out = formatRivenStat('/Lotus/x/FireRate', raw, false, attrs as never);
+  it('formatAuctionStat likewise for WFM-quoted negative values', () => {
+    const out = formatAuctionStat('fire_rate', -27.9, false, attrs as never);
     expect(out).toBe('-27.9% Fire Rate / Attack Speed');
   });
-  it('formatAuctionStat likewise for WFM-quoted negative values', () => {
-    const out = formatAuctionStat('fire_rate', -0.279, false, attrs as never);
-    expect(out).toBe('-27.9% Fire Rate / Attack Speed');
+});
+
+describe('rivenSimilarity', () => {
+  const owned = {
+    buffs: [
+      { tag: 'WeaponCritDamageMod', value: Math.round(0.9 * 1073741824) },
+      { tag: 'WeaponPunctureDepthMod', value: Math.round(1.5 * 1073741824) },
+    ],
+    curses: [
+      { tag: 'WeaponProcTimeMod', value: Math.round(-0.4 * 1073741824) },
+    ],
+  };
+
+  it('scores identical signed stat sets at 100%', () => {
+    expect(rivenSimilarity(owned, [
+      { url_name: 'critical_damage', value: 90, positive: true },
+      { url_name: 'punch_through', value: 1.5, positive: true },
+      { url_name: 'status_duration', value: 40, positive: false },
+    ], ATTRS)).toBe(100);
+  });
+
+  it('penalizes missing and opposite-sign stats without comparing roll strength', () => {
+    const score = rivenSimilarity(owned, [
+      { url_name: 'critical_damage', value: 45, positive: true },
+      { url_name: 'punch_through', value: 1.5, positive: false },
+    ], ATTRS);
+    expect(score).toBe(25);
+  });
+
+  it('returns null when no stats can be compared', () => {
+    expect(rivenSimilarity({ buffs: [], curses: [] }, [], ATTRS)).toBeNull();
   });
 });

@@ -189,6 +189,28 @@ export function resolveInvoke(): TauriInvoke {
   return invoke;
 }
 
+/** Bridge target=_blank links out of Tauri's single webview and into the
+ * system browser. The Rust command applies the final scheme/host allowlist. */
+export async function desktopOpenExternalUrl(url: string): Promise<boolean> {
+  return await resolveInvoke()<boolean>('open_external_url', { url });
+}
+
+export function installDesktopExternalLinkHandler(root: Document = document): () => void {
+  if (!isDesktopRuntime()) return () => {};
+  const onClick = (event: MouseEvent): void => {
+    if (event.defaultPrevented || event.button !== 0) return;
+    const element = event.target instanceof Element ? event.target : null;
+    const anchor = element?.closest<HTMLAnchorElement>('a[target="_blank"]');
+    if (!anchor) return;
+    const url = new URL(anchor.href, location.href);
+    if (url.protocol !== 'https:') return;
+    event.preventDefault();
+    void desktopOpenExternalUrl(url.href);
+  };
+  root.addEventListener('click', onClick);
+  return () => root.removeEventListener('click', onClick);
+}
+
 /**
  * Tauri transport: each op is a wfm-core-backed command. The listing/order ops
  * mirror serve's HTTP routes 1:1 (submit_plan ↔ POST /plan, get_pending_plan ↔

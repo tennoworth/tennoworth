@@ -1198,7 +1198,7 @@
                   {/if}
                   <span class="kind kind-{r.kind}">
                     {#if r.kind === 'near-complete'}
-                      own {r.parts.filter((p) => p.count > 0).length}/{r.parts.length}
+                      own {r.parts.reduce((n, p) => n + Math.min(p.count, p.required), 0)}/{r.parts.reduce((n, p) => n + p.required, 0)}
                     {:else if r.kind === 'complete-with-extras'}
                       {r.extras} spare{r.extras === 1 ? '' : 's'} + full set
                     {:else}
@@ -1217,11 +1217,17 @@
                 </div>
                 <p class="reco-detail muted">
                   {#if r.kind === 'near-complete'}
-                    {@const ownedCount = r.parts.filter((p) => p.count > 0).length}
-                    Buy {r.missing.map((m) => m.name).join(' + ')} for
-                    <strong class="bad-text">{r.missing_cost}p</strong>, sell as a set for
-                    <strong class="good-text">{r.set_low_sell}p</strong>
-                    (vs. {r.parts_low_sell}p selling the {ownedCount} part{ownedCount === 1 ? '' : 's'} individually).
+                    {@const ownedCount = r.parts.reduce((n, p) => n + Math.min(p.count, p.required), 0)}
+                    Buy {r.missing.map((m) => `${m.quantity > 1 ? `${m.quantity}× ` : ''}${m.name}`).join(' + ')} at current asks for
+                    <strong class="bad-text">{r.missing_cost}p</strong>, then list the set at the current lowest ask,
+                    <strong class="good-text">{r.set_low_sell}p</strong>.
+                    That is <strong class="good-text">+{r.net_plat}p potential uplift</strong> versus listing your
+                    {ownedCount} owned part{ownedCount === 1 ? '' : 's'} for {r.parts_low_sell}p.
+                    {#if r.set_top_buy !== undefined && r.instant_uplift !== undefined}
+                      Selling instantly to the {r.set_top_buy}p top bid would be
+                      <strong class:good-text={r.instant_uplift >= 0} class:bad-text={r.instant_uplift < 0}>{r.instant_uplift >= 0 ? '+' : '−'}{Math.abs(r.instant_uplift)}p</strong>
+                      versus those parts.
+                    {/if}
                   {:else if r.kind === 'complete-with-extras'}
                     You hold a full set plus {r.extras} spare blueprint{r.extras === 1 ? '' : 's'}.
                     List the extras at <strong>{r.extras_plat}p</strong>.
