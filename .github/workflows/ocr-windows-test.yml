@@ -124,7 +124,7 @@ jobs:
       - name: Inspect bundle and run installed-resource OCR probe
         shell: bash
         run: |
-          set -euo pipefail
+          set -euxo pipefail
           img=$(find companion/target/release/bundle/appimage -name '*.AppImage' -print -quit)
           test -n "$img"
           chmod +x "$img"
@@ -140,9 +140,11 @@ jobs:
           xvfb-run -a env -u WAYLAND_DISPLAY XDG_SESSION_TYPE=x11 \
             TENNOWORTH_OCR_BOOT_PROBE=1 TENNOWORTH_OCR_BOOT_PROBE_OUT="$probe_out" \
             squashfs-root/AppRun
+          cat "$probe_out"
           grep -Fx 'OCR_BOOT_PROBE_OK backend=x11-window' "$probe_out"
 
       - name: Upload Linux test bundle
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: tennoworth-ocr-test-linux
