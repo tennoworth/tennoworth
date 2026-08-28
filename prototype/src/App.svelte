@@ -39,7 +39,7 @@
   import type { ThemeController } from './lib/theme';
   import {
     createTransport, isDesktopRuntime,
-    desktopWfmStatus, DesktopCmdError,
+    desktopWfmStatus, desktopWfmLogout, DesktopCmdError,
   } from './lib/transport';
   import type { Market, OwnedRecord } from './lib/types';
   import type { OwnedRiven } from './lib/rivens';
@@ -945,6 +945,20 @@
     if (next === 'list') listingOpen = true;
   }
 
+  async function handleWfmLogout() {
+    const previousStatus = wfmStatus;
+    try {
+      await desktopWfmLogout();
+    } catch (error) {
+      wfmStatus = await desktopWfmStatus().catch(() => previousStatus);
+      throw error;
+    }
+    wfmStatus = { logged_in: false, unlocked: false };
+    ordersSummary = null;
+    listingOpen = false;
+    sessionEpoch += 1;
+  }
+
   let listingOpen = $state(false);
   // null = the normal bulk "List N on WFM" behaviour (top-50 of the current
   // view). A picks-strip "List" click stages exactly that one row instead —
@@ -1526,7 +1540,7 @@
       {@render faqContent()}
 
     {:else if effectiveView === 'settings'}
-      <SettingsPanel {theme} {transport} {isDesktop} />
+      <SettingsPanel {theme} {transport} {isDesktop} {wfmStatus} onwfmlogout={handleWfmLogout} />
     {/if}
 
   </main>

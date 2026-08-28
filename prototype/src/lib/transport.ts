@@ -428,6 +428,14 @@ export async function desktopWfmStatus(): Promise<DesktopWfmStatus> {
   }
 }
 
+export async function desktopWfmLogout(): Promise<void> {
+  try {
+    await resolveInvoke()<null>('wfm_logout');
+  } catch (e) {
+    rethrowInvoke(e);
+  }
+}
+
 export async function desktopWfmLogin(
   email: string,
   password: string,

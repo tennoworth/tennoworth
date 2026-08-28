@@ -98,6 +98,8 @@ and their notes live on the GitHub releases themselves.
   needs the AppImage, instead of incorrectly reporting that install as current.
 - The desktop market snapshot now refreshes after network reconnection and
   every 30 minutes, allowing offline launches to recover without an app restart.
+- Settings now shows the warframe.market session state and provides a confirmed
+  logout that removes saved credentials and interrupted listing batches from the device.
 
 ## 0.6.0 — 2026-08-22
 
