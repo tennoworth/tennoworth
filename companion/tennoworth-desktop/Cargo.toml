@@ -85,11 +85,19 @@ keyring = { version = "3", features = ["windows-native", "sync-secret-service", 
 base64 = { workspace = true }
 # Relic reward capture and local OCR. Release/test workflows provide the native
 # Tesseract + Leptonica runtime and stage the English model as an app resource.
-xcap = "0.9.8"
 image = { version = "0.25", default-features = false, features = ["png"] }
 leptess = "0.14"
 strsim = "0.11"
 
+[target.'cfg(target_os = "windows")'.dependencies]
+# Keep the exact Windows capture backend used for physical validation. Linux
+# uses X11/XWayland directly below, avoiding xcap's unused PipeWire recorder
+# dependency and its distro-header compatibility constraints.
+xcap = "0.8"
+
 [target.'cfg(target_os = "linux")'.dependencies]
 # Keep the passive overlay from accepting focus when GTK maps it.
 gtk = "0.18"
+# Enumerate and capture the Warframe X11/XWayland window without pulling in a
+# native Wayland portal/recorder stack that the overlay does not use.
+xcb = "1.7"

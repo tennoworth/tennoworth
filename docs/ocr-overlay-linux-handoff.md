@@ -227,9 +227,10 @@ No Warframe process or EE.log installation was present on this Linux host, so
 physical XWayland capture, focus/click-through behavior, automatic triggering,
 and reward-screen geometry remain to be tested with the uploaded Linux bundle.
 
-Ubuntu 22.04 then exposed that xcap 0.8's PipeWire 0.9 bindings assume newer
-system headers. The branch moved to xcap 0.9.8, whose PipeWire 0.10 bindings
-retain an Ubuntu-compatible baseline. The `Window` capture API used by the
-overlay is unchanged, but because this also updates the Windows backend, run
-one four-slot Windows reward-screen regression before treating the earlier
-physical result as final.
+Ubuntu 22.04 then exposed that xcap's unused PipeWire recorder dependency is
+not source-compatible across the PipeWire header versions on the supported
+Linux builders. The branch now keeps the physically validated xcap 0.8 backend
+on Windows and uses XCB directly for Linux window enumeration and capture. This
+matches the existing X11/XWayland-only product copy and avoids claiming native
+Wayland portal support. Run one physical Linux reward-screen pass to validate
+the new XCB capture path before treating Linux support as complete.
