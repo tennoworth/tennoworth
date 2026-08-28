@@ -110,10 +110,15 @@ impl Http for LiveHttp {
 /// Retries 3× with backoff, matching Python's `fetch_catalog`. On total
 /// failure, returns `None` so the caller can fall back to the prior
 /// snapshot's catalog + items.
+pub type CatalogFetch = (
+    HashMap<String, String>,
+    HashMap<String, CatalogItemMeta>,
+);
+
 pub fn fetch_catalog_wfm(
     http: &dyn Http,
     url: &str,
-) -> Result<(HashMap<String, String>, HashMap<String, CatalogItemMeta>), String> {
+) -> Result<CatalogFetch, String> {
     let mut last_err = String::new();
     for attempt in 0..3u32 {
         match http.get_json(url) {
@@ -1504,7 +1509,7 @@ mod tests {
         assert_eq!(w["kulstar"]["req_mr"], 8);
         // The fetch no longer computes the log at all — the caller does, after
         // applying DE's dispositions. See `riven_change_log`.
-        assert!(got.get("changes").is_none());
+        assert!(!got.contains_key("changes"));
         let changes = riven_change_log(got["weapons"].as_object().unwrap(), None, now);
         assert!(changes.is_empty(), "no prior means no changes");
     }
@@ -1690,7 +1695,7 @@ mod tests {
         let ax = stats.get("ax_52").unwrap();
         assert!(ax.get("rolled").is_none(), "no rolled rows for AX-52");
         assert_eq!(ax["unrolled"]["min"], 5.0);
-        assert!(stats.get("ack_brunt").is_none());
+        assert!(!stats.contains_key("ack_brunt"));
     }
 
     #[test]
@@ -1723,7 +1728,7 @@ mod tests {
 
         // A weapon only the console saw has no PC baseline to compare against,
         // so it contributes nothing rather than a lone console-only row.
-        assert!(stats.get("ack_brunt").is_none());
+        assert!(!stats.contains_key("ack_brunt"));
     }
 
     #[test]

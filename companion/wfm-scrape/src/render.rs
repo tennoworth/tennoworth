@@ -232,6 +232,7 @@ pub struct DeSurface {
 /// The `now` parameter is the injected clock (see [`clock`]); every
 /// timestamp in the snapshot — including per-surface stamps — flows
 /// through it.
+#[allow(clippy::too_many_arguments)]
 pub fn assemble_snapshot(
     now: DateTime<Utc>,
     catalog: HashMap<String, String>,

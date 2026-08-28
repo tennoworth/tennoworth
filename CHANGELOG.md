@@ -30,6 +30,37 @@ release body.
 Nothing is backfilled: releases up to and including 0.3.8 predate this file,
 and their notes live on the GitHub releases themselves.
 
+## 0.6.3 — 2026-08-28
+
+**Desktop recovery and account controls are more dependable.**
+
+- Trade detection no longer guesses which warframe.market listing to adjust
+  when EE.log omits a mod rank or item subtype, or when multiple listings share
+  an item slug. Unambiguous untiered sales continue to reduce or close their
+  matching listing automatically.
+- Desktop event subscriptions now detach when panels, dialogs, update banners,
+  or the relic overlay unmount, preventing duplicate notifications and progress
+  updates after repeatedly opening those surfaces.
+- The desktop market snapshot now refreshes after network reconnection and
+  every 30 minutes, allowing offline launches to recover without an app restart.
+- Settings now shows the warframe.market session state and provides a confirmed
+  logout that removes saved credentials and interrupted listing batches from
+  the device.
+
+**Updates and inventory restores fail more safely.**
+
+- Manual update checks now explain when a Linux install cannot self-update and
+  needs the AppImage, instead of incorrectly reporting that install as current.
+- Restoring an encrypted inventory backup now uses an in-app review step and
+  cannot decrypt or replace a non-empty inventory before explicit confirmation.
+
+**Small interface fixes round out the release.**
+
+- Relic-overlay document styles are now isolated from the hosted site, restoring
+  normal page scrolling while preserving the transparent overlay surface.
+- GitHub and Ko-fi links are now available from the hosted status bar and the
+  desktop sidebar.
+
 ## 0.6.2 — 2026-08-28
 
 - Settings now includes a manual **Check for updates** action on Windows and
@@ -86,26 +117,6 @@ and their notes live on the GitHub releases themselves.
 ## Unreleased
 
 *Fold this into the next version's section when you run `release.ts prepare`.*
-
-- Trade detection no longer guesses which warframe.market listing to adjust
-  when EE.log omits a mod rank or item subtype, or when multiple listings share
-  an item slug. Unambiguous untiered sales continue to reduce or close their
-  matching listing automatically.
-- Desktop event subscriptions now detach when panels, dialogs, update banners,
-  or the relic overlay unmount, preventing duplicate notifications and progress
-  updates after repeatedly opening those surfaces.
-- Manual update checks now explain when a Linux install cannot self-update and
-  needs the AppImage, instead of incorrectly reporting that install as current.
-- The desktop market snapshot now refreshes after network reconnection and
-  every 30 minutes, allowing offline launches to recover without an app restart.
-- Settings now shows the warframe.market session state and provides a confirmed
-  logout that removes saved credentials and interrupted listing batches from the device.
-- Restoring an encrypted inventory backup now uses an in-app review step and
-  cannot decrypt or replace a non-empty inventory before explicit confirmation.
-- Relic-overlay document styles are now isolated from the hosted site, restoring
-  normal page scrolling while preserving the transparent overlay surface.
-- GitHub and Ko-fi links are now available from the hosted status bar and the
-  desktop sidebar.
 
 ## 0.6.0 — 2026-08-22
 

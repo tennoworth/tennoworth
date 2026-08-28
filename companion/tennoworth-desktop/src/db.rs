@@ -838,7 +838,6 @@ mod tests {
             action: None,
             order_id: None,
             message: Some("app.field.orders.perTradeMustDivideQuantity".into()),
-            ..row("loki_prime_set", "error")
         };
         db.insert_listing_log("plan-c", &[failed]).unwrap();
 
