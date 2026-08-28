@@ -1,4 +1,4 @@
-name: OCR Windows test installer
+name: OCR test installers
 
 on:
   workflow_dispatch:
@@ -79,5 +79,72 @@ jobs:
         with:
           name: tennoworth-ocr-test-windows
           path: companion/target/release/bundle/nsis/*-setup.exe
+          if-no-files-found: error
+          retention-days: 7
+
+  linux-bundle-probe:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'feat/relic-ocr-windows'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    env:
+      TENNOWORTH_OCR_TEST_BUILD: '1'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - uses: ./.github/actions/setup-rust
+
+      - name: Install Linux bundle and display dependencies
+        run: >
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends
+          libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
+          librsvg2-dev libtesseract-dev libleptonica-dev xvfb xauth
+
+      - name: Stage pinned English model
+        run: |
+          set -euo pipefail
+          mkdir -p companion/tennoworth-desktop/resources/tessdata
+          curl --fail --location --retry 3 \
+            https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/eng.traineddata \
+            --output companion/tennoworth-desktop/resources/tessdata/eng.traineddata
+          echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  companion/tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
+
+      - name: Install frontend dependencies
+        working-directory: prototype
+        run: bun install --frozen-lockfile
+
+      - name: Build unsigned isolated AppImage
+        uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        with:
+          projectPath: companion/tennoworth-desktop
+          args: --config tauri.ocr-test.conf.json --bundles appimage
+
+      - name: Inspect bundle and run installed-resource OCR probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          img=$(find companion/target/release/bundle/appimage -name '*.AppImage' -print -quit)
+          test -n "$img"
+          chmod +x "$img"
+          probe_root="$RUNNER_TEMP/tennoworth-ocr-appimage"
+          mkdir -p "$probe_root"
+          img=$(realpath "$img")
+          cd "$probe_root"
+          "$img" --appimage-extract >/dev/null
+          test "$(find squashfs-root/usr/lib -name eng.traineddata | wc -l)" -eq 1
+          test -n "$(find squashfs-root/usr/lib -maxdepth 1 -name 'libtesseract.so*' -print -quit)"
+          test -n "$(find squashfs-root/usr/lib -maxdepth 1 -name 'libleptonica.so*' -print -quit)"
+          probe_out="$RUNNER_TEMP/ocr-linux-boot-probe.txt"
+          xvfb-run -a env -u WAYLAND_DISPLAY XDG_SESSION_TYPE=x11 \
+            TENNOWORTH_OCR_BOOT_PROBE=1 TENNOWORTH_OCR_BOOT_PROBE_OUT="$probe_out" \
+            squashfs-root/AppRun
+          grep -Fx 'OCR_BOOT_PROBE_OK backend=x11-window' "$probe_out"
+
+      - name: Upload Linux test bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: tennoworth-ocr-test-linux
+          path: companion/target/release/bundle/appimage/*.AppImage
           if-no-files-found: error
           retention-days: 7

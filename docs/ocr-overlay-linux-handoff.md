@@ -201,3 +201,28 @@ them without the user's explicit selection.
 - Automatic display can complete in roughly 0.6 seconds. A hotkey pressed
   during that busy pass is rejected, so wait about one second before deciding
   that automatic detection failed.
+
+## Linux bundle validation (2026-08-28)
+
+The Windows-tested tip was rebuilt on a rolling Linux host with Tesseract
+5.5.3 and Leptonica 1.87.0. All 25 overlay tests passed. The generated AppDir
+contained the pinned `eng.traineddata`, `libtesseract.so.5`, and
+`libleptonica.so.6`; `ldd` resolved both OCR libraries from the AppDir rather
+than the host. Running that extracted bundle against the active desktop
+completed the installed-resource probe with:
+
+```text
+OCR_BOOT_PROBE_OK backend=wayland-xwayland
+```
+
+Local AppImage compression could not finish because linuxdeploy's embedded
+older `strip` cannot parse the rolling distribution's RELR sections. This is a
+host-tool compatibility issue after the AppDir is populated, not an OCR bundle
+failure; production and test workflows build on Ubuntu 22.04. The branch-only
+`OCR test installers` workflow now has an Ubuntu 22.04 Linux job that builds
+the isolated AppImage, asserts all three OCR resources, runs the extracted
+bundle under Xvfb, and uploads `tennoworth-ocr-test-linux` for physical testing.
+
+No Warframe process or EE.log installation was present on this Linux host, so
+physical XWayland capture, focus/click-through behavior, automatic triggering,
+and reward-screen geometry remain to be tested with the uploaded Linux bundle.
