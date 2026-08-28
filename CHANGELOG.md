@@ -102,6 +102,10 @@ and their notes live on the GitHub releases themselves.
   logout that removes saved credentials and interrupted listing batches from the device.
 - Restoring an encrypted inventory backup now uses an in-app review step and
   cannot decrypt or replace a non-empty inventory before explicit confirmation.
+- Relic-overlay document styles are now isolated from the hosted site, restoring
+  normal page scrolling while preserving the transparent overlay surface.
+- GitHub and Ko-fi links are now available from the hosted status bar and the
+  desktop sidebar.
 
 ## 0.6.0 — 2026-08-22
 
