@@ -30,6 +30,13 @@ release body.
 Nothing is backfilled: releases up to and including 0.3.8 predate this file,
 and their notes live on the GitHub releases themselves.
 
+## 0.6.2 — 2026-08-28
+
+- Settings now includes a manual **Check for updates** action on Windows and
+  Linux AppImage builds. TennoWorth also checks the signed updater manifest
+  every 30 minutes while running; downloads and installation still require
+  explicit confirmation.
+
 ## 0.6.1 — 2026-08-28
 
 **Windows is now one installer, and the release carries one checksum file.**
@@ -79,11 +86,6 @@ and their notes live on the GitHub releases themselves.
 ## Unreleased
 
 *Fold this into the next version's section when you run `release.ts prepare`.*
-
-- Settings now includes a manual **Check for updates** action on Windows and
-  Linux AppImage builds. TennoWorth also checks the signed updater manifest
-  every 30 minutes while running; downloads and installation still require
-  explicit confirmation.
 
 ## 0.6.0 — 2026-08-22
 
