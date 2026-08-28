@@ -11,6 +11,8 @@
   import type { ThemeController } from '../lib/theme';
   import type { Transport } from '../lib/transport';
   import type { OverlaySettings, OverlayStatus } from '../lib/types';
+  import { checkUpdate, type UpdateStatus } from '../lib/desktop-update';
+  import { humanError } from '../lib/errors';
 
   interface Props {
     /** The boot-time controller from src/lib/theme.ts. */
@@ -24,6 +26,9 @@
   let overlayStatus = $state<OverlayStatus | null>(null);
   let overlayError = $state('');
   let savingOverlay = $state(false);
+  let checkingUpdate = $state(false);
+  let checkedUpdate = $state<UpdateStatus | null>(null);
+  let updateError = $state('');
 
   onMount(() => {
     if (!isDesktop || !transport) return;
@@ -88,6 +93,18 @@
       overlayError = error instanceof Error ? error.message : String(error);
     }
   }
+
+  async function checkForUpdates() {
+    updateError = '';
+    checkingUpdate = true;
+    try {
+      checkedUpdate = await checkUpdate();
+    } catch (error) {
+      updateError = humanError(error);
+    } finally {
+      checkingUpdate = false;
+    }
+  }
 </script>
 
 <section class="view-header">
@@ -116,6 +133,24 @@
   </section>
 
   {#if isDesktop}
+    <section class="wrap tw" aria-labelledby="set-updates">
+      <div class="rail"><h3 id="set-updates">Updates</h3></div>
+      <div class="sbody">
+        <div class="overlay-actions">
+          <button onclick={checkForUpdates} disabled={checkingUpdate}>
+            {checkingUpdate ? 'Checking…' : 'Check for updates'}
+          </button>
+          {#if checkedUpdate?.available}
+            <span class="status">Version {checkedUpdate.version} is available.</span>
+          {:else if checkedUpdate?.checked}
+            <span class="status">You’re up to date · v{checkedUpdate.current_version}</span>
+          {/if}
+        </div>
+        {#if updateError}<p class="error" role="alert">{updateError}</p>{/if}
+        <p class="exp">On Windows and Linux AppImage, TennoWorth also checks every 30 minutes while it is running. Updates are downloaded and installed only after you confirm.</p>
+      </div>
+    </section>
+
     <section class="wrap tw" aria-labelledby="set-relic-overlay">
       <div class="rail"><h3 id="set-relic-overlay">Relic reward overlay</h3></div>
       <div class="sbody">

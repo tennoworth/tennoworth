@@ -15,12 +15,12 @@
 use std::sync::Mutex;
 use std::time::Duration;
 use wfm_core::poison::guard;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_updater::{Update, UpdaterExt};
 
-/// Emitted to the webview when the launch check finds an update. The SPA also
-/// reads `update_status` at mount, so a listener registered after the emit
-/// still sees the result — the event is the push path, the command the pull.
+/// Emitted to the webview whenever a launch, manual, or periodic check finds an
+/// update. The SPA also reads `update_status` at mount, so a listener
+/// registered after the launch emit still sees the result.
 pub const EVENT_UPDATE_AVAILABLE: &str = "update-available";
 
 /// Manifest fetch cap — a hung check must never hold a pending `check_update`
@@ -174,6 +174,16 @@ pub async fn check(app: &AppHandle) -> UpdateStatus {
     status
 }
 
+pub async fn check_and_emit(app: &AppHandle) -> UpdateStatus {
+    let status = check(app).await;
+    if status.available {
+        if let Err(e) = app.emit(EVENT_UPDATE_AVAILABLE, &status) {
+            eprintln!("tennoworth: update-available emit failed: {e}");
+        }
+    }
+    status
+}
+
 /// Download + install the update the last check found. Explicit-confirmation
 /// only — nothing calls this but the SPA's "Install update" button. Unlike
 /// `check`, failures here ARE surfaced (the user asked for this action): a
@@ -195,13 +205,13 @@ pub async fn install_pending(app: &AppHandle) -> Result<(), String> {
 
 // ---- Tauri commands -----------------------------------------------------
 
-/// C5: run an update check now. Never rejects — offline / malformed manifest /
-/// any updater failure reads as "no update available" (see `check` above). The
-/// SPA can call this for a manual re-check; the launch path uses the same
-/// routine.
+/// Run an update check now and notify the SPA when one is available. Never
+/// rejects — offline / malformed manifest / any updater failure reads as "no
+/// update available" (see `check` above). Launch, manual, and periodic checks
+/// share this routine.
 #[tauri::command]
 pub async fn check_update(app: AppHandle) -> UpdateStatus {
-    check(&app).await
+    check_and_emit(&app).await
 }
 
 /// The last check's outcome, no network. The SPA reads this at mount so an

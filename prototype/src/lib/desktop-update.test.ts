@@ -3,9 +3,11 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { installTauri, removeTauri } from './test-utils.js';
 import {
   updateStatus,
+  checkUpdate,
   installUpdate,
   restartApp,
   onUpdateAvailable,
+  UPDATE_CHECK_INTERVAL_MS,
 } from './desktop-update.js';
 
 
@@ -23,6 +25,17 @@ const NO_UPDATE = {
 };
 
 describe('command mapping', () => {
+  it('checks for updates every half hour', () => {
+    expect(UPDATE_CHECK_INTERVAL_MS).toBe(1_800_000);
+  });
+
+  it('checkUpdate invokes its command and passes the result through', async () => {
+    const invoke = vi.fn().mockResolvedValue(NO_UPDATE);
+    installTauri(invoke);
+    expect(await checkUpdate()).toEqual(NO_UPDATE);
+    expect(invoke).toHaveBeenCalledWith('check_update');
+  });
+
   it('updateStatus invokes its command and passes the payload through', async () => {
     const invoke = vi.fn().mockResolvedValue(NO_UPDATE);
     installTauri(invoke);
