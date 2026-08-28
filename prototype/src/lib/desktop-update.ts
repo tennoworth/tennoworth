@@ -12,6 +12,8 @@
 
 import { resolveInvoke } from './transport';
 
+export const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;
+
 export interface UpdateStatus {
   /** False until the launch check (or a manual check) has completed. */
   checked: boolean;
@@ -24,6 +26,11 @@ export interface UpdateStatus {
 /** The last check's outcome — no network. Pull side of the mount handshake. */
 export function updateStatus(): Promise<UpdateStatus> {
   return resolveInvoke()<UpdateStatus>('update_status');
+}
+
+/** Fetch the signed updater manifest now. Nothing is downloaded or installed. */
+export function checkUpdate(): Promise<UpdateStatus> {
+  return resolveInvoke()<UpdateStatus>('check_update');
 }
 
 /** Download + install the pending update. Explicit user confirmation only. */

@@ -1,12 +1,13 @@
 <script lang="ts">
-  // C5 desktop auto-update banner. Self-contained: registers its own
-  // update-available listener + pulls the stored status on mount, and owns
-  // every bit of state the install/restart flow needs. Desktop-only by
+  // Desktop update banner. Self-contained: registers its own update event,
+  // pulls the stored launch status, and repeats the manifest check while the
+  // app stays open. Desktop-only by
   // construction (see lib/desktop-update.ts) — App.svelte only mounts this
   // inside `{#if isDesktop}`, so its onMount never runs in the browser build.
   import { onMount } from 'svelte';
   import {
-    updateStatus as fetchUpdateStatus, installUpdate, restartApp, onUpdateAvailable,
+    updateStatus as fetchUpdateStatus, checkUpdate, installUpdate, restartApp, onUpdateAvailable,
+    UPDATE_CHECK_INTERVAL_MS,
     type UpdateStatus,
   } from '../lib/desktop-update';
   import { humanError } from '../lib/errors';
@@ -18,21 +19,37 @@
   let updateDismissed = $state(false);
 
   onMount(() => {
-    // C5 update-available handshake: listen for the push (the Rust launch
-    // check may still be in flight) AND pull the stored status (its emit may
+    // Listen for launch/manual pushes AND pull the stored status (its emit may
     // have beaten this listener). Best-effort — a failure here must never
     // disturb boot, and "no update" needs no UI at all.
     onUpdateAvailable((s) => {
-      if (s.available) updateInfo = s;
+      if (s.available) {
+        updateInfo = s;
+        updateDismissed = false;
+      }
     });
-    (async () => {
+    const readStoredStatus = async () => {
       try {
         const s = await fetchUpdateStatus();
         if (s.available) updateInfo = s;
       } catch (e) {
         console.error('update status read failed', e);
       }
-    })();
+    };
+    const checkNow = async () => {
+      try {
+        const s = await checkUpdate();
+        if (s.available) {
+          updateInfo = s;
+          updateDismissed = false;
+        }
+      } catch (e) {
+        console.error('periodic update check failed', e);
+      }
+    };
+    void readStoredStatus();
+    const timer = window.setInterval(() => { void checkNow(); }, UPDATE_CHECK_INTERVAL_MS);
+    return () => window.clearInterval(timer);
   });
 
   // Explicit confirmation is THE gate: install_update rejects on a download

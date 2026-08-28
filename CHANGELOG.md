@@ -80,6 +80,11 @@ and their notes live on the GitHub releases themselves.
 
 *Fold this into the next version's section when you run `release.ts prepare`.*
 
+- Settings now includes a manual **Check for updates** action on Windows and
+  Linux AppImage builds. TennoWorth also checks the signed updater manifest
+  every 30 minutes while running; downloads and installation still require
+  explicit confirmation.
+
 ## 0.6.0 — 2026-08-22
 
 **Linux is now distributed as an AppImage, and only as an AppImage.** If you

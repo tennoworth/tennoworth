@@ -8,8 +8,12 @@ import SettingsPanel from './SettingsPanel.svelte';
 import type { ModePref, ThemeController } from '../lib/theme';
 import type { Transport } from '../lib/transport';
 import type { OverlaySettings } from '../lib/types';
+import { installTauri, removeTauri } from '../lib/test-utils';
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  removeTauri();
+});
 
 beforeEach(() => {
   // jsdom has no matchMedia; ThemeSwitcher subscribes to it on mount.
@@ -84,5 +88,21 @@ describe('SettingsPanel', () => {
     expect(await screen.findByText(/Diagnostic captures may contain player or game information/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Open diagnostics' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Clear diagnostics' })).toBeTruthy();
+  });
+
+  it('checks for desktop updates on demand and reports the current version', async () => {
+    const { theme } = fakeTheme();
+    const invoke = vi.fn(async (command: string) => {
+      if (command === 'check_update') {
+        return { checked: true, available: false, current_version: '0.6.1', version: null, notes: null };
+      }
+      throw new Error(`unexpected command: ${command}`);
+    });
+    installTauri(invoke, undefined);
+    render(SettingsPanel, { props: { theme, isDesktop: true } });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    expect(invoke).toHaveBeenCalledWith('check_update');
+    expect(await screen.findByText('You’re up to date · v0.6.1')).toBeTruthy();
   });
 });

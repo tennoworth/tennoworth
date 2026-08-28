@@ -344,12 +344,7 @@ fn main() {
             // "no update", so this task cannot take the app down.
             let update_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
-                let status = update::check(&update_handle).await;
-                if status.available {
-                    if let Err(e) = update_handle.emit(update::EVENT_UPDATE_AVAILABLE, &status) {
-                        eprintln!("tennoworth: update-available emit failed: {e}");
-                    }
-                }
+                update::check_and_emit(&update_handle).await;
             });
 
             if probe {
