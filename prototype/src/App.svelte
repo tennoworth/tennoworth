@@ -980,7 +980,7 @@
       {#if isDesktop}
         Scan your account and TennoWorth ranks <em>your</em> inventory by what to sell — until then, look anything up below.
       {:else}
-        What's worth selling in Warframe right now — search any item, spot the movers, see what's vaulted. No install. No login. No Overwolf.
+        What's worth selling in Warframe right now — search any item, spot the movers, see what's vaulted. No install. No login.
       {/if}
     </p>
   </header>
@@ -1052,7 +1052,6 @@
   <footer class="sitefoot">
     <span class="grow">TennoWorth is a fan project, not affiliated with Digital Extremes or warframe.market. Open source · MIT · data from warframe.market and warframestat.us.</span>
     {#if market?.updated_at}<span title="When the market snapshot was taken">Snapshot {snapshotStamp}</span>{/if}
-    <a href="https://github.com/tennoworth/tennoworth" target="_blank" rel="noopener noreferrer">GitHub</a>
     <a href="#trust">Trust &amp; safety</a>
     <span class="ver" title="build {APP_COMMIT}">{APP_COMMIT}</span>
     <!-- The theme control's home is Settings → Appearance, inside the shell.
@@ -1140,7 +1139,12 @@
     </nav>
 
     <div class="sfoot">
-      <div class="ver" title="build {APP_COMMIT}">Windows + Linux · no Overwolf · {APP_COMMIT}</div>
+      {#if isDesktop}
+        <nav class="project-links" aria-label="Project links">
+          {@render projectLinkAnchors()}
+        </nav>
+      {/if}
+      <div class="ver" title="build {APP_COMMIT}">Windows + Linux · {APP_COMMIT}</div>
     </div>
   </aside>
 
@@ -1524,6 +1528,21 @@
 </div>
 {/if}
 
+{#snippet projectLinkAnchors()}
+  <a class="project-link" href="https://github.com/tennoworth/tennoworth" target="_blank" rel="noopener noreferrer">
+    <svg class="github-mark" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M12 2.7a9.5 9.5 0 0 0-3 18.5c.5.1.7-.2.7-.5v-1.9c-2.8.6-3.4-1.2-3.4-1.2-.5-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 0 1.6 1 1.6 1 .9 1.6 2.4 1.1 3 .8.1-.7.4-1.1.7-1.3-2.2-.3-4.6-1.1-4.6-4.7 0-1 .4-1.9 1-2.6-.1-.3-.4-1.3.1-2.6 0 0 .8-.3 2.7 1a9.2 9.2 0 0 1 4.9 0c1.9-1.3 2.7-1 2.7-1 .5 1.3.2 2.3.1 2.6.6.7 1 1.6 1 2.6 0 3.7-2.4 4.5-4.6 4.7.4.3.7.9.7 1.8v2.8c0 .4.2.6.7.5A9.5 9.5 0 0 0 12 2.7Z" />
+    </svg>
+    <span>GitHub</span>
+  </a>
+  <a class="project-link" href="https://ko-fi.com/prowly" target="_blank" rel="noopener noreferrer">
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7 H17 V16 H6 L4 14 Z M17 9 H19 L21 11 V13 L19 15 H17 M7 10 L10 13 L14 9" />
+    </svg>
+    <span>Buy me a coffee</span>
+  </a>
+{/snippet}
+
 {#snippet statusStrip(inShell)}
   <!-- Shell-level status strip: one 40px spine on the landing AND the
        workspace. In the shell its brand cell sits exactly over the sidebar
@@ -1607,9 +1626,10 @@
     {/if}
     <span class="grow"></span>
     {#if !inShell}
-      <nav class="cell end" aria-label="Site">
+      <nav class="cell end site-links" aria-label="Site">
         <a href="#faq">FAQ</a>
         {#if !isDesktop}<a href="#desktop">Desktop app ↓</a>{/if}
+        {@render projectLinkAnchors()}
       </nav>
     {:else if isDesktop}
       <div class="cell end">
@@ -1646,11 +1666,11 @@
         <strong>We can't promise this is ban-safe</strong> — no third-party
         tool honestly can. What we <em>can</em> say: the app only ever
         reads memory. It never writes to the game, never injects code, and
-        doesn't interact with anti-cheat. Equivalent tools (Sainan's
-        warframe-api-helper, AlecaFrame via Overwolf) have run for years with
-        no documented bans, but Digital Extremes has never formally blessed
-        this category of tool. Use it at your own risk; we accept none. More
-        detail in <a href="#trust">Trust &amp; safety</a> below.
+        doesn't interact with anti-cheat. Other read-only inventory tools have
+        run for years with no documented bans, but Digital Extremes has never
+        formally blessed this category of tool. Use it at your own risk; we
+        accept none. More detail in <a href="#trust">Trust &amp; safety</a>
+        below.
       </p>
     </details>
 
@@ -1722,17 +1742,6 @@
     </details>
 
     <details>
-      <summary>Why no Overwolf / AlecaFrame integration?</summary>
-      <p>
-        Overwolf is Windows-only and bundles an always-running runtime
-        plus ads. Aleca is built on top of it, which is why it's the
-        dominant tool — but also why it doesn't run on Linux at all and
-        why some users avoid it on Windows. We're aimed at the audience
-        that wants the same insights without that surface area.
-      </p>
-    </details>
-
-    <details>
       <summary>What about Rivens, Arcanes, frame mods?</summary>
       <p>
         Arcanes and frame mods (in <code>RawUpgrades</code>) are
@@ -1796,14 +1805,13 @@
     </details>
 
     <details>
-      <summary>Isn't reading game memory sketchy? It's what AlecaFrame does too</summary>
+      <summary>Why does the app read game memory?</summary>
       <p>
-        Reading a process you own is ordinary, and it's the same technique the
-        most popular tool already uses. AlecaFrame reads Warframe's memory too —
-        through an Overwolf plugin (<code>gep_warframeext.dll</code>) that calls
-        Windows' <code>ReadProcessMemory</code>. We do the same thing without
-        the Overwolf middleman (and without being Windows-only). Nothing here
-        modifies the game.
+        The game does not expose a supported local inventory API. A read-only
+        scan lets TennoWorth find the short-lived credentials the running game
+        already uses, request your inventory once, and then discard them.
+        Windows uses <code>ReadProcessMemory</code>; Linux reads
+        <code>/proc/&lt;pid&gt;/mem</code>. Neither path modifies the game.
       </p>
     </details>
 
@@ -1861,10 +1869,10 @@
       <p>
         We <strong>can't promise this is ban-safe</strong>; no third-party tool
         honestly can. What we can say: the desktop app only reads memory, never
-        writes or injects, and doesn't interact with anti-cheat. Equivalent
-        tools (Sainan's warframe-api-helper, AlecaFrame via Overwolf) have run
-        for years with no documented bans, but Digital Extremes has never
-        formally blessed this category of tool. Use it at your own risk.
+        writes or injects, and doesn't interact with anti-cheat. Other
+        read-only inventory tools have run for years with no documented bans,
+        but Digital Extremes has never formally blessed this category of tool.
+        Use it at your own risk.
       </p>
       <p>
         And if DE's stance ever changes, only the memory-scan path stops: the
@@ -2111,6 +2119,23 @@
   .statusbar .cell .ducat { color: var(--ducat); }
   .statusbar .cell a { color: var(--accent); text-decoration: none; }
   .statusbar .cell a + a { margin-left: var(--s2); }
+  .project-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s2);
+  }
+  .project-link svg {
+    width: var(--s4);
+    height: var(--s4);
+    flex: none;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.5;
+    stroke-linecap: square;
+    stroke-linejoin: miter;
+  }
+  .project-link svg.github-mark { fill: currentColor; stroke: none; }
+  .statusbar .site-links { flex-wrap: wrap; row-gap: var(--s1); }
   .statusbar .cell .link {
     font: inherit;
     color: var(--accent);
@@ -2212,6 +2237,21 @@
     flex-direction: column;
     gap: var(--s2);
   }
+  .sfoot .project-links {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--border);
+  }
+  .sfoot .project-link {
+    min-height: var(--ctl-lg);
+    padding: 0 var(--s2);
+    color: var(--fg);
+    text-decoration: none;
+  }
+  .sfoot .project-link + .project-link {
+    border-top: 1px var(--rule) var(--hairline);
+  }
+  .sfoot .project-link:hover { color: var(--on-ink); background: var(--ink-bar); }
   .sfoot .ver { padding: 0 var(--s1); }
 
   /* Refresh ▾ in the strip: a 24px control inside the 40px bar. */
@@ -2359,7 +2399,20 @@
     .statusbar { flex-wrap: wrap; height: auto; min-height: var(--strip); position: static; }
     .statusbar.shell-strip .brand { width: auto; border-right: none; }
     .sfoot { padding: var(--s2) var(--s3); }
+    .sfoot .project-links { flex-direction: row; align-self: flex-start; }
+    .sfoot .project-link + .project-link {
+      border-top: none;
+      border-left: 1px var(--rule) var(--hairline);
+    }
     main.workspace { padding: 16px 16px 32px; overflow: visible; }
+  }
+  @media (max-width: 560px) {
+    .statusbar .site-links {
+      width: 100%;
+      justify-content: center;
+      border-left: none;
+      border-top: 1px var(--rule) var(--hairline);
+    }
   }
   header h1 {
     margin: 0;

@@ -31,9 +31,9 @@ The desktop app only ever *reads* memory — it never writes to the game, never
 injects code, and doesn't interact with anti-cheat. **We cannot promise this
 is ban-safe.** Sainan's
 [warframe-api-helper](https://github.com/Sainan/warframe-api-helper) has used
-the same read-only approach for years with no documented bans, and AlecaFrame
-does the equivalent via Overwolf — but DE has never formally blessed this
-category of tool. **Use at your own risk; there is no warranty.**
+the same read-only approach for years with no documented bans, but DE has never
+formally blessed this category of tool. **Use at your own risk; there is no
+warranty.**
 
 ## License
 

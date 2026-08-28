@@ -1,8 +1,8 @@
 # TennoWorth
 
-A cross-platform **Windows + Linux** Warframe inventory + market dashboard —
-the no-Overwolf alternative to AlecaFrame. It answers one question better than
-anything else: **what should I sell right now?**
+A cross-platform **Windows + Linux** Warframe inventory + market dashboard.
+It answers one question better than anything else: **what should I sell right
+now?**
 
 Your inventory is read locally by the desktop app (it memory-scans the running
 game — nothing is uploaded, no account login to *us*). It joins your inventory
@@ -122,11 +122,9 @@ The desktop app only reads: game memory for the inventory scan, the game's own
 text log (`EE.log`) for trade/reward detection, and—only after explicit opt-in—a
 bounded screenshot of the Warframe window for local reward OCR. It never
 writes to the game or injects code.
-**We can't promise it's ban-safe.** Equivalent tools
-([warframe-api-helper](https://github.com/Sainan/warframe-api-helper) and
-AlecaFrame via Overwolf) have run for years with no documented bans, but DE
-has never formally blessed this category of tool. **Use at your own risk; no
-warranty.**
+**We can't promise it's ban-safe.** Other read-only inventory tools have run
+for years with no documented bans, but DE has never formally blessed this
+category of tool. **Use at your own risk; no warranty.**
 
 For a detailed breakdown of what the desktop app reads and what never leaves
 your machine, see the in-app 'Trust & safety' section.
