@@ -135,14 +135,18 @@ pub fn plan_adjustments(
         *sold_by_slug.entry(slug.clone()).or_default() += qty;
     }
 
+    let mut unique_order_by_slug = BTreeMap::<&str, Option<&OwnSellOrder>>::new();
+    for order in orders {
+        unique_order_by_slug
+            .entry(&order.slug)
+            .and_modify(|candidate| *candidate = None)
+            .or_insert(Some(order));
+    }
+
     sold_by_slug
         .into_iter()
         .filter_map(|(slug, sold)| {
-            let mut matching = orders.iter().filter(|order| order.slug == slug);
-            let order = matching.next()?;
-            if matching.next().is_some() {
-                return None;
-            }
+            let order = unique_order_by_slug.get(slug.as_str()).copied().flatten()?;
             Some((order.clone(), (order.quantity - sold).max(0)))
         })
         .collect()
@@ -441,6 +445,25 @@ mod tests {
     }
 
     #[test]
+    fn a_tiered_item_does_not_block_an_unambiguous_untiered_adjustment() {
+        let orders = vec![
+            order("rank-0", "primed_flow", 3),
+            order("set", "loki_prime_set", 2),
+        ];
+        let tiered = BTreeSet::from(["primed_flow".into()]);
+        let plan = plan_adjustments(
+            &sale(vec![
+                ("Primed Flow", 1, "given"),
+                ("Loki Prime Set", 1, "given"),
+            ]),
+            &names(),
+            &orders,
+            &tiered,
+        );
+        assert_eq!(plan, vec![(order("set", "loki_prime_set", 2), 1)]);
+    }
+
+    #[test]
     fn catalog_metadata_marks_ranked_and_subtyped_items_as_tiered() {
         let mut catalog = BTreeMap::new();
         catalog.insert(
@@ -496,6 +519,24 @@ mod tests {
             &untiered(),
         );
         assert_eq!(plan, vec![(order("o1", "loki_prime_set", 5), 2)]);
+    }
+
+    #[test]
+    fn repeated_lines_do_not_make_ambiguous_orders_safe_to_adjust() {
+        let orders = vec![
+            order("o1", "loki_prime_set", 2),
+            order("o2", "loki_prime_set", 5),
+        ];
+        let plan = plan_adjustments(
+            &sale(vec![
+                ("Loki Prime Set", 1, "given"),
+                ("loki prime set", 9, "given"),
+            ]),
+            &names(),
+            &orders,
+            &untiered(),
+        );
+        assert!(plan.is_empty());
     }
 
     #[test]
