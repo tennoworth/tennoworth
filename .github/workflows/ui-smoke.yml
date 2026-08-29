@@ -36,7 +36,7 @@ jobs:
     outputs:
       desktop: ${{ steps.filter.outputs.desktop }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         id: filter
         with:
@@ -62,7 +62,7 @@ jobs:
     env:
       VCPKG_DEFAULT_TRIPLET: x64-windows-static-md
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: oven-sh/setup-bun@v2
 
@@ -131,7 +131,7 @@ jobs:
 
       - name: Upload probe evidence
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: probe-evidence
           path: |

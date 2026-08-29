@@ -34,7 +34,7 @@ jobs:
       version: ${{ steps.filter.outputs.version }}
       panic: ${{ steps.filter.outputs.panic }}
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         id: filter
         with:
@@ -69,7 +69,7 @@ jobs:
       run:
         working-directory: prototype
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
@@ -97,7 +97,7 @@ jobs:
       run:
         working-directory: companion
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-rust
       # Reads as an expensive from-source build and isn't: Swatinem/rust-cache
       # in setup-rust caches ~/.cargo/bin, so this resolves as already-installed.
@@ -118,7 +118,7 @@ jobs:
       run:
         working-directory: companion
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-rust
       # Cargo.lock is part of what ships, not a local cache: anyone building
       # the tag from source runs `cargo build --frozen`, which aborts rather
@@ -162,7 +162,7 @@ jobs:
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       - name: Version pins agree
         run: bun scripts/release.ts check
@@ -178,7 +178,7 @@ jobs:
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@v2
       - name: No new production unwrap()/expect() outside the allowlist
         run: bun scripts/check-panic-sites.ts
