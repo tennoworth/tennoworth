@@ -3,7 +3,7 @@
 //! [`crate::de`] is transport and parsing; this module is the join. It exists
 //! separately because the join is where the risk lives: DE speaks
 //! `/Lotus/...` uniqueNames and warframe.market speaks slugs, and a silent
-//! mismatch shows a user the wrong price — worse than showing none. Every
+//! mismatch shows a user the wrong price - worse than showing none. Every
 //! resolver here therefore returns `Option` and the callers count the misses.
 
 use std::collections::HashMap;
@@ -21,8 +21,8 @@ use crate::de::{de_millis, manifest_rows_for, relay_name};
 /// This is the alias that closes most of the join. Relic tables reference
 /// `.../OberonPrimeSystemsBlueprint`; the item catalogue knows
 /// `.../OberonPrimeSystemsComponent`. `ExportRecipes.resultType` is the link,
-/// and it lifts reward-path resolution from 69% to 87% (the rest — Forma,
-/// Kuva, Exilus adapters, Kubrow collars — are genuinely untradeable and
+/// and it lifts reward-path resolution from 69% to 87% (the rest - Forma,
+/// Kuva, Exilus adapters, Kubrow collars - are genuinely untradeable and
 /// *should* stay unresolved).
 pub fn recipe_alias(recipes: &Value) -> HashMap<String, String> {
     let mut out = HashMap::new();
@@ -79,7 +79,7 @@ pub const DUCAT_TIERS: &[i64] = &[15, 25, 45, 65, 100];
 /// `uniqueName → ducat value`, first-party.
 ///
 /// `primeSellingPrice` sits on the **recipe** (the blueprint you trade), not on
-/// its `resultType` — Nova Prime Blueprint is 45 while the frame it builds has
+/// its `resultType` - Nova Prime Blueprint is 45 while the frame it builds has
 /// no ducat value at all. Keying on the recipe is therefore correct, and it is
 /// the difference between a right and a wrong number.
 ///
@@ -101,7 +101,7 @@ pub fn ducats_from_recipes(recipes: &Value) -> HashMap<String, i64> {
         out.insert(unique.to_string(), price);
     }
     if odd > 0 {
-        eprintln!("  warning: {odd} recipes carried a ducat value off the known tiers — dropped");
+        eprintln!("  warning: {odd} recipes carried a ducat value off the known tiers - dropped");
     }
     out
 }
@@ -114,7 +114,7 @@ pub fn ducats_from_recipes(recipes: &Value) -> HashMap<String, i64> {
 ///
 /// **These are ours, not DE's.** The export ships four uniqueName variants per
 /// relic (Bronze / Silver / Gold / Platinum = intact / exceptional / flawless /
-/// radiant), but their reward lists are byte-identical — refinement changes the
+/// radiant), but their reward lists are byte-identical - refinement changes the
 /// odds, not the contents, and DE does not publish the odds. So the four tiers
 /// are derived here from the long-standing published table. If DE ever changes
 /// it, this constant goes silently wrong; it is the one number in the relic
@@ -171,7 +171,7 @@ pub struct RelicBuild {
 /// Build `relic_rewards` from `ExportRelicArcane`, with all four refinements.
 ///
 /// Two things this fixes versus the drop-table source it replaces: coverage of
-/// every refinement rather than intact only, and **correct rarity labels** —
+/// every refinement rather than intact only, and **correct rarity labels** -
 /// the old source labels 25.33% drops "Uncommon", which is the common tier.
 pub fn relic_rewards_from_de(
     relics: &Value,
@@ -242,7 +242,7 @@ pub fn relic_rewards_from_de(
 }
 
 // ---------------------------------------------------------------------------
-// Recipes — what building a thing actually costs
+// Recipes - what building a thing actually costs
 // ---------------------------------------------------------------------------
 
 /// Build costs, keyed by the slug of the TRADEABLE item each recipe belongs to.
@@ -252,7 +252,7 @@ pub fn relic_rewards_from_de(
 /// - A component recipe produces the component the user holds, so its
 ///   `resultType` resolves and that is the key.
 /// - A **final assembly** recipe (`NovaPrimeBlueprint`) produces the finished
-///   Warframe — `/Lotus/Powersuits/AntiMatter/NovaPrime` — which the item
+///   Warframe - `/Lotus/Powersuits/AntiMatter/NovaPrime` - which the item
 ///   catalogue does not carry at all, because you cannot trade a built frame.
 ///   Its tradeable identity is the blueprint you feed it, which is the
 ///   recipe's own `uniqueName`. Without that fallback the last and most
@@ -261,7 +261,7 @@ pub fn relic_rewards_from_de(
 ///   coverage from 157 recipes to 312.
 ///
 /// `ingredients` keep their display name even when they do not resolve to a
-/// market slug — Orokin Cells and Argon Crystals are the majority of a build
+/// market slug - Orokin Cells and Argon Crystals are the majority of a build
 /// and are not tradeable, so a consumer must be able to show them as an
 /// unchecked requirement rather than pretend the build is free.
 ///
@@ -390,7 +390,7 @@ pub const MAX_MR: usize = 33;
 ///
 /// Keyed by the WFM slug the display name resolves to. DE names the frame or
 /// weapon ("Braton Prime"), and warframe.market lists the SET
-/// ("Braton Prime Set"), so both spellings are tried — and the value is
+/// ("Braton Prime Set"), so both spellings are tried - and the value is
 /// therefore the PARENT's usage, which a consumer propagates to its parts.
 /// Nothing is emitted for a name that does not resolve; a renamed weapon
 /// misses rather than being guessed at.
@@ -694,7 +694,7 @@ pub fn event_rewards_from_world_child(
 /// renders, and gain `unique` so a consumer can join without a name match.
 ///
 /// Cosmetics and bundles resolve to no slug. They are kept with a name and no
-/// price rather than dropped — a missing row reads as "he isn't selling it".
+/// price rather than dropped - a missing row reads as "he isn't selling it".
 pub fn baro_from_world(
     world: &Value,
     path_to_info: &HashMap<String, Value>,
@@ -759,7 +759,7 @@ pub fn baro_from_world(
 /// Last-resort display name: split the final path segment on camel case.
 ///
 /// Only used for items with no catalogue entry (cosmetics, bundles). Better
-/// than showing a raw `/Lotus/...` path, and honest that it is derived — the
+/// than showing a raw `/Lotus/...` path, and honest that it is derived - the
 /// row carries no slug and therefore no price.
 pub fn readable_from_path(path: &str) -> String {
     let seg = path.rsplit('/').next().unwrap_or(path);
@@ -780,7 +780,7 @@ pub fn readable_from_path(path: &str) -> String {
 /// Prime Vault rotation, announced rather than estimated.
 ///
 /// The surface it supplements derives `vaulting-soon` from an estimated vault
-/// date. When DE has actually announced a rotation, this is the real thing —
+/// date. When DE has actually announced a rotation, this is the real thing -
 /// which matters because an unvaulting is the most expensive surprise in prime
 /// trading, and the estimate can be weeks out.
 pub fn vault_rotation_from_world(world: &Value, iso: impl Fn(i64) -> String) -> Vec<Value> {
@@ -822,7 +822,7 @@ pub fn vault_rotation_from_world(world: &Value, iso: impl Fn(i64) -> String) -> 
 /// Deliberately narrow. `Goals`/`Events` reward tables vary by event type and
 /// several carry no usable table at all, so parsing them into "this item is
 /// about to be given away" is a separate piece of work with its own failure
-/// modes — better absent than wrong.
+/// modes - better absent than wrong.
 pub fn deals_from_world(
     world: &Value,
     path_to_info: &HashMap<String, Value>,
@@ -1016,7 +1016,7 @@ mod tests {
     #[test]
     fn final_assembly_recipes_key_on_the_blueprint_you_trade() {
         // A finished Warframe is not a tradeable item, so its recipe's
-        // resultType resolves to nothing. Its identity is the blueprint —
+        // resultType resolves to nothing. Its identity is the blueprint -
         // and without this the last and most expensive step of every build
         // silently vanished from the cost.
         let mut info = p2i();
@@ -1065,7 +1065,7 @@ mod tests {
         let mut buckets = serde_json::Map::new();
         buckets.insert("ALL".into(), Value::from(0.0342));
         for mr in 0..=MAX_MR {
-            // Peaks at MR 10 — a starter-tier weapon's audience.
+            // Peaks at MR 10 - a starter-tier weapon's audience.
             let v = if mr == 10 { 0.09 } else { 0.001 };
             buckets.insert(mr.to_string(), Value::from(v));
         }
@@ -1229,7 +1229,7 @@ mod tests {
         let alias = recipe_alias(&recipes());
         let b = baro_from_world(&world(), &p2i(), &alias, iso);
         let inv = b["inventory"].as_array().unwrap();
-        // Readable, but explicitly no slug — so nothing downstream can price it.
+        // Readable, but explicitly no slug - so nothing downstream can price it.
         assert_eq!(inv[1]["item"], "Kiteer Sekhara");
         assert!(inv[1].get("slug").is_none());
     }

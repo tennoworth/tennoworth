@@ -1,13 +1,13 @@
 //! Canonical desktop state store (SQLite via rusqlite `bundled`). This is the
-//! single owner of the schema, the migration runner, and every SQL statement —
+//! single owner of the schema, the migration runner, and every SQL statement -
 //! call sites use the typed methods below and never write raw SQL. The schema is
 //! the one agreed in the product plan (C3), applied verbatim as the
 //! v1 migration.
 //!
 //! Two distinct concerns share this file:
-//!   - inventory HISTORY (`snapshot` / `snapshot_item`, plus `listing_log`) —
+//!   - inventory HISTORY (`snapshot` / `snapshot_item`, plus `listing_log`) -
 //!     the profit-tracking substrate, appended from day one.
-//!   - app STATE (`setting` kv, `reserve` per-slug) — the desktop backing for
+//!   - app STATE (`setting` kv, `reserve` per-slug) - the desktop backing for
 //!     the persistence the browser keeps in localStorage.
 
 use std::path::Path;
@@ -20,7 +20,7 @@ use wfm_core::poison::guard;
 /// version each one brings the DB to; `user_version` records the current level.
 /// v1 is the plan's C3 schema, verbatim.
 const MIGRATIONS: &[&str] = &[
-    // v1 — initial schema.
+    // v1 - initial schema.
     r#"
 CREATE TABLE snapshot (
   id INTEGER PRIMARY KEY,
@@ -44,17 +44,17 @@ CREATE TABLE listing_log (            -- what we listed, when, at what price
   outcome TEXT                        -- NULL until sold/cancelled observed
 );
 "#,
-    // v2 — make listing_log actually recordable.
+    // v2 - make listing_log actually recordable.
     //
     // v1 shipped the table and nothing ever wrote a row, so every plan's
     // evidence died with the modal that displayed it. Writing it needs four
     // things v1 has no column for:
-    //   plan_id  — groups the items of one batch, so a partial run reads as
+    //   plan_id  - groups the items of one batch, so a partial run reads as
     //              one event instead of N unrelated rows.
-    //   status   — the point of the log. An 'error' row IS the record of what
+    //   status   - the point of the log. An 'error' row IS the record of what
     //              went wrong; without it only successes are representable.
-    //   action   — created vs updated (the duplicate-listing reconcile path).
-    //   order_id — the join key for observing `outcome` later: diff these
+    //   action   - created vs updated (the duplicate-listing reconcile path).
+    //   order_id - the join key for observing `outcome` later: diff these
     //              against a later GET /orders and a vanished id means sold or
     //              cancelled. Nothing does that yet; this is what makes it
     //              possible without a second migration.
@@ -70,8 +70,8 @@ ALTER TABLE listing_log ADD COLUMN message TEXT;
 CREATE INDEX listing_log_slug_at ON listing_log(slug, listed_at);
 CREATE INDEX listing_log_order ON listing_log(order_id);
 "#,
-    // v3 — price watches. One row per "tell me when": `side` names which side
-    // of the book is watched — 'sell' fires when the lowest online ASK drops
+    // v3 - price watches. One row per "tell me when": `side` names which side
+    // of the book is watched - 'sell' fires when the lowest online ASK drops
     // to `threshold` or below (a buying opportunity), 'buy' fires when the
     // highest online BID reaches `threshold` or above (a selling opportunity).
     // `last_*` are the checker's evidence trail (what it saw, when, when it
@@ -93,8 +93,8 @@ CREATE TABLE watch (
 );
 CREATE INDEX watch_slug ON watch(slug);
 "#,
-    // v4 — the trade ledger. One row per trade the game confirmed in EE.log
-    // (see eelog.rs), items as JSON — the ground truth for realised P&L and
+    // v4 - the trade ledger. One row per trade the game confirmed in EE.log
+    // (see eelog.rs), items as JSON - the ground truth for realised P&L and
     // for auto-closing sold WFM listings. `log_stamp` + `at` dedupe a tailer
     // restart re-reading the same trade.
     r#"
@@ -185,7 +185,7 @@ pub struct SnapshotSummary {
 }
 
 /// What to record for one item of a plan run. Built by the listing command
-/// layer from the plan's own items joined to their results — wfm-core stays
+/// layer from the plan's own items joined to their results - wfm-core stays
 /// storage-free, so the DB write happens here rather than inside the executor.
 pub struct ListingLogRow {
     pub slug: String,
@@ -196,7 +196,7 @@ pub struct ListingLogRow {
     /// "created" | "updated" on success, None otherwise.
     pub action: Option<String>,
     pub order_id: Option<String>,
-    /// WFM's own error text on failure — the evidence that used to be lost.
+    /// WFM's own error text on failure - the evidence that used to be lost.
     pub message: Option<String>,
 }
 
@@ -226,7 +226,7 @@ pub struct Db {
 
 impl Db {
     /// Open (creating if absent) the store at `path` and bring it to the latest
-    /// schema version. Fails only on a genuine I/O / corruption problem — the
+    /// schema version. Fails only on a genuine I/O / corruption problem - the
     /// desktop treats that as unrecoverable (the store is canonical).
     pub fn open(path: &Path) -> rusqlite::Result<Db> {
         Self::init(Connection::open(path)?)
@@ -409,7 +409,7 @@ impl Db {
     /// Insert a whole snapshot (header + all item rows) in ONE transaction:
     /// either every row lands or none does. A mid-insert failure (e.g. the
     /// game returned two entries resolving to the same slug, tripping the
-    /// `(snapshot_id, slug)` PK) rolls the whole thing back — no orphaned header.
+    /// `(snapshot_id, slug)` PK) rolls the whole thing back - no orphaned header.
     /// `taken_at = None` stamps the current UTC time in SQL. Returns the new id.
     pub fn insert_snapshot(
         &self,
@@ -507,7 +507,7 @@ impl Db {
     }
 
     /// The item rows of the most recent snapshot (highest id), or an empty vec
-    /// when no snapshot exists yet. `slug` is the DE item path — the caller
+    /// when no snapshot exists yet. `slug` is the DE item path - the caller
     /// resolves it to a WFM slug for the market join (see `sellables`).
     pub fn latest_snapshot_items(&self) -> rusqlite::Result<Vec<SnapshotItem>> {
         let conn = guard(&self.conn);
@@ -580,8 +580,8 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         let version = (i + 1) as i64;
         if current < version {
             conn.execute_batch(sql)?;
-            // pragma_update won't bind `user_version` as a parameter — it's part
-            // of the statement text — so format it in (it's our own integer).
+            // pragma_update won't bind `user_version` as a parameter - it's part
+            // of the statement text - so format it in (it's our own integer).
             conn.pragma_update(None, "user_version", version)?;
         }
     }
@@ -777,7 +777,7 @@ mod tests {
             .is_err());
         assert_eq!(db.snapshot_count().unwrap(), 0);
 
-        // The store is still usable afterwards — a good insert lands.
+        // The store is still usable afterwards - a good insert lands.
         db.insert_snapshot(
             "memory",
             None,
@@ -860,8 +860,8 @@ mod tests {
 
     #[test]
     fn v1_databases_upgrade_without_losing_rows() {
-        // Shipped users are on v1. Build a v1 DB the way they have one — run
-        // ONLY the first migration — put a row in it, then open it normally and
+        // Shipped users are on v1. Build a v1 DB the way they have one - run
+        // ONLY the first migration - put a row in it, then open it normally and
         // check v2's ALTERs landed on top of the existing data rather than
         // recreating the table.
         let path = temp_db_path();

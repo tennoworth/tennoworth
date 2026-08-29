@@ -1,7 +1,7 @@
 # Self-hosted fonts
 
 Every face here is licensed under the SIL Open Font License 1.1 and is served
-from this origin only — the app makes no third-party requests, and the CSP's
+from this origin only - the app makes no third-party requests, and the CSP's
 `font-src 'self'` would block them anyway. Files are the latin woff2 subsets
 Google Fonts serves to modern browsers (fetched 2026-08-17 from the css2 API
 with a Chrome User-Agent, latin `unicode-range` blocks only), renamed but not

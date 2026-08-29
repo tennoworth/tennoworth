@@ -1,4 +1,4 @@
-// @ts-nocheck — vitest fixtures; the transport's TS contract is exercised by tsc.
+// @ts-nocheck - vitest fixtures; the transport's TS contract is exercised by tsc.
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { installTauri, removeTauri } from './test-utils.js';
 import {
@@ -47,7 +47,7 @@ describe('createTransport selection', () => {
   });
 });
 
-describe('HostedTransport — the informational site has no interactive ops', () => {
+describe('HostedTransport - the informational site has no interactive ops', () => {
   it('loadCachedMarket() is a null no-op that makes NO fetch (hosted rule)', async () => {
     await expect(new HostedTransport().loadCachedMarket()).resolves.toBeNull();
   });
@@ -76,7 +76,7 @@ describe('HostedTransport — the informational site has no interactive ops', ()
     }
   });
 
-  it('interactive ops throw — the site is informational only', async () => {
+  it('interactive ops throw - the site is informational only', async () => {
     const t = new HostedTransport();
     await expect(t.fetchInventory()).rejects.toThrow(/informational site/);
     await expect(t.submitPlan([])).rejects.toThrow(/informational site/);
@@ -131,7 +131,7 @@ describe('TauriTransport op → invoke mapping', () => {
   });
 
   it('reportScanIssue() reports a failed open as data, not a rejection', async () => {
-    // The URL is still filable by hand, so this must not reject — the UI shows
+    // The URL is still filable by hand, so this must not reject - the UI shows
     // it as a copyable link instead of a dead button.
     installTauri(() => Promise.resolve({ url: 'https://github.com/x', opened: false }));
     const t = new TauriTransport();

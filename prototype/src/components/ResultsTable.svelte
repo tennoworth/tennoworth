@@ -91,7 +91,7 @@
     empty = undefined, between = undefined,
   }: Props = $props();
 
-  // Picks panel collapse — session-only; the rail stays as a one-line reminder.
+  // Picks panel collapse - session-only; the rail stays as a one-line reminder.
   let picksOpen = $state(true);
 
   let sortKey = $state<string>('sell_score');
@@ -99,33 +99,33 @@
   let filter = $state('');
   let pageSize = $state(20);
   let page = $state(0);
-  // Compact/Comfortable row-height toggle. Session-only (not persisted) —
+  // Compact/Comfortable row-height toggle. Session-only (not persisted) -
   // Compact is the new denser default; Comfortable restores today's shipped
   // 8px cell padding for anyone who preferred the old row height.
   let density = $state<'compact' | 'comfortable'>('compact');
 
-  // Pill filter — the badges rendered next to item names double as filterable
+  // Pill filter - the badges rendered next to item names double as filterable
   // facets. Multi-select is OR ("show me peaks and holds"); empty = no filter.
   type PillKey = 'peak' | 'hold' | 'patience' | 'vaulted' | 'vaulting-soon' | 'aug';
-  // `what` is the badge's meaning, shown in the chip tooltip — the labels
+  // `what` is the badge's meaning, shown in the chip tooltip - the labels
   // alone read as insider shorthand ("aug" was guessed as "August").
   const PILL_DEFS: { key: PillKey; label: string; cls: string; what: string }[] = [
     { key: 'peak',          label: 'peak',          cls: 'peak',
-      what: 'Price near its 90-day high — a good moment to sell' },
+      what: 'Price near its 90-day high - a good moment to sell' },
     { key: 'hold',          label: 'hold',          cls: 'hold',
-      what: 'Price near its 90-day low (e.g. Baro just flooded it) — usually recovers, consider waiting' },
+      what: 'Price near its 90-day low (e.g. Baro just flooded it) - usually recovers, consider waiting' },
     { key: 'patience',      label: 'patience',      cls: 'patience',
-      what: 'Barely trades (under 3 sales in 48h) — listing it works, selling it takes a while' },
+      what: 'Barely trades (under 3 sales in 48h) - listing it works, selling it takes a while' },
     { key: 'vaulted',       label: 'vaulted',       cls: 'vaulted',
-      what: 'Prime part no longer obtainable in-game — supply only shrinks' },
+      what: 'Prime part no longer obtainable in-game - supply only shrinks' },
     { key: 'vaulting-soon', label: 'vaulting soon', cls: 'vaulting-soon',
-      what: 'About to leave the drop tables — price usually rises after' },
+      what: 'About to leave the drop tables - price usually rises after' },
     { key: 'aug',           label: 'aug',           cls: 'augment',
-      what: 'Syndicate augment mod — rebuyable with syndicate standing, so sell freely' },
+      what: 'Syndicate augment mod - rebuyable with syndicate standing, so sell freely' },
   ];
   let activePills = $state<Set<PillKey>>(new Set());
 
-  // '/' focuses the name filter from anywhere (unless already typing) —
+  // '/' focuses the name filter from anywhere (unless already typing) -
   // the filter box is the fastest path through a 400-row table.
   let filterInput: HTMLInputElement | undefined = $state();
   $effect(() => {
@@ -160,7 +160,7 @@
 
   interface BadgeDef { cls: string; label: string; title: string; }
 
-  // Ordered per-row status badges — same source facts as rowPills (vault
+  // Ordered per-row status badges - same source facts as rowPills (vault
   // status, relic, augment, patience, timing) but rendered as inline
   // outlined chips next to the item name. Capped in the template to
   // BADGE_CAP visible + a "+N" overflow trigger so a row carrying every
@@ -173,18 +173,18 @@
       out.push({ cls: 'vaulting-soon', label: 'vaulting soon', title: 'Estimated to vault within ~60 days. Selling now beats the post-vault floor for active traders.' });
     }
     if (r.subtype === 'intact' || r.subtype === 'exceptional' || r.subtype === 'flawless' || r.subtype === 'radiant') {
-      out.push({ cls: 'relic-tag', label: 'relic → planner', title: "This is a relic. Selling it intact usually clears less than cracking it — check the Relic planner tab, which ranks your relics by expected plat per crack. Relics are excluded from the bulk 'List on WFM' action." });
+      out.push({ cls: 'relic-tag', label: 'relic → planner', title: "This is a relic. Selling it intact usually clears less than cracking it - check the Relic planner tab, which ranks your relics by expected plat per crack. Relics are excluded from the bulk 'List on WFM' action." });
     }
     if (r.is_augment) {
       out.push({ cls: 'augment', label: 'aug', title: 'Syndicate augment mod. Typically 25,000 standing to re-purchase from the issuing syndicate (6 mainline syndicates).' });
     }
     if (r.patience) {
-      out.push({ cls: 'patience', label: 'patience', title: 'Volume under 2 trades/48h — listing will sit a while before clearing.' });
+      out.push({ cls: 'patience', label: 'patience', title: 'Volume under 2 trades/48h - listing will sit a while before clearing.' });
     }
     if (r.timing === 'hold') {
-      out.push({ cls: 'hold', label: 'hold', title: "Price is near its 90-day low — you'd be selling into a trough. Common right after a Baro visit floods the mod; it typically recovers over weeks. Consider holding." });
+      out.push({ cls: 'hold', label: 'hold', title: "Price is near its 90-day low - you'd be selling into a trough. Common right after a Baro visit floods the mod; it typically recovers over weeks. Consider holding." });
     } else if (r.timing === 'peak') {
-      out.push({ cls: 'peak', label: 'peak', title: 'Price is near its 90-day high — a good moment to list this one.' });
+      out.push({ cls: 'peak', label: 'peak', title: 'Price is near its 90-day high - a good moment to list this one.' });
     }
     return out;
   }
@@ -233,7 +233,7 @@
   let hasDeltas = $derived(deltas && deltas.size > 0);
 
   // Help text shown on hover (native title + dotted underline). Plain
-  // language, no marketing — say what the number actually means.
+  // language, no marketing - say what the number actually means.
   // Each help entry is {text, unit, dir} so the popover can render the
   // jargon-y bits explicitly (a casual-user persona reported reading the
   // column name and not knowing what direction was "good"). Falls back
@@ -241,27 +241,27 @@
   interface HelpEntry { text: string; unit?: string; dir?: string; }
   const HELP: Record<string, HelpEntry> = {
     name:           { text: 'Display name on warframe.market. Click to open the listing.' },
-    owned:          { text: 'How many copies you own in your inventory. When the "Keep copies" reserve is set above 0, the sellable count (owned minus the reserve) shows alongside it. Leveled copies (any XP) can’t be traded in-game at all, so they’re held back the same way — shown as "leveled" rather than "kept".', unit: 'count' },
+    owned:          { text: 'How many copies you own in your inventory. When the "Keep copies" reserve is set above 0, the sellable count (owned minus the reserve) shows alongside it. Leveled copies (any XP) can’t be traded in-game at all, so they’re held back the same way - shown as "leveled" rather than "kept".', unit: 'count' },
     delta:          { text: 'Change in count vs. the previous inventory you loaded.', unit: 'count', dir: 'positive = farmed, negative = sold' },
     avg_price:      { text: 'Volume-weighted average across closed trades in the last 48 h.', unit: 'plat', dir: 'noisy on low-volume items' },
     low_sell:       { text: 'Lowest current sell listing from in-game / online players.', unit: 'plat', dir: 'what you can realistically clear at right now' },
     top_buy:        { text: 'Highest current buy offer from in-game / online players.', unit: 'plat', dir: 'instant-sell ceiling' },
     volume_48h:     { text: 'Trades closed in the last 48 h.', unit: 'trades / 48 h', dir: 'higher = more liquid; ≥ 5 is healthy' },
-    ratio:          { text: 'Live buyers ÷ live sellers — a rough demand signal.', unit: 'ratio', dir: '> 1 = buyers outnumber sellers' },
-    potential_plat: { text: 'Owned × Avg. Optimistic — selling N copies usually clears below the average.', unit: 'plat', dir: 'upper bound, not realistic' },
-    raw_value:      { text: 'Owned × the average of the ~5 cheapest live asks (the highlighted @ price). What the stack is worth at current listings — no liquidity discount; one troll listing barely moves it.', unit: 'plat', dir: 'falls back to Owned × Avg until the next scrape adds ask-depth data' },
+    ratio:          { text: 'Live buyers ÷ live sellers - a rough demand signal.', unit: 'ratio', dir: '> 1 = buyers outnumber sellers' },
+    potential_plat: { text: 'Owned × Avg. Optimistic - selling N copies usually clears below the average.', unit: 'plat', dir: 'upper bound, not realistic' },
+    raw_value:      { text: 'Owned × the average of the ~5 cheapest live asks (the highlighted @ price). What the stack is worth at current listings - no liquidity discount; one troll listing barely moves it.', unit: 'plat', dir: 'falls back to Owned × Avg until the next scrape adds ask-depth data' },
     sell_score:     { text: 'Prioritization score, not expected plat/day. Base = min(sellable owned, max(0.05, vol_48h / 2)) × clearing price; DE usage then applies a bounded 0.75×–1.25× weight. Missing or invalid usage is neutral. Items below 3 trades / 48 h get a "patience" tag.', unit: 'score points', dir: 'higher = list sooner; actual plat totals stay unweighted' },
     ducats:         { text: 'Ducat value at Baro Ki’Teer.', unit: 'ducats', dir: 'only prime parts have a non-zero value' },
     plat_per_100d:  { text: 'Plat cost per 100 ducats of value. “Deal” badge fires below 20.', unit: 'plat / 100 ducats', dir: 'lower = better ducat trade than WFM' },
     medians_7d:     { text: 'Sparkline of the last 7 days of daily median price. Hover the line for the raw values.' },
     delta_90d_pct:  { text: 'Latest daily median vs the 90-day median.', unit: '%', dir: '▲ = price rising into a peak (sell now); ▼ = sliding' },
-    advice:         { text: 'Hold-or-sell call from the prime calendar (release decay, Resurgence reprints, post-vault ramps) plus the year of price history. Hover a chip for the exact numbers behind it. Advice only — nothing is automated.', dir: 'sell now = timing favors listing; hold = the ramp is still ahead' },
+    advice:         { text: 'Hold-or-sell call from the prime calendar (release decay, Resurgence reprints, post-vault ramps) plus the year of price history. Hover a chip for the exact numbers behind it. Advice only - nothing is automated.', dir: 'sell now = timing favors listing; hold = the ramp is still ahead' },
   };
 
   // Fixed-layout column widths (rem). Item takes the remainder, down to the
   // ITEM_FLOOR_REM floor that `floorRem` buys it; wider on bigger desks (the
   // root font steps at 1900/2500 widen the numeric block ~6% per step). Below
-  // the floor the panel scrolls sideways rather than squeezing Item — and the
+  // the floor the panel scrolls sideways rather than squeezing Item - and the
   // floor is derived per view, so a preset only ever pays for the columns it
   // actually renders.
   //
@@ -269,8 +269,8 @@
   // spent the 1440 budget: 63.5rem of fixed columns left Item ~208px and the
   // table fit a 1224px content area exactly. At 71rem it no longer fits, so
   // the no-preset view scrolls sideways at 1440 and Item sits on its floor at
-  // 136px. That is the trade this design already declares — scroll, don't
-  // squeeze the item name — but it is a REAL change for that view, and that
+  // 136px. That is the trade this design already declares - scroll, don't
+  // squeeze the item name - but it is a REAL change for that view, and that
   // view only: every preset renders a subset and its floor shrinks with it.
   //
   // ResultsTable.test.ts holds the widths, the floor and each preset together
@@ -299,17 +299,17 @@
   // Ducat-deal threshold: anything below ~20p per 100 ducats is a row
   // where Baro is the better outlet than WFM (you net ≥ 5 ducats per
   // plat you'd otherwise lose). Junk primes in this band rarely move
-  // on WFM anyway — clear them at Baro instead.
+  // on WFM anyway - clear them at Baro instead.
   const DUCAT_DEAL_THRESHOLD = 20.0;
 
   // Column filtering. (1) drop the delta column when no prior snapshot
-  // is loaded — it'd be all zeros. (2) when a preset specifies a column
+  // is loaded - it'd be all zeros. (2) when a preset specifies a column
   // allow-list, narrow to it (preserving the preset's order so the
   // workflow's signal columns come first).
   let columns: ColumnDef[] = $derived.by(() => {
     let cols = hasDeltas ? ALL_COLUMNS : ALL_COLUMNS.filter((c) => c.key !== 'delta');
     // The advice column earns its width only when some row has a verdict
-    // (calendar-dated primes) — same drop-when-absent shape as delta.
+    // (calendar-dated primes) - same drop-when-absent shape as delta.
     if (!results.some((r) => r.advice)) cols = cols.filter((c) => c.key !== 'advice');
     if (Array.isArray(visibleColumns) && visibleColumns.length > 0) {
       const byKey = new Map(cols.map((c) => [c.key, c]));
@@ -327,7 +327,7 @@
   //
   // This used to be a flat `min-width` in the stylesheet, which meant a
   // six-column preset carried the sixteen-column view's floor and scrolled
-  // sideways for columns it does not render — the exact thing the "presets
+  // sideways for columns it does not render - the exact thing the "presets
   // with few columns don't need the full-width floor" comment said was not
   // happening. Both tables take the same value, from the same `columns` that
   // feeds the shared colgroup, so the picks table stays aligned over the rows
@@ -337,14 +337,14 @@
   );
 
   // Pick rows fill the leading numeric columns and give the rest of the row to
-  // the reason line — at least three columns so the sentence has room, eight
+  // the reason line - at least three columns so the sentence has room, eight
   // on the full 16-column set (Own · Δ · Score · Avg · Low sell · Top buy ·
   // Trend stay comparable with the table below).
   let reasonSpan = $derived(Math.max(3, columns.length - 8));
   let pickCols = $derived(columns.slice(1, Math.max(1, columns.length - reasonSpan)));
 
   // A preset can carry a default sort (the Ducats preset ranks by plat-per-100-
-  // ducats ascending — best ducat trades first). presetSort changes identity
+  // ducats ascending - best ducat trades first). presetSort changes identity
   // each time the active preset changes; apply it then. Writes go inside
   // untrack() so they don't re-trigger this effect, and a later user header
   // click (changes sortKey, not presetSort) is preserved until the next switch.
@@ -356,7 +356,7 @@
 
   // If the current sort column gets hidden by a preset switch, fall back to the
   // first visible sortable column. Tracks `columns`; reads/writes sortKey inside
-  // untrack() so the fallback can't re-fire the effect — the old version read
+  // untrack() so the fallback can't re-fire the effect - the old version read
   // AND wrote sortKey in one body, which the audit flagged as a loop risk.
   $effect(() => {
     const cols = columns;
@@ -390,7 +390,7 @@
 
   // Filter and sort are separate deriveds so that changing the SORT doesn't
   // re-run the pill predicate over every row. (Changing the filter still
-  // invalidates the sort — it has to, the row set changed. The win is
+  // invalidates the sort - it has to, the row set changed. The win is
   // one-directional.)
   let filtered = $derived.by(() => {
     const f = filter.trim().toLowerCase();
@@ -419,8 +419,8 @@
     return [...filtered].sort((a, b) => {
       const av = sortValue(a);
       const bv = sortValue(b);
-      // Push nulls to the bottom regardless of sort direction — ducats /
-      // p/100d are sparse, and a column full of "—" at the top is useless.
+      // Push nulls to the bottom regardless of sort direction - ducats /
+      // p/100d are sparse, and a column full of "-" at the top is useless.
       if (av == null && bv == null) return 0;
       if (av == null) return 1;
       if (bv == null) return -1;
@@ -435,7 +435,7 @@
   let filterActive = $derived(filter.trim() !== '' || activePills.size > 0);
   $effect(() => { onfiltered?.(sorted, filterActive); });
 
-  // Pagination — clamps current page when sorted/pageSize change so the
+  // Pagination - clamps current page when sorted/pageSize change so the
   // user doesn't end up on an empty trailing page after filtering.
   let maxPage = $derived(Math.max(0, Math.ceil(sorted.length / pageSize) - 1));
   let currentPage = $derived(Math.min(page, maxPage));
@@ -448,7 +448,7 @@
   }
 
   function fmt(v: unknown, key: string): string {
-    if (v === null || v === undefined) return '—';
+    if (v === null || v === undefined) return '-';
     if (typeof v === 'number') {
       if (key === 'ratio') return v.toFixed(2);
       if (key === 'plat_per_100d') return v.toFixed(1);
@@ -473,7 +473,7 @@
   {#if col.key === 'usage'}
     <!-- Usage share + liquidity read. Sits beside price because its only job
          is to separate two rows that look identical on price and spread. -->
-    {#if r.demand}<DemandCell demand={r.demand} />{:else}<span class="muted">—</span>{/if}
+    {#if r.demand}<DemandCell demand={r.demand} />{:else}<span class="muted">-</span>{/if}
   {:else if col.key === 'name'}
     {@const badges = rowBadges(r)}
     {@const rowKey = r.key ?? r.slug}
@@ -530,16 +530,16 @@
     {#if r.ducats != null}
       <span class="ducat-num">{r.ducats}</span>
       {#if r.plat_per_100d != null && r.plat_per_100d <= DUCAT_DEAL_THRESHOLD}
-        <span class="ducat-badge" title="Listing's plat value is at or below 100 ducats — Baro is the better outlet for this row.">deal</span>
+        <span class="ducat-badge" title="Listing's plat value is at or below 100 ducats - Baro is the better outlet for this row.">deal</span>
       {/if}
     {:else}
-      <span class="muted">—</span>
+      <span class="muted">-</span>
     {/if}
   {:else if col.key === 'plat_per_100d'}
     {#if r.plat_per_100d != null}
       <span class={r.plat_per_100d <= DUCAT_DEAL_THRESHOLD ? 'ducat-num' : ''}>{fmt(r.plat_per_100d, col.key)}</span>
     {:else}
-      <span class="muted">—</span>
+      <span class="muted">-</span>
     {/if}
   {:else if col.key === 'raw_value'}
     {#if r.raw_value > 0}
@@ -548,7 +548,7 @@
         <span class="ask-avg" title="Average of the ~5 cheapest live asks right now">@{fmt(r.low5_avg, 'plat_per_100d')}</span>
       {/if}
     {:else}
-      <span class="muted">—</span>
+      <span class="muted">-</span>
     {/if}
   {:else if col.key === 'medians_7d'}
     {#if r.medians_7d && r.medians_7d.length >= 2}
@@ -557,15 +557,15 @@
         <polyline points={sparklinePoints(r.medians_7d, 60, 18)} fill="none" stroke="currentColor" stroke-width="1.2" />
       </svg>
     {:else}
-      <span class="muted">—</span>
+      <span class="muted">-</span>
     {/if}
   {:else if col.key === 'delta_90d_pct'}
     {#if r.delta_90d_pct == null}
-      <span class="muted">—</span>
+      <span class="muted">-</span>
     {:else if r.delta_90d_pct >= 1}
-      <span class="trend up" title="Latest median {r.delta_90d_pct.toFixed(0)}% above 90d median — sell into the peak">▲{r.delta_90d_pct.toFixed(0)}%</span>
+      <span class="trend up" title="Latest median {r.delta_90d_pct.toFixed(0)}% above 90d median - sell into the peak">▲{r.delta_90d_pct.toFixed(0)}%</span>
     {:else if r.delta_90d_pct <= -1}
-      <span class="trend down" title="Latest median {Math.abs(r.delta_90d_pct).toFixed(0)}% below 90d median — price is sliding">▼{Math.abs(r.delta_90d_pct).toFixed(0)}%</span>
+      <span class="trend down" title="Latest median {Math.abs(r.delta_90d_pct).toFixed(0)}% below 90d median - price is sliding">▼{Math.abs(r.delta_90d_pct).toFixed(0)}%</span>
     {:else}
       <span class="trend flat" title="Within ±1% of 90d median">·</span>
     {/if}
@@ -1038,12 +1038,12 @@
   th.right .hcontent { justify-content: flex-end; }
   th.active { color: var(--accent); }
   /* Hairline row dividers only (was additionally zebra-striped on even
-     rows) — the hairline + this hover tint carry row separation on their
+     rows) - the hairline + this hover tint carry row separation on their
      own now that the header/panel borders read at proper contrast. */
   tbody tr:hover td { background: var(--panel-2); }
   td.col-sell_score { color: var(--fg); font-weight: 600; }
   /* Rows with nothing left to sell (leveled gear ate the whole stack, or
-     the "keep copies" reserve did) stay visible but recede — still useful
+     the "keep copies" reserve did) stay visible but recede - still useful
      as inventory context, not an action item. Was `opacity: 0.5`, which
      silently dropped already-low-contrast --muted text below WCAG AA;
      this keeps every row's text at a token with checked contrast and just
@@ -1066,8 +1066,8 @@
     font-size: 11px;
     color: var(--muted);
   }
-  /* Leveled gear is a harder constraint than the Keep-copies reserve — the
-     game itself won't let you trade it, not just a local preference — so it
+  /* Leveled gear is a harder constraint than the Keep-copies reserve - the
+     game itself won't let you trade it, not just a local preference - so it
      gets a distinct (warmer) tint inside the same kept-note suffix. */
   .leveled-note {
     color: var(--warn);
@@ -1120,11 +1120,11 @@
     vertical-align: middle;
   }
 
-  /* "patience" tag — quiet so it doesn't compete with the item name, but
+  /* "patience" tag - quiet so it doesn't compete with the item name, but
      present enough that a scan picks it up. Used for items with vol_48h < 2,
      i.e. listings that exist but rarely clear. */
   /* Status badges: thin outlines in the tag's own colour (border rides
-     currentColor) — never filled backgrounds. */
+     currentColor) - never filled backgrounds. */
   .tag {
     display: inline-block;
     margin-left: 6px;
@@ -1144,7 +1144,7 @@
   .tag.vaulted { color: var(--bad); }
   .tag.vaulting-soon { color: var(--warn); }
   .tag.augment { color: var(--accent); }
-  /* Timing: "hold" warns you're near the 90d low (don't dump into a trough —
+  /* Timing: "hold" warns you're near the 90d low (don't dump into a trough -
      e.g. a Baro-flooded mod); "peak" marks a price near its 90d high. */
   .tag.hold { color: var(--warn); }
   .tag.peak { color: var(--good); }
@@ -1208,7 +1208,7 @@
     opacity: 0.4;
     cursor: not-allowed;
   }
-  /* Segmented controls — density + page-size. Replaces the native
+  /* Segmented controls - density + page-size. Replaces the native
      page-size <select>, which read as the one default-browser-chrome
      control in an otherwise fully custom-styled table. */
   .segmented {
@@ -1232,7 +1232,7 @@
   .seg-btn:hover { color: var(--fg); background: var(--hover); }
   .seg-btn.active { color: var(--accent); background: var(--panel); font-weight: 600; }
 
-  /* "+N" badge overflow — reuses the header info-popover's click/click-
+  /* "+N" badge overflow - reuses the header info-popover's click/click-
      outside interaction so a row carrying every possible badge doesn't
      crowd the item name past ~2 chips. */
   .badge-overflow-btn {
@@ -1257,11 +1257,11 @@
     border-radius: var(--radius-panel);
     box-shadow: var(--shadow-pop);
   }
-  /* Advisor chip — mirror of App.svelte's .advice-chip (scoped styles
+  /* Advisor chip - mirror of App.svelte's .advice-chip (scoped styles
      don't cross components). */
   /* Advisor verdicts share the .tag anatomy (currentColor border,
      --radius-tag, uppercase micro-label) so every look restyles them for
-     free — a rounded pill here would be the one pill in the app. */
+     free - a rounded pill here would be the one pill in the app. */
   .advice-chip {
     display: inline-block;
     padding: 1px 6px;

@@ -49,7 +49,7 @@
       const kind = d.trade.kind;
       const head = kind === 'sale' ? `Sold for ${d.trade.plat}p` : kind === 'purchase' ? `Bought for ${d.trade.plat}p` : 'Trade completed';
       const adj = d.adjusted.length ? ` · ${d.adjusted.length} listing${d.adjusted.length === 1 ? '' : 's'} updated` : '';
-      pushToast(`${head}: ${describeItems(d.trade)} — ${d.trade.partner}${adj}`);
+      pushToast(`${head}: ${describeItems(d.trade)} - ${d.trade.partner}${adj}`);
       void load();
     });
   });
@@ -83,7 +83,7 @@
   function platCell(t: TradeRow): string {
     if (t.kind === 'sale') return `+${t.plat}p`;
     if (t.kind === 'purchase') return `−${t.plat}p`;
-    return '—';
+    return '-';
   }
 </script>
 
@@ -103,7 +103,7 @@
       </p>
     {:else}
       <p class="muted lead warn-line">
-        <strong>Game log not found</strong> — trade detection is off. TennoWorth looks in <code>%LOCALAPPDATA%\Warframe\EE.log</code> (Windows) and every Steam library's <code>compatdata/230410/…/Warframe/EE.log</code> (Linux). Run Warframe once, then restart TennoWorth; for an unusual install set <code>TENNOWORTH_EELOG=/path/to/EE.log</code> before launching.
+        <strong>Game log not found</strong> - trade detection is off. TennoWorth looks in <code>%LOCALAPPDATA%\Warframe\EE.log</code> (Windows) and every Steam library's <code>compatdata/230410/…/Warframe/EE.log</code> (Linux). Run Warframe once, then restart TennoWorth; for an unusual install set <code>TENNOWORTH_EELOG=/path/to/EE.log</code> before launching.
       </p>
     {/if}
     <label class="toggle">

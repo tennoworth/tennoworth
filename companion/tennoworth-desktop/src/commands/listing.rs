@@ -1,4 +1,4 @@
-//! WFM listing/order commands — the desktop mirror of serve's listing
+//! WFM listing/order commands - the desktop mirror of serve's listing
 //! routes: same wfm-core services (`wfm_core::listing` for single-order
 //! CRUD, `wfm_core::plan` for the bulk-plan executor), gated on
 //! [`WfmSession`]'s unlock state instead of serve's lazy-JWT-unlock.
@@ -19,7 +19,7 @@ use wfm_core::plan::{
 use crate::db::{Db, ListingLogRow};
 use crate::wfm_session::{CmdError, WfmSession};
 
-const PLAN_BUSY_MSG: &str = "A listing plan is already running — wait for it to finish.";
+const PLAN_BUSY_MSG: &str = "A listing plan is already running - wait for it to finish.";
 
 /// Append a finished plan run to `listing_log`.
 ///
@@ -28,7 +28,7 @@ const PLAN_BUSY_MSG: &str = "A listing plan is already running — wait for it t
 /// failure. Losing a local row is strictly less bad than lying about the trade.
 ///
 /// `price_qty` is the plan's own items, positionally aligned with
-/// `response.results` — `run_pending` emits exactly one result per item, in
+/// `response.results` - `run_pending` emits exactly one result per item, in
 /// order. When the lengths disagree the executor took an early-exit path
 /// (empty batch, over the item cap, HTTP client build failure) and returned a
 /// single synthetic `<batch>` result that maps to no item, so there is nothing
@@ -57,7 +57,7 @@ fn record_plan(db: &Db, response: &PlanResponse, price_qty: &[(i64, i64)]) {
     }
 }
 
-/// Execute a listing batch — the desktop POST /plan. Pacing, caps, pending-file
+/// Execute a listing batch - the desktop POST /plan. Pacing, caps, pending-file
 /// persistence, and per-item results all come from wfm-core's execute_plan.
 #[tauri::command]
 pub async fn submit_plan(
@@ -85,7 +85,7 @@ pub async fn submit_plan(
     Ok(response)
 }
 
-/// The last interrupted plan, or null. No auth — mirrors serve's JWT-free
+/// The last interrupted plan, or null. No auth - mirrors serve's JWT-free
 /// GET /plan/pending, so the SPA can poll it before any unlock.
 #[tauri::command]
 pub fn get_pending_plan(session: State<'_, Arc<WfmSession>>) -> Option<PendingPlan> {
@@ -113,7 +113,7 @@ pub async fn resume_pending_plan(
         let _guard = s.begin_plan().ok_or_else(|| CmdError::of("busy", PLAN_BUSY_MSG))?;
         // EVERY item, not just the ones still 'pending'. A pending file only
         // survives when the original run never returned, and submit_plan logs
-        // only after it returns — so nothing from this plan has been recorded
+        // only after it returns - so nothing from this plan has been recorded
         // yet, including the items that succeeded before the interruption.
         // Skipping the already-terminal ones here would lose them for good.
         let price_qty: Vec<(i64, i64)> = pending
@@ -151,7 +151,7 @@ pub async fn update_order(
     order_id: String,
     patch: UpdateRequest,
 ) -> Result<PerOrderResult, CmdError> {
-    // Same cap as the create path — mirrors serve's pre-auth 400 so an edit
+    // Same cap as the create path - mirrors serve's pre-auth 400 so an edit
     // can't push a listing past what the WFM UI allows.
     if let Some(p) = patch.platinum {
         if p > MAX_PLATINUM {

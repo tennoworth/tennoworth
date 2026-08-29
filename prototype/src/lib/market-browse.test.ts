@@ -1,4 +1,4 @@
-// @ts-nocheck — hand-built market fixtures; full TS shapes would be busy-work.
+// @ts-nocheck - hand-built market fixtures; full TS shapes would be busy-work.
 import { describe, it, expect } from 'vitest';
 import {
   titleCase,
@@ -143,13 +143,13 @@ describe('topMovers', () => {
     expect(fallers[1].slug).toBe('rare_thing');
   });
 
-  it('applies the volume floor — thin books are excluded', () => {
+  it('applies the volume floor - thin books are excluded', () => {
     const { risers } = topMovers(m, idx, { minVol: 20 });
     // thin_item has +200% but vol 3 < 20.
     expect(risers.some((r) => r.slug === 'thin_item')).toBe(false);
   });
 
-  it('applies the price floor — avg 9.9 excluded, avg 10 included', () => {
+  it('applies the price floor - avg 9.9 excluded, avg 10 included', () => {
     const { risers } = topMovers(m, idx, { minVol: 1, minPrice: 10 });
     const slugs = risers.map((r) => r.slug);
     expect(slugs).not.toContain('cheap_riser'); // avg 9.9 < 10, despite +100%
@@ -225,7 +225,7 @@ describe('handoffSample', () => {
   const m = fixture();
   const idx = buildBrowseIndex(m);
 
-  it('picks three distinct liquid rows — one vaulted first — with sample owned counts and derived score/potential', () => {
+  it('picks three distinct liquid rows - one vaulted first - with sample owned counts and derived score/potential', () => {
     const rows = handoffSample(m, idx);
     expect(rows.length).toBe(3);
     expect(new Set(rows.map((r) => r.slug)).size).toBe(3);

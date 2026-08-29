@@ -1,9 +1,9 @@
-//! Digital Extremes first-party ingest — Public Export + worldState.
+//! Digital Extremes first-party ingest - Public Export + worldState.
 //!
 //! DE publishes no documented API, no keys and no rate limit. These are the
 //! unauthenticated endpoints the game, the Companion app and the Arsenal
 //! Twitch extension run on; the community has used them for a decade and DE
-//! has tolerated it. **Tolerated is not licensed** — so every fetch here goes
+//! has tolerated it. **Tolerated is not licensed** - so every fetch here goes
 //! through the same descriptive User-Agent and once-per-cycle pacing we honour
 //! for warframe.market, from the box, never per-visitor.
 //!
@@ -17,7 +17,7 @@
 //!   caller reconciles against the prior snapshot, exactly like the
 //!   warframestat surfaces do.
 //! - Nothing is resolved by guessing. An unresolvable `/Lotus/...` path is
-//!   reported, not silently mapped — a wrong price is worse than no price.
+//!   reported, not silently mapped - a wrong price is worse than no price.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -33,10 +33,10 @@ use crate::reconcile::Observation;
 /// LZMA-alone compressed newline list of `File.json!hash` entries.
 ///
 /// Note the host: the export tree lives on `content.` and the dynamic PHP on
-/// `api.` — they do not cross. `api.warframe.com/cdn/PublicExport/` is a 404.
+/// `api.` - they do not cross. `api.warframe.com/cdn/PublicExport/` is a 404.
 pub const DE_INDEX_URL: &str = "https://content.warframe.com/PublicExport/index_en.txt.lzma";
 
-/// Manifest base. The hash is **part of the path** — the bare filename 404s.
+/// Manifest base. The hash is **part of the path** - the bare filename 404s.
 pub const DE_MANIFEST_BASE: &str = "https://content.warframe.com/PublicExport/Manifest/";
 
 /// Failover origin for the same export tree. The bare
@@ -53,7 +53,7 @@ pub const DE_ORIGIN_INDEX_URL: &str =
 /// the numeric keys are Mastery Rank buckets and every value is a fraction of
 /// that category's total usage.
 ///
-/// Keyed by DISPLAY NAME, not uniqueName — so it joins through the item
+/// Keyed by DISPLAY NAME, not uniqueName - so it joins through the item
 /// catalogue rather than the `/Lotus/...` map, and a renamed weapon simply
 /// misses. Annual, so it is fetched once and cached, never per cycle. The
 /// current year is published in arrears: 2026's file did not exist in
@@ -70,7 +70,7 @@ pub fn usage_url(year: u16) -> String {
 }
 
 /// Live game state. Moved here from `content.warframe.com/dynamic/worldState.php`,
-/// which is now a 404. `?platform=` returns 409 — cross-play unified it.
+/// which is now a 404. `?platform=` returns 409 - cross-play unified it.
 pub const DE_WORLD_STATE_URL: &str = "https://api.warframe.com/cdn/worldState.php";
 
 /// DE's weekly riven price statistics. PC is the product's primary market;
@@ -104,14 +104,14 @@ pub const WANTED_MANIFESTS: &[&str] = &[
 /// 1. **It feeds an override on a surface rebuilt every cycle.** Dispositions
 ///    are applied on top of the riven surface (refetched from warframe.market
 ///    each run) and ducats on top of the item catalogue (likewise). There is
-///    nothing to carry — the host surface arrives fresh and simply loses the
-///    override — so skipping reverts dispositions to WFM's lagging mirror and
+///    nothing to carry - the host surface arrives fresh and simply loses the
+///    override - so skipping reverts dispositions to WFM's lagging mirror and
 ///    ducats to WFM's value, silently, on the very next cycle. The fixture
 ///    disagrees by design: WFM says 45 for a Volt Prime Chassis Blueprint,
 ///    DE says 65.
 /// 2. **Another surface depends on it.** Relic rewards need `ExportRecipes`
 ///    to resolve blueprint paths. Caching the two independently means a cycle
-///    where only the relic hash moved has no recipes to build with — and the
+///    where only the relic hash moved has no recipes to build with - and the
 ///    code would fall through to the legacy intact-only source. Keeping the
 ///    shared dependency always-present removes the hazard rather than
 ///    coordinating two caches.
@@ -122,7 +122,7 @@ pub const WANTED_MANIFESTS: &[&str] = &[
 ///
 /// **This list guarantees an ATTEMPT, not a result.** The index can answer
 /// while a manifest 500s, so every consumer must still handle the manifest
-/// being absent — for an override that means re-applying the last known-good
+/// being absent - for an override that means re-applying the last known-good
 /// value from the prior snapshot, never silently reverting to the other
 /// source.
 pub const ALWAYS_FETCH: &[&str] = &["ExportWeapons_en.json", "ExportRecipes_en.json"];
@@ -153,7 +153,7 @@ impl IndexEntry {
 /// Parse the decompressed index into basename → entry.
 ///
 /// Lines are `ExportWeapons_en.json!00_zwapa0tHPowLsyegwAU-zw`. A line without
-/// a `!` is skipped rather than guessed at — a hashless URL 404s, so inventing
+/// a `!` is skipped rather than guessed at - a hashless URL 404s, so inventing
 /// one would only turn a parse problem into a fetch problem.
 pub fn parse_index(text: &str) -> BTreeMap<String, IndexEntry> {
     let mut out = BTreeMap::new();
@@ -264,7 +264,7 @@ pub fn sanitize_control_chars(raw: &str) -> String {
 /// Manifests are NOT single-key. `ExportWeapons_en.json` carries both
 /// `ExportWeapons` (837 rows) and `ExportRailjackWeapons` (143), and serde's
 /// map is ordered, so a "first array wins" heuristic silently reads the wrong
-/// 143 rows — it did, until a live contract test caught it. Ask for the array
+/// 143 rows - it did, until a live contract test caught it. Ask for the array
 /// you mean.
 ///
 /// Falls back to the LARGEST top-level array if the key is absent, so a rename
@@ -304,13 +304,13 @@ pub fn manifest_rows(doc: &Value) -> &[Value] {
 // Fetch stages
 // ---------------------------------------------------------------------------
 
-/// Everything one cycle pulls from DE. Any field may be absent — the caller
+/// Everything one cycle pulls from DE. Any field may be absent - the caller
 /// reconciles against the prior snapshot rather than failing the build.
 #[derive(Debug, Default)]
 pub struct DeSnapshot {
     /// basename → content hash, for manifests we can prove we hold. A manifest
     /// that failed to fetch or parse is ABSENT here even though the index
-    /// named it — recording its hash would tell the next cycle we already have
+    /// named it - recording its hash would tell the next cycle we already have
     /// it and the failure would never be retried.
     pub hashes: BTreeMap<String, String>,
     /// Manifests actually fetched this cycle (skipped ones are absent).
@@ -321,7 +321,7 @@ pub struct DeSnapshot {
     /// Basenames whose hash moved since the prior cycle.
     pub changed: Vec<String>,
     /// Whether the index itself came back. False means DE is unreachable and
-    /// the caller must fall back rather than carry — the distinction between
+    /// the caller must fall back rather than carry - the distinction between
     /// "nothing changed" and "we could not look" is the whole safety of the
     /// skip.
     pub index_ok: bool,
@@ -337,7 +337,7 @@ pub enum ManifestOutcome {
 }
 
 impl DeSnapshot {
-    /// True when the manifest was deliberately skipped as unchanged — the
+    /// True when the manifest was deliberately skipped as unchanged - the
     /// caller should emit an empty surface and let `reconcile` carry the prior
     /// DE-derived one, NOT fall back to another source.
     pub fn skipped(&self, name: &str) -> bool {
@@ -380,7 +380,7 @@ pub fn fetch_export(
         return snap;
     }
     snap.index_ok = true;
-    // Hashes for manifests we are not fetching at all pass through untouched —
+    // Hashes for manifests we are not fetching at all pass through untouched -
     // they are provenance only. The wanted ones are recorded below, and only
     // once we actually hold them.
     snap.hashes = index
@@ -430,7 +430,7 @@ pub fn fetch_export(
     snap
 }
 
-/// Fetch worldState. Returns `None` on any failure — the caller keeps the
+/// Fetch worldState. Returns `None` on any failure - the caller keeps the
 /// prior surface and marks it stale.
 pub fn fetch_world_state(http: &dyn Http) -> Observation<Value> {
     match http.get_json(DE_WORLD_STATE_URL) {
@@ -571,7 +571,7 @@ mod tests {
     fn manifest_rows_named_picks_the_array_you_asked_for() {
         // The real ExportWeapons_en.json shape: two top-level arrays, and the
         // decoy sorts FIRST. Reading "the first array" silently returned the
-        // 143 railjack rows instead of the 837 weapons — caught in production
+        // 143 railjack rows instead of the 837 weapons - caught in production
         // only by the live contract test.
         let v: Value = serde_json::from_str(
             r#"{"ExportRailjackWeapons":[1,2,3],"ExportWeapons":[1,2,3,4,5]}"#,

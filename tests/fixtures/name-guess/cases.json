@@ -49,7 +49,7 @@
       "expected": "ash_prime"
     },
     {
-      "comment": "the case that surfaced the bug: TS used to delete punctuation\n(mk1braton), Rust already turned it into a separator (mk1_braton) —\nWFM's real slug is mk1_braton. TS was fixed to match.",
+      "comment": "the case that surfaced the bug: TS used to delete punctuation\n(mk1braton), Rust already turned it into a separator (mk1_braton) -\nWFM's real slug is mk1_braton. TS was fixed to match.",
       "name": "MK1-Braton",
       "expected": "mk1_braton"
     },

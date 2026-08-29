@@ -1,6 +1,6 @@
 #!/bin/sh
 # Pull the CI-built web bundle (web-latest release) when it changes, swap it
-# into place atomically, reload Caddy. Run from the wfm-web-pull.timer — the
+# into place atomically, reload Caddy. Run from the wfm-web-pull.timer - the
 # box never builds anything (node/bun stay off it, per README).
 set -eu
 
@@ -32,7 +32,7 @@ tar xzf "$TMP/dist.tgz" -C "$TMP/dist"
 
 # A gutted tarball must not replace a working site.
 [ -f "$TMP/dist/index.html" ] && [ -d "$TMP/dist/assets" ] || {
-  echo "downloaded bundle is missing index.html or assets/ — keeping current dist" >&2
+  echo "downloaded bundle is missing index.html or assets/ - keeping current dist" >&2
   exit 1
 }
 

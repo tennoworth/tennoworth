@@ -1,5 +1,5 @@
 // IndexedDB-backed catalog cache: key versioning, TTL expiry, and the
-// RETIRED_KEYS reclamation ("invalidation is not reclamation" — a bumped
+// RETIRED_KEYS reclamation ("invalidation is not reclamation" - a bumped
 // key never deletes its old row, only purgeRetiredCaches does).
 import 'fake-indexeddb/auto';
 import { describe, it, expect, beforeEach } from 'vitest';
@@ -9,7 +9,7 @@ const TTL_MS = 24 * 60 * 60 * 1000;
 const DB = 'wfminv';
 const STORE = 'catalogs';
 
-// Seed a row under a given key (raw IDB — the module's own API only ever
+// Seed a row under a given key (raw IDB - the module's own API only ever
 // touches its CURRENT key, which is exactly the point of the retired-keys
 // tests).
 async function seedRow(key: string, ts: number, data: unknown): Promise<void> {

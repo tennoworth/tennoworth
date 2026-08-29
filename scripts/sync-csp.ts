@@ -1,9 +1,9 @@
 // Single source of truth for the Content-Security-Policy.
 //
-// The HOSTED CSP ships in THREE places that must agree — prototype/index.html
+// The HOSTED CSP ships in THREE places that must agree - prototype/index.html
 // (meta tag, works even on hosts that drop header files),
 // prototype/public/_headers (Cloudflare Pages / Netlify), and deploy/Caddyfile
-// (self-host) — and they were hand-synced, with a standing doc warning instead
+// (self-host) - and they were hand-synced, with a standing doc warning instead
 // of tooling. Edit the DIRECTIVES below, run `bun run csp` (from prototype/) to
 // rewrite all three; CI runs `--check` before every build and fails if any copy
 // drifted.
@@ -28,7 +28,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // so there are no loopback or third-party connect origins. (The loopback
 // entries were for the removed companion CLI.)
 const HOSTED_CONNECT_SRC = "connect-src 'self'";
-// Desktop: no loopback (there is no HTTP server) — instead the Tauri
+// Desktop: no loopback (there is no HTTP server) - instead the Tauri
 // IPC transport (`ipc://localhost` + the `http://ipc.localhost` fast path) and
 // the single C4 remote-refresh origin. Verified against the desktop spike's
 // captured `connect-src` violations.
@@ -76,7 +76,7 @@ if (desktopIdx !== -1) {
   }
   const before = readFileSync(target, 'utf8');
   if (!META_RE.test(before)) {
-    console.error(`sync-csp: no CSP meta tag found in ${target} — desktop rewrite failed`);
+    console.error(`sync-csp: no CSP meta tag found in ${target} - desktop rewrite failed`);
     process.exit(2);
   }
   const after = before.replace(META_RE, metaReplacement(desktopMetaDirectives));
@@ -111,7 +111,7 @@ for (const t of TARGETS) {
   const abs = join(ROOT, t.path);
   const before = readFileSync(abs, 'utf8');
   if (!t.re.test(before)) {
-    console.error(`sync-csp: no CSP found in ${t.path} — pattern needs updating`);
+    console.error(`sync-csp: no CSP found in ${t.path} - pattern needs updating`);
     process.exit(2);
   }
   const after = before.replace(t.re, t.replacement);

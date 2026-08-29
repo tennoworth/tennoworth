@@ -1,4 +1,4 @@
-//! WFM item catalog fetch (`GET /v2/items`) and order-response enrichment —
+//! WFM item catalog fetch (`GET /v2/items`) and order-response enrichment -
 //! WFM's `/orders` endpoint returns only a raw `itemId`, so this injects the
 //! display name the browser panels need, looked up against the catalog.
 
@@ -14,13 +14,13 @@ pub struct WfmCatalogItem {
     /// Some items (mods, arcanes) accept a `rank` field on POST /v2/order
     /// and **require** that maxRank exists in the catalog. For items
     /// without `maxRank`, sending `rank` at all returns
-    /// `app.field.notAllowed` — so we conditionally include the field.
+    /// `app.field.notAllowed` - so we conditionally include the field.
     pub max_rank: Option<u32>,
     /// Items with multiple variants (relics: intact/exc/fla/rad;
     /// veiled rivens: unrevealed/revealed) require a `subtype` on POST
     /// /v2/order. Without it WFM returns `app.field.required`. We default
     /// to the first listed subtype (lowest-value: intact relic, unrevealed
-    /// riven) — the user can pick a different one via the orders panel
+    /// riven) - the user can pick a different one via the orders panel
     /// after listing succeeds.
     pub subtypes: Vec<String>,
 }
@@ -66,7 +66,7 @@ pub fn fetch_wfm_catalog(client: &Client, platform: &str) -> Result<BTreeMap<Str
     Ok(out)
 }
 
-/// Display name + slug for one WFM item id — what a bare `itemId` on a user
+/// Display name + slug for one WFM item id - what a bare `itemId` on a user
 /// order needs to become something the UI can show AND price-check.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ItemMeta {
@@ -84,7 +84,7 @@ pub fn index_item_meta(catalog: &BTreeMap<String, WfmCatalogItem>) -> BTreeMap<S
 
 // WFM /v2/orders/user/<username> returns orders that carry `itemId` but no
 // display name or slug. The MyOrdersPanel falls all the way through to the
-// raw id without this — and, until 2026-08-16, got the NAME but not the SLUG,
+// raw id without this - and, until 2026-08-16, got the NAME but not the SLUG,
 // so every slug-keyed feature downstream (the drift check against the market
 // snapshot) silently matched nothing. We mutate the response in place to
 // attach `item: { name, slug }` per order, looked up against the catalog we
@@ -117,7 +117,7 @@ fn attach_item_meta(order: &mut serde_json::Value, id_to_item: &BTreeMap<String,
     let Some(id) = id else { return };
     let Some(meta) = id_to_item.get(&id) else { return };
     let Some(obj) = order.as_object_mut() else { return };
-    // Don't clobber if WFM has started including item metadata on its own —
+    // Don't clobber if WFM has started including item metadata on its own -
     // fill only the keys that are missing.
     let item = obj
         .entry("item")

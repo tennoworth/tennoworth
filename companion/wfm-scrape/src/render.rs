@@ -1,4 +1,4 @@
-//! Render — CSV rows → item entries → full snapshot.
+//! Render - CSV rows → item entries → full snapshot.
 //!
 //! Pure transform with injected clock. No network I/O; no dependency on
 //! the fetch stage. The fetch-dependent surfaces (`path_to_info`,
@@ -67,7 +67,7 @@ pub fn render_item(row: &csvin::CsvRow, meta: &CatalogItemMeta) -> ItemEntry {
         ducats: meta.ducats,
         median_now: {
             let raw = row.median_now.as_str();
-            // old CSVs lack median_now — fall back to median_90d
+            // old CSVs lack median_now - fall back to median_90d
             let val = if raw.is_empty() { row.median_90d.as_str() } else { raw };
             parse_f64_or(val, 0.0)
         },
@@ -115,24 +115,24 @@ pub struct Snapshot {
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub baro: HashMap<String, serde_json::Value>,
     /// `weapons: {slug: {name, disposition, group, riven_type, req_mr}}` +
-    /// `changes: [{slug, name, from, to, seen_at}]` (rolling 90 d) — see
+    /// `changes: [{slug, name, from, to, seen_at}]` (rolling 90 d) - see
     /// `fetch::fetch_rivens`.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub rivens: HashMap<String, serde_json::Value>,
     /// `primes: {set_slug: {name, released, vaulted, vault_date, …}}` +
-    /// `resurgence: [{from, to, pack, frames}]` + `resurgence_current` — see
+    /// `resurgence: [{from, to, pack, frames}]` + `resurgence_current` - see
     /// `fetch::fetch_calendar`.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub calendar: HashMap<String, serde_json::Value>,
-    /// `{slug: {name, unrolled?, rolled?}}` — DE's weekly riven price bands
-    /// per weapon × reroll-state — see `fetch::fetch_riven_stats`.
+    /// `{slug: {name, unrolled?, rolled?}}` - DE's weekly riven price bands
+    /// per weapon × reroll-state - see `fetch::fetch_riven_stats`.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub riven_stats: HashMap<String, serde_json::Value>,
     /// `{slug: {build_price, build_time, rush_price, ingredients[]}}` keyed by
-    /// the item the recipe PRODUCES — see `de_extract::recipes_from_export`.
+    /// the item the recipe PRODUCES - see `de_extract::recipes_from_export`.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub recipes: HashMap<String, serde_json::Value>,
-    /// `{slug: {name, category, year, share, peak_mr, by_mr[]}}` — DE's annual
+    /// `{slug: {name, category, year, share, peak_mr, by_mr[]}}` - DE's annual
     /// usage telemetry, keyed by the PARENT's slug. See
     /// `de_extract::usage_from_export`.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
@@ -196,7 +196,7 @@ pub struct DeSurface {
     /// Export manifest basename → content hash, as published this cycle.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub hashes: std::collections::BTreeMap<String, String>,
-    /// Manifests whose hash moved this cycle — a patch-day signal in itself.
+    /// Manifests whose hash moved this cycle - a patch-day signal in itself.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub changed: Vec<String>,
     /// Whether worldState answered with an object. This does not describe
@@ -206,7 +206,7 @@ pub struct DeSurface {
     /// PC weekly-riven fetch must not make a failed Switch child look current.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub child_fetched_at: std::collections::BTreeMap<String, String>,
-    /// Announced Prime Vault rotations — the real thing, not the estimate.
+    /// Announced Prime Vault rotations - the real thing, not the estimate.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub vault_rotation: Vec<serde_json::Value>,
     /// Darvo's daily deal.
@@ -217,7 +217,7 @@ pub struct DeSurface {
     /// This is PROVENANCE, and it is load-bearing. Ducats are an override on a
     /// catalogue rebuilt from warframe.market every cycle, so when the recipes
     /// manifest fails the override has to be re-applied from the prior
-    /// snapshot — and without knowing which values were DE's, that carry would
+    /// snapshot - and without knowing which values were DE's, that carry would
     /// also stamp stale WFM values over fresh, legitimately-corrected ones.
     #[serde(default, skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub ducats: std::collections::BTreeMap<String, i64>,
@@ -230,7 +230,7 @@ pub struct DeSurface {
 /// Assemble a [`Snapshot`] from rendered items + catalog + all surfaces.
 ///
 /// The `now` parameter is the injected clock (see [`clock`]); every
-/// timestamp in the snapshot — including per-surface stamps — flows
+/// timestamp in the snapshot - including per-surface stamps - flows
 /// through it.
 #[allow(clippy::too_many_arguments)]
 pub fn assemble_snapshot(
@@ -256,7 +256,7 @@ pub fn assemble_snapshot(
         item_count: items.len(),
         catalog_count: catalog.len(),
         source: "bootstrap from wfm_results.csv + /v2/items".to_string(),
-        // Set by the caller after assembly — DE's surfaces are built from
+        // Set by the caller after assembly - DE's surfaces are built from
         // manifests that may legitimately be absent this cycle.
         de: None,
         catalog,
@@ -292,7 +292,7 @@ fn parse_i64_or(s: &str, default: i64) -> i64 {
         return default;
     }
     // The scraper writes some integer columns float-formatted ("15.0");
-    // Python does int(float(s)) — truncation toward zero. Falling back to a
+    // Python does int(float(s)) - truncation toward zero. Falling back to a
     // bare i64 parse silently zeroed every such value (caught by the first
     // real-data shadow run: 2857 Donchian diffs).
     s.parse().or_else(|_| s.parse::<f64>().map(|f| f.trunc() as i64)).unwrap_or(default)

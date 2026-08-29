@@ -3,7 +3,7 @@
 // The app's answer to "what's worth selling" has always been circular: spread
 // and volume from warframe.market tell you what is being TRADED, not what is
 // being WANTED. Two parts at 12p with a 5p spread and single-digit volume look
-// identical — and one of them is a piece of a weapon 5% of players run while
+// identical - and one of them is a piece of a weapon 5% of players run while
 // the other belongs to something nobody has equipped since 2019. The first
 // sells tonight; the second sits in your listings for a month.
 //
@@ -76,7 +76,7 @@ function parentIndexFor(market: Market): UsageParentIndex {
 /**
  * Usage for a slug, following a part up to its parent set when needed.
  *
- * `inherited` is not decoration — a part showing its parent's number without
+ * `inherited` is not decoration - a part showing its parent's number without
  * saying so would imply per-part telemetry that does not exist.
  */
 export function usageFor(
@@ -102,13 +102,13 @@ export function usageFor(
 
 /** Share at or above which an item counts as genuinely popular within its
  *  category. Categories hold 113–233 items, so an even split would be well
- *  under 1% — a whole percent is a real signal. */
+ *  under 1% - a whole percent is a real signal. */
 /** 48h trades below which the market side of the signal is too thin to lean
  *  on. Matches the threshold the relic planner uses. */
 export const THIN_VOLUME = 5;
 
 export type Liquidity =
-  | 'sells-today' //   played and trading — list at market and it moves
+  | 'sells-today' //   played and trading - list at market and it moves
   | 'underpriced' //   played and trading, but priced below its own baseline
   | 'slow' //          barely played; list high and be patient
   | 'thin' //          barely traded, whatever the usage says
@@ -118,7 +118,7 @@ export interface DemandRead {
   usage: UsageEntry | null;
   inherited: boolean;
   liquidity: Liquidity;
-  /** Mastery-Rank band that accounts for most of this item's usage — who is
+  /** Mastery-Rank band that accounts for most of this item's usage - who is
    *  actually buying it. Null when there is no usage curve. */
   band: { from: number; to: number } | null;
 }
@@ -196,7 +196,7 @@ export function readDemand(
 /**
  * A multiplier for the sell ranking, from usage.
  *
- * Deliberately gentle — 0.75× to 1.25×. Usage is a real signal but it is
+ * Deliberately gentle - 0.75× to 1.25×. Usage is a real signal but it is
  * annual, measured on the parent, and about equipping rather than buying;
  * letting it dominate a ranking built from live prices would be trading one
  * kind of overconfidence for another. Items with no usage data score 1.0 and

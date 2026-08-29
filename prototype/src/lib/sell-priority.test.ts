@@ -1,4 +1,4 @@
-// @ts-nocheck — vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
+// @ts-nocheck - vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
 import { describe, it, expect } from 'vitest';
 import { scoreRow, bandSignal, clearingPrice, sellableQty, spareQty, selectPicks, MIN_PICK_SCORE, MAX_PICKS } from './sell-priority.js';
 
@@ -41,7 +41,7 @@ describe('scoreRow', () => {
     expect(scoreRow({ owned: 5, m: { low_sell: 200, avg: 220, vol: 3 } }).patience).toBe(false);
   });
 
-  it('does not zero out completely dead items — they should still rank, just very low', () => {
+  it('does not zero out completely dead items - they should still rank, just very low', () => {
     const r = scoreRow({ owned: 1, m: { low_sell: 100, avg: 100, vol: 0 } });
     // dailySales floor of 0.05 → 0.05 × 100 = 5
     expect(r.sell_score).toBeCloseTo(5);
@@ -54,14 +54,14 @@ describe('scoreRow', () => {
 
   it('does not let a dead item with a fantasy ask top the sort', () => {
     // corpus_void_key: vol 1, lone 2,999p ask, real trades ~200p. Raw
-    // low_sell scored it 1499.5 — rank #2 of 2,623 in the live snapshot.
+    // low_sell scored it 1499.5 - rank #2 of 2,623 in the live snapshot.
     const r = scoreRow({ owned: 3, m: { low_sell: 2999, avg: 204, vol: 1, median_90d: 200 } });
     // dailySales = 0.5 → 0.5 × clamped(200 × 1.5) = 150, not 1499.5
     expect(r.sell_score).toBeCloseTo(150);
   });
 
   it('does not let a vol-2 item with a 10× ask dodge the clamp (winding isles)', () => {
-    // winding_isles_scene: vol 2, one live 100p ask over a 10p median —
+    // winding_isles_scene: vol 2, one live 100p ask over a 10p median -
     // ranked #7 at "expected 100p/day" because the old gate was vol < 2.
     const r = scoreRow({ owned: 1, m: { low_sell: 100, avg: 10, vol: 2, median_now: 10 } });
     // clearing = 10 × 1.5 = 15, units = min(1, 1) → 15, not 100
@@ -83,7 +83,7 @@ describe('clearingPrice', () => {
 
   it('clamps a thin item’s aspirational ask down to 1.5× median', () => {
     expect(clearingPrice({ low_sell: 2999, median_now: 204, avg: 204, vol: 1 })).toBe(306);
-    // vol 2–4 books get the same treatment — they used to dodge the vol<2 gate
+    // vol 2–4 books get the same treatment - they used to dodge the vol<2 gate
     expect(clearingPrice({ low_sell: 100, median_now: 10, avg: 10, vol: 2 })).toBe(15);
     expect(clearingPrice({ low_sell: 100, median_now: 10, avg: 10, vol: 4 })).toBe(15);
   });
@@ -92,7 +92,7 @@ describe('clearingPrice', () => {
     expect(clearingPrice({ low_sell: 14, median_now: 10, avg: 11, vol: 2 })).toBe(14);
   });
 
-  it('keeps a liquid item’s high ask — there the book is real information', () => {
+  it('keeps a liquid item’s high ask - there the book is real information', () => {
     expect(clearingPrice({ low_sell: 700, median_now: 200, avg: 250, vol: 30 })).toBe(700);
     // LIQUID_VOL boundary: vol 5 counts as liquid
     expect(clearingPrice({ low_sell: 100, median_now: 10, avg: 10, vol: 5 })).toBe(100);
@@ -131,13 +131,13 @@ describe('sellableQty', () => {
   });
 
   it('leveled copies satisfy the reserve when leveled > reserve', () => {
-    // 5 owned, 2 leveled (untradeable), reserve only asks for 1 kept back —
+    // 5 owned, 2 leveled (untradeable), reserve only asks for 1 kept back -
     // the leveled copies already cover that, so sellable = 5 - 2 = 3.
     expect(sellableQty(5, 1, 2)).toBe(3);
   });
 
   it('the reserve holds back more than the leveled count when reserve > leveled', () => {
-    // 5 owned, 1 leveled, but the user wants 3 kept back — reserve wins.
+    // 5 owned, 1 leveled, but the user wants 3 kept back - reserve wins.
     expect(sellableQty(5, 3, 1)).toBe(2);
   });
 
@@ -180,7 +180,7 @@ describe('bandSignal', () => {
   });
 
   it('suppresses a peak the live book contradicts (wash-traded median)', () => {
-    // Goopolla: 36 "trades" at 12p while 209 live asks sit at 1p — the peak
+    // Goopolla: 36 "trades" at 12p while 209 live asks sit at 1p - the peak
     // price is unrealizable, so "list now" would be wrong twice over.
     expect(bandSignal({ price: 12, donchBot: 1, donchTop: 12, lowSell: 1 })).toBe('neutral');
   });
@@ -194,14 +194,14 @@ describe('bandSignal', () => {
   it('fails CLOSED when there is no live book at all', () => {
     // neo_t7_relic: median 42 at the band top, zero live asks, top buy 15.
     // An uncorroborated peak on a no-ask item is the cheapest state to
-    // manipulate into existence — never render "list now" from history alone.
+    // manipulate into existence - never render "list now" from history alone.
     expect(bandSignal({ price: 64, donchBot: 25, donchTop: 66, lowSell: 0 })).toBe('neutral');
     expect(bandSignal({ price: 64, donchBot: 25, donchTop: 66 })).toBe('neutral');
     expect(bandSignal({ price: 42, donchBot: 3, donchTop: 42, lowSell: 0, topBuy: 15 })).toBe('neutral');
   });
 
   it('lets real demand corroborate a peak when the ask side is polluted', () => {
-    // akbolto receiver: stable 38p median at its high, one 1p troll ask —
+    // akbolto receiver: stable 38p median at its high, one 1p troll ask -
     // but a live buy offer near the price proves the peak is real.
     expect(bandSignal({ price: 38, donchBot: 20, donchTop: 40, lowSell: 1, topBuy: 30 })).toBe('peak');
     // ...while a wash-traded fish has no demand side to fake (Goopolla:
@@ -215,7 +215,7 @@ describe('bandSignal', () => {
 });
 
 describe('selectPicks', () => {
-  // Minimal row shape — real callers pass the full `results` row (name,
+  // Minimal row shape - real callers pass the full `results` row (name,
   // slug, timing, clearing_price, …); selectPicks only reads these three.
   function row(overrides = {}) {
     return { sellable: 5, patience: false, sell_score: 50, ...overrides };
@@ -259,7 +259,7 @@ describe('selectPicks', () => {
     expect(selectPicks(rows)).toEqual([row({ sell_score: MIN_PICK_SCORE })]);
   });
 
-  it('slices in the given order instead of re-sorting — trusts the caller pre-sorted', () => {
+  it('slices in the given order instead of re-sorting - trusts the caller pre-sorted', () => {
     // Deliberately out of score order. If selectPicks ever re-sorted, this
     // would come back ['high', 'low'] and mask a caller regression instead
     // of surfacing it.

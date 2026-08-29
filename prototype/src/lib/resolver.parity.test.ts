@@ -1,4 +1,4 @@
-// @ts-nocheck — fixture-driven parity check; full TS shapes here would be busy-work.
+// @ts-nocheck - fixture-driven parity check; full TS shapes here would be busy-work.
 //
 // Cross-language parity gate for the path/name → slug GUESS fallbacks. The
 // canonical logic lives here (resolver.ts); it is mirrored in Rust
@@ -8,7 +8,7 @@
 // (tests/fixtures/name-guess/cases.json) against the SAME expected output.
 //
 // If either implementation's behavior changes, this test (or the Rust one)
-// fails until both are brought back into agreement — that's the gate.
+// fails until both are brought back into agreement - that's the gate.
 import { describe, it, expect } from 'vitest';
 import { slugGuess, pathNameGuess } from './resolver.js';
 import fixture from '../../../tests/fixtures/name-guess/cases.json';

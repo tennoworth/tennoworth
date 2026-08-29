@@ -4,7 +4,7 @@
 //! This mirrors `flattenInventory()` in prototype/src/lib/inventory.ts: walk the
 //! same tradeable categories, key by the DE item path, sum counts, and count
 //! copies DE has flagged untradeable (XP > 0) as `leveled`. It deliberately does
-//! NOT resolve the path to a WFM slug — resolution needs the wfstat catalog,
+//! NOT resolve the path to a WFM slug - resolution needs the wfstat catalog,
 //! which is a client concern (prototype/src/lib/resolver.ts is its sole owner)
 //! and out of wfm-core's scope. The stable DE path is stored as the slug; a
 //! later join step can map it to a WFM slug when history is surfaced.
@@ -15,7 +15,7 @@ use serde_json::Value;
 
 use crate::db::SnapshotItem;
 
-/// The categories flatten walks — kept 1:1 with `TRADEABLE_CATEGORIES` in
+/// The categories flatten walks - kept 1:1 with `TRADEABLE_CATEGORIES` in
 /// inventory.ts. Stack categories (MiscItems, Recipes, RawUpgrades) carry
 /// `ItemCount` and no XP; instance categories (Suits, LongGuns, …) are one
 /// entry per owned copy with its own XP.
@@ -35,7 +35,7 @@ const TRADEABLE_CATEGORIES: &[&str] = &[
 
 /// Parse `inventory_json` and aggregate tradeable items by DE path. Result is
 /// sorted by path (BTreeMap) for deterministic snapshots. A non-array or absent
-/// category is skipped; entries without a path are skipped — matching the TS
+/// category is skipped; entries without a path are skipped - matching the TS
 /// walker's leniency.
 pub fn extract_items(inventory_json: &[u8]) -> serde_json::Result<Vec<SnapshotItem>> {
     let root: Value = serde_json::from_slice(inventory_json)?;

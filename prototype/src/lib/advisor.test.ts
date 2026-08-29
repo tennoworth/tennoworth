@@ -37,7 +37,7 @@ const gauss = {
 const p2s = { gauss_prime_set: { name: 'Gauss Prime', parts: [{ slug: 'gauss_prime_chassis', component_name: 'Chassis' }] } };
 
 describe('advise', () => {
-  it('returns null for items with no calendar entry — no advice beats a guess', () => {
+  it('returns null for items with no calendar entry - no advice beats a guess', () => {
     const market = marketWith({ primes: gauss, set_to_parts: p2s });
     const partToSet = buildPartToSet(market);
     expect(advise({ slug: 'ash_prime_blueprint', market, history: null, partToSet, nowMs: NOW })).toBeNull();

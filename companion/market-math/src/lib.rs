@@ -2,7 +2,7 @@
 //! pipeline, `wfm_demand.py` + `scripts/csv_to_market_json.py`).
 //!
 //! RULES FOR THIS CRATE:
-//! - No I/O, no HTTP, no clocks, no dependencies. Pure functions only —
+//! - No I/O, no HTTP, no clocks, no dependencies. Pure functions only -
 //!   that's what lets every function be pinned against the shared fixtures.
 //! - Where Python semantics are quirky (ties-to-even rounding, upper-middle
 //!   baseline, insertion-order tie-breaks), we preserve them DELIBERATELY
@@ -35,11 +35,11 @@ pub struct StatsDay {
     pub avg_price: f64,
     pub subtype: Option<String>,
     /// Tri-state, faithfully mirroring the Python dict semantics:
-    /// - `None`          — key absent: an untiered item (weapon/set/relic)
-    /// - `Some(None)`    — key present but null: counts as rank-0 AND marks
+    /// - `None`          - key absent: an untiered item (weapon/set/relic)
+    /// - `Some(None)`    - key present but null: counts as rank-0 AND marks
     ///   the item as tiered (Python: `"mod_rank" in d` is true,
     ///   `(d.get("mod_rank") or 0) == 0` keeps it)
-    /// - `Some(Some(n))` — a real rank tier
+    /// - `Some(Some(n))` - a real rank tier
     pub mod_rank: Option<Option<i64>>,
 }
 
@@ -48,7 +48,7 @@ pub struct StatsDay {
 pub struct LiveOrder {
     pub platinum: f64,
     /// v2 sends the key with null on untiered items, so absent-vs-null
-    /// collapse into `None` here — any `Some(rank)` marks the item tiered.
+    /// collapse into `None` here - any `Some(rank)` marks the item tiered.
     pub rank: Option<i64>,
     pub subtype: Option<String>,
 }
@@ -71,7 +71,7 @@ impl HasSubtype for LiveOrder {
 
 /// Keep the unranked tier of a closed-stats list.
 ///
-/// WFM emits one row per (day, mod_rank) for mods — an unranked AND a
+/// WFM emits one row per (day, mod_rank) for mods - an unranked AND a
 /// max-rank tier. Baro sells mods unranked and that's the tier players
 /// resell, so stats must describe rank 0. Items without rank tiers lack the
 /// key entirely, so ABSENCE OF METADATA is the only correct fallback
@@ -88,7 +88,7 @@ pub fn rank0_rows(rows: &[StatsDay]) -> Vec<StatsDay> {
         .collect()
 }
 
-/// Keep the unranked tier of a live order list — the order-book counterpart
+/// Keep the unranked tier of a live order list - the order-book counterpart
 /// of [`rank0_rows`], with the same honest empty fallback. (tempo_royale: a
 /// rank-3 ask at 30p under a 35p rank-0 book read as "sell at 30";
 /// arcane_velocity: a rank-5 buy at 160p sat next to a 7p rank-0 price.)
@@ -138,7 +138,7 @@ pub fn canonical_subtype<T: HasSubtype>(rows: &[T], volume_of: impl Fn(&T) -> f6
 }
 
 /// Filter a list to one subtype tier (`None` pick = no-op). Rows without a
-/// subtype are generic — keep them.
+/// subtype are generic - keep them.
 pub fn subtype_rows<T: HasSubtype + Clone>(rows: &[T], pick: Option<&str>) -> Vec<T> {
     match pick {
         None => rows.to_vec(),
@@ -150,7 +150,7 @@ pub fn subtype_rows<T: HasSubtype + Clone>(rows: &[T], pick: Option<&str>) -> Ve
     }
 }
 
-/// Average of the n cheapest live asks — a depth-aware "current price".
+/// Average of the n cheapest live asks - a depth-aware "current price".
 ///
 /// `low_sell` alone is ONE number any account can set for free (a 1p troll
 /// listing); the mean of the cheapest five is what the sell wall actually
@@ -186,10 +186,10 @@ fn stat_median(values: &[f64]) -> f64 {
 /// `(median_now, median_90d, medians_7d, donch_top, donch_bot)` from an
 /// already tier-narrowed, poison-filtered 90-day series.
 ///
-/// median_now = the latest day's median — "what it trades at today".
-/// median_90d = the median OF the daily medians — the 90-day baseline.
+/// median_now = the latest day's median - "what it trades at today".
+/// median_90d = the median OF the daily medians - the 90-day baseline.
 /// The band is recomputed from the filtered daily medians, not WFM's
-/// precomputed donch values — those still reflect a cap-pinned day even
+/// precomputed donch values - those still reflect a cap-pinned day even
 /// after we drop it from the series.
 pub fn series_stats(nineties: &[StatsDay]) -> (f64, f64, Vec<f64>, f64, f64) {
     let daily: Vec<f64> = nineties.iter().map(|d| d.median).collect();
@@ -209,9 +209,9 @@ pub fn series_stats(nineties: &[StatsDay]) -> (f64, f64, Vec<f64>, f64, f64) {
 /// Strip wash-trade / cap-pinned daily rows from a closed-stats list.
 ///
 /// When the cap filter removes EVERYTHING, the item's only activity is
-/// manipulation — return the empty list so volume sums to 0 (an earlier
+/// manipulation - return the empty list so volume sums to 0 (an earlier
 /// `or rows` fallback handed the fabricated 99,999p average back in exactly
-/// that case). Baseline preserved from Python: `meds[len // 2]` — the UPPER
+/// that case). Baseline preserved from Python: `meds[len // 2]` - the UPPER
 /// middle of the sorted positive medians, not statistics.median.
 pub fn drop_poisoned_rows(rows: &[StatsDay]) -> Vec<StatsDay> {
     let clean: Vec<StatsDay> = rows
@@ -280,13 +280,13 @@ pub fn clamp_low5(low5: f64, median_90d: f64, low_sell: f64) -> f64 {
     }
 }
 
-/// Highest live buy price, or 0 when there are no buys — Python's
+/// Highest live buy price, or 0 when there are no buys - Python's
 /// `max((o["platinum"] for o in live_buys), default=0)`.
 pub fn top_buy(buys: &[LiveOrder]) -> f64 {
     buys.iter().map(|o| o.platinum).reduce(f64::max).unwrap_or(0.0)
 }
 
-/// Lowest live sell price, or 0 when there are no sells — Python's
+/// Lowest live sell price, or 0 when there are no sells - Python's
 /// `min((o["platinum"] for o in live_sells), default=0)`.
 pub fn low_sell(sells: &[LiveOrder]) -> f64 {
     sells.iter().map(|o| o.platinum).reduce(f64::min).unwrap_or(0.0)
@@ -315,13 +315,13 @@ pub fn demand_ratio(buys: usize, sells: usize) -> f64 {
     }
 }
 
-/// The composite "worth farming right now" score — the SCORE() at the bottom
+/// The composite "worth farming right now" score - the SCORE() at the bottom
 /// of `analyze_item`: `volume_48h * avg_price_48h * (1 + ratio)`.
 pub fn score(volume_48h: f64, avg_price_48h: f64, ratio: f64) -> f64 {
     volume_48h * avg_price_48h * (1.0 + ratio)
 }
 
-/// Python's `round(x, dp)` — round half to EVEN (banker's rounding) on the
+/// Python's `round(x, dp)` - round half to EVEN (banker's rounding) on the
 /// *true* value of the float. A naive `(x * 10^dp).round_ties_even()` would
 /// diverge whenever the scaling multiply lands the value exactly on a tie the
 /// unscaled value wasn't on (2.675 → 267.5, rounding up to 2.68 where Python

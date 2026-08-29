@@ -1,4 +1,4 @@
-//! Long price history from relics.run — `history.json`, one year of daily
+//! Long price history from relics.run - `history.json`, one year of daily
 //! (median, volume) per item, beyond WFM's 90-day statistics window.
 //!
 //! relics.run publishes one file per day since 2021-09-12:
@@ -13,7 +13,7 @@
 //! The artifact IS the state: the run reads the existing `history.json`,
 //! fetches only the days after the last one it holds (normally one), trims
 //! to `days`, and rewrites atomically. A missing prior bootstraps up to
-//! `bootstrap_days` (a one-off ~1.4 GB pull, box only — the GitHub cron
+//! `bootstrap_days` (a one-off ~1.4 GB pull, box only - the GitHub cron
 //! never runs this subcommand). Any single day failing to fetch is a `null`
 //! column and a warning, never an abort: history is a bonus surface.
 
@@ -48,7 +48,7 @@ pub struct History {
     pub through: Option<String>,
     pub items: HashMap<String, Series>,
     /// Days in the window whose relics.run file could not be fetched (their
-    /// columns are null everywhere) — surfaced so a gap reads as "unavailable",
+    /// columns are null everywhere) - surfaced so a gap reads as "unavailable",
     /// not "no trades".
     #[serde(default)]
     pub missing_days: Vec<String>,
@@ -59,7 +59,7 @@ pub struct Series {
     pub median: Vec<Option<f64>>,
     pub volume: Vec<u32>,
     /// The subtype tier this series tracks (relic refinement, gem size…),
-    /// decided once when the series is first built and kept thereafter — an
+    /// decided once when the series is first built and kept thereafter - an
     /// incremental day must not re-decide it from one file's worth of trades.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subtype: Option<String>,
@@ -179,7 +179,7 @@ pub fn apply_day(hist: &mut History, date: NaiveDate, day: &HashMap<String, DayR
             s.median.resize(days, None);
             s.volume.resize(days, 0);
         }
-        // Series that slid entirely out of the window carry nothing — drop them.
+        // Series that slid entirely out of the window carry nothing - drop them.
         hist.items.retain(|_, s| s.median.iter().any(|m| m.is_some()));
         hist.missing_days.retain(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").map(|d| d >= new_start).unwrap_or(false));
         hist.start = new_start.to_string();
@@ -207,7 +207,7 @@ pub fn apply_day(hist: &mut History, date: NaiveDate, day: &HashMap<String, DayR
 }
 
 /// Which subtype each slug's series should track, decided over EVERY day's
-/// rows we are about to apply (volume-weighted; prefers intact for relics —
+/// rows we are about to apply (volume-weighted; prefers intact for relics -
 /// `canonical_subtype`'s rule). Items with no subtyped rows get `None`.
 pub fn decide_picks(days: &[(NaiveDate, HashMap<String, DayRows>)]) -> HashMap<String, Option<String>> {
     let mut all: HashMap<String, Vec<StatsDay>> = HashMap::new();
@@ -307,7 +307,7 @@ pub fn update_history(
     }
     // A failed day BEFORE a later successful one is a real gap: it advances the
     // window (so it isn't retried forever) and is recorded as missing. Failed
-    // days at the TAIL are left alone — relics.run publishes a day with some
+    // days at the TAIL are left alone - relics.run publishes a day with some
     // lag, so "yesterday" is often just not there yet; the window end stays at
     // the last success and the next run simply tries again.
     let last_ok = fetched_days.iter().map(|(d, _)| *d).max();
@@ -416,7 +416,7 @@ mod tests {
         ]);
         let (hist, _) = update_history(&h, None, &catalog(), d("2026-08-15"), "t0", 3, 2, &no_sleep);
         assert_eq!(hist.items["lith_c5_relic"].subtype.as_deref(), Some("intact"));
-        // Next day only radiant traded, at 40p — the intact series shows "no
+        // Next day only radiant traded, at 40p - the intact series shows "no
         // trades", not a 40p spike.
         let h2 = http(&[("2026-08-16", day_body(21.0, 80.0, &[("radiant", 40.0, 6.0)]))]);
         let (hist2, _) = update_history(&h2, Some(hist), &catalog(), d("2026-08-16"), "t1", 3, 2, &no_sleep);

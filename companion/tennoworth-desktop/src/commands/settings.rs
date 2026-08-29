@@ -1,5 +1,5 @@
 //! Key/value settings and per-item reserve-copy CRUD, plus snapshot history
-//! listing — thin pass-throughs to [`crate::db::Db`].
+//! listing - thin pass-throughs to [`crate::db::Db`].
 
 use tauri::State;
 
@@ -35,7 +35,7 @@ pub fn list_snapshots(db: State<'_, Db>, limit: i64) -> Result<Vec<SnapshotSumma
     db.list_snapshots(limit).map_err(|e| e.to_string())
 }
 
-/// What we listed, when, at what price, and whether it worked — newest first.
+/// What we listed, when, at what price, and whether it worked - newest first.
 /// Written by the listing commands; see `commands::listing::record_plan`.
 #[tauri::command]
 pub fn list_listing_log(db: State<'_, Db>, limit: i64) -> Result<Vec<ListingLogEntry>, String> {

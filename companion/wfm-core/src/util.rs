@@ -27,7 +27,7 @@ pub fn chrono_now_iso() -> String {
     format!("{y:04}-{mo:02}-{d:02}T{h:02}:{m:02}:{s:02}Z")
 }
 
-// Howard Hinnant's algorithm — converts days-since-epoch to (year, month, day).
+// Howard Hinnant's algorithm - converts days-since-epoch to (year, month, day).
 pub fn civil_from_days(z: i64) -> (i64, u32, u32) {
     let z = z + 719468;
     let era = if z >= 0 { z } else { z - 146096 } / 146097;
@@ -70,7 +70,7 @@ pub fn wfm_client() -> Result<Client> {
     browser_client(30)
 }
 
-/// `~/.config/wfminv` — the one place companion state lives.
+/// `~/.config/wfminv` - the one place companion state lives.
 pub fn config_dir() -> PathBuf {
     real_user_home()
         .unwrap_or_else(dirs_home)

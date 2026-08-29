@@ -1,7 +1,7 @@
 # Headers applied by Cloudflare Pages, Netlify, and Vercel. GitHub Pages
 # ignores this file (one reason to move off it for production).
 #
-# Headers here augment — they don't replace — the <meta> CSP in index.html.
+# Headers here augment - they don't replace - the <meta> CSP in index.html.
 # Anything that can't be set via <meta> (frame-ancestors, HSTS,
 # X-Frame-Options, Permissions-Policy) lives here.
 

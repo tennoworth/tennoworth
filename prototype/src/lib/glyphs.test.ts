@@ -19,7 +19,7 @@ describe('glyph paths', () => {
     }
   });
 
-  it('has no curve commands — the house style is angular', () => {
+  it('has no curve commands - the house style is angular', () => {
     for (const [name, d] of Object.entries(GLYPH_PATHS)) {
       expect(d, name).not.toMatch(/[CcSsQqTtAa]/);
     }

@@ -1,10 +1,10 @@
-//! Pending-plan persistence — crash-recovery for a listing batch.
+//! Pending-plan persistence - crash-recovery for a listing batch.
 //!
 //! Every plan is written to `~/.config/wfminv/pending_plan.json` before the
 //! first POST, rewritten after each item, and deleted on clean completion. The
 //! browser polls it on (re)connect and offers Resume / Discard. Writes are
-//! atomic (tmp + rename) so a concurrent read never sees a torn file — same
-//! convention as `os.replace` in the retired Python pipeline — and the tmp
+//! atomic (tmp + rename) so a concurrent read never sees a torn file - same
+//! convention as `os.replace` in the retired Python pipeline - and the tmp
 //! file is created at 0600 (it holds unsubmitted listing details).
 
 use anyhow::{Context, Result};
@@ -39,7 +39,7 @@ pub struct PendingItem {
     pub message: Option<String>,
     #[serde(default)]
     pub order_id: Option<String>,
-    /// "created" | "updated" once terminal — how the ok state was reached.
+    /// "created" | "updated" once terminal - how the ok state was reached.
     /// Default None keeps pre-reconcile pending files loadable.
     #[serde(default)]
     pub action: Option<String>,
@@ -53,7 +53,7 @@ pub fn write_pending_atomic(path: &Path, plan: &PendingPlan) -> Result<()> {
     }
     let tmp = path.with_extension("json.tmp");
     let bytes = serde_json::to_vec(plan).context("serializing pending plan")?;
-    // Create the tmp file at 0o600 from the first syscall — pending plans
+    // Create the tmp file at 0o600 from the first syscall - pending plans
     // contain unsubmitted listing details, not OK to leak to other local
     // users even briefly.
     write_restricted(&tmp, &bytes)?;

@@ -81,7 +81,7 @@ describe('priceManifest', () => {
       [{ item: 'Prisma Angstrum', slug: 'prisma_angstrum', ducats: 400 }],
       snapshot,
     );
-    // 44p / 400 ducats = 0.11 — under the floor.
+    // 44p / 400 ducats = 0.11 - under the floor.
     expect(row.verdict).toBe('skip');
   });
 
@@ -137,7 +137,7 @@ describe('ducatBasket', () => {
   it('exposes no notion of a balance we cannot observe', () => {
     // Ducats are account state, never visible to an inventory scan. If an
     // "affordable" or "short" field reappears, something is pretending to
-    // know a balance again — and the scrap planner will double-count.
+    // know a balance again - and the scrap planner will double-count.
     expect(Object.keys(ducatBasket(rows, 500)).sort()).toEqual([
       'count',
       'coveredByScrapping',

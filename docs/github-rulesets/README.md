@@ -1,4 +1,4 @@
-# GitHub rulesets — reviewable snapshots
+# GitHub rulesets - reviewable snapshots
 
 These files are exports of the repository's live rulesets, kept here so a
 change to branch/tag protection goes through a PR like any other change.

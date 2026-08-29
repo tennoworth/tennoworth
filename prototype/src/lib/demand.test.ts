@@ -120,7 +120,7 @@ describe('readDemand', () => {
     expect(r.liquidity).toBe('slow');
   });
 
-  it('lets volume override popularity — a buyer tonight is not implied by fame', () => {
+  it('lets volume override popularity - a buyer tonight is not implied by fame', () => {
     const r = readDemand('braton_prime_receiver', MARKET, { vol: 1, price: 12, baseline: 12 });
     expect(r.liquidity).toBe('thin');
   });
@@ -139,7 +139,7 @@ describe('readDemand', () => {
 
 describe('liquidityWeight', () => {
   it('is neutral for an item with no usage data', () => {
-    // Absent data must not be punished — that would rank every unmatched item
+    // Absent data must not be punished - that would rank every unmatched item
     // below every matched one for a reason that has nothing to do with demand.
     expect(liquidityWeight(null)).toBe(1);
   });

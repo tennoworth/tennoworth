@@ -1,5 +1,5 @@
 #!/bin/sh
-# RETIRED — do not run this on a new box.
+# RETIRED - do not run this on a new box.
 #
 # One-time bootstrap for the signed apt + dnf repositories. Linux is
 # AppImage-only as of the release after 0.5.0, so no new deb or rpm is ever
@@ -10,13 +10,13 @@
 #      published version, so that nobody who ran `apt install tennoworth` gets
 #      a 404 or a broken index. This file is the only record of how that tree
 #      is laid out, what `SignWith` key it uses, and what the served
-#      tennoworth.repo says — all of which you need to reason about the frozen
+#      tennoworth.repo says - all of which you need to reason about the frozen
 #      repos or to eventually take them down cleanly.
 #   2. The GPG-handling notes in it (the /etc/rpm/macros discovery, the
 #      passphrase probe) were expensive to find and are worth keeping.
 #
 # The publisher that fed these repos, deploy/pull-packages.sh, is now a no-op
-# stub — see its header. SECURITY.md documents the frozen repos and the key.
+# stub - see its header. SECURITY.md documents the frozen repos and the key.
 #
 # Why the box signed rather than CI: a repo-signing key in GitHub Actions
 # secrets would let anyone who compromises the workflow serve trusted packages
@@ -27,7 +27,7 @@ set -eu
 FPR=CC5F8E297E446C5B8D2769AC64093BF63D573CE8
 REPO=/srv/wfm/repo
 
-# rpm is Debian's package for `rpmsign` — dnf users expect gpgcheck=1, which
+# rpm is Debian's package for `rpmsign` - dnf users expect gpgcheck=1, which
 # needs the .rpm files themselves signed, not just the metadata.
 apt-get update
 apt-get install -y --no-install-recommends reprepro createrepo-c rpm gnupg
@@ -36,7 +36,7 @@ apt-get install -y --no-install-recommends reprepro createrepo-c rpm gnupg
 # reprepro failing later with "no secret key".
 if ! gpg --list-secret-keys "$FPR" >/dev/null 2>&1; then
   echo "ERROR: signing subkey $FPR is not in root's keyring." >&2
-  echo "Import it first — see the deploy runbook." >&2
+  echo "Import it first - see the deploy runbook." >&2
   exit 1
 fi
 
@@ -64,7 +64,7 @@ Suite: stable
 Codename: stable
 Architectures: amd64
 Components: main
-Description: TennoWorth — Warframe inventory + market dashboard
+Description: TennoWorth - Warframe inventory + market dashboard
 SignWith: $FPR
 EOF
 
@@ -79,12 +79,12 @@ EOF
 #
 # It goes in /etc/rpm/macros, NOT /root/.rpmmacros: rpm only finds ~/.rpmmacros
 # through HOME, and wfm-repo-pull.service runs with no HOME set. That is not
-# theoretical — the box had exactly this file and the dnf repo still sat 9 days
+# theoretical - the box had exactly this file and the dnf repo still sat 9 days
 # stale on an unsigned-by-the-new-key build, because every publish since the
 # 0.3.5 release failed at the signing step while `bash` runs of the same script
 # worked. Same shape as the git safe.directory exception in setup-container.sh.
 #
-# /etc/rpm/macros.d/ is NOT read by the rpm in Debian stable — verified on the
+# /etc/rpm/macros.d/ is NOT read by the rpm in Debian stable - verified on the
 # box, the macro stayed UNSET from there. Use the flat file.
 mkdir -p /etc/rpm
 cat > /etc/rpm/macros <<EOF
@@ -112,5 +112,5 @@ chown -R wfm:wfm "$REPO"
 chmod -R a+rX "$REPO"
 
 echo "Repo skeleton ready at $REPO"
-echo "NOTE: this script is retired — there is no longer a package to publish"
+echo "NOTE: this script is retired - there is no longer a package to publish"
 echo "into it. Linux ships as an AppImage only."

@@ -19,7 +19,7 @@ use sysinfo::System;
 
 /// The session secrets + build metadata scraped out of the running game.
 ///
-/// Fields are session secrets while a play session is live — never print
+/// Fields are session secrets while a play session is live - never print
 /// `account_id` / `nonce`.
 pub struct SessionInfo {
     pub account_id: String,
@@ -61,7 +61,7 @@ pub fn matches_warframe(p: &sysinfo::Process) -> bool {
 
 // Confirmed in May 2026 memory scan: this exact form appears in the URLs the
 // game sends. ASCII [0-9] (not \d) so we don't need the regex crate's
-// unicode-perl feature — saves ~150 KB on the binary.
+// unicode-perl feature - saves ~150 KB on the binary.
 pub const DEFAULT_CRED_PATTERN: &str = r"accountId=([0-9a-fA-F]{24})&nonce=([0-9]{6,})";
 pub const DEFAULT_BUILD_PATTERN: &str = r#""BuildLabel":"([0-9.]+)/[A-Za-z0-9]+"#;
 pub const DEFAULT_CT_PATTERN: &str = r"&ct=([A-Z]{2,4})\b";
@@ -121,7 +121,7 @@ pub struct PatternRejection {
 /// Compile a definitions file into a usable pattern set.
 ///
 /// Each pattern is validated INDEPENDENTLY and falls back to the compiled-in
-/// default on any problem, so one bad entry cannot disable scanning wholesale —
+/// default on any problem, so one bad entry cannot disable scanning wholesale -
 /// the point of shipping this is to fix a broken scan without a release, and a
 /// remote file that can brick the scanner would defeat that.
 ///
@@ -129,8 +129,8 @@ pub struct PatternRejection {
 /// loop indexes `cap[1]` and `cap[2]`, so a pattern with too few capture groups
 /// would panic mid-scan on the user's machine.
 ///
-/// ReDoS is not among the risks — the `regex` crate has no backtracking and is
-/// linear in input size — but the length cap still bounds what we agree to
+/// ReDoS is not among the risks - the `regex` crate has no backtracking and is
+/// linear in input size - but the length cap still bounds what we agree to
 /// compile.
 pub fn patterns_from_definitions(defs: &ScanDefinitions) -> (ScanPatterns, Vec<PatternRejection>) {
     let mut rejections = Vec::new();
@@ -269,7 +269,7 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
     use std::fs::File;
     use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
 
-    // One snapshot for the whole scan — a definitions swap landing mid-run
+    // One snapshot for the whole scan - a definitions swap landing mid-run
     // must not change the patterns underneath it.
     let pats = current_patterns();
 
@@ -277,14 +277,14 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
     let mem_path = format!("/proc/{pid}/mem");
 
     let maps_file = File::open(&maps_path)
-        .with_context(|| format!("cannot open {maps_path} — does PID {pid} exist?"))?;
+        .with_context(|| format!("cannot open {maps_path} - does PID {pid} exist?"))?;
     let mut mem_file =
         File::open(&mem_path).map_err(|e| ptrace_open_error(&mem_path, pid, e))?;
 
     let mut counts = PatternCounts::default();
     const CHUNK: usize = 4 * 1024 * 1024;
     let overlap = 96;
-    // Scratch buffer reused across every chunk of every region — `hay[0..tail_len]`
+    // Scratch buffer reused across every chunk of every region - `hay[0..tail_len]`
     // holds the small overlap carried from the previous chunk (0 bytes at the
     // start of a new region) and reads land right after it, so a pattern
     // straddling a chunk boundary still matches without a fresh allocation
@@ -345,24 +345,24 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
 //
 // The remedy depends on HOW the app is running, which is why this branches:
 //
-//   AppImage (the only Linux channel we ship) — `setcap` is useless here. The
+//   AppImage (the only Linux channel we ship) - `setcap` is useless here. The
 //     runtime mounts the payload on a fresh nosuid FUSE mount per launch, and
 //     the kernel ignores file capabilities on nosuid mounts; even if it did
 //     not, `current_exe()` is a /tmp/.mount_* path that ceases to exist when
 //     the app closes, so the grant could not outlive one run. The honest fix
 //     is to relax Yama.
 //
-//   Anything else (cargo run, a distro package built from source) — the
+//   Anything else (cargo run, a distro package built from source) - the
 //     per-binary capability is still the tightest grant available, so keep it.
 #[cfg(target_os = "linux")]
 fn ptrace_open_error(mem_path: &str, pid: u32, e: std::io::Error) -> anyhow::Error {
     if e.kind() != std::io::ErrorKind::PermissionDenied {
         return anyhow!(
             "cannot open {mem_path}: {e}\n\
-             PID {pid} may have exited — restart Warframe past the title screen and retry."
+             PID {pid} may have exited - restart Warframe past the title screen and retry."
         );
     }
-    // Set by the AppImage runtime to the path of the .AppImage itself — the
+    // Set by the AppImage runtime to the path of the .AppImage itself - the
     // same signal update.rs uses to decide whether self-update can work.
     let appimage = std::env::var_os("APPIMAGE").and_then(|p| p.to_str().map(str::to_owned));
     let scope = std::fs::read_to_string("/proc/sys/kernel/yama/ptrace_scope")
@@ -371,7 +371,7 @@ fn ptrace_open_error(mem_path: &str, pid: u32, e: std::io::Error) -> anyhow::Err
 
     let mut msg = match &appimage {
         Some(img) => format!(
-            "Permission denied reading {mem_path} — reading the game's memory needs \
+            "Permission denied reading {mem_path} - reading the game's memory needs \
              permission to ptrace it.\n\
              `setcap` does not work for an AppImage: it runs from a temporary mount that \
              ignores file capabilities, and the path changes every launch.\n\
@@ -388,13 +388,13 @@ fn ptrace_open_error(mem_path: &str, pid: u32, e: std::io::Error) -> anyhow::Err
                 .and_then(|p| p.to_str().map(str::to_owned))
                 .unwrap_or_else(|| "tennoworth-desktop".to_string());
             format!(
-                "Permission denied reading {mem_path} — reading the game's memory needs CAP_SYS_PTRACE.\n\
+                "Permission denied reading {mem_path} - reading the game's memory needs CAP_SYS_PTRACE.\n\
                  Grant it once (no sudo needed afterwards):\n  \
                  sudo setcap cap_sys_ptrace=eip \"{bin}\"\n  \
                  {bin}\n\
                  Or run this one invocation with sudo:\n  \
                  sudo {bin}\n\
-                 Note: re-installing or rebuilding the binary clears the capability — re-run setcap after an upgrade."
+                 Note: re-installing or rebuilding the binary clears the capability - re-run setcap after an upgrade."
             )
         }
     };
@@ -410,19 +410,19 @@ fn ptrace_open_error(mem_path: &str, pid: u32, e: std::io::Error) -> anyhow::Err
         // The only route is config plus a reboot.
         Some("3") => msg.push_str(
             "\n\nkernel.yama.ptrace_scope is 3 (ptrace disabled). This cannot be lowered \
-             while the machine is running — the sysctl write is refused once it reaches 3.\n\
+             while the machine is running - the sysctl write is refused once it reaches 3.\n\
              Set it for the next boot and reboot:\n  \
              echo 'kernel.yama.ptrace_scope=0' | sudo tee /etc/sysctl.d/10-tennoworth.conf",
         ),
         Some("0") => msg.push_str(
-            "\n\nkernel.yama.ptrace_scope is 0, so this normally would not be needed —\n\
+            "\n\nkernel.yama.ptrace_scope is 0, so this normally would not be needed -\n\
              the game may be running as a different user (a separate Steam or\n\
              Flatpak account), which same-user ptrace does not cover.",
         ),
         Some(s) => msg.push_str(&format!(
             "\n\nkernel.yama.ptrace_scope is {s}: only a process's own descendants\n\
              may read its memory, and the game is a child of Steam, not of us.\n\
-             That is the usual desktop default, so this step is expected here —\n\
+             That is the usual desktop default, so this step is expected here -\n\
              it is not caused by Proton, and a native launch behaves the same."
         )),
         None => {}
@@ -445,7 +445,7 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
 
     use windows::Win32::System::Diagnostics::Debug::ReadProcessMemory;
 
-    // One snapshot for the whole scan — see the Linux leg.
+    // One snapshot for the whole scan - see the Linux leg.
     let pats = current_patterns();
 
     unsafe {
@@ -454,7 +454,7 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
             BOOL(0),
             pid,
         )
-        .context("OpenProcess failed — not running as same user, or pid is wrong")?;
+        .context("OpenProcess failed - not running as same user, or pid is wrong")?;
 
         let mut counts = PatternCounts::default();
         let mut addr: usize = 0;
@@ -463,10 +463,10 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
 
         // Regions are read in fixed CHUNKs into one reused buffer, carrying a
         // small overlap from the previous chunk so a pattern straddling a
-        // chunk boundary still matches — the same scheme as the Linux leg.
+        // chunk boundary still matches - the same scheme as the Linux leg.
         // This replaces a per-region `vec![0u8; RegionSize]` that both risked
         // an OOM abort on a huge region AND, once capped at 64 MB, silently
-        // SKIPPED anything larger — a 64-bit game's heaps routinely exceed
+        // SKIPPED anything larger - a 64-bit game's heaps routinely exceed
         // that, so a token living in one was simply never seen.
         const CHUNK: usize = 4 * 1024 * 1024;
         let overlap = 96;
@@ -503,7 +503,7 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
                         Some(&mut read_n),
                     );
                     // A short or failed read ends THIS region (a guard page or
-                    // decommit mid-region), never the walk — skip-don't-fail.
+                    // decommit mid-region), never the walk - skip-don't-fail.
                     if ok.is_err() || read_n == 0 {
                         break;
                     }
@@ -516,7 +516,7 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
                 }
             }
             addr = next;
-            // No forward progress (zero-sized region or wraparound) — bail out
+            // No forward progress (zero-sized region or wraparound) - bail out
             // of the walk rather than re-querying the same address forever.
             if addr <= base {
                 break;
@@ -577,7 +577,7 @@ mod tests {
 
     #[test]
     fn a_valid_override_is_applied() {
-        // DE rotates the parameter names — the exact scenario this exists for.
+        // DE rotates the parameter names - the exact scenario this exists for.
         let (p, rej) = patterns_from_definitions(&defs(
             Some(r"acct=([0-9a-f]{24})&n=([0-9]{6,})"),
             None,
@@ -604,7 +604,7 @@ mod tests {
 
     #[test]
     fn too_few_capture_groups_is_refused() {
-        // Compiles fine, but the match loop indexes cap[2] — accepting this
+        // Compiles fine, but the match loop indexes cap[2] - accepting this
         // would panic mid-scan on the user's machine.
         let (p, rej) = patterns_from_definitions(&defs(Some(r"accountId=([0-9a-f]{24})"), None, None));
         assert_eq!(rej.len(), 1);
@@ -649,7 +649,7 @@ mod tests {
 
     #[test]
     fn installed_patterns_round_trip() {
-        // Snapshot, swap, restore — the global is process-wide, so leaving it
+        // Snapshot, swap, restore - the global is process-wide, so leaving it
         // modified would leak into whatever test runs next.
         let before = current_patterns();
         let (p, _) = patterns_from_definitions(&defs(Some(r"z=([0-9a-f]{24})&q=([0-9]{6,})"), None, None));

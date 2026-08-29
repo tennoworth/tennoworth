@@ -1,15 +1,15 @@
 //! warframe.market auth + JWT-at-rest.
 //!
-//! Auth flow (discovered May 2026 by inspecting the WFM frontend bundle — the
+//! Auth flow (discovered May 2026 by inspecting the WFM frontend bundle - the
 //! API spec doesn't document it): GET the signin page to populate a session
 //! cookie + read the `<meta name="csrf-token">`, then POST `/v1/auth/signin`
 //! with `auth_type: "cookie"` and that CSRF token. WFM bakes a `csrf_token`
-//! claim into the returned JWT — v2 endpoints reject header-auth JWTs, so the
+//! claim into the returned JWT - v2 endpoints reject header-auth JWTs, so the
 //! cookie flow is the only one that works. The JWT arrives via `Set-Cookie`.
 //!
 //! At rest the JWT is AES-256-GCM encrypted, key derived via PBKDF2-HMAC-SHA256
 //! (600k iterations, OWASP 2023). **The on-disk envelope shape and its default
-//! path (`~/.config/wfminv/wfm-jwt.enc`) are a compatibility contract** — do not
+//! path (`~/.config/wfminv/wfm-jwt.enc`) are a compatibility contract** - do not
 //! change field names, the format tag, or the KDF without a migration; existing
 //! users' files must keep decrypting.
 //!
@@ -40,7 +40,7 @@ pub const JWT_FORMAT: &str = "wfminv-jwt-v1";
 pub const JWT_KDF_ITERATIONS: u32 = 600_000;
 
 /// The on-disk encrypted-JWT envelope. Field names + shape are a compat
-/// contract — see the module docs. Mirrors the web app's encrypted-export
+/// contract - see the module docs. Mirrors the web app's encrypted-export
 /// format so a single human can reason about both.
 #[derive(Serialize, Deserialize)]
 pub struct EncryptedJwt {
@@ -66,7 +66,7 @@ pub struct CipherParams {
     pub iv: String,
 }
 
-/// Reject a mistyped platform up front — an unknown value would otherwise be
+/// Reject a mistyped platform up front - an unknown value would otherwise be
 /// baked into the encrypted JWT and silently authenticate against the wrong
 /// (or a non-existent) WFM market on every later session. Thin wrapper over
 /// wfm-client's canonical validator, kept anyhow-flavored for this crate's
@@ -75,7 +75,7 @@ pub fn validate_platform(platform: &str) -> Result<()> {
     wfm_client::validate_platform(platform).map_err(|e| anyhow!(e))
 }
 
-/// Minimum passphrase length, in **characters** — the unit the error message
+/// Minimum passphrase length, in **characters** - the unit the error message
 /// promises the user.
 pub const MIN_PASSPHRASE_CHARS: usize = 12;
 
@@ -84,14 +84,14 @@ pub const MIN_PASSPHRASE_CHARS: usize = 12;
 /// This lives here because it previously did not: the old CLI's `login`
 /// counted `passphrase.len()` (bytes) while the desktop dialog counted
 /// `chars().count()`, under a comment asserting the two were the same floor.
-/// They were not — a 4-character CJK passphrase is 12 bytes, so the CLI
+/// They were not - a 4-character CJK passphrase is 12 bytes, so the CLI
 /// accepted what the desktop app rejected. The desktop shell is the only
 /// caller now, and both sides share this function, so the floor cannot
 /// drift again.
 pub fn validate_passphrase(passphrase: &str) -> Result<()> {
     if passphrase.chars().count() < MIN_PASSPHRASE_CHARS {
         bail!(
-            "Passphrase must be at least {MIN_PASSPHRASE_CHARS} characters — it guards your multi-month WFM token against offline brute force."
+            "Passphrase must be at least {MIN_PASSPHRASE_CHARS} characters - it guards your multi-month WFM token against offline brute force."
         );
     }
     Ok(())
@@ -114,13 +114,13 @@ pub fn bootstrap_session() -> Result<(Client, String)> {
         .context("bootstrap GET failed (Cloudflare may have blocked us)")?;
     if !bootstrap.status().is_success() {
         bail!(
-            "Bootstrap GET returned HTTP {} — Cloudflare or WFM may have changed.",
+            "Bootstrap GET returned HTTP {} - Cloudflare or WFM may have changed.",
             bootstrap.status()
         );
     }
     let bootstrap_html = bootstrap.text().context("reading bootstrap response")?;
 
-    // Cheap regex — we only care about the meta tag, no HTML parsing needed.
+    // Cheap regex - we only care about the meta tag, no HTML parsing needed.
     let csrf_re = Regex::new(r#"name="csrf-token"\s+content="([^"]+)""#)
         .expect("static regex");
     let csrf_token = csrf_re
@@ -146,7 +146,7 @@ pub fn signin(
     csrf_token: &str,
 ) -> Result<String> {
     // We sign in with auth_type=cookie. WFM bakes a `csrf_token` claim into
-    // the resulting JWT — v2 endpoints (like /v2/order) require this claim
+    // the resulting JWT - v2 endpoints (like /v2/order) require this claim
     // type, header-auth JWTs are rejected. The JWT is returned via Set-Cookie.
     let body = serde_json::json!({
         "email": email,
@@ -174,7 +174,7 @@ pub fn signin(
 
     // The post-signin JWT comes back in Set-Cookie. Reqwest's cookie store
     // keeps it for subsequent requests, but we need the raw value to encrypt
-    // and persist — pull it out of the response headers.
+    // and persist - pull it out of the response headers.
     let jwt = resp
         .headers()
         .get_all("set-cookie")
@@ -229,7 +229,7 @@ pub fn encrypt_jwt(jwt: &str, passphrase: &str, platform: &str) -> Result<Encryp
 
 /// Run the blob's KDF over `passphrase`, yielding the raw AES-256 key. Split
 /// from `decrypt_jwt` so the desktop can hold the derived key in the OS
-/// keyring for silent unlock — the key is salt-bound (a re-login rotates the
+/// keyring for silent unlock - the key is salt-bound (a re-login rotates the
 /// salt, so a stale key fails GCM auth) and useless without the .enc file,
 /// unlike the passphrase, which users may reuse elsewhere.
 pub fn derive_jwt_key(blob: &EncryptedJwt, passphrase: &str) -> Result<[u8; 32]> {
@@ -348,7 +348,7 @@ mod tests {
     }
 
     // Parity gate: prototype/src/lib/crypto.ts's KDF_ITERATIONS must match this
-    // crate's JWT_KDF_ITERATIONS exactly — a mismatch bricks JWT decryption
+    // crate's JWT_KDF_ITERATIONS exactly - a mismatch bricks JWT decryption
     // with a false "wrong passphrase" error. Both sides read
     // tests/fixtures/jwt-kdf.json.
     #[test]

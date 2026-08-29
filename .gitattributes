@@ -4,7 +4,7 @@
 # --check does a raw string compare between the file on disk and the CSP text
 # it generates (always LF). With Git's default autocrlf on a Windows runner,
 # prototype/index.html checks out CRLF, that compare never matches, and the
-# build dies claiming the CSP copies drifted — on a tree that is perfectly in
+# build dies claiming the CSP copies drifted - on a tree that is perfectly in
 # sync. The same trap applies to any other tooling here that diffs file
 # contents rather than parsed values.
 #
@@ -12,7 +12,7 @@
 # changes no committed bytes; it only pins how Windows checks files out.
 * text=auto eol=lf
 
-# Binary assets Git already auto-detects — pinned so no future *.png-adjacent
+# Binary assets Git already auto-detects - pinned so no future *.png-adjacent
 # rule can accidentally line-ending-mangle an icon or a signed bundle.
 *.png  binary
 *.ico  binary

@@ -1,4 +1,4 @@
-// @ts-nocheck — malformed fixture rows are part of the public failure contract.
+// @ts-nocheck - malformed fixture rows are part of the public failure contract.
 import { describe, expect, it } from 'vitest';
 import fixture from '../../../tests/fixtures/usage-resolution/cases.json';
 import { buildUsageParentIndex, usageFor } from './demand';

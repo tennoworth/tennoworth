@@ -1,5 +1,5 @@
 <script lang="ts">
-  // @ts-nocheck — App.svelte is presentation glue: dialog refs, catch
+  // @ts-nocheck - App.svelte is presentation glue: dialog refs, catch
   // blocks, event handlers. The high-value typing already lives at the
   // lib/ boundary (Market, Inventory, OwnedRecord etc.). Annotating
   // every `catch (e: unknown)` and `dialog: HTMLDialogElement | undefined`
@@ -53,7 +53,7 @@
 
   // Desktop (Tauri) vs hosted informational (browser) is decided ONCE at boot.
   // The hosted site is informational only: market data + the desktop showcase,
-  // no files. Everything interactive — scan, list, orders, login — lives in
+  // no files. Everything interactive - scan, list, orders, login - lives in
   // the desktop app, driven by the wfm_session commands.
   const isDesktop = isDesktopRuntime();
   const transport = createTransport();
@@ -83,13 +83,13 @@
     owned: new Map(),
     unresolved: {},
   });
-  // Rivens parsed from the scanned inventory's Upgrades[] (raw, unresolved —
+  // Rivens parsed from the scanned inventory's Upgrades[] (raw, unresolved -
   // the market join happens in the derived below so a restored snapshot
   // resolves against the CURRENT snapshot).
   let ownedRivens = $state<OwnedRiven[]>([]);
   let resolvedRivens = $derived(resolveRivens(ownedRivens, market));
   let deltas = $state<Map<string, number>>(new Map());
-  // The snapshot the current scan was diffed against — kept for the session
+  // The snapshot the current scan was diffed against - kept for the session
   // (same lifetime as `deltas`) so the Sell summary can say what changed since
   // the last scan in the same units the table shows (sellable rows, potential
   // plat), not just per-row counts. Null after a restore-from-storage boot,
@@ -101,7 +101,7 @@
   // unfiltered preset results.
   let tableView = $state<{ rows: any[]; active: boolean }>({ rows: [], active: false });
   // Rows eligible for the bulk "List on WFM" action: the table-filtered set when
-  // a table filter is active, else all results — minus relics (subtyped rows),
+  // a table filter is active, else all results - minus relics (subtyped rows),
   // since selling an intact relic at a few plat usually loses to cracking it
   // (the Relic planner ranks those), so they shouldn't be staged by default.
   let listableRows = $derived(
@@ -109,10 +109,10 @@
   );
   let minPrice = $state(5);
   let minOwned = $state(1);
-  // "Keep copies" reserve — holds back N copies of every owned item from
+  // "Keep copies" reserve - holds back N copies of every owned item from
   // being listed (sellable = owned − N). Distinct from minOwned, which only
   // hides rows from view; this changes what's actually sellable, so unlike
-  // minOwned/minPrice it's worth persisting — losing your only copy of
+  // minOwned/minPrice it's worth persisting - losing your only copy of
   // something to an underpriced snipe is the mistake this exists to prevent.
   let reserveCopies = $state(
     (() => {
@@ -143,7 +143,7 @@
   // no tag restriction.
   let activeTags = $state<Set<string>>(new Set());
 
-  // Filter rail is collapsed by default — user feedback (casual flipper)
+  // Filter rail is collapsed by default - user feedback (casual flipper)
   // found a visible "tax form" intimidating; power users open it once and
   // it stays open via localStorage. Tag chips + table search stay visible.
   let filtersOpen = $state((() => store.getSetting('filters-open') === '1')());
@@ -153,10 +153,10 @@
     void store.setSetting('filters-open', isOpen ? '1' : '0');
   }
 
-  // Sidebar nav view — which workspace pane is active. Persists so a
+  // Sidebar nav view - which workspace pane is active. Persists so a
   // reload lands the user back where they left off. Falls through to
   // 'sell' if the persisted view's data isn't available (Baro not
-  // visiting; 'orders' is desktop-only — the hosted site is informational).
+  // visiting; 'orders' is desktop-only - the hosted site is informational).
   type View = 'sell' | 'sets' | 'relics' | 'rivens' | 'baro' | 'routines' | 'meta' | 'orders' | 'watches' | 'ledger' | 'install' | 'settings';
   const VALID_VIEWS: ReadonlySet<View> = new Set([
     'sell', 'sets', 'relics', 'rivens', 'baro', 'routines', 'meta', 'orders', 'watches', 'ledger', 'install', 'settings',
@@ -183,14 +183,14 @@
     return view;
   });
 
-  // First-session Score explainer — dismissable, one-time, persists.
+  // First-session Score explainer - dismissable, one-time, persists.
   let scoreExplainerDismissed = $state((() => store.getSetting('score-explainer-dismissed') === '1')());
   function dismissScoreExplainer(): void {
     scoreExplainerDismissed = true;
     void store.setSetting('score-explainer-dismissed', '1');
   }
 
-  // First-session sell onboarding — dismissable, one-time, persists (same
+  // First-session sell onboarding - dismissable, one-time, persists (same
   // pattern as the score explainer; keeps the keep-copies nudge from stacking
   // on top of it on a fresh install).
   let sellOnboardingDismissed = $state((() => store.getSetting('sell-onboarding-dismissed') === '1')());
@@ -199,7 +199,7 @@
     void store.setSetting('sell-onboarding-dismissed', '1');
   }
 
-  // Keep-copies nudge — permanent one-time dismissal (education, not a
+  // Keep-copies nudge - permanent one-time dismissal (education, not a
   // recurring nag).
   let keepCopiesNudgeDismissed = $state((() => store.getSetting('keep-copies-nudge-dismissed') === '1')());
   function dismissKeepCopiesNudge(): void {
@@ -207,7 +207,7 @@
     void store.setSetting('keep-copies-nudge-dismissed', '1');
   }
 
-  // Tray hint banner — set by the Rust tray-hint event when the user closes the
+  // Tray hint banner - set by the Rust tray-hint event when the user closes the
   // window while the tray still exists. Once-ever, persisted when SHOWN (not on
   // dismiss); the Rust side caps within-session duplicates with an AtomicBool.
   let trayHint = $state(false);
@@ -224,16 +224,16 @@
   // A preset's optional default sort, handed to ResultsTable. Stable object
   // identity per preset → switching presets re-applies it; header clicks don't.
   // Spread a fresh object so the derived's identity changes whenever it
-  // recomputes — re-selecting a preset then re-applies its sort.
+  // recomputes - re-selecting a preset then re-applies its sort.
   let presetSort = $derived(
     activePreset && PRESETS[activePreset]?.defaultSort
       ? { ...PRESETS[activePreset].defaultSort }
       : null,
   );
-  // The filter cascade's inputs, bundled for lib/filter-engine.ts — the
+  // The filter cascade's inputs, bundled for lib/filter-engine.ts - the
   // hand-set sliders/chips plus whatever the active preset restricts
   // (vault-only, ducats-only, min-volume, min-median).
-  // Tradeable copies per slug|refinement from the latest scan — the My orders
+  // Tradeable copies per slug|refinement from the latest scan - the My orders
   // panel's "you list ×5 but own 2" / "not owned" checks. Null without a scan
   // so those checks stay silent rather than calling every listing a ghost.
   let ownedQtyForOrders = $derived.by((): Map<string, number> | null => {
@@ -258,7 +258,7 @@
 
   // ---- Hold-or-sell advisor inputs ----
   // The year-long history loads once, on demand, the first time a surface
-  // that uses advice opens (the Hold/Sell preset or the Set picks view) —
+  // that uses advice opens (the Hold/Sell preset or the Set picks view) -
   // same lazy pattern as the market browser's 1-year toggle. Verdicts
   // degrade gracefully to the calendar-only rules until it lands.
   let advisorHistory = $state<History | null>(null);
@@ -292,7 +292,7 @@
   $effect(() => {
     // Depend ONLY on the filter primitives that define a preset (the void reads
     // below). Read/write activePreset inside untrack() so nulling the selection
-    // when the user hand-edits a filter can't re-trigger this effect — the old
+    // when the user hand-edits a filter can't re-trigger this effect - the old
     // version read AND wrote activePreset in the same body, which re-fired it
     // (flagged in the audit).
     void minPrice; void minOwned; void hideAtLvl; void typeFilter; void activeTags.size;
@@ -308,7 +308,7 @@
   // cache (last known-good from the live server) beats the compile-time bundled
   // floor; browser: loadCachedMarket() is a no-op null, so this collapses to the
   // exact same one same-origin fetch the hosted app has always done. Can throw
-  // (loadMarket rejects on a missing snapshot) — callers keep their try/catch.
+  // (loadMarket rejects on a missing snapshot) - callers keep their try/catch.
   async function loadBestMarket(): Promise<Market> {
     const cached = await transport.loadCachedMarket();
     return cached ?? (await loadMarket());
@@ -317,7 +317,7 @@
   // Desktop-only: after the bundled/cached copy is on screen, top it up from
   // tennoworth.app in the background and swap in a strictly-newer snapshot. The
   // Rust command swallows offline/timeout/HTTP failures (returns updated:false),
-  // so this never blocks or breaks boot — a failure just leaves the current copy.
+  // so this never blocks or breaks boot - a failure just leaves the current copy.
   async function refreshMarketInBackground(): Promise<void> {
     try {
       const res = await transport.refreshMarket();
@@ -364,7 +364,7 @@
   onMount(async () => {
     // Desktop mode: a best-effort `health` invoke confirms wfm-core is linked
     // and records the platform for display; failure is non-fatal (the dashboard
-    // still works). The hosted site is informational — it has no account
+    // still works). The hosted site is informational - it has no account
     // features.
     if (isDesktop) {
       try {
@@ -376,7 +376,7 @@
       // C5 update-available handshake now lives entirely in
       // DesktopUpdateBanner.svelte's own onMount.
       // Interrupted-batch recovery: get_pending_plan is JWT-free, so this needs
-      // no unlock. Best-effort — a failure just hides the Resume banner.
+      // no unlock. Best-effort - a failure just hides the Resume banner.
       try {
         pendingPlan = await transport.getPendingPlan();
       } catch (e) {
@@ -385,7 +385,7 @@
     }
 
     // Desktop only: restore the last inventory snapshot. The hosted site is
-    // informational — it never holds an inventory, so it stays on the landing.
+    // informational - it never holds an inventory, so it stays on the landing.
     if (isDesktop) {
       const snap = await store.loadSnapshot();
       if (snap) {
@@ -398,15 +398,15 @@
             try {
               market = await loadBestMarket();
             } catch (e) {
-              // We already have the restored inventory in hand — a failed price
+              // We already have the restored inventory in hand - a failed price
               // refresh must NOT throw us back to cold-start and hide the user's
               // data. Render from the snapshot; flag prices unavailable.
               console.error(e);
-              marketLoadError = 'Couldn’t load the price snapshot — you may be offline. Your saved inventory is shown below; prices and rankings will be unavailable until it loads. Reload to retry.';
+              marketLoadError = 'Couldn’t load the price snapshot - you may be offline. Your saved inventory is shown below; prices and rankings will be unavailable until it loads. Reload to retry.';
             }
           }
           // No explicit recompute: the results $effect tracks resolved/market and
-          // flushes before paint — the old call here just computed everything twice.
+          // flushes before paint - the old call here just computed everything twice.
           phase = 'done';
         } catch (e) {
           console.error(e);
@@ -417,7 +417,7 @@
     }
 
     // Cold landing (no saved inventory): preload the snapshot so the no-install
-    // MarketBrowser has data to show. Best-effort — a failure just hides the
+    // MarketBrowser has data to show. Best-effort - a failure just hides the
     // browser; the install steps below it still work.
     if (phase === 'idle' && !market) {
       try {
@@ -447,7 +447,7 @@
   }
 
   // The single inventory path: a memory scan of the running game. (The hosted
-  // site takes no files, and the desktop app scans directly — there is no
+  // site takes no files, and the desktop app scans directly - there is no
   // file-drop path.) The scan command already records a source='memory'
   // snapshot inside scan_inventory, so nothing is recorded here.
   async function handleInventory({ name, data }) {
@@ -489,14 +489,14 @@
         // Stack categories never carry XP, so this stays 0 for them.
         if (xp > 0) rec.leveled += count;
         // Carry forward the highest kept lvl across any inventory path
-        // that resolved to the same slug+subtype (rare for mods — one path
-        // per slug — but harmless for the relic refinement case).
+        // that resolved to the same slug+subtype (rare for mods - one path
+        // per slug - but harmless for the relic refinement case).
         if (typeof keptLvl === 'number' && (rec.kept_lvl === null || keptLvl > rec.kept_lvl)) {
           rec.kept_lvl = keptLvl;
         }
         owned.set(key, rec);
       }
-      // Nothing resolved to a tradeable item — the scan returned an inventory
+      // Nothing resolved to a tradeable item - the scan returned an inventory
       // with no recognizable tradeable content. Surface it as a pull error so
       // the user sees why the scan didn't produce a sell list, and don't
       // overwrite their snapshot.
@@ -518,7 +518,7 @@
 
       // No explicit recompute: the results $effect below tracks resolved +
       // market and flushes before paint. The call that was here computed the
-      // identical array a second time — the same fix the restore path above
+      // identical array a second time - the same fix the restore path above
       // already got. Its only distinct case, "market not loaded yet", is
       // covered by that effect's own `market` guard.
       phase = 'done';
@@ -531,7 +531,7 @@
 
   // Re-derive results whenever any filter input or the owned set changes.
   // We deliberately read the filter state inside the effect (so they're
-  // tracked) but write only to `results`, which the effect doesn't read —
+  // tracked) but write only to `results`, which the effect doesn't read -
   // no chance of a re-run loop. The filter cascade itself lives in
   // lib/filter-engine.ts (shared with availableTags + emptyReason below).
   //
@@ -548,7 +548,7 @@
     }
   });
 
-  // Set-completion recommendations. Pure derivation from owned × market —
+  // Set-completion recommendations. Pure derivation from owned × market -
   // see lib/set-recos.js for the three reco kinds (near-complete /
   // complete-with-extras / extras). Computed lazily; cheap (one walk per
   // set in the catalog).
@@ -559,7 +559,7 @@
   let setRecosExpanded = $state(false);
 
   // Baro Ki'Teer schedule, baked into market.json at build time (mirrors
-  // relic_rewards / vault_status). No runtime warframestat fetch — that
+  // relic_rewards / vault_status). No runtime warframestat fetch - that
   // broke the resolver-only rule and vanished during warframestat
   // outages. Null until market loads, or when the bake came back empty.
   // Footer stamp: the snapshot's own timestamp, in UTC so it matches the
@@ -621,7 +621,7 @@
   // and weekly Monday 00:00 UTC; we show only countdowns + static reminders,
   // never completion state (acts done / Endo banked are account state the
   // inventory+market snapshot can't carry). Date.now() isn't reactive, so
-  // these recompute on load / view change — the same non-ticking model as the
+  // these recompute on load / view change - the same non-ticking model as the
   // Baro card, which is fine for a "next reset in ~Xh" reminder.
   let routinesState = $derived.by(() => {
     const now = Date.now();
@@ -632,7 +632,7 @@
     return { dailyMs: nextDaily - now, weeklyMs: nextWeekly - now };
   });
 
-  // Relic planner — top 3 owned (Intact) relics by expected-plat-per-crack.
+  // Relic planner - top 3 owned (Intact) relics by expected-plat-per-crack.
   let relicPlan = $derived.by(() => {
     if (!resolved.owned.size || !market?.relic_rewards) return [];
     return deriveRelicPlan(resolved.owned, market, Infinity);
@@ -641,7 +641,7 @@
   let relicShowAll = $state(false);
   let relicVisible = $derived(relicShowAll ? relicPlan : relicPlan.slice(0, RELIC_PREVIEW));
 
-  // Routine checklist is collapsed by default — the clocks carry the daily
+  // Routine checklist is collapsed by default - the clocks carry the daily
   // urgency, the three routine cards are a long-read. Not persisted
   // (collapsed-by-default is the intent).
   let routineChecklistOpen = $state(false);
@@ -676,13 +676,13 @@
     Object.values(resolved.unresolved).reduce((s, n) => s + n, 0)
   );
 
-  // Every owned row with ANY market match — no preset/filter applied. The
+  // Every owned row with ANY market match - no preset/filter applied. The
   // sidebar Sell badge pins to this so it stays stable while filters change.
   let sellableCount = $derived.by(() => {
     if (!market) return 0;
     let n = 0;
     // Count an item only if at least one copy is actually listable after the
-    // keep-copies reserve and leveled (untradeable) copies — otherwise the
+    // keep-copies reserve and leveled (untradeable) copies - otherwise the
     // headline tile would claim items are sellable that the reserve holds back,
     // contradicting the dimmed rows and zeroed potential.
     for (const rec of resolved.owned.values())
@@ -697,7 +697,7 @@
 
   function ago(ts) {
     if (!ts) return null;
-    // Clamp at 0 — a cron runner with skewed clock can produce
+    // Clamp at 0 - a cron runner with skewed clock can produce
     // `updated_at` in the future, which used to render "-120 min ago".
     const minutes = Math.max(0, Math.round((Date.now() - new Date(ts)) / 60000));
     if (minutes < 1) return 'just now';
@@ -719,7 +719,7 @@
   });
 
   // A vendor surface (Baro schedule, relic drops, vault status, set maps) is
-  // refreshed on a full scrape but NOT on a CSV-only rebuild — so it can lag
+  // refreshed on a full scrape but NOT on a CSV-only rebuild - so it can lag
   // the price `updated_at`. Flag a surface only when it's meaningfully old
   // (these rotate on the order of days/weeks), so we don't nag on a healthy
   // snapshot where every stamp matches.
@@ -734,7 +734,7 @@
   let setSurfaceAge = $derived(surfaceAge('set_to_parts'));
 
   // Coarse freshness bucket for the small status dot next to "market Xh ago".
-  // The scrape cron runs every 2h, so a healthy snapshot is under 3h old —
+  // The scrape cron runs every 2h, so a healthy snapshot is under 3h old -
   // "fresh" means exactly that. Calling a 5h-old book "fresh" during an
   // event-week price spike would be generous to the point of misleading.
   let marketFreshness = $derived.by(() => {
@@ -745,14 +745,14 @@
     return 'stale';
   });
 
-  // Total theoretical plat across visible results — for the stats strip.
+  // Total theoretical plat across visible results - for the stats strip.
   let totalPotential = $derived(
     results.reduce((s, r) => s + r.potential_plat, 0)
   );
 
   // Since-last-scan deltas for the Sell summary cells. The previous snapshot is
   // pushed through the SAME filter cascade as the live one, so "Sellable ▲12"
-  // means twelve more rows under the current preset/filters — not a different
+  // means twelve more rows under the current preset/filters - not a different
   // definition of sellable. One extra computeResults per filter change; the
   // cascade costs ~0.1 ms on a 2k-item inventory (measured 2026-08-01).
   let prevSummary = $derived.by(() => {
@@ -794,7 +794,7 @@
     desktopWfmStatus().then((s) => { wfmStatus = s; }).catch(() => { wfmStatus = null; });
   });
   let wfmLabel = $derived(
-    !wfmStatus ? '—' : wfmStatus.unlocked ? 'session live' : wfmStatus.logged_in ? 'locked' : 'logged out',
+    !wfmStatus ? '-' : wfmStatus.unlocked ? 'session live' : wfmStatus.logged_in ? 'locked' : 'logged out',
   );
 
   // Friendly diagnosis of WHY the table is empty so we don't just shrug.
@@ -802,7 +802,7 @@
     computeEmptyReason(resolved.owned, market, filterState, results.length, activePreset, adviceMap)
   );
 
-  // Scan is the only inventory source — the refresh pop is a single action.
+  // Scan is the only inventory source - the refresh pop is a single action.
   let refreshOpen = $state(false);
   async function refreshFromGame() {
     refreshOpen = false;
@@ -864,7 +864,7 @@
       pendingPlan = null;
     } catch (e) {
       // Desktop locked-session rejection: keep the banner (the plan is still
-      // pending) and open the matching auth dialog — Resume works after that.
+      // pending) and open the matching auth dialog - Resume works after that.
       if (e instanceof DesktopCmdError && (e.code === 'needs_login' || e.code === 'needs_unlock')) {
         resumePhase = 'idle';
         wfmAuthDialogsRef.open(e.code);
@@ -887,7 +887,7 @@
   let resumeErr = $derived(resumeResults.filter((r) => r.status !== 'ok').length);
 
   // Scan inventory straight from the running game and run it through the same
-  // resolution pipeline — no file, no drag-in. Desktop only (the hosted site
+  // resolution pipeline - no file, no drag-in. Desktop only (the hosted site
   // is informational); the `scan_inventory` IPC command's rejection carries
   // the scanner's exact actionable message.
   let pullingInventory = $state(false);   // scan in flight
@@ -900,7 +900,7 @@
     reportingScan = true;
     reportUrl = null;
     try {
-      // A failed open is not a rejection — the command reports it so we can
+      // A failed open is not a rejection - the command reports it so we can
       // fall back to a copyable link rather than a dead button.
       const r = await transport.reportScanIssue(pullError);
       if (!r.opened) reportUrl = r.url;
@@ -937,7 +937,7 @@
   // 'list' means on unlock (open the review modal).
   let wfmAuthDialogsRef = $state();
   // Bumped on every successful login/unlock so auth-gated surfaces (the orders
-  // panel) retry their fetch once the session is live — the "input once, never
+  // panel) retry their fetch once the session is live - the "input once, never
   // again" path is silent via the keyring, and this is what notices it.
   let sessionEpoch = $state(0);
   function handleWfmUnlocked(next) {
@@ -961,13 +961,13 @@
 
   let listingOpen = $state(false);
   // null = the normal bulk "List N on WFM" behaviour (top-50 of the current
-  // view). A picks-strip "List" click stages exactly that one row instead —
+  // view). A picks-strip "List" click stages exactly that one row instead -
   // same modal, same price/qty editing, no second staging path.
   let reviewRowsOverride = $state(null);
 
   // The Sell CTA routes here. Desktop-only (listing needs wfm-core's session).
   // Checks the session first so the user meets the login/passphrase dialog
-  // BEFORE staging 50 rows — the same codes also arrive lazily via the modal's
+  // BEFORE staging 50 rows - the same codes also arrive lazily via the modal's
   // onauthrequired if the session state changed between staging and Send.
   //
   // `overrideRow` is set by a picks-strip "List" click to stage that single
@@ -981,7 +981,7 @@
       if (s.unlocked) listingOpen = true;
       else wfmAuthDialogsRef.open(s.logged_in ? 'needs_unlock' : 'needs_login', 'list');
     } catch (e) {
-      // Status probe failed (IPC fault) — open the modal anyway; Send will
+      // Status probe failed (IPC fault) - open the modal anyway; Send will
       // surface the typed code and route to the right dialog.
       console.error('wfm auth status check failed', e);
       listingOpen = true;
@@ -994,16 +994,16 @@
 <main class="landing" data-testid={isDesktop ? 'desktop-mode' : undefined}>
   {@render statusStrip(false)}
   <!-- One lede line under the strip (the strip's descriptor already says what
-       this is). The old pitch paragraph / hero is gone — search is the first
+       this is). The old pitch paragraph / hero is gone - search is the first
        control. The theme switcher used to ride this line's right end; it now
        lives in Settings → Appearance, with a quiet copy in the site footer for
        visitors who never search their way into the shell. -->
   <header class="landing-head">
     <p class="lede">
       {#if isDesktop}
-        Scan your account and TennoWorth ranks <em>your</em> inventory by what to sell — until then, look anything up below.
+        Scan your account and TennoWorth ranks <em>your</em> inventory by what to sell - until then, look anything up below.
       {:else}
-        What's worth selling in Warframe right now — search any item, spot the movers, see what's vaulted. No install. No login.
+        What's worth selling in Warframe right now - search any item, spot the movers, see what's vaulted. No install. No login.
       {/if}
     </p>
   </header>
@@ -1014,12 +1014,12 @@
     {#if isDesktop}
       <!-- The scan CTA leads the desktop empty state (fresh install AND
            post-Clear): scanning is the app's whole point, so it must never
-           sit below the fold of the market browser — that's how a user ends
+           sit below the fold of the market browser - that's how a user ends
            up back on the manual file path. -->
       <section class="upsell-lead desktop-hero">
         <h2>Get your personal sell list</h2>
         <p class="sub">
-          With Warframe open and past the login screen, scan your account —
+          With Warframe open and past the login screen, scan your account -
           TennoWorth ranks <em>your</em> inventory by what to sell right now.
         </p>
         <div class="desktop-scan-row">
@@ -1030,7 +1030,7 @@
             disabled={pullingInventory}
           >{pullingInventory ? 'Scanning game…' : 'Scan inventory'}</button>
         </div>
-        <span class="trust">Reads the running game's memory only — nothing leaves your machine.</span>
+        <span class="trust">Reads the running game's memory only - nothing leaves your machine.</span>
       </section>
     {/if}
 
@@ -1062,7 +1062,7 @@
   <!-- The hosted landing reads as a price-lookup tool: search, movers,
        vaulted, hand-off. Nothing above this reveals that the app also does
        set picks, relics, rivens, watches, the ledger, orders and the
-       advisor. The rail is that reveal — one miniature per surface, built
+       advisor. The rail is that reveal - one miniature per surface, built
        from sample data rather than screenshots so it re-skins with the
        theme and can never go stale. Hosted only: a desktop visitor has the
        real thing in the sidebar. -->
@@ -1079,8 +1079,8 @@
     <span class="ver" title="build {APP_COMMIT}">{APP_COMMIT}</span>
     <!-- The theme control's home is Settings → Appearance, inside the shell.
          A visitor who never searches never reaches the shell, so the mode
-         control also sits here — quiet, right-aligned, on the footer's own
-         type scale — rather than leaving the hosted site unable to override
+         control also sits here - quiet, right-aligned, on the footer's own
+         type scale - rather than leaving the hosted site unable to override
          the OS scheme. -->
     <div class="foot-theme"><ThemeSwitcher {theme} compact label="Colour mode" /></div>
   </footer>
@@ -1235,9 +1235,9 @@
                   </span>
                   {#if r.set_vol !== undefined && (r.kind === 'near-complete' || r.kind === 'complete-with-extras')}
                     {#if r.set_vol < 1}
-                      <span class="set-liq cold" title="The assembled set has traded under 1×/48h — a flip may sit unsold for a while.">set rarely trades</span>
+                      <span class="set-liq cold" title="The assembled set has traded under 1×/48h - a flip may sit unsold for a while.">set rarely trades</span>
                     {:else if r.set_vol < 5}
-                      <span class="set-liq thin" title="Thin set volume — expect to wait for a buyer before you recoup the plat.">thin · {r.set_vol}/48h</span>
+                      <span class="set-liq thin" title="Thin set volume - expect to wait for a buyer before you recoup the plat.">thin · {r.set_vol}/48h</span>
                     {:else}
                       <span class="set-liq moving" title="Healthy set volume.">{r.set_vol}/48h</span>
                     {/if}
@@ -1266,7 +1266,7 @@
                 </p>
                 <!-- The third option the spread above cannot express: buy only
                      what you lack and foundry the rest. Only for sets you are
-                     actually assembling — on a spares play there is nothing to
+                     actually assembling - on a spares play there is nothing to
                      build. -->
                 {#if r.kind === 'near-complete' && market?.set_to_parts?.[r.set_slug]}
                   <details class="build-vs-buy">
@@ -1351,7 +1351,7 @@
                         <span class="rarity rarity-{r.rarity.toLowerCase()}">{r.rarity[0]}</span>
                         <span class="reward-name">{r.name}</span>
                         <span class="muted small">{r.chance.toFixed(0)}%</span>
-                        <span class={r.low_sell > 0 ? '' : 'muted'}>{r.low_sell || '—'}p</span>
+                        <span class={r.low_sell > 0 ? '' : 'muted'}>{r.low_sell || '-'}p</span>
                       </li>
                     {/each}
                   </ul>
@@ -1383,14 +1383,14 @@
         <h2>Baro Ki'Teer</h2>
         <p class="lede">
           {#if baroState?.phase === 'here'}
-            Here at {voidTrader.location} — leaves in {humanWindow(baroState.windowMs)}.
+            Here at {voidTrader.location} - leaves in {humanWindow(baroState.windowMs)}.
           {:else if baroState?.phase === 'incoming'}
             Arrives in {humanWindow(baroState.windowMs)} at {voidTrader.location}.
           {:else}
             Next visit at {voidTrader.location}.
           {/if}
           {#if baroSurfaceAge}
-            <span class="muted">· ⚠ schedule data {baroSurfaceAge} — may be a rotation behind</span>
+            <span class="muted">· ⚠ schedule data {baroSurfaceAge} - may be a rotation behind</span>
           {/if}
         </p>
       </section>
@@ -1404,7 +1404,7 @@
                 across <strong>{ducatStats.count.toLocaleString()}</strong>
                 ducat-earning {ducatStats.count === 1 ? 'item' : 'items'}.
                 {#if baroState?.phase === 'here'}
-                  Spend them on Baro's offerings — open the <strong>Ducats</strong>
+                  Spend them on Baro's offerings - open the <strong>Ducats</strong>
                   preset to see what's worth dumping.
                 {:else}
                   Earmark these for Baro using the <strong>Ducats</strong> preset.
@@ -1439,7 +1439,7 @@
       <section class="view-header">
         <h2>Profit routines</h2>
         <p class="lede">
-          Daily and weekly habits that compound — including the Endo sources that fund the
+          Daily and weekly habits that compound - including the Endo sources that fund the
           buy-unranked → max → resell flip. Countdowns are live; what you've already claimed
           isn't tracked (your inventory + the market snapshot can't see account state).
         </p>
@@ -1459,7 +1459,7 @@
           </div>
           <div class="clock">
             <span class="clock-label">{baroState?.phase === 'here' ? 'Baro leaves' : 'Baro arrives'}</span>
-            <strong class="clock-val">{voidTrader ? humanWindow(baroState?.windowMs) : '—'}</strong>
+            <strong class="clock-val">{voidTrader ? humanWindow(baroState?.windowMs) : '-'}</strong>
             <span class="clock-sub">{voidTrader?.location ?? 'schedule unknown'}</span>
           </div>
         </div>
@@ -1471,36 +1471,36 @@
         <section class="card routine">
           <h3>Daily</h3>
         <ul class="routine-list">
-          <li><strong>Login tribute</strong> — claim it; the milestone days hand out Endo and the exclusive weapons/Forma that fund everything else.</li>
-          <li><strong>Keep the foundry busy</strong> — start a Forma or a sellable BP every day; an idle foundry is lost plat.</li>
-          <li><strong>Cap syndicate standing</strong> → buy augment mods / arcanes to flip on WFM — a steady daily plat trickle.</li>
+          <li><strong>Login tribute</strong> - claim it; the milestone days hand out Endo and the exclusive weapons/Forma that fund everything else.</li>
+          <li><strong>Keep the foundry busy</strong> - start a Forma or a sellable BP every day; an idle foundry is lost plat.</li>
+          <li><strong>Cap syndicate standing</strong> → buy augment mods / arcanes to flip on WFM - a steady daily plat trickle.</li>
           <li><strong>6 Steel Path incursions</strong> → Steel Essence → Teshin's weekly rotation (Riven slivers, Kuva, Umbra Forma).</li>
-          <li><strong>Sortie</strong> — ~4,000 Endo on the Endo reward, plus a Riven chance.</li>
+          <li><strong>Sortie</strong> - ~4,000 Endo on the Endo reward, plus a Riven chance.</li>
         </ul>
       </section>
 
       <section class="card routine">
         <h3>Weekly <span class="muted">· resets Monday</span></h3>
         <ul class="routine-list">
-          <li><strong>Maroo's Ayatan Treasure Hunt</strong> — a free sculpture worth ~1,500–3,450 Endo once filled with stars.</li>
-          <li><strong>Archon Hunt</strong> — up to ~8,000 Endo in one clear, plus an Archon Shard.</li>
-          <li><strong>Nightwave acts</strong> → Cred for potatoes/Forma. This <em>saves</em> plat (those items are account-bound) — it doesn't earn it.</li>
-          <li><strong>Baro check</strong> on arrival — but buy to <strong>hold</strong>, not flip: his mods crater ~50% on arrival and recover over weeks (watch the Sell view's “hold” tags).</li>
+          <li><strong>Maroo's Ayatan Treasure Hunt</strong> - a free sculpture worth ~1,500–3,450 Endo once filled with stars.</li>
+          <li><strong>Archon Hunt</strong> - up to ~8,000 Endo in one clear, plus an Archon Shard.</li>
+          <li><strong>Nightwave acts</strong> → Cred for potatoes/Forma. This <em>saves</em> plat (those items are account-bound) - it doesn't earn it.</li>
+          <li><strong>Baro check</strong> on arrival - but buy to <strong>hold</strong>, not flip: his mods crater ~50% on arrival and recover over weeks (watch the Sell view's “hold” tags).</li>
         </ul>
       </section>
 
       <section class="card routine">
-        <h3>Endo — to fund the rank-up flip</h3>
+        <h3>Endo - to fund the rank-up flip</h3>
         <p class="routine-note">
           Maxing one Primed mod ≈ <strong>20,000 Endo + ~1.3M credits</strong> and roughly doubles its
           value (e.g. Primed Continuity ~69p unranked → ~139p maxed). Best sources:
         </p>
         <ul class="routine-list">
-          <li><strong>Arbitrations</strong> — ~5,000–10,000 Endo/hr (the grind option; needs the full star chart cleared).</li>
-          <li><strong>Vodyanoi</strong> (Sedna, Steel Path) — the throughput king; a coordinated squad pushes far higher.</li>
-          <li><strong>Hieracon (Pluto) excavation</strong> — steady and solo-friendly, with relics as a byproduct.</li>
-          <li><strong>Archon (~8k/wk) + Sortie (~4k/day) + Maroo's weekly</strong> — passive lumps from the routines above.</li>
-          <li class="routine-avoid"><strong>Skip Eidolons &amp; Profit-Taker for Endo</strong> — they pay ~zero Endo; farm those for arcanes/plat instead.</li>
+          <li><strong>Arbitrations</strong> - ~5,000–10,000 Endo/hr (the grind option; needs the full star chart cleared).</li>
+          <li><strong>Vodyanoi</strong> (Sedna, Steel Path) - the throughput king; a coordinated squad pushes far higher.</li>
+          <li><strong>Hieracon (Pluto) excavation</strong> - steady and solo-friendly, with relics as a byproduct.</li>
+          <li><strong>Archon (~8k/wk) + Sortie (~4k/day) + Maroo's weekly</strong> - passive lumps from the routines above.</li>
+          <li class="routine-avoid"><strong>Skip Eidolons &amp; Profit-Taker for Endo</strong> - they pay ~zero Endo; farm those for arcanes/plat instead.</li>
         </ul>
       </section>
       </details>
@@ -1525,14 +1525,14 @@
     {:else if effectiveView === 'watches'}
       <section class="view-header">
         <h2>Price watches</h2>
-        <p class="lede">Desktop notifications when an item hits your price — checked every 10 minutes against live warframe.market orders.</p>
+        <p class="lede">Desktop notifications when an item hits your price - checked every 10 minutes against live warframe.market orders.</p>
       </section>
       <WatchlistPanel {market} />
 
     {:else if effectiveView === 'ledger'}
       <section class="view-header">
         <h2>Ledger</h2>
-        <p class="lede">Every trade the game confirmed, read from its own log — realised plat, not estimates.</p>
+        <p class="lede">Every trade the game confirmed, read from its own log - realised plat, not estimates.</p>
       </section>
       <LedgerPanel onsetautoclose={(on) => store.setSetting('auto-close-sold', on ? 'on' : 'off')} />
 
@@ -1569,7 +1569,7 @@
 {#snippet statusStrip(inShell)}
   <!-- Shell-level status strip: one 40px spine on the landing AND the
        workspace. In the shell its brand cell sits exactly over the sidebar
-       column; the rest answers "is what I'm looking at still true?" —
+       column; the rest answers "is what I'm looking at still true?" -
        inventory age, market age, orders to fix, Baro, WFM session. Rare
        inventory actions (Export / Restore / Clear) live one click deeper in
        the Refresh menu. -->
@@ -1579,7 +1579,7 @@
       {#if !inShell}<span class="sub">warframe.market prices, ranked by what actually sells</span>{/if}
     </div>
     {#if isDesktop}
-      <div class="cell inv" title={unresolvedCount > 0 ? `${unresolvedCount} items couldn't be price-matched (${unresolvedSummary}) — usually untradeable blueprints, quest items and very new content.` : undefined}>
+      <div class="cell inv" title={unresolvedCount > 0 ? `${unresolvedCount} items couldn't be price-matched (${unresolvedSummary}) - usually untradeable blueprints, quest items and very new content.` : undefined}>
         {#if inventoryName}
           <span class="dot {inventoryFreshness}" role="img" aria-label="Inventory {inventoryFreshness}"></span>
           <span>Inventory</span>
@@ -1602,12 +1602,12 @@
             aria-busy={pullingInventory}
             disabled={pullingInventory}
             title={pullingInventory
-              ? 'Reading the running game’s memory — this can take a few seconds.'
-              : 'Load fresh inventory — re-fetch from the game. Export / Restore / Clear live in this menu too.'}
+              ? 'Reading the running game’s memory - this can take a few seconds.'
+              : 'Load fresh inventory - re-fetch from the game. Export / Restore / Clear live in this menu too.'}
           >{pullingInventory ? 'Scanning…' : 'Refresh ▾'}</button>
           {#if refreshOpen}
             <div class="refresh-pop">
-              <p class="rp-lede">Scan the running game — no file needed.</p>
+              <p class="rp-lede">Scan the running game - no file needed.</p>
               <button class="rp-primary" data-testid="desktop-scan" onclick={refreshFromGame} disabled={pullingInventory}>
                 {pullingInventory ? 'Scanning game…' : 'Scan game'}
               </button>
@@ -1620,7 +1620,7 @@
                 <button class="rp-item danger" onclick={() => { refreshOpen = false; handleClear(); }} title="Forget the saved inventory entirely.">Clear</button>
               {/if}
               {#if unresolvedCount > 0}
-                <p class="rp-note" title="Breakdown: {unresolvedSummary}.">{unresolvedCount} items couldn't be price-matched (not shown) — usually untradeable blueprints, quest items and very new content; your sellable items aren't affected.</p>
+                <p class="rp-note" title="Breakdown: {unresolvedSummary}.">{unresolvedCount} items couldn't be price-matched (not shown) - usually untradeable blueprints, quest items and very new content; your sellable items aren't affected.</p>
               {/if}
             </div>
           {/if}
@@ -1630,7 +1630,7 @@
     <div class="cell">
       <span class="dot {marketFreshness}" role="img" aria-label="Market data {marketFreshness}"></span>
       <span>Market</span>
-      <b>{marketStaleness ?? '—'}</b>
+      <b>{marketStaleness ?? '-'}</b>
       {#if marketFreshness !== 'unknown'}<span>· {marketFreshness}</span>{/if}
     </div>
     {#if inShell && isDesktop && ordersToFix > 0}
@@ -1682,11 +1682,11 @@
         The desktop app reads the running game's process memory to find the
         <code>accountId</code> and <code>nonce</code> your client already
         obtained at login, then calls DE's own inventory endpoint with
-        those — same call your game client makes. It writes to disk; it
+        those - same call your game client makes. It writes to disk; it
         doesn't write to the game's memory or modify game state.
       </p>
       <p>
-        <strong>We can't promise this is ban-safe</strong> — no third-party
+        <strong>We can't promise this is ban-safe</strong> - no third-party
         tool honestly can. What we <em>can</em> say: the app only ever
         reads memory. It never writes to the game, never injects code, and
         doesn't interact with anti-cheat. Other read-only inventory tools have
@@ -1702,7 +1702,7 @@
       <p>
         Nowhere we control. The desktop app scans the game and keeps your
         inventory locally (SQLite + your browser's storage). This site is
-        informational — it never receives or stores your inventory. The market
+        informational - it never receives or stores your inventory. The market
         snapshot is the only thing we host, and it's the same for every visitor.
       </p>
       <p>
@@ -1727,7 +1727,7 @@
         Listing is a <strong>desktop app</strong> feature. Install the desktop
         app (Windows + Linux), scan your account, and use <strong>List on
         WFM</strong> from the Sell view. The first time, the app asks you to
-        log in to warframe.market once — the sign-in token is encrypted behind
+        log in to warframe.market once - the sign-in token is encrypted behind
         a passphrase you choose, and it never leaves your machine. After that,
         listing and your orders work for the rest of the session.
       </p>
@@ -1738,10 +1738,10 @@
     </details>
 
     <details>
-      <summary>I listed an item — what happens next?</summary>
+      <summary>I listed an item - what happens next?</summary>
       <p>
         Your listing sits on warframe.market (we create them
-        <strong>hidden</strong> so you can review first — flip them visible
+        <strong>hidden</strong> so you can review first - flip them visible
         in My orders or on WFM). When a buyer wants it, they message
         you <strong>in-game</strong>: <code>/w YourName Hi! I want to buy your
         Serration…</code>. Invite them to your squad, go to any dojo or relay,
@@ -1751,7 +1751,7 @@
         Two gotchas: you must be <strong>in-game</strong> to trade (WFM marks
         you online automatically while the site is open), and trading requires
         a clan dojo or Maroo's Bazaar. Mark the listing sold on WFM afterwards
-        — or just delete it from the <strong>My orders</strong> tab here.
+        - or just delete it from the <strong>My orders</strong> tab here.
       </p>
     </details>
 
@@ -1769,7 +1769,7 @@
       <p>
         Arcanes and frame mods (in <code>RawUpgrades</code>) are
         resolved and priced like anything else. Rivens are
-        per-instance items with rolled stats — they don't have a single
+        per-instance items with rolled stats - they don't have a single
         market price, they need a separate model (riven grader). Not
         supported here yet; semlar's tools do this better.
       </p>
@@ -1778,7 +1778,7 @@
     <details>
       <summary>Want to support this?</summary>
       <p>
-        Free, no ads, no accounts, no telemetry — always. If it saved
+        Free, no ads, no accounts, no telemetry - always. If it saved
         you some plat and you want to chip in toward hosting, that's
         appreciated but never expected:
         <a href="https://ko-fi.com/prowly" target="_blank" rel="noopener">ko-fi.com/prowly</a>.
@@ -1790,9 +1790,9 @@
     <h2>Trust &amp; safety</h2>
     <p class="trust-lede">
       Straight answers about what this tool touches, what it can't, and how to
-      check us for yourself — not legal boilerplate. The short version: the
+      check us for yourself - not legal boilerplate. The short version: the
       desktop app only ever <em>reads</em> your running game, the web app runs
-      entirely in your browser, and we can't promise this is ban-safe — so use
+      entirely in your browser, and we can't promise this is ban-safe - so use
       it at your own risk.
     </p>
 
@@ -1802,17 +1802,17 @@
         While Warframe is running, the desktop app scans the game's memory for
         two things your client already has: your <strong>account ID</strong>
         and the <strong>session nonce</strong> it uses to talk to Digital
-        Extremes. It then asks DE's own inventory API for your items — the exact
+        Extremes. It then asks DE's own inventory API for your items - the exact
         same request the game client makes. It <strong>never writes to the
         game's memory and never injects code</strong>; it only reads, then makes
         one HTTPS call. Your account ID and nonce are used for that single
-        request and discarded — never printed, never saved, never sent anywhere
+        request and discarded - never printed, never saved, never sent anywhere
         else.
       </p>
       <p>
         For trade detection (the Ledger), the app also
         <strong>reads the game's own text log</strong> (<code>EE.log</code>,
-        the file Warframe itself writes) — read-only tailing of a plain file,
+        the file Warframe itself writes) - read-only tailing of a plain file,
         the same thing WFInfo and AlecaFrame have done for years. It starts at
         the end of the file, so nothing from before the app launched is ever
         read, and if the log isn't there, trade detection is simply off.
@@ -1820,7 +1820,7 @@
       <p>
         If you explicitly enable the relic reward overlay, a reward log line or
         your retry shortcut captures the Warframe window and runs English OCR
-        locally. The frame is cropped and held only in memory—never saved or
+        locally. The frame is cropped and held only in memory-never saved or
         uploaded. The overlay can use the existing cached snapshot offline;
         optional live pricing sends only the matched public item slug to
         warframe.market.
@@ -1842,13 +1842,13 @@
       <summary>How it talks to warframe.market</summary>
       <p>
         Every request identifies itself as TennoWorth (name, version, and a
-        contact link in the <code>User-Agent</code> — warframe.market's API
+        contact link in the <code>User-Agent</code> - warframe.market's API
         rules require it, and we follow them). Traffic is polite by
         construction: live price checks run at most ~3 requests per second in
         short bursts of up to 100 items, price watches re-check every 10
         minutes, and riven comps are capped at warframe.market's 10 searches
         per minute. <strong>Order writes only ever happen when you click</strong>
-        — the app never auto-bids, never auto-undercuts, and never reprices
+        - the app never auto-bids, never auto-undercuts, and never reprices
         without you. The bots that instantly match every bid on
         warframe.market are exactly what this app refuses to be.
       </p>
@@ -1857,38 +1857,38 @@
     <details>
       <summary>What never leaves your machine</summary>
       <p>
-        The web app has no backend and no accounts — every item, price join, and
+        The web app has no backend and no accounts - every item, price join, and
         ranking is computed in your browser tab. If you log in to
         warframe.market to post listings, that login token is
         <strong>encrypted on disk</strong> (AES-256-GCM) at
         <code>~/.config/wfminv/</code> (or the Windows equivalent), and the
-        webview never sees it — it stays in the Rust process. The
+        webview never sees it - it stays in the Rust process. The
         desktop app can optionally remember the unlock key in your OS
-        keyring (KWallet, GNOME Keyring, Windows Credential Manager) —
+        keyring (KWallet, GNOME Keyring, Windows Credential Manager) -
         never the passphrase itself; details in SECURITY.md.
       </p>
       <p>
-        No telemetry, no analytics — confirm it in your browser's network tab.
+        No telemetry, no analytics - confirm it in your browser's network tab.
       </p>
     </details>
 
     <details>
       <summary>How you can verify all this yourself</summary>
       <p>
-        Everything is open source — read the desktop app's memory-scan code and
+        Everything is open source - read the desktop app's memory-scan code and
         the web app's join logic. The desktop releases are
         <strong>reproducibly built in public CI</strong>: you can audit the
         workflow file, the source at the tagged commit, and the build logs, and
         every release ships checksums so you can confirm
         your download matches. The site
-        loads <strong>zero third-party scripts</strong> — inspect the page's
+        loads <strong>zero third-party scripts</strong> - inspect the page's
         Content-Security-Policy. Full detail lives in
         <a href="https://github.com/tennoworth/tennoworth/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer">SECURITY.md</a>.
       </p>
     </details>
 
     <details>
-      <summary>The honest risk — and what happens if DE's stance changes</summary>
+      <summary>The honest risk - and what happens if DE's stance changes</summary>
       <p>
         We <strong>can't promise this is ban-safe</strong>; no third-party tool
         honestly can. What we can say: the desktop app only reads memory, never
@@ -1939,7 +1939,7 @@
     <div class="card warn-banner general-banner" role="status">
       <div class="gb-body">
         Still running in your tray. Closing the window keeps TennoWorth in the
-        background — use the tray icon's Quit to exit.
+        background - use the tray icon's Quit to exit.
       </div>
       <div class="gb-actions">
         <button class="gb-dismiss" aria-label="Dismiss" onclick={() => (trayHint = false)}>×</button>
@@ -1970,7 +1970,7 @@
             <span class="muted">
               <span class="ok-text">{resumeOk} created</span>
               {#if resumeErr > 0}· <span class="bad">{resumeErr} failed</span>{/if}.
-              New listings are still hidden — toggle from the orders panel.
+              New listings are still hidden - toggle from the orders panel.
             </span>
           </div>
           <div class="row gap-sm">
@@ -2032,7 +2032,7 @@
 
 <style>
   main.landing {
-    /* Landing — a 76rem reading column (1216px at 1440 → 1292 at 1920 →
+    /* Landing - a 76rem reading column (1216px at 1440 → 1292 at 1920 →
        1368 at 2560): strip → lede → search → movers → vaulted + Baro →
        hand-off → FAQ → footer, every block on the --stack rhythm. */
     max-width: 76rem;
@@ -2045,7 +2045,7 @@
   }
 
   /* Shell layout: a 40px status strip spanning both columns, then the
-     persistent left rail + workspace column. Sidebar is 13.5rem (216px —
+     persistent left rail + workspace column. Sidebar is 13.5rem (216px -
      room for nav-item label + 3-digit badge); workspace fills the rest.
      The shell caps at 122.5rem (1960px at 16px root) and centres. */
   .shell {
@@ -2176,7 +2176,7 @@
   }
   main.landing > .statusbar .brand { flex: 1 1 auto; }
 
-  /* Sidebar — nav only, sticky under the strip; the theme switcher and the
+  /* Sidebar - nav only, sticky under the strip; the theme switcher and the
      build string sit in its foot. */
   aside.sidebar {
     position: sticky;
@@ -2293,12 +2293,12 @@
   .refresh-trigger:hover:not(:disabled) { color: var(--fg); border-color: var(--accent); background: transparent; }
   .refresh-wrap { position: relative; }
   /* The trigger is disabled mid-scan, and the global button:disabled rule
-     dims it to 0.5 — which reads as "unavailable", the opposite of the
+     dims it to 0.5 - which reads as "unavailable", the opposite of the
      "working on it" signal a multi-second scan needs. Keep it legible and
      accent-tinted so it reads as busy. */
   /* Reserve the width both labels need. "Refresh ▾" and "Scanning…" render at
      different widths, and without a floor the swap resized the button mid-scan
-     — enough to push Export up beside it and wrap Clear onto its own row, so
+     - enough to push Export up beside it and wrap Clear onto its own row, so
      the whole sidebar footer jumped exactly when the user was watching it. */
   .refresh-trigger { min-width: 9ch; text-align: center; }
   .refresh-trigger.busy {
@@ -2308,7 +2308,7 @@
     cursor: progress;
   }
   /* Opens downward from the strip as a contained menu: Scan (primary), then
-     the rare actions — Export / Restore / Clear — as plain menu items. */
+     the rare actions - Export / Restore / Clear - as plain menu items. */
   .refresh-pop {
     position: absolute;
     top: calc(100% + 4px);
@@ -2357,7 +2357,7 @@
   .refresh-pop .rp-item.danger:hover { color: var(--bad); }
   .refresh-pop .rp-note { margin: var(--s1) 0 0; font-size: 11px; line-height: 1.45; color: var(--muted); }
 
-  /* Workspace view header — h2 + a hover/focus info dot carrying the
+  /* Workspace view header - h2 + a hover/focus info dot carrying the
      one-sentence lede, folded onto a single row (was h2 + a full lede
      paragraph on its own line) to reclaim vertical space above the fold. */
   .view-header {
@@ -2460,7 +2460,7 @@
     letter-spacing: 0.02em;
   }
 
-  /* Upsell lead — separates the free market browser above from the desktop-app
+  /* Upsell lead - separates the free market browser above from the desktop-app
      pitch below. A hairline + top padding, no box. */
   .upsell-lead {
     border-top: 1px var(--rule) var(--hairline);
@@ -2518,7 +2518,7 @@
 
 
   /* First-session Score explainer. Single dismissable line above the
-     table — the casual-flipper persona was confused by what Score
+     table - the casual-flipper persona was confused by what Score
      meant; hover-tooltip alone wasn't enough. localStorage flag means
      each user sees it once. */
   /* Cross-view banner region (unreachable / bad deep link / pull error). Reuses
@@ -2573,7 +2573,7 @@
     user-select: all;
   }
   /* Action-verb prefix on rec cards. Casual users said the cards were
-     too noun-heavy — leading with a verb gives them the instruction. */
+     too noun-heavy - leading with a verb gives them the instruction. */
   .reco-verb {
     font-size: 10px;
     font-weight: 700;
@@ -2593,7 +2593,7 @@
   button.ghost:hover { background: var(--panel-2); color: var(--fg); }
   code { background: var(--panel-2); padding: 1px 6px; border-radius: var(--radius-input); font-family: var(--font-mono); font-size: 0.93em; }
 
-  /* Set-completion card — recommendation rows. Three reco kinds
+  /* Set-completion card - recommendation rows. Three reco kinds
      distinguished by a small uppercase pill so the user can scan and
      pick a strategy without reading every detail line. Net plat is the
      right-aligned headline number per row. */
@@ -2646,7 +2646,7 @@
     margin-left: 4px;
   }
 
-  /* Advisor chips — shared shape with the table's advice column (its copy
+  /* Advisor chips - shared shape with the table's advice column (its copy
      lives in ResultsTable's scoped styles; Svelte styles don't cross
      component boundaries, so the small duplication is deliberate). */
   .advice-chip {
@@ -2686,7 +2686,7 @@
   .baro-detail strong { color: var(--fg); font-weight: 600; }
   .baro-detail .unit { color: var(--muted); font-size: 11px; margin-left: 1px; }
 
-  /* Profit routines — countdown clocks + reminder lists. */
+  /* Profit routines - countdown clocks + reminder lists. */
   .routine h3 { margin: 0 0 6px; font-size: 14px; }
   .routine h3 .muted { font-weight: 400; }
   .routine-clocks {
@@ -2712,7 +2712,7 @@
   .routine-list strong { color: var(--fg); font-weight: 600; }
   .routine-note { font-size: 12.5px; line-height: 1.5; margin: 0; color: var(--muted); }
   .routine-avoid { color: var(--muted); }
-  /* Routine checklist — the three routine cards sit behind a collapsed-by-
+  /* Routine checklist - the three routine cards sit behind a collapsed-by-
      default <details> so the clocks (the daily urgency) stay above the fold. */
   .routine-checklist { display: flex; flex-direction: column; gap: 12px; }
   .routine-checklist summary {
@@ -2727,7 +2727,7 @@
   .routine-checklist summary:hover { color: var(--accent); }
   .routine-checklist[open] summary { color: var(--accent); }
 
-  /* Relic planner — three-card grid above the main table. Equal-weight
+  /* Relic planner - three-card grid above the main table. Equal-weight
      cards because the user is making a "what tonight" choice and equal
      real estate makes the comparison direct. Each card leads with EPP
      (expected plat per crack); the moving-rewards fraction flags traps
@@ -2798,7 +2798,7 @@
   .rarity-rare     { color: var(--warn); }
   .rarity-legendary { color: var(--good); }
 
-  /* Pending-batch banner — draws the eye with a left-border accent so the
+  /* Pending-batch banner - draws the eye with a left-border accent so the
      user doesn't miss that an interrupted batch is recoverable. */
   .card.pending-banner {
     border-left: 3px solid var(--warn);
@@ -2817,7 +2817,7 @@
   .card.empty strong { font-weight: 600; }
   .card.empty p { margin: 4px 0 0 0; }
 
-  /* FAQ — native <details>, minimal chrome, custom marker. */
+  /* FAQ - native <details>, minimal chrome, custom marker. */
   .faq {
     display: flex;
     flex-direction: column;
@@ -2830,7 +2830,7 @@
   }
   .faq h2 { padding: 14px 0 8px; margin: 0; }
   /* Landing: two columns of questions under the one head. Row heights follow
-     the tallest open answer in that row — acceptable for a FAQ. */
+     the tallest open answer in that row - acceptable for a FAQ. */
   main.landing .faq { display: grid; grid-template-columns: 1fr 1fr; gap: 0 var(--s5); margin-top: calc(var(--s5) - var(--stack)); }
   main.landing .faq > h2, main.landing .faq > .trust-lede { grid-column: 1 / -1; }
   main.landing .faq details:nth-of-type(2) { border-top: 1px var(--rule) var(--hairline); }
@@ -2894,7 +2894,7 @@
     padding: var(--s3) 0 var(--s5);
     margin-top: calc(var(--s5) - var(--stack));
     border-top: 1px var(--rule) var(--hairline);
-    color: var(--muted); /* real information (licence, data sources) — --faint is decorative-only and lands at ~2.2:1 on the yorha ground */
+    color: var(--muted); /* real information (licence, data sources) - --faint is decorative-only and lands at ~2.2:1 on the yorha ground */
     font-size: 11px;
     line-height: 1rem;
   }
@@ -2906,6 +2906,6 @@
   footer.sitefoot .foot-theme { margin-left: auto; align-self: center; }
 
   /* .cryptobox dialog styling moved to WfmAuthDialogs.svelte and
-     ExportImportDialogs.svelte — no more dialog.cryptobox elements render
+     ExportImportDialogs.svelte - no more dialog.cryptobox elements render
      directly in this template. */
 </style>

@@ -5,14 +5,14 @@
 # Linux GUI stack (tennoworth-desktop → tauri → gtk3-rs + friends).
 # Tauri is pinned to GTK3/WebKitGTK-4.1 bindings until upstream moves to
 # GTK4/webkitgtk-6; every Tauri v2 Linux app carries this exact set.
-# Revisit on each Tauri minor bump — remove entries that stop firing.
+# Revisit on each Tauri minor bump - remove entries that stop firing.
 #
 # A NEW advisory (anything not listed here) still fails CI, including any
 # real vulnerability in these same crates.
 
 [advisories]
 ignore = [
-    # gtk-rs GTK3 bindings — "no longer maintained" (2024-08 batch)
+    # gtk-rs GTK3 bindings - "no longer maintained" (2024-08 batch)
     "RUSTSEC-2024-0411", # gdkwayland-sys
     "RUSTSEC-2024-0412", # gdk
     "RUSTSEC-2024-0413", # atk

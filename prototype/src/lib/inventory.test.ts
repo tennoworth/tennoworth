@@ -1,4 +1,4 @@
-// @ts-nocheck — vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
+// @ts-nocheck - vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
 import { describe, it, expect } from 'vitest';
 import { flattenInventory, extractKeptLvls, TRADEABLE_CATEGORIES } from './inventory.js';
 import categoriesFixture from '../../../tests/fixtures/tradeable-categories.json';
@@ -128,7 +128,7 @@ describe('extractKeptLvls', () => {
       ],
     };
     // The mere presence of an Upgrades entry signals the user holds an
-    // instance — even at lvl=0 — so callers can choose whether to filter.
+    // instance - even at lvl=0 - so callers can choose whether to filter.
     expect(extractKeptLvls(inv).has('/Lotus/Mods/Foo')).toBe(true);
     expect(extractKeptLvls(inv).get('/Lotus/Mods/Foo')).toBe(0);
   });

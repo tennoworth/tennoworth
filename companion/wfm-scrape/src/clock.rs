@@ -1,18 +1,18 @@
 //! The single injected clock. Every timestamp the converter reads or writes
-//! flows through a `DateTime<Utc>` handed in by the caller — `updated_at`,
+//! flows through a `DateTime<Utc>` handed in by the caller - `updated_at`,
 //! the per-surface `surface_fetched_at` stamps, the reconcile staleness
 //! warning, and the vaulting-soon horizon. Nothing in this crate may call
 //! `Utc::now()` except the binary's arg parsing (when `--now` is absent).
 
 use chrono::{DateTime, NaiveDate, NaiveDateTime, TimeZone, Utc};
 
-/// The snapshot's stamp format — Python's
+/// The snapshot's stamp format - Python's
 /// `datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")`.
 pub fn iso_z(dt: DateTime<Utc>) -> String {
     dt.format("%Y-%m-%dT%H:%M:%SZ").to_string()
 }
 
-/// Strict mirror of the converter's `strptime(s, "%Y-%m-%dT%H:%M:%SZ")` —
+/// Strict mirror of the converter's `strptime(s, "%Y-%m-%dT%H:%M:%SZ")` -
 /// used on prior `surface_fetched_at` stamps. Anything else is a parse
 /// failure, exactly like Python's ValueError path.
 pub fn parse_stamp(s: &str) -> Option<DateTime<Utc>> {
@@ -24,7 +24,7 @@ pub fn parse_stamp(s: &str) -> Option<DateTime<Utc>> {
 /// Epoch milliseconds → UTC. DE's worldState stamps every window
 /// (`Activation`, `Expiry`) as millis inside a Mongo-flavoured wrapper; once
 /// [`crate::de::de_millis`] has unwrapped it, this is the only conversion
-/// needed. Out-of-range values clamp to the epoch rather than panicking — a
+/// needed. Out-of-range values clamp to the epoch rather than panicking - a
 /// garbage timestamp should render as obviously wrong, not take down a build.
 pub fn from_millis(ms: i64) -> DateTime<Utc> {
     DateTime::<Utc>::from_timestamp_millis(ms).unwrap_or(DateTime::UNIX_EPOCH)

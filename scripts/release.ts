@@ -6,7 +6,7 @@
 // user machines: 0.3.3 sat under a 0.3.6 desktop for three releases, and 0.3.5
 // and 0.3.6 both shipped a Cargo.lock naming the previous version, which made
 // them unbuildable from source (`cargo build --frozen` refuses to rewrite a
-// lock — the retired AUR source package was where that surfaced).
+// lock - the retired AUR source package was where that surfaced).
 //
 // Two pins remain; the two AUR PKGBUILDs were dropped when Linux became
 // AppImage-only:
@@ -55,7 +55,7 @@ function fail(message: string): never {
 /** The authoritative version: the `[package]` version in the desktop crate. */
 function cargoTomlVersion(): string {
   // Anchored to the first `version = "..."` at column 0, which is the
-  // [package] one — dependency versions are all inline in `{ version = ... }`
+  // [package] one - dependency versions are all inline in `{ version = ... }`
   // tables or indented, so they cannot match.
   const m = read(CARGO_TOML).match(/^version\s*=\s*"([^"]+)"/m);
   if (!m) fail(`no [package] version found in ${CARGO_TOML}`);
@@ -87,7 +87,7 @@ function allPins(): { where: string; version: string }[] {
  *
  * Local tags first, because that works offline and in a full clone. CI checks
  * out at depth 1 with no tags, so fall back to asking the remote rather than
- * making every consumer deepen its checkout. An empty list is not an error —
+ * making every consumer deepen its checkout. An empty list is not an error -
  * a fork or a fresh clone legitimately has no release history, and a version
  * check that hard-fails there would block contributors over nothing.
  */
@@ -190,12 +190,12 @@ function cmdCheck(argv: string[]) {
       // drop the monotonicity guard for exactly the run that needs it.
       console.error(
         "no published desktop-v* releases visible. On a PR that is fine; for a release it " +
-          "means the tag lookup failed (or this really is the first release — then tag " +
+          "means the tag lookup failed (or this really is the first release - then tag " +
           "desktop-v0.0.0 on the initial commit to seed the history).",
       );
       bad = true;
     } else {
-      console.log("no published desktop-v* releases visible — skipping the history check.");
+      console.log("no published desktop-v* releases visible - skipping the history check.");
     }
   } else {
     const newest = published[published.length - 1];
@@ -238,7 +238,7 @@ function nextVersion(current: string, bump: string): string {
   // Pre-1.0 policy (stated in full in CHANGELOG.md's header). The minor digit
   // is deliberately expensive: 1.0 has to mean something, so it is not a
   // counter of how much work happened.
-  //   patch  the default — fixes, deps, internal work, AND ordinary features
+  //   patch  the default - fixes, deps, internal work, AND ordinary features
   //          and UI work. A new view is a patch.
   //   minor  only when the product changes shape: a distribution channel
   //          added/removed, a persisted-format or updater change, package
@@ -267,7 +267,7 @@ function cmdPrepare(argv: string[]) {
     fail(`${next} is not greater than the current ${current}`);
   }
 
-  // Cargo.toml — the [package] version only. The replacement is anchored the
+  // Cargo.toml - the [package] version only. The replacement is anchored the
   // same way the reader is, so a dependency's version can never be hit.
   write(
     CARGO_TOML,
@@ -275,7 +275,7 @@ function cmdPrepare(argv: string[]) {
   );
   console.log(`${CARGO_TOML}: ${current} -> ${next}`);
 
-  // Cargo.lock — `cargo update --workspace` rewrites only the workspace
+  // Cargo.lock - `cargo update --workspace` rewrites only the workspace
   // members' own entries, leaving every dependency resolution alone. This is
   // the step that was missing when 0.3.5 and 0.3.6 shipped a lock naming the
   // previous version, which any --frozen build from source refuses.
@@ -289,7 +289,7 @@ function cmdPrepare(argv: string[]) {
   // for the release body, so an empty section is a visible reminder rather
   // than a silent omission.
   const today = new Date().toISOString().slice(0, 10);
-  const section = `## ${next} — ${today}\n\n- \n\n`;
+  const section = `## ${next} - ${today}\n\n- \n\n`;
   if (!existsSync(join(ROOT, CHANGELOG))) {
     write(
       CHANGELOG,
@@ -310,7 +310,7 @@ function cmdPrepare(argv: string[]) {
     }
     write(CHANGELOG, head + section + existing.slice(at));
   }
-  console.log(`${CHANGELOG}: opened a section for ${next} — fill it in.`);
+  console.log(`${CHANGELOG}: opened a section for ${next} - fill it in.`);
 
   console.log(
     `\nDone. Review the diff, write the changelog entry, and commit all of it ` +
@@ -325,7 +325,7 @@ function cmdPrepare(argv: string[]) {
 function cmdNotes(argv: string[]) {
   const version = argv[0] ?? cargoTomlVersion();
   if (!existsSync(join(ROOT, CHANGELOG))) {
-    fail(`${CHANGELOG} does not exist — run \`prepare\` first`);
+    fail(`${CHANGELOG} does not exist - run \`prepare\` first`);
   }
   const lines = read(CHANGELOG).split("\n");
   const start = lines.findIndex((l) => l.startsWith(`## ${version} `) || l.trim() === `## ${version}`);

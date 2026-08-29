@@ -51,7 +51,7 @@ async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKe
   // BufferSource cast: TS 6 narrowed Uint8Array's buffer to ArrayBufferLike,
   // but WebCrypto's deriveKey signature wants ArrayBufferView<ArrayBuffer>
   // (excluding SharedArrayBuffer). Our salt is always a fresh
-  // crypto.getRandomValues, never shared — safe to cast.
+  // crypto.getRandomValues, never shared - safe to cast.
   return crypto.subtle.deriveKey(
     { name: 'PBKDF2', salt: salt as BufferSource, iterations: KDF_ITERATIONS, hash: 'SHA-256' },
     baseKey,

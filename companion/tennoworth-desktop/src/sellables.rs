@@ -9,9 +9,9 @@
 //!      (direct path→slug for prime parts/warframes), then the wfstat catalog
 //!      (path→name, with Component/Blueprint trimming) → market's `catalog`
 //!      (name→slug), then a de-camelled name guess. Relic refinement subtypes
-//!      are NOT reconstructed — the snapshot doesn't carry per-instance subtype —
+//!      are NOT reconstructed - the snapshot doesn't carry per-instance subtype -
 //!      so relics collapse to their base slug (a low-value edge for a top-5 tray).
-//!   2. SCORING. `market_math::sell_priority` — the single source of truth shared
+//!   2. SCORING. `market_math::sell_priority` - the single source of truth shared
 //!      with the SPA (parity-tested). We only rank; we never re-derive the score.
 //!   3. DATA FLOOR. Both catalogs are bundled via `include_str!` from the
 //!      committed `prototype/public/*.json`, so the tray works offline on a first
@@ -28,14 +28,14 @@ use serde::{Deserialize, Deserializer};
 use crate::db::Db;
 use crate::market::MarketCache;
 
-/// Compile-time floors — always present because `prototype/public/*.json` is
+/// Compile-time floors - always present because `prototype/public/*.json` is
 /// committed (unlike the gitignored `dist-desktop`, so `include_str!` never
 /// breaks a fresh checkout). The market floor is only used when the app-data
 /// cache is absent/corrupt; the catalog never changes at runtime.
 const BUNDLED_MARKET: &str = include_str!("../../../prototype/public/market.json");
 const BUNDLED_CATALOG: &str = include_str!("../../../prototype/public/wfstat-catalog.json");
 
-/// One ranked sellable row — the shape the tray label and the notification both
+/// One ranked sellable row - the shape the tray label and the notification both
 /// read, and what `top_sellables` returns to the SPA. `price` is the clamped
 /// clearing price; `score` is the usage-weighted prioritization score.
 #[derive(serde::Serialize, Debug, Clone, PartialEq)]
@@ -141,7 +141,7 @@ pub struct MarketData {
     /// name (lowercased) → WFM slug.
     #[serde(default, deserialize_with = "null_default")]
     catalog: HashMap<String, String>,
-    /// DE path → {name, slug} — prime parts pre-baked by the scraper.
+    /// DE path → {name, slug} - prime parts pre-baked by the scraper.
     #[serde(default, deserialize_with = "null_default")]
     path_to_info: HashMap<String, PathInfo>,
     #[serde(default, deserialize_with = "null_default")]
@@ -164,7 +164,7 @@ struct SlimInfo {
 fn wfstat_catalog() -> &'static HashMap<String, SlimInfo> {
     static CATALOG: OnceLock<HashMap<String, SlimInfo>> = OnceLock::new();
     CATALOG.get_or_init(|| {
-        // Slim `[uniqueName, {name, category}]` pairs — same shape resolver.ts
+        // Slim `[uniqueName, {name, category}]` pairs - same shape resolver.ts
         // reads. A parse failure yields an empty map (path_to_info still works).
         let pairs: Vec<(String, SlimInfo)> = serde_json::from_str(BUNDLED_CATALOG).unwrap_or_default();
         pairs.into_iter().collect()
@@ -252,7 +252,7 @@ impl MarketData {
         }
 
         // 3. No catalog entry: guess a display name from the path basename and
-        //    accept it ONLY on an exact market.catalog hit (strict, like the TS —
+        //    accept it ONLY on an exact market.catalog hit (strict, like the TS -
         //    a bad guess can never fabricate an item).
         let Some(info) = info else {
             let guess = path_name_guess(path)?;
@@ -333,7 +333,7 @@ fn valid_usage_share(value: &serde_json::Value) -> Option<f64> {
 }
 
 /// De-camel a path basename into a display-name guess, trimming Blueprint /
-/// Component first — ".../SagekPrimeBarrelBlueprint" → "Sagek Prime Barrel".
+/// Component first - ".../SagekPrimeBarrelBlueprint" → "Sagek Prime Barrel".
 /// Mirrors `pathNameGuess` in resolver.ts.
 fn path_name_guess(path: &str) -> Option<String> {
     let mut base = path.rsplit('/').next().unwrap_or("");
@@ -452,7 +452,7 @@ pub fn rank_sellables(db: &Db, market: &MarketData) -> Vec<SellableRow> {
 
 /// The notification payload for a completed scan, or `None` when nothing is
 /// sellable (→ the caller fires no notification). Total is the realizable plat
-/// across the WHOLE sellable set, rounded — "N items worth ~Xp to sell".
+/// across the WHOLE sellable set, rounded - "N items worth ~Xp to sell".
 pub fn build_notification(sellables: &[SellableRow]) -> Option<ScanNotification> {
     if sellables.is_empty() {
         return None;
@@ -732,7 +732,7 @@ mod tests {
         let m = MarketData::bundled();
         // Pure garbage path → None.
         assert!(m.resolve("/Lotus/Nonsense/DoesNotExistXyzzy").is_none());
-        // Orokin Cell resolves to a name but has no WFM market entry — resolve
+        // Orokin Cell resolves to a name but has no WFM market entry - resolve
         // returns a slug, but rank_sellables drops it (no `items` entry).
         let cell = m.resolve("/Lotus/Types/Items/MiscItems/OrokinCell");
         if let Some((_, slug)) = cell {

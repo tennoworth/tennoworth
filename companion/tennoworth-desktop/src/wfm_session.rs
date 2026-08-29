@@ -1,10 +1,10 @@
-//! Desktop warframe.market session — the in-memory decrypted-JWT credential
+//! Desktop warframe.market session - the in-memory decrypted-JWT credential
 //! lifecycle, mirroring serve's `ServeState` listing auth minus the terminal.
 //!
 //! The passphrase arrives from the webview (the `unlock_jwt` / `wfm_login`
 //! commands) instead of a TTY prompt; wfm-core takes it as a parameter, exactly
 //! as designed for this second adapter. The plaintext JWT lives ONLY inside this
-//! process's memory for the session — never on disk (only the AES-GCM envelope,
+//! process's memory for the session - never on disk (only the AES-GCM envelope,
 //! whose format is unchanged), never in a log line, and never in a value handed
 //! back to the SPA. `CmdError` carries a `code` + a human message and nothing
 //! else; the raw password and the JWT never appear in it.
@@ -12,7 +12,7 @@
 //! Unlock is lazy and terminal-free: a listing command with no unlocked session
 //! does NOT try to prompt (there is nowhere to prompt). It returns a typed
 //! `needs_login` (no login file on this machine) or `needs_unlock` (login file
-//! present, session locked) so the SPA can raise the login or passphrase modal —
+//! present, session locked) so the SPA can raise the login or passphrase modal -
 //! the desktop analogue of serve's 401 `needs_login:true` vs 503 split.
 
 use std::collections::VecDeque;
@@ -37,12 +37,12 @@ use zeroize::{Zeroize, Zeroizing};
 
 /// Typed command error serialized to the webview as `{ code, message }`. The SPA
 /// maps `code` to its own error classes:
-///   - `needs_login`   — no login on this machine → open the login modal.
-///   - `needs_unlock`  — login present, session locked → open the passphrase modal.
-///   - `bad_passphrase`— wrong passphrase in the unlock/login modal.
-///   - `no_api_key` / `upstream` / `rate_limited` / `too_large` — the assistant relay.
-///   - `no_pending` / `busy` — pending-plan resume edge cases.
-///   - `wfm` / `internal` — everything else, message shown verbatim.
+///   - `needs_login`   - no login on this machine → open the login modal.
+///   - `needs_unlock`  - login present, session locked → open the passphrase modal.
+///   - `bad_passphrase`- wrong passphrase in the unlock/login modal.
+///   - `no_api_key` / `upstream` / `rate_limited` / `too_large` - the assistant relay.
+///   - `no_pending` / `busy` - pending-plan resume edge cases.
+///   - `wfm` / `internal` - everything else, message shown verbatim.
 ///
 /// Never carries the JWT, the passphrase, or the WFM password.
 #[derive(Debug, serde::Serialize)]
@@ -81,7 +81,7 @@ pub struct WfmSession {
     /// Pending-plan path. `TENNOWORTH_PENDING_PATH` overrides it so a probe
     /// doesn't touch the real `~/.config/wfminv/pending_plan.json`.
     pending_path: PathBuf,
-    /// Directory the DeepSeek key file (`deepseek-key`) is read from — the JWT's
+    /// Directory the DeepSeek key file (`deepseek-key`) is read from - the JWT's
     /// own config dir, resolved once (mirrors serve's `deepseek_key_dir`).
     key_dir: PathBuf,
     /// The unlocked credentials, or `None` when locked/unavailable. The plaintext
@@ -90,13 +90,13 @@ pub struct WfmSession {
     /// Serializes plan execution: a second concurrent `execute_plan` /
     /// `resume_pending_plan` gets `busy` instead of racing on the pending file.
     plan_running: AtomicBool,
-    /// Sliding-window timestamps of recent assistant calls — same budget as
+    /// Sliding-window timestamps of recent assistant calls - same budget as
     /// serve's `ServeState.assistant_calls` (≤ 20 DeepSeek calls / 60 s).
     pub assistant_calls: Mutex<VecDeque<Instant>>,
     /// "Remember on this device" is only offered against the REAL login file:
     /// any `TENNOWORTH_JWT_PATH` override (the probe/test seam) turns the OS
-    /// keyring off entirely, so hermetic runs can never pollute — or unlock
-    /// via — the user's actual keyring entry.
+    /// keyring off entirely, so hermetic runs can never pollute - or unlock
+    /// via - the user's actual keyring entry.
     use_keyring: bool,
 }
 
@@ -148,7 +148,7 @@ impl WfmSession {
     /// this device. Best-effort scrub:
     /// if a listing call is in flight it holds a clone of the Arc, so we can't be
     /// the sole owner; dropping still frees the plaintext, just without an
-    /// explicit overwrite first. Also forgets the remembered device key —
+    /// explicit overwrite first. Also forgets the remembered device key -
     /// an explicit logout that silently re-unlocked itself wouldn't be one.
     pub fn logout(&self) -> Result<(), CmdError> {
         let _logout_guard = self
@@ -188,7 +188,7 @@ impl WfmSession {
         Ok(())
     }
 
-    /// The unlocked credentials, or a typed error WITHOUT attempting an unlock —
+    /// The unlocked credentials, or a typed error WITHOUT attempting an unlock -
     /// there is no passphrase at a listing call site (no terminal), so the SPA
     /// must drive `unlock_jwt` first. `needs_login` vs `needs_unlock` is decided
     /// by whether a login file exists (serve's `NeedsLogin` vs a present-but-
@@ -208,7 +208,7 @@ impl WfmSession {
         PlanGuard::acquire(&self.plan_running)
     }
 
-    /// Read + parse the on-disk envelope — shared by the passphrase and
+    /// Read + parse the on-disk envelope - shared by the passphrase and
     /// silent-unlock paths, with the same error mapping (missing file →
     /// `needs_login`).
     fn read_blob(&self) -> Result<EncryptedJwt, CmdError> {
@@ -226,7 +226,7 @@ impl WfmSession {
             .map_err(|e| CmdError::internal(format!("login file is unreadable: {e}")))
     }
 
-    /// Read + decrypt the on-disk JWT with `passphrase` — the offline half of
+    /// Read + decrypt the on-disk JWT with `passphrase` - the offline half of
     /// `unlock`. Returns `(jwt_plaintext, platform, derived_key)`. Split out so
     /// the error mapping (missing file → `needs_login`, wrong passphrase →
     /// `bad_passphrase`) is unit-testable without the network catalog warm.
@@ -234,7 +234,7 @@ impl WfmSession {
         let blob = self.read_blob()?;
         let platform = blob.platform.clone();
         // Any decrypt failure (wrong key or tampered ciphertext) reads as a bad
-        // passphrase — the only actionable cause from the user's side.
+        // passphrase - the only actionable cause from the user's side.
         let key = derive_jwt_key(&blob, passphrase).map_err(|_| CmdError::bad_passphrase())?;
         let jwt = decrypt_jwt_with_key(&blob, &key).map_err(|_| CmdError::bad_passphrase())?;
         Ok((jwt, platform, key))
@@ -244,7 +244,7 @@ impl WfmSession {
     /// Network: `/v2/items` + `/v2/me`. On success the plaintext JWT is held only
     /// inside the session `Arc`; with `remember`, the salt-bound derived key
     /// (never the passphrase) also goes to the OS keyring for silent unlock.
-    /// Remember only on FULL success — an unlock the user abandons after a
+    /// Remember only on FULL success - an unlock the user abandons after a
     /// network failure should leave no trace.
     pub fn unlock(&self, passphrase: &str, remember: bool) -> Result<(), CmdError> {
         let (jwt, platform, key) = self.decrypt_from_disk(passphrase)?;
@@ -261,7 +261,7 @@ impl WfmSession {
         Ok(())
     }
 
-    /// Try the OS-keyring key against the current login file — the silent
+    /// Try the OS-keyring key against the current login file - the silent
     /// analogue of `unlock`, called by the SPA before it raises the passphrase
     /// modal. Never fails the caller: every miss (no entry, no daemon, network
     /// warm failure) is `Ok(false)` → the modal opens as before. The entry is
@@ -303,7 +303,7 @@ impl WfmSession {
     }
 
     /// Sign in to warframe.market, persist the encrypted JWT (unchanged on-disk
-    /// format), and populate the session with the fresh JWT — so the first
+    /// format), and populate the session with the fresh JWT - so the first
     /// listing action doesn't re-prompt for the passphrase the user just set. The
     /// raw password is used only for the signin POST; the passphrase only
     /// encrypts. Neither is retained here.
@@ -334,13 +334,13 @@ impl WfmSession {
 
         // Warm the session with the in-hand JWT (no redundant decrypt). If the
         // catalog warm fails the JWT is already saved, so a later listing action
-        // unlocks via the passphrase modal — surface the network error either way.
+        // unlocks via the passphrase modal - surface the network error either way.
         let unlocked = warm(jwt, platform.to_string())?;
         *guard(&self.inner) = Some(Arc::new(unlocked));
         if self.use_keyring {
             if remember {
                 // A fresh login rotated the salt, so derive against the blob we
-                // just persisted — any older keyring entry is overwritten.
+                // just persisted - any older keyring entry is overwritten.
                 match derive_jwt_key(&encrypted, passphrase) {
                     Ok(key) => crate::keyring_store::store_key(&key),
                     Err(e) => eprintln!("tennoworth: deriving remember-key failed: {e}"),
@@ -394,7 +394,7 @@ impl Default for WfmSession {
 
 /// Build the `Unlocked` bundle (catalog + username) for an already-decrypted
 /// JWT. Shared by `unlock` (decrypt path) and `login` (fresh-JWT path). This is
-/// the only network in the session module — everything above is offline.
+/// the only network in the session module - everything above is offline.
 ///
 /// The warm itself lives in wfm-core; this wrapper exists for the error
 /// mapping, which is the only thing that ever differed from serve's copy.
@@ -409,7 +409,7 @@ fn warm(jwt: String, platform: String) -> Result<Unlocked, CmdError> {
 // The desktop mirror of serve's auth routes: same lock-state machine, with
 // the passphrase arriving from the webview (`wfm_login` / `unlock_jwt`)
 // instead of a TTY prompt. `needs_login` / `needs_unlock` drive the SPA's
-// login and passphrase dialogs — the desktop analogue of serve's 401
+// login and passphrase dialogs - the desktop analogue of serve's 401
 // needs_login:true vs 503 split.
 
 #[derive(serde::Serialize)]
@@ -429,7 +429,7 @@ pub fn wfm_auth_status(session: State<'_, Arc<WfmSession>>) -> WfmAuthStatus {
 
 /// Sign in to warframe.market with credentials from the SPA's login dialog,
 /// persist the encrypted JWT (unchanged envelope format), and unlock the
-/// session. Network — spawn_blocking keeps the webview event loop free.
+/// session. Network - spawn_blocking keeps the webview event loop free.
 #[tauri::command]
 pub async fn wfm_login(
     session: State<'_, Arc<WfmSession>>,
@@ -441,7 +441,7 @@ pub async fn wfm_login(
 ) -> Result<(), CmdError> {
     let s = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
-        // Zeroizing scrubs OUR copies of the secrets when the closure ends —
+        // Zeroizing scrubs OUR copies of the secrets when the closure ends -
         // best-effort (the IPC deserializer made its own transient copies).
         let password = Zeroizing::new(password);
         let passphrase = Zeroizing::new(passphrase);
@@ -472,7 +472,7 @@ pub async fn unlock_jwt(
 /// Try the OS-keyring "remember on this device" key before the SPA raises the
 /// passphrase modal. Infallible by contract: any miss (no entry, no keyring
 /// daemon, stale key, network warm failure) returns false and the modal opens
-/// exactly as before. Network on success (catalog warm) — spawn_blocking.
+/// exactly as before. Network on success (catalog warm) - spawn_blocking.
 #[tauri::command]
 pub async fn try_silent_unlock(session: State<'_, Arc<WfmSession>>) -> Result<bool, CmdError> {
     let s = Arc::clone(&session);
@@ -554,7 +554,7 @@ mod tests {
 
     #[test]
     fn require_unlocked_returns_creds_when_session_is_unlocked() {
-        // Unlocked takes priority over the on-disk check — even with no file.
+        // Unlocked takes priority over the on-disk check - even with no file.
         let path = tmp_path("unlocked");
         let _ = fs::remove_file(&path);
         let s = session_with(path);
@@ -593,7 +593,7 @@ mod tests {
         let (jwt, platform, key) = s.decrypt_from_disk("the-correct-passphrase").unwrap();
         assert_eq!(jwt, "jwt.secret.value");
         assert_eq!(platform, "ps4");
-        // The derived key it hands back must actually open the same envelope —
+        // The derived key it hands back must actually open the same envelope -
         // that key is what "remember on this device" stores.
         let blob: EncryptedJwt =
             serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
@@ -603,7 +603,7 @@ mod tests {
 
     #[test]
     fn decrypt_from_disk_corrupt_file_is_internal_not_bad_passphrase() {
-        // A present-but-garbage file must not read as "wrong passphrase" — that
+        // A present-but-garbage file must not read as "wrong passphrase" - that
         // would send the user in circles retyping a correct passphrase.
         let path = tmp_path("decrypt-corrupt");
         fs::write(&path, b"{not valid json at all").unwrap();
@@ -739,7 +739,7 @@ mod tests {
     #[test]
     fn try_silent_unlock_is_inert_when_keyring_is_disabled() {
         // The probe/test seam (use_keyring: false) must short-circuit BEFORE
-        // any keyring access, even with a perfectly good login file on disk —
+        // any keyring access, even with a perfectly good login file on disk -
         // a hermetic run must never unlock via the developer's real keyring.
         let path = tmp_path("silent-gated");
         let blob = encrypt_jwt("jwt.secret.value", "correct horse battery", "pc").unwrap();

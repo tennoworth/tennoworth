@@ -2,7 +2,7 @@
 //
 // The planner used to answer "which of my relics is worth cracking" using the
 // Intact table only, because that was all the old drop-table source gave us.
-// DE's export gives the reward list first-party — but NOT the per-refinement
+// DE's export gives the reward list first-party - but NOT the per-refinement
 // odds: the four Bronze/Silver/Gold/Platinum variants carry identical reward
 // lists, so refinement changes the odds and not the contents. Those odds are
 // therefore ours (see REFINEMENT_CHANCE in the pipeline), and this module is
@@ -10,7 +10,7 @@
 //
 // Everything here is per-crack expectation in a SOLO run. A four-person squad
 // opens four relics and everyone takes the best drop, which changes the maths
-// materially — so the caller must label which one it is showing rather than
+// materially - so the caller must label which one it is showing rather than
 // letting a reader assume.
 
 import { clearingPrice, hasRealPrice } from './sell-priority';
@@ -46,7 +46,7 @@ export interface RelicRewardRow {
  * Drop chance for one reward at one refinement.
  *
  * Older snapshots carry only the bare `chance` (which is the intact figure).
- * For those, intact is answerable and the other three are not — returning
+ * For those, intact is answerable and the other three are not - returning
  * `null` rather than reusing the intact number keeps a pre-2026-08 snapshot
  * from silently rendering four identical columns as if they were real.
  */
@@ -64,7 +64,7 @@ export interface RelicEv {
   traces: number;
   /** Plat gained over cracking it intact. */
   gainOverIntact: number;
-  /** Plat gained per trace spent — the number that decides whether refining
+  /** Plat gained per trace spent - the number that decides whether refining
    *  is worth it, since traces are the scarce input, not relics. */
   platPerTrace: number | null;
 }
@@ -83,7 +83,7 @@ export function evAt(
     // EVERY row has to answer, not merely one of them. A table where half the
     // rows carry a radiant chance and half do not cannot be summed: skipping
     // the silent rows would drop their contribution and report the remainder
-    // as a confident total — a 100p reward quietly worth 0.
+    // as a confident total - a 100p reward quietly worth 0.
     if (chance == null) return null;
     const entry: MarketItemEntry | undefined = market?.items?.[r.reward_slug];
     // An unlisted reward contributes nothing. Without this it would contribute
@@ -171,7 +171,7 @@ export function decideRelic(
   // First: plat-per-trace decides WHETHER to refine at all. Traces are the
   // scarce input, not relics, so a refinement has to earn them.
   //
-  // Then: EV decides WHICH rung, not plat-per-trace — because per trace the
+  // Then: EV decides WHICH rung, not plat-per-trace - because per trace the
   // rungs are nearly tied by construction. The rare slot goes 2 → 4 → 6 → 10%
   // for 0 → 25 → 50 → 100 traces, which is exactly 0.08% per trace at every
   // step; the only thing separating the rungs is how much value the shrinking

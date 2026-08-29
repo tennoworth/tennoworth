@@ -1,4 +1,4 @@
-// @ts-nocheck — vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
+// @ts-nocheck - vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mock IndexedDB cache so tests don't touch real storage / fetch.
@@ -44,7 +44,7 @@ describe('resolvePath', () => {
     ]);
     const market = fakeMarket();  // empty WFM catalog
     const r = resolvePath('/Lotus/Weird', catalogs, market);
-    expect(r.slug).toBe('sister_s_cool_hammer');  // punctuation is a word-separator, not deleted — matches WFM's own slugs (see resolver.parity.test.ts)
+    expect(r.slug).toBe('sister_s_cool_hammer');  // punctuation is a word-separator, not deleted - matches WFM's own slugs (see resolver.parity.test.ts)
     expect(r.category).toBe('Melee');
   });
 
@@ -119,7 +119,7 @@ describe('resolvePath', () => {
     expect(r.slug).toBe('test_item');
   });
 
-  // New primes hit WFM's catalog day-one but lag in warframestat for weeks —
+  // New primes hit WFM's catalog day-one but lag in warframestat for weeks -
   // the path-derived name guess bridges that window (real case: a brand-new
   // prime's part blueprints sat unresolved while WFM already traded them).
   it('resolves a path absent from BOTH catalogs via a WFM-catalog name guess', () => {
@@ -131,7 +131,7 @@ describe('resolvePath', () => {
     expect(r.category).toBeNull(); // caller falls back to the inventory key
   });
 
-  it('name guess is strict — no WFM-catalog hit means still unresolved', () => {
+  it('name guess is strict - no WFM-catalog hit means still unresolved', () => {
     const path = '/Lotus/Types/Recipes/Components/FormaBlueprint';
     const market = fakeMarket({ 'sagek prime barrel': 'sagek_prime_barrel' });
     const r = resolvePath(path, fakeCatalogs([]), market);

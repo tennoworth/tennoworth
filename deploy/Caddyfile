@@ -1,18 +1,18 @@
-# Warframe market dashboard — a SITE BLOCK to add to your EXISTING Caddyfile.
+# Warframe market dashboard - a SITE BLOCK to add to your EXISTING Caddyfile.
 #
 # You already run Caddy + a Cloudflare Tunnel, so DON'T replace your Caddyfile
-# with this — paste this block in (or `import` it). Pick a localhost port that's
+# with this - paste this block in (or `import` it). Pick a localhost port that's
 # free on your box (8080 is a common collision; 8081 used here), point a NEW
 # tunnel public hostname (e.g. wfm.yourdomain.com -> http://localhost:8081) at
 # it, and adjust the port below to match.
 #
-# Binds to loopback only — the tunnel reaches it; nothing else can.
+# Binds to loopback only - the tunnel reaches it; nothing else can.
 
 :8081 {
 	root * /srv/wfm/app/prototype/dist
 	encode gzip zstd
 
-	# Security headers — from prototype/public/_headers, with ONE deliberate change:
+	# Security headers - from prototype/public/_headers, with ONE deliberate change:
 	# HSTS here is `max-age` only. The canonical set adds `includeSubDomains; preload`,
 	# which is an APEX-WIDE, hard-to-undo commitment (it forces HTTPS on every sibling
 	# subdomain for a year, and `preload` gets baked into browsers). That's wrong for a
@@ -32,7 +32,7 @@
 	}
 
 	# Live, cron-refreshed data files from public/ (shadow the stale copies Vite
-	# bakes into dist/). wfstat-catalog.json backs the inventory resolver — the
+	# bakes into dist/). wfstat-catalog.json backs the inventory resolver - the
 	# browser stopped fetching warframestat directly when upstream dropped CORS.
 	# Its own handle block so routing is unambiguous.
 	# definitions.json (C7) is here for the same reason and one more: its whole
@@ -61,7 +61,7 @@
 	# that ends in `try_files {path} /index.html`, so a miss would return
 	# index.html with status 200. The documented install line is
 	#   curl -fsSL .../tennoworth-archive-keyring.asc | sudo tee /etc/apt/keyrings/...
-	# and `curl -f` does not fire on a 200 — the user would silently write HTML
+	# and `curl -f` does not fire on a 200 - the user would silently write HTML
 	# into their keyring and hit an unexplainable signature failure on the next
 	# `apt update`. Served from public/ (git-tracked, present without waiting
 	# for a web bundle rebuild) so a miss is a real 404.
@@ -73,12 +73,12 @@
 		file_server
 	}
 
-	# Signed apt + dnf repositories. FROZEN — wfm-repo-pull.timer no longer
+	# Signed apt + dnf repositories. FROZEN - wfm-repo-pull.timer no longer
 	# publishes into them (see the retirement note above). Served from a
 	# separate root; the URL path already carries the /apt or /rpm prefix, so
 	# root + path resolves without a strip_prefix.
 	#
-	# No file_server `browse` — apt and dnf fetch exact paths (dists/…/InRelease,
+	# No file_server `browse` - apt and dnf fetch exact paths (dists/…/InRelease,
 	# repodata/repomd.xml) and never need an index. Directory listings would only
 	# expose the pool layout.
 	@repo path /apt/* /rpm/*

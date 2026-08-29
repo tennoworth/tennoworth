@@ -1,25 +1,25 @@
-// Listing health — the state of each of YOUR live WFM listings against two
+// Listing health - the state of each of YOUR live WFM listings against two
 // things the panel can know right now: the live top-of-book for that exact
-// tier (with your own order already excluded — see wfm-core `live_top`), and
+// tier (with your own order already excluded - see wfm-core `live_top`), and
 // what your latest inventory scan says you still own.
 //
 // This is deliberately not the snapshot-based drift check in `order-drift.ts`
 // (which stays as the always-available fallback). Live data removes that
-// module's two caveats — the snapshot lags by up to 2 h and cannot tell whose
-// order is whose — so the verdicts here can be blunter: "someone is asking
+// module's two caveats - the snapshot lags by up to 2 h and cannot tell whose
+// order is whose - so the verdicts here can be blunter: "someone is asking
 // less than you", "someone is bidding more than you ask", "you don't own that
 // many any more". Everything is a suggestion; the user clicks.
 
 import type { LiveTop } from './transport';
 
 export type HealthKind =
-  /** Your ask is above the lowest OTHER online ask — you won't sell first. */
+  /** Your ask is above the lowest OTHER online ask - you won't sell first. */
   | 'overpriced'
-  /** A live buyer bids MORE than you're asking — you'd leave plat on the table. */
+  /** A live buyer bids MORE than you're asking - you'd leave plat on the table. */
   | 'underbid'
   /** The listing's quantity exceeds what the last scan says you own. */
   | 'excess-qty'
-  /** The last scan says you own none — the listing is a ghost. */
+  /** The last scan says you own none - the listing is a ghost. */
   | 'not-owned';
 
 export interface HealthInput {
@@ -48,7 +48,7 @@ export interface HealthIssue {
   why: string;
 }
 
-/** Only sell listings are assessed — buy orders are the user's own bids and
+/** Only sell listings are assessed - buy orders are the user's own bids and
  *  "someone asks less than your bid" is not a problem, it's a purchase. */
 export function assessListing(o: HealthInput): HealthIssue[] {
   const out: HealthIssue[] = [];
@@ -66,7 +66,7 @@ export function assessListing(o: HealthInput): HealthIssue[] {
       out.push({
         id: o.id, slug: o.slug, name: o.name, kind: 'underbid',
         current: o.platinum, suggested: t.top_buy,
-        why: `An online buyer bids ${t.top_buy}p — more than your ${o.platinum}p ask.`,
+        why: `An online buyer bids ${t.top_buy}p - more than your ${o.platinum}p ask.`,
       });
     }
   }
@@ -76,7 +76,7 @@ export function assessListing(o: HealthInput): HealthIssue[] {
       out.push({
         id: o.id, slug: o.slug, name: o.name, kind: 'not-owned',
         current: o.quantity, suggested: 0,
-        why: 'Your last scan found no tradeable copy — the listing can only disappoint a buyer.',
+        why: 'Your last scan found no tradeable copy - the listing can only disappoint a buyer.',
       });
     } else if (o.quantity > o.owned) {
       out.push({
@@ -113,7 +113,7 @@ export function summarize(issues: HealthIssue[]): HealthSummary {
 }
 
 /** Key for the owned-quantity map: slug plus relic refinement, matching the
- *  Sell view's `OwnedRecord` keying. Rank isn't part of it — the scan counts
+ *  Sell view's `OwnedRecord` keying. Rank isn't part of it - the scan counts
  *  a mod's copies, not per-rank. */
 export function ownedKey(slug: string, subtype: string | null | undefined): string {
   return `${slug}|${subtype ?? ''}`;

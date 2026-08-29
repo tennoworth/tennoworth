@@ -1,4 +1,4 @@
-//! Remote scan definitions (Phase C7) — ETag-cached, fail-open.
+//! Remote scan definitions (Phase C7) - ETag-cached, fail-open.
 //!
 //! Our scanner pattern-searches for tokens rather than struct offsets, so
 //! per-hotfix breakage is unlikely by design. This is the cheap insurance for
@@ -7,7 +7,7 @@
 //! before anyone can scan again.
 //!
 //! Deliberately NOT sharing `market::refresh_with`. The two have different
-//! contracts — the market refresh hands the SPA a body and a freshness
+//! contracts - the market refresh hands the SPA a body and a freshness
 //! timestamp to compare against what it already rendered, whereas this one
 //! either installs a pattern set or leaves the compiled-in defaults in place
 //! and reports nothing to the UI. The genuinely shared pieces (`write_atomic`,
@@ -15,7 +15,7 @@
 //!
 //! Fail-open at every step, which is the whole safety argument for letting a
 //! remote file steer the scanner: offline, 404, garbage JSON, an unparseable
-//! pattern, a pattern with the wrong capture arity — every one of them leaves
+//! pattern, a pattern with the wrong capture arity - every one of them leaves
 //! scanning exactly as it was compiled. The worst a bad push can do is nothing.
 
 use std::path::{Path, PathBuf};
@@ -33,7 +33,7 @@ struct DesktopDefinitions {
     reward_log_markers: Vec<String>,
 }
 
-/// Same origin as the market snapshot — no new third-party egress, so
+/// Same origin as the market snapshot - no new third-party egress, so
 /// SECURITY.md's audited list is unchanged. Overridable for the probe/tests.
 const DEFINITIONS_URL: &str = "https://tennoworth.app/definitions.json";
 const CACHE_FILE: &str = "definitions.json";
@@ -177,7 +177,7 @@ fn fetch(dir: &Path, url: &str) -> Option<String> {
         Some(tag) => {
             let _ = write_atomic(&etag_path(dir), tag.as_bytes());
         }
-        // No ETag means the next start does a full GET — correct, not an error.
+        // No ETag means the next start does a full GET - correct, not an error.
         None => {
             let _ = std::fs::remove_file(etag_path(dir));
         }

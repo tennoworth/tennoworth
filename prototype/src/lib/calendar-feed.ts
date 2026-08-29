@@ -2,8 +2,8 @@
 //
 // worldState publishes three of them and the app showed none: when Baro lands
 // and what he brings, when a Prime Vault rotation opens, and what Darvo is
-// discounting today. The first two are price shocks announced days ahead —
-// an unvaulting is the single most expensive surprise in prime trading — and
+// discounting today. The first two are price shocks announced days ahead -
+// an unvaulting is the single most expensive surprise in prime trading - and
 // knowing about them before they land is the entire value.
 //
 // Event rows are limited to fixed reward containers observed in DE's live
@@ -26,7 +26,7 @@ export interface CalendarItem {
   title: string;
   detail?: string;
   /** Slugs the user holds that this event affects. Empty when nothing does,
-   *  or when we cannot tell — those are different, and `affectsKnown` says
+   *  or when we cannot tell - those are different, and `affectsKnown` says
    *  which. */
   affects: string[];
   /** False when the event's contents cannot be resolved to slugs at all, so
@@ -45,7 +45,7 @@ export interface CalendarItem {
  * names are already spaced ("Revenant Prime" → revenant, prime). Reducing both
  * to word lists is what makes the comparison safe.
  *
- * A raw letters-only containment test — which this used to be — produces real
+ * A raw letters-only containment test - which this used to be - produces real
  * false positives, because seven prime names are letter-substrings of another:
  * Bo Prime inside Limbo Prime, Bronco Prime inside Akbronco Prime, Lex Prime
  * inside Aklex Prime, and four more. Tokenising kills all of them, since
@@ -54,14 +54,14 @@ export interface CalendarItem {
 function words(s: string): string[] {
   return (
     s
-      // "&" is spelled out in DE's identifiers — Cobra & Crane Prime is
-      // MPVCobraAndCranePrimeSinglePack — so dropping the symbol as
+      // "&" is spelled out in DE's identifiers - Cobra & Crane Prime is
+      // MPVCobraAndCranePrimeSinglePack - so dropping the symbol as
       // punctuation loses the word entirely and the two sides stop lining up.
       // Two of the 159 current prime names hit this: Cobra & Crane and
       // Silva & Aegis.
       .replace(/&/g, ' and ')
       // Acronym → word: MPVRevenant → MPV Revenant. Needed first, and easy to
-      // miss — without it the leading `MPV` fuses onto the frame name and
+      // miss - without it the leading `MPV` fuses onto the frame name and
       // nothing ever matches.
       .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
       // word → Word: AkbroncoPrime → Akbronco Prime.
@@ -89,7 +89,7 @@ function containsWords(haystack: string[], needle: string[]): boolean {
  *
  * Rotation manifests are bundle SKUs with no market slug, so the only signal
  * is the name embedded in the path. A set matches when its name appears as a
- * contiguous run of whole WORDS in the SKU — never a raw substring, which
+ * contiguous run of whole WORDS in the SKU - never a raw substring, which
  * would flag a held Bronco Prime on an Akbronco Prime pack. No fuzzy scoring
  * either: telling somebody their Nidus Prime is about to be unvaulted when it
  * isn't is worse than saying nothing.
@@ -148,7 +148,7 @@ function baroItems(
       title: `Baro Ki'Teer${baro.location ? ` · ${baro.location}` : ''}`,
       detail: stock.length ? `${stock.length} items` : 'manifest not published yet',
       affects,
-      // Without an inventory we cannot say what it touches — which is not the
+      // Without an inventory we cannot say what it touches - which is not the
       // same as it touching nothing.
       affectsKnown: !!owned && stock.length > 0,
     },
@@ -179,7 +179,7 @@ function dealItems(market: Market | null | undefined): CalendarItem[] {
     title: `Darvo · ${d.item}`,
     detail:
       d.discount && d.sale_price
-        ? `${d.discount}% off — ${d.sale_price}p`
+        ? `${d.discount}% off - ${d.sale_price}p`
         : undefined,
     // Darvo sells for real-money platinum from DE's store; it never touches a
     // player's tradeable holdings, so "affects nothing" here is a fact, not a
@@ -274,7 +274,7 @@ export function buildCalendar(
     .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }
 
-/** Only the rows that touch what the user holds — the notification-worthy
+/** Only the rows that touch what the user holds - the notification-worthy
  *  subset. Rows whose reach is unknown are excluded rather than assumed
  *  harmless. */
 export function affecting(items: CalendarItem[]): CalendarItem[] {

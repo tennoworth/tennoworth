@@ -1,5 +1,5 @@
 #!/bin/sh
-# RETIRED — the apt/dnf publisher. Kept as a no-op stub on purpose.
+# RETIRED - the apt/dnf publisher. Kept as a no-op stub on purpose.
 #
 # Linux is AppImage-only as of the release after 0.5.0: the desktop release
 # workflow no longer builds a .deb or a .rpm, so there is nothing left for this
@@ -21,11 +21,11 @@
 # What is NOT retired: the repositories themselves. /srv/wfm/repo keeps its
 # pool, its signed indexes and its .repo file, and the Caddyfile keeps serving
 # /apt and /rpm. Anyone who already ran `apt install tennoworth` keeps a valid,
-# signed, working repository — it is simply frozen at its last published
+# signed, working repository - it is simply frozen at its last published
 # version and will never offer another. They should switch to the AppImage; see
 # README.md and SECURITY.md.
 #
-# To stop the timer entirely (optional — this stub is already harmless):
+# To stop the timer entirely (optional - this stub is already harmless):
 #   systemctl disable --now wfm-repo-pull.timer
 set -eu
 

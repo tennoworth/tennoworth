@@ -23,7 +23,7 @@ use crate::stats::parse_stats;
 
 const API_ROOT: &str = "https://api.warframe.market";
 
-/// The CSV column order — the keys of `analyze_item`'s dict, in insertion
+/// The CSV column order - the keys of `analyze_item`'s dict, in insertion
 /// order, which is also what `csvin::CsvRow` reads back.
 const HEADER: [&str; 19] = [
     "url_name", "name", "tags", "ducats", "live_buys", "live_sells", "buy_sell_ratio",
@@ -31,7 +31,7 @@ const HEADER: [&str; 19] = [
     "median_now", "median_90d", "medians_7d", "donch_top_90d", "donch_bot_90d", "score",
 ];
 
-/// A master-catalog item — the fields `analyze_item` reads off the raw
+/// A master-catalog item - the fields `analyze_item` reads off the raw
 /// `/v2/items` entry (slug, display name, tags, ducats).
 #[derive(Debug, Clone)]
 pub struct CatalogItem {
@@ -103,7 +103,7 @@ fn item_name(it: &Value, slug: &str) -> String {
         .to_string()
 }
 
-/// JSON truthiness — Python's `not stats_payload` test (an empty object is
+/// JSON truthiness - Python's `not stats_payload` test (an empty object is
 /// falsy, so a stats payload with no content skips the item).
 fn json_truthy(v: &Value) -> bool {
     match v {
@@ -116,7 +116,7 @@ fn json_truthy(v: &Value) -> bool {
     }
 }
 
-/// The stats half of an item's analysis — everything derivable from
+/// The stats half of an item's analysis - everything derivable from
 /// `/statistics` alone, computed BEFORE the orders fetch so the scrape loop can
 /// skip the second request for items whose 48h volume is already under the
 /// gate (about 30% of the catalog on a typical run).
@@ -129,7 +129,7 @@ pub struct StatsStage {
     pub volume_48h: f64,
 }
 
-/// Parse the stats payload, or `None` to skip the item (empty payload —
+/// Parse the stats payload, or `None` to skip the item (empty payload -
 /// Python's `not stats_payload`). A hard coercion error propagates as `Err`.
 pub fn analyze_stats(
     item: &CatalogItem,
@@ -207,7 +207,7 @@ pub fn analyze_orders(
 }
 
 /// Analyze one item into a row, or `Ok(None)` to skip it (missing orders or an
-/// empty stats payload — Python's `if orders is None or not stats_payload`).
+/// empty stats payload - Python's `if orders is None or not stats_payload`).
 /// A hard coercion error (object/bool/non-finite field) propagates as `Err`.
 /// Both stages in one call, for callers that already hold both payloads.
 pub fn analyze_item(
@@ -273,7 +273,7 @@ impl AnalyzedRow {
 }
 
 /// Serialize rows to CSV bytes, sorted by score descending (stable, so score
-/// ties keep insertion order — Python's `sorted(..., reverse=True)`).
+/// ties keep insertion order - Python's `sorted(..., reverse=True)`).
 pub fn rows_to_csv(rows: &[AnalyzedRow]) -> Result<Vec<u8>, String> {
     let mut sorted: Vec<&AnalyzedRow> = rows.iter().collect();
     sorted.sort_by(|a, b| b.score.partial_cmp(&a.score).unwrap_or(std::cmp::Ordering::Equal));
@@ -285,7 +285,7 @@ pub fn rows_to_csv(rows: &[AnalyzedRow]) -> Result<Vec<u8>, String> {
     wtr.into_inner().map_err(|e| format!("CSV flush: {e}"))
 }
 
-/// Write the CSV atomically to `path` — `path.tmp` then rename, Python's
+/// Write the CSV atomically to `path` - `path.tmp` then rename, Python's
 /// `os.replace`. Callers pass either the mid-run `<out>.partial` checkpoint path
 /// or the final `--out` path; each write is torn-file-free on its own path.
 /// Empty results write nothing (Python's `write_snapshot` returns early), so a
@@ -301,7 +301,7 @@ pub fn write_csv(rows: &[AnalyzedRow], path: &Path) -> Result<(), String> {
     Ok(())
 }
 
-/// Scrape configuration — the CLI flags and their defaults.
+/// Scrape configuration - the CLI flags and their defaults.
 #[derive(Debug, Clone)]
 pub struct ScrapeConfig {
     pub filter: String,
@@ -344,7 +344,7 @@ pub fn run_scrape(
     sleeper: &dyn Sleeper,
     cfg: &ScrapeConfig,
 ) -> Result<ScrapeSummary, String> {
-    // Every WFM request — the catalog included — is paced start-to-start (see
+    // Every WFM request - the catalog included - is paced start-to-start (see
     // `Pacer`) at the documented 3 req/s ceiling.
     let mut pacer = Pacer::new(REQUEST_DELAY);
     pacer.wait(sleeper);
@@ -372,7 +372,7 @@ pub fn run_scrape(
     let mut results: Vec<AnalyzedRow> = Vec::new();
     let mut co = Coercions::new();
 
-    // CHECKPOINT SAFETY — a DELIBERATE DIVERGENCE from Python: Python's
+    // CHECKPOINT SAFETY - a DELIBERATE DIVERGENCE from Python: Python's
     // checkpoints atomic-replace `--out` itself mid-run, so an abort past a
     // checkpoint leaves `--out` as a partial file. Here checkpoints write to
     // `<out>.partial` and `--out` is replaced exactly ONCE, at successful
@@ -404,13 +404,13 @@ pub fn run_scrape(
         // The permissive-parsing budget, enforced INCREMENTALLY (Python only
         // checks equivalently at the end). A systemic upstream shape drift (WFM
         // sending numeric fields as strings) trips the budget within the first
-        // fraction of items; aborting here — before the volume gate, the
-        // checkpoint write, or any further fetch — fails the run loudly and
+        // fraction of items; aborting here - before the volume gate, the
+        // checkpoint write, or any further fetch - fails the run loudly and
         // promptly, leaving `--out` untouched, rather than promoting a
         // silently-reshaped snapshot.
         if co.exceeds(cfg.max_coercions) {
             return Err(format!(
-                "aborting: {} numeric-string coercions exceed the budget of {} — WFM field types look drifted",
+                "aborting: {} numeric-string coercions exceed the budget of {} - WFM field types look drifted",
                 co.count, cfg.max_coercions
             ));
         }
@@ -424,7 +424,7 @@ pub fn run_scrape(
         }
     }
 
-    // The single, final replacement of `--out` — reached only when every item
+    // The single, final replacement of `--out` - reached only when every item
     // was scanned without tripping the coercion budget.
     if !results.is_empty() {
         write_csv(&results, &cfg.out)?;
@@ -599,7 +599,7 @@ mod tests {
             let slug = format!("drift_{i:04}");
             items.push(json!({"slug": slug, "i18n": {"en": {"name": slug}}}));
             r.insert(format!("{API_ROOT}/v2/orders/item/{slug}"), json!({"data": []}));
-            // Numeric-string fields — every item adds coercions, so the budget
+            // Numeric-string fields - every item adds coercions, so the budget
             // trips well before the scan finishes.
             r.insert(
                 format!("{API_ROOT}/v1/items/{slug}/statistics"),
@@ -611,7 +611,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("wfmscrape_abort_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let out = dir.join("run.csv");
-        // Budget 500 with 4 coercions/item trips at item 126 — AFTER the
+        // Budget 500 with 4 coercions/item trips at item 126 - AFTER the
         // checkpoint at item 100 has already written `.partial`.
         let c = ScrapeConfig {
             filter: String::new(),

@@ -2,7 +2,7 @@
 name = "wfm-core"
 version = "0.1.0"
 edition = "2021"
-description = "Reusable core for the Warframe companion: process scan, inventory fetch, WFM auth + JWT storage, listing/order service, pending-plan store, and the DeepSeek assistant relay. Library crate — no terminal I/O, so both the CLI and a future desktop shell can drive it."
+description = "Reusable core for the Warframe companion: process scan, inventory fetch, WFM auth + JWT storage, listing/order service, pending-plan store, and the DeepSeek assistant relay. Library crate - no terminal I/O, so both the CLI and a future desktop shell can drive it."
 license = "MIT"
 
 [dependencies]

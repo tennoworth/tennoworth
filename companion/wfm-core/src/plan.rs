@@ -18,8 +18,8 @@ use crate::listing::{
 use crate::pending::{clear_pending, write_pending_atomic, PendingItem, PendingPlan};
 use crate::util::{chrono_now_iso, random_token};
 
-/// Resets a plan-in-flight flag on scope exit — including early return and
-/// panic — so a rejected or crashed request can't leave plan execution wedged.
+/// Resets a plan-in-flight flag on scope exit - including early return and
+/// panic - so a rejected or crashed request can't leave plan execution wedged.
 /// Both adapters serialize plan runs behind an `AtomicBool` and had each
 /// written this guard.
 pub struct PlanGuard<'a>(&'a AtomicBool);
@@ -45,7 +45,7 @@ const MAX_PLAN_ITEMS: usize = 50;
 const MIN_PLATINUM: u32 = 5;
 const SLUG_MISMATCH_GUARD_MULTIPLIER: u32 = 3;
 
-// Maximum items per single in-game trade — six slots per side in Warframe's
+// Maximum items per single in-game trade - six slots per side in Warframe's
 // trade window. WFM rejects `perTrade` values above this with
 // `app.field.tooBig` (verified on a real relic listing, May 2026).
 const MAX_PER_TRADE: u32 = 6;
@@ -72,7 +72,7 @@ pub struct PlanItem {
     pub rank: Option<u32>,
     /// Optional subtype (relic refinement, veiled-riven state). When
     /// `None`, we fall back to the catalog's first listed subtype (the
-    /// lowest-value default — "intact" for relics, "unrevealed" for
+    /// lowest-value default - "intact" for relics, "unrevealed" for
     /// rivens). Omitting the field for items that require it returns 400.
     #[serde(default)]
     pub subtype: Option<String>,
@@ -107,7 +107,7 @@ pub fn execute_plan(pending_path: &std::path::Path, unlocked: &Unlocked, plan: P
         return PlanResponse { plan_id, results: vec![] };
     }
 
-    // --- enforced caps (defense in depth — the browser also validates) ---
+    // --- enforced caps (defense in depth - the browser also validates) ---
     if plan.items.len() > MAX_PLAN_ITEMS {
         return PlanResponse {
             plan_id,
@@ -125,7 +125,7 @@ pub fn execute_plan(pending_path: &std::path::Path, unlocked: &Unlocked, plan: P
     }
 
     // Seed the pending file before the first POST so a crash here is
-    // recoverable — the browser polls /plan/pending on next connect.
+    // recoverable - the browser polls /plan/pending on next connect.
     let mut pending = PendingPlan {
         plan_id: plan_id.clone(),
         started_at: chrono_now_iso(),
@@ -179,9 +179,9 @@ pub fn run_pending(pending_path: &std::path::Path, unlocked: &Unlocked, pending:
     };
 
     // Reconcile against the user's live orders: WFM 403s a duplicate
-    // (same item/type/rank/subtype — "exceededOrderLimitSamePrice"), so those
+    // (same item/type/rank/subtype - "exceededOrderLimitSamePrice"), so those
     // become PATCHes of the existing order instead. Fetch once per run; on
-    // failure fall back to create-only (the old behavior — a duplicate then
+    // failure fall back to create-only (the old behavior - a duplicate then
     // fails with WFM's own message, still rendered verbatim).
     let existing = if pending.items.iter().any(|i| i.status == "pending") {
         match list_user_orders(unlocked) {
@@ -269,7 +269,7 @@ pub struct ExistingOrder {
     pub quantity: u64,
 }
 
-/// (itemId, order type, rank, subtype) — the identity WFM enforces uniqueness
+/// (itemId, order type, rank, subtype) - the identity WFM enforces uniqueness
 /// on (a second order with the same key 403s with
 /// `app.order.error.exceededOrderLimitSamePrice`).
 pub type OrderKey = (String, String, Option<u64>, Option<String>);
@@ -320,7 +320,7 @@ pub fn index_existing_orders(body: &serde_json::Value) -> BTreeMap<OrderKey, Exi
 }
 
 /// The OrderKey this plan item will occupy on WFM. MUST mirror
-/// build_order_body's rank/subtype normalization — if the body would send
+/// build_order_body's rank/subtype normalization - if the body would send
 /// rank 0 by default, the key says Some(0), so it collides with exactly the
 /// order WFM would reject as a duplicate.
 pub fn plan_item_key(item: &PlanItem, cat: &WfmCatalogItem) -> OrderKey {
@@ -343,12 +343,12 @@ pub fn plan_item_key(item: &PlanItem, cat: &WfmCatalogItem) -> OrderKey {
 //   - `itemId`, `type` (not `order_type`!), `platinum`, `quantity`,
 //     `visible` are always required.
 //   - `perTrade` is always required and capped at 6 (in-game trade
-//     slots). Listings with quantity > 6 still work — buyers just split
+//     slots). Listings with quantity > 6 still work - buyers just split
 //     across multiple trades. We default to min(quantity, 6).
 //   - `rank` is required for items with `maxRank` in the catalog, and is
 //     `app.field.notAllowed` for items without it. Default to 0 (unranked).
 //   - `subtype` is required for items with `subtypes[]` in the catalog.
-//     Default to the first listed subtype — that's the lowest-value
+//     Default to the first listed subtype - that's the lowest-value
 //     variant by WFM convention (intact relic, unrevealed riven) and
 //     matches what the user almost always wants to dump first.
 pub fn build_order_body(item: &PlanItem, cat: &WfmCatalogItem) -> serde_json::Value {
@@ -398,7 +398,7 @@ fn execute_one(
         if low > 0 && low > item.platinum * SLUG_MISMATCH_GUARD_MULTIPLIER {
             return mk_err(format!(
                 "ref low_sell {low}p is more than {SLUG_MISMATCH_GUARD_MULTIPLIER}× our {}p; \
-                 likely a slug mismatch — refusing",
+                 likely a slug mismatch - refusing",
                 item.platinum
             ));
         }
@@ -418,7 +418,7 @@ fn execute_one(
 
     // An order with this exact identity already exists → PATCH it. The plan's
     // quantities come from the current inventory scan (they already count the
-    // listed copies), so overwrite price + quantity — never sum. Visibility is
+    // listed copies), so overwrite price + quantity - never sum. Visibility is
     // left alone: the existing order keeps whatever the user chose on WFM.
     if let Some(prior) = existing.get(&plan_item_key(item, cat)) {
         let patch = serde_json::json!({ "platinum": item.platinum, "quantity": item.quantity });
@@ -446,13 +446,13 @@ fn execute_one(
 
     // Order-creation endpoint (verified via the WFM frontend's actual
     // network call, May 2026): POST /v2/order. Singular. /v2/me/orders
-    // returns 404 for POST — that path is for GET-list semantics, not
+    // returns 404 for POST - that path is for GET-list semantics, not
     // create. v2 endpoints rely on the JWT cookie that the website sets
     // (not the Authorization header). We send both so either auth path
-    // works — the WFM server picks whichever it understands for v1 vs v2.
+    // works - the WFM server picks whichever it understands for v1 vs v2.
     // Header set captured from the live frontend's preflight:
     //   access-control-request-headers: content-type, crossplay, language, platform
-    // It uses pure cookie auth — no Authorization header. We mirror that.
+    // It uses pure cookie auth - no Authorization header. We mirror that.
     let resp = send_with_retry(
         wfm_client::wfm_authed_headers(
             http.post("https://api.warframe.market/v2/order"),
@@ -529,7 +529,7 @@ mod tests {
     #[test]
     fn plan_item_key_mirrors_build_order_body_defaults() {
         // Ranked item, no explicit rank: the body sends rank 0, so the key
-        // must say Some(0) — that's the order WFM would call a duplicate.
+        // must say Some(0) - that's the order WFM would call a duplicate.
         let ranked = WfmCatalogItem {
             item_id: "item-r".into(),
             display_name: "Some Arcane".into(),
@@ -598,7 +598,7 @@ mod tests {
         // "subtype":"app.field.required","perTrade":"app.field.required"}.
         //
         // The four refinements below (here and at the other `cat(...,
-        // &["intact", ...])` call sites in this module) are test data only —
+        // &["intact", ...])` call sites in this module) are test data only -
         // production reads subtypes[] from WFM's live catalog. They mirror
         // prototype/src/lib/resolver.ts's REFINEMENTS set by hand; keep both
         // in sync if WFM ever adds a refinement tier.
@@ -651,7 +651,7 @@ mod tests {
 
     #[test]
     fn per_trade_picks_largest_divisor_under_cap() {
-        // Reproducer for `app.field.orders.perTradeMustDivideQuantity` —
+        // Reproducer for `app.field.orders.perTradeMustDivideQuantity` -
         // WFM rejects when perTrade does not evenly divide quantity.
         assert_eq!(per_trade_for(27), 3);  // {1,3,9,27} ∩ ≤6 → 3
         assert_eq!(per_trade_for(10), 5);  // {1,2,5,10} ∩ ≤6 → 5
@@ -691,7 +691,7 @@ mod tests {
     // reject an out-of-range value before the round-trip. This crate is the
     // source of truth; drift surfaces as the UI accepting a batch the companion
     // then rejects. Both sides read tests/fixtures/limits.json. Kept in plan.rs
-    // because MAX_PLAN_ITEMS and MIN_PLATINUM are private here — a test is not
+    // because MAX_PLAN_ITEMS and MIN_PLATINUM are private here - a test is not
     // a reason to widen their visibility.
     #[test]
     fn listing_limits_match_the_shared_fixture() {

@@ -1617,7 +1617,7 @@ fn capture_warframe() -> Result<CapturedFrame, String> {
         })
         .ok_or_else(|| {
             if std::env::var_os("WAYLAND_DISPLAY").is_some() {
-                "window_not_found: Warframe window not found — capture runs through XWayland for now; run Warframe borderless/windowed with XWayland enabled"
+                "window_not_found: Warframe window not found - capture runs through XWayland for now; run Warframe borderless/windowed with XWayland enabled"
                     .to_string()
             } else {
                 "window_not_found: Warframe window not found; use borderless or windowed mode".to_string()
@@ -1723,7 +1723,7 @@ fn capture_warframe() -> Result<CapturedFrame, String> {
 
     let window = warframe.ok_or_else(|| {
         if std::env::var_os("WAYLAND_DISPLAY").is_some() {
-            "window_not_found: Warframe window not found — capture runs through XWayland for now; run Warframe borderless/windowed with XWayland enabled"
+            "window_not_found: Warframe window not found - capture runs through XWayland for now; run Warframe borderless/windowed with XWayland enabled"
                 .to_string()
         } else {
             "window_not_found: Warframe window not found; use borderless or windowed mode".to_string()
@@ -2510,7 +2510,7 @@ pub fn capture_backend_name() -> &'static str {
     }
     #[cfg(target_os = "linux")]
     {
-        // Capture talks X11 directly — under Wayland that means XWayland, not
+        // Capture talks X11 directly - under Wayland that means XWayland, not
         // the portal. Report the truth so the settings UI cannot claim a
         // portal/PipeWire backend that does not exist.
         if std::env::var_os("WAYLAND_DISPLAY").is_some() {
@@ -2602,7 +2602,7 @@ mod tests {
 
     #[test]
     fn surrounding_crop_noise_does_not_downgrade_an_exact_reward_phrase() {
-        let got = match_ocr_lines("aS i@\nWisp Prime Systems Blueprint\n—", &catalog());
+        let got = match_ocr_lines("aS i@\nWisp Prime Systems Blueprint\n-", &catalog());
         assert_eq!(got.len(), 1);
         assert_eq!(got[0].item.name, "Wisp Prime Systems Blueprint");
         assert_eq!(got[0].confidence, 1.0);

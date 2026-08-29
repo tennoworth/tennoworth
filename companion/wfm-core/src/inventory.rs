@@ -12,8 +12,8 @@ use crate::scan::{find_wf_pid, scan_session, SessionInfo};
 const INVENTORY_URL: &str = "https://api.warframe.com/api/inventory.php";
 
 /// Memory-scan the running game and fetch the raw inventory.json bytes.
-/// Uses ONLY the in-memory session creds (accountId + nonce) — never the
-/// encrypted JWT — so the inventory path needs no login. Silent (no prints):
+/// Uses ONLY the in-memory session creds (accountId + nonce) - never the
+/// encrypted JWT - so the inventory path needs no login. Silent (no prints):
 /// callers add progress output as appropriate. The desktop shell is the only
 /// caller (scan_inventory over IPC).
 pub fn fetch_inventory_bytes(

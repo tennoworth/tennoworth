@@ -49,7 +49,7 @@ installDesktopExternalLinkHandler();
 
 // Pick the persistence backend (localStorage vs SQLite-over-IPC) and prime its
 // scalar-settings cache BEFORE mounting, so App can read them synchronously at
-// component init with no default-value flash — in the browser and the desktop
+// component init with no default-value flash - in the browser and the desktop
 // build alike. hydrate() never rejects; if it somehow did we still mount rather
 // than leave a blank window.
 const overlaySurface = new URLSearchParams(location.search).get('surface') === 'relic-overlay';

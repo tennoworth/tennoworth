@@ -4,7 +4,7 @@
 // which of your spare prime parts to feed the ducat kiosk, ranked so you give
 // up the least market value for the most ducats.
 //
-// The ranking is ducats-per-plat, and that is the whole point — a Nova Prime
+// The ranking is ducats-per-plat, and that is the whole point - a Nova Prime
 // Neuroptics is 65 ducats and 18p, while a Braton Prime Receiver is 45 ducats
 // and 3p. Sorting by ducats alone would tell you to scrap the Neuroptics
 // first, which is exactly backwards.
@@ -15,7 +15,7 @@ import type { Market, OwnedRecord } from './types';
 export interface ScrapCandidate {
   slug: string;
   name: string;
-  /** Copies you can spare — everything past the one you keep. */
+  /** Copies you can spare - everything past the one you keep. */
   spare: number;
   ducats: number;
   /** What one copy clears at on the market. 0 when nothing is listed. */
@@ -29,7 +29,7 @@ export interface ScrapCandidate {
 }
 
 /** Above this plat, a part is worth more sold than scrapped almost regardless
- *  of its ducat value — 100 ducats is the ceiling and a 20p part is a poor
+ *  of its ducat value - 100 ducats is the ceiling and a 20p part is a poor
  *  trade for it. Candidates above the line are still returned, flagged, so a
  *  user short on ducats can make the call themselves. */
 export const KEEP_ABOVE_PLAT = 15;
@@ -52,7 +52,7 @@ export function spareCopies(owned: Map<string, OwnedRecord>, slug: string): numb
 /**
  * Everything you could feed the ducat kiosk, best trade first.
  *
- * Only items the snapshot gives a ducat value — that is what makes something
+ * Only items the snapshot gives a ducat value - that is what makes something
  * scrappable at all. A part with no market price sorts as pure ducat gain
  * (giving up nothing measurable), which is correct: nobody is buying it.
  */
@@ -117,7 +117,7 @@ export interface DucatPlan {
  * solve would spend real effort to move the answer by one Braton receiver.
  *
  * Parts worth more than `keepAbove` on the market are held back rather than
- * spent — but they are returned, so a user who is genuinely short can decide
+ * spent - but they are returned, so a user who is genuinely short can decide
  * for themselves.
  */
 export function planDucats(
@@ -136,7 +136,7 @@ export function planDucats(
       heldBack.push(c);
       continue;
     }
-    // Take only as many copies as the target needs, not the whole stack —
+    // Take only as many copies as the target needs, not the whole stack -
     // scrapping six receivers to cover a 90-ducat gap is not a plan.
     const needed = Math.max(0, target - ducats);
     const copies = Math.min(c.spare, Math.ceil(needed / c.ducats));

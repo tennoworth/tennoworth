@@ -29,7 +29,7 @@ function tier(over: Partial<RivenStatTier>): RivenStatTier {
  * The distribution that broke the previous implementation: 90 sales at 10p and
  * 10 at 1,000p. A normal fit to its mean and standard deviation called a 10p
  * offer the 37th percentile, gave a reroll a 63% chance of beating it, and
- * priced the losing outcomes at MINUS 194p — below a stated minimum of 10.
+ * priced the losing outcomes at MINUS 194p - below a stated minimum of 10.
  */
 const SKEWED_MARKET = tier({ avg: 109, median: 10, min: 10, max: 1000, stddev: 297, pop: 100 });
 
@@ -75,7 +75,7 @@ describe('placementOf', () => {
 
   it('calls an at-the-median offer typical, even on a flat market', () => {
     // With avg == median, falling through to the skew branch called the most
-    // ordinary price on the weapon "above the average" — wrong, and the
+    // ordinary price on the weapon "above the average" - wrong, and the
     // opposite of useful.
     const flat = distributionOf(tier({ avg: 100, median: 100, min: 90, max: 110 }))!;
     expect(placementOf(100, flat)).toBe('middle');

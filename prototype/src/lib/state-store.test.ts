@@ -1,4 +1,4 @@
-// @ts-nocheck — vitest fixtures; the store's TS contract is exercised by tsc.
+// @ts-nocheck - vitest fixtures; the store's TS contract is exercised by tsc.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { installTauri, removeTauri } from './test-utils.js';
 import {
@@ -35,7 +35,7 @@ describe('createStateStore selection', () => {
   });
 });
 
-describe('LocalStorageStateStore — key/shape parity with the pre-store code', () => {
+describe('LocalStorageStateStore - key/shape parity with the pre-store code', () => {
   // These pin the exact localStorage keys and value encodings the SPA has
   // always written. A returning user's data lives under these names; a
   // rename here silently invalidates it, so this is the guard against that.
@@ -106,7 +106,7 @@ describe('LocalStorageStateStore — key/shape parity with the pre-store code', 
   });
 });
 
-describe('TauriStateStore — command mapping', () => {
+describe('TauriStateStore - command mapping', () => {
   it('hydrate() reads every scalar setting via get_setting and caches it', async () => {
     const invoke = vi.fn(async (_cmd, args) => {
       const table = {
@@ -134,7 +134,7 @@ describe('TauriStateStore — command mapping', () => {
     expect(s.getSetting('sell-onboarding-dismissed')).toBeNull();
   });
 
-  it('hydrate() never rejects — a failing read leaves the key null (default applies)', async () => {
+  it('hydrate() never rejects - a failing read leaves the key null (default applies)', async () => {
     const invoke = vi.fn().mockRejectedValue('db error');
     installTauri(invoke);
     const s = new TauriStateStore();

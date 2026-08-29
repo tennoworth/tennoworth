@@ -1,7 +1,7 @@
 // State-store abstraction: the SPA's single seam between "persist to
 // localStorage" (hosted / `serve` browser build) and "persist to the canonical
 // SQLite store over Tauri IPC" (desktop build). Selected ONCE at boot by the
-// same runtime sniff the transport uses — see `createStateStore()`.
+// same runtime sniff the transport uses - see `createStateStore()`.
 //
 // It covers EXACTLY the state the SPA persists today, no more:
 //   - the scalar settings (reserve-copies, filters-open, view,
@@ -11,14 +11,14 @@
 //   - the last-owned inventory snapshot (the reload-restore copy).
 //
 // The desktop `snapshot` / `snapshot_item` history tables are a separate
-// concern — appended by the `scan_inventory` command, not by this store's
+// concern - appended by the `scan_inventory` command, not by this store's
 // snapshot methods, which persist the display-restore copy. (The old
 // `import_snapshot` history bridge went with the file-drop path.)
 //
 // LocalStorageStateStore is byte-for-byte the pre-store behaviour: the same
 // localStorage keys, the same value encodings, and the snapshot round-trip
 // delegated verbatim to storage.ts. TauriStateStore persists the SAME serialized
-// snapshot bytes (serializeSnapshot) into the SQLite `setting` table — only the
+// snapshot bytes (serializeSnapshot) into the SQLite `setting` table - only the
 // backing store differs.
 
 import {
@@ -36,7 +36,7 @@ export type { Snapshot, SaveSnapshotInput } from './storage';
 
 // The scalar settings the SPA persists. The value is always a short string; the
 // caller owns parsing/validation (the parseInt guard, the VALID_VIEWS set), so
-// the store stays a dumb, byte-faithful key/value — it never interprets a value.
+// the store stays a dumb, byte-faithful key/value - it never interprets a value.
 export type SettingKey =
   | 'reserve-copies'
   | 'filters-open'
@@ -50,7 +50,7 @@ export type SettingKey =
   | 'auto-close-sold'
   /** Visual theme: `theme.mode` = 'system' | 'light' | 'dark'. Also read RAW
    *  from localStorage by public/theme-boot.js before first paint (the one
-   *  sanctioned raw read) — keep the key name below in step with it.
+   *  sanctioned raw read) - keep the key name below in step with it.
    *  (`theme.look` retired 2026-08 with the four-look picker: yorha is the
    *  only look. Old `wfminv:theme-look-v1` values are simply never read.) */
   | 'theme.mode';
@@ -82,7 +82,7 @@ export interface StateStore {
 
   /**
    * Load every scalar setting into an in-memory cache so `getSetting` can be
-   * read synchronously at component-init time — no default-value flash for a
+   * read synchronously at component-init time - no default-value flash for a
    * returning user. Called once at boot BEFORE the Svelte app mounts. Must never
    * reject: a backing-store failure leaves the cache empty and every
    * `getSetting` falls back to its caller default.
@@ -108,7 +108,7 @@ export class LocalStorageStateStore implements StateStore {
   readonly mode = 'local' as const;
 
   async hydrate(): Promise<void> {
-    /* localStorage is synchronous — nothing to prime. */
+    /* localStorage is synchronous - nothing to prime. */
   }
 
   getSetting(key: SettingKey): string | null {
@@ -123,7 +123,7 @@ export class LocalStorageStateStore implements StateStore {
     try {
       localStorage.setItem(LOCAL_SETTING_KEYS[key], value);
     } catch {
-      /* quota / disabled storage — match the pre-store best-effort writes. */
+      /* quota / disabled storage - match the pre-store best-effort writes. */
     }
   }
 
@@ -203,7 +203,7 @@ export class TauriStateStore implements StateStore {
 }
 
 /**
- * Boot-time store selection — the desktop store inside the Tauri webview, the
+ * Boot-time store selection - the desktop store inside the Tauri webview, the
  * localStorage store everywhere else. Keyed off the same `__TAURI_INTERNALS__`
  * sniff as the transport so the two seams always agree on which build we're in.
  */

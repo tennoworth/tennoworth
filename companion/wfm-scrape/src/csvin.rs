@@ -1,4 +1,4 @@
-//! CSV input — mirrors Python's `csv.DictReader` over `wfm_results.csv`.
+//! CSV input - mirrors Python's `csv.DictReader` over `wfm_results.csv`.
 //!
 //! Each row carries the fields the render stage reads. Old CSVs lack
 //! several columns (the scraper grew fields over time); every accessor
@@ -151,7 +151,7 @@ primed_continuity,Primed Continuity,mod,0,12,18,0.67,35,42,42.6,16.7,384,43.2,37
         assert_eq!(parse_medians_7d(&r.medians_7d), vec![33.0, 36.0, 42.0]);
     }
 
-    /// Old CSVs lack columns that were added later — missing keys must
+    /// Old CSVs lack columns that were added later - missing keys must
     /// default to the empty string without panicking.
     #[test]
     fn missing_column_defaults_to_empty_string() {

@@ -32,7 +32,7 @@ export type BuildPathKind = 'buy-set' | 'buy-parts-build' | 'buy-parts-rush' | '
 
 export interface BuildPath {
   kind: BuildPathKind;
-  /** Plat out of pocket. Negative on the sell-spares path — that one earns. */
+  /** Plat out of pocket. Negative on the sell-spares path - that one earns. */
   plat: number;
   /** Credits out of pocket, 0 where the path needs none. */
   credits: number;
@@ -43,7 +43,7 @@ export interface BuildPath {
   /** Plat saved against buying the set outright. Negative means it costs more. */
   savingVsSet: number;
   /** Whether `plat` is a real total. False when the path depends on a part the
-   *  snapshot cannot price — the caller must show "—", not the partial sum.
+   *  snapshot cannot price - the caller must show "-", not the partial sum.
    *  A warning next to an asserted number does not undo the number. */
   platKnown: boolean;
   /** Whether the recipe tree covered this path. False means credits and time
@@ -69,7 +69,7 @@ export interface SetPart {
 /**
  * How many of a slug the user holds, across every subtype.
  *
- * The owned map is keyed `${slug}|${subtype ?? ''}`, NOT by bare slug — relics
+ * The owned map is keyed `${slug}|${subtype ?? ''}`, NOT by bare slug - relics
  * exist as four refinements under one slug and each needs its own row. A bare
  * `owned.get(slug)` therefore silently misses everything, which for this module
  * meant telling people to buy parts they already had.
@@ -97,7 +97,7 @@ export interface BuildPlan {
   /** What the assembled set sells for. */
   setPrice: number | null;
   paths: BuildPath[];
-  /** True when a missing part has no price — every path involving it is a
+  /** True when a missing part has no price - every path involving it is a
    *  guess, so the caller must not present a recommendation. */
   incomplete: boolean;
 }
@@ -138,7 +138,7 @@ export function planBuild(
   const partsCost = missing.reduce((sum, m) => sum + (m.price ?? 0), 0);
 
   // Sum over the PARTS only. The final-assembly recipe is keyed under the
-  // blueprint — which is itself a part — because a built frame is not a
+  // blueprint - which is itself a part - because a built frame is not a
   // tradeable item and has no slug of its own. Adding `setSlug` here as well
   // would double-count that step the moment anything is keyed under it.
   let credits = 0;
@@ -220,7 +220,7 @@ export function planBuild(
       unverified: [],
       savingVsSet: 0,
       // An unpriced spare is left out of the total, so the figure is a floor
-      // rather than the answer — say so instead of overstating precision.
+      // rather than the answer - say so instead of overstating precision.
       platKnown: sparesPriced,
       recipesKnown: true,
     });
@@ -232,7 +232,7 @@ export function planBuild(
 /**
  * The cheapest acquisition path, or null when it cannot be decided.
  *
- * Returns null rather than a best guess when any missing part is unpriced —
+ * Returns null rather than a best guess when any missing part is unpriced -
  * "build is 43p cheaper" computed with a part silently valued at 0 is exactly
  * the confidently-wrong output this whole feature is supposed to avoid.
  */
@@ -243,7 +243,7 @@ export function cheapestPath(plan: BuildPlan): BuildPath | null {
   return acquiring.reduce((a, b) => (b.plat < a.plat ? b : a));
 }
 
-/** "3d 12h" — foundry time in the units the game shows. */
+/** "3d 12h" - foundry time in the units the game shows. */
 export function humanBuildTime(seconds: number): string {
   if (seconds <= 0) return 'instant';
   const hours = Math.round(seconds / 3600);

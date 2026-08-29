@@ -1,10 +1,10 @@
-//! Live top-of-book prices from warframe.market v2 — `/orders/item/{slug}/top`.
+//! Live top-of-book prices from warframe.market v2 - `/orders/item/{slug}/top`.
 //!
 //! The Sell view prices from `market.json`, a snapshot up to two hours old
 //! that narrows each item to one tier (rank 0 / one relic refinement) with
 //! our own filtering over the whole order book. WFM's `top` endpoint answers
-//! the exact question the listing modal asks — "what are the ≤5 best asks
-//! and bids for THIS tier, from players who are online right now" — and
+//! the exact question the listing modal asks - "what are the ≤5 best asks
+//! and bids for THIS tier, from players who are online right now" - and
 //! accepts `rank` / `subtype` (and `charges` / `stars`) so the tier is chosen
 //! server-side. Public: no JWT, so it works before login too.
 //!
@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::util::browser_client;
 
-/// Start-to-start spacing between requests — 340 ms ≈ 2.9 req/s, under WFM's
+/// Start-to-start spacing between requests - 340 ms ≈ 2.9 req/s, under WFM's
 /// documented 3 req/s. Same figure the scraper uses.
 pub const LIVE_TOP_SPACING: Duration = Duration::from_millis(340);
 
@@ -54,7 +54,7 @@ pub struct LiveTop {
     /// The caller's OWN ask/bid on this tier, when [`fetch_live_tops`] was
     /// given a username and one of the ≤5 top orders is theirs. Those orders
     /// are excluded from `sells` / `buys`, so `low_sell` is "the best ask that
-    /// is not mine" — the number a repricing decision actually needs (the
+    /// is not mine" - the number a repricing decision actually needs (the
     /// snapshot can't tell whose order is whose; this can).
     #[serde(default)]
     pub own_ask: Option<u32>,
@@ -113,7 +113,7 @@ fn is_own_order(order: &serde_json::Value, me: Option<&str>) -> bool {
 }
 
 /// Parse WFM's `top` envelope: `{data:{sell:[{platinum,..}],buy:[...]}}`.
-/// Sorted defensively — WFM already returns best-first, but the contract is
+/// Sorted defensively - WFM already returns best-first, but the contract is
 /// ours to keep, not theirs. Orders by `me` are split out into `own_ask` /
 /// `own_bid` rather than counted as competition.
 pub fn parse_top(q: &LiveTopQuery, body: &serde_json::Value, me: Option<&str>) -> Result<LiveTop> {
@@ -168,7 +168,7 @@ fn fetch_one(client: &Client, platform: &str, q: &LiveTopQuery, me: Option<&str>
 }
 
 /// Look up every query, paced at [`LIVE_TOP_SPACING`] start-to-start. Per-item
-/// failures are returned inline (`error` set), never propagated — a 50-item
+/// failures are returned inline (`error` set), never propagated - a 50-item
 /// review must not lose 49 answers to one unknown slug. `me` (the WFM
 /// in-game name, when logged in) keeps the user's own orders out of the
 /// competition figures. `on_progress` is called after each item with

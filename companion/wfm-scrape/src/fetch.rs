@@ -1,9 +1,9 @@
-//! Fetch stages — each upstream endpoint the converter needs.
+//! Fetch stages - each upstream endpoint the converter needs.
 //!
 //! Every function accepting `Http` can be swapped for a fixture in tests.
 //! The live implementation uses `wfm_client` primitives (browser UA,
 //! headers, envelope unwrap, retry). The trait is intentionally narrow:
-//! one GET→JSON method — that's all the Python converter does.
+//! one GET→JSON method - that's all the Python converter does.
 
 use std::collections::HashMap;
 
@@ -29,7 +29,7 @@ pub trait Http {
                 .ok_or_else(|| format!("{url}: expected a string fixture"))
         })
     }
-    /// Raw-bytes GET for binary endpoints — DE's export index is an LZMA-alone
+    /// Raw-bytes GET for binary endpoints - DE's export index is an LZMA-alone
     /// stream, which neither of the above can carry. The default impl reads a
     /// `"base64:..."` string fixture, so a fixture can hold a real compressed
     /// body rather than a pretend one; a plain string fixture is passed through
@@ -87,7 +87,7 @@ impl Http for LiveHttp {
     }
 
     /// Bytes, not text. The default impl round-trips through `String`, which
-    /// would corrupt an LZMA stream — so the live path must not inherit it.
+    /// would corrupt an LZMA stream - so the live path must not inherit it.
     fn get_bytes(&self, url: &str) -> Result<Vec<u8>, String> {
         let resp = self
             .client
@@ -104,7 +104,7 @@ impl Http for LiveHttp {
     }
 }
 
-/// Fetch WFM catalog (`/v2/items`) — returns name→slug catalog AND
+/// Fetch WFM catalog (`/v2/items`) - returns name→slug catalog AND
 /// per-item metadata (tags, ducats, max_rank, subtypes).
 ///
 /// Retries 3× with backoff, matching Python's `fetch_catalog`. On total
@@ -173,7 +173,7 @@ pub fn fetch_catalog_wfm(
 }
 
 /// Fetch warframestat parent endpoints → path_to_info + set_to_parts.
-/// Returns `(path_to_info, set_to_parts, complete)` — `complete` is false
+/// Returns `(path_to_info, set_to_parts, complete)` - `complete` is false
 /// when any endpoint failed.
 pub fn fetch_parent_data(
     http: &dyn Http,
@@ -184,7 +184,7 @@ pub fn fetch_parent_data(
     // now hard-404s with `Data key 'sentinels' not found`; /companions/ and
     // /pets/ do not exist either. The same parents are in the bulk /items/
     // payload under `category: "Sentinels"`, and that payload is already
-    // fetched for the resolver catalog — so sentinels are read from it rather
+    // fetched for the resolver catalog - so sentinels are read from it rather
     // than costing a second 44 MB download.
     let endpoints = [
         ("https://api.warframestat.us/warframes/", "Warframes"),
@@ -230,7 +230,7 @@ pub fn fetch_parent_data(
             }
         }
         None => {
-            eprintln!("  warning: no bulk item payload — sentinel parents unavailable this run");
+            eprintln!("  warning: no bulk item payload - sentinel parents unavailable this run");
             complete = false;
         }
     }
@@ -309,7 +309,7 @@ fn absorb_parent(
 }
 
 /// Fetch relic drop tables (Intact state only) from drops.warframestat.us.
-/// Returns {} on any failure — the relic planner UI degrades gracefully.
+/// Returns {} on any failure - the relic planner UI degrades gracefully.
 pub fn fetch_relic_rewards(
     http: &dyn Http,
     catalog: &HashMap<String, String>,
@@ -369,7 +369,7 @@ pub fn fetch_relic_rewards(
 }
 
 /// Fetch prime vault status from WFCD warframe-items sources.
-/// Returns `(vault_status, complete)` — `complete` false when any source
+/// Returns `(vault_status, complete)` - `complete` false when any source
 /// failed, so the caller can merge with prior.
 pub fn fetch_vault_status(
     http: &dyn Http,
@@ -460,7 +460,7 @@ pub fn fetch_vault_status(
 }
 
 /// Fetch Baro Ki'Teer's schedule from warframestat. Returns {} on failure
-/// or missing fields — the Baro card hides.
+/// or missing fields - the Baro card hides.
 pub fn fetch_baro(http: &dyn Http) -> HashMap<String, serde_json::Value> {
     let url = "https://api.warframestat.us/pc/voidTrader/";
     let data = match http.get_json(url) {
@@ -484,7 +484,7 @@ pub fn fetch_baro(http: &dyn Http) -> HashMap<String, serde_json::Value> {
     out.insert("expiry".into(), serde_json::Value::String(expiry.into()));
     out.insert("location".into(), serde_json::Value::String(location.into()));
 
-    // What he is actually selling — the part that decides whether any of this
+    // What he is actually selling - the part that decides whether any of this
     // is actionable. It exists ONLY while he is at a relay: between visits the
     // endpoint returns `inventory: []`, and warframestat publishes no schedule
     // and no history (both verified empty against the live API). So a visit's
@@ -533,7 +533,7 @@ pub fn fetch_baro(http: &dyn Http) -> HashMap<String, serde_json::Value> {
 /// has none.
 ///
 /// `reconcile` cannot do this: it only substitutes the prior value when the
-/// WHOLE surface is empty, and Baro's is never empty — activation, expiry and
+/// WHOLE surface is empty, and Baro's is never empty - activation, expiry and
 /// location keep arriving between visits. Without this, the one list that is
 /// only obtainable during a 48h window would be dropped on the very next
 /// scrape after he leaves.
@@ -571,7 +571,7 @@ pub const RIVEN_CHANGE_RETENTION_DAYS: i64 = 90;
 ///
 /// Why: DE has stopped decreasing dispositions and only raises them (2024
 /// policy, restated in the 2025-26 workshops), so a change is a one-sided
-/// price event for anyone holding that weapon's rivens — and repricing on
+/// price event for anyone holding that weapon's rivens - and repricing on
 /// WFM lands within a day of the patch notes. The scrape runs every 2 h, so
 /// the log catches it the same day. `seen_at` is when WE first saw the new
 /// value, not DE's patch time.
@@ -580,7 +580,7 @@ pub const RIVEN_CHANGE_RETENTION_DAYS: i64 = 90;
 /// The riven weapons manifest: slug → {name, disposition, group, riven_type,
 /// req_mr, game_ref}. Dispositions here are warframe.market's MIRROR of DE's;
 /// the caller overrides them from `ExportWeapons` and only then computes the
-/// change log — see `riven_change_log` for why the order matters.
+/// change log - see `riven_change_log` for why the order matters.
 pub fn fetch_rivens(http: &dyn Http) -> HashMap<String, serde_json::Value> {
     let data = match http.get_json(WFM_RIVEN_WEAPONS_URL) {
         Ok(b) => b,
@@ -616,7 +616,7 @@ pub fn fetch_rivens(http: &dyn Http) -> HashMap<String, serde_json::Value> {
         if let Some(mr) = w.get("reqMasteryRank").and_then(|v| v.as_i64()) {
             row.insert("req_mr".into(), serde_json::Value::from(mr));
         }
-        // The weapon's in-game path — the SPA maps a scanned riven's `compat`
+        // The weapon's in-game path - the SPA maps a scanned riven's `compat`
         // fingerprint field to this slug through it.
         if let Some(gr) = w.get("gameRef").and_then(|v| v.as_str()) {
             row.insert("game_ref".into(), serde_json::Value::String(gr.into()));
@@ -629,7 +629,7 @@ pub fn fetch_rivens(http: &dyn Http) -> HashMap<String, serde_json::Value> {
 
     // NOTE: the disposition change log is NOT computed here. It has to diff
     // the values that actually get PUBLISHED, and the DE override is applied
-    // by the caller after this returns — see `riven_change_log`.
+    // by the caller after this returns - see `riven_change_log`.
 
     // The stat-name/unit manifest (`/v2/riven/attributes`). A scanned
     // riven's fingerprint names stats by DE tag (`WeaponCritDamageMod`); this
@@ -672,7 +672,7 @@ pub fn fetch_rivens(http: &dyn Http) -> HashMap<String, serde_json::Value> {
 /// weapons map.
 ///
 /// This used to live inside `fetch_rivens`, which made it diff
-/// warframe.market's fresh mirror against the prior snapshot's STORED values —
+/// warframe.market's fresh mirror against the prior snapshot's STORED values -
 /// and those are DE's, because the caller overrides them afterwards. The
 /// result was wrong in both directions at once:
 ///
@@ -756,11 +756,11 @@ pub const WFM_RIVEN_ATTRIBUTES_URL: &str = "https://api.warframe.market/v2/riven
 /// DE's weekly riven price statistics, published every Monday as a JS object
 /// literal (NOT JSON: unquoted keys, single-quoted strings), keyed by weapon
 /// display name x `rerolled`. ~150 KB; the only stats that actually sample
-/// riven auctions — WFM's `/statistics` has no riven rows at all.
+/// riven auctions - WFM's `/statistics` has no riven rows at all.
 pub use crate::de::DE_WEEKLY_RIVENS_URL;
 
 /// The same file per platform. Console riven markets diverge sharply from PC's
-/// — different populations, different metas, and far smaller samples — and DE
+/// - different populations, different metas, and far smaller samples - and DE
 /// publishes all four while nothing in the ecosystem compares them.
 ///
 /// PC stays the primary surface (`unrolled`/`rolled` at the top level); the
@@ -769,7 +769,7 @@ pub use crate::de::DE_WEEKLY_RIVENS_URL;
 pub use crate::de::DE_WEEKLY_RIVEN_PLATFORMS;
 
 /// One row of `DE_WEEKLY_RIVENS_URL`: one weapon x reroll-state's price band.
-/// Generic rows (`compatibility: null` — "Rifle Riven Mod") carry no weapon
+/// Generic rows (`compatibility: null` - "Rifle Riven Mod") carry no weapon
 /// and are dropped by `fetch_riven_stats`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WeeklyRivenRow {
@@ -865,7 +865,7 @@ fn tokenize_js_literal(text: &str) -> Result<Vec<JsTok>, String> {
 }
 
 /// Recursive-descent parse of the JS-literal subset DE actually emits: objects,
-/// arrays, strings, numbers, `null`, booleans. Anything else is an error — a
+/// arrays, strings, numbers, `null`, booleans. Anything else is an error - a
 /// shape change upstream should fail the surface loudly, not silently zero it.
 fn js_literal_to_json(tokens: &[JsTok], pos: &mut usize) -> Result<serde_json::Value, String> {
     let Some(tok) = tokens.get(*pos) else {
@@ -1032,7 +1032,7 @@ pub fn fetch_riven_stats(
     }
 
     // Consoles, folded in under `platforms`. A platform that fails to fetch or
-    // parse is skipped with a warning rather than failing the surface — PC is
+    // parse is skipped with a warning rather than failing the surface - PC is
     // what the app actually prices against, and losing it to a Switch outage
     // would be absurd.
     for (platform, url) in DE_WEEKLY_RIVEN_PLATFORMS {
@@ -1135,17 +1135,17 @@ pub const WFSTAT_VAULT_TRADER_URL: &str = "https://api.warframestat.us/pc/vaultT
 /// `calendar` surface in market.json:
 ///
 /// - `primes: {set_slug: {name, released, vaulted, vault_date,
-///   est_vault_date}}` — per prime set, from warframestat's item catalog
+///   est_vault_date}}` - per prime set, from warframestat's item catalog
 ///   (WFCD warframe-items carries `releaseDate` / `vaultDate` /
 ///   `estimatedVaultDate` / `vaulted`; the same payload the build already
 ///   downloads for the resolver, so no extra request).
-/// - `resurgence: [{from, to, frames: [set_slug]}]` — every Prime Resurgence
+/// - `resurgence: [{from, to, frames: [set_slug]}]` - every Prime Resurgence
 ///   rotation warframestat knows (its `vaultTrader.schedule` is the full
 ///   history since 2022, one entry per rotation with the pack name and its
 ///   expiry; a rotation runs from the previous expiry to its own), plus
 ///   `resurgence_current` for the one running now.
 ///
-/// Why: a set's price has three predictable shocks — Prime Access release
+/// Why: a set's price has three predictable shocks - Prime Access release
 /// (day-1 flood), vaulting (supply cap, months-long ramp), and Resurgence
 /// (Varzia sells the relics again for four weeks → temporary flood). Dates
 /// make those computable per owned set instead of folklore.
@@ -1301,7 +1301,7 @@ pub const WFSTAT_ITEMS_URL: &str = "https://api.warframestat.us/items/";
 /// `[uniqueName, {name, category}]` pairs.
 ///
 /// Shared by the live fetch and the fixture path. It was written out twice,
-/// once each, and the filter and the shape have to agree exactly — the browser
+/// once each, and the filter and the shape have to agree exactly - the browser
 /// resolver joins on these pairs, so a divergence surfaces as owned items that
 /// silently fail to resolve.
 pub fn slim_wfstat_items(arr: &serde_json::Value, url: &str) -> Result<Vec<serde_json::Value>, String> {
@@ -1330,8 +1330,8 @@ pub fn fetch_wfstat_slim() -> Result<Vec<serde_json::Value>, String> {
 /// The bulk warframestat item payload, unreduced.
 ///
 /// Split out from `fetch_wfstat_slim` because this ~44 MB response now feeds
-/// two consumers — the resolver catalog AND the sentinel parents, whose own
-/// endpoint 404s — and downloading it twice would add minutes to a scrape that
+/// two consumers - the resolver catalog AND the sentinel parents, whose own
+/// endpoint 404s - and downloading it twice would add minutes to a scrape that
 /// already runs close to its systemd timeout.
 pub fn fetch_wfstat_raw() -> Result<serde_json::Value, String> {
     let url = WFSTAT_ITEMS_URL;
@@ -1352,7 +1352,7 @@ pub fn fetch_wfstat_raw() -> Result<serde_json::Value, String> {
     serde_json::from_str(&body).map_err(|e| format!("{url}: JSON: {e}"))
 }
 
-/// Fixture implementation of [`Http`] — serves pre-recorded responses from
+/// Fixture implementation of [`Http`] - serves pre-recorded responses from
 /// a map. Missing keys are treated as an error, so the fixture can simulate
 /// per-endpoint outages.
 pub struct FixtureHttp {
@@ -1466,7 +1466,7 @@ mod tests {
         let inv = got.get("inventory").unwrap().as_array().unwrap();
         assert_eq!(inv.len(), 1);
         assert_eq!(inv[0].get("item").unwrap(), "Primed Fury");
-        // Optional fields simply do not appear rather than defaulting to 0 —
+        // Optional fields simply do not appear rather than defaulting to 0 -
         // a missing ducat cost is unknown, not free.
         assert!(inv[0].get("ducats").is_none());
     }
@@ -1507,7 +1507,7 @@ mod tests {
         assert_eq!(w["kulstar"]["group"], "primary");
         assert_eq!(w["kulstar"]["riven_type"], "rifle");
         assert_eq!(w["kulstar"]["req_mr"], 8);
-        // The fetch no longer computes the log at all — the caller does, after
+        // The fetch no longer computes the log at all - the caller does, after
         // applying DE's dispositions. See `riven_change_log`.
         assert!(!got.contains_key("changes"));
         let changes = riven_change_log(got["weapons"].as_object().unwrap(), None, now);
@@ -1545,7 +1545,7 @@ mod tests {
     fn riven_change_log_diffs_published_values_not_the_wfm_mirror() {
         // The bug: the log used to be computed inside the fetch, so it diffed
         // warframe.market's fresh mirror against the prior snapshot's STORED
-        // values — which are DE's, because the override lands afterwards.
+        // values - which are DE's, because the override lands afterwards.
         //
         // Here WFM still reports the OLD 1.30 while DE has already moved
         // Kulstar to 1.15, and the prior snapshot recorded DE's old 1.30.
@@ -1569,7 +1569,7 @@ mod tests {
     fn riven_change_log_reports_nothing_when_the_published_value_is_unchanged() {
         // The other half: on a carry cycle the published value equals the prior
         // one even though WFM's mirror disagrees. No change occurred, so none
-        // may be logged — a phantom entry here would tell users a disposition
+        // may be logged - a phantom entry here would tell users a disposition
         // moved when it did not.
         let now = clock::parse_isoformat_utc("2026-08-16T12:00:00Z").unwrap();
         let prior = rivens_surface(&[("kulstar", 1.15)], serde_json::json!([]));
@@ -1721,7 +1721,7 @@ mod tests {
         let acceltra = stats.get("acceltra").unwrap();
         // PC keeps its place at the top level, untouched.
         assert_eq!(acceltra["unrolled"]["median"], 35.0);
-        // The console rides along underneath — console riven prices diverge
+        // The console rides along underneath - console riven prices diverge
         // sharply from PC's, which is the whole point of carrying them.
         assert_eq!(acceltra["platforms"]["ps4"]["unrolled"]["median"], 75.0);
         assert_eq!(acceltra["platforms"]["ps4"]["unrolled"]["pop"], 30);
@@ -1908,7 +1908,7 @@ mod tests {
         carry_baro_inventory(&mut fresh, Some(&partial));
         assert!(!fresh.contains_key("inventory"));
 
-        // A totally failed fetch stays failed — carry-forward must not
+        // A totally failed fetch stays failed - carry-forward must not
         // resurrect a surface reconcile is about to treat as empty.
         let mut failed: HashMap<String, serde_json::Value> = HashMap::new();
         let full: HashMap<String, serde_json::Value> = serde_json::from_value(serde_json::json!({
@@ -1919,7 +1919,7 @@ mod tests {
         assert!(failed.is_empty());
     }
     fn parent_http() -> FixtureHttp {
-        // The two endpoints that still exist, both empty — isolates the
+        // The two endpoints that still exist, both empty - isolates the
         // sentinel path.
         let mut r = HashMap::new();
         r.insert("https://api.warframestat.us/warframes/".into(), serde_json::json!([]));

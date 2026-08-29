@@ -1,34 +1,34 @@
 # Workspace root. Members:
-#   wfm-core            — reusable core: process scan, inventory fetch, WFM auth +
+#   wfm-core            - reusable core: process scan, inventory fetch, WFM auth +
 #                         encrypted-JWT storage, listing/order service, pending-plan
-#                         store, DeepSeek assistant relay. No terminal I/O — the
+#                         store, DeepSeek assistant relay. No terminal I/O - the
 #                         desktop shell drives it over IPC.
-#   market-math         — pure market-data heuristics (ported from the retired
-#                         wfm_demand.py). No I/O, no deps. Keep it pure — that's
+#   market-math         - pure market-data heuristics (ported from the retired
+#                         wfm_demand.py). No I/O, no deps. Keep it pure - that's
 #                         what makes it testable against the shared fixtures.
-#   wfm-scrape          — host-only pipeline crate: `build` renders market.json
+#   wfm-scrape          - host-only pipeline crate: `build` renders market.json
 #                         + wfstat-catalog.json, `scrape` runs the WFM scrape.
 #                         The ONLY pipeline (Python retired 2026-08); fixture
 #                         gates in its tests/ dir shell the real binary.
-#   wfm-client          — shared WFM transport primitives (UA, Cloudflare
+#   wfm-client          - shared WFM transport primitives (UA, Cloudflare
 #                         headers, envelope unwrap, retry backoff). Primitives
 #                         only: do not grow it into one abstraction spanning
 #                         anonymous scraping and authed order mutation.
-#   tennoworth-desktop  — Tauri v2 shell, the app users actually install.
-#                         Drives wfm-core over IPC — the only adapter, since the
+#   tennoworth-desktop  - Tauri v2 shell, the app users actually install.
+#                         Drives wfm-core over IPC - the only adapter, since the
 #                         standalone CLI companion was removed (2026-08): the
 #                         product is the desktop app or the informational site.
 [workspace]
 members = ["wfm-core", "market-math", "wfm-scrape", "wfm-client", "tennoworth-desktop"]
 resolver = "2"
 
-# Single version authority for deps shared by 2+ members — a member bumping
+# Single version authority for deps shared by 2+ members - a member bumping
 # its own copy independently used to be able to drift the workspace out of
 # sync with nothing catching it. Members inherit via `dep = { workspace =
 # true }`; reqwest's feature union is declared once here rather than
 # per-member because Cargo already unifies reqwest's features across a
 # `--workspace` build regardless of what each member individually asks for
-# (a member declaring a smaller subset never actually got a smaller build —
+# (a member declaring a smaller subset never actually got a smaller build -
 # see tennoworth-desktop's Cargo.toml).
 [workspace.dependencies]
 anyhow = "1"

@@ -16,7 +16,7 @@
   import { weekly, yearStats, type History } from '../lib/history';
   import MetaDriftPanel from './MetaDriftPanel.svelte';
 
-  // Powered by the already-loaded market.json — the only fetch this component
+  // Powered by the already-loaded market.json - the only fetch this component
   // can trigger is the optional year-long history, and only when the user
   // flips the "1 year" toggle (App passes the transport's loader so the
   // desktop keeps its egress in Rust).
@@ -97,7 +97,7 @@
 
   // Baro schedule + (since 2026-08-10) the last captured stock. market.json
   // carries activation/expiry/location and, when the scrape saw a visit, his
-  // inventory — joined to prices through the catalog so the card can say what
+  // inventory - joined to prices through the catalog so the card can say what
   // each ducat item averages on WFM right now.
   let baro = $derived.by(() => {
     const b = market?.baro;
@@ -147,7 +147,7 @@
   });
 
   function ratioText(r: number): string {
-    return Number.isFinite(r) ? r.toFixed(2) : '—';
+    return Number.isFinite(r) ? r.toFixed(2) : '-';
   }
 </script>
 
@@ -155,9 +155,9 @@
 {#snippet itemCell(r: BrowseRow)}
   <a href={wfmItemUrl(r.slug)} target="_blank" rel="noopener noreferrer" title={r.name}>{r.name}</a>
   {#if r.vault === 'vaulted'}
-    <span class="tag vaulted" title="Vaulted — no longer dropping, supply is capped">vaulted</span>
+    <span class="tag vaulted" title="Vaulted - no longer dropping, supply is capped">vaulted</span>
   {:else if r.vault === 'vaulting-soon'}
-    <span class="tag soon" title="Vaulting soon — supply about to be capped">soon</span>
+    <span class="tag soon" title="Vaulting soon - supply about to be capped">soon</span>
   {/if}
 {/snippet}
 
@@ -205,11 +205,11 @@
       <polyline points={sparklinePoints(r.medians_7d, w, h)} fill="none" stroke="currentColor" stroke-width="1.25" />
     </svg>
   {:else}
-    <span class="faint">—</span>
+    <span class="faint">-</span>
   {/if}
 {/snippet}
 
-<!-- Mini table: Item · Δ 90d · Trend · Avg · Vol 48h (+ Ducats) — movers and vaulted. -->
+<!-- Mini table: Item · Δ 90d · Trend · Avg · Vol 48h (+ Ducats) - movers and vaulted. -->
 {#snippet miniTable(rows: BrowseRow[], sortedKey: 'delta' | 'avg', ducats: boolean, emptyText: string)}
   {#if rows.length}
     <table class="tw fixed">
@@ -237,7 +237,7 @@
             <td>{@render trendCell(r, 56, 16)}</td>
             <td class="fg">{plat(r.avg)}</td>
             <td>{r.vol.toLocaleString()}</td>
-            {#if ducats}<td>{#if r.ducats != null}<span class="ducat">{r.ducats}</span>{:else}<span class="faint">—</span>{/if}</td>{/if}
+            {#if ducats}<td>{#if r.ducats != null}<span class="ducat">{r.ducats}</span>{:else}<span class="faint">-</span>{/if}</td>{/if}
           </tr>
         {/each}
       </tbody>
@@ -249,14 +249,14 @@
 
 <section class="browser" data-testid="market-browser">
 
-  <!-- 1. LOOK SOMETHING UP — the first control on the page. Idle = the bar
+  <!-- 1. LOOK SOMETHING UP - the first control on the page. Idle = the bar
        alone; typing renders the results table under it. -->
   <section class="wrap tw lookup" aria-label="Item lookup">
     <div class="bar">
       <input
         class="input grow"
         type="text"
-        placeholder="Search any item — try “primed”, “mag”, “ash prime set”…"
+        placeholder="Search any item - try “primed”, “mag”, “ash prime set”…"
         bind:value={query}
         bind:this={searchInput}
         aria-label="Search items"
@@ -272,7 +272,7 @@
       {/if}
     </div>
     {#if freshness === 'stale'}
-      <div class="line stale-note">⚠ This snapshot is {staleness} old — prices below may lag the live book.</div>
+      <div class="line stale-note">⚠ This snapshot is {staleness} old - prices below may lag the live book.</div>
     {/if}
     {#if query.trim()}
       {#if results.length}
@@ -296,15 +296,15 @@
             <th class="l">Item · {results.length} {results.length === 1 ? 'match' : 'matches'}</th>
             <th title="Latest daily median vs the 90-day median">{yearMode ? 'Δ 1y' : 'Δ 90d'}</th>
             <th title="{yearMode ? 'Weekly medians, last year' : 'Daily medians, last 7 days'}">Trend</th>
-            <th title="Average of recent WFM sales — list below it to sell faster">Avg</th>
+            <th title="Average of recent WFM sales - list below it to sell faster">Avg</th>
             <th title="Lowest current online sell listing">Low sell</th>
             <th title="Highest current online buy offer">Top buy</th>
             <th title="Trades completed in the last 48 hours">Vol 48h</th>
-            <th title="Live buyers ÷ live sellers — > 1 means buyers outnumber sellers">Demand</th>
+            <th title="Live buyers ÷ live sellers - > 1 means buyers outnumber sellers">Demand</th>
             <th title="Ducat value at Baro Ki’Teer">Ducats</th>
-            <th class="ghost g1" title="How many you own — filled by the desktop scan">Own</th>
-            <th class="ghost" title="Prioritization score from price, likely sell-through, and bounded DE usage — filled by the desktop scan">Score</th>
-            <th class="ghost" title="Owned × Avg — filled by the desktop scan">Potential</th>
+            <th class="ghost g1" title="How many you own - filled by the desktop scan">Own</th>
+            <th class="ghost" title="Prioritization score from price, likely sell-through, and bounded DE usage - filled by the desktop scan">Score</th>
+            <th class="ghost" title="Owned × Avg - filled by the desktop scan">Potential</th>
           </tr></thead>
           <tbody>
             {#each results as r (r.slug)}
@@ -317,7 +317,7 @@
                 <td>{plat(r.topBuy)}</td>
                 <td>{r.vol.toLocaleString()}</td>
                 <td>{ratioText(r.ratio)}</td>
-                <td>{#if r.ducats != null}<span class="ducat">{r.ducats}</span>{:else}<span class="faint">—</span>{/if}</td>
+                <td>{#if r.ducats != null}<span class="ducat">{r.ducats}</span>{:else}<span class="faint">-</span>{/if}</td>
                 <td class="ghost g1">·</td>
                 <td class="ghost">·</td>
                 <td class="ghost">·</td>
@@ -328,7 +328,7 @@
         </div>
         <div class="line">
           {#if handoff}
-            <span class="exp">Own · Score · Potential fill in when the <a href="#desktop">desktop app</a> scans your inventory — free, Windows + Linux, no login.</span>
+            <span class="exp">Own · Score · Potential fill in when the <a href="#desktop">desktop app</a> scans your inventory - free, Windows + Linux, no login.</span>
             <span class="grow"></span>
             <a href="#desktop">↓ see the completed row</a>
           {:else}
@@ -341,7 +341,7 @@
     {/if}
   </section>
 
-  <!-- 2. MOVERS — two mini-tables, same column heads as the workspace -->
+  <!-- 2. MOVERS - two mini-tables, same column heads as the workspace -->
   <section class="two">
     <div class="wrap tw movers">
       <div class="rail">
@@ -367,7 +367,7 @@
     <div class="wrap tw vaulted">
       <div class="rail">
         <h3>Vaulted &amp; valuable</h3>
-        <span class="exp">no longer drop, so supply is capped — high-value ones tend to hold or climb</span>
+        <span class="exp">no longer drop, so supply is capped - high-value ones tend to hold or climb</span>
       </div>
       {@render miniTable(vaulted, 'avg', true, 'No vault data in this snapshot.')}
     </div>
@@ -388,7 +388,7 @@
             {:else}
               Next visit at {baro.location}.
             {/if}
-            Schedule only — bring your own ducats. His mods dip ~50% on arrival day; the money is in holding for the recovery.
+            Schedule only - bring your own ducats. His mods dip ~50% on arrival day; the money is in holding for the recovery.
           </p>
         </div>
         {#if baroStock.length}
@@ -403,8 +403,8 @@
               {#each baroStock as s (s.name)}
                 <tr>
                   <td class="l">{#if s.slug}<a href={wfmItemUrl(s.slug)} target="_blank" rel="noopener noreferrer">{s.name}</a>{:else}{s.name}{/if}</td>
-                  <td>{#if s.ducats != null}<span class="ducat">{s.ducats}</span>{:else}<span class="faint">—</span>{/if}</td>
-                  <td class="fg">{s.avg != null ? plat(s.avg) : '—'}</td>
+                  <td>{#if s.ducats != null}<span class="ducat">{s.ducats}</span>{:else}<span class="faint">-</span>{/if}</td>
+                  <td class="fg">{s.avg != null ? plat(s.avg) : '-'}</td>
                 </tr>
               {/each}
             </tbody>
@@ -417,12 +417,12 @@
     {/if}
   </section>
 
-  <!-- 4. RIVEN DISPOSITIONS — only when the snapshot carries changes -->
+  <!-- 4. RIVEN DISPOSITIONS - only when the snapshot carries changes -->
   {#if dispoChanges.length}
     <section class="wrap tw dispo" data-testid="dispo-changes">
       <div class="rail">
         <h3>Riven disposition changes</h3>
-        <span class="exp">last 90 days · DE only raises dispositions now, so each change is a one-way price event for that weapon's rivens — WFM reprices within a day</span>
+        <span class="exp">last 90 days · DE only raises dispositions now, so each change is a one-way price event for that weapon's rivens - WFM reprices within a day</span>
       </div>
       <table class="tw fixed">
         <colgroup><col /><col style="width:8rem" /><col style="width:4rem" /><col style="width:5rem" /></colgroup>

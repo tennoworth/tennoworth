@@ -31,7 +31,7 @@ const ALLOWLIST = new Set([
   "companion/tennoworth-desktop/build.rs:17",
   // The end-of-main .expect("error while running tauri application"): its
   // line moves every time setup() grows (four times in 2026-08 alone), so it
-  // is keyed by its message, not its line — see the `#` form below.
+  // is keyed by its message, not its line - see the `#` form below.
   'companion/tennoworth-desktop/src/main.rs#expect("error while running tauri application")',
 
   "companion/tennoworth-desktop/src/probe.rs:308",
@@ -174,7 +174,7 @@ if (listOnly) {
   process.exit(0);
 }
 
-// Two key forms: `path:line` (the default — a site is a specific line) and
+// Two key forms: `path:line` (the default - a site is a specific line) and
 // `path#<expect message>` for the rare site whose line legitimately drifts;
 // the latter matches the file's expect() call carrying exactly that message.
 function allowlisted(site) {

@@ -3,7 +3,7 @@
 // path -> display name comes from wfstat-catalog.json, baked at build
 // time by wfm-scrape build and served same-origin. It used to be a
 // direct warframestat.us fetch, but upstream dropped its CORS headers
-// (2026-06-09) — and the direct fetch also varied on Accept-Language,
+// (2026-06-09) - and the direct fetch also varied on Accept-Language,
 // so non-English browsers got localized names that matched nothing on
 // WFM. name -> WFM slug comes from the catalog baked into market.json.
 
@@ -23,7 +23,7 @@ export async function loadCatalogs(): Promise<Catalogs> {
   void purgeRetiredCaches();
 
   // Cheap path: IndexedDB cache, 24 h TTL. The slim form holds only the
-  // (uniqueName, name, category) triples (~17k entries) we actually need —
+  // (uniqueName, name, category) triples (~17k entries) we actually need -
   // keeps the stored payload to a fraction of warframestat.us's ~5 MB raw.
   const cached = await readCached();
   if (cached && Array.isArray(cached)) {
@@ -31,8 +31,8 @@ export async function loadCatalogs(): Promise<Catalogs> {
   }
 
   const r = await fetch(WFSTAT_CATALOG_URL);
-  if (!r.ok) throw new Error(`wfstat-catalog.json responded ${r.status} — rebuild the snapshot (wfm-scrape build)`);
-  // Already in slim [uniqueName, {name, category}] form — baked that way.
+  if (!r.ok) throw new Error(`wfstat-catalog.json responded ${r.status} - rebuild the snapshot (wfm-scrape build)`);
+  // Already in slim [uniqueName, {name, category}] form - baked that way.
   const slim = (await r.json()) as SlimCatalog;
   if (!Array.isArray(slim)) throw new Error('wfstat-catalog.json is not an array');
 
@@ -41,7 +41,7 @@ export async function loadCatalogs(): Promise<Catalogs> {
   return { uniqueToInfo: new Map(slim) };
 }
 
-// Punctuation becomes a word-separator (not deleted) — WFM's own slugs do
+// Punctuation becomes a word-separator (not deleted) - WFM's own slugs do
 // the same: "MK1-Braton" -> "mk1_braton", not "mk1braton". Ported 1:1 to
 // companion/tennoworth-desktop/src/sellables.rs's slug_guess(); both are
 // checked against tests/fixtures/name-guess/cases.json.
@@ -73,12 +73,12 @@ export function pathNameGuess(path: string): string | null {
 // listing time.
 //
 // WFM's live catalog is authoritative for the listing path (it reads
-// subtypes[] directly) — this set only matters for *detecting* a relic by
+// subtypes[] directly) - this set only matters for *detecting* a relic by
 // name here. If WFM ever adds a 5th refinement, listing keeps working but
 // this resolver silently fails to recognize that refinement's relics.
 // companion/wfm-core/src/listing.rs has a matching lowercase fixture
 // (search "intact", "exceptional", "flawless", "radiant") used only as
-// test data, not enforcement — keep both lists in sync by hand.
+// test data, not enforcement - keep both lists in sync by hand.
 const REFINEMENTS = new Set(['Intact', 'Exceptional', 'Flawless', 'Radiant']);
 
 function resolveRelic(name: string, market: Market | null | undefined): ResolvedItem | null {
@@ -104,7 +104,7 @@ export function resolvePath(
   market: Market | null | undefined,
 ): ResolvedItem {
   // Prime-part components (chassis / systems / weapon barrels / …) live
-  // ONLY nested under their parent items in warframestat — the bulk
+  // ONLY nested under their parent items in warframestat - the bulk
   // /items/ endpoint omits them. The scraper pre-walks parent categories
   // and bakes a path → {name, slug, category} map into market.json so
   // these resolve directly. Check it first; if found, short-circuit.
@@ -129,8 +129,8 @@ export function resolvePath(
   if (!info) {
     // Last resort: guess the display name from the path itself and check it
     // against WFM's own catalog. That catalog is refreshed on every scrape
-    // and lists new primes the day they release — weeks before warframestat
-    // indexes their /Lotus/ paths — and weapon-part codenames usually ARE
+    // and lists new primes the day they release - weeks before warframestat
+    // indexes their /Lotus/ paths - and weapon-part codenames usually ARE
     // the display name (BurstonPrimeBarrel → "Burston Prime Barrel").
     // Strict on purpose: only an exact market.catalog hit counts, so a bad
     // guess can never fabricate an item. Category stays null; the caller
@@ -145,7 +145,7 @@ export function resolvePath(
   const { name, category } = info;
 
   // Relics carry a refinement (Intact / Exceptional / Flawless / Radiant)
-  // that's lost if we collapse on slug alone — radiant relics sell for
+  // that's lost if we collapse on slug alone - radiant relics sell for
   // multiples of intact, and WFM rejects listings missing the subtype.
   const relic = resolveRelic(name, market);
   if (relic) return relic;

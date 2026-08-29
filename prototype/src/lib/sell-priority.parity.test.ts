@@ -1,4 +1,4 @@
-// @ts-nocheck — fixture-driven parity check; full TS shapes here would be busy-work.
+// @ts-nocheck - fixture-driven parity check; full TS shapes here would be busy-work.
 //
 // Cross-language parity gate for the sell-priority RANKING. The canonical score
 // lives here (sell-priority.ts); it is mirrored in Rust
@@ -7,7 +7,7 @@
 // (tests/fixtures/sell-priority/cases.json) and assert the SAME golden order.
 //
 // If this file's scoring changes, this test fails until `expected_order` in the
-// fixture is updated — which then fails the Rust side (sellables.rs) until it is
+// fixture is updated - which then fails the Rust side (sellables.rs) until it is
 // brought back into agreement. That is the gate: neither can drift silently.
 import { describe, it, expect } from 'vitest';
 import { scoreRow, sellableQty } from './sell-priority.js';

@@ -4,7 +4,7 @@
 // IndexedDB). Codifying these once lets the rest of `lib/` stay
 // typed without scattering `any` everywhere.
 //
-// The shapes here are deliberately permissive at the edges — fields the
+// The shapes here are deliberately permissive at the edges - fields the
 // scraper may not have populated yet (90d stats, vault status) are
 // optional. Tight invariants get refined inside the consumer modules.
 
@@ -60,19 +60,19 @@ interface RelicReward {
   item_count?: number;
 }
 
-/** Prime-part vault state — `vaulted` and `vaulting-soon` are sell-signals. */
+/** Prime-part vault state - `vaulted` and `vaulting-soon` are sell-signals. */
 export type VaultStatus = 'vaulted' | 'vaulting-soon' | 'available';
 
 /** Baro Ki'Teer schedule, baked from warframestat at build time so the
  *  Baro view needs no runtime warframestat fetch. */
-/** One line of Baro's stock. `item` is the display name — resolve it through
+/** One line of Baro's stock. `item` is the display name - resolve it through
  *  `market.catalog` (display_name_lower → slug) to join it to prices. */
 export interface BaroStock {
   item: string;
   ducats?: number;
   credits?: number;
   /** WFM slug, when the line is a tradeable item. **Absent means unpriceable**
-   *  — cosmetics and bundles have no market listing, and a consumer must show
+   *  - cosmetics and bundles have no market listing, and a consumer must show
    *  them without a price rather than treating a missing price as zero. */
   slug?: string;
   /** DE's `/Lotus/...` path for the line, so a consumer can join without a
@@ -86,9 +86,9 @@ interface Baro {
   location: string;
   /** "Baro'Ki Teel". Present only on worldState-sourced snapshots. */
   character?: string;
-  /** What he is selling. Only obtainable during his ~48h visit — the upstream
+  /** What he is selling. Only obtainable during his ~48h visit - the upstream
    *  endpoint returns an empty list between visits and publishes no schedule or
-   *  history — so the scraper carries the last captured list forward. That
+   *  history - so the scraper carries the last captured list forward. That
    *  means this can describe a PAST visit: compare `inventory_for` against
    *  `activation` before calling it current. Absent until his first visit
    *  after 2026-08-10, when the capture shipped. */
@@ -105,7 +105,7 @@ export interface RivenWeapon {
   group?: string;
   riven_type?: string;
   req_mr?: number;
-  /** The weapon's in-game `/Lotus/...` path — how a scanned riven's `compat`
+  /** The weapon's in-game `/Lotus/...` path - how a scanned riven's `compat`
    *  fingerprint field resolves to this slug. */
   game_ref?: string;
 }
@@ -115,7 +115,7 @@ export interface RivenDispoChange {
   name: string;
   from: number;
   to: number;
-  /** When the pipeline first saw the new value (ISO) — not DE's patch time. */
+  /** When the pipeline first saw the new value (ISO) - not DE's patch time. */
   seen_at: string;
 }
 
@@ -153,7 +153,7 @@ export interface RivenStatsSurface {
     rolled?: RivenStatTier;
     /** The same bands on PS4 / Xbox / Switch, where DE published them
      *  alongside a weapon PC also saw. Console riven markets diverge sharply
-     *  from PC's and their samples are far smaller — read the `pop` before
+     *  from PC's and their samples are far smaller - read the `pop` before
      *  reading the median. Absent on older snapshots. */
     platforms?: Partial<
       Record<'ps4' | 'xb1' | 'swi', { unrolled?: RivenStatTier; rolled?: RivenStatTier }>
@@ -212,7 +212,7 @@ export interface Market {
   calendar?: CalendarSurface | null;
   source?: string;
   // Per-surface fetch timestamps (ISO). On a CSV-only rebuild these can lag
-  // `updated_at` — prices refreshed but the vendor surfaces (baro/relics/
+  // `updated_at` - prices refreshed but the vendor surfaces (baro/relics/
   // vault/sets) did not. Lets the UI flag a stale schedule/vault surface.
   surface_fetched_at?: Record<string, string>;
   /** Digital Extremes provenance + the surfaces only worldState provides.
@@ -222,7 +222,7 @@ export interface Market {
    *  recipe PRODUCES. Absent on older snapshots. */
   recipes?: Record<string, RecipeEntry> | null;
   /** DE's annual usage telemetry, keyed by the PARENT's slug (a part inherits
-   *  its set's figure — see `lib/demand.ts`). Absent on older snapshots. */
+   *  its set's figure - see `lib/demand.ts`). Absent on older snapshots. */
   usage?: Record<string, UsageRecord> | null;
   /** Compact immutable annual history for same-category percentage-point
    *  comparisons. Historical rows intentionally omit Mastery-Rank curves. */
@@ -287,7 +287,7 @@ export interface UsageHistorySurface {
   by_year: Record<string | number, Record<string, UsageHistoryRecord>>;
 }
 
-/** One ingredient line. **No `slug` means it cannot be bought** — resources
+/** One ingredient line. **No `slug` means it cannot be bought** - resources
  *  like Orokin Cells, which a build plan must list as an unchecked
  *  requirement rather than cost. */
 export interface RecipeIngredientEntry {
@@ -306,7 +306,7 @@ export interface RecipeEntry {
   ingredients?: RecipeIngredientEntry[];
 }
 
-/** One announced Prime Vault rotation. `items` are DE `/Lotus/...` paths —
+/** One announced Prime Vault rotation. `items` are DE `/Lotus/...` paths -
  *  bundle SKUs, so most have no WFM slug; the value is the *dates*. */
 export interface VaultRotation {
   activation: string;
@@ -329,14 +329,14 @@ export interface DeSurface {
   /** Export manifest basename → content hash. Provenance: it says exactly
    *  which build of DE's data every derived surface came from. */
   hashes?: Record<string, string>;
-  /** Manifests whose hash moved on the last cycle — a patch-day signal. */
+  /** Manifests whose hash moved on the last cycle - a patch-day signal. */
   changed?: string[];
   /** Whether worldState answered. `false` means baro / vault_rotation / deals
    *  are carried over and should be labelled stale. */
   world_ok?: boolean;
   vault_rotation?: VaultRotation[];
   deals?: DailyDeal[];
-  /** `{slug: ducats}` for exactly the slugs DE's recipe tree set — provenance,
+  /** `{slug: ducats}` for exactly the slugs DE's recipe tree set - provenance,
    *  so a later pipeline run can tell its own overrides from warframe.market's
    *  values. Consumers read `items[slug].ducats`, not this. */
   ducats?: Record<string, number>;
@@ -345,7 +345,7 @@ export interface DeSurface {
 // -------- inventory.json --------
 
 /** A leveled mod instance from `Upgrades[]`. UpgradeFingerprint is a
- *  JSON STRING (not an object) — we parse `lvl` defensively. */
+ *  JSON STRING (not an object) - we parse `lvl` defensively. */
 export interface InventoryUpgrade {
   ItemType: string;
   UpgradeFingerprint?: string;
@@ -379,7 +379,7 @@ export interface Inventory {
   SpaceMelee?: InventoryStackEntry[];
   Sentinels?: InventoryStackEntry[];
   SentinelWeapons?: InventoryStackEntry[];
-  // Open shape — many other keys exist but we don't read them.
+  // Open shape - many other keys exist but we don't read them.
   [k: string]: unknown;
 }
 
@@ -412,7 +412,7 @@ export interface OwnedRecord {
   /** Highest `lvl` seen across instances of this item in `Upgrades`.
    *  `null` = no individualised instance at all (always show). */
   kept_lvl: number | null;
-  /** Count of owned instances with XP > 0 — copies Warframe has flagged
+  /** Count of owned instances with XP > 0 - copies Warframe has flagged
    *  untradeable because they've been leveled. 0 for stack categories
    *  (MiscItems, Recipes, RawUpgrades), which have no per-instance XP. */
   leveled: number;
@@ -520,7 +520,7 @@ export interface ItemResult {
   status: 'ok' | 'skipped' | 'error';
   message?: string | null;
   order_id?: string | null;
-  /** 'created' | 'updated' — how an ok row landed on WFM (absent on errors
+  /** 'created' | 'updated' - how an ok row landed on WFM (absent on errors
    *  and on pre-reconcile companions). */
   action?: 'created' | 'updated' | null;
 }
@@ -530,7 +530,7 @@ export interface PlanResponse {
   results: ItemResult[];
 }
 
-/** Pending-plan persistence shape — kept on disk in `pending_plan.json`. */
+/** Pending-plan persistence shape - kept on disk in `pending_plan.json`. */
 interface PendingPlanItem {
   slug: string;
   platinum: number;

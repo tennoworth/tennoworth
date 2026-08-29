@@ -1,4 +1,4 @@
-//! "Remember on this device" — the PBKDF2-derived JWT unlock key in the OS
+//! "Remember on this device" - the PBKDF2-derived JWT unlock key in the OS
 //! keyring (Secret Service / Windows Credential Manager).
 //!
 //! Deliberately NOT the passphrase: the derived key is salt-bound to the
@@ -18,8 +18,8 @@ const SERVICE: &str = "tennoworth";
 const ACCOUNT: &str = "wfm-jwt-key";
 
 /// KDE Plasma ships `ksecretd` DBus-activatable ONLY as
-/// `org.kde.secretservicecompat` — no activation file claims
-/// `org.freedesktop.secrets` (verified on CachyOS/Plasma, 2026-07) — so the
+/// `org.kde.secretservicecompat` - no activation file claims
+/// `org.freedesktop.secrets` (verified on CachyOS/Plasma, 2026-07) - so the
 /// first Secret Service call in a session fails with "name is not
 /// activatable" unless the daemon happens to be up. A blocking ping on the
 /// compat name activates it; on GNOME (where gnome-keyring owns the name)
@@ -49,7 +49,7 @@ fn entry() -> Result<Entry, keyring::Error> {
     Entry::new(SERVICE, ACCOUNT)
 }
 
-/// Store the derived key. Best-effort — a failure only costs the user a
+/// Store the derived key. Best-effort - a failure only costs the user a
 /// passphrase prompt next launch.
 pub fn store_key(key: &[u8; 32]) {
     let encoded = B64.encode(key);
@@ -59,7 +59,7 @@ pub fn store_key(key: &[u8; 32]) {
     }
 }
 
-/// Fetch the stored key, or None. Transient store errors also read as None —
+/// Fetch the stored key, or None. Transient store errors also read as None -
 /// the caller falls back to the passphrase modal and the entry is kept.
 pub fn load_key() -> Option<[u8; 32]> {
     let encoded = match entry().and_then(|e| e.get_password()) {

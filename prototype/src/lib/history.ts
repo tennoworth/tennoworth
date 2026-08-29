@@ -1,10 +1,10 @@
-// Year-long daily price history — the `history.json` the box builds from
+// Year-long daily price history - the `history.json` the box builds from
 // relics.run (see companion/wfm-scrape/src/history.rs for the pipeline side).
 // Pure helpers over that shape; the transports load it, the UI renders it.
 
 export interface HistorySeries {
   /** Daily median on the item's tracked tier; null = no closed trades (or the
-   *  day's source file was unavailable — see History.missing_days). */
+   *  day's source file was unavailable - see History.missing_days). */
   median: Array<number | null>;
   volume: number[];
   subtype?: string | null;
@@ -44,7 +44,7 @@ export interface YearStats {
   latest: number;
   /** Index of that day. */
   latestIdx: number;
-  /** Median of the first ~30 days with data — the "a year ago" baseline. */
+  /** Median of the first ~30 days with data - the "a year ago" baseline. */
   baseline: number;
   /** Percent change latest vs baseline; null when either side is thin. */
   deltaPct: number | null;
@@ -55,7 +55,7 @@ export interface YearStats {
 }
 
 /** Summary over the whole window. `null` when the series has under `minDays`
- *  traded days — a Δ1y from three trades is noise, not signal. */
+ *  traded days - a Δ1y from three trades is noise, not signal. */
 export function yearStats(series: HistorySeries, minDays = 20): YearStats | null {
   const pts = points(series);
   if (pts.length < minDays) return null;
@@ -83,7 +83,7 @@ function medianOf(xs: number[]): number {
 }
 
 /** Downsample the daily series to `buckets` values (median of each bucket's
- *  non-null days; null buckets are skipped) — for a compact 1-year sparkline. */
+ *  non-null days; null buckets are skipped) - for a compact 1-year sparkline. */
 export function weekly(series: HistorySeries, buckets = 52): number[] {
   const n = series.median.length;
   if (n === 0) return [];

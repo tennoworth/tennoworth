@@ -3,7 +3,7 @@
 //! Two cross-cutting invariants live here:
 //!   * secrets and partial-state files are created at 0600 from the first
 //!     syscall (`write_restricted`), never chmod'd after a default-umask
-//!     create — there's no window where another local user can read them;
+//!     create - there's no window where another local user can read them;
 //!   * files written under `~` while running as root via `sudo` are chowned
 //!     back to `$SUDO_USER` (`chown_to_real_user`) so the user's file manager
 //!     can still read them.
@@ -15,7 +15,7 @@ use std::path::PathBuf;
 /// Writes `bytes` to `path`, creating the file at 0o600 from the first
 /// syscall on Unix. This avoids the race window where a default-umask
 /// (0o644) file exists on disk before a later `restrict_file_perms` call
-/// tightens it — a window in which another local user can read the
+/// tightens it - a window in which another local user can read the
 /// secret content. On Windows file ACLs are user-scoped by default; fall
 /// back to plain write there.
 pub fn write_restricted(path: &std::path::Path, bytes: &[u8]) -> Result<()> {

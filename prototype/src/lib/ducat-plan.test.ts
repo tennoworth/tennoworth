@@ -19,11 +19,11 @@ function owned(rows: Array<[string, string, number]>): Map<string, OwnedRecord> 
 
 const MARKET: Market = {
   items: {
-    // 45 ducats for 3p — the ideal scrap.
+    // 45 ducats for 3p - the ideal scrap.
     braton_prime_receiver: entry({ low_sell: 3, low5_avg: 3, median_90d: 3, ducats: 45 }),
     // 45 ducats for 1p.
     bo_prime_ornament: entry({ low_sell: 1, low5_avg: 1, median_90d: 1, ducats: 45 }),
-    // 65 ducats but 18p — worth more sold.
+    // 65 ducats but 18p - worth more sold.
     nova_prime_neuroptics: entry({ low_sell: 18, low5_avg: 18, median_90d: 18, ducats: 65 }),
     // Nobody lists it: pure ducat gain.
     forgotten_part: entry({ ducats: 25 }),
@@ -50,7 +50,7 @@ describe('spareCopies', () => {
 describe('scrapCandidates', () => {
   it('ranks by ducats given up per plat, not by ducats', () => {
     // Sorting by ducats alone would put the 65-ducat Neuroptics first, which
-    // is exactly backwards — it is the one worth keeping.
+    // is exactly backwards - it is the one worth keeping.
     const c = scrapCandidates(
       owned([
         ['braton_prime_receiver', 'Braton Prime Receiver', 5],
@@ -66,7 +66,7 @@ describe('scrapCandidates', () => {
     ]);
   });
 
-  it('puts an unsellable part first — scrapping it costs nothing', () => {
+  it('puts an unsellable part first - scrapping it costs nothing', () => {
     const c = scrapCandidates(
       owned([
         ['forgotten_part', 'Forgotten Part', 3],

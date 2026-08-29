@@ -1,15 +1,15 @@
 <script lang="ts">
-  // @ts-nocheck — presentation glue (dialog refs, catch blocks, event
+  // @ts-nocheck - presentation glue (dialog refs, catch blocks, event
   // handlers), same rationale as App.svelte's own @ts-nocheck: the
   // high-value typing lives at the lib/ boundary this component calls into.
   // Desktop WFM login + unlock dialogs. Triggered from App.svelte (the Sell
   // CTA's proactive status check, the pending-plan Resume flow's needs_login/
   // needs_unlock rejections, and ListingReviewModal's onauthrequired) via
-  // `bind:this` + the exported `open()` — the trigger sites live in three
+  // `bind:this` + the exported `open()` - the trigger sites live in three
   // different places in App.svelte, so this stays an imperative API rather
   // than a prop the parent sets. Secrets go straight into the wfm_login /
   // unlock_jwt commands and the bound fields are cleared as soon as the call
-  // returns — nothing lingers in webview state.
+  // returns - nothing lingers in webview state.
   import {
     desktopWfmLogin, desktopWfmUnlock, desktopTrySilentUnlock, DesktopCmdError,
   } from '../lib/transport';
@@ -25,13 +25,13 @@
   let wfmLoginPlatform = $state('pc');
   let wfmUnlockPassphrase = $state('');
   // "Remember on this device" (OS keyring). One preference shared by the
-  // login and unlock dialogs; default on — the browser-cookie parity call.
+  // login and unlock dialogs; default on - the browser-cookie parity call.
   let wfmRemember = $state(true);
   let wfmAuthBusy = $state(false);
   let wfmAuthError = $state(null);
   // What to do once the session unlocks: 'list' re-opens the listing flow the
   // CTA started; null (the Resume path) leaves the caller where it was.
-  // Threaded through to `onunlocked` rather than acted on here — App.svelte
+  // Threaded through to `onunlocked` rather than acted on here - App.svelte
   // owns what 'list' means (opening its own listingOpen state).
   let authNext: string | null = null;
   let wfmLoginEmailInput: HTMLInputElement | undefined;
@@ -48,7 +48,7 @@
       wfmLoginEmailInput?.focus();
     } else {
       // A remembered device key (OS keyring) unlocks without the modal. Any
-      // miss — no entry, no keyring daemon, stale key — falls through to the
+      // miss - no entry, no keyring daemon, stale key - falls through to the
       // passphrase prompt exactly as before.
       try {
         if (await desktopTrySilentUnlock()) {
@@ -70,7 +70,7 @@
   }
 
   // Forgot the passphrase? The token can't be recovered, but re-login mints a
-  // fresh one with a new passphrase — the WFM account is never locked out.
+  // fresh one with a new passphrase - the WFM account is never locked out.
   function goToLogin() {
     wfmUnlockDialog?.close();
     open('needs_login', authNext);
@@ -107,14 +107,14 @@
       wfmUnlockDialog?.close();
       unlocked();
     } catch (err) {
-      // The login file vanished between the check and the unlock — switch to
+      // The login file vanished between the check and the unlock - switch to
       // the login dialog instead of asking for a passphrase that can't work.
       if (err instanceof DesktopCmdError && err.code === 'needs_login') {
         wfmUnlockDialog?.close();
         open('needs_login', authNext);
       } else {
         // bad_passphrase and transient WFM failures stay in the dialog with
-        // their message — retry is a re-type away.
+        // their message - retry is a re-type away.
         wfmAuthError = err.message || String(err);
       }
     } finally {
@@ -156,7 +156,7 @@
         type="password"
         autocomplete="new-password"
         bind:value={wfmLoginPassphrase}
-        placeholder="12+ characters — you may need it again after a restart"
+        placeholder="12+ characters - you may need it again after a restart"
         required
         minlength="12"
       />
@@ -168,11 +168,11 @@
     <label>
       Confirm passphrase
       <input type="password" autocomplete="new-password" bind:value={wfmLoginConfirm} required minlength="12" />
-      <span class="muted">Forgot it? No problem — just log in again and set a new one. Your WFM account is never locked out.</span>
+      <span class="muted">Forgot it? No problem - just log in again and set a new one. Your WFM account is never locked out.</span>
     </label>
     <label class="remember">
       <input type="checkbox" bind:checked={wfmRemember} />
-      Remember on this device — stores the unlock key in your OS keyring
+      Remember on this device - stores the unlock key in your OS keyring
       (KWallet, GNOME Keyring, Windows Credential Manager) so you're not asked
       each launch. Never the passphrase itself.
     </label>
@@ -192,7 +192,7 @@
       <h3>Unlock warframe.market listing</h3>
       <p class="muted">
         Enter the passphrase you set at login to decrypt your WFM token for
-        this session. It stays in the app's memory — never on disk, never in
+        this session. It stays in the app's memory - never on disk, never in
         this window.
       </p>
     </header>
@@ -209,7 +209,7 @@
     </label>
     <label class="remember">
       <input type="checkbox" bind:checked={wfmRemember} />
-      Remember on this device — stores the unlock key in your OS keyring so
+      Remember on this device - stores the unlock key in your OS keyring so
       you're not asked each launch. Never the passphrase itself.
     </label>
     {#if wfmAuthError}
@@ -226,7 +226,7 @@
 </dialog>
 
 <style>
-  /* The dialog.cryptobox shell now lives in app.css — this component and
+  /* The dialog.cryptobox shell now lives in app.css - this component and
      ExportImportDialogs render the same chrome and had drifted apart. Only
      the remember-me row, which exists in no other dialog, stays here. */
   dialog.cryptobox label.remember {

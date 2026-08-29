@@ -1,10 +1,10 @@
-//! EE.log trade detection — the game's own log, read-only, tailed.
+//! EE.log trade detection - the game's own log, read-only, tailed.
 //!
 //! When a trade completes, Warframe writes the confirmation dialog it showed
 //! ("Are you sure you want to accept this trade? You are offering: … and will
 //! receive from <partner> the following: …") and, on success, "The trade was
 //! successful!". Reading those two lines is enough to know exactly what was
-//! sold, to whom, for how much — the ground truth a profit ledger needs and
+//! sold, to whom, for how much - the ground truth a profit ledger needs and
 //! the trigger a "close the WFM listing I just sold" automation needs. It is
 //! a plain file read; nothing is injected and nothing touches the process.
 //!
@@ -27,7 +27,7 @@ pub struct TradeEvent {
     /// Plat that changed hands: received on a sale, spent on a purchase.
     pub plat: i64,
     pub items: Vec<TradeItem>,
-    /// The game's uptime stamp at the head of the dialog line, if present —
+    /// The game's uptime stamp at the head of the dialog line, if present -
     /// distinguishes two identical trades in one session.
     pub log_stamp: Option<String>,
 }
@@ -47,7 +47,7 @@ pub const TRADE_SUCCESS: &str = "The trade was successful!";
 pub const DIALOG_TIMEOUT: Duration = Duration::from_secs(120);
 
 /// Platform glyphs the game appends to names (PC/PSN/XBOX/NSW/iOS markers
-/// live in the Private Use Area) — stripped so partner/item names compare.
+/// live in the Private Use Area) - stripped so partner/item names compare.
 fn strip_glyphs(s: &str) -> String {
     s.chars()
         .filter(|c| !('\u{e000}'..='\u{f8ff}').contains(c) && !('\u{f0000}'..='\u{ffffd}').contains(c))
@@ -56,7 +56,7 @@ fn strip_glyphs(s: &str) -> String {
         .to_string()
 }
 
-/// A line the log framework itself wrote (`123.456 Sys [Info]: …`) — must
+/// A line the log framework itself wrote (`123.456 Sys [Info]: …`) - must
 /// never be read as an item name when it interleaves with a dialog dump.
 fn is_framework_line(line: &str) -> bool {
     let t = line.trim_start();
@@ -163,7 +163,7 @@ pub fn parse_trade_dialog(lines: &[String]) -> Option<TradeEvent> {
 
 /// Line-at-a-time state machine: buffers the dialog dump from
 /// [`DIALOG_START`] until the next framework line, then emits a
-/// [`TradeEvent`] when [`TRADE_SUCCESS`] follows. Time-agnostic — the caller
+/// [`TradeEvent`] when [`TRADE_SUCCESS`] follows. Time-agnostic - the caller
 /// passes `now_ms` so tests don't sleep.
 #[derive(Default)]
 pub struct TradeMachine {
@@ -283,7 +283,7 @@ pub fn parse_steam_library_paths(vdf: &str) -> Vec<String> {
 /// Tail `path` forever: start at the current end (past trades are not
 /// re-announced), poll every `poll`, handle truncation (game restart writes a
 /// fresh file) by re-seeking to 0. Each confirmed trade goes to `on_trade`.
-/// Blocking — run on its own thread.
+/// Blocking - run on its own thread.
 pub fn tail_forever_with_lines(
     path: &Path,
     poll: Duration,
@@ -460,7 +460,7 @@ mod tests {
         let mut m = TradeMachine::new();
         m.feed(&dialog_single_line(), 0);
         // 3 minutes later the success line arrives for some OTHER trade whose
-        // dialog we never saw — must not pair with the stale buffer.
+        // dialog we never saw - must not pair with the stale buffer.
         assert!(m.feed("x", 3 * 60 * 1000).is_none());
         assert!(m.feed("9.0 Sys [Info]: The trade was successful!", 3 * 60 * 1000 + 1).is_none());
     }

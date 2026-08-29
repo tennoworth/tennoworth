@@ -4,13 +4,13 @@
   // Dead-export gate. The class it exists for: checkUpdate, desktopWfmLogout
   // and clearCached all sat exported-and-uncalled for months, each with a test
   // that made them look alive. tsconfig's noUnusedLocals cannot see any of
-  // them — it flags unused LOCALS, never unused EXPORTS — and svelte-check
+  // them - it flags unused LOCALS, never unused EXPORTS - and svelte-check
   // skips App.svelte entirely because of its @ts-nocheck, so neither existing
   // checker could have caught them.
   //
   // ignoreExportsUsedInFile: assistant.ts exports AssistantContextTotals,
   // AssistantContextItem, AssistantContext and AssistantUsage, which nothing
-  // imports BY NAME — they are the named parts of AssistantContext and
+  // imports BY NAME - they are the named parts of AssistantContext and
   // AssistantAnswer, and AssistantAnswer is re-exported through transport.ts.
   // knip cannot see that a type reachable only through another type's shape is
   // load-bearing, so without this it reports four false positives. The trade is

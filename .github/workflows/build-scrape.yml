@@ -2,9 +2,9 @@ name: build-scrape
 
 # Build the host-only wfm-scrape pipeline binary whenever it (or a crate it
 # depends on) changes, and publish it as a rolling `scrape-latest` release the
-# deploy box pulls with a plain curl, no auth — matches build-web.yml's shape.
+# deploy box pulls with a plain curl, no auth - matches build-web.yml's shape.
 # This is NOT the desktop app (that ships on tag desktop-v* via
-# release-desktop.yml); it is THE production pipeline binary — the box's
+# release-desktop.yml); it is THE production pipeline binary - the box's
 # run-scrape.sh runs it for both the scrape and the market.json build, and the
 # refresh-market GH cron downloads the same release.
 
@@ -27,7 +27,7 @@ permissions:
 
 jobs:
   build:
-    # ubuntu-22.04 for its glibc 2.35 — same rationale as release-desktop.yml's
+    # ubuntu-22.04 for its glibc 2.35 - same rationale as release-desktop.yml's
     # linux-binary job (backward- but no forward-compat).
     runs-on: ubuntu-22.04
     defaults:
@@ -57,4 +57,4 @@ jobs:
           files: |
             dist/wfm-scrape
             dist/wfm-scrape.sha256
-          body: Rolling build of the host-only wfm-scrape pipeline binary from the latest main. This is the production pipeline binary — the box runs it for the scrape and the market.json build. Not a version release — see the desktop-v* tags for the desktop app.
+          body: Rolling build of the host-only wfm-scrape pipeline binary from the latest main. This is the production pipeline binary - the box runs it for the scrape and the market.json build. Not a version release - see the desktop-v* tags for the desktop app.

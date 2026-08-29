@@ -1,4 +1,4 @@
-// @ts-nocheck — vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
+// @ts-nocheck - vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { webcrypto } from 'node:crypto';
 
@@ -32,7 +32,7 @@ describe('encryptPayload / decryptPayload (round-trip)', () => {
   });
 
   // Parity gate: companion/wfm-core/src/auth.rs's JWT_KDF_ITERATIONS must match
-  // this module's KDF_ITERATIONS exactly — a mismatch bricks JWT decryption
+  // this module's KDF_ITERATIONS exactly - a mismatch bricks JWT decryption
   // with a false "wrong passphrase" error. Both sides read
   // tests/fixtures/jwt-kdf.json.
   it('uses the iteration count pinned in the shared KDF fixture', async () => {
@@ -49,7 +49,7 @@ describe('encryptPayload / decryptPayload (round-trip)', () => {
   });
 }, 60_000);
 
-describe('encryptPayload — guardrails', () => {
+describe('encryptPayload - guardrails', () => {
   it('rejects too-short passphrases', async () => {
     await expect(encryptPayload(SAMPLE, '')).rejects.toThrow(/passphrase/i);
     await expect(encryptPayload(SAMPLE, 'ab')).rejects.toThrow(/passphrase/i);
@@ -62,7 +62,7 @@ describe('encryptPayload — guardrails', () => {
   });
 });
 
-describe('decryptPayload — failure modes', () => {
+describe('decryptPayload - failure modes', () => {
   it('rejects a wrong passphrase with a useful error', async () => {
     const blob = await encryptPayload(SAMPLE, 'rightpass1234');
     await expect(decryptPayload(blob, 'wrong')).rejects.toThrow(/passphrase|modified/i);
@@ -70,7 +70,7 @@ describe('decryptPayload — failure modes', () => {
 
   it('detects tampering with the ciphertext', async () => {
     const blob = await encryptPayload(SAMPLE, 'rightpass1234');
-    // Flip a base64 character — likely produces a different valid base64 byte
+    // Flip a base64 character - likely produces a different valid base64 byte
     // but invalid GCM tag.
     blob.ciphertext = blob.ciphertext.slice(0, -2) + 'AB';
     await expect(decryptPayload(blob, 'rightpass1234')).rejects.toThrow();

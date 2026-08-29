@@ -6,16 +6,16 @@
     <!--
       Theme boot: stamps data-look / data-mode on <html> from the persisted
       preference before the stylesheet paints (why it is a classic, blocking,
-      same-origin script rather than part of the module bundle — see the file).
+      same-origin script rather than part of the module bundle - see the file).
     -->
     <script src="/theme-boot.js"></script>
     <!--
       Defense-in-depth CSP. Allowed origins:
-        connect-src: self only — the informational site loads everything
+        connect-src: self only - the informational site loads everything
                      (market.json, wfstat-catalog.json) same-origin.
                      warframestat.us was dropped when upstream dropped CORS
                      (2026-06-09); the resolver catalog is baked now.
-        script-src:  self only — no inline, no remote scripts
+        script-src:  self only - no inline, no remote scripts
         style-src:   self + 'unsafe-inline' for Svelte's scoped style injection
         img-src:     self + data: (Vite injects small assets as data: URIs)
 
@@ -43,10 +43,10 @@
     <meta http-equiv="Referrer-Policy" content="no-referrer" />
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
 
-    <title>TennoWorth — what to sell in Warframe, right now</title>
+    <title>TennoWorth - what to sell in Warframe, right now</title>
     <meta
       name="description"
-      content="TennoWorth ranks your Warframe inventory by what's actually worth selling on warframe.market right now — Baro flips, set-vs-parts arbitrage, and ducat dumps. The desktop app runs on Windows + Linux. No account, no upload."
+      content="TennoWorth ranks your Warframe inventory by what's actually worth selling on warframe.market right now - Baro flips, set-vs-parts arbitrage, and ducat dumps. The desktop app runs on Windows + Linux. No account, no upload."
     />
     <link rel="canonical" href="https://tennoworth.app/" />
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#CFCBB2" />
@@ -62,7 +62,7 @@
     <meta property="og:site_name" content="TennoWorth" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://tennoworth.app/" />
-    <meta property="og:title" content="TennoWorth — what to sell in Warframe, right now" />
+    <meta property="og:title" content="TennoWorth - what to sell in Warframe, right now" />
     <meta
       property="og:description"
       content="Ranks your Warframe inventory by what's worth selling on warframe.market right now. Desktop app for Windows + Linux. Nothing leaves your machine."
@@ -71,7 +71,7 @@
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="TennoWorth — what to sell in Warframe, right now" />
+    <meta name="twitter:title" content="TennoWorth - what to sell in Warframe, right now" />
     <meta
       name="twitter:description"
       content="Ranks your Warframe inventory by what's worth selling right now. Desktop app for Windows + Linux."
@@ -87,7 +87,7 @@
     -->
     <noscript>
       <main style="max-width:42rem;margin:4rem auto;padding:0 1.25rem;font-family:system-ui,sans-serif;color:#46422F;background:#DBD7BF;line-height:1.55;">
-        <h1>TennoWorth — what to sell in Warframe, right now</h1>
+        <h1>TennoWorth - what to sell in Warframe, right now</h1>
         <p>
           TennoWorth cross-references your Warframe inventory against a
           warframe.market price snapshot and ranks what's actually worth

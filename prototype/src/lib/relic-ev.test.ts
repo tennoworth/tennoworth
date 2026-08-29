@@ -41,7 +41,7 @@ function rewards(): RelicRewardRow[] {
   ];
 }
 
-/** Junk commons, one valuable rare — the shape that makes radiant worth it. */
+/** Junk commons, one valuable rare - the shape that makes radiant worth it. */
 const goldRare: Market = {
   items: {
     c1: entry({ low_sell: 2, low5_avg: 2, median_90d: 2 }),
@@ -53,7 +53,7 @@ const goldRare: Market = {
   },
 } as unknown as Market;
 
-/** Everything cheap — refining just burns traces. */
+/** Everything cheap - refining just burns traces. */
 const allJunk: Market = {
   items: {
     c1: entry({ low_sell: 2, low5_avg: 2, median_90d: 2 }),
@@ -180,7 +180,7 @@ describe('decideRelic', () => {
   });
 
   it('flags a thin table regardless of how good the EV looks', () => {
-    // Same gold rare, but nothing has traded — the EV is an ask, not a market.
+    // Same gold rare, but nothing has traded - the EV is an ask, not a market.
     const dead = {
       items: Object.fromEntries(
         Object.entries(goldRare.items!).map(([k, v]) => [k, { ...v, vol: 0 }]),

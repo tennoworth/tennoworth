@@ -79,7 +79,7 @@ const PROBE_JS: &str = r#"(function(){
     return null;
   }
   // C6 lifecycle: window.close() fires CloseRequested, which Rust intercepts
-  // (prevent_close + hide) — so the window HIDES to the tray and the process
+  // (prevent_close + hide) - so the window HIDES to the tray and the process
   // stays alive (this very script keeps running). show() reshows it.
   function windowLifecycle(){
     var w = curWin();
@@ -96,7 +96,7 @@ const PROBE_JS: &str = r#"(function(){
       .catch(function(e){ R.lifecycle.err = String(e && e.message || e); });
   }
   // Seed an import snapshot directly through the `import_snapshot` command
-  // (the old DropZone file-drop path that used to reach it is gone — the app
+  // (the old DropZone file-drop path that used to reach it is gone - the app
   // scans from the game). This exercises the same record path a file-drop
   // did: source='import' history row + the sell view rendering off it.
   function dropFixture(){
@@ -135,7 +135,7 @@ const PROBE_JS: &str = r#"(function(){
       R.desktopBadge = !!document.querySelector('[data-testid="desktop-mode"]');
       R.marketBrowserRendered = !!document.querySelector('.market-browser, [data-testid="market-browser"]');
     } catch(e){ R.envErr = String(e); }
-    // Persistence marker chain (webview localStorage — separate from the SQLite
+    // Persistence marker chain (webview localStorage - separate from the SQLite
     // store; the real cross-restart proof is reserveAtStart via get_setting).
     var marker = R.runtag + '@' + new Date().toISOString();
     try { R.priorMarker = localStorage.getItem('__tennoworth_probe_marker__'); } catch(e){ R.priorMarker = 'ERR:'+e; }
@@ -146,13 +146,13 @@ const PROBE_JS: &str = r#"(function(){
     .then(function(){ return invk('health').then(function(v){ R.invokeHealth = v; }); })
     // C5 update check, endpoint overridden via TENNOWORTH_UPDATE_URL (offline
     // run: https to a refused port; malformed run: live JSON of the wrong
-    // shape). Must resolve to checked with an explicit support state — never reject.
+    // shape). Must resolve to checked with an explicit support state - never reject.
     .then(function(){ return invk('check_update').then(function(v){ R.updateCheck = v; }); })
     .then(function(){ return invk('update_status').then(function(v){ R.updateStatus = v; }); })
     // The SPA's own mount handshake should have surfaced the banner iff an
     // update is available (debug-build happy-path run); and an explicit
     // install against a fixture manifest must REJECT (unreachable bundle URL /
-    // garbage signature) without hurting the app — invk records the rejection
+    // garbage signature) without hurting the app - invk records the rejection
     // as an 'ERR:' string, and every later step still runs.
     .then(function(){
       R.updateBannerVisible = !!document.querySelector('[data-testid="update-banner"]');
@@ -172,7 +172,7 @@ const PROBE_JS: &str = r#"(function(){
     .then(function(){ return invk('get_setting', { key: 'reserve-copies' }).then(function(v){ R.reserveAtStart = v; }); })
     .then(function(){ return invk('list_snapshots', { limit: 50 }).then(function(v){ R.snapshotsAtStart = v; }); })
     // (b) Scan with no game running: drive the REAL scan button. Graceful error
-    // banner, and — critically — NO source='memory' snapshot row is added.
+    // banner, and - critically - NO source='memory' snapshot row is added.
     .then(function(){
       var btn = document.querySelector('[data-testid="desktop-scan"]');
       R.scanButtonFound = !!btn;
@@ -199,7 +199,7 @@ const PROBE_JS: &str = r#"(function(){
     .then(function(){ return setReserve().then(function(via){ R.reserveSetVia = via; }); })
     .then(function(){ return invk('get_setting', { key: 'reserve-copies' }).then(function(v){ R.reserveAfterSet = v; }); })
     // C7 WFM listing session: the full lock-state machine, hermetic (no WFM
-    // network — TENNOWORTH_JWT_PATH/TENNOWORTH_PENDING_PATH point at scratch,
+    // network - TENNOWORTH_JWT_PATH/TENNOWORTH_PENDING_PATH point at scratch,
     // and every plan item fails validation before any HTTP).
     .then(function(){ R.wfm = {}; return invkE('wfm_auth_status').then(function(v){ R.wfm.status0 = v; }); })
     // No login file → typed needs_login (the desktop analogue of serve's 401).
@@ -244,7 +244,7 @@ const PROBE_JS: &str = r#"(function(){
         d.close();
       });
     })
-    // Seed an unlocked session (probe-only, synthetic bundle — no network),
+    // Seed an unlocked session (probe-only, synthetic bundle - no network),
     // then the CTA opens the review modal with the staged fixture rows.
     .then(function(){ return invkE('debug_seed_unlocked').then(function(v){ R.wfm.seeded = v; }); })
     .then(function(){ return invkE('wfm_auth_status').then(function(v){ R.wfm.status2 = v; }); })
@@ -262,7 +262,7 @@ const PROBE_JS: &str = r#"(function(){
       return delay(300);
     })
     // Offline plan execution: both items fail wfm-core validation BEFORE any
-    // HTTP (price under the 5p floor; slug not in the catalog) — exercises the
+    // HTTP (price under the 5p floor; slug not in the catalog) - exercises the
     // full plan pipeline incl. pending-file seed + clean clear, no network.
     .then(function(){
       return invkE('submit_plan', { items: [
@@ -276,7 +276,7 @@ const PROBE_JS: &str = r#"(function(){
     .then(function(){ return invkE('wfm_auth_status').then(function(v){ R.wfm.status3 = v; }); })
     // Locked again with the envelope still on disk → needs_unlock, not login.
     .then(function(){ return invkE('submit_plan', { items: [] }).then(function(v){ R.wfm.planAfterLogout = v; }); })
-    // Checkpoint the evidence BEFORE the lifecycle test — if close-to-tray were
+    // Checkpoint the evidence BEFORE the lifecycle test - if close-to-tray were
     // broken and destroyed the window, the final report below would never write.
     .then(function(){ return invk('probe_report', { payload: JSON.stringify(R) }); })
     // C6 (lifecycle): close hides to tray (process survives), show reshows.
@@ -336,7 +336,7 @@ pub fn debug_write_login(
         return Err(CmdError::internal("debug_write_login is probe-only"));
     }
     // Without the path override this would write a synthetic envelope over the
-    // REAL ~/.config/wfminv/wfm-jwt.enc — a probe run must never be able to
+    // REAL ~/.config/wfminv/wfm-jwt.enc - a probe run must never be able to
     // clobber actual credentials, so refuse rather than fall back.
     if std::env::var_os("TENNOWORTH_JWT_PATH").is_none() {
         return Err(CmdError::internal(
@@ -347,7 +347,7 @@ pub fn debug_write_login(
 }
 
 /// Probe-only: flip the session to unlocked with a synthetic credential bundle
-/// (empty catalog, fake JWT) — no network. Listing commands then exercise
+/// (empty catalog, fake JWT) - no network. Listing commands then exercise
 /// their offline validation paths; anything that would hit WFM fails per-item.
 #[tauri::command]
 pub fn debug_seed_unlocked(session: State<'_, Arc<WfmSession>>) -> Result<(), CmdError> {
@@ -368,7 +368,7 @@ pub fn debug_seed_unlocked(session: State<'_, Arc<WfmSession>>) -> Result<(), Cm
 /// to stdout between markers so it is captured even without file access).
 #[tauri::command]
 pub fn probe_report(payload: String) -> Result<String, String> {
-    // A literal "/tmp" default put the file at C:\tmp on Windows — a Unix path
+    // A literal "/tmp" default put the file at C:\tmp on Windows - a Unix path
     // silently resolving to the drive root. temp_dir() is %TEMP% there and /tmp
     // here.
     let out = std::env::var("TENNOWORTH_PROBE_OUT").unwrap_or_else(|_| {
@@ -381,7 +381,7 @@ pub fn probe_report(payload: String) -> Result<String, String> {
     // This command is called TWICE by design: once as a checkpoint before the
     // lifecycle test (so evidence survives if close-to-tray kills the window),
     // then again at the end. Label the markers so a consumer reading the first
-    // match doesn't mistake the checkpoint for the whole run — the suffix is
+    // match doesn't mistake the checkpoint for the whole run - the suffix is
     // additive, so greps for the bare marker still match both.
     let kind = if payload.contains("\"done\":true") {
         "FINAL"

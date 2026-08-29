@@ -1,4 +1,4 @@
-// @ts-nocheck — vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
+// @ts-nocheck - vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
 import { describe, it, expect, beforeEach } from 'vitest';
 import {
   saveSnapshot, loadSnapshot, clearSnapshot, diffOwned,
@@ -25,7 +25,7 @@ describe('saveSnapshot / loadSnapshot', () => {
       count: 51, name: 'Vitality', type: 'Mods', slug: 'vitality', subtype: null, kept_lvl: null, leveled: 0,
     });
     expect(got.owned.get('axi_k2_relic|radiant').subtype).toBe('radiant');
-    // kept_lvl must survive the round-trip — losing it disabled the leveled-mod
+    // kept_lvl must survive the round-trip - losing it disabled the leveled-mod
     // hide filter on every reload (the storage v3 bug).
     expect(got.owned.get('steel_charge|').kept_lvl).toBe(5);
     expect(got.ts).toBeGreaterThan(0);
@@ -139,7 +139,7 @@ describe('diffOwned', () => {
 // stores build their payload through buildSnapshotPayload. The export used to
 // re-list the seven record fields itself, and nothing would have caught the
 // drift: add a field to OwnedRecord, wire it into the stores, forget the
-// export, and every export silently loses it — surfacing only when a user
+// export, and every export silently loses it - surfacing only when a user
 // imports on another machine and finds data missing.
 //
 // This pins the round-trip rather than the field list, so it stays honest when
@@ -171,7 +171,7 @@ describe('buildSnapshotPayload', () => {
     expect(exported).toEqual(stored);
   });
 
-  it('carries the callers timestamp, not now() — exports keep the snapshots own', () => {
+  it('carries the callers timestamp, not now() - exports keep the snapshots own', () => {
     expect(buildSnapshotPayload({ invName: 'x', owned: new Map() }, 999).ts).toBe(999);
   });
 });

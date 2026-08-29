@@ -2,7 +2,7 @@
 //! calls. Browser UA, Cloudflare-appeasing headers, envelope unwrapping,
 //! and retry backoff.
 //!
-//! Library crate — no binary. Shared by `wfm-core` (desktop app) and
+//! Library crate - no binary. Shared by `wfm-core` (desktop app) and
 //! `wfm-scrape` (pipeline).
 //!
 //! Scoping rule: share primitives only.
@@ -13,7 +13,7 @@ use std::time::Duration;
 
 /// Project identity for the `User-Agent` header, per warframe.market's API
 /// rules (docs.warframe.market/docs/rules, ToS 2026-06-19 §11): a dedicated,
-/// descriptive UA — project, version, and a way to reach us — is mandatory,
+/// descriptive UA - project, version, and a way to reach us - is mandatory,
 /// and browser spoofing is grounds for a block. Until 2026-08 this crate
 /// impersonated Firefox on the theory that "a generic UA gets a 1015 or a JS
 /// challenge"; probed 2026-08-16 against v1 + v2 (items, statistics, top
@@ -25,19 +25,19 @@ pub const APP_CONTACT: &str = "https://github.com/tennoworth/tennoworth/issues";
 /// Build the project UA for one component: `TennoWorth/0.3.7 (tennoworth-desktop;
 /// +https://tennoworth.app; https://github.com/tennoworth/tennoworth/issues)`.
 /// `component` names the binary (users can run more than one), `version` is
-/// that binary's version — the thing WFM staff would ask us to bump.
+/// that binary's version - the thing WFM staff would ask us to bump.
 pub fn user_agent(component: &str, version: &str) -> String {
     format!("{APP_NAME}/{version} ({component}; +{APP_HOME}; {APP_CONTACT})")
 }
 
-/// This library's own UA — for the pipeline and tests. Binaries that carry a
+/// This library's own UA - for the pipeline and tests. Binaries that carry a
 /// user-visible version (the desktop app) should pass theirs to
 /// [`user_agent`] instead.
 pub fn default_user_agent() -> String {
     user_agent("wfm-client", env!("CARGO_PKG_VERSION"))
 }
 
-/// WFM requires these on every request — Cloudflare blocks without them.
+/// WFM requires these on every request - Cloudflare blocks without them.
 pub const HEADER_CROSSPLAY: &str = "Crossplay";
 pub const HEADER_PLATFORM: &str = "Platform";
 pub const HEADER_LANGUAGE: &str = "Language";
@@ -63,7 +63,7 @@ pub fn wfm_headers(
 
 /// [`wfm_headers`] plus the JWT cookie + Origin/Referer an authed v2 call
 /// needs. WFM's v2 endpoints rely on the cookie the website sets, not the
-/// `Authorization` header — the v2 endpoints want the cookie-style JWT.
+/// `Authorization` header - the v2 endpoints want the cookie-style JWT.
 pub fn wfm_authed_headers(
     builder: reqwest::blocking::RequestBuilder,
     platform: &str,
@@ -75,11 +75,11 @@ pub fn wfm_authed_headers(
         .header("Referer", "https://warframe.market/")
 }
 
-/// WFM account platforms. `pc` covers Steam & Epic. Canonical list — wfm-core
+/// WFM account platforms. `pc` covers Steam & Epic. Canonical list - wfm-core
 /// re-exports this (see `wfm_core::auth::PLATFORMS`).
 pub const PLATFORMS: [&str; 4] = ["pc", "ps4", "xbox", "switch"];
 
-/// Reject a mistyped platform up front — an unknown value would otherwise be
+/// Reject a mistyped platform up front - an unknown value would otherwise be
 /// baked into an encrypted JWT or a scrape run and silently target the wrong
 /// (or a non-existent) WFM market.
 pub fn validate_platform(platform: &str) -> Result<(), String> {
@@ -107,7 +107,7 @@ pub fn unwrap_envelope(body: &serde_json::Value) -> &serde_json::Value {
 /// Backoff before retry attempt `attempt` (0-indexed): 2s, 4s, 6s, ...
 /// Shared so every retry loop in the workspace uses the same curve instead
 /// of each hand-rolling its own (wfm-core's order-mutation retries use this
-/// too — see listing.rs's `send_with_retry`).
+/// too - see listing.rs's `send_with_retry`).
 pub fn retry_backoff(attempt: u32) -> Duration {
     Duration::from_secs(2 * (attempt as u64 + 1))
 }

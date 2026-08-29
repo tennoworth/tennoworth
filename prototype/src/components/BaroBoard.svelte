@@ -2,7 +2,7 @@
   // Baro's manifest, priced.
   //
   // The stock comes from DE's worldState, which publishes it when the visit is
-  // ANNOUNCED — days before he lands. That is the whole reason this exists:
+  // ANNOUNCED - days before he lands. That is the whole reason this exists:
   // the previous source only knew his stock during the 48h he was standing in
   // the relay, by which point the decision has already been made for you.
   //
@@ -27,7 +27,7 @@
      *
      *  There is deliberately no `ducatsHeld`: ducats are account state and an
      *  inventory scan cannot see them. The only honest figure is what the
-     *  user's spare parts would YIELD, derived below — and it must never be
+     *  user's spare parts would YIELD, derived below - and it must never be
      *  presented as a balance, or the scrap plan double-counts it. */
     owned?: Map<string, OwnedRecord> | null;
   } = $props();
@@ -47,8 +47,8 @@
     owned && basket.needed > 0 ? planDucats(candidates, basket.needed) : null,
   );
 
-  // Skip and unpriced rows are collapsed by default. They are not hidden —
-  // "he is selling it and it isn't worth your ducats" is information — but
+  // Skip and unpriced rows are collapsed by default. They are not hidden -
+  // "he is selling it and it isn't worth your ducats" is information - but
   // they should not be the first thing in the list.
   let shown = $derived(
     showAll ? rows : rows.filter((r) => r.verdict === 'flip' || r.verdict === 'hold' || r.verdict === 'thin'),
@@ -65,18 +65,18 @@
 
   const VERDICT_HINT: Record<BaroVerdict, string> = {
     flip: 'Priced above its own 90-day baseline, with enough trades to sell into.',
-    hold: "At or below baseline — his arrival is why. The profit is in holding for the recovery.",
+    hold: "At or below baseline - his arrival is why. The profit is in holding for the recovery.",
     thin: 'Too few trades for the price to mean much. Treat it as a guess.',
     skip: 'The plat it returns does not justify the ducats.',
-    unpriced: 'Cosmetic or bundle — it has no market listing, so there is no price to show.',
+    unpriced: 'Cosmetic or bundle - it has no market listing, so there is no price to show.',
   };
 
   function plat(n: number | null): string {
-    return n == null ? '—' : `${Math.round(n)}p`;
+    return n == null ? '-' : `${Math.round(n)}p`;
   }
 
   function ratio(n: number | null): string {
-    return n == null ? '—' : n.toFixed(2);
+    return n == null ? '-' : n.toFixed(2);
   }
 </script>
 
@@ -86,7 +86,7 @@
     <p class="sub">
       {rows.length} {rows.length === 1 ? 'item' : 'items'} · ranked by plat returned per ducat spent.
       {#if !current}
-        <span class="stale">Stock is from a previous visit — treat it as a preview.</span>
+        <span class="stale">Stock is from a previous visit - treat it as a preview.</span>
       {/if}
     </p>
   </header>
@@ -99,13 +99,13 @@
       <strong>{basket.resale.toLocaleString()}p</strong> at 90-day medians.
       {#if owned}
         Scrapping every spare prime part you hold would yield
-        <strong>{scrapPotential.toLocaleString()}</strong> ducats — enough for
+        <strong>{scrapPotential.toLocaleString()}</strong> ducats - enough for
         <strong>{basket.coveredByScrapping}</strong> of them.
       {/if}
     </p>
     {#if owned}
       <p class="sub">
-        We can't see your ducat balance — it's account state, not an item — so this is what
+        We can't see your ducat balance - it's account state, not an item - so this is what
         your spares are worth, not what you can afford today.
       </p>
     {/if}
@@ -131,8 +131,8 @@
               <Glyph name={glyphFor(market?.path_to_info?.[row.unique ?? '']?.category)} />
               {row.item}
             </th>
-            <td class="num ducat">{row.ducats?.toLocaleString() ?? '—'}</td>
-            <td class="num muted">{row.credits ? `${Math.round(row.credits / 1000)}k` : '—'}</td>
+            <td class="num ducat">{row.ducats?.toLocaleString() ?? '-'}</td>
+            <td class="num muted">{row.credits ? `${Math.round(row.credits / 1000)}k` : '-'}</td>
             <td class="num">{plat(row.price)}</td>
             <td class="num muted">{plat(row.baseline)}</td>
             <td class="num">{ratio(row.platPerDucat)}</td>
@@ -151,7 +151,7 @@
     <details class="scrap">
       <summary>what to scrap for {basket.needed.toLocaleString()} ducats</summary>
       <p class="sub">
-        Ranked by ducats gained per plat given up — scrapping a 65-ducat part
+        Ranked by ducats gained per plat given up - scrapping a 65-ducat part
         worth 18p to save a 45-ducat part worth 3p is the trade to avoid.
       </p>
       <ul class="picks">

@@ -45,7 +45,7 @@
   interface Props {
     open?: boolean;
     rows: InputRow[];
-    /** The app's boot-selected transport — Tauri IPC into wfm-core. */
+    /** The app's boot-selected transport - Tauri IPC into wfm-core. */
     transport: Transport;
     /** Desktop only: a listing call came back `needs_login` / `needs_unlock`.
      *  The app opens the matching auth dialog on top of this modal; the user
@@ -63,7 +63,7 @@
 
   function initialPlanFor(rows: InputRow[]): PlanRow[] {
     return rows.map((r) => {
-      // Prefill from the clamped clearing price, not raw low_sell — the raw
+      // Prefill from the clamped clearing price, not raw low_sell - the raw
       // ask inherits every troll listing (a lone 100p ask on a 10p item, or
       // a 1p undercut on an undercut day). Falls back for older callers.
       const target =
@@ -71,7 +71,7 @@
         : r.low_sell > 0 ? r.low_sell
         : Math.round(r.avg_price);
       // Cap using sellable (owned minus the "Keep copies" reserve), not raw
-      // owned — this is the last line of defense against listing a copy the
+      // owned - this is the last line of defense against listing a copy the
       // user asked to hold back. Falls back to owned for callers that
       // predate the reserve field.
       const sellable = r.sellable ?? r.owned;
@@ -103,7 +103,7 @@
     return r.avg > 0 && (r.platinum > r.avg * 1.3 || r.platinum < r.avg * 0.7);
   }
 
-  // Re-initialize when the modal OPENS — and only then.
+  // Re-initialize when the modal OPENS - and only then.
   //
   // `rows` is read through untrack() deliberately. The caller passes
   // `reviewRowsOverride ?? listableRows.slice(0, 50)`, and that .slice() mints
@@ -126,7 +126,7 @@
   // ---- Live prices (desktop only) ----
   // The prefill comes from the 2-hourly snapshot. One click asks WFM for the
   // ≤5 best ONLINE asks/bids for each selected row's exact tier (rank /
-  // relic refinement) — the price you'd actually be competing with right
+  // relic refinement) - the price you'd actually be competing with right
   // now. Paced at WFM's 3 req/s, so a big batch shows a counter.
   const canLive = isDesktopRuntime();
   type LiveState = 'idle' | 'running' | 'done' | 'error';
@@ -301,11 +301,11 @@
 
       {#if phase === 'review'}
         <p class="lead">
-          Review every row. Default price is the estimated clearing price —
+          Review every row. Default price is the estimated clearing price -
           the lowest live ask, sanity-clamped against the recent median so a
           lone troll listing can't set it (floored at 5p). Rank 0 = unranked;
           set a rank only if you're listing a leveled copy. Listings go up
-          <strong>hidden</strong> — no buyers can see them until you flip
+          <strong>hidden</strong> - no buyers can see them until you flip
           them visible on the results screen (or later, in My orders).
         </p>
 
@@ -329,7 +329,7 @@
               {/if}
             </button>
             {#if liveState === 'done' && live.size > 0}
-              <button class="ghost" onclick={useLiveAll} title="Set every selected row's price to its live lowest online ask (match it — no undercutting).">Match lowest asks</button>
+              <button class="ghost" onclick={useLiveAll} title="Set every selected row's price to its live lowest online ask (match it - no undercutting).">Match lowest asks</button>
             {/if}
             {#if liveState === 'error' && liveError}
               <span class="live-err">{liveError}</span>
@@ -382,7 +382,7 @@
                       bind:value={plan[i].platinum}
                       disabled={!row.include}
                       class:off={row.include && priceOff(row)}
-                      title={row.include && priceOff(row) ? `More than 30% off the 48h average (${row.avg.toFixed(0)}p) — double-check before sending` : undefined}
+                      title={row.include && priceOff(row) ? `More than 30% off the 48h average (${row.avg.toFixed(0)}p) - double-check before sending` : undefined}
                     />
                   </td>
                   <td class="muted">{plat(row.avg)}</td>
@@ -397,14 +397,14 @@
                       {:else}
                         {#if t.low_sell != null}
                           <button class="linkish" onclick={() => useLive(i)} disabled={!row.include}
-                            title={`Online asks: ${t.sells.join(', ')}p — click to price at ${t.low_sell}p`}>{t.low_sell}p</button>
+                            title={`Online asks: ${t.sells.join(', ')}p - click to price at ${t.low_sell}p`}>{t.low_sell}p</button>
                         {:else}<span class="muted" title="No online sellers right now">no ask</span>{/if}
                         <span class="muted"> / </span>
                         {#if t.top_buy != null}
                           <span title={`Online bids: ${t.buys.join(', ')}p`}>{t.top_buy}p</span>
                         {:else}<span class="muted" title="No online buyers right now">no bid</span>{/if}
-                        {#if v === 'above'}<span class="verdict" title="Your price is above the lowest online ask — it won't be the first to sell.">▲</span>{/if}
-                        {#if v === 'below-bid'}<span class="verdict" title="A live buyer is bidding more than your price — you'd be leaving plat on the table.">▼</span>{/if}
+                        {#if v === 'above'}<span class="verdict" title="Your price is above the lowest online ask - it won't be the first to sell.">▲</span>{/if}
+                        {#if v === 'below-bid'}<span class="verdict" title="A live buyer is bidding more than your price - you'd be leaving plat on the table.">▼</span>{/if}
                       {/if}
                     </td>
                   {/if}
@@ -430,7 +430,7 @@
             <span><strong>{selectedCount}</strong> items</span>
             <span><strong>{plat(totalPlat)}</strong> plat total</span>
             {#if selectedCount > 50}
-              <span class="warn">Batch cap is 50 — deselect some.</span>
+              <span class="warn">Batch cap is 50 - deselect some.</span>
             {/if}
           </div>
           <div class="actions">
@@ -442,7 +442,7 @@
         </footer>
       {:else if phase === 'sending'}
         <p class="lead">
-          Posting to warframe.market. ~3 listings/second —
+          Posting to warframe.market. ~3 listings/second -
           this will take ~{Math.ceil((selectedCount * 0.35) + 1)} s.
         </p>
         <div class="spinner">Sending…</div>
@@ -452,9 +452,9 @@
           {#if updatedCount > 0}· <span class="ok">{updatedCount} updated</span>{/if}
           {#if errCount > 0}· <span class="bad">{errCount} failed</span>{/if}.
           {#if visibilityDone}
-            Listings are <strong>visible</strong> — buyers can see them now.
+            Listings are <strong>visible</strong> - buyers can see them now.
           {:else}
-            New listings start <strong>hidden</strong> — no buyers can see them
+            New listings start <strong>hidden</strong> - no buyers can see them
             yet. Flip them visible after you've reviewed the prices.
           {/if}
           Updated orders keep their existing visibility and price history.
@@ -601,8 +601,8 @@
     font-size: 11px;
     margin-left: 6px;
   }
-  /* Leveled gear is a harder constraint than the Keep-copies reserve — the
-     game itself won't let you trade it — so it gets the same warm tint
+  /* Leveled gear is a harder constraint than the Keep-copies reserve - the
+     game itself won't let you trade it - so it gets the same warm tint
      ResultsTable uses for its owned-column note. */
   .leveled-note { color: var(--warn); }
   .kept-note { color: var(--muted); }

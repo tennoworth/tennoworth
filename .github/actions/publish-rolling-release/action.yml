@@ -3,7 +3,7 @@ description: >
   softprops/action-gh-release with the shared policy for TennoWorth's rolling
   "-latest" releases (scrape-latest, web-latest): draft off, prerelease on
   and make_latest off (both keep a rolling build out of the repo's "Latest
-  release" badge — that's reserved for the versioned desktop-v* tags). Per-release
+  release" badge - that's reserved for the versioned desktop-v* tags). Per-release
   tag/name/files/body stay caller-supplied so the two releases can't
   silently diverge on the policy while still describing themselves
   differently.

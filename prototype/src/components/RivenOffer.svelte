@@ -1,9 +1,9 @@
 <script lang="ts">
-  // "Someone offered me 200p — is that good, and should I reroll instead?"
+  // "Someone offered me 200p - is that good, and should I reroll instead?"
   //
   // The panel around this one already refuses to print "this riven is worth N",
   // and that stays true here: the price comes from the USER. What we add is the
-  // arithmetic against DE's weekly distribution for the weapon — where the
+  // arithmetic against DE's weekly distribution for the weapon - where the
   // offer sits, what a reroll would cost, and the odds it improves on what
   // they hold. Every number carries the population it came from.
   import { appraise, rerolledDiscount, type PriceVerdict } from '../lib/riven-appraise';
@@ -19,7 +19,7 @@
     market: Market | null;
   } = $props();
 
-  // Kept as a string so an empty box is empty rather than 0 — an offer of
+  // Kept as a string so an empty box is empty rather than 0 - an offer of
   // "0p" and "no offer entered" are different questions.
   let offerText = $state('');
   let offer = $derived.by(() => {
@@ -98,14 +98,14 @@
 
     {#if offer != null && result.placement && result.verdict}
       <p class="read">
-        <strong>{PLACEMENT_TEXT[result.placement]}</strong> — {VERDICT_TEXT[result.verdict]}.
+        <strong>{PLACEMENT_TEXT[result.placement]}</strong> - {VERDICT_TEXT[result.verdict]}.
       </p>
     {/if}
 
     {#if result.reroll && offer != null}
       <!-- Two facts, no forecast. A reroll draws from the set of POSSIBLE
-           rolls while DE publishes the SOLD ones, so nothing here — not a
-           percentage, not even a "likely" — can say what a new roll will do.
+           rolls while DE publishes the SOLD ones, so nothing here - not a
+           percentage, not even a "likely" - can say what a new roll will do.
            The reader draws the inference. -->
       <p class="read">
         Rerolling costs <strong>{result.reroll.kuva.toLocaleString()}</strong> kuva. This weapon's
@@ -123,7 +123,7 @@
     {#if discount != null && discount > 0.02}
       <p class="note">
         Rerolled rivens on this weapon trade about <strong>{pct(discount)}</strong> below unrolled
-        ones — buyers pay for reroll headroom.
+        ones - buyers pay for reroll headroom.
       </p>
     {/if}
 
