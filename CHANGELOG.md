@@ -30,6 +30,11 @@ release body.
 Nothing is backfilled: releases up to and including 0.3.8 predate this file,
 and their notes live on the GitHub releases themselves.
 
+## 0.6.4 — 2026-08-29
+
+- TennoWorth now uses a cleaner transparent application icon with corrected
+  honeycomb geometry.
+
 ## 0.6.3 — 2026-08-28
 
 **Desktop recovery and account controls are more dependable.**

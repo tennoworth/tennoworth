@@ -1,20 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="TennoWorth">
-  <rect width="64" height="64" rx="14" fill="#0D1116"/>
-  <!-- carbon-lattice mark: graphene-style hex lattice (center cell + six neighbors),
-       stays legible as a cluster of hexagon outlines down to 16px -->
-  <g stroke="#4E9EEA" stroke-width="2" stroke-linecap="round" fill="none">
-    <path d="M40.31,36.80 32.00,41.60 23.69,36.80 23.69,27.20 32.00,22.40 40.31,27.20 Z"/>
-    <path d="M54.71,45.11 46.40,49.91 38.09,45.11 38.09,35.51 46.40,30.71 54.71,35.51 Z"/>
-    <path d="M40.31,53.43 32.00,58.23 23.69,53.43 23.69,43.83 32.00,39.03 40.31,43.83 Z"/>
-    <path d="M25.91,45.11 17.60,49.91 9.29,45.11 9.29,35.51 17.60,30.71 25.91,35.51 Z"/>
-    <path d="M25.91,28.49 17.60,33.29 9.29,28.49 9.29,18.89 17.60,14.09 25.91,18.89 Z"/>
-    <path d="M40.31,20.17 32.00,24.97 23.69,20.17 23.69,10.57 32.00,5.77 40.31,10.57 Z"/>
-    <path d="M54.71,28.49 46.40,33.29 38.09,28.49 38.09,18.89 46.40,14.09 54.71,18.89 Z"/>
-  </g>
-  <g fill="#4E9EEA">
-    <circle cx="32" cy="32" r="2.6"/>
-    <circle cx="32" cy="15.37" r="2.6"/>
-    <circle cx="46.40" cy="23.69" r="2.6"/>
-    <circle cx="17.60" cy="40.31" r="2.6"/>
-  </g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="4 4 56 56" role="img" aria-label="TennoWorth">
+  <path d="M22.5 15.546 27.25 7.318H36.75L41.5 15.546H51L55.75 23.773 51 32l4.75 8.227L51 48.454h-9.5l-4.75 8.228h-9.5l-4.75-8.228H13l-4.75-8.227L13 32 8.25 23.773 13 15.546Z" fill="none" stroke="#4E9EEA" stroke-width="2.7" stroke-linejoin="bevel"/>
+  <path d="M41.5 32 36.75 40.227H27.25L22.5 32l4.75-8.227h9.5ZM41.5 15.546l-4.75 8.227m-9.5 0-4.75-8.227M51 32h-9.5m0 16.454-4.75-8.227m-14.25 8.227 4.75-8.227M13 32h9.5" fill="none" stroke="#4E9EEA" stroke-width="1.55" stroke-linecap="square" stroke-linejoin="miter"/>
+  <path d="M32 28.6 34.944 30.3v3.4L32 35.4l-2.944-1.7v-3.4Z" fill="#4E9EEA"/>
 </svg>
