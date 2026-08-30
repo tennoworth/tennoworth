@@ -787,7 +787,7 @@ fn draw_overlay(
         let price = slot.live_platinum.or(slot.cached_platinum);
         draw_text(
             &context,
-            &price.map_or_else(|| "—".into(), |value| format!("{value}p")),
+            &price.map_or_else(|| "-".into(), |value| format!("{value}p")),
             x + 11.0,
             y + 47.0 * result.scale,
             22.0 * result.scale,
@@ -799,9 +799,9 @@ fn draw_overlay(
         let facts = format!(
             "{}   {}   {}",
             slot.ducats
-                .map_or_else(|| "—d".into(), |value| format!("{value}d")),
+                .map_or_else(|| "-d".into(), |value| format!("{value}d")),
             slot.owned
-                .map_or_else(|| "own —".into(), |value| format!("own {value}")),
+                .map_or_else(|| "own -".into(), |value| format!("own {value}")),
             if slot.live_platinum.is_some() {
                 "live"
             } else {
