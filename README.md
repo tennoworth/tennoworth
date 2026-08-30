@@ -7,7 +7,7 @@ warframe.market prices, Digital Extremes drop tables, vault rotations, usage
 history, and world-state data. It then turns that data into sell priorities,
 set-completion plays, relic expected value, Riven context, and listing health.
 
-- **Use the market browser:** [tennoworth.app](https://tennoworth.app) — search,
+- **Use the market browser:** [tennoworth.app](https://tennoworth.app) - search,
   prices, volume, trends, vault status, Baro, and market context in a static web
   app. No account or install.
 - **Use your own inventory:** install the desktop app from the
@@ -141,7 +141,7 @@ DE public data  ── drop tables + world state ►      └── optional WFM
   ledger, and pending listing plans remain in local application storage.
 - A warframe.market login is optional. Its bearer token is encrypted at rest
   with AES-256-GCM using a PBKDF2-derived key. Remember-on-device stores the
-  derived unlock key—not the passphrase—in the operating system keyring.
+  derived unlock key-not the passphrase-in the operating system keyring.
 - Reward captures stay in memory unless the user explicitly enables local
   diagnostics, which writes recent captures under the app cache directory.
   Nothing is uploaded automatically. Optional live overlay pricing sends

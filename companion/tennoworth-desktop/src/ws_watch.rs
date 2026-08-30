@@ -1,11 +1,11 @@
 //! Instant price-watch alerts from WFM's live order stream.
 //!
-//! The polling checker (watch.rs) stays the reliable path — every 10 minutes
+//! The polling checker (watch.rs) stays the reliable path - every 10 minutes
 //! it evaluates each watch against the real top-of-book, so state converges
 //! even if this stream is down for hours. This thread adds the fast path:
 //! `newOrders` pushes every order anyone posts, and a fresh order that
 //! satisfies a watch notifies in seconds. Same notification, same re-arm
-//! window, same Db bookkeeping as a poll hit — a fire from either path
+//! window, same Db bookkeeping as a poll hit - a fire from either path
 //! re-arms both.
 //!
 //! Behaviour under uncertainty is deliberately conservative: anything that
@@ -139,7 +139,7 @@ fn run(app: AppHandle) {
         let mut cache = WatchCache::fresh(&app.state::<Db>());
         let mut on_order = move |o: NewOrder| {
             let Some(ItemMeta { name: _, slug }) = id_to_item.get(&o.item_id) else {
-                return; // item newer than this connection's catalog — poll path covers it
+                return; // item newer than this connection's catalog - poll path covers it
             };
             let db = app2.state::<Db>();
             cache.refresh_if_stale(&db);
@@ -167,7 +167,7 @@ fn run(app: AppHandle) {
             }
             let _ = app2.emit(EVENT_WATCH_FIRED, &outcome);
             eprintln!("tennoworth: watch stream fired #{} ({})", w.id, body);
-            // The fire stamped last_fired_at — reload so the re-arm window
+            // The fire stamped last_fired_at - reload so the re-arm window
             // holds even inside the cache TTL.
             cache = WatchCache::fresh(&db);
         };

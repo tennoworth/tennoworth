@@ -1,6 +1,6 @@
 // Normalise a point series into a fixed [1, h-1] band so a flat line still
 // draws, returning SVG <polyline points="..."> coordinates. Shared by
-// ResultsTable.svelte and MarketBrowser.svelte's 7-day-median sparklines —
+// ResultsTable.svelte and MarketBrowser.svelte's 7-day-median sparklines -
 // each passes its own viewBox dimensions.
 export function sparklinePoints(arr: number[] | null | undefined, w: number, h: number): string | null {
   if (!Array.isArray(arr) || arr.length < 2) return null;

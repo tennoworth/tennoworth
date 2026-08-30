@@ -1,4 +1,4 @@
-// @ts-nocheck — shared JSON intentionally includes malformed/nonfinite sentinels.
+// @ts-nocheck - shared JSON intentionally includes malformed/nonfinite sentinels.
 import { describe, expect, it } from 'vitest';
 import fixture from '../../../tests/fixtures/usage-weighted-score/cases.json';
 import { scoreRow, sellableQty, usageWeight, usageWeightTier } from './sell-priority';

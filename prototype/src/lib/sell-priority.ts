@@ -12,12 +12,12 @@
 //   base_score   = units_today × price
 //   sell_score   = base_score × usage weight               // bounded 0.75× … 1.25×
 //
-// `patience` flag = true when vol_48h < 3 — these listings exist for the
+// `patience` flag = true when vol_48h < 3 - these listings exist for the
 // item but it barely moves. The flag is the ONLY mitigation for dead
 // items: the volume floor (0.05) deliberately keeps them ranked, so a
 // dead item with a sane clearing price can still appear high when you
 // own many copies. That's why clearingPrice() must never trust a lone
-// aspirational ask (see below) — before the clamp, a vol-1 item with a
+// aspirational ask (see below) - before the clamp, a vol-1 item with a
 // 2,999p fantasy ask ranked #2 of 2,623.
 
 import type { MarketItemEntry } from './types';
@@ -62,13 +62,13 @@ export function usageWeightTier(share: unknown): UsageWeightTier {
   return 'typical';
 }
 
-// "Keep copies" reserve — N copies of every owned item held back from ever
+// "Keep copies" reserve - N copies of every owned item held back from ever
 // being listed, so the user can't sell their only copy of something by
 // accident. 0 (the default) is a no-op; clamped so a stale/edited
 // localStorage value can never go negative.
 //
 // `leveled` = how many owned copies carry XP > 0. Warframe only allows
-// trading UNRANKED gear — any XP makes that specific copy untradeable — so
+// trading UNRANKED gear - any XP makes that specific copy untradeable - so
 // a leveled copy already satisfies the "don't sell my only copy" intent the
 // reserve exists for. Leveled copies and the reserve don't stack: the hold-
 // back is whichever is larger, not their sum.
@@ -78,10 +78,10 @@ export function sellableQty(count: number, reserve: number, leveled = 0): number
 
 // The Spares preset's notion of "sellable": copies you would otherwise
 // dissolve for endo. If you own a RANKED copy of the mod/arcane (kept_lvl > 0
-// — the one you actually use), every unranked copy in the stack is a spare.
+// - the one you actually use), every unranked copy in the stack is a spare.
 // If you don't, keep one to rank up later and the rest are spares. `leveled`
 // copies (XP > 0, untradeable) never count. This is what the "you dissolved
-// 30 Hammer Shot, oh well" threads are about — the tool's cheapest real win.
+// 30 Hammer Shot, oh well" threads are about - the tool's cheapest real win.
 export function spareQty(count: number, keptLvl: number | null, leveled = 0): number {
   const tradeable = Math.max(0, count - leveled);
   const hasRankedCopy = keptLvl !== null && keptLvl > 0;
@@ -100,13 +100,13 @@ export function spareQty(count: number, keptLvl: number | null, leveled = 0): nu
 //    vol-2 items dodged entirely: winding_isles_scene (vol 2, one 100p ask
 //    over a 10p median) ranked #7 at "expected 100p/day". On a thin book
 //    the closed trades are the evidence; cap at 1.5× median. Liquid items
-//    keep their ask — there the book is real information.
+//    keep their ask - there the book is real information.
 // No ask at all → median, then avg, floor 1.
 /**
  * Whether an entry carries any real price signal at all.
  *
  * `clearingPrice` deliberately floors at 1p so a sell score never divides by
- * nothing — but that floor is a lie to any caller asking "what is this worth",
+ * nothing - but that floor is a lie to any caller asking "what is this worth",
  * because an item nobody has ever listed comes back as 1p rather than as
  * unknown. Callers that must not invent a price (relic EV, build-vs-buy) test
  * this first and treat a false as "cannot price", not as "cheap".
@@ -149,14 +149,14 @@ export function scoreRow({ owned, m, usageShare }: SellScoreInput): SellScoreOut
 
 // Where the current price sits inside its 90-day Donchian band answers the
 // timing question the raw sell-score ignores: are you about to sell into a
-// trough or a peak? A price pinned near its 90-day low — e.g. a mod Baro just
-// flooded, which craters ~50% on arrival and recovers over weeks — is a "hold";
+// trough or a peak? A price pinned near its 90-day low - e.g. a mod Baro just
+// flooded, which craters ~50% on arrival and recovers over weeks - is a "hold";
 // near its 90-day high is "peak", the moment to list. Neutral in between, or
 // whenever the band is missing/degenerate (CSV-only rebuilds inherit zeros).
 export type TimingState = 'hold' | 'peak' | 'neutral';
 
 export interface BandSignalInput {
-  // Nullable like the other fields — the function already treats a missing
+  // Nullable like the other fields - the function already treats a missing
   // price as "no signal" via `Number(price) || 0`, same as a missing band.
   price: number | null;
   donchTop?: number | null;
@@ -167,11 +167,11 @@ export interface BandSignalInput {
 
 const HOLD_BELOW = 0.2;
 const PEAK_ABOVE = 0.8;
-// A peak must be corroborated by the live book — "peak" means "list NOW",
+// A peak must be corroborated by the live book - "peak" means "list NOW",
 // and you list into the standing market, not into a price history. Two
 // independent corroborations, either suffices:
 //  - ask-side: a live ask within 2× of the price (real peaks have asks
-//    tracking the trades up; wash-traded "peaks" sit over 1p ask walls —
+//    tracking the trades up; wash-traded "peaks" sit over 1p ask walls -
 //    Goopolla printed 36 "sales" at 12p over 209 live asks at 1p);
 //  - demand-side: a live top buy offer within 2× of the price. This is the
 //    signal a solo seller can't fake cheaply, and it rescues legit peaks
@@ -198,7 +198,7 @@ export function bandSignal({ price, donchTop, donchBot, lowSell, topBuy }: BandS
   return 'neutral';
 }
 
-// "Top picks" strip — the best rows to act on right now, out of everything
+// "Top picks" strip - the best rows to act on right now, out of everything
 // already scored above. `MIN_PICK_SCORE` is a first-pass guess, not a
 // threshold: 20 score points filters out the long tail of items that
 // technically clear sell_score > 0 but aren't worth a user's attention.
@@ -208,7 +208,7 @@ export const MAX_PICKS = 5;
 
 // Only the fields selectPicks actually reads. Generic-constrained so the
 // caller's full row shape (name, slug, timing, clearing_price, …) passes
-// through untouched — the picks UI and the listing modal both need most of
+// through untouched - the picks UI and the listing modal both need most of
 // that shape, so returning a stripped-down copy would just force a second
 // lookup back into `results` for every row a pick surfaces.
 export interface PickCandidate {
@@ -222,7 +222,7 @@ export interface SelectPicksOptions {
   minScore?: number;
 }
 
-// Rows must already be sorted best-first (sell_score desc) — App.svelte's
+// Rows must already be sorted best-first (sell_score desc) - App.svelte's
 // computeResults() does that once for the whole table. This function only
 // filters and truncates: re-sorting here would cost nothing today but would
 // silently paper over a caller that stopped guaranteeing the order, which is

@@ -15,7 +15,7 @@ use crate::sellables::{self, SellableRow};
 use crate::tray::{rebuild_tray, TrayState};
 use crate::wfm_session::{CmdError, WfmSession};
 
-/// The tray labels the last rebuild pushed + the last notification payload —
+/// The tray labels the last rebuild pushed + the last notification payload -
 /// evidence surface for the probe (the GTK menu isn't screenshot-able headless)
 /// and the backing for a later in-window "last scan" recap.
 #[derive(serde::Serialize)]
@@ -37,14 +37,14 @@ pub fn cached_market(cache: State<'_, MarketCache>) -> Option<String> {
 /// (network) call never blocks the webview event loop, mirroring scan_inventory
 /// (reqwest::blocking must not run on an async worker thread). Every network /
 /// HTTP / body failure is swallowed inside `market::refresh` and returns a
-/// no-op RefreshResult — the only Err here is the blocking task failing to run.
+/// no-op RefreshResult - the only Err here is the blocking task failing to run.
 #[tauri::command]
 pub async fn refresh_market(app: AppHandle, cache: State<'_, MarketCache>) -> Result<RefreshResult, String> {
     let dir = cache.dir();
     let result = tauri::async_runtime::spawn_blocking(move || market::refresh(&dir))
         .await
         .map_err(|e| format!("market refresh task failed to run: {e}"))?;
-    // A fresh market snapshot can re-price the tray's sellables — rebuild it
+    // A fresh market snapshot can re-price the tray's sellables - rebuild it
     // (no notification; that's a scan-only surface). Only when the body changed.
     if result.updated {
         rebuild_tray(&app);
@@ -83,7 +83,7 @@ pub fn cached_history(cache: State<'_, MarketCache>) -> Option<String> {
     cache.cached_history()
 }
 
-/// Conditionally refresh history.json from tennoworth.app — same ETag cache
+/// Conditionally refresh history.json from tennoworth.app - same ETag cache
 /// routine as the market snapshot, on demand (the SPA asks when a 1-year
 /// surface is opened, not at boot: it is ~1 MB gzipped and optional).
 #[tauri::command]
@@ -104,14 +104,14 @@ struct LiveTopProgress {
 }
 
 /// Live top-of-book (≤5 best online asks/bids) for each query's exact tier,
-/// straight from WFM v2 `/orders/item/{slug}/top`. Public endpoint — works
+/// straight from WFM v2 `/orders/item/{slug}/top`. Public endpoint - works
 /// logged out; when a login is unlocked its platform is used so the prices
 /// match the market the user actually lists on (else `pc`), and the user's
 /// own orders are reported separately (`own_ask` / `own_bid`) instead of
 /// being counted as competition. Paced at WFM's
 /// 3 req/s ceiling, so 50 items ≈ 17 s: the SPA listens for
 /// [`EVENT_LIVE_TOP_PROGRESS`] and shows a counter. Capped at 100 queries per
-/// call — a whole-inventory sweep is the scraper's job, not the UI's.
+/// call - a whole-inventory sweep is the scraper's job, not the UI's.
 #[tauri::command]
 pub async fn live_top_prices(
     app: AppHandle,
@@ -142,7 +142,7 @@ pub async fn live_top_prices(
 }
 
 /// The ≤20 cheapest matching auctions for one weapon's rivens, straight from
-/// WFM's v1 `/auctions/search` (public endpoint — works logged out; a login
+/// WFM's v1 `/auctions/search` (public endpoint - works logged out; a login
 /// only chooses the market platform). The shared 10/min auction cap is
 /// enforced inside `wfm_core::rivens`, so rapid "Show comps" clicks pace
 /// themselves instead of tripping WFM's budget.

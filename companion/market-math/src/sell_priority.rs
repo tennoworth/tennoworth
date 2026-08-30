@@ -1,7 +1,7 @@
-//! Sell-priority scoring — the "what to sell right now" ranking.
+//! Sell-priority scoring - the "what to sell right now" ranking.
 //!
 //! A faithful Rust mirror of the CLIENT scoring in
-//! `prototype/src/lib/sell-priority.ts` — the canonical sell ranking the SPA
+//! `prototype/src/lib/sell-priority.ts` - the canonical sell ranking the SPA
 //! table already uses. It lives here so the desktop tray + post-scan
 //! notification rank with the SAME formula, giving one Rust source of truth for
 //! both desktop consumers instead of a second, drifting heuristic.
@@ -17,10 +17,10 @@
 //! fall through to the next fallback. [`truthy`] mirrors that exactly.
 
 /// Below this many closed trades / 48 h the book is too thin to trust its ask
-/// as a forecast — the ask clamp and the trend badges share it. Mirrors
+/// as a forecast - the ask clamp and the trend badges share it. Mirrors
 /// `LIQUID_VOL` in sell-priority.ts.
 pub const LIQUID_VOL: f64 = 5.0;
-/// At/under this 48 h volume a listing barely moves — flagged `patience`.
+/// At/under this 48 h volume a listing barely moves - flagged `patience`.
 /// Mirrors `PATIENCE_VOL` in sell-priority.ts.
 const PATIENCE_VOL: f64 = 3.0;
 pub const DEAD_SHARE: f64 = 0.15;
@@ -52,7 +52,7 @@ pub fn usage_weight_tier(usage_share: Option<f64>) -> &'static str {
     }
 }
 
-/// The market fields the score reads — the Rust counterpart of TS's
+/// The market fields the score reads - the Rust counterpart of TS's
 /// `Pick<MarketItemEntry, 'vol' | 'low_sell' | 'avg' | 'median_now' |
 /// 'median_90d'>`. A missing field in JS reads as `0`, so `Default` (all
 /// zeroes) is the "no data" entry.
@@ -87,13 +87,13 @@ fn truthy(x: f64) -> f64 {
 
 /// How many copies are actually listable: owned minus whichever holds back
 /// more, the user's reserve or the count of leveled (XP > 0, untradeable)
-/// copies — they don't stack. Clamped at 0. 1:1 with `sellableQty` in
+/// copies - they don't stack. Clamped at 0. 1:1 with `sellableQty` in
 /// sell-priority.ts.
 pub fn sellable_qty(count: i64, reserve: i64, leveled: i64) -> i64 {
     (count - reserve.max(leveled)).max(0)
 }
 
-/// What a listing would realistically clear at — the sanity-clamped ask. 1:1
+/// What a listing would realistically clear at - the sanity-clamped ask. 1:1
 /// with `clearingPrice` in sell-priority.ts:
 ///  - no live ask → median, else avg, floor 1;
 ///  - a troll undercut (ask < median/3) → the median;
@@ -131,7 +131,7 @@ pub fn clearing_price(m: &PricedEntry) -> f64 {
 /// The neutral sell score for one owned row. `score_row_weighted` applies the
 /// bounded usage multiplier used by product ranking. `owned` is the sellable
 /// quantity (post-reserve). 1:1
-/// with `scoreRow` in sell-priority.ts — the no-market-entry case (TS `!m`
+/// with `scoreRow` in sell-priority.ts - the no-market-entry case (TS `!m`
 /// → `{0, false}`) is the caller's job here (callers skip unresolvable rows).
 pub fn score_row(owned: f64, m: &PricedEntry) -> SellScore {
     score_row_weighted(owned, m, None)

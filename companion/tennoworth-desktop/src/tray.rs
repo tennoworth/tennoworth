@@ -1,6 +1,6 @@
 //! System tray: menu build/rebuild, the post-scan notification, and window
 //! show/rescan handlers wired to tray events. Rebuilds run at startup, after
-//! every inventory scan, and after a market refresh — all three call
+//! every inventory scan, and after a market refresh - all three call
 //! [`rebuild_tray`] so the tray and the post-scan notification never disagree
 //! on what's ranked.
 
@@ -22,7 +22,7 @@ const TRAY_LIMIT: usize = 5;
 
 /// Emitted to the webview when the user closes the window while the tray still
 /// exists, so the SPA can show its once-ever "still running in the tray" toast.
-/// Event name only — the SPA also pins this literal on the TS side (no way to
+/// Event name only - the SPA also pins this literal on the TS side (no way to
 /// gate the two against each other across the language boundary).
 pub const EVENT_TRAY_HINT: &str = "tray-hint";
 
@@ -33,7 +33,7 @@ pub const EVENT_TRAY_HINT: &str = "tray-hint";
 /// so a later window can surface it.
 #[derive(Default)]
 pub struct TrayState {
-    /// The sellable labels ("Name — Np") the last rebuild put in the menu.
+    /// The sellable labels ("Name - Np") the last rebuild put in the menu.
     pub labels: Mutex<Vec<String>>,
     pub last_notification: Mutex<Option<ScanNotification>>,
 }
@@ -49,7 +49,7 @@ fn rank_all(app: &AppHandle) -> Vec<SellableRow> {
 }
 
 /// Build the tray menu from the top sellables: one enabled item per sellable
-/// ("Name — Np", id `sell:<slug>`), a separator, then Open / Rescan / Quit.
+/// ("Name - Np", id `sell:<slug>`), a separator, then Open / Rescan / Quit.
 /// An empty list shows a single disabled hint instead.
 fn build_tray_menu(app: &AppHandle, top: &[SellableRow]) -> tauri::Result<Menu<Wry>> {
     let mut mb = MenuBuilder::new(app);
@@ -58,14 +58,14 @@ fn build_tray_menu(app: &AppHandle, top: &[SellableRow]) -> tauri::Result<Menu<W
         let hint = MenuItem::with_id(
             app,
             "noop",
-            "No sellables yet — scan your inventory",
+            "No sellables yet - scan your inventory",
             false,
             None::<&str>,
         )?;
         sellable_items.push(hint);
     } else {
         for r in top {
-            let label = format!("{} — {}p", r.name, r.price.round() as i64);
+            let label = format!("{} - {}p", r.name, r.price.round() as i64);
             let item =
                 MenuItem::with_id(app, format!("sell:{}", r.slug), label, true, None::<&str>)?;
             sellable_items.push(item);
@@ -87,16 +87,16 @@ fn build_tray_menu(app: &AppHandle, top: &[SellableRow]) -> tauri::Result<Menu<W
 /// The human labels a menu built from `top` shows (for evidence / the probe).
 fn sellable_labels(top: &[SellableRow]) -> Vec<String> {
     if top.is_empty() {
-        return vec!["No sellables yet — scan your inventory".to_string()];
+        return vec!["No sellables yet - scan your inventory".to_string()];
     }
     top.iter()
-        .map(|r| format!("{} — {}p", r.name, r.price.round() as i64))
+        .map(|r| format!("{} - {}p", r.name, r.price.round() as i64))
         .collect()
 }
 
 /// Recompute the ranking and swap the tray menu in. Best-effort at every step:
 /// a menu-build error or a missing tray (init failed / de-scoped) is logged and
-/// swallowed — the window and notifications must keep working regardless. Called
+/// swallowed - the window and notifications must keep working regardless. Called
 /// at startup, after each scan, and after a market refresh. Returns the full
 /// ranked list so a caller (the scan path) can reuse it for the notification.
 pub fn rebuild_tray(app: &AppHandle) -> Vec<SellableRow> {
@@ -118,7 +118,7 @@ pub fn rebuild_tray(app: &AppHandle) -> Vec<SellableRow> {
 }
 
 /// After a successful scan: rebuild the tray off the new snapshot and fire the
-/// post-scan notification — but only when something is actually sellable. No
+/// post-scan notification - but only when something is actually sellable. No
 /// notification on an empty result (build_notification returns None).
 pub fn post_scan_surfaces(app: &AppHandle) {
     let rows = rebuild_tray(app);
@@ -138,7 +138,7 @@ pub fn post_scan_surfaces(app: &AppHandle) {
     }
 }
 
-/// Show, un-minimize, and focus the main window — the tray's "Open" and a
+/// Show, un-minimize, and focus the main window - the tray's "Open" and a
 /// left-click both route here.
 pub(crate) fn show_main_window(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
@@ -168,7 +168,7 @@ fn tray_rescan(app: &AppHandle) {
 
 /// Build and register the system tray. Best-effort: any failure (including the
 /// forced-failure test hook) returns Err, which the caller logs and swallows so
-/// startup never dies on a tray problem — the Linux baseline is window +
+/// startup never dies on a tray problem - the Linux baseline is window +
 /// notifications, tray is a bonus.
 pub fn init_tray(app: &AppHandle) -> tauri::Result<()> {
     // Test hook: force the tray-init failure path so the graceful-degradation
@@ -186,7 +186,7 @@ pub fn init_tray(app: &AppHandle) -> tauri::Result<()> {
         .ok_or(tauri::Error::FailedToReceiveMessage)?;
     TrayIconBuilder::with_id("main")
         .icon(icon)
-        .tooltip("TennoWorth — what to sell right now")
+        .tooltip("TennoWorth - what to sell right now")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id().as_ref() {

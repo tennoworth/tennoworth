@@ -1,24 +1,24 @@
 // Persists the last-processed inventory so a page refresh keeps the table.
 // We only store the resolved owned-items map + metadata (~50 KB for a
-// real inventory), not the raw 2 MB inventory.json — small enough for
+// real inventory), not the raw 2 MB inventory.json - small enough for
 // localStorage and avoids re-resolving on each page load.
 
 // v4: also persist kept_lvl. v3 dropped it, so on every page reload the restored
 // records had kept_lvl===undefined and the leveled-mod hide guard
-// (rec.kept_lvl !== null && rec.kept_lvl >= hideAtLvl) matched nothing — a mod
+// (rec.kept_lvl !== null && rec.kept_lvl >= hideAtLvl) matched nothing - a mod
 // you've leveled into your build reappeared as "safe to sell". Old v2/v3
 // snapshots are silently invalidated.
 //
-// v5: also persist `leveled` (count of owned instances with XP > 0 — copies
+// v5: also persist `leveled` (count of owned instances with XP > 0 - copies
 // Warframe has flagged untradeable). Without the bump, a restored v4 snapshot
 // would read `leveled` as undefined on every row, and `sellableQty` would
 // treat genuinely-leveled gear as fully sellable until the next inventory
-// pull — the same silent-danger shape as the v3→v4 kept_lvl bug, but here it
+// pull - the same silent-danger shape as the v3→v4 kept_lvl bug, but here it
 // risks listing a copy that can't actually be traded. Old v4 snapshots are
 // silently invalidated; reloading the inventory recomputes `leveled` fresh.
 //
 // v6: also persist `rivens` (the parsed riven list from Upgrades[]). The
-// Rivens view needs the fingerprints — extracting them again on reload would
+// Rivens view needs the fingerprints - extracting them again on reload would
 // require the raw 2 MB inventory, which the snapshot deliberately doesn't
 // keep. Persisted unresolved (compat path, no slug) and resolved against the
 // current market at render. Old v5 snapshots are silently invalidated;
@@ -50,7 +50,7 @@ export interface SaveSnapshotInput {
 //
 // The export used to re-list these seven fields itself. Nothing would have
 // caught the drift: add a field to OwnedRecord, wire it into the stores,
-// forget the export, and every export silently loses it — discovered only by
+// forget the export, and every export silently loses it - discovered only by
 // a user importing on another machine and finding data missing.
 export function buildSnapshotPayload(
   { invName, owned, rivens }: SaveSnapshotInput,

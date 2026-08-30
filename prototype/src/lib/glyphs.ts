@@ -4,7 +4,7 @@
 // them: the Fan Content Policy allows game assets only in non-commercial work,
 // which would make the art the first thing to rip out if this project ever
 // changed footing, and a mirrored PNG per item is real disk on the box for a
-// row that is 20px tall. So these are original marks — one per category, not
+// row that is 20px tall. So these are original marks - one per category, not
 // one per item.
 //
 // House style, matching the app's angular theme: 24×24 box, stroke-only,
@@ -12,7 +12,7 @@
 // rounded corners**. They read at 16px, which is the only size that matters.
 //
 // A glyph identifies a KIND of thing. It is never the only carrier of meaning
-// — every row that shows one also shows its name — so a reader who cannot
+// - every row that shows one also shows its name - so a reader who cannot
 // distinguish two marks loses nothing.
 
 export type GlyphName =
@@ -63,7 +63,7 @@ export const GLYPH_PATHS: Record<GlyphName, string> = {
   ducat: 'M9 3 H15 L21 9 V15 L15 21 H9 L3 15 V9 Z M10 10 H14 V14 H10 Z',
   // Credits: a stamped bar with two ledger rules.
   credit: 'M3 6 H21 V18 H3 Z M7 10 H17 M7 14 H13',
-  // Platinum: the trade currency — a faceted lozenge.
+  // Platinum: the trade currency - a faceted lozenge.
   plat: 'M12 3 L20 12 L12 21 L4 12 Z M8 12 H16',
   // Unknown: a plain plate, so a missing mapping still lines up in the column.
   unknown: 'M5 5 H19 V19 H5 Z',
@@ -72,7 +72,7 @@ export const GLYPH_PATHS: Record<GlyphName, string> = {
 /**
  * Map a snapshot category or tag to a glyph.
  *
- * Input is whatever the row carries — `path_to_info.category` ("Warframes",
+ * Input is whatever the row carries - `path_to_info.category` ("Warframes",
  * "Melee") or a WFM tag ("mod", "relic", "prime"). Case and plural are
  * normalised because the two sources disagree on both. Anything unrecognised
  * gets `unknown` rather than a guess: an item wearing the wrong mark is worse
@@ -127,7 +127,7 @@ export function glyphFor(category: string | null | undefined): GlyphName {
  * Pick a glyph from a WFM tag list.
  *
  * Tags are unordered and an item usually carries several ("prime", "set",
- * "warframe"), so the specific ones are tested before the generic — a prime
+ * "warframe"), so the specific ones are tested before the generic - a prime
  * set should read as a set, not as a warframe.
  */
 export function glyphForTags(tags: string[] | undefined): GlyphName {

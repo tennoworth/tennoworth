@@ -12,7 +12,7 @@
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
-    // Tightening, NOT the dead-code gate — knip is (see knip.json). These flag
+    // Tightening, NOT the dead-code gate - knip is (see knip.json). These flag
     // unused LOCALS; every dead-code finding this repo has actually had was an
     // unused EXPORT, which they are structurally blind to. Turning them on
     // produced zero new diagnostics, so they cost nothing and catch nothing
@@ -26,7 +26,7 @@
     // No ambient globals. vitest.config.ts sets `globals: false` and every
     // test imports its describe/it/expect from 'vitest', so enabling
     // vitest/globals here would let a missing import type-check and then
-    // fail at runtime — the one failure class this repo's gates exist for.
+    // fail at runtime - the one failure class this repo's gates exist for.
     "types": []
   },
   "include": ["src/**/*", "src/**/*.svelte"],

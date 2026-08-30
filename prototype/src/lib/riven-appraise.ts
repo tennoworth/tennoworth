@@ -2,14 +2,14 @@
 //
 // WHAT THIS DELIBERATELY DOES NOT DO: guess what a riven is worth from its
 // stats. That needs per-stat roll ranges and a model of which stats buyers
-// want, and we have neither — DE publishes dispositions, not roll ranges. It
+// want, and we have neither - DE publishes dispositions, not roll ranges. It
 // is why no riven price checker is trusted.
 //
 // WHAT IT ALSO NO LONGER DOES: fit a normal distribution to DE's summary
 // statistics. The first version of this module did, and it was wrong in the
 // way that matters. Riven prices are bounded below at zero and heavily
-// right-skewed — a weapon with 90 sales at 10p and 10 at 1,000p has a mean of
-// 109 and a standard deviation of 297 — and a normal fit to those two numbers
+// right-skewed - a weapon with 90 sales at 10p and 10 at 1,000p has a mean of
+// 109 and a standard deviation of 297 - and a normal fit to those two numbers
 // reported a 10p offer as the 37th percentile with a 63% chance that a reroll
 // beats it, and priced the losing outcomes at MINUS 194p. Every one of those
 // numbers is impossible or backwards. Five summary statistics do not identify
@@ -18,7 +18,7 @@
 // So this module reports only what those five numbers actually support: where
 // an offer sits against the landmarks DE gives us (min, median, average, max),
 // how skewed the market is, and what rerolling costs. The price still comes
-// from the USER — an offer they received, or their own estimate.
+// from the USER - an offer they received, or their own estimate.
 
 import type { RivenStatTier } from './types';
 
@@ -66,11 +66,11 @@ export function distributionOf(tier: RivenStatTier | null | undefined): Distribu
 }
 
 /**
- * Ratio of mean to median — how far a few large sales drag the average.
+ * Ratio of mean to median - how far a few large sales drag the average.
  *
  * Above `SKEWED` the average is not a typical price and the median is the
  * number to quote. Riven markets are routinely 3× or worse. The threshold is a
- * product judgement — see `LOWBALL_FRACTION`.
+ * product judgement - see `LOWBALL_FRACTION`.
  */
 export const SKEWED = 1.5;
 
@@ -79,7 +79,7 @@ export function skewOf(dist: Distribution): number | null {
 }
 
 /** Where an offer sits against the landmarks DE actually publishes. No model,
- *  no interpolation — each of these is directly checkable against the feed. */
+ *  no interpolation - each of these is directly checkable against the feed. */
 export type Placement =
   | 'below-observed' //  under the cheapest sale DE saw
   | 'bottom' //          between the minimum and the median
@@ -110,7 +110,7 @@ export type PriceVerdict = 'below' | 'fair' | 'above' | 'outlier';
  * How far under the median an offer has to sit before it is a lowball rather
  * than ordinary haggling.
  *
- * A PRODUCT judgement, not something DE's statistics imply — stated plainly
+ * A PRODUCT judgement, not something DE's statistics imply - stated plainly
  * because the rest of this module is careful about that distinction. Same goes
  * for `SKEWED`. Both are tuneable opinions about presentation; neither is
  * dressed up as a derived quantity.
@@ -137,7 +137,7 @@ export function judgeOffer(price: number, dist: Distribution): PriceVerdict {
  * What can be said about rerolling, which is less than you would like.
  *
  * There is no probability here and no direction either. An earlier version
- * returned a "lean" — likely gains / likely loses / coin flip — and that was
+ * returned a "lean" - likely gains / likely loses / coin flip - and that was
  * still a probability claim wearing different clothes: a reroll draws from the
  * set of POSSIBLE rolls while DE publishes the SOLD ones, so no comparison
  * against the sold median establishes what a new roll will do. The band width
@@ -167,7 +167,7 @@ export function rerollRead(price: number, dist: Distribution, rerolls: number): 
 /**
  * How much less a rerolled riven fetches than an unrolled one on this weapon.
  *
- * Straight out of DE's feed, which splits `rerolled` — and nothing in the
+ * Straight out of DE's feed, which splits `rerolled` - and nothing in the
  * ecosystem surfaces it. Buyers pay for reroll headroom, so an unrolled riven
  * of the same apparent quality is usually worth more. Medians, not means,
  * because these markets are skewed. Null when either side is too thin.
@@ -189,10 +189,10 @@ export interface Appraisal {
   placement: Placement | null;
   verdict: PriceVerdict | null;
   reroll: RerollRead | null;
-  /** True when the average is dragged well above the median — the average is
+  /** True when the average is dragged well above the median - the average is
    *  then not a typical price and the UI must lead with the median. */
   skewed: boolean;
-  /** Notes the UI must show alongside any number — the limits of the model. */
+  /** Notes the UI must show alongside any number - the limits of the model. */
   caveats: string[];
 }
 
@@ -219,7 +219,7 @@ export function appraise(
       skewed: false,
       caveats:
         pop > 0
-          ? [`Only ${pop} trade${pop === 1 ? '' : 's'} observed — too few to place a price against.`]
+          ? [`Only ${pop} trade${pop === 1 ? '' : 's'} observed - too few to place a price against.`]
           : ['DE published no trades for this weapon and reroll state this week.'],
     };
   }
@@ -228,12 +228,12 @@ export function appraise(
   const skewed = skew != null && skew >= SKEWED;
 
   const caveats = [
-    `Based on ${dist.pop} trades DE observed this week — the weapon's market, not this riven's stats.`,
+    `Based on ${dist.pop} trades DE observed this week - the weapon's market, not this riven's stats.`,
     'Stat desirability is not modelled; a god roll and a junk roll sit in the same band.',
   ];
   if (skewed) {
     caveats.push(
-      `A few large sales pull the average (${dist.avg.toFixed(0)}p) well above the median (${dist.median.toFixed(0)}p) — read the median.`,
+      `A few large sales pull the average (${dist.avg.toFixed(0)}p) well above the median (${dist.median.toFixed(0)}p) - read the median.`,
     );
   }
 

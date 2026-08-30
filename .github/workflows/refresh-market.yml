@@ -8,8 +8,8 @@ name: refresh-market
 # Each run takes ~30-45 minutes (~3800 items × 2 calls × 0.34 s pacing).
 #
 # Rust-only since 2026-08 (Python retired): it downloads the CI-published
-# `scrape-latest` binary (the same one pull-scrape.sh installs on the box) —
-# no Rust toolchain, no Python — and runs the shared deploy/run-scrape.sh
+# `scrape-latest` binary (the same one pull-scrape.sh installs on the box) -
+# no Rust toolchain, no Python - and runs the shared deploy/run-scrape.sh
 # entrypoint, which does the scrape + truncation guard + market.json build.
 
 on:
@@ -44,7 +44,7 @@ jobs:
             echo "downloaded wfm-scrape did not run (corrupt / wrong arch?)" >&2; exit 1
           }
 
-      # One scrape entrypoint shared with the self-host systemd timer —
+      # One scrape entrypoint shared with the self-host systemd timer -
       # scrape, truncation guard (row-count floor + 25%-shrinkage check
       # against the checked-out prior CSV), and the full-shape rebuild all
       # live in deploy/run-scrape.sh so the logic can't drift between the
@@ -62,11 +62,11 @@ jobs:
         run: |
           git config user.name  "wfm-bot"
           git config user.email "wfm-bot@users.noreply.github.com"
-          # wfm_results.csv is gitignored (scrape output, huge diffs) — adding an
+          # wfm_results.csv is gitignored (scrape output, huge diffs) - adding an
           # ignored path here would fail the step.
           git add prototype/public/market.json prototype/public/wfstat-catalog.json
           if git diff --cached --quiet; then
-            echo "No changes — nothing to commit."
+            echo "No changes - nothing to commit."
             exit 0
           fi
           ts=$(date -u +'%Y-%m-%dT%H:%MZ')

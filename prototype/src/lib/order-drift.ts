@@ -1,4 +1,4 @@
-// Order drift — "the market moved under your live listings".
+// Order drift - "the market moved under your live listings".
 //
 // A listing is priced once and then forgotten. The book keeps moving, so an
 // ask that was competitive last week is now either stranded above the market
@@ -6,7 +6,7 @@
 // the table). This module answers which of your orders have drifted far enough
 // to be worth a PATCH.
 //
-// It compares your ask against `clearingPrice(m)` — the SAME clamp the sell
+// It compares your ask against `clearingPrice(m)` - the SAME clamp the sell
 // score uses, deliberately. The raw lowest ask is one number any account can
 // set for free, and chasing it is how you get talked into undercutting a troll
 // 1p listing. clearingPrice already refuses to trust a lone aspirational ask on
@@ -16,7 +16,7 @@
 // KNOWN LIMIT, stated because it bounds what this can honestly claim: the
 // market snapshot does not say whose order is whose, so `low_sell` INCLUDES
 // your own listing. If you are the lowest ask, your price and the reference
-// price are the same number and no drift is reported — which is the right
+// price are the same number and no drift is reported - which is the right
 // answer (you are already competitive), but it is a consequence of the data,
 // not a judgement. It also means drift can only ever say "relative to the last
 // snapshot", which lags by up to the scrape interval.
@@ -40,7 +40,7 @@ export interface DriftInput {
   slug: string;
   name: string;
   platinum: number;
-  /** Only 'sell' orders are analysed — see `selectDrifted`. */
+  /** Only 'sell' orders are analysed - see `selectDrifted`. */
   type?: 'sell' | 'buy';
   m: Pick<MarketItemEntry, 'vol' | 'low_sell' | 'avg' | 'median_now' | 'median_90d'> | null | undefined;
 }
@@ -59,7 +59,7 @@ export interface DriftRow {
   delta_pct: number;
   kind: DriftKind;
   /** Below the liquidity floor the book is thin enough that the suggestion is
-   *  weak evidence — the UI de-emphasises rather than hides, matching how the
+   *  weak evidence - the UI de-emphasises rather than hides, matching how the
    *  sell picks treat the same threshold. */
   thin: boolean;
 }
@@ -102,7 +102,7 @@ export function selectDrifted(orders: readonly DriftInput[], limit = 25): DriftR
     });
   }
 
-  // Biggest absolute plat swing first — that is the order in which repricing
+  // Biggest absolute plat swing first - that is the order in which repricing
   // actually pays, and it keeps a 200p stranded listing above a 4p nudge.
   rows.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
   return rows.slice(0, limit);

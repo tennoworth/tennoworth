@@ -36,7 +36,7 @@ export interface OwnedRiven {
   pol: string | null;
   buffs: RivenFingerprintStat[];
   curses: RivenFingerprintStat[];
-  /** A challenge instead of stats — the riven is veiled. */
+  /** A challenge instead of stats - the riven is veiled. */
   veiled: boolean;
 }
 
@@ -58,7 +58,7 @@ function parseFingerprint(raw: string | null | undefined): RivenFingerprint {
     const parsed = JSON.parse(raw) as RivenFingerprint;
     return parsed && typeof parsed === 'object' ? parsed : {};
   } catch {
-    // A malformed fingerprint reads as an empty riven (veiled, unlisted) —
+    // A malformed fingerprint reads as an empty riven (veiled, unlisted) -
     // better than crashing the whole inventory view over one bad mod.
     return {};
   }
@@ -112,7 +112,7 @@ export interface ResolvedRivenWeapon {
   disposition: number;
 }
 
-/** `game_ref → weapon` index over `market.rivens.weapons` — the one join the
+/** `game_ref → weapon` index over `market.rivens.weapons` - the one join the
  *  whole view uses, built once per render. */
 export function buildWeaponIndex(
   surface: RivenSurface | null | undefined,
@@ -189,12 +189,12 @@ export function formatRivenStat(
 }
 
 /** DE's internal polarity codes → the glyph riven tools use. The full table:
- *  AP_ATTACK=Madurai(V), AP_DEFENSE=Vazarin(D), AP_TACTIC=Naramon(—),
+ *  AP_ATTACK=Madurai(V), AP_DEFENSE=Vazarin(D), AP_TACTIC=Naramon(-),
  *  AP_REGEN=Zenurik(Y), AP_NARAMON=Unairu(U), AP_PENJAGA(P), AP_UMBRA(◈). */
 const POLARITY_SYMBOLS: Record<string, string> = {
   AP_ATTACK: 'V',
   AP_DEFENSE: 'D',
-  AP_TACTIC: '—',
+  AP_TACTIC: '-',
   AP_REGEN: 'Y',
   AP_NARAMON: 'U',
   AP_PENJAGA: 'P',
@@ -232,7 +232,7 @@ interface AuctionStatLike {
 }
 
 /** Signed-stat Jaccard similarity, from 0–100. This compares which effects the
- * two Rivens have, not roll strength—the inventory fingerprint alone cannot
+ * two Rivens have, not roll strength-the inventory fingerprint alone cannot
  * supply a final display value honestly. */
 export function rivenSimilarity(
   riven: Pick<OwnedRiven, 'buffs' | 'curses'>,

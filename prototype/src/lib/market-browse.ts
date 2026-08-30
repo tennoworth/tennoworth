@@ -1,6 +1,6 @@
 // Pure data-shaping for the no-inventory landing browser (MarketBrowser.svelte).
-// Everything here reads ONLY the baked market.json snapshot — no fetches, no
-// DOM — so the search / movers / vault joins stay unit-testable in isolation.
+// Everything here reads ONLY the baked market.json snapshot - no fetches, no
+// DOM - so the search / movers / vault joins stay unit-testable in isolation.
 
 import type { Market, MarketItemEntry, RivenDispoChange, VaultStatus } from './types';
 import { usageFor } from './demand';
@@ -44,7 +44,7 @@ export function buildBrowseIndex(market: Market | null | undefined): BrowseIndex
   const items = market?.items;
   if (catalog) {
     for (const [nameLower, slug] of Object.entries(catalog)) {
-      // Only surface items we can actually price — search is a sell tool, an
+      // Only surface items we can actually price - search is a sell tool, an
       // un-priceable quest key is noise.
       if (items && !items[slug]) continue;
       const name = titleCase(nameLower);
@@ -59,7 +59,7 @@ export function buildBrowseIndex(market: Market | null | undefined): BrowseIndex
 }
 
 // Δ% vs the 90-day baseline. null when it can't be computed meaningfully:
-// missing median_now, or a missing/zero median_90d (dividing by it is junk —
+// missing median_now, or a missing/zero median_90d (dividing by it is junk -
 // pre-split snapshots and brand-new items land here).
 export function itemDeltaPct(e: MarketItemEntry | null | undefined): number | null {
   if (!e) return null;
@@ -105,7 +105,7 @@ export function searchItems(
   // market.json: 0.2 ms median / 0.3 ms max per keystroke over its 2,549
   // entries. A prefix index would save a fraction of a millisecond and add a
   // structure to keep in sync with the snapshot. (The ~17k figure that makes
-  // this look expensive is the wfstat RESOLVER catalog, a different thing —
+  // this look expensive is the wfstat RESOLVER catalog, a different thing -
   // this iterates market items.)
   //
   // Rank prefix matches above mid-word substring matches, then by volume, so
@@ -133,7 +133,7 @@ export interface MoversOpts {
 // Top risers/fallers by Δ% vs the 90-day median. Two floors keep the flagship
 // list honest: the volume floor drops thin books (a 200% "move" on 3 trades is
 // noise), and the price floor drops cheap junk (a ±100% swing on a 3p relic
-// isn't worth plat — the move has to be on an item where plat is at stake).
+// isn't worth plat - the move has to be on an item where plat is at stake).
 export function topMovers(
   market: Market | null | undefined,
   index: BrowseIndex,
@@ -165,7 +165,7 @@ export function topMovers(
 }
 
 // Highest-value currently-vaulted items (vault_status × items). Only 'vaulted'
-// — 'vaulting-soon' and 'available' are different signals.
+// - 'vaulting-soon' and 'available' are different signals.
 export function vaultedTop(
   market: Market | null | undefined,
   index: BrowseIndex,
@@ -186,7 +186,7 @@ export function vaultedTop(
 }
 
 /** Disposition changes from the snapshot's rolling log, newest first, capped.
- *  Raises and cuts are both kept — DE says it only raises now, but if a cut
+ *  Raises and cuts are both kept - DE says it only raises now, but if a cut
  *  ever ships, hiding it would be the wrong call. */
 export function dispositionChanges(market: Market | null | undefined, limit = 12): RivenDispoChange[] {
   const ch = market?.rivens?.changes;
@@ -208,8 +208,8 @@ export interface HandoffRow extends BrowseRow {
 }
 
 // Deterministic picks so the strip reads the same on every load: the three
-// highest-priced liquid rows (≥ 10 trades / 48h) — one vaulted set if there is
-// one, then the best risers — with owned counts 3 · 1 · 2. Everything is
+// highest-priced liquid rows (≥ 10 trades / 48h) - one vaulted set if there is
+// one, then the best risers - with owned counts 3 · 1 · 2. Everything is
 // derived from the snapshot except the owned counts, which the caption labels
 // as sample values.
 export function handoffSample(

@@ -1,6 +1,6 @@
 [Unit]
 Description=Record and notify that %i failed
-# No OnFailure of its own — an alert handler that alerts about itself failing
+# No OnFailure of its own - an alert handler that alerts about itself failing
 # is a loop. alert.sh is written to always exit 0 for the same reason.
 
 [Service]

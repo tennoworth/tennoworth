@@ -1,4 +1,4 @@
-//! warframe.market's live order stream — `wss://ws.warframe.market/socket`.
+//! warframe.market's live order stream - `wss://ws.warframe.market/socket`.
 //!
 //! WFM's API rules explicitly prefer the WebSocket to tight polling. The
 //! public `newOrders` stream pushes every order anyone posts (~a few per
@@ -8,7 +8,7 @@
 //!
 //! Parsing and matching are pure and tested against captured live frames;
 //! [`run_new_orders_stream`] is the thin blocking shell (one connection
-//! attempt per call — the caller owns reconnect policy).
+//! attempt per call - the caller owns reconnect policy).
 
 use std::net::TcpStream;
 use std::time::Duration;
@@ -32,7 +32,7 @@ pub struct NewOrder {
     /// Absent on rankless items.
     pub rank: Option<u32>,
     pub subtype: Option<String>,
-    /// WFM's 24-hex item id — the catalog maps it to a slug.
+    /// WFM's 24-hex item id - the catalog maps it to a slug.
     pub item_id: String,
     pub user_name: Option<String>,
     pub user_status: Option<String>,
@@ -43,7 +43,7 @@ pub struct NewOrder {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WsEvent {
     NewOrder(NewOrder),
-    /// `cmd/subscribe/newOrders:ok` — the subscription is live.
+    /// `cmd/subscribe/newOrders:ok` - the subscription is live.
     SubscribeOk,
     /// Periodic `reports/online` heartbeat; useful as a liveness signal.
     Online { connections: u64 },
@@ -52,7 +52,7 @@ pub enum WsEvent {
 }
 
 /// Parse one text frame. Never errors: an unknown or malformed frame is
-/// [`WsEvent::Other`] — the stream must survive WFM adding routes.
+/// [`WsEvent::Other`] - the stream must survive WFM adding routes.
 pub fn parse_ws_event(text: &str) -> WsEvent {
     let Ok(v) = serde_json::from_str::<serde_json::Value>(text) else {
         return WsEvent::Other;
@@ -100,7 +100,7 @@ pub fn parse_ws_event(text: &str) -> WsEvent {
 ///   - tier equality with the same defaults the poll uses (absent rank = 0,
 ///     absent subtype = "").
 ///
-/// Hidden orders never match — no buyer can act on them either.
+/// Hidden orders never match - no buyer can act on them either.
 pub fn order_matches_watch(
     o: &NewOrder,
     watch_side: &str,
@@ -129,13 +129,13 @@ pub fn order_matches_watch(
 /// missed heartbeats plus slack means real trouble, not a quiet minute.
 pub const SILENCE_TIMEOUT: Duration = Duration::from_secs(180);
 
-/// Read-poll granularity — how often the stop check runs on a quiet socket.
+/// Read-poll granularity - how often the stop check runs on a quiet socket.
 const READ_TICK: Duration = Duration::from_secs(5);
 
-/// Connect, subscribe to `newOrders` for `platform` (crossplay on — matching
+/// Connect, subscribe to `newOrders` for `platform` (crossplay on - matching
 /// filters afterwards), and deliver every parsed [`NewOrder`] to `on_order`
 /// until the socket dies or `stop()` returns true. Returns Ok(()) on a
-/// requested stop, Err on any connection failure — the caller decides
+/// requested stop, Err on any connection failure - the caller decides
 /// backoff and retry. Blocking; run it on a dedicated thread.
 pub fn run_new_orders_stream(
     platform: &str,
@@ -186,7 +186,7 @@ pub fn run_new_orders_stream(
                 if e.kind() == std::io::ErrorKind::WouldBlock
                     || e.kind() == std::io::ErrorKind::TimedOut =>
             {
-                continue; // quiet tick — loop to re-check stop/silence
+                continue; // quiet tick - loop to re-check stop/silence
             }
             Err(e) => return Err(e).context("ws read"),
         };

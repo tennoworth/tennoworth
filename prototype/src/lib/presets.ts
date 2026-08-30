@@ -14,15 +14,15 @@ export interface Preset {
   vaultOnly?: boolean;
   ducatsOnly?: boolean;
   minVol?: number; // hard per-preset liquidity floor (Trending uses it)
-  minMedian?: number; // 90d-baseline price floor — a +1100% Δ on a 1p fish is noise or wash-trading, not a mover
-  /** Restrict to these row types (any of). Unlike `typeFilter` — the user's
-   *  single-type dropdown — a preset can span several (Spares: Mods + Arcanes). */
+  minMedian?: number; // 90d-baseline price floor - a +1100% Δ on a 1p fish is noise or wash-trading, not a mover
+  /** Restrict to these row types (any of). Unlike `typeFilter` - the user's
+   *  single-type dropdown - a preset can span several (Spares: Mods + Arcanes). */
   typesAny?: string[];
   /** Spares mode: rows are duplicate mods/arcanes, and "sellable" means the
    *  copies you'd otherwise dissolve (see `spareQty`), not owned − reserve. */
   sparesOnly?: boolean;
   /** Hold/Sell mode: only rows the advisor has a verdict for (calendar-dated
-   *  primes) — see `lib/advisor.ts`. */
+   *  primes) - see `lib/advisor.ts`. */
   adviceOnly?: boolean;
   defaultSort?: { key: string; dir: number };
 }
@@ -35,7 +35,7 @@ export const PRESETS: Record<string, Preset> = {
   },
   spares: {
     minPrice: 3, hideAtLvl: 11, typeFilter: 'all', activeTags: [],
-    label: 'Spares', hint: 'duplicate mods & arcanes worth ≥ 3p — sell these instead of dissolving them (keeps one unless you own a ranked copy)',
+    label: 'Spares', hint: 'duplicate mods & arcanes worth ≥ 3p - sell these instead of dissolving them (keeps one unless you own a ranked copy)',
     columns: ['name', 'owned', 'low_sell', 'volume_48h', 'sell_score', 'potential_plat'],
     typesAny: ['Mods', 'Arcanes'],
     sparesOnly: true,
@@ -46,7 +46,7 @@ export const PRESETS: Record<string, Preset> = {
     label: 'Ducats', hint: 'prime parts worth feeding to Baro (ducats = his currency)',
     columns: ['name', 'owned', 'sell_score', 'low_sell', 'volume_48h', 'ducats', 'plat_per_100d'],
     // Rank by plat-per-100-ducats ASCENDING: lowest plat value per ducat =
-    // worth more fed to Baro than sold on WFM. (Nulls — non-ducat rows — sink.)
+    // worth more fed to Baro than sold on WFM. (Nulls - non-ducat rows - sink.)
     defaultSort: { key: 'plat_per_100d', dir: 1 },
     ducatsOnly: true,
   },
@@ -66,7 +66,7 @@ export const PRESETS: Record<string, Preset> = {
   },
   holdsell: {
     minPrice: 0, hideAtLvl: 11, typeFilter: 'all', activeTags: [],
-    label: 'Hold / Sell', hint: 'calendar-timed advice for your primes — release decay, Resurgence floods, post-vault ramps; hover a chip for the numbers',
+    label: 'Hold / Sell', hint: 'calendar-timed advice for your primes - release decay, Resurgence floods, post-vault ramps; hover a chip for the numbers',
     columns: ['name', 'owned', 'advice', 'low_sell', 'medians_7d', 'volume_48h', 'potential_plat'],
     adviceOnly: true,
     defaultSort: { key: 'advice', dir: -1 },
@@ -88,7 +88,7 @@ export interface PresetFilterValues {
 }
 
 /** What the raw filter `$state` should be set to when the user clicks
- * preset `name` — `null` for an unknown name. */
+ * preset `name` - `null` for an unknown name. */
 export function presetFilterValues(name: string): PresetFilterValues | null {
   const p = PRESETS[name];
   if (!p) return null;
@@ -100,7 +100,7 @@ export function presetFilterValues(name: string): PresetFilterValues | null {
   };
 }
 
-/** Whether the current hand-set filters still match preset `name` — used to
+/** Whether the current hand-set filters still match preset `name` - used to
  * null out the active-preset selection the moment the user diverges from it
  * by editing a slider/dropdown/chip directly. */
 export function presetStillMatches(name: string, current: PresetFilterValues): boolean {

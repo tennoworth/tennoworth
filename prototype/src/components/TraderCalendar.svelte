@@ -2,7 +2,7 @@
   // Dated price shocks, soonest first.
   //
   // An unvaulting is the most expensive surprise in prime trading and it is
-  // announced days ahead in worldState — the app just never read it. Rows that
+  // announced days ahead in worldState - the app just never read it. Rows that
   // touch something the user holds are marked; rows whose reach we cannot
   // determine say so rather than reading as "this doesn't affect you".
   import { buildCalendar, type CalendarItem } from '../lib/calendar-feed';
@@ -30,7 +30,7 @@
     event: 'unknown',
   };
 
-  /** "in 3d", "in 4h", "18h left" — relative, because every one of these is a
+  /** "in 3d", "in 4h", "18h left" - relative, because every one of these is a
    *  deadline and an absolute date makes the reader do the arithmetic. */
   function when(item: CalendarItem): string {
     const start = Date.parse(item.at);

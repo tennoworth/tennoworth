@@ -2,20 +2,20 @@
 // against the market.set_to_parts map (which the scraper bakes from the
 // warframestat parent walk). Three reco kinds, in display priority:
 //
-//   1. `near-complete` — missing at most 2 required component units.
+//   1. `near-complete` - missing at most 2 required component units.
 //      Action: buy the missing part(s), sell as a full set.
 //      Uplift = set_low_sell − missing-part asks − owned-part asks.
 //      Worth surfacing when that ask-to-ask uplift is positive.
 //
-//   2. `complete-with-extras` — own every part AND extras of one or more.
+//   2. `complete-with-extras` - own every part AND extras of one or more.
 //      Each "extra copy" of a part is sellable as that part.
 //      Headline: how much plat the extras add up to at low_sell.
 //
-//   3. `extras` — own multiple copies of some parts of a NON-complete set.
-//      Just count the duplicates and their plat — no set-flip story.
+//   3. `extras` - own multiple copies of some parts of a NON-complete set.
+//      Just count the duplicates and their plat - no set-flip story.
 //
 // Returns an array sorted by `net_plat` desc, capped at `limit`. Pure
-// function — easy to unit test, no Svelte state.
+// function - easy to unit test, no Svelte state.
 
 import type { Market, OwnedRecord } from './types';
 
@@ -55,7 +55,7 @@ export function deriveSetRecos(
   if (!sets || !owned) return [];
 
   // Build a slug -> count map from owned. Skip relic refinements
-  // (subtyped keys) — they aren't part of a prime SET.
+  // (subtyped keys) - they aren't part of a prime SET.
   const ownedBySlug = new Map<string, number>();
   for (const rec of owned.values()) {
     if (rec.subtype) continue;
@@ -105,7 +105,7 @@ export function deriveSetRecos(
     if (complete) {
       // Only surface when there's actually something to list. A complete
       // set with no spares produces net_plat = 0 and a meaningless
-      // "plus 0 spare blueprints" caption — dropping it keeps the card
+      // "plus 0 spare blueprints" caption - dropping it keeps the card
       // honest. The user already has the set; if they wanted to know it
       // exists they'd check the in-game inventory, not this dashboard.
       if (extraCopies > 0) {

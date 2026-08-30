@@ -36,6 +36,6 @@ describe('ledger', () => {
     expect(describeItems(t('sale', 1, 1, [g('Primed Flow'), g('Lith C5 Relic', 3)]))).toBe('Primed Flow, Lith C5 Relic ×3');
     expect(describeItems(t('purchase', 1, 1, [r('Ash Prime Blueprint', 2)]))).toBe('Ash Prime Blueprint ×2');
     expect(describeItems(t('trade', 0, 1, [g('A'), r('B')]))).toBe('A');
-    expect(describeItems(t('sale', 0, 1, []))).toBe('—');
+    expect(describeItems(t('sale', 0, 1, []))).toBe('-');
   });
 });

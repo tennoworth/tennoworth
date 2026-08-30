@@ -12,7 +12,7 @@
   import Toast from './Toast.svelte';
 
   interface Props {
-    /** Price snapshot — powers the item search and the "now ~Xp" hint. */
+    /** Price snapshot - powers the item search and the "now ~Xp" hint. */
     market?: Market | null;
   }
   let { market = null }: Props = $props();
@@ -141,7 +141,7 @@
   }
 
   function status(w: Watch): { label: string; cls: string } {
-    if (w.last_price == null) return { label: '—', cls: 'muted' };
+    if (w.last_price == null) return { label: '-', cls: 'muted' };
     const hit = w.side === 'sell' ? w.last_price <= w.threshold : w.last_price >= w.threshold;
     return hit ? { label: 'satisfied', cls: 'good' } : { label: 'waiting', cls: 'muted' };
   }
@@ -168,7 +168,7 @@
     <div class="pick">
       <input
         type="text"
-        placeholder="Item to watch — try “primed flow”, “ash prime set”…"
+        placeholder="Item to watch - try “primed flow”, “ash prime set”…"
         bind:value={query}
         oninput={() => { if (picked && query !== picked.name) picked = null; }}
         aria-label="Item to watch"
@@ -216,7 +216,7 @@
               <td>{w.name}{#if w.subtype}<span class="muted"> · {w.subtype}</span>{/if}</td>
               <td class="mono">{w.side === 'sell' ? 'ask ≤' : 'bid ≥'} {w.threshold}p</td>
               <td class="mono" title={o && o.price == null ? 'No online orders on that side right now' : undefined}>
-                {#if w.last_price != null}{w.last_price}p{:else}—{/if}
+                {#if w.last_price != null}{w.last_price}p{:else}-{/if}
                 <span class="muted"> · {ago(w.last_checked_at)}</span>
               </td>
               <td class={st.cls}>{st.label}</td>

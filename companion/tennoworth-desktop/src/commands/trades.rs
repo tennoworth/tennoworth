@@ -16,7 +16,7 @@ pub fn list_trades(db: State<'_, Db>, limit: Option<i64>) -> Result<Vec<TradeRow
 pub struct EeLogStatus {
     /// The EE.log path being tailed, or null when the game's log could not be
     /// found (game never run on this machine, non-Steam install, custom
-    /// prefix) — the SPA explains the `TENNOWORTH_EELOG` override.
+    /// prefix) - the SPA explains the `TENNOWORTH_EELOG` override.
     pub path: Option<String>,
     pub auto_close: bool,
 }

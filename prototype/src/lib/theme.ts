@@ -1,4 +1,4 @@
-// Theme = one LOOK (yorha — token family + structural CSS, `html[data-look]`)
+// Theme = one LOOK (yorha - token family + structural CSS, `html[data-look]`)
 // × a MODE (light/dark, `html[data-mode]`). app.css keys every token block off
 // those two attributes; nothing else in the app reads them.
 //
@@ -7,7 +7,7 @@
 // because a large amount of structural CSS is scoped by it.
 //
 // The mode attribute carries the RESOLVED mode ('light' | 'dark'), never
-// 'system' — so app.css needs one dark block and no prefers-color-scheme
+// 'system' - so app.css needs one dark block and no prefers-color-scheme
 // duplicates. Resolving 'system' (and following it live) is this module's job.
 // public/theme-boot.js re-implements the same resolution inline for first
 // paint; if the rules here change, change them there too.
@@ -43,7 +43,7 @@ export function applyTheme(mode: Mode): void {
   if (el.dataset.mode !== mode) el.dataset.mode = mode;
 }
 
-/** The persisted mode preference, validated — unknown/absent → the default. */
+/** The persisted mode preference, validated - unknown/absent → the default. */
 export function readThemePref(store: StateStore): ModePref {
   const mode = store.getSetting('theme.mode');
   return isModePref(mode) ? mode : DEFAULT_MODE_PREF;
@@ -52,7 +52,7 @@ export function readThemePref(store: StateStore): ModePref {
 /**
  * Apply the stored preference and keep following the OS while the pref is
  * 'system'. Returns a small controller the switcher drives; `setModePref`
- * persists through the store (never raw localStorage — the desktop build backs
+ * persists through the store (never raw localStorage - the desktop build backs
  * it with SQLite). One instance per app; call once at boot after
  * `store.hydrate()`.
  */

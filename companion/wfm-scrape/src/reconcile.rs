@@ -1,8 +1,8 @@
-//! Reconcile — per-surface preserve / merge / stamp semantics.
+//! Reconcile - per-surface preserve / merge / stamp semantics.
 //!
 //! The per-surface rules are subtle and interleave with the stale-data
 //! warning, lost-entry recovery count, and the wfstat-catalog file-level
-//! preserve-on-empty rule — all of which live here as a single tested unit.
+//! preserve-on-empty rule - all of which live here as a single tested unit.
 //!
 //! RULES (contract, not opinion):
 //! 1. Unavailable, unchanged, or invalid observations keep prior data and its
@@ -10,14 +10,14 @@
 //!    data transition is the same.
 //! 2. A usable partial fetch with prior data merges fresh over
 //!    prior (old entries the fresh fetch didn't cover are kept), stamp
-//!    NOW. Whole-surface stamp on partial merge is INTENTIONAL — retained
+//!    NOW. Whole-surface stamp on partial merge is INTENTIONAL - retained
 //!    entries were just re-validated as still-best-known.
 //! 3. Authoritative empty is data. It clears a prior surface and stamps NOW;
 //!    it must never fall into preserve-on-empty.
 //! 4. Otherwise → return usable data, stamp NOW.
 //! 5. wfstat-catalog.json is a file-level unit, not a surface: if the
 //!    bulk /items/ fetch returns empty, the prior FILE is kept as-is. We
-//!    represent that here as an `Option` — the caller reads the file,
+//!    represent that here as an `Option` - the caller reads the file,
 //!    passes `Some(prior_content)`, and receives `None` to signal "write
 //!    nothing" vs `Some(bytes)` to write.
 
@@ -81,7 +81,7 @@ pub struct StaleWarning {
 impl StaleWarning {
     pub fn format(&self) -> String {
         format!(
-            "WARNING: {} has been stale for {} days — upstream looks permanently broken, investigate.",
+            "WARNING: {} has been stale for {} days - upstream looks permanently broken, investigate.",
             self.surface, self.days,
         )
     }
@@ -177,13 +177,13 @@ impl<T: Clone> Mergeable for Vec<T> {
 /// Reconcile a single surface, returning the outcome including the
 /// assigned `fetched_at` stamp and any stale warning.
 ///
-/// `name` — surface key in `surface_fetched_at` ("path_to_info", etc.).
-/// `observation` — the classified upstream result. Empty is meaningful only
+/// `name` - surface key in `surface_fetched_at` ("path_to_info", etc.).
+/// `observation` - the classified upstream result. Empty is meaningful only
 ///   when explicitly classified as [`Observation::AuthoritativeEmpty`].
-/// `prior` — data from the prior snapshot (may be `None` if no prior).
-/// `prior_stamp` — the stamp from the prior snapshot's `surface_fetched_at`.
-/// `now` — the injected clock (same one flowing through render).
-/// `stale_days` — threshold for stale warnings (Python uses 7).
+/// `prior` - data from the prior snapshot (may be `None` if no prior).
+/// `prior_stamp` - the stamp from the prior snapshot's `surface_fetched_at`.
+/// `now` - the injected clock (same one flowing through render).
+/// `stale_days` - threshold for stale warnings (Python uses 7).
 pub fn reconcile<T: Mergeable + Default>(
     name: &str,
     observation: Observation<T>,

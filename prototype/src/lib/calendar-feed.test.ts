@@ -153,7 +153,7 @@ describe('vaultAffects', () => {
 
   it('matches a name whose ampersand DE spells out', () => {
     // Cobra & Crane Prime is MPVCobraAndCranePrimeSinglePack. Treating "&" as
-    // punctuation drops the word and the two sides stop lining up — a silent
+    // punctuation drops the word and the two sides stop lining up - a silent
     // miss on a set the user really does hold.
     const market = {
       calendar: {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Light / Dark / System — the app's only theme control. (The four-look
+  // Light / Dark / System - the app's only theme control. (The four-look
   // picker went away in 2026-08: YoRHa is THE theme, so the choice is a mode.)
   // Reads and writes through the ThemeController from src/lib/theme.ts, which
   // owns the <html> attributes and the persisted setting.
@@ -7,7 +7,7 @@
   // Two mounts exist and they never coexist: Settings → Appearance in the
   // shell, and a compact one in the hosted site's footer (a visitor who never
   // searches never reaches the shell). So local $state mirrors of the
-  // controller's values are enough — no shared store needed.
+  // controller's values are enough - no shared store needed.
   import { onMount } from 'svelte';
   import { systemMode, type ModePref, type ThemeController } from '../lib/theme';
 
@@ -98,7 +98,7 @@
   .hint { color: var(--muted); font-size: 11px; line-height: 1rem; }
 
   /* Footer variant: matches the site footer's 11px type scale and stays quiet
-     — it is a convenience for a visitor who never reaches Settings, not a
+     - it is a convenience for a visitor who never reaches Settings, not a
      piece of chrome that should compete with the footer's links. */
   .compact .segmented { border-color: var(--hairline); }
   .compact .seg-btn {

@@ -16,7 +16,7 @@ use crate::auth::fetch_wfm_me;
 use crate::catalog::{fetch_wfm_catalog, index_item_meta, ItemMeta, WfmCatalogItem};
 use crate::util::{browser_client, wfm_client};
 
-/// Shared with [`crate::plan::run_pending`] — both pace their WFM calls to
+/// Shared with [`crate::plan::run_pending`] - both pace their WFM calls to
 /// the same 3 req/sec norm.
 pub(crate) const SERVE_RATE_LIMIT_MS: u64 = 350;
 // Matches WFM's own UI cap (3000) and the browser ListingReviewModal's
@@ -29,20 +29,20 @@ pub const MAX_PLATINUM: u32 = 3000;
 /// error or 5xx, so a single dropped packet mid-batch surfaced as a permanent
 /// failure on that item.
 ///
-/// The catalog warm deliberately does NOT retry — `fetch_wfm_catalog` is
+/// The catalog warm deliberately does NOT retry - `fetch_wfm_catalog` is
 /// single-shot, and a failed warm is one visible error the user can act on
 /// rather than a half-finished batch. This comment used to claim it "already
 /// retries via wfm-client", which was the reason a dead `get_with_retry`
 /// looked load-bearing for months.
 pub(crate) const ORDER_RETRY_ATTEMPTS: u32 = 2;
 
-/// Retry a request builder for transport errors, 5xx responses, and 429 —
+/// Retry a request builder for transport errors, 5xx responses, and 429 -
 /// never any other 4xx, which are semantic (a bad price, wrong subtype, a slug
 /// that doesn't exist) and won't succeed on retry. Backoff shares
 /// `wfm_client::retry_backoff` (2s/4s/6s) rather than a second hand-rolled
 /// curve; a 429 that carries `Retry-After` (seconds) waits at least that long
 /// instead, which is what WFM's rate-limit rules ask of clients. Requests
-/// with a non-cloneable body (not the case for any call site here — all send
+/// with a non-cloneable body (not the case for any call site here - all send
 /// `.json(...)`) fall back to a single attempt.
 pub(crate) fn send_with_retry(
     builder: reqwest::blocking::RequestBuilder,
@@ -106,7 +106,7 @@ pub struct Unlocked {
 /// the credential by resolving the username.
 ///
 /// Both adapters need exactly this and had drifted into keeping their own copy
-/// (serve's `build_unlocked` tail, desktop's `warm`) — the same four calls in
+/// (serve's `build_unlocked` tail, desktop's `warm`) - the same four calls in
 /// the same order, differing only in how they map the error. Callers map;
 /// this stays anyhow so wfm-core owes nothing to either shell.
 ///

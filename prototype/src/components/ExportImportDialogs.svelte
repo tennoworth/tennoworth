@@ -1,14 +1,14 @@
 <script lang="ts">
-  // @ts-nocheck — presentation glue (dialog refs, catch blocks, event
+  // @ts-nocheck - presentation glue (dialog refs, catch blocks, event
   // handlers), same rationale as App.svelte's own @ts-nocheck.
   //
   // Encrypted-export / import dialogs. Triggered imperatively from
-  // App.svelte via `bind:this` — openExport() from the toolbar's Export
+  // App.svelte via `bind:this` - openExport() from the toolbar's Export
   // button, and the import path has its own file picker in this component
   // (the old DropZone flow that routed an encrypted drop to openImport() is
-  // gone — the app scans from the game and takes no files). Export only reads
+  // gone - the app scans from the game and takes no files). Export only reads
   // app state (owned/inventoryName/lastUpdated, passed as props); a successful
-  // import reports the decoded snapshot back via `onimport` — App.svelte owns
+  // import reports the decoded snapshot back via `onimport` - App.svelte owns
   // what importing means for its own state (resolved/deltas/market/phase/
   // store.saveSnapshot), the same split as WfmAuthDialogs' onunlocked.
   import { tick } from 'svelte';
@@ -95,7 +95,7 @@
       return;
     }
     if (exportPass.length < 12) {
-      cryptoError = 'Passphrase must be at least 12 characters — same floor as your login passphrase.';
+      cryptoError = 'Passphrase must be at least 12 characters - same floor as your login passphrase.';
       return;
     }
     exportBusy = true;
@@ -164,7 +164,7 @@
         throw new Error('Decrypted file is missing the owned-items array.');
       }
       // Old (pre-subtype) exports stored the slug as the map key and lacked
-      // rec.slug / rec.subtype — backfill from the key so they still load.
+      // rec.slug / rec.subtype - backfill from the key so they still load.
       const ownedMap = new Map(
         payload.owned.map(([key, rec]) => [
           key.includes('|') ? key : `${key}|`,
@@ -172,7 +172,7 @@
             ...rec,
             slug: rec.slug ?? (key.includes('|') ? key.split('|')[0] : key),
             subtype: rec.subtype ?? null,
-            // Older exports predate the leveled-gear feature — default to 0
+            // Older exports predate the leveled-gear feature - default to 0
             // (unknown) rather than leaving it undefined, which sellableQty's
             // default param would also catch but keeps the record shape honest.
             leveled: rec.leveled ?? 0,
@@ -204,7 +204,7 @@
         type="password"
         autocomplete="new-password"
         bind:value={exportPass}
-        placeholder="12+ characters — same floor as your login passphrase"
+        placeholder="12+ characters - same floor as your login passphrase"
         required
         minlength="12"
         bind:this={exportPassInput}
@@ -269,7 +269,7 @@
         Backup file
         <button type="button" class="ghost" onclick={pickImport}>Choose file…</button>
         {#if importBlob}
-          <span class="muted small file-name">{importName} — selected, ready to decrypt</span>
+          <span class="muted small file-name">{importName} - selected, ready to decrypt</span>
         {/if}
       </label>
       <input
@@ -304,9 +304,9 @@
 </dialog>
 
 <style>
-  /* Duplicated from App.svelte's shared .cryptobox dialog styling — same
+  /* Duplicated from App.svelte's shared .cryptobox dialog styling - same
      rationale as WfmAuthDialogs.svelte's copy (Svelte scopes CSS
-     per-component). Only the password-input subset — these dialogs have no
+     per-component). Only the password-input subset - these dialogs have no
      email/select/remember-checkbox fields. */
   label { gap: 8px; }
   label .ghost { width: max-content; }

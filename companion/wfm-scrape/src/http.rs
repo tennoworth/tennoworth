@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use serde_json::Value;
 
-/// Minimum spacing between request STARTS — WFM's documented ceiling is 3
+/// Minimum spacing between request STARTS - WFM's documented ceiling is 3
 /// req/s, so ~2.9 req/s. Measured start-to-start by [`Pacer`], so response
 /// latency is absorbed inside the interval instead of stacked on top of it.
 /// (The retired Python scraper slept this AFTER each response: 340 ms sleep
@@ -23,7 +23,7 @@ pub const REQUEST_DELAY: Duration = Duration::from_millis(340);
 /// paced request: it sleeps only for whatever remains of [`REQUEST_DELAY`]
 /// since the previous request started, then stamps the new start. The first
 /// call never sleeps. Retry backoff inside [`fetch_json`] is separate and
-/// additive — a 429 still costs its full `2**attempt` on top.
+/// additive - a 429 still costs its full `2**attempt` on top.
 pub struct Pacer {
     interval: Duration,
     last_start: Option<std::time::Instant>,
@@ -45,14 +45,14 @@ impl Pacer {
     }
 }
 
-/// Number of attempts per request — Python's `fetch_json(retries=3)`.
+/// Number of attempts per request - Python's `fetch_json(retries=3)`.
 pub const RETRIES: u32 = 3;
 
 /// Outcome of a single GET, preserving enough status to drive Python's retry.
 pub enum HttpOutcome {
     /// 2xx with a successfully-parsed JSON body.
     Ok(Value),
-    /// HTTP 429 — Cloudflare/WFM rate limit. Backs off and retries.
+    /// HTTP 429 - Cloudflare/WFM rate limit. Backs off and retries.
     RateLimited,
     /// Any other non-2xx (4xx/5xx). Python's `raise_for_status()` path.
     HttpError(u16),
@@ -72,7 +72,7 @@ pub trait Sleeper {
     fn sleep(&self, dur: Duration);
 }
 
-/// Real time — the production sleeper.
+/// Real time - the production sleeper.
 pub struct RealSleeper;
 impl Sleeper for RealSleeper {
     fn sleep(&self, dur: Duration) {
@@ -80,13 +80,13 @@ impl Sleeper for RealSleeper {
     }
 }
 
-/// Never sleeps — used in fixture mode so the parity subprocess is instant.
+/// Never sleeps - used in fixture mode so the parity subprocess is instant.
 pub struct NoopSleeper;
 impl Sleeper for NoopSleeper {
     fn sleep(&self, _dur: Duration) {}
 }
 
-/// Records requested sleeps instead of sleeping — lets tests assert the exact
+/// Records requested sleeps instead of sleeping - lets tests assert the exact
 /// backoff/pacing schedule.
 pub struct RecordingSleeper {
     pub sleeps: std::cell::RefCell<Vec<Duration>>,
@@ -118,9 +118,9 @@ fn backoff(attempt: u32) -> Duration {
 }
 
 /// WFM's envelope, unwrapped Python-order: `payload` first, then `data`, else
-/// the bare body. (`wfm_client::unwrap_envelope` prefers `data` — the opposite
-/// — so it is intentionally not reused; `fetch_json` in the scraper checks
-/// `payload` first.)
+/// the bare body. `wfm_client::unwrap_envelope` prefers `data`, so it is
+/// intentionally not reused; `fetch_json` in the scraper checks `payload`
+/// first.
 fn unwrap_payload_first(body: Value) -> Value {
     if let Value::Object(mut m) = body {
         if let Some(p) = m.remove("payload") {
@@ -136,12 +136,12 @@ fn unwrap_payload_first(body: Value) -> Value {
 
 /// GET with retry:
 ///   - 2xx → unwrap the envelope and return it.
-///   - 429 → sleep `2**attempt` and retry — INCLUDING after the final attempt,
+///   - 429 → sleep `2**attempt` and retry - INCLUDING after the final attempt,
 ///     after which it returns `None` (Python sleeps then falls out of the loop).
 ///   - 4xx/5xx/transport → return `None` immediately on the last attempt,
 ///     otherwise sleep `2**attempt` and retry (no sleep on the last attempt).
 ///
-/// Returns `None` once attempts are exhausted — the caller skips the item, the
+/// Returns `None` once attempts are exhausted - the caller skips the item, the
 /// exact "truncated but exit 0" behavior run-scrape.sh's row-floor guards.
 pub fn fetch_json(http: &dyn ScrapeHttp, sleeper: &dyn Sleeper, url: &str) -> Option<Value> {
     for attempt in 0..RETRIES {
@@ -163,8 +163,8 @@ pub fn fetch_json(http: &dyn ScrapeHttp, sleeper: &dyn Sleeper, url: &str) -> Op
 }
 
 /// Live transport over `wfm_client`'s browser-UA client. Sends the EXACT header
-/// set the scraper needs — `User-Agent` (via the client), `Platform`,
-/// `Language` — and deliberately NOT `Crossplay` (the scraper omits it;
+/// set the scraper needs - `User-Agent` (via the client), `Platform`,
+/// `Language` - and deliberately NOT `Crossplay` (the scraper omits it;
 /// `wfm_client::wfm_headers` would add it, so it is not used here).
 pub struct LiveScrapeHttp {
     pub client: reqwest::blocking::Client,
@@ -203,7 +203,7 @@ impl ScrapeHttp for LiveScrapeHttp {
 
 /// Fixture transport for `--fixtures-dir` mode: a URL→response map. A URL absent
 /// from the map is a transport error (which, after retries, makes the caller
-/// skip that item — never a panic).
+/// skip that item - never a panic).
 ///
 /// FIXTURE RESPONSE FORMAT:
 ///   - a bare JSON body (object)          → HTTP 200 with that body,
@@ -244,7 +244,7 @@ fn interpret_one(v: &Value) -> (u16, Value) {
     (200, v.clone())
 }
 
-/// Resolve a fixture entry to the response for call number `i` — indexing into a
+/// Resolve a fixture entry to the response for call number `i` - indexing into a
 /// sequence (sticky-last past its end), or the single response otherwise.
 fn response_at(value: &Value, i: usize) -> (u16, Value) {
     if let Value::Array(seq) = value {
@@ -256,7 +256,7 @@ fn response_at(value: &Value, i: usize) -> (u16, Value) {
     interpret_one(value)
 }
 
-/// Map a scripted HTTP status onto the retry-relevant outcome — the same split
+/// Map a scripted HTTP status onto the retry-relevant outcome - the same split
 /// `fetch_json` acts on: 2xx is a body, 429 rate-limits, any other is an error.
 fn outcome_for(status: u16, body: Value) -> HttpOutcome {
     match status {
@@ -291,7 +291,7 @@ mod tests {
     use std::cell::RefCell;
     use std::collections::{HashMap, VecDeque};
 
-    /// Per-URL scripted outcomes — pop one per call to drive retry sequences.
+    /// Per-URL scripted outcomes - pop one per call to drive retry sequences.
     struct ScriptedHttp {
         scripts: RefCell<HashMap<String, VecDeque<HttpOutcome>>>,
     }
@@ -425,7 +425,7 @@ mod tests {
         let mut r = HashMap::new();
         r.insert(URL.to_string(), json!({"data": [1]}));
         let http = FixtureScrapeHttp::new(r);
-        // A single body serves every call — the always-200 base fixtures rely
+        // A single body serves every call - the always-200 base fixtures rely
         // on this (each item's URL is fetched once, but retries could re-hit it).
         assert!(matches!(http.get(URL), HttpOutcome::Ok(_)));
         assert!(matches!(http.get(URL), HttpOutcome::Ok(_)));
@@ -470,7 +470,7 @@ mod tests {
     }
 
     // The scrape pacing (REQUEST_DELAY) must match the shared pacing.json
-    // fixture — the fixture documents the deliberate production cadence so a
+    // fixture - the fixture documents the deliberate production cadence so a
     // bump is a conscious change, not a silent edit.
     #[test]
     fn request_delay_matches_the_shared_fixture() {

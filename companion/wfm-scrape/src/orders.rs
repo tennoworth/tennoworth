@@ -1,12 +1,12 @@
-//! Order-book parsing — the v2 `/v2/orders/item/{slug}` list.
+//! Order-book parsing - the v2 `/v2/orders/item/{slug}` list.
 //!
 //! Python filters liveness FIRST (`[o for o in orders if live(o, kind)]`) and
-//! only ever reads `platinum` on the survivors — it never touches the field on
+//! only ever reads `platinum` on the survivors - it never touches the field on
 //! an offline/invisible/other-side order. We mirror that order exactly: the
 //! liveness predicate runs on the raw order objects, and only a live order's
 //! `platinum` flows through [`crate::coerce`]. Junk (`{}` / `true` / a
 //! numeric-string) in a dead order is therefore never coerced, so it can
-//! neither consume the coercion budget nor abort the run — precisely because
+//! neither consume the coercion budget nor abort the run - precisely because
 //! Python never reads it either.
 
 use serde_json::Value;
@@ -16,7 +16,7 @@ use market_math::LiveOrder;
 use crate::coerce::{coerce_field, Coercions};
 
 /// One LIVE order of a tradable side, retaining its side (`type`) so the caller
-/// can split buys from sells. Only live orders are ever built — liveness was
+/// can split buys from sells. Only live orders are ever built - liveness was
 /// already applied in [`parse_orders`].
 #[derive(Debug, Clone)]
 pub struct ParsedOrder {
@@ -33,7 +33,7 @@ fn is_live(o: &Value) -> bool {
         o.get("user").and_then(|u| u.get("status")).and_then(|s| s.as_str()),
         Some("ingame") | Some("online")
     );
-    // Python: o.get("visible", True) — absent → visible; a present value is
+    // Python: o.get("visible", True) - absent → visible; a present value is
     // truth-tested, so an explicit false/null is NOT live.
     let visible = match o.get("visible") {
         None => true,
@@ -43,12 +43,12 @@ fn is_live(o: &Value) -> bool {
 }
 
 /// Parse the (already envelope-unwrapped) order list into its LIVE buy/sell
-/// orders. Non-array input and non-object entries are skipped — the same shape
+/// orders. Non-array input and non-object entries are skipped - the same shape
 /// tolerance Python's `for o in orders` has once `data` is a list.
 ///
 /// FIELD-READ PARITY: the liveness filter (side ∈ {buy, sell}, status, visible)
 /// runs BEFORE any coercion, so `platinum` is coerced only on the exact orders
-/// Python reads it on — never on a dead one.
+/// Python reads it on - never on a dead one.
 pub fn parse_orders(orders: &Value, url_name: &str, co: &mut Coercions) -> Result<Vec<ParsedOrder>, String> {
     let arr = match orders.as_array() {
         Some(a) => a,
@@ -61,7 +61,7 @@ pub fn parse_orders(orders: &Value, url_name: &str, co: &mut Coercions) -> Resul
         }
         // Python reads platinum only inside live_buys / live_sells, i.e. only on
         // orders whose type is the side being scanned. An other-typed order is
-        // in neither list, so its fields are never touched — drop it before the
+        // in neither list, so its fields are never touched - drop it before the
         // coercion, matching that.
         let otype = o.get("type").and_then(|t| t.as_str()).unwrap_or("");
         if otype != "buy" && otype != "sell" {
@@ -95,7 +95,7 @@ fn parse_rank(v: Option<&Value>) -> Option<i64> {
 }
 
 /// Split out the live orders of one side (`"buy"` / `"sell"`). Liveness was
-/// already applied in [`parse_orders`]; here we only partition by side — the
+/// already applied in [`parse_orders`]; here we only partition by side - the
 /// last piece of Python's `[o for o in orders if live(o, kind)]`. Returns the
 /// bare [`LiveOrder`]s the market-math tier filters operate on.
 pub fn live_orders(parsed: &[ParsedOrder], kind: &str) -> Vec<LiveOrder> {
@@ -184,7 +184,7 @@ mod tests {
         // The blocking bug this guards: Python filters liveness FIRST, so it
         // never reads `platinum` on an offline / invisible / other-side order.
         // A junk platinum there (object → hard error, numeric-string → counted)
-        // must NOT abort the run or move the coercion budget — only the one live
+        // must NOT abort the run or move the coercion budget - only the one live
         // survivor's platinum is read.
         let mut co = Coercions::new();
         let v = json!([

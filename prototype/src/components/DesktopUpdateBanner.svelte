@@ -2,7 +2,7 @@
   // Desktop update banner. Self-contained: registers its own update event,
   // pulls the stored launch status, and repeats the manifest check while the
   // app stays open. Desktop-only by
-  // construction (see lib/desktop-update.ts) — App.svelte only mounts this
+  // construction (see lib/desktop-update.ts) - App.svelte only mounts this
   // inside `{#if isDesktop}`, so its onMount never runs in the browser build.
   import { onMount } from 'svelte';
   import {
@@ -20,7 +20,7 @@
 
   onMount(() => {
     // Listen for launch/manual pushes AND pull the stored status (its emit may
-    // have beaten this listener). Best-effort — a failure here must never
+    // have beaten this listener). Best-effort - a failure here must never
     // disturb boot, and "no update" needs no UI at all.
     const unlisten = onUpdateAvailable((s) => {
       if (s.available) {
@@ -106,7 +106,7 @@
 {/if}
 
 <style>
-  /* Duplicated from App.svelte's shared banner styles — Svelte scopes CSS
+  /* Duplicated from App.svelte's shared banner styles - Svelte scopes CSS
      per-component, and this codebase's existing extracted components
      (e.g. MarketBrowser's `.card`) already re-declare shared visual classes
      rather than promoting them to global CSS. Keep in sync by eye if the

@@ -21,11 +21,11 @@
       "appimage"
     ],
     "publisher": "TennoWorth",
-    "copyright": "MIT licensed — https://github.com/tennoworth/tennoworth",
+    "copyright": "MIT licensed - https://github.com/tennoworth/tennoworth",
     "homepage": "https://tennoworth.app",
     "license": "MIT",
     "category": "Game",
-    "shortDescription": "Warframe inventory + market dashboard — see what's worth selling right now",
+    "shortDescription": "Warframe inventory + market dashboard - see what's worth selling right now",
     "longDescription": "TennoWorth reads your Warframe inventory from the running game and ranks it against live warframe.market data, so you can see what is actually worth selling right now. Works on Windows + Linux without an account. Scanning requires the game to be running; listing on warframe.market is optional.",
     "createUpdaterArtifacts": true,
     "resources": {

@@ -1,4 +1,4 @@
-//! `wfm-scrape` binary — host-only market pipeline (the only one; Python
+//! `wfm-scrape` binary - host-only market pipeline (the only one; Python
 //! retired 2026-08).
 //!
 //! Subcommands:
@@ -147,7 +147,7 @@ fn extract_flag(args: &[String], flag: &str) -> Option<String> {
 /// `--fixtures-dir <DIR>` swaps live HTTP for a frozen `fixture_responses.json`
 /// (URL→body) and disables real sleeps, so the fixture regression tests run
 /// offline and instantly. `--now` is accepted for symmetry with `build` but is
-/// inert here — the scrape CSV carries no timestamp.
+/// inert here - the scrape CSV carries no timestamp.
 fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
     use wfm_scrape::http::{FixtureScrapeHttp, LiveScrapeHttp, NoopSleeper, RealSleeper, ScrapeHttp, Sleeper};
     use wfm_scrape::scrape::{run_scrape, ScrapeConfig};
@@ -249,7 +249,7 @@ fn run_history_cmd(args: &[String]) -> Result<(), String> {
         .map(|c| c.iter().filter_map(|(k, v)| v.as_str().map(|s| (k.to_lowercase(), s.to_string()))).collect())
         .unwrap_or_default();
     if name_to_slug.is_empty() {
-        return Err(format!("{} has no catalog — run `wfm-scrape build` first", market_path.display()));
+        return Err(format!("{} has no catalog - run `wfm-scrape build` first", market_path.display()));
     }
 
     let prior: Option<History> = std::fs::read_to_string(&out)
@@ -257,7 +257,7 @@ fn run_history_cmd(args: &[String]) -> Result<(), String> {
         .and_then(|s| serde_json::from_str(&s).ok());
     match &prior {
         Some(p) => eprintln!("history: prior {} → {} ({} items)", p.start, p.through.as_deref().unwrap_or("-"), p.items.len()),
-        None => eprintln!("history: no prior — bootstrapping up to {bootstrap_days} days (one relics.run file per day, ~4 MB each)"),
+        None => eprintln!("history: no prior - bootstrapping up to {bootstrap_days} days (one relics.run file per day, ~4 MB each)"),
     }
 
     let client = reqwest::blocking::Client::builder()
@@ -282,9 +282,9 @@ fn run_history_cmd(args: &[String]) -> Result<(), String> {
         summary.fetched, summary.failed, summary.items, summary.unmatched_names
     );
     if summary.fetched == 0 {
-        // Nothing new (or only not-yet-published days) — the artifact is
+        // Nothing new (or only not-yet-published days) - the artifact is
         // unchanged, so don't rewrite it and don't bump generated_at.
-        eprintln!("history: nothing new — not rewritten");
+        eprintln!("history: nothing new - not rewritten");
         return Ok(());
     }
     let tmp = out.with_extension("json.tmp");
@@ -354,7 +354,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     };
 
     if !csv_path.exists() {
-        return Err(format!("{} not found — run `wfm-scrape scrape` first.", csv_path.display()));
+        return Err(format!("{} not found - run `wfm-scrape scrape` first.", csv_path.display()));
     }
 
     let prior_stamps: HashMap<String, String> = prior
@@ -368,9 +368,9 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         Ok(v) => v,
         Err(e) => {
             let Some(prior_catalog) = prior.get("catalog").and_then(|c| c.as_object()) else {
-                return Err(format!("{e} — and no prior snapshot to fall back on."));
+                return Err(format!("{e} - and no prior snapshot to fall back on."));
             };
-            eprintln!("  {e} — reusing the prior snapshot's catalog");
+            eprintln!("  {e} - reusing the prior snapshot's catalog");
             let cat: HashMap<String, String> = prior_catalog.iter().map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").to_string())).collect();
             let items_meta: HashMap<String, CatalogItemMeta> = prior
                 .get("items")
@@ -396,7 +396,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // Fetched BEFORE the parent walk, and only once: sentinel parents now come
     // out of this payload (their own endpoint 404s since ~2026-07-31) and the
     // resolver catalog is reduced from the same copy further down. Two
-    // consumers, one ~44 MB download — a second one would add minutes to a
+    // consumers, one ~44 MB download - a second one would add minutes to a
     // scrape that already runs close to its systemd timeout.
     eprintln!("Fetching warframestat bulk item catalog...");
     let wfstat_raw: Option<serde_json::Value> = if fixtures_dir.is_none() {
@@ -428,9 +428,9 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     eprintln!("Fetching DE Public Export index...");
     let de_snap = de::fetch_export(http.as_ref(), &prior_de_hashes);
     if de_snap.hashes.is_empty() {
-        eprintln!("  unavailable — DE surfaces fall back to the prior snapshot");
+        eprintln!("  unavailable - DE surfaces fall back to the prior snapshot");
     } else {
-        // Fetched vs skipped, counted from what we actually hold — the old
+        // Fetched vs skipped, counted from what we actually hold - the old
         // line derived "skipped" from the changed count, which reported the
         // always-fetch manifests as skipped when they had just been pulled.
         let skipped = de::WANTED_MANIFESTS.iter().filter(|n| de_snap.skipped(n)).count();
@@ -457,7 +457,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // Ducats, first-party. `primeSellingPrice` keys on the recipe (the
     // blueprint you trade), so it resolves through path_to_info the same way
     // relic rewards do. Only applied when the manifest actually came through
-    // this cycle — a skipped manifest must not blank a good value.
+    // this cycle - a skipped manifest must not blank a good value.
     // ALWAYS_FETCH guarantees we ATTEMPT this manifest every cycle. It does not
     // guarantee we get it: the index can answer while the manifest itself 500s.
     // Ducats are an override on `meta_by_slug`, which is rebuilt from
@@ -471,7 +471,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     let mut de_ducats: std::collections::BTreeMap<String, i64> = std::collections::BTreeMap::new();
 
     // Built first so the same "did it actually produce anything" test that
-    // governs relics governs this too — a manifest can parse and resolve
+    // governs relics governs this too - a manifest can parse and resolve
     // nothing, and treating arrival as success is precisely the mistake that
     // took four review rounds to stop making.
     let fresh_ducats: HashMap<String, i64> = de_recipes
@@ -492,7 +492,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     if fresh_ducats.is_empty() {
         // Carry ONLY the values DE previously set. Copying every prior ducat
         // would stamp stale numbers over fresh, legitimately-corrected WFM
-        // ones — trading a known bug for a subtler one.
+        // ones - trading a known bug for a subtler one.
         let prior_de_ducats: std::collections::BTreeMap<String, i64> = prior
             .get("de")
             .and_then(|d| d.get("ducats"))
@@ -508,7 +508,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         }
         de_ducats = prior_de_ducats;
         eprintln!(
-            "  ducats: no DE values this cycle — carried {carried} from the prior snapshot"
+            "  ducats: no DE values this cycle - carried {carried} from the prior snapshot"
         );
     } else {
         let mut applied = 0usize;
@@ -547,7 +547,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         if recipe_collisions > 0 {
             eprintln!(
                 "  warning: {recipe_collisions} recipes collided on an already-taken slug \
-                 (first kept) — path_to_info is not one-to-one"
+                 (first kept) - path_to_info is not one-to-one"
             );
         }
     }
@@ -582,7 +582,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     for year in de::DE_USAGE_YEARS {
         let has_compact = usage_history.by_year.contains_key(year);
         if has_compact && rich_repair_year != Some(*year) {
-            eprintln!("Usage telemetry: {year} already in the snapshot — not refetched");
+            eprintln!("Usage telemetry: {year} already in the snapshot - not refetched");
             continue;
         }
         if has_compact {
@@ -633,7 +633,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // justifies the fallback.
     //
     // The fallback fires ONLY when DE is unreachable outright. Any other
-    // shortfall — a skipped manifest, or one that failed to fetch or parse —
+    // shortfall - a skipped manifest, or one that failed to fetch or parse -
     // emits EMPTY so reconcile carries the DE-derived surface forward.
     // Reaching for the legacy source in those cases produces a NON-EMPTY
     // intact-only table, and a non-empty surface is exactly what stops
@@ -688,7 +688,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     let (relic_observation, relic_source) = if !fresh_relics.is_empty() {
         (Observation::usable(fresh_relics), "de_public_export")
     } else if prior_has_relics {
-        eprintln!("Relic tables not rebuilt this cycle — carrying the prior DE surface");
+        eprintln!("Relic tables not rebuilt this cycle - carrying the prior DE surface");
         let state = match (
             de_snap.outcome("ExportRelicArcane_en.json"),
             de_snap.outcome("ExportRecipes_en.json"),
@@ -705,9 +705,9 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         // of a relic table, and losing relics entirely would be a worse
         // regression than intact-only odds. It is off the happy path, so its
         // rarity mislabelling and intact-only coverage stop being what users
-        // normally see — and it can only ever overwrite a DE surface when
+        // normally see - and it can only ever overwrite a DE surface when
         // there is no DE surface to protect.
-        eprintln!("Fetching relic drop tables (fallback — no DE data available)...");
+        eprintln!("Fetching relic drop tables (fallback - no DE data available)...");
         let r = fetch::fetch_relic_rewards(http.as_ref(), &catalog);
         eprintln!("  {} relics with reward data (intact only)", r.len());
         if r.is_empty() {
@@ -729,7 +729,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
 
     eprintln!("Fetching Baro Ki'Teer schedule...");
     // worldState carries the manifest from ANNOUNCEMENT, so his stock is known
-    // days before he lands — the old source returned an empty list between
+    // days before he lands - the old source returned an empty list between
     // visits and published no schedule at all.
     let de_alias = de_recipes.map(de_extract::recipe_alias).unwrap_or_default();
     let de_baro = de_world
@@ -737,7 +737,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         .map(|w| de_extract::baro_from_world(w, &path_to_info, &de_alias, |ms| clock::iso_z(clock::from_millis(ms))))
         .filter(|b| !b.is_empty());
     let (baro, baro_source) = de_baro.map(|b| (b, "de_world_state")).unwrap_or_else(|| {
-            eprintln!("  worldState had no trader — falling back to warframestat");
+            eprintln!("  worldState had no trader - falling back to warframestat");
             (fetch::fetch_baro(http.as_ref()), "warframestat")
         });
     eprintln!(
@@ -748,10 +748,10 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
 
     // ORDERING INVARIANT (see the market.json write below): wfstat-catalog.json
     // is written FIRST, market.json LAST. The two files are each individually
-    // atomic (tmp+rename) but the PAIR is not — keep the catalog write ahead of
+    // atomic (tmp+rename) but the PAIR is not - keep the catalog write ahead of
     // the snapshot write so a reader that catches the gap sees new-catalog +
     // old-market, never the reverse.
-    // Reduced from the payload already in hand — no second request.
+    // Reduced from the payload already in hand - no second request.
     let wfstat_slim = wfstat_raw
         .as_ref()
         .and_then(|v| {
@@ -761,7 +761,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         })
         .unwrap_or_default();
     if wfstat_slim.is_empty() && catalog_out.exists() {
-        eprintln!("  fetch empty — keeping existing {}", catalog_out.file_name().unwrap_or_default().to_string_lossy());
+        eprintln!("  fetch empty - keeping existing {}", catalog_out.file_name().unwrap_or_default().to_string_lossy());
     } else if !wfstat_slim.is_empty() {
         let tmp = catalog_out.with_extension("json.tmp");
         let slim_json = serde_json::to_string(&wfstat_slim).map_err(|e| format!("serialize: {e}"))?;
@@ -817,7 +817,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // Same rule again: a weapons manifest that parses but yields no
     // dispositions must not silently leave every value at warframe.market's
     // lagging mirror. When there is nothing fresh, re-apply the prior
-    // snapshot's — which were DE's — so the override survives.
+    // snapshot's - which were DE's - so the override survives.
     let de_dispos = de_snap
         .manifests
         .get("ExportWeapons_en.json")
@@ -851,7 +851,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         de::ManifestOutcome::Unavailable => wfm_scrape::reconcile::Disposition::PreservedUnavailable,
     };
     if !joined_usable && !de_dispos.is_empty() {
-        eprintln!("  warning: {}/{} DE dispositions joined (prior exact set {}) — preserving prior exact provenance", joined_dispositions.len(), de_dispos.len(), prior_de_dispositions.len());
+        eprintln!("  warning: {}/{} DE dispositions joined (prior exact set {}) - preserving prior exact provenance", joined_dispositions.len(), de_dispos.len(), prior_de_dispositions.len());
     }
     let mut de_dispositions = if joined_usable { joined_dispositions } else { std::collections::BTreeMap::new() };
     if !joined_usable {
@@ -867,7 +867,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
                 }
             }
         }
-        eprintln!("  dispositions: none from DE this cycle — carried {carried} from the prior snapshot");
+        eprintln!("  dispositions: none from DE this cycle - carried {carried} from the prior snapshot");
     } else {
         let mut moved = 0usize;
         if let Some(map) = rivens.get_mut("weapons").and_then(|w| w.as_object_mut()) {
@@ -904,7 +904,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
 
     eprintln!("Fetching DE weekly riven stats...");
     // DE names the weapons by display name; the riven-weapons manifest already
-    // fetched above maps those to slugs — no second request.
+    // fetched above maps those to slugs - no second request.
     let weapons_by_name: HashMap<String, String> = rivens
         .get("weapons")
         .and_then(|w| w.as_object())
@@ -1121,14 +1121,14 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     let rows = csvin::read_csv_rows(&csv_path)?;
     let items = render::render_items(&rows, &meta_by_slug);
 
-    // The DE provenance block. `hashes` is what makes the next cycle cheap —
+    // The DE provenance block. `hashes` is what makes the next cycle cheap -
     // it is compared against the fresh index so unchanged manifests are never
     // refetched. Carried forward verbatim when DE was unreachable, so an
     // outage does not force a full re-download on recovery.
     //
     // The worldState-derived rows are CARRIED on an outage rather than
     // emptied. This block is assigned after `assemble_snapshot`, so it never
-    // passes through reconcile and nothing else would preserve it — a single
+    // passes through reconcile and nothing else would preserve it - a single
     // failed poll would silently drop an announced vault rotation, which is
     // exactly the event the feature exists to warn about. `world_ok: false`
     // tells the UI the rows are stale.
@@ -1184,7 +1184,7 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         events: r_world_events.data,
     };
 
-    // market.json is written LAST — it's the generation anchor the browser app
+    // market.json is written LAST - it's the generation anchor the browser app
     // joins everything through (items[slug], catalog, path_to_info, baro), while
     // wfstat-catalog.json (written above) is only a fallback resolver that
     // resolvePath() consults AFTER market.path_to_info and that the browser

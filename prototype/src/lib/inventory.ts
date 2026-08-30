@@ -40,7 +40,7 @@ export function* flattenInventory(inv: Inventory): Generator<FlatInventoryEntry>
   }
 }
 
-// Scans `inv.Upgrades` (per-instance leveled mods — the ones the user
+// Scans `inv.Upgrades` (per-instance leveled mods - the ones the user
 // fused endo + credits into) and returns `path → max rank seen`. Used by
 // the table to flag rows where a leveled copy exists, so the user can
 // hide their working set and only see safe-to-sell duplicates.
@@ -64,7 +64,7 @@ export function extractKeptLvls(inv: Inventory | null | undefined): Map<string, 
       try {
         const parsed = JSON.parse(fp);
         if (typeof parsed?.lvl === 'number') lvl = parsed.lvl;
-      } catch { /* silently ignore — malformed fingerprint, treat as lvl 0 */ }
+      } catch { /* silently ignore - malformed fingerprint, treat as lvl 0 */ }
     }
     const prev = out.get(path) ?? -1;
     if (lvl > prev) out.set(path, lvl);

@@ -33,11 +33,11 @@ chmod 0755 "$TMP/wfm-scrape"
 
 # A truncated download or an HTML error page saved as a binary must not replace
 # a working one. wfm-scrape has no --help handler (it exits non-zero on any
-# no-op invocation), so we can't gate on exit status — instead confirm it
+# no-op invocation), so we can't gate on exit status - instead confirm it
 # actually runs and prints its usage banner, which proves a runnable ELF for
 # this host's glibc.
 if ! "$TMP/wfm-scrape" 2>&1 | grep -q 'usage: wfm-scrape'; then
-  echo "downloaded wfm-scrape did not run (corrupt / wrong arch?) — keeping current" >&2
+  echo "downloaded wfm-scrape did not run (corrupt / wrong arch?) - keeping current" >&2
   exit 1
 fi
 

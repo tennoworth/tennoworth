@@ -17,21 +17,21 @@ characteristics:
    distributed via GitHub releases and the Linux distro repos). Runs on the
    user's machine. Reads the game's process memory (Linux: needs
    `CAP_SYS_PTRACE`; Windows: same-user process access). Scans are
-   performed in-process over Tauri IPC — there is no loopback HTTP server,
+   performed in-process over Tauri IPC - there is no loopback HTTP server,
    no session token, and the browser webview never holds the WFM JWT, which
    stays in the Rust process and is encrypted at rest (AES-256-GCM,
    PBKDF2-600k passphrase). The core logic it drives lives in
    `companion/wfm-core`.
 
 3. **Our build + release pipeline** (GitHub Actions). Three workflows:
-   - `refresh-market.yml` — scrapes warframe.market once daily and
+   - `refresh-market.yml` - scrapes warframe.market once daily and
      commits a static `market.json` + `wfstat-catalog.json` to the
      repo (a floor so a fresh clone starts with recent data; the
      self-host box's own systemd timer covers the real 2 h cadence).
-   - `build-web.yml` — on a push touching `prototype/`, builds the
+   - `build-web.yml` - on a push touching `prototype/`, builds the
      static web bundle and publishes it as a rolling `web-latest`
      prerelease asset (the self-host box pulls it with a plain curl).
-   - `audit.yml` — on push / PR and weekly, runs dependency advisories
+   - `audit.yml` - on push / PR and weekly, runs dependency advisories
      (`bun audit`, `cargo audit`) plus the JS and Rust test
      suites.
 
@@ -48,7 +48,7 @@ characteristics:
    unprivileged LXC, reached only through a Cloudflare Tunnel, fronted
    by Caddy) pulls the CI-built web bundle and runs its own scrape
    timer. That box is a trust boundary the repo's public CI does not
-   cover — compromising it would let an attacker serve malicious JS or
+   cover - compromising it would let an attacker serve malicious JS or
    a stale snapshot to visitors.
 
 ## What we commit to
@@ -66,7 +66,7 @@ characteristics:
 - **The WFM JWT never reaches the webview.** Login is handled in the
   Rust process; the encrypted token lives on disk and is decrypted
   only in memory. Listing and order operations are relayed by
-  wfm-core — the webview only sees results.
+  wfm-core - the webview only sees results.
 - **Relic reward screenshots stay local and ephemeral.** The overlay is off by
   default. After the user enables it, a reward log marker or retry shortcut
   captures the Warframe window into memory, crops the reward band, and runs
@@ -75,13 +75,13 @@ characteristics:
   app cache after warning that captures may contain player/game information.
   Optional live pricing sends only resolved public item slugs to
   warframe.market; cached prices work offline.
-- **Release binaries are built in public, auditable CI — never on a
+- **Release binaries are built in public, auditable CI - never on a
   maintainer's machine.** You can read the workflow file, the source
   commit at the tag, and the full build logs for the run that produced
   every asset. What that is *not* is a **reproducible** build: the Rust
   toolchain floats on `stable` and nothing verifies that a rebuild
   produces byte-identical output, so you cannot independently recreate
-  an installer and diff it. Auditable, not reproducible — this used to
+  an installer and diff it. Auditable, not reproducible - this used to
   say "reproducibly built", which was a stronger promise than the
   pipeline keeps. Linux packages are signed (see below).
 - **No telemetry, no analytics, no accounts.** Verify with your
@@ -90,7 +90,7 @@ characteristics:
 ## The AI assistant (dormant)
 
 The DeepSeek advisor relay exists in `wfm-core` and a dormant
-`ask_assistant` Tauri command is registered, but **no UI surfaces it** —
+`ask_assistant` Tauri command is registered, but **no UI surfaces it** -
 there is no chat button, no key-setting path, and nothing sends data to
 DeepSeek from the shipped app. It was last wired to the loopback companion's
 `/assistant` route, which no longer exists. The code stays for a future
@@ -115,14 +115,14 @@ rewritten before it ships.
 
 For each desktop release on GitHub:
 
-- **Windows** — there is one installer,
+- **Windows** - there is one installer,
   `TennoWorth_<version>_x64-setup.exe`, built in public CI from the
   tagged commit; download it from the `desktop-v*` release and check its
   SHA-256 against the `SHA256SUMS` file on the same release. (The `.msi`
   is retired; releases up to 0.6.0 also carried one, alongside per-file
   `.sha256` sidecars for both. Those sidecars are gone from later
-  releases — `SHA256SUMS` carries the same hashes.)
-- **Linux** — there is one artifact, `TennoWorth-x86_64.AppImage`,
+  releases - `SHA256SUMS` carries the same hashes.)
+- **Linux** - there is one artifact, `TennoWorth-x86_64.AppImage`,
   built in the same public CI from the same tagged commit. Download it
   and its `.sha256` from the `desktop-v*` release and check them
   together (`sha256sum -c TennoWorth-x86_64.AppImage.sha256`), then
@@ -137,17 +137,17 @@ Because it names assets you probably did not download, check it with
 reporting them as failures.
 
 `SHA256SUMS` and the AppImage's `.sha256` are both plain `sha256sum`
-output — the hash, then the filename it belongs to (a `*` before the
-name is `sha256sum`'s binary-mode marker, and `-c` understands it) — so
+output - the hash, then the filename it belongs to (a `*` before the
+name is `sha256sum`'s binary-mode marker, and `-c` understands it) - so
 the check is one command wherever you have `sha256sum` (Git Bash, WSL,
 or any Linux shell). Download the installer and the checksum file into
 the same directory, then:
 
 ```bash
-# Windows — the NSIS installer, against the release's SHA256SUMS:
+# Windows - the NSIS installer, against the release's SHA256SUMS:
 sha256sum --ignore-missing -c SHA256SUMS
 
-# Linux — the AppImage, against its own sidecar:
+# Linux - the AppImage, against its own sidecar:
 sha256sum -c TennoWorth-x86_64.AppImage.sha256
 
 # …or the AppImage against SHA256SUMS, same as Windows:
@@ -156,24 +156,24 @@ sha256sum --ignore-missing -c SHA256SUMS
 
 In PowerShell with no `sha256sum` available, compare by eye instead
 (`Get-FileHash` prints the hash in upper case; `SHA256SUMS` is lower
-case — only the hex digits matter):
+case - only the hex digits matter):
 
 ```powershell
 Get-FileHash .\TennoWorth_0.6.1_x64-setup.exe -Algorithm SHA256
 Select-String -Path .\SHA256SUMS -Pattern 'x64-setup\.exe'
 ```
 
-`sha256sum -c` prints `OK` when the file matches. Anything else — a
-`FAILED` line, or two hashes that differ — means the file is corrupt or
+`sha256sum -c` prints `OK` when the file matches. Anything else - a
+`FAILED` line, or two hashes that differ - means the file is corrupt or
 tampered: delete it and re-download. Don't run a binary that fails this
 check.
 
 (The `.sig` files next to the installers are a different thing: minisign
 signatures used by the in-app updater, verified against the public key
-compiled into the app. They are not something you check by hand —
+compiled into the app. They are not something you check by hand -
 `SHA256SUMS` is.)
 
-## The Linux package repositories — historical
+## The Linux package repositories - historical
 
 **Linux ships as an AppImage only.** The `.deb` and `.rpm` packages, the
 signed apt and dnf repositories at `https://tennoworth.app/apt` and `/rpm`,
@@ -182,7 +182,7 @@ The AppImage is the only Linux channel that self-updates, which is why it is
 the one that was kept.
 
 If you installed from apt, dnf or the AUR, **nothing breaks and nothing
-disappears.** The repositories stay online, signed and valid — they are simply
+disappears.** The repositories stay online, signed and valid - they are simply
 **frozen at their last published version and will never offer another update.**
 Switch to the AppImage when convenient:
 
@@ -198,7 +198,7 @@ came from.
 
 The rest of this section describes the key those frozen repositories are
 signed with. It is kept because they are still served and your package
-manager still verifies against it — not because anything new is signed with
+manager still verifies against it - not because anything new is signed with
 it.
 
 ```
@@ -226,7 +226,7 @@ How the key is handled, so you can judge what a compromise would cost:
 - A revocation certificate exists offline. If you ever see a revocation for
   this key, stop trusting the repositories immediately.
 
-Signing covers the repository, not the identity of the author — it proves a
+Signing covers the repository, not the identity of the author - it proves a
 package came from whoever controls this key and was not altered in transit.
 It has nothing to do with the AppImage, which is verified by its `.sha256`
 and, for updates, by the minisign key compiled into the app. Note both are
@@ -245,12 +245,12 @@ cd prototype && bun install --frozen-lockfile && bun run build
 diff -r dist/ <deployed dist contents>
 ```
 
-(`bun.lock` is the source-of-truth lockfile — there is no
+(`bun.lock` is the source-of-truth lockfile - there is no
 `package-lock.json`, so `npm ci` will not work, and an npm-resolved
 tree wouldn't reproduce the bun-built `dist/` anyway.)
 
 The web app does not load any third-party scripts. Inspect the
-`<head>` of the deployed HTML — the CSP only permits scripts from
+`<head>` of the deployed HTML - the CSP only permits scripts from
 the same origin. If you see a `<script src=…>` pointing somewhere
 else, the site is compromised.
 
@@ -269,8 +269,8 @@ The desktop app's on-disk JWT (`wfm-jwt.enc`) uses the same parameters
 so one person can audit both.
 
 **Desktop "Remember on this device" (opt-out, default on):** the
-desktop app can store the PBKDF2-*derived* unlock key — never the
-passphrase itself — in the OS keyring (Secret Service / KWallet /
+desktop app can store the PBKDF2-*derived* unlock key - never the
+passphrase itself - in the OS keyring (Secret Service / KWallet /
 GNOME Keyring on Linux, Credential Manager on Windows) so listing
 unlocks silently after launch, the same protection class your browser
 gives the warframe.market cookie. The stored key is salt-bound to the
@@ -278,7 +278,7 @@ current `wfm-jwt.enc` (a re-login invalidates it) and useless without
 that file. Untick the box, log out, or remove the `tennoworth` entry
 in your keyring manager to revert to passphrase-per-session. Trade-off
 stated plainly: anything running in your unlocked desktop session that
-can read your keyring can combine the two — at-rest offline protection
+can read your keyring can combine the two - at-rest offline protection
 of the file itself is unchanged.
 
 Source: `prototype/src/lib/crypto.ts`, `companion/wfm-core/src/auth.rs`,
@@ -290,7 +290,7 @@ Open a GitHub issue with the label `security`, **or** email the
 maintainer (see the repo's main README for contact). For anything
 that could meaningfully harm users (credential theft, RCE in the
 desktop app, supply-chain compromise), please do not file a public
-issue first — give us a reasonable window to ship a fix.
+issue first - give us a reasonable window to ship a fix.
 
 ## Out of scope
 
@@ -301,4 +301,4 @@ issue first — give us a reasonable window to ship a fix.
   project.
 - **Account recovery if you lose your WFM passphrase.** The encrypted
   export uses a passphrase you choose. If you forget it, the export
-  is unrecoverable. By design — we have no way to assist.
+  is unrecoverable. By design - we have no way to assist.

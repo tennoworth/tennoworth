@@ -3,7 +3,7 @@
 //! A panic while a `std::sync::Mutex` is held poisons it; every later
 //! `lock()` then panics too, turning one crash into permanently-broken state
 //! (all DB access, the session, the updater...). These helpers recover the
-//! guard instead — the same convention the single-flight scan lock already
+//! guard instead - the same convention the single-flight scan lock already
 //! uses (`inventory.rs`). A panic inside a critical section is still a bug;
 //! the lock just must not become a second one.
 

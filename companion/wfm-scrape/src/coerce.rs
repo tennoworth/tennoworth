@@ -3,7 +3,7 @@
 //! Python's scraper reads stat fields with an *accidental* contract:
 //! `d.get("median", 0) or 0`. That silently maps null / missing / 0 to 0, but
 //! a numeric-string (`"33"`) survives as a truthy string and later blows up
-//! `statistics.median` with a `TypeError` — a hard crash of the whole run with
+//! `statistics.median` with a `TypeError` - a hard crash of the whole run with
 //! an opaque traceback and no field context.
 //!
 //! This module makes the contract explicit and improves on it, per the
@@ -16,7 +16,7 @@
 //!
 //! The *count* of numeric-string coercions is accumulated across a whole
 //! scrape; if it exceeds [`DEFAULT_MAX_COERCIONS`] the run is failed loudly
-//! (a systemic upstream shape drift — WFM sending strings for every field —
+//! (a systemic upstream shape drift - WFM sending strings for every field -
 //! would otherwise silently reshape the snapshot). A hard type error fails the
 //! run immediately with the offending field's path.
 
@@ -25,12 +25,12 @@ use serde_json::Value;
 /// Anomaly budget for numeric-string coercions across one full scrape.
 ///
 /// A healthy scrape reads on the order of hundreds of thousands of numeric
-/// fields, essentially all of which are JSON numbers — a numeric-string is an
+/// fields, essentially all of which are JSON numbers - a numeric-string is an
 /// anomaly, not the norm. 100 is generous enough that a handful of transient
 /// oddities on individual items never abort a 45-minute run, yet a systemic
 /// "WFM now sends everything as strings" drift (which would produce thousands)
 /// trips it on the first fraction of items. It is an absolute anomaly budget,
-/// not a rate — the type-drift analogue of run-scrape.sh's `MIN_ROWS` floor.
+/// not a rate - the type-drift analogue of run-scrape.sh's `MIN_ROWS` floor.
 pub const DEFAULT_MAX_COERCIONS: u64 = 100;
 
 /// Running tally of tolerated numeric-string coercions for a scrape.
@@ -44,7 +44,7 @@ impl Coercions {
         Coercions { count: 0 }
     }
 
-    /// True once the coercion tally has passed `max` — the run should fail.
+    /// True once the coercion tally has passed `max` - the run should fail.
     pub fn exceeds(&self, max: u64) -> bool {
         self.count > max
     }

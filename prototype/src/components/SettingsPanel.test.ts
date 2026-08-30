@@ -54,7 +54,7 @@ describe('SettingsPanel', () => {
     expect(screen.getByRole('radio', { name: 'System' }).getAttribute('aria-checked')).toBe('false');
   });
 
-  it('there is no look picker left — the mode is the only choice', () => {
+  it('there is no look picker left - the mode is the only choice', () => {
     const { theme } = fakeTheme();
     render(SettingsPanel, { props: { theme } });
     expect(screen.queryByRole('radiogroup', { name: 'Look' })).toBeNull();

@@ -2,7 +2,7 @@
   // Build it or buy it, for one prime set.
   //
   // The set-vs-parts spread was already computed; what was missing is the
-  // third option people actually take — buy only the parts you lack and
+  // third option people actually take - buy only the parts you lack and
   // foundry the rest. DE's recipe tree is what makes that costable: credits,
   // real time, and the plat DE would charge to skip the wait.
   //
@@ -55,7 +55,7 @@
   };
 
   function credits(n: number): string {
-    return n > 0 ? `${Math.round(n / 1000)}k cr` : '—';
+    return n > 0 ? `${Math.round(n / 1000)}k cr` : '-';
   }
 </script>
 
@@ -96,7 +96,7 @@
                    cannot support, which is the failure this panel exists to
                    avoid. -->
               {#if !path.platKnown && path.kind !== 'sell-spares'}
-                <span class="unknown" title="A part has no market price.">—</span>
+                <span class="unknown" title="A part has no market price.">-</span>
               {:else if path.plat < 0}
                 {path.platKnown ? '' : '≥ '}+{Math.round(-path.plat)}p
               {:else}
@@ -108,7 +108,7 @@
             <td class="muted">{OUTCOME[path.kind]}</td>
             <td class="num">
               {#if path.kind === 'sell-spares' || plan.setPrice == null || !path.platKnown}
-                —
+                -
               {:else if path.savingVsSet > 0}
                 <span class="good">−{Math.round(path.savingVsSet)}p</span>
               {:else if path.savingVsSet < 0}
@@ -145,7 +145,7 @@
       {plan.paths
         .find((p) => p.kind === 'buy-parts-build')!
         .unverified.map((i) => `${i.count}× ${i.name}`)
-        .join(', ')} — resources the scan can't see, so they aren't costed above.
+        .join(', ')} - resources the scan can't see, so they aren't costed above.
     </p>
   {/if}
 </section>

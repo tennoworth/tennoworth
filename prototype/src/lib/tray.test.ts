@@ -1,4 +1,4 @@
-// @ts-nocheck — vitest fixtures; the module's TS contract is exercised by tsc.
+// @ts-nocheck - vitest fixtures; the module's TS contract is exercised by tsc.
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { installTauri, removeTauri } from './test-utils.js';
 import { listenForTauriEvent, TRAY_HINT_EVENT } from './desktop-update.js';
@@ -8,7 +8,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// Pin the literal both sides of the channel use — if App.svelte ever drifts to
+// Pin the literal both sides of the channel use - if App.svelte ever drifts to
 // a different event name, the Rust emit is silently lost. (The Rust-side
 // EVENT_TRAY_HINT const is not reachable from TS, so this pins the TS half.)
 describe('TRAY_HINT_EVENT', () => {
@@ -42,7 +42,7 @@ describe('listenForTauriEvent', () => {
     const listen = vi.fn(() => Promise.reject(new Error('acl denied')));
     installTauri(vi.fn(), listen);
     expect(() => listenForTauriEvent(TRAY_HINT_EVENT, () => {})).not.toThrow();
-    await Promise.resolve(); // let the rejection settle — must not surface
+    await Promise.resolve(); // let the rejection settle - must not surface
   });
 
   it('unregisters exactly once after registration completes', async () => {

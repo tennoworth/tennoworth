@@ -4,7 +4,7 @@
   // Answers the question the intact-only table could never reach: would
   // spending traces on this relic have paid for itself? The bars are the EV at
   // each rung, and the recommended rung is the highest-EV one whose extra plat
-  // clears the plat-per-trace bar — per trace the rungs are nearly tied by
+  // clears the plat-per-trace bar - per trace the rungs are nearly tied by
   // construction, so ranking on that alone would flip on rounding.
   //
   // Every figure is a SOLO crack. Said out loud, because a squad of four
@@ -41,16 +41,16 @@
   </div>
   <p class="verdict">
     {#if decision.verdict === 'refine' && decision.best}
-      Refine to <strong>{decision.best.refinement}</strong> — {decision.best.gainOverIntact.toFixed(
+      Refine to <strong>{decision.best.refinement}</strong> - {decision.best.gainOverIntact.toFixed(
         0,
       )}p more for {decision.best.traces} traces
       ({decision.best.platPerTrace?.toFixed(2)}p per trace).
     {:else if decision.verdict === 'crack'}
-      Crack intact — refining doesn't clear {REFINE_WORTH_IT}p per trace here.
+      Crack intact - refining doesn't clear {REFINE_WORTH_IT}p per trace here.
     {:else if decision.verdict === 'sell-intact'}
       Sell it intact: the relic clears more than its contents.
     {:else if decision.verdict === 'thin'}
-      None of its rewards are trading — treat the EV as a guess.
+      None of its rewards are trading - treat the EV as a guess.
     {:else}
       Not enough price data to judge.
     {/if}

@@ -1,8 +1,8 @@
-// The Sell view's filter cascade — price / owned / type / kept-level / tag
+// The Sell view's filter cascade - price / owned / type / kept-level / tag
 // chips / preset-only clauses (vault-only, ducats-only, min-volume,
 // min-median). Three call sites in App.svelte used to each re-implement this
 // same clause sequence by hand (building the results rows, counting tag-chip
-// availability, and diagnosing an empty result) — a 2026-07-24 god-object
+// availability, and diagnosing an empty result) - a 2026-07-24 god-object
 // audit found the drift risk real, not hypothetical. Each `passes*` clause
 // now exists in exactly one place; the three consumers below only differ in
 // how they combine and report the clauses.
@@ -19,7 +19,7 @@ export interface FilterState {
   typeFilter: string;
   hideAtLvl: number;
   activeTags: Set<string>;
-  /** From the active preset, if any — 0/false when no preset restricts these. */
+  /** From the active preset, if any - 0/false when no preset restricts these. */
   vaultOnly: boolean;
   ducatsOnly: boolean;
   minVol: number;
@@ -73,8 +73,8 @@ function passesVault(market: Market, rec: OwnedRecord, f: FilterState): boolean 
 }
 function passesDucats(rec: OwnedRecord, m: MarketItemEntry, f: FilterState): boolean {
   // The 'prime' tag alone also matches syndicate augments for prime weapons
-  // (gilded_truth is tagged burston_prime), which have no ducat value — a
-  // "best ducat value" list showing "Ducats: —" rows is nonsense.
+  // (gilded_truth is tagged burston_prime), which have no ducat value - a
+  // "best ducat value" list showing "Ducats: -" rows is nonsense.
   if (!f.ducatsOnly) return true;
   return !rec.subtype && m.ducats != null;
 }
@@ -102,13 +102,13 @@ function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Mar
     m,
     usageShare: demand.usage?.share,
   });
-  // ducats live on `m` because WFM is authoritative for the value —
+  // ducats live on `m` because WFM is authoritative for the value -
   // warframestat's bulk /items/ endpoint doesn't carry it. Relics get
   // null so we don't suggest "Baro this" on a non-ducat trade.
   const ducats = rec.subtype ? null : (m.ducats ?? null);
-  // p/100d — "platinum cost per 100 ducats of value." Low numbers mean
+  // p/100d - "platinum cost per 100 ducats of value." Low numbers mean
   // ducat-trading the part is the better deal vs selling it on WFM. Null
-  // when no ducats data. Uses the clamped clearing price, not raw low_sell —
+  // when no ducats data. Uses the clamped clearing price, not raw low_sell -
   // a single 1p troll ask made a stable 38p part read as a "feed it to
   // Baro" deal.
   const plat_per_100d = ducats && ducats > 0 && row_price > 0 ? (row_price * 100) / ducats : null;
@@ -125,7 +125,7 @@ function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Mar
   // baseline rather than null out the band + Δ signals entirely.
   const median_now = m.median_now || m.median_90d || null;
   // median_90d is now the 90-day BASELINE (median of the daily medians), so
-  // Δ-vs-90d = today vs the 90-day norm — a real signal at last. On old
+  // Δ-vs-90d = today vs the 90-day norm - a real signal at last. On old
   // snapshots median_now === median_90d → Δ = 0 until the next scrape,
   // which is honest rather than fake.
   const median_90d = m.median_90d && m.median_90d > 0 ? m.median_90d : null;
@@ -138,10 +138,10 @@ function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Mar
       ? ((median_now - median_90d) / median_90d) * 100
       : null;
   // Timing: where today's median sits in its 90-day band. Uses median_now,
-  // not low_sell — the Donchian bands are built from the daily median
+  // not low_sell - the Donchian bands are built from the daily median
   // series, so a thin-book ask outlier (a lone 200p listing on a ~20p
   // item) would mislabel as "peak". median_now is always inside its own
-  // band. "hold" = near the 90d low (don't dump into a trough — e.g. a mod
+  // band. "hold" = near the 90d low (don't dump into a trough - e.g. a mod
   // Baro just flooded), "peak" = near the 90d high (list now).
   const timing = bandSignal({
     price: median_now,
@@ -165,7 +165,7 @@ function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Mar
     plat_per_100d,
     avg_price: m.avg,
     low_sell: m.low_sell,
-    // The sanity-clamped ask (what the score already prices at) — the
+    // The sanity-clamped ask (what the score already prices at) - the
     // listing modal prefills from this, not raw low_sell, so a lone
     // fantasy ask can't become the suggested price.
     clearing_price: row_price,
@@ -174,7 +174,7 @@ function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Mar
     volume_48h: m.vol,
     ratio: m.ratio,
     potential_plat: sellable * m.avg,
-    // Raw stack value: owned × the avg of the ~5 cheapest live asks — "what
+    // Raw stack value: owned × the avg of the ~5 cheapest live asks - "what
     // is this pile worth at current listings", no liquidity discounting
     // (that's sell_score's job). Falls back to the 48h closed avg on
     // snapshots that predate low5_avg.
@@ -231,7 +231,7 @@ export function computeResults(
 }
 
 /** Tag → count, for the chip row. Mirrors every clause `computeResults`
- * applies EXCEPT the tag clause itself — otherwise chip counts would
+ * applies EXCEPT the tag clause itself - otherwise chip counts would
  * overstate what clicking actually yields. */
 export function computeAvailableTags(
   owned: Map<string, OwnedRecord>,
@@ -261,7 +261,7 @@ export function computeAvailableTags(
 /** Why the Sell table is empty: which single clause excludes the most
  * candidates, for the empty-state's "relax this filter" suggestion. Walks
  * every clause independently (not short-circuited) so a row can count
- * against more than one bucket — this is a diagnostic, not a filter. */
+ * against more than one bucket - this is a diagnostic, not a filter. */
 export function computeEmptyReason(
   owned: Map<string, OwnedRecord>,
   market: Market | null | undefined,

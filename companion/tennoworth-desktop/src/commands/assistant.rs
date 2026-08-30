@@ -1,5 +1,5 @@
 //! The DeepSeek advisor relay (`ask_assistant`, POST /assistant's desktop
-//! mirror) — the only command with third-party egress. Key resolution, caps,
+//! mirror) - the only command with third-party egress. Key resolution, caps,
 //! prompt fencing, and the throttle all live in `wfm_core::assistant`; this
 //! is wiring only, so the API key never reaches the webview.
 
@@ -40,17 +40,17 @@ pub async fn ask_assistant(
         .ok_or_else(|| {
             CmdError::of(
                 AssistantErrorCode::NoApiKey.as_str(),
-                "No DeepSeek API key configured — set DEEPSEEK_API_KEY or the deepseek-key config file.",
+                "No DeepSeek API key configured - set DEEPSEEK_API_KEY or the deepseek-key config file.",
             )
         })?;
-        // Checked just before the upstream call — a rejected/oversized/keyless
+        // Checked just before the upstream call - a rejected/oversized/keyless
         // request never counts against the budget (same as serve).
         {
             let mut calls = guard(&s.assistant_calls);
             if assistant_rate_limited(&mut calls, Instant::now()) {
                 return Err(CmdError::of(
                     AssistantErrorCode::RateLimited.as_str(),
-                    "Too many advisor requests — wait a minute and try again.",
+                    "Too many advisor requests - wait a minute and try again.",
                 ));
             }
         }

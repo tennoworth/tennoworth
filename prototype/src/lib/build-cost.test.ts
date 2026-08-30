@@ -52,7 +52,7 @@ const RECIPES: Record<string, RecipeEntry> = {
 };
 
 /** Keyed exactly as App.svelte keys it: `${slug}|${subtype ?? ''}`. Building
- *  bare-slug keys here masked a real bug — the lookup never matched in the
+ *  bare-slug keys here masked a real bug - the lookup never matched in the
  *  live UI and the plan told people to buy parts they already owned. */
 function ownedMap(entries: Array<[string, number]>): Map<string, OwnedRecord> {
   return new Map(

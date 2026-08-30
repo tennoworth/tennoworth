@@ -1,5 +1,5 @@
 <script lang="ts">
-  // Shared header layout for modal dialogs — close-button styling and title
+  // Shared header layout for modal dialogs - close-button styling and title
   // treatment. The parent dialog owns aria-labelledby; titleId keeps the two
   // in sync.
   interface Props {

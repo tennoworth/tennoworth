@@ -36,7 +36,7 @@ function columnWidths(): { key: string; width: number }[] {
   }));
 }
 
-/** The floor the component derives for a given set of visible column keys —
+/** The floor the component derives for a given set of visible column keys -
  *  the same arithmetic `floorRem` performs, against the same widths. */
 function floorFor(keys: string[]): number {
   const byKey = new Map(columnWidths().map((c) => [c.key, c.width]));
@@ -53,7 +53,7 @@ describe('column width budget', () => {
 
   it('gives the Played column room for its widest real content', () => {
     // Measured in Firefox at the cell's own type: "12.3% ↑ cheap" is 95.3px
-    // and the 100%-share extreme is 103.1px, plus 12px of td padding — 7.19rem
+    // and the 100%-share extreme is 103.1px, plus 12px of td padding - 7.19rem
     // all in. The long labels this replaced needed 9.99rem, which the budget
     // could not pay.
     const played = columnWidths().find((c) => c.key === 'usage');

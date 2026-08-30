@@ -48,9 +48,9 @@
           {#if slot.bestDucats && !slot.bestPlatinum}<span class="ducat-flag">BEST DUCATS</span>{/if}
           <strong class="name">{slot.name ?? slot.rawText}</strong>
           <div class="facts">
-            <b class="plat">{price(slot) == null ? '—' : `${price(slot)}p`}</b>
-            <span>{slot.ducats == null ? '—d' : `${slot.ducats}d`}</span>
-            <span>{slot.owned == null ? 'own —' : `own ${slot.owned}`}</span>
+            <b class="plat">{price(slot) == null ? '-' : `${price(slot)}p`}</b>
+            <span>{slot.ducats == null ? '-d' : `${slot.ducats}d`}</span>
+            <span>{slot.owned == null ? 'own -' : `own ${slot.owned}`}</span>
             <span class="source">{slot.livePlatinum == null ? 'cached' : 'live'}</span>
           </div>
           {#if slot.confidence < 0.9}

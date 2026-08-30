@@ -17,7 +17,7 @@
   let priorOnly = $derived((model?.onlyPrior ?? []).filter(matches));
 
   function metric(value: number | null, suffix = ''): string {
-    return value === null ? '—' : `${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}${suffix}`;
+    return value === null ? '-' : `${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}${suffix}`;
   }
 </script>
 

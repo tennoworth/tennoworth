@@ -1,6 +1,6 @@
 <script lang="ts">
   // One item-category mark. Stroke-only and `currentColor`, so it inherits the
-  // row's colour in both modes without a second definition — no theme-specific
+  // row's colour in both modes without a second definition - no theme-specific
   // asset, no CSP entry, no bytes on the wire beyond this component.
   //
   // `aria-hidden` by default: the glyph repeats the row's own text, so

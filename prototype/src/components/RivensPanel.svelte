@@ -15,7 +15,7 @@
   import type { Market, RivenAttribute } from '../lib/types';
 
   interface Props {
-    /** Price snapshot — powers the weapon join (game_ref → slug), the DE
+    /** Price snapshot - powers the weapon join (game_ref → slug), the DE
      *  weekly band, the attributes manifest, and the disposition change. */
     market?: Market | null;
     /** Owned rivens, already resolved against the market. */
@@ -55,7 +55,7 @@
     const wanted = rerolled ? entry?.rolled : entry?.unrolled;
     const usedOther = !!entry && !wanted;
     return {
-      price: band.median > 0 ? band.median.toFixed(0) + 'p' : '—',
+      price: band.median > 0 ? band.median.toFixed(0) + 'p' : '-',
       range: band.min > 0 || band.max > 0 ? band.min.toFixed(0) + '–' + band.max.toFixed(0) + 'p' : '',
       note: (usedOther ? 'closest band · ' : '') + (rerolled ? 'rolled' : 'unrolled') + ' · n=' + band.pop,
     };
@@ -96,7 +96,7 @@
 <section class="wrap tw rivens" data-testid="rivens-view">
   <div class="bar">
     <h3>Rivens</h3>
-    <span class="exp">DE's weekly band, the disposition trend, and live comparables — no single "worth N" number.</span>
+    <span class="exp">DE's weekly band, the disposition trend, and live comparables - no single "worth N" number.</span>
     <span class="grow"></span>
     <span class="count"><b>{rivens.length}</b> owned{#if rivenStatsAge}&nbsp;· band data {rivenStatsAge}{/if}</span>
   </div>
@@ -129,7 +129,7 @@
               <td class="l">
                 <div class="weapon">
                   {#if r.veiled}
-                    <span class="veiled" title="Veiled riven — the stats are revealed by installing and completing its challenge.">Veiled</span>
+                    <span class="veiled" title="Veiled riven - the stats are revealed by installing and completing its challenge.">Veiled</span>
                   {:else}
                     <strong>{r.weaponName ?? 'Unknown weapon'}</strong>
                     {#if r.pol}<span class="pol" title="Polarity">{polaritySymbol(r.pol)}</span>{/if}
@@ -137,7 +137,7 @@
                 </div>
               </td>
               <td class="l">
-                <div class="stats" title={r.veiled ? 'Veiled — stats hidden until revealed.' : 'Stat names from the inventory fingerprint. Exact values require DE’s full Riven formula and are not guessed.'}>
+                <div class="stats" title={r.veiled ? 'Veiled - stats hidden until revealed.' : 'Stat names from the inventory fingerprint. Exact values require DE’s full Riven formula and are not guessed.'}>
                   {#if r.veiled}
                     <span class="muted">challenge to reveal</span>
                   {:else}
@@ -147,8 +147,8 @@
                   {/if}
                 </div>
               </td>
-              <td>{r.veiled ? '—' : r.rerolls}</td>
-              <td>{r.veiled ? '—' : r.lvl}</td>
+              <td>{r.veiled ? '-' : r.rerolls}</td>
+              <td>{r.veiled ? '-' : r.lvl}</td>
               <td class="l">
                 {#if r.slug && market?.rivens?.weapons?.[r.slug]}
                   <span class="mono">{market.rivens.weapons[r.slug].disposition.toFixed(2)}</span>
@@ -158,7 +158,7 @@
                     </span>
                   {/if}
                 {:else}
-                  <span class="muted">—</span>
+                  <span class="muted">-</span>
                 {/if}
               </td>
               <td>
@@ -170,13 +170,13 @@
                   </div>
                   <!-- Still no "this riven is worth N": the offer comes from
                        the user, and we supply the arithmetic against DE's
-                       distribution — percentile, reroll odds and cost. -->
+                       distribution - percentile, reroll odds and cost. -->
                   <details class="offer-check">
                     <summary>check an offer</summary>
                     <RivenOffer riven={r} market={market} />
                   </details>
                 {:else}
-                  <span class="muted">—</span>
+                  <span class="muted">-</span>
                 {/if}
               </td>
               <td>
@@ -184,7 +184,7 @@
                   class="btn ghost"
                   onclick={() => showComps(r)}
                   disabled={!r.slug || compsBusy !== null}
-                  title={r.slug ? 'Fetch the cheapest live auctions for this weapon (WFM caps at 10/min).' : 'Unknown weapon — no comps.'}
+                  title={r.slug ? 'Fetch the cheapest live auctions for this weapon (WFM caps at 10/min).' : 'Unknown weapon - no comps.'}
                 >
                   {r.slug != null && compsBusy === r.slug ? 'Fetching…' : r.slug != null && openSlug === r.slug ? 'Hide comps' : 'Comps'}
                 </button>

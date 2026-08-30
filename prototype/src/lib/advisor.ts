@@ -1,11 +1,11 @@
-// Hold-or-sell advisor — the "relic gremlins" play, computed instead of
+// Hold-or-sell advisor - the "relic gremlins" play, computed instead of
 // folklore. Joins the three inputs nobody else holds together: your scanned
 // inventory (the rows this runs over), the calendar surface (prime release /
 // vault dates + Resurgence rotations, from the wiki via the pipeline), and
 // the year of daily prices (history.json, from relics.run).
 //
 // Advice only, never automation, and every verdict carries the numbers that
-// produced it — a bare "sell" chip would be the single-number-riven-tool
+// produced it - a bare "sell" chip would be the single-number-riven-tool
 // mistake in a different column. Rules are ordered; the first that fires
 // wins. Anything without a calendar entry (non-primes, subtyped rows) gets
 // null: no advice beats confident noise.
@@ -65,7 +65,7 @@ export function slope30(median: Array<number | null>): number | null {
   return recent / before - 1;
 }
 
-/** Median over the 30 days BEFORE the vault date — the pre-vault baseline the
+/** Median over the 30 days BEFORE the vault date - the pre-vault baseline the
  *  post-vault ramp is measured against. */
 export function preVaultMedian(
   h: Pick<History, 'start'>,
@@ -98,14 +98,14 @@ export const RAMP_TARGET = 1.6;
 export interface AdviseInput {
   slug: string;
   market: Market;
-  /** Optional — rules that need it degrade to the calendar-only ones. */
+  /** Optional - rules that need it degrade to the calendar-only ones. */
   history?: History | null;
   partToSet: Map<string, string>;
   nowMs: number;
 }
 
 /** The verdict for one owned row's slug, or null when the item has no
- *  calendar entry (not a dated prime) — no advice is better than a guess. */
+ *  calendar entry (not a dated prime) - no advice is better than a guess. */
 export function advise({ slug, market, history, partToSet, nowMs }: AdviseInput): Verdict | null {
   const setSlug = partToSet.get(slug);
   const cal = setSlug ? market.calendar?.primes?.[setSlug] : undefined;
@@ -125,7 +125,7 @@ export function advise({ slug, market, history, partToSet, nowMs }: AdviseInput)
     return {
       advice: 'sell_now',
       reasons: [
-        `released ${sinceRelease} d ago — new-prime prices decay toward a floor over the first weeks`,
+        `released ${sinceRelease} d ago - new-prime prices decay toward a floor over the first weeks`,
         ...(slope != null ? [`30 d move ${pct(slope)}`] : []),
       ],
     };
@@ -172,7 +172,7 @@ export function advise({ slug, market, history, partToSet, nowMs }: AdviseInput)
       return {
         advice: 'hold',
         reasons: [
-          `vaulted ${sinceVault} d ago — the post-vault ramp typically runs for months`,
+          `vaulted ${sinceVault} d ago - the post-vault ramp typically runs for months`,
           ...(rampNow != null ? [`now ×${rampNow.toFixed(1)} its pre-vault price`] : []),
           ...(slope != null ? [`30 d move ${pct(slope)}`] : []),
         ],
@@ -180,7 +180,7 @@ export function advise({ slug, market, history, partToSet, nowMs }: AdviseInput)
     }
   }
 
-  // 4. At the 1-year high — and the year actually moved. Evaluated AFTER
+  // 4. At the 1-year high - and the year actually moved. Evaluated AFTER
   //    the post-vault hold: a recently vaulted item mid-ramp prints a fresh
   //    1-year high every week, and that leading edge is exactly the wrong
   //    moment to call "sell" (the ramp typically runs for months). Once the
@@ -200,13 +200,13 @@ export function advise({ slug, market, history, partToSet, nowMs }: AdviseInput)
     };
   }
 
-  // 5. Vault ahead: supply is about to dry up — the ramp comes after.
+  // 5. Vault ahead: supply is about to dry up - the ramp comes after.
   const toVault = cal.vaulted ? null : daysSince(cal.est_vault_date, nowMs);
   if (toVault != null && toVault < 0 && -toVault <= VAULT_SOON_DAYS) {
     return {
       advice: 'hold',
       reasons: [
-        `vault expected ~${cal.est_vault_date} (${-toVault} d) — prices typically climb once relics stop dropping`,
+        `vault expected ~${cal.est_vault_date} (${-toVault} d) - prices typically climb once relics stop dropping`,
       ],
     };
   }

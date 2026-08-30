@@ -1,11 +1,11 @@
 //! Desktop-only market snapshot cache + ETag-conditional refresh (Phase C4).
 //!
-//! The bundled `dist-desktop/market.json` is the floor — the asset protocol
+//! The bundled `dist-desktop/market.json` is the floor - the asset protocol
 //! serves it to the webview at `/market.json` (see the desktop spike, Q1), so it
 //! is always available offline with zero work here. This module keeps that data
 //! fresh: it conditionally GETs `https://tennoworth.app/market.json` with an
 //! `If-None-Match` header and caches the body + ETag next to the SQLite DB in the
-//! app-data dir. The webview never makes this third-party request — egress lives
+//! app-data dir. The webview never makes this third-party request - egress lives
 //! in Rust, exactly the rule the loopback companion follows ("no third-party
 //! fetches from the browser").
 //!
@@ -13,7 +13,7 @@
 //! is written only from a validated 200, so once present it is the last
 //! known-good copy from the live server. Every failure mode (offline, timeout,
 //! non-200, truncated/garbage body, unwritable cache) is a no-op that keeps the
-//! existing copy — a refresh must never leave the user with nothing, and must
+//! existing copy - a refresh must never leave the user with nothing, and must
 //! never block app start, so callers run it in the background and swallow errors.
 
 use std::path::{Path, PathBuf};
@@ -24,7 +24,7 @@ use std::time::Duration;
 /// local mock (200/304) or an unreachable host (offline) without a live server.
 const MARKET_URL: &str = "https://tennoworth.app/market.json";
 const HISTORY_URL: &str = "https://tennoworth.app/history.json";
-/// Short — a slow refresh must never make the app feel stuck. The bundled/cached
+/// Short - a slow refresh must never make the app feel stuck. The bundled/cached
 /// copy is already on screen; this is a background top-up.
 pub(crate) const TIMEOUT: Duration = Duration::from_secs(10);
 
@@ -48,7 +48,7 @@ impl ArtifactSpec {
     }
 }
 
-/// The 2-hourly market snapshot — the app's price source.
+/// The 2-hourly market snapshot - the app's price source.
 pub const MARKET: ArtifactSpec = ArtifactSpec {
     cache_file: "market.json",
     etag_file: "market.etag",
@@ -57,7 +57,7 @@ pub const MARKET: ArtifactSpec = ArtifactSpec {
     default_url: MARKET_URL,
 };
 
-/// The year-long daily price history (relics.run-derived, built on the box —
+/// The year-long daily price history (relics.run-derived, built on the box -
 /// see wfm-scrape/src/history.rs). ~1 MB gzipped; fetched on demand, not at
 /// boot, and there is no bundled floor: absent = the 1y surfaces simply hide.
 pub const HISTORY: ArtifactSpec = ArtifactSpec {
@@ -71,7 +71,7 @@ pub const HISTORY: ArtifactSpec = ArtifactSpec {
 /// The result the SPA acts on. `updated` is true only when a validated 200
 /// delivered a new snapshot (the SPA parses `body` and swaps it in if its
 /// `updated_at` is newer). On 304 / offline / error it is false and `body` is
-/// absent — the SPA keeps what it already loaded. `updated_at` always reports the
+/// absent - the SPA keeps what it already loaded. `updated_at` always reports the
 /// freshest snapshot we now hold (fetched on 200, else the cache) so the SPA can
 /// feed the staleness indicator even when nothing changed.
 #[derive(serde::Serialize, Default, Debug, PartialEq)]
@@ -94,7 +94,7 @@ impl MarketCache {
     }
 
     /// The cached snapshot body, or None on a first run / unreadable / empty
-    /// cache. No network — a fast local read the SPA does at boot to prefer the
+    /// cache. No network - a fast local read the SPA does at boot to prefer the
     /// cache over the bundled floor.
     pub fn cached(&self) -> Option<String> {
         read_cache(&self.dir, &MARKET)
@@ -134,7 +134,7 @@ fn parse_stamp(body: &str, key: &str) -> Option<String> {
     v.get(key)?.as_str().map(str::to_string)
 }
 
-/// Atomic write (tmp + rename), matching the repo-wide atomic-write rule — a
+/// Atomic write (tmp + rename), matching the repo-wide atomic-write rule - a
 /// concurrent reader never sees a half-written cache file.
 ///
 /// `pub(crate)` so the definitions cache reuses this one implementation rather
@@ -157,7 +157,7 @@ fn keep_cache(dir: &Path, spec: &ArtifactSpec, etag: Option<String>) -> RefreshR
     }
 }
 
-/// Blocking conditional refresh. Never panics, never returns Err — every failure
+/// Blocking conditional refresh. Never panics, never returns Err - every failure
 /// degrades to `keep_cache`. Runs inside `spawn_blocking` (reqwest::blocking must
 /// not run on an async worker thread), the same pattern `scan_inventory` uses.
 pub fn refresh(dir: &Path) -> RefreshResult {
@@ -194,7 +194,7 @@ fn refresh_artifact(dir: &Path, spec: &ArtifactSpec, url: &str) -> RefreshResult
     let resp = match req.send() {
         Ok(r) => r,
         Err(e) => {
-            // Offline / DNS / timeout / connection refused — the common case, not
+            // Offline / DNS / timeout / connection refused - the common case, not
             // an error the user should ever see. Log and keep the existing copy.
             eprintln!("tennoworth: {} refresh request failed: {e}", spec.cache_file);
             return keep_cache(dir, spec, prior_etag);
@@ -246,7 +246,7 @@ fn refresh_artifact(dir: &Path, spec: &ArtifactSpec, url: &str) -> RefreshResult
     };
 
     if let Err(e) = write_atomic(&cache_path(dir, spec), body.as_bytes()) {
-        // Couldn't persist, but the fetch succeeded — hand the SPA the fresh body
+        // Couldn't persist, but the fetch succeeded - hand the SPA the fresh body
         // for THIS session anyway (next launch just re-fetches without the ETag).
         eprintln!("tennoworth: {} cache write failed: {e}", spec.cache_file);
         return RefreshResult {
@@ -403,7 +403,7 @@ mod tests {
         // Launch 2: prior ETag on disk → conditional GET → 304 → keep cache.
         let r2 = refresh_artifact(&dir, &MARKET, &url);
         assert!(!r2.updated, "304 must not report updated");
-        assert_eq!(r2.body, None, "304 sends no body — SPA keeps what it has");
+        assert_eq!(r2.body, None, "304 sends no body - SPA keeps what it has");
         assert_eq!(
             r2.updated_at.as_deref(),
             Some("2026-07-20T10:00:00Z"),
@@ -420,7 +420,7 @@ mod tests {
         let dir = temp_dir();
         write_atomic(&cache_path(&dir, &MARKET), BODY.as_bytes()).unwrap();
         write_atomic(&etag_path(&dir, &MARKET), ETAG.as_bytes()).unwrap();
-        // Port 1 refuses instantly — a deterministic "offline".
+        // Port 1 refuses instantly - a deterministic "offline".
         let r = refresh_artifact(&dir, &MARKET, "http://127.0.0.1:1/market.json");
         assert!(!r.updated);
         assert_eq!(r.body, None);

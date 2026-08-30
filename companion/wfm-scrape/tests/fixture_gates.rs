@@ -2,14 +2,14 @@
 //!
 //! These replace the retired Python parity tests (test_scrape_parity.py /
 //! test_convert_parity.py). There is no second implementation to diff against
-//! anymore — the Rust pipeline is the only one — so the gates assert the
+//! anymore - the Rust pipeline is the only one - so the gates assert the
 //! binary's behaviour on the SAME frozen fixtures, end to end: shell the
-//! freshly-built binary (`env!("CARGO_BIN_EXE_wfm-scrape")` — cargo guarantees
+//! freshly-built binary (`env!("CARGO_BIN_EXE_wfm-scrape")` - cargo guarantees
 //! it matches this source), run against a copy of the committed fixtures, and
 //! check the output shape.
 //!
 //! Cargo rebuilds the binary before integration tests run, so a stale
-//! artifact cannot silently green these — the same guarantee conftest.py used
+//! artifact cannot silently green these - the same guarantee conftest.py used
 //! to provide by building in the fixture.
 
 use std::path::{Path, PathBuf};
@@ -177,7 +177,7 @@ fn scrape_keeps_expected_fixture_rows() {
 #[test]
 fn scrape_limit_truncates_after_filter() {
     // --limit truncates AFTER filter/exclude: the first-N in catalog order
-    // survive. The output CSV is re-sorted by score, so compare as a set —
+    // survive. The output CSV is re-sorted by score, so compare as a set -
     // the parity gate this replaces asserted `set(py_rows) == first_four`.
     let dir = stage_fixtures("scrape");
     let csv = scrape_csv(&dir, &["--limit", "4"]);
@@ -244,7 +244,7 @@ fn build_uses_de_export_and_world_state() {
     assert_eq!(inv[0]["ducats"], 375);
     assert_eq!(inv[0]["credits"], 120000);
     assert_eq!(inv[0]["slug"], "volt_prime_chassis_blueprint");
-    // A cosmetic has no market slug. It must stay readable and unpriced —
+    // A cosmetic has no market slug. It must stay readable and unpriced -
     // never given a slug it does not have, which would show a wrong price.
     assert!(inv[1].get("slug").is_none(), "cosmetics must not be assigned a slug");
     assert_eq!(inv[1]["item"], "Kiteer Sekhara");
@@ -451,7 +451,7 @@ fn build_skips_manifests_whose_hash_has_not_moved() {
     );
 
     // And the surfaces those manifests feed must survive the skip rather than
-    // blanking — that is what reconcile is for.
+    // blanking - that is what reconcile is for.
     let snap: serde_json::Value =
         serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
     assert!(
@@ -474,8 +474,8 @@ fn build_skips_manifests_whose_hash_has_not_moved() {
     );
     assert_eq!(chassis["rarity"], "Common", "DE's rarity, not the drop table's mislabel");
 
-    // Dispositions and ducats cannot be carried — both are overrides on
-    // surfaces that are refetched every cycle — so their manifests must be
+    // Dispositions and ducats cannot be carried - both are overrides on
+    // surfaces that are refetched every cycle - so their manifests must be
     // pulled every time.
     assert!(
         second_err.contains("dispositions:"),
@@ -501,7 +501,7 @@ fn build_skips_manifests_whose_hash_has_not_moved() {
 
 /// A failed ExportRecipes fetch must not undo either DE override.
 ///
-/// `ALWAYS_FETCH` guarantees the manifest is ATTEMPTED, not that it arrives —
+/// `ALWAYS_FETCH` guarantees the manifest is ATTEMPTED, not that it arrives -
 /// the index can answer while the manifest itself 500s. In that state the
 /// ducat override has no fresh source and the relic table cannot be rebuilt,
 /// and the naive handling of both is a silent downgrade: ducats revert to
@@ -571,7 +571,7 @@ fn a_failed_recipes_manifest_preserves_both_de_overrides() {
 ///
 /// The carry-on-failure rule has a hole at the start of time: reconcile can
 /// only preserve something that already exists, so emitting empty with no
-/// prior snapshot behind it publishes no relic data at all — strictly worse
+/// prior snapshot behind it publishes no relic data at all - strictly worse
 /// than the legacy intact-only table the fallback was keeping in reserve. The
 /// other failure test always seeds a good prior, so it cannot see this.
 #[test]
@@ -598,7 +598,7 @@ fn a_failed_recipes_manifest_on_a_cold_build_falls_back_rather_than_publishing_n
     assert!(out.status.success());
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
     assert!(
-        stderr.contains("fallback — no DE data available"),
+        stderr.contains("fallback - no DE data available"),
         "a cold build with a failed manifest must reach for the fallback:\n{stderr}"
     );
 
@@ -617,7 +617,7 @@ fn a_failed_recipes_manifest_on_a_cold_build_falls_back_rather_than_publishing_n
 /// The ducat carry must touch only the values DE set.
 ///
 /// Copying every prior ducat would stamp a stale number over a fresh,
-/// legitimately-corrected warframe.market one — a subtler bug than the
+/// legitimately-corrected warframe.market one - a subtler bug than the
 /// revert it was written to prevent.
 #[test]
 fn the_ducat_carry_leaves_wfm_sourced_values_alone() {
@@ -629,7 +629,7 @@ fn the_ducat_carry_leaves_wfm_sourced_values_alone() {
         serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
     // DE set this one; provenance records it.
     assert_eq!(good["de"]["ducats"]["volt_prime_chassis_blueprint"], 65);
-    // This one DE never touched — no recipe produces it — so it must be absent
+    // This one DE never touched - no recipe produces it - so it must be absent
     // from provenance even though it carries a WFM ducat value.
     assert!(
         good["de"]["ducats"].get("primed_continuity").is_none(),
@@ -681,7 +681,7 @@ fn the_ducat_carry_leaves_wfm_sourced_values_alone() {
 /// Manifests that parse but yield nothing must not publish an empty table.
 ///
 /// The case the previous three fixes all missed: DE's manifests can arrive
-/// intact and still resolve no usable rows — every reward path pointing at
+/// intact and still resolve no usable rows - every reward path pointing at
 /// something the catalogue does not carry. "Did the manifest arrive" is not
 /// "did it produce rows", and treating them as the same published an empty
 /// relic surface on a cold build while the legacy table sat unused.
@@ -720,7 +720,7 @@ fn de_manifests_that_yield_no_rows_fall_back_rather_than_publishing_empty() {
     assert!(out.status.success());
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
     assert!(
-        stderr.contains("fallback — no DE data available"),
+        stderr.contains("fallback - no DE data available"),
         "a manifest that resolves nothing must reach the fallback:\n{stderr}"
     );
 
@@ -780,7 +780,7 @@ fn de_manifests_that_yield_no_rows_carry_a_prior_surface_rather_than_downgrading
 /// A manifest we failed to read must NOT have its hash recorded.
 ///
 /// Recording it would tell the next cycle we already hold that manifest, and
-/// the failure would never be retried — a transient 500 would freeze a surface
+/// the failure would never be retried - a transient 500 would freeze a surface
 /// until DE happened to change the file.
 #[test]
 fn a_failed_manifest_does_not_record_its_hash() {
@@ -830,7 +830,7 @@ fn a_failed_manifest_does_not_record_its_hash() {
 
 /// Live check against DE, opt-in.
 ///
-/// The fixture gates prove our parsing; this proves the *contract* — that the
+/// The fixture gates prove our parsing; this proves the *contract* - that the
 /// index is still LZMA-alone at that URL, that the hash is still part of the
 /// manifest path, and that worldState still answers where it moved to. Five
 /// of the endpoints the community wiki documents are already dead, so this is
@@ -861,7 +861,7 @@ fn de_endpoints_are_still_alive() {
         assert!(index.contains_key(*name), "{name} vanished from DE's index");
     }
 
-    // One manifest, hash and all — the bare filename 404s, so this also proves
+    // One manifest, hash and all - the bare filename 404s, so this also proves
     // the hashed path still works.
     let entry = &index["ExportWeapons_en.json"];
     let body = http.get_text(&entry.url()).expect("manifest fetch");
@@ -869,10 +869,10 @@ fn de_endpoints_are_still_alive() {
     let rows = de::manifest_rows_for(&doc, "ExportWeapons_en.json");
     // Guards the two-array trap: ExportWeapons_en.json also carries
     // ExportRailjackWeapons (~143 rows), which sorts first.
-    assert!(rows.len() > 500, "only {} weapons — wrong array?", rows.len());
+    assert!(rows.len() > 500, "only {} weapons - wrong array?", rows.len());
     assert!(
         rows.iter().any(|r| r.get("omegaAttenuation").and_then(|v| v.as_f64()).is_some_and(|d| d > 0.0)),
-        "no dispositions in ExportWeapons — the field was renamed"
+        "no dispositions in ExportWeapons - the field was renamed"
     );
 
     let world = match de::fetch_world_state(&http) {
@@ -886,7 +886,7 @@ fn de_endpoints_are_still_alive() {
 ///
 /// This is the rule the previous five rounds kept rediscovering one surface at
 /// a time: **"the manifest arrived" is not "the manifest produced anything"**,
-/// and each override — ducats, dispositions, relics — has to carry its prior
+/// and each override - ducats, dispositions, relics - has to carry its prior
 /// value when the fresh build comes back empty. Asserting all three together
 /// is the point; testing them one at a time is how the hole kept moving.
 #[test]
@@ -1039,7 +1039,7 @@ fn the_disposition_log_reports_no_change_when_only_the_mirror_disagrees() {
     );
 
     // Feed that snapshot back in and run again. Nothing moved, so nothing may
-    // be logged — the mirror still says 1.30 and must not provoke an entry.
+    // be logged - the mirror still says 1.30 and must not provoke an entry.
     std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
     assert!(run(&args, &dir).status.success());
     let second: serde_json::Value =
@@ -1093,8 +1093,8 @@ fn annual_usage_history_retries_gaps_and_never_refetches_valid_years() {
     let second = run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-02T12:00:00Z"], &dir);
     assert!(second.status.success(), "{}", String::from_utf8_lossy(&second.stderr));
     let stderr = String::from_utf8_lossy(&second.stderr);
-    assert!(stderr.contains("2023 already in the snapshot — not refetched"));
-    assert!(stderr.contains("2025 already in the snapshot — not refetched"));
+    assert!(stderr.contains("2023 already in the snapshot - not refetched"));
+    assert!(stderr.contains("2025 already in the snapshot - not refetched"));
     let second_snap: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
     assert_eq!(second_snap["usage_history"]["years"], serde_json::json!([2023, 2024, 2025]));
     assert_eq!(second_snap["usage_history"]["by_year"]["2023"], first_snap["usage_history"]["by_year"]["2023"]);
@@ -1205,7 +1205,7 @@ fn annual_usage_history_retries_gaps_and_never_refetches_valid_years() {
         String::from_utf8_lossy(&warm.stderr)
     );
     assert!(String::from_utf8_lossy(&warm.stderr)
-        .contains("2025 already in the snapshot — not refetched"));
+        .contains("2025 already in the snapshot - not refetched"));
     let warm_snap: serde_json::Value =
         serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
     assert_eq!(warm_snap["usage"]["primed_continuity"]["year"], 2025);

@@ -2,7 +2,7 @@
 name = "wfm-client"
 version = "0.1.0"
 edition = "2021"
-description = "Shared transport primitives for WFM API calls (UA, headers, envelope unwrap, retry, rate limiter). Library crate — no binary."
+description = "Shared transport primitives for WFM API calls (UA, headers, envelope unwrap, retry, rate limiter). Library crate - no binary."
 license = "MIT"
 
 [dependencies]

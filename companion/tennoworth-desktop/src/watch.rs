@@ -1,11 +1,11 @@
-//! Price watches — "tell me when X drops to ≤ N" / "when someone bids ≥ N".
+//! Price watches - "tell me when X drops to ≤ N" / "when someone bids ≥ N".
 //!
 //! WFM has no native alerts; the gap is filled today by a Discord bot, a
 //! browser extension and one Windows-only app. Ours runs in the desktop's
 //! background: every [`CHECK_INTERVAL`] it asks WFM's public `top` endpoint
 //! for the exact tier of each watch (paced at 3 req/s, ≤100 watches so a full
 //! pass is ≤35 s), evaluates, records what it saw, and fires ONE desktop
-//! notification per watch per [`REARM_AFTER`] — a watch that stays satisfied
+//! notification per watch per [`REARM_AFTER`] - a watch that stays satisfied
 //! re-arms rather than nags. Evaluation is pure ([`evaluate`]) and tested;
 //! the loop is the thin shell around it.
 //!
@@ -26,11 +26,11 @@ use crate::wfm_session::WfmSession;
 /// How often the background pass runs. WFM's rules ask for no tight polling;
 /// 10 min × ≤100 watches is well inside "polite".
 pub const CHECK_INTERVAL: Duration = Duration::from_secs(10 * 60);
-/// First pass after launch — long enough not to compete with startup work.
+/// First pass after launch - long enough not to compete with startup work.
 pub const FIRST_CHECK_DELAY: Duration = Duration::from_secs(45);
 /// A satisfied watch notifies again only after this long (seconds).
 pub const REARM_AFTER_SECS: i64 = 6 * 60 * 60;
-/// Cap on watches per pass — a whole-market sweep is the scraper's job.
+/// Cap on watches per pass - a whole-market sweep is the scraper's job.
 pub const MAX_WATCHES: usize = 100;
 
 pub const EVENT_WATCH_FIRED: &str = "watch-fired";
@@ -100,7 +100,7 @@ pub fn describe(o: &WatchOutcome) -> String {
 
 /// One full pass: fetch, evaluate, record, notify. Returns every outcome (the
 /// "check now" command shows them all; the loop only acts on `fire`).
-/// Blocking — call from `spawn_blocking` or the checker thread.
+/// Blocking - call from `spawn_blocking` or the checker thread.
 pub fn run_pass(app: &AppHandle) -> Vec<WatchOutcome> {
     let db = app.state::<Db>();
     let session = app.state::<Arc<WfmSession>>();
@@ -167,7 +167,7 @@ pub fn run_pass(app: &AppHandle) -> Vec<WatchOutcome> {
 }
 
 /// Start the background checker. Detached thread: sleeps, runs a pass, sleeps.
-/// Nothing here can take the app down — every failure is logged and the loop
+/// Nothing here can take the app down - every failure is logged and the loop
 /// simply tries again next interval.
 pub fn start_checker(app: AppHandle) {
     std::thread::Builder::new()

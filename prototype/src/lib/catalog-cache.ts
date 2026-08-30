@@ -10,11 +10,11 @@ const DB_VERSION = 1;
 const STORE = 'catalogs';
 // v3: sourced from the baked same-origin wfstat-catalog.json (forced
 // English). v2 caches could hold Accept-Language-localized names that
-// never matched the WFM catalog — invalidate them.
+// never matched the WFM catalog - invalidate them.
 const KEY = 'wfstat-items-v3';
 // Bumping KEY invalidates the old row but cannot delete it: nothing reads a
 // key it no longer knows. Every key this cache has ever used therefore has to
-// stay listed here, or its rows sit in the user's IndexedDB forever — v2 rows
+// stay listed here, or its rows sit in the user's IndexedDB forever - v2 rows
 // are on real installs right now, hundreds of KB each, unreachable by any code
 // path. Add the outgoing key here whenever you bump KEY.
 const RETIRED_KEYS = ['wfstat-items-v1', 'wfstat-items-v2'];
@@ -63,7 +63,7 @@ export async function readCached(): Promise<SlimCatalog | null> {
     if (!entry) return null;
     if (Date.now() - entry.ts > TTL_MS) {
       // Drop it rather than leaving a stale multi-hundred-KB row parked until
-      // the next successful write happens to overwrite it — which never comes
+      // the next successful write happens to overwrite it - which never comes
       // if the user stops loading inventories.
       void clearCached();
       return null;
@@ -96,7 +96,7 @@ export async function clearCached(): Promise<void> {
 }
 
 /** Reclaim rows left behind by earlier cache-key versions. Called once at
- *  boot from the resolver — best-effort and non-blocking, so a browser with a
+ *  boot from the resolver - best-effort and non-blocking, so a browser with a
  *  broken IDB simply keeps the wasted space rather than failing a page load. */
 export async function purgeRetiredCaches(): Promise<void> {
   await deleteKeys(RETIRED_KEYS);

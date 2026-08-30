@@ -1,16 +1,16 @@
 // Transport abstraction: the SPA's single seam between "the hosted
 // informational site" (which performs NO companion/order/scan operations) and
 // "call wfm-core directly over Tauri IPC" (the desktop app). Selected ONCE at
-// boot by sniffing the Tauri runtime — see `isDesktopRuntime()` /
+// boot by sniffing the Tauri runtime - see `isDesktopRuntime()` /
 // `createTransport()`.
 //
 // The hosted site is informational only (market data + a dropped
-// inventory.json); every interactive operation — scanning, listing, orders,
-// login — lives in the desktop app. So the hosted build's transport is a
+// inventory.json); every interactive operation - scanning, listing, orders,
+// login - lives in the desktop app. So the hosted build's transport is a
 // HostedTransport that no-ops the two market-cache ops and throws on anything
 // else (which the hosted UI never calls). The Tauri transport invokes a
 // wfm-core-backed command per op; listing/order commands reject with a typed
-// {code, message} CmdError which surfaces here as DesktopCmdError —
+// {code, message} CmdError which surfaces here as DesktopCmdError -
 // `needs_login` / `needs_unlock` drive the SPA's login and passphrase dialogs.
 
 import type { PingResponse, PlanItemInput, OrderPatch, PendingPlan, PlanResponse, ItemResult, Market, OverlaySettings, OverlayStatus } from './types';
@@ -21,7 +21,7 @@ import { isHistory, type History } from './history';
  * `{ code, message }` the invoke promise rejects with. Callers branch on
  * `code` (`needs_login` / `needs_unlock` open the auth dialogs;
  * `bad_passphrase` stays in the passphrase dialog; everything else shows
- * `message` verbatim). Never carries the JWT, passphrase, or password —
+ * `message` verbatim). Never carries the JWT, passphrase, or password -
  * the Rust side guarantees that.
  */
 export class DesktopCmdError extends Error {
@@ -50,7 +50,7 @@ function rethrowInvoke(e: unknown): never {
  * Result of a desktop market refresh. `updated` is true only when a validated
  * 200 delivered a strictly-considerable snapshot in `market` (the caller decides
  * whether to swap, guarding a server rollback by comparing `updated_at`). On 304
- * / offline / error it is false with no `market` — the caller keeps what it has.
+ * / offline / error it is false with no `market` - the caller keeps what it has.
  * `updatedAt` reports the freshest snapshot the desktop now holds (fetched or
  * cached) so the staleness indicator stays correct even when nothing changed.
  */
@@ -85,16 +85,16 @@ export interface Transport {
    * Desktop-only: conditionally refresh the market snapshot from tennoworth.app
    * (ETag / If-None-Match) via a Rust command, updating the app-data cache. A
    * pure no-op in the browser (the hosted build gets fresh data same-origin from
-   * the box — it must make NO third-party fetch). Never rejects on network
+   * the box - it must make NO third-party fetch). Never rejects on network
    * failure; a failed refresh returns `{ updated: false }`.
    */
   refreshMarket(): Promise<MarketRefreshResult>;
   /**
    * The year-long daily price history (`history.json`, built on the box from
-   * relics.run — see wfm-scrape/src/history.rs). On demand, never at boot:
+   * relics.run - see wfm-scrape/src/history.rs). On demand, never at boot:
    * ~1 MB gzipped and optional. Hosted: same-origin fetch. Desktop: the Rust
    * ETag cache (cached copy first, then a conditional refresh). `null` when
-   * unavailable — every 1-year surface simply hides.
+   * unavailable - every 1-year surface simply hides.
    */
   loadHistory(): Promise<History | null>;
   /** Memory-scan the running game and return the parsed inventory object. */
@@ -109,7 +109,7 @@ export interface Transport {
   bulkVisibility(orderIds: string[], visible: boolean): Promise<{ results: ItemResult[] }>;
   /**
    * Desktop-only: open a prefilled "scan broke" GitHub issue in the real
-   * browser and resolve with the URL. Resolving with the URL matters — if the
+   * browser and resolve with the URL. Resolving with the URL matters - if the
    * open failed the caller can still show it as copyable text rather than
    * leaving a dead button.
    */
@@ -156,10 +156,10 @@ export class HostedTransport implements Transport {
     throw new Error('The in-game overlay is available in the desktop app.');
   }
   async reportScanIssue(): Promise<ScanReport> {
-    throw new Error('This is the informational site — the desktop app is required for account features.');
+    throw new Error('This is the informational site - the desktop app is required for account features.');
   }
   async health(): Promise<PingResponse> {
-    throw new Error('This is the informational site — the desktop app is required for account features.');
+    throw new Error('This is the informational site - the desktop app is required for account features.');
   }
   async loadCachedMarket(): Promise<Market | null> {
     return null;
@@ -178,31 +178,31 @@ export class HostedTransport implements Transport {
     }
   }
   async fetchInventory(): Promise<unknown> {
-    throw new Error('This is the informational site — the desktop app is required to scan your account.');
+    throw new Error('This is the informational site - the desktop app is required to scan your account.');
   }
   async submitPlan(): Promise<PlanResponse> {
-    throw new Error('This is the informational site — the desktop app is required to list on WFM.');
+    throw new Error('This is the informational site - the desktop app is required to list on WFM.');
   }
   async getPendingPlan(): Promise<PendingPlan | null> {
     return null;
   }
   async resumePendingPlan(): Promise<PlanResponse> {
-    throw new Error('This is the informational site — the desktop app is required to list on WFM.');
+    throw new Error('This is the informational site - the desktop app is required to list on WFM.');
   }
   async discardPendingPlan(): Promise<unknown> {
     return null;
   }
   async fetchOrders(): Promise<unknown> {
-    throw new Error('This is the informational site — the desktop app is required to manage orders.');
+    throw new Error('This is the informational site - the desktop app is required to manage orders.');
   }
   async updateOrder(): Promise<unknown> {
-    throw new Error('This is the informational site — the desktop app is required to manage orders.');
+    throw new Error('This is the informational site - the desktop app is required to manage orders.');
   }
   async deleteOrder(): Promise<unknown> {
-    throw new Error('This is the informational site — the desktop app is required to manage orders.');
+    throw new Error('This is the informational site - the desktop app is required to manage orders.');
   }
   async bulkVisibility(): Promise<{ results: ItemResult[] }> {
-    throw new Error('This is the informational site — the desktop app is required to manage orders.');
+    throw new Error('This is the informational site - the desktop app is required to manage orders.');
   }
 }
 
@@ -355,7 +355,7 @@ export class TauriTransport implements Transport {
     }
   }
   async getPendingPlan(): Promise<PendingPlan | null> {
-    // The command returns Option<PendingPlan> — null when there's nothing
+    // The command returns Option<PendingPlan> - null when there's nothing
     // queued, matching the HTTP path's 404 → null normalization.
     try {
       return await resolveInvoke()<PendingPlan | null>('get_pending_plan');
@@ -460,7 +460,7 @@ export async function desktopWfmUnlock(passphrase: string, remember: boolean): P
 
 /**
  * Try the OS-keyring "remember on this device" key before showing the
- * passphrase modal. Never throws for a miss — false just means "ask the
+ * passphrase modal. Never throws for a miss - false just means "ask the
  * human"; a genuine IPC fault still rethrows so the caller's fallback
  * (open the modal) runs.
  */
@@ -491,7 +491,7 @@ export interface LiveTop {
   low_sell: number | null;
   top_buy: number | null;
   /** Your own order on this tier, if the desktop knew your username and it was
-   *  among the top ≤5 — excluded from `sells`/`buys`, so `low_sell` is the
+   *  among the top ≤5 - excluded from `sells`/`buys`, so `low_sell` is the
    *  best ask that is NOT yours. */
   own_ask?: number | null;
   own_bid?: number | null;
@@ -504,7 +504,7 @@ export const LIVE_TOP_PROGRESS_EVENT = 'live-top-progress';
 
 /**
  * Exact-tier live asks/bids for up to 100 items, paced at WFM's 3 req/s
- * (≈17 s per 50) — listen on `LIVE_TOP_PROGRESS_EVENT` for `{done,total}`.
+ * (≈17 s per 50) - listen on `LIVE_TOP_PROGRESS_EVENT` for `{done,total}`.
  */
 export async function desktopLiveTopPrices(queries: LiveTopQuery[]): Promise<LiveTop[]> {
   try {
@@ -654,7 +654,7 @@ export async function desktopEelogStatus(): Promise<EeLogStatus> {
 
 /**
  * True inside the Tauri desktop webview. Keyed off `__TAURI_INTERNALS__` (the
- * runtime object Tauri v2 always injects), per the desktop spike — this is a
+ * runtime object Tauri v2 always injects), per the desktop spike - this is a
  * boot-time constant, not a per-call check.
  */
 export function isDesktopRuntime(): boolean {

@@ -1,6 +1,6 @@
 // Feature rail: the hosted landing's breadth reveal. The rail is the only
 // place a visitor learns the app is more than a price lookup, so the tab set
-// itself is the contract — plus the WAI-ARIA tabs wiring, which is easy to
+// itself is the contract - plus the WAI-ARIA tabs wiring, which is easy to
 // half-implement (a roving tabindex without arrow keys renders a tab list
 // nothing but a mouse can drive).
 import { describe, it, expect, afterEach } from 'vitest';

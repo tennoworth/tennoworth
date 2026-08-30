@@ -36,7 +36,7 @@ install -m 0755 "$DEPLOY/run-scrape.sh" /srv/wfm/run-scrape.sh
 install -m 0755 "$DEPLOY/pull-web.sh" /srv/wfm/pull-web.sh
 install -m 0755 "$DEPLOY/pull-scrape.sh" /srv/wfm/pull-scrape.sh
 # Without this the checkout at /srv/wfm/app only moves when a human moves it,
-# and the copies under /srv/wfm drift from the repo silently — the box ran a
+# and the copies under /srv/wfm drift from the repo silently - the box ran a
 # retired pipeline 19 commits behind main for a week that way.
 install -m 0755 "$DEPLOY/pull-app.sh" /srv/wfm/pull-app.sh
 # OnFailure handler for every unit below. Optional webhook config lives in
@@ -48,7 +48,7 @@ chown -R wfm:wfm /srv/wfm
 # The pullers run as root against a wfm-owned checkout, which git rejects as
 # "dubious ownership" unless the path is vouched for. It must be --system:
 # --global writes /root/.gitconfig, which git only finds via HOME, and systemd
-# starts these units with no HOME set — so a --global exception works when you
+# starts these units with no HOME set - so a --global exception works when you
 # run the script by hand over ssh and fails the moment the timer fires it.
 # safe.directory is also deliberately ignored from a repo's own local config.
 # --add unconditionally would stack a duplicate line on every re-run; this
@@ -61,7 +61,7 @@ if [ -s /etc/caddy/Caddyfile ] && ! grep -q 'prototype/dist' /etc/caddy/Caddyfil
   # A non-empty Caddyfile that isn't ours = this box already serves other sites.
   # Overwriting it would 502 every other hostname on reload. Skip + instruct.
   cp -n /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak 2>/dev/null || true
-  echo "    Existing /etc/caddy/Caddyfile detected (backed up to .bak) — NOT overwriting."
+  echo "    Existing /etc/caddy/Caddyfile detected (backed up to .bak) - NOT overwriting."
   echo "    Paste the site block from $DEPLOY/Caddyfile into your config, pick a free"
   echo "    localhost port, point a tunnel hostname at it, then: systemctl reload caddy"
 else
@@ -102,7 +102,7 @@ cat <<'NEXT'
      cloudflared service install <YOUR_TUNNEL_TOKEN>
      systemctl status cloudflared
 
-2. Get the built site onto the box (do NOT build here — keep node/bun off the
+2. Get the built site onto the box (do NOT build here - keep node/bun off the
    exposed box). From CI or your dev machine, place the Vite build at
    $REPO/prototype/dist  (see the deploy runbook "Build / deploy").
 
@@ -110,7 +110,7 @@ cat <<'NEXT'
      systemctl start wfm-scrape.service
      journalctl -u wfm-scrape.service -f
    Watch for repeated 429/403 (WFM 1015). The UA is now a real browser string,
-   so this should be fine from a residential IP — but verify.
+   so this should be fine from a residential IP - but verify.
 
 4. Verify headers + the companion fetch on the LIVE https URL:
      curl -sI https://wfm.yourdomain.com | grep -iE 'strict-transport|frame-options|content-security'

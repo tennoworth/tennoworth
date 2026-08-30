@@ -4,7 +4,7 @@
 //! The Rivens view shows the user's own rivens; for each one a "Show comps"
 //! button asks WFM for the cheapest matching auctions. WFM's API rules cap
 //! auction searches at 10 requests/minute, so every call passes through a
-//! process-wide sliding-window gate — two comps clicked back to back share
+//! process-wide sliding-window gate - two comps clicked back to back share
 //! the budget instead of each assuming a fresh one.
 
 use std::collections::VecDeque;
@@ -70,7 +70,7 @@ fn auction_gate() -> &'static Mutex<VecDeque<Instant>> {
 pub fn pace_auction_request() {
     let gate = auction_gate();
     loop {
-        // Recover a poisoned guard (see poison.rs) — a panic elsewhere must
+        // Recover a poisoned guard (see poison.rs) - a panic elsewhere must
         // not wedge every future comps click behind a second panic.
         let wait = {
             let mut stamps = guard(gate);
@@ -100,7 +100,7 @@ fn auctions_url(weapon_slug: &str) -> String {
 /// Parse the v1 response (`payload.auctions[]`). Closed / private / withdrawn
 /// auctions are not comps; rows without a usable price are dropped. The API
 /// returns up to 500 rows per weapon, so the result is sorted by price and
-/// truncated to [`COMPS_LIMIT`] here — the server's `sort_by` is not relied on.
+/// truncated to [`COMPS_LIMIT`] here - the server's `sort_by` is not relied on.
 pub fn parse_auctions(body: &serde_json::Value) -> Result<Vec<RivenAuction>> {
     let data = wfm_client::unwrap_envelope(body);
     let Some(arr) = data.get("auctions").and_then(|a| a.as_array()) else {

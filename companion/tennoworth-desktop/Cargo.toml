@@ -1,14 +1,14 @@
-# TennoWorth desktop shell — Phase C (see the desktop spike notes). One
+# TennoWorth desktop shell - Phase C (see the desktop spike notes). One
 # window loading the built SPA via Tauri's asset protocol; the SPA's Transport
 # drives wfm-core through thin commands: health / scan_inventory, the WFM
-# session (login / unlock — passphrase from the webview, see wfm_session.rs),
+# session (login / unlock - passphrase from the webview, see wfm_session.rs),
 # the listing/order surface mirroring serve's HTTP routes, and the assistant
 # relay.
 [package]
 name = "tennoworth-desktop"
-# THE authoritative version for the desktop app. This is CARGO_PKG_VERSION —
+# THE authoritative version for the desktop app. This is CARGO_PKG_VERSION -
 # what update.rs reports as the installed version and what the updater
-# compares against latest.json — and, with no `version` key in
+# compares against latest.json - and, with no `version` key in
 # tauri.conf.json, it is also what Tauri writes into the bundle, the installer
 # filenames and the manifest.
 #
@@ -26,13 +26,13 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 # `tray-icon` enables the system tray (C6). Linux tray needs libayatana-
 # appindicator at runtime; a failed tray init is logged and swallowed
-# (window + notifications still work) — see init_tray.
+# (window + notifications still work) - see init_tray.
 tauri = { version = "2", features = ["tray-icon"] }
 # Post-scan system notification ("N items worth ~Xp to sell"). Fired from Rust
 # (NotificationExt), so no JS ACL entry is needed.
 tauri-plugin-notification = "2"
 # C5 auto-update against the GitHub-releases latest.json. Driven entirely from
-# Rust through app-defined commands (check_update / install_update) — check on
+# Rust through app-defined commands (check_update / install_update) - check on
 # launch, notify, download+install only on explicit confirmation, apply on
 # restart. The signature pubkey lives in tauri.conf.json; the private key is
 # generated offline and never enters the repo (the maintainer signing runbook §9).
@@ -47,7 +47,7 @@ tauri-plugin-single-instance = "2"
 # Opens the prefilled "scan broke" GitHub issue in the user's real browser.
 # A bare <a target="_blank"> is NOT a substitute: this app registers no
 # window-open handler and its capability grants no opener ACL, so such a link
-# silently does nothing — the exact class of failure the repo has shipped
+# silently does nothing - the exact class of failure the repo has shipped
 # before. The URL is built and opened in Rust, where the version/platform it
 # reports already live.
 tauri-plugin-opener = "2"
@@ -60,14 +60,14 @@ wfm-core = { path = "../wfm-core" }
 # The sell-priority scoring (single source of truth, mirrored in sell-priority.ts)
 # used to rank the tray + notification sellables. Pure, no-dep crate.
 market-math = { path = "../market-math" }
-# `bundled` compiles SQLite from source — no system libsqlite3 dependency, so the
+# `bundled` compiles SQLite from source - no system libsqlite3 dependency, so the
 # canonical desktop store works on a clean Windows/Linux box with nothing
 # pre-installed (matches the "download → works" goal).
 rusqlite = { version = "0.32", features = ["bundled"] }
 # C4 market refresh: the one remote GET (tennoworth.app/market.json). Egress
 # stays in Rust, off the webview. Inherits the
 # workspace's full reqwest feature set (see root Cargo.toml) rather than
-# declaring a smaller one — Cargo already unified it with wfm-core's superset
+# declaring a smaller one - Cargo already unified it with wfm-core's superset
 # in every `--workspace` build regardless, so the old "subset" declaration
 # here was cosmetic, not a smaller actual build.
 reqwest = { workspace = true }
@@ -75,11 +75,11 @@ reqwest = { workspace = true }
 # transitively via aes-gcm, so this pins no new build.
 zeroize = "1"
 # "Remember on this device": the PBKDF2-derived unlock key (never the
-# passphrase — users reuse those) goes in the OS keyring. v3 needs explicit
+# passphrase - users reuse those) goes in the OS keyring. v3 needs explicit
 # per-platform store features or you silently get the mock store; this is the
 # crate README's cross-platform set. Linux talks Secret Service over DBus
 # (GNOME Keyring, KWallet via org.kde.secretservicecompat); crypto-rust avoids
-# an OpenSSL link. Desktop-only dependency — the CLI must not grow DBus deps.
+# an OpenSSL link. Desktop-only dependency - the CLI must not grow DBus deps.
 keyring = { version = "3", features = ["windows-native", "sync-secret-service", "crypto-rust"] }
 # Encoding for the keyring entry value.
 base64 = { workspace = true }

@@ -43,11 +43,11 @@ describe('humanWindow', () => {
   // bake an empty surface, so these arrive in practice. "NaNd NaNh" on the
   // countdown is worse than admitting we don't know.
   it('refuses to render an unknown window', () => {
-    expect(humanWindow(null)).toBe('—');
-    expect(humanWindow(undefined)).toBe('—');
-    expect(humanWindow(NaN)).toBe('—');
-    expect(humanWindow(Infinity)).toBe('—');
-    expect(humanWindow(-1)).toBe('—');
+    expect(humanWindow(null)).toBe('-');
+    expect(humanWindow(undefined)).toBe('-');
+    expect(humanWindow(NaN)).toBe('-');
+    expect(humanWindow(Infinity)).toBe('-');
+    expect(humanWindow(-1)).toBe('-');
   });
 });
 
@@ -67,9 +67,9 @@ describe('plat', () => {
   });
 
   it('renders a missing value rather than NaN', () => {
-    expect(plat(null)).toBe('—');
-    expect(plat(undefined)).toBe('—');
-    expect(plat(NaN)).toBe('—');
+    expect(plat(null)).toBe('-');
+    expect(plat(undefined)).toBe('-');
+    expect(plat(NaN)).toBe('-');
   });
 });
 
@@ -80,7 +80,7 @@ describe('ownedBreakdown', () => {
   });
 
   it('clamps leveled to what is actually held back', () => {
-    // 5 leveled but only 2 held back (reserve is 0) — an unclamped subtraction
+    // 5 leveled but only 2 held back (reserve is 0) - an unclamped subtraction
     // would render "-3 kept".
     expect(ownedBreakdown(10, 8, 5)).toEqual({ heldBack: 2, leveledPart: 2, keptPart: 0 });
   });
@@ -107,6 +107,6 @@ describe('freshnessLabel', () => {
     expect(freshnessLabel('fresh')).toBe('under 3 hours old');
     expect(freshnessLabel('aging')).toBe('3 to 24 hours old');
     expect(freshnessLabel('stale')).toBe('over 24 hours old');
-    expect(freshnessLabel('unknown')).toBe('age unknown — no timestamp in this snapshot');
+    expect(freshnessLabel('unknown')).toBe('age unknown - no timestamp in this snapshot');
   });
 });

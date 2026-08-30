@@ -8,7 +8,7 @@
   // This is a vertical tab rail: one tab per surface, each with a sentence
   // and a MINIATURE of that surface rendered from hardcoded sample rows.
   //
-  // Miniatures, not screenshots, on purpose — same reasoning as
+  // Miniatures, not screenshots, on purpose - same reasoning as
   // DesktopShowcase's sample table: a PNG freezes one mode, goes stale the
   // first time a column moves, and costs bundle weight. A token-driven table
   // re-skins with the theme and can only drift if someone edits it.
@@ -18,7 +18,7 @@
   // "above the lowest other ask", the watch conditions, the relic planner's
   // "p / crack"). Keep them that way: the point of the rail is that the
   // visitor recognises the real thing when they open it. Every NUMBER is
-  // invented — nothing here reads the snapshot.
+  // invented - nothing here reads the snapshot.
 
   type TabId =
     | 'sell' | 'sets' | 'relics' | 'rivens'
@@ -33,7 +33,7 @@
       id: 'sell',
       title: 'Sell',
       blurb:
-        'Your inventory ranked by a prioritization score from price, likely sell-through, and bounded DE usage — actual platinum totals stay unweighted.',
+        'Your inventory ranked by a prioritization score from price, likely sell-through, and bounded DE usage - actual platinum totals stay unweighted.',
     },
     {
       id: 'sets',
@@ -45,7 +45,7 @@
       id: 'relics',
       title: 'Relics',
       blurb:
-        'The relics you own ranked by expected plat per crack, priced from what is actually in the drop table — and told when selling one intact beats running it.',
+        'The relics you own ranked by expected plat per crack, priced from what is actually in the drop table - and told when selling one intact beats running it.',
     },
     {
       id: 'rivens',
@@ -63,7 +63,7 @@
       id: 'ledger',
       title: 'Ledger',
       blurb:
-        "Trades read from the game's own EE.log as they complete, so realised plat is a record rather than a guess — and a sale can shrink the matching listing for you.",
+        "Trades read from the game's own EE.log as they complete, so realised plat is a record rather than a guess - and a sale can shrink the matching listing for you.",
     },
     {
       id: 'orders',
@@ -75,7 +75,7 @@
       id: 'advisor',
       title: 'Advisor',
       blurb:
-        'Hold or sell, argued from the prime calendar and a year of price history — release decay, Resurgence reprints, post-vault ramps. Advice only; nothing is automated.',
+        'Hold or sell, argued from the prime calendar and a year of price history - release decay, Resurgence reprints, post-vault ramps. Advice only; nothing is automated.',
     },
   ];
 
@@ -87,7 +87,7 @@
   }
 
   // WAI-ARIA tabs pattern. The rail is vertical at width but stacks to a
-  // horizontal strip under 48rem, so BOTH axes move selection — a reader on
+  // horizontal strip under 48rem, so BOTH axes move selection - a reader on
   // the stacked layout reaches for Left/Right, one on the rail for Up/Down,
   // and neither should find a dead key.
   function onkeydown(e: KeyboardEvent): void {
@@ -138,7 +138,7 @@
   const rivens = [
     { weapon: 'Kuva Bramma', stats: '+182% Multishot / −53% Zoom', rolls: 3, dispo: '1.05', move: '▲ 12%', band: '90 – 210p', note: 'rolled · n=42' },
     { weapon: 'Rubico Prime', stats: '+CC / +CD / −Status', rolls: 0, dispo: '0.85', move: '▼ 8%', band: '340 – 700p', note: 'unrolled · n=17' },
-    { weapon: 'Torid', stats: 'challenge to reveal', rolls: 0, dispo: '1.25', move: '', band: '—', note: 'veiled' },
+    { weapon: 'Torid', stats: 'challenge to reveal', rolls: 0, dispo: '1.25', move: '', band: '-', note: 'veiled' },
   ];
 
   const watches = [
@@ -165,7 +165,7 @@
       item: 'Ash Prime Set',
       verdict: 'hold',
       hold: true,
-      reason: 'vaulted 96 d ago — the post-vault ramp typically runs for months · now ×1.3 its pre-vault price · 30 d move +7%',
+      reason: 'vaulted 96 d ago - the post-vault ramp typically runs for months · now ×1.3 its pre-vault price · 30 d move +7%',
     },
     {
       item: 'Nidus Prime Blueprint',
@@ -218,7 +218,7 @@
                     <tr>
                       <td class="l">{r.item}{#if r.tag}<span class="tag {r.tag}">{r.tag}</span>{/if}</td>
                       <td>{r.own}</td>
-                      <td class="score">{#if r.score}{r.score}{:else}<span class="faint">—</span>{/if}</td>
+                      <td class="score">{#if r.score}{r.score}{:else}<span class="faint">-</span>{/if}</td>
                       <td>{r.avg}<span class="unit">p</span></td>
                     </tr>
                   {/each}
@@ -236,7 +236,7 @@
                   {#each setParts as p (p.part)}
                     <tr class:dim={!p.have}>
                       <td class="l">{p.part}</td>
-                      <td>{#if p.have}<span class="good">✓</span>{:else}<span class="faint">—</span>{/if}</td>
+                      <td>{#if p.have}<span class="good">✓</span>{:else}<span class="faint">-</span>{/if}</td>
                       <td>{p.price}<span class="unit">p</span></td>
                     </tr>
                   {/each}
@@ -255,7 +255,7 @@
                     <tr class:dim={d.value === 0}>
                       <td class="l"><span class="rar {d.r}">{d.r}</span>{d.drop}</td>
                       <td>{d.chance}</td>
-                      <td>{#if d.value}{d.value}<span class="unit">p</span>{:else}<span class="faint">—</span>{/if}</td>
+                      <td>{#if d.value}{d.value}<span class="unit">p</span>{:else}<span class="faint">-</span>{/if}</td>
                     </tr>
                   {/each}
                 </tbody>
@@ -272,7 +272,7 @@
                 </tr></thead>
                 <tbody>
                   {#each rivens as r (r.weapon)}
-                    <tr class:dim={r.band === '—'}>
+                    <tr class:dim={r.band === '-'}>
                       <td class="l">{r.weapon}</td>
                       <td class="l stats">{r.stats}</td>
                       <td>{r.rolls}</td>
@@ -326,7 +326,7 @@
                     </tr>
                   {/each}
                   <tr class="sum">
-                    <td class="l" colspan="4">Net, all time — confirmed from EE.log</td>
+                    <td class="l" colspan="4">Net, all time - confirmed from EE.log</td>
                     <td class="score">+{ledgerNet}<span class="unit">p</span></td>
                   </tr>
                 </tbody>
@@ -376,17 +376,17 @@
 
           {#if t.id === 'sets'}
             <p class="verdict">
-              <!-- .lbl uppercases, so the plat figure stays outside it — "+25P"
+              <!-- .lbl uppercases, so the plat figure stays outside it - "+25P"
                    is not a unit anyone writes. -->
               <span class="lbl good">Complete</span>
-              +{setNet}p — buy {missing.part} for {missing.price}p and sell as a set for {setPrice}p, against
+              +{setNet}p - buy {missing.part} for {missing.price}p and sell as a set for {setPrice}p, against
               {heldTotal}p for the three parts you hold sold one at a time.
             </p>
           {:else if t.id === 'relics'}
             <p class="verdict">
               <span class="lbl good">Crack</span>
               18.4p expected per crack at Radiant, 3 of 6 rewards moving. Selling this one intact
-              clears 22p each — under the crack, so run it.
+              clears 22p each - under the crack, so run it.
             </p>
           {/if}
         </div>
@@ -427,7 +427,7 @@
     background: transparent;
     border: none;
     border-bottom: 1px var(--rule) var(--hairline);
-    border-radius: 0; /* UA reset, as .seg > button does — not a design radius */
+    border-radius: 0; /* UA reset, as .seg > button does - not a design radius */
     color: var(--muted);
     cursor: pointer;
     white-space: nowrap;
@@ -437,7 +437,7 @@
   }
   .tabs > button:last-child { border-bottom: none; }
   .tabs > button:hover { color: var(--fg); background: var(--hover); }
-  /* Active = inversion, not a hue — the theme's one filled surface. */
+  /* Active = inversion, not a hue - the theme's one filled surface. */
   .tabs > button.on,
   .tabs > button.on:hover { background: var(--ink-bar); color: var(--on-ink); font-weight: 600; }
 
@@ -451,7 +451,7 @@
     color: var(--muted);
     max-width: 72ch;
   }
-  /* The rule sits on the table, not on .desc — .desc is capped at 72ch, and a
+  /* The rule sits on the table, not on .desc - .desc is capped at 72ch, and a
      divider that stopped where the sentence stops reads as a broken border. */
   .mini { min-width: 0; border-top: 1px var(--rule) var(--hairline); }
   /* Deliberately the same anatomy as the search and hand-off tables above:

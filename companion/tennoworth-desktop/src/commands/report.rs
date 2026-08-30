@@ -1,6 +1,6 @@
 //! The "scan broke" report flow (Phase C7's second half).
 //!
-//! No telemetry backend, by design — nothing is collected, and nothing leaves
+//! No telemetry backend, by design - nothing is collected, and nothing leaves
 //! the machine unless the user clicks. The app opens a GitHub issue with the
 //! boring parts already filled in (app version, OS, the error text the scan
 //! actually produced), because the report that never gets filed is the one that
@@ -19,7 +19,7 @@ const ISSUE_BASE: &str = "https://github.com/tennoworth/tennoworth/issues/new";
 ///
 /// Hand-rolled because the app has no url crate and this is the only caller.
 /// Unreserved set per RFC 3986 plus the usual `-._~`; everything else, space
-/// included, goes to %XX. Space must NOT become `+` here — GitHub renders the
+/// included, goes to %XX. Space must NOT become `+` here - GitHub renders the
 /// body literally and a `+` would show up as a plus sign in the issue text.
 fn encode(s: &str) -> String {
     let mut out = String::with_capacity(s.len() * 2);
@@ -40,7 +40,7 @@ fn encode(s: &str) -> String {
 /// can actually be wrong, whereas "does the browser open" is the plugin's job.
 ///
 /// `error` is whatever the scan reported. It is truncated because a scan error
-/// can carry a long tail, and browsers/servers cap URL length — a report that
+/// can carry a long tail, and browsers/servers cap URL length - a report that
 /// silently fails to open because the URL was too long is the failure mode this
 /// truncation exists to prevent.
 pub fn issue_url(app_version: &str, os: &str, error: Option<&str>) -> String {

@@ -1,7 +1,7 @@
 // Pricing Baro's manifest.
 //
-// worldState publishes his stock from the moment the visit is announced —
-// days before he lands — with a ducat AND a credit price per line. That turns
+// worldState publishes his stock from the moment the visit is announced -
+// days before he lands - with a ducat AND a credit price per line. That turns
 // the Baro view from "here is a list" into "here is what your ducats are worth
 // this rotation", which is the only question a trader has.
 //
@@ -13,20 +13,20 @@ import type { BaroStock, Market, MarketItemEntry } from './types';
 /** What the board says to do about one line of stock. */
 export type BaroVerdict =
   | 'flip' //      priced above its own baseline and traded enough to sell into
-  | 'hold' //      worth buying, but his arrival depresses it — wait for recovery
+  | 'hold' //      worth buying, but his arrival depresses it - wait for recovery
   | 'thin' //      a "price" set by one or two optimistic listings
   | 'skip' //      the plat does not justify the ducats
-  | 'unpriced'; //  cosmetic or bundle — no market listing exists at all
+  | 'unpriced'; //  cosmetic or bundle - no market listing exists at all
 
 export interface BaroRow {
   item: string;
   slug?: string;
-  /** DE's `/Lotus/...` path. The stable row identity — two lines can share a
+  /** DE's `/Lotus/...` path. The stable row identity - two lines can share a
    *  display name, and it is also how the row finds its category glyph. */
   unique?: string;
   ducats?: number;
   credits?: number;
-  /** Current market price — the depth-aware ask where we have one. */
+  /** Current market price - the depth-aware ask where we have one. */
   price: number | null;
   /** 90-day baseline, for "is today's price actually good". */
   baseline: number | null;
@@ -88,7 +88,7 @@ export function verdictFor(row: Omit<BaroRow, 'verdict'>): BaroVerdict {
  * Price Baro's manifest against the snapshot.
  *
  * Rows keep their manifest order until sorted, and every unpriceable row is
- * kept — dropping a cosmetic would read as "he isn't selling it".
+ * kept - dropping a cosmetic would read as "he isn't selling it".
  */
 export function priceManifest(stock: BaroStock[], market: Market | null): BaroRow[] {
   return stock.map((s) => {
@@ -138,7 +138,7 @@ export interface DucatBasket {
  * What his stock costs, and how far your spare parts would go toward it.
  *
  * **There is no ducat balance here, because we cannot see one.** Ducats are
- * account state, not an item, so an inventory scan never observes them — the
+ * account state, not an item, so an inventory scan never observes them - the
  * only ducat figure a scan can derive is what your spare prime parts would
  * yield IF you scrapped them. An earlier version passed that potential in as
  * `ducatsHeld` and treated it as money already banked, then went on to propose
@@ -176,7 +176,7 @@ export function ducatBasket(rows: BaroRow[], scrapPotential: number): DucatBaske
 }
 
 /** Where a visit sits relative to now. `unknown` only when no schedule
- *  exists at all — with worldState there always is one. */
+ *  exists at all - with worldState there always is one. */
 export type BaroPhase = 'here' | 'incoming' | 'gone' | 'unknown';
 
 export function baroPhase(
@@ -200,7 +200,7 @@ export function baroPhase(
  * The surface can legitimately carry a PAST visit's stock: the old upstream
  * only published inventory during the 48h window, so the pipeline carried it
  * forward. worldState makes that rare, but a snapshot built before the switch
- * — or one carried through a DE outage — can still hit it, and showing last
+ * - or one carried through a DE outage - can still hit it, and showing last
  * rotation's stock as if it were this one is exactly the sort of confidently
  * wrong output the board exists to avoid.
  */

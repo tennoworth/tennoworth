@@ -32,7 +32,7 @@ export interface SoldItemTotal {
   name: string;
   qty: number;
   /** Plat attributed to this item: whole-trade plat when it was the only item
-   *  given, else split evenly by quantity across the given items — an honest
+   *  given, else split evenly by quantity across the given items - an honest
    *  approximation, labelled as such in the UI. */
   plat: number;
   trades: number;
@@ -64,5 +64,5 @@ export function describeItems(t: Pick<TradeRow, 'kind' | 'items'>): string {
   const side = t.kind === 'purchase' ? 'received' : 'given';
   const picked = t.items.filter((i) => i.direction === side);
   const list = (picked.length ? picked : t.items).map((i) => (i.qty > 1 ? `${i.name} ×${i.qty}` : i.name));
-  return list.join(', ') || '—';
+  return list.join(', ') || '-';
 }

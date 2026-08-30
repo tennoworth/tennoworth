@@ -1,4 +1,4 @@
-// @ts-nocheck — vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
+// @ts-nocheck - vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
 import { describe, it, expect } from 'vitest';
 import {
   attributeForTag,
@@ -139,7 +139,7 @@ describe('resolveRivens / buildWeaponIndex', () => {
     const resolved = resolveRivens(raw, market);
     expect(resolved[0].slug).toBe('inf_arm_cannon');
     expect(resolved[0].weaponName).toBe('Infested Armor Cannon');
-    expect(resolved[1].slug).toBeNull(); // veiled — nothing to resolve
+    expect(resolved[1].slug).toBeNull(); // veiled - nothing to resolve
   });
 
   it('index skips weapons without a game_ref', () => {

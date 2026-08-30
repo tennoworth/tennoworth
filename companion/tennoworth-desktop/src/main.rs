@@ -2,7 +2,7 @@
 // (prototype/dist) over Tauri's asset protocol; the SPA's Transport picks the
 // Tauri path at boot and drives wfm-core through the commands in `commands/`.
 //
-// Commands are deliberately thin adapters over wfm-core (the only adapter —
+// Commands are deliberately thin adapters over wfm-core (the only adapter -
 // the standalone CLI was removed with the CLI release stream), grouped by
 // domain:
 //   - `health` (below)   → version / platform info (the IPC liveness round-trip)
@@ -14,9 +14,9 @@
 //                        webview, never a TTY)
 //   - `commands::listing`   → `submit_plan` / `get_pending_plan` / `resume_pending_plan`
 //                        / `discard_pending_plan` / `fetch_orders` / `update_order`
-//                        / `delete_order` / `bulk_visibility` — the desktop
+//                        / `delete_order` / `bulk_visibility` - the desktop
 //                        listing/order surface, same wfm-core services
-//   - `commands::assistant` → `ask_assistant`, the DeepSeek relay (dormant —
+//   - `commands::assistant` → `ask_assistant`, the DeepSeek relay (dormant -
 //                        no UI surfaces it; the key stays in Rust, off the
 //                        webview)
 //   - `update`           → `check_update` / `update_status` / `install_update`
@@ -89,7 +89,7 @@ fn main() {
     wfm_core::set_app_identity("tennoworth-desktop", env!("CARGO_PKG_VERSION"));
     // No WebKit env shims for AppImage runs: the historical EGL abort on
     // rolling Mesa was root-caused (2026-08-20) to the bundle carrying
-    // ubuntu's libwayland-* — fixed by stripping them at bundle time in
+    // ubuntu's libwayland-* - fixed by stripping them at bundle time in
     // release-desktop.yml. A WEBKIT_DISABLE_DMABUF_RENDERER=1 shim was tried
     // here first and measurably did NOT help (same abort with it set), so it
     // does not ship.
@@ -97,7 +97,7 @@ fn main() {
     let runtag = std::env::var("TENNOWORTH_RUNTAG").unwrap_or_else(|_| "na".into());
 
     tauri::Builder::default()
-        // MUST be registered first — the plugin has to claim the single-instance
+        // MUST be registered first - the plugin has to claim the single-instance
         // lock before anything else initialises, or a second launch does real
         // work (opening the DB, building a webview) before being told to quit.
         //
@@ -184,7 +184,7 @@ fn main() {
         .setup(move |app| {
             // Open the canonical SQLite store in the platform app-data dir and
             // hand it to the command layer as managed state. A failure here is
-            // unrecoverable (the store is canonical) — abort startup with a
+            // unrecoverable (the store is canonical) - abort startup with a
             // clear message rather than run with silent, ephemeral state.
             let data_dir = app
                 .path()
@@ -235,10 +235,10 @@ fn main() {
             let boot_probe = probe && std::env::var_os("TENNOWORTH_PROBE_BOOT").is_some();
 
             // The C4 market cache lives next to the DB in the same app-data dir.
-            // Unlike the DB, a missing/unreadable cache is never fatal — the
-            // bundled snapshot is the floor — so this can't fail startup.
+            // Unlike the DB, a missing/unreadable cache is never fatal - the
+            // bundled snapshot is the floor - so this can't fail startup.
             // C7: scan definitions live in the same dir. Kicked off before the
-            // window exists and never awaited — a scan that beats it simply uses
+            // window exists and never awaited - a scan that beats it simply uses
             // the compiled-in patterns, which is the correct fallback and not
             // worth delaying startup for. reqwest::blocking must not run on an
             // async worker, hence spawn_blocking rather than spawn.
@@ -271,7 +271,7 @@ fn main() {
                 .title("TennoWorth")
                 .inner_size(1200.0, 800.0);
             // Without an explicit icon the window (and its taskbar/switcher
-            // entry) falls back to a generic WM avatar — tray.rs already
+            // entry) falls back to a generic WM avatar - tray.rs already
             // pulls the same compiled-in icon via default_window_icon().
             if let Some(icon) = app.default_window_icon() {
                 b = b.icon(icon.clone())?;
@@ -289,7 +289,7 @@ fn main() {
             overlay::prewarm_overlay_window(&app.handle().clone());
 
             // Desktop window lifecycle: closing the window HIDES it to the tray
-            // instead of quitting — only the tray's "Quit" (app.exit) actually
+            // instead of quitting - only the tray's "Quit" (app.exit) actually
             // exits. Single-instance is assumed, so re-showing is "Open". The
             // first close-with-tray emits a hint so the SPA can show its once-
             // ever "still running in the tray" banner; the AtomicBool caps that
@@ -311,7 +311,7 @@ fn main() {
 
             // Tray is best-effort (Linux is de-scoped to best-effort behind
             // libayatana; a forced-failure hook exists for testing). A failure
-            // is logged and swallowed — window + notifications carry on.
+            // is logged and swallowed - window + notifications carry on.
             if let Err(e) = tray::init_tray(&app.handle().clone()) {
                 eprintln!("tennoworth: tray unavailable, continuing without it: {e}");
             }
@@ -322,12 +322,12 @@ fn main() {
             let ee_path = if probe { None } else { trades::start_tailer(app.handle().clone()) };
             match &ee_path {
                 Some(p) => eprintln!("tennoworth: tailing EE.log at {}", p.display()),
-                None => eprintln!("tennoworth: EE.log not found — trade detection off (set TENNOWORTH_EELOG to override)"),
+                None => eprintln!("tennoworth: EE.log not found - trade detection off (set TENNOWORTH_EELOG to override)"),
             }
             app.manage(eelog_state::EeLogState { path: ee_path });
 
             // Price-watch checker: a background pass every CHECK_INTERVAL
-            // over the user's watches (see watch.rs). Not in probe runs —
+            // over the user's watches (see watch.rs). Not in probe runs -
             // the probe must not make WFM calls on a timer.
             if !probe {
                 watch::start_checker(app.handle().clone());
@@ -337,7 +337,7 @@ fn main() {
             }
 
             // C5: launch update check, off the main thread so it can never
-            // block startup. NO silent install — a found update only stores
+            // block startup. NO silent install - a found update only stores
             // status + emits `update-available`; the SPA asks the user, and
             // only their explicit confirmation invokes install_update. Any
             // failure inside check() (offline, bad manifest) already reads as

@@ -13,7 +13,7 @@
   import type { Market } from '../lib/types';
   import Toast from './Toast.svelte';
 
-  // WFM order shape is open — many fields appear depending on the
+  // WFM order shape is open - many fields appear depending on the
   // endpoint version (v1 vs v2). We type only what we read.
   interface WfmOrder {
     id: string;
@@ -36,17 +36,17 @@
 
   interface Props {
     transport: Transport;
-    /** Price reference for the drift check. Null on a snapshot-less load —
+    /** Price reference for the drift check. Null on a snapshot-less load -
      *  the drift section simply does not render. */
     market?: Market | null;
-    /** Bumped by the parent when the WFM session unlocks — re-fetches so a
+    /** Bumped by the parent when the WFM session unlocks - re-fetches so a
      *  fetch gated on needs_login/needs_unlock retries automatically. */
     sessionEpoch?: number;
     /** Desktop lock-state rejection → parent raises the auth dialog (which
      *  tries the OS-keyring silent unlock before showing the passphrase). */
     onauthrequired?: (code: 'needs_login' | 'needs_unlock') => void;
     /** Tradeable copies owned per the latest scan, keyed by `ownedKey(slug,
-     *  subtype)`. Null when there is no scan — the quantity checks stay off. */
+     *  subtype)`. Null when there is no scan - the quantity checks stay off. */
     ownedQty?: Map<string, number> | null;
     /** Live-orders summary for the shell strip / Sell summary cells: fired
      *  once orders are loaded (and whenever the count or the health issues
@@ -62,13 +62,13 @@
   let busyIds = $state<Set<string>>(new Set());
   let editingId = $state<string | null>(null);
   let editValue = $state(0);
-  // Inline delete confirmation — the destructive click is one tap, the row
+  // Inline delete confirmation - the destructive click is one tap, the row
   // tints and the button becomes "Confirm"; a second tap (or the ×) resolves.
   let confirmId = $state<string | null>(null);
   let bulkBusy = $state(false);
 
   // Toasts are component-local. Each toast owns its auto-dismiss timer id so
-  // a manual dismiss can cancel it, and onDestroy clears everything pending —
+  // a manual dismiss can cancel it, and onDestroy clears everything pending -
   // this panel is conditionally rendered, so a stray timer would otherwise
   // fire after unmount.
   let toasts = $state<ToastMsg[]>([]);
@@ -150,7 +150,7 @@
       });
   }
 
-  // Load on mount and again when the parent bumps sessionEpoch — a fetch that
+  // Load on mount and again when the parent bumps sessionEpoch - a fetch that
   // was gated on needs_login/needs_unlock retries the moment the session is
   // unlocked (the transport is a boot-time constant, so nothing else retriggers).
   $effect(() => {
@@ -166,7 +166,7 @@
 
   // The desktop command relays WFM rejections as a per-order
   // {status:"error", message} body. Treating "no throw" as success applied
-  // the edit locally while WFM kept the old value — silent desync.
+  // the edit locally while WFM kept the old value - silent desync.
   function assertOrderOk(r: unknown): void {
     const res = r as { status?: string; message?: string } | null;
     if (res?.status === 'error') throw new Error(res.message || 'WFM rejected the update');
@@ -235,7 +235,7 @@
     bulkBusy = true;
     try {
       const resp = await transport.bulkVisibility(ids, visible);
-      // Count status==='ok' — the server can skip rows (already in that state,
+      // Count status==='ok' - the server can skip rows (already in that state,
       // gone since fetch), so ids.length would over-report.
       const ok = (resp?.results ?? []).filter((r) => r.status === 'ok').length;
       for (const o of orders) if (ids.includes(o.id)) o.visible = visible;
@@ -259,7 +259,7 @@
   }
 
   // Orders whose price has drifted from the market. Recomputed whenever the
-  // orders list or the snapshot changes — repricing one row drops it out.
+  // orders list or the snapshot changes - repricing one row drops it out.
   let drifted = $derived.by((): DriftRow[] => {
     if (!market?.items) return [];
     return selectDrifted(
@@ -280,7 +280,7 @@
     );
   });
 
-  // Applies the suggestion as a normal price edit — same transport call, same
+  // Applies the suggestion as a normal price edit - same transport call, same
   // success assertion, so a WFM rejection cannot silently desync the row.
   async function reprice(row: DriftRow): Promise<void> {
     const o = orders.find((x) => x.id === row.id);
@@ -396,7 +396,7 @@
   }
 
   /** Apply every PRICE fix (match lowest ask / meet the bid). Quantity and
-   *  delete fixes stay one-click-each — those change what's for sale. */
+   *  delete fixes stay one-click-each - those change what's for sale. */
   async function fixAllPrices(): Promise<void> {
     if (fixAllBusy) return;
     fixAllBusy = true;
@@ -409,7 +409,7 @@
     }
   }
 
-  // WFM order objects nest the item info — name lookup is defensive.
+  // WFM order objects nest the item info - name lookup is defensive.
   function itemName(o: WfmOrder): string {
     return (
       o.item?.i18n?.en?.name ||
@@ -476,12 +476,12 @@
   function driftWhy(d: DriftRow): string {
     const pct = Math.round(d.delta_pct * 100);
     return d.kind === 'overpriced'
-      ? `${pct}% above the last snapshot's clearing price — a starting point, not a quote${d.thin ? ' (thin book)' : ''}.`
-      : `${pct}% under the last snapshot's clearing price — you may be leaving plat on the table${d.thin ? ' (thin book)' : ''}.`;
+      ? `${pct}% above the last snapshot's clearing price - a starting point, not a quote${d.thin ? ' (thin book)' : ''}.`
+      : `${pct}% under the last snapshot's clearing price - you may be leaving plat on the table${d.thin ? ' (thin book)' : ''}.`;
   }
 </script>
 
-<!-- Slot 2: Listing health as a fix queue — one decision, one button per row.
+<!-- Slot 2: Listing health as a fix queue - one decision, one button per row.
      Slot 3/4: controls row inside the orders table's border, then the table. -->
 <section class="wrap tw health" aria-label="Listing health">
   <div class="bar">
@@ -493,7 +493,7 @@
       {:else if queue.length > 0}{queue.length} of {orders.length} {orders.length === 1 ? 'listing needs' : 'listings need'} attention · fixes apply immediately
       {:else if live.size > 0}no issues in {orders.length} {orders.length === 1 ? 'listing' : 'listings'} · checked against the live top-of-book
       {:else if ownedQty}no issues in {orders.length} {orders.length === 1 ? 'listing' : 'listings'} · quantities checked against your last scan
-      {:else}nothing flagged yet{#if canLive} — check live to compare your asks with the online top-of-book{/if}
+      {:else}nothing flagged yet{#if canLive} - check live to compare your asks with the online top-of-book{/if}
       {/if}
     </span>
     {#if health.length > 0}
@@ -510,7 +510,7 @@
         class="btn"
         onclick={checkLive}
         disabled={liveState === 'running' || phase !== 'done' || orders.length === 0}
-        title="Ask warframe.market for the best online asks and bids on each of your sell listings' exact rank / refinement — your own order excluded — and flag what's worth fixing."
+        title="Ask warframe.market for the best online asks and bids on each of your sell listings' exact rank / refinement - your own order excluded - and flag what's worth fixing."
       >
         {#if liveState === 'running'}Checking… {liveProgress.done}/{liveProgress.total}
         {:else if liveState === 'done'}Re-check live
@@ -556,8 +556,8 @@
             <td class="l" title={q.slug}>{q.name}</td>
             <td>{o?.quantity ?? '?'}</td>
             <td class="fg">{o?.platinum ?? '?'}<span class="unit">p</span></td>
-            <td>{#if t && !t.error && t.low_sell != null}{t.low_sell}<span class="unit">p</span>{:else}<span class="faint">—</span>{/if}</td>
-            <td>{#if t && !t.error && t.top_buy != null}{t.top_buy}<span class="unit">p</span>{:else}<span class="faint">—</span>{/if}</td>
+            <td>{#if t && !t.error && t.low_sell != null}{t.low_sell}<span class="unit">p</span>{:else}<span class="faint">-</span>{/if}</td>
+            <td>{#if t && !t.error && t.top_buy != null}{t.top_buy}<span class="unit">p</span>{:else}<span class="faint">-</span>{/if}</td>
             {#if q.kind === 'health'}
               <td class="reason" class:warn={q.h.kind === 'overpriced' || q.h.kind === 'underbid'} class:bad={q.h.kind === 'not-owned'} title={q.h.why}>
                 {#if q.h.kind === 'overpriced' || q.h.kind === 'underbid'}
@@ -578,7 +578,7 @@
               <td class="reason" class:warn={q.d.kind === 'overpriced'} title={driftWhy(q.d)}>
                 <span class="to">{q.d.listed}p → <b>{q.d.suggested}p</b></span>
                 {q.d.kind === 'overpriced' ? 'above market' : 'under market'} ({Math.round(q.d.delta_pct * 100)}%, snapshot)
-                {#if q.d.thin}<span class="tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor — thin books make this a weak signal.">thin</span>{/if}
+                {#if q.d.thin}<span class="tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor - thin books make this a weak signal.">thin</span>{/if}
               </td>
               <td class="act">
                 <button class="btn xs" onclick={() => reprice(q.d)} disabled={busy} title="Update this listing to {q.d.suggested}p on warframe.market">Reprice</button>
@@ -591,7 +591,7 @@
     </div>
     {#if live.size === 0 && drifted.length > 0}
       <div class="line">
-        <span class="exp">Snapshot rows compare against the last market snapshot (up to 2 h old) and can't tell whose order is whose{#if canLive}&nbsp;— <button class="linkish" onclick={checkLive} disabled={liveState === 'running'}>check live</button> for exact figures{/if}.</span>
+        <span class="exp">Snapshot rows compare against the last market snapshot (up to 2 h old) and can't tell whose order is whose{#if canLive}&nbsp;- <button class="linkish" onclick={checkLive} disabled={liveState === 'running'}>check live</button> for exact figures{/if}.</span>
       </div>
     {/if}
   {/if}
@@ -681,8 +681,8 @@
                 {/if}
               </td>
               {#if live.size > 0}
-                <td>{#if t && !t.error && t.low_sell != null}{t.low_sell}<span class="unit">p</span>{:else}<span class="faint">—</span>{/if}</td>
-                <td>{#if t && !t.error && t.top_buy != null}{t.top_buy}<span class="unit">p</span>{:else}<span class="faint">—</span>{/if}</td>
+                <td>{#if t && !t.error && t.low_sell != null}{t.low_sell}<span class="unit">p</span>{:else}<span class="faint">-</span>{/if}</td>
+                <td>{#if t && !t.error && t.top_buy != null}{t.top_buy}<span class="unit">p</span>{:else}<span class="faint">-</span>{/if}</td>
               {/if}
               <td>
                 <button

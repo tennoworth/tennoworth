@@ -1,6 +1,6 @@
 //! What happens when EE.log confirms a trade: record it in the ledger, tell
-//! the user, and — for a SALE, when a WFM login is unlocked and the setting
-//! allows — adjust the matching WFM listing so it doesn't keep advertising a
+//! the user, and - for a SALE, when a WFM login is unlocked and the setting
+//! allows - adjust the matching WFM listing so it doesn't keep advertising a
 //! copy that just left the inventory ("sold-detection auto-close").
 //!
 //! The adjustment is deliberately conservative: it only ever DECREASES a
@@ -24,7 +24,7 @@ use crate::wfm_session::WfmSession;
 
 pub const EVENT_TRADE_DETECTED: &str = "trade-detected";
 /// Setting key; "off" disables the WFM adjustment. Anything else (incl.
-/// unset) = on — the feature is the point of watching the log.
+/// unset) = on - the feature is the point of watching the log.
 pub const SETTING_AUTO_CLOSE: &str = "auto-close-sold";
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -245,7 +245,7 @@ pub fn handle_trade(app: &AppHandle, trade: TradeEvent) {
             }
         })
         .collect();
-    let mut body = format!("{} — with {}", what.join(", "), trade.partner);
+    let mut body = format!("{} - with {}", what.join(", "), trade.partner);
     if !adjusted.is_empty() {
         let n = adjusted.len();
         body.push_str(&format!(

@@ -1,6 +1,6 @@
 <script lang="ts">
   // The Settings view. Home for preferences that are not part of doing the
-  // work — starting with Appearance, which is where the theme control lives
+  // work - starting with Appearance, which is where the theme control lives
   // now that it is no longer chrome on the landing header and the sidebar.
   //
   // Structure: one `.wrap.tw` panel per section, each with a `.rail` title and

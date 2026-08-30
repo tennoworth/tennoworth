@@ -1,4 +1,4 @@
-// @ts-nocheck — vitest fixtures; the module's TS contract is exercised by tsc.
+// @ts-nocheck - vitest fixtures; the module's TS contract is exercised by tsc.
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { installTauri, removeTauri } from './test-utils.js';
 import updateSupportFixture from '../../../tests/fixtures/update-support.json';
@@ -96,6 +96,6 @@ describe('onUpdateAvailable', () => {
     const listen = vi.fn(() => Promise.reject(new Error('acl denied')));
     installTauri(vi.fn(), listen);
     expect(() => onUpdateAvailable(() => {})).not.toThrow();
-    await Promise.resolve(); // let the rejection settle — must not surface
+    await Promise.resolve(); // let the rejection settle - must not surface
   });
 });

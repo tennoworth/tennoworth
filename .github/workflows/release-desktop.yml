@@ -13,7 +13,7 @@ name: release-desktop
 #   Policy and release decision: docs/releasing.md
 #
 # There is deliberately NO tag trigger. The tag is no longer the *input* to a
-# release — it is an *output*, created by this workflow at the exact `main`
+# release - it is an *output*, created by this workflow at the exact `main`
 # commit it captured and built. That closes three holes at once: a tag can no
 # longer point at a non-main commit, a half-finished release can no longer
 # leave a tag behind, and "re-run the release" is a well-defined operation
@@ -40,7 +40,7 @@ name: release-desktop
 # deb/rpm bundles, the self-hosted apt/dnf repositories and the two AUR
 # packages were all retired, and the jobs and steps that produced them are
 # gone from this file. The AppImage is the only Linux channel that self-updates
-# (the Tauri updater enables itself when $APPIMAGE is set — see update.rs), so
+# (the Tauri updater enables itself when $APPIMAGE is set - see update.rs), so
 # it was the only one worth keeping, and four delivery channels for one
 # platform was three too many to keep correct. See build-linux's libwayland
 # step for why the first AppImage was withdrawn in 2026-07 and what fixed it.
@@ -61,7 +61,7 @@ permissions:
   contents: read
 
 # Two releases must never interleave: they would fight over the same
-# `desktop-latest` assets. cancel-in-progress is false on purpose — cancelling
+# `desktop-latest` assets. cancel-in-progress is false on purpose - cancelling
 # a run that has already flipped the draft would leave the rolling updater
 # endpoint behind the published release.
 concurrency:
@@ -83,12 +83,12 @@ jobs:
       # The ref is not just a convention here: `publish` creates the tag at the
       # SHA this job captured, so allowing a dispatch from a feature branch
       # would mean tagging a release at a commit that was never on main.
-      - name: Guard — releases are cut from main only
+      - name: Guard - releases are cut from main only
         if: github.ref != 'refs/heads/main'
         env:
           REF: ${{ github.ref }}
         run: |
-          echo "::error title=Wrong ref::release-desktop was dispatched from $REF. A release is cut from refs/heads/main only — the tag is created at the commit this run captures."
+          echo "::error title=Wrong ref::release-desktop was dispatched from $REF. A release is cut from refs/heads/main only - the tag is created at the commit this run captures."
           exit 1
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -148,10 +148,10 @@ jobs:
           tag="desktop-v$VERSION"
 
           # The tag must not exist. If it does, either the release already
-          # happened or a previous run died between tagging and publishing —
+          # happened or a previous run died between tagging and publishing -
           # both need a human, not a silent overwrite.
           if gh api "repos/$GH_REPO/git/ref/tags/$tag" >/dev/null 2>&1; then
-            echo "::error title=Tag exists::$tag already exists. If a previous run died after tagging, use 'Re-run failed jobs' on THAT run (publish is idempotent); otherwise this version is taken — pick the next one. The tag cannot be deleted: the 'Desktop release tags' ruleset has no bypass actors."
+            echo "::error title=Tag exists::$tag already exists. If a previous run died after tagging, use 'Re-run failed jobs' on THAT run (publish is idempotent); otherwise this version is taken - pick the next one. The tag cannot be deleted: the 'Desktop release tags' ruleset has no bypass actors."
             exit 1
           fi
 
@@ -169,23 +169,23 @@ jobs:
       # Cargo.lock is part of what ships, not a local cache. Every build in
       # this repo has network access and quietly re-resolves a stale lock, so a
       # version bump that edits Cargo.toml alone is green everywhere and wrong
-      # in the tag — how 0.3.5 and 0.3.6 both shipped a lock naming the
+      # in the tag - how 0.3.5 and 0.3.6 both shipped a lock naming the
       # PREVIOUS version, unbuildable from source with `cargo build --frozen`
       # (which is what any from-source packager does; it was the retired AUR
       # source package that found it). `--locked` reproduces that refusal here,
       # before anything is built, and keeps the lock an honest version pin.
-      - name: Gate — Cargo.lock already matches the manifests
+      - name: Gate - Cargo.lock already matches the manifests
         working-directory: companion
         run: cargo fetch --locked
 
-  # Windows. Publishes NOTHING — every output leaves as a workflow artifact.
+  # Windows. Publishes NOTHING - every output leaves as a workflow artifact.
   build-windows:
     needs: preflight
     runs-on: windows-latest
     permissions:
       contents: read
     env:
-      # Generated offline by a human, never in CI, never committed — see
+      # Generated offline by a human, never in CI, never committed - see
       # the maintainer signing runbook §9. Absent secrets make `tauri build` fail
       # loudly rather than publish a release the updater can never install
       # (bundle.createUpdaterArtifacts is on, and signing them needs the key).
@@ -237,7 +237,7 @@ jobs:
       # No tagName, no release inputs: the action builds and stops. Publishing
       # is the `publish` job's single responsibility.
       #
-      # projectPath is the dir holding tauri.conf.json — this repo has no
+      # projectPath is the dir holding tauri.conf.json - this repo has no
       # `src-tauri` layout and no npm-side @tauri-apps/cli, so the action
       # installs its own CLI rather than shelling out to `bun tauri`. Local
       # builds still use `cargo tauri`; both drive the same tauri.conf.json.
@@ -285,7 +285,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # Linux. Publishes NOTHING — every output leaves as a workflow artifact.
+  # Linux. Publishes NOTHING - every output leaves as a workflow artifact.
   #
   # ubuntu-22.04 is load-bearing, not incidental: glibc is backward- but not
   # forward-compatible, so the build host's glibc becomes the floor for every
@@ -316,7 +316,7 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
 
-      # Identical list to audit.yml's — without these the *-sys crates fail at
+      # Identical list to audit.yml's - without these the *-sys crates fail at
       # pkg-config before anything builds.
       - name: Install Tauri Linux deps
         run: >
@@ -335,7 +335,7 @@ jobs:
 
       # tauri-build embeds the SPA at compile time from frontendDist, and plain
       # `cargo build` does not run tauri.conf.json's beforeBuildCommand the way
-      # `cargo tauri build` does — so the frontend is built explicitly here.
+      # `cargo tauri build` does - so the frontend is built explicitly here.
       - name: Build frontend
         working-directory: prototype
         run: |
@@ -349,7 +349,7 @@ jobs:
       # ONE bundle, deliberately. `deb,rpm` used to be here to feed the
       # self-hosted apt/dnf repositories; those are retired, so building them
       # would produce artifacts nothing consumes. The AppImage bundles its own
-      # WebKitGTK runtime, which is why it needs the libwayland surgery below —
+      # WebKitGTK runtime, which is why it needs the libwayland surgery below -
       # the deb/rpm used the system one and never did.
       - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
@@ -379,14 +379,14 @@ jobs:
       # EGL_BAD_PARAMETER" on rolling Mesa. Root-caused 2026-08-20 by A/B on
       # a Mesa 26.2 host: linuxdeploy bundles ubuntu-22.04's libwayland-
       # client/cursor/egl/server, and host Mesa's Wayland-EGL platform
-      # rejects that 2022 client — remove the four libs and the identical
+      # rejects that 2022 client - remove the four libs and the identical
       # bundle runs cleanly (WebKit itself was never the problem; a
       # WEBKIT_DISABLE_DMABUF_RENDERER shim measurably did not help).
       # libwayland has a stable ABI and every desktop Linux ships it, so
       # using the host's is strictly more correct.
       #
       # Repacking invalidates the build-time updater signature, so the file
-      # is re-signed afterwards — the .sig MUST be generated from the
+      # is re-signed afterwards - the .sig MUST be generated from the
       # repacked bytes or self-update rejects every download.
       #
       # This step also creates dist/. It used to inherit the directory from the
@@ -405,7 +405,7 @@ jobs:
             [ -f "squashfs-root/usr/lib/$f" ] && { rm "squashfs-root/usr/lib/$f"; removed=$((removed+1)); }
           done
           echo "stripped $removed bundled libwayland libs"
-          [ "$removed" -gt 0 ] || echo "::warning::no bundled libwayland found — linuxdeploy behavior changed, verify on a rolling host"
+          [ "$removed" -gt 0 ] || echo "::warning::no bundled libwayland found - linuxdeploy behavior changed, verify on a rolling host"
           curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool
           APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 ./appimagetool -n squashfs-root dist/TennoWorth-x86_64.AppImage
@@ -424,7 +424,7 @@ jobs:
   # The atomic moment. Nothing before this job has written anything visible;
   # nothing after it can make the release less complete than it already is.
   #
-  # `environment: desktop-release` is the hook for a human approval gate —
+  # `environment: desktop-release` is the hook for a human approval gate -
   # configure required reviewers on it in repo settings if a release should
   # never go out unattended. It gates the flip, not the builds: the updater
   # signing secrets are consumed by the build jobs above, which declare no
@@ -481,7 +481,7 @@ jobs:
 
           # The AppImage sidecar is what SECURITY.md tells Linux users to
           # trust. Verify it against the bytes about to be uploaded rather than
-          # assuming the build wrote it correctly. Windows ships no sidecars —
+          # assuming the build wrote it correctly. Windows ships no sidecars -
           # SHA256SUMS, assembled below, is the only checksum file there.
           for f in *.sha256; do
             sha256sum -c "$f"
@@ -492,7 +492,7 @@ jobs:
       # Windows now; Linux keeps its AppImage sidecar because the AppImage is
       # also served, unversioned, from the rolling release. `sha256sum -c`
       # against this file needs --ignore-missing unless you downloaded every
-      # asset it names — SECURITY.md spells that out.
+      # asset it names - SECURITY.md spells that out.
       - name: Assemble SHA256SUMS
         working-directory: dist
         run: |
@@ -506,7 +506,7 @@ jobs:
       #
       #   windows-x86_64        NSIS setup .exe (updaterJsonPreferNsis behavior:
       #   windows-x86_64-nsis   the generic key aliases NSIS, because that is
-      #                         what the app's install flow assumes — passive
+      #                         what the app's install flow assumes - passive
       #                         install, self-restart)
       # There is deliberately NO windows-x86_64-msi key. The MSI is retired,
       # and an already-installed MSI client is not stranded by its absence:
@@ -525,7 +525,7 @@ jobs:
       # fetched from there but downloaded from a versioned tag would be reading
       # two different sources. The desktop-latest job below puts these exact
       # files there. For the same reason latest.json is NOT attached to the
-      # versioned release — its URLs would go stale the next time
+      # versioned release - its URLs would go stale the next time
       # desktop-latest is refreshed, which is the opposite of what an immutable
       # release should carry.
       - name: Assemble latest.json
@@ -550,7 +550,7 @@ jobs:
               # What the update banner shows the user. The old manifest carried
               # the rolling release's boilerplate ("Not a version release…"),
               # which read as nonsense inside the app.
-              'notes': f'TennoWorth desktop {v} — '
+              'notes': f'TennoWorth desktop {v} - '
                        f'https://github.com/{repo}/releases/tag/desktop-v{v}',
               'pub_date': datetime.datetime.now(datetime.timezone.utc)
                               .isoformat(timespec='milliseconds')
@@ -584,7 +584,7 @@ jobs:
             # Annotated tag: the ref points at a tag object; resolve it to the commit.
             target=$(gh api "repos/$GH_REPO/git/tags/$ref_sha" --jq .object.sha 2>/dev/null || echo "$ref_sha")
             if [ "$target" = "$SHA" ]; then
-              echo "$TAG already exists at $SHA — re-run, keeping it."
+              echo "$TAG already exists at $SHA - re-run, keeping it."
               exit 0
             fi
             echo "::error title=Tag mismatch::$TAG exists at $target, not at $SHA. That is a different release; refusing to continue."
@@ -615,26 +615,26 @@ jobs:
           notes_file=$(mktemp)
           printf '%s\n\n---\n\n' "$NOTES" > "$notes_file"
           cat >> "$notes_file" <<'EOF'
-          **Windows** — one artifact: `TennoWorth_<version>_x64-setup.exe`.
+          **Windows** - one artifact: `TennoWorth_<version>_x64-setup.exe`.
           Download it and verify it against `SHA256SUMS`. The in-app updater
           handles later versions on its own. The `.msi` is retired as of this
           release; an existing MSI install still receives updates, and they
           arrive as the `.exe` installer.
 
-          **Linux** — one artifact: `TennoWorth-x86_64.AppImage`. Download it,
+          **Linux** - one artifact: `TennoWorth-x86_64.AppImage`. Download it,
           verify it against `TennoWorth-x86_64.AppImage.sha256`, `chmod +x`,
           run. It self-updates in place and resolves libwayland from the host.
           The apt/dnf repositories and the AUR packages are retired and frozen
-          at their last published version — see `SECURITY.md`.
+          at their last published version - see `SECURITY.md`.
 
-          `SHA256SUMS` lists every downloadable asset — verify with
+          `SHA256SUMS` lists every downloadable asset - verify with
           `sha256sum --ignore-missing -c SHA256SUMS`. The AppImage additionally
           carries its own `.sha256` sidecar. `.sig` files are minisign
-          signatures for the in-app updater, not user-facing checksums — see
+          signatures for the in-app updater, not user-facing checksums - see
           `SECURITY.md`.
           EOF
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "release $TAG already exists — re-run, reusing it."
+            echo "release $TAG already exists - re-run, reusing it."
           else
             gh release create "$TAG" \
               --draft \
@@ -657,7 +657,7 @@ jobs:
           gh release edit "$TAG" --draft=false --prerelease=false --latest
           echo "::notice title=Released::$TAG is public."
 
-      # Handed to the desktop-latest job rather than attached to the release —
+      # Handed to the desktop-latest job rather than attached to the release -
       # see the assembly step for why a versioned release must not carry a
       # manifest full of rolling-tag URLs.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -697,7 +697,7 @@ jobs:
           gh release view "$tag" >/dev/null 2>&1 || gh release create "$tag" \
             --prerelease \
             --title "$tag (auto-built)" \
-            --notes "Rolling desktop build. The in-app updater reads latest.json from this release. Not a version release — see desktop-v* tags for the versioned desktop app."
+            --notes "Rolling desktop build. The in-app updater reads latest.json from this release. Not a version release - see desktop-v* tags for the versioned desktop app."
 
           # Assets first, manifest LAST. A client that checks in mid-refresh
           # must never read a manifest naming a file that is not there yet;
@@ -713,13 +713,13 @@ jobs:
       #
       # It used to run first, which meant desktop-latest sat empty for the whole
       # ~8-minute build and latest.json 404'd for every client that checked in
-      # that window — trading the stale-asset bug for a worse one. Cleaning up
+      # that window - trading the stale-asset bug for a worse one. Cleaning up
       # afterwards means the previous release stays intact and servable right up
       # until the new one replaces it, and clients only ever see a complete
       # manifest: the old version during the build, the new one after.
       #
       # The AppImage is named without a version, so it is kept by name rather
-      # than by the version match — it was just overwritten above.
+      # than by the version match - it was just overwritten above.
       - name: Remove superseded assets from the rolling release
         run: |
           set -euo pipefail

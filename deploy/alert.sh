@@ -12,7 +12,7 @@
 #   - an append-only log OUTSIDE the journal, because the journal rotates and
 #     these are exactly the events you go looking for weeks later;
 #   - an optional webhook, so the box can actually reach out. Unset by default
-#     — no channel is assumed and nothing fails if none is configured.
+#     - no channel is assumed and nothing fails if none is configured.
 #
 # Must never fail: an OnFailure handler that itself fails just adds a second
 # failed unit and buries the first.
@@ -22,7 +22,7 @@ UNIT="${1:-unknown.service}"
 LOG="${WFM_ALERT_LOG:-/srv/wfm/alerts.log}"
 ENV_FILE="${WFM_ALERT_ENV:-/etc/wfm-alert.env}"
 
-# Optional config: ALERT_WEBHOOK_URL=... (anything that accepts a POST body —
+# Optional config: ALERT_WEBHOOK_URL=... (anything that accepts a POST body -
 # ntfy, a Discord/Slack webhook, healthchecks.io's /fail endpoint).
 # shellcheck disable=SC1090
 [ -r "$ENV_FILE" ] && . "$ENV_FILE"

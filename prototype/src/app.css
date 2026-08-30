@@ -1,5 +1,5 @@
 /* ==========================================================================
-   Theme system — one LOOK (yorha) × a MODE, keyed off two attributes on <html>:
+   Theme system - one LOOK (yorha) × a MODE, keyed off two attributes on <html>:
      html[data-look="yorha"]                   (always; the only look)
      html[data-mode="light" | "dark"]          (always the RESOLVED mode)
    Stamped before first paint by public/theme-boot.js, kept current by
@@ -8,13 +8,13 @@
    structural rules scoped by the attribute. Yorha's light is "paper & ink";
    its dark is "Oil & Rag", a warm brown-black workshop palette.
    The three earlier looks (baseline, corpus, vitruvian) were retired in
-   2026-08 — yorha is THE theme, so the user picks a MODE, not a look. The
+   2026-08 - yorha is THE theme, so the user picks a MODE, not a look. The
    data-look attribute stays because the structural rules are scoped by it.
-   Component <style> blocks must not hardcode colours or radii — they read
+   Component <style> blocks must not hardcode colours or radii - they read
    these tokens so both modes can re-skin them.
    ========================================================================== */
 
-/* ---------- self-hosted fonts (public/fonts, OFL — see LICENSES.md) -------- */
+/* ---------- self-hosted fonts (public/fonts, OFL - see LICENSES.md) -------- */
 @font-face { font-family: "Archivo Narrow"; font-style: normal; font-weight: 400 700; font-display: swap; src: url(/fonts/archivo-narrow-var-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 100 700; font-display: swap; src: url(/fonts/ibm-plex-sans-var-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
 @font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(/fonts/ibm-plex-mono-400-latin.woff2) format("woff2"); unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
@@ -67,8 +67,8 @@
   --inset: 1rem;      /* THE panel inset: bars, rails, panel bodies, first/last cell */
   --gutter: 1.5rem;   /* landing column side padding */
   --stack: 0.75rem;   /* 12px between sibling blocks */
-  --cell: 0.375rem;   /* 6px th/td gutter — only inside th/td */
-  /* Heights — all ×4; rows and bars ×8. Three control heights only. */
+  --cell: 0.375rem;   /* 6px th/td gutter - only inside th/td */
+  /* Heights - all ×4; rows and bars ×8. Three control heights only. */
   --ctl-xs: 1.5rem;   /* 24: buttons inside 32px rows/rails */
   --ctl: 1.75rem;     /* 28: presets, chips, page buttons, nav items */
   --ctl-lg: 2rem;     /* 32: inputs, primary CTA */
@@ -94,8 +94,8 @@ html[data-look="yorha"] {
   --bg: #CFCBB2;        /* page paper (NieR ground) */
   --panel: #DBD7BF;     /* panel paper, half-step lighter */
   --panel-2: #CBC6AC;   /* table header, inactive segments, hover, popovers */
-  --border: #706B57;    /* container outlines — 3.6:1 on panel */
-  --hairline: #B5B097;  /* inner dividers — always dotted here */
+  --border: #706B57;    /* container outlines - 3.6:1 on panel */
+  --hairline: #B5B097;  /* inner dividers - always dotted here */
   --fg: #46422F;        /* grey-brown ink */
   --muted: #5F5A46;     /* 4.8:1 on panel */
   --faint: #8B8670;     /* decorative only */
@@ -122,21 +122,21 @@ html[data-look="yorha"] {
   --glow: none;
   color-scheme: light;
 }
-/* yorha dark — "Oil & Rag": the same object with the roles swapped, seen on a
+/* yorha dark - "Oil & Rag": the same object with the roles swapped, seen on a
    workshop bench instead of a desk. Ground is a deep warm brown-black; the
    paper becomes the ink AND the one filled bar. Never blue-black, never grey.
    Every ratio below is measured (sRGB WCAG 2.x); the floors are fg ≥ 7:1 on
    --bg/--panel/--panel-2, muted and the four status hues ≥ 4.5:1 on --panel,
    border and faint ≥ 3:1. Text tops out ~10.4:1 so nothing glows. */
 html[data-look="yorha"][data-mode="dark"] {
-  --bg: #1E1913;        /* bench ground — warm brown-black */
+  --bg: #1E1913;        /* bench ground - warm brown-black */
   --panel: #29231B;     /* panel, one step up */
   --panel-2: #342D23;   /* table header, inactive segments, hover, popovers */
-  --border: #87775B;    /* container outlines — 3.6:1 on panel */
-  --hairline: #3D3527;  /* inner dividers — always dotted here */
-  --fg: #D3C7A6;        /* rag ink — 9.3:1 on panel, 10.4:1 on bg */
+  --border: #87775B;    /* container outlines - 3.6:1 on panel */
+  --hairline: #3D3527;  /* inner dividers - always dotted here */
+  --fg: #D3C7A6;        /* rag ink - 9.3:1 on panel, 10.4:1 on bg */
   --muted: #A3977A;     /* 5.4:1 on panel */
-  --faint: #8A7F66;     /* decorative only — 3.9:1 on panel (also backs --dim) */
+  --faint: #8A7F66;     /* decorative only - 3.9:1 on panel (also backs --dim) */
   --accent: #D3C7A6;    /* = ink; active state is inversion, not a hue */
   --good: #84AE85;      /* 6.2:1 on panel */
   --warn: #CBA05A;      /* 6.5:1 on panel */
@@ -195,8 +195,8 @@ h1, h2, h3, h4, th, .nav-label, .clock-label,
 .summary .cell .k, .dis-label, .bar .lbl { font-family: var(--font-ui); }
 
 /* Encrypted-dialog chrome. Global, not per-component, because the same
- dialog.cryptobox shell renders from two components — ExportImportDialogs in
- every build, WfmAuthDialogs only under {#if isDesktop} — and Svelte scoping
+ dialog.cryptobox shell renders from two components - ExportImportDialogs in
+ every build, WfmAuthDialogs only under {#if isDesktop} - and Svelte scoping
  forced each to carry its own copy. They had already diverged: WfmAuthDialogs
  styled email inputs and selects that ExportImportDialogs' copy didn't cover,
  so a future field added to the export dialog would have rendered unstyled.
@@ -273,15 +273,15 @@ dialog.cryptobox footer {
 }
 
 /* .muted and .warn-banner are global because they are written as if they
-   already were. Four components — ExportImportDialogs, ListingReviewModal,
-   MyOrdersPanel, WfmAuthDialogs — mark up
+   already were. Four components - ExportImportDialogs, ListingReviewModal,
+   MyOrdersPanel, WfmAuthDialogs - mark up
    class="muted" without declaring the rule, and Svelte's per-component
    scoping means App.svelte's copy never reached them: that text was
    rendering at full --fg instead of --muted. Measured 2026-08-01, e.g. the
    WFM login dialog's explanatory paragraph at rgb(218,227,237) where it
    should have been rgb(138,152,168).
 
-   Components that want a variant still declare their own — MarketBrowser's
+   Components that want a variant still declare their own - MarketBrowser's
    12px .muted wins on Svelte's scoped specificity, which is why this is safe
    to make global rather than something each component must now re-opt into. */
 .muted {
@@ -297,10 +297,10 @@ dialog.cryptobox footer {
 }
 
 /* ==========================================================================
-   Flow v2 shared table anatomy — `.wrap.tw` panels and `table.tw`.
+   Flow v2 shared table anatomy - `.wrap.tw` panels and `table.tw`.
    Global (not per-component) because the SAME row anatomy renders from
-   several components — the landing's search / movers / vaulted / hand-off
-   tables, the My orders fix-queue and orders tables — and Svelte's scoping
+   several components - the landing's search / movers / vaulted / hand-off
+   tables, the My orders fix-queue and orders tables - and Svelte's scoping
    would force each to carry a copy that drifts. ResultsTable keeps its own
    (richer) scoped copy; the `.tw` marker keeps these rules off it.
    Heights: rail 32 · bar 40 · head 28 · row 32 · line 32; every inset on the
@@ -406,7 +406,7 @@ table.tw td.reason.bad { color: var(--bad); }
 table.tw th.ghost { color: var(--muted); }
 table.tw td.ghost { color: var(--faint); }
 table.tw .g1 { border-left: 1px dashed var(--border); }
-/* Hand-off: the same columns, completed — accent wash + a solid lead rule. */
+/* Hand-off: the same columns, completed - accent wash + a solid lead rule. */
 table.tw th.you, table.tw td.you { background: color-mix(in srgb, var(--accent) 7%, transparent); color: var(--fg); }
 table.tw td.you.score { font-weight: 700; }
 table.tw th.you.y1, table.tw td.you.y1 { border-left: 1px solid var(--accent); }
@@ -422,7 +422,7 @@ table.tw td .type.buy { color: var(--accent); }
 /* Sparklines: 60×18 in accent, inheriting the dim rule. */
 table.tw .spark, table.tw .sparkline { color: var(--accent); vertical-align: middle; }
 table.tw tr.dim .spark { color: var(--faint); }
-/* Inline status tags — outline in the tag's own colour, never a fill. */
+/* Inline status tags - outline in the tag's own colour, never a fill. */
 table.tw .tag {
   display: inline-block;
   height: 1rem; line-height: 0.875rem;
@@ -442,7 +442,7 @@ table.tw .tag.thin { color: var(--warn); }
 /* Vis pill in the orders table. */
 table.tw .vis { font: 600 10px/1rem var(--font-mono); border: 1px solid currentColor; border-radius: var(--radius-tag); padding: 0 var(--s1); color: var(--good); letter-spacing: 0.06em; }
 table.tw .vis.off { color: var(--muted); }
-/* Pending destructive row — the two-tap delete's armed state. */
+/* Pending destructive row - the two-tap delete's armed state. */
 table.tw tr.confirming td { background: color-mix(in srgb, var(--bad) 6%, transparent); }
 table.tw tr.confirming td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
 table.tw tr.busy td { color: var(--faint); }
@@ -504,7 +504,7 @@ html[data-look="yorha"] .statusbar .brand h1 { font: 500 15px/1.2 var(--font-ui)
 html[data-look="yorha"] .nav-label,
 html[data-look="yorha"] th,
 html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.14em; }
-/* Ink-bar inversion — the ONLY filled surface: active nav, active preset,
+/* Ink-bar inversion - the ONLY filled surface: active nav, active preset,
    primary CTAs, panel title bars, dialog headers. */
 html[data-look="yorha"] .nav-item.active { background: var(--ink-bar); color: var(--on-ink); border-left-color: var(--ink-bar); }
 html[data-look="yorha"] .nav-item.active .badge { color: var(--on-ink); border-color: var(--on-ink); background: transparent; }
@@ -558,7 +558,7 @@ html[data-look="yorha"] .modal > header .x { color: var(--on-ink); border-color:
 html[data-look="yorha"] dialog.cryptobox header { padding: 8px 12px; margin: -20px -20px 0; }
 html[data-look="yorha"] dialog.cryptobox header p { color: var(--on-ink-muted); }
 /* Focus ring on the ink surfaces: the global ring is --accent, which in this
-   look IS the ink (~1.1:1 on the bar) — paint it in the bar's foreground. */
+   look IS the ink (~1.1:1 on the bar) - paint it in the bar's foreground. */
 html[data-look="yorha"] .wrap.tw > .rail :focus-visible,
 html[data-look="yorha"] .picks-head :focus-visible,
 html[data-look="yorha"] .card > h3:first-child :focus-visible,
@@ -574,7 +574,7 @@ html[data-look="yorha"] .picks-head { border-bottom-style: dotted; }
 html[data-look="yorha"] .dot { border-radius: 0; }
 html[data-look="yorha"] .lede-dot { border-radius: 0; }
 html[data-look="yorha"] .info-btn { border-radius: 0; }
-/* Mono status strip: the deadpan NieR status line — mono, tracked caps for
+/* Mono status strip: the deadpan NieR status line - mono, tracked caps for
    the labels, dotted cell rules; the outer bottom edge stays solid. */
 html[data-look="yorha"] .statusbar {
   font-family: var(--font-mono); font-size: 11px; color: var(--muted); background: var(--panel);

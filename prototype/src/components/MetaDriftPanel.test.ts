@@ -27,7 +27,7 @@ describe('MetaDriftPanel', () => {
     expect(screen.getByText('+0.0001 pp')).toBeTruthy();
     expect(screen.getByText('18p')).toBeTruthy();
     expect(screen.getByText('44')).toBeTruthy();
-    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('-').length).toBeGreaterThanOrEqual(2);
   });
 
   it('filters categories/search and exposes loss and only-in-year tabs', async () => {
@@ -44,7 +44,7 @@ describe('MetaDriftPanel', () => {
     expect(screen.getByText('New Gear')).toBeTruthy();
     expect(screen.getByText('New Missing Market')).toBeTruthy();
     expect(screen.queryByText('Old Gear')).toBeNull();
-    expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByText('-').length).toBeGreaterThanOrEqual(2);
   });
 
   it('quietly renders nothing for old one-year snapshots', () => {

@@ -1,5 +1,5 @@
 <script lang="ts">
-  // @ts-nocheck — presentation glue (event handlers, derived display strings),
+  // @ts-nocheck - presentation glue (event handlers, derived display strings),
   // same rationale as App.svelte's own @ts-nocheck.
   //
   // The Sell view: stats strip, Top Picks, the preset/tag-chip/filter
@@ -7,13 +7,13 @@
   // biggest slice of the 2026-07-24 App.svelte god-object split.
   //
   // Ownership split: the raw filter primitives (minPrice/minOwned/
-  // typeFilter/hideAtLvl/activeTags) are $bindable — App.svelte's own
+  // typeFilter/hideAtLvl/activeTags) are $bindable - App.svelte's own
   // filterState $derived and the results-recompute $effect need to read
   // them, so App.svelte owns the real $state and this component both
   // displays and writes them through native bind:value. tableView is
   // $bindable for the same reason (the results table reads it). Everything
   // else here (allPicks/picks/snoozedPicks, pickReason, toggleTag,
-  // relaxFilters) is local — nothing outside this view ever touched them.
+  // relaxFilters) is local - nothing outside this view ever touched them.
   import ResultsTable from './ResultsTable.svelte';
   import { PRESETS } from '../lib/presets';
   import { wfmItemUrl, plat } from '../lib/format';
@@ -43,7 +43,7 @@
   } = $props();
 
   // Was inline in the template, so it re-filtered the whole results array on
-  // EVERY render of this pane — including every keystroke in the name filter,
+  // EVERY render of this pane - including every keystroke in the name filter,
   // which cannot change the answer. $derived recomputes only when results does.
   let sellableCount = $derived(results.filter((r) => r.sellable > 0).length);
 
@@ -58,7 +58,7 @@
     const n = Math.abs(d).toLocaleString(undefined, { maximumFractionDigits: 0 });
     return `${d > 0 ? '▲' : '▼'}${n}${unit}`;
   }
-  // "Changes only" — session-only view of the rows whose count moved since the
+  // "Changes only" - session-only view of the rows whose count moved since the
   // last scan (the Δ column's non-zero rows). Not persisted: it is a glance,
   // not a preference, and it means nothing after a reload (no deltas then).
   let changesOnly = $state(false);
@@ -73,8 +73,8 @@
   let listLabel = $derived(`List ${stagedCount} on WFM`);
   let listTitle = $derived(
     tableView.active
-      ? `Stage the ${stagedCount} rows in your current view (up to the first 50) — the in-table name filter and badge chips are applied; relics and rows with no spare copy are excluded. Review each row in the modal before sending.`
-      : `Stage the top ${stagedCount} rows of the current view (up to the first 50) — relics and rows with no spare copy are excluded. Review each row in the modal before sending.`
+      ? `Stage the ${stagedCount} rows in your current view (up to the first 50) - the in-table name filter and badge chips are applied; relics and rows with no spare copy are excluded. Review each row in the modal before sending.`
+      : `Stage the top ${stagedCount} rows of the current view (up to the first 50) - relics and rows with no spare copy are excluded. Review each row in the modal before sending.`
   );
 
   // Auto-derived options for the type dropdown label map. The Type filter
@@ -101,19 +101,19 @@
   }
 
   // Top picks strip. Built from `results`, which is already sorted best-first,
-  // so selectPicks is a cheap filter+slice — no rescoring. Deliberately reads
+  // so selectPicks is a cheap filter+slice - no rescoring. Deliberately reads
   // `results` rather than `tableView.rows`: the table's own local name-search
   // box and pill-filter chips only narrow `tableView.rows`, so picks stay
   // "global" with respect to those. They are NOT independent of the filter
-  // rail / active preset, though — App.svelte's computeResults() reads
+  // rail / active preset, though - App.svelte's computeResults() reads
   // minPrice/minOwned/typeFilter/hideAtLvl/activeTags and the active
   // preset's own floors (vaultOnly/ducatsOnly/minVol/minMedian) directly
   // rather than taking them as parameters, so `results` (and therefore
   // picks) narrows along with whatever preset the user has selected. True
   // preset-independence would need computeResults to accept filter
-  // overrides — out of scope here.
+  // overrides - out of scope here.
   let allPicks = $derived.by(() => selectPicks(results));
-  // Snooze is session-only, no persistence and no new localStorage key — a
+  // Snooze is session-only, no persistence and no new localStorage key - a
   // dismissed pick reappearing on reload is the honest, cheap behaviour; it
   // isn't worth a storage-key version bump for a "hide until refresh" nicety.
   let snoozedPicks = $state(new Set());
@@ -125,7 +125,7 @@
   }
 
   // Plain-language reason line for a pick, built only from fields the row
-  // already carries (timing / delta_90d_pct / clearing_price / volume_48h) —
+  // already carries (timing / delta_90d_pct / clearing_price / volume_48h) -
   // no invented ETAs or destinations. Order of checks mirrors how confident
   // each signal is: a corroborated peak is the strongest "act now" case,
   // hold is the strongest "don't" case, then whatever 90d trend exists,
@@ -133,23 +133,23 @@
   function pickReason(p) {
     const price = Math.round(p.clearing_price);
     if (p.timing === 'hold') {
-      return 'Near its 90-day low — selling now leaves plat on the table.';
+      return 'Near its 90-day low - selling now leaves plat on the table.';
     }
     if (p.timing === 'peak') {
       return p.delta_90d_pct != null && p.delta_90d_pct > 0
-        ? `Near its 90-day high, up ${Math.round(p.delta_90d_pct)}% — a good moment to list around ${price}p.`
-        : `Near its 90-day high — a good moment to list around ${price}p.`;
+        ? `Near its 90-day high, up ${Math.round(p.delta_90d_pct)}% - a good moment to list around ${price}p.`
+        : `Near its 90-day high - a good moment to list around ${price}p.`;
     }
     if (p.delta_90d_pct != null && p.delta_90d_pct >= 1) {
-      return `Up ${Math.round(p.delta_90d_pct)}% vs its 90-day baseline — clears around ${price}p at current demand.`;
+      return `Up ${Math.round(p.delta_90d_pct)}% vs its 90-day baseline - clears around ${price}p at current demand.`;
     }
     if (p.delta_90d_pct != null && p.delta_90d_pct <= -1) {
-      return `Down ${Math.abs(Math.round(p.delta_90d_pct))}% vs its 90-day baseline — clears around ${price}p at current demand.`;
+      return `Down ${Math.abs(Math.round(p.delta_90d_pct))}% vs its 90-day baseline - clears around ${price}p at current demand.`;
     }
     return `Clears around ${price}p at current demand.`;
   }
 
-  // Row B "active filter" chips — the Filters popover's state surfaced as
+  // Row B "active filter" chips - the Filters popover's state surfaced as
   // removable chips so a narrowed table never reads as a mysteriously short
   // one. Each × resets that one filter to its wide-open value.
   let activeFilterChips = $derived.by(() => {
@@ -235,7 +235,7 @@
     <div class="so-body">
       <strong>How Sell works</strong>
       <p class="muted">
-        Your inventory is ranked by a prioritization score — what to list right
+        Your inventory is ranked by a prioritization score - what to list right
         now from price, turnover, and bounded DE usage. Review the prices, then <strong>List on WFM</strong> posts them
         hidden so no buyer sees them until you flip them visible in
         <strong>My orders</strong>.
@@ -251,7 +251,7 @@
       <strong>Keep copies on by default.</strong>
       <span class="muted">
         Hold back one copy of every item so an underpriced snipe can't strip
-        your last copy — set <code>Keep copies</code> to 1 in Filters.
+        your last copy - set <code>Keep copies</code> to 1 in Filters.
       </span>
     </div>
     <button class="dismiss" onclick={dismissKeepCopiesNudge} aria-label="Dismiss">×</button>
@@ -262,7 +262,7 @@
   <div class="card warn-banner">⚠ {marketLoadError}</div>
 {:else if marketFreshness === 'stale'}
   <div class="card warn-banner">
-    ⚠ Prices may be outdated — this market snapshot is {marketStaleness} old. Rankings below use stale data.
+    ⚠ Prices may be outdated - this market snapshot is {marketStaleness} old. Rankings below use stale data.
   </div>
 {/if}
 
@@ -270,7 +270,7 @@
   <div class="card empty">
     <div>
       <strong>No picks clear the bar right now.</strong>
-      <p class="muted">Nothing owned trades often enough and scores high enough to headline — check the table below for the rest.</p>
+      <p class="muted">Nothing owned trades often enough and scores high enough to headline - check the table below for the rest.</p>
     </div>
   </div>
 {/if}
@@ -281,8 +281,8 @@
   <h3>Top picks</h3>
   <span
     class="muted picks-exp"
-    title="Same prioritization Score as the table below — price × likely sell-through × a bounded DE usage weight. It is not expected plat/day. Picks also need at least 3 trades/48h and {MIN_PICK_SCORE} score points to clear the bar."
-  >Best sells right now, ranked by prioritization score — patience listings excluded.</span>
+    title="Same prioritization Score as the table below - price × likely sell-through × a bounded DE usage weight. It is not expected plat/day. Picks also need at least 3 trades/48h and {MIN_PICK_SCORE} score points to clear the bar."
+  >Best sells right now, ranked by prioritization score - patience listings excluded.</span>
   <span class="grow"></span>
   <span class="muted picks-count">
     {picks.length} of {allPicks.length}
@@ -299,7 +299,7 @@
       <span class="pick-vol">({plat(p.volume_48h)} trades / 48h)</span>
     </span>
     {#if p.volume_48h < LIQUID_VOL}
-      <span class="pick-tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor — expect to wait for a buyer.">thin</span>
+      <span class="pick-tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor - expect to wait for a buyer.">thin</span>
     {/if}
     <span class="pick-actions">
       <button class="pick-list" onclick={() => openListingFlow(p)} aria-label="List {p.name} on WFM">List</button>
@@ -333,7 +333,7 @@
     {/each}
   </div>
   <span class="muted preset-hint">
-    {activePreset ? PRESETS[activePreset].hint : 'custom — saved preset cleared'}
+    {activePreset ? PRESETS[activePreset].hint : 'custom - saved preset cleared'}
   </span>
   <span class="grow"></span>
   <details class="filter-disclosure" open={filtersOpen} ontoggle={toggleFiltersOpen}>
@@ -438,7 +438,7 @@
   >
     <summary>About the “Score” column</summary>
     <div class="score-details">
-      A <strong>prioritization score</strong>, not expected plat/day —
+      A <strong>prioritization score</strong>, not expected plat/day -
       <code>min(sellable owned, max(0.05, vol_48h / 2)) × clearing price × usage weight</code>.
       The DE usage weight is bounded from 0.75× to 1.25×; missing or invalid
       usage is neutral. Clearing
@@ -475,7 +475,7 @@
     {:else if emptyReason.kind === 'owned'}
       <div>
         <strong>{emptyReason.excluded} items you own are below the “owned” threshold ({minOwned}).</strong>
-        <p class="muted">Most are 1-of-a-kind — set min-owned to 1 to include them.</p>
+        <p class="muted">Most are 1-of-a-kind - set min-owned to 1 to include them.</p>
       </div>
       <button onclick={() => relaxFilters({ kind: 'owned' })}>Set min owned to 1</button>
     {:else if emptyReason.kind === 'type' && activePreset !== 'spares'}
@@ -511,13 +511,13 @@
     {:else if emptyReason.kind === 'advice'}
       <div>
         <strong>Nothing you own has calendar-timed advice.</strong>
-        <p class="muted">Hold / Sell covers primes with release and vault dates — parts, blueprints, and sets. Relics, mods, and non-prime gear have no calendar to time against.</p>
+        <p class="muted">Hold / Sell covers primes with release and vault dates - parts, blueprints, and sets. Relics, mods, and non-prime gear have no calendar to time against.</p>
       </div>
       <button onclick={() => relaxFilters({ kind: 'advice' })}>Back to Default</button>
     {:else if emptyReason.kind === 'ducats'}
       <div>
         <strong>You own no prime parts with a ducat value.</strong>
-        <p class="muted">Ducats are Baro Ki'Teer's currency — only prime parts and blueprints carry them.</p>
+        <p class="muted">Ducats are Baro Ki'Teer's currency - only prime parts and blueprints carry them.</p>
       </div>
       <button onclick={() => relaxFilters({ kind: 'ducats' })}>Back to Default</button>
     {:else if emptyReason.kind === 'tag' && activePreset === 'sets'}
@@ -549,7 +549,7 @@
   empty={emptyState} between={scoreExplainer} />
 
 <style>
-  /* Duplicated from App.svelte's shared styling — Svelte scopes CSS
+  /* Duplicated from App.svelte's shared styling - Svelte scopes CSS
      per-component, and this codebase's existing extracted components
      already re-declare shared visual classes rather than promoting them
      to global CSS (see DesktopUpdateBanner.svelte). */
@@ -570,7 +570,7 @@
     margin: 0;
     line-height: 1.5rem;
   }
-  /* Summary strip — one outlined container, hairline dividers between cells;
+  /* Summary strip - one outlined container, hairline dividers between cells;
      the since-scan cell rides the right rail. */
   .summary {
     flex: 1 1 auto;
@@ -664,7 +664,7 @@
   code { background: var(--panel-2); padding: 1px 6px; border-radius: var(--radius-input); font-family: var(--font-mono); font-size: 0.93em; }
 
   /* Below this point: sell-view-exclusive, moved (not duplicated) from
-     App.svelte — nothing else in the app used these selectors. */
+     App.svelte - nothing else in the app used these selectors. */
   .lede-dot {
     display: inline-flex;
     align-items: center;
@@ -688,7 +688,7 @@
   .link { font: inherit; color: var(--accent); background: transparent; border: none; padding: 0 var(--s1); cursor: pointer; }
   .link:hover { text-decoration: underline; background: transparent; }
 
-  /* Preset pills — one-click filter configurations. The active pill is
+  /* Preset pills - one-click filter configurations. The active pill is
      accent-bordered AND carries a leading check mark so the selection
      doesn't rely on colour alone. A subtle hint string trails the group. */
   .preset {
@@ -712,7 +712,7 @@
   .preset.active::before { content: '✓ '; }
   .preset-hint { font-size: 11.5px; }
 
-  /* Filters disclosure — an inline toolbar item whose panel floats as a
+  /* Filters disclosure - an inline toolbar item whose panel floats as a
      popover below the summary instead of pushing the toolbar's other
      groups down. Open state persists in localStorage so power users
      don't re-click every session. */
@@ -788,7 +788,7 @@
   .filters input, .filters select { text-transform: none; letter-spacing: 0; }
 
   /* First-session Score explainer, reworked as an inline <details> expander
-     (D9) — one quiet summary line, the how-it's-calculated body folded under
+     (D9) - one quiet summary line, the how-it's-calculated body folded under
      it. Dismissal = collapsed, persisted via the same flag as before. */
   .score-expander {
     background: var(--panel);
@@ -837,7 +837,7 @@
     color: var(--fg);
   }
 
-  /* First-session sell onboarding — above the stats strip, dismissed once. */
+  /* First-session sell onboarding - above the stats strip, dismissed once. */
   .sell-onboarding {
     flex-direction: row;
     align-items: flex-start;
@@ -860,7 +860,7 @@
   }
   .sell-onboarding .dismiss:hover { color: var(--fg); }
 
-  /* Keep-copies nudge — one-time education after the onboarding card is
+  /* Keep-copies nudge - one-time education after the onboarding card is
      dismissed; reappearing until dismissed is the intent (it's a habit, not
      a task). */
   .keep-nudge {
@@ -886,13 +886,13 @@
   }
   .keep-nudge .dismiss:hover { color: var(--fg); }
 
-  /* Tag chip row — pills, OR-combined among themselves, AND with the
+  /* Tag chip row - pills, OR-combined among themselves, AND with the
      filters row above. Inactive chips show the live row-count next to
      the tag so the user can see what's worth toggling. Zero-count chips
      stay visible (strikethrough+muted) so vocabulary is discoverable.
      Chip row caps at ~96px (≈3 wrap rows on desktop, ≈4 on mobile) with
      internal vertical scroll. */
-  /* Type chips take their own line under the presets — real inventories carry
+  /* Type chips take their own line under the presets - real inventories carry
      10–20 tags, which cannot share a 40px line with six presets. */
   .tagchips { gap: 6px; flex: 1 1 100%; }
   .chip {
@@ -909,7 +909,7 @@
     align-items: center;
     font: inherit;
     line-height: 1.2;
-    /* Tap-target — old 21px height failed iOS HIG / WCAG ≥ 24px. 28px is
+    /* Tap-target - old 21px height failed iOS HIG / WCAG ≥ 24px. 28px is
        the ladder's control height. */
     height: var(--ctl);
     transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
@@ -941,7 +941,7 @@
   }
   .chip-clear:hover { color: var(--bad); }
 
-  /* Primary CTA inside the presets row — pushed to the far right via
+  /* Primary CTA inside the presets row - pushed to the far right via
      margin-left:auto so it doesn't visually mix with the chip-style
      presets next to it. Same colour family as the accent. */
   .list-cta {
@@ -956,7 +956,7 @@
   .list-cta:hover:not(:disabled) { filter: brightness(1.1); }
   .list-cta:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  /* Top picks — the rail copy and the per-row reason cell, rendered inside
+  /* Top picks - the rail copy and the per-row reason cell, rendered inside
      ResultsTable's picks panel (rows share the table's colgroup). */
   .picks-exp { font-size: 12px; }
   .picks-count { font-size: 11.5px; white-space: nowrap; }
@@ -964,7 +964,7 @@
   /* Reason line: fixed 32px box, ellipsised, List/× at its right end. */
   .rs { display: flex; align-items: center; gap: var(--s2); height: var(--row); font-size: 12.5px; color: var(--muted); }
   .rs .t { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  /* Timing tint mirrors .tag.hold/.tag.peak in ResultsTable — same signal,
+  /* Timing tint mirrors .tag.hold/.tag.peak in ResultsTable - same signal,
      same colour, so the picks and the table below read as one vocabulary. */
   .rs.hold .t { color: var(--warn); }
   .rs.peak .t { color: var(--good); }

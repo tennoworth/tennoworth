@@ -1,4 +1,4 @@
-//! wfm-core — the reusable core of the Warframe companion.
+//! wfm-core - the reusable core of the Warframe companion.
 //!
 //! Everything the app does that is NOT shell/webview glue lives here:
 //! process detection + memory scan, DE inventory fetch, warframe.market
@@ -9,8 +9,8 @@
 //! Design rule: **no interactive terminal I/O in this crate.** Where the
 //! desktop shell needs a passphrase, it collects it in the webview and hands
 //! the plaintext to `wfm-core` as a parameter. (A handful of best-effort,
-//! non-interactive `eprintln!` diagnostics — pending-plan write warnings, a
-//! loose-key-perms warning — are preserved verbatim from the pre-extraction
+//! non-interactive `eprintln!` diagnostics - pending-plan write warnings, a
+//! loose-key-perms warning - are preserved verbatim from the pre-extraction
 //! binary.)
 
 pub mod assistant;
@@ -33,7 +33,7 @@ pub mod ws;
 // rate-limit error or a JS challenge before our request ever reaches the API.
 // This is the value proven against production traffic.
 //
-/// The `User-Agent` every WFM call from this crate sends — see
+/// The `User-Agent` every WFM call from this crate sends - see
 /// [`wfm_client::user_agent`] for the format WFM's rules require. The version
 /// is the *binary's* (the desktop app's), not this library's: the app calls
 /// [`set_app_identity`] once at startup; before that (tests, tools) the UA

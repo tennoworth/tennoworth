@@ -1,12 +1,12 @@
 //! C5 auto-update: check the GitHub-releases `latest.json`, notify, install
-//! only on explicit confirmation, apply on restart. NO silent updates — the
+//! only on explicit confirmation, apply on restart. NO silent updates - the
 //! check is the only thing that runs unprompted (at launch), and it downloads
 //! nothing but the manifest.
 //!
 //! Failure posture mirrors market.rs: `check` never panics and never returns
 //! Err. Offline, DNS failure, HTTP error, a malformed/truncated manifest, an
 //! a bad endpoint override all degrade to "no update available" (logged to
-//! stderr) — an update check must never crash the app or block launch. An
+//! stderr) - an update check must never crash the app or block launch. An
 //! install that cannot self-update is reported explicitly instead of being
 //! presented as current. A bad *bundle signature* surfaces later, in `install_pending`:
 //! the plugin verifies the minisign signature against the pubkey in
@@ -24,7 +24,7 @@ use wfm_core::poison::guard;
 /// registered after the launch emit still sees the result.
 pub const EVENT_UPDATE_AVAILABLE: &str = "update-available";
 
-/// Manifest fetch cap — a hung check must never hold a pending `check_update`
+/// Manifest fetch cap - a hung check must never hold a pending `check_update`
 /// invoke (or the launch task) open indefinitely.
 const CHECK_TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -62,7 +62,7 @@ impl Default for UpdateStatus {
 }
 
 /// Managed state: the last check's outcome (pull surface for the SPA + probe
-/// evidence) and the checked `Update` handle `install_pending` consumes — so
+/// evidence) and the checked `Update` handle `install_pending` consumes - so
 /// installing never re-downloads the manifest, and there is no window for a
 /// different release to appear between "user saw vX" and "user installed".
 #[derive(Default)]
@@ -90,20 +90,20 @@ impl UpdateState {
 /// Build the updater, honoring a `TENNOWORTH_UPDATE_URL` endpoint override so
 /// the probe can exercise the offline / malformed-manifest paths against a
 /// controlled endpoint (the market.rs `TENNOWORTH_MARKET_URL` pattern). None on
-/// any builder failure — including a non-https override, which the plugin
+/// any builder failure - including a non-https override, which the plugin
 /// rejects in release builds.
 /// Tauri's Linux updater only supports the AppImage bundle, and that is
 /// precisely why the AppImage is now the ONLY Linux channel we ship: it is the
 /// one that can replace itself. In an AppImage run (the runtime sets
 /// `APPIMAGE`) self-update works and latest.json carries a linux-x86_64 entry,
-/// so the check is real. Any other Linux run — a `cargo run` dev build, an
+/// so the check is real. Any other Linux run - a `cargo run` dev build, an
 /// extracted bundle, or a leftover install from the retired deb/rpm/AUR
-/// packages — cannot self-update. The explicit support state lets Settings
+/// packages - cannot self-update. The explicit support state lets Settings
 /// explain that instead of claiming a skipped check found the current version.
 ///
 /// (History: the first AppImage was withdrawn for an EGL abort on rolling
 /// Mesa. Root cause found 2026-08-20: the bundle carried ubuntu-22.04's
-/// libwayland-*, which host Mesa's Wayland-EGL platform rejects — fixed at
+/// libwayland-*, which host Mesa's Wayland-EGL platform rejects - fixed at
 /// bundle time in release-desktop.yml by stripping those libs, verified on
 /// Mesa 26.2. The WebKit stack itself was never the problem.)
 ///
@@ -172,10 +172,10 @@ pub async fn check(app: &AppHandle) -> UpdateStatus {
     if status.support != UpdateSupport::Supported {
         match status.support {
             UpdateSupport::AppimageRequired => eprintln!(
-                "tennoworth: update check skipped — this Linux install is not an AppImage"
+                "tennoworth: update check skipped - this Linux install is not an AppImage"
             ),
             UpdateSupport::DisabledTestBuild => {
-                eprintln!("tennoworth: update check skipped — disabled in OCR test builds")
+                eprintln!("tennoworth: update check skipped - disabled in OCR test builds")
             }
             UpdateSupport::Supported => unreachable!(),
         }
@@ -213,18 +213,18 @@ pub async fn check_and_emit(app: &AppHandle) -> UpdateStatus {
 }
 
 /// Download + install the update the last check found. Explicit-confirmation
-/// only — nothing calls this but the SPA's "Install update" button. Unlike
+/// only - nothing calls this but the SPA's "Install update" button. Unlike
 /// `check`, failures here ARE surfaced (the user asked for this action): a
 /// download error or a signature mismatch becomes the banner text, the running
 /// app is untouched, and the pending update stays retryable. On success nothing
-/// restarts by itself — the new version applies when the user restarts (the
+/// restarts by itself - the new version applies when the user restarts (the
 /// SPA offers `restart_app`; the Windows installer restarts as part of its
 /// passive install flow).
 pub async fn install_pending(app: &AppHandle) -> Result<(), String> {
     let update = app
         .state::<UpdateState>()
         .pending()
-        .ok_or("No update is pending — check for updates first.")?;
+        .ok_or("No update is pending - check for updates first.")?;
     update
         .download_and_install(|_, _| {}, || {})
         .await
@@ -234,7 +234,7 @@ pub async fn install_pending(app: &AppHandle) -> Result<(), String> {
 // ---- Tauri commands -----------------------------------------------------
 
 /// Run an update check now and notify the SPA when one is available. Never
-/// rejects — offline / malformed manifest / any updater failure reads as "no
+/// rejects - offline / malformed manifest / any updater failure reads as "no
 /// update available" (see `check` above). Launch, manual, and periodic checks
 /// share this routine.
 #[tauri::command]
@@ -250,7 +250,7 @@ pub fn update_status(state: State<'_, UpdateState>) -> UpdateStatus {
     state.last()
 }
 
-/// C5: download + install the pending update — only ever invoked from the
+/// C5: download + install the pending update - only ever invoked from the
 /// SPA's explicit "Install update" confirmation. Errors (download failure, bad
 /// signature) surface verbatim in the SPA's banner; the running app is
 /// untouched and the update stays retryable.
@@ -259,7 +259,7 @@ pub async fn install_update(app: AppHandle) -> Result<(), String> {
     install_pending(&app).await
 }
 
-/// Relaunch to apply an installed update ("apply on restart" — the SPA's
+/// Relaunch to apply an installed update ("apply on restart" - the SPA's
 /// "Restart now" button after a successful install).
 #[tauri::command]
 pub fn restart_app(app: AppHandle) {

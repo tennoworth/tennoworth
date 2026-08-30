@@ -1,9 +1,9 @@
-// Relic planner — answers "which of MY relics should I crack tonight?".
+// Relic planner - answers "which of MY relics should I crack tonight?".
 //
 // For each owned relic, computes expected-plat-per-crack (EPP) using
 // drop-weighted reward prices from market.relic_rewards. `epp` stays the
 // INTACT figure so the existing card keeps its meaning, and the refinement
-// ladder rides alongside it — DE's export lets us answer "would radiant have
+// ladder rides alongside it - DE's export lets us answer "would radiant have
 // been worth the traces", which the intact-only table never could.
 //
 // EPP = Σ (chance / 100) × clearingPrice(reward)
@@ -11,9 +11,9 @@
 // clearingPrice, not raw low_sell: a single aspirational ask on one reward
 // inflates the whole relic's EV (ballistica prime string's lone 40p ask
 // over a 15p median read a Meso G1 crack ~50% rich). Same clamp the Sell
-// score uses — the EV should describe what the parts actually clear at.
+// score uses - the EV should describe what the parts actually clear at.
 //
-// Volume signal: count of rewards with vol_48h ≥ MOVING_THRESHOLD —
+// Volume signal: count of rewards with vol_48h ≥ MOVING_THRESHOLD -
 // helps the user spot a high-EPP-but-dead-rewards trap (the relic's
 // expected drop chart is gold, but nobody's actually buying its parts).
 //
@@ -49,7 +49,7 @@ export interface RelicPlanEntry {
   rewards: RelicPlanReward[];
   /** EV at each refinement, the recommended rung, and the crack/refine/sell
    *  verdict. Absent on snapshots whose drop table predates per-refinement
-   *  chances — the card must fall back to `epp` rather than invent a ladder. */
+   *  chances - the card must fall back to `epp` rather than invent a ladder. */
   decision?: RelicDecision;
 }
 
@@ -64,7 +64,7 @@ export function deriveRelicPlan(
   const candidates: RelicPlanEntry[] = [];
   for (const rec of owned.values()) {
     // Intact only for v1. If you own only refined copies of this relic
-    // we skip — refining is a separate decision the planner doesn't
+    // we skip - refining is a separate decision the planner doesn't
     // make for you.
     if (rec.subtype !== 'intact') continue;
     const dropTable = rewards[rec.slug];
@@ -93,7 +93,7 @@ export function deriveRelicPlan(
         vol_48h: vol,
       });
     }
-    // `!(epp > 0)` also rejects NaN — if a drop entry's chance is
+    // `!(epp > 0)` also rejects NaN - if a drop entry's chance is
     // malformed (string, null, missing) and slipped past the scraper's
     // `float() or 0` guard, `epp` could become NaN and produce a card
     // full of NaN%/NaNp values. `epp <= 0` is false for NaN, so use the
@@ -116,7 +116,7 @@ export function deriveRelicPlan(
       moving_count: movingCount,
       total_rewards: dropTable.length,
       rewards: rewardRows.sort((a, b) => b.chance - a.chance),
-      // Only carried when the snapshot could answer for more than intact —
+      // Only carried when the snapshot could answer for more than intact -
       // a single-rung ladder is the old data wearing a new shape.
       decision: decision.ladder.length > 1 ? decision : undefined,
     });

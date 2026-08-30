@@ -27,10 +27,10 @@ pub(crate) fn record_snapshot(
 /// so the (potentially slow) scan never blocks the webview event loop. A busy
 /// guard or a missing/unscannable game becomes a rejected invoke carrying
 /// wfm-core's graceful, actionable message (e.g. "Warframe doesn't appear to be
-/// running…") — the SPA surfaces it verbatim in its error banner.
+/// running…") - the SPA surfaces it verbatim in its error banner.
 ///
 /// On success it also appends a `source='memory'` history snapshot. That insert
-/// is best-effort: a failure is logged to stderr and swallowed — losing a
+/// is best-effort: a failure is logged to stderr and swallowed - losing a
 /// history row must never cost the user their scan (scan value > history value).
 #[tauri::command]
 pub async fn scan_inventory(app: AppHandle, db: State<'_, Db>) -> Result<String, String> {
@@ -44,7 +44,7 @@ pub async fn scan_inventory(app: AppHandle, db: State<'_, Db>) -> Result<String,
     }
 
     // C6: refresh the tray off the new snapshot and fire the post-scan
-    // notification. Best-effort — never let a surface problem fail the scan
+    // notification. Best-effort - never let a surface problem fail the scan
     // (the SPA still gets its inventory JSON below).
     post_scan_surfaces(&app);
 
@@ -52,7 +52,7 @@ pub async fn scan_inventory(app: AppHandle, db: State<'_, Db>) -> Result<String,
 }
 
 /// Seed an import snapshot as `source='import'` history. Probe-only now (the
-/// UI file-drop it used to back is gone — the app scans from the game); the
+/// UI file-drop it used to back is gone - the app scans from the game); the
 /// probe calls it to exercise the record path and reach the sell view. Gated
 /// behind TENNOWORTH_PROBE like every other probe-only command, so a stock
 /// build can't reach it.

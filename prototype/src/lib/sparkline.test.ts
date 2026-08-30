@@ -1,4 +1,4 @@
-// @ts-nocheck — vitest runs these as JS-style fixtures; full TS shapes here would be busy-work.
+// @ts-nocheck - vitest runs these as JS-style fixtures; full TS shapes here would be busy-work.
 import { describe, it, expect } from 'vitest';
 import { sparklinePoints } from './sparkline.js';
 
