@@ -461,6 +461,7 @@ export interface OverlayLastRun {
 export interface OverlayStatus {
   state: 'disabled' | 'waiting-for-game' | 'needs-permission' | 'watching' | 'recognizing' | 'showing' | 'error';
   backend: 'windows-window' | 'x11-window' | 'wayland-xwayland' | 'unsupported';
+  presentationBackend: 'wayland-layer-shell' | 'tauri-window';
   placement: 'anchored' | 'side-panel';
   ocrReady: boolean;
   lastRun?: OverlayLastRun;

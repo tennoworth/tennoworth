@@ -101,6 +101,7 @@ pub struct OverlayLastRun {
 pub struct OverlayStatus {
     pub state: String,
     pub backend: String,
+    pub presentation_backend: String,
     pub placement: String,
     pub ocr_ready: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -114,6 +115,7 @@ impl Default for OverlayStatus {
         Self {
             state: "disabled".into(),
             backend: capture_backend_name().into(),
+            presentation_backend: "tauri-window".into(),
             placement: "anchored".into(),
             ocr_ready: false,
             last_run: None,
@@ -284,6 +286,7 @@ impl OverlayState {
                 "disabled".into()
             },
             ocr_ready: ocr_result.is_ok(),
+            presentation_backend: preferred_presentation_backend().into(),
             message: ocr_result.err(),
             ..OverlayStatus::default()
         };
@@ -310,6 +313,12 @@ impl OverlayState {
     fn finish_run(&self, app: &AppHandle, run: OverlayLastRun) {
         let mut status = self.status.lock().unwrap_or_else(|e| e.into_inner());
         status.last_run = Some(run);
+        let _ = app.emit(EVENT_STATUS, status.clone());
+    }
+
+    fn set_presentation_backend(&self, app: &AppHandle, backend: &str) {
+        let mut status = self.status.lock().unwrap_or_else(|e| e.into_inner());
+        status.presentation_backend = backend.into();
         let _ = app.emit(EVENT_STATUS, status.clone());
     }
 }
@@ -481,8 +490,7 @@ pub fn preview_relic_overlay(
         .current_capture
         .lock()
         .unwrap_or_else(|e| e.into_inner()) = Some(capture_id.clone());
-    show_overlay(&app, x, y, width, height)?;
-    push_overlay_result(&app, &result)?;
+    present_overlay(&app, x, y, width, height, &result)?;
     state.set_status(&app, "showing", Some("overlay preview".into()));
     let app_for_hide = app.clone();
     std::thread::spawn(move || {
@@ -1283,7 +1291,9 @@ fn vertical_reward_edge_profile(frame: &CapturedFrame) -> Vec<f64> {
             let right_luma = u32::from(right[0]) + u32::from(right[1]) + u32::from(right[2]);
             strength += left_luma.abs_diff(right_luma) as f64;
         }
-        profile[x as usize] = strength;
+        if let Some(value) = profile.get_mut(x as usize) {
+            *value = strength;
+        }
     }
     profile
 }
@@ -1649,6 +1659,10 @@ fn capture_warframe() -> Result<CapturedFrame, String> {
 }
 
 #[cfg(target_os = "linux")]
+#[allow(
+    clippy::indexing_slicing,
+    reason = "the reply length is checked against expected and chunks_exact guarantees each pixel has the validated 2, 3, or 4-byte width"
+)]
 fn capture_warframe() -> Result<CapturedFrame, String> {
     use xcb::{
         x::{
@@ -2099,30 +2113,14 @@ fn capture_and_recognize(
         .current_result
         .lock()
         .unwrap_or_else(|e| e.into_inner()) = Some(result.clone());
-    if let Err(error) = show_overlay(
+    if let Err(error) = present_overlay(
         app,
         overlay_geometry.0,
         overlay_geometry.1,
         overlay_geometry.2,
         overlay_geometry.3,
+        &result,
     ) {
-        timings.total_ms = elapsed_ms(run_started);
-        write_run_diagnostics(run_dir.as_deref(), &timings, Some(&result));
-        state.finish_run(
-            app,
-            OverlayLastRun {
-                outcome: error.clone(),
-                trigger_source: source.into(),
-                expected_slots,
-                recognized_slots: result.slots.len(),
-                timings,
-                diagnostics_directory: diagnostic_path,
-            },
-        );
-        return Err(error);
-    }
-    if let Err(error) = push_overlay_result(app, &result) {
-        let error = format!("cached_overlay_display_failed: {error}");
         timings.total_ms = elapsed_ms(run_started);
         write_run_diagnostics(run_dir.as_deref(), &timings, Some(&result));
         state.finish_run(
@@ -2218,7 +2216,45 @@ fn capture_and_recognize(
     Ok(())
 }
 
-fn show_overlay(app: &AppHandle, x: i32, y: i32, width: u32, height: u32) -> Result<(), String> {
+fn present_overlay(
+    app: &AppHandle,
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+    result: &RelicOverlayResult,
+) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+        let geometry = crate::wayland_overlay::OverlayGeometry {
+            x,
+            y,
+            width,
+            height,
+        };
+        match crate::wayland_overlay::show(geometry, result) {
+            Ok(()) => {
+                if let Some(window) = app.get_webview_window("relic-overlay") {
+                    let _ = window.hide();
+                }
+                if let Some(state) = app.try_state::<OverlayState>() {
+                    state.set_presentation_backend(app, "wayland-layer-shell");
+                }
+                return Ok(());
+            }
+            Err(error) => {
+                eprintln!("tennoworth: native Wayland overlay unavailable, using window fallback: {error}");
+                if let Some(state) = app.try_state::<OverlayState>() {
+                    state.set_presentation_backend(app, "tauri-window");
+                }
+            }
+        }
+    }
+    show_tauri_overlay(app, x, y, width, height)?;
+    push_tauri_overlay_result(app, result)
+}
+
+fn show_tauri_overlay(app: &AppHandle, x: i32, y: i32, width: u32, height: u32) -> Result<(), String> {
     let app_for_window = app.clone();
     let (reply_tx, reply_rx) = mpsc::sync_channel(1);
     app.run_on_main_thread(move || {
@@ -2289,6 +2325,14 @@ fn ensure_overlay_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String
 }
 
 fn push_overlay_result(app: &AppHandle, result: &RelicOverlayResult) -> Result<(), String> {
+    #[cfg(target_os = "linux")]
+    if crate::wayland_overlay::is_active() && crate::wayland_overlay::update(result)? {
+        return Ok(());
+    }
+    push_tauri_overlay_result(app, result)
+}
+
+fn push_tauri_overlay_result(app: &AppHandle, result: &RelicOverlayResult) -> Result<(), String> {
     let event_error = app
         .emit_to("relic-overlay", EVENT_UPDATE, result)
         .err()
@@ -2316,6 +2360,15 @@ fn push_overlay_result(app: &AppHandle, result: &RelicOverlayResult) -> Result<(
 }
 
 pub fn prewarm_overlay_window(app: &AppHandle) {
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+        if crate::wayland_overlay::available() {
+            return;
+        }
+        if let Some(state) = app.try_state::<OverlayState>() {
+            state.set_presentation_backend(app, "tauri-window");
+        }
+    }
     if let Err(error) = ensure_overlay_window(app) {
         eprintln!("tennoworth: could not prewarm relic overlay: {error}");
     }
@@ -2341,6 +2394,8 @@ fn configure_linux_overlay_focus(_window: &tauri::WebviewWindow) -> Result<(), S
 }
 
 fn hide_overlay(app: &AppHandle) {
+    #[cfg(target_os = "linux")]
+    crate::wayland_overlay::hide();
     if let Some(window) = app.get_webview_window("relic-overlay") {
         let _ = app.emit_to("relic-overlay", EVENT_HIDE, ());
         let _ = window.eval("window.__TENNOWORTH_RELIC_OVERLAY_HIDE__?.()");
@@ -2356,6 +2411,14 @@ fn hide_overlay(app: &AppHandle) {
             .lock()
             .unwrap_or_else(|e| e.into_inner()) = None;
     }
+}
+
+fn preferred_presentation_backend() -> &'static str {
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+        return "wayland-layer-shell";
+    }
+    "tauri-window"
 }
 
 #[derive(Debug)]
