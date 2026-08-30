@@ -118,9 +118,9 @@ fn backoff(attempt: u32) -> Duration {
 }
 
 /// WFM's envelope, unwrapped Python-order: `payload` first, then `data`, else
-/// the bare body. (`wfm_client::unwrap_envelope` prefers `data` - the opposite
-/// - so it is intentionally not reused; `fetch_json` in the scraper checks
-/// `payload` first.)
+/// the bare body. `wfm_client::unwrap_envelope` prefers `data`, so it is
+/// intentionally not reused; `fetch_json` in the scraper checks `payload`
+/// first.
 fn unwrap_payload_first(body: Value) -> Value {
     if let Value::Object(mut m) = body {
         if let Some(p) = m.remove("payload") {

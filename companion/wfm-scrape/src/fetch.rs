@@ -760,8 +760,8 @@ pub const WFM_RIVEN_ATTRIBUTES_URL: &str = "https://api.warframe.market/v2/riven
 pub use crate::de::DE_WEEKLY_RIVENS_URL;
 
 /// The same file per platform. Console riven markets diverge sharply from PC's
-/// - different populations, different metas, and far smaller samples - and DE
-/// publishes all four while nothing in the ecosystem compares them.
+/// because of different populations, different metas, and far smaller samples.
+/// DE publishes all four while nothing in the ecosystem compares them.
 ///
 /// PC stays the primary surface (`unrolled`/`rolled` at the top level); the
 /// consoles ride along under `platforms` so a consumer that only knows about
