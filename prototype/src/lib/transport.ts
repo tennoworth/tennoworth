@@ -138,7 +138,7 @@ export class HostedTransport implements Transport {
     throw new Error('The in-game overlay is available in the desktop app.');
   }
   async overlayStatus(): Promise<OverlayStatus> {
-    return { state: 'disabled', backend: 'unsupported', placement: 'side-panel', ocrReady: false };
+    return { state: 'disabled', backend: 'unsupported', presentationBackend: 'tauri-window', placement: 'side-panel', ocrReady: false };
   }
   async setupOverlayCapture(): Promise<OverlayStatus> {
     throw new Error('The in-game overlay is available in the desktop app.');

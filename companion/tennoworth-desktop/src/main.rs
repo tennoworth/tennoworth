@@ -34,6 +34,8 @@ mod eelog_state;
 mod keyring_store;
 mod market;
 mod overlay;
+#[cfg(target_os = "linux")]
+mod wayland_overlay;
 mod probe;
 mod sellables;
 mod snapshot;

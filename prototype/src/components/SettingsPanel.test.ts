@@ -72,9 +72,12 @@ describe('SettingsPanel', () => {
     const transport = {
       getOverlaySettings: vi.fn(async () => settings),
       updateOverlaySettings,
-      overlayStatus: vi.fn(async () => ({ state: 'disabled', backend: 'x11-window', placement: 'anchored', ocrReady: true })),
-      setupOverlayCapture: vi.fn(async () => ({ state: 'watching', backend: 'x11-window', placement: 'anchored', ocrReady: true })),
+      overlayStatus: vi.fn(async () => ({ state: 'disabled', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true })),
+      setupOverlayCapture: vi.fn(async () => ({ state: 'watching', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true })),
+      previewRelicOverlay: vi.fn(async () => {}),
       scanOverlayNow: vi.fn(async () => {}),
+      openOverlayDiagnostics: vi.fn(async () => {}),
+      clearOverlayDiagnostics: vi.fn(async () => {}),
     } as unknown as Transport;
     render(SettingsPanel, { props: { theme, transport, isDesktop: true } });
 

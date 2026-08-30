@@ -100,4 +100,12 @@ xcap = "0.8"
 gtk = "0.18"
 # Enumerate and capture the Warframe X11/XWayland window without pulling in a
 # native Wayland portal/recorder stack that the overlay does not use.
-xcb = "1.7"
+xcb = { version = "1.7", features = ["randr"] }
+# Layer-shell gives the passive overlay compositor-owned stacking above a
+# fullscreen game. Cairo renders into Wayland shared-memory buffers.
+cairo-rs = "0.18"
+memmap2 = "0.9"
+rustix = { version = "1", features = ["event", "fs"] }
+wayland-client = "0.31"
+wayland-protocols = { version = "0.32", features = ["client", "staging", "unstable"] }
+wayland-protocols-wlr = { version = "0.3", features = ["client"] }

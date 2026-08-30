@@ -249,13 +249,13 @@
           <div class="overlay-actions">
             <button onclick={previewOverlay} disabled={!overlay.enabled || savingOverlay}>Preview overlay</button>
             <button onclick={testOverlay} disabled={!overlay.enabled || savingOverlay}>Scan reward screen now</button>
-            {#if overlayStatus}<span class="status"><i class="status-dot {overlayStatus.state}"></i>{overlayStatus.state.replaceAll('-', ' ')} · {overlayStatus.backend} · {overlayStatus.ocrReady ? 'OCR ready' : 'OCR unavailable'}</span>{/if}
+            {#if overlayStatus}<span class="status"><i class="status-dot {overlayStatus.state}"></i>{overlayStatus.state.replaceAll('-', ' ')} · {overlayStatus.backend} capture · {overlayStatus.presentationBackend} display · {overlayStatus.ocrReady ? 'OCR ready' : 'OCR unavailable'}</span>{/if}
           </div>
           {#if overlayStatus?.lastRun}
             <p class="exp">Last run: {overlayStatus.lastRun.outcome} · {overlayStatus.lastRun.recognizedSlots}/{overlayStatus.lastRun.expectedSlots || '?'} slots · {overlayStatus.lastRun.timings.totalMs} ms</p>
           {/if}
           {#if overlayError}<p class="error" role="alert">{overlayError}</p>{/if}
-          <p class="exp">Use Borderless Fullscreen or Windowed mode. Windows and X11 use direct window capture; Wayland currently captures through XWayland, not a portal. No interaction, injection, or automatic reward selection is performed.</p>
+          <p class="exp">Use Borderless Fullscreen or Windowed mode. Windows and X11 use direct window capture; Wayland captures through XWayland and presents through layer-shell when the compositor supports it. No interaction, injection, or automatic reward selection is performed.</p>
         {:else}
           <p class="exp">Loading overlay settings…</p>
         {/if}

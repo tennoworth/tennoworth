@@ -25,8 +25,8 @@ if (import.meta.env.DEV && new URLSearchParams(location.search).has('preview-des
     ledger_rows: [], list_trades: [],
     try_silent_unlock: false,
     get_overlay_settings: { enabled: false, autoDetect: true, shortcut: 'Ctrl+Shift+O', scale: 1, livePrices: true, showOwned: true, diagnostics: false },
-    overlay_status: { state: 'disabled', backend: 'x11-window', placement: 'anchored', ocrReady: true },
-    setup_overlay_capture: { state: 'watching', backend: 'x11-window', placement: 'anchored', ocrReady: true },
+    overlay_status: { state: 'disabled', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true },
+    setup_overlay_capture: { state: 'watching', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true },
   };
   // The desktop store keeps settings + the reload-restore snapshot in SQLite
   // via get_setting/set_setting; back those onto localStorage so a seeded
