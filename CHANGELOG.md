@@ -30,6 +30,16 @@ release body.
 Nothing is backfilled: releases up to and including 0.3.8 predate this file,
 and their notes live on the GitHub releases themselves.
 
+## 0.6.5 - 2026-08-30
+
+- On Wayland, relic reward results now use a native layer-shell overlay that
+  stays above borderless-fullscreen Warframe without taking focus or
+  intercepting clicks. The existing desktop window remains available as a
+  compatibility fallback.
+- Overlay placement now maps XWayland capture geometry onto Wayland outputs,
+  including mixed-DPI and fractional-scale layouts. Settings reports capture
+  and presentation backends separately for clearer diagnostics.
+
 ## 0.6.4 - 2026-08-29
 
 - TennoWorth now uses a cleaner transparent application icon with corrected
