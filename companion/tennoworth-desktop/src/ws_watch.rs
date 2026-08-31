@@ -147,7 +147,9 @@ fn run(app: AppHandle) {
             let Some(i) = match_order(&o, slug, &cache.watches, me2.as_deref(), now) else {
                 return;
             };
-            let w = &cache.watches[i];
+            let Some(w) = cache.watches.get(i) else {
+                return;
+            };
             let outcome = WatchOutcome {
                 id: w.id,
                 slug: w.slug.clone(),

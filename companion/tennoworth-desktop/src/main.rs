@@ -98,6 +98,14 @@ fn main() {
     let probe = std::env::var("TENNOWORTH_PROBE").ok().as_deref() == Some("1");
     let runtag = std::env::var("TENNOWORTH_RUNTAG").unwrap_or_else(|_| "na".into());
 
+    #[allow(
+        clippy::expect_used,
+        reason = "a failure at the end of main must terminate with Tauri's diagnostic"
+    )]
+    #[allow(
+        clippy::exit,
+        reason = "tauri::generate_context expands to process::exit for invalid build context"
+    )]
     tauri::Builder::default()
         // MUST be registered first - the plugin has to claim the single-instance
         // lock before anything else initialises, or a second launch does real

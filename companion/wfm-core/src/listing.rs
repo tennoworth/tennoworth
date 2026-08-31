@@ -44,6 +44,7 @@ pub(crate) const ORDER_RETRY_ATTEMPTS: u32 = 2;
 /// instead, which is what WFM's rate-limit rules ask of clients. Requests
 /// with a non-cloneable body (not the case for any call site here - all send
 /// `.json(...)`) fall back to a single attempt.
+#[allow(clippy::unreachable, reason = "the loop returns on its final attempt when max_attempts is at least one")]
 pub(crate) fn send_with_retry(
     builder: reqwest::blocking::RequestBuilder,
     max_attempts: u32,
@@ -178,11 +179,13 @@ pub fn bulk_set_visibility(unlocked: &Unlocked, req: &VisibilityRequest) -> Vec<
         }
     };
     let mut out = Vec::with_capacity(req.order_ids.len());
-    let mut last = std::time::Instant::now() - Duration::from_millis(SERVE_RATE_LIMIT_MS);
+    let mut last = std::time::Instant::now()
+        .checked_sub(Duration::from_millis(SERVE_RATE_LIMIT_MS))
+        .unwrap_or_else(std::time::Instant::now);
     for id in &req.order_ids {
         let elapsed = last.elapsed();
         if elapsed < Duration::from_millis(SERVE_RATE_LIMIT_MS) {
-            thread::sleep(Duration::from_millis(SERVE_RATE_LIMIT_MS) - elapsed);
+            thread::sleep(Duration::from_millis(SERVE_RATE_LIMIT_MS).saturating_sub(elapsed));
         }
         last = std::time::Instant::now();
         out.push(patch_one_order(&client, unlocked, id, &serde_json::json!({"visible": req.visible})));
@@ -247,7 +250,11 @@ pub fn delete_order(unlocked: &Unlocked, id: &str) -> Result<()> {
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().unwrap_or_default();
-        bail!("WFM HTTP {status}: {}", &body[..body.len().min(300)]);
+        let mut end = body.len().min(300);
+        while !body.is_char_boundary(end) {
+            end = end.saturating_sub(1);
+        }
+        bail!("WFM HTTP {status}: {}", body.get(..end).unwrap_or(""));
     }
     Ok(())
 }

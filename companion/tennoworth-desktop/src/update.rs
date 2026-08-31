@@ -177,7 +177,7 @@ pub async fn check(app: &AppHandle) -> UpdateStatus {
             UpdateSupport::DisabledTestBuild => {
                 eprintln!("tennoworth: update check skipped - disabled in OCR test builds")
             }
-            UpdateSupport::Supported => unreachable!(),
+            UpdateSupport::Supported => {}
         }
         state.store(status.clone(), None);
         return status;

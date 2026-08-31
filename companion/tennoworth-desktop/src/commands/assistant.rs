@@ -2,6 +2,10 @@
 //! mirror) - the only command with third-party egress. Key resolution, caps,
 //! prompt fencing, and the throttle all live in `wfm_core::assistant`; this
 //! is wiring only, so the API key never reaches the webview.
+#![allow(
+    clippy::unreachable,
+    reason = "tauri::command injects unreachable code into async wrappers"
+)]
 
 use std::sync::Arc;
 use std::time::Instant;

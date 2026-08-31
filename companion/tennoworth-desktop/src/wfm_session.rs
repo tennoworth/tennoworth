@@ -14,6 +14,10 @@
 //! `needs_login` (no login file on this machine) or `needs_unlock` (login file
 //! present, session locked) so the SPA can raise the login or passphrase modal -
 //! the desktop analogue of serve's 401 `needs_login:true` vs 503 split.
+#![allow(
+    clippy::unreachable,
+    reason = "tauri::command injects unreachable code into async wrappers"
+)]
 
 use std::collections::VecDeque;
 use std::fs;

@@ -32,7 +32,6 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend }}
       rust: ${{ steps.filter.outputs.rust }}
       version: ${{ steps.filter.outputs.version }}
-      panic: ${{ steps.filter.outputs.panic }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
@@ -53,10 +52,6 @@ jobs:
               - 'companion/tennoworth-desktop/Cargo.toml'
               - 'scripts/release.ts'
               - '.github/workflows/release-desktop.yml'
-              - '.github/workflows/audit.yml'
-            panic:
-              - 'companion/**'
-              - 'scripts/check-panic-sites.ts'
               - '.github/workflows/audit.yml'
 
   bun-audit:
@@ -166,27 +161,34 @@ jobs:
       - name: Version pins agree
         run: bun scripts/release.ts check
 
-  # Unwrap/expect in production code is a crash (Tauri does not catch command
-  # panics) plus a poisoned mutex; the allowlist in scripts/check-panic-sites.ts
-  # holds the ~8 sites that are unreachable by construction. Fails on any NEW
-  # site outside it - fix the site, or add it with a why-comment, never silently.
-  panic-site-gate:
+  # companion/Cargo.toml denies the crash-prone Clippy family workspace-wide.
+  # Test panics are allowed by clippy.toml; impossible production paths carry
+  # a narrow allow with the invariant beside the code.
+  cargo-clippy:
     needs: changes
     if: >-
-      needs.changes.outputs.panic == 'true' ||
+      needs.changes.outputs.rust == 'true' ||
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: companion
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: oven-sh/setup-bun@v2
-      - name: No new production unwrap()/expect() outside the allowlist
-        run: bun scripts/check-panic-sites.ts
+      - uses: ./.github/actions/setup-rust
+      - name: Install Tauri Linux deps
+        run: >
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends
+          libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
+          librsvg2-dev libtesseract-dev libleptonica-dev libxcb1-dev patchelf
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-targets
 
   # This is the required audit status. It runs even when a prerequisite is
   # skipped and fails only when a relevant job failed or was cancelled.
   audit-gate:
     if: ${{ always() }}
-    needs: [changes, bun-audit, cargo-audit, cargo-test, version-pins, panic-site-gate]
+    needs: [changes, bun-audit, cargo-audit, cargo-test, cargo-clippy, version-pins]
     runs-on: ubuntu-latest
     steps:
       - name: Require every applicable check to pass

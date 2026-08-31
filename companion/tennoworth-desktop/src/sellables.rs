@@ -355,7 +355,7 @@ fn decamel(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 4);
     for (i, &c) in chars.iter().enumerate() {
         if i > 0 && c.is_ascii_uppercase() {
-            let prev = chars[i - 1];
+            let prev = chars.get(i.saturating_sub(1)).copied().unwrap_or_default();
             if prev.is_ascii_lowercase() || prev.is_ascii_digit() {
                 out.push(' ');
             }

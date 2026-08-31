@@ -39,6 +39,23 @@ reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"
 # Blocking WebSocket client for WFM's live order stream (rustls to match reqwest).
 tungstenite = { version = "0.24", default-features = false, features = ["rustls-tls-webpki-roots", "handshake"] }
 
+# A panic in a Tauri command crashes the process and poisons its mutexes, so
+# production code denies the crash family workspace-wide. Tests re-allow the
+# idiomatic assertion helpers through clippy.toml; impossible production paths
+# carry a narrow allow with their invariant at the call site.
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+indexing_slicing = "deny"
+unreachable = "deny"
+unimplemented = "deny"
+unchecked_time_subtraction = "deny"
+todo = "deny"
+string_slice = "deny"
+panic_in_result_fn = "deny"
+panic = "deny"
+exit = "deny"
+
 # Shared by every member.
 [profile.release]
 strip = true

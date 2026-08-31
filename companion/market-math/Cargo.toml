@@ -6,3 +6,6 @@ description = "Pure market-data heuristics - no I/O, no deps."
 license = "MIT"
 
 [dependencies]
+
+[lints]
+workspace = true

@@ -84,6 +84,7 @@ pub struct ScanPatterns {
 }
 
 impl Default for ScanPatterns {
+    #[allow(clippy::unwrap_used, reason = "compile-time constant patterns are exercised by the test suite")]
     fn default() -> Self {
         // unwrap is honest here: these are compile-time constants that the test
         // suite compiles. A failure is a build-breaking typo, not a runtime path.
@@ -300,9 +301,9 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
         if parts.len() < 5 {
             continue;
         }
-        let addr_range = parts[0];
-        let perms = parts[1];
-        let path = if parts.len() >= 6 { parts[5] } else { "" };
+        let addr_range = parts.first().copied().unwrap_or("");
+        let perms = parts.get(1).copied().unwrap_or("");
+        let path = parts.get(5).copied().unwrap_or("");
         if !perms.contains('r') {
             continue;
         }
@@ -322,12 +323,14 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
             if mem_file.seek(SeekFrom::Start(offset)).is_err() {
                 break;
             }
+            #[allow(clippy::indexing_slicing, reason = "buffer sizing keeps tail_len + want within hay")]
             let n = match mem_file.read(&mut hay[tail_len..tail_len + want]) {
                 Ok(0) => break,
                 Ok(n) => n,
                 Err(_) => break,
             };
             let total = tail_len + n;
+            #[allow(clippy::indexing_slicing, reason = "total cannot exceed the initialized buffer prefix")]
             aggregate_match(&hay[..total], &pats, &mut counts);
             let keep = std::cmp::min(overlap, n);
             hay.copy_within(total - keep..total, 0);

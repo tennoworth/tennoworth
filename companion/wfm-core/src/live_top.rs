@@ -187,7 +187,7 @@ pub fn fetch_live_tops(
         if let Some(t) = last_start {
             let elapsed = t.elapsed();
             if elapsed < LIVE_TOP_SPACING {
-                thread::sleep(LIVE_TOP_SPACING - elapsed);
+                thread::sleep(LIVE_TOP_SPACING.saturating_sub(elapsed));
             }
         }
         last_start = Some(Instant::now());

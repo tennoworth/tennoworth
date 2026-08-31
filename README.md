@@ -218,11 +218,12 @@ bun run knip
 
 cd ../companion
 cargo test
+cargo clippy --workspace --all-targets
+cargo shear
 cargo audit --deny warnings
 
 cd ..
 bun scripts/sync-csp.ts --check
-bun scripts/check-panic-sites.ts
 bash scripts/probe-smoke-linux.sh
 ```
 

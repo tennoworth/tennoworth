@@ -16,7 +16,8 @@ removed on 2026-08-02 - the desktop app replaced it.
 | `wfm-scrape` | Host-only pipeline binary: `scrape` runs the WFM scrape to CSV, `build` renders `market.json` + `wfstat-catalog.json`. The only pipeline - Python was retired 2026-08. |
 | `wfm-client` | Shared WFM transport primitives (UA, Cloudflare headers, envelope unwrap, retry backoff). |
 
-Build: `cargo build --release`. Tests: `cargo test`.
+Build: `cargo build --release`. Tests: `cargo test`. Rust hygiene:
+`cargo clippy --workspace --all-targets` and `cargo shear`.
 
 The Linux binary needs `cap_sys_ptrace` for the inventory scan (grant once;
 re-run after every `cargo build --release`, which wipes the capability):

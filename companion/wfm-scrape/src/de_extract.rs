@@ -221,7 +221,10 @@ pub fn relic_rewards_from_de(
 
             let mut by_refinement = serde_json::Map::new();
             for (i, key) in REFINEMENTS.iter().enumerate() {
-                by_refinement.insert((*key).to_string(), Value::from(chances[i]));
+                by_refinement.insert(
+                    (*key).to_string(),
+                    Value::from(chances.get(i).copied().unwrap_or(0.0)),
+                );
             }
             out.push(serde_json::json!({
                 "reward_slug": reward_slug,
@@ -229,7 +232,7 @@ pub fn relic_rewards_from_de(
                 "rarity": pretty_rarity(rarity),
                 // Intact stays the bare `chance` so consumers written against
                 // the old single-tier surface keep working unchanged.
-                "chance": chances[0],
+                "chance": chances.first().copied().unwrap_or(0.0),
                 "chances": Value::Object(by_refinement),
                 "item_count": rw.get("itemCount").and_then(|v| v.as_i64()).unwrap_or(1),
             }));
