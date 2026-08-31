@@ -125,8 +125,8 @@ jobs:
       # than rewrite the lock. Every build in this repo has network access and
       # quietly re-resolves it instead, so a version bump that edits Cargo.toml
       # alone is green here and wrong in the tag - how 0.3.5 and 0.3.6 both
-      # shipped unbuildable from source (the retired AUR source package was
-      # where that surfaced). Run on every push, where it's cheap to fix.
+      # shipped unbuildable from source. Run on every push, where it's cheap
+      # to fix.
       - name: Gate - Cargo.lock already matches the manifests
         run: cargo fetch --locked
       # tennoworth-desktop (Tauri v2) links the Linux GUI stack; without these
@@ -145,8 +145,7 @@ jobs:
         run: cargo test
 
   # The desktop version is pinned in two places (Cargo.toml and Cargo.lock's
-  # own entry - the two AUR PKGBUILDs went with the AUR packages when Linux
-  # became AppImage-only). Until this job existed the only thing that checked
+  # own entry). Until this job existed the only thing that checked
   # them was the release workflow, so drift was discovered while shipping:
   # package.json sat at 0.3.3 under a 0.3.6 desktop for three releases, and
   # 0.3.5 and 0.3.6 both shipped a Cargo.lock naming the previous version -

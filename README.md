@@ -72,8 +72,7 @@ prices in the background, or read `EE.log`.
 Download `TennoWorth_<version>_x64-setup.exe` from the
 [latest GitHub release](https://github.com/tennoworth/tennoworth/releases/latest).
 The installer is not code-signed, so Windows SmartScreen may require
-**More info → Run anyway** on first launch. The retired `.msi` is not produced
-by current builds.
+**More info → Run anyway** on first launch.
 
 ### Linux
 
@@ -86,9 +85,6 @@ sha256sum -c TennoWorth-x86_64.AppImage.sha256
 chmod +x TennoWorth-x86_64.AppImage
 ./TennoWorth-x86_64.AppImage
 ```
-
-The apt, dnf, and AUR channels are retired and frozen at their last published
-version. They do not receive current releases.
 
 Linux kernels commonly restrict reading another process even when both belong
 to the same user. If the app reports a ptrace permission error, it will include

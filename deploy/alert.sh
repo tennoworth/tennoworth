@@ -3,10 +3,9 @@
 # so $1 is the unit that failed.
 #
 # Exists because two separate outages ran for days without anyone noticing:
-# the dnf repo publisher failed at `rpm --addsign` for 9 days while apt kept
-# working, and wfm-app-pull failed on its very first timer firing. Both sat in
-# `systemctl --failed`, which nothing looks at. A cron box with no alerting is
-# a box whose failures are discovered by accident.
+# a release publisher failed for 9 days, and wfm-app-pull failed on its first
+# timer firing. Both sat in `systemctl --failed`, which nothing looks at. A
+# cron box with no alerting is a box whose failures are discovered by accident.
 #
 # Two sinks, deliberately:
 #   - an append-only log OUTSIDE the journal, because the journal rotates and

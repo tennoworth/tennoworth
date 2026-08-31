@@ -345,15 +345,15 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
 //
 // The remedy depends on HOW the app is running, which is why this branches:
 //
-//   AppImage (the only Linux channel we ship) - `setcap` is useless here. The
+//   AppImage - `setcap` is useless here. The
 //     runtime mounts the payload on a fresh nosuid FUSE mount per launch, and
 //     the kernel ignores file capabilities on nosuid mounts; even if it did
 //     not, `current_exe()` is a /tmp/.mount_* path that ceases to exist when
 //     the app closes, so the grant could not outlive one run. The honest fix
 //     is to relax Yama.
 //
-//   Anything else (cargo run, a distro package built from source) - the
-//     per-binary capability is still the tightest grant available, so keep it.
+//   A local or extracted binary - the per-binary capability is still the
+//     tightest grant available, so keep it.
 #[cfg(target_os = "linux")]
 fn ptrace_open_error(mem_path: &str, pid: u32, e: std::io::Error) -> anyhow::Error {
     if e.kind() != std::io::ErrorKind::PermissionDenied {

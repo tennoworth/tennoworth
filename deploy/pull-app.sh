@@ -1,9 +1,7 @@
 #!/usr/bin/env bash
 # Update the box's repo checkout at /srv/wfm/app.
 #
-# The other pullers (pull-web.sh, pull-scrape.sh) cover the built bundle and
-# the wfm-scrape binary; pull-packages.sh covered the deb/rpm and is now a
-# retired no-op stub. NOTHING covers the checkout itself, so
+# The other pullers cover built artifacts, not the checkout itself, so
 # deploy/run-scrape.sh and the systemd units only move when
 # a human moves them - which is how the box sat on a phase-3 commit while main
 # was many commits ahead.
@@ -102,9 +100,8 @@ for f in "${LIVE_ARTIFACTS[@]}"; do
 done
 
 # Untracked files that the incoming commits add as TRACKED abort the merge.
-# Happens whenever something is hand-placed on the box before it lands in git -
-# tennoworth-archive-keyring.asc was copied here during the apt/dnf repo work
-# and then committed upstream. If the box's copy is byte-identical, drop it and
+# Happens whenever something is hand-placed on the box before it lands in git.
+# If the box's copy is byte-identical, drop it and
 # let the merge bring it in; if it differs, that is a human decision, not
 # something a puller should overwrite.
 incoming_untracked=$(git diff --name-only --diff-filter=A HEAD "$REMOTE/$BRANCH" 2>/dev/null || true)

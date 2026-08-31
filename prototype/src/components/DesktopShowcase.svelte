@@ -14,8 +14,7 @@
   // information but they aren't the pitch. Anchor: <section id="desktop">.
   let { rows = [] }: { rows?: HandoffRow[] } = $props();
 
-  // Two platforms, two tabs. The per-distro tabs (Debian/Fedora/Arch) went
-  // when the apt, dnf and AUR channels were retired - Linux is the AppImage.
+  // Two platforms, two tabs: Windows installer and Linux AppImage.
   type Os = 'windows' | 'linux';
   // Default the active tab to the visitor's OS so a Windows user lands on the
   // Windows block and a Linux user on the AppImage block without a click.
@@ -50,7 +49,7 @@
     },
     windows: {
       title: 'Windows',
-      note: 'Download the installer (.exe or .msi) from the latest release. Unsigned, so SmartScreen warns - click More info → Run anyway. The app updates itself from there.',
+      note: 'Download the .exe installer from the latest release. Unsigned, so SmartScreen warns - click More info → Run anyway. The app updates itself from there.',
       cmd: 'Download from the latest release - https://github.com/tennoworth/tennoworth/releases',
       copiable: false,
     },
@@ -68,10 +67,8 @@
   // code block renders as copyable, not inline prose. Only shown on the Linux
   // tab - it doesn't apply to Windows.
   //
-  // This used to be `setcap cap_sys_ptrace=eip /usr/bin/tennoworth-desktop`,
-  // which was a deb/rpm/AUR install path: there is no /usr/bin binary any
-  // more, and file capabilities are ignored on the AppImage's nosuid FUSE
-  // mount anyway. What is left is the yama scope, which is what actually
+  // File capabilities are ignored on the AppImage's nosuid FUSE mount, and
+  // its temporary executable path changes on every launch. Yama is what
   // refuses the read on a default Debian/Ubuntu/Arch box (scope 1 allows
   // tracing descendants only, and the game is Steam's child, not ours). The
   // app itself prints the precise diagnosis - including the scope it found -
@@ -170,7 +167,7 @@
         <span class="exp">Score prioritizes what to list from price, likely sell-through, and a bounded DE usage weight - it is not expected plat/day. Potential remains the unweighted stack value. Owned counts here are sample values; the desktop app scans the running game and fills these. Nothing is uploaded; no WFM login until you list.</span>
       </div>
       <div class="cta">
-        <a class="btn lg primary" href={RELEASES} target="_blank" rel="noopener noreferrer">Windows .msi</a>
+        <a class="btn lg primary" href={RELEASES} target="_blank" rel="noopener noreferrer">Windows · .exe</a>
         <button type="button" class="btn lg" onclick={() => openInstall(activeOs === 'windows' ? 'linux' : activeOs)} aria-expanded={installOpen} aria-controls="desktop-install">Linux · AppImage</button>
         <span class="fine">free · open source · reads memory only<br />unsigned Windows build - see Install &amp; verify</span>
       </div>
@@ -216,7 +213,7 @@
   <details class="disc install" id="desktop-install" bind:open={installOpen}>
     <summary>
       <span class="lbl">Install &amp; verify</span>
-      <span class="exp">Windows .msi · Linux AppImage · first run · how to check the build</span>
+      <span class="exp">Windows .exe · Linux AppImage · first run · how to check the build</span>
     </summary>
     <div class="disc-body">
       <div class="seg" role="tablist" aria-label="Operating system">
@@ -254,13 +251,6 @@
           {/if}
         </div>
         <p class="note">{install[activeOs].note}</p>
-        {#if isLinux}
-          <p class="note">
-            Installed from apt, dnf or the AUR? Those channels are retired - the AppImage is the only
-            one that updates itself. Nothing breaks: the repositories stay served and signed, frozen
-            at their last published version. Take the AppImage above, then remove the old package.
-          </p>
-        {/if}
       </div>
 
       <h4>First run</h4>

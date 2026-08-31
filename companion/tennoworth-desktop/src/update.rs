@@ -96,10 +96,10 @@ impl UpdateState {
 /// precisely why the AppImage is now the ONLY Linux channel we ship: it is the
 /// one that can replace itself. In an AppImage run (the runtime sets
 /// `APPIMAGE`) self-update works and latest.json carries a linux-x86_64 entry,
-/// so the check is real. Any other Linux run - a `cargo run` dev build, an
-/// extracted bundle, or a leftover install from the retired deb/rpm/AUR
-/// packages - cannot self-update. The explicit support state lets Settings
-/// explain that instead of claiming a skipped check found the current version.
+/// so the check is real. Any other Linux run - such as a `cargo run` dev build
+/// or an extracted bundle - cannot self-update. The explicit support state
+/// lets Settings explain that instead of claiming a skipped check found the
+/// current version.
 ///
 /// (History: the first AppImage was withdrawn for an EGL abort on rolling
 /// Mesa. Root cause found 2026-08-20: the bundle carried ubuntu-22.04's

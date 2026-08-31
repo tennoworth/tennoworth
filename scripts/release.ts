@@ -6,10 +6,9 @@
 // user machines: 0.3.3 sat under a 0.3.6 desktop for three releases, and 0.3.5
 // and 0.3.6 both shipped a Cargo.lock naming the previous version, which made
 // them unbuildable from source (`cargo build --frozen` refuses to rewrite a
-// lock - the retired AUR source package was where that surfaced).
+// lock).
 //
-// Two pins remain; the two AUR PKGBUILDs were dropped when Linux became
-// AppImage-only:
+// Two pins remain:
 //
 //   companion/tennoworth-desktop/Cargo.toml   AUTHORITATIVE. CARGO_PKG_VERSION,
 //                                             what the app reports and what the
