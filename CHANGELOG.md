@@ -138,16 +138,21 @@ and their notes live on the GitHub releases themselves.
 **Linux is now distributed as an AppImage, and only as an AppImage.** If you
 installed from the apt or dnf repository, or from the AUR, read this.
 
-- **The `.deb` and `.rpm` are gone, and so are the two AUR packages.** The
-  AppImage is the only Linux build that can update itself - Tauri's updater
-  never supported the others - so every Linux user was choosing between a
-  package that goes stale silently and one that doesn't. One channel that
-  works beats four that half-work.
+- **The `.deb` and `.rpm` builds are gone, and the two AUR packages are frozen
+  at 0.5.0.** The AppImage is the only Linux build that can update itself -
+  Tauri's updater never supported the others - so every Linux user was
+  choosing between a package that goes stale silently and one that doesn't.
+  One channel that works beats four that half-work.
 - **Nothing you installed will break.** The apt and dnf repositories stay
   online and keep serving 0.5.0; the AUR packages still build 0.5.0. They
   simply stop receiving new versions. **To keep getting updates, download
   `TennoWorth-x86_64.AppImage` from this release** - it self-updates from
   then on.
+
+  **Update, 2026-09-01:** the frozen apt and dnf archives have now been
+  removed. Their original 0.5.0 package files remain attached to the GitHub
+  release for archival use. The two AUR package names remain held by the
+  project maintainer, but are still frozen and unsupported.
 - **The memory-scan permission hint was wrong for AppImage users** and now
   isn't. `setcap` cannot work there: the AppImage runs from a temporary mount
   that ignores file capabilities, and the path changes every launch. The app
