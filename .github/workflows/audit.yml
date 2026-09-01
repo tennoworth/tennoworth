@@ -1,18 +1,10 @@
 name: audit
 
-# Runs dependency advisories across both ecosystems on every push and on a
-# weekly schedule. Fails the workflow on anything moderate-or-higher so we
-# notice before users do.
+# Runs the full applicable gate set on pull requests, weekly, and on demand.
+# Main/develop pushes already passed these checks as pull requests; deployment
+# workflows remain responsible for producing artifacts from main.
 
 on:
-  push:
-    branches: [main, develop]
-    # The 2-hourly market-refresh bot commits touch only these three data
-    # files; skip a full CI run for a data-only push (~85 wasted runs/week).
-    paths-ignore:
-      - 'prototype/public/market.json'
-      - 'prototype/public/wfstat-catalog.json'
-      - 'wfm_results.csv'
   pull_request:
   schedule:
     - cron: '17 4 * * 1'  # every Monday at 04:17 UTC

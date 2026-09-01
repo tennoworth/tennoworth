@@ -1,8 +1,9 @@
 name: ui-smoke
 
 # Runs the REAL desktop app (Tauri v2, Windows) under the TENNOWORTH_PROBE
-# harness on every push: the probe injects a synthetic fixture, drives the
-# scan -> sell view -> listing UI over real IPC, and writes its evidence
+# harness on desktop-affecting pull requests: the probe injects a synthetic
+# fixture, drives the scan -> sell view -> listing UI over real IPC, and writes
+# its evidence
 # (console errors, CSP violations, mount state) to a JSON report that
 # scripts/check-probe-report.ts gates on. This is the only gate that catches
 # "builds fine, feature silently no-ops" - the 2026-08-03 default-vs-named
@@ -14,13 +15,6 @@ name: ui-smoke
 # needs no display tricks - this is the cheapest faithful E2E signal.
 
 on:
-  push:
-    branches: [main, develop]
-    # Skip the market-refresh cron's data-only commits (same shape as audit.yml).
-    paths-ignore:
-      - 'prototype/public/market.json'
-      - 'prototype/public/wfstat-catalog.json'
-      - 'wfm_results.csv'
   pull_request:
   workflow_dispatch:
 
@@ -47,8 +41,16 @@ jobs:
               - 'companion/tennoworth-desktop/**'
               - 'companion/wfm-client/**'
               - 'companion/wfm-core/**'
-              - 'prototype/**'
+              - 'prototype/src/**'
+              - 'prototype/index.html'
+              - 'prototype/bun.lock'
+              - 'prototype/package.json'
+              - 'prototype/svelte.config.ts'
+              - 'prototype/tsconfig.json'
+              - 'prototype/vite.config.ts'
+              - 'prototype/public/theme-boot.js'
               - 'scripts/check-probe-report.ts'
+              - 'scripts/sync-csp.ts'
               - '.github/actions/setup-rust/**'
               - '.github/workflows/ui-smoke.yml'
 
@@ -61,6 +63,7 @@ jobs:
     timeout-minutes: 60
     env:
       VCPKG_DEFAULT_TRIPLET: x64-windows-static-md
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}\vcpkg-binary-cache,readwrite
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -68,11 +71,25 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
 
-      - name: Expose hosted vcpkg installation to Cargo
+      - name: Identify hosted vcpkg installation
+        id: vcpkg
         shell: pwsh
         run: |
           if (-not $env:VCPKG_INSTALLATION_ROOT) { throw 'GitHub runner vcpkg installation was not found' }
           "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          $commit = git -C $env:VCPKG_INSTALLATION_ROOT rev-parse HEAD
+          if ($LASTEXITCODE -ne 0) { throw 'Could not identify the hosted vcpkg revision' }
+          "commit=$commit" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          "image-version=$env:ImageVersion" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+
+      # vcpkg's former x-gha backend was removed. Use its stable files backend
+      # behind GitHub's cache action instead; ABI hashes still decide whether a
+      # restored package is compatible with this compiler and port revision.
+      - name: Restore vcpkg binary packages
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ github.workspace }}\vcpkg-binary-cache
+          key: vcpkg-${{ runner.os }}-${{ env.VCPKG_DEFAULT_TRIPLET }}-${{ steps.vcpkg.outputs.commit }}-${{ steps.vcpkg.outputs.image-version }}
 
       - name: Install overlay OCR build dependencies
         shell: bash
