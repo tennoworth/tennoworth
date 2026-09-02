@@ -1,8 +1,7 @@
-# RETIRED - see wfm-repo-pull.service. Fires a no-op stub; kept only so the
-# already-enabled timer on the box has something harmless to run until it is
-# disabled.
+# Compatibility timer; its service is a no-op until the installed unit is
+# removed from the production box.
 [Unit]
-Description=Retired - was: check for a new desktop release every 30 minutes
+Description=Legacy package publisher compatibility timer
 
 [Timer]
 # Slower than the web pull (15min): desktop releases are cut by hand from a

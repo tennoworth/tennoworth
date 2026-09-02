@@ -53,7 +53,10 @@ pub fn fetch_inventory_bytes(
     let status = resp.status();
     let bytes = resp.bytes().context("reading inventory response")?;
     if !status.is_success() || bytes.len() < 1024 {
-        let preview = String::from_utf8_lossy(&bytes[..bytes.len().min(400)]);
+        let preview = bytes
+            .get(..bytes.len().min(400))
+            .map(String::from_utf8_lossy)
+            .unwrap_or_default();
         bail!(
             "Inventory endpoint returned HTTP {status} ({} bytes).\nBody:\n{preview}\n\n\
              If the response was small or 4xx, DE may have rotated something.",

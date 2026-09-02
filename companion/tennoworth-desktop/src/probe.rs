@@ -304,6 +304,10 @@ const PROBE_JS: &str = r#"(function(){
 /// the fixture `&str` into a quoted, escaped JS string literal so
 /// `var FIXTURE = __FIXTURE__;` parses.
 pub fn build_probe_script(runtag: &str) -> String {
+    #[allow(
+        clippy::expect_used,
+        reason = "the constant string fixture always serializes as a JSON string"
+    )]
     let fixture_literal = serde_json::to_string(PROBE_FIXTURE)
         .expect("probe fixture serializes to a JS string literal");
     PROBE_JS
@@ -406,6 +410,10 @@ pub fn probe_exit() {
     let _ = so.flush();
     std::thread::spawn(|| {
         std::thread::sleep(std::time::Duration::from_millis(300));
+        #[allow(
+            clippy::exit,
+            reason = "the smoke harness requests a clean process exit after evidence is flushed"
+        )]
         std::process::exit(0);
     });
 }

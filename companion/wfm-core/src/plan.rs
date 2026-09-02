@@ -196,32 +196,36 @@ pub fn run_pending(pending_path: &std::path::Path, unlocked: &Unlocked, pending:
     };
 
     let mut last_call = std::time::Instant::now()
-        - Duration::from_millis(SERVE_RATE_LIMIT_MS);
+        .checked_sub(Duration::from_millis(SERVE_RATE_LIMIT_MS))
+        .unwrap_or_else(std::time::Instant::now);
     for i in 0..pending.items.len() {
-        if pending.items[i].status != "pending" {
+        let Some(item) = pending.items.get_mut(i) else {
+            continue;
+        };
+        if item.status != "pending" {
             continue;
         }
         let since = last_call.elapsed();
         if since < Duration::from_millis(SERVE_RATE_LIMIT_MS) {
-            thread::sleep(Duration::from_millis(SERVE_RATE_LIMIT_MS) - since);
+            thread::sleep(Duration::from_millis(SERVE_RATE_LIMIT_MS).saturating_sub(since));
         }
         last_call = std::time::Instant::now();
 
         let plan_item = PlanItem {
-            slug: pending.items[i].slug.clone(),
-            platinum: pending.items[i].platinum,
-            quantity: pending.items[i].quantity,
-            order_type: pending.items[i].order_type.clone(),
-            visible: pending.items[i].visible,
-            rank: pending.items[i].rank,
-            subtype: pending.items[i].subtype.clone(),
-            reference_low_sell: pending.items[i].reference_low_sell,
+            slug: item.slug.clone(),
+            platinum: item.platinum,
+            quantity: item.quantity,
+            order_type: item.order_type.clone(),
+            visible: item.visible,
+            rank: item.rank,
+            subtype: item.subtype.clone(),
+            reference_low_sell: item.reference_low_sell,
         };
         let result = execute_one(&http, unlocked, &plan_item, &existing);
-        pending.items[i].status = result.status.clone();
-        pending.items[i].message = result.message.clone();
-        pending.items[i].order_id = result.order_id.clone();
-        pending.items[i].action = result.action.clone();
+        item.status = result.status.clone();
+        item.message = result.message.clone();
+        item.order_id = result.order_id.clone();
+        item.action = result.action.clone();
         if let Err(e) = write_pending_atomic(pending_path, pending) {
             eprintln!("warning: could not persist pending update: {e:#}");
         }
@@ -332,7 +336,7 @@ pub fn plan_item_key(item: &PlanItem, cat: &WfmCatalogItem) -> OrderKey {
             item.subtype
                 .clone()
                 .filter(|s| cat.subtypes.contains(s))
-                .unwrap_or_else(|| cat.subtypes[0].clone()),
+                .unwrap_or_else(|| cat.subtypes.first().cloned().unwrap_or_default()),
         )
     };
     (cat.item_id.clone(), item.order_type.clone(), rank, subtype)
@@ -367,7 +371,7 @@ pub fn build_order_body(item: &PlanItem, cat: &WfmCatalogItem) -> serde_json::Va
             .subtype
             .clone()
             .filter(|s| cat.subtypes.contains(s))
-            .unwrap_or_else(|| cat.subtypes[0].clone());
+            .unwrap_or_else(|| cat.subtypes.first().cloned().unwrap_or_default());
         body.insert("subtype".into(), serde_json::json!(chosen));
     }
     serde_json::Value::Object(body)

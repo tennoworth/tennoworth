@@ -149,7 +149,12 @@ pub fn reduce_day(rows: &[StatsDay], pick: Option<&str>) -> (Option<f64>, u32) {
     // Normally exactly one row survives (one rank-0 tier per day). If WFM
     // ever emits two (absent-vs-null mod_rank on the same item), take the
     // busier one for the median and sum the volume.
-    let best = tier.iter().max_by(|a, b| a.volume.total_cmp(&b.volume)).unwrap_or(&tier[0]);
+    let Some(best) = tier
+        .iter()
+        .max_by(|a, b| a.volume.total_cmp(&b.volume))
+    else {
+        return (None, 0);
+    };
     let vol: f64 = tier.iter().map(|d| d.volume).sum();
     (Some(best.median), vol.round().max(0.0) as u32)
 }
@@ -198,8 +203,12 @@ pub fn apply_day(hist: &mut History, date: NaiveDate, day: &HashMap<String, DayR
         let (median, volume) = reduce_day(&rows.rows, s.subtype.as_deref());
         s.median.resize(days, None);
         s.volume.resize(days, 0);
-        s.median[idx] = median;
-        s.volume[idx] = volume;
+        if let Some(slot) = s.median.get_mut(idx) {
+            *slot = median;
+        }
+        if let Some(slot) = s.volume.get_mut(idx) {
+            *slot = volume;
+        }
     }
     // A day can create a series that has no closed trade on its tier; keep the
     // artifact to items with at least one real value.

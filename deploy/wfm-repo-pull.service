@@ -1,13 +1,7 @@
-# RETIRED. Linux is AppImage-only, so there is no deb/rpm to publish and
-# /srv/wfm/pull-packages.sh is now a no-op stub that exits 0. The unit is kept
-# (rather than deleted) because it is still installed and enabled on the box:
-# leaving it pointed at the stub makes it harmless, while deleting the file
-# here would leave the installed copy running the OLD publisher, which would
-# fail on every fire and alert every 30 minutes.
-#
-# Safe to `systemctl disable --now wfm-repo-pull.timer` whenever convenient.
+# Compatibility unit for a timer that may still be installed on the production
+# box. Its command is deliberately a no-op until the installed timer is removed.
 [Unit]
-Description=Retired - the apt/dnf publisher (now a no-op stub)
+Description=Legacy package publisher compatibility no-op
 After=network-online.target
 Wants=network-online.target
 

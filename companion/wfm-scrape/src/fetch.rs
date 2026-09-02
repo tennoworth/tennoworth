@@ -798,6 +798,11 @@ enum JsTok {
     Num(f64),
 }
 
+#[allow(
+    clippy::indexing_slicing,
+    clippy::string_slice,
+    reason = "the byte cursor is bounds-checked at every access and slice boundaries advance only over ASCII tokens"
+)]
 fn tokenize_js_literal(text: &str) -> Result<Vec<JsTok>, String> {
     let b = text.as_bytes();
     let mut i = 0usize;
@@ -1077,6 +1082,10 @@ pub fn fetch_riven_stats(
             if !entry.get("platforms").map(|p| p.is_object()).unwrap_or(false) {
                 entry["platforms"] = serde_json::json!({});
             }
+            #[allow(
+                clippy::indexing_slicing,
+                reason = "serde_json object indexing inserts or returns Null instead of panicking"
+            )]
             let plat = &mut entry["platforms"][*platform];
             if !plat.is_object() {
                 *plat = serde_json::json!({});

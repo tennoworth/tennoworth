@@ -1,5 +1,9 @@
 //! Market snapshot cache access + refresh, and the sellables ranking the SPA
 //! reads directly (the tray reads the same ranking via [`crate::tray`]).
+#![allow(
+    clippy::unreachable,
+    reason = "tauri::command injects unreachable code into async wrappers"
+)]
 
 use std::sync::Arc;
 
