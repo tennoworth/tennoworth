@@ -18,5 +18,20 @@ Ids: `gh api repos/tennoworth/tennoworth/rulesets --jq '.[]|"\(.id) \(.name)"'`.
 | File | Live ruleset | Purpose |
 |---|---|---|
 | `desktop-release-tags.json` | Desktop release tags | `desktop-v*` tags can be neither deleted nor moved. No bypass actors: a wedged release is recovered by re-running its `publish` job, never by retagging. |
-| `develop-integration.json` | Integration branch (develop) | Integration branch rules. |
+| `develop-integration.json` | Integration branch (develop) | PR-only integration with required completion gates (`audit-gate`, `ui-gate`). The snapshot is intentionally ahead of the live ruleset until the market-refresh writer is migrated as described below. |
 | `main-production.json` | Production branch (main) | PR + 1 approval + required completion gates (`audit-gate`, `ui-gate`). Each gate verifies its applicable checks and accepts intentionally skipped work, so documentation-only changes do not consume desktop or Rust runners. Repository admins may bypass: the maintainer cannot approve their own promotion PRs, while contributors' PRs still need the maintainer's review. |
+
+## Applying the develop ruleset
+
+The live develop ruleset currently protects only deletion and non-fast-forward
+updates. Do not apply `develop-integration.json` until `refresh-market.yml` has
+a compatible write path: it currently commits generated data directly to
+develop with `GITHUB_TOKEN`, and the proposed PR rule will reject that push.
+
+Prefer retiring the GitHub snapshot writer before applying the proposed rule;
+the self-hosted box is authoritative, and any replacement bootstrap refresh is
+a separate design decision. Do not add a generic GitHub Actions bypass: that
+would let every workflow with a write token bypass the same protection and
+deepen the repository's dependence on GitHub-specific actors. Until the writer
+is retired or redesigned, leave the live develop ruleset unchanged. Afterwards,
+apply the JSON with the rulesets API and refresh the snapshot from the live rule.

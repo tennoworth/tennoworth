@@ -91,11 +91,12 @@ jobs:
 
       - uses: ./.github/actions/setup-rust
 
-      # The SAME check that runs on every PR (audit.yml), given the version
-      # this run was asked for. On a PR it asserts the pins agree with each
-      # other and are not behind what is published; `--release` additionally
-      # asserts they equal the requested version and are strictly ahead of it,
-      # because the updater only ever offers a greater version.
+      # The SAME check audit.yml runs when version inputs change (and in its
+      # weekly/manual sweeps), given the version this run was asked for. On a PR
+      # it asserts the pins agree with each other and are not behind what is
+      # published; `--release` additionally asserts they equal the requested
+      # version and are strictly ahead of it, because the updater only ever
+      # offers a greater version.
       #
       # Sharing one implementation is the point: a release-time-only guard is
       # a guard that first tells you about drift when you are trying to ship.
