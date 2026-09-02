@@ -31,9 +31,9 @@ characteristics:
    - `build-web.yml` - on a push touching `prototype/`, builds the
      static web bundle and publishes it as a rolling `web-latest`
      prerelease asset (the self-host box pulls it with a plain curl).
-   - `audit.yml` - on push / PR and weekly, runs dependency advisories
-     (`bun audit`, `cargo audit`) plus the JS and Rust test
-     suites.
+   - `audit.yml` - on pull requests, weekly, and on demand, routes changes
+     through proportional dependency, frontend, Rust, generated-data, and
+     deployment checks while keeping one stable required gate.
 
    The `release-desktop.yml` workflow builds the desktop app (the Windows
    installer and the Linux AppImage) and publishes the versioned release
