@@ -73,14 +73,11 @@ wfm_inventory_sellable.csv
 # daily; served live by Caddy, never committed. See wfm-scrape/src/history.rs.
 /prototype/public/history.json
 
-# GPG secret material for the (now frozen, still served) apt/dnf repos. Linux
-# is AppImage-only, so nothing new is signed with this key - but the key still
-# has to stay out of git for as long as those repos are served.
+# GPG secret material must never enter the repository.
 # The signing subkey lives only on
 # container 110; the primary key and revocation cert live offline. None of it
-# belongs in git - a committed signing key lets anyone serve trusted packages
-# to every user who added our repo. The PUBLIC key is deliberately not matched
-# here: prototype/public/tennoworth-archive-keyring.asc must stay tracked.
+# belongs in git: a committed secret key could sign trusted archive metadata.
+# The public key is deliberately not matched here.
 *secret-key*.asc
 *secret-subkeys*.asc
 *private*.asc

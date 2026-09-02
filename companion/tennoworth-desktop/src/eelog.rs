@@ -68,6 +68,10 @@ fn is_framework_line(line: &str) -> bool {
 
 /// Cut a `, leftItem=/Menu/…` or `title=` argument tail glued to the last
 /// item line of a single-line dialog dump.
+#[allow(
+    clippy::string_slice,
+    reason = "every bound comes from an ASCII marker returned by find and is a UTF-8 boundary"
+)]
 fn strip_arg_tail(line: &str) -> &str {
     let mut end = line.len();
     for key in [", leftItem=", " leftItem=", ", rightItem=", " rightItem=", ", title=", " title="] {
@@ -125,6 +129,10 @@ fn parse_item_block(block: &str, direction: &str) -> (Vec<TradeItem>, i64) {
 
 /// Parse a buffered dialog (one or more log lines) into a trade, or `None`
 /// when the lines are not a trade dialog.
+#[allow(
+    clippy::string_slice,
+    reason = "every bound comes from an ASCII marker returned by find and is a UTF-8 boundary"
+)]
 pub fn parse_trade_dialog(lines: &[String]) -> Option<TradeEvent> {
     let text = lines.join("\n");
     let start = text.find("You are offering:")?;
@@ -264,6 +272,10 @@ pub fn proton_log_path(steam_library: &Path) -> PathBuf {
 }
 
 /// `"path"  "/mnt/games/SteamLibrary"` lines out of libraryfolders.vdf.
+#[allow(
+    clippy::string_slice,
+    reason = "the ASCII path marker length is always a UTF-8 boundary"
+)]
 pub fn parse_steam_library_paths(vdf: &str) -> Vec<String> {
     let mut out = Vec::new();
     for line in vdf.lines() {

@@ -128,8 +128,8 @@ pub fn canonical_subtype<T: HasSubtype>(rows: &[T], volume_of: impl Fn(&T) -> f6
     if vols.iter().any(|(k, _)| k == "intact") {
         return Some("intact".to_string());
     }
-    let mut best = &vols[0];
-    for kv in &vols[1..] {
+    let mut best = vols.first()?;
+    for kv in vols.iter().skip(1) {
         if kv.1 > best.1 {
             best = kv; // strictly greater → first-seen wins ties, like Python
         }
@@ -176,10 +176,13 @@ fn stat_median(values: &[f64]) -> f64 {
     if n == 0 {
         return 0.0;
     }
+    let hi = n / 2;
     if n % 2 == 1 {
-        v[n / 2]
+        v.get(hi).copied().unwrap_or(0.0)
     } else {
-        (v[n / 2 - 1] + v[n / 2]) / 2.0
+        // Even n >= 2, so hi >= 1 and saturating_sub is exact here.
+        let lo = hi.saturating_sub(1);
+        (v.get(lo).copied().unwrap_or(0.0) + v.get(hi).copied().unwrap_or(0.0)) / 2.0
     }
 }
 

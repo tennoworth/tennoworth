@@ -1,10 +1,6 @@
 #!/bin/sh
-# RETIRED - do not run this on a new box.
-#
-# One-time bootstrap for the signed apt + dnf repositories. Linux is
-# AppImage-only as of the release after 0.5.0, so no new deb or rpm is ever
-# built and this script has nothing to bootstrap for. It is kept, unmodified
-# below this header, for exactly two reasons:
+# Legacy archive recovery only - do not run this on a new box. It is kept for
+# exactly two reasons:
 #
 #   1. The repositories it created are STILL SERVED, frozen at their last
 #      published version, so that nobody who ran `apt install tennoworth` gets
@@ -15,8 +11,8 @@
 #   2. The GPG-handling notes in it (the /etc/rpm/macros discovery, the
 #      passphrase probe) were expensive to find and are worth keeping.
 #
-# The publisher that fed these repos, deploy/pull-packages.sh, is now a no-op
-# stub - see its header. SECURITY.md documents the frozen repos and the key.
+# Routine publishing is disabled; deploy/pull-packages.sh is a compatibility
+# no-op.
 #
 # Why the box signed rather than CI: a repo-signing key in GitHub Actions
 # secrets would let anyone who compromises the workflow serve trusted packages
@@ -112,5 +108,4 @@ chown -R wfm:wfm "$REPO"
 chmod -R a+rX "$REPO"
 
 echo "Repo skeleton ready at $REPO"
-echo "NOTE: this script is retired - there is no longer a package to publish"
-echo "into it. Linux ships as an AppImage only."
+echo "NOTE: legacy archive recovery only; no publisher is configured"

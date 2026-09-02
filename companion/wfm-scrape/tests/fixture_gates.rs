@@ -1,5 +1,11 @@
 //! Fixture regression gates for the `wfm-scrape` binary.
 //!
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    reason = "integration-test helpers may panic to fail the test and are never shipped"
+)]
+//!
 //! These replace the retired Python parity tests (test_scrape_parity.py /
 //! test_convert_parity.py). There is no second implementation to diff against
 //! anymore - the Rust pipeline is the only one - so the gates assert the

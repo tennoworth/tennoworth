@@ -38,7 +38,7 @@ impl Pacer {
         if let Some(last) = self.last_start {
             let elapsed = last.elapsed();
             if elapsed < self.interval {
-                sleeper.sleep(self.interval - elapsed);
+                sleeper.sleep(self.interval.saturating_sub(elapsed));
             }
         }
         self.last_start = Some(std::time::Instant::now());
@@ -251,7 +251,10 @@ fn response_at(value: &Value, i: usize) -> (u16, Value) {
         if seq.is_empty() {
             return (200, Value::Null);
         }
-        return interpret_one(&seq[i.min(seq.len() - 1)]);
+        return interpret_one(
+            seq.get(i.min(seq.len().saturating_sub(1)))
+                .unwrap_or(&Value::Null),
+        );
     }
     interpret_one(value)
 }

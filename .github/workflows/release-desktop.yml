@@ -36,14 +36,8 @@ name: release-desktop
 #   publish          verify inventory + signatures, tag, draft, upload, flip
 #   desktop-latest   refresh the legacy rolling updater endpoint
 #
-# LINUX IS APPIMAGE ONLY. That is the state, not a direction of travel: the
-# deb/rpm bundles, the self-hosted apt/dnf repositories and the two AUR
-# packages were all retired, and the jobs and steps that produced them are
-# gone from this file. The AppImage is the only Linux channel that self-updates
-# (the Tauri updater enables itself when $APPIMAGE is set - see update.rs), so
-# it was the only one worth keeping, and four delivery channels for one
-# platform was three too many to keep correct. See build-linux's libwayland
-# step for why the first AppImage was withdrawn in 2026-07 and what fixed it.
+# Linux ships as one self-updating AppImage. See build-linux's libwayland step
+# for why the bundle is repacked before publishing.
 # ---------------------------------------------------------------------------
 
 on:
@@ -170,9 +164,8 @@ jobs:
       # this repo has network access and quietly re-resolves a stale lock, so a
       # version bump that edits Cargo.toml alone is green everywhere and wrong
       # in the tag - how 0.3.5 and 0.3.6 both shipped a lock naming the
-      # PREVIOUS version, unbuildable from source with `cargo build --frozen`
-      # (which is what any from-source packager does; it was the retired AUR
-      # source package that found it). `--locked` reproduces that refusal here,
+      # PREVIOUS version, unbuildable from source with `cargo build --frozen`.
+      # `--locked` reproduces that refusal here,
       # before anything is built, and keeps the lock an honest version pin.
       - name: Gate - Cargo.lock already matches the manifests
         working-directory: companion
@@ -346,11 +339,8 @@ jobs:
       # target/release/tennoworth-desktop (so the glibc check below is
       # unchanged) AND emits the AppImage, which is the whole Linux release.
       #
-      # ONE bundle, deliberately. `deb,rpm` used to be here to feed the
-      # self-hosted apt/dnf repositories; those are retired, so building them
-      # would produce artifacts nothing consumes. The AppImage bundles its own
-      # WebKitGTK runtime, which is why it needs the libwayland surgery below -
-      # the deb/rpm used the system one and never did.
+      # The AppImage bundles its own WebKitGTK runtime, which is why it needs
+      # the libwayland surgery below.
       - uses: tauri-apps/tauri-action@84b9d35b5fc46c1e45415bdb6144030364f7ebc5 # v0.6.2
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -617,15 +607,11 @@ jobs:
           cat >> "$notes_file" <<'EOF'
           **Windows** - one artifact: `TennoWorth_<version>_x64-setup.exe`.
           Download it and verify it against `SHA256SUMS`. The in-app updater
-          handles later versions on its own. The `.msi` is retired as of this
-          release; an existing MSI install still receives updates, and they
-          arrive as the `.exe` installer.
+          handles later versions on its own.
 
           **Linux** - one artifact: `TennoWorth-x86_64.AppImage`. Download it,
           verify it against `TennoWorth-x86_64.AppImage.sha256`, `chmod +x`,
           run. It self-updates in place and resolves libwayland from the host.
-          The apt/dnf repositories and the AUR packages are retired and frozen
-          at their last published version - see `SECURITY.md`.
 
           `SHA256SUMS` lists every downloadable asset - verify with
           `sha256sum --ignore-missing -c SHA256SUMS`. The AppImage additionally

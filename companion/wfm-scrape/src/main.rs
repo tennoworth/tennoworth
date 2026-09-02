@@ -99,37 +99,31 @@ fn rich_prior_usage_year(rows: &HashMap<String, serde_json::Value>) -> Option<u1
     common_year
 }
 
-fn main() {
+fn main() -> std::process::ExitCode {
     let args: Vec<String> = std::env::args().collect();
-    if args.len() < 2 {
+    let Some(command) = args.get(1) else {
         eprintln!("usage: wfm-scrape build|scrape|history [--fixtures-dir <DIR>] [--now <ISO>]");
-        std::process::exit(1);
-    }
-    match args[1].as_str() {
-        "history" => {
-            if let Err(e) = run_history_cmd(&args) {
-                eprintln!("error: {e}");
-                std::process::exit(1);
-            }
-        }
+        return std::process::ExitCode::FAILURE;
+    };
+    let result = match command.as_str() {
+        "history" => run_history_cmd(&args),
         "build" => {
             let fixtures_dir = extract_flag(&args, "--fixtures-dir");
             let now_arg = extract_flag(&args, "--now");
             let fixtures_path = fixtures_dir.as_deref().map(std::path::Path::new);
-            if let Err(e) = run_build(fixtures_path, now_arg.as_deref()) {
-                eprintln!("error: {e}");
-                std::process::exit(1);
-            }
+            run_build(fixtures_path, now_arg.as_deref())
         }
-        "scrape" => {
-            if let Err(e) = run_scrape_cmd(&args) {
-                eprintln!("error: {e}");
-                std::process::exit(1);
-            }
-        }
+        "scrape" => run_scrape_cmd(&args),
         _ => {
-            eprintln!("unknown subcommand: {}", args[1]);
-            std::process::exit(1);
+            eprintln!("unknown subcommand: {command}");
+            return std::process::ExitCode::FAILURE;
+        }
+    };
+    match result {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("error: {e}");
+            std::process::ExitCode::FAILURE
         }
     }
 }

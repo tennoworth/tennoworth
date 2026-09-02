@@ -1,0 +1,6 @@
+# The workspace denies crash-prone operations in production code. They remain
+# idiomatic in tests, where a panic fails the test instead of crashing the app.
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-panic-in-tests = true
+allow-indexing-slicing-in-tests = true

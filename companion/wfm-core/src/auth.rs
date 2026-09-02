@@ -121,6 +121,7 @@ pub fn bootstrap_session() -> Result<(Client, String)> {
     let bootstrap_html = bootstrap.text().context("reading bootstrap response")?;
 
     // Cheap regex - we only care about the meta tag, no HTML parsing needed.
+    #[allow(clippy::expect_used, reason = "literal regex in source cannot fail to compile")]
     let csrf_re = Regex::new(r#"name="csrf-token"\s+content="([^"]+)""#)
         .expect("static regex");
     let csrf_token = csrf_re
@@ -166,9 +167,13 @@ pub fn signin(
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().unwrap_or_default();
+        let mut end = body.len().min(400);
+        while !body.is_char_boundary(end) {
+            end = end.saturating_sub(1);
+        }
         bail!(
             "Signin failed: HTTP {status}\nResponse body:\n{}",
-            &body[..body.len().min(400)]
+            body.get(..end).unwrap_or("")
         );
     }
 

@@ -2,6 +2,10 @@
 //! routes: same wfm-core services (`wfm_core::listing` for single-order
 //! CRUD, `wfm_core::plan` for the bulk-plan executor), gated on
 //! [`WfmSession`]'s unlock state instead of serve's lazy-JWT-unlock.
+#![allow(
+    clippy::unreachable,
+    reason = "tauri::command injects unreachable code into async wrappers"
+)]
 
 use std::sync::Arc;
 use tauri::State;

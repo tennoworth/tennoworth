@@ -14,7 +14,7 @@ characteristics:
    attacker the ability to serve malicious JS to visitors.
 
 2. **The desktop app** (`companion/tennoworth-desktop`, Rust + Tauri,
-   distributed via GitHub releases and the Linux distro repos). Runs on the
+   distributed via GitHub releases). Runs on the
    user's machine. Reads the game's process memory (Linux: needs
    `CAP_SYS_PTRACE`; Windows: same-user process access). Scans are
    performed in-process over Tauri IPC - there is no loopback HTTP server,
@@ -36,7 +36,7 @@ characteristics:
      suites.
 
    The `release-desktop.yml` workflow builds the desktop app (the Windows
-   installers and the Linux AppImage) and publishes the versioned release
+   installer and the Linux AppImage) and publishes the versioned release
    and the updater manifest. It is triggered manually from `main` with a version,
    never by a tag: the build jobs publish nothing, and a single job
    verifies the complete artifact set before flipping one draft release
@@ -83,7 +83,8 @@ characteristics:
   produces byte-identical output, so you cannot independently recreate
   an installer and diff it. Auditable, not reproducible - this used to
   say "reproducibly built", which was a stronger promise than the
-  pipeline keeps. Linux packages are signed (see below).
+  pipeline keeps. In-app updater artifacts are signed, and the desktop app
+  verifies them against its compiled-in public key.
 - **No telemetry, no analytics, no accounts.** Verify with your
   browser's network tab.
 
@@ -118,10 +119,7 @@ For each desktop release on GitHub:
 - **Windows** - there is one installer,
   `TennoWorth_<version>_x64-setup.exe`, built in public CI from the
   tagged commit; download it from the `desktop-v*` release and check its
-  SHA-256 against the `SHA256SUMS` file on the same release. (The `.msi`
-  is retired; releases up to 0.6.0 also carried one, alongside per-file
-  `.sha256` sidecars for both. Those sidecars are gone from later
-  releases - `SHA256SUMS` carries the same hashes.)
+  SHA-256 against the `SHA256SUMS` file on the same release.
 - **Linux** - there is one artifact, `TennoWorth-x86_64.AppImage`,
   built in the same public CI from the same tagged commit. Download it
   and its `.sha256` from the `desktop-v*` release and check them
@@ -172,66 +170,6 @@ check.
 signatures used by the in-app updater, verified against the public key
 compiled into the app. They are not something you check by hand -
 `SHA256SUMS` is.)
-
-## The Linux package repositories - historical
-
-**Linux ships as an AppImage only.** The `.deb` and `.rpm` packages, the
-signed apt and dnf repositories at `https://tennoworth.app/apt` and `/rpm`,
-and the two AUR packages (`tennoworth`, `tennoworth-bin`) are all retired.
-The AppImage is the only Linux channel that self-updates, which is why it is
-the one that was kept.
-
-If you installed from apt, dnf or the AUR, **nothing breaks and nothing
-disappears.** The repositories stay online, signed and valid - they are simply
-**frozen at their last published version and will never offer another update.**
-Switch to the AppImage when convenient:
-
-```bash
-curl -LO https://github.com/tennoworth/tennoworth/releases/latest/download/TennoWorth-x86_64.AppImage
-chmod +x TennoWorth-x86_64.AppImage
-./TennoWorth-x86_64.AppImage
-```
-
-and then remove the old package (`sudo apt remove tennoworth`, `sudo dnf
-remove tennoworth`, or `paru -R tennoworth`) plus the repository entry it
-came from.
-
-The rest of this section describes the key those frozen repositories are
-signed with. It is kept because they are still served and your package
-manager still verifies against it - not because anything new is signed with
-it.
-
-```
-Key:         TennoWorth Packages <pmbaprow@gmail.com>
-Fingerprint: CC5F 8E29 7E44 6C5B 8D27  69AC 6409 3BF6 3D57 3CE8
-Published:   https://tennoworth.app/tennoworth-archive-keyring.asc
-```
-
-Check the key you downloaded matches, before trusting it:
-
-```bash
-gpg --show-keys tennoworth-archive-keyring.asc
-# Fingerprint must equal the one above, with no spaces:
-# CC5F8E297E446C5B8D2769AC64093BF63D573CE8
-```
-
-How the key is handled, so you can judge what a compromise would cost:
-
-- The **primary key** only certifies. It has never been on an
-  internet-connected server and is not used to sign packages.
-- A separate **signing subkey** (`F226 2474 2E2D 5D74`, expires 2028-07-31)
-  was the only key material on the server that served the repositories.
-  If that box were compromised, the subkey can be revoked and rotated without
-  users re-importing anything, because the primary they trust is unchanged.
-- A revocation certificate exists offline. If you ever see a revocation for
-  this key, stop trusting the repositories immediately.
-
-Signing covers the repository, not the identity of the author - it proves a
-package came from whoever controls this key and was not altered in transit.
-It has nothing to do with the AppImage, which is verified by its `.sha256`
-and, for updates, by the minisign key compiled into the app. Note both are
-entirely separate from Windows code signing, which we do **not** do; see
-"What we cannot promise".
 
 ## How to verify the web app
 

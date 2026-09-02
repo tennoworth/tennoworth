@@ -1,6 +1,10 @@
 //! Inventory acquisition: memory scan (the app's only UI path) landing in the
 //! snapshot history via [`record_snapshot`], plus an `import_snapshot` command
 //! the probe uses to seed history without a running game.
+#![allow(
+    clippy::unreachable,
+    reason = "tauri::command injects unreachable code into async wrappers"
+)]
 
 use tauri::{AppHandle, State};
 

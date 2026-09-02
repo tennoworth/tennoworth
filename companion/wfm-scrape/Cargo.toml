@@ -18,3 +18,6 @@ reqwest = { workspace = true }
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 lzma-rs = { version = "0.3.0", default-features = false }
 base64.workspace = true
+
+[lints]
+workspace = true
