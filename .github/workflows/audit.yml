@@ -303,7 +303,10 @@ jobs:
             bash -n "$script"
           done
       - name: systemd unit syntax
-        run: systemd-analyze verify deploy/*.service deploy/*.timer
+        run: |
+          sudo install -d -m 0755 /srv/wfm
+          sudo install -m 0755 deploy/*.sh /srv/wfm/
+          systemd-analyze verify deploy/*.service deploy/*.timer
       - name: CSP copies agree
         run: bun scripts/sync-csp.ts --check
       - name: Install Caddy
