@@ -133,7 +133,7 @@ echo "pulled: $before -> $target"
 # at a byte offset that is now different code (the same hazard the scrape guard
 # above exists for). Stage beside the target and rename over it: rename swaps
 # the inode, so the running shell keeps reading the copy it started with.
-for f in run-scrape.sh alert.sh pull-app.sh pull-web.sh pull-scrape.sh pull-packages.sh; do
+for f in run-scrape.sh alert.sh pull-app.sh pull-web.sh pull-scrape.sh; do
   src="deploy/$f"
   [ -f "$src" ] || continue
   if ! cmp -s "$src" "/srv/wfm/$f" 2>/dev/null; then
@@ -156,7 +156,7 @@ fi
 
 # Units need root plus a daemon-reload, so report rather than act - a puller
 # that silently restarts systemd units is a different and larger promise.
-for u in wfm-scrape wfm-app-pull wfm-web-pull wfm-scrape-pull wfm-repo-pull; do
+for u in wfm-scrape wfm-app-pull wfm-web-pull wfm-scrape-pull; do
   for ext in service timer; do
     src="deploy/$u.$ext"; dst="/etc/systemd/system/$u.$ext"
     [ -f "$src" ] && [ -f "$dst" ] || continue

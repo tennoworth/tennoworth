@@ -47,47 +47,15 @@
 		file_server
 	}
 
-	# Legacy package archives. Keep these routes paired with /srv/wfm/repo:
-	# removing only the routes would break existing package-manager configs.
-	# An existing `apt install tennoworth` user would get index.html with a 200
-	# from the SPA catch-all instead of InRelease, which apt reports as a
-	# corrupt repository rather than as "this repo is gone". Left as-is, their
-	# package manager keeps verifying a valid signed tree that simply never
-	# offers a new version.
-
-	# The repo signing key. It needs its OWN handle, not the SPA catch-all:
-	# that ends in `try_files {path} /index.html`, so a miss would return
-	# index.html with status 200. The documented install line is
-	#   curl -fsSL .../tennoworth-archive-keyring.asc | sudo tee /etc/apt/keyrings/...
-	# and `curl -f` does not fire on a 200 - the user would silently write HTML
-	# into their keyring and hit an unexplainable signature failure on the next
-	# `apt update`. Served from public/ (git-tracked, present without waiting
-	# for a web bundle rebuild) so a miss is a real 404.
-	@repokey path /tennoworth-archive-keyring.asc
-	handle @repokey {
-		root * /srv/wfm/app/prototype/public
-		header Content-Type "application/pgp-keys"
-		header Cache-Control "public, max-age=3600"
-		file_server
-	}
-
-	# Served from a separate root; the URL path already carries the /apt or /rpm
-	# prefix, so root + path resolves without a strip_prefix.
-	#
-	# No file_server `browse` - apt and dnf fetch exact paths (dists/…/InRelease,
-	# repodata/repomd.xml) and never need an index. Directory listings would only
-	# expose the pool layout.
-	@repo path /apt/* /rpm/*
-	handle @repo {
-		root * /srv/wfm/repo
-		# Metadata must not go stale: a cached InRelease/repomd.xml that no
-		# longer matches the pool makes apt/dnf fail checksum verification,
-		# which reads to users as a corrupt repo. Packages themselves are
-		# immutable per version, so they can be cached hard.
-		@immutable path /apt/pool/* /rpm/*.rpm
-		header Cache-Control "public, max-age=300, must-revalidate"
-		header @immutable Cache-Control "public, max-age=31536000, immutable"
-		file_server
+	# Keep removed package endpoints out of the SPA fallback. A 200 containing
+	# index.html looks like corrupt repository metadata; 410 says unambiguously
+	# that the old source must be removed from the machine's package-manager
+	# configuration. Keep this tombstone even though no archive files remain.
+	@removedPackages path /apt /apt/* /rpm /rpm/* /tennoworth-archive-keyring.asc
+	handle @removedPackages {
+		header Content-Type "text/plain; charset=utf-8"
+		header Cache-Control "no-store"
+		respond "TennoWorth package repositories have been removed. Use the Linux AppImage from https://github.com/tennoworth/tennoworth/releases/latest\n" 410
 	}
 
 	# Everything else: the SPA. Wrapped in a catch-all handle so we never mix a

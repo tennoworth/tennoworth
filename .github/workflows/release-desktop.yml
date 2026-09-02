@@ -380,9 +380,7 @@ jobs:
       # is re-signed afterwards - the .sig MUST be generated from the
       # repacked bytes or self-update rejects every download.
       #
-      # This step also creates dist/. It used to inherit the directory from the
-      # deb/rpm/tarball staging steps that ran before it; they are gone, so it
-      # makes its own.
+      # Create dist/ here rather than depending on an earlier staging step.
       - name: Strip bundled libwayland and repack the AppImage
         run: |
           set -euo pipefail
