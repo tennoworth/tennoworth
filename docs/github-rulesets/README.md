@@ -28,9 +28,10 @@ updates. Do not apply `develop-integration.json` until `refresh-market.yml` has
 a compatible write path: it currently commits generated data directly to
 develop with `GITHUB_TOKEN`, and the proposed PR rule will reject that push.
 
-Move refreshes through pull requests before applying the proposed rule. Do not
-add a generic GitHub Actions bypass: that would let every workflow with a write
-token bypass the same protection and deepen the repository's dependence on
-GitHub-specific actors. If direct refresh pushes remain, leave the live develop
-ruleset unchanged. After migrating the writer, apply the JSON with the rulesets
-API and refresh the snapshot from the live rule.
+Prefer retiring the GitHub snapshot writer before applying the proposed rule;
+the self-hosted box is authoritative, and any replacement bootstrap refresh is
+a separate design decision. Do not add a generic GitHub Actions bypass: that
+would let every workflow with a write token bypass the same protection and
+deepen the repository's dependence on GitHub-specific actors. Until the writer
+is retired or redesigned, leave the live develop ruleset unchanged. Afterwards,
+apply the JSON with the rulesets API and refresh the snapshot from the live rule.
