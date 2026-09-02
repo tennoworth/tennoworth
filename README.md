@@ -154,7 +154,7 @@ details, and explicit non-promises live in [`SECURITY.md`](SECURITY.md).
 |---|---|
 | [`prototype/`](prototype/) | Svelte 5 + Vite SPA used by both the hosted informational site and the Tauri webview. |
 | [`companion/`](companion/) | Rust workspace containing the Tauri desktop app, inventory/WFM core, shared market math and client code, and the market pipeline. |
-| [`prototype/public/market.json`](prototype/public/market.json) | Shared generated snapshot consumed by the site and bundled as the desktop fallback. |
+| [`prototype/public/market.json`](prototype/public/market.json) | Production-generated snapshot consumed live by the site and refreshed in Git during desktop release preparation as its bundled fallback. |
 | [`scripts/`](scripts/) | TypeScript maintenance gates plus the Linux desktop smoke script. |
 | [`tests/fixtures/`](tests/fixtures/) | Cross-language parity and pipeline regression fixtures. |
 | [`deploy/`](deploy/) | Self-host deployment kit for the site and scheduled market refresh. |

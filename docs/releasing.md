@@ -16,9 +16,11 @@ selected update after restart.
 
 ## What ships independently
 
-The website, market-data snapshot, scrape pipeline, deployment configuration,
-documentation, and CI-only changes deploy through their own pipelines. They do
-not require a desktop version bump or desktop release.
+The website, live market-data snapshot, scrape pipeline, deployment
+configuration, documentation, and CI-only changes deploy through their own
+pipelines. They do not require a desktop version bump or desktop release. The
+repository's bootstrap pair is different: it is deliberately refreshed during
+desktop release preparation so every build carries the same recent fallback.
 
 ## When to cut a desktop release
 
@@ -36,17 +38,37 @@ the desktop release contains the complete, tested `main` commit.
 
 ## Release procedure
 
-1. Merge reviewed work into `develop`, then promote it to `main` using the
-   repository's documented branch procedure.
-2. Decide that the `main` commit is release-ready; ensure the full required
-   checks passed and that the release notes describe user-visible changes.
-3. Prepare the next SemVer version and changelog entry using the repository's
-   release tooling.
-4. From `main`, run **Actions → release-desktop** with that version.
-5. Let the workflow build, sign, verify, publish the immutable `desktop-vX.Y.Z`
+1. Merge the release's reviewed product work into `develop`.
+2. Create a release-preparation branch from the latest `develop`. Wait for the
+   production scrape to finish, then copy its locked snapshot pair:
+
+   ```bash
+   bun scripts/release.ts snapshot
+   ```
+
+   The default SSH host is `wfm`; use `--host <host>` when the production box
+   has a different SSH name. The command refuses to overwrite local snapshot
+   edits, rejects malformed or older-than-24-hour data, and writes the catalog
+   before `market.json` so the latter remains the generation anchor.
+3. On the same branch, prepare the next SemVer version and changelog entry:
+
+   ```bash
+   bun scripts/release.ts prepare <major|minor|patch|X.Y.Z>
+   ```
+
+   Commit the resulting snapshot diff, version pins, and completed changelog
+   entry together. One file may be byte-identical to the previous copy; the
+   command still captured and validated the pair. Open the normal
+   release-preparation PR into `develop`.
+4. After its required checks pass, merge the release-preparation PR and promote
+   `develop` to `main` using the repository's documented fast-forward procedure.
+5. From `main`, run **Actions → release-desktop** with that version. Its
+   preflight rejects a repository snapshot older than 24 hours, so skipping the
+   explicit refresh is visible before either platform starts compiling.
+6. Let the workflow build, sign, verify, publish the immutable `desktop-vX.Y.Z`
    release, and refresh the `desktop-latest` updater feed. Do not replace these
    steps with a hand-created tag or GitHub Release.
-6. Verify the public release assets and updater manifest. For an urgent
+7. Verify the public release assets and updater manifest. For an urgent
    regression, ship a newer hotfix; never mutate a published versioned release.
 
 ## Channels

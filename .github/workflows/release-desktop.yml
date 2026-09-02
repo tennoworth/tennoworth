@@ -9,7 +9,11 @@ name: release-desktop
 # ---------------------------------------------------------------------------
 # HOW TO CUT A RELEASE
 #
-#   Actions → release-desktop → Run workflow, from `main`, version = X.Y.Z
+#   On a release-prep branch from `develop`:
+#     bun scripts/release.ts snapshot
+#     bun scripts/release.ts prepare <major|minor|patch|X.Y.Z>
+#   Fill the changelog entry, merge the release-prep PR, promote to `main`, then:
+#     Actions → release-desktop → Run workflow, from `main`, version = X.Y.Z
 #   Policy and release decision: docs/releasing.md
 #
 # There is deliberately NO tag trigger. The tag is no longer the *input* to a
@@ -90,6 +94,12 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
       - uses: ./.github/actions/setup-rust
+
+      # Production refreshes every two hours, while the committed pair is the
+      # reproducible desktop fallback. Release preparation copies both under
+      # the scraper lock; refuse to ship if that explicit step was skipped.
+      - name: Repository snapshot is release-fresh
+        run: bun scripts/release.ts snapshot-check --release
 
       # The SAME check audit.yml runs when version inputs change (and in its
       # weekly/manual sweeps), given the version this run was asked for. On a PR

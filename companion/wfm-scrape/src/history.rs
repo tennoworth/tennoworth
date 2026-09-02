@@ -13,9 +13,9 @@
 //! The artifact IS the state: the run reads the existing `history.json`,
 //! fetches only the days after the last one it holds (normally one), trims
 //! to `days`, and rewrites atomically. A missing prior bootstraps up to
-//! `bootstrap_days` (a one-off ~1.4 GB pull, box only - the GitHub cron
-//! never runs this subcommand). Any single day failing to fetch is a `null`
-//! column and a warning, never an abort: history is a bonus surface.
+//! `bootstrap_days` (a one-off ~1.4 GB pull on the production box). Any single
+//! day failing to fetch is a `null` column and a warning, never an abort:
+//! history is a bonus surface.
 
 use std::collections::HashMap;
 

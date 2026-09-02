@@ -17,10 +17,10 @@
 #
 #   Caddy serves /market.json and /wfstat-catalog.json from prototype/public/
 #   (the @livedata matcher), NOT from dist/. Those two files are the LIVE
-#   production snapshot and the box's copies are always newer than the repo's -
-#   the box scrapes every 2h, the GitHub cron commits daily. A plain pull either
-#   refuses because they're modified, or discards them and serves users an old
-#   snapshot until the next scrape.
+#   production snapshot and the box's copies are normally newer than the repo's
+#   release-time bootstrap pair. A plain pull either refuses because they're
+#   modified, or discards them and serves users an old snapshot until the next
+#   scrape.
 #
 # So: stash the live artifacts, fast-forward, put them back.
 #
