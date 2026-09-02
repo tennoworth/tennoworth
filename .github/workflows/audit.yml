@@ -21,35 +21,101 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      frontend: ${{ steps.filter.outputs.frontend }}
-      rust: ${{ steps.filter.outputs.rust }}
+      frontend_runtime: ${{ steps.filter.outputs.frontend_runtime }}
+      frontend_deps: ${{ steps.filter.outputs.frontend_deps }}
+      rust_code: ${{ steps.filter.outputs.rust_code }}
+      rust_deps: ${{ steps.filter.outputs.rust_deps }}
+      rust_audit: ${{ steps.filter.outputs.rust_audit }}
+      market_data: ${{ steps.filter.outputs.market_data }}
+      deploy: ${{ steps.filter.outputs.deploy }}
       version: ${{ steps.filter.outputs.version }}
+      ci: ${{ steps.filter.outputs.ci }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         id: filter
         with:
           filters: |
-            frontend:
-              - 'prototype/**'
+            frontend_runtime:
+              - 'prototype/src/**'
+              - 'prototype/index.html'
+              - 'prototype/knip.jsonc'
+              - 'prototype/svelte.config.ts'
+              - 'prototype/tsconfig.json'
+              - 'prototype/vite.config.ts'
+              - 'prototype/vitest.config.ts'
+              - 'prototype/public/theme-boot.js'
               - 'scripts/sync-csp.ts'
-              - '.github/workflows/audit.yml'
-            rust:
+              - 'tests/fixtures/**'
+            frontend_deps:
+              - 'prototype/package.json'
+              - 'prototype/bun.lock'
+            rust_code:
               - 'companion/**'
-              - '.github/actions/setup-rust/**'
-              - '.github/workflows/audit.yml'
+              - '!companion/Cargo.lock'
+              - '!companion/Cargo.toml'
+              - '!companion/**/Cargo.toml'
+              - '!companion/.cargo/audit.toml'
+              - 'tests/fixtures/**'
+            rust_deps:
+              - 'companion/Cargo.lock'
+              - 'companion/Cargo.toml'
+              - 'companion/**/Cargo.toml'
+            rust_audit:
+              - 'companion/.cargo/audit.toml'
+            market_data:
+              - 'prototype/public/market.json'
+              - 'prototype/public/wfstat-catalog.json'
+              - 'prototype/public/definitions.json'
+              - 'wfm_results.csv'
+            deploy:
+              - 'deploy/**'
+              - 'prototype/index.html'
+              - 'prototype/public/_headers'
+              - 'scripts/*.sh'
+              - 'scripts/sync-csp.ts'
             version:
-              - 'CHANGELOG.md'
               - 'companion/Cargo.lock'
               - 'companion/tennoworth-desktop/Cargo.toml'
               - 'scripts/release.ts'
               - '.github/workflows/release-desktop.yml'
-              - '.github/workflows/audit.yml'
+            ci:
+              - '.github/workflows/**'
+              - '.github/actions/**'
+
+  frontend-check:
+    needs: changes
+    if: >-
+      needs.changes.outputs.frontend_runtime == 'true' ||
+      needs.changes.outputs.frontend_deps == 'true' ||
+      needs.changes.outputs.ci == 'true' ||
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: prototype
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install --frozen-lockfile
+      - name: tests
+        run: bun run test
+      - name: type-check
+        run: bunx svelte-check --threshold error
+      # Dead exports. Neither gate above can see them: noUnusedLocals flags
+      # locals not exports, and svelte-check skips @ts-nocheck files.
+      - name: dead-export check
+        run: bun run knip
+      - name: build
+        run: bun run build
 
   bun-audit:
     needs: changes
     if: >-
-      needs.changes.outputs.frontend == 'true' ||
+      needs.changes.outputs.frontend_deps == 'true' ||
+      needs.changes.outputs.ci == 'true' ||
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     defaults:
@@ -63,21 +129,13 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: bun audit (moderate+)
         run: bun audit --prod --audit-level=moderate
-      - name: tests
-        run: bun run test
-      - name: type-check
-        run: bunx svelte-check --threshold error
-      # Dead exports. Neither gate above can see them: noUnusedLocals flags
-      # locals not exports, and svelte-check skips @ts-nocheck files.
-      - name: dead-export check
-        run: bun run knip
-      - name: build
-        run: bun run build
 
   cargo-audit:
     needs: changes
     if: >-
-      needs.changes.outputs.rust == 'true' ||
+      needs.changes.outputs.rust_deps == 'true' ||
+      needs.changes.outputs.rust_audit == 'true' ||
+      needs.changes.outputs.ci == 'true' ||
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     defaults:
@@ -95,10 +153,30 @@ jobs:
       - name: cargo audit
         run: cargo audit --deny warnings
 
+  cargo-shear:
+    needs: changes
+    if: >-
+      needs.changes.outputs.rust_deps == 'true' ||
+      needs.changes.outputs.ci == 'true' ||
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: companion
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-rust
+      - name: Install cargo-shear (cached by setup-rust)
+        run: cargo install --locked cargo-shear
+      - name: cargo shear
+        run: cargo shear
+
   cargo-test:
     needs: changes
     if: >-
-      needs.changes.outputs.rust == 'true' ||
+      needs.changes.outputs.rust_code == 'true' ||
+      needs.changes.outputs.rust_deps == 'true' ||
+      needs.changes.outputs.ci == 'true' ||
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     defaults:
@@ -112,9 +190,13 @@ jobs:
       # than rewrite the lock. Every build in this repo has network access and
       # quietly re-resolves it instead, so a version bump that edits Cargo.toml
       # alone is green here and wrong in the tag - how 0.3.5 and 0.3.6 both
-      # shipped unbuildable from source. Run on every push, where it's cheap
-      # to fix.
+      # shipped unbuildable from source. Dependency and release-metadata
+      # changes run this before compiling the workspace.
       - name: Gate - Cargo.lock already matches the manifests
+        if: >-
+          needs.changes.outputs.rust_deps == 'true' ||
+          needs.changes.outputs.ci == 'true' ||
+          github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         run: cargo fetch --locked
       # tennoworth-desktop (Tauri v2) links the Linux GUI stack; without these
       # -dev packages the *-sys crates fail at pkg-config and the whole
@@ -145,6 +227,7 @@ jobs:
     needs: changes
     if: >-
       needs.changes.outputs.version == 'true' ||
+      needs.changes.outputs.ci == 'true' ||
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
@@ -159,7 +242,9 @@ jobs:
   cargo-clippy:
     needs: changes
     if: >-
-      needs.changes.outputs.rust == 'true' ||
+      needs.changes.outputs.rust_code == 'true' ||
+      needs.changes.outputs.rust_deps == 'true' ||
+      needs.changes.outputs.ci == 'true' ||
       github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     defaults:
@@ -176,11 +261,71 @@ jobs:
       - name: cargo clippy
         run: cargo clippy --workspace --all-targets
 
+  market-data:
+    needs: changes
+    if: >-
+      needs.changes.outputs.market_data == 'true' ||
+      needs.changes.outputs.ci == 'true' ||
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Validate generated snapshots
+        run: |
+          jq -e '
+            type == "object" and
+            ([
+              "updated_at", "platform", "item_count", "catalog_count",
+              "source", "catalog", "items", "path_to_info", "set_to_parts",
+              "relic_rewards", "vault_status", "baro", "surface_fetched_at"
+            ] - keys | length == 0) and
+            (.items | type == "object" and length > 0) and
+            (.catalog | type == "object" and length > 0) and
+            (.item_count == (.items | length)) and
+            (.catalog_count == (.catalog | length))
+          ' prototype/public/market.json
+          jq -e 'type == "array" and length > 0' prototype/public/wfstat-catalog.json
+          jq -e 'type == "object"' prototype/public/definitions.json
+
+  deploy-validation:
+    needs: changes
+    if: >-
+      needs.changes.outputs.deploy == 'true' ||
+      needs.changes.outputs.ci == 'true' ||
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - name: Shell syntax
+        run: |
+          for script in deploy/*.sh scripts/*.sh; do
+            bash -n "$script"
+          done
+      - name: CSP copies agree
+        run: bun scripts/sync-csp.ts --check
+      - name: Install Caddy
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends caddy
+      - name: Caddyfile syntax
+        run: caddy validate --config deploy/Caddyfile --adapter caddyfile
+
   # This is the required audit status. It runs even when a prerequisite is
   # skipped and fails only when a relevant job failed or was cancelled.
   audit-gate:
     if: ${{ always() }}
-    needs: [changes, bun-audit, cargo-audit, cargo-test, cargo-clippy, version-pins]
+    needs:
+      - changes
+      - frontend-check
+      - bun-audit
+      - cargo-audit
+      - cargo-shear
+      - cargo-test
+      - cargo-clippy
+      - version-pins
+      - market-data
+      - deploy-validation
     runs-on: ubuntu-latest
     steps:
       - name: Require every applicable check to pass
