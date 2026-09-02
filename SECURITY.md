@@ -23,14 +23,12 @@ characteristics:
    PBKDF2-600k passphrase). The core logic it drives lives in
    `companion/wfm-core`.
 
-3. **Our build + release pipeline** (GitHub Actions). Three workflows:
-   - `refresh-market.yml` - scrapes warframe.market once daily and
-     commits a static `market.json` + `wfstat-catalog.json` to the
-     repo (a floor so a fresh clone starts with recent data; the
-     self-host box's own systemd timer covers the real 2 h cadence).
+3. **Our build + release pipeline** (GitHub Actions):
    - `build-web.yml` - on a push touching `prototype/`, builds the
      static web bundle and publishes it as a rolling `web-latest`
      prerelease asset (the self-host box pulls it with a plain curl).
+   - `build-scrape.yml` - builds the host-only market pipeline when its
+     Rust sources change; the production box pulls that rolling artifact.
    - `audit.yml` - on pull requests, weekly, and on demand, routes changes
      through proportional dependency, frontend, Rust, generated-data, and
      deployment checks while keeping one stable required gate.
@@ -43,6 +41,11 @@ characteristics:
    public. The `desktop-v*` tag is created **by** that workflow at the
    commit it built, so a release tag can only ever name a verified build
    of a `main` commit.
+
+   GitHub does not scrape market data on a schedule. The production box owns
+   the two-hour cadence. Before a desktop release, the maintainer copies its
+   idle, locked `market.json` + `wfstat-catalog.json` pair into the release
+   preparation commit; CI validates the shape and refuses a stale release.
 
    Production serving is **not** GitHub-hosted: a self-hosted box (an
    unprivileged LXC, reached only through a Cloudflare Tunnel, fronted

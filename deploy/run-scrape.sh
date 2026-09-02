@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 # Refresh market.json: full WFM scrape (~37 min @ 3 req/s, paced start-to-start;
 # zero-volume items skip the orders call) → CSV, then rebuild the full-shape
-# snapshot. This is the ONE scrape entrypoint - the self-host
-# systemd timer and the GitHub Actions cron both call it, so the truncation
-# guard can never drift between the two again.
+# snapshot. This is the ONE production scrape entrypoint, driven by the
+# self-hosted systemd timer.
 #
 # Rust-only since 2026-08 (Python retired): `wfm-scrape scrape` produces
 # wfm_results.csv and `wfm-scrape build` renders BOTH prototype/public/market.json
@@ -13,13 +12,20 @@
 #   APP      repo root to run in          (default /srv/wfm/app - the LXC layout)
 #   SCRAPE_BIN  Rust pipeline binary      (default /srv/wfm/bin/wfm-scrape)
 #   HISTORY     1 (default) also refresh history.json from relics.run after the
-#               build; 0 skips it (the GitHub cron - stateless runner)
+#               build; 0 skips it for a one-off local scrape
 set -euo pipefail
 
 APP="${APP:-/srv/wfm/app}"
 CSV=wfm_results.csv
 MIN_ROWS=800                 # absolute floor; a healthy scrape keeps ~2.6k
 cd "$APP"
+
+# Release preparation copies market.json and wfstat-catalog.json as one pair.
+# Lock the stable app-directory inode for the whole scrape so that copy either
+# sees the complete previous generation or waits for this one; it can never
+# catch the deliberate catalog-first / market-last publication gap below.
+exec 9<.
+flock 9
 
 # Capture the prior row count. The scraper never fails on a sustained 429 - it
 # retries, then skips the throttled item and flushes whatever it got with exit 0.
@@ -48,11 +54,10 @@ fi
 "$SCRAPE_BIN" build
 echo "scrape complete: $now rows, $(date -Is)"
 
-# Long price history (relics.run → prototype/public/history.json). Box-only:
+# Long price history (relics.run → prototype/public/history.json). Production-only:
 # the artifact is its own state (only new days are fetched, normally one file
-# per day), so it must live where it persists - never on the stateless GitHub
-# runner (refresh-market.yml calls this script with HISTORY=0). A failure here
-# must not fail the scrape: history is a bonus surface, market.json is not.
+# per day), so it must live where it persists. A failure here must not fail the
+# scrape: history is a bonus surface, market.json is not.
 if [ "${HISTORY:-1}" = "1" ]; then
   if ! "$SCRAPE_BIN" history; then
     echo "history: update failed (market.json is unaffected); will retry on the next tick." >&2

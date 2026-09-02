@@ -68,6 +68,8 @@ jobs:
               - 'prototype/public/wfstat-catalog.json'
               - 'prototype/public/definitions.json'
               - 'wfm_results.csv'
+              - 'scripts/release.ts'
+              - 'scripts/release.test.ts'
             deploy:
               - 'deploy/**'
               - 'prototype/index.html'
@@ -270,21 +272,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Validate generated snapshots
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - name: Snapshot validator tests
+        run: bun test scripts/release.test.ts
+      - name: Validate committed data
         run: |
-          jq -e '
-            type == "object" and
-            ([
-              "updated_at", "platform", "item_count", "catalog_count",
-              "source", "catalog", "items", "path_to_info", "set_to_parts",
-              "relic_rewards", "vault_status", "baro", "surface_fetched_at"
-            ] - keys | length == 0) and
-            (.items | type == "object" and length > 0) and
-            (.catalog | type == "object" and length > 0) and
-            (.item_count == (.items | length)) and
-            (.catalog_count == (.catalog | length))
-          ' prototype/public/market.json
-          jq -e 'type == "array" and length > 0' prototype/public/wfstat-catalog.json
+          bun scripts/release.ts snapshot-check
           jq -e 'type == "object"' prototype/public/definitions.json
 
   deploy-validation:

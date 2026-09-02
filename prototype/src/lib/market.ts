@@ -1,6 +1,6 @@
 // Fetches the pre-scraped market snapshot from /market.json. The snapshot
-// is built server-side on a schedule (GitHub Actions cron) and committed
-// to the repo, so the browser never has to call warframe.market directly.
+// is built on the production box's schedule and served from the same origin,
+// so the browser never has to call warframe.market directly.
 
 import type { Market, MarketItemEntry } from './types';
 

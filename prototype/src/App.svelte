@@ -1714,10 +1714,10 @@
     <details>
       <summary>How current are the prices?</summary>
       <p>
-        A GitHub Actions cron job scrapes <a href="https://warframe.market">warframe.market</a>
-        every 2 hours and commits a fresh <code>market.json</code> to the
-        repo. The site serves that file. The dot next to “Market data” is
-        green if the snapshot is under 6 h old, amber under 24 h, red after.
+        Our production box scrapes <a href="https://warframe.market">warframe.market</a>
+        every 2 hours and serves the resulting <code>market.json</code>
+        directly. The dot next to “Market data” is green if the snapshot is
+        under 6 h old, amber under 24 h, red after.
       </p>
     </details>
 
