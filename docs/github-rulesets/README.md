@@ -28,8 +28,9 @@ updates. Do not apply `develop-integration.json` until `refresh-market.yml` has
 a compatible write path: it currently commits generated data directly to
 develop with `GITHUB_TOKEN`, and the proposed PR rule will reject that push.
 
-Use either a dedicated, narrowly scoped GitHub App as the sole integration
-bypass actor or move refreshes through pull requests. Do not bypass the generic
-GitHub Actions app: that would let every workflow with a write token bypass the
-same protection. After choosing the bot path, add only that actor to the JSON,
-apply it with the rulesets API, then refresh the snapshot from the live rule.
+Move refreshes through pull requests before applying the proposed rule. Do not
+add a generic GitHub Actions bypass: that would let every workflow with a write
+token bypass the same protection and deepen the repository's dependence on
+GitHub-specific actors. If direct refresh pushes remain, leave the live develop
+ruleset unchanged. After migrating the writer, apply the JSON with the rulesets
+API and refresh the snapshot from the live rule.
