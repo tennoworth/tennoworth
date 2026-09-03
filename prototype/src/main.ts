@@ -6,6 +6,7 @@ import App from './App.svelte';
 import './app.css';
 import { createStateStore } from './lib/state-store';
 import { initTheme } from './lib/theme';
+import type { UpdateStatus } from './lib/desktop-update';
 import { installDesktopExternalLinkHandler } from './lib/transport';
 
 // Dev-only design-review seam: `?preview-desktop` on a `vite dev` origin
@@ -16,9 +17,19 @@ import { installDesktopExternalLinkHandler } from './lib/transport';
 // `vite build` (import.meta.env.DEV is false), and the desktop webview ships
 // its real runtime long before this line runs.
 if (import.meta.env.DEV && new URLSearchParams(location.search).has('preview-desktop')) {
+  const noUpdate: UpdateStatus = {
+    checked: true,
+    available: false,
+    support: 'disabled_test_build',
+    current_version: 'preview',
+    version: null,
+    notes: null,
+  };
   const empties: Record<string, unknown> = {
     wfm_auth_status: { logged_in: false, unlocked: false },
     tray_state: { labels: [], last_notification: null },
+    update_status: noUpdate,
+    check_update: noUpdate,
     refresh_history: { updated: false, body: null },
     refresh_market: { updated: false, status: 'offline' },
     top_sellables: [], list_watches: [], list_listing_log: [], list_snapshots: [],
