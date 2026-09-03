@@ -56,6 +56,36 @@ the desktop release contains the complete, tested `main` commit.
    bun scripts/release.ts prepare <major|minor|patch|X.Y.Z>
    ```
 
+   Complete the generated release-note scaffold before committing it. Notes
+   use the same compact, user-first structure on every desktop release:
+
+   ```markdown
+   # 🐧 TennoWorth Desktop X.Y.Z
+
+   TennoWorth Desktop X.Y.Z is ready.
+
+   One short paragraph explaining who benefits and why the release matters.
+
+   ## Changelog (2)
+
+   ### Linux
+
+   - One user-visible change.
+   - Another user-visible change.
+
+   ## Updating
+
+   TennoWorth checks for updates automatically. Downloads are available below.
+   ```
+
+   Put exactly one contextual emoji in the release title and nowhere else in
+   the entry. Use plain category headings. `🐧` fits Linux/Wayland, `🪟` fits
+   Windows, `🔒` fits security, and `🎨` fits appearance; choose the single
+   symbol that best describes a mixed release. The number in `Changelog (N)`
+   must equal its top-level bullet count. The audit PR gate validates the
+   contract when the version advances, and release preflight validates it
+   again before either platform builds.
+
    Commit the resulting snapshot diff, version pins, and completed changelog
    entry together. One file may be byte-identical to the previous copy; the
    command still captured and validated the pair. Open the normal

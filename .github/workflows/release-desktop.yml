@@ -116,8 +116,9 @@ jobs:
         run: bun scripts/release.ts check --release "$VERSION"
 
       # The CHANGELOG section for this version IS the release body. `prepare`
-      # opened it; a missing or empty section fails here, before any build,
-      # rather than shipping boilerplate notes.
+      # opens a deliberately invalid scaffold; --release requires the one-icon
+      # title, user-facing introduction, counted categorized changes, and the
+      # updating section before either platform starts building.
       - name: Release notes from CHANGELOG.md
         id: notes
         env:
@@ -126,7 +127,7 @@ jobs:
           set -euo pipefail
           {
             echo "body<<NOTES_EOF"
-            bun scripts/release.ts notes "$VERSION"
+            bun scripts/release.ts notes --release "$VERSION"
             echo "NOTES_EOF"
           } >> "$GITHUB_OUTPUT"
 
