@@ -23,12 +23,23 @@ version - a change confined to `prototype/` reaches tennoworth.app on
 promotion and needs no desktop release. Cut one when desktop users have a
 reason to update.
 
-`bun scripts/release.ts prepare <bump>` opens a section here; fill it in
-before merging the bump. `bun scripts/release.ts notes` reads it back for the
-release body.
+`bun scripts/release.ts prepare <bump>` opens a deliberately incomplete,
+structured section here. Before merging the bump, replace every placeholder:
+the release body starts with exactly one contextual emoji in
+`# <emoji> TennoWorth Desktop X.Y.Z`, follows with an announcement and a
+separate plain-language summary, groups top-level bullets below plain-text
+category headings under `## Changelog (N)`, and ends with `## Updating`.
+`N` must equal the number of top-level bullets. No other emoji belongs in the
+entry. Use `🐧` for Linux/Wayland, `🪟` for Windows, `🔒` for security, `🎨`
+for appearance, or another single symbol that honestly describes the release.
 
-Nothing is backfilled: releases up to and including 0.3.8 predate this file,
-and their notes live on the GitHub releases themselves.
+`bun scripts/release.ts check` enforces this contract as soon as the desktop
+version moves ahead of the latest published tag. The release workflow repeats
+the same validation through `bun scripts/release.ts notes --release` before
+building either platform. Historical entries are intentionally not backfilled.
+
+Releases up to and including 0.3.8 predate this file, and their notes live on
+the GitHub releases themselves.
 
 ## 0.6.6 - 2026-09-03
 

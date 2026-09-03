@@ -23,7 +23,7 @@
 //   bun scripts/release.ts snapshot-check [--release] [--dir <path>]
 //   bun scripts/release.ts prepare <major|minor|patch|X.Y.Z>
 //   bun scripts/release.ts check [--release X.Y.Z]
-//   bun scripts/release.ts notes [X.Y.Z]
+//   bun scripts/release.ts notes [--release] [X.Y.Z]
 import { Buffer } from "node:buffer";
 import { execFileSync } from "node:child_process";
 import {
@@ -434,6 +434,168 @@ function compareVersions(a: string, b: string): number {
 }
 
 // ---------------------------------------------------------------------------
+// Release notes
+
+export interface ReleaseNotesSummary {
+  icon: string;
+  changeCount: number;
+  categoryCount: number;
+}
+
+const RELEASE_NOTE_EMOJI = /\p{Extended_Pictographic}/gu;
+const RELEASE_SECTION_HEADING = /^## \d+\.\d+\.\d+(?:\s|$)/;
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+export function releaseNotesBody(changelog: string, version: string): string {
+  const lines = changelog.split("\n");
+  const start = lines.findIndex(
+    (line) => line.startsWith(`## ${version} `) || line.trim() === `## ${version}`,
+  );
+  if (start === -1) throw new Error(`${CHANGELOG} has no section for ${version}`);
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => RELEASE_SECTION_HEADING.test(line));
+  const body = (end === -1 ? rest : rest.slice(0, end)).join("\n").trim();
+  if (!body) throw new Error(`the ${version} section in ${CHANGELOG} is empty`);
+  return body;
+}
+
+export function validateReleaseNotes(body: string, version: string): ReleaseNotesSummary {
+  const lines = body.replace(/\r\n/g, "\n").split("\n");
+  if (/<!--|\b(?:EMOJI|TODO|TBD)\b|\[Category\]/i.test(body)) {
+    throw new Error("release notes still contain template placeholders");
+  }
+
+  const first = lines.findIndex((line) => line.trim().length > 0);
+  const titlePattern = new RegExp(
+    `^# (\\p{Extended_Pictographic}\\uFE0F?) TennoWorth Desktop ${escapeRegExp(version)}$`,
+    "u",
+  );
+  const title = first === -1 ? null : lines[first].match(titlePattern);
+  if (!title) {
+    throw new Error(
+      `the first line must be "# <one contextual emoji> TennoWorth Desktop ${version}"`,
+    );
+  }
+
+  const emojiCount = [...body.matchAll(RELEASE_NOTE_EMOJI)].length;
+  if (emojiCount !== 1) {
+    throw new Error(
+      `release notes must contain exactly one emoji, in the title; found ${emojiCount}`,
+    );
+  }
+
+  const changelogHeadings = lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => line.startsWith("## Changelog"));
+  if (changelogHeadings.length !== 1) {
+    throw new Error('release notes need exactly one "## Changelog (N)" heading');
+  }
+  const countMatch = changelogHeadings[0].line.match(/^## Changelog \((\d+)\)$/);
+  if (!countMatch) {
+    throw new Error('the changelog heading must use "## Changelog (N)" with a number');
+  }
+  const changelogAt = changelogHeadings[0].index;
+
+  const intro = lines
+    .slice(first + 1, changelogAt)
+    .join("\n")
+    .trim();
+  if (/^#/m.test(intro)) {
+    throw new Error("the introduction must be prose, before the changelog heading");
+  }
+  const introParagraphs = intro
+    .split(/\n\s*\n/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+  if (introParagraphs.length < 2) {
+    throw new Error(
+      "release notes need an announcement paragraph and a separate user-facing summary",
+    );
+  }
+
+  const updatingHeadings = lines
+    .map((line, index) => ({ line, index }))
+    .filter(({ line }) => line.trim() === "## Updating");
+  if (updatingHeadings.length !== 1 || updatingHeadings[0].index <= changelogAt) {
+    throw new Error('release notes need one "## Updating" section after the changelog');
+  }
+  const updatingAt = updatingHeadings[0].index;
+
+  const changelogLines = lines.slice(changelogAt + 1, updatingAt);
+  const firstChangelogLine = changelogLines.find((line) => line.trim().length > 0);
+  if (!firstChangelogLine?.startsWith("### ")) {
+    throw new Error("the changelog must begin with a plain category heading such as \"### Linux\"");
+  }
+  const categories = changelogLines.filter((line) => line.startsWith("### "));
+  if (categories.length === 0) {
+    throw new Error("the changelog needs at least one category heading");
+  }
+  if (categories.some((line) => /\p{Extended_Pictographic}/u.test(line))) {
+    throw new Error("category headings must be plain text; keep the single emoji in the title");
+  }
+
+  if (changelogLines.some((line) => /^-\s*$/.test(line))) {
+    throw new Error("the changelog contains an empty bullet");
+  }
+  const changes = changelogLines.filter((line) => /^- \S/.test(line));
+  if (changes.length === 0) throw new Error("the changelog needs at least one change bullet");
+  for (const [index, line] of changelogLines.entries()) {
+    if (!line.startsWith("### ")) continue;
+    const nextCategory = changelogLines.findIndex(
+      (candidate, candidateIndex) => candidateIndex > index && candidate.startsWith("### "),
+    );
+    const categoryBody = changelogLines.slice(
+      index + 1,
+      nextCategory === -1 ? changelogLines.length : nextCategory,
+    );
+    if (!categoryBody.some((candidate) => /^- \S/.test(candidate))) {
+      throw new Error(`the category "${line.slice(4)}" has no change bullets`);
+    }
+  }
+  const declaredCount = Number(countMatch[1]);
+  if (declaredCount !== changes.length) {
+    throw new Error(
+      `the changelog declares ${declaredCount} changes but contains ${changes.length} top-level bullets`,
+    );
+  }
+
+  const updatingLines = lines.slice(updatingAt + 1);
+  if (updatingLines.some((line) => line.startsWith("## "))) {
+    throw new Error('"## Updating" must be the final section');
+  }
+  if (!updatingLines.some((line) => line.trim().length > 0)) {
+    throw new Error('the "## Updating" section is empty');
+  }
+
+  return {
+    icon: title[1],
+    changeCount: changes.length,
+    categoryCount: categories.length,
+  };
+}
+
+export function releaseNotesTemplate(version: string, date: string): string {
+  return `## ${version} - ${date}\n\n` +
+    `# EMOJI TennoWorth Desktop ${version}\n\n` +
+    `TennoWorth Desktop ${version} is ready.\n\n` +
+    `<!-- Explain in one short paragraph who benefits and why this release matters. -->\n\n` +
+    `## Changelog (N)\n\n` +
+    `### Category\n\n` +
+    `- \n\n` +
+    `## Updating\n\n` +
+    `TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. ` +
+    `Downloads for Windows and Linux are available in the assets below.\n\n`;
+}
+
+function checkedReleaseNotes(version: string): { body: string; summary: ReleaseNotesSummary } {
+  const body = releaseNotesBody(read(CHANGELOG), version);
+  return { body, summary: validateReleaseNotes(body, version) };
+}
+
+// ---------------------------------------------------------------------------
 // check
 
 function cmdCheck(argv: string[]) {
@@ -449,6 +611,7 @@ function cmdCheck(argv: string[]) {
   const pins = allPins();
   const version = pins[0].version;
   let bad = false;
+  let notesNeedValidation = expected !== null;
 
   if (!SEMVER.test(version)) {
     console.error(
@@ -512,6 +675,20 @@ function cmdCheck(argv: string[]) {
       bad = true;
     } else {
       console.log(`newest published release: ${newest}`);
+      if (cmp > 0) notesNeedValidation = true;
+    }
+  }
+
+  if (notesNeedValidation) {
+    try {
+      const { summary } = checkedReleaseNotes(version);
+      console.log(
+        `release notes for ${version}: ${summary.icon} ${summary.changeCount} changes ` +
+          `across ${summary.categoryCount} categories`,
+      );
+    } catch (error) {
+      console.error(`release notes for ${version}: ${(error as Error).message}`);
+      bad = true;
     }
   }
 
@@ -586,11 +763,11 @@ function cmdPrepare(argv: string[]) {
     stdio: "inherit",
   });
 
-  // CHANGELOG section, opened for the human to fill in. `notes` reads it back
-  // for the release body, so an empty section is a visible reminder rather
-  // than a silent omission.
+  // Deliberately invalid placeholders make release-note authors choose the
+  // contextual icon, summary, categories and honest change count. Both the PR
+  // gate and release preflight reject the scaffold until it is complete.
   const today = new Date().toISOString().slice(0, 10);
-  const section = `## ${next} - ${today}\n\n- \n\n`;
+  const section = releaseNotesTemplate(next, today);
   if (!existsSync(join(ROOT, CHANGELOG))) {
     write(
       CHANGELOG,
@@ -611,7 +788,9 @@ function cmdPrepare(argv: string[]) {
     }
     write(CHANGELOG, head + section + existing.slice(at));
   }
-  console.log(`${CHANGELOG}: opened a section for ${next} - fill it in.`);
+  console.log(
+    `${CHANGELOG}: opened the structured section for ${next} - replace every placeholder.`,
+  );
 
   console.log(
     `\nDone. Review the diff, write the changelog entry, and commit all of it ` +
@@ -625,17 +804,29 @@ function cmdPrepare(argv: string[]) {
 // notes
 
 function cmdNotes(argv: string[]) {
-  const version = argv[0] ?? cargoTomlVersion();
+  let release = false;
+  let version: string | null = null;
+  for (const arg of argv) {
+    if (arg === "--release") {
+      release = true;
+    } else if (version === null) {
+      version = arg;
+    } else {
+      fail(`unexpected notes argument: ${arg}`);
+    }
+  }
+  version ??= cargoTomlVersion();
   if (!existsSync(join(ROOT, CHANGELOG))) {
     fail(`${CHANGELOG} does not exist - run \`prepare\` first`);
   }
-  const lines = read(CHANGELOG).split("\n");
-  const start = lines.findIndex((l) => l.startsWith(`## ${version} `) || l.trim() === `## ${version}`);
-  if (start === -1) fail(`${CHANGELOG} has no section for ${version}`);
-  const rest = lines.slice(start + 1);
-  const end = rest.findIndex((l) => l.startsWith("## "));
-  const body = (end === -1 ? rest : rest.slice(0, end)).join("\n").trim();
-  if (!body) fail(`the ${version} section in ${CHANGELOG} is empty`);
+  let body: string;
+  try {
+    body = release
+      ? checkedReleaseNotes(version).body
+      : releaseNotesBody(read(CHANGELOG), version);
+  } catch (error) {
+    fail((error as Error).message);
+  }
   console.log(body);
 }
 
@@ -666,7 +857,7 @@ if (import.meta.main) {
           "  bun scripts/release.ts snapshot-check [--release] [--dir <path>]\n" +
           "  bun scripts/release.ts prepare <major|minor|patch|X.Y.Z>\n" +
           "  bun scripts/release.ts check [--release X.Y.Z]\n" +
-          "  bun scripts/release.ts notes [X.Y.Z]",
+          "  bun scripts/release.ts notes [--release] [X.Y.Z]",
       );
       process.exit(1);
   }

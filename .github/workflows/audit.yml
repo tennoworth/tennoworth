@@ -79,7 +79,9 @@ jobs:
             version:
               - 'companion/Cargo.lock'
               - 'companion/tennoworth-desktop/Cargo.toml'
+              - 'CHANGELOG.md'
               - 'scripts/release.ts'
+              - 'scripts/release.test.ts'
               - '.github/workflows/release-desktop.yml'
             ci:
               - '.github/workflows/**'
@@ -224,7 +226,8 @@ jobs:
   #
   # Same script the release's preflight runs, minus --release: on a PR the repo
   # legitimately sits AT the newest published version between releases, so only
-  # "behind" is drift.
+  # "behind" is drift. When the version advances, it also requires the complete
+  # structured release-note contract before the preparation PR can merge.
   version-pins:
     needs: changes
     if: >-
@@ -235,7 +238,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-      - name: Version pins agree
+      - name: Version pins and release notes agree
         run: bun scripts/release.ts check
 
   # companion/Cargo.toml denies the crash-prone Clippy family workspace-wide.
