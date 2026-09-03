@@ -30,6 +30,14 @@ release body.
 Nothing is backfilled: releases up to and including 0.3.8 predate this file,
 and their notes live on the GitHub releases themselves.
 
+## 0.6.6 - 2026-09-03
+
+- Relic reward recognition on Linux now follows the reward row's
+  screen-height-scaled geometry and uses OCR-friendly grayscale crops, fixing
+  reward screens that opened correctly but returned no recognized choices.
+- Recognition now combines stable partial results across capture retries, so
+  one temporarily unreadable reward slot no longer discards the other choices.
+
 ## 0.6.5 - 2026-08-30
 
 - On Wayland, relic reward results now use a native layer-shell overlay that
