@@ -68,6 +68,9 @@ wfm_inventory_sellable.csv
 # its row count with the previous run; the MIN_ROWS=800 floor also catches a
 # grossly truncated first scrape.
 /wfm_results.csv
+# Mid-run checkpoints and failed-run diagnostics deliberately survive at this
+# path; they are box-owned state, never a source artifact.
+/wfm_results.csv.partial
 # Long price history (relics.run-derived). Box-only state, ~7 MB, rewritten
 # daily; served live by Caddy, never committed. See wfm-scrape/src/history.rs.
 /prototype/public/history.json
