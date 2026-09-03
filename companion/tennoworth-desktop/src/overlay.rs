@@ -161,7 +161,7 @@ pub struct RelicOverlayResult {
 }
 
 struct OcrRequest {
-    png: Vec<u8>,
+    image: Vec<u8>,
     mode: OcrMode,
     reply: mpsc::SyncSender<Result<String, String>>,
 }
@@ -207,7 +207,7 @@ impl OcrWorker {
                             };
                             let _ =
                                 ocr.set_variable(leptess::Variable::TesseditPagesegMode, page_mode);
-                            ocr.set_image_from_mem(&req.png)
+                            ocr.set_image_from_mem(&req.image)
                                 .map_err(|e| format!("loading capture into OCR: {e}"))
                                 .and_then(|_| match req.mode {
                                     OcrMode::SparseTsv => ocr
@@ -229,11 +229,11 @@ impl OcrWorker {
         (Self { tx }, ready)
     }
 
-    fn recognize(&self, png: Vec<u8>, mode: OcrMode) -> Result<String, String> {
+    fn recognize(&self, image: Vec<u8>, mode: OcrMode) -> Result<String, String> {
         let (tx, rx) = mpsc::sync_channel(1);
         self.tx
             .send(OcrRequest {
-                png,
+                image,
                 mode,
                 reply: tx,
             })
@@ -810,9 +810,84 @@ struct RewardLayout {
     slots: Vec<RewardSlotRect>,
 }
 
+#[derive(Clone)]
 struct LayoutRead {
     layout: RewardLayout,
     matches: Vec<(usize, FoundMatch)>,
+}
+
+#[derive(Default)]
+struct RecognitionConsensus {
+    reads: Vec<LayoutRead>,
+}
+
+impl RecognitionConsensus {
+    fn observe(&mut self, read: LayoutRead) {
+        self.reads.push(read);
+    }
+
+    fn resolve(&self, expected_slots: usize, require_complete: bool) -> Option<LayoutRead> {
+        let mut by_count: BTreeMap<usize, Vec<&LayoutRead>> = BTreeMap::new();
+        for read in &self.reads {
+            by_count.entry(read.layout.count).or_default().push(read);
+        }
+        let mut best: Option<(bool, usize, f64, LayoutRead)> = None;
+        for reads in by_count.into_values() {
+            let layout = reads
+                .iter()
+                .max_by(|a, b| a.layout.confidence.total_cmp(&b.layout.confidence))?
+                .layout
+                .clone();
+            let mut candidates: BTreeMap<usize, HashMap<String, (usize, FoundMatch)>> =
+                BTreeMap::new();
+            for read in reads {
+                for (index, found) in &read.matches {
+                    let identity = found.item.name.to_ascii_lowercase();
+                    let entry = candidates
+                        .entry(*index)
+                        .or_default()
+                        .entry(identity)
+                        .or_insert_with(|| (0, found.clone()));
+                    entry.0 += 1;
+                    if found.confidence > entry.1.confidence {
+                        entry.1 = found.clone();
+                    }
+                }
+            }
+            let mut matches = Vec::new();
+            for (index, votes) in candidates {
+                let mut ranked: Vec<(usize, FoundMatch)> = votes.into_values().collect();
+                ranked.sort_by(|a, b| {
+                    b.0.cmp(&a.0)
+                        .then_with(|| b.1.confidence.total_cmp(&a.1.confidence))
+                });
+                let Some((top_votes, top)) = ranked.first() else {
+                    continue;
+                };
+                let unambiguous = ranked.get(1).is_none_or(|(runner_votes, runner)| {
+                    top_votes > runner_votes || top.confidence - runner.confidence >= 0.12
+                });
+                if unambiguous {
+                    matches.push((index, top.clone()));
+                }
+            }
+            let read = LayoutRead { layout, matches };
+            let complete = layout_read_is_complete(&read, expected_slots);
+            if require_complete && !complete {
+                continue;
+            }
+            let confidence = read.matches.iter().map(|(_, found)| found.confidence).sum();
+            let score = (complete, read.matches.len(), confidence);
+            if best.as_ref().is_none_or(|current| {
+                (score.0 && !current.0)
+                    || (score.0 == current.0 && score.1 > current.1)
+                    || (score.0 == current.0 && score.1 == current.1 && score.2 > current.2)
+            }) {
+                best = Some((score.0, score.1, score.2, read));
+            }
+        }
+        best.map(|(_, _, _, read)| read)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -855,20 +930,22 @@ fn encode_crop(image: &RgbaImage, rect: NormalizedRect) -> Result<Vec<u8>, Strin
             FilterType::Triangle,
         );
     }
-    // Reward labels are white over translucent cards whose gold/white item art
-    // frequently merges into the glyphs. Per-channel thresholding preserves
-    // the bright label edges while discarding most of that background noise.
+    // Per-channel thresholding fragments antialiased white glyphs into colored
+    // edges on the teal reward cards. Preserve their luminance for Tesseract.
     for pixel in crop.pixels_mut() {
-        for channel in &mut pixel.0[..3] {
-            *channel = if *channel >= 178 { 255 } else { 0 };
-        }
+        let luminance = ((u32::from(pixel.0[0]) * 77
+            + u32::from(pixel.0[1]) * 150
+            + u32::from(pixel.0[2]) * 29
+            + 128)
+            >> 8) as u8;
+        pixel.0[..3].fill(luminance);
         pixel.0[3] = 255;
     }
-    let mut cursor = Cursor::new(Vec::new());
-    DynamicImage::ImageRgba8(crop)
-        .write_to(&mut cursor, ImageFormat::Png)
-        .map_err(|e| format!("encoding reward title crop: {e}"))?;
-    Ok(cursor.into_inner())
+    let header = format!("P5\n{} {}\n255\n", crop.width(), crop.height());
+    let mut pgm = Vec::with_capacity(header.len() + crop.width() as usize * crop.height() as usize);
+    pgm.extend_from_slice(header.as_bytes());
+    pgm.extend(crop.pixels().map(|pixel| pixel.0[0]));
+    Ok(pgm)
 }
 
 fn encode_frame(image: &RgbaImage) -> Result<Vec<u8>, String> {
@@ -1090,7 +1167,7 @@ fn read_dynamic_layout(
         |slot| {
             let started = Instant::now();
             let text = encode_crop(&frame.image, slot.title)
-                .and_then(|png| ocr.recognize(png, OcrMode::SingleLine))
+                .and_then(|crop| ocr.recognize(crop, OcrMode::SingleLine))
                 .unwrap_or_default();
             timings.slot_ocr_ms += elapsed_ms(started);
             text
@@ -1114,13 +1191,13 @@ fn read_expected_layout(
     let mut matches = Vec::new();
     let mut text_log = Vec::new();
     for slot in slots {
-        let png = encode_crop(&frame.image, slot.title)?;
+        let crop = encode_crop(&frame.image, slot.title)?;
         if let Some(dir) = debug_dir {
-            let _ = std::fs::write(dir.join(format!("slot-{}.png", slot.index)), &png);
+            let _ = std::fs::write(dir.join(format!("slot-{}.pgm", slot.index)), &crop);
         }
         let started = Instant::now();
         let text = ocr
-            .recognize(png, OcrMode::SingleLine)
+            .recognize(crop, OcrMode::SingleLine)
             .map_err(|e| format!("ocr_unavailable: {e}"))?;
         timings.slot_ocr_ms += elapsed_ms(started);
         let started = Instant::now();
@@ -1139,13 +1216,13 @@ fn read_expected_layout(
             let _ = std::fs::write(dir.join("layout.json"), json);
         }
     }
-    if matches.len() != expected_slots {
-        return Err(format!(
-            "catalog_match_incomplete: recognized {} of {expected_slots} expected reward names",
-            matches.len()
-        ));
-    }
-    Ok(LayoutRead { layout, matches })
+    (!matches.is_empty())
+        .then_some(LayoutRead { layout, matches })
+        .ok_or_else(|| {
+            format!(
+                "catalog_match_incomplete: recognized 0 of {expected_slots} expected reward names"
+            )
+        })
 }
 
 fn centered_layout_is_complete(read: &LayoutRead) -> bool {
@@ -1155,6 +1232,22 @@ fn centered_layout_is_complete(read: &LayoutRead) -> bool {
         // row, and a solo reward in the middle position of its three-card row.
         4 => indices == [0, 1, 2, 3] || indices == [1, 2],
         3 => indices == [0, 1, 2] || indices == [1],
+        _ => false,
+    }
+}
+
+fn layout_read_is_complete(read: &LayoutRead, expected_slots: usize) -> bool {
+    if expected_slots == 0 {
+        return centered_layout_is_complete(read);
+    }
+    if read.matches.len() != expected_slots {
+        return false;
+    }
+    let indices: Vec<usize> = read.matches.iter().map(|(index, _)| *index).collect();
+    match (read.layout.count, expected_slots) {
+        (count, expected) if count == expected => indices == (0..expected).collect::<Vec<_>>(),
+        (4, 2) => indices == [1, 2],
+        (3, 1) => indices == [1],
         _ => false,
     }
 }
@@ -1173,15 +1266,15 @@ fn read_centered_reward_layout(
     let result = layout_from_reward_header(frame, catalog, &mut diagnostic, &mut |slot| {
         let current_crop = crop_number;
         crop_number += 1;
-        let png = match encode_crop(&frame.image, slot.title) {
-            Ok(png) => png,
+        let crop = match encode_crop(&frame.image, slot.title) {
+            Ok(crop) => crop,
             Err(_) => return String::new(),
         };
         if let Some(dir) = debug_dir {
-            let _ = std::fs::write(dir.join(format!("fast-slot-{current_crop}.png")), &png);
+            let _ = std::fs::write(dir.join(format!("fast-slot-{current_crop}.pgm")), &crop);
         }
         let started = Instant::now();
-        let text = ocr.recognize(png, OcrMode::SingleLine).unwrap_or_default();
+        let text = ocr.recognize(crop, OcrMode::SingleLine).unwrap_or_default();
         timings.slot_ocr_ms += elapsed_ms(started);
         text
     });
@@ -1190,37 +1283,15 @@ fn read_centered_reward_layout(
     if let Some(dir) = debug_dir {
         let _ = std::fs::write(dir.join("centered-fast-path.txt"), diagnostic.join("\n"));
     }
-    result.filter(centered_layout_is_complete).ok_or_else(|| {
-        "centered_reward_incomplete: fixed reward crops did not form a complete row".into()
+    result.ok_or_else(|| {
+        "centered_reward_incomplete: fixed reward crops did not recognize any reward names".into()
     })
 }
 
 fn expected_reward_layout(frame: &CapturedFrame, expected_slots: usize) -> RewardLayout {
-    let centers = centered_slot_centers(frame.width, expected_slots, &[]);
-    let slots: Vec<RewardSlotRect> = centers
-        .iter()
-        .enumerate()
-        .map(|(index, center)| RewardSlotRect {
-            index,
-            card: NormalizedRect {
-                x: (center / frame.width as f64 - 0.072).max(0.0),
-                y: 0.24,
-                width: 0.144,
-                height: 0.28,
-            },
-            title: NormalizedRect {
-                x: (center / frame.width as f64 - 0.072).max(0.0),
-                y: 0.40,
-                width: 0.144,
-                height: 0.13,
-            },
-        })
-        .collect();
-    RewardLayout {
-        count: expected_slots,
-        confidence: 1.0,
-        slots,
-    }
+    let mut layout = reward_header_layout(frame, expected_slots);
+    layout.confidence = 1.0;
+    layout
 }
 
 fn reward_header_visible(frame: &CapturedFrame, lines: &[TsvLine]) -> bool {
@@ -1574,9 +1645,9 @@ fn layout_from_lines(
         .collect();
     let mut matches = Vec::new();
     for slot in &slots {
-        let png = encode_crop(&frame.image, slot.title).ok()?;
+        let crop = encode_crop(&frame.image, slot.title).ok()?;
         if let Some(dir) = &debug_dir {
-            let _ = std::fs::write(dir.join(format!("slot-{}.png", slot.index)), &png);
+            let _ = std::fs::write(dir.join(format!("slot-{}.pgm", slot.index)), &crop);
         }
         let text = read_crop(slot);
         let best = match_ocr_lines(&text, catalog)
@@ -1995,6 +2066,7 @@ fn capture_and_recognize(
         "tennoworth: relic scan {scan_id} started with {} expected slots",
         expected_slots
     );
+    let mut consensus = RecognitionConsensus::default();
     let mut recognized: Option<(CapturedFrame, LayoutRead)> = None;
     let mut last_error = None;
     for attempt in 0..3 {
@@ -2012,23 +2084,24 @@ fn capture_and_recognize(
                     &mut timings,
                 ) {
                     Ok(read) => {
-                        recognized = Some((frame, read));
-                        break;
+                        consensus.observe(read);
                     }
                     Err(error) => last_error = Some(error),
                 }
-                if recognized.is_none() && (1..=4).contains(&expected_slots) {
+                let current_expected = state.expected_slots.load(Ordering::Acquire);
+                if (1..=4).contains(&current_expected)
+                    && consensus.resolve(current_expected, true).is_none()
+                {
                     match read_expected_layout(
                         &state.ocr,
                         &frame,
                         &catalog,
-                        expected_slots,
+                        current_expected,
                         debug_dir.as_deref(),
                         &mut timings,
                     ) {
                         Ok(read) => {
-                            recognized = Some((frame, read));
-                            break;
+                            consensus.observe(read);
                         }
                         Err(error) => last_error = Some(error),
                     }
@@ -2036,7 +2109,8 @@ fn capture_and_recognize(
                 // Full-frame sparse OCR is the compatibility fallback, not the
                 // normal hot path. Run it once only after the inexpensive
                 // centered crops have had time to catch a drawing transition.
-                if recognized.is_none() && attempt == 2 {
+                let current_expected = state.expected_slots.load(Ordering::Acquire);
+                if consensus.resolve(current_expected, true).is_none() && attempt == 2 {
                     match read_dynamic_layout(
                         &state.ocr,
                         &frame,
@@ -2047,8 +2121,7 @@ fn capture_and_recognize(
                         &mut timings,
                     ) {
                         Ok(read) => {
-                            recognized = Some((frame, read));
-                            break;
+                            consensus.observe(read);
                         }
                         Err(error) => {
                             let preserve_catalog_error =
@@ -2061,6 +2134,11 @@ fn capture_and_recognize(
                         }
                     }
                 }
+                let current_expected = state.expected_slots.load(Ordering::Acquire);
+                if let Some(read) = consensus.resolve(current_expected, true) {
+                    recognized = Some((frame, read));
+                    break;
+                }
             }
             Err(error) => {
                 timings.capture_ms += elapsed_ms(capture_started);
@@ -2072,10 +2150,22 @@ fn capture_and_recognize(
         }
     }
     let Some((frame, read)) = recognized else {
-        let error = format!(
-            "{}; retry while the reward names are visible",
+        let current_expected = state.expected_slots.load(Ordering::Acquire);
+        let partial = consensus.resolve(current_expected, false);
+        let recognized_slots = partial.as_ref().map_or(0, |read| read.matches.len());
+        let expected_slots = if (1..=4).contains(&current_expected) {
+            current_expected
+        } else {
+            partial.as_ref().map_or(0, |read| read.layout.count)
+        };
+        let cause = if recognized_slots > 0 && expected_slots > recognized_slots {
+            format!(
+                "catalog_match_incomplete: recognized {recognized_slots} of {expected_slots} expected reward names"
+            )
+        } else {
             last_error.unwrap_or_else(|| "reward recognition failed".into())
-        );
+        };
+        let error = format!("{cause}; retry while the reward names are visible");
         timings.total_ms = elapsed_ms(run_started);
         write_run_diagnostics(run_dir.as_deref(), &timings, None);
         state.finish_run(
@@ -2084,7 +2174,7 @@ fn capture_and_recognize(
                 outcome: error.clone(),
                 trigger_source: source.into(),
                 expected_slots,
-                recognized_slots: 0,
+                recognized_slots,
                 timings,
                 diagnostics_directory: diagnostic_path,
             },
@@ -2421,7 +2511,7 @@ fn preferred_presentation_backend() -> &'static str {
     "tauri-window"
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct FoundMatch {
     raw: String,
     item: OverlayCatalogItem,
@@ -2738,24 +2828,60 @@ mod tests {
     }
 
     #[test]
-    fn expected_slot_fast_path_uses_a_normalized_centered_reward_band() {
+    fn expected_slot_fast_path_uses_the_height_scaled_reward_grid() {
+        let image = RgbaImage::new(2048, 1152);
+        let frame = CapturedFrame {
+            image,
+            x: 0,
+            y: 0,
+            width: 2048,
+            height: 1152,
+        };
+        let layout = expected_reward_layout(&frame, 3);
+        let centers: Vec<f64> = layout
+            .slots
+            .iter()
+            .map(|slot| (slot.title.x + slot.title.width / 2.0) * frame.width as f64)
+            .collect();
+        let spacing = frame.height as f64 * REWARD_SLOT_SPACING_PER_HEIGHT;
+        assert!((centers[0] - (1024.0 - spacing)).abs() < 0.01);
+        assert!((centers[1] - 1024.0).abs() < 0.01);
+        assert!((centers[2] - (1024.0 + spacing)).abs() < 0.01);
+    }
+
+    #[test]
+    fn partial_attempts_resolve_one_complete_reward_row() {
         let frame = corpus_frame();
-        for count in 1..=4 {
-            let layout = expected_reward_layout(&frame, count);
-            assert_eq!(layout.count, count);
-            assert_eq!(layout.slots.len(), count);
-            assert!(layout
-                .slots
-                .iter()
-                .all(|slot| slot.title.y == 0.40 && slot.title.height == 0.13));
-            let average_center = layout
-                .slots
-                .iter()
-                .map(|slot| slot.title.x + slot.title.width / 2.0)
-                .sum::<f64>()
-                / count as f64;
-            assert!((average_center - 0.5).abs() < 0.001);
+        let catalog = catalog();
+        let reads = [
+            (0, "Paris Prime Blueprint"),
+            (1, "Wisp Prime Systems Blueprint"),
+            (2, "Forma Blueprint"),
+        ];
+        let mut consensus = RecognitionConsensus::default();
+        for (index, text) in reads {
+            let found = match_ocr_lines(text, &catalog)
+                .into_iter()
+                .max_by(|a, b| a.confidence.total_cmp(&b.confidence))
+                .unwrap();
+            consensus.observe(LayoutRead {
+                layout: reward_header_layout(&frame, 3),
+                matches: vec![(index, found)],
+            });
         }
+        let resolved = consensus.resolve(3, true).unwrap();
+        assert_eq!(
+            resolved
+                .matches
+                .iter()
+                .map(|(_, found)| found.item.name.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "Paris Prime Blueprint",
+                "Wisp Prime Systems Blueprint",
+                "Forma Blueprint"
+            ]
+        );
     }
 
     #[test]
@@ -2804,8 +2930,8 @@ mod tests {
 
     #[test]
     fn reward_title_crops_are_normalized_for_ocr() {
-        let image = RgbaImage::new(512, 100);
-        let png = encode_crop(
+        let image = RgbaImage::from_pixel(512, 100, image::Rgba([240, 120, 60, 80]));
+        let pgm = encode_crop(
             &image,
             NormalizedRect {
                 x: 0.0,
@@ -2815,9 +2941,11 @@ mod tests {
             },
         )
         .unwrap();
-        let decoded = image::load_from_memory(&png).unwrap();
-        assert_eq!(decoded.width(), REWARD_TITLE_TARGET_WIDTH);
-        assert_eq!(decoded.height(), 50);
+        let header = b"P5\n256 50\n255\n";
+        assert!(pgm.starts_with(header));
+        let pixels = &pgm[header.len()..];
+        assert_eq!(pixels.len(), REWARD_TITLE_TARGET_WIDTH as usize * 50);
+        assert!(pixels.iter().all(|pixel| *pixel == 149));
     }
 
     #[test]
