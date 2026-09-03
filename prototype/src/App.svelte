@@ -26,7 +26,13 @@
   import { buildMetaDrift } from './lib/meta-drift';
   import type { History } from './lib/history';
   import { loadCatalogs, resolvePath, type Catalogs } from './lib/resolver';
-  import { loadMarket, lookup, startMarketRefreshLoop, type MarketRefreshLoop } from './lib/market';
+  import {
+    loadMarket,
+    lookup,
+    staleSurfaceTimestamp,
+    startMarketRefreshLoop,
+    type MarketRefreshLoop,
+  } from './lib/market';
   import { sellableQty } from './lib/sell-priority';
   import { computeResults as computeFilteredResults, computeAvailableTags, computeEmptyReason, type FilterState } from './lib/filter-engine';
   import { PRESETS, presetFilterValues, presetStillMatches } from './lib/presets';
@@ -718,16 +724,12 @@
     return 'stale';
   });
 
-  // A vendor surface (Baro schedule, relic drops, vault status, set maps) is
-  // refreshed on a full scrape but NOT on a CSV-only rebuild - so it can lag
-  // the price `updated_at`. Flag a surface only when it's meaningfully old
-  // (these rotate on the order of days/weeks), so we don't nag on a healthy
-  // snapshot where every stamp matches.
+  // Vendor surfaces can lag the price snapshot when their upstream fails.
+  // A matching content hash is a successful freshness check even though the
+  // retained payload keeps its original download timestamp.
   function surfaceAge(key) {
-    const ts = market?.surface_fetched_at?.[key];
-    if (!ts) return null;
-    const days = (Date.now() - new Date(ts).getTime()) / 8.64e7;
-    return days >= 3 ? ago(ts) : null;
+    const stamp = staleSurfaceTimestamp(market, key);
+    return stamp ? ago(stamp) : null;
   }
   let baroSurfaceAge = $derived(surfaceAge('baro'));
   let relicSurfaceAge = $derived(surfaceAge('relic_rewards'));

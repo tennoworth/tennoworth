@@ -682,16 +682,23 @@ fn run_build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     let (relic_observation, relic_source) = if !fresh_relics.is_empty() {
         (Observation::usable(fresh_relics), "de_public_export")
     } else if prior_has_relics {
-        eprintln!("Relic tables not rebuilt this cycle - carrying the prior DE surface");
-        let state = match (
+        let (state, status) = match (
             de_snap.outcome("ExportRelicArcane_en.json"),
-            de_snap.outcome("ExportRecipes_en.json"),
+            &recipes_observation,
         ) {
-            (de::ManifestOutcome::Invalid, _) | (_, de::ManifestOutcome::Invalid) => Observation::Invalid,
-            (de::ManifestOutcome::Unavailable, _) | (_, de::ManifestOutcome::Unavailable) => Observation::Unavailable,
-            (de::ManifestOutcome::Unchanged, de::ManifestOutcome::Usable | de::ManifestOutcome::Unchanged) => Observation::Unchanged,
-            _ => Observation::Invalid,
+            (de::ManifestOutcome::Invalid, _)
+            | (_, Observation::Invalid | Observation::AuthoritativeEmpty) => {
+                (Observation::Invalid, "invalid this cycle")
+            }
+            (de::ManifestOutcome::Unavailable, _) | (_, Observation::Unavailable) => {
+                (Observation::Unavailable, "unavailable this cycle")
+            }
+            (de::ManifestOutcome::Unchanged, Observation::Usable { .. } | Observation::Unchanged) => {
+                (Observation::Unchanged, "hash-verified unchanged")
+            }
+            _ => (Observation::Invalid, "invalid this cycle"),
         };
+        eprintln!("Relic tables {status} - carrying the prior DE surface");
         (state, "de_public_export")
     } else {
         // No DE rows and nothing to carry. The old drop-table scrape stays as

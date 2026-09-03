@@ -447,13 +447,28 @@ fn build_skips_manifests_whose_hash_has_not_moved() {
 
     // Feed the snapshot we just wrote back in as the prior one.
     std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
-    let second = run(&args, &dir);
+    let second_args = [
+        "build",
+        "--fixtures-dir",
+        dir.to_str().unwrap(),
+        "--now",
+        "2026-07-11T12:00:00Z",
+    ];
+    let second = run(&second_args, &dir);
     assert!(second.status.success());
     let second_err = String::from_utf8_lossy(&second.stderr).to_string();
     assert!(
         second_err.contains("4 skipped as unchanged") && second_err.contains("2 fetched"),
         "a warm run skips the four carryable manifests and still pulls the two \
          whose data cannot be carried:\n{second_err}"
+    );
+    assert!(
+        second_err.contains("Relic tables hash-verified unchanged - carrying the prior DE surface"),
+        "the warm run must distinguish a successful hash check from an outage:\n{second_err}"
+    );
+    assert!(
+        !second_err.contains("WARNING: relic_rewards has been stale"),
+        "unchanged content is current even when its last download is old:\n{second_err}"
     );
 
     // And the surfaces those manifests feed must survive the skip rather than
@@ -501,6 +516,14 @@ fn build_skips_manifests_whose_hash_has_not_moved() {
         "a warm cycle must keep DE's ducat value, not revert to WFM's"
     );
     assert_eq!(snap["surface_provenance"]["relic_rewards"]["disposition"], "preserved_unchanged");
+    assert_eq!(
+        snap["surface_provenance"]["relic_rewards"]["data_fetched_at"],
+        "2026-07-01T12:00:00Z"
+    );
+    assert_eq!(
+        snap["surface_provenance"]["relic_rewards"]["attempted_at"],
+        "2026-07-11T12:00:00Z"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -939,7 +962,7 @@ fn every_de_surface_carries_when_a_manifest_parses_to_nothing() {
     for expected in [
         "ducats: no DE values this cycle",
         "dispositions: none from DE this cycle",
-        "Relic tables not rebuilt this cycle",
+        "Relic tables invalid this cycle - carrying the prior DE surface",
     ] {
         assert!(stderr.contains(expected), "missing `{expected}` in:\n{stderr}");
     }
@@ -947,6 +970,11 @@ fn every_de_surface_carries_when_a_manifest_parses_to_nothing() {
     let snap: serde_json::Value =
         serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
     assert_eq!(snap["surface_provenance"]["recipes"]["disposition"], "preserved_invalid");
+    assert_eq!(
+        snap["surface_provenance"]["relic_rewards"]["disposition"],
+        "preserved_invalid",
+        "an invalid recipe dependency must not make a skipped relic manifest look healthy"
+    );
 
     assert_eq!(
         snap["items"]["volt_prime_chassis_blueprint"]["ducats"], 65,

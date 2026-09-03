@@ -183,7 +183,8 @@ impl<T: Clone> Mergeable for Vec<T> {
 /// `prior` - data from the prior snapshot (may be `None` if no prior).
 /// `prior_stamp` - the stamp from the prior snapshot's `surface_fetched_at`.
 /// `now` - the injected clock (same one flowing through render).
-/// `stale_days` - threshold for stale warnings (Python uses 7).
+/// `stale_days` - threshold for warnings about preserved data that could not
+///   be verified against the current upstream.
 pub fn reconcile<T: Mergeable + Default>(
     name: &str,
     observation: Observation<T>,
@@ -197,17 +198,24 @@ pub fn reconcile<T: Mergeable + Default>(
         if let Some(old) = prior {
             let kept_since = prior_stamp.unwrap_or("");
             let stamp = if kept_since.is_empty() { clock::iso_z(now) } else { kept_since.to_string() };
-            let stale_warning = clock::parse_stamp(kept_since).and_then(|kept_dt| {
-                let age = now.signed_duration_since(kept_dt);
-                if age.num_days() >= stale_days {
-                    Some(StaleWarning {
-                        surface: name.to_string(),
-                        days: age.num_days(),
-                    })
-                } else {
-                    None
-                }
-            });
+            // A matching content hash proves the retained payload is still
+            // current. Only a failed or invalid observation makes its age an
+            // operational warning.
+            let stale_warning = if disposition == Disposition::PreservedUnchanged {
+                None
+            } else {
+                clock::parse_stamp(kept_since).and_then(|kept_dt| {
+                    let age = now.signed_duration_since(kept_dt);
+                    if age.num_days() >= stale_days {
+                        Some(StaleWarning {
+                            surface: name.to_string(),
+                            days: age.num_days(),
+                        })
+                    } else {
+                        None
+                    }
+                })
+            };
             Reconciled {
                 data: old.clone(),
                 fetched_at: stamp,
@@ -449,15 +457,15 @@ mod tests {
     }
 
     #[test]
-    fn preserve_states_have_distinct_provenance() {
+    fn preserve_states_have_distinct_provenance_and_warning_semantics() {
         let prior = hm(&[("old", 1)]);
         let now = utc(2026, 7, 1, 0, 0, 0);
         let cases = [
-            (Observation::Unavailable, Disposition::PreservedUnavailable),
-            (Observation::Unchanged, Disposition::PreservedUnchanged),
-            (Observation::Invalid, Disposition::PreservedInvalid),
+            (Observation::Unavailable, Disposition::PreservedUnavailable, true),
+            (Observation::Unchanged, Disposition::PreservedUnchanged, false),
+            (Observation::Invalid, Disposition::PreservedInvalid, true),
         ];
-        for (observation, expected) in cases {
+        for (observation, expected, warns) in cases {
             let r = super::reconcile(
                 "surface", observation, Some(&prior), Some("2026-06-01T00:00:00Z"), now, 7,
             );
@@ -465,6 +473,7 @@ mod tests {
             assert_eq!(r.fetched_at, "2026-06-01T00:00:00Z");
             assert_eq!(r.attempted_at, "2026-07-01T00:00:00Z");
             assert_eq!(r.disposition, expected);
+            assert_eq!(r.stale_warning.is_some(), warns);
         }
     }
 
