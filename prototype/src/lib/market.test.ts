@@ -57,6 +57,68 @@ describe('lookup', () => {
   });
 });
 
+describe('staleSurfaceTimestamp', () => {
+  const NOW = Date.parse('2026-09-03T00:00:00Z');
+  const OLD = '2026-08-23T00:00:00Z';
+
+  it('does not call hash-verified unchanged data stale', async () => {
+    const { staleSurfaceTimestamp } = await freshMarket();
+    const market = {
+      surface_fetched_at: { relic_rewards: OLD },
+      surface_provenance: {
+        relic_rewards: {
+          disposition: 'preserved_unchanged',
+          attempted_at: '2026-09-03T00:00:00Z',
+          data_fetched_at: OLD,
+        },
+      },
+    };
+
+    expect(staleSurfaceTimestamp(market, 'relic_rewards', NOW)).toBeNull();
+  });
+
+  it.each(['preserved_unavailable', 'preserved_invalid'])(
+    'keeps the age warning for %s data',
+    async (disposition) => {
+      const { staleSurfaceTimestamp } = await freshMarket();
+      const market = {
+        surface_provenance: {
+          relic_rewards: {
+            disposition,
+            attempted_at: '2026-09-03T00:00:00Z',
+            data_fetched_at: OLD,
+          },
+        },
+      };
+
+      expect(staleSurfaceTimestamp(market, 'relic_rewards', NOW)).toBe(OLD);
+    },
+  );
+
+  it('keeps the legacy timestamp fallback for snapshots without provenance', async () => {
+    const { staleSurfaceTimestamp } = await freshMarket();
+    const market = { surface_fetched_at: { relic_rewards: OLD } };
+
+    expect(staleSurfaceTimestamp(market, 'relic_rewards', NOW)).toBe(OLD);
+  });
+
+  it('falls back safely when provenance carries a malformed timestamp', async () => {
+    const { staleSurfaceTimestamp } = await freshMarket();
+    const market = {
+      surface_fetched_at: { relic_rewards: OLD },
+      surface_provenance: {
+        relic_rewards: {
+          disposition: 'preserved_invalid',
+          attempted_at: '2026-09-03T00:00:00Z',
+          data_fetched_at: 'not-a-date',
+        },
+      },
+    };
+
+    expect(staleSurfaceTimestamp(market, 'relic_rewards', NOW)).toBe(OLD);
+  });
+});
+
 describe('startMarketRefreshLoop', () => {
   beforeEach(() => {
     vi.useFakeTimers();
