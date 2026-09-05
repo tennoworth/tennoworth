@@ -69,8 +69,14 @@ jobs:
           $probeOut = Join-Path $env:RUNNER_TEMP 'ocr-boot-probe.txt'
           $env:TENNOWORTH_OCR_BOOT_PROBE = '1'
           $env:TENNOWORTH_OCR_BOOT_PROBE_OUT = $probeOut
-          $probe = Start-Process -FilePath $exe.FullName -Wait -PassThru
-          if ($probe.ExitCode -ne 0) { throw "Installed app exited with $($probe.ExitCode)" }
+          $probe = Start-Process -FilePath $exe.FullName -PassThru
+          $null = $probe.Handle
+          if (-not $probe.WaitForExit(120000)) {
+            Stop-Process -Id $probe.Id -Force
+            if (Test-Path $probeOut) { Get-Content $probeOut }
+            throw 'Installed OCR probe did not exit within 120 seconds'
+          }
+          if ($null -eq $probe.ExitCode -or $probe.ExitCode -ne 0) { throw "Installed app exited with $($probe.ExitCode)" }
           $evidence = Get-Content $probeOut -Raw
           if ($evidence -notmatch '^OCR_BOOT_PROBE_OK backend=windows-window') { throw "Unexpected OCR probe output: $evidence" }
 

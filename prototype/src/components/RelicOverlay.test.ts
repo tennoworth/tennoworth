@@ -44,6 +44,30 @@ describe('RelicOverlay', () => {
     expect(screen.getByText('180p').closest('article')?.textContent).not.toContain('BEST PLAT');
   });
 
+  it('renders a missed reward placeholder without any recommendation', async () => {
+    const handlers: Record<string, (event: { payload: unknown }) => void> = {};
+    installTauri(vi.fn(async () => null), vi.fn((name, handler) => {
+      handlers[name] = handler;
+      return Promise.resolve(() => {});
+    }));
+    render(RelicOverlay);
+    const partial = {
+      ...fixture,
+      slots: fixture.slots.map((slot, index) => ({
+        ...slot,
+        ...(index === 1 ? { name: undefined, rawText: 'Reward not recognized', confidence: 0 } : {}),
+        bestPlatinum: false,
+        bestDucats: false,
+      })),
+    };
+
+    handlers['relic-overlay:update']({ payload: partial });
+
+    expect(await screen.findByText('Reward not recognized')).toBeTruthy();
+    expect(screen.queryByText('BEST PLAT')).toBeNull();
+    expect(screen.queryByText('BEST DUCATS')).toBeNull();
+  });
+
   it('clears cards when the Rust window emits hide', async () => {
     const handlers: Record<string, (event: { payload: unknown }) => void> = {};
     installTauri(vi.fn(async () => null), vi.fn((name, handler) => {

@@ -4,6 +4,84 @@ Use a physical, locally viewed Windows 11 desktop. RDP, virtual machines, and
 streaming sessions are outside this baseline because they can change capture
 behavior.
 
+## Building locally over SSH
+
+The physical Windows host can compile and test through its standard-user
+SSH account. It does not run GitHub Actions jobs. Local results do not remove
+required GitHub checks or replace testing capture in the gaming desktop.
+
+Verified on 2026-09-04: Windows 11 Pro 25H2, MSVC 14.44.35207, Windows SDK
+10.0.26100.0, Rust/Cargo 1.98.1, Bun 1.4.1, Tauri CLI 2.11.4, and Tesseract
+5.5.2. vcpkg revision was `04a9d8e5212d01ee1dd9478eadd9caade4f8b0d4`.
+Recheck versions and disk space when resuming; these are observations, not
+project version pins.
+
+- Persist `VCPKG_ROOT`, `VCPKG_DEFAULT_TRIPLET=x64-windows-static-md`, and
+  `LIBCLANG_PATH` in the build user's environment. The verified libclang
+  directory is `C:\Program Files\LLVM\bin`.
+- Windows PowerShell may select a blocked `bun.ps1` or `npm.ps1` shim. Use
+  `bun.cmd` and `npm.cmd` without changing execution policy.
+- Suppress PowerShell download progress with
+  `$ProgressPreference = 'SilentlyContinue'` for readable SSH output. Use
+  `[System.IO.DriveInfo]::new('C').AvailableFreeSpace` to check disk space;
+  `Get-PSDrive` reported an incorrect zero in the SSH session.
+- Download `eng.traineddata` from the URL and verify the SHA-256 recorded in
+  the Windows workflow before building. Build `prototype/dist-desktop`
+  before running plain Cargo builds.
+- For the unsigned isolated installer, set
+  `$env:TENNOWORTH_OCR_TEST_BUILD = '1'` and run
+  `cargo tauri build --config tauri.ocr-test.conf.json --bundles nsis` from
+  `companion/tennoworth-desktop`. This flag disables ordinary updater support.
+
+The transferred reward-regression snapshot passed 121 desktop Rust tests,
+four overlay component tests, Svelte checking, and the release build on
+Windows. Its real three-reward OCR regression passed native 1440p, scaled
+1080p/720p, ultrawide, and 16:10 variants. Fixture recognition does not prove
+live capture, trigger timing, or overlay presentation.
+
+## Probe and log-access lessons
+
+The original installed OCR boot probe wrote
+`OCR_BOOT_PROBE_OK backend=windows-window`, but did not exit within 120 seconds
+under SSH. Lifecycle tracing reached `ExitRequested` without reaching `Exit`.
+Moving the asynchronous exit request to `Ready` did not resolve it. The probe
+now waits for `Ready`, calls Tauri's `cleanup_before_exit`, and terminates
+explicitly after setup returns. Three consecutive installed Windows launches
+passed with exit code 0 in 0.31, 0.05, and 0.05 seconds on 2026-09-05; the Linux
+OCR probe also passed. Normal application shutdown is unchanged. The workflow
+requires both success evidence and a clean exit, with a 120-second guard.
+This probe returns before creating the webview, so the original timeout was
+not evidence of WebView2 initialization failure.
+Record the exact launched PID and inspect evidence even after a timeout.
+Never stop another TennoWorth process based on its name alone: an inaccessible
+process in interactive session 1 remained after this probe was stopped.
+
+Incomplete OCR rows now preserve their missing-reward positions and suppress
+best-pick marks. Complete centered two-reward and solo rows must omit the
+unoccupied outer positions of the four- and three-column detection grids;
+those are not missing rewards. Dedicated assembly tests cover this distinction
+both with and without an expected slot count. Browser checks cover partial
+two-, three-, and four-card rows. These checks do not establish the cause of
+the originally reported live Windows run; reward-log inspection and physical
+gameplay evidence remain separate verification steps.
+
+For log access, grant the dedicated account inheritable `(OI)(CI)(RX)` on
+the gaming user's `AppData\Local\Warframe` and the relevant TennoWorth cache
+directory, preserving ownership and existing permissions. Scope access to
+`relic-overlay-diagnostics` when that directory exists; granting the cache
+parent also makes future diagnostics inherit access. Production uses
+`app.tennoworth.desktop`; the isolated installer uses `app.tennoworth.ocr-test`.
+Do not grant access across the entire gaming profile.
+
+Verify from the SSH account by opening `EE.log` with read access and
+`FileShare.ReadWrite | FileShare.Delete`, then closing without reading bytes.
+Directory enumeration and metadata suffice to verify permissions. A missing
+diagnostics directory is expected until diagnostics are enabled and created.
+System-wide CIM process enumeration can be denied to this standard account;
+use narrowly scoped process checks instead of broadening its privileges.
+
+## Physical gameplay baseline
+
 1. Open the feature PR's successful **OCR Windows test installer** workflow,
    download `tennoworth-ocr-test-windows`, and unzip it.
 2. Run the unsigned NSIS installer. The SmartScreen warning is expected for

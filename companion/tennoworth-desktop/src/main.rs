@@ -96,6 +96,7 @@ fn main() {
     // here first and measurably did NOT help (same abort with it set), so it
     // does not ship.
     let probe = std::env::var("TENNOWORTH_PROBE").ok().as_deref() == Some("1");
+    let ocr_boot_probe = std::env::var_os("TENNOWORTH_OCR_BOOT_PROBE").is_some();
     let runtag = std::env::var("TENNOWORTH_RUNTAG").unwrap_or_else(|_| "na".into());
 
     #[allow(
@@ -212,7 +213,7 @@ fn main() {
             app.manage(overlay_state);
             overlay::register_configured_shortcut(&app.handle().clone());
 
-            if std::env::var_os("TENNOWORTH_OCR_BOOT_PROBE").is_some() {
+            if ocr_boot_probe {
                 match overlay::ocr_boot_probe(app.state::<overlay::OverlayState>()) {
                     Ok(()) => {
                         let evidence = format!(
@@ -225,10 +226,8 @@ fn main() {
                             std::fs::write(path, &evidence)?;
                         }
                         print!("{evidence}");
-                        // Let Tauri unwind its Windows plugins and the OCR worker
-                        // cleanly. A hard process exit from inside setup trips a
-                        // Windows fast-fail (0xc0000409) in the installed build.
-                        app.handle().exit(0);
+                        // Finish outside setup so its initialization locks unwind
+                        // before the headless probe tears down native resources.
                         return Ok(());
                     }
                     Err(error) => return Err(error.into()),
@@ -372,6 +371,13 @@ fn main() {
             }
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(move |app, event| {
+            if ocr_boot_probe && matches!(event, tauri::RunEvent::Ready) {
+                app.cleanup_before_exit();
+                #[allow(clippy::exit, reason = "the headless OCR probe has no windows; Windows SSH can stall after asynchronous ExitRequested")]
+                std::process::exit(0);
+            }
+        });
 }

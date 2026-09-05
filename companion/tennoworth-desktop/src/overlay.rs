@@ -831,7 +831,7 @@ impl RecognitionConsensus {
         for read in &self.reads {
             by_count.entry(read.layout.count).or_default().push(read);
         }
-        let mut best: Option<(bool, usize, f64, LayoutRead)> = None;
+        let mut best: Option<(bool, bool, usize, f64, LayoutRead)> = None;
         for reads in by_count.into_values() {
             let layout = reads
                 .iter()
@@ -876,17 +876,22 @@ impl RecognitionConsensus {
             if require_complete && !complete {
                 continue;
             }
+            let expected_count = expected_slots > 0 && read.layout.count == expected_slots;
             let confidence = read.matches.iter().map(|(_, found)| found.confidence).sum();
-            let score = (complete, read.matches.len(), confidence);
+            let score = (complete, expected_count, read.matches.len(), confidence);
             if best.as_ref().is_none_or(|current| {
                 (score.0 && !current.0)
-                    || (score.0 == current.0 && score.1 > current.1)
+                    || (score.0 == current.0 && score.1 && !current.1)
                     || (score.0 == current.0 && score.1 == current.1 && score.2 > current.2)
+                    || (score.0 == current.0
+                        && score.1 == current.1
+                        && score.2 == current.2
+                        && score.3 > current.3)
             }) {
-                best = Some((score.0, score.1, score.2, read));
+                best = Some((score.0, score.1, score.2, score.3, read));
             }
         }
-        best.map(|(_, _, _, read)| read)
+        best.map(|(_, _, _, _, read)| read)
     }
 }
 
@@ -1946,22 +1951,19 @@ fn compact_overlay_geometry(
     )
 }
 
-/// Assemble recognized matches into positioned, fact-joined, best-marked
-/// overlay slots plus the compact window geometry. Pure (market facts and the
-/// owned map are injected) so the corpus gate can drive the full pipeline
-/// without a MarketCache or DB.
-#[allow(
-    clippy::indexing_slicing,
-    reason = "matches carry slot.index from the slots scan in layout_from_lines; index < slots.len() by construction"
-)]
+/// Assemble recognized matches into positioned, fact-joined overlay slots plus
+/// the compact window geometry. Missing matches remain visible placeholders;
+/// recommendations stay off until the complete row is known.
 fn assemble_result(
     frame: &CapturedFrame,
     read: LayoutRead,
     settings: &OverlaySettings,
+    expected_slots: usize,
     market_facts: impl Fn(Option<&str>) -> OverlayMarketFacts,
     owned: Option<&HashMap<String, u32>>,
     capture_id: String,
 ) -> (RelicOverlayResult, (i32, i32, u32, u32)) {
+    let complete = layout_read_is_complete(&read, expected_slots);
     let panel_y = read
         .layout
         .slots
@@ -1970,32 +1972,58 @@ fn assemble_result(
         .fold(0.5, f64::max)
         + 0.035;
     let panel_y = panel_y.min(0.82);
-    let layout = read.layout;
-    let matches = read.matches;
-    let mut slots: Vec<RelicOverlaySlot> = matches
-        .into_iter()
-        .map(|(index, found)| {
-            let detected = &layout.slots[index];
-            let facts = market_facts(found.item.slug.as_deref());
+    let mut layout = read.layout;
+    let mut matches: HashMap<usize, FoundMatch> = read.matches.into_iter().collect();
+    if complete {
+        // A complete two-card or solo row may occupy only the inner positions
+        // of a wider detection grid. Those outer positions are not rewards.
+        layout.slots.retain(|slot| matches.contains_key(&slot.index));
+    }
+    let mut slots: Vec<RelicOverlaySlot> = layout
+        .slots
+        .iter()
+        .map(|detected| {
+            if let Some(found) = matches.remove(&detected.index) {
+                let facts = market_facts(found.item.slug.as_deref());
+                return RelicOverlaySlot {
+                    index: detected.index,
+                    box_: OverlayBox {
+                        x: detected.card.x,
+                        y: panel_y,
+                        width: detected.card.width,
+                        height: 0.14,
+                    },
+                    raw_text: found.raw,
+                    name: Some(found.item.name),
+                    slug: found.item.slug.clone(),
+                    confidence: found.confidence,
+                    cached_platinum: facts.cached_platinum,
+                    live_platinum: None,
+                    ducats: facts.ducats,
+                    owned: match (owned, found.item.slug.as_deref()) {
+                        (Some(totals), Some(slug)) => Some(*totals.get(slug).unwrap_or(&0)),
+                        _ => None,
+                    },
+                    best_platinum: false,
+                    best_ducats: false,
+                };
+            }
             RelicOverlaySlot {
-                index,
+                index: detected.index,
                 box_: OverlayBox {
                     x: detected.card.x,
                     y: panel_y,
                     width: detected.card.width,
                     height: 0.14,
                 },
-                raw_text: found.raw,
-                name: Some(found.item.name),
-                slug: found.item.slug.clone(),
-                confidence: found.confidence,
-                cached_platinum: facts.cached_platinum,
+                raw_text: "Reward not recognized".into(),
+                name: None,
+                slug: None,
+                confidence: 0.0,
+                cached_platinum: None,
                 live_platinum: None,
-                ducats: facts.ducats,
-                owned: match (owned, found.item.slug.as_deref()) {
-                    (Some(totals), Some(slug)) => Some(*totals.get(slug).unwrap_or(&0)),
-                    _ => None,
-                },
+                ducats: None,
+                owned: None,
                 best_platinum: false,
                 best_ducats: false,
             }
@@ -2068,6 +2096,7 @@ fn capture_and_recognize(
     );
     let mut consensus = RecognitionConsensus::default();
     let mut recognized: Option<(CapturedFrame, LayoutRead)> = None;
+    let mut last_frame = None;
     let mut last_error = None;
     for attempt in 0..3 {
         let capture_started = Instant::now();
@@ -2139,6 +2168,7 @@ fn capture_and_recognize(
                     recognized = Some((frame, read));
                     break;
                 }
+                last_frame = Some(frame);
             }
             Err(error) => {
                 timings.capture_ms += elapsed_ms(capture_started);
@@ -2165,7 +2195,72 @@ fn capture_and_recognize(
         } else {
             last_error.unwrap_or_else(|| "reward recognition failed".into())
         };
-        let error = format!("{cause}; retry while the reward names are visible");
+        let mut error = format!("{cause}; retry while the reward names are visible");
+        let partial_for_display = partial.filter(|read| {
+            (1..=4).contains(&expected_slots)
+                && read.layout.count == expected_slots
+                && recognized_slots > 0
+                && recognized_slots < expected_slots
+        });
+        if let (Some(frame), Some(read)) = (last_frame, partial_for_display) {
+            let owned = if settings.show_owned {
+                market.overlay_owned(&db)
+            } else {
+                None
+            };
+            let capture_id = scan_id;
+            let (result, overlay_geometry) = assemble_result(
+                &frame,
+                read,
+                &settings,
+                expected_slots,
+                |slug| market.overlay_market_facts(slug),
+                owned.as_ref(),
+                capture_id.clone(),
+            );
+            *state
+                .current_capture
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = Some(capture_id.clone());
+            *state
+                .current_result
+                .lock()
+                .unwrap_or_else(|e| e.into_inner()) = Some(result.clone());
+            match present_overlay(
+                app,
+                overlay_geometry.0,
+                overlay_geometry.1,
+                overlay_geometry.2,
+                overlay_geometry.3,
+                &result,
+            ) {
+                Ok(()) => {
+                    timings.cached_display_ms = elapsed_ms(run_started);
+                    timings.total_ms = elapsed_ms(run_started);
+                    write_run_diagnostics(run_dir.as_deref(), &timings, Some(&result));
+                    state.set_status(app, "showing", Some(error.clone()));
+                    state.finish_run(
+                        app,
+                        OverlayLastRun {
+                            outcome: error,
+                            trigger_source: source.into(),
+                            expected_slots,
+                            recognized_slots,
+                            timings,
+                            diagnostics_directory: diagnostic_path,
+                        },
+                    );
+                    eprintln!(
+                        "tennoworth: relic scan {capture_id} showing {recognized_slots} of {expected_slots} recognized slots without recommendations"
+                    );
+                    schedule_overlay_hide(app, capture_id);
+                    return Ok(());
+                }
+                Err(display_error) => {
+                    error = format!("{error}; displaying partial results failed: {display_error}");
+                }
+            }
+        }
         timings.total_ms = elapsed_ms(run_started);
         write_run_diagnostics(run_dir.as_deref(), &timings, None);
         state.finish_run(
@@ -2191,6 +2286,7 @@ fn capture_and_recognize(
         &frame,
         read,
         &settings,
+        expected_slots,
         |slug| market.overlay_market_facts(slug),
         owned.as_ref(),
         capture_id.clone(),
@@ -2289,6 +2385,11 @@ fn capture_and_recognize(
         },
     );
 
+    schedule_overlay_hide(app, capture_id);
+    Ok(())
+}
+
+fn schedule_overlay_hide(app: &AppHandle, capture_id: String) {
     let app_for_hide = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_secs(20));
@@ -2303,7 +2404,6 @@ fn capture_and_recognize(
             state.set_status(&app_for_hide, "watching", None);
         }
     });
-    Ok(())
 }
 
 fn present_overlay(
@@ -2626,6 +2726,9 @@ fn mark_bests(slots: &mut [RelicOverlaySlot]) {
         slot.best_platinum = false;
         slot.best_ducats = false;
     }
+    if slots.iter().any(|slot| slot.name.is_none()) {
+        return;
+    }
     let best_platinum = slots
         .iter()
         .filter(|slot| slot.confidence >= RECOMMENDATION_CONFIDENCE)
@@ -2882,6 +2985,101 @@ mod tests {
                 "Forma Blueprint"
             ]
         );
+    }
+
+    #[test]
+    fn partial_consensus_prefers_the_expected_slot_count() {
+        let frame = corpus_frame();
+        let found = match_ocr_lines("Paris Prime Blueprint", &catalog())
+            .into_iter()
+            .next()
+            .unwrap();
+        let mut consensus = RecognitionConsensus::default();
+        consensus.observe(LayoutRead {
+            layout: reward_header_layout(&frame, 4),
+            matches: vec![(1, found.clone()), (2, found.clone())],
+        });
+        consensus.observe(LayoutRead {
+            layout: reward_header_layout(&frame, 3),
+            matches: vec![(0, found)],
+        });
+        let resolved = consensus.resolve(3, false).unwrap();
+        assert_eq!(resolved.layout.count, 3);
+    }
+
+    #[test]
+    fn partial_results_keep_placeholders_and_suppress_recommendations() {
+        let frame = corpus_frame();
+        let candidates = corpus_catalog();
+        let find = |name| {
+            match_ocr_lines(name, &candidates)
+                .into_iter()
+                .next()
+                .unwrap()
+        };
+        let read = LayoutRead {
+            layout: reward_header_layout(&frame, 3),
+            matches: vec![
+                (0, find("Paris Prime Blueprint")),
+                (2, find("Cedo Prime Barrel")),
+            ],
+        };
+        let (result, _) = assemble_result(
+            &frame,
+            read,
+            &OverlaySettings::default(),
+            3,
+            corpus_facts(
+                &[("paris_prime_blueprint", 15), ("cedo_prime_barrel", 30)],
+                &[("paris_prime_blueprint", 45), ("cedo_prime_barrel", 100)],
+            ),
+            None,
+            "partial".into(),
+        );
+        assert_eq!(result.slots.len(), 3);
+        assert_eq!(result.slots[1].name, None);
+        assert_eq!(result.slots[1].raw_text, "Reward not recognized");
+        assert!(result
+            .slots
+            .iter()
+            .all(|slot| !slot.best_platinum && !slot.best_ducats));
+    }
+
+    #[test]
+    fn centered_rows_distinguish_empty_positions_from_missing_rewards() {
+        let frame = corpus_frame();
+        let catalog = corpus_catalog();
+        for (grid, indices) in [(4, vec![1, 2]), (3, vec![1])] {
+            for expected in [0, indices.len(), grid] {
+                let read = LayoutRead {
+                    layout: reward_header_layout(&frame, grid),
+                    matches: indices
+                        .iter()
+                        .map(|index| {
+                            (*index, match_ocr_lines("Paris Prime Blueprint", &catalog)
+                                .into_iter().next().unwrap())
+                        })
+                        .collect(),
+                };
+                let (result, _) = assemble_result(
+                    &frame,
+                    read,
+                    &OverlaySettings::default(),
+                    expected,
+                    corpus_facts(&[("paris_prime_blueprint", 15)], &[]),
+                    None,
+                    "centered".into(),
+                );
+                if expected == grid {
+                    assert_eq!(result.slots.len(), grid);
+                    assert_eq!(result.slots.iter().filter(|slot| slot.name.is_none()).count(), grid - indices.len());
+                    assert!(result.slots.iter().all(|slot| !slot.best_platinum && !slot.best_ducats));
+                } else {
+                    assert_eq!(result.slots.len(), indices.len());
+                    assert!(result.slots.iter().all(|slot| slot.name.is_some() && slot.best_platinum));
+                }
+            }
+        }
     }
 
     #[test]
@@ -3179,17 +3377,19 @@ mod tests {
 
     #[test]
     fn recent_log_snapshot_finds_only_an_active_reward_batch() {
-        let active = "1.0 Script [Info]: ProjectionRewardChoice.lua: Got rewards\n\
-1.1 Script [Info]: ProjectionRewardChoice.lua: Missing icon data!\n\
-1.2 Script [Info]: ProjectionRewardChoice.lua: Missing icon data!\n\
-1.3 Script [Info]: ProjectionRewardChoice.lua: Missing icon data!\n\
-1.4 Script [Info]: ProjectionRewardChoice.lua: Missing icon data!\n";
-        let batch = latest_active_reward_batch(active).unwrap();
-        assert!(batch.0.contains("Got rewards"));
-        assert_eq!(batch.1, 4);
+        for slots in 2..=4 {
+            let active = format!(
+                "1.0 Script [Info]: ProjectionRewardChoice.lua: Got rewards\n{}",
+                "1.1 Script [Info]: ProjectionRewardChoice.lua: Missing icon data!\n"
+                    .repeat(slots)
+            );
+            let batch = latest_active_reward_batch(&active).unwrap();
+            assert!(batch.0.contains("Got rewards"));
+            assert_eq!(batch.1, slots);
 
-        let closed = format!("{active}2.0 Script [Info]: {REWARD_CLOSE_MARKER}\n");
-        assert!(latest_active_reward_batch(&closed).is_none());
+            let closed = format!("{active}2.0 Script [Info]: {REWARD_CLOSE_MARKER}\n");
+            assert!(latest_active_reward_batch(&closed).is_none());
+        }
     }
 
     #[test]
@@ -3361,6 +3561,7 @@ mod tests {
             &frame,
             read,
             &OverlaySettings::default(),
+            4,
             corpus_facts(
                 &[
                     ("paris_prime_blueprint", 15),
@@ -3430,6 +3631,7 @@ mod tests {
             &frame,
             read,
             &OverlaySettings::default(),
+            4,
             corpus_facts(
                 &[
                     ("paris_prime_blueprint", 15),
@@ -3506,5 +3708,82 @@ mod tests {
         .expect("a two-reward screen must be detected");
         assert_eq!(read.layout.slots.len(), 2);
         assert_eq!(read.matches.len(), 2);
+    }
+
+    #[test]
+    #[ignore = "requires the pinned release OCR model"]
+    fn real_three_reward_capture_survives_common_display_shapes() {
+        let band = image::load_from_memory(include_bytes!(
+            "../../../tests/fixtures/relic-ocr/three-reward-band.png"
+        ))
+        .unwrap()
+        .to_rgba8();
+        let mut source = RgbaImage::new(2560, 1440);
+        image::imageops::overlay(&mut source, &band, 760, 480);
+        let scaled_1080 = image::imageops::resize(&source, 1920, 1080, FilterType::Triangle);
+        let scaled_720 = image::imageops::resize(&source, 1280, 720, FilterType::Triangle);
+        let mut ultrawide = RgbaImage::new(3440, 1440);
+        image::imageops::overlay(&mut ultrawide, &source, 440, 0);
+        let mut sixteen_ten = RgbaImage::new(1920, 1200);
+        image::imageops::overlay(&mut sixteen_ten, &scaled_1080, 0, 60);
+        let variants = [
+            ("native-1440p", source),
+            ("scaled-1080p", scaled_1080),
+            ("scaled-720p", scaled_720),
+            ("ultrawide-1440p", ultrawide),
+            ("sixteen-ten-1200p", sixteen_ten),
+        ];
+        let candidates = vec![
+            OverlayCatalogItem {
+                name: "Paris Prime String".into(),
+                slug: Some("paris_prime_string".into()),
+            },
+            OverlayCatalogItem {
+                name: "Perigale Prime Blueprint".into(),
+                slug: Some("perigale_prime_blueprint".into()),
+            },
+            OverlayCatalogItem {
+                name: "Forma Blueprint".into(),
+                slug: None,
+            },
+        ];
+        let tessdata = std::env::var_os("TENNOWORTH_TESSDATA_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| {
+                PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/tessdata")
+            });
+        assert!(
+            tessdata.join("eng.traineddata").is_file(),
+            "pinned eng.traineddata is missing from {}",
+            tessdata.display()
+        );
+        let (ocr, ready) = OcrWorker::start(Ok(tessdata));
+        ready.unwrap();
+        for (label, image) in variants {
+            let frame = CapturedFrame {
+                width: image.width(),
+                height: image.height(),
+                image,
+                x: 0,
+                y: 0,
+            };
+            let mut timings = OverlayStageTimings::default();
+            let expected = read_expected_layout(&ocr, &frame, &candidates, 3, None, &mut timings)
+                .unwrap_or_else(|error| panic!("{label} expected path: {error}"));
+            assert!(
+                layout_read_is_complete(&expected, 3),
+                "{label} expected path"
+            );
+
+            let centered =
+                read_centered_reward_layout(&ocr, &frame, &candidates, None, &mut timings)
+                    .unwrap_or_else(|error| panic!("{label} centered path: {error}"));
+            let mut consensus = RecognitionConsensus::default();
+            consensus.observe(centered);
+            assert!(
+                consensus.resolve(3, true).is_some(),
+                "{label} centered path"
+            );
+        }
     }
 }
