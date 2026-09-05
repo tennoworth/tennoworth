@@ -46,6 +46,7 @@ jobs:
               - 'companion/wfm-client/**'
               - 'companion/wfm-core/**'
               - 'prototype/src/**'
+              - 'tests/fixtures/relic-ocr/**'
               - 'prototype/index.html'
               - 'prototype/bun.lock'
               - 'prototype/package.json'
@@ -119,6 +120,12 @@ jobs:
       - name: Build the desktop app
         working-directory: companion
         run: cargo build --release -p tennoworth-desktop
+
+      - name: Real three-reward OCR regression
+        working-directory: companion
+        run: >-
+          cargo test --release -p tennoworth-desktop
+          real_three_reward_capture_survives_common_display_shapes -- --ignored
 
       # The probe auto-exits after the FINAL report; a hang is a probe bug and
       # gets killed by the step timeout. The report is written twice (checkpoint
