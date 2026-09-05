@@ -62,8 +62,14 @@ unoccupied outer positions of the four- and three-column detection grids;
 those are not missing rewards. Dedicated assembly tests cover this distinction
 both with and without an expected slot count. Browser checks cover partial
 two-, three-, and four-card rows. These checks do not establish the cause of
-the originally reported live Windows run; reward-log inspection and physical
-gameplay evidence remain separate verification steps.
+the originally reported live Windows run. A subsequent inspection of the
+available Windows log found a four-reward batch followed by a three-reward
+batch. Both had the usual ready marker, the corresponding slot-marker count
+within two milliseconds, and a close marker about 15 seconds later. The
+three-reward batch therefore uses the event format already handled by the
+overlay. This does not prove the application received the events or identify
+the failed capture/OCR stage; application diagnostics and physical gameplay
+evidence are still needed to establish that cause.
 
 For log access, grant the dedicated account inheritable `(OI)(CI)(RX)` on
 the gaming user's `AppData\Local\Warframe` and the relevant TennoWorth cache
