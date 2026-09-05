@@ -55,7 +55,7 @@
   import TraderCalendar from './components/TraderCalendar.svelte';
   import MetaDriftPanel from './components/MetaDriftPanel.svelte';
   import RefinementLadder from './components/RefinementLadder.svelte';
-  import { listenForTauriEvent, TRAY_HINT_EVENT } from './lib/desktop-update';
+  import { listenForTauriEvent, TRAY_HINT_EVENT, updateStatus } from './lib/desktop-update';
 
   // Desktop (Tauri) vs hosted informational (browser) is decided ONCE at boot.
   // The hosted site is informational only: market data + the desktop showcase,
@@ -990,7 +990,52 @@
     }
   }
 
+  let feedbackDialog: HTMLDialogElement;
+  let feedbackVersion = $state<string | null>(null);
+  const improvementUrl = 'https://github.com/tennoworth/tennoworth/issues/new?template=improvement.yml';
+  let bugReportUrl = $derived.by(() => {
+    const params = new URLSearchParams({
+      template: 'bug-report.yml',
+      version: feedbackVersion ? `${feedbackVersion} (build ${APP_COMMIT})` : `Build ${APP_COMMIT}`,
+    });
+    if (companionPlatform === 'windows') params.set('operating-system', 'Windows');
+    if (companionPlatform === 'linux') params.set('operating-system', 'Linux');
+    return `https://github.com/tennoworth/tennoworth/issues/new?${params}`;
+  });
+
+  async function openFeedback() {
+    feedbackDialog.showModal();
+    try {
+      const status = await updateStatus();
+      feedbackVersion = status?.current_version?.trim() || null;
+    } catch {
+      // Feedback must remain available when desktop metadata cannot be read.
+      feedbackVersion = null;
+    }
+  }
 </script>
+
+<dialog bind:this={feedbackDialog} class="cryptobox feedback-dialog" aria-labelledby="feedback-title" aria-describedby="feedback-description">
+  <form method="dialog">
+    <header>
+      <h3 id="feedback-title">Send feedback</h3>
+      <p id="feedback-description">Help make TennoWorth more useful.</p>
+    </header>
+    <p class="feedback-note">What would you like to share?</p>
+    <div class="feedback-options">
+      <a href={bugReportUrl} target="_blank" rel="noopener noreferrer">
+        <strong>Report a bug <span aria-hidden="true">↗</span></strong>
+        <span>Something broke or didn’t work as expected.</span>
+      </a>
+      <a href={improvementUrl} target="_blank" rel="noopener noreferrer">
+        <strong>Suggest an improvement <span aria-hidden="true">↗</span></strong>
+        <span>Tell us what would make your next trade easier.</span>
+      </a>
+    </div>
+    <p class="feedback-note">Opens GitHub · Account required · Reports are public.</p>
+    <footer><button type="submit" class="btn">Close</button></footer>
+  </form>
+</dialog>
 
 {#if phase !== 'done'}
 <main class="landing" data-testid={isDesktop ? 'desktop-mode' : undefined}>
@@ -1164,6 +1209,12 @@
     </nav>
 
     <div class="sfoot">
+      {#if isDesktop}
+        <button type="button" class="btn feedback-trigger" onclick={openFeedback}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v12H9l-5 4V4Z" /><path d="M8 8h8M8 12h5" /></svg>
+          Send feedback
+        </button>
+      {/if}
       {#if isDesktop}
         <nav class="project-links" aria-label="Project links">
           {@render projectLinkAnchors()}
@@ -2253,6 +2304,18 @@
     text-transform: uppercase;
     letter-spacing: 0.04em;
   }
+
+  .feedback-trigger { width: 100%; justify-content: flex-start; gap: var(--s2); min-height: var(--ctl-lg); }
+  .feedback-trigger svg { width: var(--s4); height: var(--s4); fill: none; stroke: currentColor; stroke-width: 1.5; flex: none; }
+  .feedback-dialog { max-height: calc(100dvh - var(--s6)); overflow-y: auto; }
+  .feedback-note { margin: 0; color: var(--muted); font-family: var(--font-body); line-height: 1.5; }
+  .feedback-options { display: flex; flex-direction: column; border: 1px solid var(--border); }
+  .feedback-options a { display: flex; flex-direction: column; gap: var(--s1); padding: var(--s3); color: var(--fg); text-decoration: none; font-family: var(--font-body); line-height: 1.5; }
+  .feedback-options a + a { border-top: 1px var(--rule) var(--hairline); }
+  .feedback-options a > span { color: var(--muted); }
+  .feedback-options strong { display: flex; justify-content: space-between; gap: var(--s2); }
+  .feedback-options a:hover { background: var(--panel-2); }
+  .feedback-options a:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
   /* Sidebar foot: build string. (The theme control moved to Settings.) */
   .sfoot {

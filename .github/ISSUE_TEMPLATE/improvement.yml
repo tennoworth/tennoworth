@@ -1,0 +1,28 @@
+name: Suggest an improvement
+description: Tell us what would make TennoWorth more useful.
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Suggestions are public. Describe your experience without sharing private account information.
+        You do not need to design the solution; knowing what gets in your way is enough.
+  - type: textarea
+    id: goal
+    attributes:
+      label: What are you trying to do?
+      description: Tell us about the task you want TennoWorth to help with.
+    validations:
+      required: true
+  - type: textarea
+    id: friction
+    attributes:
+      label: What gets in your way?
+      description: What feels difficult, confusing, or missing today?
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: What would help?
+      description: Optional. Share an idea or example if you have one.
