@@ -1,0 +1,44 @@
+name: Report a bug
+description: Something broke or did not work as expected.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Reports are public. Review screenshots and diagnostics before attaching them, and remove account details, tokens, and other private information.
+        For a security vulnerability, follow [SECURITY.md](https://github.com/tennoworth/tennoworth/blob/develop/SECURITY.md) instead of posting it here.
+  - type: textarea
+    id: happened
+    attributes:
+      label: What happened?
+      description: Describe the problem. Include any error message you saw.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: If you know how to trigger it, tell us what you did. It is fine to leave this blank for a one-off problem.
+  - type: input
+    id: version
+    attributes:
+      label: App version or build
+      description: Prefilled when available from the app. Otherwise, copy the build identifier from the sidebar footer.
+      placeholder: Version or build identifier, if known
+  - type: input
+    id: operating-system
+    attributes:
+      label: Operating system
+      description: Windows or Linux. Include your Windows version or Linux distribution if known.
+      placeholder: Windows 11, Fedora 43, Ubuntu 24.04, etc.
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Screenshots or diagnostics
+      description: Optional. Attach only files you have reviewed for private information.
