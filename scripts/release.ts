@@ -36,8 +36,9 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = new URL("..", import.meta.url).pathname.replace(/\/$/, "");
+const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 const CARGO_TOML = "companion/tennoworth-desktop/Cargo.toml";
 const CARGO_LOCK = "companion/Cargo.lock";
