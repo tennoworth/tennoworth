@@ -235,7 +235,7 @@
     gap: 8px;
     text-transform: none;
     letter-spacing: normal;
-    font-size: 12px;
+    font-size: var(--text-caption);
     line-height: 1.45;
   }
   dialog.cryptobox label.remember input { margin-top: 2px; }

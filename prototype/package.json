@@ -10,11 +10,14 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:responsive": "playwright test --project=chromium",
+    "test:responsive:all": "playwright test",
     "check": "svelte-check",
     "knip": "knip",
     "csp": "bun ../scripts/sync-csp.ts"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@sveltejs/vite-plugin-svelte": "^5.0.0",
     "@testing-library/svelte": "^5.4.2",
     "@types/node": "^25.9.1",

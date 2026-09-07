@@ -292,10 +292,35 @@
 
   let visibleOkCount = $derived(visibilityResults.filter((r) => r.status === 'ok').length);
   let visibleErrCount = $derived(visibilityResults.filter((r) => r.status !== 'ok').length);
+
+  function reviewFocus(node: HTMLElement) {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    let mounted = true;
+    const controls = () => [...node.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], [tabindex]')]
+      .filter(el => !el.matches(':disabled, [tabindex="-1"]') && el.getClientRects().length > 0);
+    queueMicrotask(() => { if (mounted) controls()[0]?.focus(); });
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); }
+      if (event.key !== 'Tab') return;
+      const available = controls();
+      const first = available[0];
+      const last = available.at(-1);
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    node.addEventListener('keydown', onKey);
+    return { destroy() {
+      mounted = false;
+      node.removeEventListener('keydown', onKey);
+      // An authentication dialog may have taken focus during the review handoff.
+      if (previous?.isConnected && (node.contains(document.activeElement) || document.activeElement === document.body)) previous.focus();
+    } };
+  }
 </script>
 
 {#if open}
-  <div class="backdrop" role="dialog" aria-modal="true" aria-labelledby="rm-title">
+  <div class="backdrop" role="dialog" aria-modal="true" aria-labelledby="rm-title" use:reviewFocus>
     <div class="modal">
       <DialogHeader titleId="rm-title" title="List on warframe.market" onclose={close} />
 
@@ -310,12 +335,12 @@
         </p>
 
         <div class="bulkrow">
-          <button class="ghost" onclick={() => setAll(true)}>Select all</button>
-          <button class="ghost" onclick={() => setAll(false)}>Deselect all</button>
+          <button class="btn ghost" onclick={() => setAll(true)}>Select all</button>
+          <button class="btn ghost" onclick={() => setAll(false)}>Deselect all</button>
           {#if canLive}
             <span class="spacer"></span>
             <button
-              class="ghost live-btn"
+              class="btn ghost live-btn"
               onclick={checkLivePrices}
               disabled={liveState === 'running' || selectedCount === 0}
               title="Ask warframe.market for the ≤5 best online asks and bids for each selected row's exact rank / refinement, right now. Paced to WFM's rate limit (~3 items per second)."
@@ -329,7 +354,7 @@
               {/if}
             </button>
             {#if liveState === 'done' && live.size > 0}
-              <button class="ghost" onclick={useLiveAll} title="Set every selected row's price to its live lowest online ask (match it - no undercutting).">Match lowest asks</button>
+              <button class="btn ghost" onclick={useLiveAll} title="Set every selected row's price to its live lowest online ask (match it - no undercutting).">Match lowest asks</button>
             {/if}
             {#if liveState === 'error' && liveError}
               <span class="live-err">{liveError}</span>
@@ -434,8 +459,8 @@
             {/if}
           </div>
           <div class="actions">
-            <button class="ghost" onclick={close}>Cancel</button>
-            <button onclick={send} disabled={!canSubmit}>
+            <button class="btn ghost" onclick={close}>Cancel</button>
+            <button class="btn primary" onclick={send} disabled={!canSubmit}>
               Send {selectedCount} listings (hidden)
             </button>
           </div>
@@ -489,11 +514,11 @@
           <div></div>
           <div class="actions">
             {#if okCount > 0 && !visibilityDone}
-              <button onclick={makeAllVisible} disabled={visibilityBusy}>
+              <button class="btn primary" onclick={makeAllVisible} disabled={visibilityBusy}>
                 {visibilityBusy ? 'Making visible…' : `Make ${okCount} visible`}
               </button>
             {/if}
-            <button class={visibilityDone ? '' : 'ghost'} onclick={close}>Done</button>
+            <button class={visibilityDone ? 'btn primary' : 'btn ghost'} onclick={close}>Done</button>
           </div>
         </footer>
       {:else if phase === 'error'}
@@ -501,8 +526,8 @@
         <footer>
           <div></div>
           <div class="actions">
-            <button class="ghost" onclick={close}>Cancel</button>
-            <button onclick={() => (phase = 'review')}>Back to review</button>
+            <button class="btn ghost" onclick={close}>Cancel</button>
+            <button class="btn primary" onclick={() => (phase = 'review')}>Back to review</button>
           </div>
         </footer>
       {/if}
@@ -518,15 +543,15 @@
     backdrop-filter: blur(2px);
     display: grid;
     place-items: center;
-    z-index: 1000;
-    padding: 24px;
+    z-index: var(--layer-modal);
+    padding: clamp(8px, 3vw, 24px);
   }
   .modal {
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
     width: min(900px, 100%);
-    max-height: 88vh;
+    max-height: calc(100dvh - clamp(16px, 6vw, 48px));
     display: flex;
     flex-direction: column;
     overflow: hidden;
@@ -534,7 +559,7 @@
   .lead {
     padding: 14px 18px 0;
     margin: 0;
-    font-size: 13px;
+    font-size: var(--text-control);
     color: var(--muted);
     line-height: 1.5;
     max-width: 80ch;
@@ -549,7 +574,7 @@
     flex-wrap: wrap;
   }
   .bulkrow .spacer { flex: 1; }
-  .live-err { color: var(--bad); font-size: 12px; }
+  .live-err { color: var(--bad); font-size: var(--text-caption); }
   td.live-cell { white-space: nowrap; font-variant-numeric: tabular-nums; }
   td.live-cell.above .verdict { color: var(--warn); margin-left: 4px; }
   td.live-cell.belowbid .verdict { color: var(--warn); margin-left: 4px; }
@@ -566,12 +591,14 @@
   button.linkish:disabled { cursor: default; text-decoration: none; color: var(--muted); }
   .scroll {
     overflow: auto;
+    min-height: 0;
     margin: 12px 0;
     border-top: 1px solid var(--border);
     border-bottom: 1px solid var(--border);
   }
   table {
     width: 100%;
+    min-width: 44rem;
     border-collapse: collapse;
     font-variant-numeric: tabular-nums;
   }
@@ -579,7 +606,7 @@
     padding: 7px 12px;
     text-align: left;
     border-bottom: 1px solid var(--border);
-    font-size: 12.5px;
+    font-size: var(--text-control);
   }
   th {
     background: var(--panel-2);
@@ -587,18 +614,18 @@
     color: var(--muted);
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    font-size: 11px;
+    font-size: var(--text-caption);
     position: sticky;
     top: 0;
   }
   td.right { text-align: right; }
   td.muted { color: var(--muted); }
-  tr.dim { opacity: 0.45; }
+  tr.dim td { color: var(--muted); }
   .item-name { color: var(--fg); }
   .item-slug {
     color: var(--muted);
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--text-caption);
     margin-left: 6px;
   }
   /* Leveled gear is a harder constraint than the Keep-copies reserve - the
@@ -609,7 +636,7 @@
   input[type="number"] {
     font: inherit;
     font-family: var(--font-mono);
-    font-size: 12.5px;
+    font-size: var(--text-control);
     width: 64px;
     background: var(--panel-2);
     border: 1px solid var(--border);
@@ -617,7 +644,7 @@
     border-radius: var(--radius-ctl);
     padding: 3px 6px;
   }
-  input[type="number"]:disabled { opacity: 0.4; }
+  input[type="number"]:disabled { color: var(--muted); background: var(--panel-2); }
   input[type="number"].rank { width: 46px; }
   input[type="number"].off { border-color: var(--warn); }
   footer {
@@ -632,22 +659,13 @@
   .totals {
     display: flex;
     gap: 18px;
-    font-size: 13px;
+    flex-wrap: wrap;
+    font-size: var(--text-control);
     color: var(--muted);
   }
   .totals strong { color: var(--fg); font-weight: 600; }
   .totals .warn { color: var(--warn); }
-  .actions { display: flex; gap: 8px; }
-  button.ghost {
-    background: transparent;
-    color: var(--muted);
-    border: 1px solid var(--border);
-    padding: 4px 10px;
-    border-radius: var(--radius-ctl);
-    font-size: 12px;
-    cursor: pointer;
-  }
-  button.ghost:hover { background: var(--panel-2); color: var(--fg); }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
   td.ok { color: var(--good); font-weight: 600; }
   td.bad { color: var(--bad); font-weight: 600; }
   .ok { color: var(--good); }
@@ -656,5 +674,19 @@
     padding: 32px;
     text-align: center;
     color: var(--muted);
+  }
+  @media (max-width: 35rem) {
+    .lead {
+      max-height: 7rem;
+      overflow-y: auto;
+      padding: var(--s3) var(--s3) 0;
+    }
+    .bulkrow { padding-right: var(--s3); padding-left: var(--s3); }
+    .scroll {
+      flex: 1 1 7rem;
+      min-height: 5rem;
+      margin: var(--s2) 0;
+    }
+    footer { padding: var(--s2) var(--s3); }
   }
 </style>

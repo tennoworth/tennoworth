@@ -719,17 +719,20 @@
   /* Bars may wrap on a narrow desk (the seg + filter + three buttons). */
   .bar { flex-wrap: wrap; row-gap: var(--s1); padding-top: var(--s1); padding-bottom: var(--s1); }
   .chips { display: inline-flex; gap: var(--s1); }
+  .orders .seg { height: auto; flex-wrap: wrap; max-width: 100%; }
+  .orders .seg > button { min-height: var(--ctl); }
   .chip {
     display: inline-flex; align-items: center;
     height: var(--ctl-xs);
     padding: 0 var(--s2);
-    font-size: 11px; color: var(--muted);
+    font-size: var(--text-caption); color: var(--muted);
     border: 1px solid var(--border); border-radius: var(--radius-tag);
   }
   .chip.warn { color: var(--warn); border-color: var(--warn); }
   .chip.bad { color: var(--bad); border-color: var(--bad); }
   .line.bad { color: var(--bad); }
   .orders .input { width: 12rem; }
+  .orders table { min-width: 48rem; }
   .queue { min-width: 48rem; }
   .queue td.reason .to { font-family: var(--font-mono); color: var(--muted); margin-right: var(--s2); }
   .queue td.reason .to b { color: var(--fg); font-weight: 600; }
@@ -738,7 +741,7 @@
   td.price .edit { margin-left: var(--s1); color: var(--muted); border-color: transparent; }
   td.price .edit:hover:not(:disabled) { color: var(--fg); border-color: var(--border); }
   td.price input[type="number"] {
-    font: inherit; font-family: var(--font-mono); font-size: 12px;
+    font: inherit; font-family: var(--font-mono); font-size: var(--text-caption);
     height: var(--ctl-xs); width: 4.5rem; padding: 0 var(--s1);
     background: var(--panel-2); color: var(--fg);
     border: 1px solid var(--border); border-radius: var(--radius-input);

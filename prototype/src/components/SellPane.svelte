@@ -278,18 +278,19 @@
 <!-- Top picks rail copy: rendered inside ResultsTable's picks panel so the
      pick rows share the table's colgroup (numbers line up with the columns). -->
 {#snippet picksHead()}
-  <h3>Top picks</h3>
+  <div class="picks-title">
+    <h3>Top picks</h3>
+    <span class="muted picks-count">
+      {picks.length}{#if picks.length !== allPicks.length} of {allPicks.length}{/if} {allPicks.length === 1 ? 'pick' : 'picks'}
+      {#if snoozedPicks.size > 0}
+        · {snoozedPicks.size} snoozed <button type="button" class="link" onclick={() => (snoozedPicks = new Set())}>restore</button>
+      {/if}
+    </span>
+  </div>
   <span
     class="muted picks-exp"
     title="Same prioritization Score as the table below - price × likely sell-through × a bounded DE usage weight. It is not expected plat/day. Picks also need at least 3 trades/48h and {MIN_PICK_SCORE} score points to clear the bar."
   >Best sells right now, ranked by prioritization score - patience listings excluded.</span>
-  <span class="grow"></span>
-  <span class="muted picks-count">
-    {picks.length} of {allPicks.length}
-    {#if snoozedPicks.size > 0}
-      · {snoozedPicks.size} snoozed <button type="button" class="link" onclick={() => (snoozedPicks = new Set())}>restore</button>
-    {/if}
-  </span>
 {/snippet}
 
 {#snippet pickReasonCell(p)}
@@ -343,6 +344,7 @@
       <span class="muted small">▾</span>
     </summary>
     <div class="filters-panel">
+      <button type="button" class="link" onclick={(event) => { const disclosure = event.currentTarget.closest('details'); if (disclosure) disclosure.open = false; }}>Close filters</button>
       <div class="filters">
         <label>
           Min avg price
@@ -549,41 +551,27 @@
   empty={emptyState} between={scoreExplainer} />
 
 <style>
-  /* Duplicated from App.svelte's shared styling - Svelte scopes CSS
-     per-component, and this codebase's existing extracted components
-     already re-declare shared visual classes rather than promoting them
-     to global CSS (see DesktopUpdateBanner.svelte). */
-  /* View header rail: title + the summary strip on one 32px rail. */
-  .view-header {
-    display: flex;
-    align-items: center;
-    gap: var(--s2);
-    min-height: var(--rail);
-    flex-wrap: wrap;
-  }
-  .view-header h2 {
-    font-size: 20px;
-    font-weight: 600;
-    text-transform: none;
-    letter-spacing: -0.01em;
-    color: var(--fg);
-    margin: 0;
-    line-height: 1.5rem;
-  }
+  .picks-title { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--s2); }
+  .picks-title h3 { margin: 0; }
+
+
+
+
   /* Summary strip - one outlined container, hairline dividers between cells;
      the since-scan cell rides the right rail. */
   .summary {
     flex: 1 1 auto;
     display: flex;
     align-items: stretch;
-    height: var(--rail);
+    min-height: var(--rail);
+    flex-wrap: wrap;
     margin-left: var(--s2);
     background: var(--panel);
     border: 1px solid var(--border);
     border-radius: var(--radius-ctl);
-    overflow: hidden;
+    overflow: visible;
     font-size: 0.75rem;
-    white-space: nowrap;
+    white-space: normal;
     min-width: 0;
   }
   .summary .cell {
@@ -592,10 +580,12 @@
     gap: var(--s2);
     padding: 0 var(--s3);
     border-left: 1px var(--rule) var(--hairline);
+    min-height: var(--rail);
+    flex-wrap: wrap;
   }
   .summary .cell:first-child { border-left: none; }
   .summary .cell .k {
-    font-size: 10px;
+    font-size: var(--text-caption);
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--muted);
@@ -604,26 +594,26 @@
   .summary .cell .v {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
-    font-size: 13px;
+    font-size: var(--text-control);
     font-weight: 600;
     line-height: 1rem;
     color: var(--fg);
   }
-  .summary .cell .v .unit { font-size: 11px; color: var(--muted); margin-left: 1px; }
+  .summary .cell .v .unit { font-size: var(--text-caption); color: var(--muted); margin-left: 1px; }
   .summary .cell .d {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
-    font-size: 11px;
+    font-size: var(--text-caption);
     line-height: 1rem;
   }
   .summary .cell .d.up { color: var(--good); }
   .summary .cell .d.down { color: var(--bad); }
   .summary .cell.attn .v { color: var(--warn); }
-  .summary .cell.since { margin-left: auto; color: var(--muted); overflow: hidden; }
+  .summary .cell.since { margin-left: auto; color: var(--muted); flex-wrap: wrap; }
   .summary .cell.since b { color: var(--fg); font-weight: 600; font-family: var(--font-mono); }
   .changes-toggle {
     font: inherit;
-    font-size: 11px;
+    font-size: var(--text-caption);
     height: var(--ctl-xs);
     padding: 0 var(--s2);
     color: var(--muted);
@@ -665,20 +655,7 @@
 
   /* Below this point: sell-view-exclusive, moved (not duplicated) from
      App.svelte - nothing else in the app used these selectors. */
-  .lede-dot {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    font-size: 11px;
-    line-height: 1;
-    color: var(--muted);
-    border: 1px var(--rule) var(--hairline);
-    cursor: help;
-  }
-  .lede-dot:hover, .lede-dot:focus-visible { color: var(--accent); border-color: var(--accent); }
+
 
   /* Controls inside the table border (rendered through ResultsTable's SCOPE /
      NARROW snippets). Groups wrap; heights are 28 (presets, chips). */
@@ -702,7 +679,7 @@
     cursor: pointer;
     transition: color 120ms, border-color 120ms, background 120ms;
     font: inherit;
-    font-size: 12px;
+    font-size: var(--text-caption);
   }
   .preset:hover { color: var(--fg); background: var(--panel-2); }
   .preset.active {
@@ -710,7 +687,7 @@
     border-color: var(--accent);
   }
   .preset.active::before { content: '✓ '; }
-  .preset-hint { font-size: 11.5px; }
+  .preset-hint { font-size: var(--text-caption); }
 
   /* Filters disclosure - an inline toolbar item whose panel floats as a
      popover below the summary instead of pushing the toolbar's other
@@ -723,7 +700,7 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    font-size: 12px;
+    font-size: var(--text-caption);
     color: var(--muted);
     height: var(--ctl);
     padding: 0 10px;
@@ -736,7 +713,7 @@
   .filter-disclosure > summary::before {
     content: '+';
     font-family: var(--font-mono);
-    font-size: 13px;
+    font-size: var(--text-control);
     color: var(--muted);
     width: 10px;
     display: inline-block;
@@ -748,27 +725,28 @@
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    font-size: 11px;
+    font-size: var(--text-caption);
   }
   .filter-disclosure[open] > summary .dis-label { color: var(--accent); }
   .dis-count {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--text-caption);
     color: var(--accent);
     border: 1px solid currentColor;
     border-radius: var(--radius-tag);
     padding: 0 4px;
     line-height: 14px;
   }
-  /* The disclosure sits at the right end of the SCOPE row, so its panel
-     anchors to the right rail. */
+  /* Viewport anchoring keeps the panel reachable when the toolbar rewraps. */
   .filters-panel {
-    position: absolute;
-    top: calc(100% + 6px);
-    right: 0;
-    z-index: 15;
-    width: max-content;
-    max-width: min(52rem, 80vw);
+    position: fixed;
+    bottom: 1rem;
+    right: 1rem;
+    z-index: var(--layer-popover);
+    width: min(52rem, calc(100vw - 2rem));
+    max-width: none;
+    max-height: calc(100dvh - 2rem);
+    overflow: auto;
     background: var(--panel-2);
     border: 1px solid var(--border);
     border-radius: var(--radius-panel);
@@ -780,7 +758,7 @@
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: var(--text-caption);
     letter-spacing: 0.02em;
     color: var(--muted);
     text-transform: uppercase;
@@ -801,7 +779,7 @@
   .score-expander > summary {
     cursor: pointer;
     list-style: none;
-    font-size: 12.5px;
+    font-size: var(--text-control);
     font-weight: 600;
     color: var(--fg);
     line-height: 1.5;
@@ -822,7 +800,7 @@
   .score-expander[open] > summary::before { content: '−'; color: var(--accent); }
   .score-expander > summary:hover { color: var(--accent); }
   .score-details {
-    font-size: 12.5px;
+    font-size: var(--text-control);
     color: var(--muted);
     line-height: 1.5;
     padding: 0 0 10px;
@@ -846,13 +824,13 @@
     border-left: 3px solid var(--accent);
   }
   .sell-onboarding .so-body { min-width: 0; }
-  .sell-onboarding strong { color: var(--fg); font-weight: 600; font-size: 13px; }
-  .sell-onboarding p { margin: 4px 0 0; font-size: 12.5px; line-height: 1.5; }
+  .sell-onboarding strong { color: var(--fg); font-weight: 600; font-size: var(--text-control); }
+  .sell-onboarding p { margin: 4px 0 0; font-size: var(--text-control); line-height: 1.5; }
   .sell-onboarding .dismiss {
     background: transparent;
     border: none;
     color: var(--muted);
-    font-size: 16px;
+    font-size: var(--text-section);
     line-height: 1;
     cursor: pointer;
     padding: 3px;
@@ -871,14 +849,14 @@
     border-left: 3px solid var(--warn);
   }
   .keep-nudge .kn-body { min-width: 0; }
-  .keep-nudge strong { color: var(--fg); font-weight: 600; font-size: 13px; }
-  .keep-nudge .muted { font-size: 12.5px; line-height: 1.5; }
+  .keep-nudge strong { color: var(--fg); font-weight: 600; font-size: var(--text-control); }
+  .keep-nudge .muted { font-size: var(--text-control); line-height: 1.5; }
   .keep-nudge code { font-family: var(--font-mono); font-size: 0.93em; }
   .keep-nudge .dismiss {
     background: transparent;
     border: none;
     color: var(--muted);
-    font-size: 16px;
+    font-size: var(--text-section);
     line-height: 1;
     cursor: pointer;
     padding: 3px;
@@ -901,7 +879,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-input);
     padding: 0 10px 0 12px;
-    font-size: 11px;
+    font-size: var(--text-caption);
     letter-spacing: 0.02em;
     cursor: pointer;
     display: inline-flex;
@@ -927,7 +905,7 @@
   }
   .chip-count {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--text-caption);
     color: var(--muted);
   }
   .chip.active .chip-count { color: var(--accent); }
@@ -935,7 +913,7 @@
     background: transparent;
     border: none;
     color: var(--muted);
-    font-size: 11px;
+    font-size: var(--text-caption);
     cursor: pointer;
     padding: 3px 8px;
   }
@@ -958,22 +936,22 @@
 
   /* Top picks - the rail copy and the per-row reason cell, rendered inside
      ResultsTable's picks panel (rows share the table's colgroup). */
-  .picks-exp { font-size: 12px; }
-  .picks-count { font-size: 11.5px; white-space: nowrap; }
+  .picks-exp { font-size: var(--text-caption); }
+  .picks-count { font-size: var(--text-caption); white-space: nowrap; }
   .picks-all-snoozed { margin: 0; }
-  /* Reason line: fixed 32px box, ellipsised, List/× at its right end. */
-  .rs { display: flex; align-items: center; gap: var(--s2); height: var(--row); font-size: 12.5px; color: var(--muted); }
-  .rs .t { flex: 1 1 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Reasons wrap while the adjacent actions retain their own space. */
+  .rs { display: flex; align-items: center; gap: var(--s2); min-height: var(--row); font-size: var(--text-control); color: var(--muted); }
+  .rs .t { flex: 1 1 0; min-width: 0; white-space: normal; }
   /* Timing tint mirrors .tag.hold/.tag.peak in ResultsTable - same signal,
      same colour, so the picks and the table below read as one vocabulary. */
   .rs.hold .t { color: var(--warn); }
   .rs.peak .t { color: var(--good); }
-  .pick-vol { font-family: var(--font-mono); font-size: 11px; color: var(--muted); margin-left: 2px; }
+  .pick-vol { font-family: var(--font-mono); font-size: var(--text-caption); color: var(--muted); margin-left: 2px; }
   .pick-tag {
     flex-shrink: 0;
     padding: 0 6px;
     line-height: 14px;
-    font-size: 9.5px;
+    font-size: var(--text-caption);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -982,12 +960,12 @@
     color: var(--warn);
   }
   .pick-actions { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
-  .pick-list { font-size: 12px; height: var(--ctl-xs); padding: 0 10px; }
+  .pick-list { font-size: var(--text-caption); height: var(--ctl-xs); padding: 0 10px; }
   .pick-snooze {
     background: transparent;
     border: none;
     color: var(--muted);
-    font-size: 15px;
+    font-size: var(--text-section);
     line-height: 1;
     cursor: pointer;
     padding: 0 6px;
@@ -996,4 +974,38 @@
   }
   .pick-snooze:hover { color: var(--bad); }
   .card.empty.flush { border: none; padding: var(--s2) 0; background: transparent; }
+
+  @media (max-width: 35rem) {
+    .summary {
+      flex: 1 1 100%;
+      height: auto;
+      margin-left: 0;
+      flex-wrap: wrap;
+      overflow: visible;
+    }
+    .summary .cell {
+      flex: 1 1 auto;
+      min-height: var(--rail);
+      border-top: 1px var(--rule) var(--hairline);
+    }
+    .summary .cell:nth-child(-n + 3) { border-top: none; }
+    .summary .cell.since { flex-basis: 100%; margin-left: 0; flex-wrap: wrap; }
+    .card.empty { align-items: flex-start; flex-direction: column; }
+    .card.empty button { align-self: stretch; }
+    .filters-panel {
+      position: fixed;
+      top: auto;
+      right: 1rem;
+      bottom: 1rem;
+      left: 1rem;
+      width: auto;
+      max-height: calc(100dvh - 2rem);
+    }
+    .filters { align-items: stretch; flex-direction: column; }
+    .filters label { justify-content: space-between; }
+    .list-cta { width: 100%; }
+    .rs { height: auto; min-height: var(--row); flex-wrap: wrap; padding: var(--s1) 0; }
+    .rs .t { flex-basis: calc(100% - 2rem); white-space: normal; overflow: visible; }
+    .pick-actions { margin-left: auto; }
+  }
 </style>

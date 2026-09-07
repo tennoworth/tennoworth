@@ -1096,7 +1096,7 @@
   {/if}
 
   {#if phase === 'error' && isDesktop}
-    <div class="card error">
+    <div class="card ui-panel error">
       Error: {error}
       <div style="margin-top:10px">
         <button class="rp-primary" data-testid="desktop-scan" onclick={pullInventory} disabled={pullingInventory}>
@@ -1257,7 +1257,7 @@
         </p>
       </section>
       {#if setRecos.length > 0}
-        <section class="card set-recos">
+        <section class="card ui-panel set-recos">
           {#each setRecos as r (r.set_slug)}
             <div class="reco row">
               <div class="reco-body">
@@ -1338,7 +1338,7 @@
           {/each}
         </section>
       {:else}
-        <div class="card empty">
+        <div class="card ui-panel empty">
           <div>
             <strong>No set recommendations.</strong>
             <p class="muted">You don't currently own enough prime parts to surface near-complete sets or spare-blueprint plays.</p>
@@ -1361,7 +1361,7 @@
         </p>
       </section>
       {#if relicPlan.length > 0}
-        <section class="card relic-planner">
+        <section class="card ui-panel relic-planner">
           <div class="relic-grid">
             {#each relicVisible as p (p.relic_slug)}
               <div class="relic-card">
@@ -1421,7 +1421,7 @@
           {/if}
         </section>
       {:else}
-        <div class="card empty">
+        <div class="card ui-panel empty">
           <div>
             <strong>No relics in your inventory.</strong>
             <p class="muted">Once you pick up relics, this planner ranks them by expected plat per crack.</p>
@@ -1447,7 +1447,7 @@
           {/if}
         </p>
       </section>
-      <section class="card baro-card" class:here={baroState?.phase === 'here'}>
+      <section class="card ui-panel baro-card" class:here={baroState?.phase === 'here'}>
         <div class="row">
           <div class="src">
             <span class="baro-icon" aria-hidden="true">⌬</span>
@@ -1476,7 +1476,7 @@
            built before that switch (or carried through a DE outage) may not
            have it, and an empty table would read as "he is selling nothing". -->
       {#if voidTrader?.inventory?.length}
-        <section class="card">
+        <section class="card ui-panel">
           <BaroBoard market={market} baro={voidTrader} owned={resolved.owned} />
         </section>
       {/if}
@@ -1484,7 +1484,7 @@
       <!-- Vault rotations and Darvo, from the same worldState poll. An
            unvaulting is the most expensive surprise in prime trading and it is
            announced days ahead. -->
-      <section class="card">
+      <section class="card ui-panel">
         <TraderCalendar market={market} owned={resolved.owned} />
       </section>
 
@@ -1498,7 +1498,7 @@
         </p>
       </section>
 
-      <section class="card routine">
+      <section class="card ui-panel routine">
         <div class="routine-clocks">
           <div class="clock">
             <span class="clock-label">Daily reset</span>
@@ -1521,7 +1521,7 @@
       <details class="routine-checklist" bind:open={routineChecklistOpen}>
         <summary>{routineChecklistOpen ? 'Hide checklist' : "Show me today's checklist"}</summary>
 
-        <section class="card routine">
+        <section class="card ui-panel routine">
           <h3>Daily</h3>
         <ul class="routine-list">
           <li><strong>Login tribute</strong> - claim it; the milestone days hand out Endo and the exclusive weapons/Forma that fund everything else.</li>
@@ -1532,7 +1532,7 @@
         </ul>
       </section>
 
-      <section class="card routine">
+      <section class="card ui-panel routine">
         <h3>Weekly <span class="muted">· resets Monday</span></h3>
         <ul class="routine-list">
           <li><strong>Maroo's Ayatan Treasure Hunt</strong> - a free sculpture worth ~1,500–3,450 Endo once filled with stars.</li>
@@ -1542,7 +1542,7 @@
         </ul>
       </section>
 
-      <section class="card routine">
+      <section class="card ui-panel routine">
         <h3>Endo - to fund the rank-up flip</h3>
         <p class="routine-note">
           Maxing one Primed mod ≈ <strong>20,000 Endo + ~1.3M credits</strong> and roughly doubles its
@@ -1963,7 +1963,7 @@
        independently dismissible. Rendered on both the landing and the workspace
        so a failure is visible wherever the user is standing. -->
   {#if pullError}
-    <div class="card warn-banner general-banner" role="alert">
+    <div class="card ui-panel warn-banner general-banner" role="alert">
       <div class="gb-body gb-pre">{pullError}</div>
       <div class="gb-actions">
         {#if isDesktop}
@@ -1977,7 +1977,7 @@
     {#if reportUrl}
       <!-- Shown only when the browser did not open: the report must still be
            filable by hand rather than dead-ending on a failed launch. -->
-      <div class="card warn-banner general-banner" role="status">
+      <div class="card ui-panel warn-banner general-banner" role="status">
         <div class="gb-body">
           Couldn't open a browser. Copy this link to file the report:
           <div class="gb-pre report-url">{reportUrl}</div>
@@ -1989,7 +1989,7 @@
     {/if}
   {/if}
   {#if isDesktop && trayHint}
-    <div class="card warn-banner general-banner" role="status">
+    <div class="card ui-panel warn-banner general-banner" role="status">
       <div class="gb-body">
         Still running in your tray. Closing the window keeps TennoWorth in the
         background - use the tray icon's Quit to exit.
@@ -2006,7 +2006,7 @@
 
 {#snippet pendingBanner()}
   {#if isDesktop && (pendingPlan || resumePhase !== 'idle')}
-    <section class="card pending-banner">
+    <section class="card ui-panel pending-banner">
       {#if resumePhase === 'running'}
         <div class="row">
           <div class="src">
@@ -2104,7 +2104,7 @@
   .shell {
     display: grid;
     grid-template-columns: var(--sidebar) minmax(0, 1fr);
-    grid-template-rows: auto 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
     max-width: min(122.5rem, 100vw);
     margin: 0 auto;
     height: 100vh;
@@ -2123,20 +2123,26 @@
     overflow-y: auto;
     scrollbar-gutter: stable;
   }
+  /* The workspace scrolls as a whole; flex shrinking can otherwise collapse
+     overflow-hidden panels to a border in short windows. */
+  main.workspace > :global(*) { flex-shrink: 0; }
 
   /* ---- Status strip: one element on the landing and the shell ------- */
   .statusbar {
     display: flex;
     align-items: stretch;
-    height: var(--strip);
+    min-height: var(--strip);
+    flex-wrap: wrap;
     background: var(--panel);
     border-bottom: 1px solid var(--border);
     font-size: 0.75rem;
     line-height: 1rem;
     color: var(--muted);
     white-space: nowrap;
+    min-width: 0;
+    max-width: 100%;
   }
-  .statusbar > * { flex-shrink: 0; }
+  .statusbar > * { flex-shrink: 1; }
   .statusbar .grow { flex: 1 1 0; min-width: 0; }
   /* In the shell the strip is the y-origin: sticky above the sidebar and
      the workspace, spanning both grid columns. */
@@ -2144,7 +2150,7 @@
     grid-column: 1 / -1;
     position: sticky;
     top: 0;
-    z-index: 20;
+    z-index: var(--layer-chrome);
   }
   .statusbar .brand {
     display: flex;
@@ -2180,7 +2186,13 @@
     padding: 0 var(--s3);
     border-left: 1px var(--rule) var(--hairline);
     min-width: 0;
+    min-height: var(--strip);
+    max-width: 100%;
+    flex-wrap: wrap;
   }
+  .statusbar .cell.inv { flex: 1 1 23rem; }
+  .statusbar .cell.inv .file { flex: 1 1 6rem; }
+  .statusbar .refresh-wrap { flex: none; margin-left: auto; }
   .statusbar.shell-strip .brand + .cell { border-left: none; }
   .statusbar .cell.end { padding-right: var(--inset); }
   .statusbar .cell b {
@@ -2191,7 +2203,7 @@
   }
   .statusbar .cell.attn b { color: var(--warn); }
   /* A long inventory filename must not push the WFM cell off the right rail. */
-  .statusbar .cell .file { max-width: 16rem; overflow: hidden; text-overflow: ellipsis; }
+  .statusbar .cell .file { max-width: 16rem; white-space: normal; overflow-wrap: anywhere; }
   .statusbar .cell .ducat { color: var(--ducat); }
   .statusbar .cell a { color: var(--accent); text-decoration: none; }
   .statusbar .cell a + a { margin-left: var(--s2); }
@@ -2232,9 +2244,7 @@
   /* Sidebar - nav only, sticky under the strip; the theme switcher and the
      build string sit in its foot. */
   aside.sidebar {
-    position: sticky;
-    top: var(--strip);
-    height: calc(100vh - var(--strip));
+    min-height: 0;
     border-right: 1px solid var(--border);
     background: var(--panel);
     display: flex;
@@ -2243,6 +2253,7 @@
   }
   aside.sidebar nav {
     flex: 1;
+    min-height: 0;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -2253,7 +2264,7 @@
   }
   .nav-group:last-child { border-bottom: none; }
   .nav-label {
-    font-size: 10px;
+    font-size: var(--text-caption);
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: var(--faint);
@@ -2267,10 +2278,10 @@
     align-items: center;
     justify-content: space-between;
     width: 100%;
-    height: var(--ctl);
-    padding: 0 var(--inset);
+    min-height: var(--ctl);
+    padding: var(--s1) var(--inset);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--text-control);
     color: var(--muted);
     background: transparent;
     border: none;
@@ -2286,7 +2297,7 @@
   }
   .nav-item .badge {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--text-caption);
     color: var(--muted);
     background: var(--panel-2);
     border: 1px solid var(--border);
@@ -2377,8 +2388,8 @@
   .refresh-pop {
     position: absolute;
     top: calc(100% + 4px);
-    left: 0;
-    z-index: 30;
+    right: 0;
+    z-index: var(--layer-menu);
     width: 15rem;
     max-width: 80vw;
     padding: var(--s3);
@@ -2392,9 +2403,9 @@
     border-radius: var(--radius-panel);
     box-shadow: var(--shadow-pop);
   }
-  .refresh-pop .rp-lede { margin: 0; font-size: 12px; color: var(--fg); line-height: 1.45; }
+  .refresh-pop .rp-lede { margin: 0; font-size: var(--text-caption); color: var(--fg); line-height: 1.45; }
   .refresh-pop .rp-primary {
-    font-size: 12px;
+    font-size: var(--text-caption);
     padding: 7px 10px;
     color: var(--on-accent);
     background: var(--accent);
@@ -2408,7 +2419,7 @@
   .refresh-pop .rp-sep { border-top: 1px var(--rule) var(--hairline); margin: var(--s1) 0; }
   .refresh-pop .rp-item {
     font: inherit;
-    font-size: 12px;
+    font-size: var(--text-caption);
     text-align: left;
     color: var(--fg);
     background: transparent;
@@ -2420,7 +2431,7 @@
   }
   .refresh-pop .rp-item:hover { background: var(--hover); }
   .refresh-pop .rp-item.danger:hover { color: var(--bad); }
-  .refresh-pop .rp-note { margin: var(--s1) 0 0; font-size: 11px; line-height: 1.45; color: var(--muted); }
+  .refresh-pop .rp-note { margin: var(--s1) 0 0; font-size: var(--text-caption); line-height: 1.45; color: var(--muted); }
 
   /* Workspace view header - h2 + a hover/focus info dot carrying the
      one-sentence lede, folded onto a single row (was h2 + a full lede
@@ -2430,9 +2441,10 @@
     align-items: baseline;
     gap: 8px;
     min-height: 28px;
+    flex-wrap: wrap;
   }
   .view-header h2 {
-    font-size: 20px;
+    font-size: var(--text-heading);
     font-weight: 600;
     text-transform: none;
     letter-spacing: -0.01em;
@@ -2444,24 +2456,34 @@
      eats too much of the workspace, so the grid collapses. */
   @media (max-width: 900px) {
     .shell {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-rows: auto auto auto;
+      width: 100%;
+      max-width: 100vw;
       height: auto;
       min-height: 100vh;
       min-height: 100dvh;
       overflow: visible;
     }
+    .shell > * { min-width: 0; max-width: 100vw; }
     aside.sidebar {
       position: static;
       height: auto;
       border-right: none;
       border-bottom: 1px solid var(--border);
       padding: 12px 0 0;
+      width: 100%;
+      min-width: 0;
+      max-width: 100vw;
     }
     aside.sidebar nav {
       flex-direction: row;
       overflow-x: auto;
       overflow-y: hidden;
       padding: 4px 12px;
+      width: 100%;
+      min-width: 0;
+      max-width: 100vw;
     }
     .nav-group {
       flex: 0 0 auto;
@@ -2484,10 +2506,28 @@
       border-left: none;
       border-bottom-color: var(--accent);
     }
-    .statusbar { flex-wrap: wrap; height: auto; min-height: var(--strip); position: static; }
-    .statusbar.shell-strip .brand { width: auto; border-right: none; }
-    .sfoot { padding: var(--s2) var(--s3); }
-    .sfoot .project-links { flex-direction: row; align-self: flex-start; }
+    .statusbar {
+      flex-wrap: wrap;
+      width: 100%;
+      max-width: 100vw;
+      height: auto;
+      min-height: var(--strip);
+      position: static;
+      white-space: normal;
+    }
+    .statusbar > * { flex-shrink: 1; }
+    .statusbar.shell-strip .brand {
+      flex: 1 1 auto;
+      width: auto;
+      border-right: none;
+      min-height: var(--strip);
+    }
+    .statusbar.shell-strip .cell { flex: 1 1 auto; min-height: var(--strip); }
+    .statusbar.shell-strip .cell.inv { flex: 1 1 23rem; }
+    .statusbar.shell-strip .cell .file { flex: 1 1 8rem; min-width: 0; }
+    .statusbar.shell-strip > .grow { display: none; }
+    .sfoot { padding: var(--s1) var(--s3); flex-direction: row; flex-wrap: wrap; align-items: center; }
+    .sfoot .project-links { flex-direction: row; align-self: flex-start; flex: 0 0 auto; }
     .sfoot .project-link + .project-link {
       border-top: none;
       border-left: 1px var(--rule) var(--hairline);
@@ -2495,32 +2535,48 @@
     main.workspace { padding: 16px 16px 32px; overflow: visible; }
   }
   @media (max-width: 560px) {
+    main.workspace { padding: var(--s3) var(--s3) var(--s5); }
+    .statusbar.shell-strip .cell { border-top: 1px var(--rule) var(--hairline); }
+    .refresh-pop {
+      position: fixed;
+      top: auto;
+      right: 1rem;
+      bottom: 1rem;
+      left: 1rem;
+      width: auto;
+      max-width: none;
+      max-height: calc(100dvh - 2rem);
+      overflow-y: auto;
+    }
     .statusbar .site-links {
       width: 100%;
       justify-content: center;
       border-left: none;
       border-top: 1px var(--rule) var(--hairline);
     }
+    .sfoot { min-width: 0; }
+    .sfoot .project-links { max-width: 100%; flex-wrap: wrap; }
+    .sfoot .ver { overflow-wrap: anywhere; }
+    .general-banner .gb-actions { width: 100%; justify-content: flex-end; }
+    .card.empty { align-items: flex-start; flex-direction: column; }
   }
   header h1 {
     margin: 0;
-    font-size: 22px;
+    font-size: var(--text-metric-lg);
     font-weight: 600;
     letter-spacing: -0.015em;
   }
   /* Landing header: title block left, theme switcher top-right; the switcher
      drops under the title on narrow viewports. */
   .landing-head { display: flex; align-items: center; justify-content: space-between; gap: var(--s2) var(--s5); flex-wrap: wrap; min-height: var(--rail); }
-  /* --muted on the yorha ground is ~4.2:1, so the lede runs a step larger
-     than body text to stay comfortably legible. */
-  .landing-head .lede { flex: 1 1 20rem; min-width: 0; margin: 0; font-size: 14px; line-height: 1.375rem; color: var(--muted); }
+  .landing-head .lede { flex: 1 1 20rem; min-width: 0; margin: 0; font-size: var(--text-body); line-height: 1.375rem; color: var(--muted); }
   .landing-head .lede em { color: var(--fg); font-style: normal; font-weight: 600; }
-  h2 { margin: 0 0 4px 0; font-size: 14px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
-  h3 { margin: 0 0 4px 0; font-size: 14px; font-weight: 600; }
-  .sub { color: var(--muted); margin: 6px 0 0 0; max-width: 64ch; font-size: 13px; }
+  h2 { margin: 0 0 4px 0; font-size: var(--text-body); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+  h3 { margin: 0 0 4px 0; font-size: var(--text-body); font-weight: 600; }
+  .sub { color: var(--muted); margin: 6px 0 0 0; max-width: 64ch; font-size: var(--text-control); }
   .ver {
     color: var(--faint);
-    font-size: 11px;
+    font-size: var(--text-caption);
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.02em;
   }
@@ -2543,7 +2599,7 @@
   }
   .desktop-hero .trust {
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--text-caption);
     margin-top: 10px;
   }
 
@@ -2560,15 +2616,7 @@
   .dot.stale   { background: var(--bad); }
 
   /* Card / row scaffolding */
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-panel);
-    padding: 14px 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-  }
+
   .card.error { border-color: var(--bad); color: var(--bad); }
   .row {
     display: flex;
@@ -2578,51 +2626,23 @@
     flex-wrap: wrap;
   }
   .row.gap-sm { gap: 10px; }
-  .src { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; }
+  .src { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: var(--text-control); }
   .src strong { font-weight: 600; }
 
 
-  /* First-session Score explainer. Single dismissable line above the
-     table - the casual-flipper persona was confused by what Score
-     meant; hover-tooltip alone wasn't enough. localStorage flag means
-     each user sees it once. */
-  /* Cross-view banner region (unreachable / bad deep link / pull error). Reuses
-     the warn-banner left-accent + card tokens; adds a body/actions row so the
-     dismiss × (and Retry) sit at the end without wrapping under the copy. */
-  .general-banner {
-    flex-direction: row;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-  }
-  .general-banner .gb-body { min-width: 0; }
   .general-banner .gb-body.gb-pre {
     white-space: pre-wrap;
     font-family: var(--font-mono);
-    font-size: 12px;
+    font-size: var(--text-caption);
     line-height: 1.5;
   }
-  .general-banner .gb-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-  }
-  .general-banner .gb-dismiss {
-    background: transparent;
-    border: none;
-    color: var(--muted);
-    font-size: 16px;
-    line-height: 1;
-    cursor: pointer;
-    padding: 3px;
-  }
-  .general-banner .gb-dismiss:hover { color: var(--fg); }
+
+
   .general-banner .gb-report {
     background: transparent;
     border: 1px solid var(--border);
     color: var(--muted);
-    font-size: 11px;
+    font-size: var(--text-caption);
     padding: 2px 8px;
     border-radius: var(--radius-input);
     cursor: pointer;
@@ -2640,7 +2660,7 @@
   /* Action-verb prefix on rec cards. Casual users said the cards were
      too noun-heavy - leading with a verb gives them the instruction. */
   .reco-verb {
-    font-size: 10px;
+    font-size: var(--text-caption);
     font-weight: 700;
     letter-spacing: 0.06em;
     text-transform: uppercase;
@@ -2652,7 +2672,7 @@
     background: transparent;
     border: 1px solid var(--border);
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--text-caption);
     padding: 4px 10px;
   }
   button.ghost:hover { background: var(--panel-2); color: var(--fg); }
@@ -2671,10 +2691,10 @@
   .reco:first-of-type { border-top: none; }
   .reco-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
   .reco-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .reco-title a { color: var(--fg); text-decoration: none; font-weight: 600; font-size: 13px; }
+  .reco-title a { color: var(--fg); text-decoration: none; font-weight: 600; font-size: var(--text-control); }
   .reco-title a:hover { color: var(--accent); text-decoration: underline; }
   .kind {
-    font-size: 10px;
+    font-size: var(--text-caption);
     letter-spacing: 0.05em;
     text-transform: uppercase;
     color: var(--muted);
@@ -2687,7 +2707,7 @@
   .kind-complete-with-extras { color: var(--good);   border-color: color-mix(in srgb, var(--good)   40%, var(--border)); }
   .kind-extras              { color: var(--warn);   border-color: color-mix(in srgb, var(--warn)   40%, var(--border)); }
   .set-liq {
-    font-size: 10px;
+    font-size: var(--text-caption);
     letter-spacing: 0.04em;
     border-radius: var(--radius-tag);
     padding: 1px 6px;
@@ -2696,7 +2716,7 @@
   .set-liq.moving { color: var(--muted); }
   .set-liq.thin   { color: var(--warn); }
   .set-liq.cold   { color: var(--bad); }
-  .reco-detail { font-size: 12.5px; margin: 0; line-height: 1.5; }
+  .reco-detail { font-size: var(--text-control); margin: 0; line-height: 1.5; }
   .reco-detail strong { color: var(--fg); font-weight: 600; }
   .good-text { color: var(--good); }
   .bad-text { color: var(--bad); }
@@ -2705,7 +2725,7 @@
      than a verb-on-left / number-on-right two-column row. */
   .reco-net-inline {
     font-family: var(--font-mono);
-    font-size: 14px;
+    font-size: var(--text-body);
     font-weight: 600;
     color: var(--good);
     margin-left: 4px;
@@ -2717,7 +2737,7 @@
   .advice-chip {
     display: inline-block;
     padding: 1px 6px;
-    font-size: 9.5px;
+    font-size: var(--text-caption);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -2743,20 +2763,20 @@
   }
   .baro-icon {
     color: var(--ducat);
-    font-size: 22px;
+    font-size: var(--text-metric-lg);
     line-height: 1;
   }
   .baro-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-  .baro-detail { font-size: 12.5px; margin: 0; line-height: 1.5; }
+  .baro-detail { font-size: var(--text-control); margin: 0; line-height: 1.5; }
   .baro-detail strong { color: var(--fg); font-weight: 600; }
-  .baro-detail .unit { color: var(--muted); font-size: 11px; margin-left: 1px; }
+  .baro-detail .unit { color: var(--muted); font-size: var(--text-caption); margin-left: 1px; }
 
   /* Profit routines - countdown clocks + reminder lists. */
-  .routine h3 { margin: 0 0 6px; font-size: 14px; }
+  .routine h3 { margin: 0 0 6px; font-size: var(--text-body); }
   .routine h3 .muted { font-weight: 400; }
   .routine-clocks {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(min(15rem, 100%), 1fr));
     gap: 12px;
   }
   @media (max-width: 760px) { .routine-clocks { grid-template-columns: 1fr; } }
@@ -2769,13 +2789,13 @@
     border-radius: var(--radius-panel);
     padding: 12px 14px;
   }
-  .clock-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
-  .clock-val { font-size: 20px; font-weight: 600; color: var(--fg); }
-  .clock-sub { font-size: 11px; color: var(--muted); }
+  .clock-label { font-size: var(--text-caption); text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted); }
+  .clock-val { font-size: var(--text-heading); font-weight: 600; color: var(--fg); }
+  .clock-sub { font-size: var(--text-caption); color: var(--muted); }
   .routine-list { margin: 8px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 7px; }
-  .routine-list li { font-size: 12.5px; line-height: 1.5; }
+  .routine-list li { font-size: var(--text-control); line-height: 1.5; }
   .routine-list strong { color: var(--fg); font-weight: 600; }
-  .routine-note { font-size: 12.5px; line-height: 1.5; margin: 0; color: var(--muted); }
+  .routine-note { font-size: var(--text-control); line-height: 1.5; margin: 0; color: var(--muted); }
   .routine-avoid { color: var(--muted); }
   /* Routine checklist - the three routine cards sit behind a collapsed-by-
      default <details> so the clocks (the daily urgency) stay above the fold. */
@@ -2784,7 +2804,7 @@
     cursor: pointer;
     align-self: flex-start;
     color: var(--muted);
-    font-size: 12px;
+    font-size: var(--text-caption);
     letter-spacing: 0.03em;
     text-transform: uppercase;
     user-select: none;
@@ -2803,7 +2823,7 @@
   .build-vs-buy[open] > summary { margin-bottom: 8px; }
   .relic-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr));
     gap: 12px;
   }
   @media (max-width: 760px) { .relic-grid { grid-template-columns: 1fr; } }
@@ -2818,32 +2838,32 @@
     gap: 8px;
   }
   .relic-title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-  .relic-title a { color: var(--fg); text-decoration: none; font-weight: 600; font-size: 13px; }
+  .relic-title a { color: var(--fg); text-decoration: none; font-weight: 600; font-size: var(--text-control); }
   .relic-title a:hover { color: var(--accent); text-decoration: underline; }
-  .small { font-size: 11px; }
+  .small { font-size: var(--text-caption); }
   .relic-epp {
     font-family: var(--font-mono);
-    font-size: 22px;
+    font-size: var(--text-metric-lg);
     font-weight: 600;
     letter-spacing: -0.01em;
     line-height: 1.1;
   }
-  .relic-epp .unit { font-size: 11px; color: var(--muted); margin-left: 4px; }
+  .relic-epp .unit { font-size: var(--text-caption); color: var(--muted); margin-left: 4px; }
   .relic-meta {
-    font-size: 11.5px;
+    font-size: var(--text-caption);
     color: var(--muted);
     display: flex;
     gap: 8px;
     align-items: center;
     flex-wrap: wrap;
   }
-  .relic-rewards { font-size: 11.5px; }
+  .relic-rewards { font-size: var(--text-caption); }
   .relic-rewards summary {
     cursor: pointer;
     color: var(--muted);
     letter-spacing: 0.03em;
     text-transform: uppercase;
-    font-size: 10px;
+    font-size: var(--text-caption);
     user-select: none;
   }
   .relic-rewards[open] summary { color: var(--accent); }
@@ -2854,10 +2874,10 @@
     gap: 6px;
     align-items: baseline;
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--text-caption);
   }
-  .reward-name { color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .rarity { font-weight: 600; font-size: 10px; text-align: center; }
+  .reward-name { color: var(--fg); overflow-wrap: anywhere; min-width: 0; }
+  .rarity { font-weight: 600; font-size: var(--text-caption); text-align: center; }
   .rarity-common   { color: var(--muted); }
   .rarity-uncommon { color: var(--accent); }
   .rarity-rare     { color: var(--warn); }
@@ -2907,7 +2927,7 @@
   .faq details > summary {
     cursor: pointer;
     list-style: none;
-    font-size: 13.5px;
+    font-size: var(--text-body);
     font-weight: 500;
     color: var(--fg);
     display: flex;
@@ -2925,14 +2945,14 @@
     right: 0;
     font-family: var(--font-mono);
     color: var(--muted);
-    font-size: 14px;
+    font-size: var(--text-body);
     transition: transform 120ms ease, color 120ms ease;
   }
   .faq details[open] > summary::after { content: '−'; color: var(--accent); }
   .faq details > summary:hover { color: var(--accent); }
   .faq details > p {
     margin: 10px 0 0 0;
-    font-size: 13px;
+    font-size: var(--text-control);
     color: var(--muted);
     line-height: 1.6;
     max-width: 72ch;
@@ -2945,7 +2965,7 @@
   .trust-lede {
     margin: 12px 0 4px;
     padding-bottom: 4px;
-    font-size: 13px;
+    font-size: var(--text-control);
     color: var(--fg);
     line-height: 1.6;
     max-width: 72ch;
@@ -2960,7 +2980,7 @@
     margin-top: calc(var(--s5) - var(--stack));
     border-top: 1px var(--rule) var(--hairline);
     color: var(--muted); /* real information (licence, data sources) - --faint is decorative-only and lands at ~2.2:1 on the yorha ground */
-    font-size: 11px;
+    font-size: var(--text-caption);
     line-height: 1rem;
   }
   footer.sitefoot .grow { flex: 1 1 24rem; }

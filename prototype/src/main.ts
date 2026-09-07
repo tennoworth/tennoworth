@@ -12,11 +12,15 @@ import { installDesktopExternalLinkHandler } from './lib/transport';
 // Dev-only design-review seam: `?preview-desktop` on a `vite dev` origin
 // installs a stub Tauri runtime BEFORE anything sniffs for it, so the
 // desktop-gated views (Rivens, My orders, Watches, Ledger) can be eyeballed
-// in a plain browser with a seeded snapshot. Every IPC command resolves to a
-// safe empty. Dead code in production: the whole block is tree-shaken out of
+// in a plain browser with a seeded snapshot. The optional sample scenario
+// supplies populated or failure responses. The block is tree-shaken out of
 // `vite build` (import.meta.env.DEV is false), and the desktop webview ships
 // its real runtime long before this line runs.
 if (import.meta.env.DEV && new URLSearchParams(location.search).has('preview-desktop')) {
+  const scenario = new URLSearchParams(location.search).get('sample');
+  const preview = scenario !== null
+    ? (await import('./lib/preview-data')).createPreview(scenario || 'populated')
+    : null;
   const noUpdate: UpdateStatus = {
     checked: true,
     available: false,
@@ -43,6 +47,7 @@ if (import.meta.env.DEV && new URLSearchParams(location.search).has('preview-des
   // via get_setting/set_setting; back those onto localStorage so a seeded
   // browser snapshot round-trips exactly like the real thing.
   const invoke = (cmd: string, args?: Record<string, unknown>) => {
+    if (preview && ['get_setting', 'set_setting', 'delete_setting', 'fetch_orders', 'list_watches', 'list_trades', 'eelog_status', 'riven_comps', 'wfm_auth_status', 'live_top_prices'].includes(cmd)) return preview(cmd, args);
     if (cmd === 'get_setting') return Promise.resolve(localStorage.getItem(String(args?.key)));
     if (cmd === 'set_setting') { localStorage.setItem(String(args?.key), String(args?.value)); return Promise.resolve(null); }
     if (cmd === 'delete_setting') { localStorage.removeItem(String(args?.key)); return Promise.resolve(null); }
@@ -69,7 +74,10 @@ const store = createStateStore();
 // Keep the overlay's transparent, scroll-locked document CSS out of the hosted
 // page's initial bundle. A conditional mount does not isolate a static import's
 // component CSS: Svelte still emits it globally even when that branch never runs.
-const app = overlaySurface
+const styleguideSurface = import.meta.env.DEV && new URLSearchParams(location.search).has('styleguide');
+const app = styleguideSurface && !overlaySurface
+  ? import('./components/Styleguide.svelte').then(({ default: Styleguide }) => mount(Styleguide, { target }))
+  : overlaySurface
   ? import('./components/RelicOverlay.svelte').then(({ default: RelicOverlay }) => mount(RelicOverlay, { target }))
   : store.hydrate().then(() => {
     // public/theme-boot.js already stamped the browser's stored theme before

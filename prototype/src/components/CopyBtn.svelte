@@ -35,7 +35,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-ctl);
     color: var(--muted);
-    font-size: 11.5px;
+    font-size: var(--text-caption);
     padding: 0 10px;
     cursor: pointer;
     white-space: nowrap;

@@ -33,7 +33,7 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
-    z-index: 1100;
+    z-index: var(--layer-toast);
     max-width: min(380px, calc(100vw - 36px));
   }
   .toast {
@@ -47,7 +47,7 @@
     border-radius: var(--radius-panel);
     padding: 10px 12px;
     box-shadow: var(--shadow-pop);
-    font-size: 12.5px;
+    font-size: var(--text-control);
     line-height: 1.5;
     color: var(--fg);
   }
@@ -55,10 +55,12 @@
   .toast.success { border-left-color: var(--good); }
   .toast-text { min-width: 0; }
   .toast-dismiss {
+    min-width: var(--ctl-xs);
+    min-height: var(--ctl-xs);
     background: transparent;
     border: none;
     color: var(--muted);
-    font-size: 15px;
+    font-size: var(--text-section);
     line-height: 1;
     cursor: pointer;
     padding: 2px 3px;

@@ -818,15 +818,19 @@
     white-space: nowrap;
   }
   .rail {
-    height: var(--rail);
+    min-height: var(--rail);
+    flex-wrap: wrap;
+    white-space: normal;
+    padding-top: var(--s2);
+    padding-bottom: var(--s2);
     background: var(--panel-2);
     border-bottom: 1px solid var(--border);
-    font-size: 12px;
+    font-size: var(--text-caption);
   }
   .rail .grow, .bar .grow { flex: 1 1 0; min-width: 0; }
   .rail-toggle {
     font: inherit;
-    font-size: 11.5px;
+    font-size: var(--text-caption);
     color: var(--muted);
     background: transparent;
     border: none;
@@ -835,7 +839,7 @@
     cursor: pointer;
   }
   .rail-toggle:hover { color: var(--accent); background: transparent; }
-  .picks-none { padding: var(--s2) var(--inset); font-size: 12.5px; color: var(--muted); }
+  .picks-none { padding: var(--s2) var(--inset); font-size: var(--text-control); color: var(--muted); }
   .empty-slot { padding: var(--s3) var(--inset); }
   /* Control rows: 40px, on the ladder; row A may wrap when an inventory carries
      many type chips (min-height, not height), row B keeps to one line. */
@@ -851,20 +855,20 @@
   .bar .lbl {
     width: 3.25rem;
     flex: 0 0 auto;
-    font-size: 10px;
+    font-size: var(--text-caption);
     line-height: 1rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     font-weight: 600;
-    color: var(--faint);
+    color: var(--muted);
   }
   .name-filter {
     height: var(--ctl-lg);
     width: 10rem;
     padding: 0 var(--s3);
-    font-size: 13px;
+    font-size: var(--text-control);
   }
-  .count { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .count { color: var(--muted); font-size: var(--text-caption); white-space: nowrap; }
   .count b { color: var(--fg); font-weight: 600; }
   /* Pill-filter chips reuse the badge palette (.tag.peak etc.) so the chip
      and the in-row pill it filters on read as the same object. */
@@ -894,7 +898,7 @@
   }
   .pill-n {
     opacity: 0.65;
-    font-size: 9px;
+    font-size: var(--text-caption);
   }
 
   /* ---- the table: fixed layout, shared colgroup ---- */
@@ -918,7 +922,7 @@
   td {
     height: var(--row);
     border-bottom: 1px var(--rule) var(--hairline);
-    font-size: 13px;
+    font-size: var(--text-control);
     color: var(--muted);
     overflow: hidden;
     text-overflow: ellipsis;
@@ -935,7 +939,7 @@
     height: var(--head);
     background: var(--panel-2);
     border-bottom: 1px solid var(--border);
-    font-size: 10px;
+    font-size: var(--text-caption);
     font-weight: 600;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -947,17 +951,16 @@
     top: 0;
     z-index: 2;
   }
-  /* Item cell: the link + badges clip with an ellipsis inside an inner span so
-     the badge-overflow popover (a sibling) can escape the cell. */
+  /* Keep the full item identity readable even at the column's width floor. */
   td.col-name { position: relative; color: var(--fg); overflow: visible; }
-  .name-clip { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .name-clip { display: block; white-space: normal; overflow-wrap: anywhere; padding-block: var(--s1); }
   /* Pick rows: rank glyph, bold name, reason spanning the trailing columns
      with the parent's List/× at its right end. */
   .pick-rank {
     float: left;
     width: 1rem;
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--text-caption);
     line-height: var(--row);
     color: var(--muted);
   }
@@ -970,7 +973,7 @@
     position: relative;
   }
   .info-btn {
-    font-size: 9.5px;
+    font-size: var(--text-caption);
     color: var(--muted);
     background: transparent;
     border: 1px solid var(--border);
@@ -991,21 +994,21 @@
     color: var(--accent);
     border-color: var(--accent);
   }
-  /* Click-popover anchored under the `?` button. Stays inside the table
-     visually but z-indexed above sticky headers; the click-outside
-     listener in the script closes it. */
+  /* A viewport anchor escapes table scrollers and stays reachable after resize. */
   .help-popover {
-    position: absolute;
-    top: calc(100% + 6px);
-    left: 0;
-    z-index: 50;
-    width: 280px;
+    position: fixed;
+    bottom: 1rem;
+    left: 1rem;
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+    z-index: var(--layer-popover);
+    width: min(280px, calc(100vw - 2rem));
     background: var(--panel);
     border: 1px solid var(--accent);
     border-radius: var(--radius-panel);
     padding: 10px 12px;
     box-shadow: var(--shadow-pop);
-    font-size: 12px;
+    font-size: var(--text-caption);
     font-weight: 400;
     color: var(--fg);
     line-height: 1.55;
@@ -1017,9 +1020,9 @@
     white-space: normal;
     cursor: default;
   }
-  th.right .help-popover { left: auto; right: 0; }
+  th.right .help-popover { left: 1rem; right: auto; }
   .hp-text { color: var(--fg); }
-  .hp-meta { color: var(--muted); font-size: 11px; display: flex; gap: 6px; }
+  .hp-meta { color: var(--muted); font-size: var(--text-caption); display: flex; gap: 6px; }
   .hp-key {
     text-transform: uppercase;
     letter-spacing: 0.05em;
@@ -1063,7 +1066,7 @@
      for the feature-off (default, no leveled gear) case. */
   .kept-note {
     margin-left: 5px;
-    font-size: 11px;
+    font-size: var(--text-caption);
     color: var(--muted);
   }
   /* Leveled gear is a harder constraint than the Keep-copies reserve - the
@@ -1084,7 +1087,7 @@
   }
   .trend {
     font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: var(--text-caption);
     font-weight: 500;
   }
   .trend.up   { color: var(--good); }
@@ -1096,7 +1099,7 @@
      at a glance. */
   .ask-avg {
     margin-left: 5px;
-    font-size: 11px;
+    font-size: var(--text-caption);
     font-family: var(--font-mono);
     color: var(--accent);
   }
@@ -1109,7 +1112,7 @@
     display: inline-block;
     margin-left: 6px;
     padding: 0 5px;
-    font-size: 9.5px;
+    font-size: var(--text-caption);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -1129,7 +1132,7 @@
     display: inline-block;
     margin-left: 6px;
     padding: 1px 6px;
-    font-size: 9.5px;
+    font-size: var(--text-caption);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;
@@ -1152,7 +1155,7 @@
 
   .no-match {
     padding: 18px 14px;
-    font-size: 13px;
+    font-size: var(--text-control);
     color: var(--muted);
     text-align: center;
     display: flex;
@@ -1163,7 +1166,7 @@
   }
   .no-match-clear {
     font: inherit;
-    font-size: 12px;
+    font-size: var(--text-caption);
     color: var(--accent);
     background: transparent;
     border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border));
@@ -1194,7 +1197,7 @@
     background: var(--panel-2);
     border: 1px solid var(--border);
     color: var(--fg);
-    font-size: 12px;
+    font-size: var(--text-caption);
     padding: 4px 10px;
     border-radius: var(--radius-ctl);
     cursor: pointer;
@@ -1223,7 +1226,7 @@
     border: none;
     border-left: 1px solid var(--border);
     color: var(--muted);
-    font-size: 11.5px;
+    font-size: var(--text-caption);
     padding: 4px 10px;
     min-height: 24px;
     cursor: pointer;
@@ -1243,14 +1246,16 @@
   }
   .badge-overflow-btn:hover { color: var(--accent); border-color: var(--accent); }
   .badge-overflow-popover {
-    position: absolute;
-    top: calc(100% + 4px);
-    left: 0;
-    z-index: 50;
+    position: fixed;
+    bottom: 1rem;
+    left: 1rem;
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+    z-index: var(--layer-popover);
     display: flex;
     flex-wrap: wrap;
     gap: 4px;
-    max-width: 240px;
+    max-width: min(240px, calc(100vw - 2rem));
     padding: 8px;
     background: var(--panel);
     border: 1px solid var(--accent);
@@ -1265,7 +1270,7 @@
   .advice-chip {
     display: inline-block;
     padding: 1px 6px;
-    font-size: 9.5px;
+    font-size: var(--text-caption);
     font-weight: 600;
     letter-spacing: 0.1em;
     text-transform: uppercase;

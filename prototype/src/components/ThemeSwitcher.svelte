@@ -55,6 +55,15 @@
         class:active={modePref === m.id}
         role="radio"
         aria-checked={modePref === m.id}
+        tabindex={modePref === m.id ? 0 : -1}
+        onkeydown={(event) => {
+          const direction = ['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : ['ArrowLeft', 'ArrowUp'].includes(event.key) ? -1 : 0;
+          if (!direction && event.key !== 'Home' && event.key !== 'End') return;
+          event.preventDefault();
+          const index = event.key === 'Home' ? 0 : event.key === 'End' ? MODES.length - 1 : (MODES.findIndex(mode => mode.id === m.id) + direction + MODES.length) % MODES.length;
+          pickMode(MODES[index].id);
+          (event.currentTarget.parentElement?.querySelectorAll('button')[index] as HTMLButtonElement | undefined)?.focus();
+        }}
         onclick={() => pickMode(m.id)}
       >{m.label}</button>
     {/each}
@@ -72,7 +81,7 @@
     flex-wrap: wrap;
     align-items: center;
     gap: var(--s1) var(--s3);
-    font-size: 11px;
+    font-size: var(--text-caption);
   }
   .segmented {
     display: inline-flex;
@@ -82,7 +91,7 @@
   }
   .seg-btn {
     font: inherit;
-    font-size: 12px;
+    font-size: var(--text-caption);
     background: var(--panel-2);
     border: none;
     border-left: 1px var(--rule) var(--border);
@@ -95,14 +104,14 @@
   .seg-btn:first-child { border-left: none; }
   .seg-btn:hover { color: var(--fg); background: var(--hover); }
   .seg-btn.active { color: var(--accent); background: var(--panel); font-weight: 600; }
-  .hint { color: var(--muted); font-size: 11px; line-height: 1rem; }
+  .hint { color: var(--muted); font-size: var(--text-caption); line-height: 1rem; }
 
   /* Footer variant: matches the site footer's 11px type scale and stays quiet
      - it is a convenience for a visitor who never reaches Settings, not a
      piece of chrome that should compete with the footer's links. */
   .compact .segmented { border-color: var(--hairline); }
   .compact .seg-btn {
-    font-size: 11px;
+    font-size: var(--text-caption);
     line-height: 1rem;
     height: var(--ctl-xs);
     padding: 0 var(--s2);

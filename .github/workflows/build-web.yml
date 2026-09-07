@@ -32,8 +32,18 @@ jobs:
         working-directory: prototype
         run: |
           bun install --frozen-lockfile
+          bunx playwright install --with-deps chromium webkit
           bun run test
+          bun run test:responsive:all
           bun run build
+
+      - name: Upload responsive failure evidence
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: responsive-test-evidence
+          path: prototype/test-results/responsive
+          if-no-files-found: ignore
 
       - name: Package
         run: tar -C prototype/dist -czf dist.tgz .

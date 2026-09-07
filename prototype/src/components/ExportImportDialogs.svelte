@@ -310,7 +310,7 @@
      email/select/remember-checkbox fields. */
   label { gap: 8px; }
   label .ghost { width: max-content; }
-  .file-name { font-size: 12px; }
+  .file-name { font-size: var(--text-caption); }
   .restore-warning {
     color: var(--fg);
     background: color-mix(in srgb, var(--bad) 10%, transparent);
@@ -319,6 +319,6 @@
     padding: 12px;
   }
   .restore-warning strong { color: var(--bad); }
-  .restore-warning p { margin: 8px 0 0; font-size: 12.5px; line-height: 1.5; }
+  .restore-warning p { margin: 8px 0 0; font-size: var(--text-control); line-height: 1.5; }
   button.danger { color: var(--bad); border-color: var(--bad); }
 </style>
