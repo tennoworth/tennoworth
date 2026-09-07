@@ -3,7 +3,7 @@
 //! Everything the app does that is NOT shell/webview glue lives here:
 //! process detection + memory scan, DE inventory fetch, warframe.market
 //! auth + encrypted-JWT storage, the listing/order service, pending-plan
-//! persistence, and the dormant DeepSeek assistant relay. The Tauri desktop
+//! persistence. The Tauri desktop
 //! shell (`tennoworth-desktop`) drives this crate over IPC.
 //!
 //! Design rule: **no interactive terminal I/O in this crate.** Where the
@@ -13,7 +13,6 @@
 //! loose-key-perms warning - are preserved verbatim from the pre-extraction
 //! binary.)
 
-pub mod assistant;
 pub mod auth;
 pub mod catalog;
 pub mod error;

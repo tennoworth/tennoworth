@@ -19,13 +19,11 @@
     reason = "tauri::command injects unreachable code into async wrappers"
 )]
 
-use std::collections::VecDeque;
 use std::fs;
 use wfm_core::poison::guard;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
 use tauri::State;
 
 use wfm_core::auth::{
@@ -44,7 +42,6 @@ use zeroize::{Zeroize, Zeroizing};
 ///   - `needs_login`   - no login on this machine → open the login modal.
 ///   - `needs_unlock`  - login present, session locked → open the passphrase modal.
 ///   - `bad_passphrase`- wrong passphrase in the unlock/login modal.
-///   - `no_api_key` / `upstream` / `rate_limited` / `too_large` - the assistant relay.
 ///   - `no_pending` / `busy` - pending-plan resume edge cases.
 ///   - `wfm` / `internal` - everything else, message shown verbatim.
 ///
@@ -85,18 +82,12 @@ pub struct WfmSession {
     /// Pending-plan path. `TENNOWORTH_PENDING_PATH` overrides it so a probe
     /// doesn't touch the real `~/.config/wfminv/pending_plan.json`.
     pending_path: PathBuf,
-    /// Directory the DeepSeek key file (`deepseek-key`) is read from - the JWT's
-    /// own config dir, resolved once (mirrors serve's `deepseek_key_dir`).
-    key_dir: PathBuf,
     /// The unlocked credentials, or `None` when locked/unavailable. The plaintext
     /// JWT lives ONLY inside this `Arc<Unlocked>` for the session's lifetime.
     inner: Mutex<Option<Arc<Unlocked>>>,
     /// Serializes plan execution: a second concurrent `execute_plan` /
     /// `resume_pending_plan` gets `busy` instead of racing on the pending file.
     plan_running: AtomicBool,
-    /// Sliding-window timestamps of recent assistant calls - same budget as
-    /// serve's `ServeState.assistant_calls` (≤ 20 DeepSeek calls / 60 s).
-    pub assistant_calls: Mutex<VecDeque<Instant>>,
     /// "Remember on this device" is only offered against the REAL login file:
     /// any `TENNOWORTH_JWT_PATH` override (the probe/test seam) turns the OS
     /// keyring off entirely, so hermetic runs can never pollute - or unlock
@@ -111,9 +102,8 @@ impl WfmSession {
         let jwt_path = overridden
             .map(PathBuf::from)
             .unwrap_or_else(default_jwt_path);
-        // Companion state lives together: a relocated JWT takes the pending
-        // plan and the DeepSeek key with it, matching serve. The explicit
-        // env override stays as the probe seam.
+        // Relocating credentials also relocates recovery state unless the
+        // probe explicitly overrides the pending-plan path.
         let key_dir = config_dir_for(&jwt_path);
         let pending_path = std::env::var_os("TENNOWORTH_PENDING_PATH")
             .map(PathBuf::from)
@@ -121,20 +111,14 @@ impl WfmSession {
         Self {
             jwt_path,
             pending_path,
-            key_dir,
             inner: Mutex::new(None),
             plan_running: AtomicBool::new(false),
-            assistant_calls: Mutex::new(VecDeque::new()),
             use_keyring,
         }
     }
 
     pub fn pending_path(&self) -> &Path {
         &self.pending_path
-    }
-
-    pub fn key_dir(&self) -> &Path {
-        &self.key_dir
     }
 
     pub fn is_unlocked(&self) -> bool {
@@ -513,14 +497,11 @@ mod tests {
 
     fn session_with(jwt_path: PathBuf) -> WfmSession {
         let pending = jwt_path.with_extension("pending.json");
-        let key_dir = jwt_path.parent().map(Path::to_path_buf).unwrap();
         WfmSession {
             jwt_path,
             pending_path: pending,
-            key_dir,
             inner: Mutex::new(None),
             plan_running: AtomicBool::new(false),
-            assistant_calls: Mutex::new(VecDeque::new()),
             // Tests must never read or write the developer's real OS keyring.
             use_keyring: false,
         }

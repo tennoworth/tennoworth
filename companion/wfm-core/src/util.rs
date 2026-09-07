@@ -92,10 +92,7 @@ pub fn default_jwt_path() -> PathBuf {
     config_dir().join("wfm-jwt.enc")
 }
 
-/// The directory sibling files (the DeepSeek key, the assistant-off marker)
-/// live in, given wherever the JWT actually is. Follows a `--jwt-path`
-/// override so those files stay beside the credential they belong to, and
-/// falls back to the cwd for a bare filename.
+/// Keep pending-plan recovery beside a relocated credential file.
 pub fn config_dir_for(jwt_path: &Path) -> PathBuf {
     jwt_path
         .parent()

@@ -2,8 +2,7 @@
 # window loading the built SPA via Tauri's asset protocol; the SPA's Transport
 # drives wfm-core through thin commands: health / scan_inventory, the WFM
 # session (login / unlock - passphrase from the webview, see wfm_session.rs),
-# the listing/order surface mirroring serve's HTTP routes, and the assistant
-# relay.
+# the listing/order surface.
 [package]
 name = "tennoworth-desktop"
 # THE authoritative version for the desktop app. This is CARGO_PKG_VERSION -

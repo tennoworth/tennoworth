@@ -91,17 +91,6 @@ characteristics:
 - **No telemetry, no analytics, no accounts.** Verify with your
   browser's network tab.
 
-## The AI assistant (dormant)
-
-The DeepSeek advisor relay exists in `wfm-core` and a dormant
-`ask_assistant` Tauri command is registered, but **no UI surfaces it** -
-there is no chat button, no key-setting path, and nothing sends data to
-DeepSeek from the shipped app. It was last wired to the loopback companion's
-`/assistant` route, which no longer exists. The code stays for a future
-desktop assistant; until one ships, the feature is off by construction. If it
-is ever re-enabled, the SECURITY.md section describing its data flow must be
-rewritten before it ships.
-
 ## What we cannot promise
 
 - **We cannot promise this is ban-safe.** The desktop app reads game

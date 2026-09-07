@@ -1,7 +1,7 @@
 # Workspace root. Members:
 #   wfm-core            - reusable core: process scan, inventory fetch, WFM auth +
 #                         encrypted-JWT storage, listing/order service, pending-plan
-#                         store, DeepSeek assistant relay. No terminal I/O - the
+#                         store. No terminal I/O - the
 #                         desktop shell drives it over IPC.
 #   market-math         - pure market-data heuristics (ported from the retired
 #                         wfm_demand.py). No I/O, no deps. Keep it pure - that's

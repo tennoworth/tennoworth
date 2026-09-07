@@ -16,8 +16,6 @@
 //                        / `discard_pending_plan` / `fetch_orders` / `update_order`
 //                        / `delete_order` / `bulk_visibility` - the desktop
 //                        listing/order surface, same wfm-core services
-//   - `commands::assistant` → `ask_assistant`, the DeepSeek relay (dormant -
-//                        no UI surfaces it; the key stays in Rust, off the
 //                        webview)
 //   - `update`           → `check_update` / `update_status` / `install_update`
 //                        / `restart_app` (C5 auto-update)
@@ -183,7 +181,6 @@ fn main() {
             commands::listing::update_order,
             commands::listing::delete_order,
             commands::listing::bulk_visibility,
-            commands::assistant::ask_assistant,
             commands::report::report_scan_issue,
             commands::report::open_external_url,
             overlay::get_overlay_settings,

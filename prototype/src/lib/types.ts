@@ -421,13 +421,9 @@ export interface OwnedRecord {
 
 // -------- Desktop transport (Tauri IPC) --------
 
-/** `/health` response shape. `assistant` was the browser companion's advisor
- *  flag; the desktop keeps the field for wire-compat but nothing surfaces it
- *  (the assistant is deliberately dormant). */
 export interface PingResponse {
   ok: boolean;
   platform?: string;
-  assistant?: boolean;
 }
 
 export interface OverlaySettings {
