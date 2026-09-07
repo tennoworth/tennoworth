@@ -80,14 +80,16 @@
   .meta-drift { min-width: 0; }
   .rail .exp { color: var(--on-ink-muted); }
   .intro { padding: .75rem 1rem; border-bottom: 1px dotted var(--hairline); line-height: 1.45; }
-  .controls { display: flex; gap: .6rem; padding: .65rem 1rem; align-items: center; border-bottom: 1px dotted var(--hairline); }
+  .controls { display: flex; flex-wrap: wrap; gap: .6rem; padding: .65rem 1rem; align-items: center; border-bottom: 1px dotted var(--hairline); }
   .tabs { display: flex; gap: .25rem; }
-  button, input, select { font: inherit; border: 1px solid var(--hairline); background: var(--panel-2); color: inherit; padding: .35rem .55rem; }
+  button, input, select { font: inherit; font-size: var(--text-control); min-height: var(--ctl-lg); border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--panel-2); color: inherit; padding: var(--s1) var(--s2); }
   button.active { background: var(--ink-bar); color: var(--on-ink); }
   input { margin-left: auto; min-width: 12rem; }
   .only-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--hairline); }
   .only-card { background: var(--panel); min-width: 0; }
-  h4 { margin: 0; padding: .6rem 1rem; font-size: .8rem; }
+  table { min-width: 46rem; }
+  .only-card table { min-width: 35rem; }
+  h4 { margin: 0; padding: var(--s3) var(--inset); font-size: var(--text-control); }
   .empty { text-align: center; padding: 1rem; color: var(--muted); }
   @media (max-width: 700px) {
     .wrap.tw.meta-drift > .rail {

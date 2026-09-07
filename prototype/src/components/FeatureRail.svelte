@@ -420,7 +420,7 @@
   .tabs > button {
     font: inherit;
     font-family: var(--font-ui);
-    font-size: 13px;
+    font-size: var(--text-control);
     text-align: left;
     height: var(--row);
     padding: 0 var(--inset);
@@ -446,7 +446,7 @@
   .desc {
     margin: 0;
     padding: var(--s3) var(--inset);
-    font-size: 13px;
+    font-size: var(--text-control);
     line-height: 1.25rem;
     color: var(--muted);
     max-width: 72ch;
@@ -458,7 +458,7 @@
      name left, numbers pinned right. A miniature that laid its columns out
      differently would stop reading as the same app. */
   .mini table { min-width: 30rem; }
-  .mini .stats, .mini .note { font-size: 11px; color: var(--muted); }
+  .mini .stats, .mini .note { font-size: var(--text-caption); color: var(--muted); }
   .mini .note { font-family: var(--font-body); }
   .mini .fix { font-weight: 600; color: var(--fg); margin-right: var(--s2); }
   .mini tr.sum td { border-top: 1px solid var(--border); color: var(--muted); }
@@ -479,7 +479,7 @@
     margin: 0;
     padding: var(--s2) var(--inset);
     border-top: 1px var(--rule) var(--hairline);
-    font-size: 12px;
+    font-size: var(--text-caption);
     line-height: 1rem;
     color: var(--muted);
   }

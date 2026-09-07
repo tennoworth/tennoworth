@@ -3,6 +3,7 @@ node_modules/
 target/
 **/target/
 dist/
+prototype/test-results/
 .playwright-mcp/
 *.tmp
 rust_out

@@ -147,12 +147,12 @@
   }
 </script>
 
-<section class="card watchlist" data-testid="watchlist">
+<section class="card ui-panel watchlist" data-testid="watchlist">
   <header class="row">
     <h2>Price watches</h2>
     <div class="row gap-sm">
       <span class="muted">{watches.length} of 100</span>
-      <button class="ghost" onclick={checkNow} disabled={checking || watches.length === 0}
+      <button class="btn ghost" onclick={checkNow} disabled={checking || watches.length === 0}
         title="Run a check right now (the app also checks every 10 minutes in the background and notifies you).">
         {checking ? 'Checking…' : 'Check now'}
       </button>
@@ -167,6 +167,7 @@
   <div class="add">
     <div class="pick">
       <input
+        class="ui-input"
         type="text"
         placeholder="Item to watch - try “primed flow”, “ash prime set”…"
         bind:value={query}
@@ -174,7 +175,7 @@
         aria-label="Item to watch"
       />
       {#if picked}
-        <button class="tiny ghost" onclick={clearPick} aria-label="Clear item">×</button>
+        <button class="btn xs ghost" onclick={clearPick} aria-label="Clear item">×</button>
       {/if}
       {#if !picked && results.length}
         <ul class="suggest" role="listbox">
@@ -188,39 +189,39 @@
       {/if}
     </div>
     <label>
-      <select bind:value={side} onchange={onSideChange} aria-label="Watch side">
+      <select class="ui-input" bind:value={side} onchange={onSideChange} aria-label="Watch side">
         <option value="sell">Tell me when the lowest ask is ≤</option>
         <option value="buy">Tell me when the highest bid is ≥</option>
       </select>
     </label>
     <label>
-      <input type="number" min="1" bind:value={threshold} aria-label="Threshold (plat)" style="width:80px" disabled={!picked} />
+      <input class="ui-input" type="number" min="1" bind:value={threshold} aria-label="Threshold (plat)" style="width:5rem" disabled={!picked} />
       <span class="muted">p</span>
     </label>
-    <button onclick={add} disabled={!picked || threshold < 1 || adding}>Add watch</button>
+    <button class="btn primary" onclick={add} disabled={!picked || threshold < 1 || adding}>Add watch</button>
   </div>
 
   {#if loadError}
-    <div class="muted bad">Couldn't load watches: {loadError}</div>
+    <div class="ui-notice" data-tone="bad" role="alert">Couldn't load watches: {loadError}</div>
   {:else if watches.length === 0}
-    <div class="muted empty">No watches yet. Pick an item above.</div>
+    <div class="ui-notice">No watches yet. Pick an item above.</div>
   {:else}
     <div class="scroll">
-      <table>
-        <thead><tr><th>Item</th><th>Condition</th><th>Last seen</th><th>Status</th><th></th></tr></thead>
+      <table class="tw">
+        <thead><tr><th class="l">Item</th><th>Condition</th><th>Last seen</th><th>Status</th><th>Action</th></tr></thead>
         <tbody>
           {#each watches as w (w.id)}
             {@const st = status(w)}
             {@const o = lastOutcomes.get(w.id)}
             <tr>
-              <td>{w.name}{#if w.subtype}<span class="muted"> · {w.subtype}</span>{/if}</td>
+              <td class="l">{w.name}{#if w.subtype}<span class="muted"> · {w.subtype}</span>{/if}</td>
               <td class="mono">{w.side === 'sell' ? 'ask ≤' : 'bid ≥'} {w.threshold}p</td>
               <td class="mono" title={o && o.price == null ? 'No online orders on that side right now' : undefined}>
                 {#if w.last_price != null}{w.last_price}p{:else}-{/if}
                 <span class="muted"> · {ago(w.last_checked_at)}</span>
               </td>
               <td class={st.cls}>{st.label}</td>
-              <td><button class="tiny ghost" onclick={() => remove(w)} disabled={busyIds.has(w.id)}>Remove</button></td>
+              <td><button class="btn xs ghost" onclick={() => remove(w)} disabled={busyIds.has(w.id)}>Remove</button></td>
             </tr>
           {/each}
         </tbody>
@@ -232,14 +233,12 @@
 </section>
 
 <style>
-  .watchlist { display: flex; flex-direction: column; gap: 10px; }
-  .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
   .gap-sm { gap: 8px; }
-  h2 { margin: 0; font-size: 15px; }
-  .lead { margin: 0; font-size: 12.5px; }
+  .lead { margin: 0; font-size: var(--text-control); }
   .add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .pick { position: relative; flex: 1 1 260px; display: flex; align-items: center; gap: 4px; }
-  .pick input { flex: 1; }
+  .pick input { flex: 1; min-width: 0; }
   .suggest {
     position: absolute; top: 100%; left: 0; right: 0; z-index: 3;
     margin: 2px 0 0; padding: 4px; list-style: none;
@@ -251,16 +250,16 @@
     background: none; border: 0; padding: 6px 8px; color: var(--fg); cursor: pointer; text-align: left; font: inherit; border-radius: var(--radius-ctl);
   }
   .suggest li button:hover { background: var(--panel-2); }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th { text-align: left; font-weight: 600; font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--border); }
-  td { padding: 6px 8px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+  table { min-width: 40rem; }
   .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .good { color: var(--good); font-weight: 600; }
   .bad { color: var(--bad); }
   .muted { color: var(--muted); }
   .empty { padding: 10px 0; }
   .scroll { overflow: auto; }
-  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); padding: 4px 10px; border-radius: var(--radius-ctl); font-size: 12px; cursor: pointer; }
-  button.ghost:hover:not(:disabled) { background: var(--panel-2); color: var(--fg); }
-  button.tiny { padding: 2px 8px; font-size: 11px; }
+  @media (max-width: 35rem) {
+    .pick { flex-basis: 100%; min-width: 0; }
+    .add > label { min-width: 0; }
+    .add select { max-width: 100%; }
+  }
 </style>

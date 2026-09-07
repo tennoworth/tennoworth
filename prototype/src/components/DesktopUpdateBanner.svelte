@@ -81,7 +81,7 @@
 </script>
 
 {#if updateInfo && !updateDismissed}
-  <div class="card warn-banner general-banner" role="status" data-testid="update-banner">
+  <div class="card ui-panel warn-banner general-banner" role="status" data-testid="update-banner">
     <div class="gb-body">
       {#if updateInstalled}
         <strong>Update installed.</strong> TennoWorth v{updateInfo.version} takes over
@@ -94,9 +94,9 @@
     </div>
     <div class="gb-actions">
       {#if updateInstalled}
-        <button onclick={restartToApply}>Restart now</button>
+        <button class="btn primary" onclick={restartToApply}>Restart now</button>
       {:else}
-        <button onclick={installUpdateNow} disabled={updateInstalling}>
+        <button class="btn primary" onclick={installUpdateNow} disabled={updateInstalling}>
           {updateInstalling ? 'Installing…' : 'Install update'}
         </button>
       {/if}
@@ -106,41 +106,7 @@
 {/if}
 
 <style>
-  /* Duplicated from App.svelte's shared banner styles - Svelte scopes CSS
-     per-component, and this codebase's existing extracted components
-     (e.g. MarketBrowser's `.card`) already re-declare shared visual classes
-     rather than promoting them to global CSS. Keep in sync by eye if the
-     shared banner look changes. */
-  .card {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-panel);
-    padding: 14px 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
+  @media (max-width: 35rem) {
+    .general-banner .gb-actions { width: 100%; justify-content: flex-end; }
   }
-  .general-banner {
-    flex-direction: row;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 12px;
-  }
-  .general-banner .gb-body { min-width: 0; }
-  .general-banner .gb-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-shrink: 0;
-  }
-  .general-banner .gb-dismiss {
-    background: transparent;
-    border: none;
-    color: var(--muted);
-    font-size: 16px;
-    line-height: 1;
-    cursor: pointer;
-    padding: 3px;
-  }
-  .general-banner .gb-dismiss:hover { color: var(--fg); }
 </style>

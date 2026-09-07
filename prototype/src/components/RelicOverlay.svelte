@@ -42,6 +42,7 @@
         style:left={`${slot.box.x * 100}%`}
         style:top={`${slot.box.y * 100}%`}
         style:width={`${slot.box.width * 100}%`}
+        style:--reward-scale={result.scale}
       >
         <div class="inner" style:transform={`scale(${result.scale})`}>
           {#if slot.bestPlatinum}<span class="best-flag">BEST PLAT</span>{/if}
@@ -64,16 +65,16 @@
 
 <style>
   :global(html.relic-overlay-surface), :global(html.relic-overlay-surface body), :global(html.relic-overlay-surface #app) { width: 100%; height: 100%; margin: 0; background: transparent !important; overflow: hidden; }
-  .overlay { position: fixed; inset: 0; pointer-events: none; font-family: var(--font-ui, system-ui, sans-serif); color: #edf2f4; }
-  .reward { position: absolute; box-sizing: border-box; padding: 0 8px; transform: translateY(8px); }
-  .inner { position: relative; max-width: 250px; min-height: 66px; margin: auto; padding: 9px 11px; border: 1px solid #66808f; border-radius: 7px; background: #091117e8; box-shadow: 0 6px 22px #000a; backdrop-filter: blur(5px); transform-origin: top center; }
-  .reward.best .inner { border-color: #e6b85c; box-shadow: 0 0 22px #e6b85c55, 0 6px 22px #000a; }
-  .reward.uncertain .inner { border-color: #ee8f70; }
-  .best-flag, .ducat-flag { position: absolute; right: 7px; top: -10px; padding: 2px 7px; border-radius: 4px; background: #e6b85c; color: #171108; font: 700 9px/1.4 ui-monospace, monospace; letter-spacing: .08em; }
-  .ducat-flag { background: #75cbd0; color: #071517; }
-  .name { display: block; padding-right: 44px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; text-shadow: 0 1px 3px #000; }
-  .facts { display: flex; align-items: baseline; gap: 9px; color: #b6c1c8; font: 10px/1.5 ui-monospace, monospace; }
-  .plat { color: #e6b85c; font-size: 22px; }
-  .source { color: #62d8d0; margin-left: auto; }
-  .confidence { display: block; color: #ee8f70; font: 9px/1.25 ui-monospace, monospace; }
+  .overlay { position: fixed; inset: 0; pointer-events: none; font-family: var(--font-body); color: var(--reward-fg); }
+  .reward { position: absolute; box-sizing: border-box; padding: 0 var(--s2); transform: translateY(var(--s2)); }
+  .inner { position: relative; width: calc(100% / var(--reward-scale, 1)); max-width: 15.625rem; min-height: 4rem; margin: auto; padding: var(--s2) var(--s3); border: 1px solid var(--reward-border); border-radius: var(--radius-panel); background: var(--reward-surface); transform-origin: top center; }
+  .reward.best .inner { border-color: var(--reward-value); }
+  .reward.uncertain .inner { border-color: var(--reward-warning); }
+  .best-flag, .ducat-flag { display: inline-block; margin-bottom: var(--s1); padding: 0 var(--s1); background: var(--reward-value); color: var(--reward-on-value); font: 600 var(--text-caption)/var(--leading-body) var(--font-ui); letter-spacing: .08em; }
+  .ducat-flag { background: var(--reward-good); }
+  .name { display: block; white-space: normal; overflow-wrap: anywhere; font-size: var(--text-caption); }
+  .facts { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s2); color: var(--reward-muted); font: var(--text-caption)/var(--leading-body) var(--font-mono); }
+  .plat { color: var(--reward-value); font-size: var(--text-metric-lg); }
+  .source { color: var(--reward-good); margin-left: auto; }
+  .confidence { display: block; color: var(--reward-warning); font: var(--text-caption)/var(--leading-control) var(--font-mono); }
 </style>

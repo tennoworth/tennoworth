@@ -28,7 +28,7 @@
   }
   h2 {
     margin: 0;
-    font-size: 13px;
+    font-size: var(--text-control);
     letter-spacing: 0.05em;
     text-transform: uppercase;
     color: var(--accent);
@@ -38,7 +38,7 @@
     background: transparent;
     border: 1px solid var(--border);
     color: var(--muted);
-    font-size: 16px;
+    font-size: var(--text-section);
     line-height: 1;
     width: 26px;
     height: 26px;

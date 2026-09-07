@@ -265,39 +265,10 @@
 </div>
 
 <style>
-  /* The view header + its info dot, as SellPane has them: both components
-     render the shared markup, but the rules are Svelte-scoped per component,
-     so each self-contained view carries its own copy. */
-  .view-header {
-    display: flex;
-    align-items: center;
-    gap: var(--s2);
-    min-height: var(--rail);
-    flex-wrap: wrap;
-  }
-  .view-header h2 {
-    font-size: 20px;
-    font-weight: 600;
-    text-transform: none;
-    letter-spacing: -0.01em;
-    color: var(--fg);
-    margin: 0;
-    line-height: 1.5rem;
-  }
-  .lede-dot {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    font-size: 11px;
-    line-height: 1;
-    color: var(--muted);
-    border: 1px var(--rule) var(--hairline);
-    cursor: help;
-  }
-  .lede-dot:hover, .lede-dot:focus-visible { color: var(--accent); border-color: var(--accent); }
+
+
+
+
 
   .settings { display: flex; flex-direction: column; gap: var(--stack); max-width: 44rem; margin-top: var(--stack); }
   .sbody {
@@ -311,7 +282,7 @@
     width: 7rem;
     flex: 0 0 auto;
     font-family: var(--font-ui);
-    font-size: 10px;
+    font-size: var(--text-caption);
     line-height: 1rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -320,22 +291,22 @@
   }
   /* Helper copy is real information, so --muted (the readable floor), never
      --faint, which is decorative-only. */
-  .sbody .exp { margin: 0; font-size: 12px; line-height: 1rem; color: var(--muted); max-width: 60ch; white-space: normal; }
+  .sbody .exp { margin: 0; font-size: var(--text-caption); line-height: 1rem; color: var(--muted); max-width: 60ch; white-space: normal; }
   .check-row { display:flex; align-items:flex-start; gap:var(--s2); color:var(--fg); cursor:pointer; }
   .check-row input { margin-top:3px; accent-color:var(--accent); }
   .check-row span { display:flex; flex-direction:column; gap:2px; }
   .check-row small { color:var(--muted); max-width:62ch; }
   .check-row.compact { align-items:center; }
-  .text-input { min-width:14rem; padding:6px 8px; border:1px var(--rule) var(--hairline); border-radius:4px; background:var(--panel); color:var(--fg); }
+  .text-input { width: min(20rem, 100%); min-width:0; padding:6px 8px; border:1px var(--rule) var(--hairline); border-radius:var(--radius-input); background:var(--panel); color:var(--fg); }
   input[type='range'] { width:min(18rem,55vw); accent-color:var(--accent); }
-  .mono,.status { font-family:var(--font-mono); font-size:11px; color:var(--muted); }
+  .mono,.status { font-family:var(--font-mono); font-size:var(--text-caption); color:var(--muted); }
   .overlay-actions { display:flex; align-items:center; gap:var(--s3); flex-wrap:wrap; }
-  .status { display:flex; align-items:center; gap:6px; text-transform:capitalize; }
+  .status { display:flex; align-items:center; gap:6px; text-transform:capitalize; min-width:0; overflow-wrap:anywhere; }
   .status-dot { width:7px; height:7px; border-radius:50%; background:var(--muted); }
   .status-dot.watching,.status-dot.showing { background:var(--good); }
   .status-dot.recognizing { background:var(--accent); }
   .status-dot.error { background:var(--bad); }
-  .error { margin:0; color:var(--bad); font-size:12px; }
-  .warning { margin:0; color:var(--warn, #b7791f); font-size:12px; line-height:1rem; }
+  .error { margin:0; color:var(--bad); font-size:var(--text-caption); }
+  .warning { margin:0; color:var(--warn); font-size:var(--text-caption); line-height:1rem; }
   button.danger { color:var(--bad); border-color:var(--bad); }
 </style>

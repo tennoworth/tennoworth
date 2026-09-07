@@ -297,7 +297,7 @@
     display: flex; align-items: center; gap: var(--s2);
     min-height: var(--rail); padding: var(--s2) var(--inset);
     border-top: 1px var(--rule) var(--hairline);
-    font-size: 12px; line-height: 1rem; color: var(--muted);
+    font-size: var(--text-caption); line-height: 1rem; color: var(--muted);
   }
   .rows .line .exp { white-space: normal; }
   .cta {
@@ -306,8 +306,8 @@
     border-top: 1px var(--rule) var(--hairline);
     margin-top: auto;
   }
-  .cta .fine { color: var(--muted); /* informational - --faint is decorative-only */ font-size: 11px; line-height: 1rem; margin-left: auto; text-align: right; }
-  .cmp { font-size: 12px; }
+  .cta .fine { color: var(--muted); /* informational - --faint is decorative-only */ font-size: var(--text-caption); line-height: 1rem; margin-left: auto; text-align: right; }
+  .cmp { font-size: var(--text-caption); }
   .cmp td { height: 1.5rem; font-family: var(--font-body); color: var(--muted); }
   .cmp td.l { color: var(--fg); }
   .cmp .ok { color: var(--good); }
@@ -325,7 +325,7 @@
     display: flex; align-items: center; gap: var(--s2);
     min-height: var(--rail); padding: 0 var(--inset);
     cursor: pointer; list-style: none; user-select: none;
-    font-size: 12px; color: var(--muted); white-space: nowrap;
+    font-size: var(--text-caption); color: var(--muted); white-space: nowrap;
   }
   .disc > summary::-webkit-details-marker { display: none; }
   .disc > summary::after {
@@ -336,29 +336,29 @@
   .disc > summary .lbl { width: auto; color: var(--fg); }
   .disc-body { padding: var(--s3) var(--inset) var(--s4); border-top: 1px var(--rule) var(--hairline); display: flex; flex-direction: column; gap: var(--s3); }
   .disc-body .seg { align-self: flex-start; }
-  .disc-body h4 { margin: var(--s2) 0 0; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
-  .safety .note code { font-size: 11px; }
+  .disc-body h4 { margin: var(--s2) 0 0; font-size: var(--text-caption); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  .safety .note code { font-size: var(--text-caption); }
   /* The summary's one-line exp must be allowed to ellipsize on narrow
      viewports rather than push the +/- marker off the rail. */
   .disc > summary .exp { white-space: nowrap; }
   .snippet-row { display: flex; gap: var(--s2); align-items: stretch; }
   .snippet-row.inline { margin: var(--s2) 0 0; max-width: 34rem; }
-  .snippet-row.inline .snippet { padding: var(--s1) var(--s2); font-size: 12px; white-space: nowrap; }
+  .snippet-row.inline .snippet { padding: var(--s1) var(--s2); font-size: var(--text-caption); white-space: nowrap; }
   .snippet {
     flex: 1; min-width: 0; overflow-x: auto; margin: 0;
     background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--radius-input);
     padding: var(--s2) var(--s3);
-    font-family: var(--font-mono); font-size: 12px; color: var(--fg); white-space: pre;
+    font-family: var(--font-mono); font-size: var(--text-caption); color: var(--fg); white-space: pre;
   }
   .snippet code { background: transparent; padding: 0; font-size: inherit; }
-  .note { margin: 0; font-size: 12px; line-height: 1rem; color: var(--muted); max-width: 72ch; }
+  .note { margin: 0; font-size: var(--text-caption); line-height: 1rem; color: var(--muted); max-width: 72ch; }
   .note a { color: var(--accent); }
   .note strong { color: var(--fg); }
   .steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2) var(--s5); }
   .steps li { display: flex; gap: var(--s3); align-items: flex-start; }
-  .steps .n { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.05em; color: var(--accent); font-weight: 600; min-width: 1.5rem; line-height: 1.25rem; }
+  .steps .n { font-family: var(--font-mono); font-size: var(--text-caption); letter-spacing: 0.05em; color: var(--accent); font-weight: 600; min-width: 1.5rem; line-height: 1.25rem; }
   .sbody { min-width: 0; }
-  .sbody strong { font-size: 13px; font-weight: 600; line-height: 1.25rem; }
-  .sbody p { margin: 0; font-size: 12px; line-height: 1rem; color: var(--muted); }
+  .sbody strong { font-size: var(--text-control); font-weight: 600; line-height: 1.25rem; }
+  .sbody p { margin: 0; font-size: var(--text-caption); line-height: 1rem; color: var(--muted); }
   @media (max-width: 720px) { .steps { grid-template-columns: 1fr; } }
 </style>

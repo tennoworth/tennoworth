@@ -28,6 +28,20 @@
   --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-ui: var(--font-body);
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --text-caption: 0.75rem;
+  --text-control: 0.8125rem;
+  --text-body: 0.875rem;
+  --text-heading: 1.25rem;
+  --text-section: 1rem;
+  --text-metric: 1.125rem;
+  --text-metric-lg: 1.375rem;
+  --leading-body: 1.5;
+  --leading-control: 1.25;
+  --layer-chrome: 20;
+  --layer-menu: 30;
+  --layer-popover: 50;
+  --layer-modal: 1000;
+  --layer-toast: 2000;
   /* Radii ladder. Components pick the slot, never a px value. */
   --radius-lg: 12px;      /* modal, showcase */
   --radius-panel: 8px;    /* cards, popovers, tables */
@@ -97,7 +111,7 @@ html[data-look="yorha"] {
   --border: #706B57;    /* container outlines - 3.6:1 on panel */
   --hairline: #B5B097;  /* inner dividers - always dotted here */
   --fg: #46422F;        /* grey-brown ink */
-  --muted: #5F5A46;     /* 4.8:1 on panel */
+  --muted: #57523F;
   --faint: #8B8670;     /* decorative only */
   --accent: #46422F;    /* = ink; active state is inversion, not a hue */
   --good: #2A6350;
@@ -155,17 +169,29 @@ html[data-look="yorha"][data-mode="dark"] {
   color-scheme: dark;
 }
 
+/* The game HUD needs a stable dark surface even when the desktop uses paper. */
+html.relic-overlay-surface {
+  --reward-surface: #1e1913f2;
+  --reward-fg: #D3C7A6;
+  --reward-muted: #A3977A;
+  --reward-border: #87775B;
+  --reward-value: #CBA05A;
+  --reward-good: #84AE85;
+  --reward-warning: #CF8360;
+  --reward-on-value: #1E1913;
+}
+
 /* ==========================================================================
    Base element styles (all looks)
    ========================================================================== */
 * { box-sizing: border-box; }
-html, body, #app { height: 100%; margin: 0; }
+html, body, #app { height: 100%; margin: 0; min-width: 0; }
 body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-body);
-  font-size: 0.875rem;
-  line-height: 1.5;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
 }
 a { color: var(--accent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -210,6 +236,8 @@ dialog.cryptobox {
   padding: 0;
   max-width: 420px;
   width: calc(100% - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
 }
 dialog.cryptobox::backdrop {
   background: var(--scrim);
@@ -220,22 +248,23 @@ dialog.cryptobox form {
   flex-direction: column;
   gap: 14px;
   padding: 20px 20px 16px;
+  min-width: 0;
 }
 dialog.cryptobox header { display: flex; flex-direction: column; gap: 6px; }
 dialog.cryptobox h3 {
   margin: 0;
-  font-size: 13px;
+  font-size: var(--text-control);
   letter-spacing: 0.05em;
   text-transform: uppercase;
   color: var(--accent);
   font-weight: 600;
 }
-dialog.cryptobox header p { margin: 0; font-size: 12.5px; line-height: 1.5; }
+dialog.cryptobox header p { margin: 0; font-size: var(--text-control); line-height: 1.5; }
 dialog.cryptobox label {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 11.5px;
+  font-size: var(--text-caption);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--muted);
@@ -250,6 +279,7 @@ dialog.cryptobox select {
   border-radius: var(--radius-input);
   padding: 8px 10px;
   font-family: var(--font-mono);
+  max-width: 100%;
 }
 dialog.cryptobox input[type="password"]:focus,
 dialog.cryptobox input[type="email"]:focus,
@@ -258,7 +288,7 @@ dialog.cryptobox select:focus {
 }
 dialog.cryptobox .err {
   color: var(--bad);
-  font-size: 12px;
+  font-size: var(--text-caption);
   background: color-mix(in srgb, var(--bad) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--bad) 40%, var(--border));
   padding: 8px 10px;
@@ -286,12 +316,12 @@ dialog.cryptobox footer {
    to make global rather than something each component must now re-opt into. */
 .muted {
   color: var(--muted);
-  font-size: 12.5px;
+  font-size: var(--text-control);
 }
 .warn-banner {
   border-left: 3px solid var(--bad);
   padding: 10px 14px;
-  font-size: 13px;
+  font-size: var(--text-control);
   color: var(--fg);
   line-height: 1.5;
 }
@@ -318,44 +348,47 @@ dialog.cryptobox footer {
   align-items: center;
   gap: var(--s2);
   padding: 0 var(--inset);
-  white-space: nowrap;
+  white-space: normal;
+  flex-wrap: wrap;
   min-width: 0;
 }
 .wrap.tw > .rail > *, .wrap.tw > .bar > *, .wrap.tw > .line > *, .wrap.tw > .foot > * { flex-shrink: 0; }
+.wrap.tw > .rail > h3 { flex-shrink: 1; min-width: 0; overflow-wrap: anywhere; }
 .wrap.tw > .rail {
-  height: var(--rail);
+  min-height: var(--rail);
+  padding-block: var(--s2);
   background: var(--panel-2);
   border-bottom: 1px solid var(--border);
-  font-size: 12px;
+  font-size: var(--text-caption);
   color: var(--muted);
 }
-.wrap.tw > .rail h3, .wrap.tw > .bar h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--fg); line-height: 1rem; }
-.wrap.tw > .bar { min-height: var(--bar); border-bottom: 1px solid var(--border); font-size: 12px; color: var(--muted); }
-.wrap.tw > .line { height: var(--rail); border-top: 1px var(--rule) var(--hairline); font-size: 12px; color: var(--muted); }
-.wrap.tw > .foot { min-height: var(--bar); border-top: 1px solid var(--border); font-size: 12px; color: var(--muted); }
-.wrap.tw .exp { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; flex-shrink: 1; min-width: 0; }
+.wrap.tw > .rail h3, .wrap.tw > .bar h3 { margin: 0; font-size: var(--text-control); font-weight: 600; color: var(--fg); line-height: 1rem; }
+.wrap.tw > .bar { min-height: var(--bar); border-bottom: 1px solid var(--border); font-size: var(--text-caption); color: var(--muted); }
+.wrap.tw > .line { min-height: var(--rail); padding-block: var(--s2); border-top: 1px var(--rule) var(--hairline); font-size: var(--text-caption); color: var(--muted); }
+.wrap.tw > .foot { min-height: var(--bar); border-top: 1px solid var(--border); font-size: var(--text-caption); color: var(--muted); }
+.wrap.tw .exp { color: var(--muted); font-size: var(--text-caption); white-space: normal; flex-shrink: 1; min-width: 0; overflow-wrap: anywhere; }
 .wrap.tw .grow { flex: 1 1 0; min-width: 0; }
-.wrap.tw .lbl { width: 3.25rem; flex: 0 0 auto; font-size: 10px; line-height: 1rem; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; color: var(--muted); font-family: var(--font-ui); } /* Scope/Narrow/Show labels are information, so --muted not --faint */
+.wrap.tw .lbl { width: 3.25rem; flex: 0 0 auto; font-size: var(--text-caption); line-height: 1rem; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 600; color: var(--muted); font-family: var(--font-ui); } /* Scope/Narrow/Show labels are information, so --muted not --faint */
 .wrap.tw .lbl.good { width: auto; color: var(--good); }
 .wrap.tw .lbl.bad { width: auto; color: var(--bad); }
-.wrap.tw .count { color: var(--muted); font-size: 12px; }
+.wrap.tw .count { color: var(--muted); font-size: var(--text-caption); }
 .wrap.tw .count b { color: var(--fg); font-weight: 600; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .wrap.tw .input {
   height: var(--ctl-lg);
   padding: 0 var(--s3);
-  font-size: 13px;
+  font-size: var(--text-control);
   min-width: 0;
 }
 .wrap.tw .input.grow { flex: 1 1 0; }
 .wrap.tw .scroll { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
-.wrap.tw .body { padding: var(--s3) var(--inset); font-size: 12px; color: var(--muted); }
+.wrap.tw .body { padding: var(--s3) var(--inset); font-size: var(--text-caption); color: var(--muted); }
 .wrap.tw .body p { margin: 0; line-height: 1rem; }
 .wrap.tw .body p + p { margin-top: var(--s2); }
 
 table.tw {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: var(--text-control);
   line-height: 1.25rem;
   font-variant-numeric: tabular-nums;
 }
@@ -366,7 +399,7 @@ table.tw th {
   padding: 0 var(--cell);
   background: var(--panel-2);
   font-family: var(--font-ui);
-  font-size: 10px; line-height: 1rem;
+  font-size: var(--text-caption); line-height: 1rem;
   letter-spacing: 0.12em; text-transform: uppercase;
   color: var(--muted); font-weight: 600;
   text-align: right;
@@ -386,7 +419,7 @@ table.tw.comfortable td { height: var(--row-cf); }
 table.tw th:first-child, table.tw td:first-child { padding-left: var(--inset); }
 table.tw th:last-child, table.tw td:last-child { padding-right: var(--inset); }
 table.tw th.l, table.tw td.l { text-align: left; }
-table.tw td.l { font-family: var(--font-body); color: var(--fg); }
+table.tw td.l { font-family: var(--font-body); color: var(--fg); white-space: normal; overflow-wrap: anywhere; padding-block: var(--s1); }
 table.tw:not(.fixed) th.l { width: 100%; min-width: 10rem; }
 table.tw tbody tr:first-child td { border-top: none; }
 table.tw tbody tr:hover td { background: var(--hover-tint); }
@@ -397,9 +430,46 @@ table.tw td.fg { color: var(--fg); }
 table.tw th.sorted { color: var(--accent); }
 table.tw tr.dim td, table.tw tr.dim td.l, table.tw tr.dim td.l a { color: var(--muted); font-weight: 400; }
 table.tw td.act { text-align: right; overflow: visible; }
-table.tw td.reason { font-family: var(--font-body); text-align: left; color: var(--muted); font-size: 12px; }
+table.tw td.reason { font-family: var(--font-body); text-align: left; color: var(--muted); font-size: var(--text-caption); }
 table.tw td.reason.warn { color: var(--warn); }
 table.tw td.reason.bad { color: var(--bad); }
+
+@media (max-width: 35rem) {
+  :root {
+    --gutter: 0.75rem;
+    --inset: 0.75rem;
+  }
+  .wrap.tw > .rail,
+  .wrap.tw > .bar,
+  .wrap.tw > .line,
+  .wrap.tw > .foot {
+    height: auto;
+    min-height: var(--rail);
+    padding-top: var(--s2);
+    padding-bottom: var(--s2);
+    flex-wrap: wrap;
+    white-space: normal;
+  }
+  .wrap.tw > .bar { min-height: var(--bar); }
+  .wrap.tw > .rail .exp,
+  .wrap.tw > .bar .exp,
+  .wrap.tw > .line .exp,
+  .wrap.tw > .foot .exp {
+    flex: 1 1 12rem;
+  }
+  .wrap.tw .exp {
+    white-space: normal;
+    overflow: visible;
+    text-overflow: clip;
+  }
+  .wrap.tw .input.grow { flex-basis: 100%; }
+  dialog.cryptobox {
+    width: calc(100% - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+  dialog.cryptobox form { padding: var(--s4) var(--s3) var(--s3); }
+  dialog.cryptobox footer { flex-wrap: wrap; }
+}
 /* Ghost "your inventory" columns on the landing: dashed lead rule; the heads
    name real columns (Own/Score/Potential) so they read at --muted, only the
    placeholder cells are decorative --faint. */
@@ -415,8 +485,8 @@ table.tw .down, table.tw .bad { color: var(--bad); }
 table.tw .flat, table.tw .muted { color: var(--muted); font-size: inherit; }
 table.tw .faint { color: var(--faint); }
 table.tw .ducat { color: var(--ducat); }
-table.tw .unit { color: var(--muted); font-size: 10px; margin-left: 1px; }
-table.tw .kept { color: var(--muted); font-size: 11px; margin-left: var(--s1); }
+table.tw .unit { color: var(--muted); font-size: var(--text-caption); margin-left: 1px; }
+table.tw .kept { color: var(--muted); font-size: var(--text-caption); margin-left: var(--s1); }
 table.tw td .type { font-family: var(--font-body); color: var(--good); }
 table.tw td .type.buy { color: var(--accent); }
 /* Sparklines: 60×18 in accent, inheriting the dim rule. */
@@ -428,7 +498,7 @@ table.tw .tag {
   height: 1rem; line-height: 0.875rem;
   padding: 0 0.3rem; margin-left: var(--s2);
   font-family: var(--font-mono);
-  font-size: 9px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
+  font-size: var(--text-caption); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
   border: 1px solid currentColor; border-radius: var(--radius-tag);
   vertical-align: middle; color: var(--muted);
 }
@@ -440,7 +510,7 @@ table.tw .tag.peak { color: var(--good); }
 table.tw .tag.deal { color: var(--ducat); }
 table.tw .tag.thin { color: var(--warn); }
 /* Vis pill in the orders table. */
-table.tw .vis { font: 600 10px/1rem var(--font-mono); border: 1px solid currentColor; border-radius: var(--radius-tag); padding: 0 var(--s1); color: var(--good); letter-spacing: 0.06em; }
+table.tw .vis { font: 600 var(--text-caption)/1rem var(--font-mono); border: 1px solid currentColor; border-radius: var(--radius-tag); padding: 0 var(--s1); color: var(--good); letter-spacing: 0.06em; }
 table.tw .vis.off { color: var(--muted); }
 /* Pending destructive row - the two-tap delete's armed state. */
 table.tw tr.confirming td { background: color-mix(in srgb, var(--bad) 6%, transparent); }
@@ -450,32 +520,67 @@ table.tw tr.busy td { color: var(--faint); }
 /* Buttons on the three heights: .btn 28 · .btn.xs 24 · .btn.lg 32. */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--s1);
-  height: var(--ctl); padding: 0 var(--s3);
-  font: inherit; font-size: 12px; line-height: 1;
+  min-height: var(--ctl); padding: var(--s1) var(--s3);
+  min-width: var(--ctl-xs); max-width: 100%;
+  font: inherit; font-size: var(--text-caption); line-height: var(--leading-control);
   color: var(--fg); background: var(--panel-2);
   border: 1px solid var(--border); border-radius: var(--radius-ctl);
-  cursor: pointer; white-space: nowrap; text-decoration: none;
+  cursor: pointer; white-space: normal; overflow-wrap: anywhere; text-decoration: none;
 }
 .btn:hover:not(:disabled) { background: var(--hover); color: var(--fg); }
-.btn.lg { height: var(--ctl-lg); font-size: 13px; padding: 0 var(--s4); }
-.btn.xs { height: var(--ctl-xs); font-size: 11px; padding: 0 var(--s2); }
+.btn.lg { min-height: var(--ctl-lg); font-size: var(--text-control); padding-inline: var(--s4); }
+.btn.xs { min-height: var(--ctl-xs); font-size: var(--text-caption); padding-inline: var(--s2); }
 .btn.ghost { background: transparent; }
 .btn.ghost:hover:not(:disabled) { background: var(--panel-2); }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 600; }
 .btn.primary:hover:not(:disabled) { filter: brightness(1.08); background: var(--accent); color: var(--on-accent); }
-.btn.x { background: transparent; border-color: transparent; color: var(--muted); padding: 0 var(--s1); font-size: 14px; }
+.btn.x { background: transparent; border-color: transparent; color: var(--muted); padding: 0 var(--s1); font-size: var(--text-body); }
 .btn.x:hover:not(:disabled) { color: var(--bad); background: transparent; }
 .btn.bad { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 40%, var(--border)); }
 .btn.bad:hover:not(:disabled) { background: color-mix(in srgb, var(--bad) 12%, transparent); }
 .btn.link { background: transparent; border-color: transparent; color: var(--accent); padding: 0 var(--s1); }
 .btn.link:hover:not(:disabled) { text-decoration: underline; background: transparent; color: var(--accent); }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn:disabled { opacity: 1; color: var(--muted); background: var(--panel-2); border-style: dotted; cursor: not-allowed; }
+
+/* Opt-in patterns keep migration independent of feature-specific selectors. */
+.ui-stack { display: flex; flex-direction: column; gap: var(--stack); min-width: 0; }
+.ui-panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-panel); padding: var(--s3) var(--inset); display: flex; flex-direction: column; gap: var(--stack); min-width: 0; }
+.ui-panel.warn-banner { border-left: 3px solid var(--warn); }
+.ui-panel > header { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); flex-wrap: wrap; }
+.ui-panel > header h2 { margin: 0; font-size: var(--text-heading); line-height: var(--leading-control); }
+.view-header { display: flex; align-items: center; gap: var(--s2); min-height: var(--rail); flex-wrap: wrap; }
+.view-header h2 { margin: 0; color: var(--fg); font-size: var(--text-heading); font-weight: 600; line-height: var(--leading-control); letter-spacing: -.01em; text-transform: none; }
+.lede-dot { display: inline-flex; align-items: center; justify-content: center; width: var(--ctl-xs); height: var(--ctl-xs); font-size: var(--text-caption); line-height: 1; color: var(--muted); border: 1px var(--rule) var(--border); cursor: help; }
+.lede-dot:hover, .lede-dot:focus-visible { color: var(--accent); border-color: var(--accent); }
+.general-banner { flex-direction: row; align-items: flex-start; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
+.general-banner .gb-body { min-width: 0; flex: 1 1 20rem; overflow-wrap: anywhere; }
+.general-banner .gb-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); margin-left: auto; }
+.general-banner .gb-dismiss { min-width: var(--ctl-xs); min-height: var(--ctl-xs); background: transparent; border: none; color: var(--muted); font-size: var(--text-section); line-height: 1; cursor: pointer; padding: var(--s1); }
+.general-banner .gb-dismiss:hover { color: var(--fg); }
+.ui-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); min-width: 0; }
+.ui-field { display: flex; flex-direction: column; gap: var(--s1); min-width: 0; font-size: var(--text-control); }
+.ui-field > :is(input, select, textarea) {
+  min-width: 0; max-width: 100%; min-height: var(--ctl-lg);
+  padding: var(--s1) var(--s2); font: inherit; line-height: var(--leading-control);
+  color: var(--fg); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-input);
+}
+.ui-field > :is(input, select, textarea)[aria-invalid="true"] { border-color: var(--bad); }
+.ui-field > small { font-size: var(--text-caption); color: var(--muted); }
+.ui-input { font: inherit; font-size: var(--text-control); line-height: var(--leading-control); color: var(--fg); background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-input); min-height: var(--ctl-lg); min-width: 0; max-width: 100%; padding: var(--s1) var(--s2); }
+.ui-notice { margin: 0; padding: var(--s2) var(--s3); border: 1px var(--rule) var(--border); border-left: 3px solid var(--border); color: var(--fg); background: var(--panel); overflow-wrap: anywhere; }
+.ui-notice[data-tone="good"] { border-left-color: var(--good); }
+.ui-notice[data-tone="warn"] { border-left-color: var(--warn); }
+.ui-notice[data-tone="bad"] { border-left-color: var(--bad); }
 /* Segmented control on the 28px height. */
 .seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-ctl); overflow: hidden; height: var(--ctl); }
-.seg > button { font: inherit; font-size: 12px; height: 100%; padding: 0 var(--s3); background: var(--panel-2); border: none; border-left: 1px solid var(--border); border-radius: 0; color: var(--muted); cursor: pointer; }
+.seg > button { font: inherit; font-size: var(--text-caption); height: 100%; padding: 0 var(--s3); background: var(--panel-2); border: none; border-left: 1px solid var(--border); border-radius: 0; color: var(--muted); cursor: pointer; }
 .seg > button:first-child { border-left: none; }
 .seg > button:hover:not(:disabled) { color: var(--fg); background: var(--hover); }
 .seg > button.on { color: var(--accent); background: var(--panel); font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
 
 /* ==========================================================================
    Per-look structural rules. Selectors mirror the component's own so the
@@ -499,8 +604,8 @@ html[data-look="yorha"][data-mode="dark"] input[type="text"],
 html[data-look="yorha"][data-mode="dark"] input[type="number"] { background: var(--bg); }
 html[data-look="yorha"] ::selection { background: var(--ink-bar); color: var(--on-ink); }
 /* Tracked condensed caps for the titles; weight 400–500, never bold. */
-html[data-look="yorha"] .view-header h2 { font: 400 24px/1.1 var(--font-ui); letter-spacing: 0.2em; text-transform: uppercase; }
-html[data-look="yorha"] .statusbar .brand h1 { font: 500 15px/1.2 var(--font-ui); letter-spacing: 0.18em; text-transform: uppercase; }
+html[data-look="yorha"] .view-header h2 { font: 400 var(--text-metric-lg)/1.1 var(--font-ui); letter-spacing: 0.2em; text-transform: uppercase; }
+html[data-look="yorha"] .statusbar .brand h1 { font: 500 var(--text-section)/1.2 var(--font-ui); letter-spacing: 0.18em; text-transform: uppercase; }
 html[data-look="yorha"] .nav-label,
 html[data-look="yorha"] th,
 html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.14em; }
@@ -518,8 +623,8 @@ html[data-look="yorha"] .nav-item > span:first-child::before {
 }
 html[data-look="yorha"] .nav-item.active > span:first-child::before { background: currentColor; }
 html[data-look="yorha"] .preset.active { background: var(--ink-bar); color: var(--on-ink); border-color: var(--ink-bar); }
-html[data-look="yorha"] .preset.active::before { content: "■ "; font-size: 8px; vertical-align: 1px; }
-html[data-look="yorha"] .preset::before { content: "□ "; font-size: 8px; vertical-align: 1px; }
+html[data-look="yorha"] .preset.active::before { content: "■ "; font-size: var(--text-caption); vertical-align: 1px; }
+html[data-look="yorha"] .preset::before { content: "□ "; font-size: var(--text-caption); vertical-align: 1px; }
 html[data-look="yorha"] .list-cta,
 html[data-look="yorha"] .rp-primary,
 html[data-look="yorha"] .btn.primary { background: var(--ink-bar); color: var(--on-ink); border-color: var(--ink-bar); }
@@ -528,7 +633,7 @@ html[data-look="yorha"] .refresh-pop .rp-primary:hover:not(:disabled),
 html[data-look="yorha"] .btn.primary:hover:not(:disabled) { background: var(--fg); color: var(--panel); filter: none; }
 /* Shared .wrap.tw rails are ink title bars too (same as .picks-head). */
 html[data-look="yorha"] .wrap.tw > .rail { background: var(--ink-bar); color: var(--on-ink-muted); border-bottom: 0; }
-html[data-look="yorha"] .wrap.tw > .rail h3 { color: var(--on-ink); font: 500 12px/1rem var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
+html[data-look="yorha"] .wrap.tw > .rail h3 { color: var(--on-ink); font: 500 var(--text-caption)/1rem var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
 html[data-look="yorha"] .wrap.tw > .rail .exp, html[data-look="yorha"] .wrap.tw > .rail a, html[data-look="yorha"] .wrap.tw > .rail .btn.link { color: var(--on-ink-muted); border-bottom-color: var(--on-ink-muted); }
 html[data-look="yorha"] .wrap.tw > .rail .lbl.good, html[data-look="yorha"] .wrap.tw > .rail .lbl.bad { color: var(--on-ink); }
 html[data-look="yorha"] .wrap.tw > .rail .rail-toggle { color: var(--on-ink-muted); }
@@ -539,8 +644,8 @@ html[data-look="yorha"] .seg > button:not(:first-child) { border-left-style: dot
 html[data-look="yorha"] .seg > button.on { color: var(--fg); background: var(--panel); }
 /* Card heads: the picks strip's head bar and any card whose first child is
    its h3 (market browser cards) become full-width ink title bars. */
-html[data-look="yorha"] .picks-head { background: var(--ink-bar); color: var(--on-ink); border-bottom: 0; padding: 6px 16px; }
-html[data-look="yorha"] .picks-head h3 { color: inherit; font: 500 12px/1.6 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
+html[data-look="yorha"] .picks-head { background: var(--ink-bar); color: var(--on-ink); border-bottom: 0; padding: var(--s1) var(--inset); }
+html[data-look="yorha"] .picks-head h3 { color: inherit; font: 500 var(--text-caption)/1.6 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
 html[data-look="yorha"] .picks-head .muted, html[data-look="yorha"] .picks-head .rail-toggle, html[data-look="yorha"] .picks-head .link { color: var(--on-ink-muted); }
 html[data-look="yorha"] .picks-head .rail-toggle:hover, html[data-look="yorha"] .picks-head .link:hover { color: var(--on-ink); }
 html[data-look="yorha"] .bar .lbl { font-weight: 500; letter-spacing: 0.14em; }
@@ -548,10 +653,10 @@ html[data-look="yorha"] .bar.raised { border-bottom-style: dotted; }
 html[data-look="yorha"] .card > h3:first-child {
   margin: -14px -16px 0; padding: 5px 12px;
   background: var(--ink-bar); color: var(--on-ink);
-  font: 500 12px/1.6 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase;
+  font: 500 var(--text-caption)/1.6 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase;
 }
 html[data-look="yorha"] .card > h3:first-child .muted { color: var(--on-ink-muted); text-transform: none; letter-spacing: 0; font-family: var(--font-body); }
-html[data-look="yorha"] .faq > h2 { background: var(--ink-bar); color: var(--on-ink); margin: -4px -18px 0; padding: 6px 12px; font: 500 12px/1.6 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
+html[data-look="yorha"] .faq > h2 { background: var(--ink-bar); color: var(--on-ink); margin: -4px -18px 0; padding: 6px 12px; font: 500 var(--text-caption)/1.6 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
 html[data-look="yorha"] .modal > header, html[data-look="yorha"] dialog.cryptobox header { background: var(--ink-bar); color: var(--on-ink); border-bottom: 0; }
 html[data-look="yorha"] .modal > header h2, html[data-look="yorha"] dialog.cryptobox h3 { color: inherit; font-family: var(--font-ui); letter-spacing: 0.16em; font-weight: 500; }
 html[data-look="yorha"] .modal > header .x { color: var(--on-ink); border-color: var(--on-ink); }
@@ -577,11 +682,11 @@ html[data-look="yorha"] .info-btn { border-radius: 0; }
 /* Mono status strip: the deadpan NieR status line - mono, tracked caps for
    the labels, dotted cell rules; the outer bottom edge stays solid. */
 html[data-look="yorha"] .statusbar {
-  font-family: var(--font-mono); font-size: 11px; color: var(--muted); background: var(--panel);
+  font-family: var(--font-mono); font-size: var(--text-caption); color: var(--muted); background: var(--panel);
 }
-html[data-look="yorha"] .statusbar .cell > span:not(.dot):not(.ducat) { text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; }
+html[data-look="yorha"] .statusbar .cell > span:not(.dot):not(.ducat) { text-transform: uppercase; letter-spacing: 0.08em; font-size: var(--text-caption); }
 html[data-look="yorha"] .statusbar .cell b { font-weight: 500; }
 html[data-look="yorha"] .statusbar .brand .sub { font-family: var(--font-body); }
-html[data-look="yorha"] .statusbar .refresh-trigger { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; }
+html[data-look="yorha"] .statusbar .refresh-trigger { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; font-size: var(--text-caption); }
 /* Summary cells (view header): tracked caps keys, mono values. */
 html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.14em; }

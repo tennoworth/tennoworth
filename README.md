@@ -172,6 +172,13 @@ The Rust workspace contains five crates:
 
 ## Development
 
+UI changes follow the [TennoWorth design system](docs/design-system.md).
+Open `http://127.0.0.1:5173/?styleguide` during development for the living
+reference: production tokens and patterns, both themes, long content, data
+states, and an editable sample dialog. Its data is fictional and its controls
+do not write settings or submit orders. The styleguide is excluded from
+production builds.
+
 The web app requires [Bun](https://bun.sh/):
 
 ```bash
@@ -179,6 +186,38 @@ cd prototype
 bun install --frozen-lockfile
 bun run dev
 ```
+
+Open `http://127.0.0.1:5173/?preview-desktop&sample` for the desktop layout
+with sample inventory, orders, watches, trades, and a Riven. This development-only
+preview keeps its state in memory and makes no account requests. Use
+`sample=empty`, `sample=error`, `sample=loading`, or `sample=logged-out`
+to inspect alternate states. Reloading resets the sample.
+
+Responsive checks run with `bun run test:responsive` (Chromium) or
+`bun run test:responsive:all` (Chromium and WebKit). Install browsers with
+`bunx playwright install --with-deps chromium webkit` on supported Linux hosts.
+Screenshots and failure traces are written to `prototype/test-results/responsive/`.
+
+| Coverage | Scenarios |
+| --- | --- |
+| Hosted page and desktop shell | 320–1600 px, including breakpoint boundaries |
+| All twelve desktop views | Populated content, 320–1440 px, heights of 480–900 px |
+| Orders, watches, ledger | Empty, delayed, and failed responses |
+| Open interactions | Listing quantity edits, Filters, column help, Riven comparisons |
+| Design contract | All twelve views in both themes, shared control targets, table columns, keyboard theme/review navigation |
+| Living reference | Linux Chromium/WebKit visual baselines, text-token contrast, data and dialog states |
+| Browser reward overlay | Transparent surface, complete names, scale-aware card widths, no CSS leakage into the site |
+| Enlarged rendering | 200% CSS zoom; native browser zoom and OS scaling require separate checks |
+
+Browser tests use the actual styled SPA and a simulated desktop transport.
+They supplement native Windows and Linux testing; they do not certify native
+window management or display scaling.
+
+The unit suite also checks component style blocks for literal colors, pixel
+text sizes, and pixel radii; shared values belong in `src/app.css`. Visual
+baseline updates require inspecting the changed images, then rerunning without
+`--update-snapshots`. Baselines use Linux and the browser versions from the
+lockfile; Windows native verification is a separate requirement.
 
 The development server listens on `http://127.0.0.1:5173`. It runs in hosted
 mode, so desktop-only IPC features are intentionally unavailable.

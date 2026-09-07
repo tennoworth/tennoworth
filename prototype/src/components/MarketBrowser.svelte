@@ -212,7 +212,8 @@
 <!-- Mini table: Item · Δ 90d · Trend · Avg · Vol 48h (+ Ducats) - movers and vaulted. -->
 {#snippet miniTable(rows: BrowseRow[], sortedKey: 'delta' | 'avg', ducats: boolean, emptyText: string)}
   {#if rows.length}
-    <table class="tw fixed">
+    <div class="scroll">
+    <table class="tw fixed mini-table" class:with-ducats={ducats}>
       <colgroup>
         <col />
         <col style="width:3.75rem" />
@@ -242,6 +243,7 @@
         {/each}
       </tbody>
     </table>
+    </div>
   {:else}
     <div class="body"><p>{emptyText}</p></div>
   {/if}
@@ -392,7 +394,8 @@
           </p>
         </div>
         {#if baroStock.length}
-          <table class="tw fixed">
+          <div class="scroll">
+          <table class="tw fixed baro-stock">
             <colgroup><col /><col style="width:4rem" /><col style="width:4.5rem" /></colgroup>
             <thead><tr>
               <th class="l">{baroStockIsPast ? "Last visit's stock" : 'Stock'}</th>
@@ -409,6 +412,7 @@
               {/each}
             </tbody>
           </table>
+          </div>
         {/if}
         {#if handoff}
           <div class="line"><a href="#desktop">Ducat math for what you own →</a></div>
@@ -424,7 +428,8 @@
         <h3>Riven disposition changes</h3>
         <span class="exp">last 90 days · DE only raises dispositions now, so each change is a one-way price event for that weapon's rivens - WFM reprices within a day</span>
       </div>
-      <table class="tw fixed">
+      <div class="scroll">
+      <table class="tw fixed dispo-table">
         <colgroup><col /><col style="width:8rem" /><col style="width:4rem" /><col style="width:5rem" /></colgroup>
         <thead><tr>
           <th class="l">Weapon</th>
@@ -443,6 +448,7 @@
           {/each}
         </tbody>
       </table>
+      </div>
     </section>
   {/if}
 
@@ -465,7 +471,7 @@
 
   .lookup .bar .exp kbd {
     font-family: var(--font-mono);
-    font-size: 10px;
+    font-size: var(--text-caption);
     border: 1px solid var(--border);
     border-radius: var(--radius-tag);
     padding: 0 4px;
@@ -474,25 +480,34 @@
   .lookup .exp.note { flex-shrink: 0; }
   .year-toggle.on { color: var(--fg); border-color: var(--accent); }
   .stale-note { color: var(--warn); }
-  .thin-hist { font-size: 11px; color: var(--muted); font-family: var(--font-body); }
+  .thin-hist { font-size: var(--text-caption); color: var(--muted); font-family: var(--font-body); }
   /* Below the results table's natural width the panel pans sideways rather
      than squeezing the Item column. */
   .results { min-width: 56rem; }
+  .mini-table { min-width: 27rem; }
+  .mini-table.with-ducats { min-width: 31rem; }
+  .baro-stock { min-width: 27rem; }
+  .dispo-table { min-width: 34rem; }
+
+  @media (max-width: 35rem) {
+    .lookup .bar .input { width: 100%; }
+    .lookup .bar .year-toggle { margin-left: auto; }
+  }
 
   /* Baro card: rail glyph in ducat gold, mono clock. */
   .baro { display: flex; flex-direction: column; }
-  .baro .glyph { color: var(--ducat); font-size: 14px; }
+  .baro .glyph { color: var(--ducat); font-size: var(--text-body); }
   .baro .body { display: flex; flex-direction: column; gap: var(--s2); }
   .baro .clock {
     font-family: var(--font-mono);
-    font-size: 18px;
+    font-size: var(--text-metric);
     line-height: 1.5rem;
     font-weight: 600;
     font-variant-numeric: tabular-nums;
     color: var(--fg);
   }
   .baro .clock small {
-    font: 600 10px/1rem var(--font-ui);
+    font: 600 var(--text-caption)/1rem var(--font-ui);
     color: var(--muted);
     letter-spacing: 0.1em;
     text-transform: uppercase;

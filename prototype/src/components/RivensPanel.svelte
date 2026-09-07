@@ -246,27 +246,28 @@
 <style>
   /* Shell + table come from the shared .wrap.tw / table.tw anatomy in
      app.css; only riven-specific content styles live here. */
+  table { min-width: 58rem; }
   .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .weapon { display: flex; align-items: center; gap: var(--s1); }
-  .pol { color: var(--muted); font-size: 12px; }
+  .pol { color: var(--muted); font-size: var(--text-caption); }
   .veiled { color: var(--muted); font-style: italic; }
   /* Stats wrap to several lines; td height acts as a minimum in tables. */
   .stats { display: flex; flex-wrap: wrap; gap: 2px var(--s3); max-width: 420px; padding: var(--s1) 0; font-family: var(--font-body); color: var(--fg); }
   .stat { white-space: nowrap; }
-  .dispo-move { font-family: var(--font-mono); font-size: 11px; color: var(--good); margin-left: var(--s1); }
+  .dispo-move { font-family: var(--font-mono); font-size: var(--text-caption); color: var(--good); margin-left: var(--s1); }
   .band { white-space: nowrap; }
   .offer-check { margin-top: 4px; white-space: normal; text-align: left; }
   .offer-check > summary { cursor: pointer; color: var(--muted); font-size: 0.75rem; }
-  .small { font-size: 11px; }
+  .small { font-size: var(--text-caption); }
   .muted { color: var(--muted); }
   .bad { color: var(--bad); }
-  .similarity { color: var(--accent); border: 1px solid var(--accent); border-radius: var(--radius-ctl); padding: 1px 5px; font: 600 11px var(--font-mono); white-space: nowrap; }
+  .similarity { color: var(--accent); border: 1px solid var(--accent); border-radius: var(--radius-ctl); padding: 1px 5px; font: 600 var(--text-caption) var(--font-mono); white-space: nowrap; }
   /* Comps expand as an inset drawer under the row, on the panel-2 ground. */
   .comps-row td { background: var(--panel-2); height: auto; text-align: left; }
   .comps { display: flex; flex-direction: column; gap: var(--s1); max-height: 320px; overflow: auto; padding: var(--s1) 0; }
   .comp { border: 1px solid var(--border); border-radius: var(--radius-ctl); padding: var(--s2); display: flex; flex-direction: column; gap: 4px; background: var(--panel); }
   .comp-head { display: flex; align-items: baseline; gap: var(--s2); }
-  .comp .price { font-weight: 700; font-size: 14px; }
+  .comp .price { font-weight: 700; font-size: var(--text-body); }
   .comp-owner { margin-left: auto; white-space: nowrap; font-family: var(--font-mono); }
   .comp-detail { display: flex; gap: var(--s2); flex-wrap: wrap; }
   .comp-stats { display: flex; flex-wrap: wrap; gap: 2px 12px; font-family: var(--font-body); color: var(--fg); }

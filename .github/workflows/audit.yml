@@ -44,6 +44,8 @@ jobs:
               - 'prototype/tsconfig.json'
               - 'prototype/vite.config.ts'
               - 'prototype/vitest.config.ts'
+              - 'prototype/playwright.config.ts'
+              - 'prototype/tests/browser/**'
               - 'prototype/public/theme-boot.js'
               - 'scripts/sync-csp.ts'
               - 'tests/fixtures/**'
@@ -104,8 +106,19 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
+      - name: Install responsive-test browsers
+        run: bunx playwright install --with-deps chromium webkit
       - name: tests
         run: bun run test
+      - name: responsive browser gate
+        run: bun run test:responsive:all
+      - name: Upload responsive failure evidence
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: responsive-test-evidence
+          path: prototype/test-results/responsive
+          if-no-files-found: ignore
       - name: type-check
         run: bunx svelte-check --threshold error
       # Dead exports. Neither gate above can see them: noUnusedLocals flags
