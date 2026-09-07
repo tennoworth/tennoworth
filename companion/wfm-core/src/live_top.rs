@@ -40,26 +40,26 @@ pub struct LiveTopQuery {
 /// The answer for one query. `sells` / `buys` are the platinum values of the
 /// ≤5 best asks / bids WFM returned (online players only), best first;
 /// `low_sell` / `top_buy` are their heads for convenience.
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub struct LiveTop {
     pub slug: String,
     #[serde(default)]
     pub rank: Option<u32>,
     #[serde(default)]
     pub subtype: Option<String>,
-    pub sells: Vec<u32>,
-    pub buys: Vec<u32>,
-    pub low_sell: Option<u32>,
-    pub top_buy: Option<u32>,
+    pub sells: Vec<f64>,
+    pub buys: Vec<f64>,
+    pub low_sell: Option<f64>,
+    pub top_buy: Option<f64>,
     /// The caller's OWN ask/bid on this tier, when [`fetch_live_tops`] was
     /// given a username and one of the ≤5 top orders is theirs. Those orders
     /// are excluded from `sells` / `buys`, so `low_sell` is "the best ask that
     /// is not mine" - the number a repricing decision actually needs (the
     /// snapshot can't tell whose order is whose; this can).
     #[serde(default)]
-    pub own_ask: Option<u32>,
+    pub own_ask: Option<f64>,
     #[serde(default)]
-    pub own_bid: Option<u32>,
+    pub own_bid: Option<f64>,
     /// Set when this one lookup failed (item unknown to WFM, network blip);
     /// the batch keeps going and the UI shows the row as "no live data".
     #[serde(default)]
@@ -122,14 +122,14 @@ pub fn parse_top(q: &LiveTopQuery, body: &serde_json::Value, me: Option<&str>) -
         bail!("unexpected /top shape for {}: no sell/buy arrays", q.slug);
     }
     // (others' prices, my price if present)
-    let side = |name: &str| -> (Vec<u32>, Option<u32>) {
+    let side = |name: &str| -> (Vec<f64>, Option<f64>) {
         let mut others = Vec::new();
         let mut mine = None;
         for o in data.get(name).and_then(|v| v.as_array()).into_iter().flatten() {
-            let Some(p) = o.get("platinum").and_then(|p| p.as_u64()) else { continue };
-            let p = p.min(u32::MAX as u64) as u32;
+            let Some(p) = o.get("platinum").and_then(|p| p.as_f64())
+                .and_then(|p| wfm_client::unit_price(p, o.get("perTrade"))) else { continue };
             if is_own_order(o, me) {
-                mine = Some(mine.map_or(p, |m: u32| m.min(p)));
+                mine = Some(mine.map_or(p, |m: f64| if name == "sell" { m.min(p) } else { m.max(p) }));
             } else {
                 others.push(p);
             }
@@ -138,8 +138,8 @@ pub fn parse_top(q: &LiveTopQuery, body: &serde_json::Value, me: Option<&str>) -
     };
     let (mut sells, own_ask) = side("sell");
     let (mut buys, own_bid) = side("buy");
-    sells.sort_unstable();
-    buys.sort_unstable_by(|a, b| b.cmp(a));
+    sells.sort_unstable_by(f64::total_cmp);
+    buys.sort_unstable_by(|a, b| b.total_cmp(a));
     Ok(LiveTop {
         slug: q.slug.clone(),
         rank: q.rank,
@@ -228,10 +228,10 @@ mod tests {
             "sell":[{"platinum":20},{"platinum":15},{"platinum":18}],
             "buy":[{"platinum":9},{"platinum":12}]}});
         let t = parse_top(&q("primed_flow", Some(0), None), &body, None).unwrap();
-        assert_eq!(t.sells, vec![15, 18, 20]);
-        assert_eq!(t.buys, vec![12, 9]);
-        assert_eq!(t.low_sell, Some(15));
-        assert_eq!(t.top_buy, Some(12));
+        assert_eq!(t.sells, vec![15.0, 18.0, 20.0]);
+        assert_eq!(t.buys, vec![12.0, 9.0]);
+        assert_eq!(t.low_sell, Some(15.0));
+        assert_eq!(t.top_buy, Some(12.0));
         assert!(t.error.is_none());
     }
 
@@ -241,6 +241,21 @@ mod tests {
         let t = parse_top(&q("thin", None, None), &body, None).unwrap();
         assert_eq!(t.low_sell, None);
         assert_eq!(t.top_buy, None);
+    }
+
+    #[test]
+    fn compares_bulk_orders_per_unit_without_losing_fractional_prices() {
+        let body = json!({"data": {
+            "sell": [{"platinum":48,"perTrade":6}, {"platinum":36,"perTrade":5},
+                {"platinum":1,"perTrade":0},
+                {"platinum":24,"perTrade":3,"user":{"slug":"me"}}],
+            "buy": [{"platinum":35,"perTrade":5}]
+        }});
+        let t = parse_top(&q("arcane_energize", Some(0), None), &body, Some("me")).unwrap();
+        assert_eq!(t.sells, vec![7.2, 8.0]);
+        assert_eq!(t.low_sell, Some(7.2));
+        assert_eq!(t.top_buy, Some(7.0));
+        assert_eq!(t.own_ask, Some(8.0));
     }
 
     #[test]
@@ -259,13 +274,13 @@ mod tests {
                 {"platinum":9,"user":{"ingameName":"Other","slug":"other"}},
                 {"platinum":8,"user":{"ingameName":"prowly","slug":"prowly"}}]}});
         let t = parse_top(&q("primed_flow", Some(0), None), &body, Some("PROWLY")).unwrap();
-        assert_eq!(t.own_ask, Some(12));
-        assert_eq!(t.own_bid, Some(8));
-        assert_eq!(t.low_sell, Some(14), "the best ask that is NOT mine");
-        assert_eq!(t.top_buy, Some(9));
+        assert_eq!(t.own_ask, Some(12.0));
+        assert_eq!(t.own_bid, Some(8.0));
+        assert_eq!(t.low_sell, Some(14.0), "the best ask that is NOT mine");
+        assert_eq!(t.top_buy, Some(9.0));
         // no username → nothing is "mine"
         let t2 = parse_top(&q("primed_flow", Some(0), None), &body, None).unwrap();
         assert_eq!(t2.own_ask, None);
-        assert_eq!(t2.low_sell, Some(12));
+        assert_eq!(t2.low_sell, Some(12.0));
     }
 }

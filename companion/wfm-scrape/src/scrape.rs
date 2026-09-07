@@ -25,10 +25,11 @@ const API_ROOT: &str = "https://api.warframe.market";
 
 /// The CSV column order - the keys of `analyze_item`'s dict, in insertion
 /// order, which is also what `csvin::CsvRow` reads back.
-const HEADER: [&str; 19] = [
+const HEADER: [&str; 20] = [
     "url_name", "name", "tags", "ducats", "live_buys", "live_sells", "buy_sell_ratio",
     "top_buy_price", "low_sell_price", "low5_avg", "spread", "volume_48h", "avg_price_48h",
     "median_now", "median_90d", "medians_7d", "donch_top_90d", "donch_bot_90d", "score",
+    "price_basis",
 ];
 
 /// A master-catalog item - the fields `analyze_item` reads off the raw
@@ -268,6 +269,7 @@ impl AnalyzedRow {
             fmt_num(self.donch_top_90d),
             fmt_num(self.donch_bot_90d),
             fmt_num(self.score),
+            "unit".into(),
         ]
     }
 }

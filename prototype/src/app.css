@@ -96,7 +96,7 @@
 }
 /* Root type scale: 16 → 17 (≥1900) → 18 (≥2500). Everything rem-based grows
    ~6% per step, so a 1920 desk gets a wider Item column, not more columns. */
-html { font-size: 16px; }
+html { font-size: 16px; scroll-padding-top: var(--sticky-header-clearance, 0px); }
 @media (min-width: 1900px) { html { font-size: 17px; } }
 @media (min-width: 2500px) { html { font-size: 18px; } }
 

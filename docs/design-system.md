@@ -111,6 +111,15 @@ Listing review uses the shared button patterns, readable deselected rows, and
 keyboard focus containment/restoration; native authentication dialogs retain
 their own browser-provided modal behavior.
 
+Trade Session uses the existing mode-button, field, notice, and fixed analytical
+table patterns. Its expanded listing review scrolls as a whole in short windows
+while keeping a usable table region; before/after order details must not collapse
+the editable rows. The keyboard boundary also handles focus moving to the document
+when a focused refresh button temporarily disables itself.
+The shell measures its wrapped status header into `--sticky-header-clearance`;
+document scroll padding keeps focused/scrolled content below that header, including
+narrow and enlarged layouts. This is a measured layout value, not a fixed spacer.
+
 | Pattern | Contract |
 |---|---|
 | Panels and title rails | Clear heading, restrained inversion, dotted internal separation; titles and adjacent status copy may wrap |
@@ -233,7 +242,7 @@ inspect the images, then rerun without that flag. Use the browser version pinned
 in the lockfile and a consistent Linux runtime. Never bulk-accept unexplained
 differences to make a gate green.
 
-`design-system.spec.ts` exercises all twelve desktop views in both themes, shared
+`design-system.spec.ts` exercises the desktop views in both themes, shared
 control targets, column widths, keyboard theme selection and listing review, and
 the isolated browser reward surface. `design-system.test.ts` scans App and all
 component style blocks (including nested component directories) for literal
@@ -242,6 +251,11 @@ arbitrary semantic misuse are not covered by that source check. These checks
 run through the existing test/browser CI jobs; no optional manual command is
 needed to include them. They are not a complete accessibility audit. Review
 visual differences and actual behavior; automation does not replace design review.
+
+`trade-session.spec.ts` adds mode selection, lot-aware review, preserved edits,
+changed-order reconfirmation, decreased safe quantities, and unavailable/zero
+allowance states. Open its fictional dataset through the living reference's
+Open sample app link, which starts on Trade Session.
 
 Run the applicable repository gates for each implementation batch. Complete
 cross-platform verification in actual desktop windows before claiming Windows

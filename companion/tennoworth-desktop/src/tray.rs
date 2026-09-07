@@ -12,7 +12,7 @@ use tauri_plugin_notification::NotificationExt;
 
 use wfm_core::poison::guard;
 
-use crate::commands::inventory::record_snapshot;
+use crate::commands::inventory::scan_and_record;
 use crate::db::Db;
 use crate::market::MarketCache;
 use crate::sellables::{self, MarketData, ScanNotification, SellableRow};
@@ -154,15 +154,13 @@ pub(crate) fn show_main_window(app: &AppHandle) {
 /// error is logged, not surfaced (there's no banner behind a tray click).
 fn tray_rescan(app: &AppHandle) {
     let app = app.clone();
-    std::thread::spawn(move || match crate::scanner().scan(None, None) {
-        Ok((bytes, info)) => {
-            let db = app.state::<Db>();
-            if let Err(e) = record_snapshot(&db, "memory", info.build.as_deref(), &bytes) {
-                eprintln!("tennoworth: tray rescan snapshot not recorded: {e}");
-            }
+    std::thread::spawn(move || {
+        match scan_and_record(&app) {
+        Ok(_) => {
             post_scan_surfaces(&app);
         }
-        Err(e) => eprintln!("tennoworth: tray rescan failed: {}", e.into_message()),
+        Err(e) => eprintln!("tennoworth: tray rescan failed: {e}"),
+        }
     });
 }
 

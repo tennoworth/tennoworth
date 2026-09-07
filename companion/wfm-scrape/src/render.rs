@@ -27,9 +27,11 @@ pub struct CatalogItemMeta {
 #[derive(Debug, Clone, Serialize)]
 pub struct ItemEntry {
     pub avg: f64,
-    pub low_sell: i64,
+    pub low_sell: f64,
     pub low5_avg: f64,
-    pub top_buy: i64,
+    pub top_buy: f64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub price_basis: Option<&'static str>,
     pub vol: i64,
     pub ratio: f64,
     pub buys: i64,
@@ -51,14 +53,15 @@ pub struct ItemEntry {
 pub fn render_item(row: &csvin::CsvRow, meta: &CatalogItemMeta) -> ItemEntry {
     let avg_raw = parse_f64_or(&row.avg_price_48h, 0.0);
     let med90 = parse_f64_or(&row.median_90d, 0.0);
-    let ls = parse_i64_or(&row.low_sell_price, 0);
+    let ls = parse_f64_or(&row.low_sell_price, 0.0);
     let low5_raw = parse_f64_or(&row.low5_avg, 0.0);
 
     ItemEntry {
         avg: clamp_avg(avg_raw, med90),
         low_sell: ls,
-        low5_avg: clamp_low5(low5_raw, med90, ls as f64),
-        top_buy: parse_i64_or(&row.top_buy_price, 0),
+        low5_avg: clamp_low5(low5_raw, med90, ls),
+        top_buy: parse_f64_or(&row.top_buy_price, 0.0),
+        price_basis: (row.price_basis == "unit").then_some("unit"),
         vol: parse_i64_or(&row.volume_48h, 0),
         ratio: parse_f64_or(&row.buy_sell_ratio, 0.0),
         buys: parse_i64_or(&row.live_buys, 0),
@@ -337,9 +340,9 @@ mod tests {
     fn render_item_clamps_and_populates_all_fields() {
         let entry = render_item(&test_row(), &test_meta());
         assert_eq!(entry.avg, 43.2); // within 3x of median_90d(33) → unchanged
-        assert_eq!(entry.low_sell, 42);
+        assert_eq!(entry.low_sell, 42.0);
         assert_eq!(entry.low5_avg, 42.6); // within 3x of 33 → unchanged
-        assert_eq!(entry.top_buy, 35);
+        assert_eq!(entry.top_buy, 35.0);
         assert_eq!(entry.vol, 384);
         assert_eq!(entry.ratio, 0.67);
         assert_eq!(entry.buys, 12);
@@ -351,6 +354,19 @@ mod tests {
         assert_eq!(entry.medians_7d, vec![33.0, 36.0, 42.0]);
         assert_eq!(entry.donch_top_90d, 45);
         assert_eq!(entry.donch_bot_90d, 15);
+    }
+
+    #[test]
+    fn certifies_only_normalized_csv_prices_and_preserves_fractions() {
+        let mut row = test_row();
+        assert!(serde_json::to_value(render_item(&row, &test_meta())).unwrap().get("price_basis").is_none());
+        row.price_basis = "unit".into();
+        row.low_sell_price = "7.2".into();
+        row.top_buy_price = "6.8".into();
+        let entry = render_item(&row, &test_meta());
+        assert_eq!(entry.low_sell, 7.2);
+        assert_eq!(entry.top_buy, 6.8);
+        assert_eq!(serde_json::to_value(entry).unwrap()["price_basis"], "unit");
     }
 
     #[test]
@@ -389,9 +405,9 @@ mod tests {
         };
         let entry = render_item(&row, &CatalogItemMeta::default());
         assert_eq!(entry.avg, 0.0);
-        assert_eq!(entry.low_sell, 0);
+        assert_eq!(entry.low_sell, 0.0);
         assert_eq!(entry.low5_avg, 0.0);
-        assert_eq!(entry.top_buy, 0);
+        assert_eq!(entry.top_buy, 0.0);
         assert_eq!(entry.vol, 0);
         assert_eq!(entry.ratio, 0.0);
         assert_eq!(entry.buys, 0);
@@ -414,8 +430,8 @@ mod tests {
         let meta = HashMap::new();
         let items = render_items(&rows, &meta);
         assert_eq!(items.len(), 2);
-        assert_eq!(items.get("slug_a").unwrap().low_sell, 10);
-        assert_eq!(items.get("slug_b").unwrap().low_sell, 20);
+        assert_eq!(items.get("slug_a").unwrap().low_sell, 10.0);
+        assert_eq!(items.get("slug_b").unwrap().low_sell, 20.0);
     }
 
     #[test]

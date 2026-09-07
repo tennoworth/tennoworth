@@ -41,7 +41,7 @@ impl Drop for PlanGuard<'_> {
     }
 }
 
-const MAX_PLAN_ITEMS: usize = 50;
+pub const MAX_PLAN_ITEMS: usize = 50;
 const MIN_PLATINUM: u32 = 5;
 const SLUG_MISMATCH_GUARD_MULTIPLIER: u32 = 3;
 
@@ -66,6 +66,10 @@ pub struct PlanItem {
     /// Explicit reviewed lot; absent callers retain the inferred bulk default.
     #[serde(default)]
     pub per_trade: Option<u32>,
+    #[serde(default)]
+    pub session: Option<SessionConstraint>,
+    #[serde(default)]
+    pub reviewed_order: Option<ReviewedOrder>,
     /// "sell" or "buy".
     pub order_type: String,
     /// false = invisible until manually toggled.
@@ -83,6 +87,20 @@ pub struct PlanItem {
     /// detection. Caller is expected to populate this from market.json.
     #[serde(default)]
     pub reference_low_sell: Option<u32>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct SessionConstraint {
+    pub snapshot_id: i64,
+    pub utc_day: i64,
+    pub budget: u32,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum ReviewedOrder {
+    New,
+    Existing { id: String, platinum: u64, quantity: u64, per_trade: Option<u64>, visible: bool },
 }
 
 #[derive(Serialize)]
@@ -103,7 +121,7 @@ pub struct ItemResult {
     pub action: Option<String>,
 }
 
-pub fn execute_plan(pending_path: &std::path::Path, unlocked: &Unlocked, plan: PlanRequest) -> PlanResponse {
+pub fn execute_plan(pending_path: &std::path::Path, unlocked: &Unlocked, plan: PlanRequest, validate: impl FnMut() -> Result<(), String>) -> PlanResponse {
     let plan_id = random_token(8);
 
     if plan.items.is_empty() {
@@ -137,6 +155,8 @@ pub fn execute_plan(pending_path: &std::path::Path, unlocked: &Unlocked, plan: P
             platinum: p.platinum,
             quantity: p.quantity,
             per_trade: p.per_trade,
+            session: p.session,
+            reviewed_order: p.reviewed_order,
             order_type: p.order_type,
             visible: p.visible,
             rank: p.rank,
@@ -149,11 +169,11 @@ pub fn execute_plan(pending_path: &std::path::Path, unlocked: &Unlocked, plan: P
         }).collect(),
     };
     if let Err(e) = write_pending_atomic(pending_path, &pending) {
-        eprintln!("warning: could not seed pending plan: {e:#}");
+        return validation_failure(&pending, format!("Could not persist this batch before posting: {e:#}"));
     }
 
-    let response = run_pending(pending_path, unlocked, &mut pending);
-    clear_pending(pending_path);
+    let response = run_pending(pending_path, unlocked, &mut pending, validate);
+    if pending.items.iter().all(|i| i.status != "pending") { clear_pending(pending_path); }
     response
 }
 
@@ -161,7 +181,8 @@ pub fn execute_plan(pending_path: &std::path::Path, unlocked: &Unlocked, plan: P
 // state (ok / error). Used both by the initial /plan POST and /plan/resume.
 // Rewrites the on-disk pending file atomically after every item so a crash
 // at any point leaves a consistent record.
-pub fn run_pending(pending_path: &std::path::Path, unlocked: &Unlocked, pending: &mut PendingPlan) -> PlanResponse {
+pub fn run_pending(pending_path: &std::path::Path, unlocked: &Unlocked, pending: &mut PendingPlan, mut validate: impl FnMut() -> Result<(), String>) -> PlanResponse {
+    if let Err(message) = validate() { return validation_failure(pending, message); }
     let http = match Client::builder()
         .user_agent(crate::user_agent())
         .timeout(Duration::from_secs(30))
@@ -187,7 +208,7 @@ pub fn run_pending(pending_path: &std::path::Path, unlocked: &Unlocked, pending:
     // become PATCHes of the existing order instead. Fetch once per run; on
     // failure fall back to create-only (the old behavior - a duplicate then
     // fails with WFM's own message, still rendered verbatim).
-    let existing = if pending.items.iter().any(|i| i.status == "pending") {
+    let existing = if pending.items.iter().any(|i| i.status == "pending" && i.reviewed_order.is_none()) {
         match list_user_orders(unlocked) {
             Ok(body) => index_existing_orders(&body),
             Err(e) => {
@@ -203,6 +224,7 @@ pub fn run_pending(pending_path: &std::path::Path, unlocked: &Unlocked, pending:
         .checked_sub(Duration::from_millis(SERVE_RATE_LIMIT_MS))
         .unwrap_or_else(std::time::Instant::now);
     for i in 0..pending.items.len() {
+        if let Err(message) = validate() { return validation_failure(pending, message); }
         let Some(item) = pending.items.get_mut(i) else {
             continue;
         };
@@ -213,20 +235,9 @@ pub fn run_pending(pending_path: &std::path::Path, unlocked: &Unlocked, pending:
         if since < Duration::from_millis(SERVE_RATE_LIMIT_MS) {
             thread::sleep(Duration::from_millis(SERVE_RATE_LIMIT_MS).saturating_sub(since));
         }
+        let plan_item = PlanItem::from(&*item);
+        let result = execute_one(&http, unlocked, &plan_item, &existing, &mut validate);
         last_call = std::time::Instant::now();
-
-        let plan_item = PlanItem {
-            slug: item.slug.clone(),
-            platinum: item.platinum,
-            quantity: item.quantity,
-            per_trade: item.per_trade,
-            order_type: item.order_type.clone(),
-            visible: item.visible,
-            rank: item.rank,
-            subtype: item.subtype.clone(),
-            reference_low_sell: item.reference_low_sell,
-        };
-        let result = execute_one(&http, unlocked, &plan_item, &existing);
         item.status = result.status.clone();
         item.message = result.message.clone();
         item.order_id = result.order_id.clone();
@@ -245,6 +256,21 @@ pub fn run_pending(pending_path: &std::path::Path, unlocked: &Unlocked, pending:
             order_id: i.order_id.clone(),
             action: i.action.clone(),
         }).collect(),
+    }
+}
+
+fn validation_failure(pending: &PendingPlan, message: String) -> PlanResponse {
+    PlanResponse { plan_id: pending.plan_id.clone(), results: vec![ItemResult {
+        slug: "<batch>".into(), status: "error".into(), message: Some(message), order_id: None, action: None,
+    }] }
+}
+
+impl From<&PendingItem> for PlanItem {
+    fn from(item: &PendingItem) -> Self {
+        Self { slug: item.slug.clone(), platinum: item.platinum, quantity: item.quantity,
+            per_trade: item.per_trade, session: item.session.clone(), reviewed_order: item.reviewed_order.clone(),
+            order_type: item.order_type.clone(), visible: item.visible, rank: item.rank,
+            subtype: item.subtype.clone(), reference_low_sell: item.reference_low_sell }
     }
 }
 
@@ -271,7 +297,7 @@ pub fn per_trade_for(quantity: u32) -> u32 {
     1
 }
 
-fn validate_lot(quantity: u32, per_trade: Option<u32>, bulk_tradable: bool) -> Result<(), String> {
+pub fn validate_lot(quantity: u32, per_trade: Option<u32>, bulk_tradable: bool) -> Result<(), String> {
     if quantity == 0 {
         return Err("quantity must be > 0".into());
     }
@@ -286,9 +312,9 @@ fn validate_lot(quantity: u32, per_trade: Option<u32>, bulk_tradable: bool) -> R
     Ok(())
 }
 
-fn build_order_patch(item: &PlanItem, cat: &WfmCatalogItem) -> serde_json::Value {
+fn build_order_patch(item: &PlanItem, cat: &WfmCatalogItem, lot: u32) -> serde_json::Value {
     let mut body = serde_json::Map::new();
-    body.insert("platinum".into(), serde_json::json!(item.platinum));
+    body.insert("platinum".into(), serde_json::json!(item.platinum.saturating_mul(lot)));
     body.insert("quantity".into(), serde_json::json!(item.quantity));
     // Omit visibility so updating a visible order cannot silently hide it.
     // Legacy callers did not edit the lot on PATCH; only explicit review does.
@@ -305,6 +331,9 @@ pub struct ExistingOrder {
     pub id: String,
     pub platinum: u64,
     pub quantity: u64,
+    pub per_trade: Option<u64>,
+    pub visible: Option<bool>,
+    pub ambiguous: bool,
 }
 
 /// (itemId, order type, rank, subtype) - the identity WFM enforces uniqueness
@@ -320,17 +349,24 @@ fn index_one_order(
     let Some(id) = o.get("id").and_then(|v| v.as_str()) else { return };
     let Some(item_id) = o.get("itemId").and_then(|v| v.as_str()) else { return };
     let Some(ty) = o.get("type").and_then(|v| v.as_str()).or(bucket_type) else { return };
-    out.insert(
-        (
+    let key = (
             item_id.to_string(),
             ty.to_string(),
             o.get("rank").and_then(|v| v.as_u64()),
             o.get("subtype").and_then(|v| v.as_str()).map(str::to_string),
-        ),
+        );
+    if let Some(prior) = out.get_mut(&key) {
+        prior.ambiguous = true;
+        return;
+    }
+    out.insert(key,
         ExistingOrder {
             id: id.to_string(),
             platinum: o.get("platinum").and_then(|v| v.as_u64()).unwrap_or(0),
             quantity: o.get("quantity").and_then(|v| v.as_u64()).unwrap_or(0),
+            per_trade: o.get("perTrade").and_then(|v| v.as_u64()),
+            visible: o.get("visible").and_then(|v| v.as_bool()),
+            ambiguous: false,
         },
     );
 }
@@ -392,7 +428,8 @@ pub fn build_order_body(item: &PlanItem, cat: &WfmCatalogItem) -> serde_json::Va
     let mut body = serde_json::Map::new();
     body.insert("itemId".into(), serde_json::json!(cat.item_id));
     body.insert("type".into(), serde_json::json!(item.order_type));
-    body.insert("platinum".into(), serde_json::json!(item.platinum));
+    let lot = if cat.bulk_tradable { item.per_trade.unwrap_or_else(|| per_trade_for(item.quantity)) } else { 1 };
+    body.insert("platinum".into(), serde_json::json!(item.platinum.saturating_mul(lot)));
     body.insert("quantity".into(), serde_json::json!(item.quantity));
     body.insert("visible".into(), serde_json::json!(item.visible));
     if cat.bulk_tradable {
@@ -417,6 +454,7 @@ fn execute_one(
     unlocked: &Unlocked,
     item: &PlanItem,
     existing: &BTreeMap<OrderKey, ExistingOrder>,
+    validate: &mut impl FnMut() -> Result<(), String>,
 ) -> ItemResult {
     let mk_err = |msg: String| ItemResult {
         slug: item.slug.clone(),
@@ -458,12 +496,41 @@ fn execute_one(
         return mk_err(message);
     }
 
+    let refreshed;
+    let existing = if let Some(reviewed) = &item.reviewed_order {
+        refreshed = match list_user_orders(unlocked) {
+            Ok(body) => index_existing_orders(&body),
+            Err(e) => return mk_err(format!("Could not revalidate reviewed orders: {e}")),
+        };
+        let prior = refreshed.get(&plan_item_key(item, cat));
+        if !review_matches(reviewed, prior) {
+            return mk_err("Order state changed or is ambiguous. Review the batch again before posting.".into());
+        }
+        thread::sleep(Duration::from_millis(SERVE_RATE_LIMIT_MS));
+        &refreshed
+    } else { existing };
+    if let Err(message) = validate() { return mk_err(message); }
+
     // An order with this exact identity already exists → PATCH it. The plan's
     // quantities come from the current inventory scan (they already count the
     // listed copies), so overwrite price + quantity - never sum. Visibility is
     // left alone: the existing order keeps whatever the user chose on WFM.
     if let Some(prior) = existing.get(&plan_item_key(item, cat)) {
-        let patch = build_order_patch(item, cat);
+        if prior.ambiguous { return mk_err("More than one existing order matches this item; resolve it in My orders.".into()); }
+        let lot = if cat.bulk_tradable {
+            match item.per_trade {
+                Some(lot) => lot,
+                None => match u32::try_from(prior.per_trade.unwrap_or(1)) {
+                    Ok(lot) => lot,
+                    Err(_) => return mk_err("Existing order has an invalid lot size.".into()),
+                },
+            }
+        } else { 1 };
+        if let Err(message) = validate_lot(item.quantity, Some(lot), cat.bulk_tradable) { return mk_err(message); }
+        if item.platinum.saturating_mul(lot) > MAX_PLATINUM {
+            return mk_err(format!("Lot total exceeds {MAX_PLATINUM}p; reduce price or units per trade."));
+        }
+        let patch = build_order_patch(item, cat, lot);
         let r = patch_one_order(http, unlocked, &prior.id, &patch);
         return if r.status == "ok" {
             ItemResult {
@@ -484,6 +551,10 @@ fn execute_one(
         };
     }
 
+    let lot = if cat.bulk_tradable { item.per_trade.unwrap_or_else(|| per_trade_for(item.quantity)) } else { 1 };
+    if item.platinum.saturating_mul(lot) > MAX_PLATINUM {
+        return mk_err(format!("Lot total exceeds {MAX_PLATINUM}p; reduce price or units per trade."));
+    }
     let body = build_order_body(item, cat);
 
     // Order-creation endpoint (verified via the WFM frontend's actual
@@ -535,9 +606,69 @@ fn execute_one(
     }
 }
 
+fn review_matches(reviewed: &ReviewedOrder, prior: Option<&ExistingOrder>) -> bool {
+    match (reviewed, prior) {
+        (ReviewedOrder::New, None) => true,
+        (ReviewedOrder::Existing { id, platinum, quantity, per_trade, visible }, Some(prior)) => {
+            !prior.ambiguous && *id == prior.id && *platinum == prior.platinum && *quantity == prior.quantity
+                && *per_trade == prior.per_trade && Some(*visible) == prior.visible
+        }
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn review_rejects_any_changed_or_ambiguous_order_detail() {
+        let expected = ReviewedOrder::Existing { id: "order".into(), platinum: 20, quantity: 6, per_trade: Some(3), visible: true };
+        let mut prior = ExistingOrder { id: "order".into(), platinum: 20, quantity: 6, per_trade: Some(3), visible: Some(true), ambiguous: false };
+        assert!(review_matches(&expected, Some(&prior)));
+        prior.visible = Some(false);
+        assert!(!review_matches(&expected, Some(&prior)));
+        prior.visible = Some(true);
+        prior.quantity = 3;
+        assert!(!review_matches(&expected, Some(&prior)));
+        prior.quantity = 6;
+        prior.per_trade = Some(1);
+        assert!(!review_matches(&expected, Some(&prior)));
+        prior.per_trade = Some(3);
+        prior.platinum = 21;
+        assert!(!review_matches(&expected, Some(&prior)));
+        prior.platinum = 20;
+        prior.ambiguous = true;
+        assert!(!review_matches(&expected, Some(&prior)));
+        assert!(!review_matches(&expected, None));
+        assert!(review_matches(&ReviewedOrder::New, None));
+        assert!(!review_matches(&ReviewedOrder::New, Some(&prior)));
+    }
+
+    #[test]
+    fn duplicate_order_keys_remain_ambiguous() {
+        let orders = index_existing_orders(&serde_json::json!({"data":[
+            {"id":"one","itemId":"item","type":"sell","quantity":1},
+            {"id":"two","itemId":"item","type":"sell","quantity":2}
+        ]}));
+        assert!(orders.values().next().unwrap().ambiguous);
+    }
+
+    #[test]
+    fn failed_recovery_revalidation_keeps_pending_items_unsubmitted() {
+        let mut pending: PendingPlan = serde_json::from_value(serde_json::json!({
+            "plan_id":"test", "started_at":"test", "items":[
+                {"slug":"example","quantity":1,"platinum":12,"order_type":"sell","visible":false,"status":"pending"}
+            ]
+        })).unwrap();
+        let unlocked = Unlocked { jwt: "test".into(), username: "test".into(), platform: "pc".into(),
+            catalog: std::sync::Arc::new(BTreeMap::new()), id_to_item: std::sync::Arc::new(BTreeMap::new()) };
+        let path = std::env::temp_dir().join(format!("not-submitted-{}", random_token(8)));
+        let result = run_pending(&path, &unlocked, &mut pending, || Err("Inventory changed".into()));
+        assert_eq!(result.results[0].message.as_deref(), Some("Inventory changed"));
+        assert_eq!(pending.items[0].status, "pending");
+        assert!(!path.exists());
+    }
 
     #[test]
     fn reviewed_lots_match_validation_and_wire_fixture() {
@@ -565,12 +696,14 @@ mod tests {
                 continue;
             }
             let create = build_order_body(&item, &catalog);
-            let patch = build_order_patch(&item, &catalog);
+            let patch = build_order_patch(&item, &catalog, item.per_trade.unwrap_or(1));
             assert_eq!(create.get("perTrade").and_then(|v| v.as_u64()), case.create_lot.map(u64::from), "{}", case.name);
             assert_eq!(patch.get("perTrade").and_then(|v| v.as_u64()), case.patch_lot.map(u64::from), "{}", case.name);
             assert_eq!(patch["quantity"], item.quantity, "replacement, not addition");
             assert!(patch.get("visible").is_none(), "preserve existing visibility");
             assert_eq!(create["visible"], false);
+            assert_eq!(create["platinum"], item.platinum * case.create_lot.unwrap_or(1), "create uses the total lot price");
+            assert_eq!(patch["platinum"], item.platinum * item.per_trade.unwrap_or(1), "patch uses the total lot price");
         }
     }
 
@@ -601,13 +734,14 @@ mod tests {
         };
         let existing = BTreeMap::from([(key, ExistingOrder {
             id: "must-not-be-updated".into(), platinum: 20, quantity: 9,
+            per_trade: None, visible: Some(true), ambiguous: false,
         })]);
         // Even a validation regression must never send a unit test to WFM.
         let http = Client::builder()
             .proxy(reqwest::Proxy::all("http://127.0.0.1:9").unwrap())
             .timeout(Duration::from_millis(100))
             .build().unwrap();
-        let result = execute_one(&http, &unlocked, &item, &existing);
+        let result = execute_one(&http, &unlocked, &item, &existing, &mut || Ok(()));
         assert_eq!(result.status, "error");
         assert!(result.message.unwrap().contains("divide quantity"));
         assert!(result.order_id.is_none());
@@ -650,6 +784,7 @@ mod tests {
         let ranked = WfmCatalogItem {
             item_id: "item-r".into(),
             bulk_tradable: false,
+            session_supported: true,
             display_name: "Some Arcane".into(),
             max_rank: Some(5),
             subtypes: vec![],
@@ -659,6 +794,8 @@ mod tests {
             platinum: 20,
             quantity: 1,
             per_trade: None,
+            session: None,
+            reviewed_order: None,
             order_type: "sell".into(),
             visible: false,
             rank: None,
@@ -675,6 +812,7 @@ mod tests {
         let relic = WfmCatalogItem {
             item_id: "item-s".into(),
             bulk_tradable: true,
+            session_supported: false,
             display_name: "Axi A1 Relic".into(),
             max_rank: None,
             subtypes: vec!["intact".into(), "radiant".into()],
@@ -694,6 +832,7 @@ mod tests {
         WfmCatalogItem {
             item_id: format!("id-{name}"),
             bulk_tradable: true,
+            session_supported: true,
             display_name: name.into(),
             max_rank,
             subtypes: subtypes.iter().map(|s| s.to_string()).collect(),
@@ -706,6 +845,8 @@ mod tests {
             platinum: 12,
             quantity: 3,
             per_trade: None,
+            session: None,
+            reviewed_order: None,
             order_type: "sell".into(),
             visible: false,
             rank,
@@ -729,7 +870,7 @@ mod tests {
         let body = build_order_body(&item, &cat);
         assert_eq!(body["itemId"], "id-neo_b2_relic");
         assert_eq!(body["type"], "sell");
-        assert_eq!(body["platinum"], 12);
+        assert_eq!(body["platinum"], 36);
         assert_eq!(body["quantity"], 3);
         assert_eq!(body["visible"], false);
         assert_eq!(body["perTrade"], 3);

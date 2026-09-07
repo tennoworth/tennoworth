@@ -1,6 +1,7 @@
 # Trade Session implementation
 
-Work in progress; the desktop planner is not enabled yet.
+The desktop view prepares a batch for the existing listing review and executor.
+This document describes its safeguards and remaining verification.
 
 The approved scope is a dedicated desktop view with Fast Cash, Plat per Trade,
 Clear Inventory, and Max Value. There is no timer or duration prompt. Budget
@@ -20,13 +21,27 @@ Create uses the explicit lot, or the existing divisor default for callers that
 omit it. Update carries an explicitly requested lot for bulk items, replaces
 quantity rather than adding to it, and leaves visibility untouched. Existing
 callers that omit a lot retain the prior PATCH behavior. Item-class eligibility
-and safe available quantities still need enforcement in the planner/review path;
-catalog bulk capability alone is not sufficient inventory or trade-slot evidence.
+and safe quantities are checked in the planner, review, and native submission/
+recovery path. Unknown classes, synthetic sets, refinements, Rivens, and charge/
+star variants are excluded. The initial planner uses singles until an unlocked
+catalog verifies supported bulk identities.
 
 The current [WFM order contract](https://docs.warframe.market/docs/api/orders/)
 permits `perTrade` on both create and update only for bulk-tradable items.
 [Item metadata](https://docs.warframe.market/docs/data-models/#item) supplies the
 capability. Product price caps remain unchanged.
+
+WFM's `platinum` field is the total **lot** price. The planner and review use
+unit prices; submission multiplies by the reviewed lot and rejects totals above
+the price cap. Existing-order comparisons retain the raw lot total. Live quotes,
+My Orders advice, and newly scraped snapshots divide by `perTrade`, preserving
+fractional unit prices. Whole-platinum session asks round up, never below the
+reference ask. The shared `prices.json` fixture checks Rust/frontend conversion.
+
+New CSVs carry `price_basis=unit`, propagated to the snapshot only when present.
+Legacy bulk book prices are not trusted as unit quotes: session planning uses
+historical prices until a normalized snapshot or explicit live check is available.
+Rebuilding an old CSV does not certify its prices or require a production scrape.
 
 ### Pending-file compatibility
 
@@ -37,21 +52,64 @@ executables do not understand this field: do not resume a newly created explicit
 lot batch after downgrading; finish or discard it using the supporting version.
 
 `tests/fixtures/trade-session/lots.json` records validation and create/update
-wire expectations. Rust tests also cover catalog capability, absent fields,
-disk recovery, and rejection before an existing order mutation. The eventual
-frontend lot validator must consume the same fixture as its parity gate.
+wire expectations, consumed by Rust and frontend validation tests. Pending items
+also retain snapshot/day/budget constraints and exact existing-order expectations.
+Failed recovery revalidation leaves unsubmitted items pending rather than silently
+posting them.
 
-## Remaining implementation
+## Allowance and inventory accounting
 
-- Rust-owned account-scoped allowance observations from scans; stable EE.log
-  deduplication, scan/event reconciliation, confidence, restart and UTC reset.
-- Deterministic four-mode selection using the shared sellable-quantity policy,
-  verified item eligibility, credible prices, hold penalties and target handling.
-- Dedicated view using the shared design system, with scan/unknown/zero states,
-  bounded requested price refresh and per-row trade assumptions.
-- Existing review integration, explicit before/after order differences,
-  preservation of edits, and submission/recovery revalidation.
-- Browser and native Windows/Linux workflow verification before shipping.
+Normal and tray scans persist optional allowance observations. Account identity
+is domain-separated and hashed locally; session credentials and raw log text are
+not retained in the observation. Zero is known; missing/invalid metadata remains
+unknown or a labeled mastery estimate.
+
+Log identity uses a fixed-prefix digest containing the game's UTC startup header;
+byte positions provide persistent replay protection even when a log is copied to
+a new file. Unrecognized startup headers still permit
+ledger/overlay processing, but cannot certify allowance tracking. Ledger insert,
+deduplication, and allowance progress commit together. Duplicate callbacks never
+repeat notifications or automatic order adjustments.
+
+Scans capture before/after log boundaries. Earlier events are ignored; overlapping
+trades retain the scan count and downgrade confidence. Callbacks committed between
+cursor capture and observation persistence are reconciled under the database lock.
+Monitoring gaps and log changes require a scan to restore tracking. Restart keeps
+the observation's age but requires a fresh scan before submission. UTC reset uses
+mastery only, never an inferred account bonus; old-day events cannot spend the new
+day's allowance.
+
+The shared sellable-quantity policy combines global/per-item reserves with
+untradeable copies. An item given away since the scan is unavailable to the planner
+until rescanned: EE.log cannot identify its rank. Submission/recovery checks the
+snapshot, account observation, UTC day, safe quantities, supported identities,
+reviewed orders, and total estimated trades before mutations.
+
+## Selection and review
+
+`tests/fixtures/trade-session/modes.json` pins deterministic mode behavior. Fast
+Cash uses liquid singles. Plat per Trade offers each valuable candidate a first
+lot before repeating. Clear Inventory prioritizes safe stack completion and
+liquidity. Max Value may concentrate in a valuable position. These are explainable
+heuristics, not mathematical optima. Hold advice lowers priority without bypassing
+hard protection. Targets stop at listing-price coverage, allow a final-lot
+overshoot, and report shortfalls.
+
+The view does not inherit incidental Sell filters. Cached prices render first;
+requested live checks are bounded to the selected batch with source labels. Unit
+bids are comparisons, not executable stack proceeds. Review preserves edits during
+refresh and resizing, recomputes trade arithmetic, and shows before/after quantity,
+lot, price, and visibility. Changed/ambiguous orders require another review. WFM
+does not provide an atomic compare-and-patch contract here: revalidation narrows
+the race window but cannot prevent another client changing an order after the
+final read.
+
+## Verification before shipping
+
+Fixture/unit tests, styled Chromium/WebKit flows in both themes at narrow/short/
+wide sizes, native probes, and the repository gates are required. Physical account
+scans, actual trading across UTC reset, and Windows interactive display/scaling
+remain manual acceptance work; browser/probe evidence does not certify gameplay.
 
 Creating a listing must never decrement the in-game allowance. No live WFM
 mutation is part of implementation verification without separate authorization.

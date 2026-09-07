@@ -10,6 +10,8 @@ pub struct WfmCatalogItem {
     pub item_id: String,
     /// WFM rejects perTrade for items without this capability.
     pub bulk_tradable: bool,
+    /// Only identities the first Trade Session planner can reconstruct safely.
+    pub session_supported: bool,
     /// Human-readable display name from /v2/items i18n.en.name. Used to
     /// enrich GET /orders so the panel doesn't render raw itemIds.
     pub display_name: String,
@@ -61,9 +63,16 @@ fn parse_wfm_catalog(body: &serde_json::Value) -> Result<BTreeMap<String, WfmCat
                 .and_then(|v| v.as_array())
                 .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
                 .unwrap_or_default();
+            let supported_tag = it.get("tags").and_then(|v| v.as_array()).is_some_and(|tags| tags.iter()
+                .filter_map(|v| v.as_str()).any(|tag| matches!(tag, "mod" | "arcane_enhancement" | "component" | "primary" | "secondary" | "melee")));
+            let session_supported = supported_tag && subtypes.is_empty()
+                && it.get("setRoot").is_none_or(|v| v.is_null() || v.as_bool() == Some(false))
+                && it.get("tradable").is_none_or(|v| v.is_null() || v.as_bool() == Some(true))
+                && ["maxCharges", "maxAmberStars", "maxCyanStars"].iter().all(|key| it.get(key).is_none_or(|v| v.is_null()));
             out.insert(slug.to_string(), WfmCatalogItem {
                 item_id: id.to_string(),
                 bulk_tradable: it.get("bulkTradable").and_then(|v| v.as_bool()).unwrap_or(false),
+                session_supported,
                 display_name,
                 max_rank,
                 subtypes,
@@ -138,6 +147,25 @@ fn attach_item_meta(order: &mut serde_json::Value, id_to_item: &BTreeMap<String,
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn session_support_excludes_unreconstructable_item_variants() {
+        let base = serde_json::json!({"id":"item","slug":"item","tags":["mod"],"maxRank":5});
+        let catalog = parse_wfm_catalog(&serde_json::json!({"data":[base.clone()]})).unwrap();
+        assert!(catalog["item"].session_supported);
+        for (key, value) in [
+            ("subtypes", serde_json::json!(["intact"])), ("setRoot", serde_json::json!(true)),
+            ("maxCharges", serde_json::json!(3)), ("maxAmberStars", serde_json::json!(4)),
+            ("maxCyanStars", serde_json::json!(4)), ("tradable", serde_json::json!(false)),
+            ("tags", serde_json::json!(["unknown-class"])),
+            ("setRoot", serde_json::json!("false")), ("tradable", serde_json::json!("true")),
+        ] {
+            let mut row = base.clone();
+            row[key] = value;
+            let catalog = parse_wfm_catalog(&serde_json::json!({"data":[row]})).unwrap();
+            assert!(!catalog["item"].session_supported, "{key}");
+        }
+    }
 
     #[test]
     fn bulk_trading_requires_explicit_catalog_capability() {
@@ -224,6 +252,7 @@ mod tests {
         cat.insert("loki_prime_set".to_string(), WfmCatalogItem {
             item_id: "aaaaaaaaaaaaaaaaaaaaaaaa".into(),
             bulk_tradable: false,
+            session_supported: false,
             display_name: "Loki Prime Set".into(),
             max_rank: None,
             subtypes: vec![],

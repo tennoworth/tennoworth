@@ -153,16 +153,18 @@ pub fn plan_adjustments(
 }
 
 /// Record + notify + adjust. Blocking; called from the tailer thread.
-pub fn handle_trade(app: &AppHandle, trade: TradeEvent) {
+pub fn handle_trade(app: &AppHandle, trade: TradeEvent, position: crate::eelog::LogPosition) {
     let db = app.state::<Db>();
     let now = unix_now();
-    let id = match db.insert_trade(&trade, now) {
-        Ok(id) => id,
+    let id = match db.insert_trade(&trade, now, &position) {
+        Ok(Some(id)) => id,
+        Ok(None) => return,
         Err(e) => {
             eprintln!("tennoworth: ledger insert failed: {e}");
             return;
         }
     };
+    let _ = app.emit(crate::allowance::EVENT_ALLOWANCE_CHANGED, ());
     let mut adjusted: Vec<(String, i64)> = Vec::new();
 
     let auto_close_on = db
@@ -291,7 +293,12 @@ pub fn start_tailer(app: AppHandle) -> Option<std::path::PathBuf> {
                 // scan before the four slot markers had arrived.
                 std::time::Duration::from_millis(250),
                 move |line| crate::overlay::handle_log_line(&overlay_app, line),
-                |trade| handle_trade(&app, trade),
+                |trade, position| handle_trade(&app, trade, position),
+                || {
+                    if app.state::<Db>().allowance_gap().unwrap_or(false) {
+                        let _ = app.emit(crate::allowance::EVENT_ALLOWANCE_CHANGED, ());
+                    }
+                },
             );
         });
     match spawned {
@@ -471,6 +478,7 @@ mod tests {
             WfmCatalogItem {
                 item_id: "mod".into(),
                 bulk_tradable: false,
+                session_supported: true,
                 display_name: "Primed Flow".into(),
                 max_rank: Some(10),
                 subtypes: vec![],
@@ -481,6 +489,7 @@ mod tests {
             WfmCatalogItem {
                 item_id: "relic".into(),
                 bulk_tradable: true,
+                session_supported: false,
                 display_name: "Lith C5 Relic".into(),
                 max_rank: None,
                 subtypes: vec!["intact".into(), "radiant".into()],
@@ -491,6 +500,7 @@ mod tests {
             WfmCatalogItem {
                 item_id: "set".into(),
                 bulk_tradable: false,
+                session_supported: false,
                 display_name: "Loki Prime Set".into(),
                 max_rank: None,
                 subtypes: vec![],

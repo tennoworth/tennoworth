@@ -72,6 +72,7 @@ pub fn parse_orders(orders: &Value, url_name: &str, co: &mut Coercions) -> Resul
         }
         let path = format!("{url_name}.orders[{i}]");
         let platinum = coerce_field(o, "platinum", &format!("{path}.platinum"), co)?;
+        let Some(platinum) = wfm_client::unit_price(platinum, o.get("perTrade")) else { continue };
         out.push(ParsedOrder {
             otype: otype.to_string(),
             order: LiveOrder {
@@ -136,6 +137,16 @@ mod tests {
     fn visible_defaults_to_true_when_absent() {
         let v = json!([{"type": "sell", "platinum": 12, "user": {"status": "online"}}]);
         assert_eq!(live_orders(&parse(&v), "sell").len(), 1);
+    }
+
+    #[test]
+    fn normalizes_bulk_lot_totals_before_market_math() {
+        let v = json!([
+            {"type":"sell", "platinum":48, "perTrade":6, "user":{"status":"online"}},
+            {"type":"sell", "platinum":36, "perTrade":5, "user":{"status":"online"}},
+            {"type":"sell", "platinum":1, "perTrade":0, "user":{"status":"online"}}
+        ]);
+        assert_eq!(live_orders(&parse(&v), "sell").iter().map(|o| o.platinum).collect::<Vec<_>>(), vec![8.0, 7.2]);
     }
 
     #[test]

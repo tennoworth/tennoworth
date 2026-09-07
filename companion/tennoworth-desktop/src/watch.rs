@@ -60,7 +60,7 @@ pub fn evaluate(w: &Watch, top: Option<&LiveTop>, now: i64) -> WatchOutcome {
         "sell" => t.low_sell,
         "buy" => t.top_buy,
         _ => None,
-    }).map(|p| p as i64);
+    }).map(|p| if w.side == "sell" { p.ceil() as i64 } else { p.floor() as i64 });
     let satisfied = match (w.side.as_str(), price) {
         ("sell", Some(p)) => p <= w.threshold,
         ("buy", Some(p)) => p >= w.threshold,
@@ -198,6 +198,8 @@ mod tests {
         }
     }
     fn top(low_sell: Option<u32>, top_buy: Option<u32>) -> LiveTop {
+        let low_sell = low_sell.map(f64::from);
+        let top_buy = top_buy.map(f64::from);
         LiveTop {
             slug: "primed_flow".into(), rank: Some(0), subtype: None,
             sells: low_sell.into_iter().collect(), buys: top_buy.into_iter().collect(),

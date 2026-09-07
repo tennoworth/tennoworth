@@ -11,6 +11,16 @@
 
 use std::time::Duration;
 
+/// WFM quotes a bulk lot total; consumers comparing items need a unit price.
+pub fn unit_price(platinum: f64, per_trade: Option<&serde_json::Value>) -> Option<f64> {
+    let lot = match per_trade {
+        None | Some(serde_json::Value::Null) => 1,
+        Some(value) => value.as_u64()?,
+    };
+    (platinum.is_finite() && platinum > 0.0 && (1..=6).contains(&lot))
+        .then(|| platinum / lot as f64)
+}
+
 /// Project identity for the `User-Agent` header, per warframe.market's API
 /// rules (docs.warframe.market/docs/rules, ToS 2026-06-19 §11): a dedicated,
 /// descriptive UA - project, version, and a way to reach us - is mandatory,
@@ -115,6 +125,17 @@ pub fn retry_backoff(attempt: u32) -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn bulk_unit_prices_match_shared_fixture() {
+        let cases: Vec<serde_json::Value> = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/trade-session/prices.json"
+        )).unwrap();
+        for case in cases {
+            assert_eq!(unit_price(case["platinum"].as_f64().unwrap(), case.get("per_trade")),
+                case["unit"].as_f64(), "{case}");
+        }
+    }
 
     #[test]
     fn unwrap_envelope_prefers_data_over_payload() {

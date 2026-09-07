@@ -39,7 +39,7 @@
           <button class="btn" class:primary={mode === choice} aria-pressed={mode === choice} onclick={() => pickTheme(choice as Mode)}>{choice === 'light' ? 'Light' : 'Dark'}</button>
         {/each}
       </div>
-      <a class="btn ghost" href="/?preview-desktop&sample">Open sample app</a>
+      <a class="btn ghost" href="/?preview-desktop&sample=session">Open sample app</a>
     </div>
     <h1>One visual language. Room for the information.</h1>
     <p class="intro">Production styles, exercised with fictional data. Resize this window and try the controls. Nothing here changes inventory, settings, or market orders.</p>

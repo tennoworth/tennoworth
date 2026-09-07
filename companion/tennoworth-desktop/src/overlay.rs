@@ -2351,7 +2351,8 @@ fn capture_and_recognize(
                         .slug
                         .as_ref()
                         .and_then(|slug| live.iter().find(|row| &row.slug == slug))
-                        .and_then(|row| row.low_sell);
+                        .and_then(|row| row.low_sell)
+                        .map(|price| price.round() as u32);
                 }
                 mark_bests(&mut result.slots);
                 let current = state

@@ -125,7 +125,7 @@ test('open editors and disclosures survive resizing in both directions', async (
     await expect(quantity).toHaveValue('2');
     expect(await review.locator('.scroll').evaluate(element => element.clientHeight)).toBeGreaterThanOrEqual(80);
     await review.locator('.scroll').evaluate(element => { element.scrollLeft = element.scrollWidth; });
-    await review.getByRole('button', { name: /Send.*hidden/ }).click({ trial: true });
+    await review.getByRole('button', { name: /^Send \d+ listings$/ }).click({ trial: true });
   }
   await review.getByRole('button', { name: 'Cancel' }).click();
   await page.locator('.filter-disclosure > summary').click();

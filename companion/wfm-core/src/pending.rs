@@ -29,6 +29,10 @@ pub struct PendingItem {
     /// Absent in shipped pending files; retain the legacy inferred lot on resume.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub per_trade: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<crate::plan::SessionConstraint>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reviewed_order: Option<crate::plan::ReviewedOrder>,
     pub order_type: String,
     pub visible: bool,
     pub rank: Option<u32>,
@@ -99,6 +103,8 @@ mod tests {
                     platinum: 120,
                     quantity: 1,
                     per_trade: Some(1),
+                    session: None,
+                    reviewed_order: None,
                     order_type: "sell".into(),
                     visible: false,
                     rank: None,
@@ -114,6 +120,8 @@ mod tests {
                     platinum: 95,
                     quantity: 1,
                     per_trade: None,
+                    session: None,
+                    reviewed_order: None,
                     order_type: "sell".into(),
                     visible: false,
                     rank: None,
@@ -152,10 +160,16 @@ mod tests {
         let mut plan = sample_plan();
         plan.items[1].quantity = 12;
         plan.items[1].per_trade = Some(3);
+        plan.items[1].session = Some(crate::plan::SessionConstraint { snapshot_id: 12, utc_day: 20_000, budget: 8 });
+        plan.items[1].reviewed_order = Some(crate::plan::ReviewedOrder::New);
         write_pending_atomic(&path, &plan).unwrap();
         let loaded = load_pending(&path).unwrap();
         assert_eq!(loaded.items[1].quantity, 12);
         assert_eq!(loaded.items[1].per_trade, Some(3));
+        let resumed = crate::plan::PlanItem::from(&loaded.items[1]);
+        assert_eq!(resumed.per_trade, Some(3));
+        assert_eq!(resumed.session, plan.items[1].session);
+        assert_eq!(resumed.reviewed_order, plan.items[1].reviewed_order);
         clear_pending(&path);
     }
 

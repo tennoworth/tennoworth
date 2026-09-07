@@ -81,7 +81,7 @@ export function selectDrifted(orders: readonly DriftInput[], limit = 25): DriftR
     if (listed <= 0) continue;
     if (!o.m) continue;
 
-    const suggested = Math.round(clearingPrice(o.m));
+    const suggested = Math.ceil(clearingPrice(o.m));
     if (suggested <= 0) continue;
 
     const delta = suggested - listed;

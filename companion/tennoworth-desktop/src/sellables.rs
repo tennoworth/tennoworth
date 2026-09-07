@@ -314,6 +314,28 @@ impl MarketData {
         }
         Some(owned)
     }
+
+    pub fn session_quantities(&self, db: &Db) -> Result<BTreeMap<String, u32>, String> {
+        let reserve = reserve_copies(db);
+        let traded = db.traded_names_since_scan().map_err(|e| e.to_string())?;
+        let reserves: BTreeMap<_, _> = db.get_reserves().map_err(|e| e.to_string())?
+            .into_iter().map(|r| (r.slug, r.keep.max(0))).collect();
+        let mut owned = BTreeMap::<String, (i64, i64)>::new();
+        for item in db.latest_snapshot_items().map_err(|e| e.to_string())? {
+            let Some((name, slug)) = self.resolve(&item.slug) else { continue };
+            // The log has no rank identity. Require another scan for an item
+            // given away since this snapshot instead of guessing which tier left.
+            if traded.contains(&name.to_lowercase()) { continue; }
+            let row = owned.entry(slug).or_default();
+            row.0 = row.0.saturating_add(item.count.max(0));
+            row.1 = row.1.saturating_add(item.leveled.max(0));
+        }
+        Ok(owned.into_iter().map(|(slug, (count, leveled))| {
+            let keep = reserve.max(reserves.get(&slug).copied().unwrap_or(0));
+            let safe = sell_priority::sellable_qty(count, keep, leveled);
+            (slug, u32::try_from(safe).unwrap_or(0))
+        }).collect())
+    }
 }
 
 fn valid_usage_share(value: &serde_json::Value) -> Option<f64> {
