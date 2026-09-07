@@ -1,0 +1,7 @@
+[
+ {"name":"whole-word match excludes similar primes","rotation":{"items":["MPVLimboPrimeSinglePack","MPVAkbroncoPrimePack"]},"market":{"calendar":{"primes":{"bo_prime_set":{"name":"Bo Prime"},"limbo_prime_set":{"name":"Limbo Prime"},"bronco_prime_set":{"name":"Bronco Prime"}}}},"held":["bo_prime_set","limbo_prime_set","bronco_prime_set"],"expected":["limbo_prime_set"]},
+ {"name":"held part matches bundle with ampersand","rotation":{"items":["MPVS ilvaAndAegisPrimeSinglePack"]},"market":{"calendar":{"primes":{"silva_and_aegis_prime_set":{"name":"Silva & Aegis Prime"}}},"set_to_parts":{"silva_and_aegis_prime_set":{"parts":[{"slug":"silva_and_aegis_prime_blade"}]}}},"held":["silva_and_aegis_prime_blade"],"expected":[]},
+ {"name":"acronym and ampersand resolve held parts","rotation":{"items":["MPVSilvaAndAegisPrimeSinglePack"]},"market":{"calendar":{"primes":{"silva_and_aegis_prime_set":{"name":"Silva & Aegis Prime"}}},"set_to_parts":{"silva_and_aegis_prime_set":{"parts":[{"slug":"silva_and_aegis_prime_blade"}]}}},"held":["silva_and_aegis_prime_blade"],"expected":["silva_and_aegis_prime_set"]},
+ {"name":"missing calendar remains unknown","rotation":{"items":["MPVVoltPrimeSinglePack"]},"market":{},"held":["volt_prime_set"],"expected":[]},
+ {"name":"empty inventory does not match","rotation":{"items":["MPVVoltPrimeSinglePack"]},"market":{"calendar":{"primes":{"volt_prime_set":{"name":"Volt Prime"}}}},"held":[],"expected":[]}
+]

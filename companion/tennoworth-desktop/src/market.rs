@@ -161,6 +161,8 @@ fn keep_cache(dir: &Path, spec: &ArtifactSpec, etag: Option<String>) -> RefreshR
 /// degrades to `keep_cache`. Runs inside `spawn_blocking` (reqwest::blocking must
 /// not run on an async worker thread), the same pattern `scan_inventory` uses.
 pub fn refresh(dir: &Path) -> RefreshResult {
+    static REFRESH_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _lock = wfm_core::poison::guard(&REFRESH_LOCK);
     refresh_artifact(dir, &MARKET, &MARKET.url())
 }
 

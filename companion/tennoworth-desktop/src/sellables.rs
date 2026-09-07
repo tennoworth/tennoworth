@@ -32,7 +32,7 @@ use crate::market::MarketCache;
 /// committed (unlike the gitignored `dist-desktop`, so `include_str!` never
 /// breaks a fresh checkout). The market floor is only used when the app-data
 /// cache is absent/corrupt; the catalog never changes at runtime.
-const BUNDLED_MARKET: &str = include_str!("../../../prototype/public/market.json");
+pub(crate) const BUNDLED_MARKET: &str = include_str!("../../../prototype/public/market.json");
 const BUNDLED_CATALOG: &str = include_str!("../../../prototype/public/wfstat-catalog.json");
 
 /// One ranked sellable row - the shape the tray label and the notification both

@@ -6,6 +6,7 @@
   // Structure: one `.wrap.tw` panel per section, each with a `.rail` title and
   // a `.sbody`. Adding a section = adding another panel; nothing here is
   // special-cased to Appearance.
+  import NotificationSettings from './NotificationSettings.svelte';
   import ThemeSwitcher from './ThemeSwitcher.svelte';
   import { onMount } from 'svelte';
   import type { ThemeController } from '../lib/theme';
@@ -137,6 +138,8 @@
   }
 </script>
 
+
+
 <section class="view-header">
   <h2>Settings</h2>
   <span
@@ -263,6 +266,8 @@
     </section>
   {/if}
 </div>
+
+{#if isDesktop}<NotificationSettings />{/if}
 
 <style>
 

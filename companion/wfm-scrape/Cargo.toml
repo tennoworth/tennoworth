@@ -12,10 +12,10 @@ csv = "1"
 serde = { workspace = true }
 serde_json = { workspace = true }
 reqwest = { workspace = true }
-# Host-only binary - chrono is fine here (the player binary doesn't get it).
+# Calendar timestamps use the shared cross-platform clock dependency.
 # Needed for the injected clock: ISO stamps, fromisoformat-style parsing of
 # WFCD vault dates, and the vaulting-soon horizon arithmetic.
-chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
+chrono = { workspace = true }
 lzma-rs = { version = "0.3.0", default-features = false }
 base64.workspace = true
 

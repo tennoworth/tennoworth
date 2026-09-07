@@ -672,3 +672,36 @@ export function isDesktopRuntime(): boolean {
 export function createTransport(): Transport {
   return isDesktopRuntime() ? new TauriTransport() : new HostedTransport();
 }
+
+export const NOTIFICATIONS_EVENT = 'notifications-changed';
+export const MARKET_REFRESHED_EVENT = 'market-refreshed';
+export const NOTIFICATION_CATEGORIES = ['trades', 'watches', 'scans', 'baro', 'calendar', 'digest'] as const;
+export type NotificationCategory = typeof NOTIFICATION_CATEGORIES[number];
+export type NotificationTarget = 'sell' | 'orders' | 'ledger' | 'watches' | 'baro' | 'routines';
+export interface NotificationEntry {
+  id: number; category: NotificationCategory; title: string; body: string;
+  target: NotificationTarget; created_at: number; read: boolean;
+  delivery: 'pending' | 'sent' | 'failed' | 'inbox_only';
+}
+export interface NotificationPreferences {
+  popups: boolean;
+  categories: Record<NotificationCategory, { enabled: boolean; native: boolean }>;
+}
+export async function desktopNotifications(): Promise<NotificationEntry[]> {
+  return resolveInvoke()<NotificationEntry[]>('list_notifications');
+}
+export async function desktopReadNotifications(id: number | null = null): Promise<void> {
+  return resolveInvoke()<void>('mark_notifications_read', { id });
+}
+export async function desktopClearNotifications(): Promise<void> {
+  return resolveInvoke()<void>('clear_notifications');
+}
+export async function desktopNotificationPreferences(): Promise<NotificationPreferences> {
+  return resolveInvoke()<NotificationPreferences>('get_notification_preferences');
+}
+export async function desktopSaveNotificationPreferences(preferences: NotificationPreferences): Promise<NotificationPreferences> {
+  return resolveInvoke()<NotificationPreferences>('set_notification_preferences', { preferences });
+}
+export async function desktopTestNotification(): Promise<string> {
+  return resolveInvoke()<string>('test_notification');
+}

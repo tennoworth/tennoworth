@@ -16,7 +16,6 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_notification::NotificationExt;
 use wfm_core::catalog::{fetch_wfm_catalog, index_item_meta, ItemMeta};
 use wfm_core::util::browser_client;
 use wfm_core::ws::{order_matches_watch, run_new_orders_stream, NewOrder};
@@ -150,7 +149,7 @@ fn run(app: AppHandle) {
             let Some(w) = cache.watches.get(i) else {
                 return;
             };
-            let outcome = WatchOutcome {
+            let mut outcome = WatchOutcome {
                 id: w.id,
                 slug: w.slug.clone(),
                 name: w.name.clone(),
@@ -160,15 +159,15 @@ fn run(app: AppHandle) {
                 satisfied: true,
                 fire: true,
             };
-            if let Err(e) = db.record_watch_check(w.id, outcome.price, now, Some(now)) {
+            outcome.fire = crate::watch::notify_watch(&app2, &outcome, now);
+            if let Err(e) = db.record_watch_check(w.id, outcome.price, now, outcome.fire.then_some(now)) {
                 eprintln!("tennoworth: watch stream: record failed for #{}: {e}", w.id);
             }
             let body = describe(&outcome);
-            if let Err(e) = app2.notification().builder().title("TennoWorth price watch").body(&body).show() {
-                eprintln!("tennoworth: watch stream notification failed: {e}");
+            if outcome.fire {
+                let _ = app2.emit(EVENT_WATCH_FIRED, &outcome);
+                eprintln!("tennoworth: watch stream fired #{} ({})", w.id, body);
             }
-            let _ = app2.emit(EVENT_WATCH_FIRED, &outcome);
-            eprintln!("tennoworth: watch stream fired #{} ({})", w.id, body);
             // The fire stamped last_fired_at - reload so the re-arm window
             // holds even inside the cache TTL.
             cache = WatchCache::fresh(&db);

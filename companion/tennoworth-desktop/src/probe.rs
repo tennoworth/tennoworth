@@ -193,6 +193,33 @@ const PROBE_JS: &str = r#"(function(){
     // C6 (notification): run the post-scan surface path against the latest
     // snapshot (probe-only, so it works with no game) → payload {count,total}.
     .then(function(){ return invk('debug_post_scan').then(function(v){ R.debugNotify = v; }); })
+    .then(function(){ return invk('list_notifications').then(function(rows){
+      R.notificationInbox = rows;
+      if (!Array.isArray(rows) || !rows.some(function(n){ return n.category === 'scans' && n.target === 'sell'; })) throw new Error('post-scan notification missing from inbox');
+      var id = rows[0].id;
+      return invk('mark_notifications_read', { id: id }).then(function(){ return invk('list_notifications'); }).then(function(next){
+        if (!next.some(function(n){ return n.id === id && n.read; })) throw new Error('notification read state did not persist');
+      });
+    }); })
+    .then(function(){ return invk('get_notification_preferences').then(function(p){
+      if (!p.categories.baro.enabled || !p.popups) throw new Error('notification defaults missing');
+      p.popups = false;
+      return invk('set_notification_preferences', { preferences: p }).then(function(){ return invk('get_notification_preferences'); }).then(function(saved){
+        if (saved.popups) throw new Error('notification popup pause did not persist');
+      });
+    }); })
+    .then(function(){
+      var nav = Array.from(document.querySelectorAll('button')).find(function(b){return b.textContent.trim().indexOf('Notifications') === 0;});
+      if (!nav) throw new Error('notification navigation missing');
+      nav.click();
+      return delay(500).then(function(){
+        if (!document.querySelector('[aria-label="Notification history"] li')) throw new Error('notification inbox did not render');
+        R.notificationUi = true;
+        var sell = Array.from(document.querySelectorAll('.sidebar button')).find(function(b){return b.textContent.trim().indexOf('Sell') === 0;});
+        if (sell) sell.click();
+        return delay(200);
+      });
+    })
     // C6 (tray model): the labels the rebuild actually pushed + stored payload.
     .then(function(){ return invk('tray_state').then(function(v){ R.trayState = v; }); })
     // (a) Set reserve via the REAL input (now rendered) → set_setting.
