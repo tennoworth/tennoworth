@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import { Buffer } from "node:buffer";
+import { execFileSync } from "node:child_process";
+import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   releaseNotesBody,
@@ -228,4 +233,26 @@ ${validReleaseNotes}
       ),
     ).toThrow('the "## Updating" section is empty');
   });
+});
+
+
+test("snapshot CLI resolves its checkout from paths containing spaces and URL characters", () => {
+  const root = mkdtempSync(join(tmpdir(), "tennoworth release # %-"));
+  try {
+    const script = join(root, "scripts", "release.ts");
+    const publicDir = join(root, "prototype", "public");
+    mkdirSync(join(root, "scripts"), { recursive: true });
+    mkdirSync(publicDir, { recursive: true });
+    copyFileSync(fileURLToPath(new URL("./release.ts", import.meta.url)), script);
+    writeFileSync(join(publicDir, "market.json"), JSON.stringify({
+      ...validMarket(), updated_at: new Date(Date.now() - 1000).toISOString(),
+    }));
+    writeFileSync(join(publicDir, "wfstat-catalog.json"), JSON.stringify(validResolver));
+    const output = execFileSync(process.execPath, [script, "snapshot-check"], {
+      cwd: tmpdir(), encoding: "utf8", stdio: ["ignore", "pipe", "pipe"],
+    });
+    expect(output).toContain("1 items, 1 market names, 1 resolver paths");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
