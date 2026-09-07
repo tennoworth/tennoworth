@@ -43,6 +43,8 @@ mod trades;
 mod tray;
 mod update;
 mod watch;
+mod notifications;
+mod reminders;
 mod wfm_session;
 
 use std::io::Write;
@@ -149,6 +151,12 @@ fn main() {
             commands::market::riven_comps,
             commands::market::cached_history,
             commands::market::refresh_history,
+            notifications::list_notifications,
+            notifications::mark_notifications_read,
+            notifications::clear_notifications,
+            notifications::get_notification_preferences,
+            notifications::set_notification_preferences,
+            notifications::test_notification,
             commands::watch::list_watches,
             commands::watch::add_watch,
             commands::watch::delete_watch,
@@ -340,6 +348,7 @@ fn main() {
             // the probe must not make WFM calls on a timer.
             if !probe {
                 watch::start_checker(app.handle().clone());
+                reminders::start(app.handle().clone());
                 // Fast path beside the poll: WFM's live order stream fires a
                 // matching watch in seconds (see ws_watch.rs).
                 ws_watch::start_stream(app.handle().clone());

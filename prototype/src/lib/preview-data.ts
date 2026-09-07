@@ -22,6 +22,8 @@ export function createPreview(scenario: string) {
     ['score-explainer-dismissed', '1'],
   ]);
   const empty = scenario === 'empty';
+  let notifications = empty ? [] : [{ id: 1, category: 'trades', title: 'Sold Pyrana Prime Set for 90p', body: 'Pyrana Prime Set ×1 · Listing update failed; review My Orders. Your completed trade is saved in the Ledger.', target: 'orders', created_at: Math.floor(Date.now() / 1000), read: false, delivery: 'failed' }];
+  let notificationPreferences = { popups: true, categories: Object.fromEntries(['trades', 'watches', 'scans', 'baro', 'calendar', 'digest'].map(k => [k, { enabled: true, native: true }])) };
   const responses: Record<string, unknown> = {
     fetch_orders: { data: { sell: empty ? [] : [
       { id: 'preview-order', platinum: 90, visible: true, quantity: 2, item: { name: 'Pyrana Prime Set', slug: 'pyrana_prime_set' } },
@@ -44,6 +46,16 @@ export function createPreview(scenario: string) {
     wfm_auth_status: { logged_in: scenario !== 'logged-out', unlocked: scenario !== 'logged-out' },
   };
   return async (command: string, args?: Record<string, unknown>): Promise<unknown> => {
+    if (command === 'list_notifications') {
+      if (scenario === 'loading') await new Promise(resolve => setTimeout(resolve, 1500));
+      if (scenario === 'error') throw new Error('Could not load notifications. Retry when storage is available.');
+      return structuredClone(notifications);
+    }
+    if (command === 'mark_notifications_read') { notifications = notifications.map(n => args?.id == null || n.id === args.id ? { ...n, read: true } : n); return null; }
+    if (command === 'clear_notifications') { notifications = []; return null; }
+    if (command === 'get_notification_preferences') return structuredClone(notificationPreferences);
+    if (command === 'set_notification_preferences') { if (scenario === 'preferences-error') throw new Error('Could not save notification preferences.'); notificationPreferences = JSON.parse(JSON.stringify(args?.preferences)) as typeof notificationPreferences; return structuredClone(notificationPreferences); }
+    if (command === 'test_notification') return 'Test sent (preview).';
     if (command === 'get_setting') return settings.get(String(args?.key)) ?? null;
     if (command === 'set_setting') { settings.set(String(args?.key), String(args?.value)); return null; }
     if (command === 'delete_setting') { settings.delete(String(args?.key)); return null; }

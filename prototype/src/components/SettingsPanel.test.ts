@@ -10,6 +10,11 @@ import type { Transport } from '../lib/transport';
 import type { OverlaySettings } from '../lib/types';
 import { installTauri, removeTauri } from '../lib/test-utils';
 
+vi.mock('../lib/transport', async (importOriginal) => ({
+  ...await importOriginal<typeof import('../lib/transport')>(),
+  desktopNotificationPreferences: vi.fn(async () => ({ popups: true, categories: Object.fromEntries(['trades', 'watches', 'scans', 'baro', 'calendar', 'digest'].map(k => [k, { enabled: true, native: true }])) })),
+}));
+
 afterEach(() => {
   cleanup();
   removeTauri();

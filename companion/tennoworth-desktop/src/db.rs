@@ -110,6 +110,18 @@ CREATE TABLE trade (
 );
 CREATE INDEX trade_at ON trade(at);
 "#,
+    r#"
+CREATE TABLE notification (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  category TEXT NOT NULL, title TEXT NOT NULL, body TEXT NOT NULL,
+  target TEXT NOT NULL, created_at INTEGER NOT NULL,
+  read INTEGER NOT NULL DEFAULT 0, delivery TEXT NOT NULL
+);
+CREATE TABLE notification_checkpoint (
+  key TEXT PRIMARY KEY, stage INTEGER NOT NULL, at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL
+);
+"#,
 ];
 
 /// A ledger row, as handed to the SPA.
@@ -225,6 +237,66 @@ pub struct Db {
 }
 
 impl Db {
+    pub fn notification_preferences(&self) -> Result<crate::notifications::Preferences, String> {
+        self.get_setting("notifications-v1").map_err(|e| e.to_string())?
+            .map(|s| serde_json::from_str(&s).map_err(|e| e.to_string()))
+            .unwrap_or_else(|| Ok(Default::default()))
+    }
+
+    pub fn list_notifications(&self) -> rusqlite::Result<Vec<crate::notifications::Notification>> {
+        let conn = guard(&self.conn);
+        let mut stmt = conn.prepare("SELECT id, category, title, body, target, created_at, read, delivery FROM notification ORDER BY id DESC LIMIT 1000")?;
+        let rows = stmt.query_map([], |r| Ok(crate::notifications::Notification {
+            id: r.get(0)?, category: r.get(1)?, title: r.get(2)?, body: r.get(3)?,
+            target: r.get(4)?, created_at: r.get(5)?, read: r.get(6)?, delivery: r.get(7)?,
+        }))?.collect();
+        rows
+    }
+
+    pub fn mark_notifications_read(&self, id: Option<i64>) -> rusqlite::Result<()> {
+        guard(&self.conn).execute("UPDATE notification SET read = 1 WHERE (?1 IS NULL OR id = ?1)", [id])?;
+        Ok(())
+    }
+
+    pub fn clear_notifications(&self) -> rusqlite::Result<()> {
+        guard(&self.conn).execute("DELETE FROM notification", [])?;
+        Ok(())
+    }
+
+    pub fn notification_delivery(&self, id: i64, status: &str) -> rusqlite::Result<()> {
+        guard(&self.conn).execute("UPDATE notification SET delivery = ?2 WHERE id = ?1", rusqlite::params![id, status])?;
+        Ok(())
+    }
+
+    pub fn prune_notifications(&self, now: i64) -> rusqlite::Result<()> {
+        let conn = guard(&self.conn);
+        conn.execute("DELETE FROM notification WHERE created_at < ?1 OR id NOT IN (SELECT id FROM notification ORDER BY id DESC LIMIT 1000)", [now - 30 * 86400])?;
+        conn.execute("DELETE FROM notification_checkpoint WHERE expires_at < ?1", [now])?;
+        Ok(())
+    }
+
+    /// The checkpoint and inbox insert share a transaction: polling and streaming
+    /// cannot both claim the same watch, even if they evaluated stale copies.
+    pub fn insert_notification(&self, n: &crate::notifications::Candidate, now: i64, native: bool, enabled: bool) -> rusqlite::Result<Option<i64>> {
+        let mut conn = guard(&self.conn);
+        let tx = conn.transaction()?;
+        let prior: Option<(i64, i64)> = tx.query_row(
+            "SELECT stage, at FROM notification_checkpoint WHERE key = ?1",
+            [&n.key], |r| Ok((r.get(0)?, r.get(1)?))).optional()?;
+        if prior.is_some_and(|(stage, at)| if n.cooldown > 0 { now.saturating_sub(at) < n.cooldown } else { stage >= n.stage }) {
+            return Ok(None);
+        }
+        tx.execute("INSERT INTO notification_checkpoint(key, stage, at, expires_at) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(key) DO UPDATE SET stage=excluded.stage, at=excluded.at, expires_at=excluded.expires_at",
+            rusqlite::params![n.key, n.stage, now, n.expires_at])?;
+        let id = if enabled {
+            tx.execute("INSERT INTO notification(category, title, body, target, created_at, delivery) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                rusqlite::params![n.category, n.title, n.body, n.target, now, if native { "pending" } else { "inbox_only" }])?;
+            Some(tx.last_insert_rowid())
+        } else { None };
+        tx.commit()?;
+        Ok(id)
+    }
+
     /// Open (creating if absent) the store at `path` and bring it to the latest
     /// schema version. Fails only on a genuine I/O / corruption problem - the
     /// desktop treats that as unrecoverable (the store is canonical).
@@ -592,7 +664,7 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
 mod tests {
     use super::*;
 
-    fn temp_db_path() -> std::path::PathBuf {
+    pub(super) fn temp_db_path() -> std::path::PathBuf {
         let nanos = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
@@ -619,6 +691,8 @@ mod tests {
             names,
             vec![
                 "listing_log".to_string(),
+                "notification".to_string(),
+                "notification_checkpoint".to_string(),
                 "reserve".to_string(),
                 "setting".to_string(),
                 "snapshot".to_string(),
@@ -952,5 +1026,71 @@ mod tests {
         assert!(!rows[0].wfm_closed);
         assert!(rows[1].wfm_closed);
         assert_eq!(rows[1].items[0].name, "Primed Flow");
+    }
+}
+
+#[cfg(test)]
+mod notification_tests {
+    use super::*;
+    use crate::notifications::Candidate;
+    fn candidate() -> Candidate { Candidate::once("baro:visit".into(), "baro", "Baro is here".into(), "Relay".into(), "baro", 1000) }
+    #[test]
+    fn inbox_survives_restart_and_clear_keeps_checkpoints() {
+        let path = tests::temp_db_path();
+        let c = candidate();
+        {
+            let db = Db::open(&path).unwrap();
+            let id = db.insert_notification(&c,1000,true,true).unwrap().unwrap();
+            db.notification_delivery(id,"failed").unwrap();
+            db.mark_notifications_read(Some(id)).unwrap();
+            let mut prefs = db.notification_preferences().unwrap();
+            prefs.popups = false;
+            prefs.categories.get_mut("baro").unwrap().enabled = false;
+            db.set_setting("notifications-v1", &serde_json::to_string(&prefs).unwrap()).unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        let prefs = db.notification_preferences().unwrap();
+        assert!(!prefs.popups && !prefs.categories["baro"].enabled);
+        let rows = db.list_notifications().unwrap();
+        assert_eq!(rows.len(),1); assert!(rows[0].read); assert_eq!(rows[0].delivery,"failed");
+        assert!(db.insert_notification(&c,1001,true,true).unwrap().is_none());
+        db.clear_notifications().unwrap(); assert!(db.list_notifications().unwrap().is_empty());
+        assert!(db.insert_notification(&c,1002,true,true).unwrap().is_none());
+        let mut later = c; later.stage = 3;
+        assert!(db.insert_notification(&later,1003,false,true).unwrap().is_some());
+        later.stage = 2;
+        assert!(db.insert_notification(&later,1004,false,true).unwrap().is_none());
+        drop(db); std::fs::remove_file(path).unwrap();
+    }
+    #[test]
+    fn concurrent_watch_producers_share_a_cooldown_even_after_restart() {
+        let db = std::sync::Arc::new(Db::open_in_memory().unwrap());
+        let mut c = candidate(); c.key = "watch:1".into(); c.cooldown = 21600;
+        let handles: Vec<_> = (0..8).map(|_| { let db=db.clone(); let c=c.clone(); std::thread::spawn(move || db.insert_notification(&c,1000,true,true).unwrap().is_some()) }).collect();
+        assert_eq!(handles.into_iter().map(|h| usize::from(h.join().unwrap())).sum::<usize>(),1);
+        assert_eq!(db.list_notifications().unwrap().len(),1);
+        assert!(db.insert_notification(&c,1000+21600-1,true,true).unwrap().is_none());
+        assert!(db.insert_notification(&c,1000+21600,true,true).unwrap().is_some());
+    }
+    #[test]
+    fn disabled_categories_checkpoint_without_history_and_pause_preserves_history() {
+        let db = Db::open_in_memory().unwrap(); let mut c = candidate();
+        assert!(db.insert_notification(&c,1000,true,false).unwrap().is_none());
+        assert!(db.list_notifications().unwrap().is_empty());
+        assert!(db.insert_notification(&c,1001,true,true).unwrap().is_none());
+        c.stage = 2;
+        db.insert_notification(&c,1002,false,true).unwrap();
+        assert_eq!(db.list_notifications().unwrap()[0].delivery,"inbox_only");
+        db.mark_notifications_read(None).unwrap(); assert!(db.list_notifications().unwrap()[0].read);
+    }
+    #[test]
+    fn retention_caps_history_without_rearming_live_events() {
+        let db = Db::open_in_memory().unwrap();
+        for i in 0..1005 { let mut c=candidate(); c.key=format!("event:{i}"); db.insert_notification(&c,1000,false,true).unwrap(); }
+        db.prune_notifications(1001).unwrap(); assert_eq!(db.list_notifications().unwrap().len(),1000);
+        let mut c=candidate(); c.key="event:0".into();
+        assert!(db.insert_notification(&c,1002,false,true).unwrap().is_none());
+        db.prune_notifications(1000+30*86400+1).unwrap(); assert!(db.list_notifications().unwrap().is_empty());
+        assert!(db.insert_notification(&c,1000+30*86400+2,false,true).unwrap().is_none());
     }
 }

@@ -133,6 +133,17 @@ and relevant uncertainty readable. A design migration must not change trading
 calculations or create a second execution flow. New planning surfaces use the
 same patterns without treating illustrative mock data as production behavior.
 
+## Notification history
+
+Desktop history uses `.notification-entry` rows with a restrained unread edge,
+explicit Read/Unread text, timestamp, evidence, and navigation to the next step.
+Read entries retain full text contrast. Native delivery failures remain visible
+in the inbox; a transient popup is never the only record. Category controls and
+popup preferences use labeled checkboxes, with disabled states kept readable.
+Long trade descriptions wrap, and row actions wrap without hiding their labels.
+Select Alerts in the living styleguide’s Data state control for the production
+row pattern and read-state toggle.
+
 ## Resizing contract
 
 - The page must not require horizontal scrolling to reach ordinary navigation,

@@ -17,7 +17,6 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_notification::NotificationExt;
 use wfm_core::live_top::{fetch_live_tops, LiveTop, LiveTopQuery};
 
 use crate::db::{Db, Watch};
@@ -149,21 +148,26 @@ pub fn run_pass(app: &AppHandle) -> Vec<WatchOutcome> {
                 && t.rank == w.rank.map(|r| r.max(0) as u32)
                 && t.subtype.as_deref().unwrap_or("") == w.subtype.as_deref().unwrap_or("")
         });
-        let o = evaluate(w, top, now);
+        let mut o = evaluate(w, top, now);
+        if o.fire { o.fire = notify_watch(app, &o, now); }
         let fired_at = if o.fire { Some(now) } else { None };
         if let Err(e) = db.record_watch_check(w.id, o.price, now, fired_at) {
             eprintln!("tennoworth: watch pass: record failed for #{}: {e}", w.id);
         }
-        if o.fire {
-            let body = describe(&o);
-            if let Err(e) = app.notification().builder().title("TennoWorth price watch").body(&body).show() {
-                eprintln!("tennoworth: watch notification failed: {e}");
-            }
-            let _ = app.emit(EVENT_WATCH_FIRED, &o);
-        }
+        if o.fire { let _ = app.emit(EVENT_WATCH_FIRED, &o); }
         out.push(o);
     }
     out
+}
+
+pub fn notify_watch(app: &AppHandle, outcome: &WatchOutcome, now: i64) -> bool {
+    let mut candidate = crate::notifications::Candidate::once(
+        format!("watch:{}", outcome.id), "watches", "TennoWorth price watch".into(), describe(outcome), "watches", now);
+    candidate.cooldown = REARM_AFTER_SECS;
+    match crate::notifications::publish(app, candidate) {
+        Ok(fired) => fired,
+        Err(e) => { eprintln!("tennoworth: watch notification failed: {e}"); false }
+    }
 }
 
 /// Start the background checker. Detached thread: sleeps, runs a pass, sleeps.

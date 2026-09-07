@@ -1,0 +1,13 @@
+{
+ "now":"2026-09-04T13:00:00Z",
+ "held":["primed_flow"],
+ "market":{
+  "surface_provenance":{"world.goals":{"data_fetched_at":"2026-09-04T13:00:00Z"}},
+  "event_rewards":{"goals":{
+   "partial":{"id":"partial","source":"goal","title":"Partial rewards","starts_at":"2026-09-04T12:00:00Z","ends_at":"2026-09-05T12:00:00Z","completeness":"partial","groups":[{"rewards":[{"slug":"primed_flow"},{"name":"Unresolved reward"}]}]},
+   "unknown":{"id":"unknown","source":"goal","title":"Unknown rewards","starts_at":"2026-09-04T12:00:00Z","ends_at":"2026-09-05T12:00:00Z","completeness":"unknown","groups":[]},
+   "unrelated":{"id":"unrelated","source":"goal","title":"Unrelated rewards","starts_at":"2026-09-04T12:00:00Z","ends_at":"2026-09-05T12:00:00Z","completeness":"complete","groups":[{"rewards":[{"slug":"other"}]}]}
+  }}
+ },
+ "expected":["Partial rewards"]
+}

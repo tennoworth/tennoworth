@@ -8,7 +8,6 @@ use std::sync::Mutex;
 use tauri::menu::{Menu, MenuBuilder, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, Wry};
-use tauri_plugin_notification::NotificationExt;
 
 use wfm_core::poison::guard;
 
@@ -126,14 +125,12 @@ pub fn post_scan_surfaces(app: &AppHandle) {
         *guard(&app.state::<TrayState>().last_notification) = Some(n);
         let noun = if n.count == 1 { "item" } else { "items" };
         let body = format!("{} {} worth ~{}p to sell", n.count, noun, n.total_plat);
-        if let Err(e) = app
-            .notification()
-            .builder()
-            .title("TennoWorth")
-            .body(&body)
-            .show()
-        {
-            eprintln!("tennoworth: post-scan notification failed: {e}");
+        let db = app.state::<Db>();
+        if let Ok(snapshots) = db.list_snapshots(1) {
+            if let Some(snapshot) = snapshots.first() {
+                crate::notifications::send(app, crate::notifications::Candidate::once(
+                    format!("scan:{}", snapshot.id), "scans", "Inventory ready to sell".into(), body, "sell", crate::notifications::now()));
+            }
         }
     }
 }
