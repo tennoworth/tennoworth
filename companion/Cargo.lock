@@ -5437,6 +5437,7 @@ version = "0.6.6"
 dependencies = [
  "base64 0.22.1",
  "cairo-rs",
+ "chrono",
  "gtk",
  "image",
  "keyring",

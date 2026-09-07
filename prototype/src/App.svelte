@@ -9,6 +9,8 @@
   import ListingReviewModal from './components/ListingReviewModal.svelte';
   import MyOrdersPanel from './components/MyOrdersPanel.svelte';
   import WatchlistPanel from './components/WatchlistPanel.svelte';
+  import NotificationInbox from './components/NotificationInbox.svelte';
+  import { desktopNotifications, NOTIFICATIONS_EVENT, MARKET_REFRESHED_EVENT } from './lib/transport';
   import LedgerPanel from './components/LedgerPanel.svelte';
   import MarketBrowser from './components/MarketBrowser.svelte';
   import DesktopUpdateBanner from './components/DesktopUpdateBanner.svelte';
@@ -164,9 +166,9 @@
   // reload lands the user back where they left off. Falls through to
   // 'sell' if the persisted view's data isn't available (Baro not
   // visiting; 'orders' is desktop-only - the hosted site is informational).
-  type View = 'sell' | 'session' | 'sets' | 'relics' | 'rivens' | 'baro' | 'routines' | 'meta' | 'orders' | 'watches' | 'ledger' | 'install' | 'settings';
+  type View = 'sell' | 'session' | 'sets' | 'relics' | 'rivens' | 'baro' | 'routines' | 'meta' | 'orders' | 'watches' | 'ledger' | 'notifications' | 'install' | 'settings';
   const VALID_VIEWS: ReadonlySet<View> = new Set([
-    'sell', 'session', 'sets', 'relics', 'rivens', 'baro', 'routines', 'meta', 'orders', 'watches', 'ledger', 'install', 'settings',
+    'sell', 'session', 'sets', 'relics', 'rivens', 'baro', 'routines', 'meta', 'orders', 'watches', 'ledger', 'notifications', 'install', 'settings',
   ]);
   let view = $state<View>(
     (() => {
@@ -196,7 +198,7 @@
   let effectiveView = $derived.by<View>(() => {
     if (view === 'baro' && !showBaroCard) return 'sell';
     if (view === 'meta' && !buildMetaDrift(market)) return 'sell';
-    if ((view === 'session' || view === 'orders' || view === 'watches' || view === 'ledger' || view === 'rivens') && !isDesktop) return 'sell';
+    if ((view === 'session' || view === 'orders' || view === 'watches' || view === 'ledger' || view === 'notifications' || view === 'rivens') && !isDesktop) return 'sell';
     return view;
   });
 
@@ -352,6 +354,24 @@
       console.error('market refresh failed', e);
     }
   }
+
+  let unreadNotifications = $state(0);
+  onMount(() => {
+    if (!isDesktop) return;
+    let active = true;
+    let request = 0;
+    const reload = async () => {
+      const current = ++request;
+      try { const rows = await desktopNotifications(); if (active && current === request) unreadNotifications = rows.filter(n => !n.read).length; } catch { /* Inbox exposes retryable errors. */ }
+    };
+    const stop = listenForTauriEvent(NOTIFICATIONS_EVENT, () => { void reload(); });
+    const stopMarket = listenForTauriEvent(MARKET_REFRESHED_EVENT, async () => {
+      const cached = await transport.loadCachedMarket().catch(() => null);
+      if (active && cached && (!market || Date.parse(cached.updated_at) > Date.parse(market.updated_at))) market = cached;
+    });
+    void reload();
+    return () => { active = false; stop(); stopMarket(); };
+  });
 
   let marketRefreshLoop: MarketRefreshLoop | null = null;
   onMount(() => {
@@ -615,7 +635,7 @@
   // Render the Baro card when (a) we got a voidTrader response and
   // (b) the user has a meaningful pile of ducat-earning inventory.
   // 500 ducats ≈ 5 prime junk parts; below that the card is noise.
-  let showBaroCard = $derived(voidTrader != null && ducatStats.total >= 500);
+  let showBaroCard = $derived(voidTrader != null && (isDesktop || ducatStats.total >= 500));
 
   // Pre-format strings so the template stays clean.
   let baroState = $derived.by(() => {
@@ -1205,6 +1225,9 @@
         <button type="button" class="nav-item" class:active={effectiveView === 'watches'} onclick={() => setView('watches')}>
           <span>Price watches</span>
         </button>
+        <button type="button" class="nav-item" class:active={effectiveView === 'notifications'} onclick={() => setView('notifications')}>
+          <span>Notifications</span>{#if unreadNotifications}<span class="badge">{unreadNotifications}</span>{/if}
+        </button>
         <button type="button" class="nav-item" class:active={effectiveView === 'ledger'} onclick={() => setView('ledger')}>
           <span>Ledger</span>
         </button>
@@ -1518,6 +1541,9 @@
         </p>
       </section>
 
+      <section class="card ui-panel">
+        <TraderCalendar market={market} owned={resolved.owned} />
+      </section>
       <section class="card ui-panel routine">
         <div class="routine-clocks">
           <div class="clock">
@@ -1602,6 +1628,9 @@
       </section>
       <WatchlistPanel {market} />
 
+    {:else if effectiveView === 'notifications'}
+      <NotificationInbox onopen={(target) => setView(target)} onsettings={() => setView('settings')} />
+
     {:else if effectiveView === 'ledger'}
       <section class="view-header">
         <h2>Ledger</h2>
@@ -1652,6 +1681,7 @@
       {#if !inShell}<span class="sub">warframe.market prices, ranked by what actually sells</span>{/if}
     </div>
     {#if isDesktop}
+      {#if !inShell}<button class="btn" onclick={() => { phase = 'done'; setView('notifications'); }}>Notifications{unreadNotifications ? ` (${unreadNotifications})` : ''}</button>{/if}
       <div class="cell inv" title={unresolvedCount > 0 ? `${unresolvedCount} items couldn't be price-matched (${unresolvedSummary}) - usually untradeable blueprints, quest items and very new content.` : undefined}>
         {#if inventoryName}
           <span class="dot {inventoryFreshness}" role="img" aria-label="Inventory {inventoryFreshness}"></span>

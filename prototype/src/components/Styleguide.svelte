@@ -4,6 +4,7 @@
 
   let mode = $state<Mode>('dark');
   let filter = $state('');
+  let notificationRead = $state(false);
   let dataState = $state('populated');
   let selected = $state('Fast Cash');
   let quantity = $state<number | undefined>(2);
@@ -77,7 +78,7 @@
       <p class="muted">Selected: {selected}. These are presentation examples, not the Trade Session planner.</p>
       <div class="fields">
         <label class="ui-field">Filter sample items<input type="text" bind:value={filter} placeholder="Item name" /></label>
-        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option></select></label>
+        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option><option value="notifications">Alerts</option></select></label>
       </div>
       <p role="status" class="muted">{message || 'Controls are ready. No changes made.'}</p>
     </div>
@@ -118,6 +119,18 @@
     <p>Watches and Ledger use this panel shell. The heading and adjacent status wrap together, with shared spacing and no feature-specific card copy.</p>
   </section>
   <footer class="muted">Reference patterns: .btn · .wrap.tw · table.tw · .ui-field · .ui-toolbar · .ui-notice · dialog.cryptobox</footer>
+  {#if dataState === 'notifications'}
+  <section class="ui-panel ui-stack" aria-label="Notification row reference">
+    <h2>Notification history</h2>
+    <article class="notification-entry" class:unread={!notificationRead}>
+      <span>{notificationRead ? 'Read' : 'Unread'} · Completed trade</span>
+      <strong>Sold Pyrana Prime Set for 90p</strong>
+      <p>Your completed trade is saved in the Ledger. Review My Orders if the listing still needs adjustment.</p>
+      <div class="ui-notice" data-tone="warn">Desktop delivery failed. The inbox keeps the result and next action.</div>
+      <div><button class="btn" onclick={() => notificationRead = !notificationRead}>{notificationRead ? 'Mark unread' : 'Mark read'}</button></div>
+    </article>
+  </section>
+  {/if}
 </main>
 
 <dialog class="cryptobox" bind:this={dialog} aria-labelledby="review-title">

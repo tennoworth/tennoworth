@@ -15,7 +15,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_notification::NotificationExt;
 use wfm_core::listing::{delete_order, list_user_orders, update_order, Unlocked, UpdateRequest};
 
 use crate::db::Db;
@@ -152,6 +151,18 @@ pub fn plan_adjustments(
         .collect()
 }
 
+fn adjustment_follow_up(trade: &TradeEvent, names: &BTreeMap<String, String>, orders: &[OwnSellOrder], tiered: &BTreeSet<String>) -> Vec<String> {
+    trade.items.iter().filter(|item| item.direction == "given").filter_map(|item| {
+        let reason = match names.get(&item.name.to_lowercase()) {
+            None => Some("item could not be resolved"),
+            Some(slug) if tiered.contains(slug) => Some("rank or refinement is unknown"),
+            Some(slug) if orders.iter().filter(|o| &o.slug == slug).count() > 1 => Some("multiple matching sell orders"),
+            _ => None,
+        }?;
+        Some(format!("{}: {reason}; review My Orders.", item.name))
+    }).collect()
+}
+
 /// Record + notify + adjust. Blocking; called from the tailer thread.
 pub fn handle_trade(app: &AppHandle, trade: TradeEvent, position: crate::eelog::LogPosition) {
     let db = app.state::<Db>();
@@ -166,6 +177,7 @@ pub fn handle_trade(app: &AppHandle, trade: TradeEvent, position: crate::eelog::
     };
     let _ = app.emit(crate::allowance::EVENT_ALLOWANCE_CHANGED, ());
     let mut adjusted: Vec<(String, i64)> = Vec::new();
+    let mut follow_up: Vec<String> = Vec::new();
 
     let auto_close_on = db
         .get_setting(SETTING_AUTO_CLOSE)
@@ -173,6 +185,7 @@ pub fn handle_trade(app: &AppHandle, trade: TradeEvent, position: crate::eelog::
         .flatten()
         .map(|v| v != "off")
         .unwrap_or(true);
+    if trade.kind == "sale" && !auto_close_on { follow_up.push("Automatic listing adjustment is off. Review your sell orders.".into()); }
     if trade.kind == "sale" && auto_close_on {
         let session = app.state::<Arc<WfmSession>>();
         if let Ok(unlocked) = session.require_unlocked() {
@@ -181,6 +194,7 @@ pub fn handle_trade(app: &AppHandle, trade: TradeEvent, position: crate::eelog::
                     let orders = own_sell_orders(&body);
                     let names = name_to_slug(&unlocked);
                     let tiered = tiered_slugs(&unlocked);
+                    follow_up.extend(adjustment_follow_up(&trade, &names, &orders, &tiered));
                     for (order, new_qty) in plan_adjustments(&trade, &names, &orders, &tiered) {
                         let res = if new_qty == 0 {
                             delete_order(&unlocked, &order.id).map(|_| ())
@@ -210,6 +224,7 @@ pub fn handle_trade(app: &AppHandle, trade: TradeEvent, position: crate::eelog::
                                 adjusted.push((name, new_qty));
                             }
                             Err(e) => {
+                                follow_up.push(format!("{}: listing update failed; review My Orders.", order.slug));
                                 eprintln!("tennoworth: auto-close of {} failed: {e}", order.slug)
                             }
                         }
@@ -218,8 +233,13 @@ pub fn handle_trade(app: &AppHandle, trade: TradeEvent, position: crate::eelog::
                         let _ = db.mark_trade_wfm_closed(id);
                     }
                 }
-                Err(e) => eprintln!("tennoworth: auto-close: could not list orders: {e}"),
+                Err(e) => {
+                    follow_up.push("Could not check sell orders. Review My Orders.".into());
+                    eprintln!("tennoworth: auto-close: could not list orders: {e}");
+                },
             }
+        } else {
+            follow_up.push("Sign in or unlock your market login to review sell orders.".into());
         }
     }
 
@@ -256,15 +276,10 @@ pub fn handle_trade(app: &AppHandle, trade: TradeEvent, position: crate::eelog::
             if n == 1 { "" } else { "s" }
         ));
     }
-    if let Err(e) = app
-        .notification()
-        .builder()
-        .title(&title)
-        .body(&body)
-        .show()
-    {
-        eprintln!("tennoworth: trade notification failed: {e}");
-    }
+    if !follow_up.is_empty() { body.push_str(&format!(" · {}", follow_up.join(" "))); }
+    crate::notifications::send(app, crate::notifications::Candidate::once(
+        format!("trade:{id}"), "trades", title, body,
+        if follow_up.is_empty() { "ledger" } else { "orders" }, now));
     let _ = app.emit(
         EVENT_TRADE_DETECTED,
         TradeDetected {
@@ -362,6 +377,20 @@ mod tests {
                 .collect(),
             log_stamp: None,
         }
+    }
+
+    #[test]
+    fn follow_up_identifies_unresolved_tiers_and_ambiguous_orders() {
+        let trade = TradeEvent { partner: "Buyer".into(), kind: "sale".into(), plat: 30, log_stamp: None,
+            items: vec![TradeItem {name:"Primed Flow".into(),qty:1,direction:"given".into()}, TradeItem {name:"Unknown".into(),qty:1,direction:"given".into()}, TradeItem {name:"Part".into(),qty:1,direction:"given".into()}] };
+        let names = BTreeMap::from([("primed flow".into(),"primed_flow".into()),("part".into(),"part".into())]);
+        let orders = vec![OwnSellOrder{id:"a".into(),slug:"part".into(),quantity:2},OwnSellOrder{id:"b".into(),slug:"part".into(),quantity:1}];
+        let messages = adjustment_follow_up(&trade,&names,&orders,&BTreeSet::from(["primed_flow".into()]));
+        assert_eq!(messages.len(),3);
+        assert!(messages.iter().all(|s| s.contains("review My Orders")));
+        assert!(messages.iter().any(|s| s.contains("rank or refinement")));
+        assert!(messages.iter().any(|s| s.contains("could not be resolved")));
+        assert!(messages.iter().any(|s| s.contains("multiple matching")));
     }
 
     #[test]
