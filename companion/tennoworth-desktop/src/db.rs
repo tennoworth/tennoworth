@@ -1152,6 +1152,49 @@ mod tests {
         assert_eq!(rows[1].items[0].name, "Primed Flow");
     }
 
+    #[test]
+    fn digests_and_sessions_share_reserves_and_post_trade_exclusions() {
+        let db = Db::open_in_memory().unwrap();
+        let market: crate::sellables::MarketData = serde_json::from_value(serde_json::json!({
+            "items":{"test_part":{"vol":1000,"low_sell":10,"avg":10,"median_now":10,"median_90d":10,"low5_avg":10}},
+            "path_to_info":{"/Lotus/TestPart":{"name":"Test Part","slug":"test_part"}}
+        })).unwrap();
+        let stamp = "1970-01-01T00:01:40Z";
+        let id = db.insert_snapshot("memory", Some(stamp), None,
+            &[SnapshotItem {slug:"/Lotus/TestPart".into(),count:6,leveled:1}]).unwrap();
+        let boundary = crate::eelog::LogPosition {session:"digest-test".into(),start:100,end:100,observed_after:100};
+        db.save_allowance(crate::allowance::Observation::scanned("account".into(),id,
+            &serde_json::json!({"TradesRemaining":8}),Some(boundary.clone()),Some(boundary.clone()),100,100)).unwrap();
+        db.set_setting("reserve-copies","1").unwrap();
+        db.set_reserve("test_part",3).unwrap();
+        let rows = crate::sellables::rank_sellables(&db,&market);
+        assert_eq!(rows[0].sellable_qty,3);
+        assert_eq!(market.session_quantities(&db).unwrap()["test_part"],3);
+        let prices = serde_json::json!({"updated_at":stamp});
+        assert!(crate::reminders::digest(&prices,&rows,stamp,110,"1970-01-01",18).unwrap().body.contains("Test Part ×3"));
+        db.set_setting("reserve-copies","4").unwrap();
+        assert_eq!(crate::sellables::rank_sellables(&db,&market)[0].sellable_qty,2);
+        db.set_reserve("test_part",6).unwrap();
+        assert!(crate::sellables::rank_sellables(&db,&market).is_empty());
+        db.set_setting("reserve-copies","1").unwrap();
+        db.set_reserve("test_part",3).unwrap();
+        let trade = crate::eelog::TradeEvent {partner:"Buyer".into(),kind:"sale".into(),plat:10,log_stamp:Some("110".into()),
+            items:vec![crate::eelog::TradeItem {name:"Test Part".into(),qty:1,direction:"given".into()}]};
+        let position = crate::eelog::LogPosition {start:101,end:120,observed_after:110,..boundary};
+        db.insert_trade(&trade,110,&position).unwrap();
+        let rows = crate::sellables::rank_sellables(&db,&market);
+        assert!(rows.is_empty());
+        assert!(!market.session_quantities(&db).unwrap().contains_key("test_part"));
+        assert!(crate::reminders::digest(&prices,&rows,stamp,111,"1970-01-01",18).is_none());
+        let id = db.insert_snapshot("memory", Some(stamp), None,
+            &[SnapshotItem {slug:"/Lotus/TestPart".into(),count:5,leveled:1}]).unwrap();
+        let boundary = crate::eelog::LogPosition {start:120,end:120,observed_after:130,..position};
+        db.save_allowance(crate::allowance::Observation::scanned("account".into(),id,
+            &serde_json::json!({"TradesRemaining":7}),Some(boundary.clone()),Some(boundary),130,130)).unwrap();
+        assert_eq!(crate::sellables::rank_sellables(&db,&market)[0].sellable_qty,2);
+        assert_eq!(market.session_quantities(&db).unwrap()["test_part"],2);
+    }
+
     fn allowance_scan(db: &Db, account: &str, remaining: u32) {
         let id = db.insert_snapshot("memory", None, None, &[]).unwrap();
         let before = crate::eelog::LogPosition { session: "log".into(), start: 100, end: 100, observed_after: 100 };

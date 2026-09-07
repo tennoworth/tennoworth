@@ -316,24 +316,28 @@ impl MarketData {
     }
 
     pub fn session_quantities(&self, db: &Db) -> Result<BTreeMap<String, u32>, String> {
+        self.sellable_inventory(db).map(|rows| rows.into_iter().map(|(slug, (_, count))| (slug, count)).collect())
+    }
+
+    fn sellable_inventory(&self, db: &Db) -> Result<BTreeMap<String, (String, u32)>, String> {
         let reserve = reserve_copies(db);
         let traded = db.traded_names_since_scan().map_err(|e| e.to_string())?;
         let reserves: BTreeMap<_, _> = db.get_reserves().map_err(|e| e.to_string())?
             .into_iter().map(|r| (r.slug, r.keep.max(0))).collect();
-        let mut owned = BTreeMap::<String, (i64, i64)>::new();
+        let mut owned = BTreeMap::<String, (String, i64, i64)>::new();
         for item in db.latest_snapshot_items().map_err(|e| e.to_string())? {
             let Some((name, slug)) = self.resolve(&item.slug) else { continue };
             // The log has no rank identity. Require another scan for an item
             // given away since this snapshot instead of guessing which tier left.
             if traded.contains(&name.to_lowercase()) { continue; }
-            let row = owned.entry(slug).or_default();
-            row.0 = row.0.saturating_add(item.count.max(0));
-            row.1 = row.1.saturating_add(item.leveled.max(0));
+            let row = owned.entry(slug).or_insert((name, 0, 0));
+            row.1 = row.1.saturating_add(item.count.max(0));
+            row.2 = row.2.saturating_add(item.leveled.max(0));
         }
-        Ok(owned.into_iter().map(|(slug, (count, leveled))| {
+        Ok(owned.into_iter().map(|(slug, (name, count, leveled))| {
             let keep = reserve.max(reserves.get(&slug).copied().unwrap_or(0));
             let safe = sell_priority::sellable_qty(count, keep, leveled);
-            (slug, u32::try_from(safe).unwrap_or(0))
+            (slug, (name, u32::try_from(safe).unwrap_or(0)))
         }).collect())
     }
 }
@@ -421,27 +425,17 @@ fn reserve_copies(db: &Db) -> i64 {
 /// by score desc, then slug asc for a deterministic order (the SPA uses
 /// insertion order on ties; ties are irrelevant for a top-N tray).
 pub fn rank_sellables(db: &Db, market: &MarketData) -> Vec<SellableRow> {
-    let items = db.latest_snapshot_items().unwrap_or_default();
-    let reserve = reserve_copies(db);
-
-    // Aggregate by resolved slug so two DE paths that map to one WFM item don't
-    // produce duplicate rows.
-    let mut by_slug: BTreeMap<String, (String, i64, i64)> = BTreeMap::new();
-    for it in items {
-        let Some((name, slug)) = market.resolve(&it.slug) else {
-            continue;
-        };
-        let entry = by_slug.entry(slug).or_insert((name, 0, 0));
-        entry.1 += it.count;
-        entry.2 += it.leveled;
-    }
-
+    let inventory = match market.sellable_inventory(db) {
+        Ok(rows) => rows,
+        Err(error) => {
+            eprintln!("tennoworth: sellable quantities unavailable: {error}");
+            return vec![];
+        }
+    };
     let mut rows: Vec<SellableRow> = Vec::new();
-    for (slug, (name, count, leveled)) in by_slug {
-        let Some(entry) = market.items.get(&slug) else {
-            continue;
-        };
-        let sellable = sell_priority::sellable_qty(count, reserve, leveled);
+    for (slug, (name, safe)) in inventory {
+        let Some(entry) = market.items.get(&slug) else { continue; };
+        let sellable = i64::from(safe);
         if sellable <= 0 {
             continue;
         }

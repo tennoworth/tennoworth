@@ -52,6 +52,17 @@ pub struct WatchOutcome {
     pub fire: bool,
 }
 
+/// Round in the conservative direction for whole-platinum watch thresholds.
+/// Polling and streaming must report the same price for fractional unit quotes.
+pub(crate) fn price_for_watch(side: &str, price: f64) -> Option<i64> {
+    if !price.is_finite() || price <= 0.0 { return None; }
+    match side {
+        "sell" => Some(price.ceil() as i64),
+        "buy" => Some(price.floor() as i64),
+        _ => None,
+    }
+}
+
 /// Judge one watch against its live top-of-book. `now` (unix seconds) decides
 /// re-arming.
 pub fn evaluate(w: &Watch, top: Option<&LiveTop>, now: i64) -> WatchOutcome {
@@ -59,7 +70,7 @@ pub fn evaluate(w: &Watch, top: Option<&LiveTop>, now: i64) -> WatchOutcome {
         "sell" => t.low_sell,
         "buy" => t.top_buy,
         _ => None,
-    }).map(|p| if w.side == "sell" { p.ceil() as i64 } else { p.floor() as i64 });
+    }).and_then(|p| price_for_watch(&w.side, p));
     let satisfied = match (w.side.as_str(), price) {
         ("sell", Some(p)) => p <= w.threshold,
         ("buy", Some(p)) => p >= w.threshold,
