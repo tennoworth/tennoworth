@@ -41,6 +41,44 @@ building either platform. Historical entries are intentionally not backfilled.
 Releases up to and including 0.3.8 predate this file, and their notes live on
 the GitHub releases themselves.
 
+## 0.7.0 - 2026-09-08
+
+# 🎯 TennoWorth Desktop 0.7.0
+
+TennoWorth Desktop 0.7.0 is ready.
+
+Plan your next trading session, keep track of completed sales, and choose which market opportunities deserve an alert. This release brings Trade Session and a persistent notification inbox to Windows and Linux, alongside clearer layouts and safer listing review.
+
+## Changelog (10)
+
+### Trading
+
+- Plan a Trade Session with Fast Cash, Plat per Trade, Clear Inventory, or Max Value, using a trade budget and optional platinum target.
+- Review existing and proposed listings together, preserve edits during refresh, and recheck quantities, allowance, and changed orders before submission.
+- Compare bulk orders using per-item prices and submit the reviewed lot total, with consistent pricing across live quotes and streamed price alerts.
+- Protect global and per-item reserves in session planning and sell digests, and require a fresh scan before recommending items given away since the last scan.
+
+### Notifications
+
+- Keep completed trades, price-watch matches, Baro reminders, relevant calendar events, and daily sell opportunities in a persistent inbox.
+- Select which notification categories are enabled and which may show desktop popups; preferences survive restarts.
+- See listing follow-up when a completed sale needs attention, with replay protection that prevents duplicate trade handling.
+
+### Desktop
+
+- Use clearer light and dark layouts with responsive tables, readable long names, and review controls that remain reachable in narrow or short windows.
+- Open bug reports and improvement suggestions from the app, and retain partially recognized relic rewards in their correct positions.
+
+### Windows
+
+- Run release and snapshot verification from Windows checkout paths, including paths containing spaces and URL-sensitive characters.
+
+## Updating
+
+TennoWorth checks for updates automatically. Use the in-app updater or download the Windows installer or Linux AppImage below.
+
+Finish or discard pending Trade Session listing batches before downgrading; older versions do not understand their explicit lot sizes.
+
 ## 0.6.6 - 2026-09-03
 
 - Relic reward recognition on Linux now follows the reward row's
