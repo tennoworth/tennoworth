@@ -470,6 +470,7 @@ mod tests {
             "primed_flow".into(),
             WfmCatalogItem {
                 item_id: "mod".into(),
+                bulk_tradable: false,
                 display_name: "Primed Flow".into(),
                 max_rank: Some(10),
                 subtypes: vec![],
@@ -479,6 +480,7 @@ mod tests {
             "lith_c5_relic".into(),
             WfmCatalogItem {
                 item_id: "relic".into(),
+                bulk_tradable: true,
                 display_name: "Lith C5 Relic".into(),
                 max_rank: None,
                 subtypes: vec!["intact".into(), "radiant".into()],
@@ -488,6 +490,7 @@ mod tests {
             "loki_prime_set".into(),
             WfmCatalogItem {
                 item_id: "set".into(),
+                bulk_tradable: false,
                 display_name: "Loki Prime Set".into(),
                 max_rank: None,
                 subtypes: vec![],

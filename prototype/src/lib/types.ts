@@ -500,6 +500,8 @@ export interface PlanItemInput {
   slug: string;
   platinum: number;
   quantity: number;
+  /** Reviewed units per transaction; omitted callers retain the bulk default. */
+  per_trade?: number;
   order_type: 'sell' | 'buy';
   visible: boolean;
   rank?: number;
@@ -536,6 +538,7 @@ interface PendingPlanItem {
   slug: string;
   platinum: number;
   quantity: number;
+  per_trade?: number | null;
   order_type: 'sell' | 'buy';
   visible: boolean;
   rank?: number | null;

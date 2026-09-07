@@ -8,6 +8,8 @@ use std::collections::BTreeMap;
 
 pub struct WfmCatalogItem {
     pub item_id: String,
+    /// WFM rejects perTrade for items without this capability.
+    pub bulk_tradable: bool,
     /// Human-readable display name from /v2/items i18n.en.name. Used to
     /// enrich GET /orders so the panel doesn't render raw itemIds.
     pub display_name: String,
@@ -35,6 +37,10 @@ pub fn fetch_wfm_catalog(client: &Client, platform: &str) -> Result<BTreeMap<Str
         bail!("/v2/items returned HTTP {}", resp.status());
     }
     let body: serde_json::Value = resp.json().context("parsing /v2/items")?;
+    parse_wfm_catalog(&body)
+}
+
+fn parse_wfm_catalog(body: &serde_json::Value) -> Result<BTreeMap<String, WfmCatalogItem>> {
     let items = body
         .get("data")
         .and_then(|v| v.as_array())
@@ -57,6 +63,7 @@ pub fn fetch_wfm_catalog(client: &Client, platform: &str) -> Result<BTreeMap<Str
                 .unwrap_or_default();
             out.insert(slug.to_string(), WfmCatalogItem {
                 item_id: id.to_string(),
+                bulk_tradable: it.get("bulkTradable").and_then(|v| v.as_bool()).unwrap_or(false),
                 display_name,
                 max_rank,
                 subtypes,
@@ -132,6 +139,21 @@ fn attach_item_meta(order: &mut serde_json::Value, id_to_item: &BTreeMap<String,
 mod tests {
     use super::*;
 
+    #[test]
+    fn bulk_trading_requires_explicit_catalog_capability() {
+        let body = serde_json::json!({ "data": [
+            { "id": "a", "slug": "bulk", "bulkTradable": true },
+            { "id": "b", "slug": "single", "bulkTradable": false },
+            { "id": "c", "slug": "unknown" },
+            { "id": "d", "slug": "malformed", "bulkTradable": "true" }
+        ] });
+        let catalog = parse_wfm_catalog(&body).unwrap();
+        assert!(catalog["bulk"].bulk_tradable);
+        for slug in ["single", "unknown", "malformed"] {
+            assert!(!catalog[slug].bulk_tradable, "{slug}");
+        }
+    }
+
     fn sample_id_map() -> BTreeMap<String, ItemMeta> {
         let mut m = BTreeMap::new();
         m.insert("54aae292e7798909064f1575".into(), ItemMeta { name: "Secura Dual Cestra".into(), slug: "secura_dual_cestra".into() });
@@ -201,6 +223,7 @@ mod tests {
         let mut cat = BTreeMap::new();
         cat.insert("loki_prime_set".to_string(), WfmCatalogItem {
             item_id: "aaaaaaaaaaaaaaaaaaaaaaaa".into(),
+            bulk_tradable: false,
             display_name: "Loki Prime Set".into(),
             max_rank: None,
             subtypes: vec![],

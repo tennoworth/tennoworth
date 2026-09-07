@@ -1,0 +1,13 @@
+[
+  {"name":"legacy bulk divisor", "quantity":27, "per_trade":null, "bulk_tradable":true, "valid":true, "create_lot":3, "patch_lot":null},
+  {"name":"explicit singles override divisor", "quantity":12, "per_trade":1, "bulk_tradable":true, "valid":true, "create_lot":1, "patch_lot":1},
+  {"name":"explicit smaller bundle", "quantity":12, "per_trade":3, "bulk_tradable":true, "valid":true, "create_lot":3, "patch_lot":3},
+  {"name":"maximum bundle", "quantity":12, "per_trade":6, "bulk_tradable":true, "valid":true, "create_lot":6, "patch_lot":6},
+  {"name":"non-bulk singles omit wire field", "quantity":12, "per_trade":1, "bulk_tradable":false, "valid":true, "create_lot":null, "patch_lot":null},
+  {"name":"legacy non-bulk omits wire field", "quantity":12, "per_trade":null, "bulk_tradable":false, "valid":true, "create_lot":null, "patch_lot":null},
+  {"name":"zero quantity", "quantity":0, "per_trade":1, "bulk_tradable":true, "valid":false},
+  {"name":"zero lot", "quantity":12, "per_trade":0, "bulk_tradable":true, "valid":false},
+  {"name":"non-divisor", "quantity":7, "per_trade":3, "bulk_tradable":true, "valid":false},
+  {"name":"over slot cap", "quantity":14, "per_trade":7, "bulk_tradable":true, "valid":false},
+  {"name":"unsupported bundle", "quantity":12, "per_trade":3, "bulk_tradable":false, "valid":false}
+]

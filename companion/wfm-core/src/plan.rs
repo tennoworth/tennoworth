@@ -63,6 +63,9 @@ pub struct PlanItem {
     pub platinum: u32,
     /// How many copies.
     pub quantity: u32,
+    /// Explicit reviewed lot; absent callers retain the inferred bulk default.
+    #[serde(default)]
+    pub per_trade: Option<u32>,
     /// "sell" or "buy".
     pub order_type: String,
     /// false = invisible until manually toggled.
@@ -133,6 +136,7 @@ pub fn execute_plan(pending_path: &std::path::Path, unlocked: &Unlocked, plan: P
             slug: p.slug,
             platinum: p.platinum,
             quantity: p.quantity,
+            per_trade: p.per_trade,
             order_type: p.order_type,
             visible: p.visible,
             rank: p.rank,
@@ -215,6 +219,7 @@ pub fn run_pending(pending_path: &std::path::Path, unlocked: &Unlocked, pending:
             slug: item.slug.clone(),
             platinum: item.platinum,
             quantity: item.quantity,
+            per_trade: item.per_trade,
             order_type: item.order_type.clone(),
             visible: item.visible,
             rank: item.rank,
@@ -264,6 +269,35 @@ pub fn per_trade_for(quantity: u32) -> u32 {
         }
     }
     1
+}
+
+fn validate_lot(quantity: u32, per_trade: Option<u32>, bulk_tradable: bool) -> Result<(), String> {
+    if quantity == 0 {
+        return Err("quantity must be > 0".into());
+    }
+    if let Some(lot) = per_trade {
+        if lot == 0 || lot > MAX_PER_TRADE || !quantity.is_multiple_of(lot) {
+            return Err(format!("units per trade must be 1–{MAX_PER_TRADE} and divide quantity"));
+        }
+        if !bulk_tradable && lot != 1 {
+            return Err("this item does not support bulk trading; use one unit per trade".into());
+        }
+    }
+    Ok(())
+}
+
+fn build_order_patch(item: &PlanItem, cat: &WfmCatalogItem) -> serde_json::Value {
+    let mut body = serde_json::Map::new();
+    body.insert("platinum".into(), serde_json::json!(item.platinum));
+    body.insert("quantity".into(), serde_json::json!(item.quantity));
+    // Omit visibility so updating a visible order cannot silently hide it.
+    // Legacy callers did not edit the lot on PATCH; only explicit review does.
+    if cat.bulk_tradable {
+        if let Some(lot) = item.per_trade {
+            body.insert("perTrade".into(), serde_json::json!(lot));
+        }
+    }
+    serde_json::Value::Object(body)
 }
 
 /// One of the user's live WFM orders, as much as reconciliation needs.
@@ -346,9 +380,8 @@ pub fn plan_item_key(item: &PlanItem, cat: &WfmCatalogItem) -> OrderKey {
 // from WFM 400 responses (May 2026):
 //   - `itemId`, `type` (not `order_type`!), `platinum`, `quantity`,
 //     `visible` are always required.
-//   - `perTrade` is always required and capped at 6 (in-game trade
-//     slots). Listings with quantity > 6 still work - buyers just split
-//     across multiple trades. We default to min(quantity, 6).
+//   - `perTrade` is required only for bulkTradable items and forbidden
+//     otherwise. Use the reviewed lot, or the legacy divisor default.
 //   - `rank` is required for items with `maxRank` in the catalog, and is
 //     `app.field.notAllowed` for items without it. Default to 0 (unranked).
 //   - `subtype` is required for items with `subtypes[]` in the catalog.
@@ -362,7 +395,9 @@ pub fn build_order_body(item: &PlanItem, cat: &WfmCatalogItem) -> serde_json::Va
     body.insert("platinum".into(), serde_json::json!(item.platinum));
     body.insert("quantity".into(), serde_json::json!(item.quantity));
     body.insert("visible".into(), serde_json::json!(item.visible));
-    body.insert("perTrade".into(), serde_json::json!(per_trade_for(item.quantity)));
+    if cat.bulk_tradable {
+        body.insert("perTrade".into(), serde_json::json!(item.per_trade.unwrap_or_else(|| per_trade_for(item.quantity))));
+    }
     if cat.max_rank.is_some() {
         body.insert("rank".into(), serde_json::json!(item.rank.unwrap_or(0)));
     }
@@ -419,13 +454,16 @@ fn execute_one(
         Some(c) => c,
         None => return mk_err(format!("slug {:?} not in WFM catalog", item.slug)),
     };
+    if let Err(message) = validate_lot(item.quantity, item.per_trade, cat.bulk_tradable) {
+        return mk_err(message);
+    }
 
     // An order with this exact identity already exists → PATCH it. The plan's
     // quantities come from the current inventory scan (they already count the
     // listed copies), so overwrite price + quantity - never sum. Visibility is
     // left alone: the existing order keeps whatever the user chose on WFM.
     if let Some(prior) = existing.get(&plan_item_key(item, cat)) {
-        let patch = serde_json::json!({ "platinum": item.platinum, "quantity": item.quantity });
+        let patch = build_order_patch(item, cat);
         let r = patch_one_order(http, unlocked, &prior.id, &patch);
         return if r.status == "ok" {
             ItemResult {
@@ -502,6 +540,81 @@ mod tests {
     use super::*;
 
     #[test]
+    fn reviewed_lots_match_validation_and_wire_fixture() {
+        #[derive(Deserialize)]
+        struct Case {
+            name: String,
+            quantity: u32,
+            per_trade: Option<u32>,
+            bulk_tradable: bool,
+            valid: bool,
+            create_lot: Option<u32>,
+            patch_lot: Option<u32>,
+        }
+        let cases: Vec<Case> = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/trade-session/lots.json"
+        )).unwrap();
+        for case in cases {
+            let mut item = plan_item("example", None, None);
+            item.quantity = case.quantity;
+            item.per_trade = case.per_trade;
+            let mut catalog = cat("example", None, &[]);
+            catalog.bulk_tradable = case.bulk_tradable;
+            assert_eq!(validate_lot(item.quantity, item.per_trade, catalog.bulk_tradable).is_ok(), case.valid, "{}", case.name);
+            if !case.valid {
+                continue;
+            }
+            let create = build_order_body(&item, &catalog);
+            let patch = build_order_patch(&item, &catalog);
+            assert_eq!(create.get("perTrade").and_then(|v| v.as_u64()), case.create_lot.map(u64::from), "{}", case.name);
+            assert_eq!(patch.get("perTrade").and_then(|v| v.as_u64()), case.patch_lot.map(u64::from), "{}", case.name);
+            assert_eq!(patch["quantity"], item.quantity, "replacement, not addition");
+            assert!(patch.get("visible").is_none(), "preserve existing visibility");
+            assert_eq!(create["visible"], false);
+        }
+    }
+
+    #[test]
+    fn plan_request_accepts_legacy_and_explicit_lots() {
+        let legacy = r#"{"items":[{"slug":"example","platinum":12,"quantity":12,"order_type":"sell","visible":false}]}"#;
+        let request: PlanRequest = serde_json::from_str(legacy).unwrap();
+        assert_eq!(request.items[0].per_trade, None);
+        let mut explicit: serde_json::Value = serde_json::from_str(legacy).unwrap();
+        explicit["items"][0]["per_trade"] = serde_json::json!(3);
+        let request: PlanRequest = serde_json::from_value(explicit).unwrap();
+        assert_eq!(request.items[0].per_trade, Some(3));
+    }
+
+    #[test]
+    fn invalid_lot_is_rejected_before_an_existing_order_can_be_updated() {
+        let mut item = plan_item("example", None, None);
+        item.quantity = 7;
+        item.per_trade = Some(3);
+        let catalog = cat("example", None, &[]);
+        let key = plan_item_key(&item, &catalog);
+        let unlocked = Unlocked {
+            jwt: "test".into(),
+            username: "test".into(),
+            platform: "pc".into(),
+            catalog: std::sync::Arc::new(BTreeMap::from([("example".into(), catalog)])),
+            id_to_item: std::sync::Arc::new(BTreeMap::new()),
+        };
+        let existing = BTreeMap::from([(key, ExistingOrder {
+            id: "must-not-be-updated".into(), platinum: 20, quantity: 9,
+        })]);
+        // Even a validation regression must never send a unit test to WFM.
+        let http = Client::builder()
+            .proxy(reqwest::Proxy::all("http://127.0.0.1:9").unwrap())
+            .timeout(Duration::from_millis(100))
+            .build().unwrap();
+        let result = execute_one(&http, &unlocked, &item, &existing);
+        assert_eq!(result.status, "error");
+        assert!(result.message.unwrap().contains("divide quantity"));
+        assert!(result.order_id.is_none());
+        assert!(result.action.is_none());
+    }
+
+    #[test]
     fn index_existing_orders_reads_both_response_shapes() {
         // Bucketed shape: type comes from the bucket name.
         let bucketed = serde_json::json!({
@@ -536,6 +649,7 @@ mod tests {
         // must say Some(0) - that's the order WFM would call a duplicate.
         let ranked = WfmCatalogItem {
             item_id: "item-r".into(),
+            bulk_tradable: false,
             display_name: "Some Arcane".into(),
             max_rank: Some(5),
             subtypes: vec![],
@@ -544,6 +658,7 @@ mod tests {
             slug: "some_arcane".into(),
             platinum: 20,
             quantity: 1,
+            per_trade: None,
             order_type: "sell".into(),
             visible: false,
             rank: None,
@@ -559,6 +674,7 @@ mod tests {
         // catalog's first entry.
         let relic = WfmCatalogItem {
             item_id: "item-s".into(),
+            bulk_tradable: true,
             display_name: "Axi A1 Relic".into(),
             max_rank: None,
             subtypes: vec!["intact".into(), "radiant".into()],
@@ -577,6 +693,7 @@ mod tests {
     fn cat(name: &str, max_rank: Option<u32>, subtypes: &[&str]) -> WfmCatalogItem {
         WfmCatalogItem {
             item_id: format!("id-{name}"),
+            bulk_tradable: true,
             display_name: name.into(),
             max_rank,
             subtypes: subtypes.iter().map(|s| s.to_string()).collect(),
@@ -588,6 +705,7 @@ mod tests {
             slug: slug.into(),
             platinum: 12,
             quantity: 3,
+            per_trade: None,
             order_type: "sell".into(),
             visible: false,
             rank,
@@ -684,8 +802,8 @@ mod tests {
 
     #[test]
     fn order_body_per_trade_uses_quantity_when_quantity_under_cap() {
-        let cat = cat("ash_prime_set", None, &[]);
-        let mut item = plan_item("ash_prime_set", None, None);
+        let cat = cat("neo_b2_relic", None, &["intact"]);
+        let mut item = plan_item("neo_b2_relic", None, None);
         item.quantity = 3;
         let body = build_order_body(&item, &cat);
         assert_eq!(body["perTrade"], 3);
