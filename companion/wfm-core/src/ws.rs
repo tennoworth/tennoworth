@@ -22,12 +22,13 @@ use tungstenite::Message;
 pub const WS_URL: &str = "wss://ws.warframe.market/socket";
 
 /// One order from the `newOrder` stream, reduced to what matching needs.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NewOrder {
     pub id: String,
     /// "sell" | "buy".
     pub side: String,
-    pub platinum: u32,
+    /// Per-unit price, normalized from the streamed lot total and perTrade.
+    pub platinum: f64,
     pub quantity: u32,
     /// Absent on rankless items.
     pub rank: Option<u32>,
@@ -40,7 +41,7 @@ pub struct NewOrder {
 }
 
 /// A parsed frame from the socket.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum WsEvent {
     NewOrder(NewOrder),
     /// `cmd/subscribe/newOrders:ok` - the subscription is live.
@@ -65,13 +66,13 @@ pub fn parse_ws_event(text: &str) -> WsEvent {
             let (Some(id), Some(side), Some(item_id)) = (s("id"), s("type"), s("itemId")) else {
                 return WsEvent::Other;
             };
-            let Some(platinum) = p.get("platinum").and_then(|x| x.as_u64()) else {
+            let Some(platinum) = p.get("platinum").and_then(|x| x.as_f64()).and_then(|price| wfm_client::unit_price(price, p.get("perTrade"))) else {
                 return WsEvent::Other;
             };
             WsEvent::NewOrder(NewOrder {
                 id,
                 side,
-                platinum: platinum.min(u32::MAX as u64) as u32,
+                platinum,
                 quantity: p.get("quantity").and_then(|x| x.as_u64()).unwrap_or(1) as u32,
                 rank: p.get("rank").and_then(|x| x.as_u64()).map(|r| r as u32),
                 subtype: s("subtype"),
@@ -108,7 +109,7 @@ pub fn order_matches_watch(
     watch_rank: Option<u32>,
     watch_subtype: Option<&str>,
 ) -> bool {
-    if !o.visible || o.side != watch_side {
+    if !o.visible || o.side != watch_side || !o.platinum.is_finite() || o.platinum <= 0.0 {
         return false;
     }
     if o.rank.unwrap_or(0) != watch_rank.unwrap_or(0) {
@@ -118,8 +119,8 @@ pub fn order_matches_watch(
         return false;
     }
     match watch_side {
-        "buy" => o.platinum as i64 >= threshold,
-        "sell" => o.platinum as i64 <= threshold,
+        "buy" => o.platinum >= threshold as f64,
+        "sell" => o.platinum <= threshold as f64,
         _ => false,
     }
 }
@@ -223,12 +224,45 @@ mod tests {
             panic!("expected NewOrder");
         };
         assert_eq!(o.side, "buy");
-        assert_eq!(o.platinum, 4);
+        assert_eq!(o.platinum, 4.0);
         assert_eq!(o.rank, Some(0));
         assert_eq!(o.item_id, "64c2ab1c66456704fef15835");
         assert_eq!(o.user_name.as_deref(), Some("TechnoRaptor"));
         assert_eq!(o.user_status.as_deref(), Some("offline"));
         assert!(o.visible);
+    }
+
+    #[test]
+    fn streamed_lot_prices_match_the_shared_unit_price_fixture() {
+        let cases: Vec<serde_json::Value> = serde_json::from_str(include_str!("../../../tests/fixtures/trade-session/prices.json")).unwrap();
+        for case in cases {
+            let mut frame: serde_json::Value = serde_json::from_str(LIVE_ORDER).unwrap();
+            frame["payload"]["platinum"] = case["platinum"].clone();
+            frame["payload"]["perTrade"] = case["per_trade"].clone();
+            match (parse_ws_event(&frame.to_string()), case["unit"].as_f64()) {
+                (WsEvent::NewOrder(order), Some(expected)) => assert_eq!(order.platinum, expected),
+                (WsEvent::Other, None) => (),
+                (actual, expected) => panic!("price fixture mismatch: {actual:?}, expected {expected:?}"),
+            }
+        }
+        let mut frame: serde_json::Value = serde_json::from_str(LIVE_ORDER).unwrap();
+        frame["payload"].as_object_mut().unwrap().remove("perTrade");
+        let WsEvent::NewOrder(order) = parse_ws_event(&frame.to_string()) else { panic!("missing lot must mean one") };
+        assert_eq!(order.platinum, 4.0);
+    }
+
+    #[test]
+    fn bulk_watch_thresholds_compare_each_copy_not_the_lot_total() {
+        let mut frame: serde_json::Value = serde_json::from_str(LIVE_ORDER).unwrap();
+        frame["payload"]["platinum"] = serde_json::json!(60);
+        frame["payload"]["perTrade"] = serde_json::json!(6);
+        let WsEvent::NewOrder(buy) = parse_ws_event(&frame.to_string()) else { panic!("expected bulk order") };
+        assert!(!order_matches_watch(&buy, "buy", 20, None, None));
+        assert!(order_matches_watch(&buy, "buy", 10, None, None));
+        frame["payload"]["type"] = serde_json::json!("sell");
+        let WsEvent::NewOrder(sell) = parse_ws_event(&frame.to_string()) else { panic!("expected bulk order") };
+        assert!(order_matches_watch(&sell, "sell", 10, None, None));
+        assert!(!order_matches_watch(&sell, "sell", 9, None, None));
     }
 
     #[test]
@@ -246,7 +280,7 @@ mod tests {
 
     fn order(side: &str, plat: u32, rank: Option<u32>, subtype: Option<&str>) -> NewOrder {
         NewOrder {
-            id: "x".into(), side: side.into(), platinum: plat, quantity: 1,
+            id: "x".into(), side: side.into(), platinum: f64::from(plat), quantity: 1,
             rank, subtype: subtype.map(String::from), item_id: "i".into(),
             user_name: None, user_status: None, visible: true,
         }

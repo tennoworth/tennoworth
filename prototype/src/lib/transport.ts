@@ -652,6 +652,13 @@ export async function desktopEelogStatus(): Promise<EeLogStatus> {
   try { return await resolveInvoke()<EeLogStatus>('eelog_status'); } catch (e) { rethrowInvoke(e); }
 }
 
+export const ALLOWANCE_CHANGED_EVENT = 'trade-allowance-changed';
+
+export async function desktopTradeSessionState(): Promise<import('./types').TradeSessionState> {
+  try { return await resolveInvoke()<import('./types').TradeSessionState>('trade_session_state'); }
+  catch (e) { rethrowInvoke(e); }
+}
+
 /**
  * True inside the Tauri desktop webview. Keyed off `__TAURI_INTERNALS__` (the
  * runtime object Tauri v2 always injects), per the desktop spike - this is a

@@ -144,6 +144,14 @@ const PROBE_JS: &str = r#"(function(){
     .then(function(x){ R.fetchMarket = x; })
     .then(function(){ return probeFetch('/wfstat-catalog.json').then(function(x){ R.fetchCatalog = x; }); })
     .then(function(){ return invk('health').then(function(v){ R.invokeHealth = v; }); })
+    .then(function(){ return invk('trade_session_state').then(function(v){
+      if (!v || !v.allowance || !v.quantities || !Array.isArray(v.bulk_slugs)
+          || ['scanned', 'tracked', 'estimated', 'unknown'].indexOf(v.allowance.confidence) < 0
+          || !(v.allowance.remaining === null || (Number.isInteger(v.allowance.remaining) && v.allowance.remaining >= 0))) {
+        throw new Error('Trade Session IPC returned an invalid allowance contract');
+      }
+      R.tradeSessionIpc = { confidence: v.allowance.confidence, remaining: v.allowance.remaining };
+    }); })
     // C5 update check, endpoint overridden via TENNOWORTH_UPDATE_URL (offline
     // run: https to a refused port; malformed run: live JSON of the wrong
     // shape). Must resolve to checked with an explicit support state - never reject.

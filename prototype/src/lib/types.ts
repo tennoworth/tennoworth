@@ -12,6 +12,7 @@
 
 /** Per-slug market entry baked by `wfm-scrape build`. */
 export interface MarketItemEntry {
+  price_basis?: 'unit';
   avg: number;
   low_sell: number;
   top_buy: number;
@@ -496,10 +497,37 @@ declare global {
 }
 
 /** Plan items submitted to wfm-core via `submit_plan`. */
+export interface TradeAllowance {
+  remaining: number | null;
+  mastery_rank: number | null;
+  observed_at: number | null;
+  utc_day: number;
+  snapshot_id: number | null;
+  confidence: 'scanned' | 'tracked' | 'estimated' | 'unknown';
+  reason: string | null;
+  monitoring: boolean;
+}
+
+export interface TradeSessionState {
+  allowance: TradeAllowance;
+  quantities: Record<string, number>;
+  bulk_slugs: string[];
+  supported_slugs?: string[] | null;
+}
+
+export interface SessionConstraint { snapshot_id: number; utc_day: number; budget: number }
+export type ReviewedOrder = { state: 'new' } | {
+  state: 'existing'; id: string; platinum: number; quantity: number; per_trade: number | null; visible: boolean;
+};
+
 export interface PlanItemInput {
   slug: string;
   platinum: number;
   quantity: number;
+  /** Reviewed units per transaction; omitted callers retain the bulk default. */
+  per_trade?: number;
+  session?: SessionConstraint;
+  reviewed_order?: ReviewedOrder;
   order_type: 'sell' | 'buy';
   visible: boolean;
   rank?: number;
@@ -536,6 +564,9 @@ interface PendingPlanItem {
   slug: string;
   platinum: number;
   quantity: number;
+  per_trade?: number | null;
+  session?: SessionConstraint | null;
+  reviewed_order?: ReviewedOrder | null;
   order_type: 'sell' | 'buy';
   visible: boolean;
   rank?: number | null;

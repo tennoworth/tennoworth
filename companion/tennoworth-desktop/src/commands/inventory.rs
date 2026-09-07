@@ -6,10 +6,51 @@
     reason = "tauri::command injects unreachable code into async wrappers"
 )]
 
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, State, Manager, Emitter};
 
 use crate::db::Db;
 use crate::tray::post_scan_surfaces;
+
+fn scan_boundary(app: &AppHandle) -> Option<crate::eelog::LogPosition> {
+    let state = app.try_state::<crate::eelog_state::EeLogState>()?;
+    crate::eelog::log_position(state.path.as_deref()?)
+}
+
+fn record_game_scan(
+    app: &AppHandle, bytes: &[u8], info: &wfm_core::scan::SessionInfo,
+    before: Option<crate::eelog::LogPosition>, started_at: i64,
+) {
+    let after = scan_boundary(app);
+    let observed_at = crate::allowance::unix_now();
+    let db = app.state::<Db>();
+    let recorded = (|| -> Result<(), String> {
+        let id = record_snapshot(&db, "memory", info.build.as_deref(), bytes)?;
+        let raw = serde_json::from_slice(bytes).map_err(|e| format!("read scan metadata: {e}"))?;
+        let account_key = wfm_core::util::local_fingerprint("tennoworth-account-v1", info.account_id.to_lowercase().as_bytes());
+        let observation = crate::allowance::Observation::scanned(account_key, id,
+            &raw, before, after, started_at, observed_at);
+        db.save_allowance(observation).map_err(|e| format!("save allowance: {e}"))
+    })();
+    if let Err(error) = recorded {
+        // A successful scan may be a different account. Never retain the
+        // previous account's allowance when recording the new one fails.
+        let _ = db.clear_allowance();
+        eprintln!("tennoworth: scan observation not recorded: {error}");
+    }
+    let _ = app.emit(crate::allowance::EVENT_ALLOWANCE_CHANGED, ());
+}
+
+pub(crate) fn scan_and_record(app: &AppHandle) -> Result<Vec<u8>, String> {
+    // Keep acquisition and its accounting boundary under the same single-flight
+    // guard; a tray scan must not persist newer data before this scan is recorded.
+    static ACTIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+    let _guard = wfm_core::plan::PlanGuard::acquire(&ACTIVE).ok_or("An inventory scan is already running.")?;
+    let started_at = crate::allowance::unix_now();
+    let before = scan_boundary(app);
+    let (bytes, info) = crate::scanner().scan(None, None).map_err(|e| e.into_message())?;
+    record_game_scan(app, &bytes, &info, before, started_at);
+    Ok(bytes)
+}
 
 /// Extract snapshot rows from raw inventory bytes and append them to history as
 /// one transactional snapshot. Shared by the memory scan and the probe's
@@ -37,15 +78,11 @@ pub(crate) fn record_snapshot(
 /// is best-effort: a failure is logged to stderr and swallowed - losing a
 /// history row must never cost the user their scan (scan value > history value).
 #[tauri::command]
-pub async fn scan_inventory(app: AppHandle, db: State<'_, Db>) -> Result<String, String> {
-    let (bytes, info) = tauri::async_runtime::spawn_blocking(|| crate::scanner().scan(None, None))
+pub async fn scan_inventory(app: AppHandle) -> Result<String, String> {
+    let scan_app = app.clone();
+    let bytes = tauri::async_runtime::spawn_blocking(move || scan_and_record(&scan_app))
         .await
-        .map_err(|e| format!("scan task failed to run: {e}"))?
-        .map_err(|e| e.into_message())?;
-
-    if let Err(e) = record_snapshot(&db, "memory", info.build.as_deref(), &bytes) {
-        eprintln!("tennoworth: inventory snapshot not recorded: {e}");
-    }
+        .map_err(|e| format!("scan task failed to run: {e}"))??;
 
     // C6: refresh the tray off the new snapshot and fire the post-scan
     // notification. Best-effort - never let a surface problem fail the scan

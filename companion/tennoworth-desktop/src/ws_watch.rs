@@ -21,7 +21,7 @@ use wfm_core::util::browser_client;
 use wfm_core::ws::{order_matches_watch, run_new_orders_stream, NewOrder};
 
 use crate::db::{Db, Watch};
-use crate::watch::{describe, WatchOutcome, EVENT_WATCH_FIRED, REARM_AFTER_SECS};
+use crate::watch::{describe, price_for_watch, WatchOutcome, EVENT_WATCH_FIRED, REARM_AFTER_SECS};
 use crate::wfm_session::WfmSession;
 
 /// With no watches configured there is nothing to stream for; re-check this
@@ -155,7 +155,7 @@ fn run(app: AppHandle) {
                 name: w.name.clone(),
                 side: w.side.clone(),
                 threshold: w.threshold,
-                price: Some(o.platinum as i64),
+                price: price_for_watch(&w.side, o.platinum),
                 satisfied: true,
                 fire: true,
             };
@@ -205,9 +205,26 @@ mod tests {
 
     fn order(side: &str, plat: u32, by: Option<&str>) -> NewOrder {
         NewOrder {
-            id: "o".into(), side: side.into(), platinum: plat, quantity: 1,
+            id: "o".into(), side: side.into(), platinum: f64::from(plat), quantity: 1,
             rank: Some(0), subtype: None, item_id: "i".into(),
             user_name: by.map(String::from), user_status: None, visible: true,
+        }
+    }
+
+    #[test]
+    fn streaming_and_polling_agree_on_fractional_unit_quotes() {
+        for side in ["buy", "sell"] {
+            let w = watch(1, "item", side, 8, None);
+            let frame = serde_json::json!({"route":"@wfm|event/subscriptions/newOrder", "payload":{
+                "id":"lot", "itemId":"i", "type":side, "platinum":36, "perTrade":5, "quantity":5
+            }});
+            let wfm_core::ws::WsEvent::NewOrder(order) = wfm_core::ws::parse_ws_event(&frame.to_string()) else { panic!("expected bulk order") };
+            let top = wfm_core::live_top::LiveTop { slug:"item".into(), rank:Some(0), subtype:None,
+                sells:vec![7.2], buys:vec![7.2], low_sell:Some(7.2), top_buy:Some(7.2), own_ask:None, own_bid:None, error:None };
+            let polled = crate::watch::evaluate(&w, Some(&top), 1000);
+            assert_eq!(match_order(&order, "item", &[w], None, 1000).is_some(), polled.fire);
+            assert_eq!(price_for_watch(side, order.platinum), polled.price);
+            assert_eq!(polled.price, Some(if side == "sell" { 8 } else { 7 }));
         }
     }
 

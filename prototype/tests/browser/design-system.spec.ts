@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import rewardFixture from '../../../tests/fixtures/relic-ocr/result.json' with { type: 'json' };
 
-const views = ['Sell', 'Set picks', 'Relics', 'Rivens', 'Baro', 'Routines', 'Meta Drift', 'My orders', 'Price watches', 'Ledger', 'FAQ', 'Settings'];
+const views = ['Sell', 'Trade Session', 'Set picks', 'Relics', 'Rivens', 'Baro', 'Routines', 'Meta Drift', 'My orders', 'Price watches', 'Ledger', 'FAQ', 'Settings'];
 
 for (const theme of ['light', 'dark'] as const) {
   test(`${theme} migrated screens retain content and shared control targets`, async ({ page }, testInfo) => {

@@ -17,6 +17,7 @@
   import WfmAuthDialogs from './components/WfmAuthDialogs.svelte';
   import ExportImportDialogs from './components/ExportImportDialogs.svelte';
   import SellPane from './components/SellPane.svelte';
+  import TradeSessionPane from './components/TradeSessionPane.svelte';
   import RivensPanel from './components/RivensPanel.svelte';
   import DesktopShowcase from './components/DesktopShowcase.svelte';
   import FeatureRail from './components/FeatureRail.svelte';
@@ -165,9 +166,9 @@
   // reload lands the user back where they left off. Falls through to
   // 'sell' if the persisted view's data isn't available (Baro not
   // visiting; 'orders' is desktop-only - the hosted site is informational).
-  type View = 'sell' | 'sets' | 'relics' | 'rivens' | 'baro' | 'routines' | 'meta' | 'orders' | 'watches' | 'ledger' | 'notifications' | 'install' | 'settings';
+  type View = 'sell' | 'session' | 'sets' | 'relics' | 'rivens' | 'baro' | 'routines' | 'meta' | 'orders' | 'watches' | 'ledger' | 'notifications' | 'install' | 'settings';
   const VALID_VIEWS: ReadonlySet<View> = new Set([
-    'sell', 'sets', 'relics', 'rivens', 'baro', 'routines', 'meta', 'orders', 'watches', 'ledger', 'notifications', 'install', 'settings',
+    'sell', 'session', 'sets', 'relics', 'rivens', 'baro', 'routines', 'meta', 'orders', 'watches', 'ledger', 'notifications', 'install', 'settings',
   ]);
   let view = $state<View>(
     (() => {
@@ -180,6 +181,16 @@
     void store.setSetting('view', v);
   }
 
+  function headerClearance(node: HTMLElement, inShell: boolean) {
+    if (!inShell) return;
+    const root = document.documentElement;
+    const update = () => root.style.setProperty('--sticky-header-clearance', `${node.offsetHeight}px`);
+    const observer = new ResizeObserver(update);
+    observer.observe(node);
+    update();
+    return { destroy() { observer.disconnect(); root.style.removeProperty('--sticky-header-clearance'); } };
+  }
+
   // Sidebar nav: if the user's persisted view is unavailable (Baro not
   // visiting, orders on the informational site), fall back to Sell rather than
   // rendering an empty pane. The nav itself hides those entries; this protects
@@ -187,7 +198,7 @@
   let effectiveView = $derived.by<View>(() => {
     if (view === 'baro' && !showBaroCard) return 'sell';
     if (view === 'meta' && !buildMetaDrift(market)) return 'sell';
-    if ((view === 'orders' || view === 'watches' || view === 'ledger' || view === 'notifications' || view === 'rivens') && !isDesktop) return 'sell';
+    if ((view === 'session' || view === 'orders' || view === 'watches' || view === 'ledger' || view === 'notifications' || view === 'rivens') && !isDesktop) return 'sell';
     return view;
   });
 
@@ -997,7 +1008,7 @@
   // included) resets any stale override from a previous picks click.
   async function openListingFlow(overrideRow = null) {
     if (!isDesktop) return;
-    reviewRowsOverride = overrideRow ? [overrideRow] : null;
+    reviewRowsOverride = Array.isArray(overrideRow) ? overrideRow : overrideRow ? [overrideRow] : null;
     try {
       const s = await desktopWfmStatus();
       if (s.unlocked) listingOpen = true;
@@ -1167,6 +1178,9 @@
                "Sell 0" reads as "your inventory got wiped". -->
           <span class="badge">{sellableCount}</span>
         </button>
+        {#if isDesktop}
+          <button type="button" class="nav-item" class:active={effectiveView === 'session'} onclick={() => setView('session')}><span>Trade Session</span></button>
+        {/if}
         {#if setRecos.length > 0}
           <button type="button" class="nav-item" class:active={effectiveView === 'sets'} onclick={() => setView('sets')}>
             <span>Set picks</span>
@@ -1268,6 +1282,12 @@
         {openListingFlow}
         {pendingBanner}
       />
+    {:else if effectiveView === 'session'}
+      <TradeSessionPane owned={resolved.owned} {market} {reserveCopies} advice={adviceMap}
+        scanning={pullingInventory} onscan={pullInventory} onreview={(rows, budget, state) => openListingFlow(rows.map(r => ({
+          ...r, proposed_quantity: r.quantity, clearing_price: r.platinum, low_sell: r.platinum,
+          avg_price: r.market.avg, session: { snapshot_id: state.allowance.snapshot_id, utc_day: state.allowance.utc_day, budget },
+        })))} />
     {:else if effectiveView === 'sets'}
       <section class="view-header">
         <h2>Set picks</h2>
@@ -1655,7 +1675,7 @@
        inventory age, market age, orders to fix, Baro, WFM session. Rare
        inventory actions (Export / Restore / Clear) live one click deeper in
        the Refresh menu. -->
-  <header class="statusbar" class:shell-strip={inShell}>
+  <header class="statusbar" class:shell-strip={inShell} use:headerClearance={inShell}>
     <div class="brand">
       <h1>TennoWorth</h1>
       {#if !inShell}<span class="sub">warframe.market prices, ranked by what actually sells</span>{/if}

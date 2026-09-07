@@ -17,6 +17,37 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct LogPosition {
+    pub session: String,
+    pub start: u64,
+    pub end: u64,
+    /// Lower observation bound, not the callback's delivery time.
+    pub observed_after: i64,
+}
+
+fn file_position(file: &mut std::fs::File) -> Option<LogPosition> {
+    let meta = file.metadata().ok()?;
+    // The startup timestamp identifies a game session across copies/replays.
+    // File birth time cannot: replacing the same log would recount its trades.
+    if meta.len() < 4096 { return None; }
+    file.seek(SeekFrom::Start(0)).ok()?;
+    let mut prefix = [0u8; 4096];
+    file.read_exact(&mut prefix).ok()?;
+    if !String::from_utf8_lossy(&prefix).lines().any(|line|
+        line.contains("Sys [Diag]: Current time:") && line.contains("[UTC:")) {
+        return None;
+    }
+    Some(LogPosition {
+        session: wfm_core::util::local_fingerprint("tennoworth-eelog-v1", &prefix),
+        start: meta.len(), end: meta.len(), observed_after: crate::allowance::unix_now(),
+    })
+}
+
+pub fn log_position(path: &Path) -> Option<LogPosition> {
+    file_position(&mut std::fs::File::open(path).ok()?)
+}
+
 /// A trade the game confirmed.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct TradeEvent {
@@ -300,47 +331,79 @@ pub fn tail_forever_with_lines(
     path: &Path,
     poll: Duration,
     mut on_line: impl FnMut(&str),
-    mut on_trade: impl FnMut(TradeEvent),
+    mut on_trade: impl FnMut(TradeEvent, LogPosition),
+    mut on_gap: impl FnMut(),
 ) {
     let mut machine = TradeMachine::new();
-    let mut offset: u64 = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
-    let mut remainder = String::new();
+    let initial = log_position(path);
+    let mut fallback_session = wfm_core::util::random_token(16);
+    let mut offset = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    let mut session = initial.map(|p| p.session).unwrap_or_else(|| fallback_session.clone());
+    let mut remainder = Vec::new();
+    let mut line_offset = offset;
+    let mut dialog_start = offset;
+    let mut observed_after = crate::allowance::unix_now();
+    let mut dialog_observed_after = observed_after;
     let start = std::time::Instant::now();
     loop {
         std::thread::sleep(poll);
-        let Ok(meta) = std::fs::metadata(path) else { continue };
-        let len = meta.len();
-        if len < offset {
-            // Truncated / rotated: the game restarted. Start over.
+        let Ok(mut file) = std::fs::File::open(path) else { on_gap(); continue };
+        let now = crate::allowance::unix_now();
+        let position = match file_position(&mut file) {
+            Some(position) => position,
+            None => {
+                on_gap();
+                let Ok(meta) = file.metadata() else { continue };
+                if meta.len() < offset { fallback_session = wfm_core::util::random_token(16); }
+                LogPosition { session: fallback_session.clone(), start: meta.len(), end: meta.len(), observed_after: now }
+            }
+        };
+        // Unrecognized startup headers still feed the ledger/overlay, but
+        // scan_boundary cannot certify their accounting identity.
+        let gained_identity = session == fallback_session && position.session != fallback_session;
+        if position.end < offset || (session != position.session && !gained_identity) {
+            on_gap();
             offset = 0;
+            line_offset = 0;
             remainder.clear();
             machine = TradeMachine::new();
         }
-        if len == offset {
+        session = position.session.clone();
+        if position.end == offset {
+            if remainder.is_empty() { observed_after = now; }
             continue;
         }
-        let Ok(mut f) = std::fs::File::open(path) else { continue };
-        if f.seek(SeekFrom::Start(offset)).is_err() {
-            continue;
-        }
-        let mut buf = Vec::with_capacity((len - offset) as usize);
-        if f.read_to_end(&mut buf).is_err() {
-            continue;
-        }
-        offset = len;
-        remainder.push_str(&String::from_utf8_lossy(&buf));
+        if file.seek(SeekFrom::Start(offset)).is_err() { on_gap(); continue; }
+        let mut buf = Vec::new();
+        if file.take(1024 * 1024).read_to_end(&mut buf).is_err() { on_gap(); continue; }
+        offset += buf.len() as u64;
+        remainder.extend_from_slice(&buf);
         let now_ms = start.elapsed().as_millis() as u64;
-        // Keep a trailing partial line for the next poll.
-        let complete_upto = remainder.rfind('\n').map(|i| i + 1).unwrap_or(0);
-        let (complete, rest) = remainder.split_at(complete_upto);
-        let lines: Vec<String> = complete.lines().map(|l| l.trim_end_matches('\r').to_string()).collect();
-        remainder = rest.to_string();
-        for line in lines {
-            on_line(&line);
-            if let Some(t) = machine.feed(&line, now_ms) {
-                on_trade(t);
+        let complete_upto = remainder.iter().rposition(|b| *b == b'\n').map(|i| i + 1).unwrap_or(0);
+        let complete: Vec<u8> = remainder.drain(..complete_upto).collect();
+        for raw in complete.split_inclusive(|b| *b == b'\n') {
+            let beginning = line_offset;
+            line_offset += raw.len() as u64;
+            let Ok(line) = std::str::from_utf8(raw) else { on_gap(); machine = TradeMachine::new(); continue };
+            let line = line.trim_end_matches(['\r', '\n']);
+            if line.contains(DIALOG_START) {
+                dialog_start = beginning;
+                dialog_observed_after = observed_after;
+            }
+            on_line(line);
+            if let Some(t) = machine.feed(line, now_ms) {
+                on_trade(t, LogPosition { session: position.session.clone(), start: dialog_start,
+                    end: line_offset, observed_after: dialog_observed_after });
+            } else if line.contains(TRADE_SUCCESS) {
+                on_gap();
             }
         }
+        if remainder.len() > 256 * 1024 {
+            on_gap(); remainder.clear(); line_offset = offset; machine = TradeMachine::new();
+        }
+        // Do not advance the time bound while draining a backlog or retaining
+        // a partial line: those bytes may predate a scan or the UTC reset.
+        if offset >= position.end && remainder.is_empty() { observed_after = now; }
     }
 }
 
@@ -373,6 +436,34 @@ pub fn watch_recent_text(path: &Path, poll: Duration, mut on_text: impl FnMut(&s
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn log_identity_is_stable_on_append_and_changes_when_the_prefix_is_replaced() {
+        use std::io::Write;
+        let path = std::env::temp_dir().join(format!("eelog-position-{}", wfm_core::util::random_token(12)));
+        let header = "0.1 Sys [Diag]: Current time: Mon Sep 7 10:00:00 2026 [UTC: Mon Sep 7 09:00:00 2026]\n";
+        let content = format!("{header}{}", "a".repeat(4096));
+        std::fs::write(&path, content.as_bytes()).unwrap();
+        let first = log_position(&path).unwrap();
+        let copied = path.with_extension("copied");
+        std::fs::copy(&path, &copied).unwrap();
+        assert_eq!(log_position(&copied).unwrap().session, first.session, "a copied log is the same game session");
+        std::fs::remove_file(copied).unwrap();
+        let mut file = std::fs::OpenOptions::new().append(true).open(&path).unwrap();
+        file.write_all("\nTrade ✓\n".as_bytes()).unwrap();
+        drop(file);
+        let appended = log_position(&path).unwrap();
+        assert_eq!(first.session, appended.session);
+        assert!(appended.end > first.end);
+        std::fs::write(&path, format!("{}{}", header.replace("10:00:00", "11:00:00").replace("09:00:00", "10:00:00"), "b".repeat(8192))).unwrap();
+        let replaced = log_position(&path).unwrap();
+        assert_ne!(appended.session, replaced.session, "replacement can be larger than the previous offset");
+        std::fs::write(&path, b"short").unwrap();
+        assert!(log_position(&path).is_none());
+        std::fs::write(&path, vec![b'x'; 4096]).unwrap();
+        assert!(log_position(&path).is_none(), "no identifiable startup header");
+        std::fs::remove_file(path).unwrap();
+    }
 
     fn dialog_single_line() -> String {
         // Real shape: one framework line carrying the whole dialog dump with

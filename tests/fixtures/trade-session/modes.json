@@ -1,0 +1,14 @@
+{
+  "inventory": [
+    {"slug":"liquid", "price":10, "volume":300, "quantity":6, "bulk":false},
+    {"slug":"valuable", "price":100, "volume":8, "quantity":12, "bulk":true},
+    {"slug":"thin", "price":200, "volume":1, "quantity":2, "bulk":false},
+    {"slug":"stack", "price":20, "volume":20, "quantity":6, "bulk":true}
+  ],
+  "cases": [
+    {"mode":"fast", "budget":3, "rows":[["liquid",1,1],["stack",1,1],["valuable",1,1]], "total":130},
+    {"mode":"per-trade", "budget":3, "rows":[["valuable",6,6],["thin",1,1],["stack",6,6]], "total":920},
+    {"mode":"clear", "budget":3, "rows":[["stack",6,6],["valuable",12,6]], "total":1320},
+    {"mode":"max", "budget":3, "rows":[["valuable",12,6],["thin",1,1]], "total":1400}
+  ]
+}

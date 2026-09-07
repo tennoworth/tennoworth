@@ -122,6 +122,20 @@ CREATE TABLE notification_checkpoint (
   expires_at INTEGER NOT NULL
 );
 "#,
+    // Version 5 shipped the notification tables; allowance tracking follows it.
+    r#"
+CREATE TABLE trade_log_event (
+  session TEXT NOT NULL,
+  end_offset INTEGER NOT NULL,
+  position TEXT NOT NULL,
+  trade_id INTEGER NOT NULL REFERENCES trade(id),
+  PRIMARY KEY(session, end_offset)
+);
+CREATE TABLE trade_allowance (
+  id INTEGER PRIMARY KEY CHECK(id = 1),
+  observation TEXT NOT NULL
+);
+"#,
 ];
 
 /// A ledger row, as handed to the SPA.
@@ -234,6 +248,7 @@ pub struct ListingLogEntry {
 /// Scans are already single-flighted upstream, so lock contention is a non-issue.
 pub struct Db {
     conn: Mutex<Connection>,
+    run_id: String,
 }
 
 impl Db {
@@ -311,6 +326,7 @@ impl Db {
         migrate(&conn)?;
         Ok(Db {
             conn: Mutex::new(conn),
+            run_id: wfm_core::util::random_token(16),
         })
     }
 
@@ -362,29 +378,101 @@ impl Db {
 
     // ---- trades (ledger) ----
 
-    /// Insert a confirmed trade; returns its id. Same (log_stamp, partner,
-    /// plat) within 10 minutes is the tailer re-reading a trade → returns
-    /// the existing id and inserts nothing.
-    pub fn insert_trade(&self, t: &crate::eelog::TradeEvent, at: i64) -> rusqlite::Result<i64> {
-        let conn = guard(&self.conn);
-        if let Some(stamp) = &t.log_stamp {
-            let dup: Option<i64> = conn
-                .query_row(
-                    "SELECT id FROM trade WHERE log_stamp = ?1 AND partner = ?2 AND plat = ?3 AND at >= ?4 ORDER BY id DESC LIMIT 1",
-                    (stamp, &t.partner, t.plat, at - 600),
-                    |r| r.get(0),
-                )
-                .optional()?;
-            if let Some(id) = dup {
-                return Ok(id);
-            }
-        }
+    /// Ledger, replay protection and allowance progress commit together.
+    /// None means already recorded: callers must not notify or auto-close again.
+    pub fn insert_trade(&self, t: &crate::eelog::TradeEvent, at: i64, position: &crate::eelog::LogPosition) -> rusqlite::Result<Option<i64>> {
+        let mut conn = guard(&self.conn);
+        let tx = conn.transaction()?;
+        let duplicate: bool = tx.query_row(
+            "SELECT EXISTS(SELECT 1 FROM trade_log_event WHERE session = ?1 AND end_offset = ?2)",
+            (&position.session, position.end), |r| r.get(0),
+        )?;
+        if duplicate { return Ok(None); }
         let items = serde_json::to_string(&t.items).unwrap_or_else(|_| "[]".into());
-        conn.execute(
+        tx.execute(
             "INSERT INTO trade (at, partner, kind, plat, items, log_stamp) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             (at, &t.partner, &t.kind, t.plat, items, &t.log_stamp),
         )?;
-        Ok(conn.last_insert_rowid())
+        let id = tx.last_insert_rowid();
+        let raw = serde_json::to_string(position).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+        tx.execute("INSERT INTO trade_log_event (session, end_offset, position, trade_id) VALUES (?1, ?2, ?3, ?4)",
+            (&position.session, position.end, raw, id))?;
+        if let Some(mut observation) = read_allowance(&tx)? {
+            if observation.run_id == self.run_id { observation.reconcile(position, at); }
+            else { observation.mark_uncertain("Monitoring restarted; scan again to confirm the account and remaining trades."); }
+            write_allowance(&tx, &observation)?;
+        }
+        tx.commit()?;
+        Ok(Some(id))
+    }
+
+    pub fn save_allowance(&self, mut observation: crate::allowance::Observation) -> rusqlite::Result<()> {
+        let mut conn = guard(&self.conn);
+        let tx = conn.transaction()?;
+        observation.run_id = self.run_id.clone();
+        if let Some(before) = &observation.before {
+            // A callback can commit between capturing the scan's end cursor
+            // and saving the observation. Reconcile that race under the DB lock.
+            let mut stmt = tx.prepare("SELECT position FROM trade_log_event WHERE session = ?1 AND end_offset > ?2 ORDER BY end_offset")?;
+            let rows = stmt.query_map((&before.session, before.end), |r| r.get::<_, String>(0))?;
+            for row in rows {
+                let position = serde_json::from_str(&row?).map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
+                observation.reconcile(&position, observation.observed_at);
+            }
+        }
+        write_allowance(&tx, &observation)?;
+        tx.commit()
+    }
+
+    pub fn trade_allowance(&self, now: i64) -> rusqlite::Result<crate::allowance::AllowanceView> {
+        let conn = guard(&self.conn);
+        Ok(read_allowance(&conn)?.map(|o| o.view(&self.run_id, now)).unwrap_or_else(|| crate::allowance::unknown(now)))
+    }
+
+    pub fn session_allowance(&self, snapshot_id: i64, utc_day: i64, now: i64) -> Result<crate::allowance::AllowanceView, String> {
+        let conn = guard(&self.conn);
+        let observation = read_allowance(&conn).map_err(|e| e.to_string())?
+            .ok_or("Scan the game before submitting a Trade Session batch.")?;
+        let latest: Option<i64> = conn.query_row("SELECT MAX(id) FROM snapshot", [], |r| r.get(0)).map_err(|e| e.to_string())?;
+        if observation.run_id != self.run_id || observation.snapshot_id != snapshot_id || latest != Some(snapshot_id) {
+            return Err("Inventory or account changed, or monitoring restarted. Scan and review a new batch.".into());
+        }
+        let view = observation.view(&self.run_id, now);
+        if view.utc_day != utc_day || utc_day != now.div_euclid(86_400) {
+            return Err("The UTC allowance day changed. Review a new batch.".into());
+        }
+        Ok(view)
+    }
+
+    pub fn allowance_gap(&self) -> rusqlite::Result<bool> {
+        let conn = guard(&self.conn);
+        let Some(mut observation) = read_allowance(&conn)? else { return Ok(false) };
+        if !observation.monitoring { return Ok(false); }
+        observation.mark_uncertain("Log monitoring was interrupted; scan again to confirm remaining trades.");
+        write_allowance(&conn, &observation)?;
+        Ok(true)
+    }
+
+    pub fn clear_allowance(&self) -> rusqlite::Result<()> {
+        guard(&self.conn).execute("DELETE FROM trade_allowance", [])?;
+        Ok(())
+    }
+
+    pub fn traded_names_since_scan(&self) -> rusqlite::Result<std::collections::BTreeSet<String>> {
+        let conn = guard(&self.conn);
+        let Some(observation) = read_allowance(&conn)? else { return Ok(Default::default()) };
+        let session = observation.before.as_ref().map(|p| p.session.as_str()).unwrap_or("");
+        let end = observation.before.as_ref().map(|p| p.end).unwrap_or(0);
+        let mut stmt = conn.prepare("SELECT t.items FROM trade_log_event e JOIN trade t ON t.id = e.trade_id
+            WHERE (e.session = ?1 AND e.end_offset > ?2) OR (e.session != ?1 AND t.at >= ?3)")?;
+        let rows = stmt.query_map((session, end, observation.observed_at), |r| r.get::<_, String>(0))?;
+        let mut names = std::collections::BTreeSet::new();
+        for row in rows {
+            let items: Vec<crate::eelog::TradeItem> = serde_json::from_str(&row?).map_err(|e|
+                rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))?;
+            names.extend(items.into_iter().filter(|i| i.direction == "given" && i.qty > 0).map(|i| i.name.to_lowercase()));
+        }
+        Ok(names)
     }
 
     pub fn mark_trade_wfm_closed(&self, id: i64) -> rusqlite::Result<()> {
@@ -643,18 +731,29 @@ impl Db {
     }
 }
 
-/// Bring `conn` up to the latest schema version, applying only the migrations
-/// past the current `user_version`. Idempotent: re-running on an up-to-date DB
-/// applies nothing.
+fn read_allowance(conn: &Connection) -> rusqlite::Result<Option<crate::allowance::Observation>> {
+    let raw: Option<String> = conn.query_row("SELECT observation FROM trade_allowance WHERE id = 1", [], |r| r.get(0)).optional()?;
+    raw.map(|json| serde_json::from_str(&json).map_err(|e| rusqlite::Error::FromSqlConversionFailure(0, rusqlite::types::Type::Text, Box::new(e)))).transpose()
+}
+
+fn write_allowance(conn: &Connection, observation: &crate::allowance::Observation) -> rusqlite::Result<()> {
+    let raw = serde_json::to_string(observation).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
+    conn.execute("INSERT INTO trade_allowance (id, observation) VALUES (1, ?1) ON CONFLICT(id) DO UPDATE SET observation = excluded.observation", [raw])?;
+    Ok(())
+}
+
+/// Apply only migrations newer than the persisted schema version.
 fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     let current: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
     for (i, sql) in MIGRATIONS.iter().enumerate() {
         let version = (i + 1) as i64;
         if current < version {
-            conn.execute_batch(sql)?;
+            let tx = conn.unchecked_transaction()?;
+            tx.execute_batch(sql)?;
             // pragma_update won't bind `user_version` as a parameter - it's part
             // of the statement text - so format it in (it's our own integer).
-            conn.pragma_update(None, "user_version", version)?;
+            tx.pragma_update(None, "user_version", version)?;
+            tx.commit()?;
         }
     }
     Ok(())
@@ -698,9 +797,34 @@ mod tests {
                 "snapshot".to_string(),
                 "snapshot_item".to_string(),
                 "trade".to_string(),
+                "trade_allowance".to_string(),
+                "trade_log_event".to_string(),
                 "watch".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn notification_v5_upgrade_keeps_history_and_adds_trade_allowance() {
+        let path = temp_db_path();
+        {
+            let conn = Connection::open(&path).unwrap();
+            for sql in MIGRATIONS.iter().take(5) { conn.execute_batch(sql).unwrap(); }
+            conn.pragma_update(None, "user_version", 5).unwrap();
+            conn.execute("INSERT INTO notification(category,title,body,target,created_at,delivery) VALUES ('trades','Saved sale','Saved context','ledger',1000,'inbox_only')", []).unwrap();
+            conn.execute("INSERT INTO setting(key,value) VALUES ('reserve-copies','2')", []).unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        assert_eq!(db.user_version().unwrap(), 6);
+        assert_eq!(db.list_notifications().unwrap()[0].title, "Saved sale");
+        assert_eq!(db.get_setting("reserve-copies").unwrap().as_deref(), Some("2"));
+        assert_eq!(db.trade_allowance(1000).unwrap().remaining, None);
+        let position = crate::eelog::LogPosition { session: "upgrade".into(), start: 1, end: 2, observed_after: 1000 };
+        assert!(db.insert_trade(&allowance_trade("sale"), 1001, &position).unwrap().is_some());
+        assert!(db.insert_trade(&allowance_trade("sale"), 1002, &position).unwrap().is_none());
+        assert_eq!(db.list_notifications().unwrap().len(), 1);
+        drop(db);
+        std::fs::remove_file(path).unwrap();
     }
 
     #[test]
@@ -1012,12 +1136,12 @@ mod tests {
             items: vec![TradeItem { name: "Primed Flow".into(), qty: 1, direction: "given".into() }],
             log_stamp: Some("1234.567".into()),
         };
-        let a = db.insert_trade(&t, 1_786_881_600).unwrap();
-        // the tailer re-reads the same trade a few seconds later → same id
-        let b = db.insert_trade(&t, 1_786_881_605).unwrap();
-        assert_eq!(a, b);
-        // a genuinely later identical trade (next session) is a new row
-        let c = db.insert_trade(&t, 1_786_881_600 + 3600).unwrap();
+        let mut position = crate::eelog::LogPosition { session: "one".into(), start: 10, end: 20, observed_after: 1_786_881_600 };
+        let a = db.insert_trade(&t, 1_786_881_600, &position).unwrap().unwrap();
+        let b = db.insert_trade(&t, 1_786_881_600 + 3600, &position).unwrap();
+        assert_eq!(b, None, "replays remain duplicates beyond ten minutes");
+        position.session = "two".into();
+        let c = db.insert_trade(&t, 1_786_881_600 + 3600, &position).unwrap().unwrap();
         assert_ne!(a, c);
         db.mark_trade_wfm_closed(a).unwrap();
         let rows = db.list_trades(10).unwrap();
@@ -1026,6 +1150,144 @@ mod tests {
         assert!(!rows[0].wfm_closed);
         assert!(rows[1].wfm_closed);
         assert_eq!(rows[1].items[0].name, "Primed Flow");
+    }
+
+    #[test]
+    fn digests_and_sessions_share_reserves_and_post_trade_exclusions() {
+        let db = Db::open_in_memory().unwrap();
+        let market: crate::sellables::MarketData = serde_json::from_value(serde_json::json!({
+            "items":{"test_part":{"vol":1000,"low_sell":10,"avg":10,"median_now":10,"median_90d":10,"low5_avg":10}},
+            "path_to_info":{"/Lotus/TestPart":{"name":"Test Part","slug":"test_part"}}
+        })).unwrap();
+        let stamp = "1970-01-01T00:01:40Z";
+        let id = db.insert_snapshot("memory", Some(stamp), None,
+            &[SnapshotItem {slug:"/Lotus/TestPart".into(),count:6,leveled:1}]).unwrap();
+        let boundary = crate::eelog::LogPosition {session:"digest-test".into(),start:100,end:100,observed_after:100};
+        db.save_allowance(crate::allowance::Observation::scanned("account".into(),id,
+            &serde_json::json!({"TradesRemaining":8}),Some(boundary.clone()),Some(boundary.clone()),100,100)).unwrap();
+        db.set_setting("reserve-copies","1").unwrap();
+        db.set_reserve("test_part",3).unwrap();
+        let rows = crate::sellables::rank_sellables(&db,&market);
+        assert_eq!(rows[0].sellable_qty,3);
+        assert_eq!(market.session_quantities(&db).unwrap()["test_part"],3);
+        let prices = serde_json::json!({"updated_at":stamp});
+        assert!(crate::reminders::digest(&prices,&rows,stamp,110,"1970-01-01",18).unwrap().body.contains("Test Part ×3"));
+        db.set_setting("reserve-copies","4").unwrap();
+        assert_eq!(crate::sellables::rank_sellables(&db,&market)[0].sellable_qty,2);
+        db.set_reserve("test_part",6).unwrap();
+        assert!(crate::sellables::rank_sellables(&db,&market).is_empty());
+        db.set_setting("reserve-copies","1").unwrap();
+        db.set_reserve("test_part",3).unwrap();
+        let trade = crate::eelog::TradeEvent {partner:"Buyer".into(),kind:"sale".into(),plat:10,log_stamp:Some("110".into()),
+            items:vec![crate::eelog::TradeItem {name:"Test Part".into(),qty:1,direction:"given".into()}]};
+        let position = crate::eelog::LogPosition {start:101,end:120,observed_after:110,..boundary};
+        db.insert_trade(&trade,110,&position).unwrap();
+        let rows = crate::sellables::rank_sellables(&db,&market);
+        assert!(rows.is_empty());
+        assert!(!market.session_quantities(&db).unwrap().contains_key("test_part"));
+        assert!(crate::reminders::digest(&prices,&rows,stamp,111,"1970-01-01",18).is_none());
+        let id = db.insert_snapshot("memory", Some(stamp), None,
+            &[SnapshotItem {slug:"/Lotus/TestPart".into(),count:5,leveled:1}]).unwrap();
+        let boundary = crate::eelog::LogPosition {start:120,end:120,observed_after:130,..position};
+        db.save_allowance(crate::allowance::Observation::scanned("account".into(),id,
+            &serde_json::json!({"TradesRemaining":7}),Some(boundary.clone()),Some(boundary),130,130)).unwrap();
+        assert_eq!(crate::sellables::rank_sellables(&db,&market)[0].sellable_qty,2);
+        assert_eq!(market.session_quantities(&db).unwrap()["test_part"],2);
+    }
+
+    fn allowance_scan(db: &Db, account: &str, remaining: u32) {
+        let id = db.insert_snapshot("memory", None, None, &[]).unwrap();
+        let before = crate::eelog::LogPosition { session: "log".into(), start: 100, end: 100, observed_after: 100 };
+        let after = crate::eelog::LogPosition { start: 200, end: 200, observed_after: 102, ..before.clone() };
+        db.save_allowance(crate::allowance::Observation::scanned(account.into(), id,
+            &serde_json::json!({"TradesRemaining":remaining,"PlayerLevel":24}), Some(before), Some(after), 100, 102)).unwrap();
+    }
+
+    fn allowance_trade(kind: &str) -> crate::eelog::TradeEvent {
+        crate::eelog::TradeEvent { partner: "Partner".into(), kind: kind.into(), plat: 12,
+            items: vec![], log_stamp: Some("100.0".into()) }
+    }
+
+    #[test]
+    fn allowance_and_ledger_commit_once_for_every_transaction_kind() {
+        let db = Db::open_in_memory().unwrap();
+        allowance_scan(&db, "account", 8);
+        for (index, kind) in ["sale", "purchase", "trade"].iter().enumerate() {
+            let position = crate::eelog::LogPosition { session: "log".into(), start: 201 + index as u64 * 20,
+                end: 220 + index as u64 * 20, observed_after: 103 };
+            assert!(db.insert_trade(&allowance_trade(kind), 110, &position).unwrap().is_some());
+            assert!(db.insert_trade(&allowance_trade(kind), 10_000, &position).unwrap().is_none());
+        }
+        assert_eq!(db.list_trades(100).unwrap().len(), 3);
+        assert_eq!(db.trade_allowance(110).unwrap().remaining, Some(5));
+    }
+
+    #[test]
+    fn allowance_reconciles_callback_committed_before_observation_is_saved() {
+        let db = Db::open_in_memory().unwrap();
+        let position = crate::eelog::LogPosition { session: "log".into(), start: 201, end: 220, observed_after: 103 };
+        db.insert_trade(&allowance_trade("sale"), 110, &position).unwrap();
+        allowance_scan(&db, "account", 8);
+        assert_eq!(db.trade_allowance(110).unwrap().remaining, Some(7));
+    }
+
+    #[test]
+    fn failed_ledger_write_cannot_advance_allowance_or_replay_position() {
+        let db = Db::open_in_memory().unwrap();
+        allowance_scan(&db, "account", 8);
+        let position = crate::eelog::LogPosition { session: "log".into(), start: 201, end: 220, observed_after: 103 };
+        assert!(db.insert_trade(&allowance_trade("invalid-kind"), 110, &position).is_err());
+        assert_eq!(db.trade_allowance(110).unwrap().remaining, Some(8));
+        assert!(db.insert_trade(&allowance_trade("sale"), 110, &position).unwrap().is_some());
+        assert_eq!(db.trade_allowance(110).unwrap().remaining, Some(7));
+    }
+
+    #[test]
+    fn fresh_account_and_missing_metadata_replace_previous_observation() {
+        let db = Db::open_in_memory().unwrap();
+        allowance_scan(&db, "first", 8);
+        allowance_scan(&db, "second", 0);
+        assert_eq!(db.trade_allowance(110).unwrap().remaining, Some(0));
+        assert_eq!(read_allowance(&guard(&db.conn)).unwrap().unwrap().account_key, "second");
+        db.save_allowance(crate::allowance::Observation::scanned("third".into(), 3,
+            &serde_json::json!({}), None, None, 110, 111)).unwrap();
+        assert_eq!(db.trade_allowance(112).unwrap().remaining, None);
+    }
+
+    #[test]
+    fn submission_guard_rejects_old_snapshots_and_days_without_spending_trades() {
+        let db = Db::open_in_memory().unwrap();
+        allowance_scan(&db, "first", 8);
+        let observed = db.trade_allowance(110).unwrap();
+        let id = observed.snapshot_id.unwrap();
+        assert!(db.session_allowance(id, 0, 110).is_ok());
+        assert_eq!(db.trade_allowance(110).unwrap().remaining, Some(8));
+        assert!(db.session_allowance(id, 0, 86_401).is_err());
+        allowance_scan(&db, "second", 24);
+        assert!(db.session_allowance(id, 0, 111).is_err());
+    }
+
+    #[test]
+    fn restart_retains_age_and_deduplication_but_cannot_assume_the_account() {
+        let path = temp_db_path();
+        let position = crate::eelog::LogPosition { session: "log".into(), start: 201, end: 220, observed_after: 103 };
+        {
+            let db = Db::open(&path).unwrap();
+            allowance_scan(&db, "account", 8);
+            db.insert_trade(&allowance_trade("sale"), 110, &position).unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        let view = db.trade_allowance(120).unwrap();
+        assert_eq!(view.remaining, Some(7));
+        assert_eq!(view.observed_at, Some(102));
+        assert_eq!(view.confidence, crate::allowance::Confidence::Estimated);
+        assert!(!view.monitoring);
+        assert_eq!(db.insert_trade(&allowance_trade("sale"), 4000, &position).unwrap(), None);
+        let next = crate::eelog::LogPosition { start: 230, end: 250, observed_after: 120, ..position };
+        db.insert_trade(&allowance_trade("sale"), 121, &next).unwrap();
+        assert_eq!(db.trade_allowance(122).unwrap().remaining, Some(7));
+        drop(db);
+        std::fs::remove_file(path).unwrap();
     }
 }
 

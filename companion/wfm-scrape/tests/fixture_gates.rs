@@ -819,16 +819,11 @@ fn a_failed_manifest_does_not_record_its_hash() {
     // The index names ExportRecipes, but no fixture answers for its URL.
     let index_text = "ExportRecipes_en.json!00_abc\n";
     let compressed = {
-        // Round-trip through the same decoder the pipeline uses, so this test
-        // cannot pass against a bad stream.
-        let raw = std::process::Command::new("python3")
-            .args([
-                "-c",
-                "import lzma,base64,sys; sys.stdout.write(base64.b64encode(lzma.compress(b'ExportRecipes_en.json!00_abc\\n', format=lzma.FORMAT_ALONE)).decode())",
-            ])
-            .output()
-            .expect("python3 for the fixture");
-        String::from_utf8(raw.stdout).unwrap()
+        // Keep this fixture runnable on Windows without a separate Python install.
+        use base64::Engine as _;
+        let mut bytes = Vec::new();
+        lzma_rs::lzma_compress(&mut std::io::Cursor::new(index_text.as_bytes()), &mut bytes).unwrap();
+        base64::engine::general_purpose::STANDARD.encode(bytes)
     };
     assert!(de::decode_lzma_alone(
         &{
@@ -845,7 +840,6 @@ fn a_failed_manifest_does_not_record_its_hash() {
         serde_json::Value::String(format!("base64:{compressed}")),
     );
     let http = FixtureHttp { responses };
-    let _ = index_text;
 
     let snap = de::fetch_export(&http, &std::collections::BTreeMap::new());
     assert!(snap.index_ok, "the index itself parsed");

@@ -11,6 +11,7 @@
   import { assessListings, summarize, ownedKey, type HealthIssue } from '../lib/listing-health';
   import { LIQUID_VOL } from '../lib/sell-priority';
   import type { Market } from '../lib/types';
+  import { orderUnitPrice, orderLotPrice, cachedUnitMarket } from '../lib/order-prices';
   import Toast from './Toast.svelte';
 
   // WFM order shape is open - many fields appear depending on the
@@ -18,6 +19,7 @@
   interface WfmOrder {
     id: string;
     platinum: number;
+    perTrade?: number | null;
     visible: boolean;
     type?: 'sell' | 'buy';
     quantity?: number;
@@ -271,12 +273,12 @@
             id: o.id,
             slug,
             name: itemName(o),
-            platinum: o.platinum,
+            platinum: orderUnitPrice(o.platinum, o.perTrade) ?? NaN,
             type: o.type,
-            m: slug ? market.items[slug] : null,
+            m: slug && market.items[slug] ? cachedUnitMarket(market.items[slug], (o.perTrade ?? 1) > 1) : null,
           };
         })
-        .filter((r) => r.slug !== ''),
+        .filter((r) => r.slug !== '' && Number.isFinite(r.platinum)),
     );
   });
 
@@ -287,10 +289,12 @@
     if (!o) return;
     markBusy(row.id, true);
     try {
-      assertOrderOk(await transport.updateOrder(row.id, { platinum: row.suggested }));
-      o.platinum = row.suggested;
+      const total = orderLotPrice(row.suggested, o.perTrade);
+      if (total == null || total > MAX_PLATINUM) throw new Error('Suggested lot total exceeds the listing price limit. Review the lot on WFM.');
+      assertOrderOk(await transport.updateOrder(row.id, { platinum: total }));
+      o.platinum = total;
       orders = [...orders];
-      pushToast(`${row.name} repriced to ${row.suggested}p.`);
+      pushToast(`${row.name} repriced to ${total}p per lot (${row.suggested}p / unit).`);
     } catch (e) {
       pushToast(`Couldn't reprice: ${humanError(e)}`, 'error');
     } finally {
@@ -354,12 +358,12 @@
           const slug = itemSlug(o);
           return {
             id: o.id, slug, name: itemName(o),
-            platinum: o.platinum, quantity: o.quantity ?? 1, type: 'sell' as const,
+            platinum: orderUnitPrice(o.platinum, o.perTrade) ?? NaN, quantity: o.quantity ?? 1, type: 'sell' as const,
             live: slug ? liveForOrder(o) : null,
             owned: ownedQty && slug ? (ownedQty.get(ownedKey(slug, o.subtype ?? null)) ?? 0) : null,
           };
         })
-        .filter((r) => r.slug !== ''),
+        .filter((r) => r.slug !== '' && Number.isFinite(r.platinum)),
     );
   });
   let healthSummary = $derived(summarize(health));
@@ -373,10 +377,11 @@
     markBusy(issue.id, true);
     try {
       if (issue.kind === 'overpriced' || issue.kind === 'underbid') {
-        const p = Math.min(MAX_PLATINUM, Math.max(MIN_PLATINUM, issue.suggested));
+        const p = orderLotPrice(Math.max(MIN_PLATINUM, issue.suggested), o.perTrade);
+        if (p == null || p > MAX_PLATINUM) throw new Error('Suggested lot total exceeds the listing price limit. Review the lot on WFM.');
         assertOrderOk(await transport.updateOrder(issue.id, { platinum: p }));
         o.platinum = p;
-        pushToast(`${issue.name} repriced to ${p}p.`);
+        pushToast(`${issue.name} repriced to ${p}p per lot.`);
       } else if (issue.kind === 'excess-qty') {
         assertOrderOk(await transport.updateOrder(issue.id, { quantity: issue.suggested }));
         o.quantity = issue.suggested;
@@ -451,7 +456,7 @@
       return !f || itemName(o).toLowerCase().includes(f);
     });
   });
-  let listedValue = $derived(orders.filter((o) => o.type !== 'buy').reduce((a, o) => a + o.platinum * (o.quantity ?? 1), 0));
+  let listedValue = $derived(orders.filter((o) => o.type !== 'buy').reduce((a, o) => a + (orderUnitPrice(o.platinum, o.perTrade) ?? 0) * (o.quantity ?? 1), 0));
 
   // The fix queue: live/scan health issues first, then (only while no live
   // check has run) the snapshot-drift fallback for the remaining sell orders.
@@ -555,7 +560,7 @@
           <tr class:busy>
             <td class="l" title={q.slug}>{q.name}</td>
             <td>{o?.quantity ?? '?'}</td>
-            <td class="fg">{o?.platinum ?? '?'}<span class="unit">p</span></td>
+            <td class="fg">{o && orderUnitPrice(o.platinum, o.perTrade) != null ? Number(orderUnitPrice(o.platinum, o.perTrade)!.toFixed(2)) : '?'}<span class="unit">p / unit</span></td>
             <td>{#if t && !t.error && t.low_sell != null}{t.low_sell}<span class="unit">p</span>{:else}<span class="faint">-</span>{/if}</td>
             <td>{#if t && !t.error && t.top_buy != null}{t.top_buy}<span class="unit">p</span>{:else}<span class="faint">-</span>{/if}</td>
             {#if q.kind === 'health'}
@@ -581,7 +586,7 @@
                 {#if q.d.thin}<span class="tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor - thin books make this a weak signal.">thin</span>{/if}
               </td>
               <td class="act">
-                <button class="btn xs" onclick={() => reprice(q.d)} disabled={busy} title="Update this listing to {q.d.suggested}p on warframe.market">Reprice</button>
+                <button class="btn xs" onclick={() => reprice(q.d)} disabled={busy} title="Update this listing to {q.d.suggested}p per unit on warframe.market">Reprice</button>
               </td>
             {/if}
           </tr>
@@ -653,7 +658,7 @@
             <th class="l">Item</th>
             <th>Type</th>
             <th>Qty</th>
-            <th>Price</th>
+            <th>Lot price</th>
             {#if live.size > 0}
               <th title="Lowest other online ask for this exact tier">Live ask</th>
               <th title="Highest online bid for this exact tier">Live bid</th>
@@ -677,12 +682,13 @@
                   <button class="btn xs x" onclick={() => (editingId = null)} title="Cancel">×</button>
                 {:else}
                   <span class="fg">{o.platinum}<span class="unit">p</span></span>
+                  {#if (o.perTrade ?? 1) > 1}<span class="unit"> / {o.perTrade} units</span>{/if}
                   <button class="btn xs ghost edit" onclick={() => startEdit(o)} disabled={busy} title="Edit price">✎</button>
                 {/if}
               </td>
               {#if live.size > 0}
-                <td>{#if t && !t.error && t.low_sell != null}{t.low_sell}<span class="unit">p</span>{:else}<span class="faint">-</span>{/if}</td>
-                <td>{#if t && !t.error && t.top_buy != null}{t.top_buy}<span class="unit">p</span>{:else}<span class="faint">-</span>{/if}</td>
+                <td>{#if t && !t.error && t.low_sell != null}{Number(t.low_sell.toFixed(2))}<span class="unit">p / unit</span>{:else}<span class="faint">-</span>{/if}</td>
+                <td>{#if t && !t.error && t.top_buy != null}{Number(t.top_buy.toFixed(2))}<span class="unit">p / unit</span>{:else}<span class="faint">-</span>{/if}</td>
               {/if}
               <td>
                 <button

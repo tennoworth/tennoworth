@@ -1,11 +1,15 @@
 <script lang="ts">
-  import { onDestroy, untrack } from 'svelte';
+  import { onDestroy, untrack, tick } from 'svelte';
   import {
     DesktopCmdError, desktopLiveTopPrices, isDesktopRuntime, LIVE_TOP_PROGRESS_EVENT,
     type LiveTop, type Transport,
+    desktopTradeSessionState, ALLOWANCE_CHANGED_EVENT,
   } from '../lib/transport';
   import { listenForTauriEvent } from '../lib/desktop-update';
-  import type { ItemResult } from '../lib/types';
+  import type { ItemResult, SessionConstraint, ReviewedOrder, MarketItemEntry } from '../lib/types';
+  import { validSessionLot } from '../lib/trade-session';
+  import { clearingPrice } from '../lib/sell-priority';
+  import { orderUnitPrice } from '../lib/order-prices';
   import { MAX_PLATINUM, MIN_PLATINUM, MAX_PLAN_ITEMS } from '../lib/limits';
   import { humanError } from '../lib/errors';
   import { plat, ownedBreakdown, LEVELED_NOTE_TITLE, keptNoteTitle } from '../lib/format';
@@ -24,6 +28,11 @@
     avg_price: number;
     clearing_price?: number;
     kept_lvl?: number | null;
+    proposed_quantity?: number;
+    per_trade?: number;
+    bulk?: boolean;
+    session?: SessionConstraint;
+    market?: MarketItemEntry;
   }
 
   interface PlanRow {
@@ -40,6 +49,17 @@
     rank: number;
     reference_low_sell: number;
     avg: number;
+    per_trade: number;
+    bulk: boolean;
+    session?: SessionConstraint;
+    reviewed_order?: ReviewedOrder;
+    market?: MarketItemEntry;
+  }
+
+  interface ReviewOrderWire {
+    id: string; platinum: number; quantity: number; visible: boolean;
+    perTrade?: number | null; rank?: number; subtype?: string | null;
+    type?: string; item?: { slug?: string };
   }
 
   interface Props {
@@ -67,7 +87,7 @@
       // ask inherits every troll listing (a lone 100p ask on a 10p item, or
       // a 1p undercut on an undercut day). Falls back for older callers.
       const target =
-        (r.clearing_price ?? 0) > 0 ? Math.round(r.clearing_price as number)
+        (r.clearing_price ?? 0) > 0 ? Math.ceil(r.clearing_price as number)
         : r.low_sell > 0 ? r.low_sell
         : Math.round(r.avg_price);
       // Cap using sellable (owned minus the "Keep copies" reserve), not raw
@@ -82,7 +102,11 @@
         name: r.name,
         include: true,
         platinum: Math.max(5, target),
-        quantity: 1,
+        quantity: r.proposed_quantity ?? 1,
+        per_trade: r.per_trade ?? 1,
+        bulk: r.bulk ?? false,
+        session: r.session,
+        market: r.market,
         owned: r.owned,
         sellable,
         leveled: r.leveled ?? 0,
@@ -114,14 +138,93 @@
   // whatever they were when the modal opened; nothing here wants live updates.
   $effect(() => {
     if (open) {
+      reviewEpoch++;
       plan = initialPlanFor(untrack(() => rows) ?? []);
       phase = 'review';
       serverResults = [];
       networkError = null;
+      ordersReady = false;
+      sessionRemaining = null;
+      sessionProblem = null;
+      untrack(() => { if (plan.some(r => r.session)) void refreshReviewOrders(false); });
     }
   });
 
   let selectedCount = $derived(plan.filter((r) => r.include).length);
+  let reviewEpoch = 0;
+  let hasSession = $derived(plan.some(r => r.session));
+  let ordersReady = $state(false);
+  let ordersBusy = $state(false);
+  let sessionRemaining = $state<number | null>(null);
+  let sessionProblem = $state<string | null>(null);
+  let estimatedTrades = $derived(plan.filter(r => r.include).every(r => validSessionLot(r.quantity, r.per_trade, r.bulk))
+    ? plan.filter(r => r.include).reduce((sum, r) => sum + r.quantity / r.per_trade, 0) : null);
+
+  async function refreshSession(): Promise<boolean> {
+    if (!hasSession) return true;
+    const epoch = reviewEpoch;
+    try {
+      const state = await desktopTradeSessionState();
+      if (!open || epoch !== reviewEpoch) return false;
+      const context = plan[0]?.session;
+      sessionRemaining = state.allowance.remaining;
+      for (const row of plan) {
+        row.sellable = Math.min(row.sellable, state.quantities[row.slug] ?? 0);
+        if (state.supported_slugs && !state.supported_slugs.includes(row.slug)) row.sellable = 0;
+        row.bulk = state.bulk_slugs.includes(row.slug);
+      }
+      sessionProblem = context && state.allowance.snapshot_id === context.snapshot_id && state.allowance.utc_day === context.utc_day
+        ? null : 'The inventory or allowance day changed. Close review and prepare a new batch.';
+      await tick();
+      return sessionProblem == null;
+    } catch (e) { if (open && epoch === reviewEpoch) sessionProblem = humanError(e); return false; }
+  }
+
+  async function refreshReviewOrders(confirm: boolean): Promise<boolean> {
+    if (!hasSession) return true;
+    const epoch = reviewEpoch;
+    ordersBusy = true;
+    try {
+      if (!await refreshSession()) return false;
+      const body = await transport.fetchOrders() as { data?: { sell?: ReviewOrderWire[] } | ReviewOrderWire[]; sell?: ReviewOrderWire[] };
+      if (!open || epoch !== reviewEpoch) return false;
+      const data = body?.data ?? body;
+      const orders = Array.isArray(data) ? data.filter(o => o.type === 'sell') : data?.sell;
+      if (!Array.isArray(orders)) throw new Error('Could not read existing orders. Retry before submitting.');
+      let changed = false;
+      for (const row of plan) {
+        const matches = orders.filter(o => o.item?.slug === row.slug && (o.rank ?? 0) === row.rank && (o.subtype ?? null) === row.subtype);
+        if (matches.length > 1) throw new Error(`${row.name} has ambiguous existing orders. Resolve them in My orders first.`);
+        const prior = matches[0];
+        if (prior && (typeof prior.id !== 'string' || typeof prior.visible !== 'boolean' || !Number.isSafeInteger(prior.platinum) || !Number.isSafeInteger(prior.quantity)
+          || (prior.perTrade != null && (!Number.isSafeInteger(prior.perTrade) || prior.perTrade < 1 || prior.perTrade > 6)))) {
+          throw new Error(`Existing order details are incomplete for ${row.name}.`);
+        }
+        const next: ReviewedOrder = prior ? { state: 'existing', id: prior.id, platinum: prior.platinum,
+          quantity: prior.quantity, per_trade: prior.perTrade ?? null, visible: prior.visible } : { state: 'new' };
+        if (JSON.stringify(row.reviewed_order) !== JSON.stringify(next)) changed = true;
+        row.reviewed_order = next;
+      }
+      ordersReady = true;
+      if (confirm && changed) {
+        networkError = 'Existing orders changed. Review the updated before/after details, then confirm again. Your edits were kept.';
+        return false;
+      }
+      return true;
+    } catch (e) {
+      if (!open || epoch !== reviewEpoch) return false;
+      ordersReady = false;
+      if (!handleAuthCode(e)) networkError = humanError(e);
+      return false;
+    } finally { if (epoch === reviewEpoch) ordersBusy = false; }
+  }
+
+  $effect(() => {
+    if (!open || !hasSession) return;
+    return listenForTauriEvent(ALLOWANCE_CHANGED_EVENT, () => {
+      if (phase === 'review') void refreshSession();
+    });
+  });
 
   // ---- Live prices (desktop only) ----
   // The prefill comes from the 2-hourly snapshot. One click asks WFM for the
@@ -175,7 +278,11 @@
   /** Set the row's price to the live lowest online ask (match, don't undercut). */
   function useLive(i: number): void {
     const t = liveFor(plan[i]);
-    if (t?.low_sell != null) plan[i].platinum = Math.max(MIN_PLATINUM, t.low_sell);
+    if (t?.low_sell != null) {
+      const row = plan[i];
+      row.platinum = Math.max(MIN_PLATINUM, Math.ceil(row.session && row.market
+        ? clearingPrice({ ...row.market, low_sell: t.low_sell }) : t.low_sell));
+    }
   }
   function useLiveAll(): void {
     plan.forEach((_, i) => { if (plan[i].include) useLive(i); });
@@ -196,8 +303,9 @@
   );
   let canSubmit = $derived(
     selectedCount > 0 && selectedCount <= MAX_PLAN_ITEMS && plan.every(
-      (r) => !r.include || (r.platinum >= MIN_PLATINUM && r.platinum <= MAX_PLATINUM && r.quantity >= 1 && r.quantity <= r.sellable)
-    )
+      (r) => !r.include || (Number.isSafeInteger(r.platinum) && r.platinum >= MIN_PLATINUM && r.platinum <= MAX_PLATINUM && Number.isSafeInteger(r.quantity) && r.quantity >= 1 && r.quantity <= r.sellable
+        && (!r.session || (validSessionLot(r.quantity, r.per_trade, r.bulk) && r.platinum * r.per_trade <= MAX_PLATINUM)))
+    ) && (!hasSession || (ordersReady && !ordersBusy && !sessionProblem && estimatedTrades != null && estimatedTrades <= (sessionRemaining ?? 0) && estimatedTrades <= (plan[0]?.session?.budget ?? 0)))
   );
 
   function close(): void {
@@ -217,6 +325,9 @@
   }
 
   async function send(): Promise<void> {
+    if (hasSession && !await refreshReviewOrders(true)) return;
+    await tick();
+    if (!canSubmit) { networkError = 'Review quantities, units per trade, prices, and the remaining allowance before submitting.'; return; }
     phase = 'sending';
     networkError = null;
     const items = plan
@@ -225,6 +336,9 @@
         slug: r.slug,
         platinum: r.platinum,
         quantity: r.quantity,
+        per_trade: r.session ? r.per_trade : undefined,
+        session: r.session,
+        reviewed_order: r.session ? r.reviewed_order : undefined,
         order_type: 'sell' as const,
         visible: false,
         rank: r.rank > 0 ? r.rank : undefined,
@@ -300,19 +414,22 @@
       .filter(el => !el.matches(':disabled, [tabindex="-1"]') && el.getClientRects().length > 0);
     queueMicrotask(() => { if (mounted) controls()[0]?.focus(); });
     const onKey = (event: KeyboardEvent) => {
-      if (event.defaultPrevented) return;
+      if (event.defaultPrevented || document.querySelector('dialog[open]')) return;
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); }
       if (event.key !== 'Tab') return;
       const available = controls();
       const first = available[0];
       const last = available.at(-1);
-      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      if (!node.contains(document.activeElement)) { event.preventDefault(); first?.focus(); }
+      else if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
       else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
     };
-    node.addEventListener('keydown', onKey);
+    // A refresh disables its focused button briefly; browsers can move focus
+    // to body. Keep Escape/Tab usable without closing an auth dialog above us.
+    document.addEventListener('keydown', onKey);
     return { destroy() {
       mounted = false;
-      node.removeEventListener('keydown', onKey);
+      document.removeEventListener('keydown', onKey);
       // An authentication dialog may have taken focus during the review handoff.
       if (previous?.isConnected && (node.contains(document.activeElement) || document.activeElement === document.body)) previous.focus();
     } };
@@ -321,18 +438,37 @@
 
 {#if open}
   <div class="backdrop" role="dialog" aria-modal="true" aria-labelledby="rm-title" use:reviewFocus>
-    <div class="modal">
+    <div class="modal" class:session={hasSession}>
       <DialogHeader titleId="rm-title" title="List on warframe.market" onclose={close} />
 
       {#if phase === 'review'}
         <p class="lead">
+          {#if hasSession}
+          New listings start <strong>hidden</strong>. Existing listings keep their visibility.
+          Quantities replace current listing totals; rank stays at the verified unranked tier.
+          {:else}
           Review every row. Default price is the estimated clearing price -
           the lowest live ask, sanity-clamped against the recent median so a
           lone troll listing can't set it (floored at 5p). Rank 0 = unranked;
-          set a rank only if you're listing a leveled copy. Listings go up
-          <strong>hidden</strong> - no buyers can see them until you flip
-          them visible on the results screen (or later, in My orders).
+          set a rank only if you're listing a leveled copy. New listings go up
+          <strong>hidden</strong>. Updates replace the existing quantity and preserve visibility.
+          {/if}
         </p>
+
+        {#if hasSession}
+          <p class="ui-notice" data-tone={canSubmit ? 'good' : 'warn'}>
+            {estimatedTrades ?? 'Invalid quantity / lot'} estimated trades / {plan[0]?.session?.budget} budget · {sessionRemaining ?? 'unknown'} remaining.
+            Quantities must divide evenly by units per trade. Posting does not spend the game allowance.
+          </p>
+          {#if sessionProblem}<p class="ui-notice" data-tone="warn">{sessionProblem}</p>{/if}
+          {#if plan.some(r => r.include && r.quantity > r.sellable)}
+            <p class="ui-notice" data-tone="warn">A selected quantity exceeds the confirmed sellable count. Your edits are retained; reduce the quantity or scan again.</p>
+          {/if}
+          {#if networkError}<p class="ui-notice" data-tone="warn" role="alert">{networkError}</p>{/if}
+          <button class="btn ghost" onclick={() => refreshReviewOrders(false)} disabled={ordersBusy}>
+            {ordersBusy ? 'Checking existing orders…' : 'Refresh existing orders'}
+          </button>
+        {/if}
 
         <div class="bulkrow">
           <button class="btn ghost" onclick={() => setAll(true)}>Select all</button>
@@ -369,6 +505,7 @@
                 <th></th>
                 <th>Item</th>
                 <th>Qty</th>
+                {#if hasSession}<th>Units / trade</th><th>Existing → proposed</th>{/if}
                 <th>Owned</th>
                 <th>Price (p)</th>
                 <th>Avg</th>
@@ -391,6 +528,21 @@
                       disabled={!row.include}
                     />
                   </td>
+                  {#if hasSession}
+                    <td><input type="number" aria-label={`Units per trade for ${row.name}`} min="1" max={row.bulk ? 6 : 1}
+                      step="1" bind:value={plan[i].per_trade} disabled={!row.include} /></td>
+                    <td>
+                      {#if row.reviewed_order?.state === 'existing'}
+                        {@const prior = row.reviewed_order}
+                        <span>Update {prior.visible ? 'visible' : 'hidden'} order</span><br />
+                        <span>Qty {prior.quantity} → {row.quantity} · unit price {Number((orderUnitPrice(prior.platinum, prior.per_trade) ?? 0).toFixed(2))}p → {row.platinum}p</span><br />
+                        <span>Lot total {prior.platinum}p → {row.platinum * row.per_trade}p</span><br />
+                        <span>Units / trade {prior.per_trade ?? 1} → {row.per_trade} · stays {prior.visible ? 'visible' : 'hidden'}</span>
+                      {:else if row.reviewed_order?.state === 'new'}
+                        New hidden listing · {row.quantity} × {row.platinum}p · {row.per_trade} units / trade · {row.platinum * row.per_trade}p per lot
+                      {:else}Existing order state not confirmed{/if}
+                    </td>
+                  {/if}
                   <td class="muted">
                     {#if row.sellable < row.owned}
                       {@const bd = ownedBreakdown(row.owned, row.sellable, row.leveled)}
@@ -440,7 +592,7 @@
                       max="10"
                       class="rank"
                       bind:value={plan[i].rank}
-                      disabled={!row.include}
+                      disabled={!row.include || !!row.session}
                     />
                   </td>
                   <td class="right">{plat(row.platinum * row.quantity)}</td>
@@ -461,7 +613,7 @@
           <div class="actions">
             <button class="btn ghost" onclick={close}>Cancel</button>
             <button class="btn primary" onclick={send} disabled={!canSubmit}>
-              Send {selectedCount} listings (hidden)
+              Send {selectedCount} listings
             </button>
           </div>
         </footer>
@@ -556,6 +708,10 @@
     flex-direction: column;
     overflow: hidden;
   }
+  .modal.session { width: min(74rem, 100%); overflow-y: auto; }
+  .modal.session > :global(*) { flex-shrink: 0; }
+  .modal.session .scroll { min-height: 12rem; max-height: 45dvh; flex-shrink: 0; }
+  .modal.session table { min-width: 70rem; }
   .lead {
     padding: 14px 18px 0;
     margin: 0;

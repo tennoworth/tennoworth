@@ -26,6 +26,13 @@ pub struct PendingItem {
     pub slug: String,
     pub platinum: u32,
     pub quantity: u32,
+    /// Absent in shipped pending files; retain the legacy inferred lot on resume.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub per_trade: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<crate::plan::SessionConstraint>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reviewed_order: Option<crate::plan::ReviewedOrder>,
     pub order_type: String,
     pub visible: bool,
     pub rank: Option<u32>,
@@ -95,6 +102,9 @@ mod tests {
                     slug: "loki_prime_set".into(),
                     platinum: 120,
                     quantity: 1,
+                    per_trade: Some(1),
+                    session: None,
+                    reviewed_order: None,
                     order_type: "sell".into(),
                     visible: false,
                     rank: None,
@@ -109,6 +119,9 @@ mod tests {
                     slug: "rhino_prime_set".into(),
                     platinum: 95,
                     quantity: 1,
+                    per_trade: None,
+                    session: None,
+                    reviewed_order: None,
                     order_type: "sell".into(),
                     visible: false,
                     rank: None,
@@ -134,9 +147,30 @@ mod tests {
         assert_eq!(loaded.items.len(), 2);
         assert_eq!(loaded.items[0].status, "ok");
         assert_eq!(loaded.items[1].status, "pending");
+        assert_eq!(loaded.items[0].per_trade, Some(1));
+        assert_eq!(loaded.items[1].per_trade, None);
 
         clear_pending(&path);
         assert!(load_pending(&path).is_none());
+    }
+
+    #[test]
+    fn pending_bundle_survives_disk_recovery_without_reinference() {
+        let path = tmp_path("bundle");
+        let mut plan = sample_plan();
+        plan.items[1].quantity = 12;
+        plan.items[1].per_trade = Some(3);
+        plan.items[1].session = Some(crate::plan::SessionConstraint { snapshot_id: 12, utc_day: 20_000, budget: 8 });
+        plan.items[1].reviewed_order = Some(crate::plan::ReviewedOrder::New);
+        write_pending_atomic(&path, &plan).unwrap();
+        let loaded = load_pending(&path).unwrap();
+        assert_eq!(loaded.items[1].quantity, 12);
+        assert_eq!(loaded.items[1].per_trade, Some(3));
+        let resumed = crate::plan::PlanItem::from(&loaded.items[1]);
+        assert_eq!(resumed.per_trade, Some(3));
+        assert_eq!(resumed.session, plan.items[1].session);
+        assert_eq!(resumed.reviewed_order, plan.items[1].reviewed_order);
+        clear_pending(&path);
     }
 
     #[test]
@@ -160,6 +194,7 @@ mod tests {
         assert_eq!(loaded.items.len(), 1);
         assert!(loaded.items[0].order_id.is_none());
         assert!(loaded.items[0].reference_low_sell.is_none());
+        assert!(loaded.items[0].per_trade.is_none());
         clear_pending(&path);
     }
 

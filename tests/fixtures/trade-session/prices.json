@@ -1,0 +1,10 @@
+[
+  {"platinum":48,"per_trade":6,"unit":8},
+  {"platinum":24,"per_trade":3,"unit":8},
+  {"platinum":36,"per_trade":5,"unit":7.2},
+  {"platinum":12,"per_trade":null,"unit":12},
+  {"platinum":0,"per_trade":1,"unit":null},
+  {"platinum":12,"per_trade":0,"unit":null},
+  {"platinum":12,"per_trade":7,"unit":null},
+  {"platinum":12,"per_trade":"3","unit":null}
+]

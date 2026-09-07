@@ -26,6 +26,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod allowance;
 mod db;
 mod definitions;
 mod eelog;
@@ -163,6 +164,7 @@ fn main() {
             commands::watch::check_watches_now,
             commands::trades::list_trades,
             commands::trades::eelog_status,
+            commands::trades::trade_session_state,
             commands::market::tray_state,
             update::check_update,
             update::update_status,
