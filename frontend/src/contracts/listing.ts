@@ -1,5 +1,7 @@
 import type { SessionConstraint, MarketItemEntry } from './data';
 export interface ListingCandidate {
+  components?: Record<string, number>;
+  component_limits?: Record<string, number>;
   key?: string;
   slug: string;
   subtype?: string | null;

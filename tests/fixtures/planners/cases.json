@@ -11675,5 +11675,64 @@
         "heldBack": []
       }
     }
+  },
+{
+  "name": "protected ducat quantity is already reserved",
+  "operation": "ducat",
+  "input": {
+    "owned": [
+      {
+        "slug": "a",
+        "name": "A",
+        "count": 1,
+        "subtype": null
+      }
+    ],
+    "market": {
+      "items": {
+        "a": {
+          "low_sell": 5,
+          "median_now": 5,
+          "vol": 30,
+          "ducats": 45
+        }
+      }
+    },
+    "target": 45,
+    "keepAbove": 15,
+    "quantitiesAreAvailable": true
+  },
+  "expected": {
+    "candidates": [
+      {
+        "slug": "a",
+        "name": "A",
+        "spare": 1,
+        "ducats": 45,
+        "plat": 5,
+        "ducatsPerPlat": 9,
+        "totalDucats": 45,
+        "totalPlat": 5
+      }
+    ],
+    "plan": {
+      "picks": [
+        {
+          "slug": "a",
+          "name": "A",
+          "spare": 1,
+          "ducats": 45,
+          "plat": 5,
+          "ducatsPerPlat": 9,
+          "totalDucats": 45,
+          "totalPlat": 5
+        }
+      ],
+      "ducats": 45,
+      "platGivenUp": 5,
+      "short": 0,
+      "heldBack": []
+    }
   }
+}
 ]

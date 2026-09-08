@@ -86,10 +86,11 @@ function passesMedian(m: MarketItemEntry, f: FilterState): boolean {
   return f.minMedian <= 0 || (m.median_90d || 0) >= f.minMedian;
 }
 
-function previewRowFacts(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Market, reserveCopies: number, sparesOnly: boolean): ScoredInventoryFact {
+function previewRowFacts(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Market, reserveCopies: number, sparesOnly: boolean, allocation?: number): ScoredInventoryFact {
+  const available = Math.min(sellableQty(rec.count, reserveCopies, rec.leveled ?? 0), allocation ?? Infinity);
   const sellable = sparesOnly
-    ? spareQty(rec.count, rec.kept_lvl, rec.leveled ?? 0)
-    : sellableQty(rec.count, reserveCopies, rec.leveled ?? 0);
+    ? Math.min(available, spareQty(rec.count, rec.kept_lvl, rec.leveled ?? 0))
+    : available;
   const row_price = clearingPrice(m);
   const demand = readDemand(rec.slug, market, {
     vol: m.vol,
@@ -158,8 +159,12 @@ function previewRowFacts(key: string, rec: OwnedRecord, m: MarketItemEntry, mark
 
 // Row enrichment: score, timing, ducat-trade math. Runs only for rows that
 // already passed every clause above.
-function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Market, reserveCopies: number, sparesOnly = false, verdict?: Verdict, nativeFact?: ScoredInventoryFact) {
-  const facts = nativeFact ?? previewRowFacts(key, rec, m, market, reserveCopies, sparesOnly);
+function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Market, reserveCopies: number, sparesOnly = false, verdict?: Verdict, nativeFact?: ScoredInventoryFact, allocation?: number) {
+  const original = nativeFact ?? previewRowFacts(key, rec, m, market, reserveCopies, sparesOnly, allocation);
+  const safeQuantity = Math.min(original.sellable, allocation ?? Infinity);
+  const facts = { ...original, sellable: safeQuantity,
+    potential_plat: safeQuantity * m.avg,
+    raw_value: safeQuantity * ((m.low5_avg || 0) > 0 ? m.low5_avg! : m.avg) };
   const { sellable, clearing_price: row_price, sell_score, patience, ducats, plat_per_100d,
     medians_7d: medians, median_90d, delta_90d_pct, timing, demand } = facts;
   const tags = Array.isArray(m.tags) ? m.tags : [];
@@ -220,6 +225,7 @@ export function computeResults(
   filters: FilterState,
   reserveCopies: number,
   advice?: Map<string, Verdict>,
+  availability?: ReadonlyMap<string, number>,
   nativeFacts?: Map<string, ScoredInventoryFact>,
 ) {
   const out: ReturnType<typeof buildRow>[] = [];
@@ -239,7 +245,7 @@ export function computeResults(
     if (!passesAdvice(rec, filters, advice)) continue;
     const nativeFact = nativeFacts?.get(key);
     if (nativeFacts && !nativeFact) continue;
-    out.push(buildRow(key, rec, m, market, reserveCopies, filters.sparesOnly, advice?.get(rec.slug), nativeFact));
+    out.push(buildRow(key, rec, m, market, reserveCopies, filters.sparesOnly, advice?.get(rec.slug), nativeFact, availability ? availability.get(key) ?? 0 : undefined));
   }
   out.sort((a, b) => b.sell_score - a.sell_score);
   return out;

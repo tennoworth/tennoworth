@@ -14,8 +14,9 @@ export function relicPlan(owned: Map<string, OwnedRecord> | null, market: Market
 export function setRecos(owned: Map<string, OwnedRecord> | null, market: Market | null, limit = 24): Promise<SetReco[]> {
   return callDomain('set_recos', { owned: records(owned), market, limit: Number.isFinite(limit) ? limit : Object.keys(market?.set_to_parts ?? {}).length });
 }
-export async function ducatPlan(owned: Map<string, OwnedRecord> | null, market: Market | null, target: number, keepAbove = 15): Promise<{ candidates: ScrapCandidate[]; plan: DucatPlan }> {
-  const result = await callDomain('ducat_plan', { owned: records(owned), market, target, keepAbove: Number.isFinite(keepAbove) ? keepAbove : Number.MAX_SAFE_INTEGER });
+export async function ducatPlan(owned: Map<string, OwnedRecord> | null, market: Market | null, target: number, keepAbove = 15, availability?: ReadonlyMap<string, number>): Promise<{ candidates: ScrapCandidate[]; plan: DucatPlan }> {
+  const availableOwned = availability && owned ? new Map([...owned].map(([key, row]) => [key, { ...row, count: row.subtype || row.slug.endsWith('_set') ? 0 : availability.get(key) ?? 0 }])) : owned;
+  const result = await callDomain('ducat_plan', { quantitiesAreAvailable: !!availability, owned: records(availableOwned), market, target, keepAbove: Number.isFinite(keepAbove) ? keepAbove : Number.MAX_SAFE_INTEGER });
   const hydrate = (candidate: Omit<ScrapCandidate, 'ducatsPerPlat'> & { ducatsPerPlat: number | null }): ScrapCandidate => ({ ...candidate, ducatsPerPlat: candidate.ducatsPerPlat ?? Infinity });
   return { candidates: result.candidates.map(hydrate), plan: { ...result.plan, picks: result.plan.picks.map(hydrate), heldBack: result.plan.heldBack.map(hydrate) } };
 }

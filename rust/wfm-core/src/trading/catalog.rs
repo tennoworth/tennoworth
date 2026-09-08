@@ -86,11 +86,13 @@ fn parse_wfm_catalog(body: &serde_json::Value) -> Result<BTreeMap<String, WfmCat
                         )
                     })
                 });
-            let session_supported = supported_tag
+            let set_identity = slug.ends_with("_set") && max_rank.is_none()
+                && it.get("setRoot").and_then(|v| v.as_bool()) == Some(true);
+            let session_supported = (supported_tag || set_identity)
                 && subtypes.is_empty()
                 && it
                     .get("setRoot")
-                    .is_none_or(|v| v.is_null() || v.as_bool() == Some(false))
+                    .is_none_or(|v| v.is_null() || v.as_bool() == Some(false) || set_identity)
                 && it
                     .get("tradable")
                     .is_none_or(|v| v.is_null() || v.as_bool() == Some(true))
@@ -221,6 +223,17 @@ mod tests {
             row[key] = value;
             let catalog = parse_wfm_catalog(&serde_json::json!({"data":[row]})).unwrap();
             assert!(!catalog["item"].session_supported, "{key}");
+        }
+    }
+
+    #[test]
+    fn complete_set_identity_requires_an_explicit_tradable_rankless_root() {
+        let base = serde_json::json!({"id":"set", "slug":"example_set", "setRoot":true, "tradable":true});
+        let parse = |row| parse_wfm_catalog(&serde_json::json!({"data":[row]})).unwrap();
+        assert!(parse(base.clone())["example_set"].session_supported);
+        for (key, value) in [("tradable", serde_json::json!(false)), ("maxRank", serde_json::json!(5)), ("setRoot", serde_json::json!("true"))] {
+            let mut row = base.clone(); row[key] = value;
+            assert!(!parse(row)["example_set"].session_supported);
         }
     }
 

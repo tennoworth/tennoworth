@@ -26,6 +26,7 @@ use crate::services::wfm_session::{CmdError, WfmSession};
 const PLAN_BUSY_MSG: &str = "A listing plan is already running - wait for it to finish.";
 
 fn validate_session_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), String> {
+    validate_protected_plan(app, items)?;
     if items.iter().all(|i| i.session.is_none()) {
         return Ok(());
     }
@@ -53,7 +54,117 @@ fn validate_session_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), Stri
         allowance.remaining,
         &quantities,
         &unlocked.catalog,
+        &market.session_recipes(),
     )
+}
+
+fn validate_protected_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), String> {
+    let db = app.state::<Db>();
+    let protection = crate::services::protection::ProtectionPlan::load(&db)?;
+    if !protection.active(&db)?
+        && items
+            .iter()
+            .all(|item| item.session.is_none() && !item.slug.ends_with("_set"))
+    {
+        return Ok(());
+    }
+    let market = crate::services::sellables::MarketData::load(
+        &app.state::<crate::services::market::MarketCache>(),
+    );
+    let session = app.state::<Arc<WfmSession>>();
+    let unlocked = session
+        .require_unlocked()
+        .map_err(|_| "Unlock WFM before validating protected quantities.")?;
+    // Invalid rows cannot reach a mutation. Let the executor report its
+    // per-item errors without requiring a live order book for an empty run.
+    if items.iter().all(|item| {
+        item.platinum < wfm_core::trading::plan::MIN_PLATINUM
+            || item.platinum > MAX_PLATINUM
+            || item.quantity == 0
+            || !unlocked.catalog.contains_key(&item.slug)
+    }) {
+        return Ok(());
+    }
+    let body = list_user_orders(&unlocked).map_err(|e| e.to_string())?;
+    std::thread::sleep(std::time::Duration::from_millis(
+        wfm_core::trading::listing::SERVE_RATE_LIMIT_MS,
+    ));
+    validate_protected_contents(&db, &market, &body, items)
+}
+
+fn validate_protected_contents(
+    db: &Db,
+    market: &crate::services::sellables::MarketData,
+    body: &serde_json::Value,
+    items: &[PlanItem],
+) -> Result<(), String> {
+    let data = body.get("data").unwrap_or(body);
+    let rows = data
+        .as_array()
+        .or_else(|| data.get("sell").and_then(|v| v.as_array()))
+        .ok_or("Current orders are unavailable.")?;
+    if rows.iter().any(|row| {
+        row.get("rank")
+            .is_some_and(|v| !v.is_null() && v.as_u64().is_none())
+    }) {
+        return Err("An existing order has an unresolved rank identity.".into());
+    }
+    let sells: Vec<_> = items
+        .iter()
+        .filter(|item| item.order_type == "sell")
+        .collect();
+    if sells
+        .iter()
+        .any(|item| item.rank.unwrap_or(0) != 0 || item.subtype.is_some())
+    {
+        return Err("This protected plan supports confirmed unranked, unsubtyped items only. Review the item identity before listing.".into());
+    }
+    let mut projected: Vec<_> = rows
+        .iter()
+        .filter(|row| {
+            if row.get("type").and_then(|v| v.as_str()) == Some("buy") {
+                return false;
+            }
+            !sells.iter().any(|item| {
+                row.get("item")
+                    .and_then(|i| i.get("slug"))
+                    .and_then(|v| v.as_str())
+                    == Some(item.slug.as_str())
+                    && row.get("rank").and_then(|v| v.as_u64()).unwrap_or(0) == 0
+                    && row.get("subtype").is_none_or(|v| v.is_null())
+            })
+        })
+        .cloned()
+        .collect();
+    for item in &sells {
+        projected.push(
+            serde_json::json!({"type":"sell", "item":{"slug":item.slug}, "quantity":item.quantity}),
+        );
+    }
+    let projected_body = serde_json::json!({"data":{"sell":projected}});
+    let state = crate::services::protection::state(db, market, Ok(projected_body))?;
+    if state.snapshot_id.is_none() {
+        return Err("Scan inventory before listing from a protected plan.".into());
+    }
+    for item in sells {
+        let parts = if item.slug.ends_with("_set") {
+            market.set_recipe(&item.slug)?
+        } else {
+            std::collections::BTreeMap::from([(item.slug.clone(), 1)])
+        };
+        for slug in parts.keys() {
+            let row = state
+                .items
+                .get(slug)
+                .ok_or_else(|| format!("{slug}: no confirmed inventory for this listing."))?;
+            if row.available.is_none()
+                || row.protected.saturating_add(row.listed.unwrap_or(u32::MAX)) > row.owned
+            {
+                return Err(format!("{slug}: the batch would consume protected or already allocated copies. Scan and review again."));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn validate_session_contents(
@@ -62,6 +173,7 @@ fn validate_session_contents(
     remaining: Option<u32>,
     quantities: &std::collections::BTreeMap<String, u32>,
     catalog: &std::collections::BTreeMap<String, wfm_core::trading::catalog::WfmCatalogItem>,
+    recipes: &std::collections::BTreeMap<String, std::collections::BTreeMap<String, u32>>,
 ) -> Result<(), String> {
     if context.budget == 0
         || context.budget as usize > wfm_core::trading::plan::MAX_PLAN_ITEMS
@@ -94,7 +206,7 @@ fn validate_session_contents(
             || item.order_type != "sell"
             || item.rank.unwrap_or(0) != 0
             || item.subtype.is_some()
-            || item.slug.ends_with("_set")
+            || (item.slug.ends_with("_set") && (!recipes.contains_key(&item.slug) || lot != 1))
             || item.reviewed_order.is_none()
             || !seen.insert(&item.slug)
         {
@@ -266,6 +378,7 @@ pub async fn fetch_orders(
 /// PATCH one order: price / quantity / visible / rank.
 #[tauri::command]
 pub async fn update_order(
+    app: AppHandle,
     session: State<'_, Arc<WfmSession>>,
     order_id: String,
     patch: UpdateRequest,
@@ -280,6 +393,25 @@ pub async fn update_order(
     let s = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
         let unlocked = s.require_unlocked()?;
+        let _guard = s.begin_plan().ok_or_else(|| CmdError::of("busy", PLAN_BUSY_MSG))?;
+        let protection = crate::services::protection::ProtectionPlan::load(&app.state::<Db>()).map_err(CmdError::internal)?;
+        if protection.active(&app.state::<Db>()).map_err(CmdError::internal)? && (patch.quantity.is_some() || patch.rank.is_some()) {
+            let market = crate::services::sellables::MarketData::load(&app.state::<crate::services::market::MarketCache>());
+            let body = list_user_orders(&unlocked).map_err(CmdError::wfm)?;
+            let data = body.get("data").unwrap_or(&body);
+            let rows = data.as_array().or_else(|| data.get("sell").and_then(|v| v.as_array())).ok_or_else(|| CmdError::internal("Current orders unavailable."))?;
+            let row = rows.iter().find(|row| row.get("id").and_then(|v| v.as_str()) == Some(order_id.as_str())).ok_or_else(|| CmdError::internal("The order changed; refresh orders."))?;
+            if row.get("type").and_then(|v| v.as_str()) != Some("buy") {
+                let item: PlanItem = serde_json::from_value(serde_json::json!({
+                    "slug":row.get("item").and_then(|i| i.get("slug")),
+                    "quantity":patch.quantity.map(serde_json::Value::from).or_else(|| row.get("quantity").cloned()),
+                    "rank":patch.rank.map(serde_json::Value::from).or_else(|| row.get("rank").cloned()),
+                    "subtype":row.get("subtype"), "platinum":patch.platinum.unwrap_or(5), "visible":false, "order_type":"sell"
+                })).map_err(|e| CmdError::internal(e.to_string()))?;
+                validate_protected_contents(&app.state::<Db>(), &market, &body, &[item]).map_err(CmdError::internal)?;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(wfm_core::trading::listing::SERVE_RATE_LIMIT_MS));
+        }
         core_update_order(&unlocked, &order_id, &patch).map_err(CmdError::wfm)
     })
     .await
@@ -328,6 +460,62 @@ mod tests {
     use wfm_core::trading::plan::SessionConstraint;
 
     #[test]
+    fn protection_checks_projected_orders_and_recipe_multiplicity() {
+        let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+        let market = serde_json::from_value(serde_json::json!({
+            "items":{"barrel":{"vol":10,"low_sell":10},"test_set":{"vol":10,"low_sell":50}},
+            "path_to_info":{"/Lotus/Barrel":{"name":"Barrel","slug":"barrel"}},
+            "set_to_parts":{"test_set":{"parts":[{"slug":"barrel","quantity":2}]}}
+        }))
+        .unwrap();
+        db.insert_snapshot(
+            "memory",
+            None,
+            None,
+            &[crate::persistence::SnapshotItem {
+                slug: "/Lotus/Barrel".into(),
+                count: 5,
+                leveled: 0,
+            }],
+        )
+        .unwrap();
+        let plan = crate::services::protection::ProtectionPlan {
+            reserves: BTreeMap::new(),
+            goal: Some("test_set".into()),
+        };
+        plan.save(&db, &market).unwrap();
+        let orders = serde_json::json!({"data":{"sell":[{"id":"set-order","item":{"slug":"test_set"},"quantity":1}]}});
+        let item: PlanItem = serde_json::from_value(serde_json::json!({"slug":"barrel","quantity":1,"platinum":10,"order_type":"sell","visible":false})).unwrap();
+        assert!(
+            validate_protected_contents(&db, &market, &orders, std::slice::from_ref(&item)).is_ok()
+        );
+        let mut too_many = item.clone();
+        too_many.quantity = 2;
+        assert!(validate_protected_contents(&db, &market, &orders, &[too_many]).is_err());
+        let same_order = serde_json::json!({"data":{"sell":[{"id":"part-order","item":{"slug":"barrel"},"quantity":3}]}});
+        assert!(
+            validate_protected_contents(&db, &market, &same_order, std::slice::from_ref(&item))
+                .is_ok(),
+            "replacement quantities do not add to the old quantity"
+        );
+        db.insert_snapshot(
+            "memory",
+            None,
+            None,
+            &[crate::persistence::SnapshotItem {
+                slug: "/Lotus/Barrel".into(),
+                count: 2,
+                leveled: 0,
+            }],
+        )
+        .unwrap();
+        assert!(
+            validate_protected_contents(&db, &market, &same_order, &[item]).is_err(),
+            "a later scan cannot leak protected copies"
+        );
+    }
+
+    #[test]
     fn session_validation_rejects_unsafe_quantities_budgets_and_identities() {
         let context = SessionConstraint {
             snapshot_id: 1,
@@ -354,7 +542,7 @@ mod tests {
                      remaining,
                      qty: &BTreeMap<String, u32>,
                      cat: &BTreeMap<String, WfmCatalogItem>| {
-            validate_session_contents(items, &context, remaining, qty, cat)
+            validate_session_contents(items, &context, remaining, qty, cat, &BTreeMap::new())
         };
         assert!(check(std::slice::from_ref(&item), Some(8), &quantities, &catalog).is_ok());
         for remaining in [None, Some(0), Some(3)] {

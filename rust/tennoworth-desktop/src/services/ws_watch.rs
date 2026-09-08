@@ -255,6 +255,7 @@ mod tests {
                 own_ask: None,
                 own_bid: None,
                 error: None,
+            buyer_book: None,
             };
             let polled = crate::services::watch::evaluate(&w, Some(&top), 1000);
             assert_eq!(

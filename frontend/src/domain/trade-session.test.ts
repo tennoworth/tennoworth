@@ -4,6 +4,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
 import lots from '../../../tests/fixtures/trade-session/lots.json';
 import modes from '../../../tests/fixtures/trade-session/modes.json';
 import events from '../../../tests/fixtures/trade-session/events.json';
+import sets from '../../../tests/fixtures/trade-session/sets.json';
 
 const inventory: SessionCandidate[] = modes.inventory.map(r => ({
   key: r.slug, slug: r.slug, name: r.slug, owned: r.quantity, sellable: r.quantity,
@@ -12,6 +13,24 @@ const inventory: SessionCandidate[] = modes.inventory.map(r => ({
 }));
 
 describe('Trade Session', () => {
+  it('spends each component once when complete sets compete with parts', () => {
+    const candidates: SessionCandidate[] = Object.entries(sets.owned).map(([slug, count]) => ({
+      ...inventory[0], key: slug, slug, name: slug, owned: count, sellable: count, bulk: false,
+      market: { ...inventory[0].market, low_sell: sets.part_prices[slug as keyof typeof sets.part_prices], median_now: sets.part_prices[slug as keyof typeof sets.part_prices] },
+    }));
+    const set: SessionCandidate = { ...inventory[0], key: 'example_set', slug: 'example_set', name: 'Example Set', owned: 2, sellable: 2,
+      bulk: false, components: sets.parts, market: { ...inventory[0].market, low_sell: sets.set_price, median_now: sets.set_price } };
+    const plan = selectSession([...candidates, set], 'per-trade', 2);
+    const consumed: Record<string, number> = {};
+    for (const row of plan.rows) for (const [slug, count] of Object.entries(row.components ?? { [row.slug]: 1 })) consumed[slug] = (consumed[slug] ?? 0) + count * row.quantity;
+    for (const [slug, count] of Object.entries(consumed)) expect(count).toBeLessThanOrEqual(sets.owned[slug as keyof typeof sets.owned]);
+    expect(plan.rows[0].slug).toBe('example_set');
+    expect(plan.trades).toBe(2);
+    const setsOnly = selectSession([...candidates, set], 'max', 2);
+    expect(setsOnly.rows.map(row => [row.slug, row.quantity])).toEqual([['example_set', sets.expected_sets]]);
+    expect(selectSession([...candidates, { ...set, bulk: true }], 'max', 2).rows[0].per_trade).toBe(1);
+    expect(selectSession([...candidates, { ...set, components: { barrel: 7 } }], 'max', 2).rows.every(row => !row.components)).toBe(true);
+  });
   it('pins the Rust event name', () => expect(ALLOWANCE_CHANGED_EVENT).toBe(events.allowance_changed));
   for (const row of lots.filter(r => r.per_trade != null)) {
     it(row.name, () => expect(validSessionLot(row.quantity, row.per_trade!, row.bulk_tradable)).toBe(row.valid));

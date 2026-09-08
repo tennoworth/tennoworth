@@ -132,6 +132,34 @@ mod tests {
     }
 
     #[test]
+    fn runtime_probe_contracts_match_current_domain_code() {
+        fn compare(actual: &serde_json::Value, expected: &serde_json::Value) {
+            use serde_json::Value;
+            match (actual, expected) {
+                (Value::Number(a), Value::Number(b)) => {
+                    let (a, b) = (a.as_f64().unwrap(), b.as_f64().unwrap());
+                    assert!((a - b).abs() <= 1e-9 * b.abs().max(1.0), "{a} != {b}");
+                }
+                (Value::Array(a), Value::Array(b)) => {
+                    assert_eq!(a.len(), b.len());
+                    for (a, b) in a.iter().zip(b) { compare(a, b); }
+                }
+                (Value::Object(a), Value::Object(b)) => {
+                    assert_eq!(a.len(), b.len());
+                    for (key, value) in b { compare(a.get(key).unwrap(), value); }
+                }
+                _ => assert_eq!(actual, expected),
+            }
+        }
+        let cases: Vec<serde_json::Value> = serde_json::from_str(include_str!("../../../tests/fixtures/domain-ipc/cases.json")).unwrap();
+        for case in cases {
+            let request: DomainRequest = serde_json::from_value(serde_json::json!({"operation":case["operation"],"input":case["input"]})).unwrap();
+            let response = serde_json::to_value(request.execute().unwrap()).unwrap();
+            compare(&response["result"], &case["expected"]);
+        }
+    }
+
+    #[test]
     fn domain_bindings_match_rust() {
         let mut types = crate::bindings::TypeScript::default();
         types.add::<DomainRequest>();

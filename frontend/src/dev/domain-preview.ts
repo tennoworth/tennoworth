@@ -12,7 +12,7 @@ import { planBuild, cheapestPath } from '../domain/build-cost';
 
 const sessionFields = new Set<string>([
   'key', 'slug', 'name', 'owned', 'sellable', 'leveled', 'subtype', 'type', 'hold', 'bulk', 'supported', 'market',
-  'quantity', 'per_trade', 'platinum', 'trades', 'reason', 'bid',
+  'components', 'component_limits', 'quantity', 'per_trade', 'platinum', 'trades', 'reason', 'bid',
 ] satisfies Array<keyof SessionRow>);
 const filters: FilterState = {
   minPrice: -Infinity, minOwned: 0, typeFilter: 'all', hideAtLvl: Infinity,
@@ -30,8 +30,8 @@ function scorePreview(input: Extract<DomainRequest, { operation: 'score_inventor
   for (const [key, row] of input.owned) {
     // Use the existing reserve calculation to express spares without applying
     // the view's spares filter: the native response includes zero-sellable rows.
-    const reserve = input.spares_only ? row.leveled + ((row.kept_lvl ?? 0) > 0 ? 0 : 1) : input.reserve_copies;
-    const result = computeResults(new Map([[key, row]]), market as unknown as Market, filters, reserve)[0];
+    const reserve = input.spares_only ? Math.max(input.reserve_copies, row.leveled + ((row.kept_lvl ?? 0) > 0 ? 0 : 1)) : input.reserve_copies;
+    const result = computeResults(new Map([[key, row]]), market as unknown as Market, filters, reserve, undefined, input.availability ? new Map(Object.entries(input.availability)) : undefined)[0];
     if (!result) continue;
     const { sellable, clearing_price, sell_score, patience, ducats, plat_per_100d, potential_plat, raw_value,
       medians_7d, median_90d, delta_90d_pct, timing, demand } = result;
@@ -81,8 +81,9 @@ export function evaluateDomainPreview(request: DomainRequest): unknown {
       break;
     }
     case 'ducat_plan': {
-      const { owned, market, target, keepAbove } = request.input;
-      const candidates = scrapCandidates(plannerOwned(owned), market as Market);
+      const { owned, market, target, keepAbove, quantitiesAreAvailable } = request.input;
+      const records = plannerOwned(owned);
+      const candidates = scrapCandidates(records, market as Market, quantitiesAreAvailable ? new Map([...records].map(([key, row]) => [key, row.count])) : undefined);
       result = { candidates, plan: planDucats(candidates, target, keepAbove ?? 15) };
       break;
     }

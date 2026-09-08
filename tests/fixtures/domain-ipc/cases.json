@@ -309,7 +309,10 @@
           "quantity": 3,
           "trades": 3,
           "reason": "Liquid singles; match credible asks.",
-          "bid": null
+          "bid": null,
+          "component_limits": {
+            "liquid": 6
+          }
         },
         {
           "key": "stack",
@@ -336,7 +339,10 @@
           "quantity": 3,
           "trades": 3,
           "reason": "Liquid singles; match credible asks.",
-          "bid": null
+          "bid": null,
+          "component_limits": {
+            "stack": 6
+          }
         },
         {
           "key": "valuable",
@@ -363,7 +369,10 @@
           "quantity": 2,
           "trades": 2,
           "reason": "Liquid singles; match credible asks.",
-          "bid": null
+          "bid": null,
+          "component_limits": {
+            "valuable": 12
+          }
         }
       ],
       "trades": 8,

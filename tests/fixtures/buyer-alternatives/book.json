@@ -1,0 +1,152 @@
+{
+  "query": {
+    "slug": "part",
+    "rank": 0,
+    "subtype": null
+  },
+  "body": {
+    "data": {
+      "buy": [
+        {
+          "id": "a",
+          "type": "buy",
+          "visible": true,
+          "quantity": 2,
+          "platinum": 12,
+          "rank": 0,
+          "perTrade": 1,
+          "user": {
+            "id": "a",
+            "slug": "a",
+            "ingameName": "a",
+            "status": "ingame",
+            "platform": "pc",
+            "crossplay": true
+          }
+        },
+        {
+          "id": "b",
+          "type": "buy",
+          "visible": true,
+          "quantity": 3,
+          "platinum": 10,
+          "rank": 0,
+          "perTrade": 1,
+          "user": {
+            "id": "b",
+            "slug": "b",
+            "ingameName": "b",
+            "status": "ingame",
+            "platform": "pc",
+            "crossplay": true
+          }
+        },
+        {
+          "id": "own",
+          "type": "buy",
+          "visible": true,
+          "quantity": 99,
+          "platinum": 20,
+          "rank": 0,
+          "perTrade": 1,
+          "user": {
+            "id": "own",
+            "slug": "own",
+            "ingameName": "Me",
+            "status": "ingame",
+            "platform": "pc",
+            "crossplay": true
+          }
+        },
+        {
+          "id": "offline",
+          "type": "buy",
+          "visible": true,
+          "quantity": 99,
+          "platinum": 20,
+          "rank": 0,
+          "perTrade": 1,
+          "user": {
+            "id": "offline",
+            "slug": "offline",
+            "ingameName": "offline",
+            "status": "offline",
+            "platform": "pc",
+            "crossplay": true
+          }
+        },
+        {
+          "id": "ranked",
+          "type": "buy",
+          "visible": true,
+          "quantity": 99,
+          "platinum": 20,
+          "rank": 5,
+          "perTrade": 1,
+          "user": {
+            "id": "ranked",
+            "slug": "ranked",
+            "ingameName": "ranked",
+            "status": "ingame",
+            "platform": "pc",
+            "crossplay": true
+          }
+        },
+        {
+          "id": "invalid_lot",
+          "type": "buy",
+          "visible": true,
+          "quantity": 7,
+          "platinum": 24,
+          "rank": 0,
+          "perTrade": 3,
+          "user": {
+            "id": "invalid_lot",
+            "slug": "invalid_lot",
+            "ingameName": "invalid_lot",
+            "status": "ingame",
+            "platform": "pc",
+            "crossplay": true
+          }
+        }
+      ],
+      "sell": []
+    }
+  },
+  "me": "me",
+  "orders": [
+    {
+      "id": "a",
+      "user_id": "a",
+      "name": "a",
+      "user_slug": "a",
+      "status": "ingame",
+      "platform": "pc",
+      "crossplay": true,
+      "quantity": 2,
+      "per_trade": 1,
+      "platinum": 12
+    },
+    {
+      "id": "b",
+      "user_id": "b",
+      "name": "b",
+      "user_slug": "b",
+      "status": "ingame",
+      "platform": "pc",
+      "crossplay": true,
+      "quantity": 3,
+      "per_trade": 1,
+      "platinum": 10
+    }
+  ],
+  "comparison": {
+    "quantity": 8,
+    "ask": 15,
+    "covered": 5,
+    "uncovered": 3,
+    "value": 54,
+    "askValue": 75,
+    "gap": 21
+  }
+}

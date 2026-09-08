@@ -29,6 +29,9 @@ pub struct DucatRequest {
     pub market: Value,
     pub target: f64,
     pub keep_above: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub quantities_are_available: Option<bool>,
 }
 #[derive(Debug, Clone, Serialize, Deserialize, TS)]
 pub struct DucatResult {
@@ -42,7 +45,7 @@ pub fn ducat_plan(r: &DucatRequest) -> DucatResult {
         if !seen.insert(&rec.slug) {
             continue;
         }
-        let spare = (count(&r.owned, &rec.slug) - 1.0).max(0.0);
+        let spare = (count(&r.owned, &rec.slug) - if r.quantities_are_available == Some(true) { 0.0 } else { 1.0 }).max(0.0);
         let ducats = field(entry(&r.market, &rec.slug), "ducats");
         if spare == 0.0 || ducats <= 0.0 {
             continue;

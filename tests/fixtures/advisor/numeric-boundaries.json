@@ -534,7 +534,8 @@
             "quantity": 1,
             "trades": 1,
             "reason": "Liquid singles; match credible asks.",
-            "bid": null
+            "component_limits": {"item": 1},
+          "bid": null
           }
         ],
         "trades": 1,

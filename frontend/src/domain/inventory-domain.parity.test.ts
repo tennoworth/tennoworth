@@ -14,12 +14,12 @@ describe('inventory domain shared fixtures', () => {
   });
   for (const row of scoring.cases) it(row.name, () => {
     const request = row.request;
-    const results = computeResults(new Map(request.owned as Array<[string, OwnedRecord]>), request.market as unknown as Market, { ...filters, sparesOnly: request.spares_only }, request.reserve_copies);
+    const results = computeResults(new Map(request.owned as Array<[string, OwnedRecord]>), request.market as unknown as Market, { ...filters, sparesOnly: request.spares_only }, request.reserve_copies, undefined, 'availability' in request ? new Map(Object.entries(request.availability ?? {})) : undefined);
     expect(results.map(result => Object.fromEntries(Object.keys(row.expected[0] ?? {}).map(field => [field, result[field as keyof typeof result]])))).toEqual(row.expected);
   });
 });
 
 it('never scores a missing native fact through the preview implementation', () => {
   const row = scoring.cases[0];
-  expect(computeResults(new Map(row.request.owned as Array<[string, OwnedRecord]>), row.request.market as unknown as Market, filters, 0, undefined, new Map())).toEqual([]);
+  expect(computeResults(new Map(row.request.owned as Array<[string, OwnedRecord]>), row.request.market as unknown as Market, filters, 0, undefined, undefined, new Map())).toEqual([]);
 });

@@ -15,7 +15,7 @@ export async function normalizeInventoryNative(data: Inventory, catalogs: Catalo
   return { owned: new Map(result.owned), unresolved: result.unresolved, flatCount: result.flat_count };
 }
 
-export async function scoreInventoryNative(owned: Map<string, OwnedRecord>, market: Market, reserveCopies: number, sparesOnly: boolean) {
+export async function scoreInventoryNative(owned: Map<string, OwnedRecord>, market: Market, reserveCopies: number, sparesOnly: boolean, availability?: ReadonlyMap<string, number>) {
   const items: Record<string, ScoringMarketEntry> = {};
   for (const rec of owned.values()) {
     const m = market.items[rec.slug];
@@ -33,6 +33,7 @@ export async function scoreInventoryNative(owned: Map<string, OwnedRecord>, mark
     market: { items, usage: market.usage ?? {}, set_to_parts: Object.fromEntries(Object.entries(market.set_to_parts ?? {}).map(([slug, entry]) => [slug, { parts: Array.isArray(entry?.parts) ? entry.parts : [] }])) },
     reserve_copies: reserveCopies,
     spares_only: sparesOnly,
+    availability: availability ? Object.fromEntries(availability) : undefined,
   });
   return new Map(rows.map(row => [row.key, row]));
 }
