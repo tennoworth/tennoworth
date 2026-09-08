@@ -41,6 +41,35 @@ building either platform. Historical entries are intentionally not backfilled.
 Releases up to and including 0.3.8 predate this file, and their notes live on
 the GitHub releases themselves.
 
+## 0.7.1 - 2026-09-08
+
+# 🎨 TennoWorth Desktop 0.7.1
+
+TennoWorth Desktop 0.7.1 is ready.
+
+This update makes Settings and the trading dashboard easier to scan, with consistent spacing, clearer labels, and more room for item names and actions. It also fixes the enlarged, blurred background pattern seen in WebKit.
+
+## Changelog (6)
+
+### Interface
+
+- Align Settings and notification preferences in one column, with separate detection, reward-card, and diagnostics groups.
+- Use consistent page headings, section spacing, and labelled controls across the trading and management views.
+- Label Top picks facts and give item names, riven comparisons, and table actions enough room to remain readable.
+- Separate watch creation from monitoring and ledger totals from listing automation and trade history.
+
+### Fixes
+
+- Keep the background grid and diagonal hatching sharp and evenly spaced on WebKit surfaces.
+
+### Market data
+
+- Refresh the bundled market snapshot and item catalog used when a live refresh is unavailable.
+
+## Updating
+
+TennoWorth checks for updates automatically. Downloads are available below.
+
 ## 0.7.0 - 2026-09-08
 
 # 🎯 TennoWorth Desktop 0.7.0

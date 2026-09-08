@@ -3046,7 +3046,7 @@
   .clock { border: 0; border-right: 1px var(--rule) var(--border); padding: var(--s4) var(--inset); background: var(--panel); gap: var(--s1); }
   .clock:last-child { border-right: 0; }
   .routine-checklist { padding: 0; }
-  .routine-checklist > summary { padding: var(--s3) var(--inset); min-height: var(--bar); background: var(--ink-bar); color: var(--on-ink); }
+  .routine-checklist > summary { align-self: stretch; padding: var(--s3) var(--inset); min-height: var(--bar); background: var(--ink-bar); color: var(--on-ink); }
   .routine-checklist > summary:hover { color: var(--on-ink); }
   .routine-checklist > summary:focus-visible { outline-color: var(--on-ink); outline-offset: -3px; }
   .routine-checklist .routine { border: 0; border-top: 1px var(--rule) var(--border); padding: var(--s4) var(--inset); }
