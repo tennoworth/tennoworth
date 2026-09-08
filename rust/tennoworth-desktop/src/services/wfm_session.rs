@@ -45,7 +45,7 @@ use zeroize::{Zeroize, Zeroizing};
 ///   - `wfm` / `internal` - everything else, message shown verbatim.
 ///
 /// Never carries the JWT, the passphrase, or the WFM password.
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, ts_rs::TS)]
 pub struct CmdError {
     pub code: &'static str,
     pub message: String,

@@ -10,3 +10,9 @@ pub mod report;
 pub mod settings;
 pub mod trades;
 pub mod watch;
+
+#[cfg(test)]
+mod bindings;
+
+#[cfg(test)]
+mod binding_types;

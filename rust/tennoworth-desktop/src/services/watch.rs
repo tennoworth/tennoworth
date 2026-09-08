@@ -35,7 +35,7 @@ pub const MAX_WATCHES: usize = 100;
 pub const EVENT_WATCH_FIRED: &str = "watch-fired";
 
 /// One evaluated watch.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, ts_rs::TS)]
 pub struct WatchOutcome {
     pub id: i64,
     pub slug: String,

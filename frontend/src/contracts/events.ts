@@ -7,7 +7,7 @@ export const LIVE_TOP_PROGRESS_EVENT = 'live-top-progress';
 
 
 /** Rust emits this (a WatchOutcome) when a background pass notifies. */
-export const WATCH_FIRED_EVENT = 'watch-fired';
+export { WATCH_FIRED_EVENT } from './generated/desktop';
 
 
 

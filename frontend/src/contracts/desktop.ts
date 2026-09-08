@@ -20,10 +20,8 @@ export interface MarketRefreshResult {
  * The operations the app performs against wfm-core. The desktop shell provides these capabilities through Tauri IPC.
  */
 /** Result of the scan-broke report: the URL, and whether a browser opened. */
-export interface ScanReport {
-  url: string;
-  opened: boolean;
-}
+export type { ScanReport } from './generated/desktop';
+import type { ScanReport } from './generated/desktop';
 
 export interface MarketCapability {
   loadCachedMarket(): Promise<Market | null>;
@@ -161,16 +159,7 @@ export interface NewWatch {
   threshold: number;
 }
 
-export interface WatchOutcome {
-  id: number;
-  slug: string;
-  name: string;
-  side: 'sell' | 'buy';
-  threshold: number;
-  price: number | null;
-  satisfied: boolean;
-  fire: boolean;
-}
+export type { WatchOutcome } from './generated/desktop';
 
 // ---- Trade ledger (desktop only; EE.log detection) ----
 

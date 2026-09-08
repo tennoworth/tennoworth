@@ -1,4 +1,6 @@
-export class DesktopCmdError extends Error {
+import type { CmdError } from './generated/desktop';
+
+export class DesktopCmdError extends Error implements CmdError {
   code: string;
   constructor(code: string, message: string) {
     super(message);
