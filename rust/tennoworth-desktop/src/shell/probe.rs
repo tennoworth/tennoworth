@@ -330,8 +330,24 @@ const PROBE_JS: &str = r#"(function(){
     })
     .catch(function(e){ try { R.fatal='ERR:'+(e && e.message || e); localStorage.setItem('__tennoworth_probe_report__', JSON.stringify(R)); invk('probe_report', { payload: JSON.stringify(R) }); } catch(_){} });
   }
-  if (document.readyState === 'complete') setTimeout(run, 900);
-  else window.addEventListener('load', function(){ setTimeout(run, 900); });
+  // Document load can precede asynchronous shell imports and store hydration.
+  // Observe the mounted surface rather than recording a fixed-delay snapshot.
+  function startWhenMounted(){
+    var deadline = Date.now() + 15000;
+    function check(){
+      var app = document.querySelector('#app');
+      if (app && app.childElementCount > 0) { run(); return; }
+      if (Date.now() >= deadline) {
+        R.fatal = 'ERR:SPA did not mount within 15000ms';
+        invk('probe_report', { payload: JSON.stringify(R) }).then(function(){ return invk('probe_exit'); });
+        return;
+      }
+      setTimeout(check, 50);
+    }
+    check();
+  }
+  if (document.readyState === 'complete') startWhenMounted();
+  else window.addEventListener('load', startWhenMounted);
 })();"#;
 
 /// Substitute the run tag and JSON-escaped fixture into [`PROBE_JS`], ready to
