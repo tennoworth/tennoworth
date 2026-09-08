@@ -264,18 +264,6 @@
   // the floor the panel scrolls sideways rather than squeezing Item - and the
   // floor is derived per view, so a preset only ever pays for the columns it
   // actually renders.
-  //
-  // "Played" is the sixteenth column, and the fifteen before it had already
-  // spent the 1440 budget: 63.5rem of fixed columns left Item ~208px and the
-  // table fit a 1224px content area exactly. At 71rem it no longer fits, so
-  // the no-preset view scrolls sideways at 1440 and Item sits on its floor at
-  // 136px. That is the trade this design already declares - scroll, don't
-  // squeeze the item name - but it is a REAL change for that view, and that
-  // view only: every preset renders a subset and its floor shrinks with it.
-  //
-  // ResultsTable.test.ts holds the widths, the floor and each preset together
-  // so the next column has to move the budget deliberately rather than
-  // silently eating the item name or taxing views that never show it.
   const ALL_COLUMNS: ColumnDef[] = [
     { key: 'name',           label: 'Item',     align: 'left',  width: 0 },
     { key: 'owned',          label: 'Own',      align: 'right', width: 6 },
@@ -321,27 +309,11 @@
   /** Width the Item column keeps once every other visible column is paid for.
    *  Item is the one column a trader cannot do without, so it gets a floor
    *  rather than the leftovers. */
-  const ITEM_FLOOR_REM = 8.5;
+  const ITEM_FLOOR_REM = 20;
 
-  // The table's horizontal floor, derived from the columns ACTUALLY on screen.
-  //
-  // This used to be a flat `min-width` in the stylesheet, which meant a
-  // six-column preset carried the sixteen-column view's floor and scrolled
-  // sideways for columns it does not render - the exact thing the "presets
-  // with few columns don't need the full-width floor" comment said was not
-  // happening. Both tables take the same value, from the same `columns` that
-  // feeds the shared colgroup, so the picks table stays aligned over the rows
-  // beneath it at every width.
   let floorRem = $derived(
     columns.reduce((sum, c) => sum + (c.width ?? 0), 0) + ITEM_FLOOR_REM,
   );
-
-  // Pick rows fill the leading numeric columns and give the rest of the row to
-  // the reason line - at least three columns so the sentence has room, eight
-  // on the full 16-column set (Own · Δ · Score · Avg · Low sell · Top buy ·
-  // Trend stay comparable with the table below).
-  let reasonSpan = $derived(Math.max(3, columns.length - 8));
-  let pickCols = $derived(columns.slice(1, Math.max(1, columns.length - reasonSpan)));
 
   // A preset can carry a default sort (the Ducats preset ranks by plat-per-100-
   // ducats ascending - best ducat trades first). presetSort changes identity
@@ -575,9 +547,6 @@
 {/snippet}
 
 {#if picks}
-  <!-- Top picks: carved panel; its rows run through the same colgroup as the
-       results table below (fixed layout, same widths) so Own · Δ · Score …
-       sit over the columns they compare with. -->
   <section class="wrap picks" aria-label="Top picks">
     <div class="rail picks-head">
       {@render picksHead?.()}
@@ -592,8 +561,9 @@
     {#if picksOpen}
       {#if picks.length > 0}
         <div class="scroll">
-        <table class:comfortable={density === 'comfortable'} class="picks-table" style="min-width:{floorRem}rem">
-          {@render colgroup()}
+        <table class:comfortable={density === 'comfortable'} class="picks-table">
+          <colgroup><col style="width:20rem" /><col style="width:7rem" /><col style="width:8rem" /><col /></colgroup>
+          <thead><tr><th class="left">Item</th><th class="right">Low sell</th><th class="right">Vol 48h</th><th class="left">Why list now</th></tr></thead>
           <tbody>
             {#each picks as p, i (p.key ?? p.slug)}
               <tr class="pick">
@@ -601,10 +571,9 @@
                   <span class="pick-rank">{i + 1}</span>
                   {@render cell(p, columns[0], rowDelta(p))}
                 </td>
-                {#each pickCols as col (col.key)}
-                  <td class="{col.align} col-{col.key}">{@render cell(p, col, rowDelta(p))}</td>
-                {/each}
-                <td class="left reason" colspan={reasonSpan}>{@render pickReason?.(p)}</td>
+                <td class="right">{fmt(p.low_sell, 'low_sell')}</td>
+                <td class="right">{fmt(p.volume_48h, 'volume_48h')}</td>
+                <td class="left reason">{@render pickReason?.(p)}</td>
               </tr>
             {/each}
           </tbody>
@@ -627,8 +596,9 @@
     </div>
   {/if}
   <div class="bar narrow-row">
-    <span class="lbl">Narrow</span>
+    <label class="lbl" for="inventory-name-filter">Item</label>
     <input
+      id="inventory-name-filter"
       type="text"
       class="name-filter"
       placeholder="Filter by name… ( / )"
@@ -652,13 +622,15 @@
         {/if}
       {/each}
     </div>
-    <span class="grow"></span>
+  </div>
+  <div class="bar result-actions">
     <div class="count" title="Sorted by {columns.find((c) => c.key === sortKey)?.label}, {sortDir === -1 ? 'descending' : 'ascending'}">
       <b>{sorted.length.toLocaleString()}</b> {sorted.length === 1 ? 'row' : 'rows'} ·
       <b>{columns.find((c) => c.key === sortKey)?.label}</b>
       {sortDir === -1 ? '↓' : '↑'}
       {#if sorted.length > pageSize}· {(pageStart + 1).toLocaleString()}–{pageEnd.toLocaleString()}{/if}
     </div>
+    <span class="grow"></span>
     {@render cta?.()}
   </div>
 
@@ -791,8 +763,8 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-panel);
   }
-  /* The picks table shares the results table's min-width so its columns stay
-     over the ones below at every width (both scroll from x=0 when narrow). */
+  .picks-table { min-width: 64rem; }
+  .picks-table th, .picks-table td { padding-block: var(--s3); }
   .wrap.picks { margin-bottom: var(--stack); overflow: hidden; }
   /* Horizontal scroll lives on the table's own scroller, not the panel, so
      the control rows' popovers (Filters, badge chips) can escape the panel.
@@ -1282,4 +1254,5 @@
   }
   .advice-chip.advice-sell_now { color: var(--good); }
   .advice-chip.advice-hold { color: var(--warn); }
+  .scope-row, .narrow-row, .result-actions { padding-block: var(--s3); gap: var(--s3); }
 </style>

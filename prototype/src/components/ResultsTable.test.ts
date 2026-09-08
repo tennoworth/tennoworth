@@ -22,7 +22,7 @@ import { PRESETS } from '../lib/presets';
  * the component never exposes at runtime. `?raw` is how theme.test.ts already
  * asserts against a file it cannot import for its values.
  */
-const ITEM_FLOOR_REM = 8.5;
+const ITEM_FLOOR_REM = 20;
 
 function columnBlock(): string {
   const block = SOURCE.slice(SOURCE.indexOf('const ALL_COLUMNS'));
@@ -69,11 +69,6 @@ describe('the table floor', () => {
     expect(tableRule).not.toMatch(/min-width/);
     expect(SOURCE).toMatch(/let floorRem = \$derived\(/);
     expect(SOURCE).toContain(`const ITEM_FLOOR_REM = ${ITEM_FLOOR_REM};`);
-  });
-
-  it('is carried by both tables, so the picks stay aligned over the rows', () => {
-    const inline = [...SOURCE.matchAll(/<table[^>]*style="min-width:\{floorRem\}rem"/g)];
-    expect(inline).toHaveLength(2);
   });
 
   it('leaves Item its floor on the full sixteen-column view', () => {

@@ -24,6 +24,7 @@
 </script>
 
 <div class="ladder">
+  <p class="legend">Expected platinum per solo crack</p>
   <div class="rungs">
     {#each decision.ladder as rung (rung.refinement)}
       <div
@@ -62,7 +63,8 @@
   .ladder {
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
+    gap: var(--s2);
+    max-width: 36rem;
   }
   .rungs {
     display: flex;
@@ -90,7 +92,7 @@
     background: var(--good);
   }
   .ev {
-    font-size: 0.68rem;
+    font-size: var(--text-caption);
     font-variant-numeric: tabular-nums;
     color: var(--muted);
     line-height: 1.2;
@@ -99,20 +101,21 @@
     color: var(--fg);
   }
   .lbl {
-    font-size: 0.62rem;
+    font-size: var(--text-caption);
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--faint);
+    color: var(--muted);
   }
   .verdict {
     margin: 0;
-    font-size: 0.8rem;
+    font-size: var(--text-control);
     color: var(--muted);
   }
   .verdict strong {
     color: var(--fg);
   }
   .solo {
-    color: var(--faint);
+    color: var(--muted);
   }
+  .legend { margin: var(--s3) 0 0; font: 600 var(--text-caption)/var(--leading-body) var(--font-ui); color: var(--muted); letter-spacing: .1em; text-transform: uppercase; }
 </style>
