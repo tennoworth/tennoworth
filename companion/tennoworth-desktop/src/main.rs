@@ -26,6 +26,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+mod browser;
 mod allowance;
 mod db;
 mod definitions;

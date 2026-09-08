@@ -6,12 +6,12 @@
 //! actually produced), because the report that never gets filed is the one that
 //! needs three facts the reporter has to go dig up.
 //!
-//! Opened through tauri-plugin-opener rather than an `<a target="_blank">`:
-//! this app registers no window-open handler and its capability grants no
-//! opener ACL by default, so such a link silently does nothing. A report button
-//! that quietly no-ops is worse than no button.
-
-use tauri_plugin_opener::OpenerExt;
+//! Opened through the native browser launcher rather than webview navigation,
+//! which has no browser window to target in the desktop shell.
+#![allow(
+    clippy::unreachable,
+    reason = "tauri::command injects unreachable code into async wrappers"
+)]
 
 const ISSUE_BASE: &str = "https://github.com/tennoworth/tennoworth/issues/new";
 
@@ -84,13 +84,13 @@ pub struct ScanReport {
 
 /// Open the prefilled report in the user's browser.
 #[tauri::command]
-pub fn report_scan_issue(app: tauri::AppHandle, error: Option<String>) -> ScanReport {
+pub async fn report_scan_issue(app: tauri::AppHandle, error: Option<String>) -> ScanReport {
     let url = issue_url(
         env!("CARGO_PKG_VERSION"),
         std::env::consts::OS,
         error.as_deref(),
     );
-    let opened = match app.opener().open_url(url.clone(), None::<&str>) {
+    let opened = match crate::browser::open(app, url.clone()).await {
         Ok(()) => true,
         Err(e) => {
             eprintln!("tennoworth: could not open the report URL: {e}");
@@ -117,11 +117,11 @@ fn allowed_external_url(raw: &str) -> bool {
 /// not give `<a target="_blank">` a window by default, so leaving navigation
 /// to the webview makes a normal item click silently do nothing.
 #[tauri::command]
-pub fn open_external_url(app: tauri::AppHandle, url: String) -> Result<bool, String> {
+pub async fn open_external_url(app: tauri::AppHandle, url: String) -> Result<bool, String> {
     if !allowed_external_url(&url) {
         return Err("external URL is not on TennoWorth's allowlist".into());
     }
-    match app.opener().open_url(url, None::<&str>) {
+    match crate::browser::open(app, url).await {
         Ok(()) => Ok(true),
         Err(e) => {
             eprintln!("tennoworth: could not open external URL: {e}");

@@ -41,6 +41,24 @@ building either platform. Historical entries are intentionally not backfilled.
 Releases up to and including 0.3.8 predate this file, and their notes live on
 the GitHub releases themselves.
 
+## 0.7.101 - 2026-09-08
+
+# 🐧 TennoWorth Desktop 0.7.101
+
+TennoWorth Desktop 0.7.101 is a small Linux hotfix.
+
+Feedback forms and other external links now open your browser from the AppImage on systems affected by bundled library conflicts.
+
+## Changelog (1)
+
+### Linux
+
+- Fix external links silently failing to open from the AppImage, including Report a bug, Suggest an improvement, and warframe.market item links. Browser launchers now use host library paths instead of the AppImage's bundled libraries.
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.7.1 - 2026-09-08
 
 # 🎨 TennoWorth Desktop 0.7.1
