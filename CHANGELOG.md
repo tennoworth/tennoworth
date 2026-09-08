@@ -41,6 +41,28 @@ building either platform. Historical entries are intentionally not backfilled.
 Releases up to and including 0.3.8 predate this file, and their notes live on
 the GitHub releases themselves.
 
+## 0.7.103 - 2026-09-08
+
+# 🔧 TennoWorth Desktop 0.7.103
+
+TennoWorth Desktop 0.7.103 fixes inventory scanning and update downloads.
+
+Scan your inventory without game metadata blocking the result, and update directly from older supported versions without a cached download disappearing after another release.
+
+## Changelog (2)
+
+### Inventory
+
+- Fix scans failing with “The calculation contains an out-of-range number” when unused game metadata contains large numeric seeds.
+
+### Updates
+
+- Keep update downloads tied to immutable releases and preserve legacy cached installer links.
+
+## Updating
+
+TennoWorth checks for updates automatically. Downloads are available below.
+
 ## 0.7.102 - 2026-09-08
 
 # 💱 TennoWorth Desktop 0.7.102

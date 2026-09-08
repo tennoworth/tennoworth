@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { Buffer } from "node:buffer";
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -255,4 +255,32 @@ test("snapshot CLI resolves its checkout from paths containing spaces and URL ch
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+
+test("cached update offers keep immutable downloads across releases", () => {
+  const workflow = readFileSync(new URL("../.github/workflows/release-desktop.yml", import.meta.url), "utf8");
+  const step = workflow.split("      - name: Assemble latest.json\n")[1];
+  const script = step.split("          python3 - <<'PY'\n")[1].split("\n          PY")[0]
+    .split("\n").map(line => line.slice(10)).join("\n");
+  const root = mkdtempSync(join(tmpdir(), "tennoworth updater-"));
+  try {
+    mkdirSync(join(root, "dist"));
+    const manifests = ["0.7.102", "0.7.103"].map(version => {
+      writeFileSync(join(root, "dist", `TennoWorth_${version}_x64-setup.exe.sig`), "windows-signature");
+      writeFileSync(join(root, "dist", "TennoWorth-x86_64.AppImage.sig"), "linux-signature");
+      execFileSync(process.platform === "win32" ? "python" : "python3", ["-c", script], {
+        cwd: root, env: { ...process.env, VERSION: version, GH_REPO: "example/market" }, stdio: "pipe",
+      });
+      return JSON.parse(readFileSync(join(root, "manifest", "latest.json"), "utf8"));
+    });
+    for (const manifest of manifests) {
+      expect(Object.keys(manifest.platforms).sort()).toEqual(["linux-x86_64", "windows-x86_64", "windows-x86_64-nsis"]);
+      const base = `https://github.com/example/market/releases/download/desktop-v${manifest.version}`;
+      expect(manifest.platforms["windows-x86_64"]).toEqual({ signature: "windows-signature", url: `${base}/TennoWorth_${manifest.version}_x64-setup.exe` });
+      expect(manifest.platforms["windows-x86_64-nsis"]).toEqual(manifest.platforms["windows-x86_64"]);
+      expect(manifest.platforms["linux-x86_64"]).toEqual({ signature: "linux-signature", url: `${base}/TennoWorth-x86_64.AppImage` });
+    }
+    expect(manifests[0].platforms["linux-x86_64"].url).not.toBe(manifests[1].platforms["linux-x86_64"].url);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
