@@ -3,7 +3,7 @@ Description=Check for a new wfm-scrape binary every 30 minutes
 
 [Timer]
 OnBootSec=2min
-# Binary changes are rarer than web bundles (only on companion/ pushes), so
+# Binary changes are rarer than web bundles (only on rust/ pushes), so
 # poll half as often as wfm-web-pull.timer.
 OnUnitActiveSec=30min
 RandomizedDelaySec=60

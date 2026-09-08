@@ -1,10 +1,10 @@
 // Single source of truth for the Content-Security-Policy.
 //
-// The HOSTED CSP ships in THREE places that must agree - prototype/index.html
+// The HOSTED CSP ships in THREE places that must agree - frontend/index.html
 // (meta tag, works even on hosts that drop header files),
-// prototype/public/_headers (Cloudflare Pages / Netlify), and deploy/Caddyfile
+// frontend/public/_headers (Cloudflare Pages / Netlify), and deploy/Caddyfile
 // (self-host) - and they were hand-synced, with a standing doc warning instead
-// of tooling. Edit the DIRECTIVES below, run `bun run csp` (from prototype/) to
+// of tooling. Edit the DIRECTIVES below, run `bun run csp` (from frontend/) to
 // rewrite all three; CI runs `--check` before every build and fails if any copy
 // drifted.
 //
@@ -88,7 +88,7 @@ if (desktopIdx !== -1) {
 
 const TARGETS = [
   {
-    path: 'prototype/public/_headers',
+    path: 'frontend/public/_headers',
     re: /^(\s*Content-Security-Policy: ).*$/m,
     replacement: `$1${full}`,
   },
@@ -98,7 +98,7 @@ const TARGETS = [
     replacement: `$1${full}$2`,
   },
   {
-    path: 'prototype/index.html',
+    path: 'frontend/index.html',
     re: META_RE,
     replacement: metaReplacement(metaDirectives),
   },
@@ -127,7 +127,7 @@ for (const t of TARGETS) {
 }
 
 if (check && drifted > 0) {
-  console.error('sync-csp: run `bun run csp` (in prototype/) and commit the result.');
+  console.error('sync-csp: run `bun run csp` (in frontend/) and commit the result.');
   process.exit(1);
 }
 if (drifted === 0) console.log('sync-csp: all three copies in sync');

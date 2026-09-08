@@ -9,10 +9,10 @@
 # Binds to loopback only - the tunnel reaches it; nothing else can.
 
 :8081 {
-	root * /srv/wfm/app/prototype/dist
+	root * /srv/wfm/app/frontend/dist
 	encode gzip zstd
 
-	# Security headers - from prototype/public/_headers, with ONE deliberate change:
+	# Security headers - from frontend/public/_headers, with ONE deliberate change:
 	# HSTS here is `max-age` only. The canonical set adds `includeSubDomains; preload`,
 	# which is an APEX-WIDE, hard-to-undo commitment (it forces HTTPS on every sibling
 	# subdomain for a year, and `preload` gets baked into browsers). That's wrong for a
@@ -42,7 +42,7 @@
 	# history.json (relics.run-derived, box-only state) is live data too.
 	@livedata path /market.json /wfstat-catalog.json /definitions.json /history.json
 	handle @livedata {
-		root * /srv/wfm/app/prototype/public
+		root * /srv/wfm/app/frontend/public
 		header Cache-Control "public, max-age=300, must-revalidate"
 		file_server
 	}

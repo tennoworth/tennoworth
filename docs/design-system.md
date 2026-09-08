@@ -46,8 +46,8 @@ Warframe. Reduce decision time, not increase time spent managing the app.
 
 ## Tokens and typography
 
-[app.css](../prototype/src/app.css) is the source of runtime token values and
-theme overrides. [theme.ts](../prototype/src/lib/theme.ts) owns theme selection.
+[app.css](../frontend/src/app.css) is the source of runtime token values and
+theme overrides. [theme.ts](../frontend/src/ui/theme.ts) owns theme selection.
 Do not maintain another palette or duplicate numeric token values in examples.
 The active look is `yorha`; the resolved modes are `light` and `dark`.
 
@@ -103,6 +103,11 @@ do not globally restyle similarly named legacy component classes by accident.
 Use `table.tw.fixed` when declaring fixed column proportions; setting only
 `table-layout: fixed` leaves the automatic item-column sizing rule active and
 can collapse numeric columns. Verify every column, not just document overflow.
+
+The hosted and desktop shells share `src/shells/shell.css`. Its `data-shell`
+attribute limits those rules to shell-owned markup, preserving component style
+isolation after extracting the shells and shared FAQ. Feature components do not
+add this attribute. The reward surface does not consume those selectors.
 
 Shared panel and banner rules replace formerly component-scoped copies in the
 shell, Watches, Ledger, and update notices. Task pages share view headers, with descriptions below the heading and actions grouped beside it.
@@ -247,7 +252,7 @@ direction changes require explicit approval, not an incidental component edit.
 ## Living reference and verification
 
 Open `/?styleguide` on the development server for the living reference in
-[Styleguide.svelte](../prototype/src/components/Styleguide.svelte). It consumes
+[Styleguide.svelte](../frontend/src/dev/Styleguide.svelte). It consumes
 production tokens and shared patterns, not copied mock CSS, and is excluded
 from production builds. It shows both themes, interaction and failure states,
 long content, a locally scrolling table, and an editable native dialog. Theme
@@ -255,8 +260,8 @@ choices and sample edits do not persist or invoke account operations. It is an
 reference for the approved visual direction, not a separate design system.
 
 For UI changes, use the existing responsive suite in
-[prototype/tests](../prototype/tests) and the checks described in
-[Development](../README.md#development). Extend coverage for new behavior rather
+[frontend/tests](../frontend/tests) and the checks described in
+[contributor checks](../CONTRIBUTING.md#frontend-checks). Extend coverage for new behavior rather
 than considering existing green tests sufficient.
 
 Review affected screens at narrow, intermediate, and wide widths, including
@@ -276,8 +281,8 @@ differences to make a gate green.
 
 `design-system.spec.ts` exercises the desktop views in both themes, shared
 control targets, column widths, keyboard theme selection and listing review, and
-the isolated browser reward surface. `design-system.test.ts` scans App and all
-component style blocks (including nested component directories) for literal
+the isolated browser reward surface. `design-system.test.ts` scans all
+shell, feature, shared UI, and development component style blocks for literal
 colors, pixel-based text sizes, and nonzero pixel radii. Inline styles and
 arbitrary semantic misuse are not covered by that source check. These checks
 run through the existing test/browser CI jobs; no optional manual command is

@@ -5,7 +5,7 @@
 set -eu
 
 APP=/srv/wfm/app
-DIST="$APP/prototype/dist"
+DIST="$APP/frontend/dist"
 STATE=/srv/wfm/web-latest.stamp
 API=https://api.github.com/repos/tennoworth/tennoworth/releases/tags/web-latest
 TARBALL=https://github.com/tennoworth/tennoworth/releases/download/web-latest/dist.tgz

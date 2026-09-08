@@ -26,12 +26,12 @@ project version pins.
   `[System.IO.DriveInfo]::new('C').AvailableFreeSpace` to check disk space;
   `Get-PSDrive` reported an incorrect zero in the SSH session.
 - Download `eng.traineddata` from the URL and verify the SHA-256 recorded in
-  the Windows workflow before building. Build `prototype/dist-desktop`
+  the Windows workflow before building. Build `frontend/dist-desktop`
   before running plain Cargo builds.
 - For the unsigned isolated installer, set
   `$env:TENNOWORTH_OCR_TEST_BUILD = '1'` and run
   `cargo tauri build --config tauri.ocr-test.conf.json --bundles nsis` from
-  `companion/tennoworth-desktop`. This flag disables ordinary updater support.
+  `rust/tennoworth-desktop`. This flag disables ordinary updater support.
 
 The transferred reward-regression snapshot passed 121 desktop Rust tests,
 four overlay component tests, Svelte checking, and the release build on
@@ -40,6 +40,16 @@ Windows. Its real three-reward OCR regression passed native 1440p, scaled
 live capture, trigger timing, or overlay presentation.
 
 ## Probe and log-access lessons
+
+The full `TENNOWORTH_PROBE` run modifies notification preferences and imports
+fictional inventory into application storage. A new `WEBVIEW2_USER_DATA_FOLDER`
+isolates browser data, but does not isolate the native SQLite database. Repeated
+runs under the same app identity can therefore fail the notification-defaults
+check because a previous probe saved different preferences. For a fresh-default
+run, build with `cargo tauri build --debug --no-bundle --config <probe-config>`
+and give that temporary JSON configuration a unique per-run `identifier`.
+Preserve existing application data; do not clear a gaming profile to reset a
+probe. Check the final report and clean process exit, not just a checkpoint.
 
 The original installed OCR boot probe wrote
 `OCR_BOOT_PROBE_OK backend=windows-window`, but did not exit within 120 seconds

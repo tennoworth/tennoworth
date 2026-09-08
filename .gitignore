@@ -3,7 +3,7 @@ node_modules/
 target/
 **/target/
 dist/
-prototype/test-results/
+frontend/test-results/
 .playwright-mcp/
 *.tmp
 rust_out
@@ -11,7 +11,7 @@ rust_out
 # Personal data - real companion output, never a fixture. Debug scripts
 # default to these filenames; never commit the real thing.
 # NOT anchored with a leading slash: the CLI writes inventory.json to its own
-# working directory, so a `companion/inventory.json` slipped past the old
+# working directory, so a `rust/inventory.json` slipped past the old
 # /inventory.json rule and sat untracked-but-committable.
 inventory.json
 wfm_inventory_sellable.csv
@@ -29,7 +29,7 @@ wfm_inventory_sellable.csv
 /docs/mockups/
 /.research/
 /.planning/
-/companion/tennoworth-desktop/resources/tessdata/eng.traineddata
+/rust/tennoworth-desktop/resources/tessdata/eng.traineddata
 /.loop-journal.md
 /docs/onboarding-friction.md
 /docs/rust-port-phase3.md
@@ -39,8 +39,8 @@ wfm_inventory_sellable.csv
 /opencode.json
 /vibeguard.config.json
 /AGENTS.md
-/companion/AGENTS.md
-/prototype/AGENTS.md
+/rust/AGENTS.md
+/frontend/AGENTS.md
 /scripts/AGENTS.md
 
 # Maintainer-only. The GitHub repo is the PUBLIC surface: source, user docs,
@@ -74,7 +74,7 @@ wfm_inventory_sellable.csv
 /wfm_results.csv.partial
 # Long price history (relics.run-derived). Box-only state, ~7 MB, rewritten
 # daily; served live by Caddy, never committed. See wfm-scrape/src/history.rs.
-/prototype/public/history.json
+/frontend/public/history.json
 
 # Private key exports and revocation certificates never belong in the
 # repository, regardless of what they protect.

@@ -5,9 +5,9 @@ on:
   pull_request:
     paths:
       - '.github/workflows/ocr-windows-test.yml'
-      - 'companion/tennoworth-desktop/**'
-      - 'companion/Cargo.*'
-      - 'prototype/**'
+      - 'rust/tennoworth-desktop/**'
+      - 'rust/Cargo.*'
+      - 'frontend/**'
 
 permissions:
   contents: read
@@ -36,14 +36,14 @@ jobs:
         run: |
           set -euo pipefail
           vcpkg install tesseract:x64-windows-static-md
-          mkdir -p companion/tennoworth-desktop/resources/tessdata
+          mkdir -p rust/tennoworth-desktop/resources/tessdata
           curl --fail --location --retry 3 \
             https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/eng.traineddata \
-            --output companion/tennoworth-desktop/resources/tessdata/eng.traineddata
-          echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  companion/tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
+            --output rust/tennoworth-desktop/resources/tessdata/eng.traineddata
+          echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  rust/tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
 
       - name: Install frontend dependencies
-        working-directory: prototype
+        working-directory: frontend
         run: bun install --frozen-lockfile
 
       - name: Build unsigned isolated NSIS installer
@@ -51,13 +51,13 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          projectPath: companion/tennoworth-desktop
+          projectPath: rust/tennoworth-desktop
           args: --config tauri.ocr-test.conf.json --bundles nsis
 
       - name: Install silently and run installed OCR boot probe
         shell: pwsh
         run: |
-          $installer = Get-ChildItem companion/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          $installer = Get-ChildItem rust/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
           if (-not $installer) { throw 'NSIS installer was not produced' }
           $installDir = Join-Path $env:RUNNER_TEMP 'TennoWorthOcrTest'
           $process = Start-Process -FilePath $installer.FullName -ArgumentList '/S', "/D=$installDir" -Wait -PassThru
@@ -84,7 +84,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: tennoworth-ocr-test-windows
-          path: companion/target/release/bundle/nsis/*-setup.exe
+          path: rust/target/release/bundle/nsis/*-setup.exe
           if-no-files-found: error
           retention-days: 7
 
@@ -109,14 +109,14 @@ jobs:
       - name: Stage pinned English model
         run: |
           set -euo pipefail
-          mkdir -p companion/tennoworth-desktop/resources/tessdata
+          mkdir -p rust/tennoworth-desktop/resources/tessdata
           curl --fail --location --retry 3 \
             https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/eng.traineddata \
-            --output companion/tennoworth-desktop/resources/tessdata/eng.traineddata
-          echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  companion/tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
+            --output rust/tennoworth-desktop/resources/tessdata/eng.traineddata
+          echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  rust/tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
 
       - name: Install frontend dependencies
-        working-directory: prototype
+        working-directory: frontend
         run: bun install --frozen-lockfile
 
       - name: Build unsigned isolated AppImage
@@ -124,14 +124,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          projectPath: companion/tennoworth-desktop
+          projectPath: rust/tennoworth-desktop
           args: --config tauri.ocr-test.conf.json --bundles appimage
 
       - name: Inspect bundle and run installed-resource OCR probe
         shell: bash
         run: |
           set -euxo pipefail
-          img=$(find companion/target/release/bundle/appimage -name '*.AppImage' -print -quit)
+          img=$(find rust/target/release/bundle/appimage -name '*.AppImage' -print -quit)
           test -n "$img"
           chmod +x "$img"
           probe_root="$RUNNER_TEMP/tennoworth-ocr-appimage"
@@ -154,6 +154,6 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: tennoworth-ocr-test-linux
-          path: companion/target/release/bundle/appimage/*.AppImage
+          path: rust/target/release/bundle/appimage/*.AppImage
           if-no-files-found: error
           retention-days: 7

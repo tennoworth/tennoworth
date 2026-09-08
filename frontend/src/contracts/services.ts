@@ -1,0 +1,36 @@
+import type { DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences } from './desktop';
+import type { UpdateStatus } from './update';
+import type { EncryptedBlob } from './encrypted-snapshot';
+export const DESKTOP_CONTEXT = 'tennoworth.desktop';
+export interface DesktopServices {
+  updateStatus(): Promise<UpdateStatus>;
+  checkUpdate(): Promise<UpdateStatus>;
+  installUpdate(): Promise<void>;
+  restartApp(): Promise<void>;
+  onUpdateAvailable(cb: (s: UpdateStatus) => void): () => void;
+  desktopNotifications(): Promise<NotificationEntry[]>;
+  desktopWfmStatus(): Promise<DesktopWfmStatus>;
+  desktopWfmLogout(): Promise<void>;
+  listenForTauriEvent<T>(event: string, cb: (payload: T) => void): () => void;
+  desktopAddWatch(watch: NewWatch): Promise<Watch[]>;
+  desktopCheckWatchesNow(): Promise<WatchOutcome[]>;
+  desktopDeleteWatch(id: number): Promise<Watch[]>;
+  desktopListWatches(): Promise<Watch[]>;
+  desktopEelogStatus(): Promise<EeLogStatus>;
+  desktopListTrades(limit?: number): Promise<TradeRow[]>;
+  currentOverlayResult(): Promise<import('./data').RelicOverlayResult | null>;
+  desktopNotificationPreferences(): Promise<NotificationPreferences>;
+  desktopSaveNotificationPreferences(preferences: NotificationPreferences): Promise<NotificationPreferences>;
+  desktopTestNotification(): Promise<string>;
+  desktopWfmLogin(email: string, password: string, passphrase: string, platform: string, remember: boolean): Promise<void>;
+  desktopWfmUnlock(passphrase: string, remember: boolean): Promise<void>;
+  desktopTrySilentUnlock(): Promise<boolean>;
+  desktopReadNotifications(id?: number | null): Promise<void>;
+  desktopClearNotifications(): Promise<void>;
+  desktopLiveTopPrices(queries: LiveTopQuery[]): Promise<LiveTop[]>;
+  isDesktopRuntime(): boolean;
+  desktopRivenComps(weapon: string): Promise<RivenAuction[]>;
+  desktopTradeSessionState(): Promise<import('./data').TradeSessionState>;
+  encryptPayload(payload: unknown, passphrase: string): Promise<EncryptedBlob>;
+  decryptPayload(blob: EncryptedBlob, passphrase: string): Promise<unknown>;
+}

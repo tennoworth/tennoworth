@@ -19,7 +19,7 @@ something.** It is not a counter of how much work happened.
 
 **Not every change needs a release at all.** The web app is continuously
 deployed from `main` and identifies itself by build commit, not by this
-version - a change confined to `prototype/` reaches tennoworth.app on
+version - a change confined to `frontend/` reaches tennoworth.app on
 promotion and needs no desktop release. Cut one when desktop users have a
 reason to update.
 

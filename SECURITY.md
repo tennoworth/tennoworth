@@ -8,12 +8,12 @@ actually commit to from what we can't promise.
 The product has three components with three different trust
 characteristics:
 
-1. **The web app** (`prototype/`, deployed as static files).
+1. **The web app** (`frontend/`, deployed as static files).
    Pure client-side informational site. No backend. We see no inventory
    data, no credentials, no telemetry. Compromising the static host gives an
    attacker the ability to serve malicious JS to visitors.
 
-2. **The desktop app** (`companion/tennoworth-desktop`, Rust + Tauri,
+2. **The desktop app** (`rust/tennoworth-desktop`, Rust + Tauri,
    distributed via GitHub releases). Runs on the
    user's machine. Reads the game's process memory (Linux: needs
    `CAP_SYS_PTRACE`; Windows: same-user process access). Scans are
@@ -21,10 +21,10 @@ characteristics:
    no session token, and the browser webview never holds the WFM JWT, which
    stays in the Rust process and is encrypted at rest (AES-256-GCM,
    PBKDF2-600k passphrase). The core logic it drives lives in
-   `companion/wfm-core`.
+   `rust/wfm-core`.
 
 3. **Our build + release pipeline** (GitHub Actions):
-   - `build-web.yml` - on a push touching `prototype/`, builds the
+   - `build-web.yml` - on a push touching `frontend/`, builds the
      static web bundle and publishes it as a rolling `web-latest`
      prerelease asset (the self-host box pulls it with a plain curl).
    - `build-scrape.yml` - builds the host-only market pipeline when its
@@ -90,17 +90,6 @@ characteristics:
   verifies them against its compiled-in public key.
 - **No telemetry, no analytics, no accounts.** Verify with your
   browser's network tab.
-
-## The AI assistant (dormant)
-
-The DeepSeek advisor relay exists in `wfm-core` and a dormant
-`ask_assistant` Tauri command is registered, but **no UI surfaces it** -
-there is no chat button, no key-setting path, and nothing sends data to
-DeepSeek from the shipped app. It was last wired to the loopback companion's
-`/assistant` route, which no longer exists. The code stays for a future
-desktop assistant; until one ships, the feature is off by construction. If it
-is ever re-enabled, the SECURITY.md section describing its data flow must be
-rewritten before it ships.
 
 ## What we cannot promise
 
@@ -182,7 +171,7 @@ verify locally:
 
 ```bash
 git checkout <tag>
-cd prototype && bun install --frozen-lockfile && bun run build
+cd frontend && bun install --frozen-lockfile && bun run build
 diff -r dist/ <deployed dist contents>
 ```
 
@@ -222,8 +211,8 @@ stated plainly: anything running in your unlocked desktop session that
 can read your keyring can combine the two - at-rest offline protection
 of the file itself is unchanged.
 
-Source: `prototype/src/lib/crypto.ts`, `companion/wfm-core/src/auth.rs`,
-and `companion/tennoworth-desktop/src/keyring_store.rs`.
+Source: `frontend/src/adapters/encrypted-snapshot.ts`, `rust/wfm-core/src/trading/auth.rs`,
+and `rust/tennoworth-desktop/src/persistence/keyring_store.rs`.
 
 ## Reporting a vulnerability
 

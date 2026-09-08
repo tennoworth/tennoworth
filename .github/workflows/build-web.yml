@@ -1,6 +1,6 @@
 name: build-web
 
-# Build the static prototype/dist/ off the exposed box (node/bun never touch
+# Build the static frontend/dist/ off the exposed box (node/bun never touch
 # it - see the deploy runbook "Build supply-chain"). Publishes a rolling
 # `web-latest` release asset the deploy box pulls with a plain curl, no auth,
 # no Tailscale/LAN transfer needed - matches release-desktop.yml's pattern.
@@ -9,7 +9,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'prototype/**'
+      - 'frontend/**'
       - '.github/workflows/build-web.yml'
       - '.github/actions/publish-rolling-release/**'
   workflow_dispatch:
@@ -29,7 +29,7 @@ jobs:
       # main pushes, and a deployable artifact must be validated in the workflow
       # that produces it.
       - name: Install, test, build
-        working-directory: prototype
+        working-directory: frontend
         run: |
           bun install --frozen-lockfile
           bunx playwright install --with-deps chromium webkit
@@ -42,11 +42,11 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: responsive-test-evidence
-          path: prototype/test-results/responsive
+          path: frontend/test-results/responsive
           if-no-files-found: ignore
 
       - name: Package
-        run: tar -C prototype/dist -czf dist.tgz .
+        run: tar -C frontend/dist -czf dist.tgz .
 
       - name: Publish rolling release
         uses: ./.github/actions/publish-rolling-release
@@ -54,4 +54,4 @@ jobs:
           tag_name: web-latest
           release_name: web-latest (auto-built)
           files: dist.tgz
-          body: Rolling build of prototype/dist from the latest main. Not a version release - see the desktop-v* tags for the desktop app.
+          body: Rolling build of frontend/dist from the latest main. Not a version release - see the desktop-v* tags for the desktop app.

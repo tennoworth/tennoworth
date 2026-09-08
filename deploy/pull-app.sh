@@ -30,16 +30,27 @@
 set -euo pipefail
 
 APP="${APP:-/srv/wfm/app}"
-REMOTE="${REMOTE:-origin}"
+REMOTE="${REMOTE:-github}"
 BRANCH="${BRANCH:-main}"
 
-# Generated, box-owned, and newer than anything upstream. Preserved verbatim.
-LIVE_ARTIFACTS=(
-  prototype/public/market.json
-  prototype/public/history.json
-  prototype/public/wfstat-catalog.json
-  wfm_results.csv
-)
+DEPLOY_ROOT="${DEPLOY_ROOT:-/srv/wfm}"
+MIGRATE_LAYOUT=false
+case "${1:-}" in
+  '') ;;
+  --migrate-layout) MIGRATE_LAYOUT=true ;;
+  *) echo "usage: pull-app.sh [--migrate-layout]" >&2; exit 2 ;;
+esac
+
+layout_at() {
+  if git cat-file -e "$1:frontend/package.json" 2>/dev/null; then
+    echo frontend
+  elif git cat-file -e "$1:prototype/package.json" 2>/dev/null; then
+    echo prototype
+  else
+    echo "ABORT: $1 has no recognized frontend layout." >&2
+    return 1
+  fi
+}
 
 cd "$APP"
 
@@ -79,24 +90,87 @@ if [ "$(git rev-parse HEAD)" = "$(git rev-parse "$REMOTE/$BRANCH")" ]; then
   exit 0
 fi
 
-# Snapshot the live artifacts outside the tree, so a failed merge can't take
-# them with it.
+source_layout=$(layout_at HEAD)
+target_layout=$(layout_at "$REMOTE/$BRANCH")
+if [[ "$source_layout" != "$target_layout" && "$MIGRATE_LAYOUT" != true ]]; then
+  echo "ABORT: repository layout changes from $source_layout to $target_layout." >&2
+  echo "Stop deployment timers and follow docs/repository-layout-transition.md before using --migrate-layout." >&2
+  exit 1
+fi
+
+# Keep logical artifact names separate from source paths: a fast-forward can
+# rename the source tree while the production snapshots are newer than Git.
+LIVE_ARTIFACTS=(wfstat-catalog.json history.json market.json)
+if [[ "$source_layout" != "$target_layout" ]]; then
+  # Keep the scan hotfix endpoint available under the old Caddy root until
+  # reload, including any operator override. Ordinary source updates still
+  # apply tracked definition changes through Git.
+  LIVE_ARTIFACTS=(definitions.json "${LIVE_ARTIFACTS[@]}")
+fi
 stash=$(mktemp -d)
-for f in "${LIVE_ARTIFACTS[@]}"; do
-  [ -f "$f" ] && { mkdir -p "$stash/$(dirname "$f")"; cp -p "$f" "$stash/$f"; }
+for name in "${LIVE_ARTIFACTS[@]}"; do
+  source="$source_layout/public/$name"
+  if [[ -f "$source" ]]; then cp -p "$source" "$stash/$name"; fi
 done
+if [[ -f wfm_results.csv ]]; then cp -p wfm_results.csv "$stash/wfm_results.csv"; fi
+if [[ "$source_layout" != "$target_layout" && -d "$source_layout/dist" ]]; then
+  cp -a "$source_layout/dist" "$stash/dist"
+fi
+
+restore_file() {
+  local source=$1 destination=$2
+  cp -p "$source" "$destination.restore" && mv -f "$destination.restore" "$destination"
+}
+
+restore_failed() {
+  echo "Recovery data retained at $stash; restore failed." >&2
+  exit 1
+}
+
 restore() {
-  for f in "${LIVE_ARTIFACTS[@]}"; do
-    [ -f "$stash/$f" ] && cp -p "$stash/$f" "$f"
+  local exit_status=$?
+  trap - EXIT
+  local restore_layout
+  restore_layout=$(layout_at HEAD) || {
+    echo "Recovery data retained at $stash; cannot determine the checkout layout." >&2
+    exit 1
+  }
+  mkdir -p "$restore_layout/public" || restore_failed
+  for name in "${LIVE_ARTIFACTS[@]}"; do
+    if [[ -f "$stash/$name" ]]; then
+      restore_file "$stash/$name" "$restore_layout/public/$name" || {
+        echo "Recovery data retained at $stash; restoring $name failed." >&2
+        exit 1
+      }
+    fi
   done
+  if [[ -f "$stash/wfm_results.csv" ]]; then
+    restore_file "$stash/wfm_results.csv" wfm_results.csv || restore_failed
+  fi
+  if [[ -d "$stash/dist" && "$restore_layout" != "$source_layout" ]]; then
+    # Preserve the previously served bundle until the matching new bundle is
+    # installed. The old directory remains available for the Caddy transition.
+    mkdir -p "$restore_layout/dist" || restore_failed
+    cp -a "$stash/dist/." "$restore_layout/dist/" || restore_failed
+  fi
+  if [[ "$restore_layout" != "$source_layout" ]]; then
+    # Caddy still serves the old public path until its separately validated
+    # configuration is reloaded. Retire this copy only after that switch.
+    mkdir -p "$source_layout/public" || restore_failed
+    for name in "${LIVE_ARTIFACTS[@]}"; do
+      if [[ -f "$stash/$name" ]]; then
+        restore_file "$stash/$name" "$source_layout/public/$name" || restore_failed
+      fi
+    done
+  fi
   rm -rf "$stash"
+  exit "$exit_status"
 }
 trap restore EXIT
 
-# Clear the working-tree modifications the merge would trip over. Safe only
-# because we just copied them out - restore() puts them back on every exit path.
-for f in "${LIVE_ARTIFACTS[@]}"; do
-  git ls-files --error-unmatch "$f" >/dev/null 2>&1 && git checkout -- "$f"
+for name in "${LIVE_ARTIFACTS[@]}"; do
+  source="$source_layout/public/$name"
+  if git ls-files --error-unmatch "$source" >/dev/null 2>&1; then git checkout -- "$source"; fi
 done
 
 # Untracked files that the incoming commits add as TRACKED abort the merge.
@@ -136,10 +210,10 @@ echo "pulled: $before -> $target"
 for f in run-scrape.sh alert.sh pull-app.sh pull-web.sh pull-scrape.sh; do
   src="deploy/$f"
   [ -f "$src" ] || continue
-  if ! cmp -s "$src" "/srv/wfm/$f" 2>/dev/null; then
-    install -m 0755 "$src" "/srv/wfm/$f.new" \
-      && mv -f "/srv/wfm/$f.new" "/srv/wfm/$f" \
-      && echo "  reinstalled /srv/wfm/$f"
+  if ! cmp -s "$src" "$DEPLOY_ROOT/$f" 2>/dev/null; then
+    install -m 0755 "$src" "$DEPLOY_ROOT/$f.new" \
+      && mv -f "$DEPLOY_ROOT/$f.new" "$DEPLOY_ROOT/$f" \
+      && echo "  reinstalled $DEPLOY_ROOT/$f"
   fi
 done
 

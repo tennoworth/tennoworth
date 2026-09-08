@@ -8,11 +8,11 @@
 # `cloudflared service install` step by hand.
 set -euo pipefail
 
-REPO=/srv/wfm/app          # the git repo (Rust pipeline binary + prototype/public + prototype/dist)
+REPO=/srv/wfm/app          # the git repo (Rust pipeline binary + frontend/public + frontend/dist)
 DEPLOY="$REPO/deploy"
 
-if [[ ! -d "$REPO/prototype" ]]; then
-  echo "ERROR: expected the repo at $REPO (with prototype/ and deploy/)." >&2
+if [[ ! -d "$REPO/frontend" ]]; then
+  echo "ERROR: expected the repo at $REPO (with frontend/ and deploy/)." >&2
   echo "Clone it there first, then re-run." >&2
   exit 1
 fi
@@ -57,7 +57,7 @@ git config --system --get-all safe.directory 2>/dev/null | grep -qx "$REPO" \
   || git config --system --add safe.directory "$REPO"
 
 echo "==> Caddy config"
-if [ -s /etc/caddy/Caddyfile ] && ! grep -q 'prototype/dist' /etc/caddy/Caddyfile; then
+if [ -s /etc/caddy/Caddyfile ] && ! grep -q 'frontend/dist' /etc/caddy/Caddyfile; then
   # A non-empty Caddyfile that isn't ours = this box already serves other sites.
   # Overwriting it would 502 every other hostname on reload. Skip + instruct.
   cp -n /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak 2>/dev/null || true
@@ -104,7 +104,7 @@ cat <<'NEXT'
 
 2. Get the built site onto the box (do NOT build here - keep node/bun off the
    exposed box). From CI or your dev machine, place the Vite build at
-   $REPO/prototype/dist  (see the deploy runbook "Build / deploy").
+   $REPO/frontend/dist  (see the deploy runbook "Build / deploy").
 
 3. Kick a first scrape and watch it:
      systemctl start wfm-scrape.service
@@ -112,8 +112,8 @@ cat <<'NEXT'
    Watch for repeated 429/403 (WFM 1015). The UA is now a real browser string,
    so this should be fine from a residential IP - but verify.
 
-4. Verify headers + the companion fetch on the LIVE https URL:
+4. Verify the hosted page and data headers on the live HTTPS URL:
      curl -sI https://wfm.yourdomain.com | grep -iE 'strict-transport|frame-options|content-security'
-   Then open the page in a browser, connect the companion, and confirm in
+   Then open the page in a browser, search for an item, and confirm in
    DevTools that the fetch to http://127.0.0.1:* is NOT blocked as mixed content.
 NEXT

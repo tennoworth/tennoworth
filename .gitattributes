@@ -3,7 +3,7 @@
 # The Windows release leg builds the desktop app, and scripts/sync-csp.ts
 # --check does a raw string compare between the file on disk and the CSP text
 # it generates (always LF). With Git's default autocrlf on a Windows runner,
-# prototype/index.html checks out CRLF, that compare never matches, and the
+# frontend/index.html checks out CRLF, that compare never matches, and the
 # build dies claiming the CSP copies drifted - on a tree that is perfectly in
 # sync. The same trap applies to any other tooling here that diffs file
 # contents rather than parsed values.

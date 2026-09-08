@@ -152,9 +152,9 @@ details, and explicit non-promises live in [`SECURITY.md`](SECURITY.md).
 
 | Path | Purpose |
 |---|---|
-| [`prototype/`](prototype/) | Svelte 5 + Vite SPA used by both the hosted informational site and the Tauri webview. |
-| [`companion/`](companion/) | Rust workspace containing the Tauri desktop app, inventory/WFM core, shared market math and client code, and the market pipeline. |
-| [`prototype/public/market.json`](prototype/public/market.json) | Production-generated snapshot consumed live by the site and refreshed in Git during desktop release preparation as its bundled fallback. |
+| [`frontend/`](frontend/) | Svelte 5 + Vite frontend with separate hosted, desktop, and reward-overlay shells. |
+| [`rust/`](rust/) | Rust workspace containing the Tauri desktop app, inventory/WFM core, shared market math and client code, and the market pipeline. |
+| [`frontend/public/market.json`](frontend/public/market.json) | Production-generated snapshot consumed live by the site and refreshed in Git during desktop release preparation as its bundled fallback. |
 | [`scripts/`](scripts/) | TypeScript maintenance gates plus the Linux desktop smoke script. |
 | [`tests/fixtures/`](tests/fixtures/) | Cross-language parity and pipeline regression fixtures. |
 | [`deploy/`](deploy/) | Self-host deployment kit for the site and scheduled market refresh. |
@@ -170,105 +170,15 @@ The Rust workspace contains five crates:
 | `wfm-client` | Shared warframe.market transport primitives and request policy. |
 | `wfm-scrape` | Host pipeline that scrapes market data and builds `market.json` plus `wfstat-catalog.json`. |
 
-## Development
+## Contributing
 
-UI changes follow the [TennoWorth design system](docs/design-system.md).
-Open `http://127.0.0.1:5173/?styleguide` during development for the living
-reference: production tokens and patterns, both themes, long content, data
-states, and an editable sample dialog. Its data is fictional and its controls
-do not write settings or submit orders. The styleguide is excluded from
-production builds.
+Start with [CONTRIBUTING.md](CONTRIBUTING.md) for a working local setup,
+contribution tiers, checks, and the pull-request workflow. You can work on the
+hosted site and a populated desktop preview without Warframe or credentials.
 
-The web app requires [Bun](https://bun.sh/):
-
-```bash
-cd prototype
-bun install --frozen-lockfile
-bun run dev
-```
-
-Open `http://127.0.0.1:5173/?preview-desktop&sample` for the desktop layout
-with sample inventory, orders, watches, trades, and a Riven. This development-only
-preview keeps its state in memory and makes no account requests. Use
-`sample=empty`, `sample=error`, `sample=loading`, or `sample=logged-out`
-to inspect alternate states. Reloading resets the sample.
-
-Responsive checks run with `bun run test:responsive` (Chromium) or
-`bun run test:responsive:all` (Chromium and WebKit). Install browsers with
-`bunx playwright install --with-deps chromium webkit` on supported Linux hosts.
-Screenshots and failure traces are written to `prototype/test-results/responsive/`.
-
-| Coverage | Scenarios |
-| --- | --- |
-| Hosted page and desktop shell | 320–1600 px, including breakpoint boundaries |
-| All twelve desktop views | Populated content, 320–1440 px, heights of 480–900 px |
-| Orders, watches, ledger | Empty, delayed, and failed responses |
-| Open interactions | Listing quantity edits, Filters, column help, Riven comparisons |
-| Design contract | All twelve views in both themes, shared control targets, table columns, keyboard theme/review navigation |
-| Living reference | Linux Chromium/WebKit visual baselines, text-token contrast, data and dialog states |
-| Browser reward overlay | Transparent surface, complete names, scale-aware card widths, no CSS leakage into the site |
-| Enlarged rendering | 200% CSS zoom; native browser zoom and OS scaling require separate checks |
-
-Browser tests use the actual styled SPA and a simulated desktop transport.
-They supplement native Windows and Linux testing; they do not certify native
-window management or display scaling.
-
-The unit suite also checks component style blocks for literal colors, pixel
-text sizes, and pixel radii; shared values belong in `src/app.css`. Visual
-baseline updates require inspecting the changed images, then rerunning without
-`--update-snapshots`. Baselines use Linux and the browser versions from the
-lockfile; Windows native verification is a separate requirement.
-
-The development server listens on `http://127.0.0.1:5173`. It runs in hosted
-mode, so desktop-only IPC features are intentionally unavailable.
-
-To build and run the desktop app, build the desktop SPA **before** Cargo; Tauri
-embeds that directory into the binary:
-
-```bash
-cd prototype
-bun install --frozen-lockfile
-bun run build:desktop
-
-cd ../companion
-cargo build -p tennoworth-desktop
-```
-
-On Linux, install the Tauri/WebKitGTK and Tesseract development packages for
-your distribution first. A locally built binary can receive the narrower
-ptrace capability; rebuilding replaces the file and removes it, so repeat this
-after every build, then launch the binary directly:
-
-```bash
-sudo setcap cap_sys_ptrace=eip target/debug/tennoworth-desktop
-./target/debug/tennoworth-desktop
-```
-
-On Windows, launch `target/debug/tennoworth-desktop.exe` after the build; no
-ptrace capability step is needed.
-
-Useful local checks mirror the repository's CI surfaces:
-
-```bash
-cd prototype
-bun run test
-bun run check
-bun run knip
-
-cd ../companion
-cargo test
-cargo clippy --workspace --all-targets
-cargo shear
-cargo audit --deny warnings
-
-cd ..
-bun scripts/sync-csp.ts --check
-bash scripts/probe-smoke-linux.sh
-```
-
-The Linux probe needs `xvfb-run`; the desktop Rust build needs the native
-WebKitGTK/GTK/AppIndicator/Tesseract toolchain. Windows builds and smoke tests
-run natively in CI.
+The [architecture guide](docs/architecture.md) explains feature ownership and
+allowed dependencies. UI changes follow the [design system](docs/design-system.md)
+and its development-only `?styleguide` reference.
 
 ## Branches and releases
 
