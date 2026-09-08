@@ -1,70 +1,42 @@
 #!/usr/bin/env bash
-# Local Linux UI smoke gate: run the REAL desktop app under a virtual display
-# with TENNOWORTH_PROBE=1 and gate the probe report (console/CSP violations,
-# SPA mount, Tauri IPC mode, scan CTA). The remote ui-smoke.yml does the same
-# on Windows; this is the version to run on a Linux box BEFORE pushing - it
-# catches the "builds fine, feature silently no-ops" class that static gates
-# cannot see, without paying for a Windows build.
-#
-# Needs: xvfb-run (Arch: sudo pacman -S xorg-server-xvfb; Debian/Ubuntu:
-# sudo apt install xvfb), the repo's normal build deps, and (only if you want
-# the scan leg to attempt real memory reads) a one-time
-#   sudo setcap cap_sys_ptrace=eip companion/target/debug/tennoworth-desktop
-# Without a running game the scan fails gracefully either way - the gate does
-# NOT require a scan hit.
-#
-# The frontend and binary are rebuilt every run (cargo is incremental): a
-# gate that tests stale artifacts is worse than no gate.
-#
-# Usage: bash scripts/probe-smoke-linux.sh
+# Build and run the real desktop probe in an isolated display and D-Bus session.
+# A separate bus prevents an already-running app from intercepting this launch.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-command -v xvfb-run >/dev/null || {
-  echo "probe-smoke: xvfb-run not found - install a virtual X server:" >&2
-  echo "  sudo pacman -S xorg-server-xvfb   # Arch" >&2
-  echo "  sudo apt install xvfb             # Debian/Ubuntu" >&2
-  exit 1
-}
+for tool in xvfb-run dbus-run-session; do
+  command -v "$tool" >/dev/null || {
+    echo "probe-smoke: $tool is required (install Xvfb and D-Bus)." >&2
+    exit 1
+  }
+done
 
-echo "probe-smoke: building dist-desktop (embedded at compile time)..."
+# The embedded SPA must be rebuilt before Cargo, even when a binary exists.
 (cd prototype && bun run build:desktop)
-echo "probe-smoke: building the desktop binary..."
 (cd companion && cargo build -p tennoworth-desktop)
-
-BIN=companion/target/debug/tennoworth-desktop
-REPORT="$(mktemp -t probe-smoke-XXXXXX.json)"
-# A FRESH app-data dir is part of the probe contract: the scan CTA and the
-# desktop-mode badge live on the onboarding view, which only renders when the
-# app has no inventory yet - a real data dir would boot straight to the sell
-# view and the probe would never find them. XDG_DATA_HOME isolates the run
-# from the host's actual data (and guarantees a writable DB) on any machine.
+TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/companion/target}"
+if [[ "$TARGET_DIR" != /* ]]; then TARGET_DIR="$ROOT/companion/$TARGET_DIR"; fi
+BIN="$TARGET_DIR/debug/tennoworth-desktop"
+EVIDENCE="${TENNOWORTH_PROBE_EVIDENCE_DIR:-$(mktemp -d -t probe-evidence-XXXXXX)}"
+mkdir -p "$EVIDENCE"
+EVIDENCE="$(cd "$EVIDENCE" && pwd)"
+REPORT="$EVIDENCE/probe-report.json"
+LOG="$EVIDENCE/probe-stdout.log"
+# A restored real inventory would bypass onboarding and invalidate the probe.
 SCRATCH="$(mktemp -d -t probe-xdg-XXXXXX)"
-trap 'rm -f "$REPORT"; rm -rf "$SCRATCH"' EXIT
+trap 'rm -rf "$SCRATCH"' EXIT
+rm -f "$REPORT"
 
-# The probe auto-exits after the FINAL report; timeout is a backstop so a
-# hung webview fails the gate instead of hanging the pre-push flow.
 set +e
-XDG_DATA_HOME="$SCRATCH" TENNOWORTH_PROBE=1 TENNOWORTH_PROBE_OUT="$REPORT" timeout 180 xvfb-run -a "$BIN" \
-  >/tmp/probe-smoke-stdout.log 2>&1
+XDG_DATA_HOME="$SCRATCH" TENNOWORTH_PROBE=1 TENNOWORTH_PROBE_OUT="$REPORT" \
+  timeout 180 dbus-run-session -- xvfb-run -a "$BIN" >"$LOG" 2>&1
 RC=$?
 set -e
-
-case "$RC" in
-  0) ;;
-  124)
-    echo "probe-smoke: the app did not exit within 180s under xvfb - hung webview or probe failure." >&2
-    tail -20 /tmp/probe-smoke-stdout.log >&2
-    exit 1
-    ;;
-  *)
-    echo "probe-smoke: the app exited $RC under xvfb." >&2
-    tail -20 /tmp/probe-smoke-stdout.log >&2
-    exit 1
-    ;;
-esac
-
+if [[ "$RC" -ne 0 ]]; then
+  echo "probe-smoke: app exited $RC; evidence: $EVIDENCE" >&2
+  tail -20 "$LOG" >&2
+  exit "$RC"
+fi
 bun scripts/check-probe-report.ts "$REPORT"
-echo "probe-smoke: OK - the real app ran the full UI probe under xvfb and passed."
-
+echo "probe-smoke: OK; evidence: $EVIDENCE"

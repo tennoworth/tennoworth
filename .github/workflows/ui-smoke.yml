@@ -9,10 +9,7 @@ name: ui-smoke
 # "builds fine, feature silently no-ops" - the 2026-08-03 default-vs-named
 # import bug passed bun run check, svelte-check AND knip.
 #
-# Linux is not smoke-tested here: the same run would need xvfb-run or a
-# headless WebKitGTK setup (fragile, and the memory scan is Windows-only
-# territory anyway). Windows runs the app in its native session, so the probe
-# needs no display tricks - this is the cheapest faithful E2E signal.
+# Linux uses the same probe under Xvfb with an isolated D-Bus session.
 
 on:
   pull_request:
@@ -44,6 +41,7 @@ jobs:
               - 'companion/Cargo.toml'
               - 'companion/tennoworth-desktop/**'
               - 'companion/wfm-client/**'
+              - 'companion/market-math/**'
               - 'companion/wfm-core/**'
               - 'prototype/src/**'
               - 'tests/fixtures/relic-ocr/**'
@@ -54,6 +52,10 @@ jobs:
               - 'prototype/tsconfig.json'
               - 'prototype/vite.config.ts'
               - 'prototype/public/theme-boot.js'
+              - 'prototype/public/market.json'
+              - 'prototype/public/wfstat-catalog.json'
+              - 'prototype/public/definitions.json'
+              - 'scripts/probe-smoke-linux.sh'
               - 'scripts/check-probe-report.ts'
               - 'scripts/sync-csp.ts'
               - '.github/actions/setup-rust/**'
@@ -167,11 +169,51 @@ jobs:
             ${{ runner.temp }}/probe-stdout.log
           if-no-files-found: ignore
 
+  probe-smoke-linux:
+    needs: changes
+    if: >-
+      needs.changes.outputs.desktop == 'true' ||
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - uses: ./.github/actions/setup-rust
+      - name: Install native build and display dependencies
+        run: >-
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends
+          libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
+          librsvg2-dev libtesseract-dev libleptonica-dev libxcb1-dev
+          libwayland-dev libxkbcommon-dev xvfb xauth dbus-x11
+      - name: Stage pinned OCR model
+        run: |
+          set -euo pipefail
+          mkdir -p companion/tennoworth-desktop/resources/tessdata
+          curl --fail --location --retry 3 \
+            https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/eng.traineddata \
+            --output companion/tennoworth-desktop/resources/tessdata/eng.traineddata
+          echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  companion/tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
+      - name: Install frontend dependencies
+        working-directory: prototype
+        run: bun install --frozen-lockfile
+      - name: Build and run the Linux desktop probe
+        env:
+          TENNOWORTH_PROBE_EVIDENCE_DIR: '${{ runner.temp }}/probe-linux'
+        run: bash scripts/probe-smoke-linux.sh
+      - name: Upload Linux probe evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: probe-evidence-linux
+          path: ${{ runner.temp }}/probe-linux/
+          if-no-files-found: ignore
+
   # The required status for this workflow. A skipped probe is intentional for
   # unrelated changes; a failed or cancelled relevant probe blocks promotion.
   ui-gate:
     if: ${{ always() }}
-    needs: [changes, probe-smoke]
+    needs: [changes, probe-smoke, probe-smoke-linux]
     runs-on: ubuntu-latest
     steps:
       - name: Require the applicable probe to pass
