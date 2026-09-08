@@ -76,7 +76,7 @@ pub fn issue_url(app_version: &str, os: &str, error: Option<&str>) -> String {
 /// and returning Err would leave the SPA holding a message instead of the link.
 /// Returning both lets the UI fall back to "copy this" on a box with no
 /// registered browser.
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, ts_rs::TS)]
 pub struct ScanReport {
     pub url: String,
     pub opened: bool,
