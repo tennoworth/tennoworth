@@ -765,6 +765,8 @@
   .order-search { flex: 1 1 15rem; }
   .order-search .input { width: 100%; }
   .order-actions { padding-block: var(--s3); }
-  .seg { flex-wrap: wrap; }
+  .orders .order-filters > .ui-field { flex-shrink: 1; max-width: 100%; }
+  .seg { flex-wrap: wrap; height: auto; min-height: var(--ctl-lg); overflow: visible; }
+  .seg > button { min-height: var(--ctl-lg); height: auto; white-space: nowrap; }
   .orders td:last-child .btn { white-space: nowrap; }
 </style>

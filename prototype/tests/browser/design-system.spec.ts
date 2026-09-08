@@ -141,15 +141,46 @@ test('selling tables label pick facts and retain readable item identities', asyn
 test('page background keeps fine repeating tiles on tall WebKit surfaces', async ({ browser }) => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   try {
-  // Cold-loading the production stylesheet reproduces the page-sized raster
-  // problem; a later style override can trigger a repaint that conceals it.
-  await page.route('**/background-probe', route => route.fulfill({
-    contentType: 'text/html',
-    body: `<!doctype html><html data-look="yorha" data-mode="dark"><head><link rel="stylesheet" href="/src/app.css"></head><body style="height:auto;min-height:100%"><main style="height:1700px;width:80%;margin:auto;background:var(--panel)"></main></body></html>`,
-  }));
-  await page.goto('/background-probe');
-  const background = await page.screenshot();
-  // The grid is faint enough that the default colour tolerance hides distortion.
-  expect(background).toMatchSnapshot('background-Dark.png', { threshold: 0, maxDiffPixelRatio: 0.002 });
+    // A tall standalone document reproduces WebKit’s page-sized raster while
+    // loading the same production background styles.
+    await page.route('**/background-probe', route => route.fulfill({
+      contentType: 'text/html',
+      body: `<!doctype html><html data-look="yorha" data-mode="dark"><head><link rel="stylesheet" href="/src/app.css"></head><body style="height:auto;min-height:100%"><main style="height:1700px;width:80%;margin:auto;background:var(--panel)"></main></body></html>`,
+    }));
+    await page.goto('/background-probe');
+    const background = await page.screenshot();
+    // The grid is faint enough that the default colour tolerance hides distortion.
+    expect(background).toMatchSnapshot('background-Dark.png', { threshold: 0, maxDiffPixelRatio: 0.002 });
   } finally { await page.close(); }
+});
+
+test('narrow order filters stay reachable and routine rails fill their panel', async ({ page }) => {
+  await page.goto('/?preview-desktop&sample');
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    for (const width of [320, 761, 1440]) {
+      await page.setViewportSize({ width, height: 480 });
+      await page.locator('.sidebar').getByRole('button', { name: /^My orders/ }).click();
+      const orderBounds = await page.locator('.orders').boundingBox();
+      const filterBounds = await page.locator('.orders .seg button').evaluateAll(buttons => buttons.map(button => {
+        const box = button.getBoundingClientRect();
+        return { right: box.right, height: box.height, clipped: button.scrollHeight > button.clientHeight + 1 };
+      }));
+      for (const button of filterBounds) {
+        expect(button.right).toBeLessThanOrEqual(orderBounds!.x + orderBounds!.width - 1);
+        expect(button.height).toBeGreaterThanOrEqual(24);
+        expect(button.clipped).toBe(false);
+      }
+      await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
+      const summary = page.locator('.routine-checklist > summary');
+      for (let state = 0; state < 2; state++) {
+        const bounds = await summary.evaluate(element => ({
+          width: element.getBoundingClientRect().width,
+          panelWidth: element.parentElement!.getBoundingClientRect().width,
+        }));
+        expect(bounds.width).toBeCloseTo(bounds.panelWidth - 2, 0);
+        await summary.click();
+      }
+    }
+  }
 });
