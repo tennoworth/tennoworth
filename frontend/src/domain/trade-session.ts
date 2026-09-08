@@ -66,7 +66,7 @@ export function selectSession(candidates: SessionCandidate[], mode: SessionMode,
       reason = 'Not enough reported trading volume for this mode.';
     }
     if (reason) { excluded.push({ name: row.name, reason }); continue; }
-    let lot = mode === 'fast' || !row.bulk ? 1 : Math.min(6, row.sellable, Math.floor(MAX_PLATINUM / price));
+    let lot = validSet || mode === 'fast' || !row.bulk ? 1 : Math.min(6, row.sellable, Math.floor(MAX_PLATINUM / price));
     if (mode === 'clear') {
       while (row.sellable % lot !== 0) lot--;
     }

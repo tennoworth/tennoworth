@@ -61,7 +61,11 @@ fn validate_session_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), Stri
 fn validate_protected_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), String> {
     let db = app.state::<Db>();
     let protection = crate::services::protection::ProtectionPlan::load(&db)?;
-    if !protection.active(&db)? && items.iter().all(|item| item.session.is_none() && !item.slug.ends_with("_set")) {
+    if !protection.active(&db)?
+        && items
+            .iter()
+            .all(|item| item.session.is_none() && !item.slug.ends_with("_set"))
+    {
         return Ok(());
     }
     let market = crate::services::sellables::MarketData::load(
@@ -73,8 +77,12 @@ fn validate_protected_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), St
         .map_err(|_| "Unlock WFM before validating protected quantities.")?;
     // Invalid rows cannot reach a mutation. Let the executor report its
     // per-item errors without requiring a live order book for an empty run.
-    if items.iter().all(|item| item.platinum < wfm_core::trading::plan::MIN_PLATINUM
-        || item.platinum > MAX_PLATINUM || item.quantity == 0 || !unlocked.catalog.contains_key(&item.slug)) {
+    if items.iter().all(|item| {
+        item.platinum < wfm_core::trading::plan::MIN_PLATINUM
+            || item.platinum > MAX_PLATINUM
+            || item.quantity == 0
+            || !unlocked.catalog.contains_key(&item.slug)
+    }) {
         return Ok(());
     }
     let body = list_user_orders(&unlocked).map_err(|e| e.to_string())?;

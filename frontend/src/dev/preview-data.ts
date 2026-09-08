@@ -88,7 +88,7 @@ export function createPreview(scenario: string) {
       return { plan: structuredClone(protectionPlan), snapshot_id: empty ? null : 1,
         items: Object.fromEntries([...owned.values()].filter(row => !row.subtype && !row.slug.endsWith('_set')).map(row => [row.slug,
           sampleAllocation(row.count, row.leveled, Number(settings.get('reserve-copies') ?? 0),
-            (protectionPlan.reserves[row.slug] ?? 0) + (protectionPlan.goal === 'akbolto_prime_set' && row.slug === 'akbolto_prime_barrel' ? 2 : 0),
+            (protectionPlan.reserves[row.slug] ?? 0) + (protectionPlan.goal === 'akbolto_prime_set' ? sampleRecipe[row.slug as keyof typeof sampleRecipe] ?? 0 : 0),
             unknown ? null : listed.get(row.slug) ?? 0)])),
         issues: unknown ? ['Unlock WFM to account for your current listings.'] : [] };
     }

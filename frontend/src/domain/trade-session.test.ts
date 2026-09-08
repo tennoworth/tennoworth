@@ -28,6 +28,7 @@ describe('Trade Session', () => {
     expect(plan.trades).toBe(2);
     const setsOnly = selectSession([...candidates, set], 'max', 2);
     expect(setsOnly.rows.map(row => [row.slug, row.quantity])).toEqual([['example_set', sets.expected_sets]]);
+    expect(selectSession([...candidates, { ...set, bulk: true }], 'max', 2).rows[0].per_trade).toBe(1);
     expect(selectSession([...candidates, { ...set, components: { barrel: 7 } }], 'max', 2).rows.every(row => !row.components)).toBe(true);
   });
   it('pins the Rust event name', () => expect(ALLOWANCE_CHANGED_EVENT).toBe(events.allowance_changed));

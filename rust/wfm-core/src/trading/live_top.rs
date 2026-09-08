@@ -24,6 +24,7 @@ use crate::http::browser_client;
 /// Start-to-start spacing between requests - 340 ms ≈ 2.9 req/s, under WFM's
 /// documented 3 req/s. Same figure the scraper uses.
 pub const LIVE_TOP_SPACING: Duration = Duration::from_millis(340);
+static LAST_LIVE_START: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
 
 /// One item's tier to look up.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -309,15 +310,20 @@ pub fn fetch_live_tops(
     let client = browser_client(20)?;
     let total = queries.len();
     let mut out = Vec::with_capacity(total);
-    let mut last_start: Option<Instant> = None;
     for (i, q) in queries.iter().enumerate() {
-        if let Some(t) = last_start {
-            let elapsed = t.elapsed();
-            if elapsed < LIVE_TOP_SPACING {
-                thread::sleep(LIVE_TOP_SPACING.saturating_sub(elapsed));
+        // Buyer comparisons and batch repricing can be requested together.
+        // Pace their request starts across invocations, without holding the
+        // lock during network I/O.
+        {
+            let mut last_start = crate::poison::guard(&LAST_LIVE_START);
+            if let Some(t) = *last_start {
+                let elapsed = t.elapsed();
+                if elapsed < LIVE_TOP_SPACING {
+                    thread::sleep(LIVE_TOP_SPACING.saturating_sub(elapsed));
+                }
             }
+            *last_start = Some(Instant::now());
         }
-        last_start = Some(Instant::now());
         let row = match fetch_one(&client, platform, q, me) {
             Ok(t) => t,
             Err(e) => LiveTop::failed(q, e.to_string()),
@@ -334,10 +340,19 @@ mod tests {
     use serde_json::json;
     #[test]
     fn buyer_book_matches_frontend_contract_fixture() {
-        let fixture: serde_json::Value = serde_json::from_str(include_str!("../../../../tests/fixtures/buyer-alternatives/book.json")).unwrap();
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/buyer-alternatives/book.json"
+        ))
+        .unwrap();
         let query = serde_json::from_value(fixture["query"].clone()).unwrap();
-        let book = parse_top(&query, &fixture["body"], fixture["me"].as_str()).unwrap().buyer_book.unwrap();
-        assert_eq!(serde_json::to_value(book.orders).unwrap(), fixture["orders"]);
+        let book = parse_top(&query, &fixture["body"], fixture["me"].as_str())
+            .unwrap()
+            .buyer_book
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(book.orders).unwrap(),
+            fixture["orders"]
+        );
     }
 
     fn q(slug: &str, rank: Option<u32>, subtype: Option<&str>) -> LiveTopQuery {

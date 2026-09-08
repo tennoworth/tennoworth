@@ -25,14 +25,25 @@ pub fn trade_session_state(
         .map(|s| {
             s.catalog
                 .iter()
-                .filter(|(_, c)| c.bulk_tradable && c.session_supported)
+                .filter(|(slug, c)| {
+                    c.bulk_tradable && c.session_supported && !slug.ends_with("_set")
+                })
                 .map(|(slug, _)| slug.clone())
                 .collect()
         })
         .unwrap_or_default();
-    let set_recipes: std::collections::BTreeMap<_, _> = market.session_recipes().into_iter().filter(|(slug, _)| {
-        unlocked.as_ref().and_then(|s| s.catalog.get(slug)).is_some_and(|c| c.session_supported && c.max_rank.is_none() && c.subtypes.is_empty())
-    }).collect();
+    let set_recipes: std::collections::BTreeMap<_, _> = market
+        .session_recipes()
+        .into_iter()
+        .filter(|(slug, _)| {
+            unlocked
+                .as_ref()
+                .and_then(|s| s.catalog.get(slug))
+                .is_some_and(|c| {
+                    c.session_supported && c.max_rank.is_none() && c.subtypes.is_empty()
+                })
+        })
+        .collect();
     let supported_slugs = unlocked.map(|s| {
         s.catalog
             .iter()

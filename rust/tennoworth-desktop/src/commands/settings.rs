@@ -1,6 +1,9 @@
 //! Key/value settings and per-item reserve-copy CRUD, plus snapshot history
 //! listing - thin pass-throughs to [`crate::persistence::Db`].
-#![allow(clippy::unreachable, reason = "tauri::command injects unreachable code into async wrappers")]
+#![allow(
+    clippy::unreachable,
+    reason = "tauri::command injects unreachable code into async wrappers"
+)]
 
 use tauri::{AppHandle, Manager, State};
 
