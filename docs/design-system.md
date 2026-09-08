@@ -110,7 +110,7 @@ isolation after extracting the shells and shared FAQ. Feature components do not
 add this attribute. The reward surface does not consume those selectors.
 
 Shared panel and banner rules replace formerly component-scoped copies in the
-shell, Watches, Ledger, and update notices. Sell and Settings share view headers.
+shell, Watches, Ledger, and update notices. Task pages share view headers, with descriptions below the heading and actions grouped beside it.
 Existing analytical table variants retain their feature-specific column layouts.
 Listing review uses the shared button patterns, readable deselected rows, and
 keyboard focus containment/restoration; native authentication dialogs retain
@@ -146,6 +146,27 @@ For listing review, keep before/after price and quantity changes, visibility,
 and relevant uncertainty readable. A design migration must not change trading
 calculations or create a second execution flow. New planning surfaces use the
 same patterns without treating illustrative mock data as production behavior.
+
+## Preferences and page rhythm
+
+Settings, Set picks, Relics, Routines, and FAQ use a bounded 64rem reading
+width. Analytical tables retain the workspace width and scroll locally when
+needed. Settings includes notification preferences within the same column.
+`.ui-setting-row`, `.ui-setting-copy`, `.ui-setting-control`, and
+`.ui-setting-check` align labels, help text, and controls; they stack below
+760px without remounting the controls. `.ui-section-group` separates related
+options, and `.ui-panel-footer` groups actions and supporting details.
+`.ui-summary-strip` presents comparable totals without nested cards.
+These patterns are demonstrated in the living reference’s Aligned preferences
+section. Watches separates creation from monitoring; Ledger separates totals,
+listing automation, and trade history. Top picks labels its decision facts
+independently of the inventory’s optional analytical columns.
+
+The schematic page background uses bounded repeating tiles. WebKit can stretch
+a page-sized gradient raster on long surfaces even when computed CSS matches
+Chromium. The grid repeats every 28px; the diagonal’s 9px period projects to a
+12.7279220614px square tile. Keep the bounded sizes and verify the actual
+rendering in both engines when changing the pattern.
 
 ## Notification history
 
@@ -240,7 +261,7 @@ reference for the approved visual direction, not a separate design system.
 
 For UI changes, use the existing responsive suite in
 [frontend/tests](../frontend/tests) and the checks described in
-[Development](../README.md#development). Extend coverage for new behavior rather
+[contributor checks](../CONTRIBUTING.md#frontend-checks). Extend coverage for new behavior rather
 than considering existing green tests sufficient.
 
 Review affected screens at narrow, intermediate, and wide widths, including

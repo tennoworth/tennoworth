@@ -42,8 +42,9 @@ import { type NotificationPreferences, type NotificationCategory } from '../../c
     finally { busy = false; }
   }
 </script>
-<section class="ui-panel ui-stack notification-settings" aria-labelledby="notification-settings-title">
-  <h3 id="notification-settings-title">Notifications</h3>
+<section class="wrap tw notification-settings" aria-labelledby="notification-settings-title">
+  <div class="rail"><h3 id="notification-settings-title">Notifications</h3></div>
+  <div class="notification-body ui-stack">
   <p>Alerts run while TennoWorth is open, including in the tray. Your inbox keeps the latest 1,000 entries for up to 30 days.</p>
   {#if error}<div class="ui-notice" data-tone="bad" role="alert">{error} <button class="btn xs" onclick={load} disabled={busy}>Retry loading preferences</button></div>{/if}
   {#if preferences}
@@ -62,14 +63,16 @@ import { type NotificationPreferences, type NotificationCategory } from '../../c
   {:else if !error}<p role="status">Loading notification preferences…</p>{/if}
   <div><button class="btn" disabled={busy} onclick={test}>Send test notification</button></div>
   {#if message}<p class="ui-notice" data-tone="good" role="status">{message}</p>{/if}
+  </div>
 </section>
 <style>
-  .notification-settings { padding: var(--inset); }
+  .notification-body { padding: var(--s4) var(--inset); }
   h3, p { margin: 0; }
   p { line-height: var(--leading-body); }
   .muted { color: var(--muted); }
-  .category { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); padding: var(--s3) 0; border-bottom: 1px var(--rule) var(--hairline); }
-  .category strong { flex: 1 1 16rem; font-family: var(--font-body); }
+  .category { display: grid; grid-template-columns: minmax(0, 1fr) 9rem 9rem; align-items: center; gap: var(--s3); padding: var(--s3) 0; border-bottom: 1px var(--rule) var(--hairline); }
+  .category strong { font-family: var(--font-body); font-weight: 500; }
+  @media (max-width: 760px) { .category { grid-template-columns: repeat(2, minmax(0, 1fr)); } .category strong { grid-column: 1 / -1; } }
   .toggle { display: flex; align-items: center; gap: var(--s2); min-height: var(--ctl); cursor: pointer; }
   input { width: var(--s4); height: var(--s4); accent-color: var(--accent); }
 </style>

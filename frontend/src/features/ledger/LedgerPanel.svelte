@@ -89,43 +89,47 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
   }
 </script>
 
-<section class="card ui-panel ledger" data-testid="ledger">
-  <header class="row">
-    <h2>Ledger</h2>
+<section class="ui-stack ledger" data-testid="ledger">
+  <header class="view-header row">
+    <div><h2>Ledger</h2><p class="lede">Every trade the game confirmed, read from its own log — realised plat, not estimates.</p></div>
     <div class="row gap-sm">
       <span class="muted">{trades.length} trade{trades.length === 1 ? '' : 's'}</span>
       <button class="btn ghost" onclick={load}>Refresh</button>
     </div>
   </header>
 
+  {#if !loadError && trades.length}
+    <div class="ui-summary-strip">
+      <div><span class="k">Net, all time</span><strong class:good={all.net > 0} class:bad={all.net < 0}>{all.net > 0 ? '+' : ''}{all.net}p</strong><span class="muted">{all.sales} sold · {all.purchases} bought</span></div>
+      <div><span class="k">Last 7 days</span><strong class:good={week.net > 0} class:bad={week.net < 0}>{week.net > 0 ? '+' : ''}{week.net}p</strong><span class="muted">{week.sales} sold · {week.purchases} bought</span></div>
+      <div><span class="k">Plat in / out</span><strong>{all.platIn}p / {all.platOut}p</strong><span class="muted">sales / purchases</span></div>
+    </div>
+
+  {/if}
   {#if status}
-    {#if status.path}
-      <p class="muted lead">
-        Reading trades from the game's own log (<code title={status.path}>EE.log</code>). Every completed trade lands here with what changed hands, and sales can adjust the matching warframe.market listing.
-      </p>
-    {:else}
+    {#if !status.path}
       <p class="ui-notice" data-tone="warn">
         <strong>Game log not found</strong> - trade detection is off. TennoWorth looks in <code>%LOCALAPPDATA%\Warframe\EE.log</code> (Windows) and every Steam library's <code>compatdata/230410/…/Warframe/EE.log</code> (Linux). Run Warframe once, then restart TennoWorth; for an unusual install set <code>TENNOWORTH_EELOG=/path/to/EE.log</code> before launching.
       </p>
     {/if}
-    <label class="toggle">
-      <input type="checkbox" checked={autoClose} onchange={toggleAutoClose} disabled={savingAutoClose || !status.path} />
-      <span>After a sale, reduce or remove the matching warframe.market listing automatically</span>
-      <span class="muted hint">only ever lowers a quantity by what you sold; never touches price or visibility</span>
-    </label>
+    <section class="wrap tw" aria-labelledby="ledger-automation-title">
+      <div class="rail"><h3 id="ledger-automation-title">Listing automation</h3></div>
+      <div class="ui-setting-row"><div class="ui-setting-copy"><label for="ledger-auto-close">After a sale, reduce or remove the matching warframe.market listing automatically</label><p>Only ever lowers a quantity by what you sold; never touches price or visibility.</p></div>
+      <label class="ui-setting-check">
+      <input id="ledger-auto-close" type="checkbox" checked={autoClose} onchange={toggleAutoClose} disabled={savingAutoClose || !status.path} />
+        <span>Enabled</span>
+      </label></div>
+    </section>
   {/if}
 
+
+  <section class="wrap tw" aria-labelledby="ledger-history-title">
+    <div class="rail"><h3 id="ledger-history-title">Trade history</h3><span class="exp">{trades.length} confirmed trade{trades.length === 1 ? '' : 's'}</span></div>
   {#if loadError}
     <div class="ui-notice" data-tone="bad" role="alert">Couldn't load the ledger: {loadError}</div>
   {:else if trades.length === 0}
     <div class="ui-notice">No trades recorded yet. Complete a trade in-game with TennoWorth running and it appears here.</div>
   {:else}
-    <div class="tiles">
-      <div class="tile"><span class="k">Net, all time</span><strong class:good={all.net > 0} class:bad={all.net < 0}>{all.net > 0 ? '+' : ''}{all.net}p</strong><span class="muted">{all.sales} sold · {all.purchases} bought</span></div>
-      <div class="tile"><span class="k">Last 7 days</span><strong class:good={week.net > 0} class:bad={week.net < 0}>{week.net > 0 ? '+' : ''}{week.net}p</strong><span class="muted">{week.sales} sold · {week.purchases} bought</span></div>
-      <div class="tile"><span class="k">Plat in / out</span><strong>{all.platIn}p / {all.platOut}p</strong><span class="muted">sales / purchases</span></div>
-    </div>
-
     {#if byItem.length}
       <details class="byitem">
         <summary>Top sellers by realised plat <span class="muted">· multi-item sales split by quantity</span></summary>
@@ -138,7 +142,8 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
     {/if}
 
     <div class="scroll">
-      <table class="tw">
+      <table class="tw fixed">
+        <colgroup><col style="width:11rem" /><col style="width:6rem" /><col /><col style="width:17rem" /><col style="width:7rem" /><col style="width:11rem" /></colgroup>
         <thead><tr><th>When</th><th>Trade</th><th class="l">Items</th><th>With</th><th class="r">Plat</th><th>Listing</th></tr></thead>
         <tbody>
           {#each trades as t (t.id)}
@@ -146,7 +151,7 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
               <td class="mono muted">{when(t.at)}</td>
               <td><span class="kind {t.kind}">{kindLabel(t.kind)}</span></td>
               <td class="l">{describeItems(t)}</td>
-              <td class="muted">{t.partner}</td>
+              <td class="l muted">{t.partner}</td>
               <td class="mono r" class:good={t.kind === 'sale'} class:bad={t.kind === 'purchase'}>{platCell(t)}</td>
               <td>{#if t.wfm_closed}<span class="muted" title="A warframe.market listing was reduced or removed after this sale">listing updated</span>{/if}</td>
             </tr>
@@ -156,24 +161,22 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
     </div>
   {/if}
 
+  </section>
   <Toast {toasts} ondismiss={(id) => (toasts = toasts.filter((x) => x.id !== id))} />
 </section>
 
 <style>
-  .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-  .gap-sm { gap: 8px; }
-  .lead { margin: 0; font-size: var(--text-control); }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
+  .gap-sm { gap: var(--s2); }
+  .lede { margin: var(--s2) 0 0; color: var(--muted); }
+  .ledger { gap: var(--s4); }
+  .ui-notice { margin: var(--s4) var(--inset); }
+  .byitem { padding: var(--s3) var(--inset); }
   code { font-family: var(--font-mono); font-size: var(--text-caption); }
-  .toggle { display: flex; align-items: center; gap: 8px; font-size: var(--text-control); flex-wrap: wrap; }
-  .toggle .hint { font-size: var(--text-caption); }
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr)); gap: 10px; }
-  .tile { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius-panel); background: var(--panel-2); }
-  .tile .k { font-size: var(--text-caption); letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
-  .tile strong { font-size: var(--text-metric); font-variant-numeric: tabular-nums; }
   .byitem summary { cursor: pointer; font-size: var(--text-control); }
   .byitem ul { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; font-size: var(--text-control); }
-  .byitem li { display: flex; justify-content: space-between; gap: 10px; }
-  table { min-width: 42rem; }
+  .byitem li { display: flex; justify-content: space-between; gap: var(--s3); }
+  table { min-width: 70rem; }
   .r { text-align: right; }
   .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .kind { font-size: var(--text-caption); padding: 1px 7px; border-radius: var(--radius-pill); border: 1px solid var(--border); color: var(--muted); }

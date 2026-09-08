@@ -714,7 +714,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
        real thing in the sidebar. -->
   
 
-  <Faq />
+  <Faq desktop />
 
   <footer data-shell class="sitefoot">
     <span data-shell class="grow">TennoWorth is a fan project, not affiliated with Digital Extremes or warframe.market. Open source · MIT · data from warframe.market and warframestat.us.</span>
@@ -827,7 +827,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     </div>
   </aside>
 
-  <main data-shell class="workspace">
+  <main data-shell class="workspace" class:reading-view={['sets', 'relics', 'routines', 'install'].includes(effectiveView)}>
 
     {@render generalBanners()}
 
@@ -866,7 +866,8 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         </p>
       </section>
       {#if setRecos.length > 0}
-        <section data-shell class="card ui-panel set-recos">
+        <section data-shell class="wrap tw set-recos">
+          <div data-shell class="rail"><h3 data-shell>Set opportunities</h3></div>
           {#each setRecos as r (r.set_slug)}
             <div data-shell class="reco row">
               <div data-shell class="reco-body">
@@ -970,12 +971,13 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         </p>
       </section>
       {#if relicPlan.length > 0}
-        <section data-shell class="card ui-panel relic-planner">
+        <section data-shell class="wrap tw relic-planner">
+          <div data-shell class="rail"><h3 data-shell>Relic decisions</h3></div>
           <div data-shell class="relic-grid">
             {#each relicVisible as p (p.relic_slug)}
               <div data-shell class="relic-card">
                 <div data-shell class="relic-title">
-                  <strong data-shell class="reco-verb">Crack</strong>
+                  <strong data-shell class="reco-verb">{p.decision?.verdict === 'sell-intact' ? 'Sell intact' : p.decision?.verdict === 'refine' ? 'Refine' : p.decision?.verdict === 'crack' ? 'Crack intact' : 'Review'}</strong>
                   <a data-shell
                     href={wfmItemUrl(p.relic_slug)}
                     target="_blank"
@@ -1085,7 +1087,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
            built before that switch (or carried through a DE outage) may not
            have it, and an empty table would read as "he is selling nothing". -->
       {#if voidTrader?.inventory?.length}
-        <section data-shell class="card ui-panel">
+        <section data-shell class="baro-stock">
           <BaroBoard market={inventory.market} baro={voidTrader} owned={inventory.resolved.owned} />
         </section>
       {/if}
@@ -1093,7 +1095,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       <!-- Vault rotations and Darvo, from the same worldState poll. An
            unvaulting is the most expensive surprise in prime trading and it is
            announced days ahead. -->
-      <section data-shell class="card ui-panel">
+      <section data-shell class="baro-calendar">
         <TraderCalendar market={inventory.market} owned={inventory.resolved.owned} />
       </section>
 
@@ -1107,10 +1109,10 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         </p>
       </section>
 
-      <section data-shell class="card ui-panel">
+      <section data-shell class="baro-calendar">
         <TraderCalendar market={inventory.market} owned={inventory.resolved.owned} />
       </section>
-      <section data-shell class="card ui-panel routine">
+      <section data-shell class="card ui-panel routine routine-timing">
         <div data-shell class="routine-clocks">
           <div data-shell class="clock">
             <span data-shell class="clock-label">Daily reset</span>
@@ -1130,7 +1132,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         </div>
       </section>
 
-      <details data-shell class="routine-checklist" bind:open={routineChecklistOpen}>
+      <details data-shell class="routine-checklist wrap tw" bind:open={routineChecklistOpen}>
         <summary data-shell>{routineChecklistOpen ? 'Hide checklist' : "Show me today's checklist"}</summary>
 
         <section data-shell class="card ui-panel routine">
@@ -1188,20 +1190,12 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       />
 
     {:else if effectiveView === 'watches'}
-      <section data-shell class="view-header">
-        <h2 data-shell>Price watches</h2>
-        <p data-shell class="lede">Desktop notifications when an item hits your price - checked every 10 minutes against live warframe.market orders.</p>
-      </section>
       <WatchlistPanel market={inventory.market} />
 
     {:else if effectiveView === 'notifications'}
       <NotificationInbox onopen={(target) => filters.setView(target)} onsettings={() => filters.setView('settings')} />
 
     {:else if effectiveView === 'ledger'}
-      <section data-shell class="view-header">
-        <h2 data-shell>Ledger</h2>
-        <p data-shell class="lede">Every trade the game confirmed, read from its own log - realised plat, not estimates.</p>
-      </section>
       <LedgerPanel onsetautoclose={(on) => store.setSetting('auto-close-sold', on ? 'on' : 'off')} />
 
     {:else if effectiveView === 'install'}
@@ -1209,7 +1203,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         <h2 data-shell>FAQ</h2>
         <p data-shell class="lede">Answers to common questions.</p>
       </section>
-      <Faq />
+      <Faq desktop />
 
     {:else if effectiveView === 'settings'}
       <SettingsPanel {theme} {transport} {isDesktop} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} />

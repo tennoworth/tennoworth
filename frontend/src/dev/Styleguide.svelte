@@ -5,6 +5,8 @@
   let mode = $state<Mode>('dark');
   let filter = $state('');
   let notificationRead = $state(false);
+  let exampleEnabled = $state(true);
+  let exampleShortcut = $state('Ctrl+Shift+O');
   let dataState = $state('populated');
   let selected = $state('Fast Cash');
   let quantity = $state<number | undefined>(2);
@@ -114,9 +116,11 @@
       <p class="ui-notice"><strong>Unknown is not zero.</strong> A missing market observation cannot support a price claim.</p>
     </div>
   </section>
-  <section class="ui-panel" aria-labelledby="panel-title">
-    <header><h2 id="panel-title">Shared panel header</h2><span class="muted">Used by management screens</span></header>
-    <p>Watches and Ledger use this panel shell. The heading and adjacent status wrap together, with shared spacing and no feature-specific card copy.</p>
+  <section class="wrap tw ui-reading" aria-labelledby="panel-title">
+    <div class="rail"><h3 id="panel-title">05 / Aligned preferences</h3></div>
+    <div class="ui-setting-row"><div class="ui-setting-copy"><label for="example-enabled">Local recognition example</label><p>Labels and help text share one edge; related controls share another.</p></div><label class="ui-setting-check"><input id="example-enabled" type="checkbox" bind:checked={exampleEnabled} />Enabled</label></div>
+    <div class="ui-setting-row"><div class="ui-setting-copy"><label for="example-shortcut">Retry shortcut example</label><p>Resize or change theme while editing. The draft stays in place.</p></div><div class="ui-setting-control"><input id="example-shortcut" class="ui-input" bind:value={exampleShortcut} disabled={!exampleEnabled} /></div></div>
+    <div class="ui-panel-footer">These examples do not change desktop preferences.</div>
   </section>
   <footer class="muted">Reference patterns: .btn · .wrap.tw · table.tw · .ui-field · .ui-toolbar · .ui-notice · dialog.cryptobox</footer>
   {#if dataState === 'notifications'}

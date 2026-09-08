@@ -97,10 +97,10 @@ import { type RivenAuction } from '../../contracts/desktop';
   }
 </script>
 
+<section class="view-header"><h2>Rivens</h2><p class="lede">DE’s weekly band, the disposition trend, and live comparables — no single “worth N” number.</p></section>
 <section class="wrap tw rivens" data-testid="rivens-view">
-  <div class="bar">
-    <h3>Rivens</h3>
-    <span class="exp">DE's weekly band, the disposition trend, and live comparables - no single "worth N" number.</span>
+  <div class="rail">
+    <h3>Owned rivens</h3>
     <span class="grow"></span>
     <span class="count"><b>{rivens.length}</b> owned{#if rivenStatsAge}&nbsp;· band data {rivenStatsAge}{/if}</span>
   </div>
@@ -109,20 +109,20 @@ import { type RivenAuction } from '../../contracts/desktop';
     <div class="line"><span class="exp">No rivens in your scanned inventory. Crack some relics or buy veiled ones.</span></div>
   {:else}
     <div class="scroll">
-      <table class="tw">
+      <table class="tw fixed">
         <colgroup>
-          <col style="width:11rem" />
+          <col style="width:13rem" />
           <col />
           <col style="width:3.5rem" />
           <col style="width:3.5rem" />
           <col style="width:7rem" />
           <col style="width:13rem" />
-          <col style="width:6rem" />
+          <col style="width:8rem" />
         </colgroup>
         <thead>
           <tr>
             <th class="l">Weapon</th><th class="l">Stats</th><th>Rolls</th><th>Rank</th>
-            <th class="l">Dispo</th><th>DE weekly</th><th></th>
+            <th class="l">Dispo</th><th>DE weekly</th><th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -250,7 +250,8 @@ import { type RivenAuction } from '../../contracts/desktop';
 <style>
   /* Shell + table come from the shared .wrap.tw / table.tw anatomy in
      app.css; only riven-specific content styles live here. */
-  table { min-width: 58rem; }
+  table { min-width: 65rem; }
+  td:last-child .btn { white-space: nowrap; }
   .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .weapon { display: flex; align-items: center; gap: var(--s1); }
   .pol { color: var(--muted); font-size: var(--text-caption); }

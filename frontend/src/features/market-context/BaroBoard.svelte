@@ -80,9 +80,10 @@
   }
 </script>
 
-<section class="board">
+<section class="wrap tw board">
+  <div class="rail"><h3>What he is selling</h3></div>
+  <div class="board-body">
   <header class="board-head">
-    <h3>What he is selling</h3>
     <p class="sub">
       {rows.length} {rows.length === 1 ? 'item' : 'items'} · ranked by plat returned per ducat spent.
       {#if !current}
@@ -143,6 +144,7 @@
             </td>
           </tr>
         {/each}
+        {#if shown.length === 0}<tr><td colspan="7" class="empty">No items in the current value filter. Use the button below to include poor-value or untradeable stock.</td></tr>{/if}
       </tbody>
     </table>
   </div>
@@ -188,6 +190,7 @@
       {showAll ? 'Hide poor-value and untradeable lines' : `Show ${hiddenCount} more (poor value or not tradeable)`}
     </button>
   {/if}
+  </div>
 </section>
 
 <style>
@@ -195,9 +198,6 @@
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-  }
-  .board-head h3 {
-    margin: 0;
   }
   .sub,
   .gap {
@@ -332,4 +332,7 @@
     color: var(--faint);
     font-variant-numeric: tabular-nums;
   }
+  .board-body { padding: var(--s4) var(--inset); display: flex; flex-direction: column; gap: var(--s3); }
+  .board { gap: 0; }
+  .empty { padding: var(--s4); color: var(--muted); }
 </style>

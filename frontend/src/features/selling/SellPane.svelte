@@ -288,8 +288,7 @@
   </div>
 {/if}
 
-<!-- Top picks rail copy: rendered inside ResultsTable's picks panel so the
-     pick rows share the table's colgroup (numbers line up with the columns). -->
+
 {#snippet picksHead()}
   <div class="picks-title">
     <h3>Top picks</h3>
@@ -947,8 +946,7 @@
   .list-cta:hover:not(:disabled) { filter: brightness(1.1); }
   .list-cta:disabled { opacity: 0.4; cursor: not-allowed; }
 
-  /* Top picks - the rail copy and the per-row reason cell, rendered inside
-     ResultsTable's picks panel (rows share the table's colgroup). */
+
   .picks-exp { font-size: var(--text-caption); }
   .picks-count { font-size: var(--text-caption); white-space: nowrap; }
   .picks-all-snoozed { margin: 0; }

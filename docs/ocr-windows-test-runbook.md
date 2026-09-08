@@ -41,6 +41,16 @@ live capture, trigger timing, or overlay presentation.
 
 ## Probe and log-access lessons
 
+The full `TENNOWORTH_PROBE` run modifies notification preferences and imports
+fictional inventory into application storage. A new `WEBVIEW2_USER_DATA_FOLDER`
+isolates browser data, but does not isolate the native SQLite database. Repeated
+runs under the same app identity can therefore fail the notification-defaults
+check because a previous probe saved different preferences. For a fresh-default
+run, build with `cargo tauri build --debug --no-bundle --config <probe-config>`
+and give that temporary JSON configuration a unique per-run `identifier`.
+Preserve existing application data; do not clear a gaming profile to reset a
+probe. Check the final report and clean process exit, not just a checkpoint.
+
 The original installed OCR boot probe wrote
 `OCR_BOOT_PROBE_OK backend=windows-window`, but did not exit within 120 seconds
 under SSH. Lifecycle tracing reached `ExitRequested` without reaching `Exit`.

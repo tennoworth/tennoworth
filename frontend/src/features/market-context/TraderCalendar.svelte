@@ -45,8 +45,9 @@
 </script>
 
 {#if items.length}
-  <section class="cal">
-    <h3>What's coming</h3>
+  <section class="wrap tw cal">
+    <div class="rail"><h3>What’s coming</h3></div>
+    <div class="calendar-body">
     <ul>
       {#each items as item (item.id ?? item.kind + item.at + item.title)}
         <li class:hot={item.affects.length > 0 && (item.affectsKnown || item.reach === 'partial-hits')}>
@@ -81,6 +82,7 @@
         </li>
       {/each}
     </ul>
+    </div>
   </section>
 {/if}
 
@@ -155,4 +157,6 @@
       grid-column: 2;
     }
   }
+  .calendar-body { padding: var(--s4) var(--inset); }
+  .cal { gap: 0; }
 </style>

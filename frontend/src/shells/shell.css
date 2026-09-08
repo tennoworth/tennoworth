@@ -595,15 +595,16 @@
      distinguished by a small uppercase pill so the user can scan and
      pick a strategy without reading every detail line. Net plat is the
      right-aligned headline number per row. */
-  .set-recos[data-shell] { padding: 14px 16px; gap: 8px; }
+  .set-recos[data-shell] { padding: 0; }
   .reco[data-shell] {
     border-top: 1px var(--rule) var(--hairline);
-    padding: 10px 0;
+    padding: var(--s4) var(--inset);
     align-items: center;
   }
   .reco:first-of-type[data-shell] { border-top: none; }
   .reco-body[data-shell] { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
-  .reco-title[data-shell] { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .reco-title[data-shell] { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+  .reco-title a[data-shell] { order: -1; flex: 1 1 16rem; }
   .reco-title a[data-shell] { color: var(--fg); text-decoration: none; font-weight: 600; font-size: var(--text-control); }
   .reco-title a:hover[data-shell] { color: var(--accent); text-decoration: underline; }
   .kind[data-shell] {
@@ -633,9 +634,6 @@
   .reco-detail strong[data-shell] { color: var(--fg); font-weight: 600; }
   .good-text[data-shell] { color: var(--good); }
   .bad-text[data-shell] { color: var(--bad); }
-  /* The net plat is inline with the verb + set name, so the phrase reads
-     "Complete Mesa Prime +95p" as a single declarative sentence rather
-     than a verb-on-left / number-on-right two-column row. */
   .reco-net-inline[data-shell] {
     font-family: var(--font-mono);
     font-size: var(--text-body);
@@ -725,12 +723,8 @@
   .routine-checklist summary:hover[data-shell] { color: var(--accent); }
   .routine-checklist[open] summary[data-shell] { color: var(--accent); }
 
-  /* Relic planner - three-card grid above the main table. Equal-weight
-     cards because the user is making a "what tonight" choice and equal
-     real estate makes the comparison direct. Each card leads with EPP
-     (expected plat per crack); the moving-rewards fraction flags traps
-     where a high-EPP relic has dead reward markets. */
-  .relic-planner[data-shell] { padding: 14px 16px; gap: 12px; }
+
+  .relic-planner[data-shell] { padding: 0; gap: 0; }
   .build-vs-buy[data-shell] { margin-top: 8px; }
   .build-vs-buy > summary[data-shell] { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
   .build-vs-buy[open] > summary[data-shell] { margin-bottom: 8px; }
@@ -906,3 +900,26 @@
   /* .cryptobox dialog styling moved to WfmAuthDialogs.svelte and
      ExportImportDialogs.svelte - no more dialog.cryptobox elements render
      directly in this template. */
+  main.reading-view[data-shell] > * { width: 100%; max-width: 64rem; }
+  main.workspace[data-shell] { gap: var(--s4); padding: var(--s5); }
+  .relic-grid[data-shell] { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .relic-card[data-shell] { border: 0; border-top: 1px var(--rule) var(--border); background: var(--panel); padding: var(--s4) var(--inset); }
+  .relic-card:first-child[data-shell] { border-top: 0; }
+  .relic-title[data-shell] { justify-content: flex-start; gap: var(--s3); }
+  .relic-title a[data-shell] { order: -1; flex: 1; }
+  .relic-rewards summary[data-shell] { min-height: var(--ctl); }
+  .routine-timing[data-shell] { padding: 0; }
+  .routine-clocks[data-shell] { gap: 0; }
+  .clock[data-shell] { border: 0; border-right: 1px var(--rule) var(--border); padding: var(--s4) var(--inset); background: var(--panel); gap: var(--s1); }
+  .clock:last-child[data-shell] { border-right: 0; }
+  .routine-checklist[data-shell] { padding: 0; }
+  .routine-checklist > summary[data-shell] { align-self: stretch; padding: var(--s3) var(--inset); min-height: var(--bar); background: var(--ink-bar); color: var(--on-ink); }
+  .routine-checklist > summary:hover[data-shell] { color: var(--on-ink); }
+  .routine-checklist > summary:focus-visible[data-shell] { outline-color: var(--on-ink); outline-offset: -3px; }
+  .routine-checklist .routine[data-shell] { border: 0; border-top: 1px var(--rule) var(--border); padding: var(--s4) var(--inset); }
+  main.workspace .faq[data-shell] { margin: 0; padding: 0; }
+  main.workspace .faq > h2[data-shell] { margin: 0; padding: var(--s2) var(--inset); min-height: var(--rail); }
+  main.workspace .faq details[data-shell] { margin: 0 var(--inset); padding-block: var(--s3); }
+  main.workspace .faq details p[data-shell] { max-width: 75ch; }
+  main.workspace .faq > .trust-lede[data-shell] { padding: var(--s4) var(--inset); margin: 0; }
+  @media (max-width: 760px) { main.workspace[data-shell] { padding: var(--s4); } .clock[data-shell] { border-right: 0; border-bottom: 1px var(--rule) var(--border); } .clock:last-child[data-shell] { border-bottom: 0; } }

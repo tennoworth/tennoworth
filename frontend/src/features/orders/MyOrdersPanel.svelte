@@ -606,23 +606,26 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
 </section>
 
 <section class="wrap tw orders" aria-label="My WFM listings">
-  <div class="bar">
-    <span class="lbl">Show</span>
+  <div class="rail"><h3>Active listings</h3></div>
+  <div class="bar order-filters">
+    <div class="ui-field"><span>Show</span>
     <span class="seg" role="group" aria-label="Show">
       <button class:on={show === 'all'} aria-pressed={show === 'all'} onclick={() => (show = 'all')}>All {counts.all}</button>
       <button class:on={show === 'sell'} aria-pressed={show === 'sell'} onclick={() => (show = 'sell')}>Sell {counts.sell}</button>
       <button class:on={show === 'buy'} aria-pressed={show === 'buy'} onclick={() => (show = 'buy')}>Buy {counts.buy}</button>
       <button class:on={show === 'hidden'} aria-pressed={show === 'hidden'} onclick={() => (show = 'hidden')}>Hidden {counts.hidden}</button>
       <button class:on={show === 'issues'} aria-pressed={show === 'issues'} onclick={() => (show = 'issues')}>Issues {counts.issues}</button>
-    </span>
-    <input class="input" type="text" placeholder="Filter by name…" bind:value={nameFilter} aria-label="Filter orders by name" />
-    <span class="grow"></span>
+    </span></div>
+    <label class="ui-field order-search"><span>Item</span><input class="input" type="text" placeholder="Filter by name…" bind:value={nameFilter} aria-label="Filter orders by name" /></label>
+  </div>
+  <div class="bar order-actions">
     <span class="count">
       {#if phase === 'loading' || phase === 'idle'}Fetching orders…
       {:else if phase === 'done'}<b>{shown.length === orders.length ? orders.length : `${shown.length} of ${orders.length}`}</b> {orders.length === 1 ? 'order' : 'orders'}{#if listedValue > 0}&nbsp;· <b>{listedValue.toLocaleString()}</b>p listed{/if}
       {:else if phase === 'locked'}unlock required
       {/if}
     </span>
+    <span class="grow"></span>
     <button
       class="btn ghost"
       onclick={() => bulkSetVisible(true)}
@@ -653,8 +656,8 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
           <col style="width:3rem" />
           <col style="width:10rem" />
           {#if live.size > 0}<col style="width:4.5rem" /><col style="width:4.5rem" />{/if}
-          <col style="width:4.5rem" />
-          <col style="width:6.5rem" />
+          <col style="width:7rem" />
+          <col style="width:8rem" />
         </colgroup>
         <thead>
           <tr>
@@ -761,4 +764,12 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   .visbtn:hover:not(:disabled) { background: transparent; }
   .visbtn:hover:not(:disabled) .vis { background: var(--panel-2); }
   button.linkish { background: none; border: 0; padding: 0; color: var(--fg); text-decoration: underline dotted; cursor: pointer; font: inherit; }
+  .order-filters { align-items: end; gap: var(--s3); padding-block: var(--s3); }
+  .order-search { flex: 1 1 15rem; }
+  .order-search .input { width: 100%; }
+  .order-actions { padding-block: var(--s3); }
+  .orders .order-filters > .ui-field { flex-shrink: 1; max-width: 100%; }
+  .seg { flex-wrap: wrap; height: auto; min-height: var(--ctl-lg); overflow: visible; }
+  .seg > button { min-height: var(--ctl-lg); height: auto; white-space: nowrap; }
+  .orders td:last-child .btn { white-space: nowrap; }
 </style>

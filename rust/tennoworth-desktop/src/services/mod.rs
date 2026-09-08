@@ -1,3 +1,4 @@
+pub(crate) mod browser;
 pub(crate) mod allowance;
 pub(crate) mod definitions;
 pub(crate) mod eelog;

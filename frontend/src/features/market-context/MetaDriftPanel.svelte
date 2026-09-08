@@ -22,26 +22,27 @@
 </script>
 
 {#if model}
+<section class="view-header"><h2>Meta Drift</h2><p class="lede">{model.label}</p></section>
 <section class="wrap tw meta-drift" data-testid="meta-drift">
   <div class="rail">
-    <h3>Meta Drift</h3>
-    <span class="exp">{model.label}</span>
+    <h3>Equip-share changes</h3>
   </div>
   <div class="intro">
     Annual DE equip-share snapshots, published in arrears. Deltas compare the same item within the same category; they are percentage points, not causes or forecasts.
     {#if model.categoryChanges}<span class="muted"> {model.categoryChanges} category {model.categoryChanges === 1 ? 'change was' : 'changes were'} incomparable and excluded.</span>{/if}
   </div>
   <div class="controls">
-    <div class="tabs" role="tablist" aria-label="Meta drift view">
-      <button class:active={tab === 'gains'} onclick={() => tab = 'gains'}>Gains</button>
-      <button class:active={tab === 'losses'} onclick={() => tab = 'losses'}>Losses</button>
-      <button class:active={tab === 'only'} onclick={() => tab = 'only'}>Only in year data</button>
+    <div class="ui-field"><span>Movement</span><div class="tabs" role="group" aria-label="Meta drift view">
+      <button class:active={tab === 'gains'} aria-pressed={tab === 'gains'} onclick={() => tab = 'gains'}>Gains</button>
+      <button class:active={tab === 'losses'} aria-pressed={tab === 'losses'} onclick={() => tab = 'losses'}>Losses</button>
+      <button class:active={tab === 'only'} aria-pressed={tab === 'only'} onclick={() => tab = 'only'}>Only in year data</button>
     </div>
-    <input bind:value={query} placeholder="Search equipment" aria-label="Search meta drift" />
-    <select bind:value={category} aria-label="Filter meta drift category">
+    </div>
+    <label class="ui-field meta-search"><span>Equipment</span><input bind:value={query} placeholder="Search equipment" aria-label="Search meta drift" /></label>
+    <label class="ui-field"><span>Category</span><select bind:value={category} aria-label="Filter meta drift category">
       <option value="all">All categories</option>
       {#each model.categories as value}<option value={value}>{value}</option>{/each}
-    </select>
+    </select></label>
   </div>
 
   {#if tab !== 'only'}
@@ -78,13 +79,13 @@
 
 <style>
   .meta-drift { min-width: 0; }
-  .rail .exp { color: var(--on-ink-muted); }
   .intro { padding: .75rem 1rem; border-bottom: 1px dotted var(--hairline); line-height: 1.45; }
-  .controls { display: flex; flex-wrap: wrap; gap: .6rem; padding: .65rem 1rem; align-items: center; border-bottom: 1px dotted var(--hairline); }
+  .controls { display: flex; flex-wrap: wrap; gap: var(--s3); padding: var(--s3) var(--inset); align-items: end; border-bottom: 1px dotted var(--hairline); }
   .tabs { display: flex; gap: .25rem; }
   button, input, select { font: inherit; font-size: var(--text-control); min-height: var(--ctl-lg); border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--panel-2); color: inherit; padding: var(--s1) var(--s2); }
   button.active { background: var(--ink-bar); color: var(--on-ink); }
-  input { margin-left: auto; min-width: 12rem; }
+  input { width: 100%; min-width: 0; }
+  .meta-search { flex: 1 1 15rem; }
   .only-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--hairline); }
   .only-card { background: var(--panel); min-width: 0; }
   table { min-width: 46rem; }
@@ -99,7 +100,6 @@
       padding-top: .5rem;
       padding-bottom: .5rem;
     }
-    .wrap.tw.meta-drift > .rail .exp { width: 100%; white-space: normal; overflow: visible; }
     .controls { align-items: stretch; flex-wrap: wrap; }
     .tabs { width: 100%; overflow-x: auto; }
     input { margin-left: 0; flex: 1 1 10rem; min-width: 0; }

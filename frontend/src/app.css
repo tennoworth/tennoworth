@@ -548,8 +548,34 @@ table.tw tr.busy td { color: var(--faint); }
 .ui-panel.warn-banner { border-left: 3px solid var(--warn); }
 .ui-panel > header { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); flex-wrap: wrap; }
 .ui-panel > header h2 { margin: 0; font-size: var(--text-heading); line-height: var(--leading-control); }
-.view-header { display: flex; align-items: center; gap: var(--s2); min-height: var(--rail); flex-wrap: wrap; }
+.view-header { display: flex; align-items: center; gap: var(--s2) var(--s4); min-height: var(--rail); flex-wrap: wrap; margin-bottom: var(--s2); }
+.view-header > .lede { flex: 0 0 100%; width: 100%; max-width: none; margin: 0; color: var(--muted); }
 .view-header h2 { margin: 0; color: var(--fg); font-size: var(--text-heading); font-weight: 600; line-height: var(--leading-control); letter-spacing: -.01em; text-transform: none; }
+/* Reading surfaces share one edge; analytical tables retain the workspace. */
+.ui-reading { width: 100%; max-width: 64rem; }
+.ui-setting-row { display: grid; grid-template-columns: minmax(0, 1fr) 19rem; gap: var(--s3) var(--s6); align-items: start; padding: var(--s4) var(--inset); min-width: 0; }
+.ui-setting-row + .ui-setting-row { border-top: 1px var(--rule) var(--hairline); }
+.ui-setting-copy { min-width: 0; }
+.ui-setting-copy > :is(label, strong) { display: block; font-weight: 500; }
+.ui-setting-copy > :is(p, small) { display: block; margin: var(--s1) 0 0; max-width: 65ch; font-size: var(--text-control); line-height: var(--leading-body); color: var(--muted); }
+.ui-setting-control { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s2); min-height: var(--ctl-lg); min-width: 0; }
+.ui-setting-control > input:not([type="checkbox"]) { min-width: 0; max-width: 100%; }
+.ui-setting-control > input[type="range"] { flex: 1; }
+.ui-setting-check { display: flex; align-items: center; gap: var(--s2); min-height: var(--ctl-lg); cursor: pointer; }
+.ui-setting-check input { width: var(--s4); height: var(--s4); margin: 0; accent-color: var(--accent); }
+.ui-section-group { padding: var(--s4) 0; border-top: 1px var(--rule) var(--border); }
+.ui-section-group > h4 { margin: 0; padding: 0 var(--inset) var(--s3); font: 600 var(--text-caption)/var(--leading-body) var(--font-ui); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.ui-section-group > .ui-setting-row:first-of-type { padding-top: 0; }
+.ui-section-group > .ui-setting-row:last-of-type { padding-bottom: 0; }
+.ui-panel-footer { padding: var(--s4) var(--inset); border-top: 1px var(--rule) var(--border); background: var(--panel-2); }
+.ui-summary-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--border); background: var(--panel); }
+.ui-summary-strip > div { display: flex; flex-direction: column; gap: var(--s1); padding: var(--s4) var(--inset); min-width: 0; }
+.ui-summary-strip > div + div { border-left: 1px var(--rule) var(--border); }
+.ui-summary-strip strong { font: 600 var(--text-metric)/var(--leading-body) var(--font-mono); }
+.ui-summary-strip .k { color: var(--muted); font: 600 var(--text-caption)/var(--leading-body) var(--font-ui); letter-spacing: .1em; text-transform: uppercase; }
+@media (max-width: 1050px) { .ui-setting-row { grid-template-columns: minmax(0, 1fr) 15rem; gap: var(--s4); } }
+@media (max-width: 760px) { .ui-setting-row { grid-template-columns: minmax(0, 1fr); gap: var(--s2); } }
+@media (max-width: 480px) { .ui-summary-strip { grid-template-columns: minmax(0, 1fr); } .ui-summary-strip > div + div { border-left: 0; border-top: 1px var(--rule) var(--border); } }
 .lede-dot { display: inline-flex; align-items: center; justify-content: center; width: var(--ctl-xs); height: var(--ctl-xs); font-size: var(--text-caption); line-height: 1; color: var(--muted); border: 1px var(--rule) var(--border); cursor: help; }
 .lede-dot:hover, .lede-dot:focus-visible { color: var(--accent); border-color: var(--accent); }
 .general-banner { flex-direction: row; align-items: flex-start; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
@@ -595,6 +621,9 @@ html[data-look="yorha"] body {
     repeating-linear-gradient(0deg, var(--grid) 0 1px, transparent 1px 28px),
     repeating-linear-gradient(90deg, var(--grid) 0 1px, transparent 1px 28px),
     repeating-linear-gradient(-45deg, var(--hatch) 0 1px, transparent 1px 9px);
+  /* Page-sized gradient rasters can stretch in WebKit. The diagonal tile
+     spans one 9px period projected onto both axes (9 × sqrt(2)). */
+  background-size: 28px 28px, 28px 28px, 12.7279220614px 12.7279220614px;
   font-size: 0.84375rem;
 }
 html[data-look="yorha"] a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--border); }

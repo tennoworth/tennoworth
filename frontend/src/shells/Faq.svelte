@@ -1,6 +1,9 @@
+<script lang="ts">
+  let { desktop = false }: { desktop?: boolean } = $props();
+</script>
 
   <section data-shell class="faq" id="faq">
-    <h2 data-shell>FAQ</h2>
+    <h2 data-shell>{desktop ? 'Using TennoWorth' : 'FAQ'}</h2>
 
     <details data-shell>
       <summary data-shell>Is this safe? Can I get banned?</summary>
