@@ -1,0 +1,1485 @@
+{
+  "cases": [
+    {
+      "name": "liquid troll ask",
+      "request": {
+        "owned": [
+          [
+            "item|",
+            {
+              "count": 5,
+              "name": "Item",
+              "type": "Mods",
+              "slug": "item",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "market": {
+          "items": {
+            "item": {
+              "avg": 20,
+              "low_sell": 1,
+              "top_buy": 25,
+              "vol": 10,
+              "ratio": 1,
+              "buys": 1,
+              "sells": 1,
+              "low5_avg": 22,
+              "medians_7d": [
+                0,
+                10,
+                20
+              ],
+              "median_now": 40,
+              "median_90d": 30,
+              "donch_top_90d": 40,
+              "donch_bot_90d": 10
+            }
+          },
+          "usage": {},
+          "set_to_parts": {}
+        },
+        "reserve_copies": 0,
+        "spares_only": false
+      },
+      "expected": [
+        {
+          "key": "item|",
+          "sellable": 5,
+          "clearing_price": 40,
+          "sell_score": 200,
+          "patience": false,
+          "ducats": null,
+          "plat_per_100d": null,
+          "potential_plat": 100,
+          "raw_value": 110,
+          "medians_7d": [
+            10,
+            20
+          ],
+          "median_90d": 30,
+          "delta_90d_pct": 33.33333333333333,
+          "timing": "peak",
+          "demand": {
+            "usage": null,
+            "inherited": false,
+            "liquidity": "unknown",
+            "band": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "thin fantasy ask",
+      "request": {
+        "owned": [
+          [
+            "item|",
+            {
+              "count": 5,
+              "name": "Item",
+              "type": "Mods",
+              "slug": "item",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "market": {
+          "items": {
+            "item": {
+              "avg": 20,
+              "low_sell": 100,
+              "top_buy": 10,
+              "vol": 2,
+              "ratio": 1,
+              "buys": 1,
+              "sells": 1,
+              "low5_avg": 22,
+              "medians_7d": [
+                0,
+                10,
+                20
+              ],
+              "median_now": 10,
+              "median_90d": 20,
+              "ducats": 45
+            }
+          },
+          "usage": {},
+          "set_to_parts": {}
+        },
+        "reserve_copies": 0,
+        "spares_only": false
+      },
+      "expected": [
+        {
+          "key": "item|",
+          "sellable": 5,
+          "clearing_price": 15,
+          "sell_score": 15,
+          "patience": true,
+          "ducats": 45,
+          "plat_per_100d": 33.333333333333336,
+          "potential_plat": 100,
+          "raw_value": 110,
+          "medians_7d": [
+            10,
+            20
+          ],
+          "median_90d": 20,
+          "delta_90d_pct": null,
+          "timing": "neutral",
+          "demand": {
+            "usage": null,
+            "inherited": false,
+            "liquidity": "thin",
+            "band": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "missing market signals",
+      "request": {
+        "owned": [
+          [
+            "item|",
+            {
+              "count": 5,
+              "name": "Item",
+              "type": "Mods",
+              "slug": "item",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "market": {
+          "items": {
+            "item": {
+              "avg": 20,
+              "low_sell": 20,
+              "top_buy": 10,
+              "vol": 10,
+              "ratio": 1,
+              "buys": 1,
+              "sells": 1,
+              "low5_avg": 22,
+              "medians_7d": [
+                0,
+                10,
+                20
+              ]
+            }
+          },
+          "usage": {},
+          "set_to_parts": {}
+        },
+        "reserve_copies": 0,
+        "spares_only": false
+      },
+      "expected": [
+        {
+          "key": "item|",
+          "sellable": 5,
+          "clearing_price": 20,
+          "sell_score": 100,
+          "patience": false,
+          "ducats": null,
+          "plat_per_100d": null,
+          "potential_plat": 100,
+          "raw_value": 110,
+          "medians_7d": [
+            10,
+            20
+          ],
+          "median_90d": null,
+          "delta_90d_pct": null,
+          "timing": "neutral",
+          "demand": {
+            "usage": null,
+            "inherited": false,
+            "liquidity": "unknown",
+            "band": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "zero today baseline fallback",
+      "request": {
+        "owned": [
+          [
+            "item|",
+            {
+              "count": 5,
+              "name": "Item",
+              "type": "Mods",
+              "slug": "item",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "market": {
+          "items": {
+            "item": {
+              "avg": 20,
+              "low_sell": 20,
+              "top_buy": 10,
+              "vol": 5,
+              "ratio": 1,
+              "buys": 1,
+              "sells": 1,
+              "low5_avg": 22,
+              "medians_7d": [
+                0,
+                10,
+                20
+              ],
+              "median_now": 0,
+              "median_90d": 10,
+              "donch_top_90d": 20,
+              "donch_bot_90d": 10
+            }
+          },
+          "usage": {},
+          "set_to_parts": {}
+        },
+        "reserve_copies": 0,
+        "spares_only": false
+      },
+      "expected": [
+        {
+          "key": "item|",
+          "sellable": 5,
+          "clearing_price": 20,
+          "sell_score": 50,
+          "patience": false,
+          "ducats": null,
+          "plat_per_100d": null,
+          "potential_plat": 100,
+          "raw_value": 110,
+          "medians_7d": [
+            10,
+            20
+          ],
+          "median_90d": 10,
+          "delta_90d_pct": 0,
+          "timing": "hold",
+          "demand": {
+            "usage": null,
+            "inherited": false,
+            "liquidity": "unknown",
+            "band": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "leveled reserve overlap",
+      "request": {
+        "owned": [
+          [
+            "item|",
+            {
+              "count": 5,
+              "name": "Item",
+              "type": "Mods",
+              "slug": "item",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 2
+            }
+          ]
+        ],
+        "market": {
+          "items": {
+            "item": {
+              "avg": 20,
+              "low_sell": 20,
+              "top_buy": 10,
+              "vol": 10,
+              "ratio": 1,
+              "buys": 1,
+              "sells": 1,
+              "low5_avg": 22,
+              "medians_7d": [
+                0,
+                10,
+                20
+              ]
+            }
+          },
+          "usage": {},
+          "set_to_parts": {}
+        },
+        "reserve_copies": 1,
+        "spares_only": false
+      },
+      "expected": [
+        {
+          "key": "item|",
+          "sellable": 3,
+          "clearing_price": 20,
+          "sell_score": 60,
+          "patience": false,
+          "ducats": null,
+          "plat_per_100d": null,
+          "potential_plat": 60,
+          "raw_value": 66,
+          "medians_7d": [
+            10,
+            20
+          ],
+          "median_90d": null,
+          "delta_90d_pct": null,
+          "timing": "neutral",
+          "demand": {
+            "usage": null,
+            "inherited": false,
+            "liquidity": "unknown",
+            "band": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "reserve wins",
+      "request": {
+        "owned": [
+          [
+            "item|",
+            {
+              "count": 5,
+              "name": "Item",
+              "type": "Mods",
+              "slug": "item",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 1
+            }
+          ]
+        ],
+        "market": {
+          "items": {
+            "item": {
+              "avg": 20,
+              "low_sell": 20,
+              "top_buy": 10,
+              "vol": 10,
+              "ratio": 1,
+              "buys": 1,
+              "sells": 1,
+              "low5_avg": 22,
+              "medians_7d": [
+                0,
+                10,
+                20
+              ]
+            }
+          },
+          "usage": {},
+          "set_to_parts": {}
+        },
+        "reserve_copies": 3,
+        "spares_only": false
+      },
+      "expected": [
+        {
+          "key": "item|",
+          "sellable": 2,
+          "clearing_price": 20,
+          "sell_score": 40,
+          "patience": false,
+          "ducats": null,
+          "plat_per_100d": null,
+          "potential_plat": 40,
+          "raw_value": 44,
+          "medians_7d": [
+            10,
+            20
+          ],
+          "median_90d": null,
+          "delta_90d_pct": null,
+          "timing": "neutral",
+          "demand": {
+            "usage": null,
+            "inherited": false,
+            "liquidity": "unknown",
+            "band": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "no safe copies",
+      "request": {
+        "owned": [
+          [
+            "item|",
+            {
+              "count": 1,
+              "name": "Item",
+              "type": "Mods",
+              "slug": "item",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 1
+            }
+          ]
+        ],
+        "market": {
+          "items": {
+            "item": {
+              "avg": 20,
+              "low_sell": 20,
+              "top_buy": 10,
+              "vol": 10,
+              "ratio": 1,
+              "buys": 1,
+              "sells": 1,
+              "low5_avg": 22,
+              "medians_7d": [
+                0,
+                10,
+                20
+              ]
+            }
+          },
+          "usage": {},
+          "set_to_parts": {}
+        },
+        "reserve_copies": 3,
+        "spares_only": false
+      },
+      "expected": [
+        {
+          "key": "item|",
+          "sellable": 0,
+          "clearing_price": 20,
+          "sell_score": 0,
+          "patience": false,
+          "ducats": null,
+          "plat_per_100d": null,
+          "potential_plat": 0,
+          "raw_value": 0,
+          "medians_7d": [
+            10,
+            20
+          ],
+          "median_90d": null,
+          "delta_90d_pct": null,
+          "timing": "neutral",
+          "demand": {
+            "usage": null,
+            "inherited": false,
+            "liquidity": "unknown",
+            "band": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "ranked spares",
+      "request": {
+        "owned": [
+          [
+            "item|",
+            {
+              "count": 5,
+              "name": "Item",
+              "type": "Mods",
+              "slug": "item",
+              "subtype": null,
+              "kept_lvl": 3,
+              "leveled": 1
+            }
+          ]
+        ],
+        "market": {
+          "items": {
+            "item": {
+              "avg": 20,
+              "low_sell": 20,
+              "top_buy": 10,
+              "vol": 10,
+              "ratio": 1,
+              "buys": 1,
+              "sells": 1,
+              "low5_avg": 22,
+              "medians_7d": [
+                0,
+                10,
+                20
+              ]
+            }
+          },
+          "usage": {},
+          "set_to_parts": {}
+        },
+        "reserve_copies": 0,
+        "spares_only": true
+      },
+      "expected": [
+        {
+          "key": "item|",
+          "sellable": 4,
+          "clearing_price": 20,
+          "sell_score": 80,
+          "patience": false,
+          "ducats": null,
+          "plat_per_100d": null,
+          "potential_plat": 80,
+          "raw_value": 88,
+          "medians_7d": [
+            10,
+            20
+          ],
+          "median_90d": null,
+          "delta_90d_pct": null,
+          "timing": "neutral",
+          "demand": {
+            "usage": null,
+            "inherited": false,
+            "liquidity": "unknown",
+            "band": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "unranked spares",
+      "request": {
+        "owned": [
+          [
+            "item|",
+            {
+              "count": 5,
+              "name": "Item",
+              "type": "Mods",
+              "slug": "item",
+              "subtype": null,
+              "kept_lvl": 0,
+              "leveled": 1
+            }
+          ]
+        ],
+        "market": {
+          "items": {
+            "item": {
+              "avg": 20,
+              "low_sell": 20,
+              "top_buy": 10,
+              "vol": 10,
+              "ratio": 1,
+              "buys": 1,
+              "sells": 1,
+              "low5_avg": 22,
+              "medians_7d": [
+                0,
+                10,
+                20
+              ]
+            }
+          },
+          "usage": {},
+          "set_to_parts": {}
+        },
+        "reserve_copies": 0,
+        "spares_only": true
+      },
+      "expected": [
+        {
+          "key": "item|",
+          "sellable": 3,
+          "clearing_price": 20,
+          "sell_score": 60,
+          "patience": false,
+          "ducats": null,
+          "plat_per_100d": null,
+          "potential_plat": 60,
+          "raw_value": 66,
+          "medians_7d": [
+            10,
+            20
+          ],
+          "median_90d": null,
+          "delta_90d_pct": null,
+          "timing": "neutral",
+          "demand": {
+            "usage": null,
+            "inherited": false,
+            "liquidity": "unknown",
+            "band": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "relic no ducats",
+      "request": {
+        "owned": [
+          [
+            "item|",
+            {
+              "count": 5,
+              "name": "Item",
+              "type": "Mods",
+              "slug": "item",
+              "subtype": "radiant",
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "market": {
+          "items": {
+            "item": {
+              "avg": 20,
+              "low_sell": 20,
+              "top_buy": 10,
+              "vol": 10,
+              "ratio": 1,
+              "buys": 1,
+              "sells": 1,
+              "low5_avg": 22,
+              "medians_7d": [
+                0,
+                10,
+                20
+              ],
+              "ducats": 45
+            }
+          },
+          "usage": {},
+          "set_to_parts": {}
+        },
+        "reserve_copies": 0,
+        "spares_only": false
+      },
+      "expected": [
+        {
+          "key": "item|",
+          "sellable": 5,
+          "clearing_price": 20,
+          "sell_score": 100,
+          "patience": false,
+          "ducats": null,
+          "plat_per_100d": null,
+          "potential_plat": 100,
+          "raw_value": 110,
+          "medians_7d": [
+            10,
+            20
+          ],
+          "median_90d": null,
+          "delta_90d_pct": null,
+          "timing": "neutral",
+          "demand": {
+            "usage": null,
+            "inherited": false,
+            "liquidity": "unknown",
+            "band": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "valid direct usage",
+      "request": {
+        "owned": [
+          [
+            "item|",
+            {
+              "count": 5,
+              "name": "Item",
+              "type": "Mods",
+              "slug": "item",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "market": {
+          "items": {
+            "item": {
+              "avg": 20,
+              "low_sell": 20,
+              "top_buy": 10,
+              "vol": 10,
+              "ratio": 1,
+              "buys": 1,
+              "sells": 1,
+              "low5_avg": 22,
+              "medians_7d": [
+                0,
+                10,
+                20
+              ]
+            }
+          },
+          "usage": {
+            "item": {
+              "name": "Parent",
+              "category": "Primary",
+              "year": 2025,
+              "share": 1,
+              "peak_mr": 1,
+              "by_mr": [
+                1,
+                3,
+                2,
+                1,
+                0
+              ]
+            }
+          },
+          "set_to_parts": {}
+        },
+        "reserve_copies": 0,
+        "spares_only": false
+      },
+      "expected": [
+        {
+          "key": "item|",
+          "sellable": 5,
+          "clearing_price": 20,
+          "sell_score": 125,
+          "patience": false,
+          "ducats": null,
+          "plat_per_100d": null,
+          "potential_plat": 100,
+          "raw_value": 110,
+          "medians_7d": [
+            10,
+            20
+          ],
+          "median_90d": null,
+          "delta_90d_pct": null,
+          "timing": "neutral",
+          "demand": {
+            "usage": {
+              "name": "Parent",
+              "category": "Primary",
+              "year": 2025,
+              "share": 1,
+              "peak_mr": 1,
+              "by_mr": [
+                1,
+                3,
+                2,
+                1,
+                0
+              ]
+            },
+            "inherited": false,
+            "liquidity": "sells-today",
+            "band": {
+              "from": 1,
+              "to": 2
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "inherited usage",
+      "request": {
+        "owned": [
+          [
+            "item|",
+            {
+              "count": 5,
+              "name": "Item",
+              "type": "Mods",
+              "slug": "item",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "market": {
+          "items": {
+            "item": {
+              "avg": 20,
+              "low_sell": 20,
+              "top_buy": 10,
+              "vol": 10,
+              "ratio": 1,
+              "buys": 1,
+              "sells": 1,
+              "low5_avg": 22,
+              "medians_7d": [
+                0,
+                10,
+                20
+              ]
+            }
+          },
+          "usage": {
+            "parent": {
+              "name": "Parent",
+              "category": "Primary",
+              "year": 2025,
+              "share": 1,
+              "peak_mr": 1,
+              "by_mr": [
+                1,
+                3,
+                2,
+                1,
+                0
+              ]
+            }
+          },
+          "set_to_parts": {
+            "parent": {
+              "parts": [
+                {
+                  "slug": "item"
+                }
+              ]
+            }
+          }
+        },
+        "reserve_copies": 0,
+        "spares_only": false
+      },
+      "expected": [
+        {
+          "key": "item|",
+          "sellable": 5,
+          "clearing_price": 20,
+          "sell_score": 125,
+          "patience": false,
+          "ducats": null,
+          "plat_per_100d": null,
+          "potential_plat": 100,
+          "raw_value": 110,
+          "medians_7d": [
+            10,
+            20
+          ],
+          "median_90d": null,
+          "delta_90d_pct": null,
+          "timing": "neutral",
+          "demand": {
+            "usage": {
+              "name": "Parent",
+              "category": "Primary",
+              "year": 2025,
+              "share": 1,
+              "peak_mr": 1,
+              "by_mr": [
+                1,
+                3,
+                2,
+                1,
+                0
+              ]
+            },
+            "inherited": true,
+            "liquidity": "sells-today",
+            "band": {
+              "from": 1,
+              "to": 2
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "invalid direct stops inheritance",
+      "request": {
+        "owned": [
+          [
+            "item|",
+            {
+              "count": 5,
+              "name": "Item",
+              "type": "Mods",
+              "slug": "item",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "market": {
+          "items": {
+            "item": {
+              "avg": 20,
+              "low_sell": 20,
+              "top_buy": 10,
+              "vol": 10,
+              "ratio": 1,
+              "buys": 1,
+              "sells": 1,
+              "low5_avg": 22,
+              "medians_7d": [
+                0,
+                10,
+                20
+              ]
+            }
+          },
+          "usage": {
+            "item": {
+              "share": 1
+            },
+            "parent": {
+              "name": "Parent",
+              "category": "Primary",
+              "year": 2025,
+              "share": 1,
+              "peak_mr": 1,
+              "by_mr": [
+                1,
+                3,
+                2,
+                1,
+                0
+              ]
+            }
+          },
+          "set_to_parts": {
+            "parent": {
+              "parts": [
+                {
+                  "slug": "item"
+                }
+              ]
+            }
+          }
+        },
+        "reserve_copies": 0,
+        "spares_only": false
+      },
+      "expected": [
+        {
+          "key": "item|",
+          "sellable": 5,
+          "clearing_price": 20,
+          "sell_score": 100,
+          "patience": false,
+          "ducats": null,
+          "plat_per_100d": null,
+          "potential_plat": 100,
+          "raw_value": 110,
+          "medians_7d": [
+            10,
+            20
+          ],
+          "median_90d": null,
+          "delta_90d_pct": null,
+          "timing": "neutral",
+          "demand": {
+            "usage": null,
+            "inherited": false,
+            "liquidity": "unknown",
+            "band": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "ambiguous parent neutral",
+      "request": {
+        "owned": [
+          [
+            "item|",
+            {
+              "count": 5,
+              "name": "Item",
+              "type": "Mods",
+              "slug": "item",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "market": {
+          "items": {
+            "item": {
+              "avg": 20,
+              "low_sell": 20,
+              "top_buy": 10,
+              "vol": 10,
+              "ratio": 1,
+              "buys": 1,
+              "sells": 1,
+              "low5_avg": 22,
+              "medians_7d": [
+                0,
+                10,
+                20
+              ]
+            }
+          },
+          "usage": {
+            "parent": {
+              "name": "Parent",
+              "category": "Primary",
+              "year": 2025,
+              "share": 1,
+              "peak_mr": 1,
+              "by_mr": [
+                1,
+                3,
+                2,
+                1,
+                0
+              ]
+            }
+          },
+          "set_to_parts": {
+            "parent": {
+              "parts": [
+                {
+                  "slug": "item"
+                }
+              ]
+            },
+            "other": {
+              "parts": [
+                {
+                  "slug": "item"
+                }
+              ]
+            }
+          }
+        },
+        "reserve_copies": 0,
+        "spares_only": false
+      },
+      "expected": [
+        {
+          "key": "item|",
+          "sellable": 5,
+          "clearing_price": 20,
+          "sell_score": 100,
+          "patience": false,
+          "ducats": null,
+          "plat_per_100d": null,
+          "potential_plat": 100,
+          "raw_value": 110,
+          "medians_7d": [
+            10,
+            20
+          ],
+          "median_90d": null,
+          "delta_90d_pct": null,
+          "timing": "neutral",
+          "demand": {
+            "usage": null,
+            "inherited": false,
+            "liquidity": "unknown",
+            "band": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "rare usage slow",
+      "request": {
+        "owned": [
+          [
+            "item|",
+            {
+              "count": 5,
+              "name": "Item",
+              "type": "Mods",
+              "slug": "item",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "market": {
+          "items": {
+            "item": {
+              "avg": 20,
+              "low_sell": 20,
+              "top_buy": 10,
+              "vol": 10,
+              "ratio": 1,
+              "buys": 1,
+              "sells": 1,
+              "low5_avg": 22,
+              "medians_7d": [
+                0,
+                10,
+                20
+              ]
+            }
+          },
+          "usage": {
+            "item": {
+              "name": "Parent",
+              "category": "Primary",
+              "year": 2025,
+              "share": 0.01,
+              "peak_mr": 1,
+              "by_mr": [
+                1,
+                3,
+                2,
+                1,
+                0
+              ]
+            }
+          },
+          "set_to_parts": {}
+        },
+        "reserve_copies": 0,
+        "spares_only": false
+      },
+      "expected": [
+        {
+          "key": "item|",
+          "sellable": 5,
+          "clearing_price": 20,
+          "sell_score": 75,
+          "patience": false,
+          "ducats": null,
+          "plat_per_100d": null,
+          "potential_plat": 100,
+          "raw_value": 110,
+          "medians_7d": [
+            10,
+            20
+          ],
+          "median_90d": null,
+          "delta_90d_pct": null,
+          "timing": "neutral",
+          "demand": {
+            "usage": {
+              "name": "Parent",
+              "category": "Primary",
+              "year": 2025,
+              "share": 0.01,
+              "peak_mr": 1,
+              "by_mr": [
+                1,
+                3,
+                2,
+                1,
+                0
+              ]
+            },
+            "inherited": false,
+            "liquidity": "slow",
+            "band": {
+              "from": 1,
+              "to": 2
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "typical underpriced",
+      "request": {
+        "owned": [
+          [
+            "item|",
+            {
+              "count": 5,
+              "name": "Item",
+              "type": "Mods",
+              "slug": "item",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "market": {
+          "items": {
+            "item": {
+              "avg": 20,
+              "low_sell": 10,
+              "top_buy": 10,
+              "vol": 10,
+              "ratio": 1,
+              "buys": 1,
+              "sells": 1,
+              "low5_avg": 22,
+              "medians_7d": [
+                0,
+                10,
+                20
+              ],
+              "median_90d": 20
+            }
+          },
+          "usage": {
+            "item": {
+              "name": "Parent",
+              "category": "Primary",
+              "year": 2025,
+              "share": 0.5,
+              "peak_mr": 1,
+              "by_mr": [
+                1,
+                3,
+                2,
+                1,
+                0
+              ]
+            }
+          },
+          "set_to_parts": {}
+        },
+        "reserve_copies": 0,
+        "spares_only": false
+      },
+      "expected": [
+        {
+          "key": "item|",
+          "sellable": 5,
+          "clearing_price": 10,
+          "sell_score": 47.79411764705882,
+          "patience": false,
+          "ducats": null,
+          "plat_per_100d": null,
+          "potential_plat": 100,
+          "raw_value": 110,
+          "medians_7d": [
+            10,
+            20
+          ],
+          "median_90d": 20,
+          "delta_90d_pct": 0,
+          "timing": "neutral",
+          "demand": {
+            "usage": {
+              "name": "Parent",
+              "category": "Primary",
+              "year": 2025,
+              "share": 0.5,
+              "peak_mr": 1,
+              "by_mr": [
+                1,
+                3,
+                2,
+                1,
+                0
+              ]
+            },
+            "inherited": false,
+            "liquidity": "underpriced",
+            "band": {
+              "from": 1,
+              "to": 2
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "no usage volume thin",
+      "request": {
+        "owned": [
+          [
+            "item|",
+            {
+              "count": 5,
+              "name": "Item",
+              "type": "Mods",
+              "slug": "item",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "market": {
+          "items": {
+            "item": {
+              "avg": 20,
+              "low_sell": 20,
+              "top_buy": 10,
+              "vol": 4,
+              "ratio": 1,
+              "buys": 1,
+              "sells": 1,
+              "low5_avg": 22,
+              "medians_7d": [
+                0,
+                10,
+                20
+              ]
+            }
+          },
+          "usage": {},
+          "set_to_parts": {}
+        },
+        "reserve_copies": 0,
+        "spares_only": false
+      },
+      "expected": [
+        {
+          "key": "item|",
+          "sellable": 5,
+          "clearing_price": 20,
+          "sell_score": 40,
+          "patience": false,
+          "ducats": null,
+          "plat_per_100d": null,
+          "potential_plat": 100,
+          "raw_value": 110,
+          "medians_7d": [
+            10,
+            20
+          ],
+          "median_90d": null,
+          "delta_90d_pct": null,
+          "timing": "neutral",
+          "demand": {
+            "usage": null,
+            "inherited": false,
+            "liquidity": "thin",
+            "band": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "ties and sparse curve",
+      "request": {
+        "owned": [
+          [
+            "item|",
+            {
+              "count": 5,
+              "name": "Item",
+              "type": "Mods",
+              "slug": "item",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "market": {
+          "items": {
+            "item": {
+              "avg": 20,
+              "low_sell": 20,
+              "top_buy": 10,
+              "vol": 10,
+              "ratio": 1,
+              "buys": 1,
+              "sells": 1,
+              "low5_avg": 22,
+              "medians_7d": [
+                0,
+                10,
+                20
+              ]
+            }
+          },
+          "usage": {
+            "item": {
+              "name": "Parent",
+              "category": "Primary",
+              "year": 2025,
+              "share": 1,
+              "peak_mr": 0,
+              "by_mr": [
+                3,
+                0,
+                0,
+                3
+              ]
+            }
+          },
+          "set_to_parts": {}
+        },
+        "reserve_copies": 0,
+        "spares_only": false
+      },
+      "expected": [
+        {
+          "key": "item|",
+          "sellable": 5,
+          "clearing_price": 20,
+          "sell_score": 125,
+          "patience": false,
+          "ducats": null,
+          "plat_per_100d": null,
+          "potential_plat": 100,
+          "raw_value": 110,
+          "medians_7d": [
+            10,
+            20
+          ],
+          "median_90d": null,
+          "delta_90d_pct": null,
+          "timing": "neutral",
+          "demand": {
+            "usage": {
+              "name": "Parent",
+              "category": "Primary",
+              "year": 2025,
+              "share": 1,
+              "peak_mr": 0,
+              "by_mr": [
+                3,
+                0,
+                0,
+                3
+              ]
+            },
+            "inherited": false,
+            "liquidity": "sells-today",
+            "band": {
+              "from": 0,
+              "to": 3
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "unpriced row omitted",
+      "request": {
+        "owned": [
+          [
+            "item|",
+            {
+              "count": 5,
+              "name": "Item",
+              "type": "Mods",
+              "slug": "item",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "market": {
+          "items": {},
+          "usage": {},
+          "set_to_parts": {}
+        },
+        "reserve_copies": 0,
+        "spares_only": false
+      },
+      "expected": []
+    }
+  ]
+}

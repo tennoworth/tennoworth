@@ -38,6 +38,7 @@ rust/
   wfm-scrape/src/
     ingest/                  upstream transport and source-specific adapters
     pipeline/                build orchestration, root discovery, publication
+  market-domain/             shared inventory and sell-row calculations
   market-math/               pure shared heuristics
   wfm-client/                shared request policy and transport primitives
 scripts/                     release, CSP, probe and deployment checks
@@ -116,9 +117,8 @@ capture must not implicitly clear or replace that identity.
 acquisition and trading modules share narrowly named HTTP, identity, path, and
 time helpers. `wfm-client` shares transport primitives, not an abstraction that
 combines anonymous scraping with authenticated order mutation. `market-math`
-has no I/O or clock dependency. The workspace remains five crates; modules are
-the default organizational unit until a separate build/dependency boundary is
-needed.
+has no I/O or clock dependency. The sixth crate, `market-domain`, isolates
+reusable calculations and type exports from Tauri and the network core.
 
 ## Data and failure boundaries
 

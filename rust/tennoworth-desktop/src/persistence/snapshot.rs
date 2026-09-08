@@ -1,13 +1,9 @@
 //! Turn a raw DE inventory payload (the exact bytes the scan / a dropped file
 //! produces) into aggregated `SnapshotItem` rows for the history tables.
 //!
-//! This mirrors `flattenInventory()` in frontend/src/lib/inventory.ts: walk the
-//! same tradeable categories, key by the DE item path, sum counts, and count
-//! copies DE has flagged untradeable (XP > 0) as `leveled`. It deliberately does
-//! NOT resolve the path to a WFM slug - resolution needs the wfstat catalog,
-//! which is a client concern (frontend/src/lib/resolver.ts is its sole owner)
-//! and out of wfm-core's scope. The stable DE path is stored as the slug; a
-//! later join step can map it to a WFM slug when history is surfaced.
+//! The portable inventory walker supplies the same path/count/XP facts used by
+//! the sell table. History keeps stable DE paths so later market revisions can
+//! resolve them without rewriting past snapshots.
 
 use std::collections::BTreeMap;
 
@@ -15,54 +11,19 @@ use serde_json::Value;
 
 use crate::persistence::SnapshotItem;
 
-/// The categories flatten walks - kept 1:1 with `TRADEABLE_CATEGORIES` in
-/// inventory.ts. Stack categories (MiscItems, Recipes, RawUpgrades) carry
-/// `ItemCount` and no XP; instance categories (Suits, LongGuns, …) are one
-/// entry per owned copy with its own XP.
-const TRADEABLE_CATEGORIES: &[&str] = &[
-    "MiscItems",
-    "Recipes",
-    "RawUpgrades",
-    "Suits",
-    "LongGuns",
-    "Pistols",
-    "Melee",
-    "SpaceGuns",
-    "SpaceMelee",
-    "Sentinels",
-    "SentinelWeapons",
-];
-
-/// Parse `inventory_json` and aggregate tradeable items by DE path. Result is
-/// sorted by path (BTreeMap) for deterministic snapshots. A non-array or absent
-/// category is skipped; entries without a path are skipped - matching the TS
-/// walker's leniency.
+/// Aggregate the validated inventory facts by DE path for deterministic history.
 pub fn extract_items(inventory_json: &[u8]) -> serde_json::Result<Vec<SnapshotItem>> {
     let root: Value = serde_json::from_slice(inventory_json)?;
     // path -> (count, leveled)
     let mut agg: BTreeMap<String, (i64, i64)> = BTreeMap::new();
 
-    for cat in TRADEABLE_CATEGORIES {
-        let Some(entries) = root.get(cat).and_then(Value::as_array) else {
-            continue;
-        };
-        for e in entries {
-            let path = e
-                .get("ItemType")
-                .and_then(Value::as_str)
-                .or_else(|| e.get("Type").and_then(Value::as_str));
-            let Some(path) = path else { continue };
-            // ItemCount defaults to 1 (instance categories omit it).
-            let count = e.get("ItemCount").and_then(Value::as_i64).unwrap_or(1);
-            let xp = e.get("XP").and_then(Value::as_i64).unwrap_or(0);
-            let slot = agg.entry(path.to_string()).or_insert((0, 0));
-            slot.0 += count;
-            // XP > 0 means DE flagged this copy untradeable; accumulate the same
-            // way the SPA does (`rec.leveled += count`).
-            if xp > 0 {
-                slot.1 += count;
-            }
-        }
+    let rows = market_domain::inventory::flatten_inventory(&root)
+        .map_err(<serde_json::Error as serde::de::Error>::custom)?;
+    for row in rows {
+        let slot = agg.entry(row.path).or_insert((0, 0));
+        let count = row.count as i64;
+        slot.0 = slot.0.saturating_add(count);
+        if row.xp > 0.0 { slot.1 = slot.1.saturating_add(count); }
     }
 
     Ok(agg
@@ -142,7 +103,7 @@ mod tests {
         let raw = std::fs::read_to_string(path).expect("read the shared category fixture");
         let fx: Fixture = serde_json::from_str(&raw).expect("parse the category fixture");
 
-        let mut got: Vec<&str> = TRADEABLE_CATEGORIES.to_vec();
+        let mut got: Vec<&str> = market_domain::inventory::TRADEABLE_CATEGORIES.to_vec();
         got.sort_unstable();
         let mut want: Vec<&str> = fx.categories.iter().map(String::as_str).collect();
         want.sort_unstable();

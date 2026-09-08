@@ -2818,6 +2818,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "market-domain"
+version = "0.1.0"
+dependencies = [
+ "market-math",
+ "serde",
+ "serde_json",
+ "ts-rs",
+]
+
+[[package]]
 name = "market-math"
 version = "0.1.0"
 
@@ -4592,6 +4602,7 @@ version = "1.0.150"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e8014e44b4736ed0538adeecded0fce2a272f22dc9578a7eb6b2d9993c74cfb9"
 dependencies = [
+ "indexmap 2.14.0",
  "itoa",
  "memchr",
  "serde",
@@ -5442,6 +5453,7 @@ dependencies = [
  "image",
  "keyring",
  "leptess",
+ "market-domain",
  "market-math",
  "memmap2",
  "reqwest 0.12.28",
