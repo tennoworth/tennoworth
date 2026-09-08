@@ -41,6 +41,30 @@ building either platform. Historical entries are intentionally not backfilled.
 Releases up to and including 0.3.8 predate this file, and their notes live on
 the GitHub releases themselves.
 
+## 0.7.102 - 2026-09-08
+
+# 💱 TennoWorth Desktop 0.7.102
+
+TennoWorth Desktop 0.7.102 is ready.
+
+Plan sales around what you want to keep, compare complete sets with individual parts, and see how much of your stack visible buyers can cover.
+
+## Changelog (4)
+
+### Selling
+
+- Reserve item quantities and pin a set goal across selling recommendations and ducat planning.
+- Include complete owned sets in Trade Session without allocating their components twice.
+- Compare visible buyers by whole-lot quantity coverage and the value gap against your listing reference.
+
+### Reliability
+
+- Keep newer scans, imports, and planning results from being replaced by older calculations.
+
+## Updating
+
+TennoWorth checks for updates automatically. Downloads are available below.
+
 ## 0.7.101 - 2026-09-08
 
 # 🐧 TennoWorth Desktop 0.7.101
