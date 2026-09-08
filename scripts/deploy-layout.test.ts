@@ -19,6 +19,7 @@ function fixture(rename = true) {
   write(join(remote, 'prototype/package.json'), '{}');
   write(join(remote, 'prototype/public/market.json'), '{"revision":"bundled-old"}');
   write(join(remote, 'prototype/public/wfstat-catalog.json'), '["bundled-old"]');
+  write(join(remote, 'prototype/public/definitions.json'), '{"revision":"bundled-old"}');
   write(join(remote, 'source.txt'), 'before');
   write(join(remote, '.gitignore'), '**/dist/\n**/history.json\nwfm_results.csv\n');
   git(remote, 'add', '.'); git(remote, 'commit', '-m', 'Initial fixture');
@@ -26,11 +27,13 @@ function fixture(rename = true) {
   write(join(app, 'prototype/public/market.json'), '{"revision":"live-newer"}');
   write(join(app, 'prototype/public/wfstat-catalog.json'), '["live-newer"]');
   write(join(app, 'prototype/public/history.json'), '{"history":"retain"}');
+  if (rename) write(join(app, 'prototype/public/definitions.json'), '{"revision":"live-hotfix"}');
   write(join(app, 'prototype/dist/index.html'), '<p>Previously served site</p>');
   write(join(app, 'prototype/dist/assets/site.js'), 'old-bundle');
   write(join(app, 'wfm_results.csv'), 'preserve,csv\n');
   const initial = git(app, 'rev-parse', 'HEAD');
   if (rename) renameSync(join(remote, 'prototype'), join(remote, 'frontend'));
+  else write(join(remote, 'prototype/public/definitions.json'), '{"revision":"bundled-new"}');
   write(join(remote, 'source.txt'), 'after');
   git(remote, 'add', '-A'); git(remote, 'commit', '-m', 'Next layout');
   write(join(bin, 'systemctl'), '#!/bin/sh\nprintf "%s\\n" "${FIXTURE_SERVICE_STATE:-inactive}"\n'); chmodSync(join(bin, 'systemctl'), 0o755);
@@ -55,6 +58,8 @@ describe.skipIf(process.platform === 'win32')('deployment layout transition', ()
     expect(readFileSync(join(f.app, 'prototype/public/market.json'), 'utf8')).toContain('live-newer');
     expect(readFileSync(join(f.app, 'frontend/public/wfstat-catalog.json'), 'utf8')).toContain('live-newer');
     expect(readFileSync(join(f.app, 'frontend/public/history.json'), 'utf8')).toContain('retain');
+    expect(readFileSync(join(f.app, 'frontend/public/definitions.json'), 'utf8')).toContain('live-hotfix');
+    expect(readFileSync(join(f.app, 'prototype/public/definitions.json'), 'utf8')).toContain('live-hotfix');
     expect(readFileSync(join(f.app, 'frontend/dist/assets/site.js'), 'utf8')).toBe('old-bundle');
     expect(readFileSync(join(f.app, 'wfm_results.csv'), 'utf8')).toBe('preserve,csv\n');
   });
@@ -64,10 +69,12 @@ describe.skipIf(process.platform === 'win32')('deployment layout transition', ()
     expect(git(f.app, 'rev-parse', 'HEAD')).toBe(f.initial);
     expect(readFileSync(join(f.app, 'prototype/public/market.json'), 'utf8')).toContain('live-newer');
     expect(readFileSync(join(f.app, 'source.txt'), 'utf8')).toBe('unfinished local work');
+    expect(readFileSync(join(f.app, 'prototype/public/definitions.json'), 'utf8')).toContain('live-hotfix');
   });
   test('keeps ordinary updates working without migration mode', () => {
     const f = fixture(false); expect(f.run().status).toBe(0);
     expect(readFileSync(join(f.app, 'prototype/public/market.json'), 'utf8')).toContain('live-newer');
+    expect(readFileSync(join(f.app, 'prototype/public/definitions.json'), 'utf8')).toContain('bundled-new');
   });
   test('does not change a checkout while the scrape service is activating', () => {
     const f = fixture(); const result = f.run(['--migrate-layout'], { FIXTURE_SERVICE_STATE: 'activating' });

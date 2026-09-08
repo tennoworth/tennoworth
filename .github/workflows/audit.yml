@@ -37,51 +37,51 @@ jobs:
         with:
           filters: |
             frontend_runtime:
-              - 'prototype/src/**'
-              - 'prototype/index.html'
-              - 'prototype/knip.jsonc'
-              - 'prototype/svelte.config.ts'
-              - 'prototype/tsconfig.json'
-              - 'prototype/vite.config.ts'
-              - 'prototype/vitest.config.ts'
-              - 'prototype/playwright.config.ts'
-              - 'prototype/tests/browser/**'
-              - 'prototype/public/theme-boot.js'
+              - 'frontend/src/**'
+              - 'frontend/index.html'
+              - 'frontend/knip.jsonc'
+              - 'frontend/svelte.config.ts'
+              - 'frontend/tsconfig.json'
+              - 'frontend/vite.config.ts'
+              - 'frontend/vitest.config.ts'
+              - 'frontend/playwright.config.ts'
+              - 'frontend/tests/browser/**'
+              - 'frontend/public/theme-boot.js'
               - 'scripts/sync-csp.ts'
               - 'tests/fixtures/**'
             frontend_deps:
-              - 'prototype/package.json'
-              - 'prototype/bun.lock'
+              - 'frontend/package.json'
+              - 'frontend/bun.lock'
             rust_code:
-              - 'companion/**'
-              - '!companion/Cargo.lock'
-              - '!companion/Cargo.toml'
-              - '!companion/**/Cargo.toml'
-              - '!companion/.cargo/audit.toml'
+              - 'rust/**'
+              - '!rust/Cargo.lock'
+              - '!rust/Cargo.toml'
+              - '!rust/**/Cargo.toml'
+              - '!rust/.cargo/audit.toml'
               - 'tests/fixtures/**'
             rust_deps:
-              - 'companion/Cargo.lock'
-              - 'companion/Cargo.toml'
-              - 'companion/**/Cargo.toml'
+              - 'rust/Cargo.lock'
+              - 'rust/Cargo.toml'
+              - 'rust/**/Cargo.toml'
             rust_audit:
-              - 'companion/.cargo/audit.toml'
+              - 'rust/.cargo/audit.toml'
             market_data:
-              - 'prototype/public/market.json'
-              - 'prototype/public/wfstat-catalog.json'
-              - 'prototype/public/definitions.json'
+              - 'frontend/public/market.json'
+              - 'frontend/public/wfstat-catalog.json'
+              - 'frontend/public/definitions.json'
               - 'wfm_results.csv'
               - 'scripts/release.ts'
               - 'scripts/release.test.ts'
             deploy:
               - 'deploy/**'
-              - 'prototype/index.html'
-              - 'prototype/public/_headers'
+              - 'frontend/index.html'
+              - 'frontend/public/_headers'
               - 'scripts/*.sh'
               - 'scripts/deploy-layout.test.ts'
               - 'scripts/sync-csp.ts'
             version:
-              - 'companion/Cargo.lock'
-              - 'companion/tennoworth-desktop/Cargo.toml'
+              - 'rust/Cargo.lock'
+              - 'rust/tennoworth-desktop/Cargo.toml'
               - 'CHANGELOG.md'
               - 'scripts/release.ts'
               - 'scripts/release.test.ts'
@@ -100,7 +100,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: prototype
+        working-directory: frontend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@v2
@@ -118,7 +118,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: responsive-test-evidence
-          path: prototype/test-results/responsive
+          path: frontend/test-results/responsive
           if-no-files-found: ignore
       - name: type-check
         run: bunx svelte-check --threshold error
@@ -138,7 +138,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: prototype
+        working-directory: frontend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@v2
@@ -158,7 +158,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: companion
+        working-directory: rust
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-rust
@@ -180,7 +180,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: companion
+        working-directory: rust
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-rust
@@ -199,7 +199,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: companion
+        working-directory: rust
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-rust
@@ -233,7 +233,7 @@ jobs:
             --output tennoworth-desktop/resources/tessdata/eng.traineddata
           echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
       # Covers the retired Python parity gates: wfm-scrape's fixture integration
-      # tests (companion/wfm-scrape/tests/) shell the freshly-built binary against
+      # tests (rust/wfm-scrape/tests/) shell the freshly-built binary against
       # the frozen fixtures. cargo rebuilds the binary before they run, so a
       # stale artifact cannot green them.
       - name: cargo test
@@ -267,7 +267,7 @@ jobs:
       - name: Version pins and release notes agree
         run: bun scripts/release.ts check
 
-  # companion/Cargo.toml denies the crash-prone Clippy family workspace-wide.
+  # rust/Cargo.toml denies the crash-prone Clippy family workspace-wide.
   # Test panics are allowed by clippy.toml; impossible production paths carry
   # a narrow allow with the invariant beside the code.
   cargo-clippy:
@@ -280,7 +280,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: companion
+        working-directory: rust
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-rust
@@ -307,7 +307,7 @@ jobs:
       - name: Validate committed data
         run: |
           bun scripts/release.ts snapshot-check
-          jq -e 'type == "object"' prototype/public/definitions.json
+          jq -e 'type == "object"' frontend/public/definitions.json
 
   deploy-validation:
     needs: changes

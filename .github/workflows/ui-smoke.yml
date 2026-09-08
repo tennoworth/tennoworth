@@ -37,24 +37,24 @@ jobs:
         with:
           filters: |
             desktop:
-              - 'companion/Cargo.lock'
-              - 'companion/Cargo.toml'
-              - 'companion/tennoworth-desktop/**'
-              - 'companion/wfm-client/**'
-              - 'companion/market-math/**'
-              - 'companion/wfm-core/**'
-              - 'prototype/src/**'
+              - 'rust/Cargo.lock'
+              - 'rust/Cargo.toml'
+              - 'rust/tennoworth-desktop/**'
+              - 'rust/wfm-client/**'
+              - 'rust/market-math/**'
+              - 'rust/wfm-core/**'
+              - 'frontend/src/**'
               - 'tests/fixtures/relic-ocr/**'
-              - 'prototype/index.html'
-              - 'prototype/bun.lock'
-              - 'prototype/package.json'
-              - 'prototype/svelte.config.ts'
-              - 'prototype/tsconfig.json'
-              - 'prototype/vite.config.ts'
-              - 'prototype/public/theme-boot.js'
-              - 'prototype/public/market.json'
-              - 'prototype/public/wfstat-catalog.json'
-              - 'prototype/public/definitions.json'
+              - 'frontend/index.html'
+              - 'frontend/bun.lock'
+              - 'frontend/package.json'
+              - 'frontend/svelte.config.ts'
+              - 'frontend/tsconfig.json'
+              - 'frontend/vite.config.ts'
+              - 'frontend/public/theme-boot.js'
+              - 'frontend/public/market.json'
+              - 'frontend/public/wfstat-catalog.json'
+              - 'frontend/public/definitions.json'
               - 'scripts/probe-smoke-linux.sh'
               - 'scripts/check-probe-report.ts'
               - 'scripts/sync-csp.ts'
@@ -103,28 +103,28 @@ jobs:
         run: |
           set -euo pipefail
           vcpkg install tesseract:x64-windows-static-md
-          mkdir -p companion/tennoworth-desktop/resources/tessdata
+          mkdir -p rust/tennoworth-desktop/resources/tessdata
           curl --fail --location --retry 3 \
             https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/eng.traineddata \
-            --output companion/tennoworth-desktop/resources/tessdata/eng.traineddata
-          echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  companion/tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
+            --output rust/tennoworth-desktop/resources/tessdata/eng.traineddata
+          echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  rust/tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
 
       # The desktop binary embeds the SPA at compile time (frontendDist) and
       # plain `cargo build` does not run tauri.conf.json's beforeBuildCommand
       # the way `tauri build` does - build the frontend explicitly first,
       # exactly like release-desktop.yml does.
       - name: Build frontend (dist-desktop)
-        working-directory: prototype
+        working-directory: frontend
         run: |
           bun install --frozen-lockfile
           bun run build:desktop
 
       - name: Build the desktop app
-        working-directory: companion
+        working-directory: rust
         run: cargo build --release -p tennoworth-desktop
 
       - name: Real three-reward OCR regression
-        working-directory: companion
+        working-directory: rust
         run: >-
           cargo test --release -p tennoworth-desktop
           real_three_reward_capture_survives_common_display_shapes -- --ignored
@@ -148,7 +148,7 @@ jobs:
           WEBVIEW2_USER_DATA_FOLDER: '${{ runner.temp }}\webview2-data'
         timeout-minutes: 5
         run: |
-          & .\companion\target\release\tennoworth-desktop.exe 2>&1 |
+          & .\rust\target\release\tennoworth-desktop.exe 2>&1 |
             Tee-Object -FilePath "${{ runner.temp }}\probe-stdout.log"
           if ($LASTEXITCODE -ne 0) {
             Write-Host "app exited with $LASTEXITCODE"
@@ -189,13 +189,13 @@ jobs:
       - name: Stage pinned OCR model
         run: |
           set -euo pipefail
-          mkdir -p companion/tennoworth-desktop/resources/tessdata
+          mkdir -p rust/tennoworth-desktop/resources/tessdata
           curl --fail --location --retry 3 \
             https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/eng.traineddata \
-            --output companion/tennoworth-desktop/resources/tessdata/eng.traineddata
-          echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  companion/tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
+            --output rust/tennoworth-desktop/resources/tessdata/eng.traineddata
+          echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  rust/tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
       - name: Install frontend dependencies
-        working-directory: prototype
+        working-directory: frontend
         run: bun install --frozen-lockfile
       - name: Build and run the Linux desktop probe
         env:

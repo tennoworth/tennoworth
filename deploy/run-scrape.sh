@@ -5,8 +5,8 @@
 # self-hosted systemd timer.
 #
 # Rust-only since 2026-08 (Python retired): `wfm-scrape scrape` produces
-# wfm_results.csv and `wfm-scrape build` renders BOTH prototype/public/market.json
-# and prototype/public/wfstat-catalog.json from it.
+# wfm_results.csv and `wfm-scrape build` renders BOTH frontend/public/market.json
+# and frontend/public/wfstat-catalog.json from it.
 #
 # Environment (all optional):
 #   APP      repo root to run in          (default /srv/wfm/app - the LXC layout)
@@ -54,7 +54,7 @@ fi
 "$SCRAPE_BIN" build
 echo "scrape complete: $now rows, $(date -Is)"
 
-# Long price history (relics.run → prototype/public/history.json). Production-only:
+# Long price history (relics.run → frontend/public/history.json). Production-only:
 # the artifact is its own state (only new days are fetched, normally one file
 # per day), so it must live where it persists. A failure here must not fail the
 # scrape: history is a bonus surface, market.json is not.

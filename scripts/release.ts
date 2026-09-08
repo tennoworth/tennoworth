@@ -10,13 +10,13 @@
 //
 // Two pins remain:
 //
-//   companion/tennoworth-desktop/Cargo.toml   AUTHORITATIVE. CARGO_PKG_VERSION,
+//   rust/tennoworth-desktop/Cargo.toml   AUTHORITATIVE. CARGO_PKG_VERSION,
 //                                             what the app reports and what the
 //                                             updater compares against, and
 //                                             (with no `version` in
 //                                             tauri.conf.json) what Tauri writes
 //                                             into the bundle.
-//   companion/Cargo.lock                      derived, machine-written
+//   rust/Cargo.lock                      derived, machine-written
 //
 // Usage:
 //   bun scripts/release.ts snapshot [--host wfm]
@@ -40,11 +40,11 @@ import { fileURLToPath } from "node:url";
 
 const ROOT = fileURLToPath(new URL("..", import.meta.url));
 
-const CARGO_TOML = "companion/tennoworth-desktop/Cargo.toml";
-const CARGO_LOCK = "companion/Cargo.lock";
+const CARGO_TOML = "rust/tennoworth-desktop/Cargo.toml";
+const CARGO_LOCK = "rust/Cargo.lock";
 const CHANGELOG = "CHANGELOG.md";
-const MARKET_SNAPSHOT = "prototype/public/market.json";
-const WFSTAT_CATALOG = "prototype/public/wfstat-catalog.json";
+const MARKET_SNAPSHOT = "frontend/public/market.json";
+const WFSTAT_CATALOG = "frontend/public/wfstat-catalog.json";
 const RELEASE_SNAPSHOT_MAX_AGE_HOURS = 24;
 const MAX_SNAPSHOT_FILE_BYTES = 16 * 1024 * 1024;
 
@@ -194,7 +194,7 @@ function printSnapshotSummary(summary: SnapshotSummary) {
 
 function cmdSnapshotCheck(argv: string[]) {
   let release = false;
-  let dir = join(ROOT, "prototype/public");
+  let dir = join(ROOT, "frontend/public");
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--release") {
       release = true;
@@ -224,7 +224,7 @@ case "\${state:-unknown}" in
   inactive|failed) ;;
   *) echo "ABORT: wfm-scrape.service is \${state:-unknown}; retry after it finishes." >&2; exit 75 ;;
 esac
-cd "$APP/prototype/public"
+cd "$APP/frontend/public"
 market_size=$(stat -c %s market.json)
 resolver_size=$(stat -c %s wfstat-catalog.json)
 printf '%s\\n%s\\n' "$market_size" "$resolver_size"
@@ -716,7 +716,7 @@ function nextVersion(current: string, bump: string): string {
   //          added/removed, a persisted-format or updater change, package
   //          identity, or a compatibility break.
   //   major  1.0 only.
-  // Also: a change confined to prototype/ ships to tennoworth.app via
+  // Also: a change confined to frontend/ ships to tennoworth.app via
   // continuous deployment and needs no desktop release at all.
   switch (bump) {
     case "major":
@@ -734,7 +734,7 @@ function cmdPrepare(argv: string[]) {
   const bump = argv[0] ?? fail("prepare needs <major|minor|patch|X.Y.Z>");
   try {
     printSnapshotSummary(
-      validateSnapshotDirectory(join(ROOT, "prototype/public"), true),
+      validateSnapshotDirectory(join(ROOT, "frontend/public"), true),
     );
   } catch (error) {
     fail((error as Error).message);
@@ -760,7 +760,7 @@ function cmdPrepare(argv: string[]) {
   // previous version, which any --frozen build from source refuses.
   console.log("refreshing Cargo.lock (cargo update --workspace)…");
   execFileSync("cargo", ["update", "--workspace"], {
-    cwd: join(ROOT, "companion"),
+    cwd: join(ROOT, "rust"),
     stdio: "inherit",
   });
 

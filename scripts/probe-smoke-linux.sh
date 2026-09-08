@@ -13,10 +13,10 @@ for tool in xvfb-run dbus-run-session; do
 done
 
 # The embedded SPA must be rebuilt before Cargo, even when a binary exists.
-(cd prototype && bun run build:desktop)
-(cd companion && cargo build -p tennoworth-desktop)
-TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/companion/target}"
-if [[ "$TARGET_DIR" != /* ]]; then TARGET_DIR="$ROOT/companion/$TARGET_DIR"; fi
+(cd frontend && bun run build:desktop)
+(cd rust && cargo build -p tennoworth-desktop)
+TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/rust/target}"
+if [[ "$TARGET_DIR" != /* ]]; then TARGET_DIR="$ROOT/rust/$TARGET_DIR"; fi
 BIN="$TARGET_DIR/debug/tennoworth-desktop"
 EVIDENCE="${TENNOWORTH_PROBE_EVIDENCE_DIR:-$(mktemp -d -t probe-evidence-XXXXXX)}"
 mkdir -p "$EVIDENCE"

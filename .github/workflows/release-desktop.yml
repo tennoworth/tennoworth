@@ -180,7 +180,7 @@ jobs:
       # `--locked` reproduces that refusal here,
       # before anything is built, and keeps the lock an honest version pin.
       - name: Gate - Cargo.lock already matches the manifests
-        working-directory: companion
+        working-directory: rust
         run: cargo fetch --locked
 
   # Windows. Publishes NOTHING - every output leaves as a workflow artifact.
@@ -227,16 +227,16 @@ jobs:
         run: |
           set -euo pipefail
           vcpkg install tesseract:x64-windows-static-md
-          mkdir -p companion/tennoworth-desktop/resources/tessdata
+          mkdir -p rust/tennoworth-desktop/resources/tessdata
           curl --fail --location --retry 3 \
             https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/eng.traineddata \
-            --output companion/tennoworth-desktop/resources/tessdata/eng.traineddata
-          echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  companion/tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
+            --output rust/tennoworth-desktop/resources/tessdata/eng.traineddata
+          echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  rust/tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
 
       # tauri.conf.json's beforeBuildCommand runs `bun run build:desktop`, so
       # the SPA's deps must exist before tauri-action invokes the build.
       - name: Install frontend deps
-        working-directory: prototype
+        working-directory: frontend
         run: bun install --frozen-lockfile
 
       # No tagName, no release inputs: the action builds and stops. Publishing
@@ -254,7 +254,7 @@ jobs:
           # scoped to what the action actually needs here.
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          projectPath: companion/tennoworth-desktop
+          projectPath: rust/tennoworth-desktop
           args: --bundles nsis
 
       - name: Stage Windows artifacts
@@ -268,12 +268,12 @@ jobs:
           # it even after converting to forward slashes, so every file looked
           # missing. A relative find from the workspace avoids the drive-letter
           # translation question altogether.
-          find companion/target/release/bundle -type f \
+          find rust/target/release/bundle -type f \
             \( -name '*.exe' -o -name '*.sig' \) \
             -exec cp -v {} dist/ \;
           if [ -z "$(ls -A dist 2>/dev/null)" ]; then
-            echo "::error title=Nothing built::No installers found under companion/target/release/bundle."
-            find companion/target/release/bundle -type f 2>/dev/null | head -20 || echo "(bundle dir absent)"
+            echo "::error title=Nothing built::No installers found under rust/target/release/bundle."
+            find rust/target/release/bundle -type f 2>/dev/null | head -20 || echo "(bundle dir absent)"
             exit 1
           fi
 
@@ -332,17 +332,17 @@ jobs:
       - name: Stage OCR language model
         run: |
           set -euo pipefail
-          mkdir -p companion/tennoworth-desktop/resources/tessdata
+          mkdir -p rust/tennoworth-desktop/resources/tessdata
           curl --fail --location --retry 3 \
             https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/eng.traineddata \
-            --output companion/tennoworth-desktop/resources/tessdata/eng.traineddata
-          echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  companion/tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
+            --output rust/tennoworth-desktop/resources/tessdata/eng.traineddata
+          echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  rust/tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
 
       # tauri-build embeds the SPA at compile time from frontendDist, and plain
       # `cargo build` does not run tauri.conf.json's beforeBuildCommand the way
       # `cargo tauri build` does - so the frontend is built explicitly here.
       - name: Build frontend
-        working-directory: prototype
+        working-directory: frontend
         run: |
           bun install --frozen-lockfile
           bun run build:desktop
@@ -357,7 +357,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          projectPath: companion/tennoworth-desktop
+          projectPath: rust/tennoworth-desktop
           args: --bundles appimage
 
       # Fails the release rather than shipping a binary that won't start on a
@@ -367,7 +367,7 @@ jobs:
       - name: Verify glibc floor
         run: |
           set -euo pipefail
-          bin=companion/target/release/tennoworth-desktop
+          bin=rust/target/release/tennoworth-desktop
           max=$(objdump -T "$bin" | grep -o 'GLIBC_[0-9.]*' | sed 's/GLIBC_//' | sort -uV | tail -1)
           echo "highest glibc symbol required: $max"
           if [ "$(printf '%s\n2.35\n' "$max" | sort -V | tail -1)" != "2.35" ]; then
@@ -396,7 +396,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          img=$(find companion/target/release/bundle/appimage -name '*.AppImage' | head -1)
+          img=$(find rust/target/release/bundle/appimage -name '*.AppImage' | head -1)
           [ -n "$img" ] || { echo "::error title=Missing AppImage::tauri build did not emit an AppImage"; exit 1; }
           chmod +x "$img"
           "$img" --appimage-extract >/dev/null

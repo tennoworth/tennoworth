@@ -46,8 +46,8 @@ Warframe. Reduce decision time, not increase time spent managing the app.
 
 ## Tokens and typography
 
-[app.css](../prototype/src/app.css) is the source of runtime token values and
-theme overrides. [theme.ts](../prototype/src/ui/theme.ts) owns theme selection.
+[app.css](../frontend/src/app.css) is the source of runtime token values and
+theme overrides. [theme.ts](../frontend/src/ui/theme.ts) owns theme selection.
 Do not maintain another palette or duplicate numeric token values in examples.
 The active look is `yorha`; the resolved modes are `light` and `dark`.
 
@@ -231,7 +231,7 @@ direction changes require explicit approval, not an incidental component edit.
 ## Living reference and verification
 
 Open `/?styleguide` on the development server for the living reference in
-[Styleguide.svelte](../prototype/src/dev/Styleguide.svelte). It consumes
+[Styleguide.svelte](../frontend/src/dev/Styleguide.svelte). It consumes
 production tokens and shared patterns, not copied mock CSS, and is excluded
 from production builds. It shows both themes, interaction and failure states,
 long content, a locally scrolling table, and an editable native dialog. Theme
@@ -239,7 +239,7 @@ choices and sample edits do not persist or invoke account operations. It is an
 reference for the approved visual direction, not a separate design system.
 
 For UI changes, use the existing responsive suite in
-[prototype/tests](../prototype/tests) and the checks described in
+[frontend/tests](../frontend/tests) and the checks described in
 [Development](../README.md#development). Extend coverage for new behavior rather
 than considering existing green tests sufficient.
 

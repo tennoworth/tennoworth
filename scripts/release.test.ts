@@ -240,7 +240,7 @@ test("snapshot CLI resolves its checkout from paths containing spaces and URL ch
   const root = mkdtempSync(join(tmpdir(), "tennoworth release # %-"));
   try {
     const script = join(root, "scripts", "release.ts");
-    const publicDir = join(root, "prototype", "public");
+    const publicDir = join(root, "frontend", "public");
     mkdirSync(join(root, "scripts"), { recursive: true });
     mkdirSync(publicDir, { recursive: true });
     copyFileSync(fileURLToPath(new URL("./release.ts", import.meta.url)), script);

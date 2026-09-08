@@ -26,12 +26,12 @@ project version pins.
   `[System.IO.DriveInfo]::new('C').AvailableFreeSpace` to check disk space;
   `Get-PSDrive` reported an incorrect zero in the SSH session.
 - Download `eng.traineddata` from the URL and verify the SHA-256 recorded in
-  the Windows workflow before building. Build `prototype/dist-desktop`
+  the Windows workflow before building. Build `frontend/dist-desktop`
   before running plain Cargo builds.
 - For the unsigned isolated installer, set
   `$env:TENNOWORTH_OCR_TEST_BUILD = '1'` and run
   `cargo tauri build --config tauri.ocr-test.conf.json --bundles nsis` from
-  `companion/tennoworth-desktop`. This flag disables ordinary updater support.
+  `rust/tennoworth-desktop`. This flag disables ordinary updater support.
 
 The transferred reward-regression snapshot passed 121 desktop Rust tests,
 four overlay component tests, Svelte checking, and the release build on

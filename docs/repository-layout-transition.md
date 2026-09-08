@@ -23,7 +23,7 @@ the old source directory after advancing the checkout.
 3. Make a private backup outside the deployment directory, with `umask 077`.
    Preserve the checkout including its Git state, `bin/`, installed scripts,
    asset stamps, and the deployed Caddy configuration. Include the live
-   market/catalog pair, history, CSV/checkpoints, and current web bundle.
+   market/catalog pair, definitions (including operator overrides), history, CSV/checkpoints, and current web bundle.
    Check that the backup can be read before continuing.
 4. Install the migration-aware `deploy/pull-app.sh` from the reviewed change
    **before** advancing the deployed checkout. Stage it beside the installed
@@ -51,13 +51,13 @@ by fast-forward, and restores to the layout actually present afterward. A
 failed fast-forward restores the original layout. Each restored JSON file is
 replaced atomically, with the catalog before the market generation anchor.
 CSV and history remain production-owned. The previously served web bundle and
-old public-data paths remain available while Caddy still uses the old root.
+old public-data paths, including definitions, remain available while Caddy still uses the old root. Definitions are preserved during this layout transition; ordinary source updates continue applying tracked definition changes.
 If restoration fails, the puller reports the retained recovery directory;
 recover it before restarting any timers.
 
 Then:
 
-1. Compare checksums of the live market/catalog pair, history, and CSV with the
+1. Compare checksums of the live market/catalog pair, definitions, history, and CSV with the
    pre-transition copies. They must be unchanged by the source update.
 2. Run the newly installed `pull-scrape.sh` and `pull-web.sh`. Verify the
    installed binary and bundle came from the successful matching workflows.
@@ -84,7 +84,7 @@ production checkout.
 ## Rollback
 
 Stop the four timers again and wait for in-flight services to settle. Save
-any live snapshots, history, CSV, and checkpoints produced since the original
+any live snapshots, definitions, history, CSV, and checkpoints produced since the original
 backup into another private directory. Retain the failed deployment separately
 for inspection.
 

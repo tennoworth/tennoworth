@@ -101,6 +101,12 @@ fi
 # Keep logical artifact names separate from source paths: a fast-forward can
 # rename the source tree while the production snapshots are newer than Git.
 LIVE_ARTIFACTS=(wfstat-catalog.json history.json market.json)
+if [[ "$source_layout" != "$target_layout" ]]; then
+  # Keep the scan hotfix endpoint available under the old Caddy root until
+  # reload, including any operator override. Ordinary source updates still
+  # apply tracked definition changes through Git.
+  LIVE_ARTIFACTS=(definitions.json "${LIVE_ARTIFACTS[@]}")
+fi
 stash=$(mktemp -d)
 for name in "${LIVE_ARTIFACTS[@]}"; do
   source="$source_layout/public/$name"
