@@ -1,13 +1,12 @@
+import { DESKTOP_CONTEXT } from './contracts/services';
 import { mount } from 'svelte';
-import App from './App.svelte';
-// Imported AFTER App so the global stylesheet lands last in the bundle: the
-// per-look structural rules in app.css rely on winning specificity ties with
-// component-scoped rules.
+// Shared theme rules follow shell layout rules so existing specificity ties
+// retain the production cascade.
+import './shells/shell.css';
 import './app.css';
-import { createStateStore } from './lib/state-store';
-import { initTheme } from './lib/theme';
-import type { UpdateStatus } from './lib/desktop-update';
-import { installDesktopExternalLinkHandler } from './lib/transport';
+import { createStateStore } from './adapters/state-store';
+import { initTheme } from './ui/theme';
+import { installDesktopExternalLinkHandler, isDesktopRuntime } from './adapters/runtime';
 
 // Dev-only design-review seam: `?preview-desktop` on a `vite dev` origin
 // installs a stub Tauri runtime BEFORE anything sniffs for it, so the
@@ -17,49 +16,7 @@ import { installDesktopExternalLinkHandler } from './lib/transport';
 // `vite build` (import.meta.env.DEV is false), and the desktop webview ships
 // its real runtime long before this line runs.
 if (import.meta.env.DEV && new URLSearchParams(location.search).has('preview-desktop')) {
-  const scenario = new URLSearchParams(location.search).get('sample');
-  const preview = scenario !== null
-    ? (await import('./lib/preview-data')).createPreview(scenario || 'populated')
-    : null;
-  const noUpdate: UpdateStatus = {
-    checked: true,
-    available: false,
-    support: 'disabled_test_build',
-    current_version: 'preview',
-    version: null,
-    notes: null,
-  };
-  const empties: Record<string, unknown> = {
-    wfm_auth_status: { logged_in: false, unlocked: false },
-    tray_state: { labels: [], last_notification: null },
-    update_status: noUpdate,
-    check_update: noUpdate,
-    refresh_history: { updated: false, body: null },
-    refresh_market: { updated: false, status: 'offline' },
-    top_sellables: [], list_watches: [], list_listing_log: [], list_snapshots: [],
-    ledger_rows: [], list_trades: [], list_notifications: [],
-    get_notification_preferences: { popups: true, categories: Object.fromEntries(['trades', 'watches', 'scans', 'baro', 'calendar', 'digest'].map(k => [k, { enabled: true, native: true }])) },
-    try_silent_unlock: false,
-    get_overlay_settings: { enabled: false, autoDetect: true, shortcut: 'Ctrl+Shift+O', scale: 1, livePrices: true, showOwned: true, diagnostics: false },
-    overlay_status: { state: 'disabled', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true },
-    setup_overlay_capture: { state: 'watching', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true },
-  };
-  // The desktop store keeps settings + the reload-restore snapshot in SQLite
-  // via get_setting/set_setting; back those onto localStorage so a seeded
-  // browser snapshot round-trips exactly like the real thing.
-  const invoke = (cmd: string, args?: Record<string, unknown>) => {
-    if (preview && ['get_setting', 'set_setting', 'delete_setting', 'fetch_orders', 'list_watches', 'list_trades', 'eelog_status', 'riven_comps', 'wfm_auth_status', 'live_top_prices', 'trade_session_state', 'submit_plan', 'list_notifications', 'mark_notifications_read', 'clear_notifications', 'get_notification_preferences', 'set_notification_preferences', 'test_notification'].includes(cmd)) return preview(cmd, args);
-    if (cmd === 'get_setting') return Promise.resolve(localStorage.getItem(String(args?.key)));
-    if (cmd === 'set_setting') { localStorage.setItem(String(args?.key), String(args?.value)); return Promise.resolve(null); }
-    if (cmd === 'delete_setting') { localStorage.removeItem(String(args?.key)); return Promise.resolve(null); }
-    if (cmd === 'set_notification_preferences') return Promise.resolve(args?.preferences);
-    if (cmd === 'test_notification') return Promise.resolve('Test sent (preview).');
-    if (cmd === 'update_overlay_settings') return Promise.resolve(args?.settings ?? null);
-    return Promise.resolve(cmd in empties ? empties[cmd] : null);
-  };
-  const w = globalThis as Record<string, unknown>;
-  w.__TAURI_INTERNALS__ = { invoke };
-  w.__TAURI__ = { core: { invoke }, event: { listen: () => Promise.resolve(() => {}) } };
+  await (await import('./dev/install-preview')).installPreview();
 }
 
 const target = document.getElementById('app');
@@ -79,15 +36,17 @@ const store = createStateStore();
 // component CSS: Svelte still emits it globally even when that branch never runs.
 const styleguideSurface = import.meta.env.DEV && new URLSearchParams(location.search).has('styleguide');
 const app = styleguideSurface && !overlaySurface
-  ? import('./components/Styleguide.svelte').then(({ default: Styleguide }) => mount(Styleguide, { target }))
+  ? import('./dev/Styleguide.svelte').then(({ default: Styleguide }) => mount(Styleguide, { target }))
   : overlaySurface
-  ? import('./components/RelicOverlay.svelte').then(({ default: RelicOverlay }) => mount(RelicOverlay, { target }))
+  ? Promise.all([import('./features/relics/RelicOverlay.svelte'), import('./adapters/services')]).then(([{ default: RelicOverlay }, { createDesktopServices }]) => mount(RelicOverlay, { target, context: new Map([[DESKTOP_CONTEXT, createDesktopServices()]]) }))
   : store.hydrate().then(() => {
     // public/theme-boot.js already stamped the browser's stored theme before
     // first paint; this re-applies from the store (the desktop build keeps
     // settings in SQLite, which the boot script can't see) and starts following
     // the OS scheme. Before mount, so the theme never changes under the UI.
     const theme = initTheme(store);
-    return mount(App, { target, props: { store, theme } });
+    return isDesktopRuntime()
+      ? Promise.all([import('./shells/DesktopShell.svelte'), import('./adapters/services')]).then(([{ default: DesktopShell }, { createDesktopServices }]) => mount(DesktopShell, { target, props: { store, theme }, context: new Map([[DESKTOP_CONTEXT, createDesktopServices()]]) }))
+      : import('./shells/HostedShell.svelte').then(({ default: HostedShell }) => mount(HostedShell, { target, props: { theme } }));
   });
 export default app;
