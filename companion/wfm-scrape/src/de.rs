@@ -23,7 +23,7 @@ use std::collections::{BTreeMap, HashMap};
 
 use serde_json::Value;
 
-use crate::fetch::Http;
+use crate::ingest::Http;
 use crate::reconcile::Observation;
 
 // ---------------------------------------------------------------------------
@@ -76,12 +76,20 @@ pub const DE_WORLD_STATE_URL: &str = "https://api.warframe.com/cdn/worldState.ph
 /// DE's weekly riven price statistics. PC is the product's primary market;
 /// console children are optional comparison data and are not reconciled into
 /// PC when one child fails.
-pub const DE_WEEKLY_RIVENS_URL: &str =
-    "https://www-static.warframe.com/repos/weeklyRivensPC.json";
+pub const DE_WEEKLY_RIVENS_URL: &str = "https://www-static.warframe.com/repos/weeklyRivensPC.json";
 pub const DE_WEEKLY_RIVEN_PLATFORMS: &[(&str, &str)] = &[
-    ("ps4", "https://www-static.warframe.com/repos/weeklyRivensPS4.json"),
-    ("xb1", "https://www-static.warframe.com/repos/weeklyRivensXB1.json"),
-    ("swi", "https://www-static.warframe.com/repos/weeklyRivensSWI.json"),
+    (
+        "ps4",
+        "https://www-static.warframe.com/repos/weeklyRivensPS4.json",
+    ),
+    (
+        "xb1",
+        "https://www-static.warframe.com/repos/weeklyRivensXB1.json",
+    ),
+    (
+        "swi",
+        "https://www-static.warframe.com/repos/weeklyRivensSWI.json",
+    ),
 ];
 
 /// Manifest basenames we actually read. The index lists 16; pulling only these
@@ -170,7 +178,10 @@ pub fn parse_index(text: &str) -> BTreeMap<String, IndexEntry> {
         }
         out.insert(
             file.to_string(),
-            IndexEntry { file: file.to_string(), hash: hash.to_string() },
+            IndexEntry {
+                file: file.to_string(),
+                hash: hash.to_string(),
+            },
         );
     }
     out
@@ -214,7 +225,9 @@ pub fn parse_manifest(raw: &str) -> Result<Value, String> {
                     );
                     Ok(v)
                 }
-                Err(e) => Err(format!("manifest parse failed: {strict_err} (and after sanitising: {e})")),
+                Err(e) => Err(format!(
+                    "manifest parse failed: {strict_err} (and after sanitising: {e})"
+                )),
             }
         }
     }
@@ -271,7 +284,9 @@ pub fn sanitize_control_chars(raw: &str) -> String {
 /// degrades to a plausible read instead of an empty one; a missing key is
 /// still worth a warning, which the caller emits.
 pub fn manifest_rows_named<'a>(doc: &'a Value, key: &str) -> &'a [Value] {
-    let Some(obj) = doc.as_object() else { return &[] };
+    let Some(obj) = doc.as_object() else {
+        return &[];
+    };
     if let Some(arr) = obj.get(key).and_then(|v| v.as_array()) {
         return arr.as_slice();
     }
@@ -295,7 +310,11 @@ pub fn manifest_rows_for<'a>(doc: &'a Value, basename: &str) -> &'a [Value] {
 /// knowing its filename (tests, mostly).
 pub fn manifest_rows(doc: &Value) -> &[Value] {
     doc.as_object()
-        .and_then(|m| m.values().filter_map(|v| v.as_array()).max_by_key(|a| a.len()))
+        .and_then(|m| {
+            m.values()
+                .filter_map(|v| v.as_array())
+                .max_by_key(|a| a.len())
+        })
         .map(|a| a.as_slice())
         .unwrap_or(&[])
 }
@@ -345,7 +364,10 @@ impl DeSnapshot {
     }
 
     pub fn outcome(&self, name: &str) -> ManifestOutcome {
-        self.outcomes.get(name).copied().unwrap_or(ManifestOutcome::Unavailable)
+        self.outcomes
+            .get(name)
+            .copied()
+            .unwrap_or(ManifestOutcome::Unavailable)
     }
 }
 
@@ -354,10 +376,7 @@ impl DeSnapshot {
 /// The 490-byte index is the whole point: a daily poll costs 490 bytes and
 /// pulls only what actually changed. A cold run (`prior_hashes` empty) pulls
 /// everything in [`WANTED_MANIFESTS`].
-pub fn fetch_export(
-    http: &dyn Http,
-    prior_hashes: &BTreeMap<String, String>,
-) -> DeSnapshot {
+pub fn fetch_export(http: &dyn Http, prior_hashes: &BTreeMap<String, String>) -> DeSnapshot {
     let mut snap = DeSnapshot::default();
 
     let raw = match http.get_bytes(DE_INDEX_URL) {
@@ -392,7 +411,8 @@ pub fn fetch_export(
     for name in WANTED_MANIFESTS {
         let Some(entry) = index.get(*name) else {
             eprintln!("  warning: {name} is not in DE's index this cycle");
-            snap.outcomes.insert((*name).to_string(), ManifestOutcome::Unavailable);
+            snap.outcomes
+                .insert((*name).to_string(), ManifestOutcome::Unavailable);
             continue;
         };
         let unchanged = prior_hashes.get(*name) == Some(&entry.hash);
@@ -400,7 +420,8 @@ pub fn fetch_export(
             // The skip that makes this cheap. Recording the hash marks it held,
             // which is what `skipped()` keys off.
             snap.hashes.insert((*name).to_string(), entry.hash.clone());
-            snap.outcomes.insert((*name).to_string(), ManifestOutcome::Unchanged);
+            snap.outcomes
+                .insert((*name).to_string(), ManifestOutcome::Unchanged);
             continue;
         }
         if !unchanged {
@@ -410,19 +431,22 @@ pub fn fetch_export(
             Ok(body) => match parse_manifest(&body) {
                 Ok(doc) => {
                     snap.manifests.insert((*name).to_string(), doc);
-                    snap.outcomes.insert((*name).to_string(), ManifestOutcome::Usable);
+                    snap.outcomes
+                        .insert((*name).to_string(), ManifestOutcome::Usable);
                     // Recorded ONLY on success. A hash written for a manifest
                     // we failed to read would tell the next cycle we already
                     // have it, and the failure would never be retried.
                     snap.hashes.insert((*name).to_string(), entry.hash.clone());
                 }
                 Err(e) => {
-                    snap.outcomes.insert((*name).to_string(), ManifestOutcome::Invalid);
+                    snap.outcomes
+                        .insert((*name).to_string(), ManifestOutcome::Invalid);
                     eprintln!("  warning: {name}: {e}");
                 }
             },
             Err(e) => {
-                snap.outcomes.insert((*name).to_string(), ManifestOutcome::Unavailable);
+                snap.outcomes
+                    .insert((*name).to_string(), ManifestOutcome::Unavailable);
                 eprintln!("  warning: could not fetch {name}: {e}");
             }
         }
@@ -454,9 +478,15 @@ pub fn world_array_observation(
     key: &str,
     extracted: Vec<Value>,
 ) -> Observation<Vec<Value>> {
-    let Some(world) = world else { return Observation::Unavailable };
-    let Some(raw) = world.get(key) else { return Observation::Invalid };
-    let Some(rows) = raw.as_array() else { return Observation::Invalid };
+    let Some(world) = world else {
+        return Observation::Unavailable;
+    };
+    let Some(raw) = world.get(key) else {
+        return Observation::Invalid;
+    };
+    let Some(rows) = raw.as_array() else {
+        return Observation::Invalid;
+    };
     if rows.is_empty() {
         return Observation::AuthoritativeEmpty;
     }
@@ -491,7 +521,8 @@ pub fn de_millis(v: Option<&Value>) -> Option<i64> {
         return Some(n);
     }
     let num = inner.get("$numberLong")?;
-    num.as_i64().or_else(|| num.as_str().and_then(|s| s.parse().ok()))
+    num.as_i64()
+        .or_else(|| num.as_str().and_then(|s| s.parse().ok()))
 }
 
 /// Relay node id → the display name players use.
@@ -519,9 +550,7 @@ mod tests {
 
     #[test]
     fn parse_index_reads_file_and_hash() {
-        let idx = parse_index(
-            "ExportWeapons_en.json!00_abc\nExportRecipes_en.json!00_def\n",
-        );
+        let idx = parse_index("ExportWeapons_en.json!00_abc\nExportRecipes_en.json!00_def\n");
         assert_eq!(idx.len(), 2);
         assert_eq!(idx["ExportWeapons_en.json"].hash, "00_abc");
         assert_eq!(
@@ -595,7 +624,8 @@ mod tests {
 
     #[test]
     fn manifest_rows_named_falls_back_to_the_largest_array_on_a_rename() {
-        let v: Value = serde_json::from_str(r#"{"SomethingDeRenamed":[1,2,3],"Tiny":[1]}"#).unwrap();
+        let v: Value =
+            serde_json::from_str(r#"{"SomethingDeRenamed":[1,2,3],"Tiny":[1]}"#).unwrap();
         assert_eq!(manifest_rows_named(&v, "ExportWeapons").len(), 3);
     }
 
@@ -628,16 +658,39 @@ mod tests {
 
     #[test]
     fn world_children_only_clear_on_a_literal_valid_empty_array() {
-        assert!(matches!(world_array_observation(None, "Events", vec![]), Observation::Unavailable));
-        for world in [serde_json::json!({}), serde_json::json!({"Events": null}), serde_json::json!({"Events": {}})] {
-            assert!(matches!(world_array_observation(Some(&world), "Events", vec![]), Observation::Invalid));
+        assert!(matches!(
+            world_array_observation(None, "Events", vec![]),
+            Observation::Unavailable
+        ));
+        for world in [
+            serde_json::json!({}),
+            serde_json::json!({"Events": null}),
+            serde_json::json!({"Events": {}}),
+        ] {
+            assert!(matches!(
+                world_array_observation(Some(&world), "Events", vec![]),
+                Observation::Invalid
+            ));
         }
         let empty = serde_json::json!({"Events": []});
-        assert!(matches!(world_array_observation(Some(&empty), "Events", vec![]), Observation::AuthoritativeEmpty));
+        assert!(matches!(
+            world_array_observation(Some(&empty), "Events", vec![]),
+            Observation::AuthoritativeEmpty
+        ));
         let all_bad = serde_json::json!({"Events": [{"bad": true}]});
-        assert!(matches!(world_array_observation(Some(&all_bad), "Events", vec![]), Observation::Invalid));
+        assert!(matches!(
+            world_array_observation(Some(&all_bad), "Events", vec![]),
+            Observation::Invalid
+        ));
         let mixed = serde_json::json!({"Events": [{"ok": true}, {"bad": true}]});
-        assert!(matches!(world_array_observation(Some(&mixed), "Events", vec![serde_json::json!({"ok": true})]), Observation::Invalid));
+        assert!(matches!(
+            world_array_observation(
+                Some(&mixed),
+                "Events",
+                vec![serde_json::json!({"ok": true})]
+            ),
+            Observation::Invalid
+        ));
     }
 
     #[test]
@@ -647,7 +700,9 @@ mod tests {
         // lzma.compress(b"ExportWeapons_en.json!00_abc\n", format=FORMAT_ALONE).
         let b64 = "XQAAgAD//////////wAingoHEY9IBeul/igQedVd/DS3zFnbU+I+EEtzpT/OZLg//9DKEAA=";
         use base64::Engine as _;
-        let bytes = base64::engine::general_purpose::STANDARD.decode(b64).unwrap();
+        let bytes = base64::engine::general_purpose::STANDARD
+            .decode(b64)
+            .unwrap();
         let text = decode_lzma_alone(&bytes).unwrap();
         assert_eq!(text.trim(), "ExportWeapons_en.json!00_abc");
     }

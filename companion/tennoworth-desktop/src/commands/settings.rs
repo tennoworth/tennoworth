@@ -1,9 +1,9 @@
 //! Key/value settings and per-item reserve-copy CRUD, plus snapshot history
-//! listing - thin pass-throughs to [`crate::db::Db`].
+//! listing - thin pass-throughs to [`crate::persistence::Db`].
 
 use tauri::State;
 
-use crate::db::{Db, ListingLogEntry, Reserve, SnapshotSummary};
+use crate::persistence::{Db, ListingLogEntry, Reserve, SnapshotSummary};
 
 #[tauri::command]
 pub fn get_setting(db: State<'_, Db>, key: String) -> Result<Option<String>, String> {

@@ -1,5 +1,5 @@
 //! Market snapshot cache access + refresh, and the sellables ranking the SPA
-//! reads directly (the tray reads the same ranking via [`crate::tray`]).
+//! reads directly (the tray reads the same ranking via [`crate::shell::tray`]).
 #![allow(
     clippy::unreachable,
     reason = "tauri::command injects unreachable code into async wrappers"
@@ -9,15 +9,15 @@ use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter, State};
 
-use wfm_core::live_top::{fetch_live_tops, LiveTop, LiveTopQuery};
 use wfm_core::poison::guard;
-use wfm_core::rivens::{fetch_riven_comps, RivenAuction};
+use wfm_core::trading::live_top::{fetch_live_tops, LiveTop, LiveTopQuery};
+use wfm_core::trading::rivens::{fetch_riven_comps, RivenAuction};
 
-use crate::db::Db;
-use crate::market::{self, MarketCache, RefreshResult};
-use crate::sellables::{self, SellableRow};
-use crate::tray::{rebuild_tray, TrayState};
-use crate::wfm_session::{CmdError, WfmSession};
+use crate::persistence::Db;
+use crate::services::market::{self, MarketCache, RefreshResult};
+use crate::services::sellables::{self, SellableRow};
+use crate::services::wfm_session::{CmdError, WfmSession};
+use crate::shell::tray::{rebuild_tray, TrayState};
 
 /// The tray labels the last rebuild pushed + the last notification payload -
 /// evidence surface for the probe (the GTK menu isn't screenshot-able headless)
@@ -43,7 +43,10 @@ pub fn cached_market(cache: State<'_, MarketCache>) -> Option<String> {
 /// HTTP / body failure is swallowed inside `market::refresh` and returns a
 /// no-op RefreshResult - the only Err here is the blocking task failing to run.
 #[tauri::command]
-pub async fn refresh_market(app: AppHandle, cache: State<'_, MarketCache>) -> Result<RefreshResult, String> {
+pub async fn refresh_market(
+    app: AppHandle,
+    cache: State<'_, MarketCache>,
+) -> Result<RefreshResult, String> {
     let dir = cache.dir();
     let result = tauri::async_runtime::spawn_blocking(move || market::refresh(&dir))
         .await
@@ -126,7 +129,10 @@ pub async fn live_top_prices(
     if queries.len() > MAX_QUERIES {
         return Err(CmdError::of(
             "too_many",
-            format!("{} items requested; the live-price check takes at most {MAX_QUERIES} at a time", queries.len()),
+            format!(
+                "{} items requested; the live-price check takes at most {MAX_QUERIES} at a time",
+                queries.len()
+            ),
         ));
     }
     // Logged in: use the login's market and keep the user's own orders out of
@@ -148,7 +154,7 @@ pub async fn live_top_prices(
 /// The ≤20 cheapest matching auctions for one weapon's rivens, straight from
 /// WFM's v1 `/auctions/search` (public endpoint - works logged out; a login
 /// only chooses the market platform). The shared 10/min auction cap is
-/// enforced inside `wfm_core::rivens`, so rapid "Show comps" clicks pace
+/// enforced inside `wfm_core::trading::rivens`, so rapid "Show comps" clicks pace
 /// themselves instead of tripping WFM's budget.
 #[tauri::command]
 pub async fn riven_comps(

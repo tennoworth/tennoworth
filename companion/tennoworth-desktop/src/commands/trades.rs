@@ -2,28 +2,52 @@
 
 use tauri::{AppHandle, Manager, State};
 
-use crate::db::{Db, TradeRow};
-use crate::eelog_state::EeLogState;
-use crate::wfm_session::CmdError;
+use crate::persistence::{Db, TradeRow};
+use crate::services::eelog_state::EeLogState;
+use crate::services::wfm_session::CmdError;
 
 #[tauri::command]
-pub fn trade_session_state(app: AppHandle, db: State<'_, Db>) -> Result<TradeSessionState, CmdError> {
-    let market = crate::sellables::MarketData::load(&app.state::<crate::market::MarketCache>());
-    let allowance = db.trade_allowance(crate::allowance::unix_now()).map_err(|e| CmdError::internal(e.to_string()))?;
+pub fn trade_session_state(
+    app: AppHandle,
+    db: State<'_, Db>,
+) -> Result<TradeSessionState, CmdError> {
+    let market = crate::services::sellables::MarketData::load(
+        &app.state::<crate::services::market::MarketCache>(),
+    );
+    let allowance = db
+        .trade_allowance(crate::services::allowance::unix_now())
+        .map_err(|e| CmdError::internal(e.to_string()))?;
     let quantities = market.session_quantities(&db).map_err(CmdError::internal)?;
-    let session = app.state::<std::sync::Arc<crate::wfm_session::WfmSession>>();
+    let session = app.state::<std::sync::Arc<crate::services::wfm_session::WfmSession>>();
     let unlocked = session.require_unlocked().ok();
-    let bulk_slugs = unlocked.as_ref().map(|s| s.catalog.iter()
-        .filter(|(_, c)| c.bulk_tradable && c.session_supported)
-        .map(|(slug, _)| slug.clone()).collect()).unwrap_or_default();
-    let supported_slugs = unlocked.map(|s| s.catalog.iter().filter(|(_, c)| c.session_supported)
-        .map(|(slug, _)| slug.clone()).collect());
-    Ok(TradeSessionState { allowance, quantities, bulk_slugs, supported_slugs })
+    let bulk_slugs = unlocked
+        .as_ref()
+        .map(|s| {
+            s.catalog
+                .iter()
+                .filter(|(_, c)| c.bulk_tradable && c.session_supported)
+                .map(|(slug, _)| slug.clone())
+                .collect()
+        })
+        .unwrap_or_default();
+    let supported_slugs = unlocked.map(|s| {
+        s.catalog
+            .iter()
+            .filter(|(_, c)| c.session_supported)
+            .map(|(slug, _)| slug.clone())
+            .collect()
+    });
+    Ok(TradeSessionState {
+        allowance,
+        quantities,
+        bulk_slugs,
+        supported_slugs,
+    })
 }
 
 #[derive(serde::Serialize)]
 pub struct TradeSessionState {
-    pub allowance: crate::allowance::AllowanceView,
+    pub allowance: crate::services::allowance::AllowanceView,
     pub quantities: std::collections::BTreeMap<String, u32>,
     pub bulk_slugs: Vec<String>,
     pub supported_slugs: Option<Vec<String>>,
@@ -47,10 +71,13 @@ pub struct EeLogStatus {
 #[tauri::command]
 pub fn eelog_status(db: State<'_, Db>, ee: State<'_, EeLogState>) -> EeLogStatus {
     let auto_close = db
-        .get_setting(crate::trades::SETTING_AUTO_CLOSE)
+        .get_setting(crate::services::trades::SETTING_AUTO_CLOSE)
         .ok()
         .flatten()
         .map(|v| v != "off")
         .unwrap_or(true);
-    EeLogStatus { path: ee.path.as_ref().map(|p| p.display().to_string()), auto_close }
+    EeLogStatus {
+        path: ee.path.as_ref().map(|p| p.display().to_string()),
+        auto_close,
+    }
 }

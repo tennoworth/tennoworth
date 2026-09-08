@@ -47,8 +47,6 @@ pub struct ItemEntry {
     pub donch_bot_90d: i64,
 }
 
-
-
 /// Render a single CSV row into an [`ItemEntry`].
 pub fn render_item(row: &csvin::CsvRow, meta: &CatalogItemMeta) -> ItemEntry {
     let avg_raw = parse_f64_or(&row.avg_price_48h, 0.0);
@@ -71,7 +69,11 @@ pub fn render_item(row: &csvin::CsvRow, meta: &CatalogItemMeta) -> ItemEntry {
         median_now: {
             let raw = row.median_now.as_str();
             // old CSVs lack median_now - fall back to median_90d
-            let val = if raw.is_empty() { row.median_90d.as_str() } else { raw };
+            let val = if raw.is_empty() {
+                row.median_90d.as_str()
+            } else {
+                raw
+            };
             parse_f64_or(val, 0.0)
         },
         median_90d: med90,
@@ -119,16 +121,16 @@ pub struct Snapshot {
     pub baro: HashMap<String, serde_json::Value>,
     /// `weapons: {slug: {name, disposition, group, riven_type, req_mr}}` +
     /// `changes: [{slug, name, from, to, seen_at}]` (rolling 90 d) - see
-    /// `fetch::fetch_rivens`.
+    /// `ingest::fetch_rivens`.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub rivens: HashMap<String, serde_json::Value>,
     /// `primes: {set_slug: {name, released, vaulted, vault_date, …}}` +
     /// `resurgence: [{from, to, pack, frames}]` + `resurgence_current` - see
-    /// `fetch::fetch_calendar`.
+    /// `ingest::fetch_calendar`.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub calendar: HashMap<String, serde_json::Value>,
     /// `{slug: {name, unrolled?, rolled?}}` - DE's weekly riven price bands
-    /// per weapon × reroll-state - see `fetch::fetch_riven_stats`.
+    /// per weapon × reroll-state - see `ingest::fetch_riven_stats`.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub riven_stats: HashMap<String, serde_json::Value>,
     /// `{slug: {build_price, build_time, rush_price, ingredients[]}}` keyed by
@@ -164,7 +166,9 @@ pub struct UsageHistorySurface {
 }
 
 impl UsageHistorySurface {
-    pub fn is_empty(&self) -> bool { self.years.is_empty() || self.by_year.is_empty() }
+    pub fn is_empty(&self) -> bool {
+        self.years.is_empty() || self.by_year.is_empty()
+    }
 }
 
 #[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
@@ -176,7 +180,9 @@ pub struct EventRewardsSurface {
 }
 
 impl EventRewardsSurface {
-    pub fn is_empty(&self) -> bool { self.goals.is_empty() && self.events.is_empty() }
+    pub fn is_empty(&self) -> bool {
+        self.goals.is_empty() && self.events.is_empty()
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -298,7 +304,9 @@ fn parse_i64_or(s: &str, default: i64) -> i64 {
     // Python does int(float(s)) - truncation toward zero. Falling back to a
     // bare i64 parse silently zeroed every such value (caught by the first
     // real-data shadow run: 2857 Donchian diffs).
-    s.parse().or_else(|_| s.parse::<f64>().map(|f| f.trunc() as i64)).unwrap_or(default)
+    s.parse()
+        .or_else(|_| s.parse::<f64>().map(|f| f.trunc() as i64))
+        .unwrap_or(default)
 }
 
 #[cfg(test)]
@@ -359,7 +367,10 @@ mod tests {
     #[test]
     fn certifies_only_normalized_csv_prices_and_preserves_fractions() {
         let mut row = test_row();
-        assert!(serde_json::to_value(render_item(&row, &test_meta())).unwrap().get("price_basis").is_none());
+        assert!(serde_json::to_value(render_item(&row, &test_meta()))
+            .unwrap()
+            .get("price_basis")
+            .is_none());
         row.price_basis = "unit".into();
         row.low_sell_price = "7.2".into();
         row.top_buy_price = "6.8".into();
@@ -424,8 +435,18 @@ mod tests {
     #[test]
     fn render_items_multiple_rows() {
         let rows = vec![
-            CsvRow { url_name: "slug_a".into(), low_sell_price: "10".into(), median_90d: "10".into(), ..Default::default() },
-            CsvRow { url_name: "slug_b".into(), low_sell_price: "20".into(), median_90d: "20".into(), ..Default::default() },
+            CsvRow {
+                url_name: "slug_a".into(),
+                low_sell_price: "10".into(),
+                median_90d: "10".into(),
+                ..Default::default()
+            },
+            CsvRow {
+                url_name: "slug_b".into(),
+                low_sell_price: "20".into(),
+                median_90d: "20".into(),
+                ..Default::default()
+            },
         ];
         let meta = HashMap::new();
         let items = render_items(&rows, &meta);
@@ -437,8 +458,16 @@ mod tests {
     #[test]
     fn render_items_skips_empty_slug() {
         let rows = vec![
-            CsvRow { url_name: "".into(), ..Default::default() },
-            CsvRow { url_name: "ok".into(), low_sell_price: "5".into(), median_90d: "5".into(), ..Default::default() },
+            CsvRow {
+                url_name: "".into(),
+                ..Default::default()
+            },
+            CsvRow {
+                url_name: "ok".into(),
+                low_sell_price: "5".into(),
+                median_90d: "5".into(),
+                ..Default::default()
+            },
         ];
         let items = render_items(&rows, &HashMap::new());
         assert_eq!(items.len(), 1);

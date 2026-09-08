@@ -86,7 +86,7 @@ pub fn wfm_authed_headers(
 }
 
 /// WFM account platforms. `pc` covers Steam & Epic. Canonical list - wfm-core
-/// re-exports this (see `wfm_core::auth::PLATFORMS`).
+/// re-exports this (see `wfm_core::trading::auth::PLATFORMS`).
 pub const PLATFORMS: [&str; 4] = ["pc", "ps4", "xbox", "switch"];
 
 /// Reject a mistyped platform up front - an unknown value would otherwise be
@@ -130,10 +130,14 @@ mod tests {
     fn bulk_unit_prices_match_shared_fixture() {
         let cases: Vec<serde_json::Value> = serde_json::from_str(include_str!(
             "../../../tests/fixtures/trade-session/prices.json"
-        )).unwrap();
+        ))
+        .unwrap();
         for case in cases {
-            assert_eq!(unit_price(case["platinum"].as_f64().unwrap(), case.get("per_trade")),
-                case["unit"].as_f64(), "{case}");
+            assert_eq!(
+                unit_price(case["platinum"].as_f64().unwrap(), case.get("per_trade")),
+                case["unit"].as_f64(),
+                "{case}"
+            );
         }
     }
 

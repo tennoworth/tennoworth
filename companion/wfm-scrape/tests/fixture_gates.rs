@@ -27,7 +27,12 @@ const BIN: &str = env!("CARGO_BIN_EXE_wfm-scrape");
 const MANIFEST_DIR: &str = env!("CARGO_MANIFEST_DIR");
 
 fn repo_root() -> PathBuf {
-    Path::new(MANIFEST_DIR).parent().unwrap().parent().unwrap().to_path_buf()
+    Path::new(MANIFEST_DIR)
+        .parent()
+        .unwrap()
+        .parent()
+        .unwrap()
+        .to_path_buf()
 }
 
 fn fixtures_dir(name: &str) -> PathBuf {
@@ -79,47 +84,93 @@ fn run(args: &[&str], cwd: &Path) -> std::process::Output {
 fn build_produces_full_shape_market_json() {
     let dir = stage_fixtures("convert");
     let out = run(
-        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"],
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-01T12:00:00Z",
+        ],
         &dir,
     );
-    assert!(out.status.success(), "build failed:\n{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "build failed:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 
     let market_path = dir.join("market.json");
     assert!(market_path.exists(), "market.json not written");
-    let snap: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(&market_path).unwrap()).expect("market.json is valid JSON");
+    let snap: serde_json::Value = serde_json::from_slice(&std::fs::read(&market_path).unwrap())
+        .expect("market.json is valid JSON");
 
     let obj = snap.as_object().expect("market.json is an object");
     for key in [
-        "updated_at", "platform", "item_count", "catalog_count", "source", "catalog",
-        "items", "path_to_info", "set_to_parts", "relic_rewards", "vault_status",
-        "baro", "surface_fetched_at",
+        "updated_at",
+        "platform",
+        "item_count",
+        "catalog_count",
+        "source",
+        "catalog",
+        "items",
+        "path_to_info",
+        "set_to_parts",
+        "relic_rewards",
+        "vault_status",
+        "baro",
+        "surface_fetched_at",
     ] {
         assert!(obj.contains_key(key), "missing required key {key}");
     }
 
     let items = obj["items"].as_object().expect("items is an object");
     assert!(!items.is_empty(), "empty items");
-    assert!(items.contains_key("primed_continuity"), "missing primed_continuity");
+    assert!(
+        items.contains_key("primed_continuity"),
+        "missing primed_continuity"
+    );
 
-    let priced = items.values().filter(|it| {
-        it["low_sell"].as_f64().unwrap_or(0.0) > 0.0
-            || it["avg"].as_f64().unwrap_or(0.0) > 0.0
-            || it["median_90d"].as_f64().unwrap_or(0.0) > 0.0
-    }).count();
-    assert!(priced as f64 / items.len() as f64 >= 0.9, "only {priced}/{} items priced", items.len());
+    let priced = items
+        .values()
+        .filter(|it| {
+            it["low_sell"].as_f64().unwrap_or(0.0) > 0.0
+                || it["avg"].as_f64().unwrap_or(0.0) > 0.0
+                || it["median_90d"].as_f64().unwrap_or(0.0) > 0.0
+        })
+        .count();
+    assert!(
+        priced as f64 / items.len() as f64 >= 0.9,
+        "only {priced}/{} items priced",
+        items.len()
+    );
 
-    let volumed = items.values().filter(|it| it["vol"].as_f64().unwrap_or(0.0) > 0.0).count();
-    assert!(volumed as f64 / items.len() as f64 >= 0.9, "only {volumed}/{} items volumed", items.len());
+    let volumed = items
+        .values()
+        .filter(|it| it["vol"].as_f64().unwrap_or(0.0) > 0.0)
+        .count();
+    assert!(
+        volumed as f64 / items.len() as f64 >= 0.9,
+        "only {volumed}/{} items volumed",
+        items.len()
+    );
 
-    assert!(obj["catalog"].as_object().map(|c| !c.is_empty()).unwrap_or(false), "empty catalog");
+    assert!(
+        obj["catalog"]
+            .as_object()
+            .map(|c| !c.is_empty())
+            .unwrap_or(false),
+        "empty catalog"
+    );
 
     // The resolver catalog must also be written by `build`.
     let catalog_path = dir.join("wfstat-catalog.json");
     assert!(catalog_path.exists(), "wfstat-catalog.json not written");
-    let catalog: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(&catalog_path).unwrap()).expect("wfstat-catalog.json is valid JSON");
-    assert!(!catalog.as_array().unwrap_or(&vec![]).is_empty(), "empty wfstat-catalog");
+    let catalog: serde_json::Value = serde_json::from_slice(&std::fs::read(&catalog_path).unwrap())
+        .expect("wfstat-catalog.json is valid JSON");
+    assert!(
+        !catalog.as_array().unwrap_or(&vec![]).is_empty(),
+        "empty wfstat-catalog"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -140,7 +191,11 @@ fn scrape_csv(dir: &Path, extra: &[&str]) -> String {
     ];
     args.extend_from_slice(extra);
     let out = run(&args, dir);
-    assert!(out.status.success(), "scrape failed:\n{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "scrape failed:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let csv_path = dir.join("wfm_results.csv");
     std::fs::read_to_string(&csv_path).expect("wfm_results.csv written")
 }
@@ -149,7 +204,10 @@ fn row_urls(csv: &str) -> Vec<String> {
     let mut rows = Vec::new();
     let mut lines = csv.lines();
     let header = lines.next().expect("header row");
-    let idx = header.split(',').position(|c| c == "url_name").expect("url_name column");
+    let idx = header
+        .split(',')
+        .position(|c| c == "url_name")
+        .expect("url_name column");
     for line in lines {
         if line.trim().is_empty() {
             continue;
@@ -169,13 +227,25 @@ fn scrape_keeps_expected_fixture_rows() {
     // orders 429->429->200; missing_ninetydays survives off its 48h window;
     // stats_exhaust is dropped (stats 429 exhausts retries).
     for slug in [
-        "volt_prime_barrel", "goopolla", "primed_continuity", "lith_v1_relic",
-        "axi_a1_relic", "nova_prime_blueprint", "ivara_prime_set",
-        "retry_recover", "missing_ninetydays",
+        "volt_prime_barrel",
+        "goopolla",
+        "primed_continuity",
+        "lith_v1_relic",
+        "axi_a1_relic",
+        "nova_prime_blueprint",
+        "ivara_prime_set",
+        "retry_recover",
+        "missing_ninetydays",
     ] {
-        assert!(urls.contains(slug), "expected {slug} in scrape output, got {urls:?}");
+        assert!(
+            urls.contains(slug),
+            "expected {slug} in scrape output, got {urls:?}"
+        );
     }
-    assert!(!urls.contains("stats_exhaust"), "stats_exhaust must be skipped");
+    assert!(
+        !urls.contains("stats_exhaust"),
+        "stats_exhaust must be skipped"
+    );
 
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -189,12 +259,19 @@ fn scrape_limit_truncates_after_filter() {
     let csv = scrape_csv(&dir, &["--limit", "4"]);
     let urls: std::collections::BTreeSet<String> = row_urls(&csv).into_iter().collect();
     let first_four: std::collections::BTreeSet<String> = [
-        "volt_prime_barrel", "goopolla", "primed_continuity", "lith_v1_relic",
+        "volt_prime_barrel",
+        "goopolla",
+        "primed_continuity",
+        "lith_v1_relic",
     ]
     .into_iter()
     .map(String::from)
     .collect();
-    assert_eq!(urls.len(), 4, "expected exactly 4 rows with --limit 4, got {urls:?}");
+    assert_eq!(
+        urls.len(),
+        4,
+        "expected exactly 4 rows with --limit 4, got {urls:?}"
+    );
     assert_eq!(urls, first_four, "limit truncation set drifted");
 
     let _ = std::fs::remove_dir_all(&dir);
@@ -211,21 +288,51 @@ fn scrape_limit_truncates_after_filter() {
 fn build_uses_de_export_and_world_state() {
     let dir = stage_fixtures("convert");
     let out = run(
-        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"],
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-01T12:00:00Z",
+        ],
         &dir,
     );
-    assert!(out.status.success(), "build failed:\n{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "build failed:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     let snap: serde_json::Value =
         serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
 
     let de = snap.get("de").expect("de surface written");
-    assert_eq!(de["hashes"].as_object().unwrap().len(), 6, "all indexed manifests recorded");
+    assert_eq!(
+        de["hashes"].as_object().unwrap().len(),
+        6,
+        "all indexed manifests recorded"
+    );
     assert_eq!(de["world_ok"], true);
-    assert_eq!(de["dispositions"]["volt_prime"], 1.15, "only DE-matched dispositions are provenance");
-    assert_eq!(de["child_fetched_at"]["world.vault_rotation"], "2026-07-01T12:00:00Z");
-    assert_eq!(de["child_fetched_at"]["world.deals"], "2026-07-01T12:00:00Z");
-    assert_eq!(snap["surface_provenance"]["world.vault_rotation"]["disposition"], "published_fresh");
-    assert_eq!(de["vault_rotation"].as_array().unwrap().len(), 1, "announced vault rotation");
+    assert_eq!(
+        de["dispositions"]["volt_prime"], 1.15,
+        "only DE-matched dispositions are provenance"
+    );
+    assert_eq!(
+        de["child_fetched_at"]["world.vault_rotation"],
+        "2026-07-01T12:00:00Z"
+    );
+    assert_eq!(
+        de["child_fetched_at"]["world.deals"],
+        "2026-07-01T12:00:00Z"
+    );
+    assert_eq!(
+        snap["surface_provenance"]["world.vault_rotation"]["disposition"],
+        "published_fresh"
+    );
+    assert_eq!(
+        de["vault_rotation"].as_array().unwrap().len(),
+        1,
+        "announced vault rotation"
+    );
     assert_eq!(de["deals"][0]["discount"], 40, "Darvo's daily deal");
 
     // One relic, not four: Bronze/Silver/Gold/Platinum are refinement variants
@@ -233,12 +340,28 @@ fn build_uses_de_export_and_world_state() {
     let relics = snap["relic_rewards"].as_object().unwrap();
     assert_eq!(relics.len(), 1, "refinement variants must collapse");
     let rewards = relics["lith_v1_relic"].as_array().unwrap();
-    assert_eq!(rewards.len(), 2, "Forma is untradeable and must stay unresolved");
+    assert_eq!(
+        rewards.len(),
+        2,
+        "Forma is untradeable and must stay unresolved"
+    );
 
-    let chassis = rewards.iter().find(|r| r["reward_slug"] == "volt_prime_chassis_blueprint").unwrap();
-    assert_eq!(chassis["rarity"], "Common", "DE's rarity, not the drop table's mislabel");
-    assert_eq!(chassis["chance"], 25.33, "bare `chance` stays intact for existing consumers");
-    assert_eq!(chassis["chances"]["radiant"], 16.67, "all four refinements present");
+    let chassis = rewards
+        .iter()
+        .find(|r| r["reward_slug"] == "volt_prime_chassis_blueprint")
+        .unwrap();
+    assert_eq!(
+        chassis["rarity"], "Common",
+        "DE's rarity, not the drop table's mislabel"
+    );
+    assert_eq!(
+        chassis["chance"], 25.33,
+        "bare `chance` stays intact for existing consumers"
+    );
+    assert_eq!(
+        chassis["chances"]["radiant"], 16.67,
+        "all four refinements present"
+    );
     assert_eq!(chassis["chances"]["intact"], 25.33);
 
     // Baro comes from worldState, so his stock is present with prices.
@@ -252,7 +375,10 @@ fn build_uses_de_export_and_world_state() {
     assert_eq!(inv[0]["slug"], "volt_prime_chassis_blueprint");
     // A cosmetic has no market slug. It must stay readable and unpriced -
     // never given a slug it does not have, which would show a wrong price.
-    assert!(inv[1].get("slug").is_none(), "cosmetics must not be assigned a slug");
+    assert!(
+        inv[1].get("slug").is_none(),
+        "cosmetics must not be assigned a slug"
+    );
     assert_eq!(inv[1]["item"], "Kiteer Sekhara");
 
     let _ = std::fs::remove_dir_all(&dir);
@@ -262,7 +388,13 @@ fn build_uses_de_export_and_world_state() {
 fn world_children_reconcile_independently_and_only_literal_empty_clears() {
     let dir = stage_fixtures("convert");
     let first = run(
-        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"],
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-01T12:00:00Z",
+        ],
         &dir,
     );
     assert!(first.status.success());
@@ -282,18 +414,46 @@ fn world_children_reconcile_independently_and_only_literal_empty_clears() {
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
 
     let second = run(
-        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-02T12:00:00Z"],
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-02T12:00:00Z",
+        ],
         &dir,
     );
-    assert!(second.status.success(), "{}", String::from_utf8_lossy(&second.stderr));
+    assert!(
+        second.status.success(),
+        "{}",
+        String::from_utf8_lossy(&second.stderr)
+    );
     let snap: serde_json::Value =
         serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
-    assert!(!snap["de"]["deals"].as_array().unwrap().is_empty(), "missing child preserves its own prior rows");
-    assert!(snap["de"].get("vault_rotation").is_none(), "literal [] authoritatively clears and empty fields omit on disk");
-    assert_eq!(snap["de"]["child_fetched_at"]["world.deals"], "2026-07-01T12:00:00Z");
-    assert_eq!(snap["de"]["child_fetched_at"]["world.vault_rotation"], "2026-07-02T12:00:00Z");
-    assert_eq!(snap["surface_provenance"]["world.deals"]["disposition"], "preserved_invalid");
-    assert_eq!(snap["surface_provenance"]["world.vault_rotation"]["disposition"], "cleared_authoritative_empty");
+    assert!(
+        !snap["de"]["deals"].as_array().unwrap().is_empty(),
+        "missing child preserves its own prior rows"
+    );
+    assert!(
+        snap["de"].get("vault_rotation").is_none(),
+        "literal [] authoritatively clears and empty fields omit on disk"
+    );
+    assert_eq!(
+        snap["de"]["child_fetched_at"]["world.deals"],
+        "2026-07-01T12:00:00Z"
+    );
+    assert_eq!(
+        snap["de"]["child_fetched_at"]["world.vault_rotation"],
+        "2026-07-02T12:00:00Z"
+    );
+    assert_eq!(
+        snap["surface_provenance"]["world.deals"]["disposition"],
+        "preserved_invalid"
+    );
+    assert_eq!(
+        snap["surface_provenance"]["world.vault_rotation"]["disposition"],
+        "cleared_authoritative_empty"
+    );
 
     std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
     let world = responses
@@ -301,33 +461,96 @@ fn world_children_reconcile_independently_and_only_literal_empty_clears() {
         .unwrap()
         .as_object_mut()
         .unwrap();
-    world.insert("DailyDeals".into(), serde_json::json!([valid_deal, {"bad": true}]));
+    world.insert(
+        "DailyDeals".into(),
+        serde_json::json!([valid_deal, {"bad": true}]),
+    );
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
-    assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-03T12:00:00Z"], &dir).status.success());
-    let third: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
-    assert_eq!(third["surface_provenance"]["world.deals"]["disposition"], "preserved_invalid");
-    assert_eq!(third["de"]["child_fetched_at"]["world.deals"], "2026-07-01T12:00:00Z");
+    assert!(run(
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-03T12:00:00Z"
+        ],
+        &dir
+    )
+    .status
+    .success());
+    let third: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(
+        third["surface_provenance"]["world.deals"]["disposition"],
+        "preserved_invalid"
+    );
+    assert_eq!(
+        third["de"]["child_fetched_at"]["world.deals"],
+        "2026-07-01T12:00:00Z"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn malformed_manifest_and_non_object_world_keep_invalid_provenance() {
     let dir = stage_fixtures("convert");
-    assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"], &dir).status.success());
+    assert!(run(
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-01T12:00:00Z"
+        ],
+        &dir
+    )
+    .status
+    .success());
     std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
     let path = dir.join("fixture_responses.json");
     let mut responses: serde_json::Map<String, serde_json::Value> =
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-    let recipes = responses.keys().find(|key| key.contains("ExportRecipes_en.json")).cloned().unwrap();
+    let recipes = responses
+        .keys()
+        .find(|key| key.contains("ExportRecipes_en.json"))
+        .cloned()
+        .unwrap();
     responses.insert(recipes, serde_json::Value::String("not json".into()));
-    responses.insert("https://api.warframe.com/cdn/worldState.php".into(), serde_json::json!([]));
+    responses.insert(
+        "https://api.warframe.com/cdn/worldState.php".into(),
+        serde_json::json!([]),
+    );
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
-    assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-02T12:00:00Z"], &dir).status.success());
-    let snap: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
-    assert_eq!(snap["surface_provenance"]["recipes"]["disposition"], "preserved_invalid");
-    assert_eq!(snap["surface_provenance"]["relic_rewards"]["disposition"], "preserved_invalid");
-    assert_eq!(snap["surface_provenance"]["world.deals"]["disposition"], "preserved_invalid");
-    assert_eq!(snap["surface_provenance"]["world.vault_rotation"]["disposition"], "preserved_invalid");
+    assert!(run(
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-02T12:00:00Z"
+        ],
+        &dir
+    )
+    .status
+    .success());
+    let snap: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(
+        snap["surface_provenance"]["recipes"]["disposition"],
+        "preserved_invalid"
+    );
+    assert_eq!(
+        snap["surface_provenance"]["relic_rewards"]["disposition"],
+        "preserved_invalid"
+    );
+    assert_eq!(
+        snap["surface_provenance"]["world.deals"]["disposition"],
+        "preserved_invalid"
+    );
+    assert_eq!(
+        snap["surface_provenance"]["world.vault_rotation"]["disposition"],
+        "preserved_invalid"
+    );
     assert_eq!(snap["de"]["world_ok"], false);
     let _ = std::fs::remove_dir_all(&dir);
 }
@@ -340,13 +563,28 @@ fn event_reward_fixture_keeps_groups_and_reconciles_goals_independently() {
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
     let observed: serde_json::Value = serde_json::from_slice(
         &std::fs::read(fixtures_dir("de-events").join("world-shapes.json")).unwrap(),
-    ).unwrap();
-    let world = responses["https://api.warframe.com/cdn/worldState.php"].as_object_mut().unwrap();
+    )
+    .unwrap();
+    let world = responses["https://api.warframe.com/cdn/worldState.php"]
+        .as_object_mut()
+        .unwrap();
     world.insert("Goals".into(), observed["Goals"].clone());
     world.insert("Events".into(), observed["Events"].clone());
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
-    assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"], &dir).status.success());
-    let first: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert!(run(
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-01T12:00:00Z"
+        ],
+        &dir
+    )
+    .status
+    .success());
+    let first: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
     let goal = &first["event_rewards"]["goals"]["redacted-goal-milestones"];
     assert_eq!(goal["source"], "goal");
     assert_eq!(goal["groups"][0]["kind"], "milestone");
@@ -354,10 +592,22 @@ fn event_reward_fixture_keeps_groups_and_reconciles_goals_independently() {
     assert_eq!(goal["groups"][2]["kind"], "final");
     assert_eq!(goal["completeness"], "partial");
     assert_eq!(goal["groups"][1]["credits"], 50_000);
-    assert_eq!(first["event_rewards"]["goals"]["redacted-goal-jobs"]["completeness"], "unknown");
-    assert_eq!(first["event_rewards"]["events"]["redacted-announcement"]["title"], "Redacted announcement");
-    assert_eq!(first["surface_provenance"]["world.goals"]["disposition"], "published_fresh");
-    assert_eq!(first["surface_provenance"]["world.events"]["disposition"], "published_fresh");
+    assert_eq!(
+        first["event_rewards"]["goals"]["redacted-goal-jobs"]["completeness"],
+        "unknown"
+    );
+    assert_eq!(
+        first["event_rewards"]["events"]["redacted-announcement"]["title"],
+        "Redacted announcement"
+    );
+    assert_eq!(
+        first["surface_provenance"]["world.goals"]["disposition"],
+        "published_fresh"
+    );
+    assert_eq!(
+        first["surface_provenance"]["world.events"]["disposition"],
+        "published_fresh"
+    );
     let mut prior = first;
     prior["event_rewards"]["events"]["prior-event"] = serde_json::json!({
         "id":"prior-event", "source":"event", "title":"Prior fixed event",
@@ -368,31 +618,93 @@ fn event_reward_fixture_keeps_groups_and_reconciles_goals_independently() {
         }]}]
     });
     prior["de"]["child_fetched_at"]["world.events"] = serde_json::json!("2026-06-01T12:00:00Z");
-    std::fs::write(dir.join("prior-market.json"), serde_json::to_vec(&prior).unwrap()).unwrap();
+    std::fs::write(
+        dir.join("prior-market.json"),
+        serde_json::to_vec(&prior).unwrap(),
+    )
+    .unwrap();
 
     let mut changed = observed["Goals"][1].clone();
     changed["Tag"] = serde_json::json!("ShouldNotPublish");
-    responses["https://api.warframe.com/cdn/worldState.php"]["Goals"] = serde_json::json!([changed, {"bad":true}]);
-    responses["https://api.warframe.com/cdn/worldState.php"].as_object_mut().unwrap().remove("Events");
+    responses["https://api.warframe.com/cdn/worldState.php"]["Goals"] =
+        serde_json::json!([changed, {"bad":true}]);
+    responses["https://api.warframe.com/cdn/worldState.php"]
+        .as_object_mut()
+        .unwrap()
+        .remove("Events");
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
-    assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-02T12:00:00Z"], &dir).status.success());
-    let second: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
-    assert_eq!(second["event_rewards"]["goals"]["redacted-goal-milestones"]["groups"][0]["kind"], "milestone");
-    assert_eq!(second["event_rewards"]["goals"]["redacted-goal-bonus"]["title"], "Observed Bonus Shape");
-    assert_eq!(second["event_rewards"]["events"]["prior-event"]["title"], "Prior fixed event");
-    assert_eq!(second["surface_provenance"]["world.goals"]["disposition"], "preserved_invalid");
-    assert_eq!(second["surface_provenance"]["world.goals"]["data_fetched_at"], "2026-07-01T12:00:00Z");
-    assert_eq!(second["surface_provenance"]["world.events"]["disposition"], "preserved_invalid");
-    assert_eq!(second["surface_provenance"]["world.events"]["data_fetched_at"], "2026-06-01T12:00:00Z");
+    assert!(run(
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-02T12:00:00Z"
+        ],
+        &dir
+    )
+    .status
+    .success());
+    let second: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(
+        second["event_rewards"]["goals"]["redacted-goal-milestones"]["groups"][0]["kind"],
+        "milestone"
+    );
+    assert_eq!(
+        second["event_rewards"]["goals"]["redacted-goal-bonus"]["title"],
+        "Observed Bonus Shape"
+    );
+    assert_eq!(
+        second["event_rewards"]["events"]["prior-event"]["title"],
+        "Prior fixed event"
+    );
+    assert_eq!(
+        second["surface_provenance"]["world.goals"]["disposition"],
+        "preserved_invalid"
+    );
+    assert_eq!(
+        second["surface_provenance"]["world.goals"]["data_fetched_at"],
+        "2026-07-01T12:00:00Z"
+    );
+    assert_eq!(
+        second["surface_provenance"]["world.events"]["disposition"],
+        "preserved_invalid"
+    );
+    assert_eq!(
+        second["surface_provenance"]["world.events"]["data_fetched_at"],
+        "2026-06-01T12:00:00Z"
+    );
 
     std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
     responses["https://api.warframe.com/cdn/worldState.php"]["Goals"] = serde_json::json!([]);
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
-    assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-03T12:00:00Z"], &dir).status.success());
-    let third: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
-    assert!(third["event_rewards"].get("goals").is_none(), "authoritative empty Goals clears only its rows");
-    assert_eq!(third["event_rewards"]["events"]["prior-event"]["title"], "Prior fixed event");
-    assert_eq!(third["surface_provenance"]["world.goals"]["disposition"], "cleared_authoritative_empty");
+    assert!(run(
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-03T12:00:00Z"
+        ],
+        &dir
+    )
+    .status
+    .success());
+    let third: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert!(
+        third["event_rewards"].get("goals").is_none(),
+        "authoritative empty Goals clears only its rows"
+    );
+    assert_eq!(
+        third["event_rewards"]["events"]["prior-event"]["title"],
+        "Prior fixed event"
+    );
+    assert_eq!(
+        third["surface_provenance"]["world.goals"]["disposition"],
+        "cleared_authoritative_empty"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -402,34 +714,113 @@ fn riven_children_keep_failed_console_data_and_its_own_stamp() {
     let path = dir.join("fixture_responses.json");
     let mut responses: serde_json::Map<String, serde_json::Value> =
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-    let row = |median: i64| format!("[{{ itemType: 'Rifle Riven Mod', compatibility: 'Volt Prime', rerolled: false, avg: {median}, stddev: 1, min: 1, max: 30, pop: 4, median: {median} }}]");
+    let row = |median: i64| {
+        format!("[{{ itemType: 'Rifle Riven Mod', compatibility: 'Volt Prime', rerolled: false, avg: {median}, stddev: 1, min: 1, max: 30, pop: 4, median: {median} }}]")
+    };
     let mixed = |median: i64| row(median).replacen(']', ", { bad: true }]", 1);
-    responses.insert(de::DE_WEEKLY_RIVENS_URL.into(), serde_json::Value::String(row(10)));
-    responses.insert(de::DE_WEEKLY_RIVEN_PLATFORMS[2].1.into(), serde_json::Value::String(row(20)));
+    responses.insert(
+        de::DE_WEEKLY_RIVENS_URL.into(),
+        serde_json::Value::String(row(10)),
+    );
+    responses.insert(
+        de::DE_WEEKLY_RIVEN_PLATFORMS[2].1.into(),
+        serde_json::Value::String(row(20)),
+    );
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
-    assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"], &dir).status.success());
+    assert!(run(
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-01T12:00:00Z"
+        ],
+        &dir
+    )
+    .status
+    .success());
     std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
 
-    responses.insert(de::DE_WEEKLY_RIVENS_URL.into(), serde_json::Value::String(row(11)));
-    responses.insert(de::DE_WEEKLY_RIVEN_PLATFORMS[2].1.into(), serde_json::Value::String(mixed(99)));
+    responses.insert(
+        de::DE_WEEKLY_RIVENS_URL.into(),
+        serde_json::Value::String(row(11)),
+    );
+    responses.insert(
+        de::DE_WEEKLY_RIVEN_PLATFORMS[2].1.into(),
+        serde_json::Value::String(mixed(99)),
+    );
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
-    assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-02T12:00:00Z"], &dir).status.success());
-    let snap: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
-    assert_eq!(snap["riven_stats"]["volt_prime"]["unrolled"]["median"], 11.0);
-    assert_eq!(snap["riven_stats"]["volt_prime"]["platforms"]["swi"]["unrolled"]["median"], 20.0);
-    assert_eq!(snap["de"]["child_fetched_at"]["riven_stats.pc"], "2026-07-02T12:00:00Z");
-    assert_eq!(snap["de"]["child_fetched_at"]["riven_stats.swi"], "2026-07-01T12:00:00Z");
+    assert!(run(
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-02T12:00:00Z"
+        ],
+        &dir
+    )
+    .status
+    .success());
+    let snap: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(
+        snap["riven_stats"]["volt_prime"]["unrolled"]["median"],
+        11.0
+    );
+    assert_eq!(
+        snap["riven_stats"]["volt_prime"]["platforms"]["swi"]["unrolled"]["median"],
+        20.0
+    );
+    assert_eq!(
+        snap["de"]["child_fetched_at"]["riven_stats.pc"],
+        "2026-07-02T12:00:00Z"
+    );
+    assert_eq!(
+        snap["de"]["child_fetched_at"]["riven_stats.swi"],
+        "2026-07-01T12:00:00Z"
+    );
 
     std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
-    responses.insert(de::DE_WEEKLY_RIVENS_URL.into(), serde_json::Value::String(mixed(99)));
-    responses.insert(de::DE_WEEKLY_RIVEN_PLATFORMS[2].1.into(), serde_json::Value::String(row(99)));
+    responses.insert(
+        de::DE_WEEKLY_RIVENS_URL.into(),
+        serde_json::Value::String(mixed(99)),
+    );
+    responses.insert(
+        de::DE_WEEKLY_RIVEN_PLATFORMS[2].1.into(),
+        serde_json::Value::String(row(99)),
+    );
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
-    assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-03T12:00:00Z"], &dir).status.success());
-    let third: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
-    assert_eq!(third["riven_stats"]["volt_prime"]["unrolled"]["median"], 11.0, "invalid PC preserves the entire prior surface");
-    assert_eq!(third["riven_stats"]["volt_prime"]["platforms"]["swi"]["unrolled"]["median"], 20.0);
-    assert_eq!(third["de"]["child_fetched_at"]["riven_stats.pc"], "2026-07-02T12:00:00Z");
-    assert_eq!(third["surface_provenance"]["riven_stats"]["disposition"], "preserved_invalid");
+    assert!(run(
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-03T12:00:00Z"
+        ],
+        &dir
+    )
+    .status
+    .success());
+    let third: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(
+        third["riven_stats"]["volt_prime"]["unrolled"]["median"], 11.0,
+        "invalid PC preserves the entire prior surface"
+    );
+    assert_eq!(
+        third["riven_stats"]["volt_prime"]["platforms"]["swi"]["unrolled"]["median"],
+        20.0
+    );
+    assert_eq!(
+        third["de"]["child_fetched_at"]["riven_stats.pc"],
+        "2026-07-02T12:00:00Z"
+    );
+    assert_eq!(
+        third["surface_provenance"]["riven_stats"]["disposition"],
+        "preserved_invalid"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -438,12 +829,21 @@ fn riven_children_keep_failed_console_data_and_its_own_stamp() {
 #[test]
 fn build_skips_manifests_whose_hash_has_not_moved() {
     let dir = stage_fixtures("convert");
-    let args = ["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"];
+    let args = [
+        "build",
+        "--fixtures-dir",
+        dir.to_str().unwrap(),
+        "--now",
+        "2026-07-01T12:00:00Z",
+    ];
 
     let first = run(&args, &dir);
     assert!(first.status.success());
     let first_err = String::from_utf8_lossy(&first.stderr).to_string();
-    assert!(first_err.contains("6 fetched"), "cold run pulls everything:\n{first_err}");
+    assert!(
+        first_err.contains("6 fetched"),
+        "cold run pulls everything:\n{first_err}"
+    );
 
     // Feed the snapshot we just wrote back in as the prior one.
     std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
@@ -493,7 +893,10 @@ fn build_skips_manifests_whose_hash_has_not_moved() {
         chassis["chances"]["radiant"], 16.67,
         "a skipped manifest must not downgrade the surface to the legacy source"
     );
-    assert_eq!(chassis["rarity"], "Common", "DE's rarity, not the drop table's mislabel");
+    assert_eq!(
+        chassis["rarity"], "Common",
+        "DE's rarity, not the drop table's mislabel"
+    );
 
     // Dispositions and ducats cannot be carried - both are overrides on
     // surfaces that are refetched every cycle - so their manifests must be
@@ -515,7 +918,10 @@ fn build_skips_manifests_whose_hash_has_not_moved() {
         snap["items"]["volt_prime_chassis_blueprint"]["ducats"], 65,
         "a warm cycle must keep DE's ducat value, not revert to WFM's"
     );
-    assert_eq!(snap["surface_provenance"]["relic_rewards"]["disposition"], "preserved_unchanged");
+    assert_eq!(
+        snap["surface_provenance"]["relic_rewards"]["disposition"],
+        "preserved_unchanged"
+    );
     assert_eq!(
         snap["surface_provenance"]["relic_rewards"]["data_fetched_at"],
         "2026-07-01T12:00:00Z"
@@ -540,7 +946,13 @@ fn build_skips_manifests_whose_hash_has_not_moved() {
 #[test]
 fn a_failed_recipes_manifest_preserves_both_de_overrides() {
     let dir = stage_fixtures("convert");
-    let args = ["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"];
+    let args = [
+        "build",
+        "--fixtures-dir",
+        dir.to_str().unwrap(),
+        "--now",
+        "2026-07-01T12:00:00Z",
+    ];
 
     // A good cycle first, so there is a prior snapshot holding DE's values.
     assert!(run(&args, &dir).status.success());
@@ -563,7 +975,10 @@ fn a_failed_recipes_manifest_preserves_both_de_overrides() {
     std::fs::write(&resp_path, serde_json::to_vec(&responses).unwrap()).unwrap();
 
     let out = run(&args, &dir);
-    assert!(out.status.success(), "a failed manifest must not fail the build");
+    assert!(
+        out.status.success(),
+        "a failed manifest must not fail the build"
+    );
     let stderr = String::from_utf8_lossy(&out.stderr).to_string();
     assert!(
         stderr.contains("ducats: no DE values this cycle"),
@@ -572,8 +987,14 @@ fn a_failed_recipes_manifest_preserves_both_de_overrides() {
 
     let snap: serde_json::Value =
         serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
-    assert_eq!(snap["surface_provenance"]["recipes"]["disposition"], "preserved_unavailable");
-    assert_eq!(snap["surface_provenance"]["relic_rewards"]["disposition"], "preserved_unavailable", "a skipped relic still depends on the failed recipes manifest");
+    assert_eq!(
+        snap["surface_provenance"]["recipes"]["disposition"],
+        "preserved_unavailable"
+    );
+    assert_eq!(
+        snap["surface_provenance"]["relic_rewards"]["disposition"], "preserved_unavailable",
+        "a skipped relic still depends on the failed recipes manifest"
+    );
 
     // WFM says 45 for this item; DE said 65. A failed fetch must keep 65.
     assert_eq!(
@@ -621,7 +1042,13 @@ fn a_failed_recipes_manifest_on_a_cold_build_falls_back_rather_than_publishing_n
     std::fs::write(&resp_path, serde_json::to_vec(&responses).unwrap()).unwrap();
 
     let out = run(
-        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"],
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-01T12:00:00Z",
+        ],
         &dir,
     );
     assert!(out.status.success());
@@ -633,8 +1060,14 @@ fn a_failed_recipes_manifest_on_a_cold_build_falls_back_rather_than_publishing_n
 
     let snap: serde_json::Value =
         serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
-    assert_eq!(snap["surface_provenance"]["relic_rewards"]["source"], "legacy_drop_table");
-    assert_eq!(snap["surface_provenance"]["relic_rewards"]["disposition"], "published_fresh");
+    assert_eq!(
+        snap["surface_provenance"]["relic_rewards"]["source"],
+        "legacy_drop_table"
+    );
+    assert_eq!(
+        snap["surface_provenance"]["relic_rewards"]["disposition"],
+        "published_fresh"
+    );
     assert!(
         !snap["relic_rewards"].as_object().unwrap().is_empty(),
         "some relic data beats none when there is nothing to carry"
@@ -651,7 +1084,13 @@ fn a_failed_recipes_manifest_on_a_cold_build_falls_back_rather_than_publishing_n
 #[test]
 fn the_ducat_carry_leaves_wfm_sourced_values_alone() {
     let dir = stage_fixtures("convert");
-    let args = ["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"];
+    let args = [
+        "build",
+        "--fixtures-dir",
+        dir.to_str().unwrap(),
+        "--now",
+        "2026-07-01T12:00:00Z",
+    ];
 
     assert!(run(&args, &dir).status.success());
     let good: serde_json::Value =
@@ -676,7 +1115,11 @@ fn the_ducat_carry_leaves_wfm_sourced_values_alone() {
     let resp_path = dir.join("fixture_responses.json");
     let mut responses: serde_json::Map<String, serde_json::Value> =
         serde_json::from_slice(&std::fs::read(&resp_path).unwrap()).unwrap();
-    let recipes_key = responses.keys().find(|k| k.contains("ExportRecipes_en.json")).cloned().unwrap();
+    let recipes_key = responses
+        .keys()
+        .find(|k| k.contains("ExportRecipes_en.json"))
+        .cloned()
+        .unwrap();
     responses.remove(&recipes_key);
     let items = responses
         .get_mut("https://api.warframe.market/v2/items")
@@ -693,7 +1136,10 @@ fn the_ducat_carry_leaves_wfm_sourced_values_alone() {
     assert!(run(&args, &dir).status.success());
     let snap: serde_json::Value =
         serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
-    assert_eq!(snap["surface_provenance"]["recipes"]["disposition"], "preserved_unavailable");
+    assert_eq!(
+        snap["surface_provenance"]["recipes"]["disposition"],
+        "preserved_unavailable"
+    );
 
     assert_eq!(
         snap["items"]["volt_prime_chassis_blueprint"]["ducats"], 65,
@@ -743,7 +1189,13 @@ fn de_manifests_that_yield_no_rows_fall_back_rather_than_publishing_empty() {
     std::fs::write(&resp_path, serde_json::to_vec(&responses).unwrap()).unwrap();
 
     let out = run(
-        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"],
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-01T12:00:00Z",
+        ],
         &dir,
     );
     assert!(out.status.success());
@@ -767,7 +1219,13 @@ fn de_manifests_that_yield_no_rows_fall_back_rather_than_publishing_empty() {
 #[test]
 fn de_manifests_that_yield_no_rows_carry_a_prior_surface_rather_than_downgrading() {
     let dir = stage_fixtures("convert");
-    let args = ["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"];
+    let args = [
+        "build",
+        "--fixtures-dir",
+        dir.to_str().unwrap(),
+        "--now",
+        "2026-07-01T12:00:00Z",
+    ];
 
     assert!(run(&args, &dir).status.success());
     std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
@@ -775,7 +1233,11 @@ fn de_manifests_that_yield_no_rows_carry_a_prior_surface_rather_than_downgrading
     let resp_path = dir.join("fixture_responses.json");
     let mut responses: serde_json::Map<String, serde_json::Value> =
         serde_json::from_slice(&std::fs::read(&resp_path).unwrap()).unwrap();
-    let relic_key = responses.keys().find(|k| k.contains("ExportRelicArcane_en.json")).cloned().unwrap();
+    let relic_key = responses
+        .keys()
+        .find(|k| k.contains("ExportRelicArcane_en.json"))
+        .cloned()
+        .unwrap();
     responses.insert(
         relic_key,
         serde_json::json!({"ExportRelicArcane": [{
@@ -814,7 +1276,7 @@ fn de_manifests_that_yield_no_rows_carry_a_prior_surface_rather_than_downgrading
 #[test]
 fn a_failed_manifest_does_not_record_its_hash() {
     use wfm_scrape::de;
-    use wfm_scrape::fetch::{FixtureHttp, Http};
+    use wfm_scrape::ingest::{FixtureHttp, Http};
 
     // The index names ExportRecipes, but no fixture answers for its URL.
     let index_text = "ExportRecipes_en.json!00_abc\n";
@@ -822,15 +1284,16 @@ fn a_failed_manifest_does_not_record_its_hash() {
         // Keep this fixture runnable on Windows without a separate Python install.
         use base64::Engine as _;
         let mut bytes = Vec::new();
-        lzma_rs::lzma_compress(&mut std::io::Cursor::new(index_text.as_bytes()), &mut bytes).unwrap();
+        lzma_rs::lzma_compress(&mut std::io::Cursor::new(index_text.as_bytes()), &mut bytes)
+            .unwrap();
         base64::engine::general_purpose::STANDARD.encode(bytes)
     };
-    assert!(de::decode_lzma_alone(
-        &{
-            use base64::Engine as _;
-            base64::engine::general_purpose::STANDARD.decode(&compressed).unwrap()
-        }
-    )
+    assert!(de::decode_lzma_alone(&{
+        use base64::Engine as _;
+        base64::engine::general_purpose::STANDARD
+            .decode(&compressed)
+            .unwrap()
+    })
     .unwrap()
     .contains("ExportRecipes"));
 
@@ -847,7 +1310,10 @@ fn a_failed_manifest_does_not_record_its_hash() {
         !snap.hashes.contains_key("ExportRecipes_en.json"),
         "a manifest we could not read must stay un-held so the next cycle retries"
     );
-    assert!(!snap.skipped("ExportRecipes_en.json"), "a failure is not a skip");
+    assert!(
+        !snap.skipped("ExportRecipes_en.json"),
+        "a failure is not a skip"
+    );
     let _ = http.get_text(de::DE_INDEX_URL);
 }
 
@@ -866,10 +1332,13 @@ fn a_failed_manifest_does_not_record_its_hash() {
 #[ignore = "hits Digital Extremes' live endpoints"]
 fn de_endpoints_are_still_alive() {
     use wfm_scrape::de;
-    use wfm_scrape::fetch::{Http, LiveHttp};
+    use wfm_scrape::ingest::{Http, LiveHttp};
 
     let client = reqwest::blocking::Client::builder()
-        .user_agent(wfm_client::user_agent("wfm-scrape", env!("CARGO_PKG_VERSION")))
+        .user_agent(wfm_client::user_agent(
+            "wfm-scrape",
+            env!("CARGO_PKG_VERSION"),
+        ))
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .expect("build client");
@@ -878,7 +1347,11 @@ fn de_endpoints_are_still_alive() {
     let raw = http.get_bytes(de::DE_INDEX_URL).expect("index fetch");
     let text = de::decode_lzma_alone(&raw).expect("index is still LZMA-alone");
     let index = de::parse_index(&text);
-    assert!(index.len() >= 10, "index shrank unexpectedly: {} entries", index.len());
+    assert!(
+        index.len() >= 10,
+        "index shrank unexpectedly: {} entries",
+        index.len()
+    );
 
     for name in de::WANTED_MANIFESTS {
         assert!(index.contains_key(*name), "{name} vanished from DE's index");
@@ -892,9 +1365,16 @@ fn de_endpoints_are_still_alive() {
     let rows = de::manifest_rows_for(&doc, "ExportWeapons_en.json");
     // Guards the two-array trap: ExportWeapons_en.json also carries
     // ExportRailjackWeapons (~143 rows), which sorts first.
-    assert!(rows.len() > 500, "only {} weapons - wrong array?", rows.len());
     assert!(
-        rows.iter().any(|r| r.get("omegaAttenuation").and_then(|v| v.as_f64()).is_some_and(|d| d > 0.0)),
+        rows.len() > 500,
+        "only {} weapons - wrong array?",
+        rows.len()
+    );
+    assert!(
+        rows.iter().any(|r| r
+            .get("omegaAttenuation")
+            .and_then(|v| v.as_f64())
+            .is_some_and(|d| d > 0.0)),
         "no dispositions in ExportWeapons - the field was renamed"
     );
 
@@ -902,7 +1382,10 @@ fn de_endpoints_are_still_alive() {
         wfm_scrape::reconcile::Observation::Usable { data, .. } => data,
         other => panic!("worldState was not usable: {other:?}"),
     };
-    assert!(world.get("VoidTraders").is_some(), "worldState lost VoidTraders");
+    assert!(
+        world.get("VoidTraders").is_some(),
+        "worldState lost VoidTraders"
+    );
 }
 
 /// Every DE-derived surface must survive a manifest that parses but is empty.
@@ -915,7 +1398,13 @@ fn de_endpoints_are_still_alive() {
 #[test]
 fn every_de_surface_carries_when_a_manifest_parses_to_nothing() {
     let dir = stage_fixtures("convert");
-    let args = ["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"];
+    let args = [
+        "build",
+        "--fixtures-dir",
+        dir.to_str().unwrap(),
+        "--now",
+        "2026-07-01T12:00:00Z",
+    ];
 
     let resp_path = dir.join("fixture_responses.json");
     let mut seeded: serde_json::Map<String, serde_json::Value> =
@@ -939,13 +1428,18 @@ fn every_de_surface_carries_when_a_manifest_parses_to_nothing() {
     let mut responses: serde_json::Map<String, serde_json::Value> =
         serde_json::from_slice(&std::fs::read(&resp_path).unwrap()).unwrap();
     responses["https://api.warframe.market/v2/riven/weapons"]["data"]
-        .as_array_mut().unwrap()[1]["disposition"] = serde_json::json!(0.8);
+        .as_array_mut()
+        .unwrap()[1]["disposition"] = serde_json::json!(0.8);
     for (basename, key) in [
         ("ExportRecipes_en.json", "ExportRecipes"),
         ("ExportWeapons_en.json", "ExportWeapons"),
         ("ExportRelicArcane_en.json", "ExportRelicArcane"),
     ] {
-        let url = responses.keys().find(|k| k.contains(basename)).cloned().unwrap();
+        let url = responses
+            .keys()
+            .find(|k| k.contains(basename))
+            .cloned()
+            .unwrap();
         responses.insert(url, serde_json::json!({ key: [] }));
     }
     std::fs::write(&resp_path, serde_json::to_vec(&responses).unwrap()).unwrap();
@@ -958,15 +1452,20 @@ fn every_de_surface_carries_when_a_manifest_parses_to_nothing() {
         "dispositions: none from DE this cycle",
         "Relic tables invalid this cycle - carrying the prior DE surface",
     ] {
-        assert!(stderr.contains(expected), "missing `{expected}` in:\n{stderr}");
+        assert!(
+            stderr.contains(expected),
+            "missing `{expected}` in:\n{stderr}"
+        );
     }
 
     let snap: serde_json::Value =
         serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
-    assert_eq!(snap["surface_provenance"]["recipes"]["disposition"], "preserved_invalid");
     assert_eq!(
-        snap["surface_provenance"]["relic_rewards"]["disposition"],
-        "preserved_invalid",
+        snap["surface_provenance"]["recipes"]["disposition"],
+        "preserved_invalid"
+    );
+    assert_eq!(
+        snap["surface_provenance"]["relic_rewards"]["disposition"], "preserved_invalid",
         "an invalid recipe dependency must not make a skipped relic manifest look healthy"
     );
 
@@ -983,8 +1482,14 @@ fn every_de_surface_carries_when_a_manifest_parses_to_nothing() {
         "disposition carry must use exact DE provenance, not every prior WFM row"
     );
     assert_eq!(snap["rivens"]["weapons"]["volt_prime"]["disposition"], 1.15);
-    assert_eq!(snap["rivens"]["weapons"]["wfm_only"]["disposition"], 0.8, "a WFM-only mirror stays fresh on DE failure");
-    assert!(snap["de"]["dispositions"].get("wfm_only").is_none(), "WFM-only rows are never promoted to DE provenance");
+    assert_eq!(
+        snap["rivens"]["weapons"]["wfm_only"]["disposition"], 0.8,
+        "a WFM-only mirror stays fresh on DE failure"
+    );
+    assert!(
+        snap["de"]["dispositions"].get("wfm_only").is_none(),
+        "WFM-only rows are never promoted to DE provenance"
+    );
     let rewards = snap["relic_rewards"]["lith_v1_relic"].as_array().unwrap();
     assert!(
         rewards.iter().any(|r| r["chances"]["radiant"] == 16.67),
@@ -1000,19 +1505,43 @@ fn all_unmatched_dispositions_preserve_prior_joined_slug_provenance() {
     let path = dir.join("fixture_responses.json");
     let mut responses: serde_json::Map<String, serde_json::Value> =
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-    let wfm = responses["https://api.warframe.market/v2/riven/weapons"]["data"].as_array_mut().unwrap();
+    let wfm = responses["https://api.warframe.market/v2/riven/weapons"]["data"]
+        .as_array_mut()
+        .unwrap();
     for (slug, name, disposition) in [("alpha", "Alpha", 0.2), ("beta", "Beta", 0.3)] {
         wfm.push(serde_json::json!({"slug":slug,"disposition":disposition,"gameRef":format!("/Lotus/{slug}"),"group":"rifle","i18n":{"en":{"name":name}}}));
     }
-    let weapons_key = responses.keys().find(|key| key.contains("ExportWeapons_en.json")).cloned().unwrap();
-    let de_rows = responses[&weapons_key]["ExportWeapons"].as_array_mut().unwrap();
-    de_rows.push(serde_json::json!({"name":"Alpha","omegaAttenuation":1.1,"uniqueName":"/Lotus/Alpha"}));
-    de_rows.push(serde_json::json!({"name":"Beta","omegaAttenuation":1.2,"uniqueName":"/Lotus/Beta"}));
+    let weapons_key = responses
+        .keys()
+        .find(|key| key.contains("ExportWeapons_en.json"))
+        .cloned()
+        .unwrap();
+    let de_rows = responses[&weapons_key]["ExportWeapons"]
+        .as_array_mut()
+        .unwrap();
+    de_rows.push(
+        serde_json::json!({"name":"Alpha","omegaAttenuation":1.1,"uniqueName":"/Lotus/Alpha"}),
+    );
+    de_rows
+        .push(serde_json::json!({"name":"Beta","omegaAttenuation":1.2,"uniqueName":"/Lotus/Beta"}));
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
-    assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"], &dir).status.success());
+    assert!(run(
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-01T12:00:00Z"
+        ],
+        &dir
+    )
+    .status
+    .success());
     std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
 
-    let wfm = responses["https://api.warframe.market/v2/riven/weapons"]["data"].as_array_mut().unwrap();
+    let wfm = responses["https://api.warframe.market/v2/riven/weapons"]["data"]
+        .as_array_mut()
+        .unwrap();
     wfm[1]["disposition"] = serde_json::json!(0.8);
     wfm[2]["disposition"] = serde_json::json!(0.9);
     responses[&weapons_key]["ExportWeapons"] = serde_json::json!([
@@ -1021,24 +1550,60 @@ fn all_unmatched_dispositions_preserve_prior_joined_slug_provenance() {
         {"name":"Missing Three","omegaAttenuation":1.5,"uniqueName":"/Lotus/M3"}
     ]);
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
-    assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-02T12:00:00Z"], &dir).status.success());
-    let snap: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert!(run(
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-02T12:00:00Z"
+        ],
+        &dir
+    )
+    .status
+    .success());
+    let snap: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
     assert_eq!(snap["rivens"]["weapons"]["alpha"]["disposition"], 1.1);
     assert_eq!(snap["rivens"]["weapons"]["beta"]["disposition"], 1.2);
     assert_eq!(snap["de"]["dispositions"].as_object().unwrap().len(), 3);
-    assert_eq!(snap["surface_provenance"]["de.dispositions"]["disposition"], "preserved_invalid");
+    assert_eq!(
+        snap["surface_provenance"]["de.dispositions"]["disposition"],
+        "preserved_invalid"
+    );
 
     std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
     responses[&weapons_key]["ExportWeapons"] = serde_json::json!([
         {"name":"Volt Prime","omegaAttenuation":1.9,"uniqueName":"/Lotus/Volt"}
     ]);
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
-    assert!(run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-03T12:00:00Z"], &dir).status.success());
-    let truncated: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
-    assert_eq!(truncated["rivens"]["weapons"]["volt_prime"]["disposition"], 1.15, "fully joinable truncation preserves prior");
+    assert!(run(
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-03T12:00:00Z"
+        ],
+        &dir
+    )
+    .status
+    .success());
+    let truncated: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(
+        truncated["rivens"]["weapons"]["volt_prime"]["disposition"], 1.15,
+        "fully joinable truncation preserves prior"
+    );
     assert_eq!(truncated["rivens"]["weapons"]["alpha"]["disposition"], 1.1);
-    assert_eq!(truncated["de"]["dispositions"].as_object().unwrap().len(), 3);
-    assert_eq!(truncated["surface_provenance"]["de.dispositions"]["disposition"], "preserved_invalid");
+    assert_eq!(
+        truncated["de"]["dispositions"].as_object().unwrap().len(),
+        3
+    );
+    assert_eq!(
+        truncated["surface_provenance"]["de.dispositions"]["disposition"],
+        "preserved_invalid"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -1056,7 +1621,13 @@ fn all_unmatched_dispositions_preserve_prior_joined_slug_provenance() {
 #[test]
 fn the_disposition_log_reports_no_change_when_only_the_mirror_disagrees() {
     let dir = stage_fixtures("convert");
-    let args = ["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"];
+    let args = [
+        "build",
+        "--fixtures-dir",
+        dir.to_str().unwrap(),
+        "--now",
+        "2026-07-01T12:00:00Z",
+    ];
 
     assert!(run(&args, &dir).status.success());
     let first: serde_json::Value =
@@ -1073,8 +1644,14 @@ fn the_disposition_log_reports_no_change_when_only_the_mirror_disagrees() {
     let second: serde_json::Value =
         serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
 
-    assert_eq!(second["rivens"]["weapons"]["volt_prime"]["disposition"], 1.15);
-    let changes = second["rivens"]["changes"].as_array().cloned().unwrap_or_default();
+    assert_eq!(
+        second["rivens"]["weapons"]["volt_prime"]["disposition"],
+        1.15
+    );
+    let changes = second["rivens"]["changes"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
     assert!(
         !changes.iter().any(|c| c["slug"] == "volt_prime"),
         "a lagging mirror must not manufacture a disposition change: {changes:?}"
@@ -1089,26 +1666,55 @@ fn annual_usage_history_retries_gaps_and_never_refetches_valid_years() {
     let path = dir.join("fixture_responses.json");
     let mut responses: serde_json::Map<String, serde_json::Value> =
         serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-    let usage_doc = |direct: f64, parent: f64| serde_json::json!({"ALL": {
-        "Warframes": {
-            "Primed Continuity": {"ALL": direct, "0": direct},
-            "Volt Prime": {"ALL": parent, "0": parent},
-            "Unlisted Future Gear": {"ALL": 0.01, "0": 0.01},
-            "Negative": {"ALL": -1}
-        }
-    }});
+    let usage_doc = |direct: f64, parent: f64| {
+        serde_json::json!({"ALL": {
+            "Warframes": {
+                "Primed Continuity": {"ALL": direct, "0": direct},
+                "Volt Prime": {"ALL": parent, "0": parent},
+                "Unlisted Future Gear": {"ALL": 0.01, "0": 0.01},
+                "Negative": {"ALL": -1}
+            }
+        }})
+    };
     responses.insert(de::usage_url(2023), usage_doc(0.1, 0.2));
     responses.insert(de::usage_url(2024), serde_json::json!({"ALL": []}));
     responses.insert(de::usage_url(2025), usage_doc(0.3, 0.4));
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
 
-    let first = run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-01T12:00:00Z"], &dir);
-    assert!(first.status.success(), "{}", String::from_utf8_lossy(&first.stderr));
-    let first_snap: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
-    assert_eq!(first_snap["usage_history"]["years"], serde_json::json!([2023, 2025]));
-    assert_eq!(first_snap["usage_history"]["by_year"]["2023"]["primed_continuity"]["share"], 10.0);
-    assert_eq!(first_snap["usage_history"]["by_year"]["2023"]["volt_prime_set"]["share"], 20.0);
-    assert!(first_snap["usage_history"]["by_year"]["2023"]["primed_continuity"].get("by_mr").is_none());
+    let first = run(
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-01T12:00:00Z",
+        ],
+        &dir,
+    );
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let first_snap: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(
+        first_snap["usage_history"]["years"],
+        serde_json::json!([2023, 2025])
+    );
+    assert_eq!(
+        first_snap["usage_history"]["by_year"]["2023"]["primed_continuity"]["share"],
+        10.0
+    );
+    assert_eq!(
+        first_snap["usage_history"]["by_year"]["2023"]["volt_prime_set"]["share"],
+        20.0
+    );
+    assert!(
+        first_snap["usage_history"]["by_year"]["2023"]["primed_continuity"]
+            .get("by_mr")
+            .is_none()
+    );
     assert_eq!(first_snap["usage"]["primed_continuity"]["year"], 2025);
     assert!(first_snap["usage"]["primed_continuity"]["by_mr"].is_array());
 
@@ -1118,15 +1724,38 @@ fn annual_usage_history_retries_gaps_and_never_refetches_valid_years() {
     responses.insert(de::usage_url(2025), serde_json::json!({"broken": true}));
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
 
-    let second = run(&["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-02T12:00:00Z"], &dir);
-    assert!(second.status.success(), "{}", String::from_utf8_lossy(&second.stderr));
+    let second = run(
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-02T12:00:00Z",
+        ],
+        &dir,
+    );
+    assert!(
+        second.status.success(),
+        "{}",
+        String::from_utf8_lossy(&second.stderr)
+    );
     let stderr = String::from_utf8_lossy(&second.stderr);
     assert!(stderr.contains("2023 already in the snapshot - not refetched"));
     assert!(stderr.contains("2025 already in the snapshot - not refetched"));
-    let second_snap: serde_json::Value = serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
-    assert_eq!(second_snap["usage_history"]["years"], serde_json::json!([2023, 2024, 2025]));
-    assert_eq!(second_snap["usage_history"]["by_year"]["2023"], first_snap["usage_history"]["by_year"]["2023"]);
-    assert_eq!(second_snap["usage_history"]["by_year"]["2025"], first_snap["usage_history"]["by_year"]["2025"]);
+    let second_snap: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(
+        second_snap["usage_history"]["years"],
+        serde_json::json!([2023, 2024, 2025])
+    );
+    assert_eq!(
+        second_snap["usage_history"]["by_year"]["2023"],
+        first_snap["usage_history"]["by_year"]["2023"]
+    );
+    assert_eq!(
+        second_snap["usage_history"]["by_year"]["2025"],
+        first_snap["usage_history"]["by_year"]["2025"]
+    );
     assert_eq!(second_snap["usage"]["primed_continuity"]["year"], 2025);
 
     let mut missing_rich = second_snap.clone();
@@ -1139,7 +1768,13 @@ fn annual_usage_history_retries_gaps_and_never_refetches_valid_years() {
     responses.insert(de::usage_url(2025), usage_doc(0.3, 0.4));
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
     let repaired_missing = run(
-        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-03T12:00:00Z"],
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-03T12:00:00Z",
+        ],
         &dir,
     );
     assert!(
@@ -1170,7 +1805,13 @@ fn annual_usage_history_retries_gaps_and_never_refetches_valid_years() {
     )
     .unwrap();
     let repaired_older = run(
-        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-04T12:00:00Z"],
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-04T12:00:00Z",
+        ],
         &dir,
     );
     assert!(
@@ -1196,7 +1837,13 @@ fn annual_usage_history_retries_gaps_and_never_refetches_valid_years() {
     )
     .unwrap();
     let repaired_invalid = run(
-        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-05T12:00:00Z"],
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-05T12:00:00Z",
+        ],
         &dir,
     );
     assert!(
@@ -1212,10 +1859,12 @@ fn annual_usage_history_retries_gaps_and_never_refetches_valid_years() {
         repaired_invalid_snap["usage_history"]["by_year"]["2025"],
         repaired_older_snap["usage_history"]["by_year"]["2025"]
     );
-    assert!(!repaired_invalid_snap["usage"]["primed_continuity"]["by_mr"]
-        .as_array()
-        .unwrap()
-        .is_empty());
+    assert!(
+        !repaired_invalid_snap["usage"]["primed_continuity"]["by_mr"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
     assert!(repaired_invalid_snap["usage"]["volt_prime_set"]["peak_mr"]
         .as_f64()
         .is_some_and(|value| value >= 0.0));
@@ -1224,7 +1873,13 @@ fn annual_usage_history_retries_gaps_and_never_refetches_valid_years() {
     responses.insert(de::usage_url(2025), serde_json::json!({"broken": true}));
     std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
     let warm = run(
-        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-06T12:00:00Z"],
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-06T12:00:00Z",
+        ],
         &dir,
     );
     assert!(

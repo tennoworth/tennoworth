@@ -1,6 +1,6 @@
 //! WFM listing/order commands - the desktop mirror of serve's listing
-//! routes: same wfm-core services (`wfm_core::listing` for single-order
-//! CRUD, `wfm_core::plan` for the bulk-plan executor), gated on
+//! routes: same wfm-core services (`wfm_core::trading::listing` for single-order
+//! CRUD, `wfm_core::trading::plan` for the bulk-plan executor), gated on
 //! [`WfmSession`]'s unlock state instead of serve's lazy-JWT-unlock.
 #![allow(
     clippy::unreachable,
@@ -10,63 +10,111 @@
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 
-use wfm_core::listing::{
+use wfm_core::trading::listing::{
     bulk_set_visibility, delete_order as core_delete_order, list_user_orders,
     update_order as core_update_order, PerOrderResult, UpdateRequest, VisibilityRequest,
     MAX_PLATINUM,
 };
-use wfm_core::pending::{clear_pending, load_pending, PendingPlan};
-use wfm_core::plan::{
+use wfm_core::trading::pending::{clear_pending, load_pending, PendingPlan};
+use wfm_core::trading::plan::{
     execute_plan as core_execute_plan, run_pending, PlanItem, PlanRequest, PlanResponse,
 };
 
-use crate::db::{Db, ListingLogRow};
-use crate::wfm_session::{CmdError, WfmSession};
+use crate::persistence::{Db, ListingLogRow};
+use crate::services::wfm_session::{CmdError, WfmSession};
 
 const PLAN_BUSY_MSG: &str = "A listing plan is already running - wait for it to finish.";
 
 fn validate_session_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), String> {
-    if items.iter().all(|i| i.session.is_none()) { return Ok(()); }
-    let context = items.first().and_then(|i| i.session.as_ref()).ok_or("Mixed listing and Trade Session batch.")?;
+    if items.iter().all(|i| i.session.is_none()) {
+        return Ok(());
+    }
+    let context = items
+        .first()
+        .and_then(|i| i.session.as_ref())
+        .ok_or("Mixed listing and Trade Session batch.")?;
     let db = app.state::<Db>();
-    let allowance = db.session_allowance(context.snapshot_id, context.utc_day, crate::allowance::unix_now())?;
-    let market = crate::sellables::MarketData::load(&app.state::<crate::market::MarketCache>());
+    let allowance = db.session_allowance(
+        context.snapshot_id,
+        context.utc_day,
+        crate::services::allowance::unix_now(),
+    )?;
+    let market = crate::services::sellables::MarketData::load(
+        &app.state::<crate::services::market::MarketCache>(),
+    );
     let quantities = market.session_quantities(&db)?;
     let session = app.state::<Arc<WfmSession>>();
-    let unlocked = session.require_unlocked().map_err(|_| "Unlock WFM before reviewing this batch.")?;
-    validate_session_contents(items, context, allowance.remaining, &quantities, &unlocked.catalog)
+    let unlocked = session
+        .require_unlocked()
+        .map_err(|_| "Unlock WFM before reviewing this batch.")?;
+    validate_session_contents(
+        items,
+        context,
+        allowance.remaining,
+        &quantities,
+        &unlocked.catalog,
+    )
 }
 
 fn validate_session_contents(
-    items: &[PlanItem], context: &wfm_core::plan::SessionConstraint, remaining: Option<u32>,
+    items: &[PlanItem],
+    context: &wfm_core::trading::plan::SessionConstraint,
+    remaining: Option<u32>,
     quantities: &std::collections::BTreeMap<String, u32>,
-    catalog: &std::collections::BTreeMap<String, wfm_core::catalog::WfmCatalogItem>,
+    catalog: &std::collections::BTreeMap<String, wfm_core::trading::catalog::WfmCatalogItem>,
 ) -> Result<(), String> {
-    if context.budget == 0 || context.budget as usize > wfm_core::plan::MAX_PLAN_ITEMS || items.iter().any(|i| i.session.as_ref() != Some(context)) {
+    if context.budget == 0
+        || context.budget as usize > wfm_core::trading::plan::MAX_PLAN_ITEMS
+        || items.iter().any(|i| i.session.as_ref() != Some(context))
+    {
         return Err("Invalid or inconsistent Trade Session budget.".into());
     }
     let mut trades = 0u32;
     let mut seen = std::collections::BTreeSet::new();
     for item in items {
-        let cat = catalog.get(&item.slug).filter(|c| c.session_supported)
-            .ok_or_else(|| format!("{} has an unsupported trade identity. Use the dedicated item flow instead.", item.slug))?;
-        let lot = item.per_trade.ok_or("Trade Session requires explicit units per trade.")?;
-        wfm_core::plan::validate_lot(item.quantity, Some(lot), cat.bulk_tradable)?;
+        let cat = catalog
+            .get(&item.slug)
+            .filter(|c| c.session_supported)
+            .ok_or_else(|| {
+                format!(
+                    "{} has an unsupported trade identity. Use the dedicated item flow instead.",
+                    item.slug
+                )
+            })?;
+        let lot = item
+            .per_trade
+            .ok_or("Trade Session requires explicit units per trade.")?;
+        wfm_core::trading::plan::validate_lot(item.quantity, Some(lot), cat.bulk_tradable)?;
         if item.platinum.saturating_mul(lot) > MAX_PLATINUM {
-            return Err(format!("Lot total exceeds {MAX_PLATINUM}p; reduce price or units per trade."));
+            return Err(format!(
+                "Lot total exceeds {MAX_PLATINUM}p; reduce price or units per trade."
+            ));
         }
-        if item.visible || item.order_type != "sell" || item.rank.unwrap_or(0) != 0 || item.subtype.is_some()
-            || item.slug.ends_with("_set") || item.reviewed_order.is_none() || !seen.insert(&item.slug)
+        if item.visible
+            || item.order_type != "sell"
+            || item.rank.unwrap_or(0) != 0
+            || item.subtype.is_some()
+            || item.slug.ends_with("_set")
+            || item.reviewed_order.is_none()
+            || !seen.insert(&item.slug)
         {
             return Err("Unsupported or ambiguous Trade Session item identity.".into());
         }
         if item.quantity > quantities.get(&item.slug).copied().unwrap_or(0) {
-            return Err(format!("{} no longer has the reviewed sellable quantity. Scan and review again.", item.slug));
+            return Err(format!(
+                "{} no longer has the reviewed sellable quantity. Scan and review again.",
+                item.slug
+            ));
         }
-        trades = trades.checked_add(item.quantity / lot).ok_or("Trade estimate is too large.")?;
+        trades = trades
+            .checked_add(item.quantity / lot)
+            .ok_or("Trade estimate is too large.")?;
     }
     if trades > context.budget || trades > remaining.unwrap_or(0) {
-        return Err("The batch exceeds the current trade allowance or selected budget. Review it again.".into());
+        return Err(
+            "The batch exceeds the current trade allowance or selected budget. Review it again."
+                .into(),
+        );
     }
     Ok(())
 }
@@ -84,7 +132,10 @@ fn validate_session_contents(
 /// single synthetic `<batch>` result that maps to no item, including when the
 /// original plan contained only one item. Neither case belongs in item history.
 fn record_plan(db: &Db, response: &PlanResponse, price_qty: &[(i64, i64)]) {
-    if response.results.is_empty() || response.results.len() != price_qty.len() || response.results.iter().any(|r| r.slug == "<batch>") {
+    if response.results.is_empty()
+        || response.results.len() != price_qty.len()
+        || response.results.iter().any(|r| r.slug == "<batch>")
+    {
         return;
     }
     let rows: Vec<ListingLogRow> = response
@@ -126,8 +177,15 @@ pub async fn submit_plan(
     let reviewed = items.clone();
     let response = tauri::async_runtime::spawn_blocking(move || {
         let unlocked = s.require_unlocked()?;
-        let _guard = s.begin_plan().ok_or_else(|| CmdError::of("busy", PLAN_BUSY_MSG))?;
-        Ok::<_, CmdError>(core_execute_plan(s.pending_path(), &unlocked, PlanRequest { items }, || validate_session_plan(&app, &reviewed)))
+        let _guard = s
+            .begin_plan()
+            .ok_or_else(|| CmdError::of("busy", PLAN_BUSY_MSG))?;
+        Ok::<_, CmdError>(core_execute_plan(
+            s.pending_path(),
+            &unlocked,
+            PlanRequest { items },
+            || validate_session_plan(&app, &reviewed),
+        ))
     })
     .await
     .map_err(|e| CmdError::internal(format!("plan task failed to run: {e}")))??;
@@ -162,7 +220,9 @@ pub async fn resume_pending_plan(
         let mut pending = load_pending(s.pending_path())
             .ok_or_else(|| CmdError::of("no_pending", "No pending plan to resume."))?;
         let unlocked = s.require_unlocked()?;
-        let _guard = s.begin_plan().ok_or_else(|| CmdError::of("busy", PLAN_BUSY_MSG))?;
+        let _guard = s
+            .begin_plan()
+            .ok_or_else(|| CmdError::of("busy", PLAN_BUSY_MSG))?;
         // EVERY item, not just the ones still 'pending'. A pending file only
         // survives when the original run never returned, and submit_plan logs
         // only after it returns - so nothing from this plan has been recorded
@@ -174,8 +234,12 @@ pub async fn resume_pending_plan(
             .map(|i| (i.platinum as i64, i.quantity as i64))
             .collect();
         let reviewed: Vec<PlanItem> = pending.items.iter().map(PlanItem::from).collect();
-        let response = run_pending(s.pending_path(), &unlocked, &mut pending, || validate_session_plan(&app, &reviewed));
-        if pending.items.iter().all(|i| i.status != "pending") { clear_pending(s.pending_path()); }
+        let response = run_pending(s.pending_path(), &unlocked, &mut pending, || {
+            validate_session_plan(&app, &reviewed)
+        });
+        if pending.items.iter().all(|i| i.status != "pending") {
+            clear_pending(s.pending_path());
+        }
         Ok::<_, CmdError>((response, price_qty))
     })
     .await
@@ -187,7 +251,9 @@ pub async fn resume_pending_plan(
 
 /// The user's current WFM listings, enriched with display names (GET /orders).
 #[tauri::command]
-pub async fn fetch_orders(session: State<'_, Arc<WfmSession>>) -> Result<serde_json::Value, CmdError> {
+pub async fn fetch_orders(
+    session: State<'_, Arc<WfmSession>>,
+) -> Result<serde_json::Value, CmdError> {
     let s = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
         let unlocked = s.require_unlocked()?;
@@ -245,7 +311,10 @@ pub async fn bulk_visibility(
     let s = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
         let unlocked = s.require_unlocked()?;
-        Ok(bulk_set_visibility(&unlocked, &VisibilityRequest { order_ids, visible }))
+        Ok(bulk_set_visibility(
+            &unlocked,
+            &VisibilityRequest { order_ids, visible },
+        ))
     })
     .await
     .map_err(|e| CmdError::internal(format!("visibility task failed to run: {e}")))?
@@ -255,27 +324,47 @@ pub async fn bulk_visibility(
 mod tests {
     use super::*;
     use std::collections::BTreeMap;
-    use wfm_core::catalog::WfmCatalogItem;
-    use wfm_core::plan::SessionConstraint;
+    use wfm_core::trading::catalog::WfmCatalogItem;
+    use wfm_core::trading::plan::SessionConstraint;
 
     #[test]
     fn session_validation_rejects_unsafe_quantities_budgets_and_identities() {
-        let context = SessionConstraint { snapshot_id: 1, utc_day: 20_000, budget: 8 };
+        let context = SessionConstraint {
+            snapshot_id: 1,
+            utc_day: 20_000,
+            budget: 8,
+        };
         let item: PlanItem = serde_json::from_value(serde_json::json!({
             "slug":"arcane", "platinum":20, "quantity":12, "per_trade":3,
             "order_type":"sell", "visible":false, "session":context, "reviewed_order":{"state":"new"}
         })).unwrap();
-        let mut catalog = BTreeMap::from([("arcane".into(), WfmCatalogItem {
-            item_id: "item".into(), display_name: "Arcane".into(), bulk_tradable: true,
-            session_supported: true, max_rank: Some(5), subtypes: vec![],
-        })]);
+        let mut catalog = BTreeMap::from([(
+            "arcane".into(),
+            WfmCatalogItem {
+                item_id: "item".into(),
+                display_name: "Arcane".into(),
+                bulk_tradable: true,
+                session_supported: true,
+                max_rank: Some(5),
+                subtypes: vec![],
+            },
+        )]);
         let mut quantities = BTreeMap::from([("arcane".into(), 12)]);
-        let check = |items: &[PlanItem], remaining, qty: &BTreeMap<String, u32>, cat: &BTreeMap<String, WfmCatalogItem>| {
+        let check = |items: &[PlanItem],
+                     remaining,
+                     qty: &BTreeMap<String, u32>,
+                     cat: &BTreeMap<String, WfmCatalogItem>| {
             validate_session_contents(items, &context, remaining, qty, cat)
         };
         assert!(check(std::slice::from_ref(&item), Some(8), &quantities, &catalog).is_ok());
         for remaining in [None, Some(0), Some(3)] {
-            assert!(check(std::slice::from_ref(&item), remaining, &quantities, &catalog).is_err());
+            assert!(check(
+                std::slice::from_ref(&item),
+                remaining,
+                &quantities,
+                &catalog
+            )
+            .is_err());
         }
         quantities.insert("arcane".into(), 11);
         assert!(check(std::slice::from_ref(&item), Some(8), &quantities, &catalog).is_err());
@@ -289,7 +378,13 @@ mod tests {
         let mut changed = item.clone();
         changed.reviewed_order = None;
         assert!(check(&[changed], Some(8), &quantities, &catalog).is_err());
-        assert!(check(&[item.clone(), item.clone()], Some(8), &quantities, &catalog).is_err());
+        assert!(check(
+            &[item.clone(), item.clone()],
+            Some(8),
+            &quantities,
+            &catalog
+        )
+        .is_err());
         catalog.get_mut("arcane").unwrap().bulk_tradable = false;
         assert!(check(std::slice::from_ref(&item), Some(8), &quantities, &catalog).is_err());
         catalog.get_mut("arcane").unwrap().session_supported = false;

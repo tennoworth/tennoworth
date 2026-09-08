@@ -23,7 +23,7 @@ use chrono::{Duration, NaiveDate};
 use market_math::{canonical_subtype, drop_poisoned_rows, rank0_rows, subtype_rows, StatsDay};
 use serde::{Deserialize, Serialize};
 
-use crate::fetch::Http;
+use crate::ingest::Http;
 
 pub const HISTORY_URL_BASE: &str = "https://relics.run/history/price_history_";
 /// Series length kept.
@@ -77,14 +77,17 @@ impl History {
         }
     }
     pub fn through_date(&self) -> Option<NaiveDate> {
-        self.through.as_deref().and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
+        self.through
+            .as_deref()
+            .and_then(|s| NaiveDate::parse_from_str(s, "%Y-%m-%d").ok())
     }
     pub fn start_date(&self) -> Option<NaiveDate> {
         NaiveDate::parse_from_str(&self.start, "%Y-%m-%d").ok()
     }
     /// The last calendar day the window covers (inclusive).
     pub fn end_date(&self) -> Option<NaiveDate> {
-        self.start_date().map(|s| s + Duration::days(self.days as i64 - 1))
+        self.start_date()
+            .map(|s| s + Duration::days(self.days as i64 - 1))
     }
 }
 
@@ -103,7 +106,9 @@ pub fn parse_day_file(
 ) -> (HashMap<String, DayRows>, usize) {
     let mut out: HashMap<String, DayRows> = HashMap::new();
     let mut unmatched = 0usize;
-    let Some(obj) = body.as_object() else { return (out, 0) };
+    let Some(obj) = body.as_object() else {
+        return (out, 0);
+    };
     for (name, rows) in obj {
         let Some(slug) = name_to_slug.get(&name.to_lowercase()) else {
             unmatched += 1;
@@ -149,10 +154,7 @@ pub fn reduce_day(rows: &[StatsDay], pick: Option<&str>) -> (Option<f64>, u32) {
     // Normally exactly one row survives (one rank-0 tier per day). If WFM
     // ever emits two (absent-vs-null mod_rank on the same item), take the
     // busier one for the median and sum the volume.
-    let Some(best) = tier
-        .iter()
-        .max_by(|a, b| a.volume.total_cmp(&b.volume))
-    else {
+    let Some(best) = tier.iter().max_by(|a, b| a.volume.total_cmp(&b.volume)) else {
         return (None, 0);
     };
     let vol: f64 = tier.iter().map(|d| d.volume).sum();
@@ -162,8 +164,15 @@ pub fn reduce_day(rows: &[StatsDay], pick: Option<&str>) -> (Option<f64>, u32) {
 /// Fold a day's rows into `hist` at `date`. Grows the window forward when the
 /// date is past the current end (dropping the oldest columns) and ignores
 /// dates before the start. `picks` is the per-slug subtype decision.
-pub fn apply_day(hist: &mut History, date: NaiveDate, day: &HashMap<String, DayRows>, picks: &HashMap<String, Option<String>>) {
-    let Some(start) = hist.start_date() else { return };
+pub fn apply_day(
+    hist: &mut History,
+    date: NaiveDate,
+    day: &HashMap<String, DayRows>,
+    picks: &HashMap<String, Option<String>>,
+) {
+    let Some(start) = hist.start_date() else {
+        return;
+    };
     let days = hist.days;
     let mut idx = (date - start).num_days();
     if idx < 0 {
@@ -185,8 +194,13 @@ pub fn apply_day(hist: &mut History, date: NaiveDate, day: &HashMap<String, DayR
             s.volume.resize(days, 0);
         }
         // Series that slid entirely out of the window carry nothing - drop them.
-        hist.items.retain(|_, s| s.median.iter().any(|m| m.is_some()));
-        hist.missing_days.retain(|d| NaiveDate::parse_from_str(d, "%Y-%m-%d").map(|d| d >= new_start).unwrap_or(false));
+        hist.items
+            .retain(|_, s| s.median.iter().any(|m| m.is_some()));
+        hist.missing_days.retain(|d| {
+            NaiveDate::parse_from_str(d, "%Y-%m-%d")
+                .map(|d| d >= new_start)
+                .unwrap_or(false)
+        });
         hist.start = new_start.to_string();
         idx = days as i64 - 1;
     }
@@ -212,17 +226,22 @@ pub fn apply_day(hist: &mut History, date: NaiveDate, day: &HashMap<String, DayR
     }
     // A day can create a series that has no closed trade on its tier; keep the
     // artifact to items with at least one real value.
-    hist.items.retain(|_, s| s.median.iter().any(|m| m.is_some()));
+    hist.items
+        .retain(|_, s| s.median.iter().any(|m| m.is_some()));
 }
 
 /// Which subtype each slug's series should track, decided over EVERY day's
 /// rows we are about to apply (volume-weighted; prefers intact for relics -
 /// `canonical_subtype`'s rule). Items with no subtyped rows get `None`.
-pub fn decide_picks(days: &[(NaiveDate, HashMap<String, DayRows>)]) -> HashMap<String, Option<String>> {
+pub fn decide_picks(
+    days: &[(NaiveDate, HashMap<String, DayRows>)],
+) -> HashMap<String, Option<String>> {
     let mut all: HashMap<String, Vec<StatsDay>> = HashMap::new();
     for (_, day) in days {
         for (slug, rows) in day {
-            all.entry(slug.clone()).or_default().extend(rows.rows.iter().cloned());
+            all.entry(slug.clone())
+                .or_default()
+                .extend(rows.rows.iter().cloned());
         }
     }
     all.into_iter()
@@ -233,7 +252,12 @@ pub fn decide_picks(days: &[(NaiveDate, HashMap<String, DayRows>)]) -> HashMap<S
 /// The dates to fetch for this run: the day after the last day WITH DATA up to
 /// `yesterday` (relics.run publishes a day once it's over, with some lag), or
 /// a bootstrap window when there is no prior. Never more than `days` dates.
-pub fn dates_to_fetch(prior: Option<&History>, yesterday: NaiveDate, days: usize, bootstrap_days: usize) -> Vec<NaiveDate> {
+pub fn dates_to_fetch(
+    prior: Option<&History>,
+    yesterday: NaiveDate,
+    days: usize,
+    bootstrap_days: usize,
+) -> Vec<NaiveDate> {
     let first = match prior.and_then(|p| p.through_date()) {
         Some(through) => through + Duration::days(1),
         None => yesterday - Duration::days(bootstrap_days.min(days).saturating_sub(1) as i64),
@@ -287,7 +311,11 @@ pub fn update_history(
             p.generated_at = generated_at.into();
             p
         }
-        None => History::empty(yesterday - Duration::days(days as i64 - 1), days, generated_at),
+        None => History::empty(
+            yesterday - Duration::days(days as i64 - 1),
+            days,
+            generated_at,
+        ),
     };
     let mut summary = HistorySummary::default();
     let mut fetched_days: Vec<(NaiveDate, HashMap<String, DayRows>)> = Vec::new();
@@ -337,7 +365,7 @@ pub fn update_history(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fetch::FixtureHttp;
+    use crate::ingest::FixtureHttp;
 
     fn d(s: &str) -> NaiveDate {
         NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap()
@@ -349,12 +377,21 @@ mod tests {
         m.insert("volt prime set".into(), "volt_prime_set".into());
         m
     }
-    fn closed(median: f64, volume: f64, mod_rank: Option<Option<i64>>, subtype: Option<&str>) -> serde_json::Value {
+    fn closed(
+        median: f64,
+        volume: f64,
+        mod_rank: Option<Option<i64>>,
+        subtype: Option<&str>,
+    ) -> serde_json::Value {
         let mut o = serde_json::json!({"order_type": "closed", "median": median, "volume": volume, "max_price": median * 1.2, "avg_price": median});
         match mod_rank {
             None => {}
-            Some(None) => { o["mod_rank"] = serde_json::Value::Null; }
-            Some(Some(r)) => { o["mod_rank"] = serde_json::json!(r); }
+            Some(None) => {
+                o["mod_rank"] = serde_json::Value::Null;
+            }
+            Some(Some(r)) => {
+                o["mod_rank"] = serde_json::json!(r);
+            }
         }
         if let Some(s) = subtype {
             o["subtype"] = serde_json::json!(s);
@@ -362,7 +399,10 @@ mod tests {
         o
     }
     fn day_body(pf_r0: f64, pf_r10: f64, relic: &[(&str, f64, f64)]) -> serde_json::Value {
-        let relic_rows: Vec<serde_json::Value> = relic.iter().map(|(st, m, v)| closed(*m, *v, None, Some(st))).collect();
+        let relic_rows: Vec<serde_json::Value> = relic
+            .iter()
+            .map(|(st, m, v)| closed(*m, *v, None, Some(st)))
+            .collect();
         serde_json::json!({
             "Primed Flow": [
                 closed(pf_r10, 57.0, Some(Some(10)), None),
@@ -384,14 +424,23 @@ mod tests {
 
     #[test]
     fn a_day_file_reduces_to_rank0_and_the_volume_dominant_subtype() {
-        let (rows, unmatched) = parse_day_file(&day_body(20.0, 80.0, &[("intact", 8.0, 30.0), ("radiant", 40.0, 5.0)]), &catalog());
+        let (rows, unmatched) = parse_day_file(
+            &day_body(20.0, 80.0, &[("intact", 8.0, 30.0), ("radiant", 40.0, 5.0)]),
+            &catalog(),
+        );
         assert_eq!(unmatched, 1, "Unknown Thing");
         assert_eq!(rows["primed_flow"].rows.len(), 2, "sell rows dropped");
         let picks = decide_picks(&[(d("2026-08-15"), rows.clone())]);
         assert_eq!(picks["lith_c5_relic"].as_deref(), Some("intact"));
         assert_eq!(picks["primed_flow"], None);
-        assert_eq!(reduce_day(&rows["primed_flow"].rows, None), (Some(20.0), 86));
-        assert_eq!(reduce_day(&rows["lith_c5_relic"].rows, Some("intact")), (Some(8.0), 30));
+        assert_eq!(
+            reduce_day(&rows["primed_flow"].rows, None),
+            (Some(20.0), 86)
+        );
+        assert_eq!(
+            reduce_day(&rows["lith_c5_relic"].rows, Some("intact")),
+            (Some(8.0), 30)
+        );
     }
 
     #[test]
@@ -402,18 +451,45 @@ mod tests {
             ("2026-08-14", day_body(19.0, 80.0, &[("intact", 8.0, 10.0)])),
             ("2026-08-15", day_body(20.0, 80.0, &[("intact", 9.0, 10.0)])),
         ]);
-        let (hist, sum) = update_history(&h, None, &catalog(), d("2026-08-15"), "t0", 3, 3, &no_sleep);
-        assert_eq!(sum, HistorySummary { fetched: 3, failed: 0, items: 2, unmatched_names: 1 });
+        let (hist, sum) =
+            update_history(&h, None, &catalog(), d("2026-08-15"), "t0", 3, 3, &no_sleep);
+        assert_eq!(
+            sum,
+            HistorySummary {
+                fetched: 3,
+                failed: 0,
+                items: 2,
+                unmatched_names: 1
+            }
+        );
         assert_eq!(hist.start, "2026-08-13");
-        assert_eq!(hist.items["primed_flow"].median, vec![Some(18.0), Some(19.0), Some(20.0)]);
+        assert_eq!(
+            hist.items["primed_flow"].median,
+            vec![Some(18.0), Some(19.0), Some(20.0)]
+        );
         assert_eq!(hist.items["lith_c5_relic"].volume, vec![10, 10, 10]);
 
         // Next day: only 08-16 is fetched; the window slides, 08-13 falls off.
-        let h2 = http(&[("2026-08-16", day_body(21.0, 80.0, &[("intact", 10.0, 10.0)]))]);
-        let (hist2, sum2) = update_history(&h2, Some(hist), &catalog(), d("2026-08-16"), "t1", 3, 3, &no_sleep);
+        let h2 = http(&[(
+            "2026-08-16",
+            day_body(21.0, 80.0, &[("intact", 10.0, 10.0)]),
+        )]);
+        let (hist2, sum2) = update_history(
+            &h2,
+            Some(hist),
+            &catalog(),
+            d("2026-08-16"),
+            "t1",
+            3,
+            3,
+            &no_sleep,
+        );
         assert_eq!(sum2.fetched, 1);
         assert_eq!(hist2.start, "2026-08-14");
-        assert_eq!(hist2.items["primed_flow"].median, vec![Some(19.0), Some(20.0), Some(21.0)]);
+        assert_eq!(
+            hist2.items["primed_flow"].median,
+            vec![Some(19.0), Some(20.0), Some(21.0)]
+        );
         assert_eq!(hist2.generated_at, "t1");
     }
 
@@ -423,14 +499,36 @@ mod tests {
             ("2026-08-14", day_body(19.0, 80.0, &[("intact", 8.0, 30.0)])),
             ("2026-08-15", day_body(20.0, 80.0, &[("intact", 9.0, 30.0)])),
         ]);
-        let (hist, _) = update_history(&h, None, &catalog(), d("2026-08-15"), "t0", 3, 2, &no_sleep);
-        assert_eq!(hist.items["lith_c5_relic"].subtype.as_deref(), Some("intact"));
+        let (hist, _) =
+            update_history(&h, None, &catalog(), d("2026-08-15"), "t0", 3, 2, &no_sleep);
+        assert_eq!(
+            hist.items["lith_c5_relic"].subtype.as_deref(),
+            Some("intact")
+        );
         // Next day only radiant traded, at 40p - the intact series shows "no
         // trades", not a 40p spike.
-        let h2 = http(&[("2026-08-16", day_body(21.0, 80.0, &[("radiant", 40.0, 6.0)]))]);
-        let (hist2, _) = update_history(&h2, Some(hist), &catalog(), d("2026-08-16"), "t1", 3, 2, &no_sleep);
-        assert_eq!(hist2.items["lith_c5_relic"].subtype.as_deref(), Some("intact"));
-        assert_eq!(hist2.items["lith_c5_relic"].median, vec![Some(8.0), Some(9.0), None]);
+        let h2 = http(&[(
+            "2026-08-16",
+            day_body(21.0, 80.0, &[("radiant", 40.0, 6.0)]),
+        )]);
+        let (hist2, _) = update_history(
+            &h2,
+            Some(hist),
+            &catalog(),
+            d("2026-08-16"),
+            "t1",
+            3,
+            2,
+            &no_sleep,
+        );
+        assert_eq!(
+            hist2.items["lith_c5_relic"].subtype.as_deref(),
+            Some("intact")
+        );
+        assert_eq!(
+            hist2.items["lith_c5_relic"].median,
+            vec![Some(8.0), Some(9.0), None]
+        );
     }
 
     #[test]
@@ -440,10 +538,14 @@ mod tests {
             // 08-14 absent from the fixture → fetch error, but 08-15 exists
             ("2026-08-15", day_body(20.0, 80.0, &[])),
         ]);
-        let (hist, sum) = update_history(&h, None, &catalog(), d("2026-08-15"), "t", 3, 3, &no_sleep);
+        let (hist, sum) =
+            update_history(&h, None, &catalog(), d("2026-08-15"), "t", 3, 3, &no_sleep);
         assert_eq!(sum.fetched, 2);
         assert_eq!(sum.failed, 1);
-        assert_eq!(hist.items["primed_flow"].median, vec![Some(18.0), None, Some(20.0)]);
+        assert_eq!(
+            hist.items["primed_flow"].median,
+            vec![Some(18.0), None, Some(20.0)]
+        );
         assert_eq!(hist.missing_days, vec!["2026-08-14".to_string()]);
     }
 
@@ -451,45 +553,96 @@ mod tests {
     fn a_not_yet_published_trailing_day_is_retried_next_run_not_recorded() {
         let h = http(&[("2026-08-14", day_body(19.0, 80.0, &[]))]);
         // "yesterday" = 08-15 but relics.run hasn't published it yet
-        let (hist, sum) = update_history(&h, None, &catalog(), d("2026-08-15"), "t", 3, 2, &no_sleep);
+        let (hist, sum) =
+            update_history(&h, None, &catalog(), d("2026-08-15"), "t", 3, 2, &no_sleep);
         assert_eq!((sum.fetched, sum.failed), (1, 1));
         assert!(hist.missing_days.is_empty());
         assert_eq!(hist.through.as_deref(), Some("2026-08-14"));
         // data ends at 08-14 → next run asks for 08-15 again
-        assert_eq!(hist.items["primed_flow"].median, vec![None, Some(19.0), None]);
+        assert_eq!(
+            hist.items["primed_flow"].median,
+            vec![None, Some(19.0), None]
+        );
         // (start is yesterday-2 = 08-13, so 08-14 is index 1 and 08-15 is still empty)
         let h2 = http(&[("2026-08-15", day_body(20.0, 80.0, &[]))]);
-        let (hist2, _) = update_history(&h2, Some(hist), &catalog(), d("2026-08-15"), "t2", 3, 3, &no_sleep);
-        assert_eq!(hist2.items["primed_flow"].median, vec![None, Some(19.0), Some(20.0)]);
+        let (hist2, _) = update_history(
+            &h2,
+            Some(hist),
+            &catalog(),
+            d("2026-08-15"),
+            "t2",
+            3,
+            3,
+            &no_sleep,
+        );
+        assert_eq!(
+            hist2.items["primed_flow"].median,
+            vec![None, Some(19.0), Some(20.0)]
+        );
     }
 
     #[test]
     fn items_with_no_closed_trade_on_their_tier_get_no_series() {
-        let h = http(&[("2026-08-15", day_body(20.0, 80.0, &[("radiant", 40.0, 6.0)]))]);
+        let h = http(&[(
+            "2026-08-15",
+            day_body(20.0, 80.0, &[("radiant", 40.0, 6.0)]),
+        )]);
         let (hist, _) = update_history(&h, None, &catalog(), d("2026-08-15"), "t", 2, 1, &no_sleep);
         // relic traded only radiant → intact-preferring pick? canonical_subtype
         // prefers intact only when present; here radiant is the sole tier, so
         // it IS the pick and the series exists.
         assert!(hist.items.contains_key("lith_c5_relic"));
-        assert!(!hist.items.contains_key("volt_prime_set"), "never in any day file");
+        assert!(
+            !hist.items.contains_key("volt_prime_set"),
+            "never in any day file"
+        );
     }
 
     #[test]
     fn nothing_to_fetch_when_already_current() {
-        let prior = History { generated_at: "x".into(), start: "2026-08-13".into(), days: 3, through: Some("2026-08-15".into()), items: HashMap::new(), missing_days: vec![] };
+        let prior = History {
+            generated_at: "x".into(),
+            start: "2026-08-13".into(),
+            days: 3,
+            through: Some("2026-08-15".into()),
+            items: HashMap::new(),
+            missing_days: vec![],
+        };
         assert!(dates_to_fetch(Some(&prior), d("2026-08-15"), 3, 3).is_empty());
-        assert_eq!(dates_to_fetch(Some(&prior), d("2026-08-17"), 3, 3), vec![d("2026-08-16"), d("2026-08-17")]);
+        assert_eq!(
+            dates_to_fetch(Some(&prior), d("2026-08-17"), 3, 3),
+            vec![d("2026-08-16"), d("2026-08-17")]
+        );
         // a very stale prior only refetches what still fits the window
-        assert_eq!(dates_to_fetch(Some(&prior), d("2026-09-30"), 3, 3), vec![d("2026-09-28"), d("2026-09-29"), d("2026-09-30")]);
+        assert_eq!(
+            dates_to_fetch(Some(&prior), d("2026-09-30"), 3, 3),
+            vec![d("2026-09-28"), d("2026-09-29"), d("2026-09-30")]
+        );
         // bootstrap is capped by the window
         assert_eq!(dates_to_fetch(None, d("2026-08-15"), 3, 365).len(), 3);
     }
 
     #[test]
     fn a_prior_with_a_different_window_length_is_rebuilt() {
-        let prior = History { generated_at: "x".into(), start: "2026-08-13".into(), days: 3, through: Some("2026-08-15".into()), items: HashMap::new(), missing_days: vec![] };
+        let prior = History {
+            generated_at: "x".into(),
+            start: "2026-08-13".into(),
+            days: 3,
+            through: Some("2026-08-15".into()),
+            items: HashMap::new(),
+            missing_days: vec![],
+        };
         let h = http(&[("2026-08-15", day_body(20.0, 80.0, &[]))]);
-        let (hist, _) = update_history(&h, Some(prior), &catalog(), d("2026-08-15"), "t", 2, 1, &no_sleep);
+        let (hist, _) = update_history(
+            &h,
+            Some(prior),
+            &catalog(),
+            d("2026-08-15"),
+            "t",
+            2,
+            1,
+            &no_sleep,
+        );
         assert_eq!(hist.days, 2);
         assert_eq!(hist.start, "2026-08-14");
         assert_eq!(hist.items["primed_flow"].median, vec![None, Some(20.0)]);

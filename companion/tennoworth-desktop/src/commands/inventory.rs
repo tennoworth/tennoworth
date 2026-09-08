@@ -6,30 +6,44 @@
     reason = "tauri::command injects unreachable code into async wrappers"
 )]
 
-use tauri::{AppHandle, State, Manager, Emitter};
+use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::db::Db;
-use crate::tray::post_scan_surfaces;
+use crate::persistence::Db;
+use crate::shell::tray::post_scan_surfaces;
 
-fn scan_boundary(app: &AppHandle) -> Option<crate::eelog::LogPosition> {
-    let state = app.try_state::<crate::eelog_state::EeLogState>()?;
-    crate::eelog::log_position(state.path.as_deref()?)
+fn scan_boundary(app: &AppHandle) -> Option<crate::services::eelog::LogPosition> {
+    let state = app.try_state::<crate::services::eelog_state::EeLogState>()?;
+    crate::services::eelog::log_position(state.path.as_deref()?)
 }
 
 fn record_game_scan(
-    app: &AppHandle, bytes: &[u8], info: &wfm_core::scan::SessionInfo,
-    before: Option<crate::eelog::LogPosition>, started_at: i64,
+    app: &AppHandle,
+    bytes: &[u8],
+    info: &wfm_core::acquisition::scan::SessionInfo,
+    before: Option<crate::services::eelog::LogPosition>,
+    started_at: i64,
 ) {
     let after = scan_boundary(app);
-    let observed_at = crate::allowance::unix_now();
+    let observed_at = crate::services::allowance::unix_now();
     let db = app.state::<Db>();
     let recorded = (|| -> Result<(), String> {
         let id = record_snapshot(&db, "memory", info.build.as_deref(), bytes)?;
         let raw = serde_json::from_slice(bytes).map_err(|e| format!("read scan metadata: {e}"))?;
-        let account_key = wfm_core::util::local_fingerprint("tennoworth-account-v1", info.account_id.to_lowercase().as_bytes());
-        let observation = crate::allowance::Observation::scanned(account_key, id,
-            &raw, before, after, started_at, observed_at);
-        db.save_allowance(observation).map_err(|e| format!("save allowance: {e}"))
+        let account_key = wfm_core::identity::local_fingerprint(
+            "tennoworth-account-v1",
+            info.account_id.to_lowercase().as_bytes(),
+        );
+        let observation = crate::services::allowance::Observation::scanned(
+            account_key,
+            id,
+            &raw,
+            before,
+            after,
+            started_at,
+            observed_at,
+        );
+        db.save_allowance(observation)
+            .map_err(|e| format!("save allowance: {e}"))
     })();
     if let Err(error) = recorded {
         // A successful scan may be a different account. Never retain the
@@ -37,17 +51,20 @@ fn record_game_scan(
         let _ = db.clear_allowance();
         eprintln!("tennoworth: scan observation not recorded: {error}");
     }
-    let _ = app.emit(crate::allowance::EVENT_ALLOWANCE_CHANGED, ());
+    let _ = app.emit(crate::services::allowance::EVENT_ALLOWANCE_CHANGED, ());
 }
 
 pub(crate) fn scan_and_record(app: &AppHandle) -> Result<Vec<u8>, String> {
     // Keep acquisition and its accounting boundary under the same single-flight
     // guard; a tray scan must not persist newer data before this scan is recorded.
     static ACTIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-    let _guard = wfm_core::plan::PlanGuard::acquire(&ACTIVE).ok_or("An inventory scan is already running.")?;
-    let started_at = crate::allowance::unix_now();
+    let _guard = wfm_core::trading::plan::PlanGuard::acquire(&ACTIVE)
+        .ok_or("An inventory scan is already running.")?;
+    let started_at = crate::services::allowance::unix_now();
     let before = scan_boundary(app);
-    let (bytes, info) = crate::scanner().scan(None, None).map_err(|e| e.into_message())?;
+    let (bytes, info) = crate::services::inventory::scanner()
+        .scan(None, None)
+        .map_err(|e| e.into_message())?;
     record_game_scan(app, &bytes, &info, before, started_at);
     Ok(bytes)
 }
@@ -61,7 +78,7 @@ pub(crate) fn record_snapshot(
     game_version: Option<&str>,
     bytes: &[u8],
 ) -> Result<i64, String> {
-    let items = crate::snapshot::extract_items(bytes)
+    let items = crate::persistence::snapshot::extract_items(bytes)
         .map_err(|e| format!("parse inventory for snapshot: {e}"))?;
     db.insert_snapshot(source, None, game_version, &items)
         .map_err(|e| format!("insert snapshot: {e}"))

@@ -13,20 +13,14 @@
 //! loose-key-perms warning - are preserved verbatim from the pre-extraction
 //! binary.)
 
-pub mod auth;
-pub mod catalog;
-pub mod error;
-pub mod inventory;
-pub mod listing;
-pub mod live_top;
-pub mod pending;
-pub mod plan;
-pub mod rivens;
-pub mod poison;
+pub mod acquisition;
+pub mod http;
+pub mod identity;
+pub mod paths;
 pub mod platform;
-pub mod scan;
-pub mod util;
-pub mod ws;
+pub mod poison;
+pub mod time;
+pub mod trading;
 
 // WFM is behind Cloudflare with bot protection. A non-browser UA gets a 1015
 // rate-limit error or a JS challenge before our request ever reaches the API.
@@ -38,10 +32,12 @@ pub mod ws;
 /// [`set_app_identity`] once at startup; before that (tests, tools) the UA
 /// carries wfm-core's own name and version.
 pub fn user_agent() -> String {
-    let (component, version) = APP_IDENTITY
-        .get()
-        .cloned()
-        .unwrap_or_else(|| ("wfm-core".to_string(), env!("CARGO_PKG_VERSION").to_string()));
+    let (component, version) = APP_IDENTITY.get().cloned().unwrap_or_else(|| {
+        (
+            "wfm-core".to_string(),
+            env!("CARGO_PKG_VERSION").to_string(),
+        )
+    });
     wfm_client::user_agent(&component, &version)
 }
 

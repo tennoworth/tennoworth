@@ -1,7 +1,7 @@
 //! Scrape transport: a status-aware GET trait, retry/backoff, and injectable
 //! pacing.
 //!
-//! The converter's [`crate::fetch::Http`] collapses every non-2xx into an
+//! The converter's [`crate::ingest::Http`] collapses every non-2xx into an
 //! error string, which cannot express the 429-vs-5xx-vs-transport distinction
 //! the scrape's fetch path acts on. This trait keeps the status so the
 //! retry loop can reproduce that behavior exactly, and stays fixture-driven so
@@ -31,7 +31,10 @@ pub struct Pacer {
 
 impl Pacer {
     pub fn new(interval: Duration) -> Self {
-        Pacer { interval, last_start: None }
+        Pacer {
+            interval,
+            last_start: None,
+        }
     }
 
     pub fn wait(&mut self, sleeper: &dyn Sleeper) {
@@ -354,7 +357,10 @@ mod tests {
         let sl = RecordingSleeper::new();
         assert_eq!(fetch_json(&http, &sl, URL), Some(json!(1)));
         // 2**0, 2**1 before the 3rd (successful) attempt.
-        assert_eq!(sl.recorded(), vec![Duration::from_secs(1), Duration::from_secs(2)]);
+        assert_eq!(
+            sl.recorded(),
+            vec![Duration::from_secs(1), Duration::from_secs(2)]
+        );
     }
 
     #[test]
@@ -372,7 +378,11 @@ mod tests {
         // 429 sleeps after every attempt, including the last: 1s, 2s, 4s.
         assert_eq!(
             sl.recorded(),
-            vec![Duration::from_secs(1), Duration::from_secs(2), Duration::from_secs(4)]
+            vec![
+                Duration::from_secs(1),
+                Duration::from_secs(2),
+                Duration::from_secs(4)
+            ]
         );
     }
 
@@ -380,7 +390,10 @@ mod tests {
     fn retries_5xx_then_succeeds() {
         let http = ScriptedHttp::new(
             URL,
-            vec![HttpOutcome::HttpError(503), HttpOutcome::Ok(json!({"data": 9}))],
+            vec![
+                HttpOutcome::HttpError(503),
+                HttpOutcome::Ok(json!({"data": 9})),
+            ],
         );
         let sl = RecordingSleeper::new();
         assert_eq!(fetch_json(&http, &sl, URL), Some(json!(9)));
@@ -400,7 +413,10 @@ mod tests {
         let sl = RecordingSleeper::new();
         assert_eq!(fetch_json(&http, &sl, URL), None);
         // Non-429 errors do NOT sleep on the final attempt: 1s, 2s only.
-        assert_eq!(sl.recorded(), vec![Duration::from_secs(1), Duration::from_secs(2)]);
+        assert_eq!(
+            sl.recorded(),
+            vec![Duration::from_secs(1), Duration::from_secs(2)]
+        );
     }
 
     #[test]
@@ -469,7 +485,10 @@ mod tests {
         let http = FixtureScrapeHttp::new(r);
         let sl = RecordingSleeper::new();
         assert_eq!(fetch_json(&http, &sl, URL), Some(json!([1, 2])));
-        assert_eq!(sl.recorded(), vec![Duration::from_secs(1), Duration::from_secs(2)]);
+        assert_eq!(
+            sl.recorded(),
+            vec![Duration::from_secs(1), Duration::from_secs(2)]
+        );
     }
 
     // The scrape pacing (REQUEST_DELAY) must match the shared pacing.json
