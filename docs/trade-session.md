@@ -7,7 +7,9 @@ The approved scope is a dedicated desktop view with Fast Cash, Plat per Trade,
 Clear Inventory, and Max Value. There is no timer or duration prompt. Budget
 defaults to the smaller of eight, the observed allowance, and the listing batch
 cap. An optional platinum target uses credible listing asks, not executable bids.
-Goals and the general recipe graph are separate work.
+Protected copies, one pinned set goal, complete owned sets, and quantity-aware
+buyer comparisons share this workflow. Purchasing missing components and a
+general foundry planner remain outside its scope.
 
 ## Listing foundation
 
@@ -22,8 +24,8 @@ omit it. Update carries an explicitly requested lot for bulk items, replaces
 quantity rather than adding to it, and leaves visibility untouched. Existing
 callers that omit a lot retain the prior PATCH behavior. Item-class eligibility
 and safe quantities are checked in the planner, review, and native submission/
-recovery path. Unknown classes, synthetic sets, refinements, Rivens, and charge/
-star variants are excluded. The initial planner uses singles until an unlocked
+recovery path. Unknown classes, sets without verified recipes, refinements,
+Rivens, and charge/star variants are excluded. The initial planner uses singles until an unlocked
 catalog verifies supported bulk identities.
 
 The current [WFM order contract](https://docs.warframe.market/docs/api/orders/)
@@ -86,6 +88,58 @@ snapshot, account observation, UTC day, safe quantities, supported identities,
 reviewed orders, and total estimated trades before mutations.
 
 ## Selection and review
+
+### Protected quantities and complete sets
+
+The Protected selling plan disclosure is available in Sell, Trade Session,
+Set picks and Baro. Manual quantities reserve unranked copies; a pinned set adds
+its recipe quantities. The global keep-copy floor and existing per-item reserves
+still apply. Leveled copies cannot satisfy a goal for unbuilt components.
+Protection persists locally through `save_protection_plan`. Saving is excluded
+while a listing plan runs. Missing recipes or unreadable protection do not
+silently release copies.
+
+`protection_state` reads native inventory and current WFM sell orders. Set orders
+consume their component quantities, including repeated parts. The frontend uses
+the resulting available counts across all four views. Without current orders,
+listed and available quantities remain unknown, and Connect WFM offers the
+authentication path. The allocation display distinguishes owned, protected,
+listed and available copies. Existing orders are never changed by saving a goal.
+
+Complete sets compete with individual parts for the same component pool. A set
+must have a valid recipe fitting six game slots and a supported, rankless WFM
+identity. It consumes one estimated exchange per set, with no purchase of missing
+parts. Selection and edited review quantities cannot allocate the same copy
+twice. Native submission and recovery also validate projected order totals;
+updating an existing listing replaces its quantity rather than adding to it.
+Quantity/rank edits in My orders revalidate active protection too.
+
+Confirmed trades invalidate the affected scanned quantities until a new scan.
+A reported set sale also invalidates its recipe components. Tray and notification
+ranking read the stored protection requirements, so a goal cannot be bypassed
+by switching recommendation surfaces. These controls do not establish the
+accuracy of a game scan or guarantee that external clients leave orders unchanged.
+
+### Buyer alternatives
+
+Compare buyers opens a comparison for the selected item and quantity without
+editing the listing batch. Rust retains buyer identity, status, platform,
+quantity and lot price from the [WFM top-order response](https://docs.warframe.market/docs/api/orders/).
+Only compatible visible buy orders count; own orders, unsupported variants,
+invalid quantities and duplicate buyer identities are excluded. An unlocked
+account is needed to establish the own-order exclusion.
+
+The response covers at most five buyers. The comparison fills whole lots in
+descending unit-price order, labels uncovered units, and compares the same
+covered quantity against the selected listing reference. This heuristic does
+not claim optimal book coverage. Missing books remain unavailable, empty books
+show zero observed coverage, and observations expire after 60 seconds. Refresh
+rechecks the selected identity. Item/profile links open WFM for deliberate
+follow-up; the app does not send messages or promise a sale time.
+
+The proposed player-pilot targets in the feature plan have not been measured.
+
+### Batch selection
 
 `tests/fixtures/trade-session/modes.json` pins deterministic mode behavior. Fast
 Cash uses liquid singles. Plat per Trade offers each valuable candidate a first

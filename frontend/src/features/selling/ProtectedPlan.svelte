@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Market, OwnedRecord } from '../../contracts/data';
   import type { ProtectionController } from './protection.svelte';
-  let { controller, owned, market }: { controller: ProtectionController; owned: Map<string, OwnedRecord>; market: Market | null } = $props();
+  let { controller, owned, market, onconnect }: { controller: ProtectionController; owned: Map<string, OwnedRecord>; market: Market | null; onconnect(): void } = $props();
   let editing = $state(false);
   let goal = $state('');
   let selected = $state('');
@@ -21,7 +21,9 @@
     if (!selected || quantity == null || !Number.isSafeInteger(quantity) || quantity < 0 || quantity > 1_000_000) {
       formError = 'Choose an item and a whole quantity from 0 to 1000000.'; return;
     }
-    reserves = { ...reserves, [selected]: quantity };
+    const next = { ...reserves };
+    if (quantity === 0) delete next[selected]; else next[selected] = quantity;
+    reserves = next;
     formError = null;
   }
   async function save() {
@@ -36,11 +38,14 @@
   <div class="ui-toolbar">
     <button class="btn" onclick={() => controller.refresh()} disabled={controller.loading || controller.saving}>{controller.loading ? 'Checking allocation…' : 'Refresh allocation'}</button>
     <button class="btn" onclick={edit} disabled={!controller.state || controller.saving || editing}>Edit protection</button>
+    {#if controller.error && !controller.state && !editing}<button class="btn" onclick={edit}>Review a replacement plan</button>{/if}
+    {#if controller.state?.issues.some(issue => issue.includes('Unlock WFM'))}<button class="btn primary" onclick={onconnect}>Connect WFM</button>{/if}
   </div>
   {#if controller.error}<p class="ui-notice" data-tone="bad" role="alert">{controller.error}</p>{/if}
   {#if controller.state?.issues.length}<ul class="ui-notice" data-tone="warn">{#each controller.state.issues as issue}<li>{issue}</li>{/each}</ul>{/if}
   {#if editing}
     <div class="ui-stack">
+      {#if !controller.state}<p class="ui-notice" data-tone="warn">The saved plan could not be read. Saving replaces it; re-enter every item and goal you want to protect.</p>{/if}
       <label class="ui-field">Pinned set goal
         <select class="ui-input" aria-label="Pinned set goal" bind:value={goal} disabled={controller.saving}>
           <option value="">No pinned goal</option>

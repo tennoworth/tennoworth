@@ -6,6 +6,7 @@
   const { desktopNotifications, desktopWfmStatus, desktopWfmLogout, listenForTauriEvent, updateStatus, desktopProtectionState, desktopSaveProtectionPlan } = useDesktopServices();
   import { ProtectionController } from '../features/selling/protection.svelte';
   import ProtectedPlan from '../features/selling/ProtectedPlan.svelte';
+  import { humanError } from '../contracts/errors';
   
   import { onMount, untrack } from 'svelte';
   import Faq from './Faq.svelte';
@@ -759,12 +760,10 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'session'} onclick={() => filters.setView('session')}><span data-shell>Trade Session</span></button>
         
-        {#if setRecos.length > 0}
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'sets'} onclick={() => filters.setView('sets')}>
             <span data-shell>Set picks</span>
             <span data-shell class="badge">{setRecos.length}</span>
           </button>
-        {/if}
         {#if relicPlan.length > 0}
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'relics'} onclick={() => filters.setView('relics')}>
             <span data-shell>Relics</span>
@@ -844,7 +843,13 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     {@render generalBanners()}
 
     {#if ['sell', 'session', 'sets', 'baro'].includes(effectiveView)}
-      <ProtectedPlan controller={protection} owned={inventory.resolved.owned} market={inventory.market} />
+      <ProtectedPlan controller={protection} owned={inventory.resolved.owned} market={inventory.market} onconnect={async () => {
+        try {
+          const status = await desktopWfmStatus();
+          if (status.unlocked) await protection.refresh();
+          else wfmAuthDialogsRef?.open(status.logged_in ? 'needs_unlock' : 'needs_login');
+        } catch (error) { protection.error = humanError(error); }
+      }} />
       {#if protection.error || protection.state?.issues.length}
         <p class="ui-notice" data-tone="warn">Some quantities need review. Open Protected selling plan for details; unavailable copies are excluded.</p>
       {/if}

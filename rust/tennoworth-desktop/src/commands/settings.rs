@@ -1,5 +1,6 @@
 //! Key/value settings and per-item reserve-copy CRUD, plus snapshot history
 //! listing - thin pass-throughs to [`crate::persistence::Db`].
+#![allow(clippy::unreachable, reason = "tauri::command injects unreachable code into async wrappers")]
 
 use tauri::{AppHandle, Manager, State};
 
@@ -9,10 +10,6 @@ use crate::services::wfm_session::{CmdError, WfmSession};
 use std::sync::Arc;
 
 #[tauri::command]
-#[allow(
-    clippy::unreachable,
-    reason = "tauri::command injects unreachable code into async wrappers"
-)]
 pub async fn protection_state(
     app: AppHandle,
     session: State<'_, Arc<WfmSession>>,

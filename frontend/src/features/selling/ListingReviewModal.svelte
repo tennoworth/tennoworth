@@ -752,7 +752,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   button.linkish:disabled { cursor: default; text-decoration: none; color: var(--muted); }
   .scroll {
     overflow: auto;
-    min-height: 0;
+    min-height: 5rem;
     margin: 12px 0;
     border-top: 1px solid var(--border);
     border-bottom: 1px solid var(--border);

@@ -12,9 +12,9 @@ export function createPreview(scenario: string) {
     ['neo_n8_relic', { count: 7, name: 'Neo N8 Relic', type: 'Relic', slug: 'neo_n8_relic', subtype: 'intact', kept_lvl: null, leveled: 0 }],
   ]);
   const sessionSample = scenario === 'session' || scenario.endsWith('-trades') || scenario.startsWith('protection') || scenario === 'session-sets' || scenario.startsWith('buyers');
-  if (sessionSample) {
-    owned.set('arcane_energize', { count: 12, name: 'Arcane Energize', type: 'Arcane', slug: 'arcane_energize', subtype: null, kept_lvl: null, leveled: 0 });
-    owned.set('primed_flow', { count: 6, name: 'Primed Flow', type: 'Mod', slug: 'primed_flow', subtype: null, kept_lvl: null, leveled: 0 });
+  if (scenario !== 'session-sets') {
+    owned.set('arcane_energize', { count: sessionSample ? 24 : 12, name: 'Arcane Energize', type: 'Arcanes', slug: 'arcane_energize', subtype: null, kept_lvl: null, leveled: 0 });
+    owned.set('primed_flow', { count: 6, name: 'Primed Flow', type: 'Mods', slug: 'primed_flow', subtype: null, kept_lvl: null, leveled: 0 });
   }
   if (scenario.startsWith('protection')) {
     owned.set('akbolto_prime_barrel', { count: 5, name: 'Akbolto Prime Barrel', type: 'Misc', slug: 'akbolto_prime_barrel', subtype: null, kept_lvl: null, leveled: 0 });
@@ -45,7 +45,7 @@ export function createPreview(scenario: string) {
   let notifications = empty ? [] : [{ id: 1, category: 'trades', title: 'Sold Pyrana Prime Set for 90p', body: 'Pyrana Prime Set ×1 · Listing update failed; review My Orders. Your completed trade is saved in the Ledger.', target: 'orders', created_at: Math.floor(Date.now() / 1000), read: false, delivery: 'failed' }];
   let notificationPreferences = { popups: true, categories: Object.fromEntries(['trades', 'watches', 'scans', 'baro', 'calendar', 'digest'].map(k => [k, { enabled: true, native: true }])) };
   const responses: Record<string, unknown> = {
-    fetch_orders: { data: { sell: empty ? [] : [
+    fetch_orders: { data: { sell: empty || scenario.startsWith('buyers') ? [] : [
       { id: 'preview-order', platinum: 90, visible: true, quantity: 2, item: { name: 'Pyrana Prime Set', slug: 'pyrana_prime_set' } },
       ...(sessionSample ? [{ id: 'preview-flow', platinum: 26, visible: true, quantity: 5, rank: 0, item: { name: 'Primed Flow', slug: 'primed_flow' } }] : []),
       ...(sessionSample ? [{ id: 'preview-arcane', platinum: 48, perTrade: 6, visible: false, quantity: 12, rank: 0, item: { name: 'Arcane Energize', slug: 'arcane_energize' } }] : []),

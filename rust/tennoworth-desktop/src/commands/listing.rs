@@ -71,6 +71,12 @@ fn validate_protected_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), St
     let unlocked = session
         .require_unlocked()
         .map_err(|_| "Unlock WFM before validating protected quantities.")?;
+    // Invalid rows cannot reach a mutation. Let the executor report its
+    // per-item errors without requiring a live order book for an empty run.
+    if items.iter().all(|item| item.platinum < wfm_core::trading::plan::MIN_PLATINUM
+        || item.platinum > MAX_PLATINUM || item.quantity == 0 || !unlocked.catalog.contains_key(&item.slug)) {
+        return Ok(());
+    }
     let body = list_user_orders(&unlocked).map_err(|e| e.to_string())?;
     std::thread::sleep(std::time::Duration::from_millis(
         wfm_core::trading::listing::SERVE_RATE_LIMIT_MS,

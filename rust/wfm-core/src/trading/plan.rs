@@ -43,7 +43,7 @@ impl Drop for PlanGuard<'_> {
 }
 
 pub const MAX_PLAN_ITEMS: usize = 50;
-const MIN_PLATINUM: u32 = 5;
+pub const MIN_PLATINUM: u32 = 5;
 const SLUG_MISMATCH_GUARD_MULTIPLIER: u32 = 3;
 
 // Maximum items per single in-game trade - six slots per side in Warframe's

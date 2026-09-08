@@ -70,6 +70,16 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   let display = $derived(cap === 0 && retained ? retained : plan);
   let allowance = $derived(sessionData?.allowance);
 
+  function partsAsk(components: Record<string, number>): number | null {
+    let total = 0;
+    for (const [slug, count] of Object.entries(components)) {
+      const ask = parts.find(part => part.slug === slug)?.market.low_sell;
+      if (ask == null || !Number.isFinite(ask) || ask <= 0) return null;
+      total += ask * count;
+    }
+    return total;
+  }
+
   async function refresh() {
     const current = ++request;
     try {
@@ -203,8 +213,9 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
               <tr>
                 <td class="l">{row.name}<small>{row.sellable} confirmed sellable / {row.owned} owned · rank 0 where applicable</small>
                   {#if row.components}
+                    {@const reference = partsAsk(row.components)}
                     <small>Per set: {Object.entries(row.components).map(([slug, count]) => `${parts.find(part => part.slug === slug)?.name ?? slug} ×${count}`).join(', ')}</small>
-                    <small>Parts reference: {Object.entries(row.components).reduce((sum, [slug, count]) => sum + (market?.items[slug]?.low_sell ?? 0) * count, 0)}p · set ask {row.platinum}p</small>
+                    <small>Parts reference: {reference == null ? 'Unknown' : `${Number(reference.toFixed(2))}p`} · set ask {row.platinum}p</small>
                   {/if}
                   <button class="btn ghost xs" onclick={() => buyerSelection = { ...row }}>Compare buyers</button>
                 </td>

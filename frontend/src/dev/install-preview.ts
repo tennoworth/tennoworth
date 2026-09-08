@@ -1,4 +1,7 @@
 import type { UpdateStatus } from '../contracts/update';
+import { sampleAllocation } from './protection-preview';
+import type { ProtectionPlan } from '../contracts/protection';
+import type { OwnedRecord } from '../contracts/data';
 export async function installPreview() {
   const scenario = new URLSearchParams(location.search).get('sample');
   const preview = scenario !== null
@@ -30,8 +33,17 @@ export async function installPreview() {
   // The desktop store keeps settings + the reload-restore snapshot in SQLite
   // via get_setting/set_setting; back those onto localStorage so a seeded
   // browser snapshot round-trips exactly like the real thing.
+  let protectionPlan: ProtectionPlan = { reserves: {}, goal: null };
   const invoke = (cmd: string, args?: Record<string, unknown>) => {
     if (preview && ['protection_state', 'save_protection_plan', 'get_setting', 'set_setting', 'delete_setting', 'fetch_orders', 'list_watches', 'list_trades', 'eelog_status', 'riven_comps', 'wfm_auth_status', 'live_top_prices', 'trade_session_state', 'submit_plan', 'list_notifications', 'mark_notifications_read', 'clear_notifications', 'get_notification_preferences', 'set_notification_preferences', 'test_notification'].includes(cmd)) return preview(cmd, args);
+    if (cmd === 'save_protection_plan') { protectionPlan = JSON.parse(JSON.stringify(args?.plan)) as ProtectionPlan; return Promise.resolve(null); }
+    if (cmd === 'protection_state') {
+      const snapshot = JSON.parse(localStorage.getItem('last-owned') ?? '{"owned":[]}') as { owned: Array<[string, OwnedRecord]> };
+      return Promise.resolve({ plan: protectionPlan, snapshot_id: snapshot.owned.length ? 1 : null,
+        items: Object.fromEntries(snapshot.owned.map(([, row]) => [row.slug, sampleAllocation(row.count, row.leveled ?? 0,
+          Number(localStorage.getItem('reserve-copies') ?? 0), protectionPlan.reserves[row.slug] ?? 0, protectionPlan.goal ? null : 0)])),
+        issues: protectionPlan.goal ? ['Open the protected-plan sample to preview a pinned goal.'] : [] });
+    }
     if (cmd === 'get_setting') return Promise.resolve(localStorage.getItem(String(args?.key)));
     if (cmd === 'set_setting') { localStorage.setItem(String(args?.key), String(args?.value)); return Promise.resolve(null); }
     if (cmd === 'delete_setting') { localStorage.removeItem(String(args?.key)); return Promise.resolve(null); }
