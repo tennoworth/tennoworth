@@ -104,6 +104,25 @@ export interface LiveTop {
   own_bid?: number | null;
   /** Set when this one lookup failed; the row simply has no live data. */
   error?: string | null;
+  buyer_book?: {
+    orders: BuyerOrder[];
+    own_orders_excluded: boolean;
+    observed_at: string | null;
+  } | null;
+}
+
+export interface BuyerOrder {
+  id: string;
+  user_id: string;
+  name: string;
+  user_slug: string;
+  status: string;
+  platform: string;
+  crossplay: boolean;
+  quantity: number;
+  per_trade: number;
+  /** Total price for one complete lot. */
+  platinum: number;
 }
 
 // ---- Riven auction comps (desktop only; WFM v1 auctions search) ----

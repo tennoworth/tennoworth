@@ -2,6 +2,7 @@
   import { useDesktopServices } from '../../ui/desktop-context';
   const { desktopTradeSessionState, desktopLiveTopPrices, listenForTauriEvent } = useDesktopServices();
   import { onMount } from 'svelte';
+  import BuyerAlternatives from './BuyerAlternatives.svelte';
   import { computeResults } from '../../domain/filter-engine';
   import { SESSION_MODES, selectSession, type SessionMode, type SessionRow, type SessionCandidate } from '../../domain/trade-session';
   
@@ -29,6 +30,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   let priceNote = $state<string | null>(null);
   let livePrices = $state<Record<string, Partial<MarketItemEntry>>>({});
   let priceSources = $state<Record<string, string>>({});
+  let buyerSelection = $state<SessionRow | null>(null);
   let disposed = false;
   let request = 0;
   let budgetInitialized = false;
@@ -204,6 +206,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
                     <small>Per set: {Object.entries(row.components).map(([slug, count]) => `${parts.find(part => part.slug === slug)?.name ?? slug} ×${count}`).join(', ')}</small>
                     <small>Parts reference: {Object.entries(row.components).reduce((sum, [slug, count]) => sum + (market?.items[slug]?.low_sell ?? 0) * count, 0)}p · set ask {row.platinum}p</small>
                   {/if}
+                  <button class="btn ghost xs" onclick={() => buyerSelection = { ...row }}>Compare buyers</button>
                 </td>
                 <td>{row.quantity}</td><td>{row.per_trade}</td><td>{row.trades}</td><td>{row.platinum}p<small>{priceSources[row.slug] ?? 'Cached reference'}</small></td>
                 <td>{row.bid == null ? 'Unknown' : `${Number(row.bid.toFixed(2))}p`}</td><td>{row.quantity * row.platinum}p</td><td class="reason">{row.reason}</td>
@@ -222,6 +225,12 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
       </details>
     {/if}
   </section>
+  {#if buyerSelection}
+    {#key buyerSelection}
+      <BuyerAlternatives slug={buyerSelection.slug} name={buyerSelection.name} quantity={buyerSelection.quantity}
+        ask={buyerSelection.platinum} onclose={() => buyerSelection = null} />
+    {/key}
+  {/if}
 </div>
 
 <style>

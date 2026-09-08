@@ -11,7 +11,7 @@ export function createPreview(scenario: string) {
     ['ivara_prime_neuroptics_blueprint', { count: 4, name: 'Ivara Prime Neuroptics Blueprint', type: 'Warframe', slug: 'ivara_prime_neuroptics_blueprint', subtype: null, kept_lvl: null, leveled: 0 }],
     ['neo_n8_relic', { count: 7, name: 'Neo N8 Relic', type: 'Relic', slug: 'neo_n8_relic', subtype: 'intact', kept_lvl: null, leveled: 0 }],
   ]);
-  const sessionSample = scenario === 'session' || scenario.endsWith('-trades') || scenario.startsWith('protection') || scenario === 'session-sets';
+  const sessionSample = scenario === 'session' || scenario.endsWith('-trades') || scenario.startsWith('protection') || scenario === 'session-sets' || scenario.startsWith('buyers');
   if (sessionSample) {
     owned.set('arcane_energize', { count: 12, name: 'Arcane Energize', type: 'Arcane', slug: 'arcane_energize', subtype: null, kept_lvl: null, leveled: 0 });
     owned.set('primed_flow', { count: 6, name: 'Primed Flow', type: 'Mod', slug: 'primed_flow', subtype: null, kept_lvl: null, leveled: 0 });
@@ -112,7 +112,21 @@ export function createPreview(scenario: string) {
       }
       return structuredClone(responses[command]);
     }
-    if (command === 'live_top_prices') return [];
+    if (command === 'live_top_prices') {
+      if (!scenario.startsWith('buyers')) return [];
+      if (scenario === 'buyers-error') throw new Error('Sample buyer lookup failed.');
+      return (args?.queries as Array<{ slug: string; rank?: number; subtype?: string }>).map(query => ({
+        ...query, buys: [12, 10], sells: [15], low_sell: 15, top_buy: 12,
+        buyer_book: {
+          observed_at: new Date(Date.now() - (scenario === 'buyers-stale' ? 90_000 : 0)).toISOString(),
+          own_orders_excluded: scenario !== 'buyers-locked',
+          orders: scenario === 'buyers-empty' ? [] : [
+            { id: 'sample-buyer-a', user_id: 'sample-a', name: 'SampleBuyerA', user_slug: 'sample_buyer_a', status: 'ingame', platform: 'pc', crossplay: true, quantity: 2, per_trade: 1, platinum: 12 },
+            { id: 'sample-buyer-b', user_id: 'sample-b', name: 'SampleBuyerB', user_slug: 'sample_buyer_b', status: 'online', platform: 'pc', crossplay: true, quantity: 3, per_trade: 1, platinum: 10 },
+          ],
+        },
+      }));
+    }
     if (command === 'submit_plan') return { plan_id: 'preview-plan', results: (args?.items as Array<{slug: string}>).map(i => ({
       slug: i.slug, status: 'ok', action: i.slug === 'primed_flow' ? 'updated' : 'created', order_id: `preview-${i.slug}`,
     })) };

@@ -261,6 +261,7 @@ mod tests {
             own_ask: None,
             own_bid: None,
             error: None,
+            buyer_book: None,
         }
     }
     const NOON: i64 = 1_786_881_600; // 2026-08-16T12:00:00Z
