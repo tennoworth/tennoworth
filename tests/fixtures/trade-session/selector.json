@@ -1,0 +1,2186 @@
+[
+  {
+    "name": "selector 0",
+    "request": {
+      "candidates": [
+        {
+          "key": "liquid",
+          "slug": "liquid",
+          "name": "liquid",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 10,
+            "low_sell": 10,
+            "median_now": 10,
+            "vol": 300,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "thin",
+          "slug": "thin",
+          "name": "thin",
+          "owned": 2,
+          "sellable": 2,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 200,
+            "low_sell": 200,
+            "median_now": 200,
+            "vol": 1,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "stack",
+          "slug": "stack",
+          "name": "stack",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 20,
+            "low_sell": 20,
+            "median_now": 20,
+            "vol": 20,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        }
+      ],
+      "mode": "fast",
+      "budget": 8,
+      "target": null
+    },
+    "expected": {
+      "rows": [
+        {
+          "key": "liquid",
+          "slug": "liquid",
+          "name": "liquid",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 10,
+            "low_sell": 10,
+            "median_now": 10,
+            "vol": 300,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 10,
+          "per_trade": 1,
+          "quantity": 3,
+          "trades": 3,
+          "reason": "Liquid singles; match credible asks.",
+          "bid": null
+        },
+        {
+          "key": "stack",
+          "slug": "stack",
+          "name": "stack",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 20,
+            "low_sell": 20,
+            "median_now": 20,
+            "vol": 20,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 20,
+          "per_trade": 1,
+          "quantity": 3,
+          "trades": 3,
+          "reason": "Liquid singles; match credible asks.",
+          "bid": null
+        },
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 100,
+          "per_trade": 1,
+          "quantity": 2,
+          "trades": 2,
+          "reason": "Liquid singles; match credible asks.",
+          "bid": null
+        }
+      ],
+      "trades": 8,
+      "total": 290,
+      "excluded": [
+        {
+          "name": "thin",
+          "reason": "Not enough reported trading volume for this mode."
+        }
+      ],
+      "target": null,
+      "shortfall": null
+    }
+  },
+  {
+    "name": "selector 1",
+    "request": {
+      "candidates": [
+        {
+          "key": "liquid",
+          "slug": "liquid",
+          "name": "liquid",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 10,
+            "low_sell": 10,
+            "median_now": 10,
+            "vol": 300,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "thin",
+          "slug": "thin",
+          "name": "thin",
+          "owned": 2,
+          "sellable": 2,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 200,
+            "low_sell": 200,
+            "median_now": 200,
+            "vol": 1,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "stack",
+          "slug": "stack",
+          "name": "stack",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 20,
+            "low_sell": 20,
+            "median_now": 20,
+            "vol": 20,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        }
+      ],
+      "mode": "per-trade",
+      "budget": 8,
+      "target": null
+    },
+    "expected": {
+      "rows": [
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 100,
+          "per_trade": 6,
+          "quantity": 12,
+          "trades": 2,
+          "reason": "600p per suggested exchange.",
+          "bid": null
+        },
+        {
+          "key": "thin",
+          "slug": "thin",
+          "name": "thin",
+          "owned": 2,
+          "sellable": 2,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 200,
+            "low_sell": 200,
+            "median_now": 200,
+            "vol": 1,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 200,
+          "per_trade": 1,
+          "quantity": 2,
+          "trades": 2,
+          "reason": "200p per suggested exchange. Thin market: patience may be needed.",
+          "bid": null
+        },
+        {
+          "key": "stack",
+          "slug": "stack",
+          "name": "stack",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 20,
+            "low_sell": 20,
+            "median_now": 20,
+            "vol": 20,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 20,
+          "per_trade": 6,
+          "quantity": 6,
+          "trades": 1,
+          "reason": "120p per suggested exchange.",
+          "bid": null
+        },
+        {
+          "key": "liquid",
+          "slug": "liquid",
+          "name": "liquid",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 10,
+            "low_sell": 10,
+            "median_now": 10,
+            "vol": 300,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 10,
+          "per_trade": 1,
+          "quantity": 3,
+          "trades": 3,
+          "reason": "10p per suggested exchange.",
+          "bid": null
+        }
+      ],
+      "trades": 8,
+      "total": 1750,
+      "excluded": [],
+      "target": null,
+      "shortfall": null
+    }
+  },
+  {
+    "name": "selector 2",
+    "request": {
+      "candidates": [
+        {
+          "key": "liquid",
+          "slug": "liquid",
+          "name": "liquid",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 10,
+            "low_sell": 10,
+            "median_now": 10,
+            "vol": 300,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "thin",
+          "slug": "thin",
+          "name": "thin",
+          "owned": 2,
+          "sellable": 2,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 200,
+            "low_sell": 200,
+            "median_now": 200,
+            "vol": 1,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "stack",
+          "slug": "stack",
+          "name": "stack",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 20,
+            "low_sell": 20,
+            "median_now": 20,
+            "vol": 20,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        }
+      ],
+      "mode": "clear",
+      "budget": 8,
+      "target": null
+    },
+    "expected": {
+      "rows": [
+        {
+          "key": "stack",
+          "slug": "stack",
+          "name": "stack",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 20,
+            "low_sell": 20,
+            "median_now": 20,
+            "vol": 20,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 20,
+          "per_trade": 6,
+          "quantity": 6,
+          "trades": 1,
+          "reason": "Clears this safe spare stack.",
+          "bid": null
+        },
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 100,
+          "per_trade": 6,
+          "quantity": 12,
+          "trades": 2,
+          "reason": "Clears this safe spare stack.",
+          "bid": null
+        },
+        {
+          "key": "liquid",
+          "slug": "liquid",
+          "name": "liquid",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 10,
+            "low_sell": 10,
+            "median_now": 10,
+            "vol": 300,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 10,
+          "per_trade": 1,
+          "quantity": 5,
+          "trades": 5,
+          "reason": "Prioritizes listing value within the budget.",
+          "bid": null
+        }
+      ],
+      "trades": 8,
+      "total": 1370,
+      "excluded": [
+        {
+          "name": "thin",
+          "reason": "Not enough reported trading volume for this mode."
+        }
+      ],
+      "target": null,
+      "shortfall": null
+    }
+  },
+  {
+    "name": "selector 3",
+    "request": {
+      "candidates": [
+        {
+          "key": "liquid",
+          "slug": "liquid",
+          "name": "liquid",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 10,
+            "low_sell": 10,
+            "median_now": 10,
+            "vol": 300,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "thin",
+          "slug": "thin",
+          "name": "thin",
+          "owned": 2,
+          "sellable": 2,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 200,
+            "low_sell": 200,
+            "median_now": 200,
+            "vol": 1,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "stack",
+          "slug": "stack",
+          "name": "stack",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 20,
+            "low_sell": 20,
+            "median_now": 20,
+            "vol": 20,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        }
+      ],
+      "mode": "max",
+      "budget": 8,
+      "target": null
+    },
+    "expected": {
+      "rows": [
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 100,
+          "per_trade": 6,
+          "quantity": 12,
+          "trades": 2,
+          "reason": "Prioritizes listing value within the budget.",
+          "bid": null
+        },
+        {
+          "key": "thin",
+          "slug": "thin",
+          "name": "thin",
+          "owned": 2,
+          "sellable": 2,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 200,
+            "low_sell": 200,
+            "median_now": 200,
+            "vol": 1,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 200,
+          "per_trade": 1,
+          "quantity": 2,
+          "trades": 2,
+          "reason": "Prioritizes listing value within the budget. Thin market: patience may be needed.",
+          "bid": null
+        },
+        {
+          "key": "stack",
+          "slug": "stack",
+          "name": "stack",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 20,
+            "low_sell": 20,
+            "median_now": 20,
+            "vol": 20,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 20,
+          "per_trade": 6,
+          "quantity": 6,
+          "trades": 1,
+          "reason": "Prioritizes listing value within the budget.",
+          "bid": null
+        },
+        {
+          "key": "liquid",
+          "slug": "liquid",
+          "name": "liquid",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 10,
+            "low_sell": 10,
+            "median_now": 10,
+            "vol": 300,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 10,
+          "per_trade": 1,
+          "quantity": 3,
+          "trades": 3,
+          "reason": "Prioritizes listing value within the budget.",
+          "bid": null
+        }
+      ],
+      "trades": 8,
+      "total": 1750,
+      "excluded": [],
+      "target": null,
+      "shortfall": null
+    }
+  },
+  {
+    "name": "selector 4",
+    "request": {
+      "candidates": [
+        {
+          "key": "liquid",
+          "slug": "liquid",
+          "name": "liquid",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 10,
+            "low_sell": 10,
+            "median_now": 10,
+            "vol": 300,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "thin",
+          "slug": "thin",
+          "name": "thin",
+          "owned": 2,
+          "sellable": 2,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 200,
+            "low_sell": 200,
+            "median_now": 200,
+            "vol": 1,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "stack",
+          "slug": "stack",
+          "name": "stack",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 20,
+            "low_sell": 20,
+            "median_now": 20,
+            "vol": 20,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        }
+      ],
+      "mode": "max",
+      "budget": 0,
+      "target": null
+    },
+    "expected": {
+      "rows": [],
+      "trades": 0,
+      "total": 0,
+      "excluded": [],
+      "target": null,
+      "shortfall": null
+    }
+  },
+  {
+    "name": "selector 5",
+    "request": {
+      "candidates": [
+        {
+          "key": "liquid",
+          "slug": "liquid",
+          "name": "liquid",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 10,
+            "low_sell": 10,
+            "median_now": 10,
+            "vol": 300,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "thin",
+          "slug": "thin",
+          "name": "thin",
+          "owned": 2,
+          "sellable": 2,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 200,
+            "low_sell": 200,
+            "median_now": 200,
+            "vol": 1,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "stack",
+          "slug": "stack",
+          "name": "stack",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 20,
+            "low_sell": 20,
+            "median_now": 20,
+            "vol": 20,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        }
+      ],
+      "mode": "max",
+      "budget": -1,
+      "target": null
+    },
+    "expected": {
+      "rows": [],
+      "trades": 0,
+      "total": 0,
+      "excluded": [],
+      "target": null,
+      "shortfall": null
+    }
+  },
+  {
+    "name": "selector 6",
+    "request": {
+      "candidates": [
+        {
+          "key": "liquid",
+          "slug": "liquid",
+          "name": "liquid",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 10,
+            "low_sell": 10,
+            "median_now": 10,
+            "vol": 300,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "thin",
+          "slug": "thin",
+          "name": "thin",
+          "owned": 2,
+          "sellable": 2,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 200,
+            "low_sell": 200,
+            "median_now": 200,
+            "vol": 1,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "stack",
+          "slug": "stack",
+          "name": "stack",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 20,
+            "low_sell": 20,
+            "median_now": 20,
+            "vol": 20,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        }
+      ],
+      "mode": "max",
+      "budget": 1.5,
+      "target": null
+    },
+    "expected": {
+      "rows": [],
+      "trades": 0,
+      "total": 0,
+      "excluded": [],
+      "target": null,
+      "shortfall": null
+    }
+  },
+  {
+    "name": "selector 7",
+    "request": {
+      "candidates": [
+        {
+          "key": "liquid",
+          "slug": "liquid",
+          "name": "liquid",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 10,
+            "low_sell": 10,
+            "median_now": 10,
+            "vol": 300,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "thin",
+          "slug": "thin",
+          "name": "thin",
+          "owned": 2,
+          "sellable": 2,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 200,
+            "low_sell": 200,
+            "median_now": 200,
+            "vol": 1,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "stack",
+          "slug": "stack",
+          "name": "stack",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 20,
+            "low_sell": 20,
+            "median_now": 20,
+            "vol": 20,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        }
+      ],
+      "mode": "max",
+      "budget": 51,
+      "target": null
+    },
+    "expected": {
+      "rows": [
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 100,
+          "per_trade": 6,
+          "quantity": 12,
+          "trades": 2,
+          "reason": "Prioritizes listing value within the budget.",
+          "bid": null
+        },
+        {
+          "key": "thin",
+          "slug": "thin",
+          "name": "thin",
+          "owned": 2,
+          "sellable": 2,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 200,
+            "low_sell": 200,
+            "median_now": 200,
+            "vol": 1,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 200,
+          "per_trade": 1,
+          "quantity": 2,
+          "trades": 2,
+          "reason": "Prioritizes listing value within the budget. Thin market: patience may be needed.",
+          "bid": null
+        },
+        {
+          "key": "stack",
+          "slug": "stack",
+          "name": "stack",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 20,
+            "low_sell": 20,
+            "median_now": 20,
+            "vol": 20,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 20,
+          "per_trade": 6,
+          "quantity": 6,
+          "trades": 1,
+          "reason": "Prioritizes listing value within the budget.",
+          "bid": null
+        },
+        {
+          "key": "liquid",
+          "slug": "liquid",
+          "name": "liquid",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 10,
+            "low_sell": 10,
+            "median_now": 10,
+            "vol": 300,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 10,
+          "per_trade": 1,
+          "quantity": 6,
+          "trades": 6,
+          "reason": "Prioritizes listing value within the budget.",
+          "bid": null
+        }
+      ],
+      "trades": 11,
+      "total": 1780,
+      "excluded": [],
+      "target": null,
+      "shortfall": null
+    }
+  },
+  {
+    "name": "selector 8",
+    "request": {
+      "candidates": [
+        {
+          "key": "liquid",
+          "slug": "liquid",
+          "name": "liquid",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 10,
+            "low_sell": 10,
+            "median_now": 10,
+            "vol": 300,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "thin",
+          "slug": "thin",
+          "name": "thin",
+          "owned": 2,
+          "sellable": 2,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 200,
+            "low_sell": 200,
+            "median_now": 200,
+            "vol": 1,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "stack",
+          "slug": "stack",
+          "name": "stack",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 20,
+            "low_sell": 20,
+            "median_now": 20,
+            "vol": 20,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        }
+      ],
+      "mode": "max",
+      "budget": 1,
+      "target": 500
+    },
+    "expected": {
+      "rows": [
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 100,
+          "per_trade": 6,
+          "quantity": 6,
+          "trades": 1,
+          "reason": "Prioritizes listing value within the budget.",
+          "bid": null
+        }
+      ],
+      "trades": 1,
+      "total": 600,
+      "excluded": [],
+      "target": 500,
+      "shortfall": 0
+    }
+  },
+  {
+    "name": "selector 9",
+    "request": {
+      "candidates": [
+        {
+          "key": "liquid",
+          "slug": "liquid",
+          "name": "liquid",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 10,
+            "low_sell": 10,
+            "median_now": 10,
+            "vol": 300,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "thin",
+          "slug": "thin",
+          "name": "thin",
+          "owned": 2,
+          "sellable": 2,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 200,
+            "low_sell": 200,
+            "median_now": 200,
+            "vol": 1,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "stack",
+          "slug": "stack",
+          "name": "stack",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 20,
+            "low_sell": 20,
+            "median_now": 20,
+            "vol": 20,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        }
+      ],
+      "mode": "max",
+      "budget": 1,
+      "target": 1000
+    },
+    "expected": {
+      "rows": [
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 100,
+          "per_trade": 6,
+          "quantity": 6,
+          "trades": 1,
+          "reason": "Prioritizes listing value within the budget.",
+          "bid": null
+        }
+      ],
+      "trades": 1,
+      "total": 600,
+      "excluded": [],
+      "target": 1000,
+      "shortfall": 400
+    }
+  },
+  {
+    "name": "selector 10",
+    "request": {
+      "candidates": [
+        {
+          "key": "liquid",
+          "slug": "liquid",
+          "name": "liquid",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 10,
+            "low_sell": 10,
+            "median_now": 10,
+            "vol": 300,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "thin",
+          "slug": "thin",
+          "name": "thin",
+          "owned": 2,
+          "sellable": 2,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 200,
+            "low_sell": 200,
+            "median_now": 200,
+            "vol": 1,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "stack",
+          "slug": "stack",
+          "name": "stack",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 20,
+            "low_sell": 20,
+            "median_now": 20,
+            "vol": 20,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        }
+      ],
+      "mode": "max",
+      "budget": 1,
+      "target": -1
+    },
+    "expected": {
+      "rows": [
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 100,
+          "per_trade": 6,
+          "quantity": 6,
+          "trades": 1,
+          "reason": "Prioritizes listing value within the budget.",
+          "bid": null
+        }
+      ],
+      "trades": 1,
+      "total": 600,
+      "excluded": [],
+      "target": null,
+      "shortfall": null
+    }
+  },
+  {
+    "name": "selector 11",
+    "request": {
+      "candidates": [
+        {
+          "key": "liquid",
+          "slug": "liquid",
+          "name": "liquid",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 10,
+            "low_sell": 10,
+            "median_now": 10,
+            "vol": 300,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "thin",
+          "slug": "thin",
+          "name": "thin",
+          "owned": 2,
+          "sellable": 2,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 200,
+            "low_sell": 200,
+            "median_now": 200,
+            "vol": 1,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "stack",
+          "slug": "stack",
+          "name": "stack",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 20,
+            "low_sell": 20,
+            "median_now": 20,
+            "vol": 20,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        }
+      ],
+      "mode": "max",
+      "budget": 1,
+      "target": 0
+    },
+    "expected": {
+      "rows": [
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 100,
+          "per_trade": 6,
+          "quantity": 6,
+          "trades": 1,
+          "reason": "Prioritizes listing value within the budget.",
+          "bid": null
+        }
+      ],
+      "trades": 1,
+      "total": 600,
+      "excluded": [],
+      "target": null,
+      "shortfall": null
+    }
+  },
+  {
+    "name": "selector 12",
+    "request": {
+      "candidates": [
+        {
+          "key": "liquid",
+          "slug": "liquid",
+          "name": "liquid",
+          "owned": 6,
+          "sellable": 0,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 10,
+            "low_sell": 10,
+            "median_now": 10,
+            "vol": 300,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 3,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": true,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "thin",
+          "slug": "thin",
+          "name": "thin",
+          "owned": 2,
+          "sellable": 2,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 200,
+            "low_sell": 200,
+            "median_now": 200,
+            "vol": 1,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "subtype": "radiant"
+        },
+        {
+          "key": "stack",
+          "slug": "stack",
+          "name": "stack",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 20,
+            "low_sell": 20,
+            "median_now": 20,
+            "vol": 20,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "stack",
+          "slug": "stack",
+          "name": "stack",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 20,
+            "low_sell": 20,
+            "median_now": 20,
+            "vol": 20,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        }
+      ],
+      "mode": "max",
+      "budget": 8,
+      "target": null
+    },
+    "expected": {
+      "rows": [
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 3,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": true,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 100,
+          "per_trade": 3,
+          "quantity": 3,
+          "trades": 1,
+          "reason": "Prioritizes listing value within the budget. Hold advice lowers priority; protected copies remain excluded.",
+          "bid": null
+        }
+      ],
+      "trades": 1,
+      "total": 300,
+      "excluded": [
+        {
+          "name": "liquid",
+          "reason": "No confirmed sellable copies after protection and trade checks."
+        },
+        {
+          "name": "thin",
+          "reason": "This item identity is not supported in Trade Session yet."
+        },
+        {
+          "name": "stack",
+          "reason": "This item identity is not supported in Trade Session yet."
+        },
+        {
+          "name": "stack",
+          "reason": "This item identity is not supported in Trade Session yet."
+        }
+      ],
+      "target": null,
+      "shortfall": null
+    }
+  },
+  {
+    "name": "selector 13",
+    "request": {
+      "candidates": [
+        {
+          "key": "liquid",
+          "slug": "unsupported_set",
+          "name": "liquid",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 10,
+            "low_sell": 10,
+            "median_now": 10,
+            "vol": 300,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "supported": false
+        },
+        {
+          "key": "thin",
+          "slug": "thin",
+          "name": "thin",
+          "owned": 2,
+          "sellable": 2,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {}
+        },
+        {
+          "key": "stack",
+          "slug": "stack",
+          "name": "stack",
+          "owned": 1,
+          "sellable": 2,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 20,
+            "low_sell": 20,
+            "median_now": 20,
+            "vol": 20,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        }
+      ],
+      "mode": "fast",
+      "budget": 8,
+      "target": null
+    },
+    "expected": {
+      "rows": [],
+      "trades": 0,
+      "total": 0,
+      "excluded": [
+        {
+          "name": "liquid",
+          "reason": "This item identity is not supported in Trade Session yet."
+        },
+        {
+          "name": "valuable",
+          "reason": "This item identity is not supported in Trade Session yet."
+        },
+        {
+          "name": "thin",
+          "reason": "No credible price within the listing limits."
+        },
+        {
+          "name": "stack",
+          "reason": "No confirmed sellable copies after protection and trade checks."
+        }
+      ],
+      "target": null,
+      "shortfall": null
+    }
+  },
+  {
+    "name": "selector 14",
+    "request": {
+      "candidates": [
+        {
+          "key": "thin",
+          "slug": "thin",
+          "name": "thin",
+          "owned": 2,
+          "sellable": 2,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 200,
+            "low_sell": 2000,
+            "median_now": 20,
+            "vol": 1,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        }
+      ],
+      "mode": "max",
+      "budget": 1,
+      "target": null
+    },
+    "expected": {
+      "rows": [
+        {
+          "key": "thin",
+          "slug": "thin",
+          "name": "thin",
+          "owned": 2,
+          "sellable": 2,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 200,
+            "low_sell": 2000,
+            "median_now": 20,
+            "vol": 1,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 30,
+          "per_trade": 1,
+          "quantity": 1,
+          "trades": 1,
+          "reason": "Prioritizes listing value within the budget. Thin market: patience may be needed.",
+          "bid": null
+        }
+      ],
+      "trades": 1,
+      "total": 30,
+      "excluded": [],
+      "target": null,
+      "shortfall": null
+    }
+  }
+]

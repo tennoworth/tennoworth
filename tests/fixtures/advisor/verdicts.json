@@ -1,0 +1,734 @@
+[
+  {
+    "name": "fresh wins",
+    "request": {
+      "slugs": [
+        "example_prime_part",
+        "example_prime_set",
+        "unknown",
+        "example_prime_part"
+      ],
+      "market": {
+        "items": {
+          "example_prime_part": {
+            "median_now": 120
+          }
+        },
+        "set_to_parts": {
+          "example_prime_set": {
+            "parts": [
+              {
+                "slug": "example_prime_part"
+              }
+            ]
+          }
+        },
+        "calendar": {
+          "primes": {
+            "example_prime_set": {
+              "released": "2026-08-01",
+              "vaulted": true,
+              "vault_date": "2026-08-10"
+            }
+          },
+          "resurgence_current": null
+        }
+      },
+      "history": {
+        "start": "2026-01-01",
+        "days": 30,
+        "items": {
+          "example_prime_part": {
+            "median": [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80],
+            "volume": [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+          }
+        }
+      },
+      "now_ms": 1787184000000
+    },
+    "expected": {
+      "example_prime_part": {
+        "advice": "sell_now",
+        "reasons": [
+          "released 19 d ago - new-prime prices decay toward a floor over the first weeks",
+          "30 d move -20%"
+        ]
+      },
+      "example_prime_set": {
+        "advice": "sell_now",
+        "reasons": [
+          "released 19 d ago - new-prime prices decay toward a floor over the first weeks"
+        ]
+      }
+    }
+  },
+  {
+    "name": "release boundary",
+    "request": {
+      "slugs": [
+        "example_prime_part",
+        "example_prime_set",
+        "unknown",
+        "example_prime_part"
+      ],
+      "market": {
+        "items": {
+          "example_prime_part": {
+            "median_now": 120
+          }
+        },
+        "set_to_parts": {
+          "example_prime_set": {
+            "parts": [
+              {
+                "slug": "example_prime_part"
+              }
+            ]
+          }
+        },
+        "calendar": {
+          "primes": {
+            "example_prime_set": {
+              "released": "2026-07-06",
+              "vaulted": false
+            }
+          },
+          "resurgence_current": null
+        }
+      },
+      "history": null,
+      "now_ms": 1787184000000
+    },
+    "expected": {
+      "example_prime_part": {
+        "advice": "neutral",
+        "reasons": [
+          "not vaulted"
+        ]
+      },
+      "example_prime_set": {
+        "advice": "neutral",
+        "reasons": [
+          "not vaulted"
+        ]
+      }
+    }
+  },
+  {
+    "name": "recent vault calendar only",
+    "request": {
+      "slugs": [
+        "example_prime_part",
+        "example_prime_set",
+        "unknown",
+        "example_prime_part"
+      ],
+      "market": {
+        "items": {
+          "example_prime_part": {
+            "median_now": 120
+          }
+        },
+        "set_to_parts": {
+          "example_prime_set": {
+            "parts": [
+              {
+                "slug": "example_prime_part"
+              }
+            ]
+          }
+        },
+        "calendar": {
+          "primes": {
+            "example_prime_set": {
+              "released": "2024-01-01",
+              "vaulted": true,
+              "vault_date": "2026-06-10"
+            }
+          },
+          "resurgence_current": null
+        }
+      },
+      "history": null,
+      "now_ms": 1787184000000
+    },
+    "expected": {
+      "example_prime_part": {
+        "advice": "hold",
+        "reasons": [
+          "vaulted 71 d ago - the post-vault ramp typically runs for months"
+        ]
+      },
+      "example_prime_set": {
+        "advice": "hold",
+        "reasons": [
+          "vaulted 71 d ago - the post-vault ramp typically runs for months"
+        ]
+      }
+    }
+  },
+  {
+    "name": "post vault upper median",
+    "request": {
+      "slugs": [
+        "example_prime_part",
+        "example_prime_set",
+        "unknown",
+        "example_prime_part"
+      ],
+      "market": {
+        "items": {
+          "example_prime_part": {
+            "median_now": 120
+          }
+        },
+        "set_to_parts": {
+          "example_prime_set": {
+            "parts": [
+              {
+                "slug": "example_prime_part"
+              }
+            ]
+          }
+        },
+        "calendar": {
+          "primes": {
+            "example_prime_set": {
+              "released": "2024-01-01",
+              "vaulted": true,
+              "vault_date": "2026-06-10"
+            }
+          },
+          "resurgence_current": null
+        }
+      },
+      "history": {
+        "start": "2026-01-01",
+        "days": 200,
+        "items": {
+          "example_prime_part": {
+            "median": [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
+            "volume": [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+          }
+        }
+      },
+      "now_ms": 1787184000000
+    },
+    "expected": {
+      "example_prime_part": {
+        "advice": "hold",
+        "reasons": [
+          "vaulted 71 d ago - the post-vault ramp typically runs for months",
+          "now ×1.2 its pre-vault price",
+          "30 d move 0%"
+        ]
+      },
+      "example_prime_set": {
+        "advice": "hold",
+        "reasons": [
+          "vaulted 71 d ago - the post-vault ramp typically runs for months"
+        ]
+      }
+    }
+  },
+  {
+    "name": "rounding half tie",
+    "request": {
+      "slugs": [
+        "example_prime_part",
+        "example_prime_set",
+        "unknown",
+        "example_prime_part"
+      ],
+      "market": {
+        "items": {
+          "example_prime_part": {
+            "median_now": 125
+          }
+        },
+        "set_to_parts": {
+          "example_prime_set": {
+            "parts": [
+              {
+                "slug": "example_prime_part"
+              }
+            ]
+          }
+        },
+        "calendar": {
+          "primes": {
+            "example_prime_set": {
+              "released": "2024-01-01",
+              "vaulted": true,
+              "vault_date": "2026-06-10"
+            }
+          },
+          "resurgence_current": null
+        }
+      },
+      "history": {
+        "start": "2026-01-01",
+        "days": 200,
+        "items": {
+          "example_prime_part": {
+            "median": [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
+            "volume": [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+          }
+        }
+      },
+      "now_ms": 1787184000000
+    },
+    "expected": {
+      "example_prime_part": {
+        "advice": "hold",
+        "reasons": [
+          "vaulted 71 d ago - the post-vault ramp typically runs for months",
+          "now ×1.3 its pre-vault price",
+          "30 d move 0%"
+        ]
+      },
+      "example_prime_set": {
+        "advice": "hold",
+        "reasons": [
+          "vaulted 71 d ago - the post-vault ramp typically runs for months"
+        ]
+      }
+    }
+  },
+  {
+    "name": "ramp reached",
+    "request": {
+      "slugs": [
+        "example_prime_part",
+        "example_prime_set",
+        "unknown",
+        "example_prime_part"
+      ],
+      "market": {
+        "items": {
+          "example_prime_part": {
+            "median_now": 160
+          }
+        },
+        "set_to_parts": {
+          "example_prime_set": {
+            "parts": [
+              {
+                "slug": "example_prime_part"
+              }
+            ]
+          }
+        },
+        "calendar": {
+          "primes": {
+            "example_prime_set": {
+              "released": "2024-01-01",
+              "vaulted": true,
+              "vault_date": "2026-06-10"
+            }
+          },
+          "resurgence_current": null
+        }
+      },
+      "history": {
+        "start": "2026-01-01",
+        "days": 200,
+        "items": {
+          "example_prime_part": {
+            "median": [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
+            "volume": [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+          }
+        }
+      },
+      "now_ms": 1787184000000
+    },
+    "expected": {
+      "example_prime_part": {
+        "advice": "neutral",
+        "reasons": [
+          "vaulted 71 d ago",
+          "at 160% of its 1-year high",
+          "30 d move 0%"
+        ]
+      },
+      "example_prime_set": {
+        "advice": "hold",
+        "reasons": [
+          "vaulted 71 d ago - the post-vault ramp typically runs for months"
+        ]
+      }
+    }
+  },
+  {
+    "name": "near high",
+    "request": {
+      "slugs": [
+        "example_prime_part",
+        "example_prime_set",
+        "unknown",
+        "example_prime_part"
+      ],
+      "market": {
+        "items": {
+          "example_prime_part": {
+            "median_now": 190
+          }
+        },
+        "set_to_parts": {
+          "example_prime_set": {
+            "parts": [
+              {
+                "slug": "example_prime_part"
+              }
+            ]
+          }
+        },
+        "calendar": {
+          "primes": {
+            "example_prime_set": {
+              "released": "2024-01-01",
+              "vaulted": true,
+              "vault_date": "2024-06-10"
+            }
+          },
+          "resurgence_current": null
+        }
+      },
+      "history": {
+        "start": "2026-01-01",
+        "days": 200,
+        "items": {
+          "example_prime_part": {
+            "median": [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200],
+            "volume": [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+          }
+        }
+      },
+      "now_ms": 1787184000000
+    },
+    "expected": {
+      "example_prime_part": {
+        "advice": "sell_now",
+        "reasons": [
+          "at 95% of its 1-year high (200p)",
+          "30 d move 0%"
+        ]
+      },
+      "example_prime_set": {
+        "advice": "neutral",
+        "reasons": [
+          "vaulted 801 d ago"
+        ]
+      }
+    }
+  },
+  {
+    "name": "soon",
+    "request": {
+      "slugs": [
+        "example_prime_part",
+        "example_prime_set",
+        "unknown",
+        "example_prime_part"
+      ],
+      "market": {
+        "items": {
+          "example_prime_part": {
+            "median_now": 120
+          }
+        },
+        "set_to_parts": {
+          "example_prime_set": {
+            "parts": [
+              {
+                "slug": "example_prime_part"
+              }
+            ]
+          }
+        },
+        "calendar": {
+          "primes": {
+            "example_prime_set": {
+              "released": "2024-01-01",
+              "vaulted": false,
+              "est_vault_date": "2026-09-01"
+            }
+          },
+          "resurgence_current": null
+        }
+      },
+      "history": null,
+      "now_ms": 1787184000000
+    },
+    "expected": {
+      "example_prime_part": {
+        "advice": "hold",
+        "reasons": [
+          "vault expected ~2026-09-01 (12 d) - prices typically climb once relics stop dropping"
+        ]
+      },
+      "example_prime_set": {
+        "advice": "hold",
+        "reasons": [
+          "vault expected ~2026-09-01 (12 d) - prices typically climb once relics stop dropping"
+        ]
+      }
+    }
+  },
+  {
+    "name": "invalid dates",
+    "request": {
+      "slugs": [
+        "example_prime_part",
+        "example_prime_set",
+        "unknown",
+        "example_prime_part"
+      ],
+      "market": {
+        "items": {
+          "example_prime_part": {
+            "median_now": 120
+          }
+        },
+        "set_to_parts": {
+          "example_prime_set": {
+            "parts": [
+              {
+                "slug": "example_prime_part"
+              }
+            ]
+          }
+        },
+        "calendar": {
+          "primes": {
+            "example_prime_set": {
+              "released": "nonsense",
+              "vaulted": true,
+              "vault_date": "nonsense"
+            }
+          },
+          "resurgence_current": null
+        }
+      },
+      "history": null,
+      "now_ms": 1787184000000
+    },
+    "expected": {
+      "example_prime_part": {
+        "advice": "neutral",
+        "reasons": [
+          "not vaulted"
+        ]
+      },
+      "example_prime_set": {
+        "advice": "neutral",
+        "reasons": [
+          "not vaulted"
+        ]
+      }
+    }
+  },
+  {
+    "name": "resurgence 80",
+    "request": {
+      "slugs": [
+        "example_prime_part",
+        "example_prime_set",
+        "unknown",
+        "example_prime_part"
+      ],
+      "market": {
+        "items": {
+          "example_prime_part": {
+            "median_now": 120
+          }
+        },
+        "set_to_parts": {
+          "example_prime_set": {
+            "parts": [
+              {
+                "slug": "example_prime_part"
+              }
+            ]
+          }
+        },
+        "calendar": {
+          "primes": {
+            "example_prime_set": {
+              "released": "2024-01-01",
+              "vaulted": true,
+              "vault_date": "2025-06-10"
+            }
+          },
+          "resurgence_current": {
+            "frames": [
+              "example_prime_set"
+            ],
+            "from": "2026-08-01T00:00:00Z",
+            "to": "2026-09-01T18:00:00+02:00"
+          }
+        }
+      },
+      "history": {
+        "start": "2026-01-01",
+        "days": 30,
+        "items": {
+          "example_prime_part": {
+            "median": [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80, 80],
+            "volume": [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+          }
+        }
+      },
+      "now_ms": 1787184000000
+    },
+    "expected": {
+      "example_prime_part": {
+        "advice": "sell_now",
+        "reasons": [
+          "Prime Resurgence is reprinting it until 2026-09-01",
+          "price falling: -20% over 30 d"
+        ]
+      },
+      "example_prime_set": {
+        "advice": "neutral",
+        "reasons": [
+          "Prime Resurgence is reprinting it until 2026-09-01",
+          "no price series yet"
+        ]
+      }
+    }
+  },
+  {
+    "name": "resurgence 100",
+    "request": {
+      "slugs": [
+        "example_prime_part",
+        "example_prime_set",
+        "unknown",
+        "example_prime_part"
+      ],
+      "market": {
+        "items": {
+          "example_prime_part": {
+            "median_now": 120
+          }
+        },
+        "set_to_parts": {
+          "example_prime_set": {
+            "parts": [
+              {
+                "slug": "example_prime_part"
+              }
+            ]
+          }
+        },
+        "calendar": {
+          "primes": {
+            "example_prime_set": {
+              "released": "2024-01-01",
+              "vaulted": true,
+              "vault_date": "2025-06-10"
+            }
+          },
+          "resurgence_current": {
+            "frames": [
+              "example_prime_set"
+            ],
+            "from": "2026-08-01T00:00:00Z",
+            "to": "2026-09-01T18:00:00+02:00"
+          }
+        }
+      },
+      "history": {
+        "start": "2026-01-01",
+        "days": 30,
+        "items": {
+          "example_prime_part": {
+            "median": [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
+            "volume": [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3]
+          }
+        }
+      },
+      "now_ms": 1787184000000
+    },
+    "expected": {
+      "example_prime_part": {
+        "advice": "neutral",
+        "reasons": [
+          "Prime Resurgence is reprinting it until 2026-09-01",
+          "price holding so far (0% / 30 d)"
+        ]
+      },
+      "example_prime_set": {
+        "advice": "neutral",
+        "reasons": [
+          "Prime Resurgence is reprinting it until 2026-09-01",
+          "no price series yet"
+        ]
+      }
+    }
+  },
+  {
+    "name": "invalid volume does not hide valid medians",
+    "request": {
+      "slugs": [
+        "example_prime_part",
+        "example_prime_set",
+        "unknown",
+        "example_prime_part"
+      ],
+      "market": {
+        "items": {
+          "example_prime_part": {
+            "median_now": 190
+          }
+        },
+        "set_to_parts": {
+          "example_prime_set": {
+            "parts": [
+              {
+                "slug": "example_prime_part"
+              }
+            ]
+          }
+        },
+        "calendar": {
+          "primes": {
+            "example_prime_set": {
+              "released": "2024-01-01",
+              "vaulted": true,
+              "vault_date": "2024-06-10"
+            }
+          },
+          "resurgence_current": null
+        }
+      },
+      "history": {
+        "start": "2026-01-01",
+        "days": 200,
+        "items": {
+          "example_prime_part": {
+            "median": [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200, 200],
+            "volume": "unavailable"
+          }
+        }
+      },
+      "now_ms": 1787184000000
+    },
+    "expected": {
+      "example_prime_part": {
+        "advice": "sell_now",
+        "reasons": [
+          "at 95% of its 1-year high (200p)",
+          "30 d move 0%"
+        ]
+      },
+      "example_prime_set": {
+        "advice": "neutral",
+        "reasons": [
+          "vaulted 801 d ago"
+        ]
+      }
+    }
+  }
+]
