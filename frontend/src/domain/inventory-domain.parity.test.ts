@@ -18,3 +18,8 @@ describe('inventory domain shared fixtures', () => {
     expect(results.map(result => Object.fromEntries(Object.keys(row.expected[0] ?? {}).map(field => [field, result[field as keyof typeof result]])))).toEqual(row.expected);
   });
 });
+
+it('never scores a missing native fact through the preview implementation', () => {
+  const row = scoring.cases[0];
+  expect(computeResults(new Map(row.request.owned as Array<[string, OwnedRecord]>), row.request.market as unknown as Market, filters, 0, undefined, new Map())).toEqual([]);
+});

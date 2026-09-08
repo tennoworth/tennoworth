@@ -38,7 +38,7 @@ rust/
   wfm-scrape/src/
     ingest/                  upstream transport and source-specific adapters
     pipeline/                build orchestration, root discovery, publication
-  market-domain/             shared inventory and sell-row calculations
+  market-domain/             inventory, scoring, advisor and planning decisions
   market-math/               pure shared heuristics
   wfm-client/                shared request policy and transport primitives
 scripts/                     release, CSP, probe and deployment checks
@@ -117,8 +117,9 @@ capture must not implicitly clear or replace that identity.
 acquisition and trading modules share narrowly named HTTP, identity, path, and
 time helpers. `wfm-client` shares transport primitives, not an abstraction that
 combines anonymous scraping with authenticated order mutation. `market-math`
-has no I/O or clock dependency. The sixth crate, `market-domain`, isolates
-reusable calculations and type exports from Tauri and the network core.
+has no I/O or clock dependency. `market-domain` is the sixth workspace member:
+it isolates decision contracts and computations from both Tauri and the network
+core, so shared fixtures and contract generation can run without the GUI stack.
 
 ## Data and failure boundaries
 
@@ -159,3 +160,40 @@ for promotion and rollback; a source merge is not permission to migrate a host.
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md) for contribution tiers and executable
 setup/check commands.
+
+## Native decision boundary
+
+Desktop inventory normalization, sell-row facts, Trade Session selection,
+calendar advice and relic/set/ducat/build plans run through `evaluate_domain`.
+The registry in `rust/market-domain/src/dispatch.rs` defines a tagged request and
+matching response together. The command computes on a blocking worker and never
+executes orders; existing listing validation, account state and recovery remain
+the authority for mutations.
+
+Frontend adapters serialize Maps and optional fields explicitly. Feature
+controllers guard response generations, clear obsolete evidence, expose pending
+or failed calculations, and preserve local editing state. UI filtering stays
+synchronous over native facts. Market-only browsing and development previews
+retain fixture-gated TypeScript counterparts; these are not production desktop
+fallbacks when native computation fails.
+
+`frontend/src/contracts/generated/` contains Rust-derived declarations. The
+ordinary Rust tests compare them against current types. To update intentionally:
+
+```sh
+cd rust
+TENNOWORTH_UPDATE_BINDINGS=1 cargo test -p market-domain domain_bindings_match_rust
+TENNOWORTH_UPDATE_BINDINGS=1 cargo test -p tennoworth-desktop desktop_bindings_match_rust
+```
+
+The desktop binding pilot covers scan-report results, command errors and watch
+notification payloads/event names. Existing commands outside that pilot keep
+their current adapters; all newly migrated calculations use the generated
+request/response registry. Generation preserves serialized optionality and field
+names; it does not replace input validation. IPC uses JSON numbers, so large
+integer inputs are bounded rather than represented as JavaScript bigint.
+
+The real desktop smoke probe exercises all nine domain operations against shared
+fixtures before completing its existing persistence/authentication checks. A
+successful browser preview proves rendering and interaction behavior; it does
+not establish that native IPC registration or serialization works.

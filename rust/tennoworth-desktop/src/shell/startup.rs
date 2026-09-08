@@ -78,6 +78,7 @@ pub(crate) fn run() {
         .manage(Arc::new(WfmSession::new()))
         .invoke_handler(tauri::generate_handler![
             health,
+            commands::domain::evaluate_domain,
             commands::inventory::scan_inventory,
             commands::inventory::import_snapshot,
             commands::settings::get_setting,

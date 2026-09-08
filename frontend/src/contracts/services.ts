@@ -1,8 +1,26 @@
 import type { DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences } from './desktop';
 import type { UpdateStatus } from './update';
 import type { EncryptedBlob } from './encrypted-snapshot';
+import type { Inventory, Market, OwnedRecord } from './data';
+import type { Catalogs } from '../domain/resolver';
+import type { Verdict } from '../domain/advisor';
+import type { SessionCandidate, selectSession } from '../domain/trade-session';
+import type { BuildPath, BuildPlan, RecipeEntry, SetPart } from '../domain/build-cost';
+import type { DucatPlan, ScrapCandidate } from '../domain/ducat-plan';
+import type { RelicPlanEntry } from '../domain/relic-planner';
+import type { SetReco } from '../domain/set-recos';
+import type { AdvisorRequest, HistoryRequest, HistoryAnalysis, SessionRequest, ScoredInventoryFact } from './generated/domain';
 export const DESKTOP_CONTEXT = 'tennoworth.desktop';
 export interface DesktopServices {
+  normalizeInventoryNative(data: Inventory, catalogs: Catalogs, market: Market): Promise<{ owned: Map<string, OwnedRecord>; unresolved: Record<string, number>; flatCount: number }>;
+  scoreInventoryNative(owned: Map<string, OwnedRecord>, market: Market, reserveCopies: number, sparesOnly: boolean): Promise<Map<string, ScoredInventoryFact>>;
+  evaluateAdvisor(request: AdvisorRequest): Promise<Record<string, Verdict>>;
+  evaluateTradeSession(request: Omit<SessionRequest, 'candidates'> & { candidates: SessionCandidate[] }): Promise<ReturnType<typeof selectSession>>;
+  evaluateHistory(request: HistoryRequest): Promise<HistoryAnalysis>;
+  relicPlan(owned: Map<string, OwnedRecord> | null, market: Market | null, limit?: number): Promise<RelicPlanEntry[]>;
+  setRecos(owned: Map<string, OwnedRecord> | null, market: Market | null, limit?: number): Promise<SetReco[]>;
+  ducatPlan(owned: Map<string, OwnedRecord> | null, market: Market | null, target: number, keepAbove?: number): Promise<{ candidates: ScrapCandidate[]; plan: DucatPlan }>;
+  buildPlan(setSlug: string, setName: string, parts: SetPart[], market: Market | null, owned: Map<string, OwnedRecord> | null, recipes: Record<string, RecipeEntry> | null | undefined): Promise<{ plan: BuildPlan; cheapest: BuildPath | null }>;
   updateStatus(): Promise<UpdateStatus>;
   checkUpdate(): Promise<UpdateStatus>;
   installUpdate(): Promise<void>;

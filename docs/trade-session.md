@@ -104,6 +104,22 @@ does not provide an atomic compare-and-patch contract here: revalidation narrows
 the race window but cannot prevent another client changing an order after the
 final read.
 
+## Native calculation data boundary
+
+Trade selection and calendar advice accept numeric snapshot prices, with missing
+or null prices remaining unknown. Numeric strings and other nonnumeric price
+fields reject the calculation explicitly. This is stricter than the old browser
+coercion; an invalid snapshot must not quietly produce a different suggestion.
+History medians similarly require numbers or null. Unrelated history volume
+metadata does not affect advice.
+
+Finite inputs can still overflow when divided by a tiny positive baseline.
+Native history and advisor validation reject those calculations before a nonfinite
+result can serialize as null or appear as a recommendation. A literal zero
+history baseline retains the existing `Infinity%` explanation; changing that
+heuristic is separate from the port. Shared numeric-boundary fixtures preserve
+legacy output and identify intentional native errors.
+
 ## Verification before shipping
 
 Fixture/unit tests, styled Chromium/WebKit flows in both themes at narrow/short/

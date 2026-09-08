@@ -10,7 +10,9 @@
   // is the question, and his shelf order answers a different one.
   import { byPlatPerDucat, ducatBasket, priceManifest, stockIsCurrent } from '../../domain/baro-board';
   import type { BaroVerdict } from '../../domain/baro-board';
-  import { planDucats, scrapCandidates } from '../../domain/ducat-plan';
+  import type { DucatPlan, ScrapCandidate } from '../../domain/ducat-plan';
+  import { useDesktopServices } from '../../ui/desktop-context';
+  const { ducatPlan } = useDesktopServices();
   import { glyphFor } from '../../ui/glyphs';
   import type { Market, OwnedRecord } from '../../contracts/data';
   import Glyph from '../../ui/Glyph.svelte';
@@ -38,14 +40,30 @@
   let rows = $derived(byPlatPerDucat(priceManifest(baro?.inventory ?? [], market)));
   // Everything the user could feed the kiosk, and what that would yield. This
   // is a POTENTIAL, not a balance.
-  let candidates = $derived(owned ? scrapCandidates(owned, market) : []);
+  let candidates = $state<ScrapCandidate[]>([]);
+  let scrapPlan = $state<DucatPlan | null>(null);
+  let scrapError = $state('');
+  let scrapLoading = $state(false);
+  const basketTarget = $derived(ducatBasket(rows, 0).needed);
+  $effect(() => {
+    const inventory = owned;
+    const snapshot = market;
+    const target = basketTarget;
+    let active = true;
+    candidates = [];
+    scrapPlan = null;
+    scrapError = '';
+    scrapLoading = !!inventory;
+    if (inventory) ducatPlan(inventory, snapshot, target).then((result) => {
+      if (active) { candidates = result.candidates; scrapPlan = target > 0 ? result.plan : null; scrapLoading = false; }
+    }).catch(() => { if (active) { scrapError = 'Scrap planning unavailable. Try reopening the Baro board.'; scrapLoading = false; } });
+    return () => { active = false; };
+  });
   let scrapPotential = $derived(candidates.reduce((sum, c) => sum + c.totalDucats, 0));
   let basket = $derived(ducatBasket(rows, scrapPotential));
   // What to scrap to pay for the basket. Sized against the basket itself, not
   // against a shortfall computed from a balance we do not have.
-  let scrapPlan = $derived(
-    owned && basket.needed > 0 ? planDucats(candidates, basket.needed) : null,
-  );
+
 
   // Skip and unpriced rows are collapsed by default. They are not hidden -
   // "he is selling it and it isn't worth your ducats" is information - but
@@ -83,6 +101,8 @@
 <section class="wrap tw board">
   <div class="rail"><h3>What he is selling</h3></div>
   <div class="board-body">
+  {#if scrapLoading}<p role="status">Calculating scrap plan…</p>{/if}
+  {#if scrapError}<p class="ui-notice" data-tone="bad" role="alert">{scrapError}</p>{/if}
   <header class="board-head">
     <p class="sub">
       {rows.length} {rows.length === 1 ? 'item' : 'items'} · ranked by plat returned per ducat spent.
@@ -98,7 +118,7 @@
       {basket.count === 1 ? 'item' : 'items'} worth buying cost
       <strong>{basket.needed.toLocaleString()}</strong> ducats and resell for about
       <strong>{basket.resale.toLocaleString()}p</strong> at 90-day medians.
-      {#if owned}
+      {#if owned && !scrapLoading && !scrapError}
         Scrapping every spare prime part you hold would yield
         <strong>{scrapPotential.toLocaleString()}</strong> ducats - enough for
         <strong>{basket.coveredByScrapping}</strong> of them.

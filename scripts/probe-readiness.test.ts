@@ -4,7 +4,8 @@ import { runInNewContext } from 'node:vm';
 
 const source = readFileSync(new URL('../rust/tennoworth-desktop/src/shell/probe.rs', import.meta.url), 'utf8');
 const script = source.split('const PROBE_JS: &str = r#"')[1].split('"#;')[0]
-  .replace('__RUNTAG__', 'fixture').replace('__FIXTURE__', '{}');
+  .replace('__RUNTAG__', 'fixture').replace('__FIXTURE__', '{}')
+  .replace('__DOMAIN_CASES__', readFileSync(new URL('../tests/fixtures/domain-ipc/cases.json', import.meta.url), 'utf8'));
 
 function harness() {
   let now = 0;

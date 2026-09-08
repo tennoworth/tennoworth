@@ -1,0 +1,1710 @@
+[
+  {
+    "operation": "normalize_inventory",
+    "input": {
+      "inventory": {
+        "RawUpgrades": [
+          {
+            "ItemType": "/Lotus/Mod",
+            "ItemCount": 4
+          },
+          {
+            "ItemType": "/Lotus/AltMod",
+            "ItemCount": 2
+          }
+        ],
+        "LongGuns": [
+          {
+            "ItemType": "/Lotus/Weapon",
+            "XP": 3
+          },
+          {
+            "ItemType": "/Lotus/Weapon",
+            "XP": 0
+          }
+        ],
+        "Upgrades": [
+          {
+            "ItemType": "/Lotus/Mod",
+            "UpgradeFingerprint": "{\"lvl\":5}"
+          },
+          {
+            "ItemType": "/Lotus/AltMod",
+            "UpgradeFingerprint": "{\"lvl\":7}"
+          }
+        ]
+      },
+      "catalog": [
+        [
+          "/Lotus/Mod",
+          {
+            "name": "Hammer Shot",
+            "category": "Mods"
+          }
+        ],
+        [
+          "/Lotus/RelicIntact",
+          {
+            "name": "Axi K2 Intact",
+            "category": "Relics"
+          }
+        ],
+        [
+          "/Lotus/RelicRadiant",
+          {
+            "name": "Axi K2 Radiant",
+            "category": "Relics"
+          }
+        ],
+        [
+          "/Lotus/Weapon",
+          {
+            "name": "MK1-Braton",
+            "category": "Primary"
+          }
+        ],
+        [
+          "/Lotus/AltMod",
+          {
+            "name": "Hammer Shot",
+            "category": "Mods"
+          }
+        ]
+      ],
+      "market": {
+        "catalog": {
+          "hammer shot": "hammer_shot",
+          "axi k2 relic": "axi_k2_relic",
+          "sagek prime barrel": "sagek_prime_barrel"
+        },
+        "path_to_info": {
+          "/Lotus/Part": {
+            "name": "Part",
+            "slug": "part",
+            "category": "Prime Parts"
+          }
+        }
+      }
+    },
+    "expected": {
+      "owned": [
+        [
+          "hammer_shot|",
+          {
+            "count": 6,
+            "name": "Hammer Shot",
+            "type": "Mods",
+            "slug": "hammer_shot",
+            "subtype": null,
+            "kept_lvl": 7,
+            "leveled": 0
+          }
+        ],
+        [
+          "mk1_braton|",
+          {
+            "count": 2,
+            "name": "MK1-Braton",
+            "type": "Primary",
+            "slug": "mk1_braton",
+            "subtype": null,
+            "kept_lvl": null,
+            "leveled": 1
+          }
+        ]
+      ],
+      "unresolved": {},
+      "flat_count": 4
+    }
+  },
+  {
+    "operation": "score_inventory",
+    "input": {
+      "owned": [
+        [
+          "item|",
+          {
+            "count": 5,
+            "name": "Item",
+            "type": "Mods",
+            "slug": "item",
+            "subtype": null,
+            "kept_lvl": null,
+            "leveled": 0
+          }
+        ]
+      ],
+      "market": {
+        "items": {
+          "item": {
+            "avg": 20,
+            "low_sell": 1,
+            "top_buy": 25,
+            "vol": 10,
+            "ratio": 1,
+            "buys": 1,
+            "sells": 1,
+            "low5_avg": 22,
+            "medians_7d": [
+              0,
+              10,
+              20
+            ],
+            "median_now": 40,
+            "median_90d": 30,
+            "donch_top_90d": 40,
+            "donch_bot_90d": 10
+          }
+        },
+        "usage": {},
+        "set_to_parts": {}
+      },
+      "reserve_copies": 0,
+      "spares_only": false
+    },
+    "expected": [
+      {
+        "key": "item|",
+        "sellable": 5,
+        "clearing_price": 40,
+        "sell_score": 200,
+        "patience": false,
+        "ducats": null,
+        "plat_per_100d": null,
+        "potential_plat": 100,
+        "raw_value": 110,
+        "medians_7d": [
+          10,
+          20
+        ],
+        "median_90d": 30,
+        "delta_90d_pct": 33.33333333333333,
+        "timing": "peak",
+        "demand": {
+          "usage": null,
+          "inherited": false,
+          "liquidity": "unknown",
+          "band": null
+        }
+      }
+    ]
+  },
+  {
+    "operation": "trade_session",
+    "input": {
+      "candidates": [
+        {
+          "key": "liquid",
+          "slug": "liquid",
+          "name": "liquid",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 10,
+            "low_sell": 10,
+            "median_now": 10,
+            "vol": 300,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "thin",
+          "slug": "thin",
+          "name": "thin",
+          "owned": 2,
+          "sellable": 2,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 200,
+            "low_sell": 200,
+            "median_now": 200,
+            "vol": 1,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        },
+        {
+          "key": "stack",
+          "slug": "stack",
+          "name": "stack",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 20,
+            "low_sell": 20,
+            "median_now": 20,
+            "vol": 20,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          }
+        }
+      ],
+      "mode": "fast",
+      "budget": 8,
+      "target": null
+    },
+    "expected": {
+      "rows": [
+        {
+          "key": "liquid",
+          "slug": "liquid",
+          "name": "liquid",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "avg": 10,
+            "low_sell": 10,
+            "median_now": 10,
+            "vol": 300,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 10,
+          "per_trade": 1,
+          "quantity": 3,
+          "trades": 3,
+          "reason": "Liquid singles; match credible asks.",
+          "bid": null
+        },
+        {
+          "key": "stack",
+          "slug": "stack",
+          "name": "stack",
+          "owned": 6,
+          "sellable": 6,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 20,
+            "low_sell": 20,
+            "median_now": 20,
+            "vol": 20,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 20,
+          "per_trade": 1,
+          "quantity": 3,
+          "trades": 3,
+          "reason": "Liquid singles; match credible asks.",
+          "bid": null
+        },
+        {
+          "key": "valuable",
+          "slug": "valuable",
+          "name": "valuable",
+          "owned": 12,
+          "sellable": 12,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": true,
+          "market": {
+            "avg": 100,
+            "low_sell": 100,
+            "median_now": 100,
+            "vol": 8,
+            "top_buy": 0,
+            "buys": 0,
+            "sells": 0,
+            "ratio": 0
+          },
+          "platinum": 100,
+          "per_trade": 1,
+          "quantity": 2,
+          "trades": 2,
+          "reason": "Liquid singles; match credible asks.",
+          "bid": null
+        }
+      ],
+      "trades": 8,
+      "total": 290,
+      "excluded": [
+        {
+          "name": "thin",
+          "reason": "Not enough reported trading volume for this mode."
+        }
+      ],
+      "target": null,
+      "shortfall": null
+    }
+  },
+  {
+    "operation": "advisor",
+    "input": {
+      "slugs": [
+        "example_prime_part",
+        "example_prime_set",
+        "unknown",
+        "example_prime_part"
+      ],
+      "market": {
+        "items": {
+          "example_prime_part": {
+            "median_now": 120
+          }
+        },
+        "set_to_parts": {
+          "example_prime_set": {
+            "parts": [
+              {
+                "slug": "example_prime_part"
+              }
+            ]
+          }
+        },
+        "calendar": {
+          "primes": {
+            "example_prime_set": {
+              "released": "2026-08-01",
+              "vaulted": true,
+              "vault_date": "2026-08-10"
+            }
+          },
+          "resurgence_current": null
+        }
+      },
+      "history": {
+        "start": "2026-01-01",
+        "days": 30,
+        "items": {
+          "example_prime_part": {
+            "median": [
+              100,
+              100,
+              100,
+              100,
+              100,
+              100,
+              100,
+              100,
+              100,
+              100,
+              100,
+              100,
+              100,
+              100,
+              100,
+              80,
+              80,
+              80,
+              80,
+              80,
+              80,
+              80,
+              80,
+              80,
+              80,
+              80,
+              80,
+              80,
+              80,
+              80
+            ],
+            "volume": [
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3,
+              3
+            ]
+          }
+        }
+      },
+      "now_ms": 1787184000000
+    },
+    "expected": {
+      "example_prime_part": {
+        "advice": "sell_now",
+        "reasons": [
+          "released 19 d ago - new-prime prices decay toward a floor over the first weeks",
+          "30 d move -20%"
+        ]
+      },
+      "example_prime_set": {
+        "advice": "sell_now",
+        "reasons": [
+          "released 19 d ago - new-prime prices decay toward a floor over the first weeks"
+        ]
+      }
+    }
+  },
+  {
+    "operation": "history",
+    "input": {
+      "series": {
+        "median": [
+          10,
+          12,
+          14,
+          16,
+          18,
+          20,
+          22,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          null,
+          30,
+          30,
+          30,
+          30,
+          30,
+          30,
+          30
+        ],
+        "volume": [
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          0,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3
+        ]
+      },
+      "min_days": 20,
+      "buckets": 3
+    },
+    "expected": {
+      "points": [
+        [
+          0,
+          10
+        ],
+        [
+          1,
+          12
+        ],
+        [
+          2,
+          14
+        ],
+        [
+          3,
+          16
+        ],
+        [
+          4,
+          18
+        ],
+        [
+          5,
+          20
+        ],
+        [
+          6,
+          22
+        ],
+        [
+          14,
+          30
+        ],
+        [
+          15,
+          30
+        ],
+        [
+          16,
+          30
+        ],
+        [
+          17,
+          30
+        ],
+        [
+          18,
+          30
+        ],
+        [
+          19,
+          30
+        ],
+        [
+          20,
+          30
+        ]
+      ],
+      "stats": null,
+      "weekly": [
+        16,
+        30
+      ],
+      "slope30": 0.875
+    }
+  },
+  {
+    "operation": "relic_plan",
+    "input": {
+      "owned": [
+        {
+          "slug": "r",
+          "name": "r",
+          "count": 3,
+          "subtype": "intact"
+        },
+        {
+          "slug": "s",
+          "name": "s",
+          "count": 7,
+          "subtype": "intact"
+        },
+        {
+          "slug": "r",
+          "name": "r",
+          "count": 2,
+          "subtype": "radiant"
+        }
+      ],
+      "market": {
+        "items": {
+          "a": {
+            "ducats": 45
+          },
+          "b": {
+            "low_sell": 0,
+            "median_now": 14,
+            "vol": 7,
+            "ducats": 65,
+            "top_buy": 21
+          },
+          "c": {
+            "low_sell": 54,
+            "median_now": 13,
+            "vol": 0,
+            "ducats": 100,
+            "top_buy": 38
+          },
+          "d": {
+            "low_sell": 11,
+            "median_now": 0,
+            "vol": 5,
+            "ducats": 15,
+            "top_buy": 59
+          },
+          "z_set": {
+            "low_sell": 0,
+            "median_now": 24,
+            "vol": 3,
+            "ducats": 0,
+            "top_buy": 25
+          },
+          "a_set": {
+            "low_sell": 42,
+            "median_now": 13,
+            "vol": 4,
+            "ducats": 15,
+            "top_buy": 74
+          },
+          "r": {
+            "low_sell": 0,
+            "median_now": 5,
+            "vol": 2,
+            "ducats": 45,
+            "top_buy": 64
+          },
+          "s": {
+            "low_sell": 0,
+            "median_now": 1,
+            "vol": 8,
+            "ducats": 0,
+            "top_buy": 54
+          }
+        },
+        "set_to_parts": {
+          "z_set": {
+            "name": "Z",
+            "parts": [
+              {
+                "slug": "a",
+                "component_name": "a",
+                "quantity": 1
+              },
+              {
+                "slug": "b",
+                "component_name": "b",
+                "quantity": 3
+              },
+              {
+                "slug": "c",
+                "component_name": "c",
+                "quantity": 2
+              },
+              {
+                "slug": "d",
+                "component_name": "d",
+                "quantity": 3
+              }
+            ]
+          },
+          "a_set": {
+            "name": "A",
+            "parts": [
+              {
+                "slug": "a",
+                "component_name": "a",
+                "quantity": 1
+              },
+              {
+                "slug": "b",
+                "component_name": "b",
+                "quantity": 3
+              },
+              {
+                "slug": "c",
+                "component_name": "c",
+                "quantity": 2
+              },
+              {
+                "slug": "d",
+                "component_name": "d",
+                "quantity": 3
+              }
+            ]
+          }
+        },
+        "relic_rewards": {
+          "r": [
+            {
+              "reward_slug": "a",
+              "reward_name": "a",
+              "rarity": "common",
+              "chance": 76,
+              "item_count": 1
+            },
+            {
+              "reward_slug": "b",
+              "reward_name": "b",
+              "rarity": "uncommon",
+              "chance": 22,
+              "item_count": 2
+            },
+            {
+              "reward_slug": "c",
+              "reward_name": "c",
+              "rarity": "rare",
+              "chance": 2,
+              "item_count": 1
+            }
+          ],
+          "s": [
+            {
+              "reward_slug": "a",
+              "reward_name": "a",
+              "rarity": "common",
+              "chance": 76,
+              "item_count": 1
+            },
+            {
+              "reward_slug": "b",
+              "reward_name": "b",
+              "rarity": "uncommon",
+              "chance": 22,
+              "item_count": 2
+            },
+            {
+              "reward_slug": "c",
+              "reward_name": "c",
+              "rarity": "rare",
+              "chance": 2,
+              "item_count": 1
+            }
+          ]
+        }
+      },
+      "limit": 3
+    },
+    "expected": [
+      {
+        "relic_slug": "r",
+        "relic_name": "r",
+        "owned": 3,
+        "epp": 6.55,
+        "epp_owned": 19.65,
+        "sell_now": 5,
+        "moving_count": 1,
+        "total_rewards": 3,
+        "rewards": [
+          {
+            "slug": "a",
+            "name": "a",
+            "rarity": "common",
+            "chance": 76,
+            "low_sell": 0,
+            "vol_48h": 0
+          },
+          {
+            "slug": "b",
+            "name": "b",
+            "rarity": "uncommon",
+            "chance": 22,
+            "low_sell": 14,
+            "vol_48h": 7
+          },
+          {
+            "slug": "c",
+            "name": "c",
+            "rarity": "rare",
+            "chance": 2,
+            "low_sell": 19.5,
+            "vol_48h": 0
+          }
+        ]
+      },
+      {
+        "relic_slug": "s",
+        "relic_name": "s",
+        "owned": 7,
+        "epp": 6.55,
+        "epp_owned": 45.85,
+        "sell_now": 1,
+        "moving_count": 1,
+        "total_rewards": 3,
+        "rewards": [
+          {
+            "slug": "a",
+            "name": "a",
+            "rarity": "common",
+            "chance": 76,
+            "low_sell": 0,
+            "vol_48h": 0
+          },
+          {
+            "slug": "b",
+            "name": "b",
+            "rarity": "uncommon",
+            "chance": 22,
+            "low_sell": 14,
+            "vol_48h": 7
+          },
+          {
+            "slug": "c",
+            "name": "c",
+            "rarity": "rare",
+            "chance": 2,
+            "low_sell": 19.5,
+            "vol_48h": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "operation": "set_recos",
+    "input": {
+      "owned": [
+        {
+          "slug": "a",
+          "name": "a",
+          "count": 4,
+          "subtype": null
+        },
+        {
+          "slug": "b",
+          "name": "b",
+          "count": 4,
+          "subtype": null
+        },
+        {
+          "slug": "c",
+          "name": "c",
+          "count": 1,
+          "subtype": null
+        },
+        {
+          "slug": "d",
+          "name": "d",
+          "count": 2,
+          "subtype": null
+        },
+        {
+          "slug": "z_set",
+          "name": "z_set",
+          "count": 4,
+          "subtype": null
+        },
+        {
+          "slug": "a_set",
+          "name": "a_set",
+          "count": 1,
+          "subtype": null
+        },
+        {
+          "slug": "r",
+          "name": "r",
+          "count": 5,
+          "subtype": null
+        },
+        {
+          "slug": "s",
+          "name": "s",
+          "count": 5,
+          "subtype": null
+        }
+      ],
+      "market": {
+        "items": {
+          "a": {
+            "ducats": 45
+          },
+          "b": {
+            "low_sell": 0,
+            "median_now": 14,
+            "vol": 7,
+            "ducats": 65,
+            "top_buy": 21
+          },
+          "c": {
+            "low_sell": 54,
+            "median_now": 13,
+            "vol": 0,
+            "ducats": 100,
+            "top_buy": 38
+          },
+          "d": {
+            "low_sell": 11,
+            "median_now": 0,
+            "vol": 5,
+            "ducats": 15,
+            "top_buy": 59
+          },
+          "z_set": {
+            "low_sell": 0,
+            "median_now": 24,
+            "vol": 3,
+            "ducats": 0,
+            "top_buy": 25
+          },
+          "a_set": {
+            "low_sell": 42,
+            "median_now": 13,
+            "vol": 4,
+            "ducats": 15,
+            "top_buy": 74
+          },
+          "r": {
+            "low_sell": 0,
+            "median_now": 5,
+            "vol": 2,
+            "ducats": 45,
+            "top_buy": 64
+          },
+          "s": {
+            "low_sell": 0,
+            "median_now": 1,
+            "vol": 8,
+            "ducats": 0,
+            "top_buy": 54
+          }
+        },
+        "set_to_parts": {
+          "z_set": {
+            "name": "Z",
+            "parts": [
+              {
+                "slug": "a",
+                "component_name": "a",
+                "quantity": 1
+              },
+              {
+                "slug": "b",
+                "component_name": "b",
+                "quantity": 3
+              },
+              {
+                "slug": "c",
+                "component_name": "c",
+                "quantity": 2
+              },
+              {
+                "slug": "d",
+                "component_name": "d",
+                "quantity": 3
+              }
+            ]
+          },
+          "a_set": {
+            "name": "A",
+            "parts": [
+              {
+                "slug": "a",
+                "component_name": "a",
+                "quantity": 1
+              },
+              {
+                "slug": "b",
+                "component_name": "b",
+                "quantity": 3
+              },
+              {
+                "slug": "c",
+                "component_name": "c",
+                "quantity": 2
+              },
+              {
+                "slug": "d",
+                "component_name": "d",
+                "quantity": 3
+              }
+            ]
+          }
+        },
+        "relic_rewards": {
+          "r": [
+            {
+              "reward_slug": "a",
+              "reward_name": "a",
+              "rarity": "common",
+              "chance": 76,
+              "item_count": 1
+            },
+            {
+              "reward_slug": "b",
+              "reward_name": "b",
+              "rarity": "uncommon",
+              "chance": 22,
+              "item_count": 2
+            },
+            {
+              "reward_slug": "c",
+              "reward_name": "c",
+              "rarity": "rare",
+              "chance": 2,
+              "item_count": 1
+            }
+          ],
+          "s": [
+            {
+              "reward_slug": "a",
+              "reward_name": "a",
+              "rarity": "common",
+              "chance": 76,
+              "item_count": 1
+            },
+            {
+              "reward_slug": "b",
+              "reward_name": "b",
+              "rarity": "uncommon",
+              "chance": 22,
+              "item_count": 2
+            },
+            {
+              "reward_slug": "c",
+              "reward_name": "c",
+              "rarity": "rare",
+              "chance": 2,
+              "item_count": 1
+            }
+          ]
+        }
+      },
+      "limit": 24
+    },
+    "expected": [
+      {
+        "kind": "extras",
+        "set_slug": "z_set",
+        "set_name": "Z",
+        "parts": [
+          {
+            "slug": "a",
+            "name": "a",
+            "count": 4,
+            "required": 1,
+            "low_sell": 0
+          },
+          {
+            "slug": "b",
+            "name": "b",
+            "count": 4,
+            "required": 3,
+            "low_sell": 0
+          },
+          {
+            "slug": "c",
+            "name": "c",
+            "count": 1,
+            "required": 2,
+            "low_sell": 54
+          },
+          {
+            "slug": "d",
+            "name": "d",
+            "count": 2,
+            "required": 3,
+            "low_sell": 11
+          }
+        ],
+        "extras": 4,
+        "extras_plat": 0,
+        "net_plat": 0
+      }
+    ]
+  },
+  {
+    "operation": "ducat_plan",
+    "input": {
+      "owned": [
+        {
+          "slug": "a",
+          "name": "a",
+          "count": 4,
+          "subtype": null
+        },
+        {
+          "slug": "b",
+          "name": "b",
+          "count": 4,
+          "subtype": null
+        },
+        {
+          "slug": "c",
+          "name": "c",
+          "count": 1,
+          "subtype": null
+        },
+        {
+          "slug": "d",
+          "name": "d",
+          "count": 2,
+          "subtype": null
+        },
+        {
+          "slug": "z_set",
+          "name": "z_set",
+          "count": 4,
+          "subtype": null
+        },
+        {
+          "slug": "a_set",
+          "name": "a_set",
+          "count": 1,
+          "subtype": null
+        },
+        {
+          "slug": "r",
+          "name": "r",
+          "count": 5,
+          "subtype": null
+        },
+        {
+          "slug": "s",
+          "name": "s",
+          "count": 5,
+          "subtype": null
+        }
+      ],
+      "market": {
+        "items": {
+          "a": {
+            "ducats": 45
+          },
+          "b": {
+            "low_sell": 0,
+            "median_now": 14,
+            "vol": 7,
+            "ducats": 65,
+            "top_buy": 21
+          },
+          "c": {
+            "low_sell": 54,
+            "median_now": 13,
+            "vol": 0,
+            "ducats": 100,
+            "top_buy": 38
+          },
+          "d": {
+            "low_sell": 11,
+            "median_now": 0,
+            "vol": 5,
+            "ducats": 15,
+            "top_buy": 59
+          },
+          "z_set": {
+            "low_sell": 0,
+            "median_now": 24,
+            "vol": 3,
+            "ducats": 0,
+            "top_buy": 25
+          },
+          "a_set": {
+            "low_sell": 42,
+            "median_now": 13,
+            "vol": 4,
+            "ducats": 15,
+            "top_buy": 74
+          },
+          "r": {
+            "low_sell": 0,
+            "median_now": 5,
+            "vol": 2,
+            "ducats": 45,
+            "top_buy": 64
+          },
+          "s": {
+            "low_sell": 0,
+            "median_now": 1,
+            "vol": 8,
+            "ducats": 0,
+            "top_buy": 54
+          }
+        },
+        "set_to_parts": {
+          "z_set": {
+            "name": "Z",
+            "parts": [
+              {
+                "slug": "a",
+                "component_name": "a",
+                "quantity": 1
+              },
+              {
+                "slug": "b",
+                "component_name": "b",
+                "quantity": 3
+              },
+              {
+                "slug": "c",
+                "component_name": "c",
+                "quantity": 2
+              },
+              {
+                "slug": "d",
+                "component_name": "d",
+                "quantity": 3
+              }
+            ]
+          },
+          "a_set": {
+            "name": "A",
+            "parts": [
+              {
+                "slug": "a",
+                "component_name": "a",
+                "quantity": 1
+              },
+              {
+                "slug": "b",
+                "component_name": "b",
+                "quantity": 3
+              },
+              {
+                "slug": "c",
+                "component_name": "c",
+                "quantity": 2
+              },
+              {
+                "slug": "d",
+                "component_name": "d",
+                "quantity": 3
+              }
+            ]
+          }
+        },
+        "relic_rewards": {
+          "r": [
+            {
+              "reward_slug": "a",
+              "reward_name": "a",
+              "rarity": "common",
+              "chance": 76,
+              "item_count": 1
+            },
+            {
+              "reward_slug": "b",
+              "reward_name": "b",
+              "rarity": "uncommon",
+              "chance": 22,
+              "item_count": 2
+            },
+            {
+              "reward_slug": "c",
+              "reward_name": "c",
+              "rarity": "rare",
+              "chance": 2,
+              "item_count": 1
+            }
+          ],
+          "s": [
+            {
+              "reward_slug": "a",
+              "reward_name": "a",
+              "rarity": "common",
+              "chance": 76,
+              "item_count": 1
+            },
+            {
+              "reward_slug": "b",
+              "reward_name": "b",
+              "rarity": "uncommon",
+              "chance": 22,
+              "item_count": 2
+            },
+            {
+              "reward_slug": "c",
+              "reward_name": "c",
+              "rarity": "rare",
+              "chance": 2,
+              "item_count": 1
+            }
+          ]
+        }
+      },
+      "limit": 24,
+      "target": 0,
+      "keepAbove": 100
+    },
+    "expected": {
+      "candidates": [
+        {
+          "slug": "a",
+          "name": "a",
+          "spare": 3,
+          "ducats": 45,
+          "plat": 0,
+          "ducatsPerPlat": null,
+          "totalDucats": 135,
+          "totalPlat": 0
+        },
+        {
+          "slug": "r",
+          "name": "r",
+          "spare": 4,
+          "ducats": 45,
+          "plat": 5,
+          "ducatsPerPlat": 9,
+          "totalDucats": 180,
+          "totalPlat": 20
+        },
+        {
+          "slug": "b",
+          "name": "b",
+          "spare": 3,
+          "ducats": 65,
+          "plat": 14,
+          "ducatsPerPlat": 4.642857142857143,
+          "totalDucats": 195,
+          "totalPlat": 42
+        },
+        {
+          "slug": "d",
+          "name": "d",
+          "spare": 1,
+          "ducats": 15,
+          "plat": 11,
+          "ducatsPerPlat": 1.3636363636363635,
+          "totalDucats": 15,
+          "totalPlat": 11
+        }
+      ],
+      "plan": {
+        "picks": [],
+        "ducats": 0,
+        "platGivenUp": 0,
+        "short": 0,
+        "heldBack": []
+      }
+    }
+  },
+  {
+    "operation": "build_plan",
+    "input": {
+      "owned": [
+        {
+          "slug": "a",
+          "name": "a",
+          "count": 4,
+          "subtype": null
+        },
+        {
+          "slug": "b",
+          "name": "b",
+          "count": 4,
+          "subtype": null
+        },
+        {
+          "slug": "c",
+          "name": "c",
+          "count": 1,
+          "subtype": null
+        },
+        {
+          "slug": "d",
+          "name": "d",
+          "count": 2,
+          "subtype": null
+        },
+        {
+          "slug": "z_set",
+          "name": "z_set",
+          "count": 4,
+          "subtype": null
+        },
+        {
+          "slug": "a_set",
+          "name": "a_set",
+          "count": 1,
+          "subtype": null
+        },
+        {
+          "slug": "r",
+          "name": "r",
+          "count": 5,
+          "subtype": null
+        },
+        {
+          "slug": "s",
+          "name": "s",
+          "count": 5,
+          "subtype": null
+        }
+      ],
+      "market": {
+        "items": {
+          "a": {
+            "ducats": 45
+          },
+          "b": {
+            "low_sell": 0,
+            "median_now": 14,
+            "vol": 7,
+            "ducats": 65,
+            "top_buy": 21
+          },
+          "c": {
+            "low_sell": 54,
+            "median_now": 13,
+            "vol": 0,
+            "ducats": 100,
+            "top_buy": 38
+          },
+          "d": {
+            "low_sell": 11,
+            "median_now": 0,
+            "vol": 5,
+            "ducats": 15,
+            "top_buy": 59
+          },
+          "z_set": {
+            "low_sell": 0,
+            "median_now": 24,
+            "vol": 3,
+            "ducats": 0,
+            "top_buy": 25
+          },
+          "a_set": {
+            "low_sell": 42,
+            "median_now": 13,
+            "vol": 4,
+            "ducats": 15,
+            "top_buy": 74
+          },
+          "r": {
+            "low_sell": 0,
+            "median_now": 5,
+            "vol": 2,
+            "ducats": 45,
+            "top_buy": 64
+          },
+          "s": {
+            "low_sell": 0,
+            "median_now": 1,
+            "vol": 8,
+            "ducats": 0,
+            "top_buy": 54
+          }
+        },
+        "set_to_parts": {
+          "z_set": {
+            "name": "Z",
+            "parts": [
+              {
+                "slug": "a",
+                "component_name": "a",
+                "quantity": 1
+              },
+              {
+                "slug": "b",
+                "component_name": "b",
+                "quantity": 3
+              },
+              {
+                "slug": "c",
+                "component_name": "c",
+                "quantity": 2
+              },
+              {
+                "slug": "d",
+                "component_name": "d",
+                "quantity": 3
+              }
+            ]
+          },
+          "a_set": {
+            "name": "A",
+            "parts": [
+              {
+                "slug": "a",
+                "component_name": "a",
+                "quantity": 1
+              },
+              {
+                "slug": "b",
+                "component_name": "b",
+                "quantity": 3
+              },
+              {
+                "slug": "c",
+                "component_name": "c",
+                "quantity": 2
+              },
+              {
+                "slug": "d",
+                "component_name": "d",
+                "quantity": 3
+              }
+            ]
+          }
+        },
+        "relic_rewards": {
+          "r": [
+            {
+              "reward_slug": "a",
+              "reward_name": "a",
+              "rarity": "common",
+              "chance": 76,
+              "item_count": 1
+            },
+            {
+              "reward_slug": "b",
+              "reward_name": "b",
+              "rarity": "uncommon",
+              "chance": 22,
+              "item_count": 2
+            },
+            {
+              "reward_slug": "c",
+              "reward_name": "c",
+              "rarity": "rare",
+              "chance": 2,
+              "item_count": 1
+            }
+          ],
+          "s": [
+            {
+              "reward_slug": "a",
+              "reward_name": "a",
+              "rarity": "common",
+              "chance": 76,
+              "item_count": 1
+            },
+            {
+              "reward_slug": "b",
+              "reward_name": "b",
+              "rarity": "uncommon",
+              "chance": 22,
+              "item_count": 2
+            },
+            {
+              "reward_slug": "c",
+              "reward_name": "c",
+              "rarity": "rare",
+              "chance": 2,
+              "item_count": 1
+            }
+          ]
+        }
+      },
+      "limit": 24,
+      "setSlug": "z_set",
+      "setName": "Z",
+      "parts": [
+        {
+          "slug": "a",
+          "component_name": "a",
+          "quantity": 1
+        },
+        {
+          "slug": "b",
+          "component_name": "b",
+          "quantity": 3
+        },
+        {
+          "slug": "c",
+          "component_name": "c",
+          "quantity": 2
+        },
+        {
+          "slug": "d",
+          "component_name": "d",
+          "quantity": 3
+        }
+      ],
+      "recipes": null
+    },
+    "expected": {
+      "plan": {
+        "setSlug": "z_set",
+        "setName": "Z",
+        "have": [
+          {
+            "slug": "a",
+            "name": "a",
+            "count": 4
+          },
+          {
+            "slug": "b",
+            "name": "b",
+            "count": 4
+          },
+          {
+            "slug": "c",
+            "name": "c",
+            "count": 1
+          },
+          {
+            "slug": "d",
+            "name": "d",
+            "count": 2
+          }
+        ],
+        "missing": [],
+        "setPrice": 24,
+        "paths": [
+          {
+            "kind": "buy-set",
+            "plat": 24,
+            "credits": 0,
+            "seconds": 0,
+            "unverified": [],
+            "savingVsSet": 0,
+            "platKnown": true,
+            "recipesKnown": true
+          },
+          {
+            "kind": "buy-parts-build",
+            "plat": 0,
+            "credits": 0,
+            "seconds": 0,
+            "unverified": [],
+            "savingVsSet": 24,
+            "platKnown": true,
+            "recipesKnown": false
+          },
+          {
+            "kind": "sell-spares",
+            "plat": -53,
+            "credits": 0,
+            "seconds": 0,
+            "unverified": [],
+            "savingVsSet": 0,
+            "platKnown": false,
+            "recipesKnown": true
+          }
+        ],
+        "incomplete": false
+      },
+      "cheapest": {
+        "kind": "buy-parts-build",
+        "plat": 0,
+        "credits": 0,
+        "seconds": 0,
+        "unverified": [],
+        "savingVsSet": 24,
+        "platKnown": true,
+        "recipesKnown": false
+      }
+    }
+  }
+]

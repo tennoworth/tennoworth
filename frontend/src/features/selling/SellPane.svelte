@@ -30,6 +30,9 @@
     dismissSellOnboarding(): void; dismissKeepCopiesNudge(): void;
     openListingFlow(rows?: ListingCandidate | ListingCandidate[]): void;
     pendingBanner: Snippet;
+    calculationPending?: boolean;
+    calculationError?: string | null;
+    onretryCalculation?: () => void;
   }
 
   let {
@@ -52,12 +55,13 @@
     applyPreset, setReserveCopies, toggleFiltersOpen, 
     dismissSellOnboarding, dismissKeepCopiesNudge,
     openListingFlow,
-    pendingBanner,
+    pendingBanner, calculationPending = false, calculationError = null, onretryCalculation,
   }: Props = $props();
 
   // Was inline in the template, so it re-filtered the whole results array on
   // EVERY render of this pane - including every keystroke in the name filter,
   // which cannot change the answer. $derived recomputes only when results does.
+  let calculationReady = $derived(!calculationPending && !calculationError);
   let sellableCount = $derived(results.filter((r) => r.sellable > 0).length);
 
   // Since-last-scan deltas for the summary cells. prevSummary is the previous
@@ -207,13 +211,13 @@
     </div>
     <div class="cell">
       <span class="k">Sellable</span>
-      <span class="v">{sellableCount.toLocaleString()}</span>
-      {#if fmtDelta(sellableDelta)}<span class="d" class:up={(sellableDelta ?? 0) > 0} class:down={(sellableDelta ?? 0) < 0}>{fmtDelta(sellableDelta)}</span>{/if}
+      <span class="v">{calculationReady ? sellableCount.toLocaleString() : '—'}</span>
+      {#if calculationReady && fmtDelta(sellableDelta)}<span class="d" class:up={(sellableDelta ?? 0) > 0} class:down={(sellableDelta ?? 0) < 0}>{fmtDelta(sellableDelta)}</span>{/if}
     </div>
     <div class="cell">
       <span class="k">Potential</span>
-      <span class="v">{totalPotential.toLocaleString(undefined, { maximumFractionDigits: 0 })}<span class="unit">p</span></span>
-      {#if fmtDelta(potentialDelta)}<span class="d" class:up={(potentialDelta ?? 0) > 0} class:down={(potentialDelta ?? 0) < 0}>{fmtDelta(potentialDelta, 'p')}</span>{/if}
+      <span class="v">{calculationReady ? totalPotential.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}{#if calculationReady}<span class="unit">p</span>{/if}</span>
+      {#if calculationReady && fmtDelta(potentialDelta)}<span class="d" class:up={(potentialDelta ?? 0) > 0} class:down={(potentialDelta ?? 0) < 0}>{fmtDelta(potentialDelta, 'p')}</span>{/if}
     </div>
     {#if ordersSummary}
       <div class="cell">
@@ -271,6 +275,15 @@
   </div>
 {/if}
 
+{#if calculationPending}
+  <div class="ui-notice" role="status">Calculating sale values… Your filters remain available.</div>
+{:else if calculationError}
+  <div class="ui-notice" data-tone="bad" role="alert">
+    Sale calculations unavailable: {calculationError}
+    {#if onretryCalculation}<button class="btn" onclick={onretryCalculation}>Retry calculations</button>{/if}
+  </div>
+{/if}
+
 {#if marketLoadError}
   <div class="card warn-banner">⚠ {marketLoadError}</div>
 {:else if marketFreshness === 'stale'}
@@ -315,7 +328,7 @@
       <span class="pick-tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor - expect to wait for a buyer.">thin</span>
     {/if}
     <span class="pick-actions">
-      <button class="pick-list" onclick={() => openListingFlow(p)} aria-label="List {p.name} on WFM">List</button>
+      <button class="pick-list" disabled={!calculationReady} onclick={() => { if (calculationReady) openListingFlow(p); }} aria-label="List {p.name} on WFM">List</button>
       <button
         type="button"
         class="pick-snooze"
@@ -434,8 +447,8 @@
     <button
       class="list-cta"
       data-testid="desktop-list"
-      onclick={() => openListingFlow()}
-      disabled={listableRows.length === 0}
+      onclick={() => { if (calculationReady) openListingFlow(); }}
+      disabled={!calculationReady || listableRows.length === 0}
       title={listTitle}
     >{listLabel}</button>
   {/if}
@@ -469,7 +482,7 @@
 
 
 {#snippet emptyState()}
-  {#if emptyReason}
+  {#if calculationReady && emptyReason}
   <div class="card empty flush">
     {#if emptyReason.kind === 'no-market'}
       <div>

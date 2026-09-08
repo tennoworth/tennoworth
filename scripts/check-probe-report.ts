@@ -23,6 +23,10 @@ try {
 }
 
 const problems = [];
+if (report.domainRejectedInvalid !== true) problems.push('invalid native domain quantities were not rejected');
+const expectedDomainOperations = ['normalize_inventory', 'score_inventory', 'trade_session', 'advisor', 'history', 'relic_plan', 'set_recos', 'ducat_plan', 'build_plan'];
+if (JSON.stringify(report.domainOperations) !== JSON.stringify(expectedDomainOperations))
+  problems.push('native domain operations did not all match their shared fixtures');
 if (report.done !== true) problems.push("done is not true (run did not complete)");
 if (report.fatal) problems.push("fatal: " + String(report.fatal).slice(0, 300));
 if (!Array.isArray(report.consoleErrors) || report.consoleErrors.length > 0)

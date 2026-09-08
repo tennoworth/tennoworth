@@ -1,3 +1,5 @@
+import { evaluateDomainPreview } from './domain-preview';
+import type { DomainRequest } from '../contracts/generated/domain';
 import type { OwnedRiven } from '../domain/rivens';
 import { serializeSnapshot } from '../domain/snapshot';
 
@@ -62,6 +64,7 @@ export function createPreview(scenario: string) {
     wfm_auth_status: { logged_in: scenario !== 'logged-out', unlocked: scenario !== 'logged-out' },
   };
   return async (command: string, args?: Record<string, unknown>): Promise<unknown> => {
+    if (command === 'evaluate_domain') return evaluateDomainPreview(args?.request as DomainRequest);
     if (command === 'list_notifications') {
       if (scenario === 'loading') await new Promise(resolve => setTimeout(resolve, 1500));
       if (scenario === 'error') throw new Error('Could not load notifications. Retry when storage is available.');

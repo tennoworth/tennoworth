@@ -7,6 +7,7 @@
 // now exists in exactly one place; the three consumers below only differ in
 // how they combine and report the clauses.
 
+import type { ScoredInventoryFact } from '../contracts/generated/domain';
 import { lookup } from './market';
 import { readDemand } from './demand';
 import { clearingPrice, scoreRow, bandSignal, sellableQty, spareQty, LIQUID_VOL } from './sell-priority';
@@ -85,9 +86,7 @@ function passesMedian(m: MarketItemEntry, f: FilterState): boolean {
   return f.minMedian <= 0 || (m.median_90d || 0) >= f.minMedian;
 }
 
-// Row enrichment: score, timing, ducat-trade math. Runs only for rows that
-// already passed every clause above.
-function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Market, reserveCopies: number, sparesOnly = false, verdict?: Verdict) {
+function previewRowFacts(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Market, reserveCopies: number, sparesOnly: boolean): ScoredInventoryFact {
   const sellable = sparesOnly
     ? spareQty(rec.count, rec.kept_lvl, rec.leveled ?? 0)
     : sellableQty(rec.count, reserveCopies, rec.leveled ?? 0);
@@ -150,6 +149,19 @@ function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Mar
     lowSell: m.low_sell,
     topBuy: m.top_buy,
   });
+  return { key, sellable, clearing_price: row_price, sell_score, patience, ducats, plat_per_100d,
+    medians_7d: medians, median_90d, delta_90d_pct, timing, demand,
+    potential_plat: sellable * m.avg,
+    raw_value: sellable * ((m.low5_avg || 0) > 0 ? (m.low5_avg as number) : m.avg),
+  };
+}
+
+// Row enrichment: score, timing, ducat-trade math. Runs only for rows that
+// already passed every clause above.
+function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Market, reserveCopies: number, sparesOnly = false, verdict?: Verdict, nativeFact?: ScoredInventoryFact) {
+  const facts = nativeFact ?? previewRowFacts(key, rec, m, market, reserveCopies, sparesOnly);
+  const { sellable, clearing_price: row_price, sell_score, patience, ducats, plat_per_100d,
+    medians_7d: medians, median_90d, delta_90d_pct, timing, demand } = facts;
   const tags = Array.isArray(m.tags) ? m.tags : [];
   return {
     key,
@@ -173,12 +185,12 @@ function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Mar
     top_buy: m.top_buy,
     volume_48h: m.vol,
     ratio: m.ratio,
-    potential_plat: sellable * m.avg,
+    potential_plat: facts.potential_plat,
     // Raw stack value: owned × the avg of the ~5 cheapest live asks - "what
     // is this pile worth at current listings", no liquidity discounting
     // (that's sell_score's job). Falls back to the 48h closed avg on
     // snapshots that predate low5_avg.
-    raw_value: sellable * ((m.low5_avg || 0) > 0 ? (m.low5_avg as number) : m.avg),
+    raw_value: facts.raw_value,
     sell_score,
     patience,
     timing,
@@ -208,6 +220,7 @@ export function computeResults(
   filters: FilterState,
   reserveCopies: number,
   advice?: Map<string, Verdict>,
+  nativeFacts?: Map<string, ScoredInventoryFact>,
 ) {
   const out: ReturnType<typeof buildRow>[] = [];
   for (const [key, rec] of owned) {
@@ -224,7 +237,9 @@ export function computeResults(
     if (!passesMedian(m, filters)) continue;
     if (!passesSpares(rec, filters)) continue;
     if (!passesAdvice(rec, filters, advice)) continue;
-    out.push(buildRow(key, rec, m, market, reserveCopies, filters.sparesOnly, advice?.get(rec.slug)));
+    const nativeFact = nativeFacts?.get(key);
+    if (nativeFacts && !nativeFact) continue;
+    out.push(buildRow(key, rec, m, market, reserveCopies, filters.sparesOnly, advice?.get(rec.slug), nativeFact));
   }
   out.sort((a, b) => b.sell_score - a.sell_score);
   return out;

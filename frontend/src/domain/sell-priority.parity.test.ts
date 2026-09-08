@@ -1,19 +1,13 @@
 // @ts-nocheck - fixture-driven parity check; full TS shapes here would be busy-work.
 //
-// Cross-language parity gate for the sell-priority RANKING. The canonical score
-// lives here (sell-priority.ts); it is mirrored in Rust
-// (rust/market-math/src/sell_priority.rs) so the desktop tray + post-scan
-// notification rank identically. Both languages rank the SAME shared fixture
-// (tests/fixtures/sell-priority/cases.json) and assert the SAME golden order.
-//
-// If this file's scoring changes, this test fails until `expected_order` in the
-// fixture is updated - which then fails the Rust side (sellables.rs) until it is
-// brought back into agreement. That is the gate: neither can drift silently.
+// Desktop ranking is native; hosted browsing and development previews still
+// need this counterpart. Both implementations consume the same expected order
+// so a one-sided formula change cannot silently alter their recommendations.
 import { describe, it, expect } from 'vitest';
 import { scoreRow, sellableQty } from './sell-priority.js';
 import fixture from '../../../tests/fixtures/sell-priority/cases.json';
 
-describe('sell-priority ranking parity (TS canonical side)', () => {
+describe('sell-priority ranking parity (hosted and preview side)', () => {
   it('ranks the shared fixture into the golden order', () => {
     const ranked = fixture.cases
       .map((c) => {

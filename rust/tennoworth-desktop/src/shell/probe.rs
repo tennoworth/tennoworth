@@ -36,6 +36,30 @@ const PROBE_FIXTURE: &str = r#"{
 const PROBE_JS: &str = r#"(function(){
   var R = { runtag: "__RUNTAG__", steps_ts: new Date().toISOString(), cspViolations: [], consoleErrors: [] };
   var FIXTURE = __FIXTURE__;
+  var DOMAIN_CASES = __DOMAIN_CASES__;
+  function sameDomainValue(actual, expected) {
+    if (typeof expected === 'number') return typeof actual === 'number' && Number.isFinite(actual) && Math.abs(actual - expected) <= 1e-9 * Math.max(1, Math.abs(expected));
+    if (actual === expected) return true;
+    if (!actual || !expected || typeof actual !== 'object' || typeof expected !== 'object') return false;
+    var keys = Object.keys(expected).sort();
+    if (JSON.stringify(Object.keys(actual).sort()) !== JSON.stringify(keys)) return false;
+    return keys.every(function(key){ return sameDomainValue(actual[key], expected[key]); });
+  }
+  function checkDomain() {
+    R.domainOperations = [];
+    return DOMAIN_CASES.reduce(function(chain, test){
+      return chain.then(function(){ return invk('evaluate_domain', { request: { operation: test.operation, input: test.input } }); })
+        .then(function(response){
+          if (!response || response.operation !== test.operation || !sameDomainValue(response.result, test.expected)) throw new Error('Domain IPC contract failed: ' + test.operation);
+          R.domainOperations.push(test.operation);
+        });
+    }, Promise.resolve()).then(function(){
+      return invk('evaluate_domain', { request: { operation: 'set_recos', input: { owned: [{ slug: 'invalid', name: 'Invalid', count: -1, subtype: null }], market: { items: {} }, limit: 24 } } });
+    }).then(function(response){
+      R.domainRejectedInvalid = typeof response === 'string' && response.indexOf('ERR:') === 0;
+      if (!R.domainRejectedInvalid) throw new Error('Invalid domain quantities were accepted');
+    });
+  }
   try {
     document.addEventListener('securitypolicyviolation', function(e){
       if (R.cspViolations.length < 20) R.cspViolations.push({ blockedURI: e.blockedURI, violatedDirective: e.violatedDirective, effectiveDirective: e.effectiveDirective, disposition: e.disposition });
@@ -143,6 +167,7 @@ const PROBE_JS: &str = r#"(function(){
     probeFetch('/market.json')
     .then(function(x){ R.fetchMarket = x; })
     .then(function(){ return probeFetch('/wfstat-catalog.json').then(function(x){ R.fetchCatalog = x; }); })
+    .then(checkDomain)
     .then(function(){ return invk('health').then(function(v){ R.invokeHealth = v; }); })
     .then(function(){ return invk('trade_session_state').then(function(v){
       if (!v || !v.allowance || !v.quantities || !Array.isArray(v.bulk_slugs)
@@ -364,6 +389,7 @@ pub fn build_probe_script(runtag: &str) -> String {
     PROBE_JS
         .replace("__RUNTAG__", runtag)
         .replace("__FIXTURE__", &fixture_literal)
+        .replace("__DOMAIN_CASES__", include_str!("../../../../tests/fixtures/domain-ipc/cases.json"))
 }
 
 /// Probe-only: run the full post-scan surface path (rebuild tray + fire the

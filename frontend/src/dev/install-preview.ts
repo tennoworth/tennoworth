@@ -1,3 +1,5 @@
+import { evaluateDomainPreview } from './domain-preview';
+import type { DomainRequest } from '../contracts/generated/domain';
 import type { UpdateStatus } from '../contracts/update';
 export async function installPreview() {
   const scenario = new URLSearchParams(location.search).get('sample');
@@ -31,6 +33,7 @@ export async function installPreview() {
   // via get_setting/set_setting; back those onto localStorage so a seeded
   // browser snapshot round-trips exactly like the real thing.
   const invoke = (cmd: string, args?: Record<string, unknown>) => {
+    if (cmd === 'evaluate_domain') return Promise.resolve().then(() => evaluateDomainPreview(args?.request as DomainRequest));
     if (preview && ['get_setting', 'set_setting', 'delete_setting', 'fetch_orders', 'list_watches', 'list_trades', 'eelog_status', 'riven_comps', 'wfm_auth_status', 'live_top_prices', 'trade_session_state', 'submit_plan', 'list_notifications', 'mark_notifications_read', 'clear_notifications', 'get_notification_preferences', 'set_notification_preferences', 'test_notification'].includes(cmd)) return preview(cmd, args);
     if (cmd === 'get_setting') return Promise.resolve(localStorage.getItem(String(args?.key)));
     if (cmd === 'set_setting') { localStorage.setItem(String(args?.key), String(args?.value)); return Promise.resolve(null); }

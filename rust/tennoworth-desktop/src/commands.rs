@@ -13,3 +13,5 @@ pub mod watch;
 
 #[cfg(test)]
 mod bindings;
+
+pub mod domain;

@@ -11,12 +11,14 @@
   // is cheaper while silently assuming a full foundry would be wrong for
   // exactly the players who most need the answer.
   import {
-    cheapestPath,
     humanBuildTime,
-    planBuild,
+    type BuildPath,
+    type BuildPlan,
     type BuildPathKind,
     type SetPart,
   } from '../../domain/build-cost';
+  import { useDesktopServices } from '../../ui/desktop-context';
+  const { buildPlan } = useDesktopServices();
   import { glyphFor } from '../../ui/glyphs';
   import type { Market, OwnedRecord } from '../../contracts/data';
   import Glyph from '../../ui/Glyph.svelte';
@@ -35,10 +37,19 @@
     owned?: Map<string, OwnedRecord> | null;
   } = $props();
 
-  let plan = $derived(
-    planBuild(setSlug, setName, parts, market, owned, market?.recipes ?? null),
-  );
-  let best = $derived(cheapestPath(plan));
+  let plan = $state<BuildPlan | null>(null);
+  let best = $state<BuildPath | null>(null);
+  let planError = $state('');
+  $effect(() => {
+    const request = buildPlan(setSlug, setName, parts, market, owned, market?.recipes ?? null);
+    let active = true;
+    plan = null;
+    best = null;
+    planError = '';
+    request.then((result) => { if (active) { plan = result.plan; best = result.cheapest; } })
+      .catch(() => { if (active) planError = 'Build comparison unavailable. Try reopening this set.'; });
+    return () => { active = false; };
+  });
 
   const LABEL: Record<BuildPathKind, string> = {
     'buy-set': 'Buy the set',
@@ -60,6 +71,11 @@
 </script>
 
 <section class="bvb">
+  {#if planError}
+    <p class="ui-notice" data-tone="bad" role="alert">{planError}</p>
+  {:else if !plan}
+    <p role="status">Calculating build comparison…</p>
+  {:else}
   <header>
     <h4><Glyph name={glyphFor('set')} /> {setName}</h4>
     <p class="sub">
@@ -147,6 +163,7 @@
         .unverified.map((i) => `${i.count}× ${i.name}`)
         .join(', ')} - resources the scan can't see, so they aren't costed above.
     </p>
+  {/if}
   {/if}
 </section>
 

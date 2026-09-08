@@ -1,4 +1,4 @@
-// Inventory walker. Mirrors flatten_inventory() in wfm_inventory.py.
+// Browser-preview walker, parity-gated against native inventory normalization.
 
 import type { Inventory, InventoryStackEntry, InventoryUpgrade } from '../contracts/data';
 
