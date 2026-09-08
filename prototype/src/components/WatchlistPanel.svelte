@@ -147,11 +147,10 @@
   }
 </script>
 
-<section class="card ui-panel watchlist" data-testid="watchlist">
-  <header class="row">
-    <h2>Price watches</h2>
+<section class="ui-stack watchlist" data-testid="watchlist">
+  <header class="view-header row">
+    <div><h2>Price watches</h2><p class="lede">Get a desktop notification when an item reaches your target price.</p></div>
     <div class="row gap-sm">
-      <span class="muted">{watches.length} of 100</span>
       <button class="btn ghost" onclick={checkNow} disabled={checking || watches.length === 0}
         title="Run a check right now (the app also checks every 10 minutes in the background and notifies you).">
         {checking ? 'Checking…' : 'Check now'}
@@ -159,14 +158,14 @@
     </div>
   </header>
 
-  <p class="muted lead">
-    Get a desktop notification when an item you want to buy drops to your price, or when a live buyer bids what you'd sell for.
-    Checked every 10 minutes against warframe.market's online orders (your own listings excluded); one notification per watch per 6 hours.
-  </p>
-
+  <section class="wrap tw watch-create" aria-labelledby="watch-create-title">
+    <div class="rail"><h3 id="watch-create-title">Add a watch</h3></div>
   <div class="add">
-    <div class="pick">
+    <div class="pick ui-field">
+      <label for="watch-item">Item to watch</label>
+      <div class="pick-input">
       <input
+        id="watch-item"
         class="ui-input"
         type="text"
         placeholder="Item to watch - try “primed flow”, “ash prime set”…"
@@ -177,6 +176,7 @@
       {#if picked}
         <button class="btn xs ghost" onclick={clearPick} aria-label="Clear item">×</button>
       {/if}
+      </div>
       {#if !picked && results.length}
         <ul class="suggest" role="listbox">
           {#each results as r (r.slug)}
@@ -188,26 +188,32 @@
         </ul>
       {/if}
     </div>
-    <label>
+    <label class="ui-field">
+      <span>Notify when</span>
       <select class="ui-input" bind:value={side} onchange={onSideChange} aria-label="Watch side">
         <option value="sell">Tell me when the lowest ask is ≤</option>
         <option value="buy">Tell me when the highest bid is ≥</option>
       </select>
     </label>
-    <label>
-      <input class="ui-input" type="number" min="1" bind:value={threshold} aria-label="Threshold (plat)" style="width:5rem" disabled={!picked} />
-      <span class="muted">p</span>
+    <label class="ui-field threshold">
+      <span>Target price (p)</span>
+      <input class="ui-input" type="number" min="1" bind:value={threshold} aria-label="Threshold (plat)"  disabled={!picked} />
     </label>
     <button class="btn primary" onclick={add} disabled={!picked || threshold < 1 || adding}>Add watch</button>
   </div>
 
+    <div class="foot">Checks online orders every 10 minutes, excluding your own. At most one notification per watch every 6 hours.</div>
+  </section>
+  <section class="wrap tw" aria-labelledby="watch-list-title">
+    <div class="rail"><h3 id="watch-list-title">Your watches</h3><span class="exp">{watches.length} of 100</span></div>
   {#if loadError}
     <div class="ui-notice" data-tone="bad" role="alert">Couldn't load watches: {loadError}</div>
   {:else if watches.length === 0}
     <div class="ui-notice">No watches yet. Pick an item above.</div>
   {:else}
     <div class="scroll">
-      <table class="tw">
+      <table class="tw fixed">
+        <colgroup><col /><col style="width:10rem" /><col style="width:11rem" /><col style="width:8rem" /><col style="width:7rem" /></colgroup>
         <thead><tr><th class="l">Item</th><th>Condition</th><th>Last seen</th><th>Status</th><th>Action</th></tr></thead>
         <tbody>
           {#each watches as w (w.id)}
@@ -229,24 +235,30 @@
     </div>
   {/if}
 
+  </section>
   <Toast {toasts} ondismiss={(id) => (toasts = toasts.filter((x) => x.id !== id))} />
 </section>
 
 <style>
-  .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
-  .gap-sm { gap: 8px; }
-  .lead { margin: 0; font-size: var(--text-control); }
-  .add { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-  .pick { position: relative; flex: 1 1 260px; display: flex; align-items: center; gap: 4px; }
+  .row { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
+  .gap-sm { gap: var(--s2); }
+  .lede { margin: var(--s2) 0 0; color: var(--muted); }
+  .add { display: flex; flex-wrap: wrap; gap: var(--s3); align-items: end; padding: var(--s4) var(--inset); }
+  .add > .btn { min-height: var(--ctl-lg); }
+  .pick-input { display: flex; gap: var(--s1); min-width: 0; }
+  .watch-create { overflow: visible; }
+  .watchlist { gap: var(--s4); }
+  .threshold input { width: 7rem; }
+  .pick { position: relative; flex: 1 1 16rem; min-width: 0; }
   .pick input { flex: 1; min-width: 0; }
   .suggest {
-    position: absolute; top: 100%; left: 0; right: 0; z-index: 3;
+    position: absolute; top: 100%; left: 0; right: 0; z-index: var(--layer-menu);
     margin: 2px 0 0; padding: 4px; list-style: none;
     background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-panel);
     box-shadow: var(--shadow-pop);
   }
   .suggest li button {
-    width: 100%; display: flex; justify-content: space-between; gap: 10px;
+    width: 100%; display: flex; justify-content: space-between; gap: var(--s3);
     background: none; border: 0; padding: 6px 8px; color: var(--fg); cursor: pointer; text-align: left; font: inherit; border-radius: var(--radius-ctl);
   }
   .suggest li button:hover { background: var(--panel-2); }
@@ -262,4 +274,7 @@
     .add > label { min-width: 0; }
     .add select { max-width: 100%; }
   }
+  table { min-width: 52rem; }
+  td:last-child .btn { white-space: nowrap; }
+  .ui-notice { margin: var(--s4) var(--inset); }
 </style>

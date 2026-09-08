@@ -1261,7 +1261,7 @@
     </div>
   </aside>
 
-  <main class="workspace">
+  <main class="workspace" class:reading-view={['sets', 'relics', 'routines', 'install'].includes(effectiveView)}>
 
     {@render generalBanners()}
 
@@ -1300,7 +1300,8 @@
         </p>
       </section>
       {#if setRecos.length > 0}
-        <section class="card ui-panel set-recos">
+        <section class="wrap tw set-recos">
+          <div class="rail"><h3>Set opportunities</h3></div>
           {#each setRecos as r (r.set_slug)}
             <div class="reco row">
               <div class="reco-body">
@@ -1404,12 +1405,13 @@
         </p>
       </section>
       {#if relicPlan.length > 0}
-        <section class="card ui-panel relic-planner">
+        <section class="wrap tw relic-planner">
+          <div class="rail"><h3>Relic decisions</h3></div>
           <div class="relic-grid">
             {#each relicVisible as p (p.relic_slug)}
               <div class="relic-card">
                 <div class="relic-title">
-                  <strong class="reco-verb">Crack</strong>
+                  <strong class="reco-verb">{p.decision?.verdict === 'sell-intact' ? 'Sell intact' : p.decision?.verdict === 'refine' ? 'Refine' : p.decision?.verdict === 'crack' ? 'Crack intact' : 'Review'}</strong>
                   <a
                     href={wfmItemUrl(p.relic_slug)}
                     target="_blank"
@@ -1519,7 +1521,7 @@
            built before that switch (or carried through a DE outage) may not
            have it, and an empty table would read as "he is selling nothing". -->
       {#if voidTrader?.inventory?.length}
-        <section class="card ui-panel">
+        <section class="baro-stock">
           <BaroBoard market={market} baro={voidTrader} owned={resolved.owned} />
         </section>
       {/if}
@@ -1527,7 +1529,7 @@
       <!-- Vault rotations and Darvo, from the same worldState poll. An
            unvaulting is the most expensive surprise in prime trading and it is
            announced days ahead. -->
-      <section class="card ui-panel">
+      <section class="baro-calendar">
         <TraderCalendar market={market} owned={resolved.owned} />
       </section>
 
@@ -1541,10 +1543,10 @@
         </p>
       </section>
 
-      <section class="card ui-panel">
+      <section class="baro-calendar">
         <TraderCalendar market={market} owned={resolved.owned} />
       </section>
-      <section class="card ui-panel routine">
+      <section class="card ui-panel routine routine-timing">
         <div class="routine-clocks">
           <div class="clock">
             <span class="clock-label">Daily reset</span>
@@ -1564,7 +1566,7 @@
         </div>
       </section>
 
-      <details class="routine-checklist" bind:open={routineChecklistOpen}>
+      <details class="routine-checklist wrap tw" bind:open={routineChecklistOpen}>
         <summary>{routineChecklistOpen ? 'Hide checklist' : "Show me today's checklist"}</summary>
 
         <section class="card ui-panel routine">
@@ -1622,20 +1624,14 @@
       />
 
     {:else if effectiveView === 'watches'}
-      <section class="view-header">
-        <h2>Price watches</h2>
-        <p class="lede">Desktop notifications when an item hits your price - checked every 10 minutes against live warframe.market orders.</p>
-      </section>
+
       <WatchlistPanel {market} />
 
     {:else if effectiveView === 'notifications'}
       <NotificationInbox onopen={(target) => setView(target)} onsettings={() => setView('settings')} />
 
     {:else if effectiveView === 'ledger'}
-      <section class="view-header">
-        <h2>Ledger</h2>
-        <p class="lede">Every trade the game confirmed, read from its own log - realised plat, not estimates.</p>
-      </section>
+
       <LedgerPanel onsetautoclose={(on) => store.setSetting('auto-close-sold', on ? 'on' : 'off')} />
 
     {:else if effectiveView === 'install'}
@@ -1777,7 +1773,7 @@
 
 {#snippet faqContent()}
   <section class="faq" id="faq">
-    <h2>FAQ</h2>
+    <h2>{isDesktop ? 'Using TennoWorth' : 'FAQ'}</h2>
 
     <details>
       <summary>Is this safe? Can I get banned?</summary>
@@ -2732,15 +2728,16 @@
      distinguished by a small uppercase pill so the user can scan and
      pick a strategy without reading every detail line. Net plat is the
      right-aligned headline number per row. */
-  .set-recos { padding: 14px 16px; gap: 8px; }
+  .set-recos { padding: 0; }
   .reco {
     border-top: 1px var(--rule) var(--hairline);
-    padding: 10px 0;
+    padding: var(--s4) var(--inset);
     align-items: center;
   }
   .reco:first-of-type { border-top: none; }
   .reco-body { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
-  .reco-title { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .reco-title { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
+  .reco-title a { order: -1; flex: 1 1 16rem; }
   .reco-title a { color: var(--fg); text-decoration: none; font-weight: 600; font-size: var(--text-control); }
   .reco-title a:hover { color: var(--accent); text-decoration: underline; }
   .kind {
@@ -2770,9 +2767,6 @@
   .reco-detail strong { color: var(--fg); font-weight: 600; }
   .good-text { color: var(--good); }
   .bad-text { color: var(--bad); }
-  /* The net plat is inline with the verb + set name, so the phrase reads
-     "Complete Mesa Prime +95p" as a single declarative sentence rather
-     than a verb-on-left / number-on-right two-column row. */
   .reco-net-inline {
     font-family: var(--font-mono);
     font-size: var(--text-body);
@@ -2862,12 +2856,8 @@
   .routine-checklist summary:hover { color: var(--accent); }
   .routine-checklist[open] summary { color: var(--accent); }
 
-  /* Relic planner - three-card grid above the main table. Equal-weight
-     cards because the user is making a "what tonight" choice and equal
-     real estate makes the comparison direct. Each card leads with EPP
-     (expected plat per crack); the moving-rewards fraction flags traps
-     where a high-EPP relic has dead reward markets. */
-  .relic-planner { padding: 14px 16px; gap: 12px; }
+
+  .relic-planner { padding: 0; gap: 0; }
   .build-vs-buy { margin-top: 8px; }
   .build-vs-buy > summary { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
   .build-vs-buy[open] > summary { margin-bottom: 8px; }
@@ -3043,4 +3033,27 @@
   /* .cryptobox dialog styling moved to WfmAuthDialogs.svelte and
      ExportImportDialogs.svelte - no more dialog.cryptobox elements render
      directly in this template. */
+  main.reading-view > :global(*) { width: 100%; max-width: 64rem; }
+  main.workspace { gap: var(--s4); padding: var(--s5); }
+  .relic-grid { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .relic-card { border: 0; border-top: 1px var(--rule) var(--border); background: var(--panel); padding: var(--s4) var(--inset); }
+  .relic-card:first-child { border-top: 0; }
+  .relic-title { justify-content: flex-start; gap: var(--s3); }
+  .relic-title a { order: -1; flex: 1; }
+  .relic-rewards summary { min-height: var(--ctl); }
+  .routine-timing { padding: 0; }
+  .routine-clocks { gap: 0; }
+  .clock { border: 0; border-right: 1px var(--rule) var(--border); padding: var(--s4) var(--inset); background: var(--panel); gap: var(--s1); }
+  .clock:last-child { border-right: 0; }
+  .routine-checklist { padding: 0; }
+  .routine-checklist > summary { padding: var(--s3) var(--inset); min-height: var(--bar); background: var(--ink-bar); color: var(--on-ink); }
+  .routine-checklist > summary:hover { color: var(--on-ink); }
+  .routine-checklist > summary:focus-visible { outline-color: var(--on-ink); outline-offset: -3px; }
+  .routine-checklist .routine { border: 0; border-top: 1px var(--rule) var(--border); padding: var(--s4) var(--inset); }
+  main.workspace .faq { margin: 0; padding: 0; }
+  main.workspace .faq > h2 { margin: 0; padding: var(--s2) var(--inset); min-height: var(--rail); }
+  main.workspace .faq details { margin: 0 var(--inset); padding-block: var(--s3); }
+  main.workspace .faq details p { max-width: 75ch; }
+  main.workspace .faq > .trust-lede { padding: var(--s4) var(--inset); margin: 0; }
+  @media (max-width: 760px) { main.workspace { padding: var(--s4); } .clock { border-right: 0; border-bottom: 1px var(--rule) var(--border); } .clock:last-child { border-bottom: 0; } }
 </style>
