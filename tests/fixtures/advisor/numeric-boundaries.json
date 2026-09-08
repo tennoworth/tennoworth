@@ -1,0 +1,548 @@
+[
+  {
+    "name": "zero history keeps its existing Infinity percentage text",
+    "operation": "advisor",
+    "input": {
+      "slugs": [
+        "example_prime_set"
+      ],
+      "market": {
+        "items": {
+          "example_prime_set": {
+            "median_now": 10
+          }
+        },
+        "set_to_parts": {
+          "example_prime_set": {
+            "parts": []
+          }
+        },
+        "calendar": {
+          "primes": {
+            "example_prime_set": {
+              "released": "2020-01-01",
+              "vaulted": false
+            }
+          }
+        }
+      },
+      "history": {
+        "start": "2026-01-01",
+        "items": {
+          "example_prime_set": {
+            "median": [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+          }
+        }
+      },
+      "now_ms": 1787184000000
+    },
+    "error": null,
+    "legacy": {
+      "operation": "advisor",
+      "result": {
+        "example_prime_set": {
+          "advice": "sell_now",
+          "reasons": [
+            "at Infinity% of its 1-year high (0p)"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "large integral percentage is not rounded twice",
+    "operation": "advisor",
+    "input": {
+      "slugs": [
+        "example_prime_set"
+      ],
+      "market": {
+        "items": {
+          "example_prime_set": {
+            "median_now": 45035996273704.97
+          }
+        },
+        "set_to_parts": {
+          "example_prime_set": {
+            "parts": []
+          }
+        },
+        "calendar": {
+          "primes": {
+            "example_prime_set": {
+              "released": "2020-01-01",
+              "vaulted": false
+            }
+          }
+        }
+      },
+      "history": {
+        "start": "2026-01-01",
+        "items": {
+          "example_prime_set": {
+            "median": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+          }
+        }
+      },
+      "now_ms": 1787184000000
+    },
+    "error": null,
+    "legacy": {
+      "operation": "advisor",
+      "result": {
+        "example_prime_set": {
+          "advice": "neutral",
+          "reasons": [
+            "not vaulted",
+            "at 4503599627370497% of its 1-year high",
+            "30 d move 0%"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "finite large comparison keeps JS exponent text",
+    "operation": "advisor",
+    "input": {
+      "slugs": [
+        "example_prime_set"
+      ],
+      "market": {
+        "items": {
+          "example_prime_set": {
+            "median_now": 10
+          }
+        },
+        "set_to_parts": {
+          "example_prime_set": {
+            "parts": []
+          }
+        },
+        "calendar": {
+          "primes": {
+            "example_prime_set": {
+              "released": "2020-01-01",
+              "vaulted": false
+            }
+          }
+        }
+      },
+      "history": {
+        "start": "2026-01-01",
+        "items": {
+          "example_prime_set": {
+            "median": [1e-20, 1e-20, 1e-20, 1e-20, 1e-20, 1e-20, 1e-20, 1e-20, 1e-20, 1e-20, 1e-20, 1e-20, 1e-20, 1e-20, 1e-20, 1e-20, 1e-20, 1e-20, 1e-20, 1e-20]
+          }
+        }
+      },
+      "now_ms": 1787184000000
+    },
+    "error": null,
+    "legacy": {
+      "operation": "advisor",
+      "result": {
+        "example_prime_set": {
+          "advice": "neutral",
+          "reasons": [
+            "not vaulted",
+            "at 1e+23% of its 1-year high",
+            "30 d move 0%"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "tiny positive history rejects overflowing slope",
+    "operation": "history",
+    "input": {
+      "series": {
+        "median": [1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+        "volume": [],
+        "subtype": null
+      },
+      "min_days": 20,
+      "buckets": 52
+    },
+    "error": "History price movement exceeds the supported numeric range.",
+    "legacy": {
+      "operation": "history",
+      "result": {
+        "points": [
+          [0, 1e-320],
+          [1, 1e-320],
+          [2, 1e-320],
+          [3, 1e-320],
+          [4, 1e-320],
+          [5, 1e-320],
+          [6, 1e-320],
+          [7, 1e-320],
+          [8, 1e-320],
+          [9, 1e-320],
+          [10, 1e-320],
+          [11, 1e-320],
+          [12, 1e-320],
+          [13, 1e-320],
+          [14, 1e-320],
+          [15, 10],
+          [16, 10],
+          [17, 10],
+          [18, 10],
+          [19, 10],
+          [20, 10],
+          [21, 10],
+          [22, 10],
+          [23, 10],
+          [24, 10],
+          [25, 10],
+          [26, 10],
+          [27, 10],
+          [28, 10],
+          [29, 10]
+        ],
+        "stats": {
+          "latest": 10,
+          "latestIdx": 29,
+          "baseline": 1e-320,
+          "deltaPct": null,
+          "high": 10,
+          "low": 1e-320,
+          "tradedDays": 30
+        },
+        "weekly": [1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10],
+        "slope30": null
+      }
+    }
+  },
+  {
+    "name": "tiny baseline rejects overflowing yearly delta",
+    "operation": "history",
+    "input": {
+      "series": {
+        "median": [1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 10],
+        "volume": [],
+        "subtype": null
+      },
+      "min_days": 20,
+      "buckets": 52
+    },
+    "error": "History price change exceeds the supported numeric range.",
+    "legacy": {
+      "operation": "history",
+      "result": {
+        "points": [
+          [0, 1e-320],
+          [1, 1e-320],
+          [2, 1e-320],
+          [3, 1e-320],
+          [4, 1e-320],
+          [5, 1e-320],
+          [6, 1e-320],
+          [7, 1e-320],
+          [8, 1e-320],
+          [9, 1e-320],
+          [10, 1e-320],
+          [11, 1e-320],
+          [12, 1e-320],
+          [13, 1e-320],
+          [14, 1e-320],
+          [15, 1e-320],
+          [16, 1e-320],
+          [17, 1e-320],
+          [18, 1e-320],
+          [19, 1e-320],
+          [20, 1e-320],
+          [21, 1e-320],
+          [22, 1e-320],
+          [23, 1e-320],
+          [24, 1e-320],
+          [25, 1e-320],
+          [26, 1e-320],
+          [27, 1e-320],
+          [28, 1e-320],
+          [29, 1e-320],
+          [30, 10]
+        ],
+        "stats": {
+          "latest": 10,
+          "latestIdx": 30,
+          "baseline": 1e-320,
+          "deltaPct": null,
+          "high": 10,
+          "low": 1e-320,
+          "tradedDays": 31
+        },
+        "weekly": [1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 10],
+        "slope30": 0
+      }
+    }
+  },
+  {
+    "name": "tiny advisor series rejects overflowing slope",
+    "operation": "advisor",
+    "input": {
+      "slugs": [
+        "example_prime_set"
+      ],
+      "market": {
+        "items": {
+          "example_prime_set": {
+            "median_now": 10
+          }
+        },
+        "set_to_parts": {
+          "example_prime_set": {
+            "parts": []
+          }
+        },
+        "calendar": {
+          "primes": {
+            "example_prime_set": {
+              "released": "2020-01-01",
+              "vaulted": false
+            }
+          }
+        }
+      },
+      "history": {
+        "start": "2026-01-01",
+        "items": {
+          "example_prime_set": {
+            "median": [1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]
+          }
+        }
+      },
+      "now_ms": 1787184000000
+    },
+    "error": "History price movement exceeds the supported numeric range.",
+    "legacy": {
+      "operation": "advisor",
+      "result": {
+        "example_prime_set": {
+          "advice": "sell_now",
+          "reasons": [
+            "at 100% of its 1-year high (10p)",
+            "30 d move +Infinity%"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "tiny positive year high rejects overflowing comparison",
+    "operation": "advisor",
+    "input": {
+      "slugs": [
+        "example_prime_set"
+      ],
+      "market": {
+        "items": {
+          "example_prime_set": {
+            "median_now": 10
+          }
+        },
+        "set_to_parts": {
+          "example_prime_set": {
+            "parts": []
+          }
+        },
+        "calendar": {
+          "primes": {
+            "example_prime_set": {
+              "released": "2020-01-01",
+              "vaulted": false
+            }
+          }
+        }
+      },
+      "history": {
+        "start": "2026-01-01",
+        "items": {
+          "example_prime_set": {
+            "median": [1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320]
+          }
+        }
+      },
+      "now_ms": 1787184000000
+    },
+    "error": "Advisor price comparison exceeds the supported numeric range.",
+    "legacy": {
+      "operation": "advisor",
+      "result": {
+        "example_prime_set": {
+          "advice": "neutral",
+          "reasons": [
+            "not vaulted",
+            "at Infinity% of its 1-year high",
+            "30 d move 0%"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "tiny pre-vault baseline rejects overflowing ramp",
+    "operation": "advisor",
+    "input": {
+      "slugs": [
+        "example_prime_set"
+      ],
+      "market": {
+        "items": {
+          "example_prime_set": {
+            "median_now": 10
+          }
+        },
+        "set_to_parts": {
+          "example_prime_set": {
+            "parts": []
+          }
+        },
+        "calendar": {
+          "primes": {
+            "example_prime_set": {
+              "released": "2020-01-01",
+              "vaulted": true,
+              "vault_date": "2026-01-31"
+            }
+          }
+        }
+      },
+      "history": {
+        "start": "2026-01-01",
+        "items": {
+          "example_prime_set": {
+            "median": [1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 1e-320, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]
+          }
+        }
+      },
+      "now_ms": 1787184000000
+    },
+    "error": "Advisor vault comparison exceeds the supported numeric range.",
+    "legacy": {
+      "operation": "advisor",
+      "result": {
+        "example_prime_set": {
+          "advice": "sell_now",
+          "reasons": [
+            "at 100% of its 1-year high (10p)",
+            "30 d move 0%"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "advisor numeric string is an explicit invalid snapshot",
+    "operation": "advisor",
+    "input": {
+      "slugs": [
+        "example_prime_set"
+      ],
+      "market": {
+        "items": {
+          "example_prime_set": {
+            "median_now": "10"
+          }
+        },
+        "set_to_parts": {
+          "example_prime_set": {
+            "parts": []
+          }
+        },
+        "calendar": {
+          "primes": {
+            "example_prime_set": {
+              "released": "2020-01-01",
+              "vaulted": false
+            }
+          }
+        }
+      },
+      "history": {
+        "start": "2026-01-01",
+        "items": {
+          "example_prime_set": {
+            "median": [10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]
+          }
+        }
+      },
+      "now_ms": 1787184000000
+    },
+    "error": "Advisor market prices must be numbers or null.",
+    "legacy": {
+      "operation": "advisor",
+      "result": {
+        "example_prime_set": {
+          "advice": "neutral",
+          "reasons": [
+            "not vaulted",
+            "at 100% of its 1-year high",
+            "30 d move 0%"
+          ]
+        }
+      }
+    }
+  },
+  {
+    "name": "trade numeric string is an explicit invalid snapshot",
+    "operation": "trade_session",
+    "input": {
+      "candidates": [
+        {
+          "key": "item",
+          "slug": "item",
+          "name": "Item",
+          "owned": 1,
+          "sellable": 1,
+          "leveled": 0,
+          "type": "Mod",
+          "hold": false,
+          "bulk": false,
+          "market": {
+            "low_sell": "20",
+            "vol": 10
+          }
+        }
+      ],
+      "mode": "fast",
+      "budget": 1,
+      "target": null
+    },
+    "error": "Trade Session market prices and volumes must be numbers or null.",
+    "legacy": {
+      "operation": "trade_session",
+      "result": {
+        "rows": [
+          {
+            "key": "item",
+            "slug": "item",
+            "name": "Item",
+            "owned": 1,
+            "sellable": 1,
+            "leveled": 0,
+            "type": "Mod",
+            "hold": false,
+            "bulk": false,
+            "market": {
+              "low_sell": "20",
+              "vol": 10
+            },
+            "platinum": 20,
+            "per_trade": 1,
+            "quantity": 1,
+            "trades": 1,
+            "reason": "Liquid singles; match credible asks.",
+            "bid": null
+          }
+        ],
+        "trades": 1,
+        "total": 20,
+        "excluded": [],
+        "target": null,
+        "shortfall": null
+      }
+    }
+  }
+]
