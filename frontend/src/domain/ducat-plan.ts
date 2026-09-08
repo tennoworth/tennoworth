@@ -59,19 +59,22 @@ export function spareCopies(owned: Map<string, OwnedRecord>, slug: string): numb
 export function scrapCandidates(
   owned: Map<string, OwnedRecord> | null | undefined,
   market: Market | null | undefined,
+  availability?: ReadonlyMap<string, number>,
 ): ScrapCandidate[] {
   if (!owned || !market?.items) return [];
 
   const bySlug = new Map<string, { name: string; count: number }>();
-  for (const rec of owned.values()) {
+  for (const [key, rec] of owned) {
+    if (availability && (rec.subtype || rec.slug.endsWith('_set'))) continue;
+    const count = availability ? availability.get(key) ?? 0 : rec.count;
     const cur = bySlug.get(rec.slug);
-    if (cur) cur.count += rec.count;
-    else bySlug.set(rec.slug, { name: rec.name, count: rec.count });
+    if (cur) cur.count += count;
+    else bySlug.set(rec.slug, { name: rec.name, count });
   }
 
   const out: ScrapCandidate[] = [];
   for (const [slug, { name, count }] of bySlug) {
-    const spare = Math.max(0, count - 1);
+    const spare = Math.max(0, count - (availability ? 0 : 1));
     if (spare === 0) continue;
     const entry = market.items[slug];
     const ducats = entry?.ducats ?? 0;

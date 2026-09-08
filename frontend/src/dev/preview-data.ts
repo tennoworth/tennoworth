@@ -2,6 +2,8 @@ import { evaluateDomainPreview } from './domain-preview';
 import type { DomainRequest } from '../contracts/generated/domain';
 import type { OwnedRiven } from '../domain/rivens';
 import { serializeSnapshot } from '../domain/snapshot';
+import { sampleAllocation } from './protection-preview';
+import type { ProtectionPlan } from '../contracts/protection';
 
 // This module is dynamically imported only by the development preview.
 export function createPreview(scenario: string) {
@@ -11,10 +13,22 @@ export function createPreview(scenario: string) {
     ['ivara_prime_neuroptics_blueprint', { count: 4, name: 'Ivara Prime Neuroptics Blueprint', type: 'Warframe', slug: 'ivara_prime_neuroptics_blueprint', subtype: null, kept_lvl: null, leveled: 0 }],
     ['neo_n8_relic', { count: 7, name: 'Neo N8 Relic', type: 'Relic', slug: 'neo_n8_relic', subtype: 'intact', kept_lvl: null, leveled: 0 }],
   ]);
-  const sessionSample = scenario === 'session' || scenario.endsWith('-trades');
-  if (sessionSample) {
-    owned.set('arcane_energize', { count: 12, name: 'Arcane Energize', type: 'Arcane', slug: 'arcane_energize', subtype: null, kept_lvl: null, leveled: 0 });
-    owned.set('primed_flow', { count: 6, name: 'Primed Flow', type: 'Mod', slug: 'primed_flow', subtype: null, kept_lvl: null, leveled: 0 });
+  const sessionSample = scenario === 'session' || scenario.endsWith('-trades') || scenario.startsWith('protection') || scenario === 'session-sets' || scenario.startsWith('buyers');
+  if (scenario !== 'session-sets') {
+    owned.set('arcane_energize', { count: sessionSample ? 24 : 12, name: 'Arcane Energize', type: 'Arcanes', slug: 'arcane_energize', subtype: null, kept_lvl: null, leveled: 0 });
+    owned.set('primed_flow', { count: 6, name: 'Primed Flow', type: 'Mods', slug: 'primed_flow', subtype: null, kept_lvl: null, leveled: 0 });
+  }
+  if (scenario.startsWith('protection')) {
+    owned.set('akbolto_prime_barrel', { count: 5, name: 'Akbolto Prime Barrel', type: 'Misc', slug: 'akbolto_prime_barrel', subtype: null, kept_lvl: null, leveled: 0 });
+  }
+  let protectionPlan: ProtectionPlan = { reserves: {}, goal: null };
+  const sampleRecipe = { akbolto_prime_barrel: 2, akbolto_prime_blueprint: 1, akbolto_prime_link: 1, akbolto_prime_receiver: 2 };
+  if (scenario === 'session-sets') {
+    owned.clear();
+    for (const [slug, required] of Object.entries(sampleRecipe)) {
+      const name = slug.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+      owned.set(slug, { count: required * 2 + (slug.endsWith('barrel') ? 1 : 0), name, type: 'Misc', slug, subtype: null, kept_lvl: null, leveled: 0 });
+    }
   }
   const rivens: OwnedRiven[] = [{
     path: '/Lotus/Upgrades/Mods/Randomized/LotusRifleRandomModRare',
@@ -33,7 +47,7 @@ export function createPreview(scenario: string) {
   let notifications = empty ? [] : [{ id: 1, category: 'trades', title: 'Sold Pyrana Prime Set for 90p', body: 'Pyrana Prime Set ×1 · Listing update failed; review My Orders. Your completed trade is saved in the Ledger.', target: 'orders', created_at: Math.floor(Date.now() / 1000), read: false, delivery: 'failed' }];
   let notificationPreferences = { popups: true, categories: Object.fromEntries(['trades', 'watches', 'scans', 'baro', 'calendar', 'digest'].map(k => [k, { enabled: true, native: true }])) };
   const responses: Record<string, unknown> = {
-    fetch_orders: { data: { sell: empty ? [] : [
+    fetch_orders: { data: { sell: empty || scenario.startsWith('buyers') ? [] : [
       { id: 'preview-order', platinum: 90, visible: true, quantity: 2, item: { name: 'Pyrana Prime Set', slug: 'pyrana_prime_set' } },
       ...(sessionSample ? [{ id: 'preview-flow', platinum: 26, visible: true, quantity: 5, rank: 0, item: { name: 'Primed Flow', slug: 'primed_flow' } }] : []),
       ...(sessionSample ? [{ id: 'preview-arcane', platinum: 48, perTrade: 6, visible: false, quantity: 12, rank: 0, item: { name: 'Arcane Energize', slug: 'arcane_energize' } }] : []),
@@ -48,11 +62,12 @@ export function createPreview(scenario: string) {
     }],
     eelog_status: { path: '/sample/Warframe/EE.log', auto_close: false },
     trade_session_state: {
+      set_recipes: scenario === 'session-sets' ? { akbolto_prime_set: sampleRecipe } : {},
       allowance: { remaining: scenario === 'zero-trades' ? 0 : scenario === 'unknown-trades' ? null : 24,
         mastery_rank: scenario === 'unknown-trades' ? null : 24, observed_at: now - 120, utc_day: Math.floor(now / 86400), snapshot_id: 1,
         confidence: scenario === 'estimated-trades' ? 'estimated' : scenario === 'unknown-trades' ? 'unknown' : 'scanned',
         reason: null, monitoring: true },
-      quantities: { pyrana_prime_set: 30, ivara_prime_neuroptics_blueprint: 4, arcane_energize: 12, primed_flow: 6 },
+      quantities: { ...Object.fromEntries([...owned].map(([slug, row]) => [slug, row.count])), ...(scenario === 'session-sets' ? { akbolto_prime_set: 2 } : {}) },
       bulk_slugs: scenario === 'logged-out' ? [] : ['arcane_energize'],
     },
     riven_comps: [{
@@ -65,6 +80,21 @@ export function createPreview(scenario: string) {
   };
   return async (command: string, args?: Record<string, unknown>): Promise<unknown> => {
     if (command === 'evaluate_domain') return evaluateDomainPreview(args?.request as DomainRequest);
+    if (command === 'save_protection_plan') {
+      if (scenario === 'protection-save-error') throw new Error('Sample protection save failed. Your edits are retained.');
+      protectionPlan = JSON.parse(JSON.stringify(args?.plan)) as ProtectionPlan;
+      return null;
+    }
+    if (command === 'protection_state') {
+      const unknown = scenario === 'protection-error' || scenario === 'logged-out';
+      const listed = new Map((responses.fetch_orders as {data:{sell:Array<{quantity:number,item:{slug:string}}>}}).data.sell.map(row => [row.item.slug, row.quantity]));
+      return { plan: structuredClone(protectionPlan), snapshot_id: empty ? null : 1,
+        items: Object.fromEntries([...owned.values()].filter(row => !row.subtype && !row.slug.endsWith('_set')).map(row => [row.slug,
+          sampleAllocation(row.count, row.leveled, Number(settings.get('reserve-copies') ?? 0),
+            (protectionPlan.reserves[row.slug] ?? 0) + (protectionPlan.goal === 'akbolto_prime_set' ? sampleRecipe[row.slug as keyof typeof sampleRecipe] ?? 0 : 0),
+            unknown ? null : listed.get(row.slug) ?? 0)])),
+        issues: unknown ? ['Unlock WFM to account for your current listings.'] : [] };
+    }
     if (command === 'list_notifications') {
       if (scenario === 'loading') await new Promise(resolve => setTimeout(resolve, 1500));
       if (scenario === 'error') throw new Error('Could not load notifications. Retry when storage is available.');
@@ -85,7 +115,21 @@ export function createPreview(scenario: string) {
       }
       return structuredClone(responses[command]);
     }
-    if (command === 'live_top_prices') return [];
+    if (command === 'live_top_prices') {
+      if (!scenario.startsWith('buyers')) return [];
+      if (scenario === 'buyers-error') throw new Error('Sample buyer lookup failed.');
+      return (args?.queries as Array<{ slug: string; rank?: number; subtype?: string }>).map(query => ({
+        ...query, buys: [12, 10], sells: [15], low_sell: 15, top_buy: 12,
+        buyer_book: {
+          observed_at: new Date(Date.now() - (scenario === 'buyers-stale' ? 90_000 : 0)).toISOString(),
+          own_orders_excluded: scenario !== 'buyers-locked',
+          orders: scenario === 'buyers-empty' ? [] : [
+            { id: 'sample-buyer-a', user_id: 'sample-a', name: 'SampleBuyerA', user_slug: 'sample_buyer_a', status: 'ingame', platform: 'pc', crossplay: true, quantity: 2, per_trade: 1, platinum: 12 },
+            { id: 'sample-buyer-b', user_id: 'sample-b', name: 'SampleBuyerB', user_slug: 'sample_buyer_b', status: 'online', platform: 'pc', crossplay: true, quantity: 3, per_trade: 1, platinum: 10 },
+          ],
+        },
+      }));
+    }
     if (command === 'submit_plan') return { plan_id: 'preview-plan', results: (args?.items as Array<{slug: string}>).map(i => ({
       slug: i.slug, status: 'ok', action: i.slug === 'primed_flow' ? 'updated' : 'created', order_id: `preview-${i.slug}`,
     })) };

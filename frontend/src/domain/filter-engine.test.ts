@@ -125,8 +125,24 @@ describe('Spares preset (typesAny + sparesOnly)', () => {
     expect(bySlug.hammer_shot.sellable).toBe(4);
     expect(bySlug.acid_shells.sellable).toBe(2);
     expect(bySlug.arcane_x.sellable).toBe(1);
-    // potential is spares × avg, ignoring the global reserve
     expect(bySlug.hammer_shot.potential_plat).toBe(4 * 50);
+  });
+
+  it.each([
+    { count: 5, kept_lvl: 5, leveled: 0, reserve: 3, available: 2 },
+    { count: 5, kept_lvl: null, leveled: 0, reserve: 3, available: 2 },
+    { count: 5, kept_lvl: 5, leveled: 2, reserve: 3, available: 2 },
+    { count: 5, kept_lvl: 5, leveled: 3, reserve: 2, available: 2 },
+    { count: 5, kept_lvl: 5, leveled: 0, reserve: 5, available: 0 },
+    { count: 5, kept_lvl: 5, leveled: 0, reserve: 8, available: 0 },
+  ])('preserves the keep-copy limit in Spares: %j', ({ reserve, available, ...record }) => {
+    const rows = computeResults(owned(rec('a', record)), market({ a: item() }), spares(), reserve);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].sellable).toBe(available);
+    expect(rows[0].potential_plat).toBe(available * 50);
+    const ordinary = computeResults(owned(rec('a', record)), market({ a: item() }),
+      { ...baseFilters(), hideAtLvl: Infinity }, reserve);
+    expect(rows[0].sellable).toBeLessThanOrEqual(ordinary[0].sellable);
   });
 
   it('never counts leveled (XP > 0, untradeable) copies as spares', () => {

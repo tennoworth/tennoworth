@@ -16,7 +16,7 @@ describe('planner shared contracts', () => {
       case 'sets': output = deriveSetRecos(owned, market, input.limit ?? undefined); break;
       case 'relic': output = deriveRelicPlan(owned, market, input.limit ?? undefined); break;
       case 'ducat': {
-        const candidates = scrapCandidates(owned, market);
+        const candidates = scrapCandidates(owned, market, 'quantitiesAreAvailable' in input && input.quantitiesAreAvailable ? new Map([...owned].map(([key, row]) => [key, row.count])) : undefined);
         output = { candidates, plan: planDucats(candidates, input.target!, input.keepAbove ?? undefined) }; break;
       }
       case 'build': {

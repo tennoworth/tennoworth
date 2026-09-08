@@ -124,6 +124,7 @@ fn subnormal_prices_cannot_turn_a_priced_ducat_ratio_into_null() {
         market: serde_json::json!({"items":{"a":{"low_sell":5e-324,"ducats":100}}}),
         target: 45.0,
         keep_above: Some(15.0),
+        quantities_are_available: None,
     };
     assert!(validate_ducat_request(&request).is_err());
     request.market = serde_json::json!({"items":{"a":{"low_sell":0,"ducats":100}}});

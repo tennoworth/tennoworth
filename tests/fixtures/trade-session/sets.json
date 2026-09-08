@@ -1,0 +1,25 @@
+{
+  "parts": {
+    "barrel": 2,
+    "receiver": 1,
+    "blueprint": 1
+  },
+  "owned": {
+    "barrel": 5,
+    "receiver": 2,
+    "blueprint": 2
+  },
+  "set_price": 65,
+  "part_prices": {
+    "barrel": 12,
+    "receiver": 14,
+    "blueprint": 18
+  },
+  "expected_sets": 2,
+  "expected_left": {
+    "barrel": 1,
+    "receiver": 0,
+    "blueprint": 0
+  },
+  "trade_slots": 4
+}

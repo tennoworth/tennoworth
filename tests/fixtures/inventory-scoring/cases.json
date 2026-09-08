@@ -1480,6 +1480,226 @@
         "spares_only": false
       },
       "expected": []
+    },
+    {
+      "name": "protected allocation caps native scoring",
+      "request": {
+        "owned": [
+          [
+            "item|",
+            {
+              "count": 5,
+              "name": "Item",
+              "type": "Mods",
+              "slug": "item",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "market": {
+          "items": {
+            "item": {
+              "avg": 20,
+              "low_sell": 1,
+              "top_buy": 25,
+              "vol": 10,
+              "ratio": 1,
+              "buys": 1,
+              "sells": 1,
+              "low5_avg": 22,
+              "medians_7d": [
+                0,
+                10,
+                20
+              ],
+              "median_now": 40,
+              "median_90d": 30,
+              "donch_top_90d": 40,
+              "donch_bot_90d": 10
+            }
+          },
+          "usage": {},
+          "set_to_parts": {}
+        },
+        "reserve_copies": 0,
+        "spares_only": false,
+        "availability": {
+          "item|": 2
+        }
+      },
+      "expected": [
+        {
+          "key": "item|",
+          "sellable": 2,
+          "clearing_price": 40,
+          "sell_score": 80,
+          "patience": false,
+          "ducats": null,
+          "plat_per_100d": null,
+          "potential_plat": 40,
+          "raw_value": 44,
+          "medians_7d": [
+            10,
+            20
+          ],
+          "median_90d": 30,
+          "delta_90d_pct": 33.33333333333333,
+          "timing": "peak",
+          "demand": {
+            "usage": null,
+            "inherited": false,
+            "liquidity": "unknown",
+            "band": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "unknown allocation is not free inventory",
+      "request": {
+        "owned": [
+          [
+            "item|",
+            {
+              "count": 5,
+              "name": "Item",
+              "type": "Mods",
+              "slug": "item",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "market": {
+          "items": {
+            "item": {
+              "avg": 20,
+              "low_sell": 1,
+              "top_buy": 25,
+              "vol": 10,
+              "ratio": 1,
+              "buys": 1,
+              "sells": 1,
+              "low5_avg": 22,
+              "medians_7d": [
+                0,
+                10,
+                20
+              ],
+              "median_now": 40,
+              "median_90d": 30,
+              "donch_top_90d": 40,
+              "donch_bot_90d": 10
+            }
+          },
+          "usage": {},
+          "set_to_parts": {}
+        },
+        "reserve_copies": 0,
+        "spares_only": false,
+        "availability": {}
+      },
+      "expected": [
+        {
+          "key": "item|",
+          "sellable": 0,
+          "clearing_price": 40,
+          "sell_score": 0,
+          "patience": false,
+          "ducats": null,
+          "plat_per_100d": null,
+          "potential_plat": 0,
+          "raw_value": 0,
+          "medians_7d": [
+            10,
+            20
+          ],
+          "median_90d": 30,
+          "delta_90d_pct": 33.33333333333333,
+          "timing": "peak",
+          "demand": {
+            "usage": null,
+            "inherited": false,
+            "liquidity": "unknown",
+            "band": null
+          }
+        }
+      ]
+    },
+    {
+      "name": "spares cannot release the global reserve",
+      "request": {
+        "owned": [
+          [
+            "item|",
+            {
+              "count": 5,
+              "name": "Item",
+              "type": "Mods",
+              "slug": "item",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "market": {
+          "items": {
+            "item": {
+              "avg": 20,
+              "low_sell": 1,
+              "top_buy": 25,
+              "vol": 10,
+              "ratio": 1,
+              "buys": 1,
+              "sells": 1,
+              "low5_avg": 22,
+              "medians_7d": [
+                0,
+                10,
+                20
+              ],
+              "median_now": 40,
+              "median_90d": 30,
+              "donch_top_90d": 40,
+              "donch_bot_90d": 10
+            }
+          },
+          "usage": {},
+          "set_to_parts": {}
+        },
+        "reserve_copies": 4,
+        "spares_only": true
+      },
+      "expected": [
+        {
+          "key": "item|",
+          "sellable": 1,
+          "clearing_price": 40,
+          "sell_score": 40,
+          "patience": false,
+          "ducats": null,
+          "plat_per_100d": null,
+          "potential_plat": 20,
+          "raw_value": 22,
+          "medians_7d": [
+            10,
+            20
+          ],
+          "median_90d": 30,
+          "delta_90d_pct": 33.33333333333333,
+          "timing": "peak",
+          "demand": {
+            "usage": null,
+            "inherited": false,
+            "liquidity": "unknown",
+            "band": null
+          }
+        }
+      ]
     }
   ]
 }

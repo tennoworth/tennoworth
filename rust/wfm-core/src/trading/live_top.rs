@@ -24,6 +24,7 @@ use crate::http::browser_client;
 /// Start-to-start spacing between requests - 340 ms ≈ 2.9 req/s, under WFM's
 /// documented 3 req/s. Same figure the scraper uses.
 pub const LIVE_TOP_SPACING: Duration = Duration::from_millis(340);
+static LAST_LIVE_START: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
 
 /// One item's tier to look up.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -35,6 +36,27 @@ pub struct LiveTopQuery {
     /// Relic refinement (`intact` …), fish/gem sizes, etc.
     #[serde(default)]
     pub subtype: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct BuyerOrder {
+    pub id: String,
+    pub user_id: String,
+    pub name: String,
+    pub user_slug: String,
+    pub status: String,
+    pub platform: String,
+    pub crossplay: bool,
+    pub quantity: u32,
+    pub per_trade: u32,
+    pub platinum: u32,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct BuyerBook {
+    pub orders: Vec<BuyerOrder>,
+    pub own_orders_excluded: bool,
+    pub observed_at: Option<String>,
 }
 
 /// The answer for one query. `sells` / `buys` are the platinum values of the
@@ -64,6 +86,8 @@ pub struct LiveTop {
     /// the batch keeps going and the UI shows the row as "no live data".
     #[serde(default)]
     pub error: Option<String>,
+    #[serde(default)]
+    pub buyer_book: Option<BuyerBook>,
 }
 
 impl LiveTop {
@@ -79,8 +103,90 @@ impl LiveTop {
             own_ask: None,
             own_bid: None,
             error: Some(e),
+            buyer_book: None,
         }
     }
+}
+
+fn buyer_orders(q: &LiveTopQuery, data: &serde_json::Value, me: Option<&str>) -> Option<BuyerBook> {
+    let rows = data.get("buy")?.as_array()?;
+    let mut orders = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    for row in rows {
+        let parse = || -> Option<BuyerOrder> {
+            let user = row.get("user")?;
+            let text = |value: &serde_json::Value, key: &str| -> Option<String> {
+                value
+                    .get(key)?
+                    .as_str()
+                    .filter(|s| !s.is_empty() && s.len() <= 100)
+                    .map(String::from)
+            };
+            let positive = |key: &str| -> Option<u32> {
+                u32::try_from(row.get(key)?.as_u64()?)
+                    .ok()
+                    .filter(|n| *n > 0)
+            };
+            let rank = match row.get("rank").filter(|v| !v.is_null()) {
+                Some(value) => value.as_u64()?,
+                None => 0,
+            };
+            let subtype = row.get("subtype").filter(|v| !v.is_null());
+            if is_own_order(row, me)
+                || !row.get("visible")?.as_bool()?
+                || row.get("type")?.as_str()? != "buy"
+                || rank != u64::from(q.rank.unwrap_or(0))
+                || subtype.and_then(|v| v.as_str())
+                    != q.subtype.as_deref().filter(|s| !s.is_empty())
+                || subtype.is_some_and(|v| !v.is_string())
+                || ["charges", "amberStars", "cyanStars"]
+                    .iter()
+                    .any(|k| row.get(k).is_some_and(|v| !v.is_null()))
+            {
+                return None;
+            }
+            let status = text(user, "status")?;
+            if !matches!(status.as_str(), "online" | "ingame") {
+                return None;
+            }
+            let quantity = positive("quantity")?;
+            let per_trade = match row.get("perTrade").filter(|v| !v.is_null()) {
+                Some(_) => positive("perTrade")?,
+                None => 1,
+            };
+            if per_trade > 6 || quantity % per_trade != 0 {
+                return None;
+            }
+            Some(BuyerOrder {
+                id: text(row, "id")?,
+                user_id: text(user, "id")?,
+                name: text(user, "ingameName")?,
+                user_slug: text(user, "slug")?,
+                status,
+                platform: text(user, "platform")?,
+                crossplay: user.get("crossplay")?.as_bool()?,
+                quantity,
+                per_trade,
+                platinum: positive("platinum")?,
+            })
+        };
+        if let Some(order) = parse() {
+            if seen.insert(order.user_id.clone()) {
+                orders.push(order);
+            }
+        }
+    }
+    orders.sort_by(|a, b| {
+        (f64::from(b.platinum) / f64::from(b.per_trade))
+            .total_cmp(&(f64::from(a.platinum) / f64::from(a.per_trade)))
+            .then_with(|| a.id.cmp(&b.id))
+    });
+    orders.truncate(5);
+    Some(BuyerBook {
+        orders,
+        own_orders_excluded: me.is_some_and(|s| !s.is_empty()),
+        observed_at: None,
+    })
 }
 
 fn top_url(q: &LiveTopQuery) -> String {
@@ -161,6 +267,7 @@ pub fn parse_top(q: &LiveTopQuery, body: &serde_json::Value, me: Option<&str>) -
         own_ask,
         own_bid,
         error: None,
+        buyer_book: buyer_orders(q, data, me),
     })
 }
 
@@ -179,7 +286,13 @@ fn fetch_one(
         bail!("{url}: HTTP {status}");
     }
     let body: serde_json::Value = resp.json().with_context(|| format!("{url}: JSON"))?;
-    parse_top(q, &body, me)
+    let mut top = parse_top(q, &body, me)?;
+    if let Some(book) = &mut top.buyer_book {
+        book.orders
+            .retain(|order| order.platform == platform || order.crossplay);
+        book.observed_at = Some(crate::time::chrono_now_iso());
+    }
+    Ok(top)
 }
 
 /// Look up every query, paced at [`LIVE_TOP_SPACING`] start-to-start. Per-item
@@ -197,15 +310,20 @@ pub fn fetch_live_tops(
     let client = browser_client(20)?;
     let total = queries.len();
     let mut out = Vec::with_capacity(total);
-    let mut last_start: Option<Instant> = None;
     for (i, q) in queries.iter().enumerate() {
-        if let Some(t) = last_start {
-            let elapsed = t.elapsed();
-            if elapsed < LIVE_TOP_SPACING {
-                thread::sleep(LIVE_TOP_SPACING.saturating_sub(elapsed));
+        // Buyer comparisons and batch repricing can be requested together.
+        // Pace their request starts across invocations, without holding the
+        // lock during network I/O.
+        {
+            let mut last_start = crate::poison::guard(&LAST_LIVE_START);
+            if let Some(t) = *last_start {
+                let elapsed = t.elapsed();
+                if elapsed < LIVE_TOP_SPACING {
+                    thread::sleep(LIVE_TOP_SPACING.saturating_sub(elapsed));
+                }
             }
+            *last_start = Some(Instant::now());
         }
-        last_start = Some(Instant::now());
         let row = match fetch_one(&client, platform, q, me) {
             Ok(t) => t,
             Err(e) => LiveTop::failed(q, e.to_string()),
@@ -220,6 +338,22 @@ pub fn fetch_live_tops(
 mod tests {
     use super::*;
     use serde_json::json;
+    #[test]
+    fn buyer_book_matches_frontend_contract_fixture() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/buyer-alternatives/book.json"
+        ))
+        .unwrap();
+        let query = serde_json::from_value(fixture["query"].clone()).unwrap();
+        let book = parse_top(&query, &fixture["body"], fixture["me"].as_str())
+            .unwrap()
+            .buyer_book
+            .unwrap();
+        assert_eq!(
+            serde_json::to_value(book.orders).unwrap(),
+            fixture["orders"]
+        );
+    }
 
     fn q(slug: &str, rank: Option<u32>, subtype: Option<&str>) -> LiveTopQuery {
         LiveTopQuery {
@@ -268,6 +402,69 @@ mod tests {
         let t = parse_top(&q("thin", None, None), &body, None).unwrap();
         assert_eq!(t.low_sell, None);
         assert_eq!(t.top_buy, None);
+    }
+
+    #[test]
+    fn buyer_depth_keeps_identity_and_lots_and_rejects_incompatible_rows() {
+        let order = json!({"id":"order-a", "type":"buy", "visible":true,
+            "rank":0, "platinum":24, "quantity":6, "perTrade":2,
+            "user":{"id":"buyer-a", "slug":"buyer_a", "ingameName":"BuyerA",
+                "status":"ingame", "platform":"pc", "crossplay":true}});
+        let mut invalid = Vec::new();
+        for (field, value) in [
+            ("rank", json!(5)),
+            ("quantity", json!(5)),
+            ("quantity", json!(0)),
+            ("perTrade", json!(7)),
+            ("platinum", json!(-1)),
+            ("visible", json!(false)),
+            ("type", json!("sell")),
+            ("charges", json!(1)),
+            ("subtype", json!("radiant")),
+            ("subtype", json!(123)),
+        ] {
+            let mut row = order.clone();
+            row[field] = value;
+            invalid.push(row);
+        }
+        let mut own = order.clone();
+        own["user"]["ingameName"] = json!("Me");
+        invalid.push(own);
+        let mut offline = order.clone();
+        offline["user"]["status"] = json!("offline");
+        invalid.push(offline);
+        let mut no_identity = order.clone();
+        no_identity["user"]["id"] = json!(null);
+        invalid.push(no_identity);
+        invalid.push(order.clone());
+        invalid.push(order);
+        let top = parse_top(
+            &q("arcane", Some(0), None),
+            &json!({"data":{"buy":invalid,"sell":[]}}),
+            Some("me"),
+        )
+        .unwrap();
+        let book = top.buyer_book.unwrap();
+        assert!(book.own_orders_excluded);
+        assert_eq!(book.orders.len(), 1);
+        assert_eq!(book.orders[0].name, "BuyerA");
+        assert_eq!(book.orders[0].platinum, 24);
+        assert_eq!(book.orders[0].quantity, 6);
+        assert_eq!(book.orders[0].per_trade, 2);
+    }
+
+    #[test]
+    fn missing_buyer_array_remains_unknown_and_logged_out_books_are_labeled() {
+        let missing =
+            parse_top(&q("item", None, None), &json!({"data":{"sell":[]}}), None).unwrap();
+        assert!(missing.buyer_book.is_none());
+        let empty = parse_top(
+            &q("item", None, None),
+            &json!({"data":{"sell":[],"buy":[]}}),
+            None,
+        )
+        .unwrap();
+        assert!(!empty.buyer_book.unwrap().own_orders_excluded);
     }
 
     #[test]

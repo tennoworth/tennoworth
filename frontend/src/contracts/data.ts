@@ -498,6 +498,7 @@ export interface TradeAllowance {
 }
 
 export interface TradeSessionState {
+  set_recipes: Record<string, Record<string, number>>;
   allowance: TradeAllowance;
   quantities: Record<string, number>;
   bulk_slugs: string[];

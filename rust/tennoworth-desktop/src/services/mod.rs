@@ -8,6 +8,7 @@ pub(crate) mod market;
 pub(crate) mod notifications;
 pub(crate) mod reminders;
 pub(crate) mod sellables;
+pub(crate) mod protection;
 pub(crate) mod trades;
 pub(crate) mod watch;
 pub(crate) mod wfm_session;

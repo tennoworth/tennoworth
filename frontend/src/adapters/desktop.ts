@@ -3,6 +3,14 @@ import { isHistory, type History } from '../domain/history';
 import type { MarketRefreshResult, ScanReport, DesktopCapabilities, DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences } from '../contracts/desktop';
 import { resolveInvoke, rethrowInvoke } from './runtime';
 
+export async function desktopProtectionState(): Promise<import('../contracts/protection').ProtectionState> {
+  try { return await resolveInvoke()('protection_state'); } catch (error) { return rethrowInvoke(error); }
+}
+
+export async function desktopSaveProtectionPlan(plan: import('../contracts/protection').ProtectionPlan): Promise<void> {
+  try { await resolveInvoke()('save_protection_plan', { plan }); } catch (error) { rethrowInvoke(error); }
+}
+
 /** Native operations preserve command error codes for authentication routing. */
 export class TauriTransport implements DesktopCapabilities {
   async getOverlaySettings(): Promise<OverlaySettings> {

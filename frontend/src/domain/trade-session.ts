@@ -23,9 +23,11 @@ export interface SessionCandidate {
   bulk: boolean;
   supported?: boolean;
   market: MarketItemEntry;
+  components?: Record<string, number>;
 }
 
 export interface SessionRow extends SessionCandidate {
+  component_limits: Record<string, number>;
   quantity: number;
   per_trade: number;
   platinum: number;
@@ -45,11 +47,14 @@ export function selectSession(candidates: SessionCandidate[], mode: SessionMode,
   const excluded: Array<{ name: string; reason: string }> = [];
   const counts = new Map<string, number>();
   for (const row of candidates) counts.set(row.slug, (counts.get(row.slug) ?? 0) + 1);
-  const eligible: Array<SessionRow & { volume: number; weight: number }> = [];
+  const eligible: Array<Omit<SessionRow, 'component_limits'> & { volume: number; weight: number }> = [];
   for (const row of candidates) {
     const price = Math.ceil(clearingPrice(row.market));
     let reason: string | null = null;
-    if (row.supported === false || row.subtype || row.slug.endsWith('_set') || /riven/i.test(row.type) || counts.get(row.slug) !== 1) {
+    const recipe = Object.entries(row.components ?? {});
+    const validSet = row.slug.endsWith('_set') && recipe.length > 0 && recipe.every(([slug, count]) => slug !== row.slug && Number.isSafeInteger(count) && count > 0)
+      && recipe.reduce((sum, [, count]) => sum + count, 0) <= 6;
+    if (row.supported === false || row.subtype || ((row.components || row.slug.endsWith('_set')) && !validSet) || /riven/i.test(row.type) || counts.get(row.slug) !== 1) {
       reason = 'This item identity is not supported in Trade Session yet.';
     } else if (!Number.isSafeInteger(row.sellable) || row.sellable <= 0 || !Number.isSafeInteger(row.owned) || row.sellable > row.owned) {
       reason = 'No confirmed sellable copies after protection and trade checks.';
@@ -61,7 +66,7 @@ export function selectSession(candidates: SessionCandidate[], mode: SessionMode,
       reason = 'Not enough reported trading volume for this mode.';
     }
     if (reason) { excluded.push({ name: row.name, reason }); continue; }
-    let lot = mode === 'fast' || !row.bulk ? 1 : Math.min(6, row.sellable, Math.floor(MAX_PLATINUM / price));
+    let lot = validSet || mode === 'fast' || !row.bulk ? 1 : Math.min(6, row.sellable, Math.floor(MAX_PLATINUM / price));
     if (mode === 'clear') {
       while (row.sellable % lot !== 0) lot--;
     }
@@ -85,8 +90,14 @@ export function selectSession(candidates: SessionCandidate[], mode: SessionMode,
     return a.key < b.key ? -1 : a.key > b.key ? 1 : 0;
   });
   let trades = 0, total = 0;
+  const available = new Map(candidates.filter(row => !row.components && !row.subtype && !row.slug.endsWith('_set') && counts.get(row.slug) === 1)
+    .map(row => [row.slug, Number.isSafeInteger(row.sellable) && row.sellable >= 0 ? row.sellable : 0]));
+  const limits = new Map(available);
   const add = (row: typeof eligible[number]) => {
     if (trades >= cap || (goal != null && total >= goal) || row.quantity + row.per_trade > row.sellable) return false;
+    const components = Object.entries(row.components ?? { [row.slug]: 1 });
+    if (components.some(([slug, count]) => (available.get(slug) ?? 0) < count * row.per_trade)) return false;
+    for (const [slug, count] of components) available.set(slug, (available.get(slug) ?? 0) - count * row.per_trade);
     row.quantity += row.per_trade;
     row.trades++;
     trades++;
@@ -105,11 +116,13 @@ export function selectSession(candidates: SessionCandidate[], mode: SessionMode,
     for (const row of eligible) while (add(row)) { /* bounded by the trade cap */ }
   }
   const rows: SessionRow[] = eligible.filter(r => r.quantity > 0).map(r => ({ ...r,
+    component_limits: Object.fromEntries(Object.keys(r.components ?? { [r.slug]: 1 }).map(slug => [slug, limits.get(slug) ?? 0])),
     reason: [
       mode === 'fast' ? 'Liquid singles; match credible asks.' : mode === 'per-trade' ? `${r.platinum * r.per_trade}p per suggested exchange.`
         : mode === 'clear' && r.quantity === r.sellable ? 'Clears this safe spare stack.' : 'Prioritizes listing value within the budget.',
       r.volume < LIQUID_VOL ? 'Thin market: patience may be needed.' : '',
       r.hold ? 'Hold advice lowers priority; protected copies remain excluded.' : '',
+      r.components ? 'Complete owned set; its components are allocated within this batch.' : '',
     ].filter(Boolean).join(' '),
   }));
   return { rows, trades, total, excluded, target: goal, shortfall: goal == null ? null : Math.max(0, goal - total) };

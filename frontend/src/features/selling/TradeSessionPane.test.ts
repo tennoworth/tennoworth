@@ -16,7 +16,7 @@ type Plan = ReturnType<typeof selectSession>;
 function plan(name: string): Plan {
   return { rows: [{ key: name, slug: name, name, owned: 2, sellable: 2, leveled: 0, type: 'Mod', hold: false, bulk: false,
     market: { avg: 10, low_sell: 10, vol: 30, top_buy: 0, buys: 0, sells: 0, ratio: 0 },
-    quantity: 1, per_trade: 1, platinum: 10, trades: 1, reason: 'Liquid singles; match credible asks.', bid: null }],
+    component_limits: { [name]: 2 }, quantity: 1, per_trade: 1, platinum: 10, trades: 1, reason: 'Liquid singles; match credible asks.', bid: null }],
     trades: 1, total: 10, excluded: [], target: null, shortfall: null };
 }
 async function mountPane() {

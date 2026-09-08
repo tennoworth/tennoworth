@@ -220,6 +220,20 @@ const PROBE_JS: &str = r#"(function(){
     // (c) Seed an import snapshot → source='import' snapshot with item_count == 4.
     .then(function(){ return dropFixture().then(function(v){ R.dropResult = v; return delay(1500); }); })
     .then(function(){ return invk('list_snapshots', { limit: 50 }).then(function(v){ R.snapshotsAfterDrop = v; }); })
+    .then(function(){ return invkE('save_protection_plan', { plan: { reserves: { accelerated_blast: 2 }, goal: null } }).then(function(saved){
+      if (!saved.ok) throw new Error('Protected plan did not save through native IPC');
+      return invk('protection_state').then(function(state){
+        var row = state && state.items && state.items.accelerated_blast;
+        if (!row || row.owned !== 3 || row.protected !== 2 || row.available !== null || state.plan.reserves.accelerated_blast !== 2) {
+          throw new Error('Native protection failed to preserve reserved copies or unknown order coverage');
+        }
+        R.protectionIpc = { persisted: true, protected: row.protected, available: row.available };
+        return invkE('save_protection_plan', { plan: { reserves: { accelerated_blast: -1 }, goal: null } });
+      }).then(function(invalid){
+        if (invalid.ok) throw new Error('Native protection accepted a negative reserve');
+        return invkE('save_protection_plan', { plan: { reserves: {}, goal: null } });
+      }).then(function(cleared){ if (!cleared.ok) throw new Error('Probe protection cleanup failed'); });
+    }); })
     // C6 (top_sellables): rank the imported snapshot × bundled market. With a
     // clean data dir (reserve 0) this is the deterministic 3-item ranking.
     .then(function(){ return invk('top_sellables', { limit: 5 }).then(function(v){ R.topSellables = v; }); })

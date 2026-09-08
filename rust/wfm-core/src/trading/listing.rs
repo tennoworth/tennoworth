@@ -18,7 +18,7 @@ use crate::trading::catalog::{fetch_wfm_catalog, index_item_meta, ItemMeta, WfmC
 
 /// Shared with [`crate::trading::plan::run_pending`] - both pace their WFM calls to
 /// the same 3 req/sec norm.
-pub(crate) const SERVE_RATE_LIMIT_MS: u64 = 350;
+pub const SERVE_RATE_LIMIT_MS: u64 = 350;
 // Matches WFM's own UI cap (3000) and the browser ListingReviewModal's
 // MAX_PLATINUM. Previously 999, which silently blocked maxed-Arcane and
 // Galvanized-mod listings that genuinely sell for 1500–2500p.

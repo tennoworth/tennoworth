@@ -13,14 +13,16 @@ import type { AdvisorRequest, HistoryRequest, HistoryAnalysis, SessionRequest, S
 export const DESKTOP_CONTEXT = 'tennoworth.desktop';
 export interface DesktopServices {
   normalizeInventoryNative(data: Inventory, catalogs: Catalogs, market: Market): Promise<{ owned: Map<string, OwnedRecord>; unresolved: Record<string, number>; flatCount: number }>;
-  scoreInventoryNative(owned: Map<string, OwnedRecord>, market: Market, reserveCopies: number, sparesOnly: boolean): Promise<Map<string, ScoredInventoryFact>>;
+  scoreInventoryNative(owned: Map<string, OwnedRecord>, market: Market, reserveCopies: number, sparesOnly: boolean, availability?: ReadonlyMap<string, number>): Promise<Map<string, ScoredInventoryFact>>;
   evaluateAdvisor(request: AdvisorRequest): Promise<Record<string, Verdict>>;
   evaluateTradeSession(request: Omit<SessionRequest, 'candidates'> & { candidates: SessionCandidate[] }): Promise<ReturnType<typeof selectSession>>;
   evaluateHistory(request: HistoryRequest): Promise<HistoryAnalysis>;
   relicPlan(owned: Map<string, OwnedRecord> | null, market: Market | null, limit?: number): Promise<RelicPlanEntry[]>;
   setRecos(owned: Map<string, OwnedRecord> | null, market: Market | null, limit?: number): Promise<SetReco[]>;
-  ducatPlan(owned: Map<string, OwnedRecord> | null, market: Market | null, target: number, keepAbove?: number): Promise<{ candidates: ScrapCandidate[]; plan: DucatPlan }>;
+  ducatPlan(owned: Map<string, OwnedRecord> | null, market: Market | null, target: number, keepAbove?: number, availability?: ReadonlyMap<string, number>): Promise<{ candidates: ScrapCandidate[]; plan: DucatPlan }>;
   buildPlan(setSlug: string, setName: string, parts: SetPart[], market: Market | null, owned: Map<string, OwnedRecord> | null, recipes: Record<string, RecipeEntry> | null | undefined): Promise<{ plan: BuildPlan; cheapest: BuildPath | null }>;
+  desktopProtectionState(): Promise<import('./protection').ProtectionState>;
+  desktopSaveProtectionPlan(plan: import('./protection').ProtectionPlan): Promise<void>;
   updateStatus(): Promise<UpdateStatus>;
   checkUpdate(): Promise<UpdateStatus>;
   installUpdate(): Promise<void>;

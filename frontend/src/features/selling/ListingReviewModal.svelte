@@ -21,6 +21,8 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   import type { ListingCandidate as InputRow } from '../../contracts/listing';
 
   interface PlanRow {
+    components?: Record<string, number>;
+    component_limits?: Record<string, number>;
     key: string;
     slug: string;
     subtype: string | null;
@@ -82,6 +84,8 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
       const sellable = r.sellable ?? r.owned;
       return {
         key: r.key ?? r.slug,
+        components: r.components,
+        component_limits: r.component_limits ? { ...r.component_limits } : undefined,
         slug: r.slug,
         subtype: r.subtype ?? null,
         name: r.name,
@@ -155,6 +159,9 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
       sessionRemaining = state.allowance.remaining;
       for (const row of plan) {
         row.sellable = Math.min(row.sellable, state.quantities[row.slug] ?? 0);
+        if (row.component_limits) for (const slug of Object.keys(row.component_limits)) {
+          row.component_limits[slug] = Math.min(row.component_limits[slug], state.quantities[slug] ?? 0);
+        }
         if (state.supported_slugs && !state.supported_slugs.includes(row.slug)) row.sellable = 0;
         row.bulk = state.bulk_slugs.includes(row.slug);
       }
@@ -286,8 +293,20 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
       .filter((r) => r.include)
       .reduce((s, r) => s + r.platinum * r.quantity, 0)
   );
+  let allocationProblem = $derived.by(() => {
+    const used = new Map<string, number>();
+    const limits = new Map<string, number>();
+    for (const row of plan.filter(row => row.include && row.component_limits)) {
+      for (const [slug, count] of Object.entries(row.components ?? { [row.slug]: 1 })) {
+        used.set(slug, (used.get(slug) ?? 0) + count * row.quantity);
+        limits.set(slug, Math.min(limits.get(slug) ?? Infinity, row.component_limits?.[slug] ?? 0));
+      }
+    }
+    return [...used].some(([slug, count]) => !Number.isSafeInteger(count) || count > (limits.get(slug) ?? 0))
+      ? 'These edited quantities reuse components or exceed their available copies. Reduce a set or part quantity.' : null;
+  });
   let canSubmit = $derived(
-    selectedCount > 0 && selectedCount <= MAX_PLAN_ITEMS && plan.every(
+    !allocationProblem && selectedCount > 0 && selectedCount <= MAX_PLAN_ITEMS && plan.every(
       (r) => !r.include || (Number.isSafeInteger(r.platinum) && r.platinum >= MIN_PLATINUM && r.platinum <= MAX_PLATINUM && Number.isSafeInteger(r.quantity) && r.quantity >= 1 && r.quantity <= r.sellable
         && (!r.session || (validSessionLot(r.quantity, r.per_trade, r.bulk) && r.platinum * r.per_trade <= MAX_PLATINUM)))
     ) && (!hasSession || (ordersReady && !ordersBusy && !sessionProblem && estimatedTrades != null && estimatedTrades <= (sessionRemaining ?? 0) && estimatedTrades <= (plan[0]?.session?.budget ?? 0)))
@@ -441,6 +460,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
         </p>
 
         {#if hasSession}
+          {#if allocationProblem}<p class="ui-notice" data-tone="warn" role="alert">{allocationProblem}</p>{/if}
           <p class="ui-notice" data-tone={canSubmit ? 'good' : 'warn'}>
             {estimatedTrades ?? 'Invalid quantity / lot'} estimated trades / {plan[0]?.session?.budget} budget · {sessionRemaining ?? 'unknown'} remaining.
             Quantities must divide evenly by units per trade. Posting does not spend the game allowance.
@@ -732,7 +752,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   button.linkish:disabled { cursor: default; text-decoration: none; color: var(--muted); }
   .scroll {
     overflow: auto;
-    min-height: 0;
+    min-height: 5rem;
     margin: 12px 0;
     border-top: 1px solid var(--border);
     border-bottom: 1px solid var(--border);

@@ -55,6 +55,9 @@ pub struct ScoreInventoryRequest {
     pub market: ScoringMarket,
     pub reserve_copies: f64,
     pub spares_only: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub availability: Option<BTreeMap<String, f64>>,
 }
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 pub struct UsageEntry {
@@ -222,15 +225,30 @@ pub fn score_inventory(request: ScoreInventoryRequest) -> Result<Vec<ScoredInven
             median_now: m.median_now.unwrap_or(0.0),
             median_90d: m.median_90d.unwrap_or(0.0),
         };
+        let available = (owned.count - request.reserve_copies.max(owned.leveled))
+            .max(0.0)
+            .min(
+                request
+                    .availability
+                    .as_ref()
+                    .map(|values| {
+                        values
+                            .get(&key)
+                            .copied()
+                            .filter(|n| n.is_finite() && *n >= 0.0)
+                            .unwrap_or(0.0)
+                    })
+                    .unwrap_or(f64::INFINITY),
+            );
         let sellable = if request.spares_only {
             let tradeable = (owned.count - owned.leveled).max(0.0);
             if owned.kept_lvl.is_some_and(|v| v > 0.0) {
-                tradeable
+                tradeable.min(available)
             } else {
-                (tradeable - 1.0).max(0.0)
+                (tradeable - 1.0).max(0.0).min(available)
             }
         } else {
-            (owned.count - request.reserve_copies.max(owned.leveled)).max(0.0)
+            available
         };
         let clearing_price = sell_priority::clearing_price(&priced);
         let (usage, inherited) = if let Some(value) = request.market.usage.get(&owned.slug) {

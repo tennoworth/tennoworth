@@ -32,6 +32,9 @@ pub struct SessionCandidate {
     pub supported: Option<bool>,
     #[ts(type = "unknown")]
     pub market: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub components: Option<BTreeMap<String, f64>>,
 }
 #[derive(Clone, Debug, Deserialize, Serialize, TS, PartialEq)]
 pub struct SessionRequest {
@@ -44,6 +47,7 @@ pub struct SessionRequest {
 pub struct SessionRow {
     #[serde(flatten)]
     pub candidate: SessionCandidate,
+    pub component_limits: BTreeMap<String, f64>,
     pub quantity: f64,
     pub per_trade: f64,
     pub platinum: f64,
@@ -100,6 +104,27 @@ pub fn select_session(request: SessionRequest) -> SessionPlan {
     for row in &request.candidates {
         *counts.entry(row.slug.clone()).or_insert(0_u32) += 1;
     }
+    let mut available: BTreeMap<String, f64> = request
+        .candidates
+        .iter()
+        .filter(|row| {
+            row.components.is_none()
+                && row.subtype.as_ref().is_none_or(|s| s.is_empty())
+                && !row.slug.ends_with("_set")
+                && counts.get(&row.slug) == Some(&1)
+        })
+        .map(|row| {
+            (
+                row.slug.clone(),
+                if safe(row.sellable) && row.sellable >= 0.0 {
+                    row.sellable
+                } else {
+                    0.0
+                },
+            )
+        })
+        .collect();
+    let component_limits = available.clone();
     let mut eligible = Vec::new();
     for candidate in request.candidates {
         let m = &candidate.market;
@@ -112,9 +137,17 @@ pub fn select_session(request: SessionRequest) -> SessionPlan {
         };
         let price = clearing_price(&priced).ceil();
         let volume = priced.vol.max(0.0);
+        let valid_set = candidate.slug.ends_with("_set")
+            && candidate.components.as_ref().is_some_and(|parts| {
+                !parts.is_empty()
+                    && parts.iter().all(|(slug, count)| {
+                        slug != &candidate.slug && safe(*count) && *count > 0.0
+                    })
+                    && parts.values().sum::<f64>() <= 6.0
+            });
         let reason = if candidate.supported == Some(false)
             || candidate.subtype.as_ref().is_some_and(|s| !s.is_empty())
-            || candidate.slug.ends_with("_set")
+            || ((candidate.components.is_some() || candidate.slug.ends_with("_set")) && !valid_set)
             || candidate.item_type.to_lowercase().contains("riven")
             || counts.get(&candidate.slug) != Some(&1)
         {
@@ -152,7 +185,7 @@ pub fn select_session(request: SessionRequest) -> SessionPlan {
             });
             continue;
         }
-        let mut lot = if request.mode == SessionMode::Fast || !candidate.bulk {
+        let mut lot = if valid_set || request.mode == SessionMode::Fast || !candidate.bulk {
             1.0
         } else {
             6.0_f64
@@ -191,6 +224,29 @@ pub fn select_session(request: SessionRequest) -> SessionPlan {
         };
         eligible.push((
             SessionRow {
+                component_limits: candidate
+                    .components
+                    .as_ref()
+                    .map(|parts| {
+                        parts
+                            .keys()
+                            .map(|slug| {
+                                (
+                                    slug.clone(),
+                                    component_limits.get(slug).copied().unwrap_or(0.0),
+                                )
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_else(|| {
+                        BTreeMap::from([(
+                            candidate.slug.clone(),
+                            component_limits
+                                .get(&candidate.slug)
+                                .copied()
+                                .unwrap_or(0.0),
+                        )])
+                    }),
                 candidate,
                 quantity: 0.0,
                 per_trade: lot,
@@ -213,12 +269,27 @@ pub fn select_session(request: SessionRequest) -> SessionPlan {
                     .cmp(b.0.candidate.key.encode_utf16())
             })
     });
-    let add = |row: &mut SessionRow, result: &mut SessionPlan| {
+    let mut add = |row: &mut SessionRow, result: &mut SessionPlan| {
         if result.trades >= cap
             || goal.is_some_and(|g| result.total >= g)
             || row.quantity + row.per_trade > row.candidate.sellable
         {
             return false;
+        }
+        let components = row
+            .candidate
+            .components
+            .clone()
+            .unwrap_or_else(|| BTreeMap::from([(row.candidate.slug.clone(), 1.0)]));
+        if components.iter().any(|(slug, count)| {
+            available.get(slug).copied().unwrap_or(0.0) < count * row.per_trade
+        }) {
+            return false;
+        }
+        for (slug, count) in components {
+            if let Some(left) = available.get_mut(&slug) {
+                *left -= count * row.per_trade;
+            }
         }
         row.quantity += row.per_trade;
         row.trades += 1;
@@ -260,6 +331,10 @@ pub fn select_session(request: SessionRequest) -> SessionPlan {
         }
         if row.candidate.hold {
             reasons.push("Hold advice lowers priority; protected copies remain excluded.".into());
+        }
+        if row.candidate.components.is_some() {
+            reasons
+                .push("Complete owned set; its components are allocated within this batch.".into());
         }
         row.reason = reasons.join(" ");
         result.rows.push(row);
@@ -312,6 +387,70 @@ mod tests {
             let expected: SessionPlan = serde_json::from_value(case["expected"].clone()).unwrap();
             assert_eq!(actual, expected, "{}", case["name"]);
         }
+    }
+    #[test]
+    fn sets_share_the_component_pool() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/trade-session/sets.json"
+        ))
+        .unwrap();
+        let mut candidates: Vec<SessionCandidate> = fixture["owned"].as_object().unwrap().iter().map(|(slug, count)| {
+            serde_json::from_value(serde_json::json!({"key":slug,"slug":slug,"name":slug,"owned":count,"sellable":count,
+                "leveled":0,"type":"Prime","hold":false,"bulk":false,
+                "market":{"low_sell":fixture["part_prices"][slug],"median_now":fixture["part_prices"][slug],"vol":30}})).unwrap()
+        }).collect();
+        let set: SessionCandidate = serde_json::from_value(serde_json::json!({"key":"example_set","slug":"example_set","name":"Example Set",
+            "owned":2,"sellable":2,"leveled":0,"type":"Set","hold":false,"bulk":true,"components":fixture["parts"],
+            "market":{"low_sell":fixture["set_price"],"median_now":fixture["set_price"],"vol":30}})).unwrap();
+        candidates.push(set);
+        for mode in [
+            SessionMode::Fast,
+            SessionMode::PerTrade,
+            SessionMode::Clear,
+            SessionMode::Max,
+        ] {
+            let plan = select_session(SessionRequest {
+                candidates: candidates.clone(),
+                mode,
+                budget: 2.0,
+                target: None,
+            });
+            let mut consumed = BTreeMap::<String, f64>::new();
+            for row in &plan.rows {
+                for (slug, count) in row
+                    .candidate
+                    .components
+                    .clone()
+                    .unwrap_or_else(|| BTreeMap::from([(row.candidate.slug.clone(), 1.0)]))
+                {
+                    *consumed.entry(slug).or_default() += count * row.quantity;
+                }
+                if row.candidate.components.is_some() {
+                    assert_eq!(row.per_trade, 1.0);
+                }
+            }
+            for (slug, count) in consumed {
+                assert!(count <= fixture["owned"][slug].as_f64().unwrap());
+            }
+            if mode == SessionMode::Max {
+                assert_eq!(plan.rows.len(), 1);
+                assert_eq!(plan.rows[0].candidate.slug, "example_set");
+                assert_eq!(
+                    plan.rows[0].quantity,
+                    fixture["expected_sets"].as_f64().unwrap()
+                );
+            }
+        }
+        candidates.last_mut().unwrap().components = Some(BTreeMap::from([("barrel".into(), 7.0)]));
+        assert!(select_session(SessionRequest {
+            candidates,
+            mode: SessionMode::Max,
+            budget: 2.0,
+            target: None
+        })
+        .rows
+        .iter()
+        .all(|row| row.candidate.components.is_none()));
     }
     #[test]
     fn lot_shared_contract() {

@@ -24,7 +24,7 @@ export type DomainResponse = { "operation": "normalize_inventory", "result": Nor
 
 export type DucatPlan = { picks: Array<ScrapCandidate>, ducats: number, platGivenUp: number, short: number, heldBack: Array<ScrapCandidate>, };
 
-export type DucatRequest = { owned: Array<PlannerOwned>, market: unknown, target: number, keepAbove: number | null, };
+export type DucatRequest = { owned: Array<PlannerOwned>, market: unknown, target: number, keepAbove: number | null, quantitiesAreAvailable?: boolean, };
 
 export type DucatResult = { candidates: Array<ScrapCandidate>, plan: DucatPlan, };
 
@@ -74,7 +74,7 @@ export type RelicPlanReward = { slug: string, name: string, rarity: string, chan
 
 export type RelicVerdict = "crack" | "refine" | "sell-intact" | "thin" | "unknown";
 
-export type ScoreInventoryRequest = { owned: Array<[string, OwnedItem]>, market: ScoringMarket, reserve_copies: number, spares_only: boolean, };
+export type ScoreInventoryRequest = { owned: Array<[string, OwnedItem]>, market: ScoringMarket, reserve_copies: number, spares_only: boolean, availability?: { [key in string]: number }, };
 
 export type ScoredInventoryFact = { key: string, sellable: number, clearing_price: number, sell_score: number, patience: boolean, ducats: number | null, plat_per_100d: number | null, potential_plat: number, raw_value: number, medians_7d: Array<number>, median_90d: number | null, delta_90d_pct: number | null, timing: Timing, demand: DemandRead, };
 
@@ -88,7 +88,7 @@ export type ScrapCandidate = { slug: string, name: string, spare: number, ducats
  */
 ducatsPerPlat: number | null, totalDucats: number, totalPlat: number, };
 
-export type SessionCandidate = { key: string, slug: string, name: string, owned: number, sellable: number, leveled: number, subtype?: string, type: string, hold: boolean, bulk: boolean, supported?: boolean, market: unknown, };
+export type SessionCandidate = { key: string, slug: string, name: string, owned: number, sellable: number, leveled: number, subtype?: string, type: string, hold: boolean, bulk: boolean, supported?: boolean, market: unknown, components?: { [key in string]: number }, };
 
 export type SessionExclusion = { name: string, reason: string, };
 
@@ -98,7 +98,7 @@ export type SessionPlan = { rows: Array<SessionRow>, trades: number, total: numb
 
 export type SessionRequest = { candidates: Array<SessionCandidate>, mode: SessionMode, budget: number, target: number | null, };
 
-export type SessionRow = { quantity: number, per_trade: number, platinum: number, trades: number, reason: string, bid: number | null, key: string, slug: string, name: string, owned: number, sellable: number, leveled: number, subtype?: string, type: string, hold: boolean, bulk: boolean, supported?: boolean, market: unknown, };
+export type SessionRow = { component_limits: { [key in string]: number }, quantity: number, per_trade: number, platinum: number, trades: number, reason: string, bid: number | null, key: string, slug: string, name: string, owned: number, sellable: number, leveled: number, subtype?: string, type: string, hold: boolean, bulk: boolean, supported?: boolean, market: unknown, components?: { [key in string]: number }, };
 
 export type SetPart = { slug: string, component_name: string, };
 

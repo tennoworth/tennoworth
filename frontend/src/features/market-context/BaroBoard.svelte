@@ -21,6 +21,7 @@
     market,
     baro,
     owned = null,
+    availability,
   }: {
     market: Market | null;
     baro: NonNullable<Market['baro']> | null;
@@ -32,6 +33,7 @@
      *  user's spare parts would YIELD, derived below - and it must never be
      *  presented as a balance, or the scrap plan double-counts it. */
     owned?: Map<string, OwnedRecord> | null;
+    availability?: ReadonlyMap<string, number>;
   } = $props();
 
   let showAll = $state(false);
@@ -47,6 +49,7 @@
   const basketTarget = $derived(ducatBasket(rows, 0).needed);
   $effect(() => {
     const inventory = owned;
+    const available = availability;
     const snapshot = market;
     const target = basketTarget;
     let active = true;
@@ -54,7 +57,7 @@
     scrapPlan = null;
     scrapError = '';
     scrapLoading = !!inventory;
-    if (inventory) ducatPlan(inventory, snapshot, target).then((result) => {
+    if (inventory) ducatPlan(inventory, snapshot, target, 15, available).then((result) => {
       if (active) { candidates = result.candidates; scrapPlan = target > 0 ? result.plan : null; scrapLoading = false; }
     }).catch(() => { if (active) { scrapError = 'Scrap planning unavailable. Try reopening the Baro board.'; scrapLoading = false; } });
     return () => { active = false; };
