@@ -1,4 +1,4 @@
-use super::binding_types::TypeScript;
+use market_domain::bindings::TypeScript;
 
 #[test]
 fn desktop_bindings_match_rust() {

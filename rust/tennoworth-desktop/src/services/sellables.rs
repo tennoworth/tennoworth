@@ -22,6 +22,7 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::OnceLock;
 
+use market_domain::inventory::{path_name_guess, slug_guess};
 use market_math::sell_priority::{self, PricedEntry};
 use serde::{Deserialize, Deserializer};
 
@@ -379,98 +380,7 @@ impl MarketData {
 }
 
 fn valid_usage_share(value: &serde_json::Value) -> Option<f64> {
-    let row = value.as_object()?;
-    if row
-        .get("name")
-        .and_then(|v| v.as_str())
-        .filter(|s| !s.is_empty())
-        .is_none()
-        || row
-            .get("category")
-            .and_then(|v| v.as_str())
-            .filter(|s| !s.is_empty())
-            .is_none()
-        || row
-            .get("year")
-            .and_then(|v| v.as_u64())
-            .filter(|year| *year > 0)
-            .is_none()
-        || row
-            .get("peak_mr")
-            .and_then(|v| v.as_f64())
-            .filter(|v| v.is_finite() && *v >= 0.0)
-            .is_none()
-    {
-        return None;
-    }
-    let by_mr = row
-        .get("by_mr")
-        .and_then(|v| v.as_array())
-        .filter(|values| !values.is_empty())?;
-    if !by_mr
-        .iter()
-        .all(|value| value.as_f64().is_some_and(|v| v.is_finite() && v >= 0.0))
-    {
-        return None;
-    }
-    row.get("share")
-        .and_then(|v| v.as_f64())
-        .filter(|v| v.is_finite() && *v >= 0.0)
-}
-
-/// De-camel a path basename into a display-name guess, trimming Blueprint /
-/// Component first - ".../SagekPrimeBarrelBlueprint" → "Sagek Prime Barrel".
-/// Mirrors `pathNameGuess` in resolver.ts.
-fn path_name_guess(path: &str) -> Option<String> {
-    let mut base = path.rsplit('/').next().unwrap_or("");
-    for suffix in ["Blueprint", "Component"] {
-        if let Some(trimmed) = base.strip_suffix(suffix) {
-            base = trimmed;
-        }
-    }
-    if base.is_empty() {
-        return None;
-    }
-    Some(decamel(base))
-}
-
-/// Insert a space between a lowercase/digit and an uppercase letter, matching
-/// resolver.ts's `/([a-z0-9])([A-Z])/g` → `$1 $2`.
-fn decamel(s: &str) -> String {
-    let chars: Vec<char> = s.chars().collect();
-    let mut out = String::with_capacity(s.len() + 4);
-    for (i, &c) in chars.iter().enumerate() {
-        if i > 0 && c.is_ascii_uppercase() {
-            let prev = chars.get(i.saturating_sub(1)).copied().unwrap_or_default();
-            if prev.is_ascii_lowercase() || prev.is_ascii_digit() {
-                out.push(' ');
-            }
-        }
-        out.push(c);
-    }
-    out
-}
-
-/// `slugGuess` from resolver.ts: strip non-alphanumerics (keep spaces), trim,
-/// lowercase, collapse whitespace to underscores.
-fn slug_guess(name: &str) -> String {
-    let cleaned: String = name
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == ' ' {
-                c
-            } else {
-                ' '
-            }
-        })
-        .collect::<String>();
-    // Collapse runs of whitespace to single underscores; trims ends implicitly
-    // (split_whitespace drops leading/trailing/empty tokens).
-    cleaned
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join("_")
-        .to_lowercase()
+    market_domain::scoring::valid_usage(value).map(|usage| usage.share)
 }
 
 /// Read the user's global "keep N copies" reserve from settings (the SPA's
@@ -853,9 +763,9 @@ mod tests {
     // ---- decamel / slug_guess helpers ------------------------------------
     #[test]
     fn decamel_inserts_spaces_like_the_ts_regex() {
-        assert_eq!(decamel("SagekPrimeBarrel"), "Sagek Prime Barrel");
-        assert_eq!(decamel("AcceleratedBlast"), "Accelerated Blast");
-        assert_eq!(decamel("Already Spaced"), "Already Spaced");
+        assert_eq!(path_name_guess("SagekPrimeBarrel").unwrap(), "Sagek Prime Barrel");
+        assert_eq!(path_name_guess("AcceleratedBlast").unwrap(), "Accelerated Blast");
+        assert_eq!(path_name_guess("Already Spaced").unwrap(), "Already Spaced");
     }
 
     #[test]

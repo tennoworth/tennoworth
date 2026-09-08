@@ -23,6 +23,7 @@ license = "MIT"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+market-domain = { path = "../market-domain" }
 ts-rs = { workspace = true }
 # `tray-icon` enables the system tray (C6). Linux tray needs libayatana-
 # appindicator at runtime; a failed tray init is logged and swallowed

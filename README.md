@@ -160,13 +160,14 @@ details, and explicit non-promises live in [`SECURITY.md`](SECURITY.md).
 | [`deploy/`](deploy/) | Self-host deployment kit for the site and scheduled market refresh. |
 | [`.github/workflows/`](.github/workflows/) | Web, scraper, desktop release, smoke, and audit automation. |
 
-The Rust workspace contains five crates:
+The Rust workspace contains six crates:
 
 | Crate | Role |
 |---|---|
 | `tennoworth-desktop` | Tauri v2 shell, local SQLite state, tray, notifications, overlay, update flow, and IPC commands. |
 | `wfm-core` | Inventory scan/fetch, encrypted WFM session, listings, orders, and recoverable batch plans. |
 | `market-math` | Pure market heuristics shared by the desktop path and parity-tested against the SPA. |
+| `market-domain` | Shared inventory normalization and sell-row facts. |
 | `wfm-client` | Shared warframe.market transport primitives and request policy. |
 | `wfm-scrape` | Host pipeline that scrapes market data and builds `market.json` plus `wfstat-catalog.json`. |
 

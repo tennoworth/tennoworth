@@ -1,0 +1,746 @@
+{
+  "cases": [
+    {
+      "name": "mixed protected copies",
+      "request": {
+        "inventory": {
+          "RawUpgrades": [
+            {
+              "ItemType": "/Lotus/Mod",
+              "ItemCount": 4
+            },
+            {
+              "ItemType": "/Lotus/AltMod",
+              "ItemCount": 2
+            }
+          ],
+          "LongGuns": [
+            {
+              "ItemType": "/Lotus/Weapon",
+              "XP": 3
+            },
+            {
+              "ItemType": "/Lotus/Weapon",
+              "XP": 0
+            }
+          ],
+          "Upgrades": [
+            {
+              "ItemType": "/Lotus/Mod",
+              "UpgradeFingerprint": "{\"lvl\":5}"
+            },
+            {
+              "ItemType": "/Lotus/AltMod",
+              "UpgradeFingerprint": "{\"lvl\":7}"
+            }
+          ]
+        },
+        "catalog": [
+          [
+            "/Lotus/Mod",
+            {
+              "name": "Hammer Shot",
+              "category": "Mods"
+            }
+          ],
+          [
+            "/Lotus/RelicIntact",
+            {
+              "name": "Axi K2 Intact",
+              "category": "Relics"
+            }
+          ],
+          [
+            "/Lotus/RelicRadiant",
+            {
+              "name": "Axi K2 Radiant",
+              "category": "Relics"
+            }
+          ],
+          [
+            "/Lotus/Weapon",
+            {
+              "name": "MK1-Braton",
+              "category": "Primary"
+            }
+          ],
+          [
+            "/Lotus/AltMod",
+            {
+              "name": "Hammer Shot",
+              "category": "Mods"
+            }
+          ]
+        ],
+        "market": {
+          "catalog": {
+            "hammer shot": "hammer_shot",
+            "axi k2 relic": "axi_k2_relic",
+            "sagek prime barrel": "sagek_prime_barrel"
+          },
+          "path_to_info": {
+            "/Lotus/Part": {
+              "name": "Part",
+              "slug": "part",
+              "category": "Prime Parts"
+            }
+          }
+        }
+      },
+      "expected": {
+        "owned": [
+          [
+            "hammer_shot|",
+            {
+              "count": 6,
+              "name": "Hammer Shot",
+              "type": "Mods",
+              "slug": "hammer_shot",
+              "subtype": null,
+              "kept_lvl": 7,
+              "leveled": 0
+            }
+          ],
+          [
+            "mk1_braton|",
+            {
+              "count": 2,
+              "name": "MK1-Braton",
+              "type": "Primary",
+              "slug": "mk1_braton",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 1
+            }
+          ]
+        ],
+        "unresolved": {},
+        "flat_count": 4
+      }
+    },
+    {
+      "name": "relic identities",
+      "request": {
+        "inventory": {
+          "MiscItems": [
+            {
+              "ItemType": "/Lotus/RelicIntact",
+              "ItemCount": 2
+            },
+            {
+              "ItemType": "/Lotus/RelicRadiant",
+              "ItemCount": 3
+            }
+          ]
+        },
+        "catalog": [
+          [
+            "/Lotus/Mod",
+            {
+              "name": "Hammer Shot",
+              "category": "Mods"
+            }
+          ],
+          [
+            "/Lotus/RelicIntact",
+            {
+              "name": "Axi K2 Intact",
+              "category": "Relics"
+            }
+          ],
+          [
+            "/Lotus/RelicRadiant",
+            {
+              "name": "Axi K2 Radiant",
+              "category": "Relics"
+            }
+          ],
+          [
+            "/Lotus/Weapon",
+            {
+              "name": "MK1-Braton",
+              "category": "Primary"
+            }
+          ],
+          [
+            "/Lotus/AltMod",
+            {
+              "name": "Hammer Shot",
+              "category": "Mods"
+            }
+          ]
+        ],
+        "market": {
+          "catalog": {
+            "hammer shot": "hammer_shot",
+            "axi k2 relic": "axi_k2_relic",
+            "sagek prime barrel": "sagek_prime_barrel"
+          },
+          "path_to_info": {
+            "/Lotus/Part": {
+              "name": "Part",
+              "slug": "part",
+              "category": "Prime Parts"
+            }
+          }
+        }
+      },
+      "expected": {
+        "owned": [
+          [
+            "axi_k2_relic|intact",
+            {
+              "count": 2,
+              "name": "Axi K2 Relic (Intact)",
+              "type": "Relics",
+              "slug": "axi_k2_relic",
+              "subtype": "intact",
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ],
+          [
+            "axi_k2_relic|radiant",
+            {
+              "count": 3,
+              "name": "Axi K2 Relic (Radiant)",
+              "type": "Relics",
+              "slug": "axi_k2_relic",
+              "subtype": "radiant",
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "unresolved": {},
+        "flat_count": 2
+      }
+    },
+    {
+      "name": "resolution paths",
+      "request": {
+        "inventory": {
+          "Recipes": [
+            {
+              "ItemType": "/Lotus/Part",
+              "ItemCount": 2
+            },
+            {
+              "ItemType": "/Lotus/ModComponent",
+              "ItemCount": 1
+            },
+            {
+              "ItemType": "/Lotus/ModBlueprint",
+              "ItemCount": 1
+            },
+            {
+              "ItemType": "/Lotus/SagekPrimeBarrelBlueprint",
+              "ItemCount": 1
+            },
+            {
+              "ItemType": "/Lotus/Unknown",
+              "ItemCount": 1
+            }
+          ]
+        },
+        "catalog": [
+          [
+            "/Lotus/Mod",
+            {
+              "name": "Hammer Shot",
+              "category": "Mods"
+            }
+          ],
+          [
+            "/Lotus/RelicIntact",
+            {
+              "name": "Axi K2 Intact",
+              "category": "Relics"
+            }
+          ],
+          [
+            "/Lotus/RelicRadiant",
+            {
+              "name": "Axi K2 Radiant",
+              "category": "Relics"
+            }
+          ],
+          [
+            "/Lotus/Weapon",
+            {
+              "name": "MK1-Braton",
+              "category": "Primary"
+            }
+          ],
+          [
+            "/Lotus/AltMod",
+            {
+              "name": "Hammer Shot",
+              "category": "Mods"
+            }
+          ]
+        ],
+        "market": {
+          "catalog": {
+            "hammer shot": "hammer_shot",
+            "axi k2 relic": "axi_k2_relic",
+            "sagek prime barrel": "sagek_prime_barrel"
+          },
+          "path_to_info": {
+            "/Lotus/Part": {
+              "name": "Part",
+              "slug": "part",
+              "category": "Prime Parts"
+            }
+          }
+        }
+      },
+      "expected": {
+        "owned": [
+          [
+            "part|",
+            {
+              "count": 2,
+              "name": "Part",
+              "type": "Prime Parts",
+              "slug": "part",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ],
+          [
+            "hammer_shot|",
+            {
+              "count": 2,
+              "name": "Hammer Shot",
+              "type": "Mods",
+              "slug": "hammer_shot",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ],
+          [
+            "sagek_prime_barrel|",
+            {
+              "count": 1,
+              "name": "Sagek Prime Barrel",
+              "type": "Recipes",
+              "slug": "sagek_prime_barrel",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "unresolved": {
+          "Recipes": 1
+        },
+        "flat_count": 5
+      }
+    },
+    {
+      "name": "empty and malformed containers",
+      "request": {
+        "inventory": {
+          "MiscItems": "bad",
+          "Recipes": [
+            {
+              "ItemCount": 3
+            },
+            {
+              "ItemType": ""
+            }
+          ],
+          "Consumables": [
+            {
+              "ItemType": "/Lotus/Part"
+            }
+          ]
+        },
+        "catalog": [
+          [
+            "/Lotus/Mod",
+            {
+              "name": "Hammer Shot",
+              "category": "Mods"
+            }
+          ],
+          [
+            "/Lotus/RelicIntact",
+            {
+              "name": "Axi K2 Intact",
+              "category": "Relics"
+            }
+          ],
+          [
+            "/Lotus/RelicRadiant",
+            {
+              "name": "Axi K2 Radiant",
+              "category": "Relics"
+            }
+          ],
+          [
+            "/Lotus/Weapon",
+            {
+              "name": "MK1-Braton",
+              "category": "Primary"
+            }
+          ],
+          [
+            "/Lotus/AltMod",
+            {
+              "name": "Hammer Shot",
+              "category": "Mods"
+            }
+          ]
+        ],
+        "market": {
+          "catalog": {
+            "hammer shot": "hammer_shot",
+            "axi k2 relic": "axi_k2_relic",
+            "sagek prime barrel": "sagek_prime_barrel"
+          },
+          "path_to_info": {
+            "/Lotus/Part": {
+              "name": "Part",
+              "slug": "part",
+              "category": "Prime Parts"
+            }
+          }
+        }
+      },
+      "expected": {
+        "owned": [],
+        "unresolved": {},
+        "flat_count": 0
+      }
+    },
+    {
+      "name": "level fingerprints",
+      "request": {
+        "inventory": {
+          "RawUpgrades": [
+            {
+              "ItemType": "/Lotus/Mod",
+              "ItemCount": 9
+            }
+          ],
+          "Upgrades": [
+            {
+              "ItemType": "/Lotus/Mod",
+              "UpgradeFingerprint": "bad"
+            },
+            {
+              "ItemType": "/Lotus/Mod",
+              "UpgradeFingerprint": "{\"lvl\":\"9\"}"
+            },
+            {
+              "ItemType": "/Lotus/Mod",
+              "UpgradeFingerprint": "{\"lvl\":0}"
+            }
+          ]
+        },
+        "catalog": [
+          [
+            "/Lotus/Mod",
+            {
+              "name": "Hammer Shot",
+              "category": "Mods"
+            }
+          ],
+          [
+            "/Lotus/RelicIntact",
+            {
+              "name": "Axi K2 Intact",
+              "category": "Relics"
+            }
+          ],
+          [
+            "/Lotus/RelicRadiant",
+            {
+              "name": "Axi K2 Radiant",
+              "category": "Relics"
+            }
+          ],
+          [
+            "/Lotus/Weapon",
+            {
+              "name": "MK1-Braton",
+              "category": "Primary"
+            }
+          ],
+          [
+            "/Lotus/AltMod",
+            {
+              "name": "Hammer Shot",
+              "category": "Mods"
+            }
+          ]
+        ],
+        "market": {
+          "catalog": {
+            "hammer shot": "hammer_shot",
+            "axi k2 relic": "axi_k2_relic",
+            "sagek prime barrel": "sagek_prime_barrel"
+          },
+          "path_to_info": {
+            "/Lotus/Part": {
+              "name": "Part",
+              "slug": "part",
+              "category": "Prime Parts"
+            }
+          }
+        }
+      },
+      "expected": {
+        "owned": [
+          [
+            "hammer_shot|",
+            {
+              "count": 9,
+              "name": "Hammer Shot",
+              "type": "Mods",
+              "slug": "hammer_shot",
+              "subtype": null,
+              "kept_lvl": 0,
+              "leveled": 0
+            }
+          ]
+        ],
+        "unresolved": {},
+        "flat_count": 1
+      }
+    },
+    {
+      "name": "alternate fields and counts",
+      "request": {
+        "inventory": {
+          "MiscItems": [
+            {
+              "Type": "/Lotus/Part",
+              "ItemCount": null
+            },
+            {
+              "ItemType": null,
+              "Type": "/Lotus/Part",
+              "ItemCount": 0
+            }
+          ]
+        },
+        "catalog": [
+          [
+            "/Lotus/Mod",
+            {
+              "name": "Hammer Shot",
+              "category": "Mods"
+            }
+          ],
+          [
+            "/Lotus/RelicIntact",
+            {
+              "name": "Axi K2 Intact",
+              "category": "Relics"
+            }
+          ],
+          [
+            "/Lotus/RelicRadiant",
+            {
+              "name": "Axi K2 Radiant",
+              "category": "Relics"
+            }
+          ],
+          [
+            "/Lotus/Weapon",
+            {
+              "name": "MK1-Braton",
+              "category": "Primary"
+            }
+          ],
+          [
+            "/Lotus/AltMod",
+            {
+              "name": "Hammer Shot",
+              "category": "Mods"
+            }
+          ]
+        ],
+        "market": {
+          "catalog": {
+            "hammer shot": "hammer_shot",
+            "axi k2 relic": "axi_k2_relic",
+            "sagek prime barrel": "sagek_prime_barrel"
+          },
+          "path_to_info": {
+            "/Lotus/Part": {
+              "name": "Part",
+              "slug": "part",
+              "category": "Prime Parts"
+            }
+          }
+        }
+      },
+      "expected": {
+        "owned": [
+          [
+            "part|",
+            {
+              "count": 1,
+              "name": "Part",
+              "type": "Prime Parts",
+              "slug": "part",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "unresolved": {},
+        "flat_count": 2
+      }
+    },
+    {
+      "name": "all categories",
+      "request": {
+        "inventory": {
+          "MiscItems": [
+            {
+              "ItemType": "/Lotus/Part",
+              "XP": 1
+            }
+          ],
+          "Recipes": [
+            {
+              "ItemType": "/Lotus/Part",
+              "XP": 1
+            }
+          ],
+          "RawUpgrades": [
+            {
+              "ItemType": "/Lotus/Part",
+              "XP": 1
+            }
+          ],
+          "Suits": [
+            {
+              "ItemType": "/Lotus/Part",
+              "XP": 1
+            }
+          ],
+          "LongGuns": [
+            {
+              "ItemType": "/Lotus/Part",
+              "XP": 1
+            }
+          ],
+          "Pistols": [
+            {
+              "ItemType": "/Lotus/Part",
+              "XP": 1
+            }
+          ],
+          "Melee": [
+            {
+              "ItemType": "/Lotus/Part",
+              "XP": 1
+            }
+          ],
+          "SpaceGuns": [
+            {
+              "ItemType": "/Lotus/Part",
+              "XP": 1
+            }
+          ],
+          "SpaceMelee": [
+            {
+              "ItemType": "/Lotus/Part",
+              "XP": 1
+            }
+          ],
+          "Sentinels": [
+            {
+              "ItemType": "/Lotus/Part",
+              "XP": 1
+            }
+          ],
+          "SentinelWeapons": [
+            {
+              "ItemType": "/Lotus/Part",
+              "XP": 1
+            }
+          ]
+        },
+        "catalog": [
+          [
+            "/Lotus/Mod",
+            {
+              "name": "Hammer Shot",
+              "category": "Mods"
+            }
+          ],
+          [
+            "/Lotus/RelicIntact",
+            {
+              "name": "Axi K2 Intact",
+              "category": "Relics"
+            }
+          ],
+          [
+            "/Lotus/RelicRadiant",
+            {
+              "name": "Axi K2 Radiant",
+              "category": "Relics"
+            }
+          ],
+          [
+            "/Lotus/Weapon",
+            {
+              "name": "MK1-Braton",
+              "category": "Primary"
+            }
+          ],
+          [
+            "/Lotus/AltMod",
+            {
+              "name": "Hammer Shot",
+              "category": "Mods"
+            }
+          ]
+        ],
+        "market": {
+          "catalog": {
+            "hammer shot": "hammer_shot",
+            "axi k2 relic": "axi_k2_relic",
+            "sagek prime barrel": "sagek_prime_barrel"
+          },
+          "path_to_info": {
+            "/Lotus/Part": {
+              "name": "Part",
+              "slug": "part",
+              "category": "Prime Parts"
+            }
+          }
+        }
+      },
+      "expected": {
+        "owned": [
+          [
+            "part|",
+            {
+              "count": 11,
+              "name": "Part",
+              "type": "Prime Parts",
+              "slug": "part",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 11
+            }
+          ]
+        ],
+        "unresolved": {},
+        "flat_count": 11
+      }
+    }
+  ]
+}

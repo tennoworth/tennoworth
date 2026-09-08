@@ -1,0 +1,15 @@
+[package]
+name = "market-domain"
+version = "0.1.0"
+edition = "2021"
+description = "Portable inventory and market decision contracts."
+license = "MIT"
+
+[dependencies]
+market-math = { path = "../market-math" }
+serde = { workspace = true }
+serde_json = { workspace = true, features = ["preserve_order"] }
+ts-rs = { workspace = true }
+
+[lints]
+workspace = true

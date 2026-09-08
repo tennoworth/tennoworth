@@ -13,6 +13,3 @@ pub mod watch;
 
 #[cfg(test)]
 mod bindings;
-
-#[cfg(test)]
-mod binding_types;
