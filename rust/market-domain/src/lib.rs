@@ -6,3 +6,5 @@ pub mod inventory;
 pub mod planners;
 pub mod scoring;
 pub mod trade_session;
+
+pub mod dispatch;

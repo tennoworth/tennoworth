@@ -166,8 +166,8 @@ The Rust workspace contains six crates:
 |---|---|
 | `tennoworth-desktop` | Tauri v2 shell, local SQLite state, tray, notifications, overlay, update flow, and IPC commands. |
 | `wfm-core` | Inventory scan/fetch, encrypted WFM session, listings, orders, and recoverable batch plans. |
-| `market-math` | Pure market heuristics shared by the desktop path and parity-tested against the SPA. |
-| `market-domain` | Shared inventory normalization and sell-row facts. |
+| `market-math` | Dependency-free market arithmetic. |
+| `market-domain` | Native inventory normalization, sell facts, trade/advisor decisions and planners, with generated IPC contracts. |
 | `wfm-client` | Shared warframe.market transport primitives and request policy. |
 | `wfm-scrape` | Host pipeline that scrapes market data and builds `market.json` plus `wfstat-catalog.json`. |
 

@@ -81,3 +81,34 @@ describe('SellPane', () => {
     await waitFor(() => expect(screen.getByDisplayValue('1')).toBeTruthy());
   });
 });
+
+it('keeps filter edits while native values load and disables stale listing actions', async () => {
+  const openListingFlow = vi.fn();
+  const view = renderPane({ calculationPending: true, openListingFlow });
+  const stage = screen.getByRole('button', { name: 'List 3 on WFM' }) as HTMLButtonElement;
+  expect(stage.disabled).toBe(true);
+  expect(screen.getByRole('status').textContent).toContain('Calculating sale values');
+  expect(screen.getByRole('group', { name: 'Sell summary' }).textContent).not.toContain('100p');
+  await fireEvent.click(stage);
+  expect(openListingFlow).not.toHaveBeenCalled();
+  const chip = screen.getByRole('button', { name: 'prime 1' });
+  await fireEvent.click(chip);
+  await waitFor(() => expect(chip.getAttribute('aria-pressed')).toBe('true'));
+  await fireEvent.click(screen.getByRole('button', { name: 'Hide Accelerated Blast for this session' }));
+  await view.rerender({ calculationPending: false, activeTags: new Set(['prime']) });
+  expect(screen.getByText('All picks snoozed for this session.')).toBeTruthy();
+  expect(screen.getByRole('button', { name: 'prime 1' })).toBe(chip);
+  expect(chip.getAttribute('aria-pressed')).toBe('true');
+  expect(stage.disabled).toBe(false);
+});
+
+it('shows native failure as unavailable values with a retry action', async () => {
+  const retry = vi.fn();
+  renderPane({ results: [], calculationError: 'Snapshot invalid', onretryCalculation: retry });
+  expect(screen.getByRole('alert').textContent).toContain('Snapshot invalid');
+  const summary = screen.getByRole('group', { name: 'Sell summary' });
+  expect(summary.textContent).not.toContain('100p');
+  expect(summary.textContent).toContain('—');
+  await fireEvent.click(screen.getByRole('button', { name: 'Retry calculations' }));
+  expect(retry).toHaveBeenCalledOnce();
+});

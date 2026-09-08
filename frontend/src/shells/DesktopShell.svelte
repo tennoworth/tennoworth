@@ -3,7 +3,7 @@
   import { loadCatalogs } from '../adapters/catalogs';
   import { TauriTransport } from '../adapters/desktop';
   import { useDesktopServices } from '../ui/desktop-context';
-  const { desktopNotifications, desktopWfmStatus, desktopWfmLogout, listenForTauriEvent, updateStatus } = useDesktopServices();
+  const { desktopNotifications, desktopWfmStatus, desktopWfmLogout, listenForTauriEvent, updateStatus, normalizeInventoryNative, scoreInventoryNative, relicPlan: loadRelicPlan, setRecos: loadSetRecos, evaluateAdvisor } = useDesktopServices();
   
   import { onMount, untrack } from 'svelte';
   import Faq from './Faq.svelte';
@@ -27,18 +27,19 @@ import { NOTIFICATIONS_EVENT, MARKET_REFRESHED_EVENT } from '../contracts/events
   import ThemeSwitcher from '../ui/ThemeSwitcher.svelte';
   import SettingsPanel from '../features/settings/SettingsPanel.svelte';
   import { resolveRivens } from '../domain/rivens';
-  import { adviseOwned } from '../domain/advisor';
+  import type { Verdict } from '../domain/advisor';
+  import type { ScoredInventoryFact } from '../contracts/generated/domain';
+  import { DomainResult } from '../features/selling/domain-result.svelte';
   import { buildMetaDrift } from '../domain/meta-drift';
   import type { History } from '../domain/history';
   import { lookup, staleSurfaceTimestamp } from '../domain/market';
 import { startMarketRefreshLoop, type MarketRefreshLoop } from '../adapters/market';
-  import { sellableQty } from '../domain/sell-priority';
   import { computeResults as computeFilteredResults, computeAvailableTags, computeEmptyReason, type FilterState } from '../domain/filter-engine';
   import { PRESETS, presetStillMatches } from '../domain/presets';
 
   const APP_COMMIT = __APP_COMMIT__;
-  import { deriveSetRecos } from '../domain/set-recos';
-  import { deriveRelicPlan } from '../domain/relic-planner';
+  import type { SetReco } from '../domain/set-recos';
+  import type { RelicPlanEntry } from '../domain/relic-planner';
   import type { StateStore } from '../contracts/state-store';
   import type { ThemeController } from '../ui/theme';
 
@@ -66,7 +67,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // control in Settings → Appearance (and its footer twin) drives.
   let { store, theme }: { store: StateStore; theme: ThemeController } = $props();
   const filters = untrack(() => new FilterController(store));
-  const inventory = untrack(() => new InventoryController(store, transport, { loadMarket, loadCatalogs }));
+  const inventory = untrack(() => new InventoryController(store, transport, { loadMarket, loadCatalogs, normalizeInventory: normalizeInventoryNative }));
   const listing = new ListingController({ resumePendingPlan: () => transport.resumePendingPlan(), discardPendingPlan: () => transport.discardPendingPlan(), status: desktopWfmStatus, logout: desktopWfmLogout }, (code, next) => wfmAuthDialogsRef?.open(code, next));
 
   let resolvedRivens = $derived(resolveRivens(inventory.ownedRivens, inventory.market));
@@ -77,14 +78,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // CTA stages exactly what the user sees (name filter + badge chips), not the
   // unfiltered preset results.
   let tableView = $state<{ rows: SellRow[]; active: boolean }>({ rows: [], active: false });
-  // Rows eligible for the bulk "List on WFM" action: the table-filtered set when
-  // a table filter is active, else all results - minus relics (subtyped rows),
-  // since selling an intact relic at a few plat usually loses to cracking it
-  // (the Relic planner ranks those), so they shouldn't be staged by default.
-  let listableRows = $derived(
-    (tableView.active ? tableView.rows : results).filter((r) => !r.subtype && r.sellable > 0)
-  );
-
   function headerClearance(node: HTMLElement, inShell: boolean) {
     if (!inShell) return;
     const root = document.documentElement;
@@ -138,6 +131,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     return m;
   });
 
+  let sparesOnly = $derived(!!PRESETS[filters.activePreset ?? '']?.sparesOnly);
   let filterState = $derived<FilterState>({
     minPrice: filters.minPrice, minOwned: filters.minOwned, typeFilter: filters.typeFilter, hideAtLvl: filters.hideAtLvl, activeTags: filters.activeTags,
     vaultOnly: !!PRESETS[filters.activePreset ?? '']?.vaultOnly,
@@ -145,7 +139,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     minVol: PRESETS[filters.activePreset ?? '']?.minVol ?? 0,
     minMedian: PRESETS[filters.activePreset ?? '']?.minMedian ?? 0,
     typesAny: PRESETS[filters.activePreset ?? '']?.typesAny ?? [],
-    sparesOnly: !!PRESETS[filters.activePreset ?? '']?.sparesOnly,
+    sparesOnly,
     adviceOnly: !!PRESETS[filters.activePreset ?? '']?.adviceOnly,
   });
 
@@ -154,26 +148,29 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // that uses advice opens (the Hold/Sell preset or the Set picks view) -
   // same lazy pattern as the market browser's 1-year toggle. Verdicts
   // degrade gracefully to the calendar-only rules until it lands.
-  let advisorHistory = $state<History | null>(null);
-  let advisorHistoryState = $state<'idle' | 'loading' | 'done'>('idle');
+  const historyResult = new DomainResult<History | null>(() => null);
+  let advisorHistory = $derived(historyResult.value);
   $effect(() => {
     const wanted = filters.activePreset === 'holdsell' || effectiveView === 'sets';
-    if (wanted && advisorHistoryState === 'idle') {
-      advisorHistoryState = 'loading';
-      transport.loadHistory().then((h) => {
-        advisorHistory = h;
-        advisorHistoryState = 'done';
-      }).catch(() => { advisorHistoryState = 'done'; });
+    if (!wanted || untrack(() => historyResult.phase === 'done')) return;
+    return untrack(() => historyResult.start(() => transport.loadHistory()));
+  });
+  let calculationEpoch = $state(0);
+  const advisorResult = new DomainResult<Map<string, Verdict>>(() => new Map());
+  $effect(() => {
+    void calculationEpoch;
+    const owned = inventory.resolved.owned;
+    const market = inventory.market;
+    const history = advisorHistory;
+    if (!owned.size || !market?.calendar?.primes) {
+      untrack(() => advisorResult.clear());
+      return;
     }
+    const slugs = [...owned.values()].map(row => row.slug);
+    return untrack(() => advisorResult.start(async () => new Map(Object.entries(await evaluateAdvisor({ slugs, market, history, now_ms: Date.now() })))));
   });
-  // Verdicts per owned slug (calendar-dated primes only). Cheap: one
-  // set_to_parts index + a rule walk per owned slug.
-  let adviceMap = $derived.by(() => {
-    if (!inventory.resolved.owned.size || !inventory.market?.calendar?.primes) return new Map();
-    const slugs = [...inventory.resolved.owned.values()].map((r) => r.slug);
-    return adviseOwned(slugs, inventory.market, advisorHistory, Date.now());
-  });
-  
+  let adviceMap = $derived(advisorResult.value);
+
   $effect(() => {
     // Depend ONLY on the filter primitives that define a preset (the void reads
     // below). Read/write activePreset inside untrack() so nulling the selection
@@ -275,45 +272,80 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   });
 
   function handleClear() {
-    void store.clearSnapshot();
-    inventory.inventoryName = null;
-    inventory.lastUpdated = null;
-    inventory.resolved = { owned: new Map(), unresolved: {} };
-    inventory.ownedRivens = [];
-    inventory.deltas = new Map();
-    inventory.previousOwned = null;
+    void inventory.clear();
     results = [];
     tableView = { rows: [], active: false };
-    inventory.phase = 'idle';
+    for (const result of [defaultFacts, spareFacts, previousFacts, advisorResult, setResult, relicResult]) result.clear();
   }
 
-  // Re-derive results whenever any filter input or the owned set changes.
-  // We deliberately read the filter state inside the effect (so they're
-  // tracked) but write only to `results`, which the effect doesn't read -
-  // no chance of a re-run loop. The filter cascade itself lives in
-  // lib/filter-engine.ts (shared with availableTags + emptyReason below).
-  //
-  // The several independent walks over `owned` here and below look like an
-  // obvious merge target. Measured 2026-08-01 with a 2,165-item inventory:
-  // 0.1 ms median / 0.2 ms max of synchronous JS per filter change. The ~33 ms
-  // a slider drag actually costs is Svelte's flush and the table repaint, which
-  // merging the walks does not touch. Don't trade this cascade's clarity for
-  // it without measuring again.
-  $effect(() => {
-    filterState; filters.reserveCopies;                   // track filter changes
-    if (inventory.resolved.owned.size && inventory.market) {          // track owned + market readiness
-      results = computeFilteredResults(inventory.resolved.owned, inventory.market, filterState, filters.reserveCopies, adviceMap);
-    }
-  });
+  const defaultFacts = new DomainResult<Map<string, ScoredInventoryFact>>(() => new Map());
+  const spareFacts = new DomainResult<Map<string, ScoredInventoryFact>>(() => new Map());
+  const previousFacts = new DomainResult<Map<string, ScoredInventoryFact>>(() => new Map());
+  const setResult = new DomainResult<SetReco[]>(() => []);
+  const relicResult = new DomainResult<RelicPlanEntry[]>(() => []);
 
-  // Set-completion recommendations. Pure derivation from owned × market -
-  // see lib/set-recos.js for the three reco kinds (near-complete /
-  // complete-with-extras / extras). Computed lazily; cheap (one walk per
-  // set in the catalog).
-  let setRecos = $derived.by(() => {
-    if (!inventory.resolved.owned.size || !inventory.market?.set_to_parts) return [];
-    return deriveSetRecos(inventory.resolved.owned, inventory.market);
+  $effect(() => {
+    void calculationEpoch;
+    const owned = inventory.resolved.owned;
+    const market = inventory.market;
+    const reserve = filters.reserveCopies;
+    if (!owned.size || !market) { untrack(() => defaultFacts.clear()); return; }
+    return untrack(() => defaultFacts.start(() => scoreInventoryNative(owned, market, reserve, false)));
   });
+  $effect(() => {
+    void calculationEpoch;
+    const wanted = sparesOnly;
+    const owned = inventory.resolved.owned;
+    const market = inventory.market;
+    const reserve = filters.reserveCopies;
+    if (!wanted || !owned.size || !market) { untrack(() => spareFacts.clear()); return; }
+    return untrack(() => spareFacts.start(() => scoreInventoryNative(owned, market, reserve, true)));
+  });
+  $effect(() => {
+    void calculationEpoch;
+    const owned = inventory.previousOwned;
+    const market = inventory.market;
+    const reserve = filters.reserveCopies;
+    const spares = sparesOnly;
+    if (!owned?.size || !market) { untrack(() => previousFacts.clear()); return; }
+    return untrack(() => previousFacts.start(() => scoreInventoryNative(owned, market, reserve, spares)));
+  });
+  let currentFacts = $derived(sparesOnly ? spareFacts : defaultFacts);
+  let calculationError = $derived(currentFacts.error ?? (filterState.adviceOnly ? advisorResult.error : null));
+  let calculationPending = $derived(inventory.resolved.owned.size > 0 && !!inventory.market &&
+    (currentFacts.phase === 'idle' || currentFacts.phase === 'loading' || (filterState.adviceOnly && advisorResult.phase === 'loading')));
+  let calculationsReady = $derived(!calculationPending && !calculationError && currentFacts.phase === 'done');
+  // Rows eligible for the bulk "List on WFM" action: the table-filtered set when
+  // a table filter is active, else all results - minus relics (subtyped rows),
+  // since selling an intact relic at a few plat usually loses to cracking it
+  // (the Relic planner ranks those), so they shouldn't be staged by default.
+  let listableRows = $derived.by(() => {
+    if (!calculationsReady) return [];
+    const current = new Map(results.map(row => [row.key ?? row.slug, row]));
+    const visible = tableView.active ? tableView.rows.flatMap(row => {
+      const match = current.get(row.key ?? row.slug);
+      return match ? [match] : [];
+    }) : results;
+    return visible.filter(row => !row.subtype && row.sellable > 0);
+  });
+  $effect(() => {
+    results = computeFilteredResults(inventory.resolved.owned, inventory.market, filterState, filters.reserveCopies, adviceMap, currentFacts.value);
+  });
+  $effect(() => {
+    void calculationEpoch;
+    const owned = inventory.resolved.owned;
+    const market = inventory.market;
+    if (!owned.size || !market?.set_to_parts) { untrack(() => setResult.clear()); return; }
+    return untrack(() => setResult.start(() => loadSetRecos(owned, market)));
+  });
+  $effect(() => {
+    void calculationEpoch;
+    const owned = inventory.resolved.owned;
+    const market = inventory.market;
+    if (!owned.size || !market?.relic_rewards) { untrack(() => relicResult.clear()); return; }
+    return untrack(() => relicResult.start(() => loadRelicPlan(owned, market, Number.MAX_SAFE_INTEGER)));
+  });
+  let setRecos = $derived(setResult.value);
 
   // Baro Ki'Teer schedule, baked into market.json at build time (mirrors
   // relic_rewards / vault_status). No runtime warframestat fetch - that
@@ -389,11 +421,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     return { dailyMs: nextDaily - now, weeklyMs: nextWeekly - now };
   });
 
-  // Relic planner - top 3 owned (Intact) relics by expected-plat-per-crack.
-  let relicPlan = $derived.by(() => {
-    if (!inventory.resolved.owned.size || !inventory.market?.relic_rewards) return [];
-    return deriveRelicPlan(inventory.resolved.owned, inventory.market, Infinity);
-  });
+  let relicPlan = $derived(relicResult.value);
   const RELIC_PREVIEW = 6;
   let relicShowAll = $state(false);
   let relicVisible = $derived(relicShowAll ? relicPlan : relicPlan.slice(0, RELIC_PREVIEW));
@@ -435,17 +463,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
 
   // Every owned row with ANY market match - no preset/filter applied. The
   // sidebar Sell badge pins to this so it stays stable while filters change.
-  let sellableCount = $derived.by(() => {
-    if (!inventory.market) return 0;
-    let n = 0;
-    // Count an item only if at least one copy is actually listable after the
-    // keep-copies reserve and leveled (untradeable) copies - otherwise the
-    // headline tile would claim items are sellable that the reserve holds back,
-    // contradicting the dimmed rows and zeroed potential.
-    for (const rec of inventory.resolved.owned.values())
-      if (lookup(inventory.market, rec.slug) && sellableQty(rec.count, filters.reserveCopies, rec.leveled ?? 0) > 0) n += 1;
-    return n;
-  });
+  let sellableCount = $derived([...defaultFacts.value.values()].filter(row => row.sellable > 0).length);
   let unresolvedSummary = $derived(
     Object.entries(inventory.resolved.unresolved)
       .map(([k, v]) => `${k}: ${v}`)
@@ -509,8 +527,8 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // definition of sellable. One extra computeResults per filter change; the
   // cascade costs ~0.1 ms on a 2k-item inventory (measured 2026-08-01).
   let prevSummary = $derived.by(() => {
-    if (!inventory.previousOwned || !inventory.market) return null;
-    const rows = computeFilteredResults(inventory.previousOwned, inventory.market, filterState, filters.reserveCopies);
+    if (!inventory.previousOwned || !inventory.market || previousFacts.phase !== 'done' || currentFacts.phase !== 'done') return null;
+    const rows = computeFilteredResults(inventory.previousOwned, inventory.market, filterState, filters.reserveCopies, undefined, previousFacts.value);
     return {
       owned: inventory.previousOwned.size,
       sellable: rows.filter((r) => r.sellable > 0).length,
@@ -543,7 +561,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
 
   // Friendly diagnosis of WHY the table is empty so we don't just shrug.
   let emptyReason = $derived.by(() =>
-    computeEmptyReason(inventory.resolved.owned, inventory.market, filterState, results.length, filters.activePreset, adviceMap)
+    currentFacts.phase !== 'done' || (filterState.adviceOnly && advisorResult.phase !== 'done') ? null : computeEmptyReason(inventory.resolved.owned, inventory.market, filterState, results.length, filters.activePreset, adviceMap)
   );
 
   // Scan is the only inventory source - the refresh pop is a single action.
@@ -742,21 +760,21 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
           <!-- Pinned to the unfiltered sellable count: with a narrow preset
                active (Vaulted on a no-vaulted inventory), a filter-driven
                "Sell 0" reads as "your inventory got wiped". -->
-          <span data-shell class="badge">{sellableCount}</span>
+          <span data-shell class="badge">{defaultFacts.phase === 'done' ? sellableCount : '—'}</span>
         </button>
         
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'session'} onclick={() => filters.setView('session')}><span data-shell>Trade Session</span></button>
         
-        {#if setRecos.length > 0}
+        {#if setRecos.length > 0 || setResult.phase === 'loading' || setResult.error}
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'sets'} onclick={() => filters.setView('sets')}>
             <span data-shell>Set picks</span>
-            <span data-shell class="badge">{setRecos.length}</span>
+            <span data-shell class="badge">{setResult.phase === 'done' ? setRecos.length : '—'}</span>
           </button>
         {/if}
-        {#if relicPlan.length > 0}
+        {#if relicPlan.length > 0 || relicResult.phase === 'loading' || relicResult.error}
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'relics'} onclick={() => filters.setView('relics')}>
             <span data-shell>Relics</span>
-            <span data-shell class="badge">{relicPlan.length}</span>
+            <span data-shell class="badge">{relicResult.phase === 'done' ? relicPlan.length : '—'}</span>
           </button>
         {/if}
         {#if isDesktop && resolvedRivens.length > 0}
@@ -830,6 +848,9 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   <main data-shell class="workspace" class:reading-view={['sets', 'relics', 'routines', 'install'].includes(effectiveView)}>
 
     {@render generalBanners()}
+    {#if advisorResult.error && !filterState.adviceOnly && ['sell', 'sets', 'session'].includes(effectiveView)}
+      <div class="ui-notice" data-tone="warn" role="status">Hold/sell advice unavailable: {advisorResult.error} <button class="btn" onclick={() => calculationEpoch += 1}>Retry calculations</button></div>
+    {/if}
 
     {#if effectiveView === 'sell'}
       <SellPane
@@ -845,11 +866,17 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         {isDesktop}
         applyPreset={(name) => filters.applyPreset(name)} setReserveCopies={(value) => filters.setReserveCopies(value)} toggleFiltersOpen={(event) => filters.toggleFiltersOpen(event)}
         dismissSellOnboarding={() => filters.dismissSellOnboarding()} dismissKeepCopiesNudge={() => filters.dismissKeepCopiesNudge()}
-        openListingFlow={(rows) => listing.openListingFlow(rows)}
+        openListingFlow={(rows) => { if (calculationsReady) listing.openListingFlow(rows); }}
         {pendingBanner}
+        {calculationPending} {calculationError} onretryCalculation={() => calculationEpoch += 1}
       />
     {:else if effectiveView === 'session'}
-      <TradeSessionPane owned={inventory.resolved.owned} market={inventory.market} reserveCopies={filters.reserveCopies} advice={adviceMap}
+      {#if defaultFacts.phase === 'loading'}
+        <div class="ui-notice" role="status">Calculating safe quantities and sale values…</div>
+      {:else if defaultFacts.error}
+        <div class="ui-notice" data-tone="bad" role="alert">Sale calculations unavailable: {defaultFacts.error} <button class="btn" onclick={() => calculationEpoch += 1}>Retry calculations</button></div>
+      {/if}
+      <TradeSessionPane owned={inventory.resolved.owned} market={inventory.market} reserveCopies={filters.reserveCopies} advice={adviceMap} nativeFacts={defaultFacts.value}
         scanning={inventory.pullingInventory} onscan={inventory.pullInventory} onreview={(rows, budget, state) => listing.openListingFlow(rows.map(r => ({
           ...r, proposed_quantity: r.quantity, clearing_price: r.platinum, low_sell: r.platinum,
           avg_price: r.market.avg, session: { snapshot_id: state.allowance.snapshot_id!, utc_day: state.allowance.utc_day, budget },
@@ -865,10 +892,15 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
           {/if}
         </p>
       </section>
-      {#if setRecos.length > 0}
+      {#if setResult.phase === 'loading'}
+        <div class="ui-notice" role="status">Calculating set opportunities…</div>
+      {:else if setResult.error}
+        <div class="ui-notice" data-tone="bad" role="alert">Set recommendations unavailable: {setResult.error} <button class="btn" onclick={() => calculationEpoch += 1}>Retry calculations</button></div>
+      {:else if setRecos.length > 0}
         <section data-shell class="wrap tw set-recos">
           <div data-shell class="rail"><h3 data-shell>Set opportunities</h3></div>
           {#each setRecos as r (r.set_slug)}
+            {@const av = adviceMap.get(r.set_slug)}
             <div data-shell class="reco row">
               <div data-shell class="reco-body">
                 <div data-shell class="reco-title">
@@ -881,8 +913,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
                     rel="noopener noreferrer"
                   >{r.set_name}</a>
                   <span data-shell class="reco-net-inline">+{r.net_plat}p</span>
-                  {#if adviceMap.get(r.set_slug)}
-                    {@const av = adviceMap.get(r.set_slug)}
+                  {#if av}
                     <span data-shell class="advice-chip advice-{av.advice}" title={av.reasons.join(' · ')}>
                       {av.advice === 'sell_now' ? 'sell now' : av.advice}
                     </span>
@@ -960,7 +991,11 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       <section data-shell class="view-header">
         <h2 data-shell>Relic planner</h2>
         <p data-shell class="lede">
-          {#if relicPlan.length > relicVisible.length}
+          {#if relicResult.phase === 'loading'}
+            Expected values are being calculated from your inventory and the current snapshot.
+          {:else if relicResult.error}
+            Expected values are unavailable until the calculation succeeds.
+          {:else if relicPlan.length > relicVisible.length}
             Top {relicVisible.length} of {relicPlan.length} relics you own, ranked by expected plat per solo crack (Intact); the ladder shows what refining would add.
           {:else}
             Your {relicPlan.length} relic{relicPlan.length === 1 ? '' : 's'} ranked by expected plat per solo crack (Intact); the ladder shows what refining would add.
@@ -970,7 +1005,11 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
           {/if}
         </p>
       </section>
-      {#if relicPlan.length > 0}
+      {#if relicResult.phase === 'loading'}
+        <div class="ui-notice" role="status">Calculating relic values…</div>
+      {:else if relicResult.error}
+        <div class="ui-notice" data-tone="bad" role="alert">Relic recommendations unavailable: {relicResult.error} <button class="btn" onclick={() => calculationEpoch += 1}>Retry calculations</button></div>
+      {:else if relicPlan.length > 0}
         <section data-shell class="wrap tw relic-planner">
           <div data-shell class="rail"><h3 data-shell>Relic decisions</h3></div>
           <div data-shell class="relic-grid">

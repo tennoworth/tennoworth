@@ -1,9 +1,9 @@
 <script lang="ts">
   import { useDesktopServices } from '../../ui/desktop-context';
-  const { desktopTradeSessionState, desktopLiveTopPrices, listenForTauriEvent } = useDesktopServices();
+  const { desktopTradeSessionState, desktopLiveTopPrices, listenForTauriEvent, evaluateTradeSession } = useDesktopServices();
   import { onMount } from 'svelte';
   import { computeResults } from '../../domain/filter-engine';
-  import { SESSION_MODES, selectSession, type SessionMode, type SessionRow } from '../../domain/trade-session';
+  import { SESSION_MODES, type selectSession, type SessionMode, type SessionRow } from '../../domain/trade-session';
   
 import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   
@@ -11,10 +11,12 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   import { MAX_PLAN_ITEMS } from '../../domain/limits';
   import { cachedUnitMarket } from '../../domain/order-prices';
   import type { Market, MarketItemEntry, OwnedRecord, TradeSessionState } from '../../contracts/data';
+  import type { ScoredInventoryFact } from '../../contracts/generated/domain';
   import type { Verdict } from '../../domain/advisor';
 
-  let { owned, market, reserveCopies, advice, scanning, onscan, onreview }: {
+  let { owned, market, reserveCopies, advice, scanning, onscan, onreview, nativeFacts = new Map() }: {
     owned: Map<string, OwnedRecord>; market: Market | null; reserveCopies: number;
+    nativeFacts?: Map<string, ScoredInventoryFact>;
     advice: Map<string, Verdict>; scanning: boolean; onscan: () => Promise<void>;
     onreview: (rows: SessionRow[], budget: number, state: TradeSessionState) => void;
   } = $props();
@@ -35,7 +37,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   const filters = { minPrice: 0, minOwned: 0, typeFilter: 'all', hideAtLvl: Infinity,
     activeTags: new Set<string>(), vaultOnly: false, ducatsOnly: false, minVol: 0,
     minMedian: 0, typesAny: [], sparesOnly: false, adviceOnly: false };
-  let candidates = $derived(computeResults(owned, market, filters, reserveCopies, advice).map(r => ({
+  let candidates = $derived(computeResults(owned, market, filters, reserveCopies, advice, nativeFacts).map(r => ({
     key: r.key, slug: r.slug, name: r.name, owned: r.owned, leveled: r.leveled,
     sellable: Math.min(r.sellable, sessionData?.quantities[r.slug] ?? 0), subtype: r.subtype,
     type: r.type, hold: r.timing === 'hold' || r.advice === 'hold',
@@ -43,7 +45,23 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
     supported: sessionData?.supported_slugs == null ? undefined : sessionData.supported_slugs.includes(r.slug),
     market: { ...cachedUnitMarket(market!.items[r.slug], sessionData?.bulk_slugs.includes(r.slug)), ...livePrices[r.slug] },
   })));
-  let plan = $derived(selectSession(candidates, mode, budget ?? 0, target));
+  let plan = $state<ReturnType<typeof selectSession>>({ rows: [], trades: 0, total: 0, excluded: [], target: null, shortfall: null });
+  let planning = $state(false);
+  let planningError = $state<string | null>(null);
+  $effect(() => {
+    const input = { candidates, mode, budget: budget ?? 0, target: target ?? null };
+    let cancelled = false;
+    planning = true;
+    planningError = null;
+    void evaluateTradeSession(input).then(next => {
+      if (!cancelled) plan = next;
+    }).catch(e => {
+      if (!cancelled) planningError = humanError(e);
+    }).finally(() => {
+      if (!cancelled) planning = false;
+    });
+    return () => { cancelled = true; };
+  });
   let cap = $derived(Math.min(MAX_PLAN_ITEMS, sessionData?.allowance.remaining ?? 0));
   let retained = $state<ReturnType<typeof selectSession> | null>(null);
   $effect(() => { if (plan.rows.length > 0) retained = plan; });
@@ -156,15 +174,17 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   <section class="ui-panel ui-stack" aria-label="Suggested batch">
     <div class="ui-toolbar">
       <h3>{display.rows.length} listings · {display.trades} estimated trades · {display.total.toLocaleString()}p potential</h3>
-      <button class="btn primary" disabled={loading || !!error || cap === 0 || !plan.rows.length || (budget ?? 0) > cap || liveBusy}
+      <button class="btn primary" disabled={loading || planning || !!planningError || !!error || cap === 0 || !plan.rows.length || (budget ?? 0) > cap || liveBusy}
         onclick={() => sessionData && onreview(plan.rows, budget ?? 0, sessionData)}>Review batch</button>
-      <button class="btn ghost" onclick={refreshPrices} disabled={liveBusy || !plan.rows.length || cap === 0}>
+      <button class="btn ghost" onclick={refreshPrices} disabled={planning || !!planningError || liveBusy || !plan.rows.length || cap === 0}>
         {liveBusy ? 'Checking prices…' : 'Check live prices'}
       </button>
     </div>
     <p class="muted">Potential assumes sales at the listed unit asks, rounded up to whole platinum. Bids are per-unit comparisons, not instant proceeds.
       Cached market: {market?.updated_at ? new Date(market.updated_at).toLocaleString() : 'unknown age'}.
       </p>
+    {#if planning}<p role="status">Updating suggested batch…</p>{/if}
+    {#if planningError}<p class="ui-notice" data-tone="bad" role="alert">Could not update the suggested batch: {planningError} Change the intent or budget to retry.</p>{/if}
     {#if priceNote}<p role="status">{priceNote}</p>{/if}
     {#if display.target != null}
       <p class="ui-notice" data-tone={display.shortfall === 0 ? 'good' : 'warn'}>
@@ -189,7 +209,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
         </table>
       </div>
       <p class="muted">Estimated trades = quantity ÷ suggested units per trade, summed across the batch. Buyers may agree different quantities. Posting listings does not spend in-game trades.</p>
-    {:else if !loading}
+    {:else if !loading && !planning && !planningError}
       <p>No eligible batch yet. Scan the game, check protected quantities, or choose another intent.</p>
     {/if}
     {#if plan.excluded.length}
