@@ -30,10 +30,13 @@ pub fn trade_session_state(
                 .collect()
         })
         .unwrap_or_default();
+    let set_recipes: std::collections::BTreeMap<_, _> = market.session_recipes().into_iter().filter(|(slug, _)| {
+        unlocked.as_ref().and_then(|s| s.catalog.get(slug)).is_some_and(|c| c.session_supported && c.max_rank.is_none() && c.subtypes.is_empty())
+    }).collect();
     let supported_slugs = unlocked.map(|s| {
         s.catalog
             .iter()
-            .filter(|(_, c)| c.session_supported)
+            .filter(|(slug, c)| c.session_supported || set_recipes.contains_key(*slug))
             .map(|(slug, _)| slug.clone())
             .collect()
     });
@@ -42,11 +45,13 @@ pub fn trade_session_state(
         quantities,
         bulk_slugs,
         supported_slugs,
+        set_recipes,
     })
 }
 
 #[derive(serde::Serialize)]
 pub struct TradeSessionState {
+    pub set_recipes: std::collections::BTreeMap<String, std::collections::BTreeMap<String, u32>>,
     pub allowance: crate::services::allowance::AllowanceView,
     pub quantities: std::collections::BTreeMap<String, u32>,
     pub bulk_slugs: Vec<String>,

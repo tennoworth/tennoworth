@@ -19,6 +19,7 @@
     market,
     baro,
     owned = null,
+    availability,
   }: {
     market: Market | null;
     baro: NonNullable<Market['baro']> | null;
@@ -30,6 +31,7 @@
      *  user's spare parts would YIELD, derived below - and it must never be
      *  presented as a balance, or the scrap plan double-counts it. */
     owned?: Map<string, OwnedRecord> | null;
+    availability?: ReadonlyMap<string, number>;
   } = $props();
 
   let showAll = $state(false);
@@ -38,7 +40,7 @@
   let rows = $derived(byPlatPerDucat(priceManifest(baro?.inventory ?? [], market)));
   // Everything the user could feed the kiosk, and what that would yield. This
   // is a POTENTIAL, not a balance.
-  let candidates = $derived(owned ? scrapCandidates(owned, market) : []);
+  let candidates = $derived(owned ? scrapCandidates(owned, market, availability) : []);
   let scrapPotential = $derived(candidates.reduce((sum, c) => sum + c.totalDucats, 0));
   let basket = $derived(ducatBasket(rows, scrapPotential));
   // What to scrap to pay for the basket. Sized against the basket itself, not

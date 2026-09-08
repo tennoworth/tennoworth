@@ -3,7 +3,7 @@
   const { desktopTradeSessionState, desktopLiveTopPrices, listenForTauriEvent } = useDesktopServices();
   import { onMount } from 'svelte';
   import { computeResults } from '../../domain/filter-engine';
-  import { SESSION_MODES, selectSession, type SessionMode, type SessionRow } from '../../domain/trade-session';
+  import { SESSION_MODES, selectSession, type SessionMode, type SessionRow, type SessionCandidate } from '../../domain/trade-session';
   
 import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   
@@ -13,10 +13,11 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   import type { Market, MarketItemEntry, OwnedRecord, TradeSessionState } from '../../contracts/data';
   import type { Verdict } from '../../domain/advisor';
 
-  let { owned, market, reserveCopies, advice, scanning, onscan, onreview }: {
+  let { owned, market, reserveCopies, advice, scanning, onscan, onreview, availability }: {
     owned: Map<string, OwnedRecord>; market: Market | null; reserveCopies: number;
     advice: Map<string, Verdict>; scanning: boolean; onscan: () => Promise<void>;
     onreview: (rows: SessionRow[], budget: number, state: TradeSessionState) => void;
+    availability?: ReadonlyMap<string, number>;
   } = $props();
   let mode = $state<SessionMode>('fast');
   let budget = $state<number | undefined>();
@@ -32,10 +33,11 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   let request = 0;
   let budgetInitialized = false;
   let lastPositiveBudget = 8;
+  let includeSets = $state(true);
   const filters = { minPrice: 0, minOwned: 0, typeFilter: 'all', hideAtLvl: Infinity,
     activeTags: new Set<string>(), vaultOnly: false, ducatsOnly: false, minVol: 0,
     minMedian: 0, typesAny: [], sparesOnly: false, adviceOnly: false };
-  let candidates = $derived(computeResults(owned, market, filters, reserveCopies, advice).map(r => ({
+  let parts = $derived(computeResults(owned, market, filters, reserveCopies, advice, availability).filter(r => !r.slug.endsWith('_set')).map(r => ({
     key: r.key, slug: r.slug, name: r.name, owned: r.owned, leveled: r.leveled,
     sellable: Math.min(r.sellable, sessionData?.quantities[r.slug] ?? 0), subtype: r.subtype,
     type: r.type, hold: r.timing === 'hold' || r.advice === 'hold',
@@ -43,6 +45,22 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
     supported: sessionData?.supported_slugs == null ? undefined : sessionData.supported_slugs.includes(r.slug),
     market: { ...cachedUnitMarket(market!.items[r.slug], sessionData?.bulk_slugs.includes(r.slug)), ...livePrices[r.slug] },
   })));
+  let candidates = $derived.by<SessionCandidate[]>(() => {
+    if (!includeSets || !market || !sessionData) return parts;
+    const sets: SessionCandidate[] = [];
+    for (const [slug, components] of Object.entries(sessionData.set_recipes ?? {})) {
+      const recipe = Object.entries(components);
+      const rows = recipe.map(([part]) => parts.filter(row => row.slug === part && !row.subtype));
+      if (!recipe.length || rows.some(rows => rows.length !== 1) || !market.items[slug]) continue;
+      const sellable = Math.min(...recipe.map(([, count], i) => Math.floor(rows[i][0].sellable / count)));
+      if (sellable < 1) continue;
+      sets.push({ key: slug, slug, name: `${market.set_to_parts?.[slug]?.name ?? slug} Set`,
+        owned: Math.min(...recipe.map(([, count], i) => Math.floor(rows[i][0].owned / count))),
+        sellable, leveled: 0, subtype: null, type: 'Set', hold: advice.get(slug)?.advice === 'hold',
+        bulk: false, supported: true, components, market: { ...market.items[slug], ...livePrices[slug] } });
+    }
+    return [...parts, ...sets];
+  });
   let plan = $derived(selectSession(candidates, mode, budget ?? 0, target));
   let cap = $derived(Math.min(MAX_PLAN_ITEMS, sessionData?.allowance.remaining ?? 0));
   let retained = $state<ReturnType<typeof selectSession> | null>(null);
@@ -150,6 +168,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
         <input class="ui-input" aria-label="Platinum target" type="number" min="1" step="1" bind:value={target} placeholder="No target" disabled={cap === 0 && !!retained} />
       </label>
       <span class="muted">Up to {cap} estimated trades.</span>
+      <label><input type="checkbox" bind:checked={includeSets} disabled={cap === 0 && !!retained} /> Include complete owned sets</label>
     </div>
   </section>
 
@@ -180,7 +199,12 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
           <tbody>
             {#each display.rows as row (row.key)}
               <tr>
-                <td class="l">{row.name}<small>{row.sellable} confirmed sellable / {row.owned} owned · rank 0 where applicable</small></td>
+                <td class="l">{row.name}<small>{row.sellable} confirmed sellable / {row.owned} owned · rank 0 where applicable</small>
+                  {#if row.components}
+                    <small>Per set: {Object.entries(row.components).map(([slug, count]) => `${parts.find(part => part.slug === slug)?.name ?? slug} ×${count}`).join(', ')}</small>
+                    <small>Parts reference: {Object.entries(row.components).reduce((sum, [slug, count]) => sum + (market?.items[slug]?.low_sell ?? 0) * count, 0)}p · set ask {row.platinum}p</small>
+                  {/if}
+                </td>
                 <td>{row.quantity}</td><td>{row.per_trade}</td><td>{row.trades}</td><td>{row.platinum}p<small>{priceSources[row.slug] ?? 'Cached reference'}</small></td>
                 <td>{row.bid == null ? 'Unknown' : `${Number(row.bid.toFixed(2))}p`}</td><td>{row.quantity * row.platinum}p</td><td class="reason">{row.reason}</td>
               </tr>

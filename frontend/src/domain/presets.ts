@@ -18,8 +18,8 @@ export interface Preset {
   /** Restrict to these row types (any of). Unlike `typeFilter` - the user's
    *  single-type dropdown - a preset can span several (Spares: Mods + Arcanes). */
   typesAny?: string[];
-  /** Spares mode: rows are duplicate mods/arcanes, and "sellable" means the
-   *  copies you'd otherwise dissolve (see `spareQty`), not owned − reserve. */
+  /** Spares mode narrows sellable copies to duplicate mods/arcanes without
+   *  overriding the player's keep-copy limit. */
   sparesOnly?: boolean;
   /** Hold/Sell mode: only rows the advisor has a verdict for (calendar-dated
    *  primes) - see `lib/advisor.ts`. */

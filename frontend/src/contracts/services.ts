@@ -3,6 +3,8 @@ import type { UpdateStatus } from './update';
 import type { EncryptedBlob } from './encrypted-snapshot';
 export const DESKTOP_CONTEXT = 'tennoworth.desktop';
 export interface DesktopServices {
+  desktopProtectionState(): Promise<import('./protection').ProtectionState>;
+  desktopSaveProtectionPlan(plan: import('./protection').ProtectionPlan): Promise<void>;
   updateStatus(): Promise<UpdateStatus>;
   checkUpdate(): Promise<UpdateStatus>;
   installUpdate(): Promise<void>;

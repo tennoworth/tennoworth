@@ -3,7 +3,9 @@
   import { loadCatalogs } from '../adapters/catalogs';
   import { TauriTransport } from '../adapters/desktop';
   import { useDesktopServices } from '../ui/desktop-context';
-  const { desktopNotifications, desktopWfmStatus, desktopWfmLogout, listenForTauriEvent, updateStatus } = useDesktopServices();
+  const { desktopNotifications, desktopWfmStatus, desktopWfmLogout, listenForTauriEvent, updateStatus, desktopProtectionState, desktopSaveProtectionPlan } = useDesktopServices();
+  import { ProtectionController } from '../features/selling/protection.svelte';
+  import ProtectedPlan from '../features/selling/ProtectedPlan.svelte';
   
   import { onMount, untrack } from 'svelte';
   import Faq from './Faq.svelte';
@@ -67,6 +69,16 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   let { store, theme }: { store: StateStore; theme: ThemeController } = $props();
   const filters = untrack(() => new FilterController(store));
   const inventory = untrack(() => new InventoryController(store, transport, { loadMarket, loadCatalogs }));
+  const protection = new ProtectionController({ desktopProtectionState, desktopSaveProtectionPlan });
+  let availability = $derived(new Map([...inventory.resolved.owned].map(([key, row]) => [key,
+    row.subtype || row.slug.endsWith('_set') ? 0 : Math.min(sellableQty(row.count, filters.reserveCopies, row.leveled ?? 0), protection.state?.items[row.slug]?.available ?? 0),
+  ])));
+  let availableOwned = $derived(new Map([...inventory.resolved.owned].map(([key, row]) => [key, { ...row, count: availability.get(key) ?? 0, leveled: 0 }])));
+  onMount(() => {
+    const timer = setInterval(() => { if (!protection.loading && !protection.saving) void protection.refresh(); }, 30_000);
+    return () => { clearInterval(timer); protection.destroy(); };
+  });
+  $effect(() => { inventory.resolved.owned; untrack(() => void protection.refresh()); });
   const listing = new ListingController({ resumePendingPlan: () => transport.resumePendingPlan(), discardPendingPlan: () => transport.discardPendingPlan(), status: desktopWfmStatus, logout: desktopWfmLogout }, (code, next) => wfmAuthDialogsRef?.open(code, next));
 
   let resolvedRivens = $derived(resolveRivens(inventory.ownedRivens, inventory.market));
@@ -302,7 +314,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   $effect(() => {
     filterState; filters.reserveCopies;                   // track filter changes
     if (inventory.resolved.owned.size && inventory.market) {          // track owned + market readiness
-      results = computeFilteredResults(inventory.resolved.owned, inventory.market, filterState, filters.reserveCopies, adviceMap);
+      results = computeFilteredResults(inventory.resolved.owned, inventory.market, filterState, filters.reserveCopies, adviceMap, availability);
     }
   });
 
@@ -312,7 +324,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // set in the catalog).
   let setRecos = $derived.by(() => {
     if (!inventory.resolved.owned.size || !inventory.market?.set_to_parts) return [];
-    return deriveSetRecos(inventory.resolved.owned, inventory.market);
+    return deriveSetRecos(availableOwned, inventory.market);
   });
 
   // Baro Ki'Teer schedule, baked into market.json at build time (mirrors
@@ -442,8 +454,8 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     // keep-copies reserve and leveled (untradeable) copies - otherwise the
     // headline tile would claim items are sellable that the reserve holds back,
     // contradicting the dimmed rows and zeroed potential.
-    for (const rec of inventory.resolved.owned.values())
-      if (lookup(inventory.market, rec.slug) && sellableQty(rec.count, filters.reserveCopies, rec.leveled ?? 0) > 0) n += 1;
+    for (const [key, rec] of inventory.resolved.owned)
+      if (lookup(inventory.market, rec.slug) && (availability.get(key) ?? 0) > 0) n += 1;
     return n;
   });
   let unresolvedSummary = $derived(
@@ -831,6 +843,13 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
 
     {@render generalBanners()}
 
+    {#if ['sell', 'session', 'sets', 'baro'].includes(effectiveView)}
+      <ProtectedPlan controller={protection} owned={inventory.resolved.owned} market={inventory.market} />
+      {#if protection.error || protection.state?.issues.length}
+        <p class="ui-notice" data-tone="warn">Some quantities need review. Open Protected selling plan for details; unavailable copies are excluded.</p>
+      {/if}
+    {/if}
+
     {#if effectiveView === 'sell'}
       <SellPane
         bind:minPrice={filters.minPrice} bind:minOwned={filters.minOwned} bind:typeFilter={filters.typeFilter} bind:hideAtLvl={filters.hideAtLvl} bind:activeTags={filters.activeTags}
@@ -849,8 +868,8 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         {pendingBanner}
       />
     {:else if effectiveView === 'session'}
-      <TradeSessionPane owned={inventory.resolved.owned} market={inventory.market} reserveCopies={filters.reserveCopies} advice={adviceMap}
-        scanning={inventory.pullingInventory} onscan={inventory.pullInventory} onreview={(rows, budget, state) => listing.openListingFlow(rows.map(r => ({
+      <TradeSessionPane owned={inventory.resolved.owned} market={inventory.market} reserveCopies={filters.reserveCopies} advice={adviceMap} {availability}
+        scanning={inventory.pullingInventory} onscan={async () => { await inventory.pullInventory(); await protection.refresh(); }} onreview={(rows, budget, state) => listing.openListingFlow(rows.map(r => ({
           ...r, proposed_quantity: r.quantity, clearing_price: r.platinum, low_sell: r.platinum,
           avg_price: r.market.avg, session: { snapshot_id: state.allowance.snapshot_id!, utc_day: state.allowance.utc_day, budget },
         })))} />
@@ -1088,7 +1107,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
            have it, and an empty table would read as "he is selling nothing". -->
       {#if voidTrader?.inventory?.length}
         <section data-shell class="baro-stock">
-          <BaroBoard market={inventory.market} baro={voidTrader} owned={inventory.resolved.owned} />
+          <BaroBoard market={inventory.market} baro={voidTrader} owned={inventory.resolved.owned} {availability} />
         </section>
       {/if}
 
@@ -1445,11 +1464,11 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   rows={listing.reviewRowsOverride ?? listableRows.slice(0, 50)}
   {transport}
   onauthrequired={(code) => wfmAuthDialogsRef?.open(code, 'list')}
-  onclose={() => (listing.reviewRowsOverride = null)}
+  onclose={() => { listing.reviewRowsOverride = null; void protection.refresh(); }}
 />
 
 
-  <WfmAuthDialogs bind:this={wfmAuthDialogsRef} onunlocked={(next) => listing.handleWfmUnlocked(next)} />
+  <WfmAuthDialogs bind:this={wfmAuthDialogsRef} onunlocked={(next) => { listing.handleWfmUnlocked(next); void protection.refresh(); }} />
 
 
 <ExportImportDialogs
@@ -1459,5 +1478,3 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   lastUpdated={inventory.lastUpdated}
   onimport={(result) => inventory.handleImported(result)}
 />
-
-

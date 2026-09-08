@@ -87,10 +87,13 @@ function passesMedian(m: MarketItemEntry, f: FilterState): boolean {
 
 // Row enrichment: score, timing, ducat-trade math. Runs only for rows that
 // already passed every clause above.
-function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Market, reserveCopies: number, sparesOnly = false, verdict?: Verdict) {
+function buildRow(key: string, rec: OwnedRecord, m: MarketItemEntry, market: Market, reserveCopies: number, sparesOnly = false, verdict?: Verdict, allocation?: number) {
+  const available = Math.min(sellableQty(rec.count, reserveCopies, rec.leveled ?? 0), allocation ?? Infinity);
+  // A preset can narrow the recommendation, but cannot release copies the
+  // player explicitly chose to keep.
   const sellable = sparesOnly
-    ? spareQty(rec.count, rec.kept_lvl, rec.leveled ?? 0)
-    : sellableQty(rec.count, reserveCopies, rec.leveled ?? 0);
+    ? Math.min(available, spareQty(rec.count, rec.kept_lvl, rec.leveled ?? 0))
+    : available;
   const row_price = clearingPrice(m);
   const demand = readDemand(rec.slug, market, {
     vol: m.vol,
@@ -208,6 +211,7 @@ export function computeResults(
   filters: FilterState,
   reserveCopies: number,
   advice?: Map<string, Verdict>,
+  availability?: ReadonlyMap<string, number>,
 ) {
   const out: ReturnType<typeof buildRow>[] = [];
   for (const [key, rec] of owned) {
@@ -224,7 +228,7 @@ export function computeResults(
     if (!passesMedian(m, filters)) continue;
     if (!passesSpares(rec, filters)) continue;
     if (!passesAdvice(rec, filters, advice)) continue;
-    out.push(buildRow(key, rec, m, market, reserveCopies, filters.sparesOnly, advice?.get(rec.slug)));
+    out.push(buildRow(key, rec, m, market, reserveCopies, filters.sparesOnly, advice?.get(rec.slug), availability ? availability.get(key) ?? 0 : undefined));
   }
   out.sort((a, b) => b.sell_score - a.sell_score);
   return out;

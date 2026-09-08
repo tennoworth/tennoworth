@@ -83,6 +83,8 @@ pub(crate) fn run() {
             commands::settings::get_setting,
             commands::settings::set_setting,
             commands::settings::get_reserves,
+            commands::settings::protection_state,
+            commands::settings::save_protection_plan,
             commands::settings::set_reserve,
             commands::settings::delete_reserve,
             commands::settings::list_snapshots,
