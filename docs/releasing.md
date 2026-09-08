@@ -101,6 +101,12 @@ the desktop release contains the complete, tested `main` commit.
 7. Verify the public release assets and updater manifest. For an urgent
    regression, ship a newer hotfix; never mutate a published versioned release.
 
+Updater checks keep using `desktop-latest/latest.json`, while each platform's
+download URL points to its immutable `desktop-vX.Y.Z` release. Supported older
+versions can update directly to the latest version. Publishing a newer release
+must not remove or replace downloads referenced by a cached update offer. Retain
+legacy rolling assets for clients that cached older rolling URLs.
+
 ## Channels
 
 `desktop-latest` is the stable updater feed and must contain only tested stable

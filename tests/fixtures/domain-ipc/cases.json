@@ -3,6 +3,10 @@
     "operation": "normalize_inventory",
     "input": {
       "inventory": {
+        "RewardSeed": 18446744073709551615,
+        "CrewMembers": [{"Seed": 18446744073709551615}],
+        "DuviriInfo": {"Seed": 18446744073709551615},
+        "NemesisHistory": [{"fp": 18446744073709551615}],
         "RawUpgrades": [
           {
             "ItemType": "/Lotus/Mod",

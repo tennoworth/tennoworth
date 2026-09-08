@@ -39,6 +39,9 @@ impl DomainRequest {
     fn validate(&self) -> Result<(), String> {
         let json =
             serde_json::to_value(self).map_err(|_| "Invalid calculation request.".to_string())?;
+        // Raw inventories contain opaque u64 seeds unrelated to sale arithmetic.
+        // flatten_inventory validates the quantities normalization actually uses.
+        let bound_numbers = !matches!(self, Self::NormalizeInventory(_));
         let mut pending = vec![(&json, 0_u8)];
         let mut nodes = 0_usize;
         while let Some((value, depth)) = pending.pop() {
@@ -48,7 +51,7 @@ impl DomainRequest {
             }
             match value {
                 serde_json::Value::Number(number)
-                    if number
+                    if bound_numbers && number
                         .as_f64()
                         .is_none_or(|v| !v.is_finite() || v.abs() > 9_007_199_254_740_991.0) =>
                 {
@@ -157,6 +160,26 @@ mod tests {
             let response = serde_json::to_value(request.execute().unwrap()).unwrap();
             compare(&response["result"], &case["expected"]);
         }
+    }
+
+    #[test]
+    fn raw_inventory_metadata_does_not_relax_quantity_or_shape_validation() {
+        use serde_json::{json, Value};
+        let request = |inventory: Value| serde_json::from_value::<DomainRequest>(json!({
+            "operation":"normalize_inventory", "input":{"inventory":inventory,"catalog":[],"market":{}}
+        })).unwrap();
+        for count in [json!(-1), json!(1.5), json!("3"), json!(9_007_199_254_740_992_u64)] {
+            let result = request(json!({"RewardSeed":u64::MAX,
+                "MiscItems":[{"ItemType":"/Lotus/Part","ItemCount":count}]})).execute();
+            assert!(matches!(result, Err(error) if error == "Inventory count must be a nonnegative safe integer"));
+        }
+        let mut metadata = Value::Null;
+        for _ in 0..65 { metadata = json!({"nested":metadata}); }
+        assert!(matches!(request(json!({"metadata":metadata})).execute(), Err(error) if error == "The calculation request is too large."));
+        let numeric_request: DomainRequest = serde_json::from_value(json!({
+            "operation":"trade_session", "input":{"candidates":[],"mode":"fast","budget":9_007_199_254_740_992_u64,"target":null}
+        })).unwrap();
+        assert!(matches!(numeric_request.execute(), Err(error) if error == "The calculation contains an out-of-range number."));
     }
 
     #[test]

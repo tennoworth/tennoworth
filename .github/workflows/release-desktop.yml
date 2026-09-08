@@ -519,15 +519,8 @@ jobs:
       # work too, but it would be a key that lies about its contents.
       #   linux-x86_64          the repacked, re-signed AppImage
       #
-      # URLs point at the ROLLING desktop-latest tag, not at this release: the
-      # endpoint baked into every shipped binary is
-      # releases/download/desktop-latest/latest.json, and an updater that
-      # fetched from there but downloaded from a versioned tag would be reading
-      # two different sources. The desktop-latest job below puts these exact
-      # files there. For the same reason latest.json is NOT attached to the
-      # versioned release - its URLs would go stale the next time
-      # desktop-latest is refreshed, which is the opposite of what an immutable
-      # release should carry.
+      # Cacheable update offers must name immutable binaries. The manifest stays
+      # on desktop-latest, but later releases cannot remove or replace its URLs.
       - name: Assemble latest.json
         run: |
           set -euo pipefail
@@ -535,7 +528,7 @@ jobs:
           import json, os, datetime
           v    = os.environ['VERSION']
           repo = os.environ['GH_REPO']
-          base = f'https://github.com/{repo}/releases/download/desktop-latest'
+          base = f'https://github.com/{repo}/releases/download/desktop-v{v}'
 
           def sig(name):
               with open(f'dist/{name}.sig') as fh:
@@ -638,9 +631,8 @@ jobs:
               --target "$SHA" \
               --notes-file "$notes_file"
           fi
-          # Never the updater manifest: its URLs point at the rolling tag (see
-          # the assembly step). On a re-run it can be sitting in dist/ via
-          # merge-multiple, downloaded from this job's own earlier artifact.
+          # The updater manifest belongs to the stable discovery endpoint.
+          # A publish-job rerun may download it alongside the bundle artifacts.
           rm -f dist/latest.json
           gh release upload "$TAG" dist/* --clobber
           echo "draft $TAG carries:"
@@ -653,9 +645,7 @@ jobs:
           gh release edit "$TAG" --draft=false --prerelease=false --latest
           echo "::notice title=Released::$TAG is public."
 
-      # Handed to the desktop-latest job rather than attached to the release -
-      # see the assembly step for why a versioned release must not carry a
-      # manifest full of rolling-tag URLs.
+      # Only the stable discovery endpoint receives the latest-version manifest.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: updater-manifest
@@ -670,7 +660,7 @@ jobs:
   # repo's "Latest release" badge, which belongs to the versioned tag.
   #
   # Runs after `publish`, never beside it: the versioned release is the record,
-  # this is a convenience mirror of it for already-installed clients.
+  # the rolling manifest lets installed clients discover that version.
   desktop-latest:
     needs: [preflight, publish]
     runs-on: ubuntu-latest
@@ -695,38 +685,6 @@ jobs:
             --title "$tag (auto-built)" \
             --notes "Rolling desktop build. The in-app updater reads latest.json from this release. Not a version release - see desktop-v* tags for the versioned desktop app."
 
-          # Assets first, manifest LAST. A client that checks in mid-refresh
-          # must never read a manifest naming a file that is not there yet;
-          # reading the previous complete manifest is always safe.
-          gh release upload "$tag" --clobber \
-            "dist/TennoWorth_${VERSION}_x64-setup.exe" \
-            "dist/TennoWorth_${VERSION}_x64-setup.exe.sig" \
-            dist/TennoWorth-x86_64.AppImage \
-            dist/TennoWorth-x86_64.AppImage.sig
+          # Versioned assets are already public. Retain the old rolling files
+          # for clients that cached manifests before immutable URLs were used.
           gh release upload "$tag" --clobber dist/latest.json
-
-      # Stale-asset cleanup runs AFTER the upload, never before.
-      #
-      # It used to run first, which meant desktop-latest sat empty for the whole
-      # ~8-minute build and latest.json 404'd for every client that checked in
-      # that window - trading the stale-asset bug for a worse one. Cleaning up
-      # afterwards means the previous release stays intact and servable right up
-      # until the new one replaces it, and clients only ever see a complete
-      # manifest: the old version during the build, the new one after.
-      #
-      # The AppImage is named without a version, so it is kept by name rather
-      # than by the version match - it was just overwritten above.
-      - name: Remove superseded assets from the rolling release
-        run: |
-          set -euo pipefail
-          gh release view desktop-latest --json assets --jq '.assets[].name' | while read -r asset; do
-              [ -z "$asset" ] && continue
-              case "$asset" in
-                latest.json)                 echo "keep (manifest):  $asset" ;;
-                TennoWorth-x86_64.AppImage|TennoWorth-x86_64.AppImage.sig)
-                                             echo "keep (unversioned): $asset" ;;
-                *"$VERSION"*)                echo "keep (current):   $asset" ;;
-                *)                           echo "remove (stale):   $asset"
-                                             gh release delete-asset desktop-latest "$asset" --yes ;;
-              esac
-            done
