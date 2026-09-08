@@ -145,8 +145,10 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
-      - name: bun audit (moderate+)
-        run: bun audit --prod --audit-level=moderate
+      # Build and test tooling runs on contributor machines and CI; all frontend
+      # packages are devDependencies, so --prod would audit an empty graph.
+      - name: Audit all frontend dependencies (moderate+)
+        run: bun audit --audit-level=moderate
 
   cargo-audit:
     needs: changes

@@ -67,6 +67,7 @@ From `frontend/`:
 bun run check
 bun run test
 bun run knip
+bun audit --audit-level=moderate
 bun run build
 bun run build:desktop
 bunx playwright install --with-deps chromium webkit
