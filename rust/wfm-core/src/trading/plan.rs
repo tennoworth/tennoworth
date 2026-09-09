@@ -126,11 +126,44 @@ pub struct ItemResult {
     pub action: Option<String>,
 }
 
+#[derive(Debug)]
+pub enum PlanValidationError {
+    Invalid(String),
+    Market(anyhow::Error),
+}
+
+impl From<String> for PlanValidationError {
+    fn from(message: String) -> Self {
+        Self::Invalid(message)
+    }
+}
+
+impl From<&str> for PlanValidationError {
+    fn from(message: &str) -> Self {
+        Self::Invalid(message.into())
+    }
+}
+
+impl From<wfm_client::governor::AccessError> for PlanValidationError {
+    fn from(error: wfm_client::governor::AccessError) -> Self {
+        Self::Market(error.into())
+    }
+}
+
+impl std::fmt::Display for PlanValidationError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Invalid(message) => formatter.write_str(message),
+            Self::Market(error) => std::fmt::Display::fmt(error, formatter),
+        }
+    }
+}
+
 pub fn execute_plan(
     pending_path: &std::path::Path,
     unlocked: &Unlocked,
     plan: PlanRequest,
-    validate: impl FnMut() -> Result<(), String>,
+    validate: impl FnMut() -> Result<(), PlanValidationError>,
 ) -> PlanResponse {
     let plan_id = random_token(8);
 
@@ -207,11 +240,8 @@ pub fn run_pending(
     pending_path: &std::path::Path,
     unlocked: &Unlocked,
     pending: &mut PendingPlan,
-    mut validate: impl FnMut() -> Result<(), String>,
+    validate: impl FnMut() -> Result<(), PlanValidationError>,
 ) -> PlanResponse {
-    if let Err(message) = validate() {
-        return validation_failure(pending, message);
-    }
     let http = match Client::builder()
         .retry(reqwest::retry::never())
         .redirect(wfm_client::redirect_policy())
@@ -234,6 +264,23 @@ pub fn run_pending(
         }
     };
 
+    run_pending_with(pending_path, pending, validate, |item, validate| {
+        execute_one(&http, unlocked, item, &mut || list_user_orders(unlocked), validate)
+    })
+}
+
+fn run_pending_with(
+    pending_path: &std::path::Path,
+    pending: &mut PendingPlan,
+    mut validate: impl FnMut() -> Result<(), PlanValidationError>,
+    mut execute: impl FnMut(
+        &PlanItem,
+        &mut dyn FnMut() -> Result<(), PlanValidationError>,
+    ) -> ItemResult,
+) -> PlanResponse {
+    if let Err(error) = validate() {
+        return validation_failure(pending, error);
+    }
     for i in 0..pending.items.len() {
         if let Err(message) = validate() {
             return validation_failure(pending, message);
@@ -244,20 +291,29 @@ pub fn run_pending(
         if item.status != "pending" {
             continue;
         }
-        if let Err(error) = wfm_client::governor::process().check(wfm_client::governor::Kind::Mutation, &wfm_client::governor::context()) {
-            return validation_failure(pending, error.to_string());
+        if let Err(error) = wfm_client::governor::process().check(
+            wfm_client::governor::Kind::Mutation,
+            &wfm_client::governor::context(),
+        ) {
+            return validation_failure(pending, error);
         }
         let plan_item = PlanItem::from(&*item);
-        let result = execute_one(&http, unlocked, &plan_item, &mut || list_user_orders(unlocked), &mut validate);
+        let result = execute(&plan_item, &mut validate);
         let interrupted = matches!(result.status.as_str(), "pending" | "uncertain_mutation");
-        item.status = if interrupted { "pending".into() } else { result.status.clone() };
+        item.status = if interrupted {
+            "pending".into()
+        } else {
+            result.status.clone()
+        };
         item.message = result.message.clone();
         item.order_id = result.order_id.clone();
         item.action = result.action.clone();
         if let Err(e) = write_pending_atomic(pending_path, pending) {
             return validation_failure(pending, format!("Could not persist pending update: {e}"));
         }
-        if interrupted { break; }
+        if interrupted {
+            break;
+        }
     }
 
     PlanResponse {
@@ -276,8 +332,10 @@ pub fn run_pending(
     }
 }
 
-fn validation_failure(pending: &PendingPlan, message: String) -> PlanResponse {
-    if wfm_client::governor::process().check(wfm_client::governor::Kind::Mutation, &wfm_client::governor::context()).is_err() {
+fn validation_failure(pending: &PendingPlan, error: impl Into<PlanValidationError>) -> PlanResponse {
+    let error = error.into();
+    let message = error.to_string();
+    if matches!(error, PlanValidationError::Market(_)) {
         return PlanResponse { plan_id: pending.plan_id.clone(), results: pending.items.iter().map(|item| ItemResult {
             slug: item.slug.clone(), status: item.status.clone(), message: if item.status == "pending" { Some(message.clone()) } else { item.message.clone() }, order_id: item.order_id.clone(), action: item.action.clone(),
         }).collect() };
@@ -525,7 +583,7 @@ fn execute_one(
     unlocked: &Unlocked,
     item: &PlanItem,
     read_orders: &mut impl FnMut() -> anyhow::Result<serde_json::Value>,
-    validate: &mut impl FnMut() -> Result<(), String>,
+    validate: &mut dyn FnMut() -> Result<(), PlanValidationError>,
 ) -> ItemResult {
     let mk_err = |msg: String| ItemResult {
         slug: item.slug.clone(),
@@ -579,8 +637,12 @@ fn execute_one(
             return mk_err("Order state changed or is ambiguous. Review the batch again before posting.".into());
         }
     }
-    if let Err(message) = validate() {
-        return mk_err(message);
+    if let Err(error) = validate() {
+        let mut result = mk_err(error.to_string());
+        if matches!(error, PlanValidationError::Market(_)) {
+            result.status = "pending".into();
+        }
+        return result;
     }
 
     // An order with this exact identity already exists → PATCH it. The plan's
@@ -728,6 +790,160 @@ fn review_matches(reviewed: &ReviewedOrder, prior: Option<&ExistingOrder>) -> bo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn interrupted_final_validation_persists_unsent_items_for_explicit_resume() {
+        use wfm_client::governor::AccessError;
+        for error in [
+            AccessError::Cancelled,
+            AccessError::Cooldown(1),
+            AccessError::Paused("Maintenance".into()),
+            AccessError::Busy,
+            AccessError::Transport,
+            AccessError::Persistence,
+            AccessError::Http(503),
+        ] {
+            let path =
+                std::env::temp_dir().join(format!("validation-resume-{}.json", random_token(8)));
+            let mut pending: PendingPlan = serde_json::from_value(serde_json::json!({
+                "plan_id":"resume", "started_at":"test", "items":[
+                    {"slug":"finished","quantity":1,"platinum":12,"order_type":"sell","visible":false,"status":"ok","order_id":"existing"},
+                    {"slug":"waiting","quantity":1,"platinum":12,"order_type":"sell","visible":false,"status":"pending"},
+                    {"slug":"later","quantity":1,"platinum":12,"order_type":"sell","visible":false,"status":"pending"}
+                ]
+            })).unwrap();
+            write_pending_atomic(&path, &pending).unwrap();
+            let session = Unlocked {
+                jwt: "fixture".into(),
+                username: "fixture".into(),
+                platform: "pc".into(),
+                catalog: std::sync::Arc::new(BTreeMap::from([(
+                    "waiting".into(),
+                    cat("item", None, &[]),
+                )])),
+                id_to_item: std::sync::Arc::new(BTreeMap::new()),
+            };
+            let http = Client::builder()
+                .proxy(reqwest::Proxy::all("http://127.0.0.1:9").unwrap())
+                .timeout(Duration::from_millis(100))
+                .build()
+                .unwrap();
+            let validating_order = std::cell::Cell::new(false);
+            let mut attempted = vec![];
+            let response = run_pending_with(
+                &path,
+                &mut pending,
+                || {
+                    if validating_order.get() {
+                        Err(error.clone().into())
+                    } else {
+                        Ok(())
+                    }
+                },
+                |item, validate| {
+                    attempted.push(item.slug.clone());
+                    execute_one(
+                        &http,
+                        &session,
+                        item,
+                        &mut || {
+                            validating_order.set(true);
+                            Ok(serde_json::json!({"data": []}))
+                        },
+                        validate,
+                    )
+                },
+            );
+            assert_eq!(attempted, ["waiting"]);
+            assert_eq!(
+                response
+                    .results
+                    .iter()
+                    .map(|row| row.status.as_str())
+                    .collect::<Vec<_>>(),
+                ["ok", "pending", "pending"]
+            );
+            let mut saved = crate::trading::pending::load_pending(&path).unwrap();
+            assert_eq!(saved.items[1].status, "pending");
+            assert_eq!(
+                saved.items[1].message.as_deref(),
+                Some(error.to_string().as_str())
+            );
+            assert_eq!(saved.items[0].order_id.as_deref(), Some("existing"));
+
+            let mut resumed = vec![];
+            let validations = std::cell::Cell::new(0);
+            let response = run_pending_with(
+                &path,
+                &mut saved,
+                || {
+                    validations.set(validations.get() + 1);
+                    Ok(())
+                },
+                |item, validate| {
+                    validate().unwrap();
+                    resumed.push(item.slug.clone());
+                    ItemResult {
+                        slug: item.slug.clone(),
+                        status: "ok".into(),
+                        message: None,
+                        order_id: Some(item.slug.clone()),
+                        action: Some("created".into()),
+                    }
+                },
+            );
+            assert_eq!(resumed, ["waiting", "later"]);
+            assert!(validations.get() >= resumed.len());
+            assert!(response.results.iter().all(|item| item.status == "ok"));
+            assert!(crate::trading::pending::load_pending(&path)
+                .unwrap()
+                .items
+                .iter()
+                .all(|item| item.status == "ok"));
+            std::fs::remove_file(path).unwrap();
+        }
+    }
+
+    #[test]
+    fn final_inventory_validation_errors_remain_terminal() {
+        let item = plan_item("waiting", None, None);
+        let session = Unlocked {
+            jwt: "fixture".into(),
+            username: "fixture".into(),
+            platform: "pc".into(),
+            catalog: std::sync::Arc::new(BTreeMap::from([(
+                "waiting".into(),
+                cat("item", None, &[]),
+            )])),
+            id_to_item: std::sync::Arc::new(BTreeMap::new()),
+        };
+        let http = Client::builder()
+            .proxy(reqwest::Proxy::all("http://127.0.0.1:9").unwrap())
+            .timeout(Duration::from_millis(100))
+            .build()
+            .unwrap();
+        let response = execute_one(
+            &http,
+            &session,
+            &item,
+            &mut || Ok(serde_json::json!({"data": []})),
+            &mut || Err("Inventory changed".into()),
+        );
+        assert_eq!(response.status, "error");
+        assert_eq!(response.message.as_deref(), Some("Inventory changed"));
+    }
+
+    #[test]
+    fn transient_validation_failure_stays_interrupted_after_the_cooldown_ends() {
+        let pending: PendingPlan = serde_json::from_value(serde_json::json!({
+            "plan_id":"test", "started_at":"test", "items":[
+                {"slug":"waiting","quantity":1,"platinum":12,"order_type":"sell","visible":false,"status":"pending"}
+            ]
+        })).unwrap();
+        let response = validation_failure(&pending, wfm_client::governor::AccessError::Cooldown(0));
+        assert_eq!(response.results[0].status, "pending");
+        assert_eq!(response.results[0].slug, "waiting");
+    }
 
     #[test]
     fn review_rejects_any_changed_or_ambiguous_order_detail() {

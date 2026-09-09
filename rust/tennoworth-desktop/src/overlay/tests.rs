@@ -1001,8 +1001,9 @@ fn real_three_reward_capture_survives_common_display_shapes() {
             y: 0,
         };
         let mut timings = OverlayStageTimings::default();
+        let started = std::time::Instant::now();
         let expected = read_expected_layout(&ocr, &frame, &candidates, 3, None, &mut timings)
-            .unwrap_or_else(|error| panic!("{label} expected path: {error}"));
+            .unwrap_or_else(|error| panic!("{label} expected path after {:?}: {error}; timings={timings:?}", started.elapsed()));
         assert!(
             layout_read_is_complete(&expected, 3),
             "{label} expected path"
@@ -1016,5 +1017,6 @@ fn real_three_reward_capture_survives_common_display_shapes() {
             consensus.resolve(3, true).is_some(),
             "{label} centered path"
         );
+        eprintln!("{label}: elapsed={:?}; timings={timings:?}", started.elapsed());
     }
 }

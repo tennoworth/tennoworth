@@ -241,9 +241,12 @@ jobs:
       - name: cargo test
         run: cargo test
       - name: Real three-reward OCR regression
+        # OpenMP oversubscription slows small OCR crops on shared CI CPUs.
+        env:
+          OMP_THREAD_LIMIT: '1'
         run: >-
           cargo test -p tennoworth-desktop
-          real_three_reward_capture_survives_common_display_shapes -- --ignored
+          real_three_reward_capture_survives_common_display_shapes -- --ignored --nocapture
 
   # The desktop version is pinned in two places (Cargo.toml and Cargo.lock's
   # own entry). Until this job existed the only thing that checked

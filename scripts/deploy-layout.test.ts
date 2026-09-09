@@ -82,3 +82,46 @@ describe.skipIf(process.platform === 'win32')('deployment layout transition', ()
     expect(existsSync(join(f.app, 'frontend'))).toBe(false);
   });
 });
+
+describe.skipIf(process.platform === 'win32')('signed policy bootstrap', () => {
+  const workflow = Bun.YAML.parse(readFileSync(fileURLToPath(new URL('../.github/workflows/publish-wfm-policy.yml', import.meta.url)), 'utf8')) as {
+    jobs: { publish: { steps: Array<{ name?: string; run?: string }> } };
+  };
+  const verify = workflow.jobs.publish.steps.find(step => step.name === 'Verify signed revision')!.run!;
+  function run(ref: string, first: boolean, status: number) {
+    const root = mkdtempSync(join(tmpdir(), 'policy-bootstrap-')); directories.push(root);
+    const bin = join(root, 'bin'); mkdirSync(bin);
+    const commands = {
+      curl: '#!/bin/sh\nprintf "%s" "$FIXTURE_HTTP_STATUS"\n',
+      gh: '#!/bin/sh\nprintf "%s\\n" "$*" >> "$FIXTURE_CALLS"\n',
+      cargo: '#!/bin/sh\nprintf "%s\\n" "$*" >> "$FIXTURE_CALLS"\nmkdir -p rust/target/release\nprintf verifier > rust/target/release/wfm-policy\n',
+    };
+    for (const [name, body] of Object.entries(commands)) { write(join(bin, name), body); chmodSync(join(bin, name), 0o755); }
+    const calls = join(root, 'calls');
+    const result = spawnSync('bash', ['-c', verify], { cwd: root, encoding: 'utf8', env: {
+      ...process.env, PATH: `${bin}:${process.env.PATH}`, GITHUB_REF: ref, FIRST_PUBLICATION: String(first),
+      TENNOWORTH_WFM_POLICY_PUBLIC_KEY: 'fixture', ENVELOPE_BASE64: Buffer.from('{}').toString('base64'),
+      GH_TOKEN: 'fixture', GITHUB_REPOSITORY: 'fixture/repository', FIXTURE_HTTP_STATUS: String(status), FIXTURE_CALLS: calls,
+    } });
+    return { result, calls: existsSync(calls) ? readFileSync(calls, 'utf8') : '', artifact: existsSync(join(root, 'policy/wfm-policy')) };
+  }
+  test('develop can bootstrap only a demonstrably absent first policy', () => {
+    const success = run('refs/heads/develop', true, 404);
+    expect(success.result.status).toBe(0); expect(success.artifact).toBe(true);
+    expect(success.calls).toContain('-- policy/wfm-policy.json');
+    for (const status of [200, 403, 500]) {
+      const rejected = run('refs/heads/develop', true, status);
+      expect(rejected.result.status).not.toBe(0); expect(rejected.calls).toBe(''); expect(rejected.artifact).toBe(false);
+    }
+  });
+  test('updates require main and compare against the published policy', () => {
+    const success = run('refs/heads/main', false, 200);
+    expect(success.result.status).toBe(0);
+    expect(success.calls).toContain('policy/wfm-policy.json previous/wfm-policy.json');
+    for (const [ref, first] of [['refs/heads/develop', false], ['refs/heads/feature', true], ['refs/heads/main', true]] as const) {
+      const rejected = run(ref, first, 200);
+      expect(rejected.result.status).not.toBe(0); expect(rejected.calls).toBe('');
+    }
+    expect(run('refs/heads/main', false, 404).result.status).not.toBe(0);
+  });
+});

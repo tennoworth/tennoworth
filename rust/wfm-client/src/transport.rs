@@ -239,6 +239,55 @@ mod tests {
     }
     static SERIAL: Mutex<()> = Mutex::new(());
     const OK: &str = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}";
+    const SHORT_THROTTLE: &str = "HTTP/1.1 429 Too Many Requests\r\nRetry-After: 0\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+
+    #[test]
+    fn explicit_short_mutation_throttles_retry_once_through_the_same_budget() {
+        let _serial = SERIAL.lock().unwrap();
+        for second in [OK, SHORT_THROTTLE] {
+            let (url, starts, task) = server(vec![SHORT_THROTTLE, second]);
+            let governor = Arc::new(crate::governor::Governor::default());
+            let result = send_on(&governor, crate::build_client(2).unwrap().post(url), Kind::Mutation);
+            if second == OK {
+                assert_eq!(result.unwrap().text().unwrap(), "{}");
+            } else {
+                assert!(matches!(result, Err(AccessError::Cooldown(_))));
+            }
+            task.join().unwrap();
+            let starts = starts.lock().unwrap();
+            assert_eq!(starts.len(), 2);
+            assert!(starts[1].duration_since(starts[0]) >= Duration::from_millis(490));
+            assert_eq!(governor.status().requests, 2);
+            assert_eq!(governor.status().outstanding, 0);
+        }
+    }
+
+    #[test]
+    fn cancellation_during_short_throttle_prevents_the_retry() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let _serial = SERIAL.lock().unwrap();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/", listener.local_addr().unwrap());
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let stop = cancelled.clone();
+        let task = std::thread::spawn(move || {
+            let (mut socket, _) = listener.accept().unwrap();
+            let mut input = [0; 4096];
+            assert!(socket.read(&mut input).unwrap() > 0);
+            stop.store(true, Ordering::Release);
+            socket.write_all(SHORT_THROTTLE.as_bytes()).unwrap();
+        });
+        let governor = Arc::new(crate::governor::Governor::default());
+        let result = crate::governor::with_context(
+            crate::governor::Context { cancelled: Some(cancelled), ..Default::default() },
+            || send_on(&governor, crate::build_client(2).unwrap().post(url), Kind::Mutation),
+        );
+        task.join().unwrap();
+        assert!(matches!(result, Err(AccessError::Cancelled)));
+        assert_eq!(governor.status().requests, 1);
+        assert_eq!(governor.status().outstanding, 0);
+    }
+
     #[test]
     fn actual_http_starts_share_a_budget_across_request_kinds() {
         let _serial = SERIAL.lock().unwrap();

@@ -19,7 +19,7 @@ env:
   TENNOWORTH_WFM_POLICY_PUBLIC_KEY: ${{ vars.TENNOWORTH_WFM_POLICY_PUBLIC_KEY }}
 jobs:
   publish:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' || (github.ref == 'refs/heads/develop' && inputs.first_publication)
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -30,6 +30,10 @@ jobs:
           FIRST_PUBLICATION: ${{ inputs.first_publication }}
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
+          if [ "$GITHUB_REF" != refs/heads/main ]; then
+            test "$GITHUB_REF" = refs/heads/develop && test "$FIRST_PUBLICATION" = true
+          fi
           test -n "$TENNOWORTH_WFM_POLICY_PUBLIC_KEY" || { echo "Configure the dedicated WFM policy public key before publication." >&2; exit 1; }
           mkdir -p policy previous
           printf '%s' "$ENVELOPE_BASE64" | base64 --decode > policy/wfm-policy.json
@@ -37,6 +41,7 @@ jobs:
           status=$(curl --silent --show-error --max-time 15 -H "Authorization: Bearer $GH_TOKEN" -o previous/release.json -w '%{http_code}' "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/wfm-policy-latest")
           case "$status" in
             200)
+              test "$FIRST_PUBLICATION" != true || { echo "An initial policy already exists; publish updates from main." >&2; exit 1; }
               gh release download wfm-policy-latest --pattern wfm-policy.json --dir previous
               cargo run --manifest-path rust/Cargo.toml --release -p wfm-client --bin wfm-policy -- policy/wfm-policy.json previous/wfm-policy.json
               ;;
