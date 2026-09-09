@@ -93,7 +93,8 @@ export function createPreview(scenario: string) {
           sampleAllocation(row.count, row.leveled, Number(settings.get('reserve-copies') ?? 0),
             (protectionPlan.reserves[row.slug] ?? 0) + (protectionPlan.goal === 'akbolto_prime_set' ? sampleRecipe[row.slug as keyof typeof sampleRecipe] ?? 0 : 0),
             unknown ? null : listed.get(row.slug) ?? 0)])),
-        issues: unknown ? ['Unlock WFM to account for your current listings.'] : [] };
+        issues: scenario === 'logged-out' ? ['Unlock WFM to account for your current listings.']
+          : unknown ? ['Current sell orders are unavailable.'] : [] };
     }
     if (command === 'list_notifications') {
       if (scenario === 'loading') await new Promise(resolve => setTimeout(resolve, 1500));

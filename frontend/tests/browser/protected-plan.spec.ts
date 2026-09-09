@@ -45,3 +45,39 @@ test('unavailable current orders never imply zero listed copies', async ({ page 
   await expect(page.getByRole('region', { name: 'Inventory allocation' })).toContainText('Unknown');
   await expect(page.getByRole('button', { name: 'Review batch', exact: true })).toBeDisabled();
 });
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`${theme} zero sellable count explains when WFM login is required`, async ({ page }, info) => {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.goto('/?preview-desktop&sample=logged-out');
+    const sell = page.getByRole('button', { name: /^Sell\s/ });
+    await sell.click();
+    const cell = page.getByRole('group', { name: 'Sell summary' }).locator('.cell').filter({ hasText: 'Sellable' });
+    await expect(cell).toContainText('0');
+    const hint = 'Sellable quantities cannot be checked while Warframe Market is disconnected. Log in or unlock Warframe Market in this app: open Protected selling plan → Connect WFM.';
+    await expect(cell).toHaveAttribute('title', hint);
+    await expect(sell).toHaveAttribute('title', hint);
+    for (const [width, height] of [[1440, 900], [1200, 480], [768, 600], [320, 480]]) {
+      await page.setViewportSize({ width, height });
+      await cell.hover();
+      await expect(page.getByText(hint, { exact: true })).toBeVisible();
+      await page.getByText(hint, { exact: true }).scrollIntoViewIfNeeded();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+      await page.screenshot({ path: info.outputPath(`sell-login-${theme}-${width}.png`) });
+    }
+    await page.getByText('Protected selling plan · No pinned goal', { exact: true }).click();
+    await page.getByRole('button', { name: 'Connect WFM', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('dialog')).toBeVisible();
+
+    await page.goto('/?preview-desktop&sample=protection');
+    await page.getByRole('button', { name: /^Sell\s/ }).click();
+    await expect(cell).not.toHaveAttribute('title', hint);
+    await expect(page.getByText(hint, { exact: true })).toHaveCount(0);
+    await page.goto('/?preview-desktop&sample=protection-error');
+    await page.getByRole('button', { name: /^Sell\s/ }).click();
+    await expect(cell).toContainText('0');
+    await expect(cell).not.toHaveAttribute('title', hint);
+    await expect(page.getByText(hint, { exact: true })).toHaveCount(0);
+  });
+}
