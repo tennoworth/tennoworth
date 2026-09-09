@@ -36,6 +36,7 @@ export interface InventoryCapability {
 }
 
 export interface OrderCapability {
+  cancelPlan(): Promise<void>;
   submitPlan(items: PlanItemInput[]): Promise<PlanResponse>;
   getPendingPlan(): Promise<PendingPlan | null>;
   resumePendingPlan(): Promise<PlanResponse>;

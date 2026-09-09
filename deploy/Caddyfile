@@ -31,6 +31,12 @@
 		-Server
 	}
 
+	handle /wfm-policy.json {
+		root * /srv/wfm/policy
+		header Cache-Control "public, max-age=60, must-revalidate"
+		file_server
+	}
+
 	# Live, cron-refreshed data files from public/ (shadow the stale copies Vite
 	# bakes into dist/). wfstat-catalog.json backs the inventory resolver - the
 	# browser stopped fetching warframestat directly when upstream dropped CORS.

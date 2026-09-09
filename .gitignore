@@ -82,3 +82,8 @@ wfm_inventory_sellable.csv
 *secret-subkeys*.asc
 *private*.asc
 *revoke*.asc
+
+# Local market access safeguards and scraper output lock.
+**/.wfm-output.lock
+wfm-cooldown.json
+/wfm-policy.json

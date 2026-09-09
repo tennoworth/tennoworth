@@ -1056,7 +1056,11 @@ fn capture_and_recognize(
             .collect();
         if !queries.is_empty() {
             if let Ok(live) =
-                wfm_core::trading::live_top::fetch_live_tops("pc", None, &queries, |_, _| {})
+                wfm_client::governor::with_context(wfm_client::governor::Context {
+                    cancelled: Some(state.lifecycle.cancellation(&capture_id)),
+                    expires: live_started.checked_add(Duration::from_secs(15)),
+                    ..Default::default()
+                }, || wfm_core::trading::live_top::fetch_live_tops("pc", None, &queries, |_, _| {}))
             {
                 for slot in &mut result.slots {
                     slot.live_platinum = slot

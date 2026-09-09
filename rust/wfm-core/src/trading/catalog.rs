@@ -2,6 +2,8 @@
 //! WFM's `/orders` endpoint returns only a raw `itemId`, so this injects the
 //! display name the browser panels need, looked up against the catalog.
 
+use wfm_client::transport::GovernedRequest;
+use wfm_client::governor::Kind;
 use anyhow::{bail, Context, Result};
 use reqwest::blocking::Client;
 use std::collections::BTreeMap;
@@ -37,7 +39,7 @@ pub fn fetch_wfm_catalog(
     // Order creation is v2 as well (POST /v2/order, see plan::build_order_body).
     let resp =
         wfm_client::wfm_headers(client.get("https://api.warframe.market/v2/items"), platform)
-            .send()
+            .send_governed(Kind::Read)
             .context("fetching /v2/items")?;
     if !resp.status().is_success() {
         bail!("/v2/items returned HTTP {}", resp.status());

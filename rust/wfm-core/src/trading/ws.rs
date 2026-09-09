@@ -159,6 +159,7 @@ pub fn run_new_orders_stream(
     on_order: &mut dyn FnMut(NewOrder),
     stop: &dyn Fn() -> bool,
 ) -> Result<()> {
+    wfm_client::governor::process().check(wfm_client::governor::Kind::WebSocket, &wfm_client::governor::context())?;
     let mut req = WS_URL.into_client_request().context("ws request")?;
     req.headers_mut().insert(
         "Sec-WebSocket-Protocol",
@@ -190,7 +191,7 @@ pub fn run_new_orders_stream(
 
     let mut last_frame = std::time::Instant::now();
     loop {
-        if stop() {
+        if stop() || wfm_client::governor::process().check(wfm_client::governor::Kind::WebSocket, &wfm_client::governor::context()).is_err() {
             let _ = socket.close(None);
             return Ok(());
         }

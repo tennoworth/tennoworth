@@ -1,0 +1,58 @@
+name: publish-wfm-policy
+on:
+  workflow_dispatch:
+    inputs:
+      envelope_base64:
+        description: Base64 of the complete, offline-signed policy envelope
+        required: true
+        type: string
+      first_publication:
+        description: Allow the first publication when no previous policy release exists
+        default: false
+        type: boolean
+permissions:
+  contents: write
+concurrency:
+  group: publish-wfm-policy
+  cancel-in-progress: false
+env:
+  TENNOWORTH_WFM_POLICY_PUBLIC_KEY: ${{ vars.TENNOWORTH_WFM_POLICY_PUBLIC_KEY }}
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup-rust
+      - name: Verify signed revision
+        env:
+          ENVELOPE_BASE64: ${{ inputs.envelope_base64 }}
+          FIRST_PUBLICATION: ${{ inputs.first_publication }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test -n "$TENNOWORTH_WFM_POLICY_PUBLIC_KEY" || { echo "Configure the dedicated WFM policy public key before publication." >&2; exit 1; }
+          mkdir -p policy previous
+          printf '%s' "$ENVELOPE_BASE64" | base64 --decode > policy/wfm-policy.json
+          test "$(wc -c < policy/wfm-policy.json)" -le 65536
+          status=$(curl --silent --show-error --max-time 15 -H "Authorization: Bearer $GH_TOKEN" -o previous/release.json -w '%{http_code}' "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/wfm-policy-latest")
+          case "$status" in
+            200)
+              gh release download wfm-policy-latest --pattern wfm-policy.json --dir previous
+              cargo run --manifest-path rust/Cargo.toml --release -p wfm-client --bin wfm-policy -- policy/wfm-policy.json previous/wfm-policy.json
+              ;;
+            404)
+              test "$FIRST_PUBLICATION" = true
+              cargo run --manifest-path rust/Cargo.toml --release -p wfm-client --bin wfm-policy -- policy/wfm-policy.json
+              ;;
+            *) echo "Could not establish the previous policy revision (HTTP $status)." >&2; exit 1 ;;
+          esac
+          cp rust/target/release/wfm-policy policy/wfm-policy
+      - name: Publish verified policy
+        uses: ./.github/actions/publish-rolling-release
+        with:
+          tag_name: wfm-policy-latest
+          release_name: WFM access policy
+          files: |
+            policy/wfm-policy.json
+            policy/wfm-policy
+          body: Signed WFM access restrictions and the offline verifier for deployment.

@@ -115,4 +115,9 @@ CREATE TABLE trade_allowance (
   observation TEXT NOT NULL
 );
 "#,
+    // Interrupted batches can return repeatedly; preserve one stable history row per item.
+    r#"
+ALTER TABLE listing_log ADD COLUMN plan_index INTEGER;
+CREATE UNIQUE INDEX listing_log_plan_item ON listing_log(plan_id, plan_index);
+"#,
 ];

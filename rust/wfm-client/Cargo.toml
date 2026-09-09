@@ -2,12 +2,19 @@
 name = "wfm-client"
 version = "0.1.0"
 edition = "2021"
-description = "Shared transport primitives for WFM API calls (UA, headers, envelope unwrap, retry, rate limiter). Library crate - no binary."
+description = "Shared WFM request budgets, signed policy verification and transport primitives."
 license = "MIT"
 
 [dependencies]
 reqwest = { workspace = true }
 serde_json = { workspace = true }
+serde = { workspace = true }
+ts-rs = { workspace = true }
+# Accept IMF-fixdate and the two legacy HTTP-date formats without truncating delays.
+httpdate = "1.0.3"
+base64 = { workspace = true }
+# Pure Rust verification; no signing material or native crypto dependency.
+minisign-verify = "0.2.5"
 
 [lints]
 workspace = true

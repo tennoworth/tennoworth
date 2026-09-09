@@ -78,6 +78,7 @@ pub(crate) fn run() {
         .manage(Arc::new(WfmSession::new()))
         .invoke_handler(tauri::generate_handler![
             health,
+            crate::services::wfm_session::wfm_access_status,
             commands::domain::evaluate_domain,
             commands::inventory::scan_inventory,
             commands::inventory::import_snapshot,
@@ -121,6 +122,7 @@ pub(crate) fn run() {
             crate::services::wfm_session::try_silent_unlock,
             crate::services::wfm_session::wfm_logout,
             commands::listing::submit_plan,
+            commands::listing::cancel_plan,
             commands::listing::get_pending_plan,
             commands::listing::discard_pending_plan,
             commands::listing::resume_pending_plan,
@@ -157,10 +159,17 @@ pub(crate) fn run() {
                 .map_err(|e| format!("resolving app data dir: {e}"))?;
             std::fs::create_dir_all(&data_dir)
                 .map_err(|e| format!("creating app data dir {}: {e}", data_dir.display()))?;
+            if !probe && !ocr_boot_probe {
+                if let Err(error) = wfm_client::policy::start(&data_dir, wfm_client::policy::Component::Desktop) {
+                    let restrictions = wfm_client::governor::Restrictions { pause_all: true, ..Default::default() };
+                    let _ = wfm_client::governor::process().apply_policy(u64::MAX, error.to_string(), restrictions);
+                }
+            }
             let db_path = data_dir.join("tennoworth.db");
             let store = Db::open(&db_path)
                 .map_err(|e| format!("opening state DB {}: {e}", db_path.display()))?;
             app.manage(store);
+            crate::services::wfm_session::publish_access_changes(app.handle().clone());
 
             let overlay_state =
                 overlay::OverlayState::new(&app.handle().clone(), &app.state::<Db>());

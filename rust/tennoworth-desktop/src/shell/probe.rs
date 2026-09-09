@@ -84,7 +84,12 @@ const PROBE_JS: &str = r#"(function(){
   // Like invk, but keeps the typed CmdError shape: rejections come back as
   // { ok:false, code, message } so the report can assert needs_login vs
   // needs_unlock vs bad_passphrase instead of a flattened string.
+  var wfmRequestSerial = 0;
   function invkE(cmd, args){
+    if (cmd === 'submit_plan' || cmd === 'resume_pending_plan') {
+      args = args || {};
+      args.requestId = 'probe-' + (++wfmRequestSerial);
+    }
     var inv = invokeFn();
     if (!inv) return Promise.resolve('NO_INVOKE_FN');
     return inv(cmd, args).then(
@@ -275,7 +280,9 @@ const PROBE_JS: &str = r#"(function(){
     // C7 WFM listing session: the full lock-state machine, hermetic (no WFM
     // network - TENNOWORTH_JWT_PATH/TENNOWORTH_PENDING_PATH point at scratch,
     // and every plan item fails validation before any HTTP).
-    .then(function(){ R.wfm = {}; return invkE('wfm_auth_status').then(function(v){ R.wfm.status0 = v; }); })
+    .then(function(){ R.wfm = {}; return invkE('wfm_access_status').then(function(v){ R.wfm.access = v; }); })
+    .then(function(){ return invkE('cancel_plan', { requestId: 'probe-idle-cancel' }).then(function(v){ R.wfm.cancelIdle = v; }); })
+    .then(function(){ return invkE('wfm_auth_status').then(function(v){ R.wfm.status0 = v; }); })
     // No login file → typed needs_login (the desktop analogue of serve's 401).
     .then(function(){ return invkE('submit_plan', { items: [] }).then(function(v){ R.wfm.planNoLogin = v; }); })
     // Real Sell CTA with no login → the login dialog opens (proactive check).

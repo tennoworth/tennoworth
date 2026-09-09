@@ -24,6 +24,15 @@ fn main() -> std::process::ExitCode {
         eprintln!("usage: wfm-scrape build|scrape|history [--fixtures-dir <DIR>] [--now <ISO>]");
         return std::process::ExitCode::FAILURE;
     };
+    let _output_lock = if extract_flag(&args, "--fixtures-dir").is_none() && matches!(command.as_str(), "scrape" | "build") {
+        let directory = if command == "scrape" {
+            PathBuf::from(extract_flag(&args, "--out").unwrap_or_else(|| "wfm_results.csv".into())).parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new(".")).to_path_buf()
+        } else { find_root().unwrap_or_else(|_| PathBuf::from(".")) };
+        match acquire_output(&directory) {
+            Ok(file) => Some(file),
+            Err(error) => { eprintln!("{error}"); return std::process::ExitCode::FAILURE; }
+        }
+    } else { None };
     let result = match command.as_str() {
         "history" => run_history_cmd(&args),
         "build" => {
@@ -45,6 +54,13 @@ fn main() -> std::process::ExitCode {
             std::process::ExitCode::FAILURE
         }
     }
+}
+
+fn acquire_output(directory: &Path) -> Result<std::fs::File, String> {
+    let file = std::fs::OpenOptions::new().create(true).truncate(false).write(true).open(directory.join(".wfm-output.lock")).map_err(|e| format!("Opening scrape lock: {e}"))?;
+    file.try_lock().map_err(|_| "Another scraper is using this output directory.".to_string())?;
+    wfm_client::policy::start(directory, wfm_client::policy::Component::Scraper).map_err(|e| e.to_string())?;
+    Ok(file)
 }
 
 fn extract_flag(args: &[String], flag: &str) -> Option<String> {
@@ -199,6 +215,8 @@ fn run_history_cmd(args: &[String]) -> Result<(), String> {
     }
 
     let client = reqwest::blocking::Client::builder()
+        .retry(reqwest::retry::never())
+        .redirect(wfm_client::redirect_policy())
         .user_agent(wfm_client::user_agent(
             "wfm-scrape",
             env!("CARGO_PKG_VERSION"),

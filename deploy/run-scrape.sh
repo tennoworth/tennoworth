@@ -25,13 +25,9 @@ cd "$APP"
 # sees the complete previous generation or waits for this one; it can never
 # catch the deliberate catalog-first / market-last publication gap below.
 exec 9<.
-flock 9
+flock -n 9 || { echo "ABORT: another scrape or snapshot operation holds the output lock." >&2; exit 1; }
 
-# Capture the prior row count. The scraper never fails on a sustained 429 - it
-# retries, then skips the throttled item and flushes whatever it got with exit 0.
-# So `set -e` won't catch a truncated run, and the atomic replace gives an
-# atomic-but-gutted market.json. Gate the rebuild on row count so a throttled
-# scrape can't promote a snapshot missing most items.
+# Retain the row-count guard as an independent check on upstream shape changes.
 prior=0
 [ -f "$CSV" ] && prior=$(( $(wc -l < "$CSV") - 1 ))
 

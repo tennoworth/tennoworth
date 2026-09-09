@@ -1,13 +1,9 @@
-//! Shared transport primitives for Warframe.market and warframestat API
-//! calls. Browser UA, Cloudflare-appeasing headers, envelope unwrapping,
-//! and retry backoff.
-//!
-//! Library crate - no binary. Shared by `wfm-core` (desktop app) and
-//! `wfm-scrape` (pipeline).
-//!
-//! Scoping rule: share primitives only.
-//! Do NOT build one abstraction covering both anonymous scraping and
-//! authed order mutation; their auth/error semantics differ.
+//! Shared WFM headers, request scheduling, retry primitives and signed restrictions.
+//! Authentication, response interpretation and mutation reconciliation stay in callers.
+
+pub mod governor;
+pub mod policy;
+pub mod transport;
 
 use std::time::Duration;
 
@@ -55,6 +51,8 @@ pub const HEADER_LANGUAGE: &str = "Language";
 /// Build a blocking reqwest client with the project UA and a shared timeout.
 pub fn build_client(timeout_secs: u64) -> Result<reqwest::blocking::Client, reqwest::Error> {
     reqwest::blocking::Client::builder()
+        .retry(reqwest::retry::never())
+        .redirect(redirect_policy())
         .user_agent(default_user_agent())
         .timeout(Duration::from_secs(timeout_secs))
         .build()
@@ -120,6 +118,25 @@ pub fn unwrap_envelope(body: &serde_json::Value) -> &serde_json::Value {
 /// too - see listing.rs's `send_with_retry`).
 pub fn retry_backoff(attempt: u32) -> Duration {
     Duration::from_secs(2 * (attempt as u64 + 1))
+}
+
+/// Redirects involving WFM must not create hidden attempts outside the governor.
+pub fn redirect_policy() -> reqwest::redirect::Policy {
+    reqwest::redirect::Policy::custom(|attempt| {
+        let wfm = |url: &reqwest::Url| {
+            matches!(
+                url.host_str(),
+                Some("api.warframe.market" | "warframe.market")
+            )
+        };
+        if wfm(attempt.url()) || attempt.previous().iter().any(wfm) {
+            attempt.stop()
+        } else if attempt.previous().len() >= 10 {
+            attempt.error("Too many redirects")
+        } else {
+            attempt.follow()
+        }
+    })
 }
 
 #[cfg(test)]

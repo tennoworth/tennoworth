@@ -1,0 +1,10 @@
+[Unit]
+Description=Check for signed WFM policy changes
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=60s
+RandomizedDelaySec=10s
+
+[Install]
+WantedBy=timers.target

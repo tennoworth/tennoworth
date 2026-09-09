@@ -4,7 +4,7 @@
   import { loadCatalogs } from '../adapters/catalogs';
   import { TauriTransport } from '../adapters/desktop';
   import { useDesktopServices } from '../ui/desktop-context';
-  const { desktopNotifications, desktopWfmStatus, desktopWfmLogout, listenForTauriEvent, updateStatus, updateDiagnostics, desktopOpenExternalUrl, desktopProtectionState, desktopSaveProtectionPlan, normalizeInventoryNative, scoreInventoryNative, relicPlan: loadRelicPlan, setRecos: loadSetRecos, evaluateAdvisor } = useDesktopServices();
+  const { desktopAccessStatus, desktopNotifications, desktopWfmStatus, desktopWfmLogout, listenForTauriEvent, updateStatus, updateDiagnostics, desktopOpenExternalUrl, desktopProtectionState, desktopSaveProtectionPlan, normalizeInventoryNative, scoreInventoryNative, relicPlan: loadRelicPlan, setRecos: loadSetRecos, evaluateAdvisor } = useDesktopServices();
   import { ProtectionController } from '../features/selling/protection.svelte';
   import ProtectedPlan from '../features/selling/ProtectedPlan.svelte';
   import { feedbackSnapshot, feedbackLink } from '../features/settings/feedback';
@@ -13,7 +13,7 @@
   import { onMount, untrack } from 'svelte';
   import Faq from './Faq.svelte';
   import { FilterController, type View } from '../features/selling/filters.svelte';
-  import { ListingController } from '../features/selling/controller.svelte';
+  import { ListingController, WfmAccessController } from '../features/selling/controller.svelte';
   import { InventoryController } from '../features/inventory/controller.svelte';
   import ListingReviewModal from '../features/selling/ListingReviewModal.svelte';
   import MyOrdersPanel from '../features/orders/MyOrdersPanel.svelte';
@@ -63,6 +63,8 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // the desktop app, driven by the wfm_session commands.
   const isDesktop = true;
   const transport = new TauriTransport();
+  const marketAccess = new WfmAccessController({ desktopAccessStatus, listenForTauriEvent });
+  onMount(() => marketAccess.start());
 
   // Persistence seam: localStorage in the browser, SQLite-over-IPC in desktop.
   // Selected + primed (scalar settings loaded into cache) in main.ts and passed
@@ -83,7 +85,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     return () => { clearInterval(timer); protection.destroy(); };
   });
   $effect(() => { inventory.resolved.owned; untrack(() => void protection.refresh()); });
-  const listing = new ListingController({ resumePendingPlan: () => transport.resumePendingPlan(), discardPendingPlan: () => transport.discardPendingPlan(), status: desktopWfmStatus, logout: desktopWfmLogout }, (code, next) => wfmAuthDialogsRef?.open(code, next));
+  const listing = new ListingController({ getPendingPlan: () => transport.getPendingPlan(), resumePendingPlan: () => transport.resumePendingPlan(), discardPendingPlan: () => transport.discardPendingPlan(), status: desktopWfmStatus, logout: desktopWfmLogout }, (code, next) => wfmAuthDialogsRef?.open(code, next));
 
   let resolvedRivens = $derived(resolveRivens(inventory.ownedRivens, inventory.market));
   
@@ -1475,6 +1477,9 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
 
 
 {#snippet generalBanners()}
+  {#if marketAccess.message}
+    <div class="ui-notice" data-tone="warn" role="status">{marketAccess.message}</div>
+  {/if}
   <!-- Cross-view banner region: pull-error and the desktop update banner, each
        independently dismissible. Rendered on both the landing and the workspace
        so a failure is visible wherever the user is standing. -->
@@ -1528,7 +1533,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
           <div data-shell class="src">
             <span data-shell class="dot aging" aria-hidden="true"></span>
             <strong data-shell>Resuming interrupted batch…</strong>
-            <span data-shell class="muted">~{Math.ceil(pendingRemaining * 0.35 + 1)}s</span>
+            <span data-shell class="muted">Checking current orders before continuing.</span>
           </div>
         </div>
       {:else if listing.resumePhase === 'done'}
@@ -1554,7 +1559,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
             <span data-shell class="muted bad">{listing.resumeError}</span>
           </div>
           <div data-shell class="row gap-sm">
-            <button data-shell onclick={() => listing.doResume()}>Retry</button>
+            <button data-shell onclick={() => listing.doResume()} disabled={marketAccess.mutationsBlocked}>Retry</button>
             <button data-shell class="ghost" onclick={() => listing.doDiscard()}>Discard pending</button>
           </div>
         </div>
@@ -1568,7 +1573,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
             </span>
           </div>
           <div data-shell class="row gap-sm">
-            <button data-shell onclick={() => listing.doResume()}>Resume</button>
+            <button data-shell onclick={() => listing.doResume()} disabled={marketAccess.mutationsBlocked}>Resume</button>
             <button data-shell class="ghost" onclick={() => listing.doDiscard()}>Discard</button>
           </div>
         </div>
@@ -1584,7 +1589,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   rows={listing.reviewRowsOverride ?? listableRows.slice(0, 50)}
   {transport}
   onauthrequired={(code) => wfmAuthDialogsRef?.open(code, 'list')}
-  onclose={() => { listing.reviewRowsOverride = null; void protection.refresh(); }}
+  onclose={() => { listing.reviewRowsOverride = null; void protection.refresh(); void transport.getPendingPlan().then(plan => listing.pendingPlan = plan); }}
 />
 
 

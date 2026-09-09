@@ -33,7 +33,7 @@ fn fetch_catalog_returns_name_slug_map_and_meta() {
 }
 
 #[test]
-fn fetch_catalog_retries_3x_then_errors() {
+fn fetch_catalog_propagates_transport_failure() {
     let empty = FixtureHttp {
         responses: HashMap::new(),
     };

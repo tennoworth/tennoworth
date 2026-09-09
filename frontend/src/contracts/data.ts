@@ -536,7 +536,7 @@ export interface OrderPatch {
 /** Single per-item result echoed by the companion's POST /plan / PATCH /order. */
 export interface ItemResult {
   slug: string;
-  status: 'ok' | 'skipped' | 'error';
+  status: 'ok' | 'skipped' | 'error' | 'pending' | 'uncertain_mutation';
   message?: string | null;
   order_id?: string | null;
   /** 'created' | 'updated' - how an ok row landed on WFM (absent on errors

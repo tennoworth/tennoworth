@@ -15,7 +15,7 @@ ExecStart=/srv/wfm/run-scrape.sh
 # killing the scrape a few hundred seconds short of writing market.json -
 # every run for ~14h just re-served the last successful snapshot. Matches
 # the GH Actions job's own timeout-minutes: 90 headroom.
-TimeoutStartSec=5400
+TimeoutStartSec=7200
 Nice=10
 
 # Sandboxing - the scraper rewrites files under its repo (market.json,

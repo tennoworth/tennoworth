@@ -86,9 +86,6 @@ fn validate_protected_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), St
         return Ok(());
     }
     let body = list_user_orders(&unlocked).map_err(|e| e.to_string())?;
-    std::thread::sleep(std::time::Duration::from_millis(
-        wfm_core::trading::listing::SERVE_RATE_LIMIT_MS,
-    ));
     validate_protected_contents(&db, &market, &body, items)
 }
 
@@ -277,6 +274,7 @@ pub async fn submit_plan(
     session: State<'_, Arc<WfmSession>>,
     db: State<'_, Db>,
     items: Vec<PlanItem>,
+    request_id: String,
 ) -> Result<PlanResponse, CmdError> {
     // Captured before the call: execute_plan consumes `items` to seed the
     // pending file, and the price/qty the user actually asked for is not
@@ -288,16 +286,20 @@ pub async fn submit_plan(
     let s = Arc::clone(&session);
     let reviewed = items.clone();
     let response = tauri::async_runtime::spawn_blocking(move || {
-        let unlocked = s.require_unlocked()?;
+        let request = s.claim_plan_request(request_id)?;
         let _guard = s
             .begin_plan()
             .ok_or_else(|| CmdError::of("busy", PLAN_BUSY_MSG))?;
-        Ok::<_, CmdError>(core_execute_plan(
+        let unlocked = s.require_unlocked()?;
+        if load_pending(s.pending_path()).is_some_and(|plan| plan.items.iter().any(|item| item.status == "pending")) {
+            return Err(CmdError::of("busy", "An unfinished batch is saved. Resume or discard it before sending another."));
+        }
+        Ok::<_, CmdError>(wfm_client::governor::with_context(request.context(), || core_execute_plan(
             s.pending_path(),
             &unlocked,
             PlanRequest { items },
             || validate_session_plan(&app, &reviewed),
-        ))
+        )))
     })
     .await
     .map_err(|e| CmdError::internal(format!("plan task failed to run: {e}")))??;
@@ -314,8 +316,14 @@ pub fn get_pending_plan(session: State<'_, Arc<WfmSession>>) -> Option<PendingPl
 }
 
 #[tauri::command]
-pub fn discard_pending_plan(session: State<'_, Arc<WfmSession>>) {
+pub fn discard_pending_plan(session: State<'_, Arc<WfmSession>>) -> Result<(), CmdError> {
+    let _guard = session.begin_plan().ok_or_else(|| CmdError::of("busy", PLAN_BUSY_MSG))?;
     clear_pending(session.pending_path());
+    Ok(())
+}
+#[tauri::command]
+pub fn cancel_plan(session: State<'_, Arc<WfmSession>>, request_id: String) -> Result<(), CmdError> {
+    session.cancel_plan(&request_id)
 }
 
 /// Re-run the pending plan, skipping items already in a terminal state.
@@ -324,6 +332,7 @@ pub async fn resume_pending_plan(
     app: AppHandle,
     session: State<'_, Arc<WfmSession>>,
     db: State<'_, Db>,
+    request_id: String,
 ) -> Result<PlanResponse, CmdError> {
     let s = Arc::clone(&session);
     let (response, price_qty) = tauri::async_runtime::spawn_blocking(move || {
@@ -331,24 +340,21 @@ pub async fn resume_pending_plan(
         // nothing to resume the user must not be bounced into a login dialog.
         let mut pending = load_pending(s.pending_path())
             .ok_or_else(|| CmdError::of("no_pending", "No pending plan to resume."))?;
-        let unlocked = s.require_unlocked()?;
+        let request = s.claim_plan_request(request_id)?;
         let _guard = s
             .begin_plan()
             .ok_or_else(|| CmdError::of("busy", PLAN_BUSY_MSG))?;
-        // EVERY item, not just the ones still 'pending'. A pending file only
-        // survives when the original run never returned, and submit_plan logs
-        // only after it returns - so nothing from this plan has been recorded
-        // yet, including the items that succeeded before the interruption.
-        // Skipping the already-terminal ones here would lose them for good.
+        let unlocked = s.require_unlocked()?;
+        // Stable plan positions let history upsert prior successes during resume.
         let price_qty: Vec<(i64, i64)> = pending
             .items
             .iter()
             .map(|i| (i.platinum as i64, i.quantity as i64))
             .collect();
         let reviewed: Vec<PlanItem> = pending.items.iter().map(PlanItem::from).collect();
-        let response = run_pending(s.pending_path(), &unlocked, &mut pending, || {
+        let response = wfm_client::governor::with_context(request.context(), || run_pending(s.pending_path(), &unlocked, &mut pending, || {
             validate_session_plan(&app, &reviewed)
-        });
+        }));
         if pending.items.iter().all(|i| i.status != "pending") {
             clear_pending(s.pending_path());
         }
@@ -369,7 +375,7 @@ pub async fn fetch_orders(
     let s = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
         let unlocked = s.require_unlocked()?;
-        list_user_orders(&unlocked).map_err(CmdError::wfm)
+        wfm_core::trading::listing::cached_user_orders(&unlocked).map_err(CmdError::wfm)
     })
     .await
     .map_err(|e| CmdError::internal(format!("orders task failed to run: {e}")))?
@@ -387,7 +393,7 @@ pub async fn update_order(
     // can't push a listing past what the WFM UI allows.
     if let Some(p) = patch.platinum {
         if p > MAX_PLATINUM {
-            return Err(CmdError::wfm(format!("price {p}p > max {MAX_PLATINUM}p")));
+            return Err(CmdError::of("wfm", format!("price {p}p > max {MAX_PLATINUM}p")));
         }
     }
     let s = Arc::clone(&session);
@@ -410,7 +416,6 @@ pub async fn update_order(
                 })).map_err(|e| CmdError::internal(e.to_string()))?;
                 validate_protected_contents(&app.state::<Db>(), &market, &body, &[item]).map_err(CmdError::internal)?;
             }
-            std::thread::sleep(std::time::Duration::from_millis(wfm_core::trading::listing::SERVE_RATE_LIMIT_MS));
         }
         core_update_order(&unlocked, &order_id, &patch).map_err(CmdError::wfm)
     })

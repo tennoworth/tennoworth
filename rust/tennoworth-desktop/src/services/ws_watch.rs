@@ -98,7 +98,7 @@ pub fn match_order(
 pub fn start_stream(app: AppHandle) {
     std::thread::Builder::new()
         .name("watch-stream".into())
-        .spawn(move || run(app))
+        .spawn(move || wfm_client::governor::with_context(wfm_client::governor::Context { background: true, ..Default::default() }, || run(app)))
         .map(|_| ())
         .unwrap_or_else(|e| eprintln!("tennoworth: watch stream thread failed to start: {e}"));
 }
@@ -106,6 +106,10 @@ pub fn start_stream(app: AppHandle) {
 fn run(app: AppHandle) {
     let mut backoff = BACKOFF_MIN;
     loop {
+        if wfm_client::governor::process().check(wfm_client::governor::Kind::WebSocket, &wfm_client::governor::context()).is_err() {
+            std::thread::sleep(Duration::from_secs(5));
+            continue;
+        }
         // No watches → no connection. Cheap Db read every 5 min.
         let have_watches = app
             .state::<Db>()
@@ -131,7 +135,7 @@ fn run(app: AppHandle) {
                 eprintln!(
                     "tennoworth: watch stream: catalog load failed: {e}; retrying in {backoff:?}"
                 );
-                std::thread::sleep(backoff);
+                std::thread::sleep(backoff + wfm_client::governor::jitter(5000));
                 backoff = (backoff * 2).min(BACKOFF_MAX);
                 continue;
             }
@@ -182,7 +186,7 @@ fn run(app: AppHandle) {
         eprintln!("tennoworth: watch stream connecting ({platform})");
         let connected_at = Instant::now();
         match run_new_orders_stream(&platform, &mut on_order, &|| false) {
-            Ok(()) => return, // requested stop (never, today)
+            Ok(()) => continue,
             Err(e) => {
                 // A connection that lived a while earned a fresh backoff; only
                 // consecutive fast failures escalate.
@@ -190,7 +194,7 @@ fn run(app: AppHandle) {
                     backoff = BACKOFF_MIN;
                 }
                 eprintln!("tennoworth: watch stream dropped: {e}; reconnecting in {backoff:?}");
-                std::thread::sleep(backoff);
+                std::thread::sleep(backoff + wfm_client::governor::jitter(5000));
                 backoff = (backoff * 2).min(BACKOFF_MAX);
             }
         }

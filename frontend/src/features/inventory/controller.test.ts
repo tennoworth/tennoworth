@@ -52,7 +52,7 @@ describe('inventory lifecycle', () => {
 describe('listing lifecycle', () => {
   it('preserves the pending plan when resuming requires authentication', async () => {
     const requestAuth = vi.fn();
-    const c = new ListingController({ resumePendingPlan: async () => { throw new DesktopCmdError('needs_unlock', 'Unlock'); }, discardPendingPlan: vi.fn(), status: vi.fn(), logout: vi.fn() }, requestAuth);
+    const c = new ListingController({ getPendingPlan: vi.fn().mockResolvedValue(null), resumePendingPlan: async () => { throw new DesktopCmdError('needs_unlock', 'Unlock'); }, discardPendingPlan: vi.fn(), status: vi.fn(), logout: vi.fn() }, requestAuth);
     const plan = { plan_id: 'pending', started_at: '2026-09-08', items: [] } as PendingPlan;
     c.pendingPlan = plan;
     await c.doResume();
@@ -62,7 +62,7 @@ describe('listing lifecycle', () => {
   });
 
   it('does not report a failed logout as success or discard the review', async () => {
-    const c = new ListingController({ resumePendingPlan: vi.fn(), discardPendingPlan: vi.fn(), status: async () => { throw new Error('unavailable'); }, logout: async () => { throw new Error('failed'); } }, vi.fn());
+    const c = new ListingController({ getPendingPlan: vi.fn().mockResolvedValue(null), resumePendingPlan: vi.fn(), discardPendingPlan: vi.fn(), status: async () => { throw new Error('unavailable'); }, logout: async () => { throw new Error('failed'); } }, vi.fn());
     c.wfmStatus = { logged_in: true, unlocked: true };
     c.listingOpen = true;
     await expect(c.handleWfmLogout()).rejects.toThrow('failed');

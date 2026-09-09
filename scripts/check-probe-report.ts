@@ -8,6 +8,7 @@
 //
 // Usage: bun scripts/check-probe-report.ts <report.json>
 import { readFileSync } from "node:fs";
+import pacing from "../tests/fixtures/pacing.json";
 
 const path = process.argv[2];
 if (!path) {
@@ -23,6 +24,12 @@ try {
 }
 
 const problems = [];
+if (report.wfm?.cancelIdle?.ok !== true) problems.push('WFM cancellation command was unavailable');
+const access = report.wfm?.access?.ok === true ? report.wfm.access.value : null;
+if (!access || Object.entries(pacing).some(([key, value]) => access.restrictions?.[key] !== value))
+  problems.push('WFM access command did not expose the compiled request safeguards');
+if (access?.revision !== 0 || typeof access?.queue_count !== 'number')
+  problems.push('WFM access status contract is incomplete');
 if (report.domainRejectedInvalid !== true) problems.push('invalid native domain quantities were not rejected');
 const expectedDomainOperations = ['normalize_inventory', 'score_inventory', 'trade_session', 'advisor', 'history', 'relic_plan', 'set_recos', 'ducat_plan', 'build_plan'];
 if (JSON.stringify(report.domainOperations) !== JSON.stringify(expectedDomainOperations))

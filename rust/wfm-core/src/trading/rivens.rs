@@ -3,25 +3,15 @@
 //!
 //! The Rivens view shows the user's own rivens; for each one a "Show comps"
 //! button asks WFM for the cheapest matching auctions. WFM's API rules cap
-//! auction searches at 10 requests/minute, so every call passes through a
-//! process-wide sliding-window gate - two comps clicked back to back share
-//! the budget instead of each assuming a fresh one.
+//! auction searches at 10 requests/minute. The shared governor enforces
+//! conservative spacing between starts, without accumulated burst slots.
 
-use std::collections::VecDeque;
-use std::sync::{Mutex, OnceLock};
-use std::thread;
-use std::time::{Duration, Instant};
-
-use anyhow::{bail, Context, Result};
+use wfm_client::governor::Kind;
+use anyhow::{bail, Result};
 use serde::{Deserialize, Serialize};
 
 use crate::http::browser_client;
-use crate::poison::guard;
 
-/// WFM's documented cap: 10 auction searches per minute.
-pub const AUCTIONS_PER_MIN: usize = 10;
-/// The window the cap applies over.
-pub const AUCTIONS_WINDOW: Duration = Duration::from_secs(60);
 /// How many comps rows we keep per weapon.
 pub const COMPS_LIMIT: usize = 20;
 
@@ -55,45 +45,6 @@ pub struct RivenAuction {
     pub name: Option<String>,
     pub platform: Option<String>,
     pub attributes: Vec<RivenAuctionAttribute>,
-}
-
-/// The process-wide sliding-window gate: at most [`AUCTIONS_PER_MIN`] requests
-/// in any rolling [`AUCTIONS_WINDOW`].
-fn auction_gate() -> &'static Mutex<VecDeque<Instant>> {
-    static GATE: OnceLock<Mutex<VecDeque<Instant>>> = OnceLock::new();
-    GATE.get_or_init(|| Mutex::new(VecDeque::new()))
-}
-
-/// Block until an auctions-request slot is free, then consume one. The first
-/// requests of a burst pass immediately (≤10), then callers sleep until the
-/// oldest request ages out of the window.
-pub fn pace_auction_request() {
-    let gate = auction_gate();
-    loop {
-        // Recover a poisoned guard (see poison.rs) - a panic elsewhere must
-        // not wedge every future comps click behind a second panic.
-        let wait = {
-            let mut stamps = guard(gate);
-            let now = Instant::now();
-            while stamps
-                .front()
-                .is_some_and(|t| now.duration_since(*t) >= AUCTIONS_WINDOW)
-            {
-                stamps.pop_front();
-            }
-            if stamps.len() < AUCTIONS_PER_MIN {
-                stamps.push_back(now);
-                return;
-            }
-            // The window is full (len >= AUCTIONS_PER_MIN > 0), so a stamp
-            // exists by construction; sleep until the oldest one ages out.
-            match stamps.front().copied() {
-                Some(oldest) => AUCTIONS_WINDOW.saturating_sub(now.duration_since(oldest)),
-                None => continue,
-            }
-        };
-        thread::sleep(wait);
-    }
 }
 
 fn auctions_url(weapon_slug: &str) -> String {
@@ -201,20 +152,15 @@ pub fn parse_auctions(body: &serde_json::Value) -> Result<Vec<RivenAuction>> {
 }
 
 /// The ≤[`COMPS_LIMIT`] cheapest matching auctions for one weapon, straight
-/// from WFM's v1 auctions search. Paced through the shared 10/min gate, so
-/// the caller can never exceed WFM's auction budget across the whole app.
+/// from WFM's v1 auctions search, through the shared governor and read cache.
 pub fn fetch_riven_comps(platform: &str, weapon_slug: &str) -> Result<Vec<RivenAuction>> {
-    pace_auction_request();
     let client = browser_client(20)?;
     let url = auctions_url(weapon_slug);
-    let resp = wfm_client::wfm_headers(client.get(&url), platform)
-        .send()
-        .with_context(|| format!("GET {url}"))?;
-    let status = resp.status();
-    if !status.is_success() {
-        bail!("{url}: HTTP {status}");
-    }
-    let body: serde_json::Value = resp.json().with_context(|| format!("{url}: JSON"))?;
+    let body = wfm_client::transport::read_json(
+        wfm_client::wfm_headers(client.get(&url), platform), Kind::Contract,
+        wfm_client::transport::ReadKey { url, platform: platform.into(), account: None },
+        std::time::Duration::from_secs(60), false,
+    )?;
     parse_auctions(&body)
 }
 
@@ -294,17 +240,4 @@ mod tests {
         assert!(parse_auctions(&body).is_err());
     }
 
-    #[test]
-    fn the_gate_consumes_burst_slots_up_to_the_cap() {
-        // A burst of 10 passes instantly and fills the window; the 11th would
-        // sleep, so we assert the shared state caps at the budget instead of
-        // blocking the suite for a minute.
-        let gate = auction_gate();
-        gate.lock().unwrap().clear();
-        for _ in 0..AUCTIONS_PER_MIN {
-            pace_auction_request();
-        }
-        assert_eq!(gate.lock().unwrap().len(), AUCTIONS_PER_MIN);
-        gate.lock().unwrap().clear();
-    }
 }

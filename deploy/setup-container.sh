@@ -34,6 +34,8 @@ echo "==> Service user"
 id wfm >/dev/null 2>&1 || useradd --system --create-home --home-dir /srv/wfm --shell /usr/sbin/nologin wfm
 install -m 0755 "$DEPLOY/run-scrape.sh" /srv/wfm/run-scrape.sh
 install -m 0755 "$DEPLOY/pull-web.sh" /srv/wfm/pull-web.sh
+install -m 0755 "$DEPLOY/pull-policy.sh" /srv/wfm/pull-policy.sh
+mkdir -p /srv/wfm/policy
 install -m 0755 "$DEPLOY/pull-scrape.sh" /srv/wfm/pull-scrape.sh
 # Without this the checkout at /srv/wfm/app only moves when a human moves it,
 # and the copies under /srv/wfm drift from the repo silently - the box ran a
@@ -69,6 +71,14 @@ else
   caddy validate --config /etc/caddy/Caddyfile
   systemctl enable --now caddy
   systemctl reload caddy
+fi
+
+install -m 0644 "$DEPLOY/wfm-policy-pull.service" /etc/systemd/system/wfm-policy-pull.service
+install -m 0644 "$DEPLOY/wfm-policy-pull.timer" /etc/systemd/system/wfm-policy-pull.timer
+# Enable after installing the verifier with the dedicated public key.
+if [ -x /srv/wfm/bin/wfm-policy ]; then
+  systemctl daemon-reload
+  systemctl enable --now wfm-policy-pull.timer
 fi
 
 echo "==> Scrape + app-pull + web-pull + scrape-pull timers"

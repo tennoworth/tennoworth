@@ -7,15 +7,13 @@ use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::thread;
 use std::time::Duration;
 
 use crate::identity::random_token;
 use crate::time::chrono_now_iso;
 use crate::trading::catalog::WfmCatalogItem;
 use crate::trading::listing::{
-    list_user_orders, patch_one_order, send_with_retry, Unlocked, MAX_PLATINUM,
-    ORDER_RETRY_ATTEMPTS, SERVE_RATE_LIMIT_MS,
+    list_user_orders, patch_one_order, send_mutation, Unlocked, MAX_PLATINUM,
 };
 use crate::trading::pending::{clear_pending, write_pending_atomic, PendingItem, PendingPlan};
 
@@ -215,6 +213,8 @@ pub fn run_pending(
         return validation_failure(pending, message);
     }
     let http = match Client::builder()
+        .retry(reqwest::retry::never())
+        .redirect(wfm_client::redirect_policy())
         .user_agent(crate::user_agent())
         .timeout(Duration::from_secs(30))
         .build()
@@ -234,30 +234,6 @@ pub fn run_pending(
         }
     };
 
-    // Reconcile against the user's live orders: WFM 403s a duplicate
-    // (same item/type/rank/subtype - "exceededOrderLimitSamePrice"), so those
-    // become PATCHes of the existing order instead. Fetch once per run; on
-    // failure fall back to create-only (the old behavior - a duplicate then
-    // fails with WFM's own message, still rendered verbatim).
-    let existing = if pending
-        .items
-        .iter()
-        .any(|i| i.status == "pending" && i.reviewed_order.is_none())
-    {
-        match list_user_orders(unlocked) {
-            Ok(body) => index_existing_orders(&body),
-            Err(e) => {
-                eprintln!("warning: existing-order fetch failed; plan will create only: {e:#}");
-                BTreeMap::new()
-            }
-        }
-    } else {
-        BTreeMap::new()
-    };
-
-    let mut last_call = std::time::Instant::now()
-        .checked_sub(Duration::from_millis(SERVE_RATE_LIMIT_MS))
-        .unwrap_or_else(std::time::Instant::now);
     for i in 0..pending.items.len() {
         if let Err(message) = validate() {
             return validation_failure(pending, message);
@@ -268,20 +244,20 @@ pub fn run_pending(
         if item.status != "pending" {
             continue;
         }
-        let since = last_call.elapsed();
-        if since < Duration::from_millis(SERVE_RATE_LIMIT_MS) {
-            thread::sleep(Duration::from_millis(SERVE_RATE_LIMIT_MS).saturating_sub(since));
+        if let Err(error) = wfm_client::governor::process().check(wfm_client::governor::Kind::Mutation, &wfm_client::governor::context()) {
+            return validation_failure(pending, error.to_string());
         }
         let plan_item = PlanItem::from(&*item);
-        let result = execute_one(&http, unlocked, &plan_item, &existing, &mut validate);
-        last_call = std::time::Instant::now();
-        item.status = result.status.clone();
+        let result = execute_one(&http, unlocked, &plan_item, &mut || list_user_orders(unlocked), &mut validate);
+        let interrupted = matches!(result.status.as_str(), "pending" | "uncertain_mutation");
+        item.status = if interrupted { "pending".into() } else { result.status.clone() };
         item.message = result.message.clone();
         item.order_id = result.order_id.clone();
         item.action = result.action.clone();
         if let Err(e) = write_pending_atomic(pending_path, pending) {
-            eprintln!("warning: could not persist pending update: {e:#}");
+            return validation_failure(pending, format!("Could not persist pending update: {e}"));
         }
+        if interrupted { break; }
     }
 
     PlanResponse {
@@ -301,6 +277,11 @@ pub fn run_pending(
 }
 
 fn validation_failure(pending: &PendingPlan, message: String) -> PlanResponse {
+    if wfm_client::governor::process().check(wfm_client::governor::Kind::Mutation, &wfm_client::governor::context()).is_err() {
+        return PlanResponse { plan_id: pending.plan_id.clone(), results: pending.items.iter().map(|item| ItemResult {
+            slug: item.slug.clone(), status: item.status.clone(), message: if item.status == "pending" { Some(message.clone()) } else { item.message.clone() }, order_id: item.order_id.clone(), action: item.action.clone(),
+        }).collect() };
+    }
     PlanResponse {
         plan_id: pending.plan_id.clone(),
         results: vec![ItemResult {
@@ -543,7 +524,7 @@ fn execute_one(
     http: &Client,
     unlocked: &Unlocked,
     item: &PlanItem,
-    existing: &BTreeMap<OrderKey, ExistingOrder>,
+    read_orders: &mut impl FnMut() -> anyhow::Result<serde_json::Value>,
     validate: &mut impl FnMut() -> Result<(), String>,
 ) -> ItemResult {
     let mk_err = |msg: String| ItemResult {
@@ -589,24 +570,15 @@ fn execute_one(
         return mk_err(message);
     }
 
-    let refreshed;
-    let existing = if let Some(reviewed) = &item.reviewed_order {
-        refreshed = match list_user_orders(unlocked) {
-            Ok(body) => index_existing_orders(&body),
-            Err(e) => return mk_err(format!("Could not revalidate reviewed orders: {e}")),
-        };
-        let prior = refreshed.get(&plan_item_key(item, cat));
-        if !review_matches(reviewed, prior) {
-            return mk_err(
-                "Order state changed or is ambiguous. Review the batch again before posting."
-                    .into(),
-            );
-        }
-        thread::sleep(Duration::from_millis(SERVE_RATE_LIMIT_MS));
-        &refreshed
-    } else {
-        existing
+    let existing = match read_orders() {
+        Ok(body) => index_existing_orders(&body),
+        Err(error) => return ItemResult { slug: item.slug.clone(), status: "pending".into(), message: Some(format!("Could not revalidate current orders: {error}")), order_id: None, action: None },
     };
+    if let Some(reviewed) = &item.reviewed_order {
+        if !review_matches(reviewed, existing.get(&plan_item_key(item, cat))) {
+            return mk_err("Order state changed or is ambiguous. Review the batch again before posting.".into());
+        }
+    }
     if let Err(message) = validate() {
         return mk_err(message);
     }
@@ -654,10 +626,7 @@ fn execute_one(
                 action: Some("updated".into()),
             }
         } else {
-            mk_err(format!(
-                "updating existing order: {}",
-                r.message.unwrap_or_else(|| "(no message)".into())
-            ))
+            ItemResult { slug: item.slug.clone(), status: r.status, message: r.message, order_id: Some(prior.id.clone()), action: None }
         };
     }
 
@@ -683,21 +652,27 @@ fn execute_one(
     // Header set captured from the live frontend's preflight:
     //   access-control-request-headers: content-type, crossplay, language, platform
     // It uses pure cookie auth - no Authorization header. We mirror that.
-    let resp = send_with_retry(
+    let resp = send_mutation(
         wfm_client::wfm_authed_headers(
             http.post("https://api.warframe.market/v2/order"),
             &unlocked.platform,
             &unlocked.jwt,
         )
         .json(&body),
-        ORDER_RETRY_ATTEMPTS,
     );
     let resp = match resp {
         Ok(r) => r,
-        Err(e) => return mk_err(format!("HTTP request failed: {e}")),
+        Err(e) => return ItemResult {
+            slug: item.slug.clone(), status: if matches!(e, wfm_client::governor::AccessError::UncertainMutation) { "uncertain_mutation" } else { "pending" }.into(),
+            message: Some(e.to_string()), order_id: None, action: None,
+        },
     };
     let status = resp.status();
-    let resp_body: serde_json::Value = resp.json().unwrap_or(serde_json::Value::Null);
+    let resp_body: serde_json::Value = match resp.json() {
+        Ok(body) => body,
+        Err(_) if status.is_success() => return ItemResult { slug: item.slug.clone(), status: "uncertain_mutation".into(), message: Some("The listing may have been applied, but its response could not be read. Resume to reconcile.".into()), order_id: None, action: None },
+        Err(_) => serde_json::Value::Null,
+    };
     if !status.is_success() {
         // v2 puts errors under `.error` (object or array of strings); v1 used
         // a top-level `.error` string. Render whatever we can find verbatim
@@ -714,6 +689,9 @@ fn execute_one(
         .or_else(|| resp_body.pointer("/payload/order/id"))
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
+    if order_id.is_none() {
+        return ItemResult { slug: item.slug.clone(), status: "uncertain_mutation".into(), message: Some("The listing response had no order identity. Resume to reconcile before another send.".into()), order_id: None, action: None };
+    }
     ItemResult {
         slug: item.slug.clone(),
         status: "ok".into(),
@@ -902,12 +880,11 @@ mod tests {
     }
 
     #[test]
-    fn invalid_lot_is_rejected_before_an_existing_order_can_be_updated() {
+    fn invalid_lot_is_rejected_before_market_access() {
         let mut item = plan_item("example", None, None);
         item.quantity = 7;
         item.per_trade = Some(3);
         let catalog = cat("example", None, &[]);
-        let key = plan_item_key(&item, &catalog);
         let unlocked = Unlocked {
             jwt: "test".into(),
             username: "test".into(),
@@ -915,24 +892,17 @@ mod tests {
             catalog: std::sync::Arc::new(BTreeMap::from([("example".into(), catalog)])),
             id_to_item: std::sync::Arc::new(BTreeMap::new()),
         };
-        let existing = BTreeMap::from([(
-            key,
-            ExistingOrder {
-                id: "must-not-be-updated".into(),
-                platinum: 20,
-                quantity: 9,
-                per_trade: None,
-                visible: Some(true),
-                ambiguous: false,
-            },
-        )]);
         // Even a validation regression must never send a unit test to WFM.
         let http = Client::builder()
+        .retry(reqwest::retry::never())
+        .redirect(wfm_client::redirect_policy())
             .proxy(reqwest::Proxy::all("http://127.0.0.1:9").unwrap())
             .timeout(Duration::from_millis(100))
             .build()
             .unwrap();
-        let result = execute_one(&http, &unlocked, &item, &existing, &mut || Ok(()));
+        let mut reads = 0;
+        let result = execute_one(&http, &unlocked, &item, &mut || { reads += 1; Ok(serde_json::json!({"data": []})) }, &mut || Ok(()));
+        assert_eq!(reads, 0);
         assert_eq!(result.status, "error");
         assert!(result.message.unwrap().contains("divide quantity"));
         assert!(result.order_id.is_none());
@@ -1195,4 +1165,16 @@ mod tests {
         assert_eq!(MIN_PLATINUM, fx.min_platinum);
         assert_eq!(MAX_PLATINUM, fx.max_platinum);
     }
+    #[test]
+    fn pending_and_uncertain_results_match_the_shared_frontend_contract() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!("../../../../tests/fixtures/wfm-access/outcomes.json")).unwrap();
+        let item = plan_item("accelerated_blast", None, None);
+        let session = Unlocked { jwt: "fixture".into(), username: "fixture".into(), platform: "pc".into(), catalog: std::sync::Arc::new(BTreeMap::from([("accelerated_blast".into(), cat("item", None, &[]))])), id_to_item: std::sync::Arc::new(BTreeMap::new()) };
+        let http = Client::builder().retry(reqwest::retry::never()).redirect(wfm_client::redirect_policy()).proxy(reqwest::Proxy::all("http://127.0.0.1:9").unwrap()).timeout(Duration::from_millis(100)).build().unwrap();
+        let pending = execute_one(&http, &session, &item, &mut || Err(anyhow::anyhow!("offline")), &mut || Ok(()));
+        assert_eq!(serde_json::to_value(pending).unwrap()["status"], fixture["pending"]["status"]);
+        let uncertain = execute_one(&http, &session, &item, &mut || Ok(serde_json::json!({"data": []})), &mut || Ok(()));
+        assert_eq!(serde_json::to_value(uncertain).unwrap()["status"], fixture["uncertain_mutation"]["status"]);
+    }
+
 }

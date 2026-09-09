@@ -1,9 +1,11 @@
+import { WFM_ACCESS_EVENT, type AccessStatus } from '../../contracts/generated/desktop';
+import type { DesktopServices } from '../../contracts/services';
 import { DesktopCmdError } from '../../contracts/errors';
 import { type DesktopCapabilities, type DesktopWfmStatus } from '../../contracts/desktop';
 import type { PendingPlan, ItemResult } from '../../contracts/data';
 import type { ListingCandidate } from '../../contracts/listing';
 import { humanError } from '../../contracts/errors';
-type Port = Pick<DesktopCapabilities, 'resumePendingPlan' | 'discardPendingPlan'> & { status(): Promise<DesktopWfmStatus>; logout(): Promise<void> };
+type Port = Pick<DesktopCapabilities, 'resumePendingPlan' | 'discardPendingPlan' | 'getPendingPlan'> & { status(): Promise<DesktopWfmStatus>; logout(): Promise<void> };
 
 export class ListingController {
   constructor(private port: Port, private requestAuth: (code: string, next?: string) => void) { }
@@ -17,13 +19,14 @@ export class ListingController {
   listingOpen = $state(false);
   reviewRowsOverride = $state<ListingCandidate[] | null>(null);
   async doResume() {
+    if (this.resumePhase === 'running') return;
     this.resumePhase = 'running';
     this.resumeError = null;
     try {
       const resp = await this.port.resumePendingPlan();
       this.resumeResults = resp?.results ?? [];
-      this.resumePhase = 'done';
-      this.pendingPlan = null;
+      this.pendingPlan = await this.port.getPendingPlan();
+      this.resumePhase = this.pendingPlan ? 'idle' : 'done';
     } catch (e) {
       // Desktop locked-session rejection: keep the banner (the plan is still
       // pending) and open the matching auth dialog - Resume works after that.
@@ -37,7 +40,7 @@ export class ListingController {
     }
   }
   async doDiscard() {
-    try { await this.port.discardPendingPlan(); } catch { /* ignore */ }
+    try { await this.port.discardPendingPlan(); } catch (error) { this.resumeError = humanError(error); this.resumePhase = 'error'; return; }
     this.pendingPlan = null;
     this.resumePhase = 'idle';
     this.resumeResults = [];
@@ -71,5 +74,35 @@ export class ListingController {
       console.error('wfm auth status check failed', e);
       this.listingOpen = true;
     }
+  }
+}
+
+export class WfmAccessController {
+  constructor(private port: Pick<DesktopServices, 'desktopAccessStatus' | 'listenForTauriEvent'>) {}
+  status = $state<AccessStatus | null>(null);
+  now = $state(Date.now());
+  cooling = $derived(!!this.status && this.status.cooldown_until_ms > this.now);
+  mutationsBlocked = $derived(this.cooling || !!this.status?.restrictions.pause_all || !!this.status?.restrictions.pause_mutations);
+  message = $derived.by(() => {
+    const status = this.status;
+    if (!status) return null;
+    if (this.cooling) {
+      const deadline = new Date(status.cooldown_until_ms);
+      return `Market access is cooling down${Number.isFinite(deadline.getTime()) ? ` until ${deadline.toLocaleString()}` : ''}. Unfinished listings stay saved and require Resume.`;
+    }
+    const rules = status.restrictions;
+    const paused = [rules.pause_all ? 'all market access' : null, rules.pause_background ? 'background checks' : null, rules.pause_contracts ? 'contract searches' : null, rules.pause_mutations ? 'listing changes' : null, rules.pause_websockets ? 'live watch updates' : null].filter(Boolean);
+    const reason = status.reason.trim();
+    if (paused.length) return `Paused: ${paused.join(', ')}.${reason ? ` ${reason}${/[.!?]$/.test(reason) ? '' : '.'}` : ''} Cached inventory and prices remain available.`;
+    if (status.queue_count > 0) return `Waiting for market access · ${status.queue_count} queued. Your edits are preserved.`;
+    return null;
+  });
+  start() {
+    let live = true;
+    let receivedEvent = false;
+    const stop = this.port.listenForTauriEvent<AccessStatus>(WFM_ACCESS_EVENT, status => { receivedEvent = true; this.status = status; });
+    void this.port.desktopAccessStatus().then(status => { if (live && !receivedEvent) this.status = status; }).catch(() => {});
+    const timer = setInterval(() => { this.now = Date.now(); }, 1000);
+    return () => { live = false; stop(); clearInterval(timer); };
   }
 }

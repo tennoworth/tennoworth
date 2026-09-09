@@ -30,6 +30,7 @@ rm -f "$REPORT"
 
 set +e
 XDG_DATA_HOME="$SCRATCH" TENNOWORTH_PROBE=1 TENNOWORTH_PROBE_OUT="$REPORT" \
+  TENNOWORTH_JWT_PATH="$SCRATCH/wfm-jwt.enc" TENNOWORTH_PENDING_PATH="$SCRATCH/pending-plan.json" \
   timeout 180 dbus-run-session -- xvfb-run -a "$BIN" >"$LOG" 2>&1
 RC=$?
 set -e
