@@ -220,12 +220,14 @@ fn row_urls(csv: &str) -> Vec<String> {
 #[test]
 fn scrape_keeps_expected_fixture_rows() {
     let dir = stage_fixtures("scrape");
+    let responses_path = dir.join("fixture_responses.json");
+    let mut responses: serde_json::Value = serde_json::from_slice(&std::fs::read(&responses_path).unwrap()).unwrap();
+    for outcome in responses["https://api.warframe.market/v2/orders/item/retry_recover"].as_array_mut().unwrap().iter_mut().take(2) { outcome["status"] = serde_json::json!(503); }
+    responses["https://api.warframe.market/v1/items/stats_exhaust/statistics"] = serde_json::json!({"payload": {"statistics_closed": {"48hours": [], "90days": []}}});
+    std::fs::write(responses_path, serde_json::to_vec(&responses).unwrap()).unwrap();
     let csv = scrape_csv(&dir, &[]);
     let urls: std::collections::BTreeSet<String> = row_urls(&csv).into_iter().collect();
 
-    // Same survivors the Python gate asserted: retry_recover survives its
-    // orders 429->429->200; missing_ninetydays survives off its 48h window;
-    // stats_exhaust is dropped (stats 429 exhausts retries).
     for slug in [
         "volt_prime_barrel",
         "goopolla",
@@ -1893,4 +1895,16 @@ fn annual_usage_history_retries_gaps_and_never_refetches_valid_years() {
         serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
     assert_eq!(warm_snap["usage"]["primed_continuity"]["year"], 2025);
     let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn throttled_scrape_preserves_the_published_csv() {
+    let dir = stage_fixtures("scrape");
+    let csv = dir.join("wfm_results.csv");
+    std::fs::write(&csv, "previous snapshot").unwrap();
+    let out = run(&["scrape", "--fixtures-dir", dir.to_str().unwrap(), "--filter", "", "--exclude", "", "--min-volume", "1"], &dir);
+    assert!(!out.status.success());
+    assert!(String::from_utf8_lossy(&out.stderr).contains("publication aborted"));
+    assert_eq!(std::fs::read_to_string(csv).unwrap(), "previous snapshot");
+    std::fs::remove_dir_all(dir).unwrap();
 }

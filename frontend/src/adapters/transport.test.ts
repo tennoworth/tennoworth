@@ -1,4 +1,5 @@
 // @ts-nocheck - vitest fixtures; the transport's TS contract is exercised by tsc.
+import outcomes from '../../../tests/fixtures/wfm-access/outcomes.json';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { installTauri, removeTauri } from '../dev/test-utils.js';
 import { isDesktopRuntime, installDesktopExternalLinkHandler } from './runtime';
@@ -196,7 +197,7 @@ describe('TauriTransport op → invoke mapping', () => {
     installTauri(invoke);
     const items = [{ slug: 'loki_prime_set', platinum: 120, quantity: 1, order_type: 'sell', visible: false }];
     await expect(new TauriTransport().submitPlan(items)).resolves.toEqual(resp);
-    expect(invoke).toHaveBeenCalledWith('submit_plan', { items });
+    expect(invoke).toHaveBeenCalledWith('submit_plan', { items, requestId: expect.any(String) });
   });
 
   it('a CmdError rejection surfaces as DesktopCmdError with its code (needs_login)', async () => {
@@ -335,4 +336,12 @@ describe('desktop WFM auth ops', () => {
 it('hosted capabilities do not expose account or native operations', () => {
   const publicData = new HostedTransport();
   for (const name of ['fetchInventory', 'submitPlan', 'fetchOrders', 'scanOverlayNow']) expect(name in publicData).toBe(false);
+});
+
+it('preserves the shared WFM access error codes across IPC', async () => {
+  for (const code of outcomes.codes) {
+    installTauri(vi.fn().mockRejectedValue({ code, message: 'Market access unavailable' }));
+    await expect(new TauriTransport().submitPlan([])).rejects.toMatchObject({ code, message: 'Market access unavailable' });
+  }
+  removeTauri();
 });

@@ -1,7 +1,10 @@
 <script lang="ts">
   import { useDesktopServices } from '../../ui/desktop-context';
-  const { desktopLiveTopPrices, desktopTradeSessionState, isDesktopRuntime, listenForTauriEvent } = useDesktopServices();
-  import { onDestroy, untrack, tick } from 'svelte';
+  const { desktopAccessStatus, desktopLiveTopPrices, desktopTradeSessionState, isDesktopRuntime, listenForTauriEvent } = useDesktopServices();
+  import { onMount, onDestroy, untrack, tick } from 'svelte';
+  import { WfmAccessController } from './controller.svelte';
+  const marketAccess = new WfmAccessController({ desktopAccessStatus, listenForTauriEvent });
+  onMount(() => marketAccess.start());
   import { DesktopCmdError } from '../../contracts/errors';
 
 import { LIVE_TOP_PROGRESS_EVENT, ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
@@ -65,6 +68,8 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   let plan = $state<PlanRow[]>([]);
   type Phase = 'review' | 'sending' | 'results' | 'error';
   let phase = $state<Phase>('review');
+  let validatingSend = $state(false);
+  let cancellationRequested = $state(false);
   let serverResults = $state<ItemResult[]>([]);
   let networkError = $state<string | null>(null);
 
@@ -222,7 +227,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   // The prefill comes from the 2-hourly snapshot. One click asks WFM for the
   // ≤5 best ONLINE asks/bids for each selected row's exact tier (rank /
   // relic refinement) - the price you'd actually be competing with right
-  // now. Paced at WFM's 3 req/s, so a big batch shows a counter.
+  // now. A shared request budget makes batch progress useful.
   const canLive = isDesktopRuntime();
   type LiveState = 'idle' | 'running' | 'done' | 'error';
   let liveState = $state<LiveState>('idle');
@@ -329,10 +334,13 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   }
 
   async function send(): Promise<void> {
-    if (hasSession && !await refreshReviewOrders(true)) return;
+    if (phase === 'sending' || validatingSend || marketAccess.mutationsBlocked) return;
+    validatingSend = true;
+    try { if (hasSession && !await refreshReviewOrders(true)) return; } finally { validatingSend = false; }
     await tick();
     if (!canSubmit) { networkError = 'Review quantities, units per trade, prices, and the remaining allowance before submitting.'; return; }
     phase = 'sending';
+    cancellationRequested = false;
     networkError = null;
     const items = plan
       .filter((r) => r.include)
@@ -360,13 +368,20 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     }
   }
 
+  async function stopSending() {
+    if (cancellationRequested) return;
+    cancellationRequested = true;
+    try { await transport.cancelPlan(); } catch (error) { cancellationRequested = false; networkError = humanError(error); }
+  }
+
   let updatedCount = $derived(
     serverResults.filter((r) => r.status === 'ok' && r.action === 'updated').length,
   );
   let okCount = $derived(
     serverResults.filter((r) => r.status === 'ok').length - updatedCount,
   );
-  let errCount = $derived(serverResults.filter((r) => r.status !== 'ok').length);
+  let pendingCount = $derived(serverResults.filter(r => r.status === 'pending' || r.status === 'uncertain_mutation').length);
+  let errCount = $derived(serverResults.filter(r => r.status !== 'ok' && r.status !== 'pending' && r.status !== 'uncertain_mutation').length);
 
   // The results table only carries slugs; map back to human names so the
   // "what did I just list" review isn't a wall of snake_case.
@@ -484,7 +499,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
               class="btn ghost live-btn"
               onclick={checkLivePrices}
               disabled={liveState === 'running' || selectedCount === 0}
-              title="Ask warframe.market for the ≤5 best online asks and bids for each selected row's exact rank / refinement, right now. Paced to WFM's rate limit (~3 items per second)."
+              title="Ask warframe.market for the ≤5 best online asks and bids for each selected row's exact rank / refinement, right now. Shares market access with other activity; large batches can take time."
             >
               {#if liveState === 'running'}
                 Checking live prices… {liveProgress.done}/{liveProgress.total}
@@ -607,6 +622,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
           </table>
         </div>
 
+        {#if marketAccess.message}<p class="ui-notice" data-tone="warn" role="status">{marketAccess.message}</p>{/if}
         <footer>
           <div class="totals">
             <span><strong>{selectedCount}</strong> items</span>
@@ -617,22 +633,24 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
           </div>
           <div class="actions">
             <button class="btn ghost" onclick={close}>Cancel</button>
-            <button class="btn primary" onclick={send} disabled={!canSubmit}>
+            <button class="btn primary" onclick={send} disabled={!canSubmit || validatingSend || marketAccess.mutationsBlocked}>
               Send {selectedCount} listings
             </button>
           </div>
         </footer>
       {:else if phase === 'sending'}
         <p class="lead">
-          Posting to warframe.market. ~3 listings/second -
-          this will take ~{Math.ceil((selectedCount * 0.35) + 1)} s.
+          Checking current orders and posting your listings. Other market activity can add waiting time.
         </p>
-        <div class="spinner">Sending…</div>
+<div class="spinner">{cancellationRequested ? 'Finishing the current request; unsent listings will stay saved.' : marketAccess.message ?? 'Sending…'}</div>
+        {#if networkError}<p class="ui-notice" data-tone="bad">{networkError}</p>{/if}
+        <button class="btn" onclick={stopSending} disabled={cancellationRequested}>Stop after current request</button>
       {:else if phase === 'results'}
         <p class="lead">
-          Done. <span class="ok">{okCount} created</span>
+          {pendingCount > 0 ? 'Batch interrupted. Close this review and use Resume to revalidate the saved items.' : 'Done.'} <span class="ok">{okCount} created</span>
           {#if updatedCount > 0}· <span class="ok">{updatedCount} updated</span>{/if}
-          {#if errCount > 0}· <span class="bad">{errCount} failed</span>{/if}.
+          {#if errCount > 0}· <span class="bad">{errCount} failed</span>{/if}
+          {#if pendingCount > 0}· <span class="warn">{pendingCount} saved for resume</span>{/if}.
           {#if visibilityDone}
             Listings are <strong>visible</strong> - buyers can see them now.
           {:else}
@@ -647,8 +665,8 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
             <tbody>
               {#each serverResults as r, i (i)}
                 <tr>
-                  <td class:ok={r.status === 'ok'} class:bad={r.status !== 'ok'}>
-                    {r.status === 'ok' ? '✓' : '✗'}
+                  <td class:ok={r.status === 'ok'} class:bad={r.status === 'error'} class:warn={r.status === 'pending' || r.status === 'uncertain_mutation'}>
+                    {r.status === 'ok' ? '✓' : r.status === 'pending' || r.status === 'uncertain_mutation' ? '…' : '✗'}
                   </td>
                   <td>
                     <span class="item-name">{planNameBySlug.get(r.slug) ?? r.slug}</span>

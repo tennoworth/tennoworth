@@ -59,7 +59,9 @@ tauri-plugin-global-shortcut = "2"
 chrono = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+anyhow = { workspace = true }
 wfm-core = { path = "../wfm-core" }
+wfm-client = { path = "../wfm-client" }
 # The sell-priority scoring (single source of truth, mirrored in sell-priority.ts)
 # used to rank the tray + notification sellables. Pure, no-dep crate.
 market-math = { path = "../market-math" }

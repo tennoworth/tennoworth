@@ -146,6 +146,8 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
             .join("wfstat-catalog.json");
 
         let client = reqwest::blocking::Client::builder()
+        .retry(reqwest::retry::never())
+        .redirect(wfm_client::redirect_policy())
             .user_agent(wfm_client::user_agent(
                 "wfm-scrape",
                 env!("CARGO_PKG_VERSION"),
@@ -611,6 +613,8 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
             .map(|a| a.len())
             .unwrap_or(0)
     );
+
+    crate::ingest::transport::ensure_wfm_complete()?;
 
     // ORDERING INVARIANT (see the market.json write below): wfstat-catalog.json
     // is written FIRST, market.json LAST. The two files are each individually

@@ -17,7 +17,7 @@ use market_math::{
 };
 
 use crate::coerce::{Coercions, DEFAULT_MAX_COERCIONS};
-use crate::http::{fetch_json, Pacer, ScrapeHttp, Sleeper, REQUEST_DELAY};
+use crate::http::{fetch_json, ScrapeHttp, Sleeper};
 use crate::orders::{live_orders, parse_orders};
 use crate::stats::parse_stats;
 
@@ -346,10 +346,6 @@ pub fn run_scrape(
     sleeper: &dyn Sleeper,
     cfg: &ScrapeConfig,
 ) -> Result<ScrapeSummary, String> {
-    // Every WFM request - the catalog included - is paced start-to-start (see
-    // `Pacer`) at the documented 3 req/s ceiling.
-    let mut pacer = Pacer::new(REQUEST_DELAY);
-    pacer.wait(sleeper);
     let items_val = fetch_json(http, sleeper, &format!("{API_ROOT}/v2/items"))
         .ok_or_else(|| "Failed to fetch item list. Network problem?".to_string())?;
     let mut items = parse_items(&items_val);
@@ -390,15 +386,13 @@ pub fn run_scrape(
     // kept set and every row in it are identical to fetching both
     // unconditionally.
     for (idx, item) in items.iter().enumerate() {
-        pacer.wait(sleeper);
-        let stats = fetch_json(http, sleeper, &format!("{API_ROOT}/v1/items/{}/statistics", item.slug));
-        let stage = analyze_stats(item, stats, &mut co)?;
+        let stats = fetch_json(http, sleeper, &format!("{API_ROOT}/v1/items/{}/statistics", item.slug)).ok_or_else(|| format!("WFM statistics failed for {}; publication aborted", item.slug))?;
+        let stage = analyze_stats(item, Some(stats), &mut co)?;
 
         let row = match stage {
             Some(stage) if stage.volume_48h >= cfg.min_volume as f64 => {
-                pacer.wait(sleeper);
-                let orders = fetch_json(http, sleeper, &format!("{API_ROOT}/v2/orders/item/{}", item.slug));
-                analyze_orders(item, &stage, orders, &mut co)?
+                        let orders = fetch_json(http, sleeper, &format!("{API_ROOT}/v2/orders/item/{}", item.slug)).ok_or_else(|| format!("WFM orders failed for {}; publication aborted", item.slug))?;
+                analyze_orders(item, &stage, Some(orders), &mut co)?
             }
             _ => None,
         };
@@ -529,12 +523,7 @@ mod tests {
         let http = fixture();
         let summary = run_scrape(&http, &sl, &cfg(&out)).unwrap();
         assert_eq!(summary.scanned, 2);
-        let sleeps = sl.recorded();
-        assert_eq!(sleeps.len(), 3, "catalog + 2 stats + 1 orders = 4 requests, 3 spacings");
-        assert!(
-            sleeps.iter().all(|d| *d <= REQUEST_DELAY && *d > REQUEST_DELAY / 2),
-            "each spacing is the remainder of REQUEST_DELAY: {sleeps:?}"
-        );
+        assert!(sl.recorded().is_empty(), "Fixture requests need no real pacing");
         assert!(
             !http.was_fetched(&format!("{API_ROOT}/v2/orders/item/thin_item")),
             "orders must not be fetched for an item under the volume gate"
@@ -631,18 +620,15 @@ mod tests {
     }
 
     #[test]
-    fn missing_stats_url_skips_the_item_but_run_completes() {
-        // Truncated/partial behavior: an item whose stats never arrive is
-        // skipped (fetch_json → None), the run finishes with the survivors.
+    fn missing_stats_aborts_without_replacing_previous_csv() {
         let mut fx = fixture();
         fx.responses.remove(&format!("{API_ROOT}/v1/items/volt_prime_barrel/statistics"));
         let dir = std::env::temp_dir().join(format!("wfmscrape_trunc_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let out = dir.join("run.csv");
-        let summary = run_scrape(&fx, &NoopSleeper, &cfg(&out)).unwrap();
-        assert_eq!(summary.scanned, 2);
-        assert_eq!(summary.kept, 0); // both items now drop out
-        assert!(!out.exists()); // empty results → no CSV promoted
+        std::fs::write(&out, "previous published CSV").unwrap();
+        assert!(run_scrape(&fx, &NoopSleeper, &cfg(&out)).is_err());
+        assert_eq!(std::fs::read_to_string(&out).unwrap(), "previous published CSV");
         std::fs::remove_dir_all(&dir).ok();
     }
 

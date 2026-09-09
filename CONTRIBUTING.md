@@ -219,3 +219,12 @@ still apply when a local environment cannot perform a platform check; state
 the gap rather than treating another platform as equivalent. Ordinary feature
 PRs do not bump desktop versions. Maintainers handle production promotion and
 release tags under [releasing.md](docs/releasing.md).
+
+### WFM request budgets
+
+Classify each new WFM endpoint as a read, contract search, authentication request,
+or mutation, and identify foreground/background work. Route every HTTP attempt
+through `wfm-client::transport`, including retries. Keep mutation reconciliation in
+the trading services; never retry an ambiguous create. Cover mixed request traffic,
+cancellation, throttling and pending-plan recovery with request-budget tests. See
+[WFM access controls](docs/wfm-access.md) for the policy and rollout contract.

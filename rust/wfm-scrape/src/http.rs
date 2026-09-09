@@ -11,43 +11,6 @@ use std::time::Duration;
 
 use serde_json::Value;
 
-/// Minimum spacing between request STARTS - WFM's documented ceiling is 3
-/// req/s, so ~2.9 req/s. Measured start-to-start by [`Pacer`], so response
-/// latency is absorbed inside the interval instead of stacked on top of it.
-/// (The retired Python scraper slept this AFTER each response: 340 ms sleep
-/// plus ~140 ms latency gave ~2.1 req/s and a 62-minute run; on GitHub runners
-/// the latency is worse and the run brushed the 90-minute job limit.)
-pub const REQUEST_DELAY: Duration = Duration::from_millis(340);
-
-/// Start-to-start request pacer. Call [`Pacer::wait`] immediately before every
-/// paced request: it sleeps only for whatever remains of [`REQUEST_DELAY`]
-/// since the previous request started, then stamps the new start. The first
-/// call never sleeps. Retry backoff inside [`fetch_json`] is separate and
-/// additive - a 429 still costs its full `2**attempt` on top.
-pub struct Pacer {
-    interval: Duration,
-    last_start: Option<std::time::Instant>,
-}
-
-impl Pacer {
-    pub fn new(interval: Duration) -> Self {
-        Pacer {
-            interval,
-            last_start: None,
-        }
-    }
-
-    pub fn wait(&mut self, sleeper: &dyn Sleeper) {
-        if let Some(last) = self.last_start {
-            let elapsed = last.elapsed();
-            if elapsed < self.interval {
-                sleeper.sleep(self.interval.saturating_sub(elapsed));
-            }
-        }
-        self.last_start = Some(std::time::Instant::now());
-    }
-}
-
 /// Number of attempts per request - Python's `fetch_json(retries=3)`.
 pub const RETRIES: u32 = 3;
 
@@ -62,6 +25,7 @@ pub enum HttpOutcome {
     /// Connection/timeout/read/parse failure. Python's other
     /// `RequestException` path (a `r.json()` decode error lands here too).
     Transport(String),
+    Access(String),
 }
 
 /// Status-aware GET. Every scrape endpoint goes through this so a fixture can
@@ -137,23 +101,14 @@ fn unwrap_payload_first(body: Value) -> Value {
     body
 }
 
-/// GET with retry:
-///   - 2xx → unwrap the envelope and return it.
-///   - 429 → sleep `2**attempt` and retry - INCLUDING after the final attempt,
-///     after which it returns `None` (Python sleeps then falls out of the loop).
-///   - 4xx/5xx/transport → return `None` immediately on the last attempt,
-///     otherwise sleep `2**attempt` and retry (no sleep on the last attempt).
-///
-/// Returns `None` once attempts are exhausted - the caller skips the item, the
-/// exact "truncated but exit 0" behavior run-scrape.sh's row-floor guards.
+/// Retry transient reads; throttling, policy blocks and ordinary client errors abort.
 pub fn fetch_json(http: &dyn ScrapeHttp, sleeper: &dyn Sleeper, url: &str) -> Option<Value> {
     for attempt in 0..RETRIES {
         match http.get(url) {
             HttpOutcome::Ok(body) => return Some(unwrap_payload_first(body)),
-            HttpOutcome::RateLimited => {
-                // 429 backs off on every attempt, the last one included.
-                sleeper.sleep(backoff(attempt));
-            }
+            HttpOutcome::RateLimited => { eprintln!("WFM throttled the request; publication is stopped. Retry after market access recovers."); return None; }
+            HttpOutcome::Access(reason) => { eprintln!("WFM request stopped: {reason}"); return None; }
+            HttpOutcome::HttpError(status) if status < 500 || status == 509 => return None,
             HttpOutcome::HttpError(_) | HttpOutcome::Transport(_) => {
                 if attempt + 1 == RETRIES {
                     return None;
@@ -165,7 +120,7 @@ pub fn fetch_json(http: &dyn ScrapeHttp, sleeper: &dyn Sleeper, url: &str) -> Op
     None
 }
 
-/// Live transport over `wfm_client`'s browser-UA client. Sends the EXACT header
+/// Live transport through the shared request governor. Sends the EXACT header
 /// set the scraper needs - `User-Agent` (via the client), `Platform`,
 /// `Language` - and deliberately NOT `Crossplay` (the scraper omits it;
 /// `wfm_client::wfm_headers` would add it, so it is not used here).
@@ -176,12 +131,13 @@ pub struct LiveScrapeHttp {
 
 impl ScrapeHttp for LiveScrapeHttp {
     fn get(&self, url: &str) -> HttpOutcome {
+        use wfm_client::transport::GovernedRequest;
         let resp = self
             .client
             .get(url)
             .header("Platform", &self.platform)
             .header("Language", "en")
-            .send();
+            .send_governed(wfm_client::governor::Kind::Read);
         match resp {
             Ok(r) => {
                 let status = r.status();
@@ -189,17 +145,17 @@ impl ScrapeHttp for LiveScrapeHttp {
                     return HttpOutcome::RateLimited;
                 }
                 if !status.is_success() {
-                    return HttpOutcome::HttpError(status.as_u16());
+                    return HttpOutcome::Access(format!("WFM HTTP {status}; request retries exhausted"));
                 }
                 match r.text() {
                     Ok(body) => match serde_json::from_str(&body) {
                         Ok(v) => HttpOutcome::Ok(v),
-                        Err(e) => HttpOutcome::Transport(format!("{url}: JSON parse: {e}")),
+                        Err(e) => HttpOutcome::Access(format!("{url}: JSON parse: {e}")),
                     },
-                    Err(e) => HttpOutcome::Transport(format!("{url}: read body: {e}")),
+                    Err(e) => HttpOutcome::Access(format!("{url}: read body: {e}")),
                 }
             }
-            Err(e) => HttpOutcome::Transport(format!("{url}: {e}")),
+            Err(e) => HttpOutcome::Access(e.to_string()),
         }
     }
 }
@@ -267,7 +223,7 @@ fn response_at(value: &Value, i: usize) -> (u16, Value) {
 fn outcome_for(status: u16, body: Value) -> HttpOutcome {
     match status {
         200..=299 => HttpOutcome::Ok(body),
-        429 => HttpOutcome::RateLimited,
+        429 | 509 => HttpOutcome::RateLimited,
         other => HttpOutcome::HttpError(other),
     }
 }
@@ -345,45 +301,11 @@ mod tests {
     }
 
     #[test]
-    fn retries_429_then_succeeds_with_growing_backoff() {
-        let http = ScriptedHttp::new(
-            URL,
-            vec![
-                HttpOutcome::RateLimited,
-                HttpOutcome::RateLimited,
-                HttpOutcome::Ok(json!({"data": 1})),
-            ],
-        );
-        let sl = RecordingSleeper::new();
-        assert_eq!(fetch_json(&http, &sl, URL), Some(json!(1)));
-        // 2**0, 2**1 before the 3rd (successful) attempt.
-        assert_eq!(
-            sl.recorded(),
-            vec![Duration::from_secs(1), Duration::from_secs(2)]
-        );
-    }
-
-    #[test]
-    fn exhausts_429_and_backs_off_on_the_final_attempt_too() {
-        let http = ScriptedHttp::new(
-            URL,
-            vec![
-                HttpOutcome::RateLimited,
-                HttpOutcome::RateLimited,
-                HttpOutcome::RateLimited,
-            ],
-        );
-        let sl = RecordingSleeper::new();
-        assert_eq!(fetch_json(&http, &sl, URL), None);
-        // 429 sleeps after every attempt, including the last: 1s, 2s, 4s.
-        assert_eq!(
-            sl.recorded(),
-            vec![
-                Duration::from_secs(1),
-                Duration::from_secs(2),
-                Duration::from_secs(4)
-            ]
-        );
+    fn throttling_aborts_without_retrying_or_sleeping() {
+        let http = ScriptedHttp::new(URL, vec![HttpOutcome::RateLimited, HttpOutcome::Ok(json!({"data": 1}))]);
+        let sleeper = RecordingSleeper::new();
+        assert_eq!(fetch_json(&http, &sleeper, URL), None);
+        assert!(sleeper.recorded().is_empty());
     }
 
     #[test]
@@ -473,39 +395,25 @@ mod tests {
         assert!(matches!(http.get(URL), HttpOutcome::Ok(_)));
     }
 
+
     #[test]
-    fn fixture_429_sequence_drives_fetch_json_to_recovery() {
-        // The end-to-end shape parity case (i) leans on: 429 twice then 200 must
-        // resolve to the body through fetch_json's retry loop.
-        let mut r = HashMap::new();
-        r.insert(
-            URL.to_string(),
-            json!([{"status": 429, "body": {}}, {"status": 429, "body": {}}, {"payload": [1, 2]}]),
-        );
-        let http = FixtureScrapeHttp::new(r);
-        let sl = RecordingSleeper::new();
-        assert_eq!(fetch_json(&http, &sl, URL), Some(json!([1, 2])));
-        assert_eq!(
-            sl.recorded(),
-            vec![Duration::from_secs(1), Duration::from_secs(2)]
-        );
+    fn a_malformed_body_after_server_retries_does_not_restart_the_retry_budget() {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            for status in [503, 503, 200] {
+                let (mut socket, _) = listener.accept().unwrap();
+                let mut input = [0; 4096];
+                let _ = socket.read(&mut input).unwrap();
+                write!(socket, "HTTP/1.1 {status} Test\r\nContent-Length: 1\r\nConnection: close\r\n\r\nx").unwrap();
+            }
+        });
+        let before = wfm_client::governor::process().status().requests;
+        let http = LiveScrapeHttp { client: wfm_client::build_client(2).unwrap(), platform: "pc".into() };
+        assert!(fetch_json(&http, &NoopSleeper, &url).is_none());
+        server.join().unwrap();
+        assert_eq!(wfm_client::governor::process().status().requests - before, 3);
     }
 
-    // The scrape pacing (REQUEST_DELAY) must match the shared pacing.json
-    // fixture - the fixture documents the deliberate production cadence so a
-    // bump is a conscious change, not a silent edit.
-    #[test]
-    fn request_delay_matches_the_shared_fixture() {
-        #[derive(serde::Deserialize)]
-        struct Fixture {
-            request_delay_ms: u64,
-        }
-        let path = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../tests/fixtures/pacing.json"
-        );
-        let raw = std::fs::read_to_string(path).expect("read the shared pacing fixture");
-        let fx: Fixture = serde_json::from_str(&raw).expect("parse the pacing fixture");
-        assert_eq!(REQUEST_DELAY.as_millis() as u64, fx.request_delay_ms);
-    }
 }

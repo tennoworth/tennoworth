@@ -4,6 +4,7 @@ use market_domain::bindings::TypeScript;
 fn desktop_bindings_match_rust() {
     let mut types = TypeScript::default();
     types.add::<super::report::ScanReport>();
+    types.add::<wfm_client::governor::AccessStatus>();
     types.add::<crate::services::wfm_session::CmdError>();
     types.add::<crate::services::watch::WatchOutcome>();
     let mut expected = types.finish().expect("unique wire types");
@@ -11,6 +12,7 @@ fn desktop_bindings_match_rust() {
         "\nexport const WATCH_FIRED_EVENT = {:?} as const;\n",
         crate::services::watch::EVENT_WATCH_FIRED
     ));
+    expected.push_str(&format!("\nexport const WFM_ACCESS_EVENT = {:?} as const;\n", crate::services::wfm_session::WFM_ACCESS_EVENT));
     let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../frontend/src/contracts/generated/desktop.ts");
     if std::env::var_os("TENNOWORTH_UPDATE_BINDINGS").is_some() {

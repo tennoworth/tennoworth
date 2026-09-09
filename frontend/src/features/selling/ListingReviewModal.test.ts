@@ -9,6 +9,9 @@ import { afterEach } from 'vitest';
 import ListingReviewModal from './ListingReviewModal.svelte';
 import { DesktopCmdError } from '../../contracts/errors';
 import { type DesktopCapabilities } from '../../contracts/desktop';
+import outcomes from '../../../../tests/fixtures/wfm-access/outcomes.json';
+import type { ItemResult } from '../../contracts/data';
+import type { PlanResponse } from '../../contracts/data';
 import { installTauri, removeTauri } from '../../dev/test-utils';
 
 // globals: false in vitest.config.ts, so testing-library's auto-cleanup
@@ -114,18 +117,39 @@ describe('ListingReviewModal', () => {
     expect(screen.getByRole('button', { name: /Send 2 listings/ })).toBeTruthy();
   });
 
+  it('stops unsent listings without issuing a second submission', async () => {
+    let finish: (result: PlanResponse) => void = () => {};
+    const transport = makeTransport({
+      submitPlan: vi.fn(() => new Promise<PlanResponse>(resolve => { finish = resolve; })),
+      cancelPlan: vi.fn(async () => { finish({ plan_id: 'paused', results: [outcomes.pending as ItemResult] }); }),
+    });
+    openModal({ transport });
+    await fireEvent.click(screen.getByRole('button', { name: /Send 2 listings/ }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Stop after current request' }));
+    await screen.findByText(/Batch interrupted/);
+    expect(transport.submitPlan).toHaveBeenCalledTimes(1);
+    expect(transport.cancelPlan).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps an uncertain mutation separate from terminal failures', async () => {
+    openModal({ transport: makeTransport({ submitPlan: vi.fn().mockResolvedValue({ plan_id: 'uncertain', results: [outcomes.uncertain_mutation] }) }) });
+    await fireEvent.click(screen.getByRole('button', { name: /Send 2 listings/ }));
+    await screen.findByText(/Batch interrupted/);
+    expect(screen.getByText('1 saved for resume')).toBeTruthy();
+  });
+
   describe('live prices (desktop only)', () => {
     afterEach(removeTauri);
 
     it('unregisters a lazily armed progress listener on unmount', async () => {
       const unlisten = vi.fn();
       const listen = vi.fn().mockResolvedValue(unlisten);
-      installTauri(vi.fn().mockResolvedValue([]), listen);
+      installTauri(vi.fn(async cmd => cmd === 'wfm_access_status' ? null : []), listen);
       const modal = openModal();
       await fireEvent.click(screen.getByRole('button', { name: /Check live prices/ }));
-      await waitFor(() => expect(listen).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(listen).toHaveBeenCalledWith('live-top-progress', expect.any(Function)));
       modal.unmount();
-      await waitFor(() => expect(unlisten).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(unlisten).toHaveBeenCalledTimes(listen.mock.calls.length));
     });
 
     it('is absent in the hosted build', () => {
@@ -135,6 +159,7 @@ describe('ListingReviewModal', () => {
 
     it('asks the desktop for each selected row\'s exact tier, renders ask/bid, and one click matches the ask', async () => {
       const invoke = vi.fn(async (cmd: string, args: { queries: Array<{ slug: string; rank: number; subtype: string | null }> }) => {
+        if (cmd === 'wfm_access_status') return null;
         expect(cmd).toBe('live_top_prices');
         return args.queries.map((q) => ({
           slug: q.slug, rank: q.rank, subtype: q.subtype,
@@ -149,9 +174,9 @@ describe('ListingReviewModal', () => {
       openModal();
       const btn = screen.getByRole('button', { name: /Check live prices/ });
       await fireEvent.click(btn);
-      await waitFor(() => expect(invoke).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(invoke.mock.calls.filter(call => call[0] === 'live_top_prices')).toHaveLength(1));
       // exact-tier queries: rank 0 default, no subtype
-      expect(invoke.mock.calls[0][1].queries).toEqual([
+      expect(invoke.mock.calls.find(call => call[0] === 'live_top_prices')?.[1].queries).toEqual([
         { slug: 'accelerated_blast', rank: 0, subtype: null },
         { slug: 'ash_prime_blueprint', rank: 0, subtype: null },
       ]);

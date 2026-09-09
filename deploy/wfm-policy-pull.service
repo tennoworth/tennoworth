@@ -1,0 +1,11 @@
+[Unit]
+Description=Verify and publish the latest signed WFM access policy
+After=network-online.target
+Wants=network-online.target
+OnFailure=wfm-alert@%n.service
+
+[Service]
+Type=oneshot
+User=wfm
+ExecStart=/srv/wfm/pull-policy.sh
+TimeoutStartSec=30

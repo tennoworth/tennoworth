@@ -1,0 +1,24 @@
+{
+  "codes": [
+    "busy",
+    "cooldown",
+    "paused",
+    "cancelled",
+    "uncertain_mutation",
+    "wfm"
+  ],
+  "pending": {
+    "slug": "accelerated_blast",
+    "status": "pending",
+    "message": "Saved for explicit resume.",
+    "order_id": null,
+    "action": null
+  },
+  "uncertain_mutation": {
+    "slug": "accelerated_blast",
+    "status": "uncertain_mutation",
+    "message": "The order may have changed. Resume to reconcile.",
+    "order_id": null,
+    "action": null
+  }
+}

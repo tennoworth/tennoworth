@@ -7,6 +7,8 @@ use std::time::Duration;
 /// applies uniformly.
 pub fn browser_client(timeout_secs: u64) -> Result<Client> {
     Client::builder()
+        .retry(reqwest::retry::never())
+        .redirect(wfm_client::redirect_policy())
         .user_agent(crate::user_agent())
         .timeout(Duration::from_secs(timeout_secs))
         .build()

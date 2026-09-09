@@ -5,7 +5,7 @@ mod calendar;
 mod catalog;
 mod relics;
 mod rivens;
-mod transport;
+pub(crate) mod transport;
 pub use baro::{carry_baro_inventory, fetch_baro};
 pub use calendar::{
     fetch_calendar, fetch_vault_status, frames_in_pack_name, resurgence_rotations,

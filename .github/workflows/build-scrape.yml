@@ -7,6 +7,9 @@ name: build-scrape
 # release-desktop.yml); it is THE production pipeline binary - the box's
 # run-scrape.sh runs it for both the scrape and the market.json build.
 
+env:
+  TENNOWORTH_WFM_POLICY_PUBLIC_KEY: ${{ vars.TENNOWORTH_WFM_POLICY_PUBLIC_KEY }}
+
 on:
   push:
     branches: [main]
@@ -36,6 +39,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: ./.github/actions/setup-rust
+
+      - name: Verify deployed policy
+        run: |
+          test -n "$TENNOWORTH_WFM_POLICY_PUBLIC_KEY" || { echo "Configure the dedicated WFM policy public key before publication." >&2; exit 1; }
+          curl --fail --silent --show-error --max-time 15 --max-filesize 65536 https://tennoworth.app/wfm-policy.json -o ../wfm-policy.json
+          cargo run --release -p wfm-client --bin wfm-policy -- ../wfm-policy.json
 
       - name: Build
         run: cargo build --release -p wfm-scrape

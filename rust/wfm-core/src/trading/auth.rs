@@ -17,6 +17,8 @@
 //! pipe, or a desktop dialog) and hands the plaintext to `decrypt_jwt` /
 //! `encrypt_jwt`.
 
+use wfm_client::transport::GovernedRequest;
+use wfm_client::governor::Kind;
 use aes_gcm::aead::{Aead, KeyInit, OsRng};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
 use anyhow::{anyhow, bail, Context, Result};
@@ -102,6 +104,8 @@ pub fn validate_passphrase(passphrase: &str) -> Result<()> {
 /// page. Returns the client so `signin` reuses the same cookie jar.
 pub fn bootstrap_session() -> Result<(Client, String)> {
     let client = Client::builder()
+        .retry(reqwest::retry::never())
+        .redirect(wfm_client::redirect_policy())
         .user_agent(crate::user_agent())
         .cookie_store(true)
         .timeout(Duration::from_secs(30))
@@ -110,7 +114,7 @@ pub fn bootstrap_session() -> Result<(Client, String)> {
 
     let bootstrap = client
         .get(WFM_BOOTSTRAP_URL)
-        .send()
+        .send_governed(Kind::Read)
         .context("bootstrap GET failed (Cloudflare may have blocked us)")?;
     if !bootstrap.status().is_success() {
         bail!(
@@ -163,7 +167,7 @@ pub fn signin(
         .header("auth_type", "cookie")
         .header("X-CSRFToken", csrf_token)
         .json(&body)
-        .send()
+        .send_governed(Kind::Authentication)
         .context("signin request failed")?;
 
     let status = resp.status();
@@ -294,7 +298,7 @@ pub fn fetch_wfm_me(client: &Client, jwt: &str, platform: &str) -> Result<String
         platform,
         jwt,
     )
-    .send()
+    .send_governed(Kind::Read)
     .context("/v2/me request failed")?;
     let status = resp.status();
     let body: serde_json::Value = resp.json().context("parsing /v2/me")?;

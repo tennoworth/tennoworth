@@ -3,8 +3,8 @@
 //! WFM has no native alerts; the gap is filled today by a Discord bot, a
 //! browser extension and one Windows-only app. Ours runs in the desktop's
 //! background: every [`CHECK_INTERVAL`] it asks WFM's public `top` endpoint
-//! for the exact tier of each watch (paced at 3 req/s, ≤100 watches so a full
-//! pass is ≤35 s), evaluates, records what it saw, and fires ONE desktop
+//! for the exact tier of each watch (≤100 watches, sharing the WFM budget),
+//! evaluates, records what it saw, and fires ONE desktop
 //! notification per watch per [`REARM_AFTER`] - a watch that stays satisfied
 //! re-arms rather than nags. Evaluation is pure ([`evaluate`]) and tested;
 //! the loop is the thin shell around it.
@@ -123,6 +123,8 @@ pub fn describe(o: &WatchOutcome) -> String {
 /// "check now" command shows them all; the loop only acts on `fire`).
 /// Blocking - call from `spawn_blocking` or the checker thread.
 pub fn run_pass(app: &AppHandle) -> Vec<WatchOutcome> {
+    static PASS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let Ok(_pass) = PASS.try_lock() else { return vec![]; };
     let db = app.state::<Db>();
     let session = app.state::<Arc<WfmSession>>();
     let mut watches = match db.list_watches() {
@@ -215,13 +217,20 @@ pub fn start_checker(app: AppHandle) {
     std::thread::Builder::new()
         .name("watch-checker".into())
         .spawn(move || {
-            std::thread::sleep(FIRST_CHECK_DELAY);
+            std::thread::sleep(FIRST_CHECK_DELAY + wfm_client::governor::jitter(30_000));
             loop {
-                let fired = run_pass(&app).into_iter().filter(|o| o.fire).count();
+                let fired = wfm_client::governor::with_context(wfm_client::governor::Context { background: true, ..Default::default() }, || run_pass(&app)).into_iter().filter(|o| o.fire).count();
                 if fired > 0 {
                     eprintln!("tennoworth: watch pass fired {fired}");
                 }
-                std::thread::sleep(CHECK_INTERVAL);
+                let finished = std::time::Instant::now();
+                let jitter = wfm_client::governor::jitter(60_000);
+                loop {
+                    let delay = CHECK_INTERVAL.max(Duration::from_millis(wfm_client::governor::process().status().restrictions.watch_interval_ms)) + jitter;
+                    let remaining = delay.saturating_sub(finished.elapsed());
+                    if remaining.is_zero() { break; }
+                    std::thread::sleep(remaining.min(Duration::from_secs(30)));
+                }
             }
         })
         .map(|_| ())

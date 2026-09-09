@@ -44,6 +44,9 @@ name: release-desktop
 # for why the bundle is repacked before publishing.
 # ---------------------------------------------------------------------------
 
+env:
+  TENNOWORTH_WFM_POLICY_PUBLIC_KEY: ${{ vars.TENNOWORTH_WFM_POLICY_PUBLIC_KEY }}
+
 on:
   workflow_dispatch:
     inputs:
@@ -94,6 +97,12 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
       - uses: ./.github/actions/setup-rust
+
+      - name: Verify deployed WFM policy
+        run: |
+          test -n "$TENNOWORTH_WFM_POLICY_PUBLIC_KEY" || { echo "Configure the dedicated WFM policy public key before publication." >&2; exit 1; }
+          curl --fail --silent --show-error --max-time 15 --max-filesize 65536 https://tennoworth.app/wfm-policy.json -o wfm-policy.json
+          cargo run --manifest-path rust/Cargo.toml --release -p wfm-client --bin wfm-policy -- wfm-policy.json
 
       # Production refreshes every two hours, while the committed pair is the
       # reproducible desktop fallback. Release preparation copies both under

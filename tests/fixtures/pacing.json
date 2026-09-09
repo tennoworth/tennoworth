@@ -1,4 +1,11 @@
 {
-  "request_delay_ms": 340,
-  "note": "Post-request sleep for the WFM scrape, ~3 req/s. The single source for the scrape pacing (companion/wfm-scrape/src/http.rs REQUEST_DELAY). Python is retired; this fixture documents the constant so a bump is deliberate. Raising it slows a ~45-minute full scrape; lowering it risks WFM rate-limiting the box."
+  "spacing_ms": 500,
+  "concurrency": 2,
+  "contract_spacing_ms": 6100,
+  "watch_interval_ms": 600000,
+  "pause_all": false,
+  "pause_background": false,
+  "pause_contracts": false,
+  "pause_mutations": false,
+  "pause_websockets": false
 }

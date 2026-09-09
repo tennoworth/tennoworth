@@ -5,73 +5,58 @@ use std::collections::HashMap;
 /// Fetch WFM catalog (`/v2/items`) - returns name→slug catalog AND
 /// per-item metadata (tags, ducats, max_rank, subtypes).
 ///
-/// Retries 3× with backoff, matching Python's `fetch_catalog`. On total
-/// failure, returns `None` so the caller can fall back to the prior
-/// snapshot's catalog + items.
+/// The live transport owns retries so ingestion cannot multiply its budget.
 pub type CatalogFetch = (HashMap<String, String>, HashMap<String, CatalogItemMeta>);
 
 pub fn fetch_catalog_wfm(http: &dyn Http, url: &str) -> Result<CatalogFetch, String> {
-    let mut last_err = String::new();
-    for attempt in 0..3u32 {
-        match http.get_json(url) {
-            Ok(body) => {
-                let items = wfm_client::unwrap_envelope(&body);
-                let arr = items
-                    .as_array()
-                    .ok_or_else(|| format!("{url}: not an array"))?;
-                let mut catalog = HashMap::new();
-                let mut meta = HashMap::new();
-                for it in arr {
-                    let slug = it.get("slug").and_then(|s| s.as_str()).unwrap_or("");
-                    let nm = it
-                        .get("i18n")
-                        .and_then(|i| i.get("en"))
-                        .and_then(|n| n.get("name"))
-                        .and_then(|n| n.as_str())
-                        .unwrap_or("");
-                    if !slug.is_empty() && !nm.is_empty() {
-                        catalog.insert(nm.to_lowercase(), slug.to_string());
-                    }
-                    if !slug.is_empty() {
-                        let tags: Vec<String> = it
-                            .get("tags")
-                            .and_then(|t| t.as_array())
-                            .map(|a| {
-                                a.iter()
-                                    .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                                    .collect()
-                            })
-                            .unwrap_or_default();
-                        meta.insert(
-                            slug.to_string(),
-                            CatalogItemMeta {
-                                tags,
-                                ducats: it.get("ducats").and_then(|d| d.as_i64()),
-                                max_rank: it.get("maxRank").and_then(|r| r.as_i64()),
-                                subtypes: it
-                                    .get("subtypes")
-                                    .and_then(|s| s.as_array())
-                                    .map(|a| {
-                                        a.iter()
-                                            .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                                            .collect()
-                                    })
-                                    .unwrap_or_default(),
-                            },
-                        );
-                    }
-                }
-                return Ok((catalog, meta));
-            }
-            Err(e) => {
-                last_err = e;
-                if attempt + 1 < 3 {
-                    std::thread::sleep(std::time::Duration::from_secs(2 * (attempt as u64 + 1)));
-                }
-            }
+    let body = http.get_json(url)?;
+    let items = wfm_client::unwrap_envelope(&body);
+    let arr = items
+        .as_array()
+        .ok_or_else(|| format!("{url}: not an array"))?;
+    let mut catalog = HashMap::new();
+    let mut meta = HashMap::new();
+    for it in arr {
+        let slug = it.get("slug").and_then(|s| s.as_str()).unwrap_or("");
+        let nm = it
+            .get("i18n")
+            .and_then(|i| i.get("en"))
+            .and_then(|n| n.get("name"))
+            .and_then(|n| n.as_str())
+            .unwrap_or("");
+        if !slug.is_empty() && !nm.is_empty() {
+            catalog.insert(nm.to_lowercase(), slug.to_string());
+        }
+        if !slug.is_empty() {
+            let tags: Vec<String> = it
+                .get("tags")
+                .and_then(|t| t.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                        .collect()
+                })
+                .unwrap_or_default();
+            meta.insert(
+                slug.to_string(),
+                CatalogItemMeta {
+                    tags,
+                    ducats: it.get("ducats").and_then(|d| d.as_i64()),
+                    max_rank: it.get("maxRank").and_then(|r| r.as_i64()),
+                    subtypes: it
+                        .get("subtypes")
+                        .and_then(|s| s.as_array())
+                        .map(|a| {
+                            a.iter()
+                                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                },
+            );
         }
     }
-    Err(last_err)
+    Ok((catalog, meta))
 }
 
 /// Fetch warframestat parent endpoints → path_to_info + set_to_parts.

@@ -8,23 +8,16 @@
 //! accepts `rank` / `subtype` (and `charges` / `stars`) so the tier is chosen
 //! server-side. Public: no JWT, so it works before login too.
 //!
-//! Every request goes through [`fetch_live_tops`], which paces itself to
-//! WFM's 3 req/s ceiling; a batch of 50 items is ~17 s, which is why the
-//! caller reports progress rather than blocking silently.
+//! Requests share the process-wide governor with listings, watches and login.
+//! The caller reports progress because validation and queued work add latency.
 
-use std::thread;
-use std::time::{Duration, Instant};
+use wfm_client::governor::Kind;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, Result};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 
 use crate::http::browser_client;
-
-/// Start-to-start spacing between requests - 340 ms ≈ 2.9 req/s, under WFM's
-/// documented 3 req/s. Same figure the scraper uses.
-pub const LIVE_TOP_SPACING: Duration = Duration::from_millis(340);
-static LAST_LIVE_START: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
 
 /// One item's tier to look up.
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -278,14 +271,11 @@ fn fetch_one(
     me: Option<&str>,
 ) -> Result<LiveTop> {
     let url = top_url(q);
-    let resp = wfm_client::wfm_headers(client.get(&url), platform)
-        .send()
-        .with_context(|| format!("GET {url}"))?;
-    let status = resp.status();
-    if !status.is_success() {
-        bail!("{url}: HTTP {status}");
-    }
-    let body: serde_json::Value = resp.json().with_context(|| format!("{url}: JSON"))?;
+    let body = wfm_client::transport::read_json(
+        wfm_client::wfm_headers(client.get(&url), platform), Kind::Read,
+        wfm_client::transport::ReadKey { url, platform: platform.into(), account: me.map(String::from) },
+        std::time::Duration::from_secs(15), false,
+    )?;
     let mut top = parse_top(q, &body, me)?;
     if let Some(book) = &mut top.buyer_book {
         book.orders
@@ -295,7 +285,7 @@ fn fetch_one(
     Ok(top)
 }
 
-/// Look up every query, paced at [`LIVE_TOP_SPACING`] start-to-start. Per-item
+/// Look up every query through the shared request budget. Per-item
 /// failures are returned inline (`error` set), never propagated - a 50-item
 /// review must not lose 49 answers to one unknown slug. `me` (the WFM
 /// in-game name, when logged in) keeps the user's own orders out of the
@@ -307,23 +297,11 @@ pub fn fetch_live_tops(
     queries: &[LiveTopQuery],
     mut on_progress: impl FnMut(usize, usize),
 ) -> Result<Vec<LiveTop>> {
+    if queries.len() > 100 { bail!("At most 100 live-price queries are allowed."); }
     let client = browser_client(20)?;
     let total = queries.len();
     let mut out = Vec::with_capacity(total);
     for (i, q) in queries.iter().enumerate() {
-        // Buyer comparisons and batch repricing can be requested together.
-        // Pace their request starts across invocations, without holding the
-        // lock during network I/O.
-        {
-            let mut last_start = crate::poison::guard(&LAST_LIVE_START);
-            if let Some(t) = *last_start {
-                let elapsed = t.elapsed();
-                if elapsed < LIVE_TOP_SPACING {
-                    thread::sleep(LIVE_TOP_SPACING.saturating_sub(elapsed));
-                }
-            }
-            *last_start = Some(Instant::now());
-        }
         let row = match fetch_one(&client, platform, q, me) {
             Ok(t) => t,
             Err(e) => LiveTop::failed(q, e.to_string()),

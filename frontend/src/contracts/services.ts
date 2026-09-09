@@ -12,6 +12,7 @@ import type { SetReco } from '../domain/set-recos';
 import type { AdvisorRequest, HistoryRequest, HistoryAnalysis, SessionRequest, ScoredInventoryFact } from './generated/domain';
 export const DESKTOP_CONTEXT = 'tennoworth.desktop';
 export interface DesktopServices {
+  desktopAccessStatus(): Promise<import('./generated/desktop').AccessStatus>;
   normalizeInventoryNative(data: Inventory, catalogs: Catalogs, market: Market): Promise<{ owned: Map<string, OwnedRecord>; unresolved: Record<string, number>; flatCount: number }>;
   scoreInventoryNative(owned: Map<string, OwnedRecord>, market: Market, reserveCopies: number, sparesOnly: boolean, availability?: ReadonlyMap<string, number>): Promise<Map<string, ScoredInventoryFact>>;
   evaluateAdvisor(request: AdvisorRequest): Promise<Record<string, Verdict>>;

@@ -1,3 +1,4 @@
+import { DesktopCmdError } from '../contracts/errors';
 import type { PingResponse, PlanItemInput, OrderPatch, PendingPlan, PlanResponse, ItemResult, Market, OverlaySettings, OverlayStatus } from '../contracts/data';
 import { isHistory, type History } from '../domain/history';
 import type { MarketRefreshResult, ScanReport, DesktopCapabilities, DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences } from '../contracts/desktop';
@@ -13,6 +14,7 @@ export async function desktopSaveProtectionPlan(plan: import('../contracts/prote
 
 /** Native operations preserve command error codes for authentication routing. */
 export class TauriTransport implements DesktopCapabilities {
+  private activePlanRequest: string | null = null;
   async getOverlaySettings(): Promise<OverlaySettings> {
     return await resolveInvoke()<OverlaySettings>('get_overlay_settings');
   }
@@ -110,12 +112,21 @@ export class TauriTransport implements DesktopCapabilities {
     return best;
   }
 
+  async cancelPlan(): Promise<void> {
+    const requestId = this.activePlanRequest;
+    if (!requestId) return;
+    try { await resolveInvoke()('cancel_plan', { requestId }); } catch (error) { rethrowInvoke(error); }
+  }
   async submitPlan(items: PlanItemInput[]): Promise<PlanResponse> {
-    try {
-      return await resolveInvoke()<PlanResponse>('submit_plan', { items });
-    } catch (e) {
-      rethrowInvoke(e);
-    }
+    return this.runPlan('submit_plan', { items });
+  }
+  private async runPlan(command: string, args: Record<string, unknown> = {}): Promise<PlanResponse> {
+    if (this.activePlanRequest) throw new DesktopCmdError('busy', 'A listing request is already running.');
+    const requestId = crypto.randomUUID();
+    this.activePlanRequest = requestId;
+    try { return await resolveInvoke()<PlanResponse>(command, { ...args, requestId }); }
+    catch (error) { return rethrowInvoke(error); }
+    finally { if (this.activePlanRequest === requestId) this.activePlanRequest = null; }
   }
   async getPendingPlan(): Promise<PendingPlan | null> {
     // The command returns Option<PendingPlan> - null when there's nothing
@@ -127,11 +138,7 @@ export class TauriTransport implements DesktopCapabilities {
     }
   }
   async resumePendingPlan(): Promise<PlanResponse> {
-    try {
-      return await resolveInvoke()<PlanResponse>('resume_pending_plan');
-    } catch (e) {
-      rethrowInvoke(e);
-    }
+    return this.runPlan('resume_pending_plan');
   }
   async discardPendingPlan(): Promise<unknown> {
     try {
@@ -303,4 +310,8 @@ export async function desktopTestNotification(): Promise<string> {
 
 export async function currentOverlayResult(): Promise<import('../contracts/data').RelicOverlayResult | null> {
   return resolveInvoke()<import('../contracts/data').RelicOverlayResult | null>('current_overlay_result');
+}
+
+export async function desktopAccessStatus(): Promise<import('../contracts/generated/desktop').AccessStatus> {
+  try { return await resolveInvoke()('wfm_access_status'); } catch (error) { return rethrowInvoke(error); }
 }

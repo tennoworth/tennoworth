@@ -50,14 +50,19 @@ impl Db {
         }
         let mut conn = guard(&self.conn);
         let tx = conn.transaction()?;
+        let mut written = 0;
         {
             let mut stmt = tx.prepare(
                 "INSERT INTO listing_log
-                   (plan_id, slug, listed_at, price, qty, status, action, order_id, message)
-                 VALUES (?1, ?2, strftime('%Y-%m-%dT%H:%M:%SZ','now'), ?3, ?4, ?5, ?6, ?7, ?8)",
+                   (plan_id, slug, listed_at, price, qty, status, action, order_id, message, plan_index)
+                 VALUES (?1, ?2, strftime('%Y-%m-%dT%H:%M:%SZ','now'), ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                 ON CONFLICT(plan_id, plan_index) DO UPDATE SET
+                   price=excluded.price, qty=excluded.qty, status=excluded.status,
+                   action=excluded.action, order_id=excluded.order_id, message=excluded.message",
             )?;
-            for r in rows {
-                stmt.execute((
+            for (index, r) in rows.iter().enumerate() {
+                if matches!(r.status.as_str(), "pending" | "uncertain_mutation") { continue; }
+                written += stmt.execute((
                     plan_id,
                     &r.slug,
                     r.price,
@@ -66,11 +71,12 @@ impl Db {
                     &r.action,
                     &r.order_id,
                     &r.message,
+                    i64::try_from(index).unwrap_or(i64::MAX),
                 ))?;
             }
         }
         tx.commit()?;
-        Ok(rows.len())
+        Ok(written)
     }
 
     /// Most recent `listing_log` rows, newest first.

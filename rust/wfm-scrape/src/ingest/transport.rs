@@ -37,51 +37,38 @@ pub struct LiveHttp {
     pub client: reqwest::blocking::Client,
 }
 
+static WFM_FAILED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+pub(crate) fn ensure_wfm_complete() -> Result<(), String> {
+    wfm_client::governor::process().check(wfm_client::governor::Kind::Read, &wfm_client::governor::context()).map_err(|e| e.to_string())?;
+    if WFM_FAILED.load(std::sync::atomic::Ordering::Acquire) { Err("WFM access failed during ingestion; keeping the previous published snapshot.".into()) } else { Ok(()) }
+}
+impl LiveHttp {
+    fn request(&self, url: &str) -> Result<Vec<u8>, String> {
+        let is_wfm = reqwest::Url::parse(url).ok().is_some_and(|url| matches!(url.host_str(), Some("api.warframe.market" | "warframe.market")));
+        let result = if is_wfm {
+            (|| {
+                let response = wfm_client::transport::send(wfm_client::wfm_headers(self.client.get(url), "pc"), wfm_client::governor::Kind::Read).map_err(|e| e.to_string())?;
+                if !response.status().is_success() { return Err(format!("WFM HTTP {}", response.status())); }
+                response.bytes().map_err(|e| e.to_string())
+            })()
+        } else {
+            self.client.get(url).send().and_then(reqwest::blocking::Response::error_for_status).and_then(reqwest::blocking::Response::bytes).map(|b| b.to_vec()).map_err(|e| e.to_string())
+        };
+        if is_wfm && result.is_err() { WFM_FAILED.store(true, std::sync::atomic::Ordering::Release); }
+        result
+    }
+}
 impl Http for LiveHttp {
     fn get_json(&self, url: &str) -> Result<serde_json::Value, String> {
-        let resp = self
-            .client
-            .get(url)
-            .send()
-            .map_err(|e| format!("{url}: {e}"))?;
-        let status = resp.status();
-        let body = resp.text().map_err(|e| format!("{url}: read body: {e}"))?;
-        if !status.is_success() {
-            return Err(format!("{url}: HTTP {status}: {body}"));
-        }
-        serde_json::from_str(&body).map_err(|e| format!("{url}: JSON parse: {e}"))
+        serde_json::from_slice(&self.request(url)?).map_err(|e| {
+            if reqwest::Url::parse(url).ok().is_some_and(|url| matches!(url.host_str(), Some("api.warframe.market" | "warframe.market"))) { WFM_FAILED.store(true, std::sync::atomic::Ordering::Release); }
+            format!("{url}: JSON parse: {e}")
+        })
     }
-
     fn get_text(&self, url: &str) -> Result<String, String> {
-        let resp = self
-            .client
-            .get(url)
-            .send()
-            .map_err(|e| format!("{url}: {e}"))?;
-        let status = resp.status();
-        let body = resp.text().map_err(|e| format!("{url}: read body: {e}"))?;
-        if !status.is_success() {
-            return Err(format!("{url}: HTTP {status}: {body}"));
-        }
-        Ok(body)
+        String::from_utf8(self.request(url)?).map_err(|e| format!("{url}: UTF-8: {e}"))
     }
-
-    /// Bytes, not text. The default impl round-trips through `String`, which
-    /// would corrupt an LZMA stream - so the live path must not inherit it.
-    fn get_bytes(&self, url: &str) -> Result<Vec<u8>, String> {
-        let resp = self
-            .client
-            .get(url)
-            .send()
-            .map_err(|e| format!("{url}: {e}"))?;
-        let status = resp.status();
-        if !status.is_success() {
-            return Err(format!("{url}: HTTP {status}"));
-        }
-        resp.bytes()
-            .map(|b| b.to_vec())
-            .map_err(|e| format!("{url}: read body: {e}"))
-    }
+    fn get_bytes(&self, url: &str) -> Result<Vec<u8>, String> { self.request(url) }
 }
 
 /// Fixture implementation of [`Http`] - serves pre-recorded responses from

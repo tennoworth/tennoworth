@@ -76,7 +76,8 @@ impl CmdError {
             "Wrong passphrase, or the login file was modified.",
         )
     }
-    pub fn wfm(e: impl std::fmt::Display) -> Self {
+    pub fn wfm(e: anyhow::Error) -> Self {
+        if let Some(access) = e.downcast_ref::<wfm_client::governor::AccessError>() { return Self::of(access.code(), access.to_string()); }
         Self::of("wfm", e.to_string())
     }
     pub fn internal(e: impl std::fmt::Display) -> Self {
@@ -99,11 +100,37 @@ pub struct WfmSession {
     /// Serializes plan execution: a second concurrent `execute_plan` /
     /// `resume_pending_plan` gets `busy` instead of racing on the pending file.
     plan_running: AtomicBool,
+    plan_requests: Arc<Mutex<PlanRequests>>,
     /// "Remember on this device" is only offered against the REAL login file:
     /// any `TENNOWORTH_JWT_PATH` override (the probe/test seam) turns the OS
     /// keyring off entirely, so hermetic runs can never pollute - or unlock
     /// via - the user's actual keyring entry.
     use_keyring: bool,
+}
+
+#[derive(Default)]
+struct PlanRequests {
+    pending: std::collections::HashMap<String, (Arc<AtomicBool>, bool)>,
+    completed: std::collections::VecDeque<String>,
+}
+
+pub struct PlanRequestScope {
+    requests: Arc<Mutex<PlanRequests>>,
+    id: String,
+    cancelled: Arc<AtomicBool>,
+}
+impl PlanRequestScope {
+    pub fn context(&self) -> wfm_client::governor::Context {
+        wfm_client::governor::Context { cancelled: Some(self.cancelled.clone()), ..Default::default() }
+    }
+}
+impl Drop for PlanRequestScope {
+    fn drop(&mut self) {
+        let mut requests = guard(&self.requests);
+        requests.pending.remove(&self.id);
+        if requests.completed.len() >= wfm_client::governor::MAX_QUEUE { requests.completed.pop_front(); }
+        requests.completed.push_back(self.id.clone());
+    }
 }
 
 impl WfmSession {
@@ -124,6 +151,7 @@ impl WfmSession {
             pending_path,
             inner: Mutex::new(None),
             plan_running: AtomicBool::new(false),
+            plan_requests: Arc::new(Mutex::new(PlanRequests::default())),
             use_keyring,
         }
     }
@@ -174,6 +202,7 @@ impl WfmSession {
                 )));
             }
         }
+        wfm_client::transport::invalidate_reads();
         let mut guard = guard(&self.inner);
         if let Some(arc) = guard.take() {
             if let Ok(mut unlocked) = Arc::try_unwrap(arc) {
@@ -205,6 +234,31 @@ impl WfmSession {
 
     pub fn begin_plan(&self) -> Option<PlanGuard<'_>> {
         PlanGuard::acquire(&self.plan_running)
+    }
+
+    fn request_token(&self, id: &str, claim: bool) -> Result<Option<Arc<AtomicBool>>, CmdError> {
+        if id.is_empty() || id.len() > 64 || !id.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_') {
+            return Err(CmdError::of("wfm", "Invalid listing request identity."));
+        }
+        let mut requests = guard(&self.plan_requests);
+        if requests.completed.iter().any(|completed| completed == id) { return Ok(None); }
+        if requests.pending.len() >= wfm_client::governor::MAX_QUEUE && !requests.pending.contains_key(id) {
+            return Err(CmdError::of("busy", "Too many listing requests are waiting."));
+        }
+        let entry = requests.pending.entry(id.into()).or_insert_with(|| (Arc::new(AtomicBool::new(false)), false));
+        if claim {
+            if entry.1 { return Err(CmdError::of("busy", "This listing request is already running.")); }
+            entry.1 = true;
+        }
+        Ok(Some(entry.0.clone()))
+    }
+    pub fn claim_plan_request(&self, id: String) -> Result<PlanRequestScope, CmdError> {
+        let cancelled = self.request_token(&id, true)?.ok_or_else(|| CmdError::of("busy", "This listing request already finished."))?;
+        Ok(PlanRequestScope { requests: self.plan_requests.clone(), id, cancelled })
+    }
+    pub fn cancel_plan(&self, id: &str) -> Result<(), CmdError> {
+        if let Some(token) = self.request_token(id, false)? { token.store(true, std::sync::atomic::Ordering::Release); }
+        Ok(())
     }
 
     /// Read + parse the on-disk envelope - shared by the passphrase and
@@ -250,6 +304,7 @@ impl WfmSession {
     pub fn unlock(&self, passphrase: &str, remember: bool) -> Result<(), CmdError> {
         let (jwt, platform, key) = self.decrypt_from_disk(passphrase)?;
         let unlocked = warm(jwt, platform)?;
+        wfm_client::transport::invalidate_reads();
         *guard(&self.inner) = Some(Arc::new(unlocked));
         if self.use_keyring {
             if remember {
@@ -291,7 +346,8 @@ impl WfmSession {
         };
         match warm(jwt, platform) {
             Ok(unlocked) => {
-                *guard(&self.inner) = Some(Arc::new(unlocked));
+                wfm_client::transport::invalidate_reads();
+        *guard(&self.inner) = Some(Arc::new(unlocked));
                 true
             }
             Err(e) => {
@@ -337,6 +393,7 @@ impl WfmSession {
         // catalog warm fails the JWT is already saved, so a later listing action
         // unlocks via the passphrase modal - surface the network error either way.
         let unlocked = warm(jwt, platform.to_string())?;
+        wfm_client::transport::invalidate_reads();
         *guard(&self.inner) = Some(Arc::new(unlocked));
         if self.use_keyring {
             if remember {
@@ -373,6 +430,7 @@ impl WfmSession {
     /// itself runtime-gated behind `TENNOWORTH_PROBE=1` (same pattern as the
     /// other `debug_*` probe commands).
     pub fn debug_set_unlocked(&self, unlocked: Unlocked) {
+        wfm_client::transport::invalidate_reads();
         *guard(&self.inner) = Some(Arc::new(unlocked));
     }
 
@@ -518,6 +576,7 @@ mod tests {
             pending_path: pending,
             inner: Mutex::new(None),
             plan_running: AtomicBool::new(false),
+            plan_requests: Arc::new(Mutex::new(PlanRequests::default())),
             // Tests must never read or write the developer's real OS keyring.
             use_keyring: false,
         }
@@ -731,6 +790,22 @@ mod tests {
     }
 
     #[test]
+    fn early_cancellation_is_retained_and_does_not_poison_explicit_resume() {
+        let session = session_with(tmp_path("cancel"));
+        session.cancel_plan("first").unwrap();
+        let first = session.claim_plan_request("first".into()).unwrap();
+        let running = session.begin_plan().unwrap();
+        assert!(matches!(wfm_client::governor::process().check(wfm_client::governor::Kind::Mutation, &first.context()), Err(wfm_client::governor::AccessError::Cancelled)));
+        assert!(session.claim_plan_request("first".into()).is_err());
+        drop(running); drop(first);
+        session.cancel_plan("first").unwrap();
+        assert!(guard(&session.plan_requests).pending.is_empty());
+        let resumed = session.claim_plan_request("resume".into()).unwrap();
+        let _running = session.begin_plan().unwrap();
+        assert!(wfm_client::governor::process().check(wfm_client::governor::Kind::Mutation, &resumed.context()).is_ok());
+    }
+
+    #[test]
     fn begin_plan_serializes_and_guard_releases_on_drop() {
         let s = session_with(tmp_path("busy"));
         let guard = s.begin_plan().expect("first plan starts");
@@ -798,4 +873,24 @@ mod tests {
         assert_eq!(s.auth_status(), (true, true));
         let _ = fs::remove_file(&path);
     }
+}
+
+pub const WFM_ACCESS_EVENT: &str = "wfm-access-changed";
+#[tauri::command]
+pub fn wfm_access_status() -> wfm_client::governor::AccessStatus {
+    wfm_client::governor::process().status()
+}
+pub fn publish_access_changes(app: tauri::AppHandle) {
+    use tauri::Emitter;
+    let _ = std::thread::Builder::new().name("wfm-access-status".into()).spawn(move || {
+        let mut previous = None;
+        loop {
+            let current = wfm_access_status();
+            if previous.as_ref() != Some(&current) {
+                let _ = app.emit(WFM_ACCESS_EVENT, &current);
+                previous = Some(current);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(100));
+        }
+    });
 }

@@ -4,95 +4,26 @@
 //! the crash-recoverable plan executor, and [`crate::trading::catalog`] for the WFM
 //! item catalog fetch both this module and the plan executor depend on.
 
+use wfm_client::transport::GovernedRequest;
+use wfm_client::governor::Kind;
 use anyhow::{bail, Context, Result};
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
 
 use crate::http::{browser_client, wfm_client};
 use crate::trading::auth::fetch_wfm_me;
 use crate::trading::catalog::{fetch_wfm_catalog, index_item_meta, ItemMeta, WfmCatalogItem};
 
-/// Shared with [`crate::trading::plan::run_pending`] - both pace their WFM calls to
-/// the same 3 req/sec norm.
-pub const SERVE_RATE_LIMIT_MS: u64 = 350;
 // Matches WFM's own UI cap (3000) and the browser ListingReviewModal's
 // MAX_PLATINUM. Previously 999, which silently blocked maxed-Arcane and
 // Galvanized-mod listings that genuinely sell for 1500–2500p.
 pub const MAX_PLATINUM: u32 = 3000;
 
-/// Attempts for create/update/delete order calls. This is the path a user
-/// watches in real time: these calls used to give up after one transport
-/// error or 5xx, so a single dropped packet mid-batch surfaced as a permanent
-/// failure on that item.
-///
-/// The catalog warm deliberately does NOT retry - `fetch_wfm_catalog` is
-/// single-shot, and a failed warm is one visible error the user can act on
-/// rather than a half-finished batch. This comment used to claim it "already
-/// retries via wfm-client", which was the reason a dead `get_with_retry`
-/// looked load-bearing for months.
-pub(crate) const ORDER_RETRY_ATTEMPTS: u32 = 2;
-
-/// Retry a request builder for transport errors, 5xx responses, and 429 -
-/// never any other 4xx, which are semantic (a bad price, wrong subtype, a slug
-/// that doesn't exist) and won't succeed on retry. Backoff shares
-/// `wfm_client::retry_backoff` (2s/4s/6s) rather than a second hand-rolled
-/// curve; a 429 that carries `Retry-After` (seconds) waits at least that long
-/// instead, which is what WFM's rate-limit rules ask of clients. Requests
-/// with a non-cloneable body (not the case for any call site here - all send
-/// `.json(...)`) fall back to a single attempt.
-#[allow(
-    clippy::unreachable,
-    reason = "the loop returns on its final attempt when max_attempts is at least one"
-)]
-pub(crate) fn send_with_retry(
-    builder: reqwest::blocking::RequestBuilder,
-    max_attempts: u32,
-) -> reqwest::Result<reqwest::blocking::Response> {
-    for attempt in 0..max_attempts {
-        let this_send = match builder.try_clone() {
-            Some(b) => b.send(),
-            None => return builder.send(),
-        };
-        let (retryable, retry_after) = match &this_send {
-            Ok(resp) => {
-                let st = resp.status();
-                let after = (st.as_u16() == 429)
-                    .then(|| retry_after_secs(resp.headers()))
-                    .flatten();
-                (st.is_server_error() || st.as_u16() == 429, after)
-            }
-            Err(_) => (true, None),
-        };
-        if !retryable || attempt + 1 == max_attempts {
-            return this_send;
-        }
-        let wait = wfm_client::retry_backoff(attempt);
-        let wait = match retry_after {
-            Some(ra) if ra > wait => ra,
-            _ => wait,
-        };
-        std::thread::sleep(wait);
-    }
-    unreachable!("ORDER_RETRY_ATTEMPTS must be >= 1")
-}
-
-/// `Retry-After` as a delay, when it is the delta-seconds form (the only form
-/// WFM/Cloudflare send). Absent, unparseable, or the HTTP-date form → `None`,
-/// and the caller falls back to the standard backoff. Capped at 60 s so a
-/// hostile or mistaken header cannot park the UI thread.
-pub(crate) fn retry_after_secs(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
-    let secs: u64 = headers
-        .get(reqwest::header::RETRY_AFTER)?
-        .to_str()
-        .ok()?
-        .trim()
-        .parse()
-        .ok()?;
-    Some(Duration::from_secs(secs.min(60)))
+/// Mutations are never replayed after an ambiguous transport or server failure.
+pub(crate) fn send_mutation(builder: reqwest::blocking::RequestBuilder) -> Result<wfm_client::transport::GovernedResponse, wfm_client::governor::AccessError> {
+    builder.send_governed(Kind::Mutation)
 }
 
 /// Everything a listing request needs, produced once on first use (decrypt +
@@ -159,19 +90,23 @@ pub struct PerOrderResult {
 }
 
 pub fn list_user_orders(unlocked: &Unlocked) -> Result<serde_json::Value> {
+    read_user_orders(unlocked, true)
+}
+pub fn cached_user_orders(unlocked: &Unlocked) -> Result<serde_json::Value> {
+    read_user_orders(unlocked, false)
+}
+fn read_user_orders(unlocked: &Unlocked, fresh: bool) -> Result<serde_json::Value> {
     let client = wfm_client()?;
     let url = format!(
         "https://api.warframe.market/v2/orders/user/{}",
         unlocked.username
     );
-    let resp = wfm_client::wfm_authed_headers(client.get(&url), &unlocked.platform, &unlocked.jwt)
-        .send()
-        .context("/v2/orders/user request failed")?;
-    let status = resp.status();
-    let mut body: serde_json::Value = resp.json().context("parsing orders response")?;
-    if !status.is_success() {
-        bail!("WFM HTTP {status}: {body}");
-    }
+    let mut body = wfm_client::transport::read_json(
+        wfm_client::wfm_authed_headers(client.get(&url), &unlocked.platform, &unlocked.jwt), Kind::Read,
+        wfm_client::transport::ReadKey { url, platform: unlocked.platform.clone(), account: Some(unlocked.username.clone()) },
+        std::time::Duration::from_secs(5), fresh,
+    )?;
+    validate_orders_body(&body, unlocked)?;
     crate::trading::catalog::enrich_orders_with_names(&mut body, &unlocked.id_to_item);
     Ok(body)
 }
@@ -192,15 +127,7 @@ pub fn bulk_set_visibility(unlocked: &Unlocked, req: &VisibilityRequest) -> Vec<
         }
     };
     let mut out = Vec::with_capacity(req.order_ids.len());
-    let mut last = std::time::Instant::now()
-        .checked_sub(Duration::from_millis(SERVE_RATE_LIMIT_MS))
-        .unwrap_or_else(std::time::Instant::now);
     for id in &req.order_ids {
-        let elapsed = last.elapsed();
-        if elapsed < Duration::from_millis(SERVE_RATE_LIMIT_MS) {
-            thread::sleep(Duration::from_millis(SERVE_RATE_LIMIT_MS).saturating_sub(elapsed));
-        }
-        last = std::time::Instant::now();
         out.push(patch_one_order(
             &client,
             unlocked,
@@ -244,10 +171,9 @@ pub(crate) fn patch_one_order(
     body: &serde_json::Value,
 ) -> PerOrderResult {
     let url = format!("https://api.warframe.market/v2/order/{id}");
-    let resp = send_with_retry(
+    let resp = send_mutation(
         wfm_client::wfm_authed_headers(client.patch(&url), &unlocked.platform, &unlocked.jwt)
             .json(body),
-        ORDER_RETRY_ATTEMPTS,
     );
     match resp {
         Ok(r) => {
@@ -274,8 +200,8 @@ pub(crate) fn patch_one_order(
         }
         Err(e) => PerOrderResult {
             order_id: id.into(),
-            status: "error".into(),
-            message: Some(format!("HTTP request failed: {e}")),
+            status: if matches!(e, wfm_client::governor::AccessError::UncertainMutation) { "uncertain_mutation" } else { "pending" }.into(),
+            message: Some(e.to_string()),
         },
     }
 }
@@ -283,9 +209,8 @@ pub(crate) fn patch_one_order(
 pub fn delete_order(unlocked: &Unlocked, id: &str) -> Result<()> {
     let client = wfm_client()?;
     let url = format!("https://api.warframe.market/v2/order/{id}");
-    let resp = send_with_retry(
+    let resp = send_mutation(
         wfm_client::wfm_authed_headers(client.delete(&url), &unlocked.platform, &unlocked.jwt),
-        ORDER_RETRY_ATTEMPTS,
     )
     .context("DELETE request failed")?;
     let status = resp.status();
@@ -300,29 +225,51 @@ pub fn delete_order(unlocked: &Unlocked, id: &str) -> Result<()> {
     Ok(())
 }
 
+fn validate_orders_body(body: &serde_json::Value, unlocked: &Unlocked) -> Result<()> {
+    let data = body.get("data").context("Orders response has no data; refusing to assume an empty account.")?;
+    let valid_row = |row: &serde_json::Value, bucket: Option<&str>| {
+        ["id", "itemId"].iter().all(|key| row.get(key).and_then(|v| v.as_str()).is_some_and(|s| !s.is_empty()))
+            && matches!(row.get("type").and_then(|v| v.as_str()).or(bucket), Some("buy" | "sell"))
+            && ["quantity", "platinum"].iter().all(|key| row.get(key).and_then(|v| v.as_u64()).is_some_and(|n| n > 0))
+            && row.get("rank").is_none_or(|v| v.is_null() || v.as_u64().is_some())
+            && row.get("subtype").is_none_or(|v| v.is_null() || v.as_str().is_some_and(|s| !s.is_empty()))
+            && unlocked.catalog.values().find(|item| Some(item.item_id.as_str()) == row.get("itemId").and_then(|v| v.as_str())).is_none_or(|item| {
+                item.max_rank.is_none_or(|max| row.get("rank").and_then(|v| v.as_u64()).is_some_and(|rank| rank <= u64::from(max)))
+                    && (item.subtypes.is_empty() || row.get("subtype").and_then(|v| v.as_str()).is_some_and(|subtype| item.subtypes.iter().any(|s| s == subtype)))
+            })
+    };
+    let valid = if let Some(rows) = data.as_array() {
+        rows.iter().all(|row| valid_row(row, None))
+    } else {
+        ["sell", "buy"].iter().all(|bucket| data.get(bucket).and_then(|v| v.as_array()).is_some_and(|rows| rows.iter().all(|row| valid_row(row, Some(bucket)))))
+    };
+    if !valid { bail!("Orders response is incomplete; reconcile current orders before changing listings."); }
+    Ok(())
+}
+
 #[cfg(test)]
-mod retry_after_tests {
-    use super::retry_after_secs;
-    use reqwest::header::{HeaderMap, HeaderValue, RETRY_AFTER};
-    use std::time::Duration;
-
-    fn hm(v: &str) -> HeaderMap {
-        let mut h = HeaderMap::new();
-        h.insert(RETRY_AFTER, HeaderValue::from_str(v).unwrap());
-        h
+mod response_tests {
+    use super::*;
+    fn unlocked() -> Unlocked {
+        Unlocked { jwt: String::new(), username: "fixture".into(), platform: "pc".into(), catalog: Arc::new(BTreeMap::new()), id_to_item: Arc::new(BTreeMap::new()) }
     }
-
     #[test]
-    fn delta_seconds_is_honoured_and_capped() {
-        assert_eq!(retry_after_secs(&hm("7")), Some(Duration::from_secs(7)));
-        assert_eq!(retry_after_secs(&hm(" 3 ")), Some(Duration::from_secs(3)));
-        assert_eq!(retry_after_secs(&hm("9999")), Some(Duration::from_secs(60)));
+    fn malformed_orders_cannot_be_interpreted_as_an_empty_account() {
+        for body in [serde_json::json!({}), serde_json::json!({"data": null}), serde_json::json!({"data": {"sell": []}}), serde_json::json!({"data": [{"id": "a"}]})] {
+            assert!(validate_orders_body(&body, &unlocked()).is_err());
+        }
+        assert!(validate_orders_body(&serde_json::json!({"data": []}), &unlocked()).is_ok());
+        assert!(validate_orders_body(&serde_json::json!({"data": {"sell": [], "buy": []}}), &unlocked()).is_ok());
     }
-
     #[test]
-    fn absent_or_http_date_falls_back_to_none() {
-        assert_eq!(retry_after_secs(&HeaderMap::new()), None);
-        assert_eq!(retry_after_secs(&hm("Wed, 21 Oct 2026 07:28:00 GMT")), None);
-        assert_eq!(retry_after_secs(&hm("-1")), None);
+    fn missing_variant_metadata_cannot_hide_an_existing_order() {
+        let mut session = unlocked();
+        session.catalog = Arc::new(BTreeMap::from([("fixture".into(), WfmCatalogItem { item_id: "item".into(), display_name: "Fixture".into(), bulk_tradable: false, session_supported: true, max_rank: Some(10), subtypes: vec!["revealed".into()] })]));
+        let mut body = serde_json::json!({"data": [{"id": "order", "itemId": "item", "type": "sell", "quantity": 1, "platinum": 10}]});
+        assert!(validate_orders_body(&body, &session).is_err());
+        body["data"][0]["rank"] = serde_json::json!(0);
+        assert!(validate_orders_body(&body, &session).is_err());
+        body["data"][0]["subtype"] = serde_json::json!("revealed");
+        assert!(validate_orders_body(&body, &session).is_ok());
     }
 }
