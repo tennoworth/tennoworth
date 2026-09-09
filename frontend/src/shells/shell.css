@@ -1,5 +1,6 @@
 
-  main.landing[data-shell] {
+  main.landing[data-shell],
+  .desktop-landing[data-shell] {
     /* Landing - a 76rem reading column (1216px at 1440 → 1292 at 1920 →
        1368 at 2560): strip → lede → search → movers → vaulted + Baro →
        hand-off → FAQ → footer, every block on the --stack rhythm. */
@@ -10,6 +11,12 @@
     flex-direction: column;
     gap: var(--stack);
     min-width: 0;
+  }
+
+  .desktop-landing > main.landing[data-shell] {
+    max-width: none;
+    margin: 0;
+    padding: 0;
   }
 
   /* Shell layout: a 40px status strip spanning both columns, then the
@@ -150,11 +157,13 @@
   }
   .statusbar .cell .link:hover[data-shell] { text-decoration: underline; background: transparent; }
   /* Landing: same strip, framed as the first block of the reading column. */
-  main.landing > .statusbar[data-shell] {
+  main.landing > .statusbar[data-shell],
+  .desktop-landing > .statusbar[data-shell] {
     border: 1px solid var(--border);
     border-radius: var(--radius-panel);
   }
-  main.landing > .statusbar .brand[data-shell] { flex: 1 1 auto; }
+  main.landing > .statusbar .brand[data-shell],
+  .desktop-landing > .statusbar .brand[data-shell] { flex: 1 1 auto; }
 
   /* Sidebar - nav only, sticky under the strip; the theme switcher and the
      build string sit in its foot. */
@@ -229,6 +238,12 @@
     border-color: color-mix(in srgb, var(--ducat) 40%, var(--border));
     text-transform: uppercase;
     letter-spacing: 0.04em;
+  }
+
+  .recovery-details[data-shell] {
+    white-space: pre-wrap;
+    font-family: var(--font-mono);
+    font-size: var(--text-caption);
   }
 
   .feedback-trigger[data-shell] { width: 100%; justify-content: flex-start; gap: var(--s2); min-height: var(--ctl-lg); }
@@ -448,6 +463,9 @@
       border-left: 1px var(--rule) var(--hairline);
     }
     main.workspace[data-shell] { padding: 16px 16px 32px; overflow: visible; }
+  }
+  @media (max-width: 560px), (max-height: 480px) {
+    .statusbar.shell-strip[data-shell] { position: static; }
   }
   @media (max-width: 560px) {
     main.workspace[data-shell] { padding: var(--s3) var(--s3) var(--s5); }

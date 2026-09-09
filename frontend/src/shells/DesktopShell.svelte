@@ -99,13 +99,19 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // unfiltered preset results.
   let tableView = $state<{ rows: SellRow[]; active: boolean }>({ rows: [], active: false });
   function headerClearance(node: HTMLElement, inShell: boolean) {
-    if (!inShell) return;
     const root = document.documentElement;
-    const update = () => root.style.setProperty('--sticky-header-clearance', `${node.offsetHeight}px`);
+    let enabled = inShell;
+    const update = () => {
+      if (enabled && getComputedStyle(node).position === 'sticky') root.style.setProperty('--sticky-header-clearance', `${node.offsetHeight}px`);
+      else root.style.removeProperty('--sticky-header-clearance');
+    };
     const observer = new ResizeObserver(update);
     observer.observe(node);
     update();
-    return { destroy() { observer.disconnect(); root.style.removeProperty('--sticky-header-clearance'); } };
+    return {
+      update(value: boolean) { enabled = value; update(); },
+      destroy() { observer.disconnect(); root.style.removeProperty('--sticky-header-clearance'); },
+    };
   }
 
   // Sidebar nav: if the user's persisted view is unavailable (Baro not
@@ -277,7 +283,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     // Cold landing (no saved inventory): preload the snapshot so the no-install
     // MarketBrowser has data to show. Best-effort - a failure just hides the
     // browser; the install steps below it still work.
-    if (inventory.phase === 'idle' && !inventory.market) {
+    if (!inventory.market) {
       try {
         inventory.market = await inventory.loadBestMarket();
       } catch (e) {
@@ -333,6 +339,10 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     return untrack(() => previousFacts.start(() => scoreInventoryNative(owned, market, reserve, spares)));
   });
   let currentFacts = $derived(sparesOnly ? spareFacts : defaultFacts);
+  let hasInventory = $derived(inventory.resolved.owned.size > 0);
+  let showWorkspace = $derived(hasInventory || inventory.phase === 'done' || effectiveView !== 'sell');
+  let updateBanner: DesktopUpdateBanner;
+
   let calculationError = $derived(currentFacts.error ?? (filterState.adviceOnly ? advisorResult.error : null));
   let calculationPending = $derived(inventory.resolved.owned.size > 0 && !!inventory.market &&
     (currentFacts.phase === 'idle' || currentFacts.phase === 'loading' || (filterState.adviceOnly && advisorResult.phase === 'loading')));
@@ -656,7 +666,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     feedbackDownloadError = false;
     const state = {
       capturedAt: new Date().toISOString(), build: APP_COMMIT, platform: desktopPlatform,
-      view: inventory.phase === 'done' ? effectiveView : 'landing', phase: inventory.phase,
+      view: showWorkspace ? effectiveView : 'landing', phase: inventory.phase,
       scanning: inventory.pullingInventory, scanError: inventory.error ?? inventory.pullError,
       marketLoaded: !!inventory.market, marketError: inventory.marketLoadError,
       theme: document.documentElement.dataset.mode ?? 'unknown', width: window.innerWidth, height: window.innerHeight,
@@ -755,106 +765,20 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   </form>
 </dialog>
 
-{#if inventory.phase !== 'done'}
-<main data-shell class="landing" data-testid={isDesktop ? 'desktop-mode' : undefined}>
-  {@render statusStrip(false)}
-  <!-- One lede line under the strip (the strip's descriptor already says what
-       this is). The old pitch paragraph / hero is gone - search is the first
-       control. The theme switcher used to ride this line's right end; it now
-       lives in Settings → Appearance, with a quiet copy in the site footer for
-       visitors who never search their way into the shell. -->
-  <header data-shell class="landing-head">
-    <p data-shell class="lede">
-      
-        Scan your account and TennoWorth ranks <em data-shell>your</em> inventory by what to sell - until then, look anything up below.
-      
-    </p>
-  </header>
-
-  <div data-shell class="ui-toolbar"><button data-shell type="button" class="btn" onclick={openFeedback}>Send feedback</button></div>
-  {@render generalBanners()}
-
-  {#if inventory.phase === 'idle' || inventory.phase === 'loading'}
-    
-      <!-- The scan CTA leads the desktop empty state (fresh install AND
-           post-Clear): scanning is the app's whole point, so it must never
-           sit below the fold of the market browser - that's how a user ends
-           up back on the manual file path. -->
-      <section data-shell class="upsell-lead desktop-hero">
-        <h2 data-shell>Get your personal sell list</h2>
-        <p data-shell class="sub">
-          With Warframe open and past the login screen, scan your account -
-          TennoWorth ranks <em data-shell>your</em> inventory by what to sell right now.
-        </p>
-        <div data-shell class="desktop-scan-row">
-          <button data-shell
-            class="rp-primary"
-            data-testid="desktop-scan"
-            onclick={() => inventory.pullInventory()}
-            disabled={inventory.pullingInventory}
-          >{inventory.pullingInventory ? 'Scanning game…' : 'Scan inventory'}</button>
-        </div>
-        <span data-shell class="trust">Reads the running game's memory only - nothing leaves your machine.</span>
-      </section>
-    
-
-    {#if inventory.market}
-      
-        <MarketBrowser market={inventory.market} staleness={marketStaleness} freshness={marketFreshness} loadHistory={() => transport.loadHistory()} />
-      
-    {:else}{/if}
-  {/if}
-
-  {#if inventory.phase === 'error' && isDesktop}
-    <div data-shell class="card ui-panel error">
-      Error: {inventory.error}
-      <div data-shell style="margin-top:10px">
-        <button data-shell class="rp-primary" data-testid="desktop-scan" onclick={() => inventory.pullInventory()} disabled={inventory.pullingInventory}>
-          {inventory.pullingInventory ? 'Scanning game…' : 'Scan inventory'}
-        </button>
-        <button data-shell type="button" class="btn" onclick={openFeedback}>Report a bug</button>
-      </div>
-    </div>
-  {/if}
-
-  <!-- The hosted landing reads as a price-lookup tool: search, movers,
-       vaulted, hand-off. Nothing above this reveals that the app also does
-       set picks, relics, rivens, watches, the ledger, orders and the
-       advisor. The rail is that reveal - one miniature per surface, built
-       from sample data rather than screenshots so it re-skins with the
-       theme and can never go stale. Hosted only: a desktop visitor has the
-       real thing in the sidebar. -->
-  
-
-  <Faq desktop />
-
-  <footer data-shell class="sitefoot">
-    <span data-shell class="grow">TennoWorth is a fan project, not affiliated with Digital Extremes or warframe.market. Open source · MIT · data from warframe.market and warframestat.us.</span>
-    {#if inventory.market?.updated_at}<span data-shell title="When the market snapshot was taken">Snapshot {snapshotStamp}</span>{/if}
-    <a data-shell href="#trust">Trust &amp; safety</a>
-    <span data-shell class="ver" title="build {APP_COMMIT}">{APP_COMMIT}</span>
-    <!-- The theme control's home is Settings → Appearance, inside the shell.
-         A visitor who never searches never reaches the shell, so the mode
-         control also sits here - quiet, right-aligned, on the footer's own
-         type scale - rather than leaving the hosted site unable to override
-         the OS scheme. -->
-    <div data-shell class="foot-theme"><ThemeSwitcher {theme} compact label="Colour mode" /></div>
-  </footer>
-</main>
-{:else}
-<div data-shell class="shell">
-  {@render statusStrip(true)}
-
+<!-- Keep the banner region mounted while navigation or a scan changes the content. -->
+<div data-shell class={showWorkspace ? 'shell' : 'desktop-landing'}>
+  {@render statusStrip(showWorkspace)}
+  {#if showWorkspace}
   <aside data-shell class="sidebar">
     <nav data-shell>
       <div data-shell class="nav-group">
         <div data-shell class="nav-label">Trade</div>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'sell'} title={defaultFacts.phase === 'done' && sellableCount === 0 ? allocationLoginHint : undefined} onclick={() => filters.setView('sell')}>
-          <span data-shell>Sell</span>
+          <span data-shell>{hasInventory ? 'Sell' : 'Inventory'}</span>
           <!-- Pinned to the unfiltered sellable count: with a narrow preset
                active (Vaulted on a no-vaulted inventory), a filter-driven
                "Sell 0" reads as "your inventory got wiped". -->
-          <span data-shell class="badge">{defaultFacts.phase === 'done' ? sellableCount : '—'}</span>
+          {#if hasInventory}<span data-shell class="badge">{defaultFacts.phase === 'done' ? sellableCount : '—'}</span>{/if}
         </button>
         
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'session'} onclick={() => filters.setView('session')}><span data-shell>Trade Session</span></button>
@@ -937,9 +861,41 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     </div>
   </aside>
 
-  <main data-shell class="workspace" class:reading-view={['sets', 'relics', 'routines', 'install'].includes(effectiveView)}>
-
+  {/if}
+  <main data-shell class={showWorkspace ? 'workspace' : 'landing'} class:reading-view={['sets', 'relics', 'routines', 'install', 'settings'].includes(effectiveView)} data-testid={!showWorkspace ? 'desktop-mode' : undefined}>
     {@render generalBanners()}
+    {#if !showWorkspace}
+  {#if !inventory.error && !inventory.pullError}
+  <header data-shell class="landing-head">
+    <p data-shell class="lede">Scan your account and TennoWorth ranks <em data-shell>your</em> inventory by what to sell - until then, look anything up below.</p>
+  </header>
+  <nav data-shell class="ui-toolbar" aria-label="Application">
+    <button data-shell type="button" class="btn" onclick={() => filters.setView('settings')}>Settings</button>
+    <button data-shell type="button" class="btn" onclick={() => updateBanner.checkForUpdates()}>Check for updates</button>
+    <button data-shell type="button" class="btn" onclick={openFeedback}>Send feedback</button>
+  </nav>
+    <section data-shell class="upsell-lead desktop-hero">
+      <h2 data-shell>Get your personal sell list</h2>
+      <p data-shell class="sub">With Warframe open and past the login screen, scan your account - TennoWorth ranks <em data-shell>your</em> inventory by what to sell right now.</p>
+      <div data-shell class="desktop-scan-row">
+        <button data-shell class="rp-primary" data-testid="desktop-scan" onclick={() => inventory.pullInventory()} disabled={inventory.pullingInventory}>{inventory.pullingInventory ? 'Scanning game…' : 'Scan inventory'}</button>
+      </div>
+      <span data-shell class="trust">Reads the running game's memory only - nothing leaves your machine.</span>
+    </section>
+  {/if}
+  {#if inventory.market}
+    <MarketBrowser market={inventory.market} staleness={marketStaleness} freshness={marketFreshness} loadHistory={() => transport.loadHistory()} />
+  {/if}
+  <Faq desktop />
+
+  <footer data-shell class="sitefoot">
+    <span data-shell class="grow">TennoWorth is a fan project, not affiliated with Digital Extremes or warframe.market. Open source · MIT · data from warframe.market and warframestat.us.</span>
+    {#if inventory.market?.updated_at}<span data-shell title="When the market snapshot was taken">Snapshot {snapshotStamp}</span>{/if}
+    <a data-shell href="#trust">Trust &amp; safety</a>
+    <span data-shell class="ver" title="build {APP_COMMIT}">{APP_COMMIT}</span>
+    <div data-shell class="foot-theme"><ThemeSwitcher {theme} compact label="Colour mode" /></div>
+  </footer>
+    {:else}
     {#if advisorResult.error && !filterState.adviceOnly && ['sell', 'sets', 'session'].includes(effectiveView)}
       <div class="ui-notice" data-tone="warn" role="status">Hold/sell advice unavailable: {advisorResult.error} <button class="btn" onclick={() => calculationEpoch += 1}>Retry calculations</button></div>
     {/if}
@@ -1354,9 +1310,9 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       <SettingsPanel {theme} {transport} {isDesktop} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} />
     {/if}
 
+    {/if}
   </main>
 </div>
-{/if}
 
 {#snippet projectLinkAnchors()}
   <a data-shell class="project-link" href="https://github.com/tennoworth/tennoworth" target="_blank" rel="noopener noreferrer">
@@ -1386,7 +1342,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       {#if !inShell}<span data-shell class="sub">warframe.market prices, ranked by what actually sells</span>{/if}
     </div>
     
-      {#if !inShell}<button data-shell class="btn" onclick={() => { inventory.phase = 'done'; filters.setView('notifications'); }}>Notifications{unreadNotifications ? ` (${unreadNotifications})` : ''}</button>{/if}
+      {#if !inShell}<button data-shell class="btn" onclick={() => filters.setView('notifications')}>Notifications{unreadNotifications ? ` (${unreadNotifications})` : ''}</button>{/if}
       <div data-shell class="cell inv" title={unresolvedCount > 0 ? `${unresolvedCount} items couldn't be price-matched (${unresolvedSummary}) - usually untradeable blueprints, quest items and very new content.` : undefined}>
         {#if inventory.inventoryName}
           <span data-shell class="dot {inventoryFreshness}" role="img" aria-label="Inventory {inventoryFreshness}"></span>
@@ -1484,21 +1440,22 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   {#if marketAccess.message}
     <div class="ui-notice" data-tone="warn" role="status">{marketAccess.message}</div>
   {/if}
-  <!-- Cross-view banner region: pull-error and the desktop update banner, each
-       independently dismissible. Rendered on both the landing and the workspace
-       so a failure is visible wherever the user is standing. -->
-  {#if inventory.pullError}
-    <div data-shell class="card ui-panel warn-banner general-banner" role="alert">
-      <div data-shell class="gb-body gb-pre">{inventory.pullError}</div>
-      <div data-shell class="gb-actions">
-        
-          <button data-shell class="gb-report" onclick={openFeedback}>
-            Report a bug
-          </button>
-        
-        <button data-shell class="gb-dismiss" aria-label="Dismiss" onclick={() => (inventory.pullError = null)}>×</button>
+  {#if inventory.error || inventory.pullError}
+    <section data-shell class="ui-notice ui-stack" data-tone="bad" role="alert" aria-label="Inventory unavailable">
+      <strong data-shell>Your inventory couldn’t be refreshed</strong>
+      <p data-shell>{hasInventory ? 'Showing your last successful inventory. Its quantities have not been refreshed.' : 'Try scanning again, or check for an app update. Settings and help are still available.'}</p>
+      <details data-shell>
+        <summary data-shell>Technical details</summary>
+        <p data-shell class="recovery-details">{inventory.pullError ?? inventory.error}</p>
+      </details>
+      <div data-shell class="ui-toolbar">
+        <button data-shell class="btn primary" onclick={() => inventory.pullInventory()} disabled={inventory.pullingInventory}>{inventory.pullingInventory ? 'Scanning game…' : 'Retry scan'}</button>
+        <button data-shell class="btn" onclick={() => updateBanner.checkForUpdates()}>Check for updates</button>
+        <button data-shell class="btn" onclick={() => filters.setView('settings')}>Settings</button>
+        <button data-shell class="btn" onclick={openFeedback}>Report a bug</button>
+        <button data-shell class="btn ghost" onclick={() => { inventory.error = null; inventory.pullError = null; }}>Dismiss scan error</button>
       </div>
-    </div>
+    </section>
     {#if inventory.reportUrl}
       <!-- Shown only when the browser did not open: the report must still be
            filable by hand rather than dead-ending on a failed launch. -->
@@ -1525,7 +1482,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     </div>
   {/if}
   
-    <DesktopUpdateBanner />
+    <DesktopUpdateBanner bind:this={updateBanner} />
   
 {/snippet}
 

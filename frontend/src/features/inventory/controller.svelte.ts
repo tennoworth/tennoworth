@@ -89,7 +89,6 @@ export class InventoryController {
 
   async handleInventory({ name, data }: { name: string; data: Inventory }) {
     const generation = ++this.generation;
-    this.inventoryName = name;
     this.phase = 'loading';
     this.error = null;
     this.pullError = null;
@@ -108,7 +107,6 @@ export class InventoryController {
         this.pullError = flatCount === 0
           ? "The scan didn't find a recognizable inventory in the game's memory. Make sure Warframe is running and you're past the login screen, then try again."
           : 'The scan found items, but nothing in them is tradeable on warframe.market (quest items, resources, and brand-new content have no listings).';
-        this.inventoryName = null;
         this.phase = 'idle';
         return;
       }
@@ -118,6 +116,7 @@ export class InventoryController {
       if (generation !== this.generation) return;
       this.deltas = diffOwned(previous?.owned, owned);
       this.previousOwned = previous?.owned ?? null;
+      this.inventoryName = name;
       this.resolved = { owned, unresolved };
       this.ownedRivens = rivens;
       this.lastUpdated = Date.now();
@@ -132,7 +131,6 @@ export class InventoryController {
 
   async handleImported({ invName, ts, ownedMap }: { invName: string; ts: number; ownedMap: Map<string, OwnedRecord> }) {
     const generation = ++this.generation;
-    this.inventoryName = invName;
     this.phase = 'loading';
     this.error = null;
     this.pullError = null;
@@ -199,10 +197,10 @@ export class InventoryController {
     // Startup can reach this after a user acts while the health check awaits IPC.
     if (this.generation !== 0) return;
     const generation = ++this.generation;
-    const snap = await this.store.loadSnapshot();
-    if (generation !== this.generation) return;
-    if (snap) {
-      try {
+    try {
+      const snap = await this.store.loadSnapshot();
+      if (generation !== this.generation) return;
+      if (snap) {
         this.inventoryName = snap.invName;
         this.lastUpdated = snap.ts;
         this.resolved = { owned: snap.owned, unresolved: {} };
@@ -225,13 +223,12 @@ export class InventoryController {
         // flushes before paint - the old call here just computed everything twice.
         if (generation !== this.generation) return;
         this.phase = 'done';
-      } catch (e) {
-        if (generation !== this.generation) return;
-        console.error(e);
-        this.error = humanError(e);
-        this.phase = 'error';
       }
+    } catch (e) {
+      if (generation !== this.generation) return;
+      console.error(e);
+      this.error = humanError(e);
+      this.phase = 'error';
     }
-
   }
 }
