@@ -1,0 +1,44 @@
+name: Setup Windows OCR dependencies
+description: Restore ABI-checked vcpkg packages for the hosted Windows toolchain.
+inputs:
+  cache-namespace:
+    description: Optional isolated namespace for non-publishing cold/warm benchmarks.
+    required: false
+    default: ''
+outputs:
+  compatibility-key:
+    description: Native toolchain identity for downstream Rust caches.
+    value: ${{ steps.native.outputs.key }}
+runs:
+  using: composite
+  steps:
+    - name: Identify hosted vcpkg installation
+      id: native
+      shell: pwsh
+      env:
+        CACHE_NAMESPACE: ${{ inputs.cache-namespace }}
+      run: |
+        if (-not $env:VCPKG_INSTALLATION_ROOT) { throw 'GitHub runner vcpkg installation was not found' }
+        if (-not $env:ImageVersion) { throw 'GitHub runner image version was not found' }
+        if ($env:CACHE_NAMESPACE -and $env:CACHE_NAMESPACE -notmatch '^[a-zA-Z0-9-]{1,64}$') { throw 'Cache namespace must contain 1-64 letters, digits or hyphens' }
+        $commit = git -C $env:VCPKG_INSTALLATION_ROOT rev-parse HEAD
+        if ($LASTEXITCODE -ne 0) { throw 'Could not identify the hosted vcpkg revision' }
+        "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" >> $env:GITHUB_ENV
+        'VCPKG_DEFAULT_TRIPLET=x64-windows-static-md' >> $env:GITHUB_ENV
+        "VCPKG_BINARY_SOURCES=clear;files,$env:GITHUB_WORKSPACE\vcpkg-binary-cache,readwrite" >> $env:GITHUB_ENV
+        $key = "vcpkg-$env:RUNNER_OS-x64-windows-static-md-$commit-$env:ImageVersion"
+        if ($env:CACHE_NAMESPACE) { $key = "$env:CACHE_NAMESPACE-$key" }
+        "key=$key" >> $env:GITHUB_OUTPUT
+
+    # vcpkg ABI hashes validate each package even when GitHub restores the archive.
+    - name: Restore vcpkg binary packages
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ github.workspace }}\vcpkg-binary-cache
+        key: ${{ steps.native.outputs.key }}
+
+    - name: Install OCR build dependencies
+      shell: pwsh
+      run: |
+        & "$env:VCPKG_ROOT\vcpkg.exe" install tesseract:x64-windows-static-md
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

@@ -196,7 +196,6 @@ jobs:
       # (bundle.createUpdaterArtifacts is on, and signing them needs the key).
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-      VCPKG_DEFAULT_TRIPLET: x64-windows-static-md
     steps:
       # Pinned to the SHA preflight captured, not to whatever main points at
       # now: a push landing mid-release must not end up inside the build.
@@ -214,19 +213,16 @@ jobs:
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
+
+      - uses: ./.github/actions/setup-windows-ocr
+        id: windows-ocr
+
       - uses: ./.github/actions/setup-rust
 
-      - name: Expose hosted vcpkg installation to Cargo
-        shell: pwsh
-        run: |
-          if (-not $env:VCPKG_INSTALLATION_ROOT) { throw 'GitHub runner vcpkg installation was not found' }
-          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Install and stage OCR runtime
+      - name: Stage pinned OCR model
         shell: bash
         run: |
           set -euo pipefail
-          vcpkg install tesseract:x64-windows-static-md
           mkdir -p rust/tennoworth-desktop/resources/tessdata
           curl --fail --location --retry 3 \
             https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/eng.traineddata \
