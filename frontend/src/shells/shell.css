@@ -923,3 +923,10 @@
   main.workspace .faq details p[data-shell] { max-width: 75ch; }
   main.workspace .faq > .trust-lede[data-shell] { padding: var(--s4) var(--inset); margin: 0; }
   @media (max-width: 760px) { main.workspace[data-shell] { padding: var(--s4); } .clock[data-shell] { border-right: 0; border-bottom: 1px var(--rule) var(--border); } .clock:last-child[data-shell] { border-bottom: 0; } }
+
+.feedback-check[data-shell] { display: flex; align-items: flex-start; gap: var(--s2); font-family: var(--font-body); }
+.feedback-state[data-shell] { min-width: 0; }
+.feedback-state summary[data-shell] { cursor: pointer; padding-block: var(--s2); }
+.feedback-state pre[data-shell] { white-space: pre-wrap; overflow-wrap: anywhere; font: var(--text-caption)/var(--leading-body) var(--font-mono); }
+html[data-look="yorha"] dialog.feedback-dialog header[data-shell] { margin: 0; padding: var(--s3); }
+dialog.feedback-dialog .feedback-check[data-shell] { flex-direction: row; font-family: var(--font-body); font-size: var(--text-control); letter-spacing: normal; text-transform: none; }
