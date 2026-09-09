@@ -4,9 +4,10 @@
   import { loadCatalogs } from '../adapters/catalogs';
   import { TauriTransport } from '../adapters/desktop';
   import { useDesktopServices } from '../ui/desktop-context';
-  const { desktopNotifications, desktopWfmStatus, desktopWfmLogout, listenForTauriEvent, updateStatus, desktopProtectionState, desktopSaveProtectionPlan, normalizeInventoryNative, scoreInventoryNative, relicPlan: loadRelicPlan, setRecos: loadSetRecos, evaluateAdvisor } = useDesktopServices();
+  const { desktopNotifications, desktopWfmStatus, desktopWfmLogout, listenForTauriEvent, updateStatus, updateDiagnostics, desktopOpenExternalUrl, desktopProtectionState, desktopSaveProtectionPlan, normalizeInventoryNative, scoreInventoryNative, relicPlan: loadRelicPlan, setRecos: loadSetRecos, evaluateAdvisor } = useDesktopServices();
   import { ProtectionController } from '../features/selling/protection.svelte';
   import ProtectedPlan from '../features/selling/ProtectedPlan.svelte';
+  import { feedbackSnapshot, feedbackLink } from '../features/settings/feedback';
   import { humanError } from '../contracts/errors';
   
   import { onMount, untrack } from 'svelte';
@@ -633,28 +634,79 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // 'list' means on unlock (open the review modal).
   let wfmAuthDialogsRef = $state<{ open(code: string, next?: string | null): Promise<void> }>();
   let feedbackDialog: HTMLDialogElement;
-  let feedbackVersion = $state<string | null>(null);
+  let feedbackState = $state<ReturnType<typeof feedbackSnapshot> | null>(null);
+  let includeFeedbackState = $state(true);
+  let feedbackLoading = $state(false);
+  let feedbackDownloadError = $state(false);
+  let feedbackGeneration = 0;
+  let feedbackFallbackKind = $state<'bug' | 'improvement' | null>(null);
   const improvementUrl = 'https://github.com/tennoworth/tennoworth/issues/new?template=improvement.yml';
-  let bugReportUrl = $derived.by(() => {
-    const params = new URLSearchParams({
-      template: 'bug-report.yml',
-      version: feedbackVersion ? `${feedbackVersion} (build ${APP_COMMIT})` : `Build ${APP_COMMIT}`,
-    });
-    if (desktopPlatform === 'windows') params.set('operating-system', 'Windows');
-    if (desktopPlatform === 'linux') params.set('operating-system', 'Linux');
-    return `https://github.com/tennoworth/tennoworth/issues/new?${params}`;
-  });
+  let bugReport = $derived(feedbackState ? feedbackLink(feedbackState, includeFeedbackState) : null);
 
-  async function openFeedback() {
-    feedbackDialog.showModal();
+  let feedbackFallbackUrl = $derived(feedbackFallbackKind === 'bug' ? bugReport?.url : feedbackFallbackKind === 'improvement' ? improvementUrl : null);
+
+  async function captureFeedback() {
+    const generation = ++feedbackGeneration;
+    feedbackLoading = true;
+    feedbackDownloadError = false;
+    const state = {
+      capturedAt: new Date().toISOString(), build: APP_COMMIT, platform: desktopPlatform,
+      view: inventory.phase === 'done' ? effectiveView : 'landing', phase: inventory.phase,
+      scanning: inventory.pullingInventory, scanError: inventory.error ?? inventory.pullError,
+      marketLoaded: !!inventory.market, marketError: inventory.marketLoadError,
+      theme: document.documentElement.dataset.mode ?? 'unknown', width: window.innerWidth, height: window.innerHeight,
+    };
+    const operation = updateDiagnostics();
+    feedbackState = feedbackSnapshot(state, null, operation);
+    let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      const status = await updateStatus();
-      feedbackVersion = status?.current_version?.trim() || null;
+      const status = await Promise.race([
+        updateStatus(),
+        new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 1500); }),
+      ]);
+      if (generation === feedbackGeneration) feedbackState = feedbackSnapshot(state, status, operation);
     } catch {
-      // Feedback must remain available when desktop metadata cannot be read.
-      feedbackVersion = null;
+      // Feedback still works if the IPC bridge is unavailable.
+    } finally {
+      clearTimeout(timer);
+      if (generation === feedbackGeneration) feedbackLoading = false;
     }
   }
+
+  function openFeedback() {
+    feedbackFallbackKind = null;
+    feedbackDialog.showModal();
+    void captureFeedback();
+  }
+
+  async function openFeedbackLink(event: MouseEvent, url: string | undefined, loading = false, kind: 'bug' | 'improvement' = 'bug') {
+    event.preventDefault();
+    if (loading || !url) return;
+    feedbackFallbackKind = null;
+    try {
+      if (!(await desktopOpenExternalUrl(url))) feedbackFallbackKind = kind;
+    } catch {
+      feedbackFallbackKind = kind;
+    }
+  }
+
+  function downloadFeedback() {
+    if (!feedbackState || !includeFeedbackState) return;
+    feedbackDownloadError = false;
+    try {
+      const url = URL.createObjectURL(new Blob([JSON.stringify(feedbackState, null, 2)], { type: 'application/json' }));
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'tennoworth-diagnostics.json';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      feedbackDownloadError = true;
+    }
+  }
+
 </script>
 
 <dialog data-shell bind:this={feedbackDialog} class="cryptobox feedback-dialog" aria-labelledby="feedback-title" aria-describedby="feedback-description">
@@ -665,16 +717,35 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     </header>
     <p data-shell class="feedback-note">What would you like to share?</p>
     <div data-shell class="feedback-options">
-      <a data-shell href={bugReportUrl} target="_blank" rel="noopener noreferrer">
+      <a data-shell href={bugReport?.url} aria-disabled={feedbackLoading} onclick={(event) => openFeedbackLink(event, bugReport?.url, feedbackLoading)} target="_blank" rel="noopener noreferrer">
         <strong data-shell>Report a bug <span data-shell aria-hidden="true">↗</span></strong>
         <span data-shell>Something broke or didn’t work as expected.</span>
       </a>
-      <a data-shell href={improvementUrl} target="_blank" rel="noopener noreferrer">
+      <a data-shell href={improvementUrl} onclick={(event) => openFeedbackLink(event, improvementUrl, false, 'improvement')} target="_blank" rel="noopener noreferrer">
         <strong data-shell>Suggest an improvement <span data-shell aria-hidden="true">↗</span></strong>
         <span data-shell>Tell us what would make your next trade easier.</span>
       </a>
     </div>
+    <label data-shell class="feedback-check"><input type="checkbox" bind:checked={includeFeedbackState} /> Include app-state snapshot with bug report</label>
+    <p data-shell class="feedback-note">Version, operating system, current screen, scan and update status, error categories, theme, and window size. No account identifiers, credentials, inventory contents, file paths, or game memory.</p>
+    {#if includeFeedbackState && feedbackState}
+      <details data-shell class="feedback-state">
+        <summary data-shell>Review app-state snapshot</summary>
+        <pre data-shell>{JSON.stringify(feedbackState, null, 2)}</pre>
+      </details>
+      <div data-shell class="ui-toolbar">
+        <button data-shell type="button" class="btn" onclick={() => captureFeedback()} disabled={feedbackLoading}>Refresh snapshot</button>
+        <button data-shell type="button" class="btn" onclick={downloadFeedback} disabled={feedbackLoading}>Download diagnostics</button>
+      </div>
+    {/if}
+    {#if feedbackLoading}<p data-shell class="feedback-note" role="status">Reading app version…</p>{/if}
+    {#if bugReport?.needsAttachment}<p data-shell class="feedback-note" role="status">This snapshot is too large to prefill. Download diagnostics, then attach the file to your GitHub report.</p>{/if}
+    {#if feedbackDownloadError}<p data-shell role="alert">The download could not start. Copy the reviewed snapshot into the diagnostics field on GitHub.</p>{/if}
     <p data-shell class="feedback-note">Opens GitHub · Account required · Reports are public.</p>
+    {#if feedbackFallbackUrl}
+      <p data-shell role="alert">Couldn’t open your browser. Copy this link into your browser to continue.</p>
+      <label data-shell>GitHub issue link<textarea data-shell class="ui-input" readonly value={feedbackFallbackUrl}></textarea></label>
+    {/if}
     <footer data-shell><button data-shell type="submit" class="btn">Close</button></footer>
   </form>
 </dialog>
@@ -695,6 +766,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     </p>
   </header>
 
+  <div data-shell class="ui-toolbar"><button data-shell type="button" class="btn" onclick={openFeedback}>Send feedback</button></div>
   {@render generalBanners()}
 
   {#if inventory.phase === 'idle' || inventory.phase === 'loading'}
@@ -735,6 +807,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         <button data-shell class="rp-primary" data-testid="desktop-scan" onclick={() => inventory.pullInventory()} disabled={inventory.pullingInventory}>
           {inventory.pullingInventory ? 'Scanning game…' : 'Scan inventory'}
         </button>
+        <button data-shell type="button" class="btn" onclick={openFeedback}>Report a bug</button>
       </div>
     </div>
   {/if}
@@ -1410,8 +1483,8 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       <div data-shell class="gb-body gb-pre">{inventory.pullError}</div>
       <div data-shell class="gb-actions">
         
-          <button data-shell class="gb-report" onclick={() => inventory.reportScanBroke()} disabled={inventory.reportingScan}>
-            {inventory.reportingScan ? 'Opening…' : 'Report this'}
+          <button data-shell class="gb-report" onclick={openFeedback}>
+            Report a bug
           </button>
         
         <button data-shell class="gb-dismiss" aria-label="Dismiss" onclick={() => (inventory.pullError = null)}>×</button>

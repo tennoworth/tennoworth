@@ -20,7 +20,7 @@ export async function installPreview() {
   const empties: Record<string, unknown> = {
     wfm_auth_status: { logged_in: false, unlocked: false },
     tray_state: { labels: [], last_notification: null },
-    update_status: noUpdate,
+    update_status: scenario === 'feedback-update-error' ? { ...noUpdate, available: true, support: 'supported', version: 'next-preview' } : noUpdate,
     check_update: noUpdate,
     refresh_history: { updated: false, body: null },
     refresh_market: { updated: false, status: 'offline' },

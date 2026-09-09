@@ -23,6 +23,8 @@ export interface DesktopServices {
   buildPlan(setSlug: string, setName: string, parts: SetPart[], market: Market | null, owned: Map<string, OwnedRecord> | null, recipes: Record<string, RecipeEntry> | null | undefined): Promise<{ plan: BuildPlan; cheapest: BuildPath | null }>;
   desktopProtectionState(): Promise<import('./protection').ProtectionState>;
   desktopSaveProtectionPlan(plan: import('./protection').ProtectionPlan): Promise<void>;
+  desktopOpenExternalUrl(url: string): Promise<boolean>;
+  updateDiagnostics(): { operation: string; status: string; error: string | null } | null;
   updateStatus(): Promise<UpdateStatus>;
   checkUpdate(): Promise<UpdateStatus>;
   installUpdate(): Promise<void>;
