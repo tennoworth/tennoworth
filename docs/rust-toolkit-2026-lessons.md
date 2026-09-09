@@ -60,8 +60,8 @@ exclude workspace crates. The pinned rust-cache action ignores `key` when
 Windows release and smoke share a release-profile
 group keyed by the native compatibility identity. OCR installers have their
 own groups. Linux Ubuntu 22.04 release, smoke debug and OCR installer groups
-are separate, with runner image identity included. Tool-install, preflight
-and scraper jobs keep their existing job-specific caches.
+are separate, with runner image identity included. Tool-install, preflight,
+scraper and audit jobs keep their existing job-specific caches.
 
 The weekly smoke schedule runs on the default branch (`develop`), warming a
 cache that releases on `main` can restore. Pull-request caches are scoped to
@@ -84,6 +84,31 @@ restore/save durations, vcpkg restored-package counts, build time and total
 job time. Check cache retention during ordinary CI activity as well as
 consecutive warm runs. A GitHub cache hit alone does not establish package
 reuse or current-source compilation.
+
+### Audit cache experiment (September 9)
+
+Three warm runs with identical application source compared shared test/Clippy
+caches against the prior job-specific caches. Combined job seconds were:
+
+| Sample | Separate caches | Shared cache |
+|---|---:|---:|
+| 1 | 248 | 317 |
+| 2 | 251 | 318 |
+| 3 | 214 | 189 |
+| Mean | 238 | 275 |
+
+Sharing regressed mean combined runner time by 15.6%, exceeding the 10%
+rollback threshold. Audit jobs therefore retain their separate keys. In the
+first two shared samples, Clippy restored the test job's roughly 1 GB archive
+and still compiled its own outputs. Hosted runner image versions were rolling
+between `20260831.293.1` and `20260907.300.1`; the experiment kept those keys
+separate. The third sample was faster, so the mean does not imply every run
+regresses.
+
+Controls: [audit run 34290649818, attempts 2–4](https://github.com/tennoworth/tennoworth/actions/runs/34290649818).
+Shared samples: [1](https://github.com/tennoworth/tennoworth/actions/runs/34294765431),
+[2](https://github.com/tennoworth/tennoworth/actions/runs/34295140317),
+[3](https://github.com/tennoworth/tennoworth/actions/runs/34295564135).
 
 ## Measured and rejected
 

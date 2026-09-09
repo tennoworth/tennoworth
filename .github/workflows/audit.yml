@@ -204,13 +204,7 @@ jobs:
         working-directory: rust
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Identify runner image
-        id: runner-image
-        shell: bash
-        run: echo "version=${ImageVersion:?Runner image version is required}" >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-rust
-        with:
-          shared-key: linux-audit-debug-${{ steps.runner-image.outputs.version }}
       # Cargo.lock is part of what ships, not a local cache: anyone building
       # the tag from source runs `cargo build --frozen`, which aborts rather
       # than rewrite the lock. Every build in this repo has network access and
@@ -291,13 +285,7 @@ jobs:
         working-directory: rust
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Identify runner image
-        id: runner-image
-        shell: bash
-        run: echo "version=${ImageVersion:?Runner image version is required}" >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-rust
-        with:
-          shared-key: linux-audit-debug-${{ steps.runner-image.outputs.version }}
       - name: Install Tauri Linux deps
         run: >
           sudo apt-get update && sudo apt-get install -y --no-install-recommends
