@@ -8,6 +8,14 @@ inputs:
     description: Passed through to Swatinem/rust-cache's `workspaces` input.
     required: false
     default: rust
+  shared-key:
+    description: Compatibility group shared across jobs; empty preserves the job-based key.
+    required: false
+    default: ''
+  key:
+    description: Additional job key, used only when shared-key is empty.
+    required: false
+    default: ''
 runs:
   using: composite
   steps:
@@ -22,3 +30,6 @@ runs:
     - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       with:
         workspaces: ${{ inputs.workspaces }}
+        shared-key: ${{ inputs.shared-key }}
+        key: ${{ inputs.key }}
+        cache-workspace-crates: false

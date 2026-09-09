@@ -196,7 +196,6 @@ jobs:
       # (bundle.createUpdaterArtifacts is on, and signing them needs the key).
       TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-      VCPKG_DEFAULT_TRIPLET: x64-windows-static-md
     steps:
       # Pinned to the SHA preflight captured, not to whatever main points at
       # now: a push landing mid-release must not end up inside the build.
@@ -214,19 +213,18 @@ jobs:
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
+
+      - uses: ./.github/actions/setup-windows-ocr
+        id: windows-ocr
+
       - uses: ./.github/actions/setup-rust
+        with:
+          shared-key: windows-desktop-release-${{ steps.windows-ocr.outputs.compatibility-key }}
 
-      - name: Expose hosted vcpkg installation to Cargo
-        shell: pwsh
-        run: |
-          if (-not $env:VCPKG_INSTALLATION_ROOT) { throw 'GitHub runner vcpkg installation was not found' }
-          "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
-
-      - name: Install and stage OCR runtime
+      - name: Stage pinned OCR model
         shell: bash
         run: |
           set -euo pipefail
-          vcpkg install tesseract:x64-windows-static-md
           mkdir -p rust/tennoworth-desktop/resources/tessdata
           curl --fail --location --retry 3 \
             https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/eng.traineddata \
@@ -319,7 +317,13 @@ jobs:
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
+      - name: Identify runner image
+        id: runner-image
+        shell: bash
+        run: echo "version=${ImageVersion:?Runner image version is required}" >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-rust
+        with:
+          shared-key: linux-ubuntu-22.04-release-${{ steps.runner-image.outputs.version }}
 
       # Identical list to audit.yml's - without these the *-sys crates fail at
       # pkg-config before anything builds.
@@ -338,14 +342,10 @@ jobs:
             --output rust/tennoworth-desktop/resources/tessdata/eng.traineddata
           echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  rust/tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
 
-      # tauri-build embeds the SPA at compile time from frontendDist, and plain
-      # `cargo build` does not run tauri.conf.json's beforeBuildCommand the way
-      # `cargo tauri build` does - so the frontend is built explicitly here.
-      - name: Build frontend
+      # Tauri's beforeBuildCommand produces dist-desktop once dependencies exist.
+      - name: Install frontend dependencies
         working-directory: frontend
-        run: |
-          bun install --frozen-lockfile
-          bun run build:desktop
+        run: bun install --frozen-lockfile
 
       # `tauri build` rather than `cargo build`: it produces the same binary at
       # target/release/tennoworth-desktop (so the glibc check below is
