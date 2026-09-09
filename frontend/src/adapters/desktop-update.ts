@@ -1,3 +1,4 @@
+import { diagnosticError } from '../contracts/errors';
 import type { UpdateStatus } from '../contracts/update';
 // C5 desktop auto-update surface. Desktop-only by construction - every entry
 // point invokes a Tauri command, so nothing here is reachable in the hosted
@@ -13,6 +14,20 @@ import type { UpdateStatus } from '../contracts/update';
 
 import { resolveInvoke } from './runtime';
 
+let lastOperation: { operation: string; status: string; error: string | null } | null = null;
+export function updateDiagnostics() { return lastOperation ? { ...lastOperation } : null; }
+async function trackedUpdate<T>(operation: string, command: string): Promise<T> {
+  lastOperation = { operation, status: 'running', error: null };
+  try {
+    const result = await resolveInvoke()<T>(command);
+    lastOperation = { operation, status: 'completed', error: null };
+    return result;
+  } catch (error) {
+    lastOperation = { operation, status: 'failed', error: diagnosticError(error) };
+    throw error;
+  }
+}
+
 /** The last check's outcome - no network. Pull side of the mount handshake. */
 export function updateStatus(): Promise<UpdateStatus> {
   return resolveInvoke()<UpdateStatus>('update_status');
@@ -20,17 +35,17 @@ export function updateStatus(): Promise<UpdateStatus> {
 
 /** Fetch the signed updater manifest now. Nothing is downloaded or installed. */
 export function checkUpdate(): Promise<UpdateStatus> {
-  return resolveInvoke()<UpdateStatus>('check_update');
+  return trackedUpdate<UpdateStatus>('check', 'check_update');
 }
 
 /** Download + install the pending update. Explicit user confirmation only. */
 export async function installUpdate(): Promise<void> {
-  await resolveInvoke()('install_update');
+  await trackedUpdate('install', 'install_update');
 }
 
 /** Relaunch to switch to the installed version ("apply on restart"). */
 export async function restartApp(): Promise<void> {
-  await resolveInvoke()('restart_app');
+  await trackedUpdate('restart', 'restart_app');
 }
 
 /**

@@ -92,3 +92,14 @@ describe('onUpdateAvailable', () => {
     await Promise.resolve(); // let the rejection settle - must not surface
   });
 });
+
+it('keeps a safe install failure available after reading update status', async () => {
+  const { updateDiagnostics } = await import('./desktop-update');
+  const invoke = vi.fn();
+  installTauri(invoke);
+  invoke.mockRejectedValueOnce(new Error('404 Not Found https://private/token'));
+  await expect(installUpdate()).rejects.toThrow('404');
+  invoke.mockResolvedValueOnce(NO_UPDATE);
+  await updateStatus();
+  expect(updateDiagnostics()).toEqual({ operation: 'install', status: 'failed', error: 'not_found' });
+});
