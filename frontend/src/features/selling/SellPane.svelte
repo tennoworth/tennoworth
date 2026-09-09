@@ -32,6 +32,7 @@
     pendingBanner: Snippet;
     calculationPending?: boolean;
     calculationError?: string | null;
+    allocationLoginHint?: string;
     onretryCalculation?: () => void;
   }
 
@@ -55,7 +56,7 @@
     applyPreset, setReserveCopies, toggleFiltersOpen, 
     dismissSellOnboarding, dismissKeepCopiesNudge,
     openListingFlow,
-    pendingBanner, calculationPending = false, calculationError = null, onretryCalculation,
+    pendingBanner, calculationPending = false, calculationError = null, allocationLoginHint, onretryCalculation,
   }: Props = $props();
 
   // Was inline in the template, so it re-filtered the whole results array on
@@ -209,7 +210,7 @@
       <span class="v">{resolved.owned.size.toLocaleString()}</span>
       {#if fmtDelta(ownedDelta)}<span class="d" class:up={(ownedDelta ?? 0) > 0} class:down={(ownedDelta ?? 0) < 0}>{fmtDelta(ownedDelta)}</span>{/if}
     </div>
-    <div class="cell">
+    <div class="cell" title={calculationReady && sellableCount === 0 ? allocationLoginHint : undefined}>
       <span class="k">Sellable</span>
       <span class="v">{calculationReady ? sellableCount.toLocaleString() : '—'}</span>
       {#if calculationReady && fmtDelta(sellableDelta)}<span class="d" class:up={(sellableDelta ?? 0) > 0} class:down={(sellableDelta ?? 0) < 0}>{fmtDelta(sellableDelta)}</span>{/if}

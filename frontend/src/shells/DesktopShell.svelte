@@ -73,6 +73,9 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   const filters = untrack(() => new FilterController(store));
   const inventory = untrack(() => new InventoryController(store, transport, { loadMarket, loadCatalogs, normalizeInventory: normalizeInventoryNative }));
   const protection = new ProtectionController({ desktopProtectionState, desktopSaveProtectionPlan });
+  let allocationLoginHint = $derived(protection.state?.issues.some(issue => issue.includes('Unlock WFM'))
+    ? 'Sellable quantities cannot be checked while Warframe Market is disconnected. Log in or unlock Warframe Market in this app: open Protected selling plan → Connect WFM.'
+    : undefined);
   let availability = $derived(new Map([...inventory.resolved.owned].map(([key, row]) => [key,
     row.subtype || row.slug.endsWith('_set') ? 0 : Math.min(sellableQty(row.count, filters.reserveCopies, row.leveled ?? 0), protection.state?.items[row.slug]?.available ?? 0),
   ])));
@@ -771,7 +774,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     <nav data-shell>
       <div data-shell class="nav-group">
         <div data-shell class="nav-label">Trade</div>
-        <button data-shell type="button" class="nav-item" class:active={effectiveView === 'sell'} onclick={() => filters.setView('sell')}>
+        <button data-shell type="button" class="nav-item" class:active={effectiveView === 'sell'} title={defaultFacts.phase === 'done' && sellableCount === 0 ? allocationLoginHint : undefined} onclick={() => filters.setView('sell')}>
           <span data-shell>Sell</span>
           <!-- Pinned to the unfiltered sellable count: with a narrow preset
                active (Vaulted on a no-vaulted inventory), a filter-driven
@@ -875,12 +878,13 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         } catch (error) { protection.error = humanError(error); }
       }} />
       {#if protection.error || protection.state?.issues.length}
-        <p class="ui-notice" data-tone="warn">Some quantities need review. Open Protected selling plan for details; unavailable copies are excluded.</p>
+        <p class="ui-notice" data-tone="warn">{allocationLoginHint ?? 'Some quantities need review. Open Protected selling plan for details; unavailable copies are excluded.'}</p>
       {/if}
     {/if}
 
     {#if effectiveView === 'sell'}
       <SellPane
+        {allocationLoginHint}
         bind:minPrice={filters.minPrice} bind:minOwned={filters.minOwned} bind:typeFilter={filters.typeFilter} bind:hideAtLvl={filters.hideAtLvl} bind:activeTags={filters.activeTags}
         bind:tableView
         resolved={inventory.resolved} {results} deltas={inventory.deltas} {totalPotential}
