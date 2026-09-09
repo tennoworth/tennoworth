@@ -37,6 +37,8 @@ jobs:
           cache-namespace: ${{ inputs.cache-namespace }}
 
       - uses: ./.github/actions/setup-rust
+        with:
+          shared-key: windows-ocr-test-release-${{ steps.windows-ocr.outputs.compatibility-key }}
 
       - name: Stage pinned OCR model
         shell: bash
@@ -103,7 +105,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - name: Identify runner image
+        id: runner-image
+        shell: bash
+        run: echo "version=${ImageVersion:?Runner image version is required}" >> "$GITHUB_OUTPUT"
       - uses: ./.github/actions/setup-rust
+        with:
+          shared-key: linux-ubuntu-22.04-ocr-test-release-${{ steps.runner-image.outputs.version }}
 
       - name: Install Linux bundle and display dependencies
         run: >
