@@ -6,6 +6,7 @@
 
 
   import type { Snippet } from 'svelte';
+  import type { ProtectionState } from '../../contracts/protection';
   import type { OwnedRecord } from '../../contracts/data';
   import type { ListingCandidate } from '../../contracts/listing';
   import type { EmptyReason } from '../../domain/filter-engine';
@@ -14,6 +15,7 @@
     minPrice: number; minOwned: number; typeFilter: string; hideAtLvl: number;
     activeTags: Set<string>; tableView: { rows: SellRow[]; active: boolean };
     resolved: { owned: Map<string, OwnedRecord>; unresolved: Record<string, number> };
+    allocation?: ProtectionState | null;
     results: SellRow[]; deltas: Map<string, number>; totalPotential: number;
     prevSummary?: { owned: number; sellable: number; potential: number } | null;
     sinceScan?: { added: number; changed: number; removed: number } | null;
@@ -32,6 +34,7 @@
     pendingBanner: Snippet;
     calculationPending?: boolean;
     calculationError?: string | null;
+    calculationErrorShown?: boolean;
     estimatedGuidance?: boolean;
     canList?: boolean;
     unavailableCount?: number;
@@ -48,7 +51,7 @@
     activeTags = $bindable(),
     tableView = $bindable(),
 
-    resolved, results, deltas, totalPotential,
+    resolved, results, deltas, totalPotential, allocation = null,
     prevSummary = null, sinceScan = null, ordersSummary = null,
     marketFreshness, marketStaleness, marketLoadError,
     listableRows, availableTags, availableTypes,
@@ -60,7 +63,7 @@
     applyPreset, setReserveCopies, toggleFiltersOpen, 
     dismissSellOnboarding, dismissKeepCopiesNudge,
     openListingFlow,
-    pendingBanner, estimatedGuidance = false, canList = true, unavailableCount = 0, listingActionLabel = 'Check WFM listings', oncheckListings, calculationPending = false, calculationError = null, onretryCalculation,
+    pendingBanner, estimatedGuidance = false, canList = true, unavailableCount = 0, listingActionLabel = 'Check WFM listings', oncheckListings, calculationPending = false, calculationError = null, onretryCalculation, calculationErrorShown = false,
   }: Props = $props();
 
   // Was inline in the template, so it re-filtered the whole results array on
@@ -216,12 +219,12 @@
     </div>
     <div class="cell">
       <span class="k">{estimatedGuidance ? 'Opportunities' : 'Sellable'}</span>
-      <span class="v">{calculationReady ? sellableCount.toLocaleString() : '—'}</span>
+      <span class="v">{calculationReady ? sellableCount.toLocaleString() : 'Unavailable'}</span>
       {#if calculationReady && fmtDelta(sellableDelta)}<span class="d" class:up={(sellableDelta ?? 0) > 0} class:down={(sellableDelta ?? 0) < 0}>{fmtDelta(sellableDelta)}</span>{/if}
     </div>
     <div class="cell">
       <span class="k">{unavailableCount ? 'Known estimated value' : estimatedGuidance ? 'Estimated value' : 'Potential'}</span>
-      <span class="v">{calculationReady ? totalPotential.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}{#if calculationReady}<span class="unit">p</span>{/if}</span>
+      <span class="v">{calculationReady ? totalPotential.toLocaleString(undefined, { maximumFractionDigits: 0 }) : 'Unavailable'}{#if calculationReady}<span class="unit">p</span>{/if}</span>
       {#if calculationReady && fmtDelta(potentialDelta)}<span class="d" class:up={(potentialDelta ?? 0) > 0} class:down={(potentialDelta ?? 0) < 0}>{fmtDelta(potentialDelta, 'p')}</span>{/if}
     </div>
     {#if ordersSummary}
@@ -282,7 +285,7 @@
 
 {#if calculationPending}
   <div class="ui-notice" role="status">Calculating sale values… Your filters remain available.</div>
-{:else if calculationError}
+{:else if calculationError && !calculationErrorShown}
   <div class="ui-notice" data-tone="bad" role="alert">
     Sale calculations unavailable: {calculationError}
     {#if onretryCalculation}<button class="btn" onclick={onretryCalculation}>Retry calculations</button>{/if}
@@ -297,7 +300,7 @@
   </div>
 {/if}
 
-{#if results.length > 0 && allPicks.length === 0}
+{#if calculationReady && results.length > 0 && allPicks.length === 0}
   <div class="card empty">
     <div>
       <strong>No picks clear the bar right now.</strong>
@@ -575,10 +578,10 @@
      picks panel is rendered by the table so both share one colgroup. When the
      cascade leaves nothing, the empty-state card takes the table body's place
      and the presets stay reachable in row A. -->
-<ResultsTable results={tableRows} {deltas} {visibleColumns} {presetSort}
+<ResultsTable {allocation} quantityStatus={isDesktop} {estimatedGuidance} results={tableRows} {deltas} {visibleColumns} {presetSort}
   onfiltered={(rows, active) => (tableView = { rows, active: active || changesOnly })}
   scope={scopeRow} narrow={narrowChips} cta={listCta}
-  picks={results.length > 0 && allPicks.length > 0 ? picks : null}
+  picks={calculationReady && results.length > 0 && allPicks.length > 0 ? picks : null}
   {picksHead} pickReason={pickReasonCell} {picksEmpty}
   empty={emptyState} between={scoreExplainer} />
 

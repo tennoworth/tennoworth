@@ -77,7 +77,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   const inventory = untrack(() => new InventoryController(store, transport, { loadMarket, loadCatalogs, normalizeInventory: normalizeInventoryNative }));
   const protection = new ProtectionController({ desktopProtectionState, desktopSaveProtectionPlan });
   const listing = new ListingController({ getPendingPlan: () => transport.getPendingPlan(), resumePendingPlan: () => transport.resumePendingPlan(), discardPendingPlan: () => transport.discardPendingPlan(), status: desktopWfmStatus, logout: desktopWfmLogout }, (code, next) => wfmAuthDialogsRef?.open(code, next));
-  let supportedOwned = $derived(new Map([...inventory.resolved.owned].filter(([, row]) => !row.subtype && !row.slug.endsWith('_set') && !row.slug.endsWith('_relic'))));
+  let supportedOwned = $derived(new Map([...inventory.resolved.owned].filter(([, row]) => !row.subtype && !row.slug.endsWith('_set') && !row.slug.endsWith('_relic') && inventory.market?.items[row.slug])));
   let allocationMatches = $derived(protection.matchesInventory(inventory.resolved.owned, inventory.nativeSnapshotId));
   let unknownSlugs = $derived(new Set([...supportedOwned.values()].filter(row => !allocationMatches || protection.state?.items[row.slug]?.estimated == null).map(row => row.slug)));
   let guidanceUnavailable = $derived(supportedOwned.size > 0 && unknownSlugs.size === supportedOwned.size);
@@ -960,13 +960,11 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     {/if}
 
     {#if ['sell', 'session', 'sets', 'baro'].includes(effectiveView)}
-      <ProtectedPlan controller={protection} owned={inventory.resolved.owned} market={inventory.market} onconnect={connectForListings} />
+      <ProtectedPlan controller={protection} owned={inventory.resolved.owned} market={inventory.market} onconnect={connectForListings}
+        reserveCopies={filters.reserveCopies} onsetKeep={async (value) => { await store.setSetting('reserve-copies', String(value)); filters.reserveCopies = value; }}
+        unavailableCount={unknownSlugs.size} unavailable={guidanceUnavailable} scanning={inventory.pullingInventory} onscan={() => inventory.pullInventory()} />
       {#if estimatedGuidance && !guidanceUnavailable}
-        <div class="ui-notice" data-tone="warn" role="status" aria-label="Estimated guidance">Estimates use your saved inventory and protection rules. Current WFM listings are not accounted for. Connect WFM or recheck listings before posting.</div>
-      {/if}
-      {#if unknownSlugs.size}<p class="ui-notice" data-tone="warn">Quantities unavailable for {unknownSlugs.size} {unknownSlugs.size === 1 ? 'item' : 'items'}. These items are excluded from opportunities and totals. <button class="btn" onclick={() => protection.refresh()}>Recheck protection</button></p>{/if}
-      {#if guidanceUnavailable || (!estimatedGuidance && (protection.error || protection.state?.issues.length))}
-        <p class="ui-notice" data-tone="warn">{guidanceUnavailable ? 'Protection rules could not be checked. Open Protected selling plan to retry.' : 'Some quantities need review. Open Protected selling plan for details; unavailable copies are excluded.'}</p>
+        <p class="ui-notice" role="status" aria-label="Estimated guidance">Estimates apply your keep rules. Existing WFM listings are not subtracted. Check WFM listings before posting.</p>
       {/if}
     {/if}
 
@@ -974,7 +972,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       <SellPane
         bind:minPrice={filters.minPrice} bind:minOwned={filters.minOwned} bind:typeFilter={filters.typeFilter} bind:hideAtLvl={filters.hideAtLvl} bind:activeTags={filters.activeTags}
         bind:tableView
-        resolved={inventory.resolved} {results} deltas={inventory.deltas} {totalPotential}
+        resolved={inventory.resolved} allocation={allocationMatches ? protection.state : null} {results} deltas={inventory.deltas} {totalPotential}
         prevSummary={estimatedGuidance ? null : prevSummary} {sinceScan} ordersSummary={estimatedGuidance ? null : listing.ordersSummary}
         {marketFreshness} {marketStaleness} marketLoadError={inventory.marketLoadError}
         {listableRows} {availableTags} {availableTypes}
@@ -987,7 +985,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         openListingFlow={(rows) => { if (calculationsReady && !estimatedGuidance) listing.openListingFlow((Array.isArray(rows) ? rows : rows ? [rows] : listableRows).map(row => ({ ...row, inventory_snapshot_id: inventory.nativeSnapshotId ?? undefined }))); }}
         {estimatedGuidance} oncheckListings={checkListingRequirements} canList={listingQuantitiesKnown} {listingActionLabel} unavailableCount={unknownSlugs.size}
         {pendingBanner}
-        {calculationPending} {calculationError} onretryCalculation={() => calculationEpoch += 1}
+        {calculationPending} {calculationError} calculationErrorShown={guidanceUnavailable} onretryCalculation={() => calculationEpoch += 1}
       />
     {:else if effectiveView === 'session'}
       {#if defaultFacts.phase === 'loading'}
@@ -1011,7 +1009,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
           {/if}
         </p>
       </section>
-      {#if guidanceUnavailable}<div class="ui-notice" data-tone="warn">Set quantities unavailable. Recheck inventory protection.</div>
+      {#if guidanceUnavailable}<p class="muted">Set recommendations will appear once quantities are available.</p>
       {:else if setResult.phase === 'loading'}
         <div class="ui-notice" role="status">Calculating set opportunities…</div>
       {:else if setResult.error}
