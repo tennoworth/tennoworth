@@ -222,6 +222,8 @@ test('a changed native scan blocks an open review and retains its edits after re
   await expect(price).toHaveValue('99');
   await dialog.getByRole('button', { name: 'Scan game', exact: true }).click();
   await expect(dialog.getByText(/Inventory changed\. Close review/)).toBeVisible();
+  await expect(dialog.getByRole('button', { name: 'Check WFM listings', exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: 'Close review', exact: true })).toBeVisible();
   await expect(dialog.getByRole('button', { name: /^Send \d+ listings$/ })).toBeDisabled();
   await expect(price).toHaveValue('99');
 });

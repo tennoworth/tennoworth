@@ -469,7 +469,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     <div class="modal" class:session={hasSession}>
       <DialogHeader titleId="rm-title" title="List on warframe.market" onclose={close} />
 
-      {#if reviewBlockReason && phase === 'review'}<div class="ui-notice" data-tone="warn" role="status">{reviewBlockReason} {#if onrecheck}<button class="btn" onclick={onrecheck}>{listingActionLabel}</button>{/if}</div>{/if}
+      {#if reviewBlockReason && phase === 'review'}<div class="ui-notice" data-tone="warn" role="status">{reviewBlockReason} {#if listingBlockReason && onrecheck}<button class="btn" onclick={onrecheck}>{listingActionLabel}</button>{:else if !listingBlockReason}<button class="btn" onclick={close}>Close review</button>{/if}</div>{/if}
       {#if phase === 'review'}
         <p class="lead">
           {#if hasSession}

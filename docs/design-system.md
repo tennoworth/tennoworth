@@ -170,7 +170,9 @@ never a zero-valued estimate. With partial coverage, label totals as known
 estimates and state how many items are excluded. Set picks and Baro must also
 show unavailable quantity states. Imported backups can show protected estimates,
 with a Scan game action before posting. A blocked review explains why and keeps
-price/quantity edits while the user rechecks requirements. Hide prior listing
+price/quantity edits while the user rechecks requirements. Failed allocation
+offers Recheck protection; a review tied to an older scan offers Close review
+so a new batch can be prepared. Hide prior listing
 totals when current listings are unknown. The living styleguide includes an
 Estimates state.
 

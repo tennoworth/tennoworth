@@ -89,7 +89,7 @@
   <section class="wrap tw" aria-labelledby="table-title">
     <div class="rail"><h3 id="table-title">03 / Dense data, complete names</h3><span class="exp">The table scrolls locally; the page does not</span></div>
     {#if dataState === 'estimates'}
-      <div class="specimens ui-stack"><h2>Estimated opportunities</h2><p class="numeric">Known estimated value: 30p</p><p class="ui-notice" data-tone="warn">Estimates honor inventory protection. Current WFM listings are not accounted for. Quantities unavailable for 1 item; known totals exclude it.</p><div class="ui-toolbar"><button class="btn" disabled>List on WFM</button><button class="btn primary" onclick={() => message = 'Check current listings before reviewing a batch. Imported backups require a game scan; review edits are kept.'}>Check WFM listings</button></div></div>
+      <div class="specimens ui-stack"><h2>Estimated opportunities</h2><p class="numeric">Known estimated value: 30p</p><p class="ui-notice" data-tone="warn">Estimates honor inventory protection. Current WFM listings are not accounted for. Quantities unavailable for 1 item; known totals exclude it.</p><div class="ui-toolbar"><button class="btn" disabled>List on WFM</button><button class="btn primary" onclick={() => message = 'Recheck protection before listing. Imported backups require a game scan; review edits are kept.'}>Recheck protection</button></div></div>
     {:else if dataState === 'loading'}
       <div class="specimens" role="status" aria-busy="true">Loading sample inventory…</div>
     {:else if dataState === 'error'}
