@@ -6,7 +6,6 @@ const KEY = 'wfminv:last-owned-v7';
 
 export function saveSnapshot(input: SaveSnapshotInput): void {
   try {
-    localStorage.removeItem('wfminv:last-owned-v6');
     localStorage.setItem(KEY, serializeSnapshot(input, Date.now()));
   } catch (e) {
     console.warn('Could not persist inventory snapshot:', e);
@@ -16,6 +15,7 @@ export function saveSnapshot(input: SaveSnapshotInput): void {
 
 export function loadSnapshot(): Snapshot | null {
   try {
+    localStorage.removeItem('wfminv:last-owned-v6');
     return deserializeSnapshot(localStorage.getItem(KEY));
   } catch (e) {
     console.warn('Could not load inventory snapshot:', e);

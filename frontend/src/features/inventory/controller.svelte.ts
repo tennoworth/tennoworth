@@ -51,9 +51,9 @@ export class InventoryController {
 
   clear(): Promise<void> {
     this.cancelPending();
-    this.nativeSnapshotId = null;
     this.inventoryName = null;
     this.lastUpdated = null;
+    this.nativeSnapshotId = null;
     this.resolved = { owned: new Map(), unresolved: {} };
     this.ownedRivens = [];
     this.deltas = new Map();
