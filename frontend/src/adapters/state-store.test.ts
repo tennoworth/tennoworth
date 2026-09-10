@@ -84,14 +84,14 @@ describe('LocalStorageStateStore - key/shape parity with the pre-store code', ()
     }
   });
 
-  it('snapshot round-trips through the historical wfminv:last-owned-v6 key', async () => {
+  it('snapshot round-trips through the historical wfminv:last-owned-v7 key', async () => {
     const s = new LocalStorageStateStore();
     const owned = new Map([
       ['vitality|', { count: 51, name: 'Vitality', type: 'Mods', slug: 'vitality', subtype: null, kept_lvl: null, leveled: 0 }],
     ]);
     await s.saveSnapshot({ invName: 'inventory.json', owned });
     // Written under the exact key storage.ts uses.
-    expect(localStorage.getItem('wfminv:last-owned-v6')).not.toBeNull();
+    expect(localStorage.getItem('wfminv:last-owned-v7')).not.toBeNull();
     const got = await s.loadSnapshot();
     expect(got.invName).toBe('inventory.json');
     expect(got.owned).toBeInstanceOf(Map);
@@ -150,8 +150,8 @@ describe('TauriStateStore - command mapping', () => {
   it('saveSnapshot serializes to the last-owned setting; loadSnapshot deserializes it back', async () => {
     let stored = null;
     const invoke = vi.fn(async (cmd, args) => {
-      if (cmd === 'set_setting' && args.key === 'last-owned') { stored = args.value; return; }
-      if (cmd === 'get_setting' && args.key === 'last-owned') return stored;
+      if (cmd === 'set_setting' && args.key === 'last-owned-v2') { stored = args.value; return; }
+      if (cmd === 'get_setting' && args.key === 'last-owned-v2') return stored;
       return null;
     });
     installTauri(invoke);
@@ -176,8 +176,8 @@ describe('TauriStateStore - command mapping', () => {
   it('clearSnapshot writes an empty last-owned value (which deserializes to null)', async () => {
     let stored = 'something';
     const invoke = vi.fn(async (cmd, args) => {
-      if (cmd === 'set_setting' && args.key === 'last-owned') { stored = args.value; return; }
-      if (cmd === 'get_setting' && args.key === 'last-owned') return stored;
+      if (cmd === 'set_setting' && args.key === 'last-owned-v2') { stored = args.value; return; }
+      if (cmd === 'get_setting' && args.key === 'last-owned-v2') return stored;
       return null;
     });
     installTauri(invoke);

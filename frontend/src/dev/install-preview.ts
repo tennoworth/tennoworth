@@ -2,8 +2,8 @@ import defaults from '../../../tests/fixtures/pacing.json';
 import { evaluateDomainPreview } from './domain-preview';
 import type { DomainRequest } from '../contracts/generated/domain';
 import type { UpdateStatus } from '../contracts/update';
-import { sampleAllocation } from './protection-preview';
-import type { ProtectionPlan } from '../contracts/protection';
+import { sampleAllocation, sampleGuidance } from './protection-preview';
+import type { ProtectionInventory, ProtectionPlan } from '../contracts/protection';
 import type { OwnedRecord } from '../contracts/data';
 export async function installPreview() {
   const scenario = new URLSearchParams(location.search).get('sample');
@@ -40,14 +40,14 @@ export async function installPreview() {
   let protectionPlan: ProtectionPlan = { reserves: {}, goal: null };
   const invoke = (cmd: string, args?: Record<string, unknown>) => {
     if (cmd === 'evaluate_domain') return Promise.resolve().then(() => evaluateDomainPreview(args?.request as DomainRequest));
-    if (preview && ['protection_state', 'save_protection_plan', 'get_setting', 'set_setting', 'delete_setting', 'fetch_orders', 'list_watches', 'list_trades', 'eelog_status', 'riven_comps', 'wfm_auth_status', 'live_top_prices', 'trade_session_state', 'submit_plan', 'list_notifications', 'mark_notifications_read', 'clear_notifications', 'get_notification_preferences', 'set_notification_preferences', 'test_notification'].includes(cmd)) return preview(cmd, args);
+    if (preview && ['protection_state', 'save_protection_plan', 'get_setting', 'set_setting', 'delete_setting', 'fetch_orders', 'list_watches', 'list_trades', 'eelog_status', 'riven_comps', 'wfm_auth_status', 'wfm_logout', 'live_top_prices', 'trade_session_state', 'submit_plan', 'list_notifications', 'mark_notifications_read', 'clear_notifications', 'get_notification_preferences', 'set_notification_preferences', 'test_notification'].includes(cmd)) return preview(cmd, args);
     if (cmd === 'save_protection_plan') { protectionPlan = JSON.parse(JSON.stringify(args?.plan)) as ProtectionPlan; return Promise.resolve(null); }
     if (cmd === 'protection_state') {
-      const snapshot = JSON.parse(localStorage.getItem('last-owned') ?? '{"owned":[]}') as { owned: Array<[string, OwnedRecord]> };
-      return Promise.resolve({ plan: protectionPlan, snapshot_id: snapshot.owned.length ? 1 : null,
-        items: Object.fromEntries(snapshot.owned.map(([, row]) => [row.slug, sampleAllocation(row.count, row.leveled ?? 0,
+      const snapshot = JSON.parse(localStorage.getItem('last-owned-v2') ?? '{"owned":[]}') as { owned: Array<[string, OwnedRecord]> };
+      return Promise.resolve(sampleGuidance({ plan: protectionPlan, snapshot_id: snapshot.owned.length ? 1 : null,
+        items: Object.fromEntries(snapshot.owned.filter(([, row]) => !row.subtype && !row.slug.endsWith('_set') && !row.slug.endsWith('_relic')).map(([, row]) => [row.slug, sampleAllocation(row.count, row.leveled ?? 0,
           Number(localStorage.getItem('reserve-copies') ?? 0), protectionPlan.reserves[row.slug] ?? 0, protectionPlan.goal ? null : 0)])),
-        issues: protectionPlan.goal ? ['Open the protected-plan sample to preview a pinned goal.'] : [] });
+        issues: protectionPlan.goal ? ['Open the protected-plan sample to preview a pinned goal.'] : [] }, args?.inventory as ProtectionInventory, Number(localStorage.getItem('reserve-copies') ?? 0), {}));
     }
     if (cmd === 'get_setting') return Promise.resolve(localStorage.getItem(String(args?.key)));
     if (cmd === 'set_setting') { localStorage.setItem(String(args?.key), String(args?.value)); return Promise.resolve(null); }

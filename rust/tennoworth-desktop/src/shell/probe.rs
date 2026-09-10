@@ -227,12 +227,17 @@ const PROBE_JS: &str = r#"(function(){
     .then(function(){ return invk('list_snapshots', { limit: 50 }).then(function(v){ R.snapshotsAfterDrop = v; }); })
     .then(function(){ return invkE('save_protection_plan', { plan: { reserves: { accelerated_blast: 2 }, goal: null } }).then(function(saved){
       if (!saved.ok) throw new Error('Protected plan did not save through native IPC');
-      return invk('protection_state').then(function(state){
+      return invk('protection_state', { inventory: { snapshot_id: null, items: { accelerated_blast: { count: 3, leveled: 0 } } } }).then(function(state){
         var row = state && state.items && state.items.accelerated_blast;
-        if (!row || row.owned !== 3 || row.protected !== 2 || row.available !== null || state.plan.reserves.accelerated_blast !== 2) {
+        if (!row || row.owned !== 3 || row.protected !== 2 || row.available !== null || row.estimated !== 1 || state.snapshot_id !== null || state.plan.reserves.accelerated_blast !== 2) {
           throw new Error('Native protection failed to preserve reserved copies or unknown order coverage');
         }
         R.protectionIpc = { persisted: true, protected: row.protected, available: row.available };
+        return invk('protection_state', { inventory: { snapshot_id: R.snapshotsAfterDrop[0].id, items: { accelerated_blast: { count: 1, leveled: 0 } } } });
+      }).then(function(imported){
+        var row = imported && imported.items && imported.items.accelerated_blast;
+        if (!row || row.owned !== 1 || row.estimated !== 0 || row.available !== null || imported.snapshot_id !== null) throw new Error('Imported guidance reused native quantities or scan authorization');
+        R.protectionIpc.importEstimate = row.estimated;
         return invkE('save_protection_plan', { plan: { reserves: { accelerated_blast: -1 }, goal: null } });
       }).then(function(invalid){
         if (invalid.ok) throw new Error('Native protection accepted a negative reserve');
@@ -342,9 +347,9 @@ const PROBE_JS: &str = r#"(function(){
       if (x) x.click();
       return delay(300);
     })
-    // Offline plan execution: both items fail wfm-core validation BEFORE any
-    // HTTP (price under the 5p floor; slug not in the catalog) - exercises the
-    // full plan pipeline incl. pending-file seed + clean clear, no network.
+    // Offline plan execution: no verified game scan is present, so the
+    // snapshot guard rejects this batch before HTTP. Exercise the native
+    // guard and pending-plan pipeline without a real market mutation.
     .then(function(){
       return invkE('submit_plan', { items: [
         { slug: 'ash_prime_set', platinum: 1, quantity: 1, order_type: 'sell', visible: false },

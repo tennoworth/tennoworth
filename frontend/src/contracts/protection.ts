@@ -9,3 +9,8 @@ export interface ProtectionState {
   items: Record<string, { owned: number; protected: number; estimated: number | null; listed: number | null; available: number | null }>;
   issues: string[];
 }
+
+export interface ProtectionInventory {
+  snapshot_id: number | null;
+  items: Record<string, { count: number; leveled: number }>;
+}

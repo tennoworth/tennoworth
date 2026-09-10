@@ -28,6 +28,7 @@ import type { OwnedRiven } from './rivens';
 import type { OwnedRecord } from '../contracts/data';
 
 export interface Snapshot {
+  nativeSnapshotId: number | null;
   ts: number;
   invName: string;
   owned: Map<string, OwnedRecord>;
@@ -35,6 +36,7 @@ export interface Snapshot {
 }
 
 export interface SaveSnapshotInput {
+  nativeSnapshotId?: number | null;
   invName: string;
   owned: Map<string, OwnedRecord>;
   /** Parsed rivens from the scanned inventory; absent on older callers
@@ -45,7 +47,8 @@ export interface SaveSnapshotInput {
 // The single source of truth for the on-the-wire snapshot shape: the
 // localStorage store (below), the desktop SQLite store (state-store.ts), and
 // the encrypted export (ExportImportDialogs.svelte) all build their payload
-// here, so all three carry byte-identical records.
+// here, so all three carry identical inventory records. The local cache alone
+// carries native scan identity; an exported backup cannot authorize listing.
 //
 // The export used to re-list these seven fields itself. Nothing would have
 // caught the drift: add a field to OwnedRecord, wire it into the stores,
@@ -75,13 +78,14 @@ export function buildSnapshotPayload(
 }
 
 export function serializeSnapshot(input: SaveSnapshotInput, timestamp: number): string {
-  return JSON.stringify(buildSnapshotPayload(input, timestamp));
+  return JSON.stringify({ ...buildSnapshotPayload(input, timestamp), nativeSnapshotId: input.nativeSnapshotId ?? null });
 }
 
 export function deserializeSnapshot(raw: string | null): Snapshot | null {
   if (!raw) return null;
   const p = JSON.parse(raw);
   return {
+    nativeSnapshotId: Number.isSafeInteger(p.nativeSnapshotId) && p.nativeSnapshotId > 0 ? p.nativeSnapshotId : null,
     ts: p.ts,
     invName: p.invName,
     owned: new Map<string, OwnedRecord>(p.owned),

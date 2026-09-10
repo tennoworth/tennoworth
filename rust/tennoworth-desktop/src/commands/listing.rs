@@ -27,6 +27,9 @@ use crate::services::wfm_session::{CmdError, WfmSession};
 const PLAN_BUSY_MSG: &str = "A listing plan is already running - wait for it to finish.";
 
 fn validate_session_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), PlanValidationError> {
+    for item in items.iter().filter(|item| item.order_type == "sell") {
+        crate::services::protection::validate_snapshot(&app.state::<Db>(), item.inventory_snapshot_id)?;
+    }
     validate_protected_plan(app, items)?;
     if items.iter().all(|i| i.session.is_none()) {
         return Ok(());

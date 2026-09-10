@@ -87,3 +87,15 @@ describe('native Trade Session planning', () => {
     expect(screen.queryByText('Late')).toBeNull();
   });
 });
+
+it('explains blocked review and restores the action without discarding the draft', async () => {
+  const view = await mountPane();
+  await view.rerender({ listingBlockReason: 'Connect WFM to check current listings before posting.' });
+  expect((screen.getByRole('button', { name: 'Review batch' }) as HTMLButtonElement).disabled).toBe(true);
+  expect(screen.getByText('Connect WFM to check current listings before posting.')).toBeTruthy();
+  await fireEvent.click(screen.getByRole('button', { name: 'Review batch' }));
+  expect(view.onreview).not.toHaveBeenCalled();
+  await view.rerender({ listingBlockReason: null });
+  await fireEvent.click(screen.getByRole('button', { name: 'Review batch' }));
+  expect(view.onreview).toHaveBeenCalledOnce();
+});

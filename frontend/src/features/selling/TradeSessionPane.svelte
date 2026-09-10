@@ -15,12 +15,15 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   import type { ScoredInventoryFact } from '../../contracts/generated/domain';
   import type { Verdict } from '../../domain/advisor';
 
-  let { owned, market, reserveCopies, advice, scanning, onscan, onreview, nativeFacts = new Map(), availability }: {
+  let { owned, market, reserveCopies, advice, scanning, onscan, onreview, nativeFacts = new Map(), availability, listingBlockReason = null, onrecheck, listingActionLabel = 'Check WFM listings' }: {
     owned: Map<string, OwnedRecord>; market: Market | null; reserveCopies: number;
     nativeFacts?: Map<string, ScoredInventoryFact>;
     advice: Map<string, Verdict>; scanning: boolean; onscan: () => Promise<void>;
     onreview: (rows: SessionRow[], budget: number, state: TradeSessionState) => void;
     availability?: ReadonlyMap<string, number>;
+    listingBlockReason?: string | null;
+    onrecheck?: () => void;
+    listingActionLabel?: string;
   } = $props();
   let mode = $state<SessionMode>('fast');
   let budget = $state<number | undefined>();
@@ -203,10 +206,11 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   </section>
 
   <section class="ui-panel ui-stack" aria-label="Suggested batch">
+    {#if listingBlockReason}<p class="ui-notice" data-tone="warn" role="status">{listingBlockReason} {#if onrecheck}<button class="btn" onclick={onrecheck}>{listingActionLabel}</button>{/if}</p>{/if}
     <div class="ui-toolbar">
       <h3>{display.rows.length} listings · {display.trades} estimated trades · {display.total.toLocaleString()}p potential</h3>
-      <button class="btn primary" disabled={loading || planning || !!planningError || !!error || cap === 0 || !plan.rows.length || (budget ?? 0) > cap || liveBusy}
-        onclick={() => sessionData && onreview(plan.rows, budget ?? 0, sessionData)}>Review batch</button>
+      <button class="btn primary" disabled={!!listingBlockReason || loading || planning || !!planningError || !!error || cap === 0 || !plan.rows.length || (budget ?? 0) > cap || liveBusy}
+        onclick={() => !listingBlockReason && sessionData && onreview(plan.rows, budget ?? 0, sessionData)}>Review batch</button>
       <button class="btn ghost" onclick={refreshPrices} disabled={planning || !!planningError || liveBusy || !plan.rows.length || cap === 0}>
         {liveBusy ? 'Checking prices…' : 'Check live prices'}
       </button>

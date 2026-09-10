@@ -20,7 +20,7 @@
   import WatchlistPanel from '../features/watches/WatchlistPanel.svelte';
   import NotificationInbox from '../features/settings/NotificationInbox.svelte';
   
-import { NOTIFICATIONS_EVENT, MARKET_REFRESHED_EVENT } from '../contracts/events';
+import { NOTIFICATIONS_EVENT, MARKET_REFRESHED_EVENT, ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   import LedgerPanel from '../features/ledger/LedgerPanel.svelte';
   import MarketBrowser from '../features/market-context/MarketBrowser.svelte';
   import DesktopUpdateBanner from '../ui/DesktopUpdateBanner.svelte';
@@ -77,23 +77,42 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   const inventory = untrack(() => new InventoryController(store, transport, { loadMarket, loadCatalogs, normalizeInventory: normalizeInventoryNative }));
   const protection = new ProtectionController({ desktopProtectionState, desktopSaveProtectionPlan });
   const listing = new ListingController({ getPendingPlan: () => transport.getPendingPlan(), resumePendingPlan: () => transport.resumePendingPlan(), discardPendingPlan: () => transport.discardPendingPlan(), status: desktopWfmStatus, logout: desktopWfmLogout }, (code, next) => wfmAuthDialogsRef?.open(code, next));
-  let availability = $derived(new Map([...inventory.resolved.owned].map(([key, row]) => [key,
-    row.subtype || row.slug.endsWith('_set') ? 0 : Math.min(sellableQty(row.count, filters.reserveCopies, row.leveled ?? 0), protection.state?.items[row.slug]?.available ?? 0),
-  ])));
-  let listingQuantitiesKnown = $derived(!!protection.state?.snapshot_id && listing.wfmStatus?.unlocked === true && Object.values(protection.state.items).every(row => row.available != null));
+  let supportedOwned = $derived(new Map([...inventory.resolved.owned].filter(([, row]) => !row.subtype && !row.slug.endsWith('_set') && !row.slug.endsWith('_relic'))));
+  let allocationMatches = $derived(protection.matchesInventory(inventory.resolved.owned, inventory.nativeSnapshotId));
+  let unknownSlugs = $derived(new Set([...supportedOwned.values()].filter(row => !allocationMatches || protection.state?.items[row.slug]?.estimated == null).map(row => row.slug)));
+  let guidanceUnavailable = $derived(supportedOwned.size > 0 && unknownSlugs.size === supportedOwned.size);
+  let listingBlockReason = $derived.by(() => {
+    if (!inventory.nativeSnapshotId) return 'Scan the game to verify this inventory before listing. Imported backups provide estimates only.';
+    if (inventory.pullingInventory) return 'A scan is in progress. Your review edits are kept.';
+    if (!allocationMatches || !protection.state) return 'Inventory protection is unavailable. Recheck quantities before listing.';
+    if (protection.state.snapshot_id !== inventory.nativeSnapshotId) return 'The game inventory changed. Scan again and prepare a new batch.';
+    if (unknownSlugs.size) return 'Protection quantities are unavailable for some items. Recheck before listing.';
+    if (!listing.wfmStatus?.unlocked) return 'Connect WFM to check current listings before posting.';
+    if ([...supportedOwned.values()].some(row => protection.state?.items[row.slug]?.available == null)) return 'Current WFM listings could not be checked. Recheck before posting.';
+    return null;
+  });
+  let listingQuantitiesKnown = $derived(!listingBlockReason);
   let estimatedGuidance = $derived(!listingQuantitiesKnown);
-  let guidanceAvailability = $derived(new Map([...inventory.resolved.owned].map(([key, row]) => [key,
-    row.subtype || row.slug.endsWith('_set') ? 0 : Math.min(sellableQty(row.count, filters.reserveCopies, row.leveled ?? 0),
-      (estimatedGuidance ? protection.state?.items[row.slug]?.estimated : protection.state?.items[row.slug]?.available) ?? 0),
+  let listingActionLabel = $derived(!inventory.nativeSnapshotId || (allocationMatches && protection.state && protection.state.snapshot_id !== inventory.nativeSnapshotId) ? 'Scan game' : 'Check WFM listings');
+  let availability = $derived(new Map([...inventory.resolved.owned].map(([key, row]) => [key,
+    listingQuantitiesKnown && supportedOwned.has(key) ? Math.min(sellableQty(row.count, filters.reserveCopies, row.leveled ?? 0), protection.state?.items[row.slug]?.available ?? 0) : 0,
   ])));
-  let guidanceUnavailable = $derived(inventory.resolved.owned.size > 0 && !protection.loading &&
-    (!protection.state?.snapshot_id || Object.values(protection.state.items).some(row => row.estimated == null)));
-  let availableOwned = $derived(new Map([...inventory.resolved.owned].map(([key, row]) => [key, { ...row, count: guidanceAvailability.get(key) ?? 0, leveled: 0 }])));
+  let guidanceAvailability = $derived(new Map([...inventory.resolved.owned].map(([key, row]) => [key,
+    supportedOwned.has(key) && !unknownSlugs.has(row.slug) ? Math.min(sellableQty(row.count, filters.reserveCopies, row.leveled ?? 0),
+      (estimatedGuidance ? protection.state?.items[row.slug]?.estimated : protection.state?.items[row.slug]?.available) ?? 0) : 0,
+  ])));
+  let guidanceOwned = $derived(new Map([...inventory.resolved.owned].filter(([, row]) => !unknownSlugs.has(row.slug))));
+  let availableOwned = $derived(new Map([...guidanceOwned].map(([key, row]) => [key, { ...row, count: guidanceAvailability.get(key) ?? 0, leveled: 0 }])));
   onMount(() => {
     const timer = setInterval(() => { if (!protection.loading && !protection.saving) void protection.refresh(); }, 30_000);
-    return () => { clearInterval(timer); protection.destroy(); };
+    const stop = listenForTauriEvent(ALLOWANCE_CHANGED_EVENT, () => void protection.refresh());
+    return () => { clearInterval(timer); stop(); protection.destroy(); };
   });
-  $effect(() => { inventory.resolved.owned; untrack(() => void protection.refresh()); });
+  $effect(() => {
+    const owned = inventory.resolved.owned;
+    const snapshotId = inventory.nativeSnapshotId;
+    untrack(() => void protection.setInventory(owned, snapshotId));
+  });
 
   let resolvedRivens = $derived(resolveRivens(inventory.ownedRivens, inventory.market));
   
@@ -366,13 +385,13 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     return visible.filter(row => !row.subtype && row.sellable > 0);
   });
   $effect(() => {
-    results = computeFilteredResults(inventory.resolved.owned, inventory.market, filterState, filters.reserveCopies, adviceMap, guidanceAvailability, currentFacts.value);
+    results = computeFilteredResults(guidanceOwned, inventory.market, filterState, filters.reserveCopies, adviceMap, guidanceAvailability, currentFacts.value);
   });
   $effect(() => {
     void calculationEpoch;
     const owned = availableOwned;
     const market = inventory.market;
-    if (!owned.size || !market?.set_to_parts) { untrack(() => setResult.clear()); return; }
+    if (guidanceUnavailable || !owned.size || !market?.set_to_parts) { untrack(() => setResult.clear()); return; }
     return untrack(() => setResult.start(() => loadSetRecos(owned, market)));
   });
   $effect(() => {
@@ -382,7 +401,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     if (!owned.size || !market?.relic_rewards) { untrack(() => relicResult.clear()); return; }
     return untrack(() => relicResult.start(() => loadRelicPlan(owned, market, Number.MAX_SAFE_INTEGER)));
   });
-  let setRecos = $derived(setResult.value);
+  let setRecos = $derived(setResult.value.filter(reco => !(inventory.market?.set_to_parts?.[reco.set_slug]?.parts ?? []).some(part => unknownSlugs.has(part.slug))));
 
   // Baro Ki'Teer schedule, baked into market.json at build time (mirrors
   // relic_rewards / vault_status). No runtime warframestat fetch - that
@@ -653,6 +672,13 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // and ListingReviewModal's onauthrequired) via this ref, and decides what
   // 'list' means on unlock (open the review modal).
   let wfmAuthDialogsRef = $state<{ open(code: string, next?: string | null): Promise<void> }>();
+  async function checkListingRequirements() {
+    if (inventory.pullingInventory || protection.loading) return;
+    if (listingActionLabel === 'Scan game') {
+      await inventory.pullInventory();
+      await protection.refresh();
+    } else await connectForListings();
+  }
   async function connectForListings() {
     try {
       const status = await desktopWfmStatus();
@@ -918,6 +944,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       {#if estimatedGuidance && !guidanceUnavailable}
         <div class="ui-notice" data-tone="warn" role="status" aria-label="Estimated guidance">Estimates use your saved inventory and protection rules. Current WFM listings are not accounted for. Connect WFM or recheck listings before posting.</div>
       {/if}
+      {#if unknownSlugs.size}<p class="ui-notice" data-tone="warn">Quantities unavailable for {unknownSlugs.size} {unknownSlugs.size === 1 ? 'item' : 'items'}. These items are excluded from opportunities and totals. <button class="btn" onclick={() => protection.refresh()}>Recheck protection</button></p>{/if}
       {#if guidanceUnavailable || (!estimatedGuidance && (protection.error || protection.state?.issues.length))}
         <p class="ui-notice" data-tone="warn">{guidanceUnavailable ? 'Protection rules could not be checked. Open Protected selling plan to retry.' : 'Some quantities need review. Open Protected selling plan for details; unavailable copies are excluded.'}</p>
       {/if}
@@ -928,7 +955,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         bind:minPrice={filters.minPrice} bind:minOwned={filters.minOwned} bind:typeFilter={filters.typeFilter} bind:hideAtLvl={filters.hideAtLvl} bind:activeTags={filters.activeTags}
         bind:tableView
         resolved={inventory.resolved} {results} deltas={inventory.deltas} {totalPotential}
-        prevSummary={estimatedGuidance ? null : prevSummary} {sinceScan} ordersSummary={listing.ordersSummary}
+        prevSummary={estimatedGuidance ? null : prevSummary} {sinceScan} ordersSummary={estimatedGuidance ? null : listing.ordersSummary}
         {marketFreshness} {marketStaleness} marketLoadError={inventory.marketLoadError}
         {listableRows} {availableTags} {availableTypes}
         {visibleColumns} {presetSort} {emptyReason}
@@ -937,8 +964,8 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         {isDesktop}
         applyPreset={(name) => filters.applyPreset(name)} setReserveCopies={(value) => filters.setReserveCopies(value)} toggleFiltersOpen={(event) => filters.toggleFiltersOpen(event)}
         dismissSellOnboarding={() => filters.dismissSellOnboarding()} dismissKeepCopiesNudge={() => filters.dismissKeepCopiesNudge()}
-        openListingFlow={(rows) => { if (calculationsReady && !estimatedGuidance) listing.openListingFlow(rows); }}
-        {estimatedGuidance} oncheckListings={connectForListings} canList={listingQuantitiesKnown}
+        openListingFlow={(rows) => { if (calculationsReady && !estimatedGuidance) listing.openListingFlow((Array.isArray(rows) ? rows : rows ? [rows] : listableRows).map(row => ({ ...row, inventory_snapshot_id: inventory.nativeSnapshotId ?? undefined }))); }}
+        {estimatedGuidance} oncheckListings={checkListingRequirements} canList={listingQuantitiesKnown} {listingActionLabel} unavailableCount={unknownSlugs.size}
         {pendingBanner}
         {calculationPending} {calculationError} onretryCalculation={() => calculationEpoch += 1}
       />
@@ -948,9 +975,9 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       {:else if defaultFacts.error}
         <div class="ui-notice" data-tone="bad" role="alert">Sale calculations unavailable: {defaultFacts.error} <button class="btn" onclick={() => calculationEpoch += 1}>Retry calculations</button></div>
       {/if}
-      <TradeSessionPane owned={inventory.resolved.owned} market={inventory.market} reserveCopies={filters.reserveCopies} advice={adviceMap} nativeFacts={defaultFacts.value} {availability}
+      <TradeSessionPane {listingBlockReason} onrecheck={checkListingRequirements} {listingActionLabel} owned={inventory.resolved.owned} market={inventory.market} reserveCopies={filters.reserveCopies} advice={adviceMap} nativeFacts={defaultFacts.value} {availability}
         scanning={inventory.pullingInventory} onscan={async () => { await inventory.pullInventory(); await protection.refresh(); }} onreview={(rows, budget, state) => { if (!listingQuantitiesKnown) return; listing.openListingFlow(rows.map(r => ({
-          ...r, proposed_quantity: r.quantity, clearing_price: r.platinum, low_sell: r.platinum,
+          ...r, inventory_snapshot_id: inventory.nativeSnapshotId ?? undefined, proposed_quantity: r.quantity, clearing_price: r.platinum, low_sell: r.platinum,
           avg_price: r.market.avg, session: { snapshot_id: state.allowance.snapshot_id!, utc_day: state.allowance.utc_day, budget },
         }))); }} />
     {:else if effectiveView === 'sets'}
@@ -964,7 +991,8 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
           {/if}
         </p>
       </section>
-      {#if setResult.phase === 'loading'}
+      {#if guidanceUnavailable}<div class="ui-notice" data-tone="warn">Set quantities unavailable. Recheck inventory protection.</div>
+      {:else if setResult.phase === 'loading'}
         <div class="ui-notice" role="status">Calculating set opportunities…</div>
       {:else if setResult.error}
         <div class="ui-notice" data-tone="bad" role="alert">Set recommendations unavailable: {setResult.error} <button class="btn" onclick={() => calculationEpoch += 1}>Retry calculations</button></div>
@@ -1199,7 +1227,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
            have it, and an empty table would read as "he is selling nothing". -->
       {#if voidTrader?.inventory?.length}
         <section data-shell class="baro-stock">
-          <BaroBoard market={inventory.market} baro={voidTrader} owned={inventory.resolved.owned} availability={guidanceAvailability} />
+          <BaroBoard market={inventory.market} baro={voidTrader} owned={guidanceOwned} availability={guidanceAvailability} unavailableItems={unknownSlugs.size} quantitiesUnavailable={guidanceUnavailable} />
         </section>
       {/if}
 
@@ -1556,8 +1584,9 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
 <!-- Desktop only (listing needs wfm-core's session). onauthrequired fires on
      typed needs_login/needs_unlock rejections. -->
 <ListingReviewModal
+    {listingBlockReason} currentSnapshotId={inventory.nativeSnapshotId} onrecheck={checkListingRequirements} {listingActionLabel}
   bind:open={listing.listingOpen}
-  rows={listing.reviewRowsOverride ?? listableRows.slice(0, 50)}
+  rows={listing.reviewRowsOverride ?? listableRows.slice(0, 50).map(row => ({ ...row, inventory_snapshot_id: inventory.nativeSnapshotId ?? undefined }))}
   {transport}
   onauthrequired={(code) => wfmAuthDialogsRef?.open(code, 'list')}
   onclose={() => { listing.reviewRowsOverride = null; void protection.refresh(); void transport.getPendingPlan().then(plan => listing.pendingPlan = plan); }}

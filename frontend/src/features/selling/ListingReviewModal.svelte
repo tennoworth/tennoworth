@@ -24,6 +24,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   import type { ListingCandidate as InputRow } from '../../contracts/listing';
 
   interface PlanRow {
+    inventory_snapshot_id?: number;
     components?: Record<string, number>;
     component_limits?: Record<string, number>;
     key: string;
@@ -62,10 +63,16 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
      *  resends after authenticating. */
     onauthrequired?: (code: 'needs_login' | 'needs_unlock') => void;
     onclose?: () => void;
+    listingBlockReason?: string | null;
+    onrecheck?: () => void;
+    listingActionLabel?: string;
+    currentSnapshotId?: number | null;
   }
-  let { open = $bindable(false), rows, transport, onauthrequired, onclose }: Props = $props();
+  let { open = $bindable(false), rows, transport, onauthrequired, onclose, listingBlockReason = null, onrecheck, listingActionLabel = 'Check WFM listings', currentSnapshotId }: Props = $props();
 
   let plan = $state<PlanRow[]>([]);
+  let reviewBlockReason = $derived(listingBlockReason ?? (currentSnapshotId !== undefined && plan.some(row => row.inventory_snapshot_id !== currentSnapshotId)
+    ? 'Inventory changed. Close review and prepare a new batch; your current edits remain here until you close.' : null));
   type Phase = 'review' | 'sending' | 'results' | 'error';
   let phase = $state<Phase>('review');
   let validatingSend = $state(false);
@@ -88,6 +95,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
       // predate the reserve field.
       const sellable = r.sellable ?? r.owned;
       return {
+        inventory_snapshot_id: r.inventory_snapshot_id,
         key: r.key ?? r.slug,
         components: r.components,
         component_limits: r.component_limits ? { ...r.component_limits } : undefined,
@@ -310,7 +318,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     return [...used].some(([slug, count]) => !Number.isSafeInteger(count) || count > (limits.get(slug) ?? 0))
       ? 'These edited quantities reuse components or exceed their available copies. Reduce a set or part quantity.' : null;
   });
-  let canSubmit = $derived(
+  let canSubmit = $derived(!reviewBlockReason &&
     !allocationProblem && selectedCount > 0 && selectedCount <= MAX_PLAN_ITEMS && plan.every(
       (r) => !r.include || (Number.isSafeInteger(r.platinum) && r.platinum >= MIN_PLATINUM && r.platinum <= MAX_PLATINUM && Number.isSafeInteger(r.quantity) && r.quantity >= 1 && r.quantity <= r.sellable
         && (!r.session || (validSessionLot(r.quantity, r.per_trade, r.bulk) && r.platinum * r.per_trade <= MAX_PLATINUM)))
@@ -334,7 +342,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   }
 
   async function send(): Promise<void> {
-    if (phase === 'sending' || validatingSend || marketAccess.mutationsBlocked) return;
+    if (phase === 'sending' || validatingSend || marketAccess.mutationsBlocked || reviewBlockReason) return;
     validatingSend = true;
     try { if (hasSession && !await refreshReviewOrders(true)) return; } finally { validatingSend = false; }
     await tick();
@@ -345,6 +353,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     const items = plan
       .filter((r) => r.include)
       .map((r) => ({
+        inventory_snapshot_id: r.inventory_snapshot_id,
         slug: r.slug,
         platinum: r.platinum,
         quantity: r.quantity,
@@ -460,6 +469,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     <div class="modal" class:session={hasSession}>
       <DialogHeader titleId="rm-title" title="List on warframe.market" onclose={close} />
 
+      {#if reviewBlockReason && phase === 'review'}<div class="ui-notice" data-tone="warn" role="status">{reviewBlockReason} {#if onrecheck}<button class="btn" onclick={onrecheck}>{listingActionLabel}</button>{/if}</div>{/if}
       {#if phase === 'review'}
         <p class="lead">
           {#if hasSession}

@@ -1,3 +1,4 @@
+import scanResponse from '../../../tests/fixtures/protection/scan-response.json';
 // @ts-nocheck - vitest fixtures; the transport's TS contract is exercised by tsc.
 import outcomes from '../../../tests/fixtures/wfm-access/outcomes.json';
 import { describe, it, expect, afterEach, vi } from 'vitest';
@@ -60,11 +61,11 @@ describe('TauriTransport op → invoke mapping', () => {
     expect(invoke).toHaveBeenCalledWith('health');
   });
 
-  it('fetchInventory() invokes `scan_inventory` and JSON-parses the returned string', async () => {
-    const invoke = vi.fn().mockResolvedValue('{"Suits":[{"a":1}]}');
+  it('fetchInventory() preserves the recorded snapshot identity while decoding scan inventory', async () => {
+    const invoke = vi.fn().mockResolvedValue(scanResponse);
     installTauri(invoke);
     const t = new TauriTransport();
-    await expect(t.fetchInventory()).resolves.toEqual({ Suits: [{ a: 1 }] });
+    await expect(t.fetchInventory()).resolves.toEqual({ data: { Suits: [{ a: 1 }] }, snapshotId: 7 });
     expect(invoke).toHaveBeenCalledWith('scan_inventory');
   });
 

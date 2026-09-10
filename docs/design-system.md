@@ -166,7 +166,13 @@ Scan-only guidance labels its heading and value as estimates and uses one
 contextual notice explaining that current WFM listings are not accounted for.
 Keep posting actions disabled until listing quantities are checked, with a
 separate “Check WFM listings” action. Missing protection data is unavailable,
-never a zero-valued estimate. The living styleguide includes an Estimates state.
+never a zero-valued estimate. With partial coverage, label totals as known
+estimates and state how many items are excluded. Set picks and Baro must also
+show unavailable quantity states. Imported backups can show protected estimates,
+with a Scan game action before posting. A blocked review explains why and keeps
+price/quantity edits while the user rechecks requirements. Hide prior listing
+totals when current listings are unknown. The living styleguide includes an
+Estimates state.
 
 The schematic page background uses bounded repeating tiles. WebKit can stretch
 a page-sized gradient raster on long surfaces even when computed CSS matches

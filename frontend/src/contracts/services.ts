@@ -22,7 +22,7 @@ export interface DesktopServices {
   setRecos(owned: Map<string, OwnedRecord> | null, market: Market | null, limit?: number): Promise<SetReco[]>;
   ducatPlan(owned: Map<string, OwnedRecord> | null, market: Market | null, target: number, keepAbove?: number, availability?: ReadonlyMap<string, number>): Promise<{ candidates: ScrapCandidate[]; plan: DucatPlan }>;
   buildPlan(setSlug: string, setName: string, parts: SetPart[], market: Market | null, owned: Map<string, OwnedRecord> | null, recipes: Record<string, RecipeEntry> | null | undefined): Promise<{ plan: BuildPlan; cheapest: BuildPath | null }>;
-  desktopProtectionState(): Promise<import('./protection').ProtectionState>;
+  desktopProtectionState(inventory: import('./protection').ProtectionInventory): Promise<import('./protection').ProtectionState>;
   desktopSaveProtectionPlan(plan: import('./protection').ProtectionPlan): Promise<void>;
   desktopOpenExternalUrl(url: string): Promise<boolean>;
   updateDiagnostics(): { operation: string; status: string; error: string | null } | null;

@@ -2,8 +2,8 @@ import { evaluateDomainPreview } from './domain-preview';
 import type { DomainRequest } from '../contracts/generated/domain';
 import type { OwnedRiven } from '../domain/rivens';
 import { serializeSnapshot } from '../domain/snapshot';
-import { sampleAllocation } from './protection-preview';
-import type { ProtectionPlan } from '../contracts/protection';
+import { sampleAllocation, sampleGuidance } from './protection-preview';
+import type { ProtectionInventory, ProtectionPlan } from '../contracts/protection';
 
 // This module is dynamically imported only by the development preview.
 export function createPreview(scenario: string) {
@@ -38,7 +38,7 @@ export function createPreview(scenario: string) {
     curses: [{ tag: 'WeaponProcTimeMod', value: 472179622 }], veiled: false,
   }];
   const settings = new Map<string, string>([
-    ['last-owned', serializeSnapshot({ invName: 'Sample inventory with a deliberately long name', owned, rivens }, Date.now())],
+    ['last-owned-v2', serializeSnapshot({ invName: 'Sample inventory with a deliberately long name', owned, rivens, nativeSnapshotId: 1 }, Date.now())],
     ['sell-onboarding-dismissed', '1'], ['keep-copies-nudge-dismissed', '1'],
     ['score-explainer-dismissed', '1'],
   ]);
@@ -85,16 +85,17 @@ export function createPreview(scenario: string) {
       protectionPlan = JSON.parse(JSON.stringify(args?.plan)) as ProtectionPlan;
       return null;
     }
+    if (command === 'wfm_logout') { responses.wfm_auth_status = { logged_in: false, unlocked: false }; return null; }
     if (command === 'protection_state') {
-      const unknown = scenario === 'protection-error' || scenario === 'logged-out';
+      const unknown = scenario === 'protection-error' || !(responses.wfm_auth_status as { unlocked: boolean }).unlocked;
       const listed = new Map((responses.fetch_orders as {data:{sell:Array<{quantity:number,item:{slug:string}}>}}).data.sell.map(row => [row.item.slug, row.quantity]));
-      return { plan: structuredClone(protectionPlan), snapshot_id: empty ? null : 1,
+      return sampleGuidance({ plan: structuredClone(protectionPlan), snapshot_id: empty ? null : 1,
         items: Object.fromEntries([...owned.values()].filter(row => !row.subtype && !row.slug.endsWith('_set')).map(row => [row.slug,
           sampleAllocation(row.count, row.leveled, Number(settings.get('reserve-copies') ?? 0),
             (protectionPlan.reserves[row.slug] ?? 0) + (protectionPlan.goal === 'akbolto_prime_set' ? sampleRecipe[row.slug as keyof typeof sampleRecipe] ?? 0 : 0),
             unknown ? null : listed.get(row.slug) ?? 0)])),
         issues: scenario === 'logged-out' ? ['Unlock WFM to account for your current listings.']
-          : unknown ? ['Current sell orders are unavailable.'] : [] };
+          : unknown ? ['Current sell orders are unavailable.'] : [] }, args?.inventory as ProtectionInventory, Number(settings.get('reserve-copies') ?? 0), protectionPlan.goal === 'akbolto_prime_set' ? sampleRecipe : {});
     }
     if (command === 'list_notifications') {
       if (scenario === 'loading') await new Promise(resolve => setTimeout(resolve, 1500));

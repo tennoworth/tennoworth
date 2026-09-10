@@ -14,6 +14,7 @@ export class InventoryController {
   error = $state<string | null>(null);
   marketLoadError = $state<string | null>(null);
   inventoryName = $state<string | null>(null);
+  nativeSnapshotId = $state<number | null>(null);
   lastUpdated = $state<number | null>(null);
   catalogs = $state<Catalogs | null>(null);
   market = $state<Market | null>(null);
@@ -50,6 +51,7 @@ export class InventoryController {
 
   clear(): Promise<void> {
     this.cancelPending();
+    this.nativeSnapshotId = null;
     this.inventoryName = null;
     this.lastUpdated = null;
     this.resolved = { owned: new Map(), unresolved: {} };
@@ -87,7 +89,7 @@ export class InventoryController {
     }
   }
 
-  async handleInventory({ name, data }: { name: string; data: Inventory }) {
+  async handleInventory({ name, data, snapshotId = null }: { name: string; data: Inventory; snapshotId?: number | null }) {
     const generation = ++this.generation;
     this.phase = 'loading';
     this.error = null;
@@ -112,10 +114,11 @@ export class InventoryController {
       }
       const previous = await this.store.loadSnapshot();
       if (generation !== this.generation) return;
-      await this.saveSnapshot(generation, { invName: name, owned, rivens });
+      await this.saveSnapshot(generation, { invName: name, owned, rivens, nativeSnapshotId: snapshotId });
       if (generation !== this.generation) return;
       this.deltas = diffOwned(previous?.owned, owned);
       this.previousOwned = previous?.owned ?? null;
+      this.nativeSnapshotId = snapshotId;
       this.inventoryName = name;
       this.resolved = { owned, unresolved };
       this.ownedRivens = rivens;
@@ -141,6 +144,7 @@ export class InventoryController {
       if (generation !== this.generation) return;
       await this.saveSnapshot(generation, { invName, owned: ownedMap });
       if (generation !== this.generation) return;
+      this.nativeSnapshotId = null;
       this.inventoryName = invName;
       this.lastUpdated = ts;
       this.deltas = diffOwned(previous?.owned, ownedMap);
@@ -180,11 +184,11 @@ export class InventoryController {
     this.pullingInventory = true;
     this.pullError = null;
     try {
-      const data = await this.transport.fetchInventory() as Inventory;
+      const { data, snapshotId } = await this.transport.fetchInventory();
       if (generation !== this.generation) return;
       await this.handleInventory({
         name: 'inventory (from game)',
-        data,
+        data, snapshotId,
       });
     } catch (e) {
       if (generation === this.generation) this.pullError = humanError(e);
@@ -203,6 +207,7 @@ export class InventoryController {
       if (snap) {
         this.inventoryName = snap.invName;
         this.lastUpdated = snap.ts;
+        this.nativeSnapshotId = snap.nativeSnapshotId;
         this.resolved = { owned: snap.owned, unresolved: {} };
         this.ownedRivens = snap.rivens ?? [];
         if (!this.market) {

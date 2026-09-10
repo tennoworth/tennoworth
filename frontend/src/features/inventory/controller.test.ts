@@ -16,7 +16,7 @@ function store(snapshot: Snapshot | null = null, settings: Record<string, string
     loadSnapshot: async () => snapshot, saveSnapshot: vi.fn(), clearSnapshot: vi.fn(),
   };
 }
-const snapshot: Snapshot = { ts: 100, invName: 'saved', rivens: [], owned: new Map([
+const snapshot: Snapshot = { nativeSnapshotId: 1, ts: 100, invName: 'saved', rivens: [], owned: new Map([
   ['item', { slug: 'item', name: 'Item', type: 'Mods', count: 3, leveled: 1, kept_lvl: 5, subtype: null }],
 ]) };
 
@@ -37,7 +37,7 @@ describe('inventory lifecycle', () => {
 
   it('rejects overlapping scans and keeps an actionable failure for retry', async () => {
     let fail!: (error: Error) => void;
-    const fetchInventory = vi.fn(() => new Promise<unknown>((_, reject) => { fail = reject; }));
+    const fetchInventory = vi.fn(() => new Promise<{ data: import('../../contracts/data').Inventory; snapshotId: number | null }>((_, reject) => { fail = reject; }));
     const c = new InventoryController(store(), { fetchInventory, loadCachedMarket: vi.fn(), refreshMarket: vi.fn(), reportScanIssue: vi.fn() }, sources);
     const pending = c.pullInventory();
     await c.pullInventory();
@@ -184,7 +184,7 @@ describe('inventory replacement races', () => {
   });
 
   it('ignores acquired inventory after a newer import without releasing the acquisition guard early', async () => {
-    const acquisition = deferred<unknown>();
+    const acquisition = deferred<{ data: import('../../contracts/data').Inventory; snapshotId: number | null }>();
     const normalize = vi.fn();
     const fetchInventory = vi.fn(() => acquisition.promise);
     const c = new InventoryController(store(), { fetchInventory, loadCachedMarket: vi.fn(), refreshMarket: vi.fn(), reportScanIssue: vi.fn() }, { ...sources, normalizeInventory: normalize });
@@ -193,7 +193,7 @@ describe('inventory replacement races', () => {
     await c.handleImported({ invName: 'import', ts: 123, ownedMap: normalized('import').owned });
     await c.pullInventory();
     expect(fetchInventory).toHaveBeenCalledOnce();
-    acquisition.resolve({});
+    acquisition.resolve({ data: {}, snapshotId: 1 });
     await scan;
     expect(normalize).not.toHaveBeenCalled();
     expect(c.inventoryName).toBe('import');

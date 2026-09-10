@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const INVENTORY = {
+  nativeSnapshotId: 1,
   ts: 1_800_000_000_000,
   invName: 'responsive-audit-inventory-with-an-intentionally-long-filename.json',
   owned: [
@@ -73,7 +74,7 @@ async function assertWithinViewport(page: Page, locator: Locator): Promise<void>
 
 async function openDesktop(page: Page): Promise<void> {
   await page.addInitScript((snapshot) => {
-    localStorage.setItem('last-owned', JSON.stringify(snapshot));
+    localStorage.setItem('last-owned-v2', JSON.stringify(snapshot));
     localStorage.setItem('sell-onboarding-dismissed', '1');
     localStorage.setItem('keep-copies-nudge-dismissed', '1');
   }, INVENTORY);

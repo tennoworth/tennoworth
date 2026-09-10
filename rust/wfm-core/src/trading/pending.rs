@@ -23,6 +23,8 @@ pub struct PendingPlan {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct PendingItem {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub inventory_snapshot_id: Option<i64>,
     pub slug: String,
     pub platinum: u32,
     pub quantity: u32,
@@ -103,6 +105,7 @@ mod tests {
             started_at: "2026-05-27T15:30:00Z".into(),
             items: vec![
                 PendingItem {
+                    inventory_snapshot_id: Some(7),
                     slug: "loki_prime_set".into(),
                     platinum: 120,
                     quantity: 1,
@@ -120,6 +123,7 @@ mod tests {
                     action: Some("created".into()),
                 },
                 PendingItem {
+                    inventory_snapshot_id: Some(7),
                     slug: "rhino_prime_set".into(),
                     platinum: 95,
                     quantity: 1,
@@ -138,6 +142,14 @@ mod tests {
                 },
             ],
         }
+    }
+
+    #[test]
+    fn reviewed_inventory_identity_survives_pending_recovery() {
+        let plan = sample_plan();
+        let bytes = serde_json::to_vec(&plan).unwrap();
+        let restored: PendingPlan = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(crate::trading::plan::PlanItem::from(&restored.items[0]).inventory_snapshot_id, Some(7));
     }
 
     #[test]

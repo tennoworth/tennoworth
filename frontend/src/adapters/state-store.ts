@@ -18,9 +18,9 @@ import type { StateStore, SettingKey } from '../contracts/state-store';
 //
 // LocalStorageStateStore is byte-for-byte the pre-store behaviour: the same
 // localStorage keys, the same value encodings, and the snapshot round-trip
-// delegated verbatim to storage.ts. TauriStateStore persists the SAME serialized
+// delegated to the shared snapshot serializer. TauriStateStore persists the SAME serialized
 // snapshot bytes (serializeSnapshot) into the SQLite `setting` table - only the
-// backing store differs.
+// backing store differs. Native scan identity is local cache metadata.
 
 import { serializeSnapshot, deserializeSnapshot, type Snapshot, type SaveSnapshotInput } from '../domain/snapshot';
 import { loadSnapshot as loadLocalSnapshot, saveSnapshot as saveLocalSnapshot, clearSnapshot as clearLocalSnapshot } from './browser-snapshot';
@@ -48,7 +48,7 @@ export const LOCAL_SETTING_KEYS: Record<SettingKey, string> = {
 
 // The SQLite `setting.key` the desktop store parks the reload-restore snapshot
 // under. Distinct from the `snapshot`/`snapshot_item` history tables.
-const DESKTOP_SNAPSHOT_KEY = 'last-owned';
+const DESKTOP_SNAPSHOT_KEY = 'last-owned-v2';
 
 /**
  * Hosted / `serve` browser build. Behaviour is verbatim the pre-store code:
@@ -142,6 +142,7 @@ export class TauriStateStore implements StateStore {
       key: DESKTOP_SNAPSHOT_KEY,
       value: serializeSnapshot(input, Date.now()),
     });
+    await resolveInvoke()<void>('set_setting', { key: 'last-owned', value: '' }).catch(() => {});
   }
 
   async clearSnapshot(): Promise<void> {

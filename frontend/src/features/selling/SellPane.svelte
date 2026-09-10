@@ -34,6 +34,8 @@
     calculationError?: string | null;
     estimatedGuidance?: boolean;
     canList?: boolean;
+    unavailableCount?: number;
+    listingActionLabel?: string;
     oncheckListings?: () => void;
     onretryCalculation?: () => void;
   }
@@ -58,7 +60,7 @@
     applyPreset, setReserveCopies, toggleFiltersOpen, 
     dismissSellOnboarding, dismissKeepCopiesNudge,
     openListingFlow,
-    pendingBanner, estimatedGuidance = false, canList = true, oncheckListings, calculationPending = false, calculationError = null, onretryCalculation,
+    pendingBanner, estimatedGuidance = false, canList = true, unavailableCount = 0, listingActionLabel = 'Check WFM listings', oncheckListings, calculationPending = false, calculationError = null, onretryCalculation,
   }: Props = $props();
 
   // Was inline in the template, so it re-filtered the whole results array on
@@ -218,7 +220,7 @@
       {#if calculationReady && fmtDelta(sellableDelta)}<span class="d" class:up={(sellableDelta ?? 0) > 0} class:down={(sellableDelta ?? 0) < 0}>{fmtDelta(sellableDelta)}</span>{/if}
     </div>
     <div class="cell">
-      <span class="k">{estimatedGuidance ? 'Estimated value' : 'Potential'}</span>
+      <span class="k">{unavailableCount ? 'Known estimated value' : estimatedGuidance ? 'Estimated value' : 'Potential'}</span>
       <span class="v">{calculationReady ? totalPotential.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}{#if calculationReady}<span class="unit">p</span>{/if}</span>
       {#if calculationReady && fmtDelta(potentialDelta)}<span class="d" class:up={(potentialDelta ?? 0) > 0} class:down={(potentialDelta ?? 0) < 0}>{fmtDelta(potentialDelta, 'p')}</span>{/if}
     </div>
@@ -447,7 +449,7 @@
 
 {#snippet listCta()}
   {#if isDesktop && !canList}
-    <button class="list-cta" onclick={oncheckListings}>Check WFM listings</button>
+    <button class="list-cta" onclick={oncheckListings}>{listingActionLabel}</button>
   {:else if isDesktop}
     <button
       class="list-cta"

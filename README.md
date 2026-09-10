@@ -138,8 +138,9 @@ market prices and public-data tools. No login or installation is needed.
    comparisons, and listing management. You can then use Trade Session to plan
    a batch and **List on WFM** to review it before submission.
 
-Scan-only estimates exclude protected copies but do not account for current
-WFM listings. **Check WFM listings** connects or rechecks your session before
+Scan-only estimates use the displayed inventory, including restored backups, and
+exclude protected copies. Restored backups require a game scan before listing.
+Estimates do not account for current WFM listings. **Check WFM listings** connects or rechecks your session before
 listing review becomes available. Listing quantities remain unknown until that
 check succeeds; scanning and estimated guidance need no WFM login.
 

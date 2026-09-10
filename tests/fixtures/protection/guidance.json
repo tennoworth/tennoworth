@@ -1,0 +1,170 @@
+[
+  {
+    "name": "import respects reserve from displayed count",
+    "native_count": 6,
+    "input_count": 1,
+    "leveled": 0,
+    "reserved": 5,
+    "keep": 0,
+    "goal": false,
+    "request_id": null,
+    "source": "memory",
+    "orders": false,
+    "record": true,
+    "expected_snapshot_id": null,
+    "expected": {
+      "owned": 1,
+      "protected": 5,
+      "estimated": 0,
+      "listed": null,
+      "available": null
+    }
+  },
+  {
+    "name": "import respects leveled plus pinned goal and manual copies",
+    "native_count": 10,
+    "input_count": 7,
+    "leveled": 2,
+    "reserved": 1,
+    "keep": 0,
+    "goal": true,
+    "request_id": null,
+    "source": "memory",
+    "orders": false,
+    "record": true,
+    "expected_snapshot_id": null,
+    "expected": {
+      "owned": 7,
+      "protected": 5,
+      "estimated": 2,
+      "listed": null,
+      "available": null
+    }
+  },
+  {
+    "name": "import honors global keep copies",
+    "native_count": 10,
+    "input_count": 4,
+    "leveled": 0,
+    "reserved": 0,
+    "keep": 3,
+    "goal": false,
+    "request_id": null,
+    "source": "memory",
+    "orders": false,
+    "record": true,
+    "expected_snapshot_id": null,
+    "expected": {
+      "owned": 4,
+      "protected": 3,
+      "estimated": 1,
+      "listed": null,
+      "available": null
+    }
+  },
+  {
+    "name": "matching verified scan reconciles orders",
+    "native_count": 6,
+    "input_count": 6,
+    "leveled": 0,
+    "reserved": 2,
+    "keep": 0,
+    "goal": false,
+    "request_id": 1,
+    "source": "memory",
+    "orders": true,
+    "record": true,
+    "expected_snapshot_id": 1,
+    "expected": {
+      "owned": 6,
+      "protected": 2,
+      "estimated": 4,
+      "listed": 0,
+      "available": 4
+    }
+  },
+  {
+    "name": "same-count changed scan stays advisory",
+    "native_count": 6,
+    "input_count": 6,
+    "leveled": 0,
+    "reserved": 2,
+    "keep": 0,
+    "goal": false,
+    "request_id": 2,
+    "source": "memory",
+    "orders": true,
+    "record": true,
+    "expected_snapshot_id": null,
+    "expected": {
+      "owned": 6,
+      "protected": 2,
+      "estimated": 4,
+      "listed": null,
+      "available": null
+    }
+  },
+  {
+    "name": "same-id different inventory stays advisory",
+    "native_count": 6,
+    "input_count": 1,
+    "leveled": 0,
+    "reserved": 5,
+    "keep": 0,
+    "goal": false,
+    "request_id": 1,
+    "source": "memory",
+    "orders": true,
+    "record": true,
+    "expected_snapshot_id": null,
+    "expected": {
+      "owned": 1,
+      "protected": 5,
+      "estimated": 0,
+      "listed": null,
+      "available": null
+    }
+  },
+  {
+    "name": "native import is never a verified game scan",
+    "native_count": 6,
+    "input_count": 6,
+    "leveled": 0,
+    "reserved": 2,
+    "keep": 0,
+    "goal": false,
+    "request_id": 1,
+    "source": "import",
+    "orders": true,
+    "record": true,
+    "expected_snapshot_id": null,
+    "expected": {
+      "owned": 6,
+      "protected": 2,
+      "estimated": 4,
+      "listed": null,
+      "available": null
+    }
+  },
+  {
+    "name": "first-run backup can provide estimates",
+    "native_count": 0,
+    "input_count": 3,
+    "leveled": 0,
+    "reserved": 1,
+    "keep": 0,
+    "goal": false,
+    "request_id": null,
+    "source": "memory",
+    "orders": false,
+    "record": false,
+    "expected_snapshot_id": null,
+    "expected": {
+      "owned": 3,
+      "protected": 1,
+      "estimated": 2,
+      "listed": null,
+      "available": null
+    }
+  }
+]

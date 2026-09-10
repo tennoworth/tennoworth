@@ -21,7 +21,7 @@
     market,
     baro,
     owned = null,
-    availability,
+    availability, unavailableItems = 0, quantitiesUnavailable = false,
   }: {
     market: Market | null;
     baro: NonNullable<Market['baro']> | null;
@@ -34,6 +34,8 @@
      *  presented as a balance, or the scrap plan double-counts it. */
     owned?: Map<string, OwnedRecord> | null;
     availability?: ReadonlyMap<string, number>;
+    unavailableItems?: number;
+    quantitiesUnavailable?: boolean;
   } = $props();
 
   let showAll = $state(false);
@@ -56,7 +58,8 @@
     candidates = [];
     scrapPlan = null;
     scrapError = '';
-    scrapLoading = !!inventory;
+    scrapLoading = !!inventory && !quantitiesUnavailable;
+    if (quantitiesUnavailable) return () => { active = false; };
     if (inventory) ducatPlan(inventory, snapshot, target, 15, available).then((result) => {
       if (active) { candidates = result.candidates; scrapPlan = target > 0 ? result.plan : null; scrapLoading = false; }
     }).catch(() => { if (active) { scrapError = 'Scrap planning unavailable. Try reopening the Baro board.'; scrapLoading = false; } });
@@ -104,6 +107,7 @@
 <section class="wrap tw board">
   <div class="rail"><h3>What he is selling</h3></div>
   <div class="board-body">
+  {#if unavailableItems}<p class="ui-notice" data-tone="warn">Scrap quantities unavailable for {unavailableItems} {unavailableItems === 1 ? 'item' : 'items'}. {quantitiesUnavailable ? 'Recheck protection to calculate scrap potential.' : 'Scrap totals include only items with known quantities.'}</p>{/if}
   {#if scrapLoading}<p role="status">Calculating scrap plan…</p>{/if}
   {#if scrapError}<p class="ui-notice" data-tone="bad" role="alert">{scrapError}</p>{/if}
   <header class="board-head">
@@ -121,8 +125,8 @@
       {basket.count === 1 ? 'item' : 'items'} worth buying cost
       <strong>{basket.needed.toLocaleString()}</strong> ducats and resell for about
       <strong>{basket.resale.toLocaleString()}p</strong> at 90-day medians.
-      {#if owned && !scrapLoading && !scrapError}
-        Scrapping every spare prime part you hold would yield
+      {#if owned && !quantitiesUnavailable && !scrapLoading && !scrapError}
+        Scrapping {unavailableItems ? 'the prime parts with known spare quantities' : 'every spare prime part you hold'} would yield
         <strong>{scrapPotential.toLocaleString()}</strong> ducats - enough for
         <strong>{basket.coveredByScrapping}</strong> of them.
       {/if}
