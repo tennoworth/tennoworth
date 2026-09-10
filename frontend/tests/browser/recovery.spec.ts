@@ -109,13 +109,16 @@ test('a failed replacement preserves the visible saved inventory, name and age',
   await page.goto('/?preview-desktop&sample');
   await page.locator('.shell').waitFor();
   await expect(page.locator('.statusbar .file')).toContainText('Sample inventory');
-  const identity = await page.locator('.statusbar .inv').innerText();
+  const identity = await page.locator('.statusbar .file').innerText();
+  const timestamp = await page.locator('.statusbar .inv time').getAttribute('datetime');
   await recoveryCommands(page);
   await page.getByRole('button', { name: 'Refresh ▾', exact: true }).click();
   await page.getByTestId('desktop-scan').click();
   await expect(page.getByRole('alert', { name: 'Inventory unavailable' })).toContainText('Showing your last successful inventory');
   await expect(page.locator('.shell')).toBeVisible();
-  expect(await page.locator('.statusbar .inv').innerText()).toBe(identity);
+  expect(await page.locator('.statusbar .file').innerText()).toBe(identity);
+  await expect(page.locator('.statusbar .inv time')).toHaveAttribute('datetime', timestamp!);
+  await expect(page.locator('.statusbar .inv')).toContainText('Last refresh failed');
   await expect(page.locator('.workspace')).toContainText('Pyrana Prime Set');
   await page.locator('.sidebar').getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Send feedback', exact: true }).click();
@@ -148,3 +151,44 @@ test('manual checks expose failed and unsupported outcomes; Notifications never 
   await expect(page.getByTestId('desktop-scan')).toBeVisible();
   await expect(update).toContainText('Download and run the TennoWorth AppImage');
 });
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`${theme} snapshot age advances and failed refresh remains visible after dismissing details`, async ({ page }, info) => {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.clock.install({ time: new Date('2026-09-10T12:00:00Z') });
+    await page.goto('/?preview-desktop&sample');
+    const inventory = page.locator('.statusbar .inv');
+    await expect(inventory.locator('time')).toContainText('just now');
+    const timestamp = await inventory.locator('time').getAttribute('datetime');
+    await page.clock.setSystemTime(new Date('2026-09-12T12:00:00Z'));
+    await page.clock.runFor(60_000);
+    await expect(inventory.locator('time')).toContainText('2 d ago');
+    await page.clock.setSystemTime(new Date('2026-09-13T12:00:00Z'));
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(inventory.locator('time')).toContainText('3 d ago');
+    await recoveryCommands(page);
+    await page.getByRole('button', { name: 'Refresh ▾', exact: true }).click();
+    await page.getByTestId('desktop-scan').click();
+    const error = page.getByRole('alert', { name: 'Inventory unavailable' });
+    await expect(error).toBeVisible();
+    await error.getByRole('button', { name: 'Dismiss scan error' }).click();
+    await expect(error).toHaveCount(0);
+    await expect(inventory).toContainText('Last refresh failed');
+    await expect(inventory.locator('time')).toHaveAttribute('datetime', timestamp!);
+    for (const [width, height] of [[1440,900],[1440,480],[760,600],[320,480]]) {
+      await page.setViewportSize({ width, height });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+      await page.getByRole('button', { name: 'Refresh ▾', exact: true }).scrollIntoViewIfNeeded();
+      await page.screenshot({ path: info.outputPath(`${theme}-saved-${width}-${height}.png`) });
+    }
+    await page.evaluate(() => { (window as any).recovery.scan = 'success'; });
+    await page.getByRole('button', { name: 'Refresh ▾', exact: true }).click();
+    await page.getByTestId('desktop-scan').click();
+    await expect(inventory).not.toContainText('Last refresh failed');
+    await expect(inventory.locator('time')).toContainText('just now');
+    await page.getByRole('button', { name: 'Refresh ▾', exact: true }).click();
+    await page.getByRole('button', { name: 'Clear', exact: true }).click();
+    await expect(inventory).toContainText('No inventory yet');
+    await expect(inventory.locator('time')).toHaveCount(0);
+  });
+}

@@ -11,6 +11,8 @@ type Phase = 'idle' | 'loading' | 'done' | 'error';
 export class InventoryController {
   constructor(private store: StateStore, private transport: Pick<DesktopCapabilities, 'loadCachedMarket' | 'refreshMarket' | 'fetchInventory' | 'reportScanIssue'>, private sources: { loadMarket(): Promise<Market>; loadCatalogs(): Promise<Catalogs>; normalizeInventory(data: Inventory, catalogs: Catalogs, market: Market): Promise<{ owned: Map<string, OwnedRecord>; unresolved: Record<string, number>; flatCount: number }> }) { }
   phase = $state<Phase>('idle');
+  refreshFailed = $state(false);
+  source = $state<'scan' | 'saved' | 'import' | null>(null);
   error = $state<string | null>(null);
   marketLoadError = $state<string | null>(null);
   inventoryName = $state<string | null>(null);
@@ -42,14 +44,16 @@ export class InventoryController {
     return pending;
   }
 
-  private saveSnapshot(generation: number, input: SaveSnapshotInput): Promise<void> {
+  private saveSnapshot(generation: number, input: SaveSnapshotInput, timestamp = Date.now()): Promise<void> {
     return this.persist(async () => {
-      if (generation === this.generation) await this.store.saveSnapshot(input);
+      if (generation === this.generation) await this.store.saveSnapshot(input, timestamp);
     });
   }
 
   clear(): Promise<void> {
     this.cancelPending();
+    this.refreshFailed = false;
+    this.source = null;
     this.inventoryName = null;
     this.lastUpdated = null;
     this.resolved = { owned: new Map(), unresolved: {} };
@@ -104,6 +108,7 @@ export class InventoryController {
       if (generation !== this.generation) return;
       const rivens = extractRivens(data);
       if (owned.size === 0) {
+        this.refreshFailed = true;
         this.pullError = flatCount === 0
           ? "The scan didn't find a recognizable inventory in the game's memory. Make sure Warframe is running and you're past the login screen, then try again."
           : 'The scan found items, but nothing in them is tradeable on warframe.market (quest items, resources, and brand-new content have no listings).';
@@ -120,11 +125,14 @@ export class InventoryController {
       this.resolved = { owned, unresolved };
       this.ownedRivens = rivens;
       this.lastUpdated = Date.now();
+      this.refreshFailed = false;
+      this.source = 'scan';
       this.phase = 'done';
     } catch (e) {
       if (generation !== this.generation) return;
       console.error(e);
       this.error = humanError(e);
+      this.refreshFailed = true;
       this.phase = 'error';
     }
   }
@@ -139,10 +147,12 @@ export class InventoryController {
       if (generation !== this.generation) return;
       const market = this.market ?? await this.loadBestMarket();
       if (generation !== this.generation) return;
-      await this.saveSnapshot(generation, { invName, owned: ownedMap });
+      await this.saveSnapshot(generation, { invName, owned: ownedMap }, ts);
       if (generation !== this.generation) return;
       this.inventoryName = invName;
       this.lastUpdated = ts;
+      this.refreshFailed = false;
+      this.source = 'import';
       this.deltas = diffOwned(previous?.owned, ownedMap);
       this.previousOwned = previous?.owned ?? null;
       this.resolved = { owned: ownedMap, unresolved: {} };
@@ -153,6 +163,7 @@ export class InventoryController {
     } catch (error) {
       if (generation !== this.generation) return;
       this.error = humanError(error);
+      this.refreshFailed = true;
       this.phase = 'error';
       throw error;
     }
@@ -187,7 +198,7 @@ export class InventoryController {
         data,
       });
     } catch (e) {
-      if (generation === this.generation) this.pullError = humanError(e);
+      if (generation === this.generation) { this.pullError = humanError(e); this.refreshFailed = true; }
     } finally {
       this.pullingInventory = false;
     }
@@ -201,6 +212,7 @@ export class InventoryController {
       const snap = await this.store.loadSnapshot();
       if (generation !== this.generation) return;
       if (snap) {
+        this.source = 'saved';
         this.inventoryName = snap.invName;
         this.lastUpdated = snap.ts;
         this.resolved = { owned: snap.owned, unresolved: {} };
@@ -228,6 +240,7 @@ export class InventoryController {
       if (generation !== this.generation) return;
       console.error(e);
       this.error = humanError(e);
+      this.refreshFailed = true;
       this.phase = 'error';
     }
   }

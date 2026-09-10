@@ -187,3 +187,16 @@ describe('TauriStateStore - command mapping', () => {
     expect(await s.loadSnapshot()).toBeNull();
   });
 });
+
+for (const Store of [LocalStorageStateStore, TauriStateStore]) {
+  it(`${Store.name} preserves a supplied snapshot timestamp across reload`, async () => {
+    const data = new Map();
+    installTauri(async (command, args) => {
+      if (command === 'set_setting') data.set(args.key, args.value);
+      if (command === 'get_setting') return data.get(args.key) ?? null;
+    });
+    const timestamp = Date.UTC(2025, 1, 1);
+    await new Store().saveSnapshot({ invName: 'older import', owned: new Map() }, timestamp);
+    expect((await new Store().loadSnapshot()).ts).toBe(timestamp);
+  });
+}

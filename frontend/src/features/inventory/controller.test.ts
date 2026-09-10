@@ -265,7 +265,12 @@ for (const outcome of ['invalid', 'empty', 'untradeable', 'persistence'] as cons
       expect(c.lastUpdated).toBe(snapshot.ts);
       expect(c.resolved.owned).toEqual(snapshot.owned);
       expect(c.error ?? c.pullError).toBeTruthy();
+      expect(c.refreshFailed).toBe(true);
+      c.error = null; c.pullError = null;
+      expect(c.refreshFailed).toBe(true);
       expect(storage.clearSnapshot).not.toHaveBeenCalled();
+      await c.clear();
+      expect(c.refreshFailed).toBe(false);
     } finally { log.mockRestore(); }
   });
 }
@@ -290,4 +295,15 @@ it('makes a failed snapshot read recoverable and ignores a read superseded by Cl
     expect(next.phase).toBe('idle');
     expect(next.error).toBeNull();
   } finally { log.mockRestore(); }
+});
+
+it('a successful import clears the failed-refresh marker and preserves its original timestamp', async () => {
+  const storage = store();
+  const c = normalizationController(vi.fn(), storage);
+  c.refreshFailed = true;
+  await c.handleImported({ invName: 'older import', ts: 123, ownedMap: normalized('import').owned });
+  expect(c.refreshFailed).toBe(false);
+  expect(c.source).toBe('import');
+  expect(c.lastUpdated).toBe(123);
+  expect(storage.saveSnapshot).toHaveBeenCalledWith({ invName: 'older import', owned: normalized('import').owned }, 123);
 });
