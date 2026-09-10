@@ -7,24 +7,24 @@ for (const theme of ['light', 'dark'] as const) {
     page.on('pageerror', error => errors.push(error.message));
     await page.emulateMedia({ colorScheme: theme });
     await page.goto('/?preview-desktop&sample=protection');
-    await page.getByText('Protected selling plan · No pinned goal', { exact: true }).click();
-    await page.getByRole('button', { name: 'Edit protection', exact: true }).click();
-    await page.getByLabel('Pinned set goal', { exact: true }).selectOption('akbolto_prime_set');
-    await page.getByLabel('Item to protect', { exact: true }).selectOption('akbolto_prime_barrel');
-    await page.getByLabel('Manual copies', { exact: true }).fill('1');
+    await page.getByText('View quantity details', { exact: true }).click();
+    await page.getByRole('button', { name: 'Change what I keep', exact: true }).click();
+    await page.getByLabel('Keep parts for a set', { exact: true }).selectOption('akbolto_prime_set');
+    await page.getByLabel('Item to keep', { exact: true }).selectOption('akbolto_prime_barrel');
+    await page.getByLabel('Extra copies', { exact: true }).fill('1');
     await page.getByRole('button', { name: 'Set quantity', exact: true }).click();
     for (const [width, height] of [[1440, 900], [1200, 480], [320, 480]]) {
       await page.setViewportSize({ width, height });
-      await expect(page.getByLabel('Pinned set goal', { exact: true })).toHaveValue('akbolto_prime_set');
-      await expect(page.getByLabel('Manual copies', { exact: true })).toHaveValue('1');
-      await page.getByRole('button', { name: 'Save protection', exact: true }).scrollIntoViewIfNeeded();
+      await expect(page.getByLabel('Keep parts for a set', { exact: true })).toHaveValue('akbolto_prime_set');
+      await expect(page.getByLabel('Extra copies', { exact: true })).toHaveValue('1');
+      await page.getByRole('button', { name: 'Save keep rules', exact: true }).scrollIntoViewIfNeeded();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
       await page.screenshot({ path: info.outputPath(`protection-${theme}-${width}.png`) });
     }
-    await page.getByRole('button', { name: 'Save protection', exact: true }).click();
+    await page.getByRole('button', { name: 'Save keep rules', exact: true }).click();
     const row = page.getByRole('region', { name: 'Inventory allocation' }).locator('tbody tr').filter({ hasText: 'Akbolto Prime Barrel' });
     await expect(row.locator('td')).toHaveText(['Akbolto Prime Barrel', '5', '3', '0', '2']);
-    await page.getByRole('button', { name: 'Refresh allocation', exact: true }).click();
+    await page.getByRole('region', { name: 'What I’m keeping', exact: true }).getByRole('button', { name: 'Recheck quantities', exact: true }).click();
     await expect(row.locator('td')).toHaveText(['Akbolto Prime Barrel', '5', '3', '0', '2']);
     expect(errors).toEqual([]);
   });
@@ -32,17 +32,17 @@ for (const theme of ['light', 'dark'] as const) {
 
 test('a failed save retains the protection draft', async ({ page }) => {
   await page.goto('/?preview-desktop&sample=protection-save-error');
-  await page.getByText('Protected selling plan · No pinned goal', { exact: true }).click();
-  await page.getByRole('button', { name: 'Edit protection', exact: true }).click();
-  await page.getByLabel('Pinned set goal', { exact: true }).selectOption('akbolto_prime_set');
-  await page.getByRole('button', { name: 'Save protection', exact: true }).click();
+  await page.getByText('View quantity details', { exact: true }).click();
+  await page.getByRole('button', { name: 'Change what I keep', exact: true }).click();
+  await page.getByLabel('Keep parts for a set', { exact: true }).selectOption('akbolto_prime_set');
+  await page.getByRole('button', { name: 'Save keep rules', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Sample protection save failed');
-  await expect(page.getByLabel('Pinned set goal', { exact: true })).toHaveValue('akbolto_prime_set');
+  await expect(page.getByLabel('Keep parts for a set', { exact: true })).toHaveValue('akbolto_prime_set');
 });
 
 test('unavailable current orders never imply zero listed copies', async ({ page }) => {
   await page.goto('/?preview-desktop&sample=protection-error');
-  await page.getByText('Protected selling plan · No pinned goal', { exact: true }).click();
+  await page.getByText('View quantity details', { exact: true }).click();
   await expect(page.getByRole('region', { name: 'Inventory allocation' })).toContainText('Unknown');
   await expect(page.getByRole('button', { name: 'Review batch', exact: true })).toBeDisabled();
 });
@@ -64,7 +64,7 @@ for (const theme of ['light', 'dark'] as const) {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
       await page.screenshot({ path: info.outputPath(`scan-estimates-${theme}-${width}.png`) });
     }
-    await page.getByText('Protected selling plan · No pinned goal', { exact: true }).click();
+    await page.getByText('View quantity details', { exact: true }).click();
     await expect(page.getByRole('region', { name: 'Inventory allocation' })).toContainText('Unknown');
     await page.getByRole('button', { name: 'Check WFM listings', exact: true }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
@@ -84,7 +84,7 @@ for (const theme of ['light', 'dark'] as const) {
 test('protection failures hide estimates and successful listing checks enable review', async ({ page }) => {
   await page.goto('/?preview-desktop&sample=logged-out');
   await page.getByRole('button', { name: /^Opportunities\s/ }).click();
-  await page.getByText('Protected selling plan · No pinned goal', { exact: true }).click();
+  await page.getByText('View quantity details', { exact: true }).click();
   await page.evaluate(() => {
     const w = window as any;
     const original = w.__TAURI__.core.invoke;
@@ -106,11 +106,11 @@ test('protection failures hide estimates and successful listing checks enable re
       return original(command, args);
     };
   });
-  const refresh = page.getByRole('button', { name: 'Refresh allocation', exact: true });
+  const refresh = page.getByRole('region', { name: 'What I’m keeping', exact: true }).getByRole('button', { name: 'Recheck quantities', exact: true });
   for (const mode of ['failure', 'invalid']) {
     await page.evaluate(mode => { (window as any).allocationMode = mode; }, mode);
     await refresh.click();
-    await expect(page.getByRole('group', { name: 'Sell summary' })).toContainText('—');
+    await expect(page.getByRole('group', { name: 'Sell summary' })).toContainText('Unavailable');
     await expect(page.getByRole('status', { name: 'Estimated guidance' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: /^List \d+ on WFM$/ })).toHaveCount(0);
   }
@@ -131,12 +131,12 @@ for (const theme of ['light', 'dark'] as const) {
   test(`${theme} imported estimates use the restored count and cannot inherit scan authorization`, async ({ page }, info) => {
     await page.emulateMedia({ colorScheme: theme });
     await page.goto('/?preview-desktop&sample=logged-out');
-    await page.getByText('Protected selling plan · No pinned goal', { exact: true }).click();
-    await page.getByRole('button', { name: 'Edit protection', exact: true }).click();
-    await page.getByLabel('Item to protect', { exact: true }).selectOption('primed_flow');
-    await page.getByLabel('Manual copies', { exact: true }).fill('5');
+    await page.getByText('View quantity details', { exact: true }).click();
+    await page.getByRole('button', { name: 'Change what I keep', exact: true }).click();
+    await page.getByLabel('Item to keep', { exact: true }).selectOption('primed_flow');
+    await page.getByLabel('Extra copies', { exact: true }).fill('5');
     await page.getByRole('button', { name: 'Set quantity', exact: true }).click();
-    await page.getByRole('button', { name: 'Save protection', exact: true }).click();
+    await page.getByRole('button', { name: 'Save keep rules', exact: true }).click();
     const backup = await encryptPayload({ invName: 'One copy restored', ts: 1_780_000_000_000, owned: [['primed_flow', { slug: 'primed_flow', name: 'Primed Flow', count: 1, leveled: 0, type: 'RawUpgrades', kept_lvl: null, subtype: null }]], nativeSnapshotId: 1 }, 'review-test-passphrase');
     await page.getByRole('button', { name: 'Refresh ▾', exact: true }).click();
     const chooser = page.waitForEvent('filechooser');
@@ -150,7 +150,7 @@ for (const theme of ['light', 'dark'] as const) {
     const summary = page.getByRole('group', { name: 'Sell summary' });
     await expect(summary.locator('.cell').filter({ hasText: 'Opportunities' })).toContainText('0');
     await expect(summary.locator('.cell').filter({ hasText: 'Estimated value' })).toContainText('0');
-    await expect(page.getByRole('region', { name: 'Inventory allocation' }).locator('tbody tr').filter({ hasText: 'Primed Flow' }).locator('td')).toHaveText(['Primed Flow', '1', '5', 'Unknown', 'Unknown']);
+    await expect(page.getByRole('region', { name: 'Inventory allocation' }).locator('tbody tr').filter({ hasText: 'Primed Flow' }).locator('td')).toHaveText(['Primed Flow', '1', '5', 'Unknown', '0 estimated']);
     await expect(page.getByRole('button', { name: /^List \d+ on WFM$/ })).toHaveCount(0);
     const stored = await page.evaluate(async () => JSON.parse(await (window as any).__TAURI__.core.invoke('get_setting', { key: 'last-owned-v2' })));
     expect(stored.nativeSnapshotId).toBeNull();
@@ -166,7 +166,7 @@ for (const theme of ['light', 'dark'] as const) {
 
 test('missing allocation keeps known estimates while unavailable sets and scrap stay explicit', async ({ page }) => {
   await page.goto('/?preview-desktop&sample=logged-out');
-  await page.getByText('Protected selling plan · No pinned goal', { exact: true }).click();
+  await page.getByText('View quantity details', { exact: true }).click();
   await page.evaluate(() => {
     const w = window as any;
     const original = w.__TAURI__.core.invoke;
@@ -180,15 +180,15 @@ test('missing allocation keeps known estimates while unavailable sets and scrap 
       return result;
     };
   });
-  await page.getByRole('button', { name: 'Refresh allocation', exact: true }).click();
+  await page.getByRole('region', { name: 'What I’m keeping', exact: true }).getByRole('button', { name: 'Recheck quantities', exact: true }).click();
   await expect(page.getByText('Quantities unavailable for 1 item.', { exact: false })).toBeVisible();
   await expect(page.getByRole('group', { name: 'Sell summary' })).toContainText('Known estimated value');
   await expect(page.getByRole('group', { name: 'Sell summary' }).locator('.cell').filter({ hasText: 'Opportunities' })).not.toContainText('0');
   await page.evaluate(() => { (window as any).missingAll = true; });
-  await page.getByRole('button', { name: 'Refresh allocation', exact: true }).click();
-  await expect(page.getByRole('group', { name: 'Sell summary' })).toContainText('—');
+  await page.getByRole('region', { name: 'What I’m keeping', exact: true }).getByRole('button', { name: 'Recheck quantities', exact: true }).click();
+  await expect(page.getByRole('group', { name: 'Sell summary' })).toContainText('Unavailable');
   await page.getByRole('button', { name: /^Set picks/ }).click();
-  await expect(page.getByText('Set quantities unavailable. Recheck inventory protection.')).toBeVisible();
+  await expect(page.getByText('Set recommendations will appear once quantities are available.')).toBeVisible();
   await page.getByRole('button', { name: 'Baro', exact: true }).click();
   await expect(page.getByText(/Scrap quantities unavailable/)).toBeVisible();
   await expect(page.getByText(/Scrapping every spare/)).toHaveCount(0);
@@ -250,3 +250,42 @@ test('logout blocks Trade Session review until current listings are rechecked', 
   await page.getByRole('button', { name: 'Check WFM listings', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Review batch', exact: true })).toBeEnabled();
 });
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`${theme} quantity failure has one recovery notice and keeps the editor accessible`, async ({ page }, info) => {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.goto('/?preview-desktop&sample=logged-out');
+    await page.getByRole('button', { name: /^Opportunities\s/ }).click();
+    const keeping = page.getByRole('region', { name: 'What I’m keeping', exact: true });
+    await expect(keeping).toContainText('✓ Keep rules applied');
+    await page.evaluate(() => {
+      const w = window as any;
+      const original = w.__TAURI__.core.invoke;
+      w.__TAURI__.core.invoke = (command: string, args: unknown) => command === 'protection_state'
+        ? Promise.reject(new Error('Inventory quantities are invalid. Scan again or restore a valid backup.'))
+        : original(command, args);
+    });
+    await keeping.getByText('View quantity details', { exact: true }).click();
+    await keeping.getByRole('button', { name: 'Recheck quantities', exact: true }).click();
+    await expect(page.getByRole('alert')).toHaveCount(1);
+    await expect(page.getByRole('alert')).toContainText('We can’t calculate what you can sell yet');
+    await expect(page.getByRole('alert').getByRole('button', { name: 'Scan game again' })).toBeVisible();
+    await expect(page.getByText('No picks clear the bar right now.')).toHaveCount(0);
+    await expect(keeping).not.toContainText('✓ Keep rules applied');
+    await keeping.getByText('View quantity details', { exact: true }).click();
+    for (const [width, height] of [[1440, 900], [900, 480], [320, 480]]) {
+      await page.setViewportSize({ width, height });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.screenshot({ path: info.outputPath(`quantity-error-${theme}-${width}.png`) });
+    }
+    const edit = keeping.getByRole('button', { name: 'Change what I keep' });
+    await edit.click();
+    const dialog = page.getByRole('dialog', { name: 'What I’m keeping', exact: true });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('searchbox').fill('primed');
+    await expect(dialog.getByLabel('Item to keep', { exact: true }).locator('option')).toContainText(['Choose an owned item', 'Primed Flow']);
+    await page.keyboard.press('Escape');
+    await expect(dialog).not.toBeVisible();
+    await expect(edit).toBeFocused();
+  });
+}

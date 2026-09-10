@@ -4,6 +4,7 @@
   import { sparklinePoints } from '../../ui/sparkline';
   import { wfmItemUrl, ownedBreakdown, LEVELED_NOTE_TITLE, keptNoteTitle } from '../../ui/format';
 
+  import type { ProtectionState } from '../../contracts/protection';
   import type { SellRow as Row } from '../../contracts/selling';
 
   interface ColumnDef {
@@ -16,6 +17,9 @@
 
   interface Props {
     results: Row[];
+    allocation?: ProtectionState | null;
+    quantityStatus?: boolean;
+    estimatedGuidance?: boolean;
     deltas?: Map<string, number>;
     visibleColumns?: string[] | null;
     presetSort?: { key: string; dir: number } | null;
@@ -47,7 +51,7 @@
     between?: Snippet;
   }
   let {
-    results, deltas = new Map(), visibleColumns = null, presetSort = null, onfiltered = undefined,
+    results, allocation = null, quantityStatus = false, estimatedGuidance = false, deltas = new Map(), visibleColumns = null, presetSort = null, onfiltered = undefined,
     scope = undefined, narrow = undefined, cta = undefined,
     picks = null, picksHead = undefined, pickReason = undefined, picksEmpty = undefined,
     empty = undefined, between = undefined,
@@ -440,7 +444,11 @@
     {/if}
   {:else if col.key === 'owned'}
     {fmt(r.owned, col.key)}
-    {#if r.sellable < r.owned}
+    {#if quantityStatus}
+      {@const quantity = allocation?.items[r.slug]}
+      <span class="quantity-note">Keep {quantity?.protected ?? '—'}</span>
+      <span class="quantity-note" class:quantity-unknown={quantity?.estimated == null}>Can sell {quantity?.estimated == null ? 'unavailable' : estimatedGuidance ? `${quantity.estimated} estimated` : quantity.available ?? 'unavailable'}</span>
+    {:else if r.sellable < r.owned}
       {@const bd = ownedBreakdown(r.owned, r.sellable, r.leveled)}
       <span class="kept-note">({#if bd.leveledPart > 0}<span class="leveled-note" title={LEVELED_NOTE_TITLE}>{bd.leveledPart} leveled</span>{/if}{#if bd.leveledPart > 0 && bd.keptPart > 0} · {/if}{#if bd.keptPart > 0}<span title={keptNoteTitle(bd.keptPart)}>{bd.keptPart} kept</span>{/if})</span>
     {/if}
@@ -802,6 +810,8 @@
     padding: 0 var(--s3);
     font-size: var(--text-control);
   }
+  .quantity-note { display: block; font-size: var(--text-caption); color: var(--muted); white-space: normal; }
+  .quantity-note.quantity-unknown { color: var(--bad); }
   .count { color: var(--muted); font-size: var(--text-caption); white-space: nowrap; }
   .count b { color: var(--fg); font-weight: 600; }
   /* Pill-filter chips reuse the badge palette (.tag.peak etc.) so the chip

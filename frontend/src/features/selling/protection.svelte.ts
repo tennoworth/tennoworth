@@ -6,6 +6,7 @@ import { humanError } from '../../contracts/errors';
 export class ProtectionController {
   constructor(private port: Pick<DesktopServices, 'desktopProtectionState' | 'desktopSaveProtectionPlan'>) {}
   state = $state<ProtectionState | null>(null);
+  savedPlan = $state<ProtectionPlan | null>(null);
   loading = $state(false);
   saving = $state(false);
   error = $state<string | null>(null);
@@ -43,6 +44,7 @@ export class ProtectionController {
       // Unchanged polling results must not reset native calculations or disable
       // the listing trigger while the review restores keyboard focus.
       if (JSON.stringify(this.state) !== JSON.stringify(state)) this.state = state;
+      this.savedPlan = state.plan;
       this.error = null;
     } catch (error) {
       if (request === this.request && !this.disposed) { this.state = null; this.error = humanError(error); }
@@ -54,6 +56,7 @@ export class ProtectionController {
     this.error = null;
     try {
       await this.port.desktopSaveProtectionPlan(plan);
+      this.savedPlan = plan;
       // Invalidate old availability before the refresh; the saved protection
       // already governs native submission even if reading orders now fails.
       this.state = null;

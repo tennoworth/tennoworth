@@ -46,3 +46,16 @@ it('keeps a native missing row absent for the shell to mark unavailable', async 
   await c.setInventory(inventory(2), null);
   expect(c.state?.items.part).toBeUndefined();
 });
+
+
+it('a failed quantity refresh retains saved keep rules for editing without retaining sale permission', async () => {
+  const state = allocation(5);
+  state.plan = { reserves: { part: 2 }, goal: null };
+  const port = { desktopProtectionState: vi.fn().mockResolvedValueOnce(state).mockRejectedValue(new Error('Inventory quantities are invalid')), desktopSaveProtectionPlan: vi.fn() };
+  const c = new ProtectionController(port);
+  await c.setInventory(inventory(5), 1);
+  await c.refresh();
+  expect(c.state).toBeNull();
+  expect(c.savedPlan).toEqual({ reserves: { part: 2 }, goal: null });
+  expect(c.error).toContain('invalid');
+});

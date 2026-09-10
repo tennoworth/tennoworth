@@ -116,7 +116,7 @@ html[data-look="yorha"] {
   --accent: #46422F;    /* = ink; active state is inversion, not a hue */
   --good: #2A6350;
   --warn: #77541C;
-  --bad: #9E3D25;
+  --bad: #98201D;
   --ducat: #77541C;
   --ink-bar: #4B4739;   /* the one filled surface */
   --on-ink: #DBD7BF;
@@ -154,7 +154,7 @@ html[data-look="yorha"][data-mode="dark"] {
   --accent: #D3C7A6;    /* = ink; active state is inversion, not a hue */
   --good: #84AE85;      /* 6.2:1 on panel */
   --warn: #CBA05A;      /* 6.5:1 on panel */
-  --bad: #CF8360;       /* 5.2:1 on panel */
+  --bad: #F18C85;
   --ducat: #CBA05A;
   --ink-bar: #C0B187;   /* the bar is now rag */
   --on-ink: #1E1913;
@@ -596,7 +596,8 @@ table.tw tr.busy td { color: var(--faint); }
 .ui-notice { margin: 0; padding: var(--s2) var(--s3); border: 1px var(--rule) var(--border); border-left: 3px solid var(--border); color: var(--fg); background: var(--panel); overflow-wrap: anywhere; }
 .ui-notice[data-tone="good"] { border-left-color: var(--good); }
 .ui-notice[data-tone="warn"] { border-left-color: var(--warn); }
-.ui-notice[data-tone="bad"] { border-left-color: var(--bad); }
+.ui-notice[data-tone="bad"] { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 8%, var(--panel)); }
+.ui-notice[data-tone="bad"] strong { color: var(--bad); }
 /* Segmented control on the 28px height. */
 .seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-ctl); overflow: hidden; height: var(--ctl); }
 .seg > button { font: inherit; font-size: var(--text-caption); height: 100%; padding: 0 var(--s3); background: var(--panel-2); border: none; border-left: 1px solid var(--border); border-radius: 0; color: var(--muted); cursor: pointer; }

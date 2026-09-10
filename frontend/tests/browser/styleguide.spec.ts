@@ -55,6 +55,7 @@ test('reference stays readable in both themes and narrow, short, wide windows', 
         return channels[0] * .2126 + channels[1] * .7152 + channels[2] * .0722;
       };
       const pairs = [
+        ['--bad', '--panel'], ['--bad', '--panel-2'], ['--good', '--panel'], ['--warn', '--panel'],
         ['--fg', '--bg'], ['--fg', '--panel'], ['--muted', '--panel'], ['--muted', '--panel-2'],
         ['--on-accent', '--accent'], ['--on-ink', '--ink-bar'], ['--on-ink-muted', '--ink-bar'],
       ];

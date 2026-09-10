@@ -156,6 +156,22 @@ and relevant uncertainty readable. A design migration must not change trading
 calculations or create a second execution flow. New planning surfaces use the
 same patterns without treating illustrative mock data as production behavior.
 
+## Keeping and quantity status
+
+Use red (`--bad`) for invalid data and blocked calculations, amber (`--warn`)
+for incomplete estimates, and green (`--good`) for successfully applied keep
+rules. Green does not certify listing readiness. Staying logged out, keeping an
+item, or having no crafting goal is neutral. Pair color with explicit text.
+Error notices use a red outline and restrained tinted background in both themes.
+
+Show one primary quantity failure and its recovery action. Suppress derived
+failure notices and ordinary “no picks” messaging while calculations are blocked.
+Keep settings appear in a compact “What I’m keeping” summary; the editor is a
+keyboard-contained dialog, and the complete quantity table is opt-in. Show actual
+saved minimum-copy settings, automatic leveled exclusions, and crafting/item
+rules. Never advertise a last-copy default that is not enabled. Missing data stays
+unavailable; scan-only quantities are estimates before existing listings.
+
 ## Preferences and page rhythm
 
 Settings, Set picks, Relics, Routines, and FAQ use a bounded 64rem reading
