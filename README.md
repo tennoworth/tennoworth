@@ -122,15 +122,24 @@ reports capture and presentation backends separately, along with OCR readiness.
 
 ## First run
 
+**In the browser:** open [tennoworth.app](https://tennoworth.app/) to browse
+market prices and public-data tools. No login or installation is needed.
+
+**In the desktop app:**
+
 1. Start Warframe and continue past its login screen.
-2. Open TennoWorth and select **Scan inventory**.
-3. Open **Protected selling plan → Connect WFM** to log in or unlock your
-   warframe.market account. Current listings are needed to establish available
-   selling quantities; without them, those quantities remain unavailable.
-4. Review the ranked Sell view and protect quantities or pin a set goal. Use
-   Trade Session to plan a batch, then **List on WFM** to review it before
-   submission. You can also explore Set picks, Relics, Rivens, Baro, and
-   market-timing views as they apply to your inventory.
+2. Open TennoWorth and select **Scan inventory**. No warframe.market login is
+   needed to scan your account.
+3. Explore your inventory and market context, including Set picks, Relics,
+   Rivens, Baro, and market-timing views as they apply to your items.
+4. Optional: open **Protected selling plan → Connect WFM** to log in or unlock
+   warframe.market. This adds current-listing-aware selling quantities, buyer
+   comparisons, and listing management. You can then use Trade Session to plan
+   a batch and **List on WFM** to review it before submission.
+
+Current listings are needed to verify available selling quantities. While WFM
+is disconnected, those quantities remain unavailable; that does not prevent
+inventory scanning or public market browsing.
 
 Closing the main window hides the desktop app to the system tray so price
 watches and trade detection can continue. Quit it from the tray to stop the
@@ -156,7 +165,8 @@ DE public data  ── drop tables + world state ►      └── optional WFM
   ledger, protected selling plan, notification history, and pending listing
   plans remain in local application storage.
 - Scanning and public market browsing do not require a warframe.market login.
-  Selling availability and buyer comparisons do; its bearer token is encrypted at rest
+  Verified selling availability and buyer comparisons do. The bearer token is
+  encrypted at rest
   with AES-256-GCM using a PBKDF2-derived key. Remember-on-device stores the
   derived unlock key, rather than the passphrase, in the operating system keyring.
 - Reward captures stay in memory unless the user explicitly enables local
