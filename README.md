@@ -33,6 +33,9 @@ set-completion plays, relic expected value, Riven context, and listing health.
 - Provides focused views for spare mods and Arcanes, ducat fodder, movers,
   sets, hold/sell timing, and vaulted or soon-to-vault items.
 - Compares scans so newly acquired and recently removed sellables are visible.
+- Protects per-item quantities and the components of a pinned set goal across
+  selling recommendations and ducat planning, alongside the global keep-copy
+  setting. Existing listings remain unchanged until reviewed.
 
 ### Find the better play
 
@@ -49,7 +52,14 @@ set-completion plays, relic expected value, Riven context, and listing health.
 
 ### Manage the sale
 
-- Reviews and edits a batch before creating warframe.market listings. Failed or
+- Plans a **Trade Session** for Fast Cash, Plat per Trade, Clear Inventory, or
+  Max Value within a trade budget and optional platinum target. Complete owned
+  sets compete with individual parts without allocating their components twice.
+- Compares visible buyers' whole-lot quantity coverage and bid value with your
+  listing reference. This uses a top-five sample, not the full order book or a
+  guarantee of a sale.
+- Reviews existing and proposed warframe.market listings together, with quantity,
+  trade-allowance, and changed-order checks before submission. Failed or
   interrupted batches are persisted and can be resumed.
 - Shows live orders, quantity mismatches, and listings that have fallen behind
   the current top of book; supports repricing, visibility changes, and removal.
@@ -57,9 +67,13 @@ set-completion plays, relic expected value, Riven context, and listing health.
   live order stream supplies the fast path, with a periodic check as fallback.
 - Reads confirmed trades from `EE.log` into a local platinum ledger and can
   shrink or close the matching listing after a sale.
+- Keeps a persistent notification inbox for completed trades, price watches,
+  scan summaries, Baro reminders, relevant events, and daily sell opportunities,
+  with category controls and optional desktop popups.
 - Offers an opt-in relic reward overlay. A bounded local capture is OCR'd after
-  a reward event or shortcut and annotated with platinum, ducats, owned count,
-  and recognition confidence. It does not click or choose a reward.
+  a reward event or the default `Ctrl+Shift+O` shortcut, recognizes English reward names,
+  and adds platinum, ducats, owned count, and recognition confidence. It does
+  not click or choose a reward.
 
 The hosted site exposes the public-data tools and a guided product preview. It
 cannot scan inventory, sign in to warframe.market, create listings, watch
@@ -99,19 +113,33 @@ That relaxes same-user ptrace protection system-wide until reboot; do not apply
 it without understanding the trade-off. File capabilities are appropriate for
 a locally built binary, but do not work on the AppImage's `nosuid` mount.
 
-The optional reward overlay works with Borderless Fullscreen or Windowed mode.
-Windows and X11 use direct window capture. Wayland currently requires Warframe
-to run through XWayland; the overlay does not use a capture portal yet. Settings
-reports the active capture backend and whether OCR is ready.
+The optional reward overlay works with Borderless Fullscreen or Windowed mode
+on both platforms. Windows and X11 use direct window capture. Wayland capture
+currently requires Warframe to run through XWayland; it does not use a capture
+portal yet. On supported Wayland compositors, a native layer-shell overlay
+displays results above the game, with a desktop-window fallback. Settings
+reports capture and presentation backends separately, along with OCR readiness.
 
 ## First run
 
+**In the browser:** open [tennoworth.app](https://tennoworth.app/) to browse
+market prices and public-data tools. No login or installation is needed.
+
+**In the desktop app:**
+
 1. Start Warframe and continue past its login screen.
-2. Open TennoWorth and select **Scan inventory**.
-3. Review the ranked Sell view, then explore Set picks, Relics, Rivens, Baro,
-   routines, and market-timing views as they apply to the scanned inventory.
-4. Optional: use **List on WFM**. TennoWorth asks for warframe.market
-   credentials only when an authenticated feature needs them.
+2. Open TennoWorth and select **Scan inventory**. No warframe.market login is
+   needed to scan your account.
+3. Explore your inventory and market context, including Set picks, Relics,
+   Rivens, Baro, and market-timing views as they apply to your items.
+4. Optional: open **Protected selling plan → Connect WFM** to log in or unlock
+   warframe.market. This adds current-listing-aware selling quantities, buyer
+   comparisons, and listing management. You can then use Trade Session to plan
+   a batch and **List on WFM** to review it before submission.
+
+Current listings are needed to verify available selling quantities. While WFM
+is disconnected, those quantities remain unavailable; that does not prevent
+inventory scanning or public market browsing.
 
 Closing the main window hides the desktop app to the system tray so price
 watches and trade detection can continue. Quit it from the tray to stop the
@@ -134,10 +162,13 @@ DE public data  ── drop tables + world state ►      └── optional WFM
   upload service. The hosted site is static and never receives inventory.
 - The desktop scan extracts the session values needed to request inventory
   from Digital Extremes. The resulting inventory, snapshots, settings, watches,
-  ledger, and pending listing plans remain in local application storage.
-- A warframe.market login is optional. Its bearer token is encrypted at rest
+  ledger, protected selling plan, notification history, and pending listing
+  plans remain in local application storage.
+- Scanning and public market browsing do not require a warframe.market login.
+  Verified selling availability and buyer comparisons do. The bearer token is
+  encrypted at rest
   with AES-256-GCM using a PBKDF2-derived key. Remember-on-device stores the
-  derived unlock key-not the passphrase-in the operating system keyring.
+  derived unlock key, rather than the passphrase, in the operating system keyring.
 - Reward captures stay in memory unless the user explicitly enables local
   diagnostics, which writes recent captures under the app cache directory.
   Nothing is uploaded automatically. Optional live overlay pricing sends
