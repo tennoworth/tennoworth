@@ -9,6 +9,7 @@ async function recoveryCommands(page: Page) {
       const state = w.recovery;
       if (command === 'scan_inventory') return Promise.resolve('{}');
       if (command === 'evaluate_domain' && args.request.operation === 'normalize_inventory') {
+        if (state.scan === 'empty') return Promise.resolve({ operation: 'normalize_inventory', result: { owned: [], flat_count: 1, unresolved: {} } });
         if (state.scan === 'error') return Promise.reject('The calculation contains an out-of-range number.');
         return Promise.resolve({ operation: 'normalize_inventory', result: { owned: [
           ['pyrana_prime_set', { slug: 'pyrana_prime_set', name: 'Pyrana Prime Set', type: 'Weapon', count: 3, leveled: 0, kept_lvl: null, subtype: null }],
@@ -190,5 +191,27 @@ for (const theme of ['light', 'dark'] as const) {
     await page.getByRole('button', { name: 'Clear', exact: true }).click();
     await expect(inventory).toContainText('No inventory yet');
     await expect(inventory.locator('time')).toHaveCount(0);
+  });
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`${theme} a scan with no tradeables keeps an explicit retained-inventory outcome`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.goto('/?preview-desktop&sample');
+    const inventory = page.locator('.statusbar .inv');
+    const timestamp = await inventory.locator('time').getAttribute('datetime');
+    await recoveryCommands(page);
+    await page.evaluate(() => { (window as any).recovery.scan = 'empty'; });
+    await page.getByRole('button', { name: 'Refresh ▾', exact: true }).click();
+    await page.getByTestId('desktop-scan').click();
+    await expect(inventory).toContainText('No tradeable items found; showing saved inventory');
+    await expect(inventory).not.toContainText('Last refresh failed');
+    await expect(inventory.locator('time')).toHaveAttribute('datetime', timestamp!);
+    await page.getByRole('button', { name: 'Dismiss scan error', exact: true }).click();
+    await expect(inventory).toContainText('No tradeable items found; showing saved inventory');
+    for (const [width, height] of [[1440, 900], [1200, 480], [320, 480]]) {
+      await page.setViewportSize({ width, height });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    }
   });
 }

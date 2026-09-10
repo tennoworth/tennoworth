@@ -265,9 +265,11 @@ for (const outcome of ['invalid', 'empty', 'untradeable', 'persistence'] as cons
       expect(c.lastUpdated).toBe(snapshot.ts);
       expect(c.resolved.owned).toEqual(snapshot.owned);
       expect(c.error ?? c.pullError).toBeTruthy();
-      expect(c.refreshFailed).toBe(true);
+      expect(c.refreshFailed).toBe(outcome === 'invalid' || outcome === 'persistence');
+      expect(c.noTradeables).toBe(outcome === 'empty' || outcome === 'untradeable');
       c.error = null; c.pullError = null;
-      expect(c.refreshFailed).toBe(true);
+      expect(c.refreshFailed).toBe(outcome === 'invalid' || outcome === 'persistence');
+      expect(c.noTradeables).toBe(outcome === 'empty' || outcome === 'untradeable');
       expect(storage.clearSnapshot).not.toHaveBeenCalled();
       await c.clear();
       expect(c.refreshFailed).toBe(false);
@@ -306,4 +308,25 @@ it('a successful import clears the failed-refresh marker and preserves its origi
   expect(c.source).toBe('import');
   expect(c.lastUpdated).toBe(123);
   expect(storage.saveSnapshot).toHaveBeenCalledWith({ invName: 'older import', owned: normalized('import').owned }, 123);
+});
+
+it('distinguishes a scan with no tradeables from a failed refresh and clears that outcome on success', async () => {
+  const storage = store(snapshot);
+  let empty = true;
+  const c = new InventoryController(storage, { fetchInventory: vi.fn(), loadCachedMarket: vi.fn(), refreshMarket: vi.fn(), reportScanIssue: vi.fn() }, {
+    ...sources, normalizeInventory: async () => ({ owned: empty ? new Map() : snapshot.owned, unresolved: {}, flatCount: 1 }),
+  });
+  c.market = { items: {} } as import('../../contracts/data').Market;
+  c.catalogs = { uniqueToInfo: new Map() };
+  await c.restore();
+  const timestamp = c.lastUpdated;
+  await c.handleInventory({ name: 'No tradeables', data: {} });
+  expect(c.refreshFailed).toBe(false);
+  expect(c.noTradeables).toBe(true);
+  expect(c.lastUpdated).toBe(timestamp);
+  c.pullError = null;
+  expect(c.noTradeables).toBe(true);
+  empty = false;
+  await c.handleInventory({ name: 'New scan', data: {} });
+  expect(c.noTradeables).toBe(false);
 });

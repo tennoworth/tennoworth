@@ -1360,12 +1360,12 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       <div data-shell class="cell inv" title={unresolvedCount > 0 ? `${unresolvedCount} items couldn't be price-matched (${unresolvedSummary}) - usually untradeable blueprints, quest items and very new content.` : undefined}>
         {#if inventory.inventoryName}
           <span data-shell class="dot {inventory.refreshFailed ? 'stale' : inventoryFreshness}" role="img" aria-label={inventory.refreshFailed ? 'Inventory refresh failed' : `Inventory recorded ${inventoryStaleness ?? 'at an unknown time'}`}></span>
-          <span data-shell>{inventory.source === 'import' ? 'Imported inventory' : inventory.source === 'saved' || inventory.refreshFailed ? 'Using saved scan' : 'Inventory'}</span>
+          <span data-shell>{inventory.source === 'import' ? 'Imported inventory' : inventory.source === 'saved' || inventory.refreshFailed || inventory.noTradeables ? 'Using saved scan' : 'Inventory'}</span>
           <b data-shell class="file" title={inventory.inventoryName}>{inventory.inventoryName}</b>
           {#if inventoryTimestamp}
             <span data-shell>·</span><time data-shell datetime={inventoryTimestamp}>As of {new Date(inventoryTimestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })} · {inventoryStaleness}</time>
           {:else}<span data-shell>Timestamp unavailable</span>{/if}
-          {#if inventory.refreshFailed}<span data-shell class="bad">Last refresh failed</span>{/if}
+          {#if inventory.refreshFailed}<span data-shell class="bad">Last refresh failed</span>{:else if inventory.noTradeables}<span data-shell>No tradeable items found; showing saved inventory</span>{/if}
         {:else}
           <span data-shell class="dot" aria-hidden="true"></span>
           <span data-shell>No inventory yet</span>
