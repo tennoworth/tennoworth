@@ -43,10 +43,10 @@
     <meta http-equiv="Referrer-Policy" content="no-referrer" />
     <meta http-equiv="X-Content-Type-Options" content="nosniff" />
 
-    <title>TennoWorth - what to sell in Warframe, right now</title>
+    <title>TennoWorth | Warframe Market Prices &amp; Inventory Tool</title>
     <meta
       name="description"
-      content="TennoWorth ranks your Warframe inventory by what's actually worth selling on warframe.market right now - Baro flips, set-vs-parts arbitrage, and ducat dumps. The desktop app runs on Windows + Linux. No account, no upload."
+      content="Check Warframe market prices and find what to sell for platinum. Browse free, or rank your inventory with TennoWorth for Windows and Linux. No Overwolf required."
     />
     <link rel="canonical" href="https://tennoworth.app/" />
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#CFCBB2" />
@@ -62,21 +62,53 @@
     <meta property="og:site_name" content="TennoWorth" />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://tennoworth.app/" />
-    <meta property="og:title" content="TennoWorth - what to sell in Warframe, right now" />
+    <meta property="og:title" content="TennoWorth | Warframe Market Prices &amp; Inventory Tool" />
     <meta
       property="og:description"
-      content="Ranks your Warframe inventory by what's worth selling on warframe.market right now. Desktop app for Windows + Linux. Nothing leaves your machine."
+      content="Check Warframe market prices and find what to sell for platinum. Free inventory tools for Windows and Linux, without Overwolf. Your inventory stays local."
     />
     <meta property="og:image" content="https://tennoworth.app/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:alt" content="TennoWorth — what to sell in Warframe, right now" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="TennoWorth - what to sell in Warframe, right now" />
+    <meta name="twitter:title" content="TennoWorth | Warframe Market Prices &amp; Inventory Tool" />
     <meta
       name="twitter:description"
-      content="Ranks your Warframe inventory by what's worth selling right now. Desktop app for Windows + Linux."
+      content="Check Warframe market prices and find what to sell for platinum. Free inventory tools for Windows and Linux, without Overwolf. Your inventory stays local."
     />
     <meta name="twitter:image" content="https://tennoworth.app/og.png" />
+    <meta name="twitter:image:alt" content="TennoWorth — what to sell in Warframe, right now" />
+    <noscript><style>#app { display: none; }</style></noscript>
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://tennoworth.app/#website",
+            "url": "https://tennoworth.app/",
+            "name": "TennoWorth",
+            "inLanguage": "en",
+            "description": "Warframe market prices and inventory tools to help you decide what to sell."
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://tennoworth.app/#application",
+            "name": "TennoWorth",
+            "url": "https://tennoworth.app/#desktop",
+            "operatingSystem": "Windows, Linux",
+            "applicationCategory": "UtilitiesApplication",
+            "description": "Free, open-source Warframe inventory and market dashboard for Windows and Linux. Rank owned items by sell priority without Overwolf; inventory stays on your machine.",
+            "isAccessibleForFree": true,
+            "license": "https://github.com/tennoworth/tennoworth/blob/main/LICENSE",
+            "downloadUrl": "https://github.com/tennoworth/tennoworth/releases/latest",
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+          }
+        ]
+      }
+    </script>
   </head>
   <body>
     <div id="app"></div>
@@ -86,13 +118,13 @@
       sibling; users with JS see the real app, not this block.
     -->
     <noscript>
-      <main style="max-width:42rem;margin:4rem auto;padding:0 1.25rem;font-family:system-ui,sans-serif;color:#46422F;background:#DBD7BF;line-height:1.55;">
+      <main style="max-width:42rem;margin:4rem auto;padding:0 1.25rem;font-family:var(--font-body, system-ui),sans-serif;color:var(--fg, #46422F);background:var(--panel, #DBD7BF);line-height:var(--leading-body, 1.55);">
         <h1>TennoWorth - what to sell in Warframe, right now</h1>
         <p>
-          TennoWorth cross-references your Warframe inventory against a
-          warframe.market price snapshot and ranks what's actually worth
-          selling: live sell-score, Baro Ki'Teer buy-and-hold flip timing,
-          set-vs-parts arbitrage, and ducat-dump efficiency.
+          Browse Warframe market prices, price movers, and vaulted items for
+          free. TennoWorth uses warframe.market price snapshots to help you
+          decide what to sell for platinum. Enable JavaScript to search items
+          and explore the market dashboard.
         </p>
         <p>
           The desktop app treats <strong>Windows + Linux as equal, first-class
@@ -100,7 +132,16 @@
           and no inventory upload: the app reads your inventory from the
           running game and keeps it on your machine.
         </p>
-        <p>This page needs JavaScript enabled to run the dashboard.</p>
+        <p>
+          The free, open-source desktop app ranks your owned items by sell
+          priority and compares sets, parts, and ducat value. No Overwolf required.
+        </p>
+        <p>
+          <a href="https://github.com/tennoworth/tennoworth/releases/latest">Download TennoWorth for Windows or Linux</a>
+          · <a href="https://github.com/tennoworth/tennoworth">Source code</a>
+          · <a href="https://github.com/tennoworth/tennoworth/blob/main/SECURITY.md">Trust and safety</a>
+        </p>
+        <p>TennoWorth is a fan project, not affiliated with Digital Extremes or warframe.market.</p>
       </main>
     </noscript>
     <script type="module" src="/src/main.ts"></script>
