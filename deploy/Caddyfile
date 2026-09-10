@@ -64,13 +64,15 @@
 		respond "TennoWorth package repositories have been removed. Use the Linux AppImage from https://github.com/tennoworth/tennoworth/releases/latest\n" 410
 	}
 
-	# Everything else: the SPA. Wrapped in a catch-all handle so we never mix a
-	# handle block with bare file_server/try_files (Caddy's directive ordering
-	# there is surprising). try_files rewrites unknown paths to index.html.
+	# The hosted site uses root-page fragments, not path-based routes. Let
+	# file_server return 404 for missing paths instead of indexing homepage copies.
 	handle {
-		@assets path /assets/*
+		# Missing chunks must not pin a 404 in browser or CDN caches.
+		@assets {
+			path /assets/*
+			file {path}
+		}
 		header @assets Cache-Control "public, max-age=31536000, immutable"
-		try_files {path} /index.html
 		file_server
 	}
 }
