@@ -12,10 +12,27 @@ import { UPDATE_CHECK_INTERVAL_MS, type UpdateStatus } from '../contracts/update
   import { humanError } from '../contracts/errors';
 
   let updateInfo = $state<UpdateStatus | null>(null);
+  let updateChecking = $state(false);
+  let manualCheck = $state(false);
   let updateInstalling = $state(false);
   let updateInstalled = $state(false);
   let updateError = $state<string | null>(null);
   let updateDismissed = $state(false);
+
+  export async function checkForUpdates() {
+    updateDismissed = false;
+    if (updateChecking || updateInstalling || updateInstalled) return;
+    manualCheck = true;
+    updateChecking = true;
+    updateError = null;
+    try {
+      updateInfo = await checkUpdate();
+    } catch (error) {
+      updateError = humanError(error);
+    } finally {
+      updateChecking = false;
+    }
+  }
 
   onMount(() => {
     // Listen for launch/manual pushes AND pull the stored status (its emit may
@@ -71,6 +88,7 @@ import { UPDATE_CHECK_INTERVAL_MS, type UpdateStatus } from '../contracts/update
   }
 
   async function restartToApply() {
+    updateError = null;
     try {
       await restartApp();
     } catch (e) {
@@ -79,27 +97,42 @@ import { UPDATE_CHECK_INTERVAL_MS, type UpdateStatus } from '../contracts/update
   }
 </script>
 
-{#if updateInfo && !updateDismissed}
+{#if (updateInfo || manualCheck) && !updateDismissed}
   <div class="card ui-panel warn-banner general-banner" role="status" data-testid="update-banner">
     <div class="gb-body">
       {#if updateInstalled}
-        <strong>Update installed.</strong> TennoWorth v{updateInfo.version} takes over
-        the next time the app starts.
-      {:else}
+        <strong>Update installed.</strong> TennoWorth v{updateInfo?.version} takes over the next time the app starts.
+      {:else if updateInstalling}
+        <strong>Installing update…</strong> Keep TennoWorth open until installation finishes.
+      {:else if updateChecking}
+        <strong>Checking for updates…</strong>
+      {:else if updateInfo?.available}
         <strong>Update available:</strong> TennoWorth v{updateInfo.version}
         (you have v{updateInfo.current_version}). Nothing downloads until you install.
-        {#if updateError}<br />{updateError}{/if}
+      {:else if !updateError}
+        {#if updateInfo?.support === 'appimage_required'}
+          This install can’t update itself. Download and run the TennoWorth AppImage to receive updates.
+        {:else if updateInfo?.support === 'disabled_test_build'}
+          Updates are disabled in this test build.
+        {:else if updateInfo?.checked}
+          No update was offered · v{updateInfo.current_version}. If you’re offline, reconnect and check again.
+        {:else}
+          Couldn’t check for updates. Check your connection and try again.
+        {/if}
       {/if}
+      {#if updateError}<p>{updateError}</p>{/if}
     </div>
     <div class="gb-actions">
       {#if updateInstalled}
         <button class="btn primary" onclick={restartToApply}>Restart now</button>
-      {:else}
-        <button class="btn primary" onclick={installUpdateNow} disabled={updateInstalling}>
+      {:else if updateInfo?.available}
+        <button class="btn primary" onclick={installUpdateNow} disabled={updateInstalling || updateChecking}>
           {updateInstalling ? 'Installing…' : 'Install update'}
         </button>
+      {:else}
+        <button class="btn" onclick={checkForUpdates} disabled={updateChecking}>{updateChecking ? 'Checking…' : 'Check again'}</button>
       {/if}
-      <button class="gb-dismiss" aria-label="Dismiss" onclick={() => (updateDismissed = true)}>×</button>
+      <button class="gb-dismiss" aria-label="Dismiss update notice" onclick={() => (updateDismissed = true)} disabled={updateInstalling}>×</button>
     </div>
   </div>
 {/if}

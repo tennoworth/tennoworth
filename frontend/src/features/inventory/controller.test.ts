@@ -237,7 +237,7 @@ it('reports an active failed import while keeping prior inventory after supersed
   await expect(c.handleImported({ invName: 'import', ts: 123, ownedMap: normalized('import').owned })).rejects.toThrow('Snapshot write failed');
   expect(c.phase).toBe('error');
   expect(c.error).toBe('Snapshot write failed');
-  expect(c.inventoryName).toBe('import');
+  expect(c.inventoryName).toBe('saved');
   expect(c.resolved.owned).toEqual(snapshot.owned);
   expect(c.lastUpdated).toBe(snapshot.ts);
   pending.resolve(normalized('stale scan'));
@@ -245,4 +245,49 @@ it('reports an active failed import while keeping prior inventory after supersed
   expect(c.phase).toBe('error');
   expect(c.resolved.owned).toEqual(snapshot.owned);
   expect(storage.saveSnapshot).toHaveBeenCalledOnce();
+});
+
+for (const outcome of ['invalid', 'empty', 'untradeable', 'persistence'] as const) {
+  it(`retains the last successful inventory identity and quantities after ${outcome} replacement`, async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const storage = store(snapshot);
+      const normalize = vi.fn(async () => {
+        if (outcome === 'invalid') throw new Error('Inventory count is invalid');
+        if (outcome === 'empty' || outcome === 'untradeable') return { owned: new Map(), unresolved: {}, flatCount: outcome === 'empty' ? 0 : 4 };
+        return normalized('replacement');
+      });
+      if (outcome === 'persistence') storage.saveSnapshot = vi.fn().mockRejectedValue(new Error('Storage unavailable'));
+      const c = normalizationController(normalize, storage);
+      await c.restore();
+      await c.handleInventory({ name: 'replacement', data: {} });
+      expect(c.inventoryName).toBe(snapshot.invName);
+      expect(c.lastUpdated).toBe(snapshot.ts);
+      expect(c.resolved.owned).toEqual(snapshot.owned);
+      expect(c.error ?? c.pullError).toBeTruthy();
+      expect(storage.clearSnapshot).not.toHaveBeenCalled();
+    } finally { log.mockRestore(); }
+  });
+}
+
+it('makes a failed snapshot read recoverable and ignores a read superseded by Clear', async () => {
+  const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+  try {
+    const storage = store();
+    storage.loadSnapshot = vi.fn().mockRejectedValue(new Error('Saved inventory unavailable'));
+    const c = normalizationController(vi.fn(), storage);
+    await c.restore();
+    expect(c.phase).toBe('error');
+    expect(c.error).toBe('Saved inventory unavailable');
+    const pending = deferred<Snapshot | null>();
+    const nextStore = store();
+    nextStore.loadSnapshot = vi.fn(() => pending.promise);
+    const next = normalizationController(vi.fn(), nextStore);
+    const restoring = next.restore();
+    await next.clear();
+    pending.reject(new Error('obsolete read'));
+    await restoring;
+    expect(next.phase).toBe('idle');
+    expect(next.error).toBeNull();
+  } finally { log.mockRestore(); }
 });
