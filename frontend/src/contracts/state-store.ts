@@ -40,6 +40,6 @@ export interface StateStore {
   setSetting(key: SettingKey, value: string): Promise<void>;
 
   loadSnapshot(): Promise<Snapshot | null>;
-  saveSnapshot(input: SaveSnapshotInput): Promise<void>;
+  saveSnapshot(input: SaveSnapshotInput, timestamp?: number): Promise<void>;
   clearSnapshot(): Promise<void>;
 }

@@ -502,11 +502,24 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       .join(', ')
   );
 
+  let displayNow = $state(Date.now());
+  onMount(() => {
+    const refreshClock = () => { displayNow = Date.now(); };
+    const timer = window.setInterval(() => { if (!document.hidden) refreshClock(); }, 60_000);
+    document.addEventListener('visibilitychange', refreshClock);
+    window.addEventListener('focus', refreshClock);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshClock);
+      window.removeEventListener('focus', refreshClock);
+    };
+  });
+
   function ago(ts: string | number | null | undefined) {
-    if (!ts) return null;
+    if (!ts || !Number.isFinite(new Date(ts).getTime())) return null;
     // Clamp at 0 - a cron runner with skewed clock can produce
     // `updated_at` in the future, which used to render "-120 min ago".
-    const minutes = Math.max(0, Math.round((Date.now() - new Date(ts).getTime()) / 60000));
+    const minutes = Math.max(0, Math.round((displayNow - new Date(ts).getTime()) / 60000));
     if (minutes < 1) return 'just now';
     if (minutes < 60) return `${minutes} min ago`;
     if (minutes < 60 * 24) return `${Math.round(minutes / 60)} h ago`;
@@ -515,11 +528,12 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
 
   let marketStaleness = $derived(ago(inventory.market?.updated_at));
   let inventoryStaleness = $derived(ago(inventory.lastUpdated));
+  let inventoryTimestamp = $derived(inventory.lastUpdated && Number.isFinite(new Date(inventory.lastUpdated).getTime()) ? new Date(inventory.lastUpdated).toISOString() : null);
   // Same buckets as the market dot, on the inventory's own clock: a scan is
   // "fresh" for a day (inventories move slower than the order book).
   let inventoryFreshness = $derived.by(() => {
     if (!inventory.lastUpdated) return 'unknown';
-    const h = (Date.now() - inventory.lastUpdated) / 3.6e6;
+    const h = (displayNow - inventory.lastUpdated) / 3.6e6;
     if (h <= 24) return 'fresh';
     if (h <= 24 * 7) return 'aging';
     return 'stale';
@@ -529,7 +543,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // A matching content hash is a successful freshness check even though the
   // retained payload keeps its original download timestamp.
   function surfaceAge(key: string) {
-    const stamp = staleSurfaceTimestamp(inventory.market, key, Date.now());
+    const stamp = staleSurfaceTimestamp(inventory.market, key, displayNow);
     return stamp ? ago(stamp) : null;
   }
   let baroSurfaceAge = $derived(surfaceAge('baro'));
@@ -542,7 +556,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // event-week price spike would be generous to the point of misleading.
   let marketFreshness = $derived.by<'unknown' | 'fresh' | 'aging' | 'stale'>(() => {
     if (!inventory.market?.updated_at) return 'unknown';
-    const h = (Date.now() - new Date(inventory.market.updated_at).getTime()) / 3.6e6;
+    const h = (displayNow - new Date(inventory.market.updated_at).getTime()) / 3.6e6;
     if (h <= 3) return 'fresh';
     if (h <= 24) return 'aging';
     return 'stale';
@@ -1345,10 +1359,13 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       {#if !inShell}<button data-shell class="btn" onclick={() => filters.setView('notifications')}>Notifications{unreadNotifications ? ` (${unreadNotifications})` : ''}</button>{/if}
       <div data-shell class="cell inv" title={unresolvedCount > 0 ? `${unresolvedCount} items couldn't be price-matched (${unresolvedSummary}) - usually untradeable blueprints, quest items and very new content.` : undefined}>
         {#if inventory.inventoryName}
-          <span data-shell class="dot {inventoryFreshness}" role="img" aria-label="Inventory {inventoryFreshness}"></span>
-          <span data-shell>Inventory</span>
+          <span data-shell class="dot {inventory.refreshFailed ? 'stale' : inventoryFreshness}" role="img" aria-label={inventory.refreshFailed ? 'Inventory refresh failed' : `Inventory recorded ${inventoryStaleness ?? 'at an unknown time'}`}></span>
+          <span data-shell>{inventory.source === 'import' ? 'Imported inventory' : inventory.source === 'saved' || inventory.refreshFailed || inventory.noTradeables ? 'Using saved scan' : 'Inventory'}</span>
           <b data-shell class="file" title={inventory.inventoryName}>{inventory.inventoryName}</b>
-          {#if inventoryStaleness}<span data-shell>·</span><b data-shell>{inventoryStaleness}</b>{/if}
+          {#if inventoryTimestamp}
+            <span data-shell>·</span><time data-shell datetime={inventoryTimestamp}>As of {new Date(inventoryTimestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })} · {inventoryStaleness}</time>
+          {:else}<span data-shell>Timestamp unavailable</span>{/if}
+          {#if inventory.refreshFailed}<span data-shell class="bad">Last refresh failed</span>{:else if inventory.noTradeables}<span data-shell>No tradeable items found; showing saved inventory</span>{/if}
         {:else}
           <span data-shell class="dot" aria-hidden="true"></span>
           <span data-shell>No inventory yet</span>
@@ -1440,7 +1457,17 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   {#if marketAccess.message}
     <div class="ui-notice" data-tone="warn" role="status">{marketAccess.message}</div>
   {/if}
-  {#if inventory.error || inventory.pullError}
+  {#if inventory.noTradeables && inventory.pullError}
+    <section data-shell class="ui-notice ui-stack" data-tone="warn" role="status" aria-label="No tradeable items found">
+      <strong data-shell>No tradeable items found</strong>
+      <p data-shell>{inventory.pullError}</p>
+      {#if hasInventory}<p data-shell>Showing your saved inventory. This scan did not replace its quantities.</p>{/if}
+      <div data-shell class="ui-toolbar">
+        <button data-shell class="btn" onclick={() => inventory.pullInventory()} disabled={inventory.pullingInventory}>Scan again</button>
+        <button data-shell class="btn ghost" onclick={() => { inventory.pullError = null; }}>Dismiss scan notice</button>
+      </div>
+    </section>
+  {:else if inventory.error || inventory.pullError}
     <section data-shell class="ui-notice ui-stack" data-tone="bad" role="alert" aria-label="Inventory unavailable">
       <strong data-shell>Your inventory couldn’t be refreshed</strong>
       <p data-shell>{hasInventory ? 'Showing your last successful inventory. Its quantities have not been refreshed.' : 'Try scanning again, or check for an app update. Settings and help are still available.'}</p>

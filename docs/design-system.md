@@ -142,6 +142,15 @@ part of each applicable pattern, not finishing touches. Empty inventory is not
 a failed request. Missing data is not zero. Estimates must be labeled as such,
 and background refresh must not silently replace user edits.
 
+Retained inventory displays its original absolute timestamp alongside a live
+relative age. Identify saved and imported snapshots explicitly. A failed refresh
+keeps a textual status beside that timestamp even after error details are
+dismissed; only a successful replacement or clearing inventory resets it.
+A scan with no tradeable items explains that saved inventory remains visible,
+in an informational notice, separately from an acquisition or processing
+failure. Its heading must not claim that the refresh failed. The living styleguide’s
+Error state demonstrates these retained-data notices.
+
 For listing review, keep before/after price and quantity changes, visibility,
 and relevant uncertainty readable. A design migration must not change trading
 calculations or create a second execution flow. New planning surfaces use the
