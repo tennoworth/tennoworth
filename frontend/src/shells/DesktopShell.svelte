@@ -86,7 +86,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     if (inventory.pullingInventory) return 'A scan is in progress. Your review edits are kept.';
     if (!allocationMatches || !protection.state) return 'Inventory protection is unavailable. Recheck quantities before listing.';
     if (protection.state.snapshot_id !== inventory.nativeSnapshotId) return 'The displayed inventory does not match the latest game scan. Scan again before listing.';
-    if (unknownSlugs.size) return 'Protection quantities are unavailable for some items. Recheck before listing.';
+    if (protection.error || unknownSlugs.size) return 'Protection quantities are unavailable for some items. Recheck before listing.';
     if (!listing.wfmStatus?.unlocked) return 'Connect WFM to check current listings before posting.';
     if ([...supportedOwned.values()].some(row => protection.state?.items[row.slug]?.available == null)) return 'Current WFM listings could not be checked. Recheck before posting.';
     return null;
@@ -95,8 +95,9 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   let estimatedGuidance = $derived(!listingQuantitiesKnown);
   let listingActionLabel = $derived.by(() => {
     if (!inventory.nativeSnapshotId) return 'Scan game';
-    if (!allocationMatches || !protection.state || protection.error || unknownSlugs.size) return 'Recheck protection';
-    return protection.state.snapshot_id !== inventory.nativeSnapshotId ? 'Scan game' : 'Check WFM listings';
+    if (!allocationMatches || !protection.state) return 'Recheck protection';
+    if (protection.state.snapshot_id !== inventory.nativeSnapshotId) return 'Scan game';
+    return protection.error || unknownSlugs.size ? 'Recheck protection' : 'Check WFM listings';
   });
   let availability = $derived(new Map([...inventory.resolved.owned].map(([key, row]) => [key,
     listingQuantitiesKnown && supportedOwned.has(key) ? Math.min(sellableQty(row.count, filters.reserveCopies, row.leveled ?? 0), protection.state?.items[row.slug]?.available ?? 0) : 0,
