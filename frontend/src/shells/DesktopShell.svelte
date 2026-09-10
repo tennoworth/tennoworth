@@ -1457,7 +1457,17 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   {#if marketAccess.message}
     <div class="ui-notice" data-tone="warn" role="status">{marketAccess.message}</div>
   {/if}
-  {#if inventory.error || inventory.pullError}
+  {#if inventory.noTradeables && inventory.pullError}
+    <section data-shell class="ui-notice ui-stack" data-tone="warn" role="status" aria-label="No tradeable items found">
+      <strong data-shell>No tradeable items found</strong>
+      <p data-shell>{inventory.pullError}</p>
+      {#if hasInventory}<p data-shell>Showing your saved inventory. This scan did not replace its quantities.</p>{/if}
+      <div data-shell class="ui-toolbar">
+        <button data-shell class="btn" onclick={() => inventory.pullInventory()} disabled={inventory.pullingInventory}>Scan again</button>
+        <button data-shell class="btn ghost" onclick={() => { inventory.pullError = null; }}>Dismiss scan notice</button>
+      </div>
+    </section>
+  {:else if inventory.error || inventory.pullError}
     <section data-shell class="ui-notice ui-stack" data-tone="bad" role="alert" aria-label="Inventory unavailable">
       <strong data-shell>Your inventory couldn’t be refreshed</strong>
       <p data-shell>{hasInventory ? 'Showing your last successful inventory. Its quantities have not been refreshed.' : 'Try scanning again, or check for an app update. Settings and help are still available.'}</p>

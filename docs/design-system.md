@@ -147,7 +147,8 @@ relative age. Identify saved and imported snapshots explicitly. A failed refresh
 keeps a textual status beside that timestamp even after error details are
 dismissed; only a successful replacement or clearing inventory resets it.
 A scan with no tradeable items explains that saved inventory remains visible,
-separately from an acquisition or processing failure. The living styleguide’s
+in an informational notice, separately from an acquisition or processing
+failure. Its heading must not claim that the refresh failed. The living styleguide’s
 Error state demonstrates these retained-data notices.
 
 For listing review, keep before/after price and quantity changes, visibility,

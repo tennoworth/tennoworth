@@ -207,7 +207,9 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(inventory).toContainText('No tradeable items found; showing saved inventory');
     await expect(inventory).not.toContainText('Last refresh failed');
     await expect(inventory.locator('time')).toHaveAttribute('datetime', timestamp!);
-    await page.getByRole('button', { name: 'Dismiss scan error', exact: true }).click();
+    await expect(page.getByRole('alert', { name: 'Inventory unavailable' })).toHaveCount(0);
+    await expect(page.getByRole('status', { name: 'No tradeable items found' })).toBeVisible();
+    await page.getByRole('button', { name: 'Dismiss scan notice', exact: true }).click();
     await expect(inventory).toContainText('No tradeable items found; showing saved inventory');
     for (const [width, height] of [[1440, 900], [1200, 480], [320, 480]]) {
       await page.setViewportSize({ width, height });
