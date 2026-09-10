@@ -32,7 +32,11 @@
     pendingBanner: Snippet;
     calculationPending?: boolean;
     calculationError?: string | null;
-    allocationLoginHint?: string;
+    estimatedGuidance?: boolean;
+    canList?: boolean;
+    unavailableCount?: number;
+    listingActionLabel?: string;
+    oncheckListings?: () => void;
     onretryCalculation?: () => void;
   }
 
@@ -56,7 +60,7 @@
     applyPreset, setReserveCopies, toggleFiltersOpen, 
     dismissSellOnboarding, dismissKeepCopiesNudge,
     openListingFlow,
-    pendingBanner, calculationPending = false, calculationError = null, allocationLoginHint, onretryCalculation,
+    pendingBanner, estimatedGuidance = false, canList = true, unavailableCount = 0, listingActionLabel = 'Check WFM listings', oncheckListings, calculationPending = false, calculationError = null, onretryCalculation,
   }: Props = $props();
 
   // Was inline in the template, so it re-filtered the whole results array on
@@ -194,7 +198,7 @@
 </script>
 
 <section class="view-header">
-  <h2>Sell</h2>
+  <h2>{estimatedGuidance ? 'Estimated opportunities' : 'Sell'}</h2>
   <span
     class="lede-dot"
     role="img"
@@ -210,13 +214,13 @@
       <span class="v">{resolved.owned.size.toLocaleString()}</span>
       {#if fmtDelta(ownedDelta)}<span class="d" class:up={(ownedDelta ?? 0) > 0} class:down={(ownedDelta ?? 0) < 0}>{fmtDelta(ownedDelta)}</span>{/if}
     </div>
-    <div class="cell" title={calculationReady && sellableCount === 0 ? allocationLoginHint : undefined}>
-      <span class="k">Sellable</span>
+    <div class="cell">
+      <span class="k">{estimatedGuidance ? 'Opportunities' : 'Sellable'}</span>
       <span class="v">{calculationReady ? sellableCount.toLocaleString() : '—'}</span>
       {#if calculationReady && fmtDelta(sellableDelta)}<span class="d" class:up={(sellableDelta ?? 0) > 0} class:down={(sellableDelta ?? 0) < 0}>{fmtDelta(sellableDelta)}</span>{/if}
     </div>
     <div class="cell">
-      <span class="k">Potential</span>
+      <span class="k">{unavailableCount ? 'Known estimated value' : estimatedGuidance ? 'Estimated value' : 'Potential'}</span>
       <span class="v">{calculationReady ? totalPotential.toLocaleString(undefined, { maximumFractionDigits: 0 }) : '—'}{#if calculationReady}<span class="unit">p</span>{/if}</span>
       {#if calculationReady && fmtDelta(potentialDelta)}<span class="d" class:up={(potentialDelta ?? 0) > 0} class:down={(potentialDelta ?? 0) < 0}>{fmtDelta(potentialDelta, 'p')}</span>{/if}
     </div>
@@ -329,7 +333,7 @@
       <span class="pick-tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor - expect to wait for a buyer.">thin</span>
     {/if}
     <span class="pick-actions">
-      <button class="pick-list" disabled={!calculationReady} onclick={() => { if (calculationReady) openListingFlow(p); }} aria-label="List {p.name} on WFM">List</button>
+      <button class="pick-list" disabled={!calculationReady || !canList} onclick={() => { if (calculationReady && canList) openListingFlow(p); }} aria-label="List {p.name} on WFM">List</button>
       <button
         type="button"
         class="pick-snooze"
@@ -444,7 +448,9 @@
 {/snippet}
 
 {#snippet listCta()}
-  {#if isDesktop}
+  {#if isDesktop && !canList}
+    <button class="list-cta" onclick={oncheckListings}>{listingActionLabel}</button>
+  {:else if isDesktop}
     <button
       class="list-cta"
       data-testid="desktop-list"

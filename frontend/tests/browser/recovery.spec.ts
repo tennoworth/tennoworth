@@ -7,7 +7,7 @@ async function recoveryCommands(page: Page) {
     w.recovery = { installs: 0, restarts: 0, scan: 'error', update: 'available' };
     w.__TAURI__.core.invoke = (command: string, args: any) => {
       const state = w.recovery;
-      if (command === 'scan_inventory') return Promise.resolve('{}');
+      if (command === 'scan_inventory') return Promise.resolve({ inventory: '{}', snapshot_id: 1 });
       if (command === 'evaluate_domain' && args.request.operation === 'normalize_inventory') {
         if (state.scan === 'empty') return Promise.resolve({ operation: 'normalize_inventory', result: { owned: [], flat_count: 1, unresolved: {} } });
         if (state.scan === 'error') return Promise.reject('The calculation contains an out-of-range number.');

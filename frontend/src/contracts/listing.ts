@@ -1,5 +1,6 @@
 import type { SessionConstraint, MarketItemEntry } from './data';
 export interface ListingCandidate {
+  inventory_snapshot_id?: number;
   components?: Record<string, number>;
   component_limits?: Record<string, number>;
   key?: string;

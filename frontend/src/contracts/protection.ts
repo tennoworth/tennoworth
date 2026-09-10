@@ -6,6 +6,11 @@ export interface ProtectionPlan {
 export interface ProtectionState {
   plan: ProtectionPlan;
   snapshot_id: number | null;
-  items: Record<string, { owned: number; protected: number; listed: number | null; available: number | null }>;
+  items: Record<string, { owned: number; protected: number; estimated: number | null; listed: number | null; available: number | null }>;
   issues: string[];
+}
+
+export interface ProtectionInventory {
+  snapshot_id: number | null;
+  items: Record<string, { count: number; leveled: number }>;
 }

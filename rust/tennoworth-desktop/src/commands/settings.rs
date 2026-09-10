@@ -8,7 +8,7 @@
 use tauri::{AppHandle, Manager, State};
 
 use crate::persistence::{Db, ListingLogEntry, Reserve, SnapshotSummary};
-use crate::services::protection::{ProtectionPlan, ProtectionState};
+use crate::services::protection::{GuidanceInventory, ProtectionPlan, ProtectionState};
 use crate::services::wfm_session::{CmdError, WfmSession};
 use std::sync::Arc;
 
@@ -16,19 +16,19 @@ use std::sync::Arc;
 pub async fn protection_state(
     app: AppHandle,
     session: State<'_, Arc<WfmSession>>,
+    inventory: GuidanceInventory,
 ) -> Result<ProtectionState, CmdError> {
     let session = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
         let market = crate::services::sellables::MarketData::load(
             &app.state::<crate::services::market::MarketCache>(),
         );
-        let orders = session
-            .require_unlocked()
-            .map_err(|_| "Unlock WFM to account for your current listings.".to_string())
+        let orders = crate::services::protection::validate_snapshot(&app.state::<Db>(), inventory.snapshot_id)
+            .and_then(|()| session.require_unlocked().map_err(|_| "Unlock WFM to account for your current listings.".to_string()))
             .and_then(|unlocked| {
                 wfm_core::trading::listing::list_user_orders(&unlocked).map_err(|e| e.to_string())
             });
-        crate::services::protection::state(&app.state::<Db>(), &market, orders)
+        crate::services::protection::guidance_state(&app.state::<Db>(), &market, orders, inventory)
             .map_err(CmdError::internal)
     })
     .await

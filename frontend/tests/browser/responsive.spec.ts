@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const INVENTORY = {
+  nativeSnapshotId: 1,
   ts: 1_800_000_000_000,
   invName: 'responsive-audit-inventory-with-an-intentionally-long-filename.json',
   owned: [
@@ -12,7 +13,7 @@ const INVENTORY = {
 };
 
 const SWEEP_WIDTHS = [320, 360, 480, 559, 560, 561, 719, 720, 721, 759, 760, 761, 899, 900, 901, 1200, 1600];
-const DESKTOP_VIEWS = ['Sell', 'Set picks', 'Baro', 'Routines', 'Meta Drift', 'My orders', 'Price watches', 'Ledger', 'FAQ', 'Settings'];
+const DESKTOP_VIEWS = ['(?:Sell|Opportunities)', 'Set picks', 'Baro', 'Routines', 'Meta Drift', 'My orders', 'Price watches', 'Ledger', 'FAQ', 'Settings'];
 
 async function assertDocumentFits(page: Page): Promise<void> {
   const dimensions = await page.evaluate(() => ({
@@ -73,7 +74,7 @@ async function assertWithinViewport(page: Page, locator: Locator): Promise<void>
 
 async function openDesktop(page: Page): Promise<void> {
   await page.addInitScript((snapshot) => {
-    localStorage.setItem('last-owned', JSON.stringify(snapshot));
+    localStorage.setItem('last-owned-v2', JSON.stringify(snapshot));
     localStorage.setItem('sell-onboarding-dismissed', '1');
     localStorage.setItem('keep-copies-nudge-dismissed', '1');
   }, INVENTORY);
@@ -286,6 +287,7 @@ test.describe('desktop responsive layout', () => {
       runtime.__TAURI__.core.invoke = unlocked;
       runtime.__TAURI_INTERNALS__.invoke = unlocked;
     });
+    await page.getByRole('button', { name: 'Check WFM listings', exact: true }).click();
     await page.getByRole('button', { name: /^List \d+ on WFM$/ }).click();
     const review = page.locator('.modal');
     await expect(review).toBeVisible();

@@ -511,6 +511,7 @@ export type ReviewedOrder = { state: 'new' } | {
 };
 
 export interface PlanItemInput {
+  inventory_snapshot_id?: number;
   slug: string;
   platinum: number;
   quantity: number;

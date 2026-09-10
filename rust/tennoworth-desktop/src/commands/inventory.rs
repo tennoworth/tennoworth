@@ -22,11 +22,11 @@ fn record_game_scan(
     info: &wfm_core::acquisition::scan::SessionInfo,
     before: Option<crate::services::eelog::LogPosition>,
     started_at: i64,
-) {
+) -> Option<i64> {
     let after = scan_boundary(app);
     let observed_at = crate::services::allowance::unix_now();
     let db = app.state::<Db>();
-    let recorded = (|| -> Result<(), String> {
+    let recorded = (|| -> Result<i64, String> {
         let id = record_snapshot(&db, "memory", info.build.as_deref(), bytes)?;
         let raw = serde_json::from_slice(bytes).map_err(|e| format!("read scan metadata: {e}"))?;
         let account_key = wfm_core::identity::local_fingerprint(
@@ -43,8 +43,10 @@ fn record_game_scan(
             observed_at,
         );
         db.save_allowance(observation)
-            .map_err(|e| format!("save allowance: {e}"))
+            .map_err(|e| format!("save allowance: {e}"))?;
+        Ok(id)
     })();
+    let snapshot_id = recorded.as_ref().ok().copied();
     if let Err(error) = recorded {
         // A successful scan may be a different account. Never retain the
         // previous account's allowance when recording the new one fails.
@@ -52,9 +54,16 @@ fn record_game_scan(
         eprintln!("tennoworth: scan observation not recorded: {error}");
     }
     let _ = app.emit(crate::services::allowance::EVENT_ALLOWANCE_CHANGED, ());
+    snapshot_id
 }
 
-pub(crate) fn scan_and_record(app: &AppHandle) -> Result<Vec<u8>, String> {
+#[derive(serde::Serialize)]
+pub struct ScannedInventory {
+    inventory: String,
+    snapshot_id: Option<i64>,
+}
+
+pub(crate) fn scan_and_record(app: &AppHandle) -> Result<ScannedInventory, String> {
     // Keep acquisition and its accounting boundary under the same single-flight
     // guard; a tray scan must not persist newer data before this scan is recorded.
     static ACTIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -65,8 +74,8 @@ pub(crate) fn scan_and_record(app: &AppHandle) -> Result<Vec<u8>, String> {
     let (bytes, info) = crate::services::inventory::scanner()
         .scan(None, None)
         .map_err(|e| e.into_message())?;
-    record_game_scan(app, &bytes, &info, before, started_at);
-    Ok(bytes)
+    let snapshot_id = record_game_scan(app, &bytes, &info, before, started_at);
+    Ok(ScannedInventory { inventory: String::from_utf8(bytes).map_err(|_| "Inventory response was not valid UTF-8.".to_string())?, snapshot_id })
 }
 
 /// Extract snapshot rows from raw inventory bytes and append them to history as
@@ -84,7 +93,7 @@ pub(crate) fn record_snapshot(
         .map_err(|e| format!("insert snapshot: {e}"))
 }
 
-/// Memory-scan the running game and return the inventory JSON as a string.
+/// Return inventory JSON together with the identity recorded under the scan guard.
 /// Async + spawn_blocking
 /// so the (potentially slow) scan never blocks the webview event loop. A busy
 /// guard or a missing/unscannable game becomes a rejected invoke carrying
@@ -95,9 +104,9 @@ pub(crate) fn record_snapshot(
 /// is best-effort: a failure is logged to stderr and swallowed - losing a
 /// history row must never cost the user their scan (scan value > history value).
 #[tauri::command]
-pub async fn scan_inventory(app: AppHandle) -> Result<String, String> {
+pub async fn scan_inventory(app: AppHandle) -> Result<ScannedInventory, String> {
     let scan_app = app.clone();
-    let bytes = tauri::async_runtime::spawn_blocking(move || scan_and_record(&scan_app))
+    let scan = tauri::async_runtime::spawn_blocking(move || scan_and_record(&scan_app))
         .await
         .map_err(|e| format!("scan task failed to run: {e}"))??;
 
@@ -106,7 +115,7 @@ pub async fn scan_inventory(app: AppHandle) -> Result<String, String> {
     // (the SPA still gets its inventory JSON below).
     post_scan_surfaces(&app);
 
-    String::from_utf8(bytes).map_err(|e| format!("inventory response was not valid UTF-8: {e}"))
+    Ok(scan)
 }
 
 /// Seed an import snapshot as `source='import'` history. Probe-only now (the
@@ -120,4 +129,16 @@ pub fn import_snapshot(db: State<'_, Db>, inventory_json: String) -> Result<i64,
         return Err("import_snapshot is probe-only".into());
     }
     record_snapshot(&db, "import", None, inventory_json.as_bytes())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ScannedInventory;
+
+    #[test]
+    fn scan_response_matches_the_frontend_transport_fixture() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!("../../../../tests/fixtures/protection/scan-response.json")).unwrap();
+        let result = ScannedInventory { inventory: r#"{"Suits":[{"a":1}]}"#.into(), snapshot_id: Some(7) };
+        assert_eq!(serde_json::to_value(result).unwrap(), fixture);
+    }
 }

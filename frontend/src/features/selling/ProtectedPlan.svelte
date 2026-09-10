@@ -8,7 +8,7 @@
   let quantity = $state<number | undefined>(1);
   let reserves = $state<Record<string, number>>({});
   let formError = $state<string | null>(null);
-  let choices = $derived([...owned.values()].filter(row => !row.subtype && !row.slug.endsWith('_set'))
+  let choices = $derived([...owned.values()].filter(row => !row.subtype && !row.slug.endsWith('_set') && !row.slug.endsWith('_relic'))
     .filter((row, i, rows) => rows.findIndex(other => other.slug === row.slug) === i).sort((a, b) => a.name.localeCompare(b.name)));
   let names = $derived(new Map([...owned.values()].map(row => [row.slug, row.name])));
   function edit() {

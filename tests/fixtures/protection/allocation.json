@@ -9,7 +9,8 @@
       "owned": 5,
       "protected": 2,
       "listed": 1,
-      "available": 2
+      "available": 2,
+      "estimated": 3
     }
   },
   {
@@ -22,7 +23,8 @@
       "owned": 5,
       "protected": 4,
       "listed": 1,
-      "available": 0
+      "available": 0,
+      "estimated": 1
     }
   },
   {
@@ -35,7 +37,8 @@
       "owned": 5,
       "protected": 3,
       "listed": 1,
-      "available": 1
+      "available": 1,
+      "estimated": 2
     }
   },
   {
@@ -48,7 +51,8 @@
       "owned": 1,
       "protected": 2,
       "listed": 0,
-      "available": 0
+      "available": 0,
+      "estimated": 0
     }
   },
   {
@@ -61,7 +65,8 @@
       "owned": 5,
       "protected": 2,
       "listed": null,
-      "available": null
+      "available": null,
+      "estimated": 3
     }
   },
   {
@@ -74,7 +79,8 @@
       "owned": 0,
       "protected": 2,
       "listed": 1,
-      "available": 0
+      "available": 0,
+      "estimated": 0
     }
   },
   {
@@ -87,7 +93,22 @@
       "owned": 8,
       "protected": 5,
       "listed": 4,
-      "available": 0
+      "available": 0,
+      "estimated": 3
+    }
+  },
+  {
+    "owned": 7,
+    "unavailable": 2,
+    "global_keep": 1,
+    "reserved": 2,
+    "listed": null,
+    "expected": {
+      "owned": 7,
+      "protected": 4,
+      "listed": null,
+      "available": null,
+      "estimated": 3
     }
   }
 ]

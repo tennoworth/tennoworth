@@ -56,6 +56,9 @@ pub struct PlanRequest {
 
 #[derive(Deserialize, Clone)]
 pub struct PlanItem {
+    /// Reviewed native game scan; retained in pending recovery.
+    #[serde(default)]
+    pub inventory_snapshot_id: Option<i64>,
     /// warframe.market url_name.
     pub slug: String,
     /// Plat the user wants to list at.
@@ -200,6 +203,7 @@ pub fn execute_plan(
             .items
             .into_iter()
             .map(|p| PendingItem {
+                inventory_snapshot_id: p.inventory_snapshot_id,
                 slug: p.slug,
                 platinum: p.platinum,
                 quantity: p.quantity,
@@ -355,6 +359,7 @@ fn validation_failure(pending: &PendingPlan, error: impl Into<PlanValidationErro
 impl From<&PendingItem> for PlanItem {
     fn from(item: &PendingItem) -> Self {
         Self {
+            inventory_snapshot_id: item.inventory_snapshot_id,
             slug: item.slug.clone(),
             platinum: item.platinum,
             quantity: item.quantity,
@@ -1172,6 +1177,7 @@ mod tests {
             subtypes: vec![],
         };
         let item = PlanItem {
+            inventory_snapshot_id: None,
             slug: "some_arcane".into(),
             platinum: 20,
             quantity: 1,
@@ -1200,6 +1206,7 @@ mod tests {
             subtypes: vec!["intact".into(), "radiant".into()],
         };
         let item = PlanItem {
+            inventory_snapshot_id: None,
             subtype: Some("nonsense".into()),
             ..item
         };
@@ -1226,6 +1233,7 @@ mod tests {
 
     fn plan_item(slug: &str, rank: Option<u32>, subtype: Option<&str>) -> PlanItem {
         PlanItem {
+            inventory_snapshot_id: None,
             slug: slug.into(),
             platinum: 12,
             quantity: 3,

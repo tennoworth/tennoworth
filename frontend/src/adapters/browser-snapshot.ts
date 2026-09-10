@@ -1,7 +1,7 @@
 import { serializeSnapshot, deserializeSnapshot, type Snapshot, type SaveSnapshotInput } from '../domain/snapshot';
 
 
-const KEY = 'wfminv:last-owned-v6';
+const KEY = 'wfminv:last-owned-v7';
 
 
 export function saveSnapshot(input: SaveSnapshotInput, timestamp = Date.now()): void {
@@ -15,6 +15,7 @@ export function saveSnapshot(input: SaveSnapshotInput, timestamp = Date.now()): 
 
 export function loadSnapshot(): Snapshot | null {
   try {
+    localStorage.removeItem('wfminv:last-owned-v6');
     return deserializeSnapshot(localStorage.getItem(KEY));
   } catch (e) {
     console.warn('Could not load inventory snapshot:', e);

@@ -31,7 +31,7 @@ export interface MarketCapability {
 
 export interface InventoryCapability {
   health(timeoutMs?: number): Promise<PingResponse>;
-  fetchInventory(): Promise<unknown>;
+  fetchInventory(): Promise<{ data: import('./data').Inventory; snapshotId: number | null }>;
   reportScanIssue(error: string | null): Promise<ScanReport>;
 }
 

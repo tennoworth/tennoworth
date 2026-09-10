@@ -18,8 +18,22 @@ pub struct ProtectionPlan {
 pub struct Allocation {
     pub owned: u32,
     pub protected: u32,
+    /// Local protection only; never authorizes posting without current orders.
+    pub estimated: Option<u32>,
     pub listed: Option<u32>,
     pub available: Option<u32>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GuidanceInventory {
+    pub snapshot_id: Option<i64>,
+    pub items: BTreeMap<String, GuidanceOwned>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct GuidanceOwned {
+    pub count: u32,
+    pub leveled: u32,
 }
 
 #[derive(Serialize)]
@@ -96,6 +110,7 @@ pub fn allocate(
     Allocation {
         owned,
         protected,
+        estimated: Some(owned.saturating_sub(protected)),
         listed,
         available: listed.map(|listed| owned.saturating_sub(protected).saturating_sub(listed)),
     }
@@ -213,6 +228,7 @@ pub fn state(
         );
         if required.is_none() || snapshot_id.is_none() {
             row.available = None;
+            row.estimated = None;
         }
         if row.protected.saturating_add(row.listed.unwrap_or(0)) > owned {
             issues.push(format!("{slug}: protected and listed copies exceed the current inventory; review existing orders."));
@@ -230,6 +246,7 @@ pub fn state(
                     Allocation {
                         owned: 0,
                         protected: count,
+                        estimated: snapshot_id.map(|_| 0),
                         listed: listed.as_ref().map(|l| l.get(&slug).copied().unwrap_or(0)),
                         available: snapshot_id.and(listed.as_ref().map(|_| 0)),
                     },
@@ -243,6 +260,56 @@ pub fn state(
         items,
         issues,
     })
+}
+
+/// Advisory input cannot create a trusted snapshot or authorize a mutation.
+pub fn guidance_state(
+    db: &Db,
+    market: &MarketData,
+    orders: Result<serde_json::Value, String>,
+    inventory: GuidanceInventory,
+) -> Result<ProtectionState, String> {
+    if inventory.items.len() > 100_000 || inventory.items.iter().any(|(slug, row)| {
+        !valid_slug(slug) || row.leveled > row.count
+    }) {
+        return Err("Inventory quantities are invalid. Scan again or restore a valid backup.".into());
+    }
+    let plan = ProtectionPlan::load(db)?;
+    if validate_snapshot(db, inventory.snapshot_id).is_ok() {
+        let native = state(db, market, orders)?;
+        let native_owned = market.owned_quantities(db)?;
+        let verified = inventory.snapshot_id == native.snapshot_id
+            && validate_snapshot(db, inventory.snapshot_id).is_ok()
+            && inventory.items.len() == native_owned.len()
+            && inventory.items.iter().all(|(slug, row)| native_owned.get(slug).is_some_and(|(count, _)| *count == row.count));
+        if verified { return Ok(native); }
+    }
+    let mut issues = Vec::new();
+    let requirements = match plan.requirements(market) {
+        Ok(required) => Some(required),
+        Err(error) => { issues.push(error); None }
+    };
+    let global = db.get_setting("reserve-copies").map_err(|e| e.to_string())?
+        .map(|raw| raw.parse::<u32>().map_err(|_| "The keep-copy setting is invalid.".to_string()))
+        .transpose()?.unwrap_or(0);
+    let legacy: BTreeMap<_, _> = db.get_reserves().map_err(|e| e.to_string())?.into_iter()
+        .map(|row| (row.slug, u32::try_from(row.keep).unwrap_or(u32::MAX))).collect();
+    let items = inventory.items.into_iter().map(|(slug, owned)| {
+        let mut row = allocate(owned.count, owned.leveled,
+            global.max(legacy.get(&slug).copied().unwrap_or(0)),
+            requirements.as_ref().and_then(|required| required.get(&slug)).copied().unwrap_or(0), None);
+        if requirements.is_none() || !market.has_item(&slug) { row.estimated = None; }
+        (slug, row)
+    }).collect();
+    Ok(ProtectionState { plan, snapshot_id: None, items, issues })
+}
+
+pub fn validate_snapshot(db: &Db, snapshot_id: Option<i64>) -> Result<(), String> {
+    let latest = db.list_snapshots(1).map_err(|e| e.to_string())?.into_iter().next();
+    if !latest.is_some_and(|snapshot| snapshot.source == "memory" && Some(snapshot.id) == snapshot_id) {
+        return Err("Inventory changed or is not a verified game scan. Scan again and prepare a new batch.".into());
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -261,6 +328,49 @@ mod tests {
         assert_eq!(serde_json::to_value(left).unwrap(), fixture["expected_left"]);
         assert_eq!(parts.values().sum::<u32>(), fixture["trade_slots"].as_u64().unwrap() as u32);
     }
+    #[test]
+    fn guidance_matches_preview_fixture_and_uses_the_displayed_inventory() {
+        #[derive(Deserialize)]
+        struct Case {
+            name: String, native_count: u32, input_count: u32, leveled: u32,
+            reserved: u32, keep: u32, goal: bool, request_id: Option<i64>, source: String,
+            orders: bool, record: bool, expected_snapshot_id: Option<i64>, expected: Allocation,
+        }
+        let cases: Vec<Case> = serde_json::from_str(include_str!("../../../../tests/fixtures/protection/guidance.json")).unwrap();
+        let market: MarketData = serde_json::from_value(serde_json::json!({
+            "items": { "part": {} },
+            "path_to_info": { "/Lotus/Part": { "name": "Part", "slug": "part" } },
+            "set_to_parts": { "test_set": { "parts": [{ "slug": "part", "quantity": 2 }] } }
+        })).unwrap();
+        for case in cases {
+            let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+            if case.record { db.insert_snapshot(&case.source, None, None, &[crate::persistence::SnapshotItem {
+                slug: "/Lotus/Part".into(), count: i64::from(case.native_count), leveled: i64::from(case.leveled),
+            }]).unwrap(); }
+            db.set_setting("reserve-copies", &case.keep.to_string()).unwrap();
+            ProtectionPlan { reserves: BTreeMap::from([("part".into(), case.reserved)]), goal: case.goal.then(|| "test_set".into()) }.save(&db, &market).unwrap();
+            let input = GuidanceInventory { snapshot_id: case.request_id, items: BTreeMap::from([("part".into(), GuidanceOwned { count: case.input_count, leveled: case.leveled })]) };
+            let orders = if case.orders { Ok(serde_json::json!({"data":{"sell":[]}})) } else { Err("Disconnected".into()) };
+            let result = guidance_state(&db, &market, orders, input).unwrap();
+            assert_eq!(result.snapshot_id, case.expected_snapshot_id, "{}", case.name);
+            assert_eq!(result.items["part"], case.expected, "{}", case.name);
+        }
+    }
+
+    #[test]
+    fn listing_identity_requires_the_latest_memory_scan() {
+        let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+        assert!(validate_snapshot(&db, None).is_err());
+        let first = db.insert_snapshot("memory", None, None, &[]).unwrap();
+        assert!(validate_snapshot(&db, Some(first)).is_ok());
+        let second = db.insert_snapshot("memory", None, None, &[]).unwrap();
+        assert!(validate_snapshot(&db, Some(first)).is_err());
+        assert!(validate_snapshot(&db, Some(second)).is_ok());
+        let imported = db.insert_snapshot("import", None, None, &[]).unwrap();
+        assert!(validate_snapshot(&db, Some(imported)).is_err());
+        assert!(validate_snapshot(&db, None).is_err());
+    }
+
     #[test]
     fn allocation_matches_preview_fixture() {
         #[derive(Deserialize)]
@@ -297,6 +407,33 @@ mod tests {
         assert_eq!(allocate(1, 0, 0, 2, Some(0)).available, Some(0));
         assert_eq!(allocate(5, 0, 0, 2, None).available, None);
     }
+    #[test]
+    fn estimates_require_valid_local_protection_but_not_current_orders() {
+        let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+        let market: MarketData = serde_json::from_value(serde_json::json!({
+            "items": { "test_part": {} },
+            "path_to_info": { "/Lotus/Test": { "name": "Test Part", "slug": "test_part" } }
+        })).unwrap();
+        let plan = ProtectionPlan { reserves: BTreeMap::from([("test_part".into(), 2)]), goal: None };
+        plan.save(&db, &market).unwrap();
+        let missing = state(&db, &market, Err("Disconnected".into())).unwrap();
+        assert_eq!(missing.items["test_part"].estimated, None);
+        db.insert_snapshot("memory", None, None, &[crate::persistence::SnapshotItem {
+            slug: "/Lotus/Test".into(), count: 7, leveled: 2,
+        }]).unwrap();
+        db.set_setting("reserve-copies", "1").unwrap();
+        let offline = state(&db, &market, Err("Disconnected".into())).unwrap();
+        assert_eq!(offline.items["test_part"].estimated, Some(3));
+        assert_eq!(offline.items["test_part"].available, None);
+        assert_eq!(offline.items["test_part"].listed, None);
+        db.set_setting(KEY, r#"{"reserves":{},"goal":"unknown_set"}"#).unwrap();
+        let invalid = state(&db, &market, Ok(serde_json::json!({ "sell_orders": [] }))).unwrap();
+        assert_eq!(invalid.items["test_part"].estimated, None);
+        assert_eq!(invalid.items["test_part"].available, None);
+        db.set_setting("reserve-copies", "bad").unwrap();
+        assert!(state(&db, &market, Err("Disconnected".into())).is_err());
+    }
+
     #[test]
     fn corrupt_protection_is_not_an_empty_plan() {
         let db = Db::open(std::path::Path::new(":memory:")).unwrap();

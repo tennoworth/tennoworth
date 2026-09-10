@@ -58,7 +58,7 @@ describe('saveSnapshot / loadSnapshot', () => {
   });
 
   it('older snapshots without rivens load as an empty list', () => {
-    localStorage.setItem('wfminv:last-owned-v6', JSON.stringify({
+    localStorage.setItem('wfminv:last-owned-v7', JSON.stringify({
       ts: 1, invName: 'old', owned: [['x', { count: 1 }]],
     }));
     const got = loadSnapshot();
@@ -70,7 +70,7 @@ describe('saveSnapshot / loadSnapshot', () => {
   });
 
   it('returns null on corrupted storage rather than throwing', () => {
-    localStorage.setItem('wfminv:last-owned-v6', '{garbage');
+    localStorage.setItem('wfminv:last-owned-v7', '{garbage');
     expect(loadSnapshot()).toBeNull();
   });
 
@@ -163,10 +163,14 @@ describe('buildSnapshotPayload', () => {
     expect(back?.owned).toEqual(owned);
   });
 
-  it('is what serializeSnapshot emits, so export and store cannot diverge', () => {
-    const stored = JSON.parse(serializeSnapshot({ invName: 'inventory.json', owned }, Date.now()));
+  it('shares inventory records while keeping native scan identity out of exports', () => {
+    const stored = JSON.parse(serializeSnapshot({ invName: 'inventory.json', owned, nativeSnapshotId: 7 }, Date.now()));
     const exported = buildSnapshotPayload({ invName: 'inventory.json', owned }, stored.ts);
-    expect(exported).toEqual(stored);
+    const { nativeSnapshotId, ...records } = stored;
+    expect(nativeSnapshotId).toBe(7);
+    expect(exported).toEqual(records);
+    expect(deserializeSnapshot(JSON.stringify(exported))?.nativeSnapshotId).toBeNull();
+    expect(deserializeSnapshot(JSON.stringify(stored))?.nativeSnapshotId).toBe(7);
   });
 
   it('carries the callers timestamp, not now() - exports keep the snapshots own', () => {

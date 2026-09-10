@@ -80,7 +80,7 @@
       <p class="muted">Selected: {selected}. These are presentation examples, not the Trade Session planner.</p>
       <div class="fields">
         <label class="ui-field">Filter sample items<input type="text" bind:value={filter} placeholder="Item name" /></label>
-        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option><option value="notifications">Alerts</option></select></label>
+        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option><option value="notifications">Alerts</option><option value="estimates">Estimates</option></select></label>
       </div>
       <p role="status" class="muted">{message || 'Controls are ready. No changes made.'}</p>
     </div>
@@ -88,7 +88,9 @@
 
   <section class="wrap tw" aria-labelledby="table-title">
     <div class="rail"><h3 id="table-title">03 / Dense data, complete names</h3><span class="exp">The table scrolls locally; the page does not</span></div>
-    {#if dataState === 'loading'}
+    {#if dataState === 'estimates'}
+      <div class="specimens ui-stack"><h2>Estimated opportunities</h2><p class="numeric">Known estimated value: 30p</p><p class="ui-notice" data-tone="warn">Estimates honor inventory protection. Current WFM listings are not accounted for. Quantities unavailable for 1 item; known totals exclude it.</p><div class="ui-toolbar"><button class="btn" disabled>List on WFM</button><button class="btn primary" onclick={() => message = 'Recheck protection before listing. Imported backups require a game scan; review edits are kept.'}>Recheck protection</button></div></div>
+    {:else if dataState === 'loading'}
       <div class="specimens" role="status" aria-busy="true">Loading sample inventory…</div>
     {:else if dataState === 'error'}
       <div class="specimens ui-stack"><div class="ui-toolbar"><strong>Using saved scan</strong><time datetime="2026-09-08T12:00:00Z">As of 8 September 2026, 12:00 UTC · 2d ago</time><span class="bad">Last refresh failed</span></div><p class="ui-notice" data-tone="warn">Alternative outcome: <strong>No tradeable items found.</strong> Showing saved inventory; this scan did not replace its quantities.</p><p class="ui-notice" data-tone="bad" role="alert">Inventory could not be refreshed. Saved items remain available.</p><div><button class="btn" onclick={() => dataState = 'populated'}>Retry sample load</button></div></div>

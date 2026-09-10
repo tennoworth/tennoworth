@@ -78,6 +78,11 @@ test('states, local filtering, modal editing, and keyboard focus are usable', as
   const state = page.getByRole('combobox', { name: 'Data state' });
   await state.selectOption('empty');
   await expect(page.getByRole('heading', { name: 'No inventory yet' })).toBeVisible();
+  await state.selectOption('estimates');
+  await expect(page.getByRole('heading', { name: 'Estimated opportunities' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'List on WFM', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Recheck protection', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Recheck protection');
   await state.selectOption('loading');
   await expect(page.getByText('Loading sample inventory…')).toBeVisible();
   await state.selectOption('error');

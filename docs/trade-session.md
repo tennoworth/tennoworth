@@ -11,6 +11,25 @@ Protected copies, one pinned set goal, complete owned sets, and quantity-aware
 buyer comparisons share this workflow. Purchasing missing components and a
 general foundry planner remain outside its scope.
 
+## Scan-only guidance
+
+The Opportunities view, Set picks, and Baro can use locally protected inventory
+estimates without a WFM session. Estimates subtract leveled, kept, reserved, and
+pinned-goal copies, but do not subtract unknown WFM listings. They are labeled
+as estimates and never enter listing review or Trade Session execution.
+Connecting WFM and refreshing allocation replaces estimates with checked
+availability only when the displayed inventory matches the latest native game
+scan. Imported backups use their own quantities for protected estimates and
+cannot inherit a native scan identity. Missing protection quantities remain
+unavailable; unaffected estimates remain visible with partial totals labeled.
+
+Every inventory-derived sell batch retains its reviewed native snapshot identity
+in pending recovery. Native validation rejects a changed scan, imported snapshot,
+or missing identity before each mutation. Older pending batches remain readable
+but need a fresh scan and a newly prepared batch before posting. The local UI
+cache is versioned separately from encrypted backups; older UI caches require
+a rescan, while backups remain available for advisory restore.
+
 ## Listing foundation
 
 `PlanItem.per_trade` carries an explicit reviewed lot through the existing plan
