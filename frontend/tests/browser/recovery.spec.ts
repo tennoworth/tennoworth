@@ -215,5 +215,11 @@ for (const theme of ['light', 'dark'] as const) {
       await page.setViewportSize({ width, height });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     }
+    await page.evaluate(() => { (window as any).recovery.scan = 'error'; });
+    await page.getByRole('button', { name: 'Refresh ▾', exact: true }).click();
+    await page.getByTestId('desktop-scan').click();
+    await expect(page.getByRole('alert', { name: 'Inventory unavailable' })).toBeVisible();
+    await expect(page.getByRole('status', { name: 'No tradeable items found' })).toHaveCount(0);
+    await expect(inventory).toContainText('Last refresh failed');
   });
 }
