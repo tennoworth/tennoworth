@@ -1,5 +1,5 @@
-import scanResponse from '../../../tests/fixtures/protection/scan-response.json';
 // @ts-nocheck - vitest fixtures; the transport's TS contract is exercised by tsc.
+import scanResponse from '../../../tests/fixtures/protection/scan-response.json';
 import outcomes from '../../../tests/fixtures/wfm-access/outcomes.json';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { installTauri, removeTauri } from '../dev/test-utils.js';
