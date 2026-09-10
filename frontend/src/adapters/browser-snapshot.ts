@@ -4,9 +4,9 @@ import { serializeSnapshot, deserializeSnapshot, type Snapshot, type SaveSnapsho
 const KEY = 'wfminv:last-owned-v7';
 
 
-export function saveSnapshot(input: SaveSnapshotInput): void {
+export function saveSnapshot(input: SaveSnapshotInput, timestamp = Date.now()): void {
   try {
-    localStorage.setItem(KEY, serializeSnapshot(input, Date.now()));
+    localStorage.setItem(KEY, serializeSnapshot(input, timestamp));
   } catch (e) {
     console.warn('Could not persist inventory snapshot:', e);
   }

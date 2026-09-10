@@ -86,7 +86,9 @@ test('states, local filtering, modal editing, and keyboard focus are usable', as
   await state.selectOption('loading');
   await expect(page.getByText('Loading sample inventory…')).toBeVisible();
   await state.selectOption('error');
-  await expect(page.getByRole('alert')).toContainText('No saved items were removed');
+  await expect(page.getByRole('alert')).toContainText('Saved items remain available');
+  await expect(page.getByText('Last refresh failed', { exact: true })).toBeVisible();
+  await expect(page.locator('time')).toHaveAttribute('datetime', '2026-09-08T12:00:00Z');
   await page.getByRole('button', { name: 'Retry sample load' }).click();
   await expect(page.getByRole('table')).toBeVisible();
   await page.getByRole('button', { name: 'Clear Inventory', exact: true }).click();

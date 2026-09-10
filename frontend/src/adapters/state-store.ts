@@ -83,8 +83,8 @@ export class LocalStorageStateStore implements StateStore {
     return loadLocalSnapshot();
   }
 
-  async saveSnapshot(input: SaveSnapshotInput): Promise<void> {
-    saveLocalSnapshot(input);
+  async saveSnapshot(input: SaveSnapshotInput, timestamp = Date.now()): Promise<void> {
+    saveLocalSnapshot(input, timestamp);
   }
 
   async clearSnapshot(): Promise<void> {
@@ -137,10 +137,10 @@ export class TauriStateStore implements StateStore {
     return deserializeSnapshot(raw ?? null);
   }
 
-  async saveSnapshot(input: SaveSnapshotInput): Promise<void> {
+  async saveSnapshot(input: SaveSnapshotInput, timestamp = Date.now()): Promise<void> {
     await resolveInvoke()<void>('set_setting', {
       key: DESKTOP_SNAPSHOT_KEY,
-      value: serializeSnapshot(input, Date.now()),
+      value: serializeSnapshot(input, timestamp),
     });
     await resolveInvoke()<void>('set_setting', { key: 'last-owned', value: '' }).catch(() => {});
   }

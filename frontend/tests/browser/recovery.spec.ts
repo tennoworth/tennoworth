@@ -9,6 +9,7 @@ async function recoveryCommands(page: Page) {
       const state = w.recovery;
       if (command === 'scan_inventory') return Promise.resolve({ inventory: '{}', snapshot_id: 1 });
       if (command === 'evaluate_domain' && args.request.operation === 'normalize_inventory') {
+        if (state.scan === 'empty') return Promise.resolve({ operation: 'normalize_inventory', result: { owned: [], flat_count: 1, unresolved: {} } });
         if (state.scan === 'error') return Promise.reject('The calculation contains an out-of-range number.');
         return Promise.resolve({ operation: 'normalize_inventory', result: { owned: [
           ['pyrana_prime_set', { slug: 'pyrana_prime_set', name: 'Pyrana Prime Set', type: 'Weapon', count: 3, leveled: 0, kept_lvl: null, subtype: null }],
@@ -109,13 +110,16 @@ test('a failed replacement preserves the visible saved inventory, name and age',
   await page.goto('/?preview-desktop&sample');
   await page.locator('.shell').waitFor();
   await expect(page.locator('.statusbar .file')).toContainText('Sample inventory');
-  const identity = await page.locator('.statusbar .inv').innerText();
+  const identity = await page.locator('.statusbar .file').innerText();
+  const timestamp = await page.locator('.statusbar .inv time').getAttribute('datetime');
   await recoveryCommands(page);
   await page.getByRole('button', { name: 'Refresh ▾', exact: true }).click();
   await page.getByTestId('desktop-scan').click();
   await expect(page.getByRole('alert', { name: 'Inventory unavailable' })).toContainText('Showing your last successful inventory');
   await expect(page.locator('.shell')).toBeVisible();
-  expect(await page.locator('.statusbar .inv').innerText()).toBe(identity);
+  expect(await page.locator('.statusbar .file').innerText()).toBe(identity);
+  await expect(page.locator('.statusbar .inv time')).toHaveAttribute('datetime', timestamp!);
+  await expect(page.locator('.statusbar .inv')).toContainText('Last refresh failed');
   await expect(page.locator('.workspace')).toContainText('Pyrana Prime Set');
   await page.locator('.sidebar').getByRole('button', { name: 'Settings', exact: true }).click();
   await page.getByRole('button', { name: 'Send feedback', exact: true }).click();
@@ -148,3 +152,74 @@ test('manual checks expose failed and unsupported outcomes; Notifications never 
   await expect(page.getByTestId('desktop-scan')).toBeVisible();
   await expect(update).toContainText('Download and run the TennoWorth AppImage');
 });
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`${theme} snapshot age advances and failed refresh remains visible after dismissing details`, async ({ page }, info) => {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.clock.install({ time: new Date('2026-09-10T12:00:00Z') });
+    await page.goto('/?preview-desktop&sample');
+    const inventory = page.locator('.statusbar .inv');
+    await expect(inventory.locator('time')).toContainText('just now');
+    const timestamp = await inventory.locator('time').getAttribute('datetime');
+    await page.clock.setSystemTime(new Date('2026-09-12T12:00:00Z'));
+    await page.clock.runFor(60_000);
+    await expect(inventory.locator('time')).toContainText('2 d ago');
+    await page.clock.setSystemTime(new Date('2026-09-13T12:00:00Z'));
+    await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+    await expect(inventory.locator('time')).toContainText('3 d ago');
+    await recoveryCommands(page);
+    await page.getByRole('button', { name: 'Refresh ▾', exact: true }).click();
+    await page.getByTestId('desktop-scan').click();
+    const error = page.getByRole('alert', { name: 'Inventory unavailable' });
+    await expect(error).toBeVisible();
+    await error.getByRole('button', { name: 'Dismiss scan error' }).click();
+    await expect(error).toHaveCount(0);
+    await expect(inventory).toContainText('Last refresh failed');
+    await expect(inventory.locator('time')).toHaveAttribute('datetime', timestamp!);
+    for (const [width, height] of [[1440,900],[1440,480],[760,600],[320,480]]) {
+      await page.setViewportSize({ width, height });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+      await page.getByRole('button', { name: 'Refresh ▾', exact: true }).scrollIntoViewIfNeeded();
+      await page.screenshot({ path: info.outputPath(`${theme}-saved-${width}-${height}.png`) });
+    }
+    await page.evaluate(() => { (window as any).recovery.scan = 'success'; });
+    await page.getByRole('button', { name: 'Refresh ▾', exact: true }).click();
+    await page.getByTestId('desktop-scan').click();
+    await expect(inventory).not.toContainText('Last refresh failed');
+    await expect(inventory.locator('time')).toContainText('just now');
+    await page.getByRole('button', { name: 'Refresh ▾', exact: true }).click();
+    await page.getByRole('button', { name: 'Clear', exact: true }).click();
+    await expect(inventory).toContainText('No inventory yet');
+    await expect(inventory.locator('time')).toHaveCount(0);
+  });
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`${theme} a scan with no tradeables keeps an explicit retained-inventory outcome`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.goto('/?preview-desktop&sample');
+    const inventory = page.locator('.statusbar .inv');
+    const timestamp = await inventory.locator('time').getAttribute('datetime');
+    await recoveryCommands(page);
+    await page.evaluate(() => { (window as any).recovery.scan = 'empty'; });
+    await page.getByRole('button', { name: 'Refresh ▾', exact: true }).click();
+    await page.getByTestId('desktop-scan').click();
+    await expect(inventory).toContainText('No tradeable items found; showing saved inventory');
+    await expect(inventory).not.toContainText('Last refresh failed');
+    await expect(inventory.locator('time')).toHaveAttribute('datetime', timestamp!);
+    await expect(page.getByRole('alert', { name: 'Inventory unavailable' })).toHaveCount(0);
+    await expect(page.getByRole('status', { name: 'No tradeable items found' })).toBeVisible();
+    await page.getByRole('button', { name: 'Dismiss scan notice', exact: true }).click();
+    await expect(inventory).toContainText('No tradeable items found; showing saved inventory');
+    for (const [width, height] of [[1440, 900], [1200, 480], [320, 480]]) {
+      await page.setViewportSize({ width, height });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    }
+    await page.evaluate(() => { (window as any).recovery.scan = 'error'; });
+    await page.getByRole('button', { name: 'Refresh ▾', exact: true }).click();
+    await page.getByTestId('desktop-scan').click();
+    await expect(page.getByRole('alert', { name: 'Inventory unavailable' })).toBeVisible();
+    await expect(page.getByRole('status', { name: 'No tradeable items found' })).toHaveCount(0);
+    await expect(inventory).toContainText('Last refresh failed');
+  });
+}
