@@ -76,19 +76,24 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   const filters = untrack(() => new FilterController(store));
   const inventory = untrack(() => new InventoryController(store, transport, { loadMarket, loadCatalogs, normalizeInventory: normalizeInventoryNative }));
   const protection = new ProtectionController({ desktopProtectionState, desktopSaveProtectionPlan });
-  let allocationLoginHint = $derived(protection.state?.issues.some(issue => issue.includes('Unlock WFM'))
-    ? 'Sellable quantities cannot be checked while Warframe Market is disconnected. Log in or unlock Warframe Market in this app: open Protected selling plan → Connect WFM.'
-    : undefined);
+  const listing = new ListingController({ getPendingPlan: () => transport.getPendingPlan(), resumePendingPlan: () => transport.resumePendingPlan(), discardPendingPlan: () => transport.discardPendingPlan(), status: desktopWfmStatus, logout: desktopWfmLogout }, (code, next) => wfmAuthDialogsRef?.open(code, next));
   let availability = $derived(new Map([...inventory.resolved.owned].map(([key, row]) => [key,
     row.subtype || row.slug.endsWith('_set') ? 0 : Math.min(sellableQty(row.count, filters.reserveCopies, row.leveled ?? 0), protection.state?.items[row.slug]?.available ?? 0),
   ])));
-  let availableOwned = $derived(new Map([...inventory.resolved.owned].map(([key, row]) => [key, { ...row, count: availability.get(key) ?? 0, leveled: 0 }])));
+  let listingQuantitiesKnown = $derived(!!protection.state?.snapshot_id && listing.wfmStatus?.unlocked === true && Object.values(protection.state.items).every(row => row.available != null));
+  let estimatedGuidance = $derived(!listingQuantitiesKnown);
+  let guidanceAvailability = $derived(new Map([...inventory.resolved.owned].map(([key, row]) => [key,
+    row.subtype || row.slug.endsWith('_set') ? 0 : Math.min(sellableQty(row.count, filters.reserveCopies, row.leveled ?? 0),
+      (estimatedGuidance ? protection.state?.items[row.slug]?.estimated : protection.state?.items[row.slug]?.available) ?? 0),
+  ])));
+  let guidanceUnavailable = $derived(inventory.resolved.owned.size > 0 && !protection.loading &&
+    (!protection.state?.snapshot_id || Object.values(protection.state.items).some(row => row.estimated == null)));
+  let availableOwned = $derived(new Map([...inventory.resolved.owned].map(([key, row]) => [key, { ...row, count: guidanceAvailability.get(key) ?? 0, leveled: 0 }])));
   onMount(() => {
     const timer = setInterval(() => { if (!protection.loading && !protection.saving) void protection.refresh(); }, 30_000);
     return () => { clearInterval(timer); protection.destroy(); };
   });
   $effect(() => { inventory.resolved.owned; untrack(() => void protection.refresh()); });
-  const listing = new ListingController({ getPendingPlan: () => transport.getPendingPlan(), resumePendingPlan: () => transport.resumePendingPlan(), discardPendingPlan: () => transport.discardPendingPlan(), status: desktopWfmStatus, logout: desktopWfmLogout }, (code, next) => wfmAuthDialogsRef?.open(code, next));
 
   let resolvedRivens = $derived(resolveRivens(inventory.ownedRivens, inventory.market));
   
@@ -315,14 +320,14 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     const owned = inventory.resolved.owned;
     const market = inventory.market;
     const reserve = filters.reserveCopies;
-    const available = availability;
+    const available = guidanceAvailability;
     if (!owned.size || !market) { untrack(() => defaultFacts.clear()); return; }
     return untrack(() => defaultFacts.start(() => scoreInventoryNative(owned, market, reserve, false, available)));
   });
   $effect(() => {
     void calculationEpoch;
     const wanted = sparesOnly;
-    const available = availability;
+    const available = guidanceAvailability;
     const owned = inventory.resolved.owned;
     const market = inventory.market;
     const reserve = filters.reserveCopies;
@@ -343,16 +348,16 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   let showWorkspace = $derived(hasInventory || inventory.phase === 'done' || effectiveView !== 'sell');
   let updateBanner: DesktopUpdateBanner;
 
-  let calculationError = $derived(currentFacts.error ?? (filterState.adviceOnly ? advisorResult.error : null));
+  let calculationError = $derived((guidanceUnavailable ? 'Protection rules are unavailable. Refresh allocation before using quantity estimates.' : null) ?? currentFacts.error ?? (filterState.adviceOnly ? advisorResult.error : null));
   let calculationPending = $derived(inventory.resolved.owned.size > 0 && !!inventory.market &&
-    (currentFacts.phase === 'idle' || currentFacts.phase === 'loading' || (filterState.adviceOnly && advisorResult.phase === 'loading')));
+    ((!protection.state && protection.loading) || currentFacts.phase === 'idle' || currentFacts.phase === 'loading' || (filterState.adviceOnly && advisorResult.phase === 'loading')));
   let calculationsReady = $derived(!calculationPending && !calculationError && currentFacts.phase === 'done');
   // Rows eligible for the bulk "List on WFM" action: the table-filtered set when
   // a table filter is active, else all results - minus relics (subtyped rows),
   // since selling an intact relic at a few plat usually loses to cracking it
   // (the Relic planner ranks those), so they shouldn't be staged by default.
   let listableRows = $derived.by(() => {
-    if (!calculationsReady) return [];
+    if (!calculationsReady || estimatedGuidance) return [];
     const current = new Map(results.map(row => [row.key ?? row.slug, row]));
     const visible = tableView.active ? tableView.rows.flatMap(row => {
       const match = current.get(row.key ?? row.slug);
@@ -361,7 +366,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     return visible.filter(row => !row.subtype && row.sellable > 0);
   });
   $effect(() => {
-    results = computeFilteredResults(inventory.resolved.owned, inventory.market, filterState, filters.reserveCopies, adviceMap, availability, currentFacts.value);
+    results = computeFilteredResults(inventory.resolved.owned, inventory.market, filterState, filters.reserveCopies, adviceMap, guidanceAvailability, currentFacts.value);
   });
   $effect(() => {
     void calculationEpoch;
@@ -495,7 +500,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
 
   // Every owned row with ANY market match - no preset/filter applied. The
   // sidebar Sell badge pins to this so it stays stable while filters change.
-  let sellableCount = $derived([...defaultFacts.value.values()].filter(row => row.sellable > 0 && (availability.get(row.key) ?? 0) > 0).length);
+  let sellableCount = $derived([...defaultFacts.value.values()].filter(row => row.sellable > 0 && (guidanceAvailability.get(row.key) ?? 0) > 0).length);
   let unresolvedSummary = $derived(
     Object.entries(inventory.resolved.unresolved)
       .map(([k, v]) => `${k}: ${v}`)
@@ -648,6 +653,14 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // and ListingReviewModal's onauthrequired) via this ref, and decides what
   // 'list' means on unlock (open the review modal).
   let wfmAuthDialogsRef = $state<{ open(code: string, next?: string | null): Promise<void> }>();
+  async function connectForListings() {
+    try {
+      const status = await desktopWfmStatus();
+      listing.wfmStatus = status;
+      if (status.unlocked) await protection.refresh();
+      else await wfmAuthDialogsRef?.open(status.logged_in ? 'needs_unlock' : 'needs_login');
+    } catch (error) { protection.error = humanError(error); }
+  }
   let feedbackDialog: HTMLDialogElement;
   let feedbackState = $state<ReturnType<typeof feedbackSnapshot> | null>(null);
   let includeFeedbackState = $state(true);
@@ -773,12 +786,12 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     <nav data-shell>
       <div data-shell class="nav-group">
         <div data-shell class="nav-label">Trade</div>
-        <button data-shell type="button" class="nav-item" class:active={effectiveView === 'sell'} title={defaultFacts.phase === 'done' && sellableCount === 0 ? allocationLoginHint : undefined} onclick={() => filters.setView('sell')}>
-          <span data-shell>{hasInventory ? 'Sell' : 'Inventory'}</span>
+        <button data-shell type="button" class="nav-item" class:active={effectiveView === 'sell'} onclick={() => filters.setView('sell')}>
+          <span data-shell>{hasInventory ? estimatedGuidance ? 'Opportunities' : 'Sell' : 'Inventory'}</span>
           <!-- Pinned to the unfiltered sellable count: with a narrow preset
                active (Vaulted on a no-vaulted inventory), a filter-driven
                "Sell 0" reads as "your inventory got wiped". -->
-          {#if hasInventory}<span data-shell class="badge">{defaultFacts.phase === 'done' ? sellableCount : '—'}</span>{/if}
+          {#if hasInventory}<span data-shell class="badge">{defaultFacts.phase === 'done' && !guidanceUnavailable ? sellableCount : '—'}</span>{/if}
         </button>
         
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'session'} onclick={() => filters.setView('session')}><span data-shell>Trade Session</span></button>
@@ -901,25 +914,21 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     {/if}
 
     {#if ['sell', 'session', 'sets', 'baro'].includes(effectiveView)}
-      <ProtectedPlan controller={protection} owned={inventory.resolved.owned} market={inventory.market} onconnect={async () => {
-        try {
-          const status = await desktopWfmStatus();
-          if (status.unlocked) await protection.refresh();
-          else wfmAuthDialogsRef?.open(status.logged_in ? 'needs_unlock' : 'needs_login');
-        } catch (error) { protection.error = humanError(error); }
-      }} />
-      {#if protection.error || protection.state?.issues.length}
-        <p class="ui-notice" data-tone="warn">{allocationLoginHint ?? 'Some quantities need review. Open Protected selling plan for details; unavailable copies are excluded.'}</p>
+      <ProtectedPlan controller={protection} owned={inventory.resolved.owned} market={inventory.market} onconnect={connectForListings} />
+      {#if estimatedGuidance && !guidanceUnavailable}
+        <div class="ui-notice" data-tone="warn" role="status" aria-label="Estimated guidance">Estimates use your saved inventory and protection rules. Current WFM listings are not accounted for. Connect WFM or recheck listings before posting.</div>
+      {/if}
+      {#if guidanceUnavailable || (!estimatedGuidance && (protection.error || protection.state?.issues.length))}
+        <p class="ui-notice" data-tone="warn">{guidanceUnavailable ? 'Protection rules could not be checked. Open Protected selling plan to retry.' : 'Some quantities need review. Open Protected selling plan for details; unavailable copies are excluded.'}</p>
       {/if}
     {/if}
 
     {#if effectiveView === 'sell'}
       <SellPane
-        {allocationLoginHint}
         bind:minPrice={filters.minPrice} bind:minOwned={filters.minOwned} bind:typeFilter={filters.typeFilter} bind:hideAtLvl={filters.hideAtLvl} bind:activeTags={filters.activeTags}
         bind:tableView
         resolved={inventory.resolved} {results} deltas={inventory.deltas} {totalPotential}
-        {prevSummary} {sinceScan} ordersSummary={listing.ordersSummary}
+        prevSummary={estimatedGuidance ? null : prevSummary} {sinceScan} ordersSummary={listing.ordersSummary}
         {marketFreshness} {marketStaleness} marketLoadError={inventory.marketLoadError}
         {listableRows} {availableTags} {availableTypes}
         {visibleColumns} {presetSort} {emptyReason}
@@ -928,7 +937,8 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         {isDesktop}
         applyPreset={(name) => filters.applyPreset(name)} setReserveCopies={(value) => filters.setReserveCopies(value)} toggleFiltersOpen={(event) => filters.toggleFiltersOpen(event)}
         dismissSellOnboarding={() => filters.dismissSellOnboarding()} dismissKeepCopiesNudge={() => filters.dismissKeepCopiesNudge()}
-        openListingFlow={(rows) => { if (calculationsReady) listing.openListingFlow(rows); }}
+        openListingFlow={(rows) => { if (calculationsReady && !estimatedGuidance) listing.openListingFlow(rows); }}
+        {estimatedGuidance} oncheckListings={connectForListings} canList={listingQuantitiesKnown}
         {pendingBanner}
         {calculationPending} {calculationError} onretryCalculation={() => calculationEpoch += 1}
       />
@@ -939,10 +949,10 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         <div class="ui-notice" data-tone="bad" role="alert">Sale calculations unavailable: {defaultFacts.error} <button class="btn" onclick={() => calculationEpoch += 1}>Retry calculations</button></div>
       {/if}
       <TradeSessionPane owned={inventory.resolved.owned} market={inventory.market} reserveCopies={filters.reserveCopies} advice={adviceMap} nativeFacts={defaultFacts.value} {availability}
-        scanning={inventory.pullingInventory} onscan={async () => { await inventory.pullInventory(); await protection.refresh(); }} onreview={(rows, budget, state) => listing.openListingFlow(rows.map(r => ({
+        scanning={inventory.pullingInventory} onscan={async () => { await inventory.pullInventory(); await protection.refresh(); }} onreview={(rows, budget, state) => { if (!listingQuantitiesKnown) return; listing.openListingFlow(rows.map(r => ({
           ...r, proposed_quantity: r.quantity, clearing_price: r.platinum, low_sell: r.platinum,
           avg_price: r.market.avg, session: { snapshot_id: state.allowance.snapshot_id!, utc_day: state.allowance.utc_day, budget },
-        })))} />
+        }))); }} />
     {:else if effectiveView === 'sets'}
       <section data-shell class="view-header">
         <h2 data-shell>Set picks</h2>
@@ -1189,7 +1199,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
            have it, and an empty table would read as "he is selling nothing". -->
       {#if voidTrader?.inventory?.length}
         <section data-shell class="baro-stock">
-          <BaroBoard market={inventory.market} baro={voidTrader} owned={inventory.resolved.owned} {availability} />
+          <BaroBoard market={inventory.market} baro={voidTrader} owned={inventory.resolved.owned} availability={guidanceAvailability} />
         </section>
       {/if}
 

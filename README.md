@@ -130,16 +130,18 @@ market prices and public-data tools. No login or installation is needed.
 1. Start Warframe and continue past its login screen.
 2. Open TennoWorth and select **Scan inventory**. No warframe.market login is
    needed to scan your account.
-3. Explore your inventory and market context, including Set picks, Relics,
-   Rivens, Baro, and market-timing views as they apply to your items.
+3. Explore **Estimated opportunities** without signing in. Estimates honor
+   your keep-copy and protection rules. Set picks, Relics, Rivens, Baro, and
+   market-timing views provide further context for your inventory.
 4. Optional: open **Protected selling plan → Connect WFM** to log in or unlock
    warframe.market. This adds current-listing-aware selling quantities, buyer
    comparisons, and listing management. You can then use Trade Session to plan
    a batch and **List on WFM** to review it before submission.
 
-Current listings are needed to verify available selling quantities. While WFM
-is disconnected, those quantities remain unavailable; that does not prevent
-inventory scanning or public market browsing.
+Scan-only estimates exclude protected copies but do not account for current
+WFM listings. **Check WFM listings** connects or rechecks your session before
+listing review becomes available. Listing quantities remain unknown until that
+check succeeds; scanning and estimated guidance need no WFM login.
 
 Closing the main window hides the desktop app to the system tray so price
 watches and trade detection can continue. Quit it from the tray to stop the

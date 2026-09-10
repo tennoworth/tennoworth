@@ -47,37 +47,81 @@ test('unavailable current orders never imply zero listed copies', async ({ page 
 });
 
 for (const theme of ['light', 'dark'] as const) {
-  test(`${theme} zero sellable count explains when WFM login is required`, async ({ page }, info) => {
+  test(`${theme} scan-only opportunities preserve unknown listing quantities`, async ({ page }, info) => {
     await page.emulateMedia({ colorScheme: theme });
     await page.goto('/?preview-desktop&sample=logged-out');
-    const sell = page.getByRole('button', { name: /^Sell\s/ });
-    await sell.click();
-    const cell = page.getByRole('group', { name: 'Sell summary' }).locator('.cell').filter({ hasText: 'Sellable' });
-    await expect(cell).toContainText('0');
-    const hint = 'Sellable quantities cannot be checked while Warframe Market is disconnected. Log in or unlock Warframe Market in this app: open Protected selling plan → Connect WFM.';
-    await expect(cell).toHaveAttribute('title', hint);
-    await expect(sell).toHaveAttribute('title', hint);
+    await page.getByRole('button', { name: /^Opportunities\s/ }).click();
+    const summary = page.getByRole('group', { name: 'Sell summary' });
+    await expect(summary).toContainText('Estimated value');
+    await expect(summary.locator('.cell').filter({ hasText: 'Opportunities' })).not.toContainText('0');
+    await expect(page.getByRole('status', { name: 'Estimated guidance' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^List \d+ on WFM$/ })).toHaveCount(0);
+    const listButtons = page.getByRole('button', { name: 'List', exact: true });
+    for (const button of await listButtons.all()) await expect(button).toBeDisabled();
     for (const [width, height] of [[1440, 900], [1200, 480], [768, 600], [320, 480]]) {
       await page.setViewportSize({ width, height });
-      await cell.hover();
-      await expect(page.getByText(hint, { exact: true })).toBeVisible();
-      await page.getByText(hint, { exact: true }).scrollIntoViewIfNeeded();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
-      await page.screenshot({ path: info.outputPath(`sell-login-${theme}-${width}.png`) });
+      await page.screenshot({ path: info.outputPath(`scan-estimates-${theme}-${width}.png`) });
     }
     await page.getByText('Protected selling plan · No pinned goal', { exact: true }).click();
-    await page.getByRole('button', { name: 'Connect WFM', exact: true }).focus();
-    await page.keyboard.press('Enter');
+    await expect(page.getByRole('region', { name: 'Inventory allocation' })).toContainText('Unknown');
+    await page.getByRole('button', { name: 'Check WFM listings', exact: true }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
 
     await page.goto('/?preview-desktop&sample=protection');
     await page.getByRole('button', { name: /^Sell\s/ }).click();
-    await expect(cell).not.toHaveAttribute('title', hint);
-    await expect(page.getByText(hint, { exact: true })).toHaveCount(0);
+    await expect(summary).toContainText('Sellable');
+    await expect(page.getByRole('status', { name: 'Estimated guidance' })).toHaveCount(0);
+
     await page.goto('/?preview-desktop&sample=protection-error');
-    await page.getByRole('button', { name: /^Sell\s/ }).click();
-    await expect(cell).toContainText('0');
-    await expect(cell).not.toHaveAttribute('title', hint);
-    await expect(page.getByText(hint, { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: /^Opportunities\s/ }).click();
+    await expect(summary).toContainText('Estimated value');
+    await expect(page.getByRole('status', { name: 'Estimated guidance' })).toBeVisible();
   });
 }
+
+test('protection failures hide estimates and successful listing checks enable review', async ({ page }) => {
+  await page.goto('/?preview-desktop&sample=logged-out');
+  await page.getByRole('button', { name: /^Opportunities\s/ }).click();
+  await page.getByText('Protected selling plan · No pinned goal', { exact: true }).click();
+  await page.evaluate(() => {
+    const w = window as any;
+    const original = w.__TAURI__.core.invoke;
+    w.allocationMode = 'failure';
+    w.__TAURI__.core.invoke = async (command: string, args: any) => {
+      if (command === 'wfm_auth_status' && w.allocationMode === 'checked') return { logged_in: true, unlocked: true };
+      if (command === 'protection_state') {
+        if (w.allocationMode === 'failure') throw new Error('Protection storage could not be read');
+        const state = await original(command, args);
+        if (w.allocationMode === 'invalid') {
+          for (const row of Object.values(state.items) as any[]) row.estimated = null;
+        }
+        if (w.allocationMode === 'checked') {
+          for (const row of Object.values(state.items) as any[]) { row.available = row.estimated; row.listed = 0; }
+          state.issues = [];
+        }
+        return state;
+      }
+      return original(command, args);
+    };
+  });
+  const refresh = page.getByRole('button', { name: 'Refresh allocation', exact: true });
+  for (const mode of ['failure', 'invalid']) {
+    await page.evaluate(mode => { (window as any).allocationMode = mode; }, mode);
+    await refresh.click();
+    await expect(page.getByRole('group', { name: 'Sell summary' })).toContainText('—');
+    await expect(page.getByRole('status', { name: 'Estimated guidance' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^List \d+ on WFM$/ })).toHaveCount(0);
+  }
+  await page.evaluate(() => { (window as any).allocationMode = 'offline'; });
+  await refresh.click();
+  await expect(page.getByRole('status', { name: 'Estimated guidance' })).toBeVisible();
+  await page.getByRole('button', { name: 'Trade Session', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Review batch', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: /^Opportunities\s/ }).click();
+  await page.evaluate(() => { (window as any).allocationMode = 'checked'; });
+  await page.getByRole('button', { name: 'Check WFM listings', exact: true }).click();
+  await expect(page.getByRole('status', { name: 'Estimated guidance' })).toHaveCount(0);
+  await expect(page.getByRole('group', { name: 'Sell summary' })).toContainText('Sellable');
+  await expect(page.getByRole('button', { name: /^List \d+ on WFM$/ })).toBeEnabled();
+});

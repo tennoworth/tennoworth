@@ -18,6 +18,8 @@ pub struct ProtectionPlan {
 pub struct Allocation {
     pub owned: u32,
     pub protected: u32,
+    /// Local protection only; never authorizes posting without current orders.
+    pub estimated: Option<u32>,
     pub listed: Option<u32>,
     pub available: Option<u32>,
 }
@@ -96,6 +98,7 @@ pub fn allocate(
     Allocation {
         owned,
         protected,
+        estimated: Some(owned.saturating_sub(protected)),
         listed,
         available: listed.map(|listed| owned.saturating_sub(protected).saturating_sub(listed)),
     }
@@ -213,6 +216,7 @@ pub fn state(
         );
         if required.is_none() || snapshot_id.is_none() {
             row.available = None;
+            row.estimated = None;
         }
         if row.protected.saturating_add(row.listed.unwrap_or(0)) > owned {
             issues.push(format!("{slug}: protected and listed copies exceed the current inventory; review existing orders."));
@@ -230,6 +234,7 @@ pub fn state(
                     Allocation {
                         owned: 0,
                         protected: count,
+                        estimated: snapshot_id.map(|_| 0),
                         listed: listed.as_ref().map(|l| l.get(&slug).copied().unwrap_or(0)),
                         available: snapshot_id.and(listed.as_ref().map(|_| 0)),
                     },
@@ -297,6 +302,33 @@ mod tests {
         assert_eq!(allocate(1, 0, 0, 2, Some(0)).available, Some(0));
         assert_eq!(allocate(5, 0, 0, 2, None).available, None);
     }
+    #[test]
+    fn estimates_require_valid_local_protection_but_not_current_orders() {
+        let db = Db::open(std::path::Path::new(":memory:")).unwrap();
+        let market: MarketData = serde_json::from_value(serde_json::json!({
+            "items": { "test_part": {} },
+            "path_to_info": { "/Lotus/Test": { "name": "Test Part", "slug": "test_part" } }
+        })).unwrap();
+        let plan = ProtectionPlan { reserves: BTreeMap::from([("test_part".into(), 2)]), goal: None };
+        plan.save(&db, &market).unwrap();
+        let missing = state(&db, &market, Err("Disconnected".into())).unwrap();
+        assert_eq!(missing.items["test_part"].estimated, None);
+        db.insert_snapshot("memory", None, None, &[crate::persistence::SnapshotItem {
+            slug: "/Lotus/Test".into(), count: 7, leveled: 2,
+        }]).unwrap();
+        db.set_setting("reserve-copies", "1").unwrap();
+        let offline = state(&db, &market, Err("Disconnected".into())).unwrap();
+        assert_eq!(offline.items["test_part"].estimated, Some(3));
+        assert_eq!(offline.items["test_part"].available, None);
+        assert_eq!(offline.items["test_part"].listed, None);
+        db.set_setting(KEY, r#"{"reserves":{},"goal":"unknown_set"}"#).unwrap();
+        let invalid = state(&db, &market, Ok(serde_json::json!({ "sell_orders": [] }))).unwrap();
+        assert_eq!(invalid.items["test_part"].estimated, None);
+        assert_eq!(invalid.items["test_part"].available, None);
+        db.set_setting("reserve-copies", "bad").unwrap();
+        assert!(state(&db, &market, Err("Disconnected".into())).is_err());
+    }
+
     #[test]
     fn corrupt_protection_is_not_an_empty_plan() {
         let db = Db::open(std::path::Path::new(":memory:")).unwrap();

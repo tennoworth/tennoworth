@@ -12,7 +12,7 @@ const INVENTORY = {
 };
 
 const SWEEP_WIDTHS = [320, 360, 480, 559, 560, 561, 719, 720, 721, 759, 760, 761, 899, 900, 901, 1200, 1600];
-const DESKTOP_VIEWS = ['Sell', 'Set picks', 'Baro', 'Routines', 'Meta Drift', 'My orders', 'Price watches', 'Ledger', 'FAQ', 'Settings'];
+const DESKTOP_VIEWS = ['(?:Sell|Opportunities)', 'Set picks', 'Baro', 'Routines', 'Meta Drift', 'My orders', 'Price watches', 'Ledger', 'FAQ', 'Settings'];
 
 async function assertDocumentFits(page: Page): Promise<void> {
   const dimensions = await page.evaluate(() => ({
@@ -286,6 +286,7 @@ test.describe('desktop responsive layout', () => {
       runtime.__TAURI__.core.invoke = unlocked;
       runtime.__TAURI_INTERNALS__.invoke = unlocked;
     });
+    await page.getByRole('button', { name: 'Check WFM listings', exact: true }).click();
     await page.getByRole('button', { name: /^List \d+ on WFM$/ }).click();
     const review = page.locator('.modal');
     await expect(review).toBeVisible();

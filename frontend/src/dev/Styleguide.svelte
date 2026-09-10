@@ -80,7 +80,7 @@
       <p class="muted">Selected: {selected}. These are presentation examples, not the Trade Session planner.</p>
       <div class="fields">
         <label class="ui-field">Filter sample items<input type="text" bind:value={filter} placeholder="Item name" /></label>
-        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option><option value="notifications">Alerts</option></select></label>
+        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option><option value="notifications">Alerts</option><option value="estimates">Estimates</option></select></label>
       </div>
       <p role="status" class="muted">{message || 'Controls are ready. No changes made.'}</p>
     </div>
@@ -92,6 +92,8 @@
       <div class="specimens" role="status" aria-busy="true">Loading sample inventory…</div>
     {:else if dataState === 'error'}
       <div class="specimens ui-stack"><p class="ui-notice" data-tone="bad" role="alert">Inventory could not be loaded. No saved items were removed.</p><div><button class="btn" onclick={() => dataState = 'populated'}>Retry sample load</button></div></div>
+    {:else if dataState === 'estimates'}
+      <div class="specimens ui-stack"><h2>Estimated opportunities</h2><p class="numeric">Estimated value: 30p</p><p class="ui-notice" data-tone="warn">Estimates honor inventory protection. Current WFM listings are not accounted for.</p><div class="ui-toolbar"><button class="btn" disabled>List on WFM</button><button class="btn primary" onclick={() => message = 'Check current listings before reviewing a batch.'}>Check WFM listings</button></div></div>
     {:else if dataState === 'empty' || visibleRows.length === 0}
       <div class="specimens ui-stack"><h2>{dataState === 'empty' ? 'No inventory yet' : 'No matching items'}</h2><p>{dataState === 'empty' ? 'Scan the game to see owned items. This reference uses sample data only.' : 'Try a shorter name or reset the filter.'}</p><div><button class="btn" onclick={() => { dataState = 'populated'; filter = ''; }}>Show sample inventory</button></div></div>
     {:else}

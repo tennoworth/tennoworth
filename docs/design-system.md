@@ -162,6 +162,12 @@ section. Watches separates creation from monitoring; Ledger separates totals,
 listing automation, and trade history. Top picks labels its decision facts
 independently of the inventory’s optional analytical columns.
 
+Scan-only guidance labels its heading and value as estimates and uses one
+contextual notice explaining that current WFM listings are not accounted for.
+Keep posting actions disabled until listing quantities are checked, with a
+separate “Check WFM listings” action. Missing protection data is unavailable,
+never a zero-valued estimate. The living styleguide includes an Estimates state.
+
 The schematic page background uses bounded repeating tiles. WebKit can stretch
 a page-sized gradient raster on long surfaces even when computed CSS matches
 Chromium. The grid repeats every 28px; the diagonal’s 9px period projects to a

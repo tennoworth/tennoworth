@@ -11,6 +11,16 @@ Protected copies, one pinned set goal, complete owned sets, and quantity-aware
 buyer comparisons share this workflow. Purchasing missing components and a
 general foundry planner remain outside its scope.
 
+## Scan-only guidance
+
+The Opportunities view, Set picks, and Baro can use locally protected inventory
+estimates without a WFM session. Estimates subtract leveled, kept, reserved, and
+pinned-goal copies, but do not subtract unknown WFM listings. They are labeled
+as estimates and never enter listing review or Trade Session execution.
+Connecting WFM and refreshing allocation replaces estimates with checked
+availability. Missing inventory or invalid protection rules leave both quantities
+unavailable.
+
 ## Listing foundation
 
 `PlanItem.per_trade` carries an explicit reviewed lot through the existing plan
