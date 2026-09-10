@@ -67,7 +67,11 @@
 	# The hosted site uses root-page fragments, not path-based routes. Let
 	# file_server return 404 for missing paths instead of indexing homepage copies.
 	handle {
-		@assets path /assets/*
+		# Missing chunks must not pin a 404 in browser or CDN caches.
+		@assets {
+			path /assets/*
+			file {path}
+		}
 		header @assets Cache-Control "public, max-age=31536000, immutable"
 		file_server
 	}
