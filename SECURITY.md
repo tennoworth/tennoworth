@@ -216,11 +216,13 @@ and `rust/tennoworth-desktop/src/persistence/keyring_store.rs`.
 
 ## Reporting a vulnerability
 
-Open a GitHub issue with the label `security`, **or** email the
-maintainer (see the repo's main README for contact). For anything
-that could meaningfully harm users (credential theft, RCE in the
-desktop app, supply-chain compromise), please do not file a public
-issue first - give us a reasonable window to ship a fix.
+Report website and desktop vulnerabilities through
+[GitHub private vulnerability reporting](https://github.com/tennoworth/tennoworth/security/advisories/new).
+Sign in with a GitHub account to use the form. This route keeps reports private
+while we investigate and prepare a fix.
+The published `/.well-known/security.txt` points to the same reporting form and
+policy; review its contact details and renew its `Expires` date before it
+expires.
 
 ## Out of scope
 
