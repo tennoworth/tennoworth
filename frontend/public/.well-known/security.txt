@@ -1,0 +1,5 @@
+Contact: https://github.com/tennoworth/tennoworth/security/advisories/new
+Expires: 2027-09-01T00:00:00Z
+Preferred-Languages: en
+Canonical: https://tennoworth.app/.well-known/security.txt
+Policy: https://github.com/tennoworth/tennoworth/security/policy
