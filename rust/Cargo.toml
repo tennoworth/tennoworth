@@ -19,7 +19,7 @@
 #                         standalone CLI companion was removed (2026-08): the
 #                         product is the desktop app or the informational site.
 [workspace]
-members = ["wfm-core", "market-math", "market-domain", "wfm-scrape", "wfm-client", "tennoworth-desktop"]
+members = ["wfm-core", "market-math", "market-domain", "wfm-scrape", "wfm-client", "tennoworth-desktop", "tennoworth-usage"]
 resolver = "2"
 
 # Single version authority for deps shared by 2+ members - a member bumping
@@ -31,6 +31,8 @@ resolver = "2"
 # (a member declaring a smaller subset never actually got a smaller build -
 # see tennoworth-desktop's Cargo.toml).
 [workspace.dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time", "sync", "net", "signal"] }
+
 chrono = { version = "0.4", default-features = false, features = ["std", "clock"] }
 anyhow = "1"
 base64 = "0.22"

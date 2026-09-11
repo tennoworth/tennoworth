@@ -106,7 +106,7 @@ for (const theme of ['light', 'dark'] as const) {
         const box = section.getBoundingClientRect();
         return { left: box.left, right: box.right };
       }));
-      expect(bounds).toHaveLength(5);
+      expect(bounds).toHaveLength(6);
       for (const box of bounds) {
         expect(box.left).toBeCloseTo(bounds[0].left, 0);
         expect(box.right).toBeCloseTo(bounds[0].right, 0);

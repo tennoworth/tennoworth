@@ -125,3 +125,43 @@ describe.skipIf(process.platform === 'win32')('signed policy bootstrap', () => {
     expect(run('refs/heads/main', false, 404).result.status).not.toBe(0);
   });
 });
+
+describe('usage collector rollback', () => {
+  for (const failure of ['restart', 'health']) {
+    test(`restores the preceding binary after ${failure} failure`, () => {
+      const root = mkdtempSync(join(tmpdir(), 'usage-pull-'));
+      directories.push(root);
+      const deploy = join(root, 'deploy');
+      const mocks = join(root, 'mocks');
+      mkdirSync(join(deploy, 'bin'), { recursive: true });
+      mkdirSync(mocks);
+      writeFileSync(join(deploy, 'bin/tennoworth-usage'), 'old-binary');
+      const source = readFileSync(new URL('../deploy/pull-usage.sh', import.meta.url), 'utf8');
+      writeFileSync(join(root, 'pull.sh'), source.replaceAll('/srv/wfm', deploy));
+      writeFileSync(join(mocks, 'curl'), `#!/bin/sh
+case "$*" in
+  *'/health'*) exit ${failure === 'health' ? 1 : 0};;
+esac
+for arg do previous="$last"; last="$arg"; done
+case "$last" in
+  *.sha256) printf 'unused' > "$last";;
+  *) printf 'new-binary' > "$last";;
+esac
+`);
+      writeFileSync(join(mocks, 'sha256sum'), '#!/bin/sh\nexit 0\n');
+      writeFileSync(join(mocks, 'sleep'), '#!/bin/sh\nexit 0\n');
+      writeFileSync(join(mocks, 'systemctl'), `#!/bin/sh
+if [ ! -f '${root}/restarted' ]; then
+  touch '${root}/restarted'
+  exit ${failure === 'restart' ? 1 : 0}
+fi
+exit 0
+`);
+      for (const command of ['curl', 'sha256sum', 'sleep', 'systemctl']) chmodSync(join(mocks, command), 0o755);
+      const result = spawnSync('sh', [join(root, 'pull.sh')], { env: { ...process.env, PATH: `${mocks}:${process.env.PATH}` }, encoding: 'utf8' });
+      expect(result.status).toBe(1);
+      expect(result.stderr).toContain('Usage collector health check failed');
+      expect(readFileSync(join(deploy, 'bin/tennoworth-usage'), 'utf8')).toBe('old-binary');
+    });
+  }
+});

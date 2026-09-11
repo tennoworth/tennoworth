@@ -337,3 +337,13 @@ Run the applicable repository gates for each implementation batch. Complete
 cross-platform verification in actual desktop windows before claiming Windows
 and Linux resize/scaling support. Documentation-only changes require link,
 consistency, and whitespace checks, not a new visual certification.
+
+## Community usage chart
+
+The hosted community section uses a daily bar chart with an expandable exact-value
+table. Bars share the accent token; incomplete days use muted bars and explicit
+coverage text in the table. One-pixel bar gaps keep all 90 days within narrow
+panels; endpoint dates orient the chart without crowding it. Zero has no filled bar and remains an explicit table
+value. Loading, unavailable, empty, and stale states never invent observations.
+Select Community usage in the living reference’s Data state control for the
+production chart with fictional daily counts.

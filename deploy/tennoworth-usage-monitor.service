@@ -1,0 +1,8 @@
+[Unit]
+Description=Check usage collector health and freshness
+OnFailure=wfm-alert@%n.service
+[Service]
+Type=oneshot
+User=tennoworth-usage
+ExecStart=/srv/wfm/monitor-usage.sh
+NoNewPrivileges=true

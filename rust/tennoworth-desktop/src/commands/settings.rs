@@ -23,11 +23,18 @@ pub async fn protection_state(
         let market = crate::services::sellables::MarketData::load(
             &app.state::<crate::services::market::MarketCache>(),
         );
-        let orders = crate::services::protection::validate_snapshot(&app.state::<Db>(), inventory.snapshot_id)
-            .and_then(|()| session.require_unlocked().map_err(|_| "Unlock WFM to account for your current listings.".to_string()))
-            .and_then(|unlocked| {
-                wfm_core::trading::listing::list_user_orders(&unlocked).map_err(|e| e.to_string())
-            });
+        let orders = crate::services::protection::validate_snapshot(
+            &app.state::<Db>(),
+            inventory.snapshot_id,
+        )
+        .and_then(|()| {
+            session
+                .require_unlocked()
+                .map_err(|_| "Unlock WFM to account for your current listings.".to_string())
+        })
+        .and_then(|unlocked| {
+            wfm_core::trading::listing::list_user_orders(&unlocked).map_err(|e| e.to_string())
+        });
         crate::services::protection::guidance_state(&app.state::<Db>(), &market, orders, inventory)
             .map_err(CmdError::internal)
     })
@@ -58,11 +65,17 @@ pub fn save_protection_plan(
 
 #[tauri::command]
 pub fn get_setting(db: State<'_, Db>, key: String) -> Result<Option<String>, String> {
+    if key.starts_with("usage.") {
+        return Err("Usage state is private to its typed commands.".into());
+    }
     db.get_setting(&key).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn set_setting(db: State<'_, Db>, key: String, value: String) -> Result<(), String> {
+    if key.starts_with("usage.") {
+        return Err("Usage state is private to its typed commands.".into());
+    }
     db.set_setting(&key, &value).map_err(|e| e.to_string())
 }
 

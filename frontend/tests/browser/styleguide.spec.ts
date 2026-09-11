@@ -19,7 +19,7 @@ test('reference stays readable in both themes and narrow, short, wide windows', 
         };
       });
       expect(clipped).toEqual({ pageOverflow: false, contents: [] });
-      const columns = await page.getByRole('columnheader').evaluateAll(headers => headers.map(header => ({
+      const columns = await page.getByRole('region', { name: 'Sample inventory table' }).getByRole('columnheader').evaluateAll(headers => headers.map(header => ({
         text: header.textContent, width: header.getBoundingClientRect().width,
         clipped: header.scrollWidth > header.clientWidth + 1,
       })));

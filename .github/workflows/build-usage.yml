@@ -1,0 +1,52 @@
+name: build-usage
+
+# Publish the isolated opt-in counting service from production.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'rust/tennoworth-usage/**'
+      - 'rust/Cargo.toml'
+      - 'rust/Cargo.lock'
+      - '.github/workflows/build-usage.yml'
+      - '.github/actions/setup-rust/**'
+      - '.github/actions/publish-rolling-release/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    # ubuntu-22.04 for its glibc 2.35 - same rationale as release-desktop.yml's
+    # linux-binary job (backward- but no forward-compat).
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup-rust
+
+      - name: Build
+        run: cargo build --release -p tennoworth-usage
+
+      - name: Package + checksum
+        run: |
+          mkdir -p ../dist
+          cp target/release/tennoworth-usage ../dist/tennoworth-usage
+          cd ../dist
+          sha256sum tennoworth-usage > tennoworth-usage.sha256
+          cat tennoworth-usage.sha256
+
+      - name: Publish rolling release
+        uses: ./.github/actions/publish-rolling-release
+        with:
+          tag_name: usage-latest
+          release_name: usage-latest (auto-built)
+          files: |
+            dist/tennoworth-usage
+            dist/tennoworth-usage.sha256
+          body: Rolling build of the opt-in daily installation counter from main.

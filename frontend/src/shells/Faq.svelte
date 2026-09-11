@@ -6,6 +6,12 @@
     <h2 data-shell>{desktop ? 'Using TennoWorth' : 'FAQ'}</h2>
 
     <details data-shell>
+      <summary data-shell>What does the community usage count measure?</summary>
+      <p data-shell>Only opted-in desktop installations running that UTC day, including in the tray. Two computers count twice. Downloads and visits do not count, and we do not estimate total people. <a data-shell href="/#community-usage">View the public daily chart</a>.</p>
+      <p data-shell>Tokens change daily and expire from the collector at the next UTC rollover. Only aggregate counts are retained and backed up. Turning sharing off stops future check-ins, but does not remove past aggregate contributions. IP addresses are visible to the delivery infrastructure; see <a data-shell href="https://github.com/tennoworth/tennoworth/security/policy">the security policy</a> for the hosting boundary.</p>
+    </details>
+
+    <details data-shell>
       <summary data-shell>Is this safe? Can I get banned?</summary>
       <p data-shell>
         The desktop app reads the running game's process memory to find the
@@ -31,12 +37,10 @@
       <p data-shell>
         Nowhere we control. The desktop app scans the game and keeps your
         inventory locally (SQLite + your browser's storage). This site is
-        informational - it never receives or stores your inventory. The market
-        snapshot is the only thing we host, and it's the same for every visitor.
+        informational - it never receives or stores your inventory. The market snapshot and public aggregate usage counts are the same for every visitor.
       </p>
       <p data-shell>
-        No accounts, no telemetry, no analytics. Inspect the network tab
-        if you don't trust us.
+        No TennoWorth accounts or website analytics. Desktop usage counting is optional and off by default. Only a daily token is sent after you enable it in Settings; inventory stays local.
       </p>
     </details>
 
@@ -107,7 +111,7 @@
     <details data-shell>
       <summary data-shell>Want to support this?</summary>
       <p data-shell>
-        Free, no ads, no accounts, no telemetry - always. If it saved
+        Free, no ads, no accounts. Daily desktop usage sharing is optional and off by default. If it saved
         you some plat and you want to chip in toward hosting, that's
         appreciated but never expected:
         <a data-shell href="https://ko-fi.com/prowly" target="_blank" rel="noopener">ko-fi.com/prowly</a>.
@@ -197,7 +201,7 @@
         never the passphrase itself; details in SECURITY.md.
       </p>
       <p data-shell>
-        No telemetry, no analytics - confirm it in your browser's network tab.
+        No website analytics. Optional desktop usage sharing is disabled until you enable it.
       </p>
     </details>
 

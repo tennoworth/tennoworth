@@ -14,6 +14,8 @@ export async function desktopSaveProtectionPlan(plan: import('../contracts/prote
 
 /** Native operations preserve command error codes for authentication routing. */
 export class TauriTransport implements DesktopCapabilities {
+  async getUsagePreferences(): Promise<import('../contracts/usage').UsagePreferences> { return resolveInvoke()('get_usage_preferences'); }
+  async setUsagePreferences(enabled: boolean): Promise<import('../contracts/usage').UsagePreferences> { return resolveInvoke()('set_usage_preferences', { enabled }); }
   private activePlanRequest: string | null = null;
   async getOverlaySettings(): Promise<OverlaySettings> {
     return await resolveInvoke()<OverlaySettings>('get_overlay_settings');

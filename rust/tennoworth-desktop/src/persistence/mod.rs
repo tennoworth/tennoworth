@@ -63,7 +63,7 @@ impl Db {
     // ---- watches ----
 
     #[cfg(test)]
-    fn open_in_memory() -> rusqlite::Result<Db> {
+    pub(crate) fn open_in_memory() -> rusqlite::Result<Db> {
         Self::init(Connection::open_in_memory()?)
     }
 
@@ -466,12 +466,15 @@ mod tests {
     #[test]
     fn resumed_plan_keeps_stable_history_without_duplicate_successes() {
         let db = Db::open_in_memory().unwrap();
-        db.insert_listing_log("paused", &[row("first", "ok"), row("second", "pending")]).unwrap();
+        db.insert_listing_log("paused", &[row("first", "ok"), row("second", "pending")])
+            .unwrap();
         let initial = db.list_listing_log(10).unwrap();
         assert_eq!(initial.len(), 1);
         let id = initial[0].id;
-        db.insert_listing_log("paused", &[row("first", "ok"), row("second", "ok")]).unwrap();
-        db.insert_listing_log("paused", &[row("first", "ok"), row("second", "ok")]).unwrap();
+        db.insert_listing_log("paused", &[row("first", "ok"), row("second", "ok")])
+            .unwrap();
+        db.insert_listing_log("paused", &[row("first", "ok"), row("second", "ok")])
+            .unwrap();
         let resumed = db.list_listing_log(10).unwrap();
         assert_eq!(resumed.len(), 2);
         assert_eq!(resumed.iter().find(|r| r.slug == "first").unwrap().id, id);

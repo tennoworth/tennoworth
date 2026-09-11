@@ -47,13 +47,27 @@ const PROBE_JS: &str = r#"(function(){
   }
   function checkDomain() {
     R.domainOperations = [];
+    return invk('get_usage_preferences').then(function(status){
+      if (!status || status.enabled !== false || status.available !== false) throw new Error('Probe usage reporting was not disabled');
+      return invk('set_usage_preferences', { enabled: true });
+    }).then(function(result){
+      if (typeof result !== 'string' || result.indexOf('ERR:') !== 0) throw new Error('Probe allowed usage opt-in');
+      return invk('get_setting', { key: 'usage.daily-v1' });
+    }).then(function(result){
+      if (typeof result !== 'string' || result.indexOf('ERR:') !== 0) throw new Error('Generic settings exposed private usage state');
+      return invk('set_setting', { key: 'usage.consent-v1', value: 'true' });
+    }).then(function(result){
+      if (typeof result !== 'string' || result.indexOf('ERR:') !== 0) throw new Error('Generic settings bypassed usage consent');
+      R.usageExcluded = true;
+    }).then(function(){
     return DOMAIN_CASES.reduce(function(chain, test){
       return chain.then(function(){ return invk('evaluate_domain', { request: { operation: test.operation, input: test.input } }); })
         .then(function(response){
           if (!response || response.operation !== test.operation || !sameDomainValue(response.result, test.expected)) throw new Error('Domain IPC contract failed: ' + test.operation);
           R.domainOperations.push(test.operation);
         });
-    }, Promise.resolve()).then(function(){
+    }, Promise.resolve());
+    }).then(function(){
       return invk('evaluate_domain', { request: { operation: 'set_recos', input: { owned: [{ slug: 'invalid', name: 'Invalid', count: -1, subtype: null }], market: { items: {} }, limit: 24 } } });
     }).then(function(response){
       R.domainRejectedInvalid = typeof response === 'string' && response.indexOf('ERR:') === 0;

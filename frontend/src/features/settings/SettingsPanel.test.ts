@@ -76,6 +76,8 @@ describe('SettingsPanel', () => {
     };
     const updateOverlaySettings = vi.fn(async (next: OverlaySettings) => next);
     const transport = {
+      getUsagePreferences: vi.fn(async () => ({ enabled: false, available: true })),
+      setUsagePreferences: vi.fn(async (enabled: boolean) => ({ enabled, available: true })),
       getOverlaySettings: vi.fn(async () => settings),
       updateOverlaySettings,
       overlayStatus: vi.fn(async () => ({ state: 'disabled', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true })),

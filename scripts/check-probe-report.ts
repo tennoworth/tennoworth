@@ -30,6 +30,7 @@ if (!access || Object.entries(pacing).some(([key, value]) => access.restrictions
   problems.push('WFM access command did not expose the compiled request safeguards');
 if (access?.revision !== 0 || typeof access?.queue_count !== 'number')
   problems.push('WFM access status contract is incomplete');
+if (report.usageExcluded !== true) problems.push('probe usage reporting was not excluded or private settings were exposed');
 if (report.domainRejectedInvalid !== true) problems.push('invalid native domain quantities were not rejected');
 const expectedDomainOperations = ['normalize_inventory', 'score_inventory', 'trade_session', 'advisor', 'history', 'relic_plan', 'set_recos', 'ducat_plan', 'build_plan'];
 if (JSON.stringify(report.domainOperations) !== JSON.stringify(expectedDomainOperations))

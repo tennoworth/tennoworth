@@ -8,6 +8,8 @@ fn raw_http_send_sites_are_classified() {
         "wfm-client/src/policy.rs",
         "wfm-core/src/acquisition/inventory.rs",
         "tennoworth-desktop/src/services/market.rs",
+        // First-party, consent-gated counter: must not inherit WFM identity headers.
+        "tennoworth-desktop/src/services/usage.rs",
         "tennoworth-desktop/src/services/definitions.rs",
         "wfm-scrape/src/ingest/catalog.rs",
         "wfm-scrape/src/ingest/transport.rs",
