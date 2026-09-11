@@ -1,0 +1,100 @@
+{
+  "version": "0.7.103",
+  "coverage_since": "0.7.1",
+  "releases": [
+    {
+      "version": "0.7.101",
+      "date": "2026-09-08",
+      "changes": [
+        {
+          "id": "appimage-links",
+          "kind": "fixed",
+          "title": "Links open your browser again",
+          "body": "Report a bug, suggest an improvement, or open an item on warframe.market from the Linux AppImage.",
+          "platforms": [
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.7.102",
+      "date": "2026-09-08",
+      "changes": [
+        {
+          "id": "keep-plan",
+          "kind": "improved",
+          "title": "Choose what you want to keep",
+          "body": "Set aside copies or save the parts for a set you are building. Your selling and ducat suggestions take those choices into account.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "complete-sets",
+          "kind": "improved",
+          "title": "Plan sales for complete sets",
+          "body": "Add complete sets to Trade Session without counting their parts again in another sale.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "buyer-stacks",
+          "kind": "improved",
+          "title": "Find buyers for larger stacks",
+          "body": "See how much of your stack the listed buyers want, and compare their offers with your asking price.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "newest-inventory",
+          "kind": "fixed",
+          "title": "Your latest inventory stays in view",
+          "body": "An older calculation finishing late will no longer replace your newer scan, import, or plan.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.7.103",
+      "date": "2026-09-08",
+      "changes": [
+        {
+          "id": "scan-metadata",
+          "kind": "fixed",
+          "title": "More reliable inventory scans",
+          "body": "Fixed a scan error caused by game data that was not needed to read your inventory.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "update-downloads",
+          "kind": "fixed",
+          "title": "Updates work when you have missed a release",
+          "body": "Older update links keep working after a newer version comes out.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    }
+  ]
+}

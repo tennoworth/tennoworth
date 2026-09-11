@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  appNotesCatalog,
   releaseNotesBody,
   releaseNotesTemplate,
   splitSnapshotFrame,
@@ -283,4 +284,33 @@ test("cached update offers keep immutable downloads across releases", () => {
     }
     expect(manifests[0].platforms["linux-x86_64"].url).not.toBe(manifests[1].platforms["linux-x86_64"].url);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+describe('bundled app notes', () => {
+  const source = readFileSync(new URL('../CHANGELOG.md', import.meta.url), 'utf8');
+  const changelog = ['0.7.103', '0.7.102', '0.7.101'].map(v => `## ${v} - 2026-09-08\n\n${releaseNotesBody(source, v)}\n`).join('\n');
+  test('keeps intermediate releases and a single canonical plain-English source', () => {
+    const notes = appNotesCatalog(changelog, '0.7.103');
+    expect(notes.releases.map(r => r.version)).toEqual(['0.7.101', '0.7.102', '0.7.103']);
+    expect(notes.releases[1].changes).toHaveLength(4);
+    expect(notes.releases[0].changes[0].platforms).toEqual(['linux']);
+    expect(notes.releases[2].changes[0].body).not.toContain('<!--');
+  });
+  test('rejects missing intermediate notes, future versions, duplicate releases, and invalid IDs', () => {
+    expect(() => appNotesCatalog(changelog.replace(/ <!-- app-note \{"id":"appimage-links"[^\n]+ -->/, ''), '0.7.103')).toThrow('no app notes');
+    expect(() => appNotesCatalog(changelog, '0.7.102')).toThrow('future');
+    expect(() => appNotesCatalog(changelog.replace('## 0.7.102 -', '## 0.7.103 -'), '0.7.103')).toThrow('duplicate');
+    expect(() => appNotesCatalog(changelog.replace('"id":"scan-metadata"', '"id":"bad id"'), '0.7.103')).toThrow('ID');
+    expect(() => appNotesCatalog(changelog.replace('"kind":"fixed"', '"kind":"fixed","supersedes":["missing"]'), '0.7.103')).toThrow('supersession');
+  });
+  test('orders the same stable version boundaries as the native selector', () => {
+    const cases = JSON.parse(readFileSync(new URL('../tests/fixtures/update-notes/versions.json', import.meta.url), 'utf8'));
+    const body = releaseNotesBody(source, '0.7.103');
+    const history = cases.ascending.toReversed().map((v: string) => `## ${v} - 2026-09-08\n\n${body.replaceAll('0.7.103', v)}\n`).join('\n');
+    expect(appNotesCatalog(history, '1.0.0').releases.map(r => r.version)).toEqual(cases.ascending.slice(1));
+  });
+  test('rejects non-stable versions using the shared native fixture', () => {
+    const cases = JSON.parse(readFileSync(new URL('../tests/fixtures/update-notes/versions.json', import.meta.url), 'utf8'));
+    for (const version of cases.invalid) expect(() => appNotesCatalog(changelog, version)).toThrow();
+  });
 });

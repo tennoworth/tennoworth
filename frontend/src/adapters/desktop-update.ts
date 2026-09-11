@@ -105,3 +105,13 @@ export function listenForTauriEvent<T>(event: string, cb: (payload: T) => void):
     unlisten = undefined;
   };
 }
+
+export function updateNotes(): Promise<import('../contracts/update').UpdateNotesStatus> {
+  return resolveInvoke()('update_notes');
+}
+export function acknowledgeUpdateNotes(version: string): Promise<void> {
+  return resolveInvoke()('acknowledge_update_notes', { version });
+}
+export function updateNotesCanPresent(): Promise<boolean> {
+  return resolveInvoke()('update_notes_can_present');
+}

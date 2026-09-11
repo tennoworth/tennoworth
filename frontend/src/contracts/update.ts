@@ -25,3 +25,27 @@ export interface UpdateStatus {
 
 /** Event name the Rust close-with-tray path emits so the SPA shows its once-ever tray banner. */
 export const TRAY_HINT_EVENT = 'tray-hint';
+
+export interface UpdateChange {
+  id: string;
+  kind: 'improved' | 'fixed' | 'action';
+  title: string;
+  body: string;
+  platforms: Array<'windows' | 'linux'>;
+  supersedes: string[];
+}
+export interface UpdateRelease { version: string; date: string; changes: UpdateChange[] }
+export interface UpdateNotesStatus {
+  current_version: string;
+  previous_version: string | null;
+  auto_show: boolean;
+  earlier_version_unknown: boolean;
+  partial_history: boolean;
+  releases: UpdateRelease[];
+  changes: UpdateChange[];
+}
+export interface UpdateNotesServices {
+  updateNotes(): Promise<UpdateNotesStatus>;
+  acknowledgeUpdateNotes(version: string): Promise<void>;
+  updateNotesCanPresent(): Promise<boolean>;
+}

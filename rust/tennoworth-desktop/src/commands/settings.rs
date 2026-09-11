@@ -68,6 +68,9 @@ pub fn get_setting(db: State<'_, Db>, key: String) -> Result<Option<String>, Str
     if key.starts_with("usage.") {
         return Err("Usage state is private to its typed commands.".into());
     }
+    if key.starts_with("update-notes.") {
+        return Err("Update history is managed by its own commands.".into());
+    }
     db.get_setting(&key).map_err(|e| e.to_string())
 }
 
@@ -75,6 +78,9 @@ pub fn get_setting(db: State<'_, Db>, key: String) -> Result<Option<String>, Str
 pub fn set_setting(db: State<'_, Db>, key: String, value: String) -> Result<(), String> {
     if key.starts_with("usage.") {
         return Err("Usage state is private to its typed commands.".into());
+    }
+    if key.starts_with("update-notes.") {
+        return Err("Update history is managed by its own commands.".into());
     }
     db.set_setting(&key, &value).map_err(|e| e.to_string())
 }

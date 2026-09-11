@@ -1,6 +1,11 @@
 <script lang="ts">
   import UsageChart from '../features/community/UsageChart.svelte';
   import usageSample from '../../../tests/fixtures/usage/daily.json';
+  import UpdateNotes from '../ui/UpdateNotes.svelte';
+  import notesSample from '../../../tests/fixtures/update-notes/status.json';
+  import type { UpdateNotesStatus } from '../contracts/update';
+  let notesRef = $state<UpdateNotes>();
+  const notesServices = { updateNotes: async () => ({ ...notesSample, auto_show: false } as UpdateNotesStatus), acknowledgeUpdateNotes: async () => {}, updateNotesCanPresent: async () => true };
   import { onMount } from 'svelte';
   import { applyTheme, systemMode, type Mode } from '../ui/theme';
 
@@ -82,7 +87,7 @@
       <p class="muted">Selected: {selected}. These are presentation examples, not the Trade Session planner.</p>
       <div class="fields">
         <label class="ui-field">Filter sample items<input type="text" bind:value={filter} placeholder="Item name" /></label>
-        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option><option value="notifications">Alerts</option><option value="estimates">Estimates</option><option value="usage">Community usage</option></select></label>
+        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option><option value="notifications">Alerts</option><option value="estimates">Estimates</option><option value="usage">Community usage</option><option value="updates">Update notes</option></select></label>
       </div>
       <p role="status" class="muted">{message || 'Controls are ready. No changes made.'}</p>
     </div>
@@ -140,6 +145,8 @@
   </section>
   {/if}
   {#if dataState === 'usage'}<UsageChart sample={usageSample} />{/if}
+  {#if dataState === 'updates'}<section class="ui-panel ui-stack"><h2>Changes across installed versions</h2><p>One plain-English summary combines skipped releases, with a version history beneath it.</p><button class="btn" onclick={() => notesRef?.open()}>Preview what’s new</button></section>{/if}
+  {#if dataState === 'updates'}<UpdateNotes bind:this={notesRef} services={notesServices} />{/if}
 </main>
 
 <dialog class="cryptobox" bind:this={dialog} aria-labelledby="review-title">

@@ -60,7 +60,7 @@ The active look is `yorha`; the resolved modes are `light` and `dark`.
 | Emphasis | `--accent`, `--on-accent`, `--ink-bar`, `--on-ink`, `--on-ink-muted` | Use matching foreground/background pairs |
 | Meaning | `--good`, `--warn`, `--bad`, `--ducat` | Success, caution, error, and ducat data; not decoration |
 | Type | `--font-ui`, `--font-body`, `--font-mono` | Headings/labels, reading, numeric/technical data |
-| Type scale | `--text-caption`, `--text-control`, `--text-body`, `--text-section`, `--text-heading`, `--text-metric`, `--text-metric-lg`, `--leading-body`, `--leading-control` | Shared text roles and line heights; extend centrally rather than per panel |
+| Type scale | `--text-caption`, `--text-control`, `--text-body`, `--text-section`, `--text-heading`, `--text-dialog-title`, `--text-metric`, `--text-metric-lg`, `--leading-body`, `--leading-control` | Shared text roles and line heights; extend centrally rather than per panel |
 | Rhythm | `--s1` through `--s6`, `--inset`, `--gutter`, `--stack`, `--cell` | Shared spacing and contextual insets |
 | Density | `--ctl-xs`, `--ctl`, `--ctl-lg`, `--row`, `--row-cf`, `--head`, `--rail`, `--bar`, `--strip` | Baseline sizes, not clipping constraints |
 | Shape and layering | `--radius-*`, `--shadow-pop`, `--scrim` | Square active-theme shapes and restrained overlay separation |
@@ -347,3 +347,25 @@ panels; endpoint dates orient the chart without crowding it. Zero has no filled 
 value. Loading, unavailable, empty, and stale states never invent observations.
 Select Community usage in the living reference’s Data state control for the
 production chart with fictional daily counts.
+
+## Installed update notes
+
+“What’s new” uses the native dialog pattern with a 47rem maximum width and a
+`--text-dialog-title` heading. Its explanatory header deliberately uses the
+normal panel surface instead of the inverted authentication-dialog rail, as in
+the approved mock; scoped overrides prevent the authentication form’s negative
+header margins from clipping the heading. A single summary combines skipped releases into
+New & improved and Fixes; Action needed entries stay fully visible before
+ordinary highlights. Long gaps offer Show all changes and a release-by-release
+disclosure. Version range, partial history, and an unknown starting version are
+explicit. Use green only for a confirmed installed upgrade; reopening notes or
+an unknown earlier version uses neutral status text.
+
+Got it, Close and Escape dismiss the same summary. Failed acknowledgement
+closes the dialog and leaves a persistent corner notice with Retry saving and
+Dismiss notice, rather than hiding the error below a long dashboard. The footer points to Settings
+→ Updates → What’s new; short windows scroll the whole dialog so actions remain
+reachable. Theme/resizing preserve expanded content. Automatic presentation waits
+for the hydrated, visible, focused main window and never stacks over another
+modal or pending recovery. Select Update notes in the living styleguide to open
+the production dialog with a fictional upgrade state.

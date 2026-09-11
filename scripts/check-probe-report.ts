@@ -24,6 +24,8 @@ try {
 }
 
 const problems = [];
+if (report.updateNotesUiVerified !== true) problems.push("installed update notes did not open and close through Settings");
+if (report.updateNotesVerified !== true) problems.push("installed update notes were not verified over native IPC");
 if (report.wfm?.cancelIdle?.ok !== true) problems.push('WFM cancellation command was unavailable');
 const access = report.wfm?.access?.ok === true ? report.wfm.access.value : null;
 if (!access || Object.entries(pacing).some(([key, value]) => access.restrictions?.[key] !== value))

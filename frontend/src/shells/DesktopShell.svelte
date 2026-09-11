@@ -30,6 +30,7 @@ import { NOTIFICATIONS_EVENT, MARKET_REFRESHED_EVENT, ALLOWANCE_CHANGED_EVENT } 
   import TradeSessionPane from '../features/selling/TradeSessionPane.svelte';
   import RivensPanel from '../features/rivens/RivensPanel.svelte';
   import ThemeSwitcher from '../ui/ThemeSwitcher.svelte';
+  import UpdateNotes from '../ui/UpdateNotes.svelte';
   import SettingsPanel from '../features/settings/SettingsPanel.svelte';
   import { resolveRivens } from '../domain/rivens';
   import type { Verdict } from '../domain/advisor';
@@ -61,6 +62,9 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // The hosted site is informational only: market data + the desktop showcase,
   // no files. Everything interactive - scan, list, orders, login - lives in
   // the desktop app, driven by the wfm_session commands.
+  let updateNotesRef: UpdateNotes;
+  let notesReady = $state(false);
+  const notesServices = useDesktopServices();
   const isDesktop = true;
   const transport = new TauriTransport();
   const marketAccess = new WfmAccessController({ desktopAccessStatus, listenForTauriEvent });
@@ -324,6 +328,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     // retries on reconnect and every 30 minutes, so an offline launch recovers
     // without restarting; hosted builds already fetch same-origin from the box.
     marketRefreshLoop?.trigger();
+    notesReady = true;
   });
 
   function handleClear() {
@@ -1363,7 +1368,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       <Faq desktop />
 
     {:else if effectiveView === 'settings'}
-      <SettingsPanel {theme} {transport} {isDesktop} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} />
+      <SettingsPanel onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} {isDesktop} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} />
     {/if}
 
     {/if}
@@ -1634,3 +1639,5 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   lastUpdated={inventory.lastUpdated}
   onimport={(result) => inventory.handleImported(result)}
 />
+
+<UpdateNotes bind:this={updateNotesRef} services={notesServices} ready={notesReady} blocked={pendingRemaining > 0 || listing.resumePhase !== 'idle'} />

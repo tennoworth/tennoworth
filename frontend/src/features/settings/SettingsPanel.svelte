@@ -15,12 +15,13 @@ import { type UpdateStatus } from '../../contracts/update';
   interface Props {
     /** The boot-time controller from src/lib/theme.ts. */
     theme: ThemeController;
+    onwhatsnew?: () => void;
     transport?: DesktopCapabilities;
     isDesktop?: boolean;
     wfmStatus?: DesktopWfmStatus | null;
     onwfmlogout?: () => Promise<void>;
   }
-  let { theme, transport, isDesktop = false, wfmStatus = null, onwfmlogout }: Props = $props();
+  let { theme, onwhatsnew, transport, isDesktop = false, wfmStatus = null, onwfmlogout }: Props = $props();
 
   let overlay = $state<OverlaySettings | null>(null);
   let overlayStatus = $state<OverlayStatus | null>(null);
@@ -170,6 +171,7 @@ import { type UpdateStatus } from '../../contracts/update';
       <div class="ui-setting-row">
         <div class="ui-setting-copy"><strong>Application updates</strong><p>On Windows and Linux AppImage, TennoWorth also checks every 30 minutes while it is running. Updates are downloaded and installed only after you confirm.</p></div>
         <div class="ui-setting-control">
+          {#if onwhatsnew}<button class="btn" onclick={onwhatsnew}>What’s new</button>{/if}
           <button class="btn" onclick={checkForUpdates} disabled={checkingUpdate}>{checkingUpdate ? 'Checking…' : 'Check for updates'}</button>
           {#if checkedUpdate?.available}<span class="status">Version {checkedUpdate.version} is available.</span>
           {:else if checkedUpdate?.checked && checkedUpdate.support === 'supported'}<span class="status">You’re up to date · v{checkedUpdate.current_version}</span>

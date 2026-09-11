@@ -1,3 +1,4 @@
+import notesSample from '../../../tests/fixtures/update-notes/status.json';
 import defaults from '../../../tests/fixtures/pacing.json';
 import { evaluateDomainPreview } from './domain-preview';
 import type { DomainRequest } from '../contracts/generated/domain';
@@ -10,6 +11,13 @@ export async function installPreview() {
   const preview = scenario !== null
     ? (await import('./preview-data')).createPreview(scenario || 'populated')
     : null;
+  let notes: import('../contracts/update').UpdateNotesStatus = structuredClone(notesSample) as import('../contracts/update').UpdateNotesStatus;
+  notes.auto_show = scenario?.startsWith('update-notes') ?? false;
+  if (scenario === 'update-notes-single' || scenario === 'update-notes-unknown') {
+    notes.releases = notes.releases.slice(0, 1); notes.changes = notes.releases[0].changes;
+    notes.previous_version = scenario === 'update-notes-single' ? '0.7.102' : null;
+    notes.earlier_version_unknown = scenario === 'update-notes-unknown';
+  }
   const noUpdate: UpdateStatus = {
     checked: true,
     available: false,
@@ -40,6 +48,9 @@ export async function installPreview() {
   // browser snapshot round-trips exactly like the real thing.
   let protectionPlan: ProtectionPlan = { reserves: {}, goal: null };
   const invoke = (cmd: string, args?: Record<string, unknown>) => {
+    if (cmd === 'update_notes') return Promise.resolve(structuredClone(notes));
+    if (cmd === 'update_notes_can_present') return Promise.resolve(true);
+    if (cmd === 'acknowledge_update_notes') { notes.auto_show = false; return Promise.resolve(null); }
     if (cmd === 'evaluate_domain') return Promise.resolve().then(() => evaluateDomainPreview(args?.request as DomainRequest));
     if (preview && ['protection_state', 'save_protection_plan', 'get_setting', 'set_setting', 'delete_setting', 'fetch_orders', 'list_watches', 'list_trades', 'eelog_status', 'riven_comps', 'wfm_auth_status', 'wfm_logout', 'live_top_prices', 'trade_session_state', 'submit_plan', 'list_notifications', 'mark_notifications_read', 'clear_notifications', 'get_notification_preferences', 'set_notification_preferences', 'test_notification'].includes(cmd)) return preview(cmd, args);
     if (cmd === 'save_protection_plan') { protectionPlan = JSON.parse(JSON.stringify(args?.plan)) as ProtectionPlan; return Promise.resolve(null); }
