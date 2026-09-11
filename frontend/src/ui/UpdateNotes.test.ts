@@ -36,6 +36,17 @@ describe('installed update notes', () => {
     await fireEvent(window,new Event('focus'));
     expect(document.querySelector('dialog')?.open).toBe(false);
   });
+  it('opens an explicit Settings request when window focus reporting lags', async () => {
+    vi.mocked(document.hasFocus).mockReturnValue(false);
+    const canPresent=vi.fn(async () => false);
+    const api=services({ updateNotesCanPresent: canPresent });
+    const { component }=render(UpdateNotes,{services:api,ready:false});
+    await waitFor(() => expect(api.updateNotes).toHaveBeenCalled());
+    expect(document.querySelector('dialog')?.open).toBe(false);
+    await component.open();
+    await waitFor(() => expect(document.querySelector('dialog')?.open).toBe(true));
+    expect(canPresent).not.toHaveBeenCalled();
+  });
   it('closes on persistence failure and offers a retry without reopening automatically', async () => {
     const save=vi.fn().mockRejectedValueOnce(new Error('disk full')).mockResolvedValue(undefined);
     render(UpdateNotes,{ services:services({ acknowledgeUpdateNotes:save }),ready:true });

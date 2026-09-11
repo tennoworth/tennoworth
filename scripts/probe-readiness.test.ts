@@ -7,7 +7,7 @@ const script = source.split('const PROBE_JS: &str = r#"')[1].split('"#;')[0]
   .replace('__RUNTAG__', 'fixture').replace('__FIXTURE__', '{}')
   .replace('__DOMAIN_CASES__', readFileSync(new URL('../tests/fixtures/domain-ipc/cases.json', import.meta.url), 'utf8'));
 
-function harness() {
+function harness(settleFetch = false) {
   let now = 0;
   let mounted = false;
   let fetches = 0;
@@ -28,7 +28,12 @@ function harness() {
     localStorage: { getItem() { return null; }, setItem() {} },
     console: { error() {} },
     // Stop after startup evidence is captured; later scenarios are native gates.
-    fetch() { fetches++; return new Promise(() => {}); },
+    fetch() {
+      fetches++;
+      return settleFetch
+        ? Promise.resolve({ ok: true, status: 200, type: 'basic', text: () => Promise.resolve('{}') })
+        : new Promise(() => {});
+    },
   });
   return {
     mount() { mounted = true; },
@@ -63,6 +68,16 @@ describe('native probe startup readiness', () => {
     expect(h.fetches).toBe(0);
     const report = h.calls.find(call => call.command === 'probe_report');
     expect(JSON.parse(report!.args!.payload).fatal).toContain('did not mount');
+    expect(h.calls.some(call => call.command === 'probe_exit')).toBe(true);
+  });
+
+  test('reports and exits after a scenario assertion fails', async () => {
+    const h = harness(true);
+    h.mount();
+    await h.advance(50);
+    await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+    const report = h.calls.find(call => call.command === 'probe_report');
+    expect(JSON.parse(report!.args!.payload).fatal).toContain('Probe usage reporting was not disabled');
     expect(h.calls.some(call => call.command === 'probe_exit')).toBe(true);
   });
 });
