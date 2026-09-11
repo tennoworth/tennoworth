@@ -1,5 +1,5 @@
 import type { DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences } from './desktop';
-import type { UpdateStatus } from './update';
+import type { UpdateNotesServices, UpdateStatus } from './update';
 import type { EncryptedBlob } from './encrypted-snapshot';
 import type { Inventory, Market, OwnedRecord } from './data';
 import type { Catalogs } from '../domain/resolver';
@@ -11,7 +11,7 @@ import type { RelicPlanEntry } from '../domain/relic-planner';
 import type { SetReco } from '../domain/set-recos';
 import type { AdvisorRequest, HistoryRequest, HistoryAnalysis, SessionRequest, ScoredInventoryFact } from './generated/domain';
 export const DESKTOP_CONTEXT = 'tennoworth.desktop';
-export interface DesktopServices {
+export interface DesktopServices extends UpdateNotesServices {
   desktopAccessStatus(): Promise<import('./generated/desktop').AccessStatus>;
   normalizeInventoryNative(data: Inventory, catalogs: Catalogs, market: Market): Promise<{ owned: Map<string, OwnedRecord>; unresolved: Record<string, number>; flatCount: number }>;
   scoreInventoryNative(owned: Map<string, OwnedRecord>, market: Market, reserveCopies: number, sparesOnly: boolean, availability?: ReadonlyMap<string, number>): Promise<Map<string, ScoredInventoryFact>>;

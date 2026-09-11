@@ -4,9 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "bun ../scripts/sync-csp.ts --check",
+    "prebuild": "bun ../scripts/release.ts app-notes --check && bun ../scripts/sync-csp.ts --check",
     "build": "vite build",
-    "build:desktop": "bun ../scripts/sync-csp.ts --check && vite build --outDir dist-desktop --emptyOutDir && bun ../scripts/sync-csp.ts --desktop dist-desktop/index.html",
+    "build:desktop": "bun ../scripts/release.ts app-notes --check && bun ../scripts/sync-csp.ts --check && vite build --outDir dist-desktop --emptyOutDir && bun ../scripts/sync-csp.ts --desktop dist-desktop/index.html",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

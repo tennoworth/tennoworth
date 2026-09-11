@@ -41,6 +41,19 @@ building either platform. Historical entries are intentionally not backfilled.
 Releases up to and including 0.3.8 predate this file, and their notes live on
 the GitHub releases themselves.
 
+App summaries are generated from annotated bullets in this file. For releases
+newer than 0.7.1, include at least one plain-English bullet in this form:
+`- **What the person can do** A short explanation. <!-- app-note {"id":"stable-change-id","kind":"improved"} -->`
+Kinds are `improved`, `fixed`, and `action`; optional `platforms` restricts a note
+to `windows` or `linux`. Stable IDs deduplicate repeated notes. Optional
+`supersedes` explicitly replaces earlier non-action IDs; action notices cannot
+be hidden this way. Keep titles under 100 and explanations under 600 characters.
+The annotation is omitted from published release bodies.
+
+After editing, run `bun scripts/release.ts app-notes`. Release checks and frontend
+builds reject a stale bundle. Historical releases through 0.7.1 keep their original
+format; the app explicitly identifies incomplete coverage for older upgrades.
+
 ## 0.7.103 - 2026-09-08
 
 # 🔧 TennoWorth Desktop 0.7.103
@@ -53,11 +66,11 @@ Scan your inventory without game metadata blocking the result, and update direct
 
 ### Inventory
 
-- Fix scans failing with “The calculation contains an out-of-range number” when unused game metadata contains large numeric seeds.
+- **More reliable inventory scans** Fixed a scan error caused by game data that was not needed to read your inventory. <!-- app-note {"id":"scan-metadata","kind":"fixed"} -->
 
 ### Updates
 
-- Keep update downloads tied to immutable releases and preserve legacy cached installer links.
+- **Updates work when you have missed a release** Older update links keep working after a newer version comes out. <!-- app-note {"id":"update-downloads","kind":"fixed"} -->
 
 ## Updating
 
@@ -75,13 +88,13 @@ Plan sales around what you want to keep, compare complete sets with individual p
 
 ### Selling
 
-- Reserve item quantities and pin a set goal across selling recommendations and ducat planning.
-- Include complete owned sets in Trade Session without allocating their components twice.
-- Compare visible buyers by whole-lot quantity coverage and the value gap against your listing reference.
+- **Choose what you want to keep** Set aside copies or save the parts for a set you are building. Your selling and ducat suggestions take those choices into account. <!-- app-note {"id":"keep-plan","kind":"improved"} -->
+- **Plan sales for complete sets** Add complete sets to Trade Session without counting their parts again in another sale. <!-- app-note {"id":"complete-sets","kind":"improved"} -->
+- **Find buyers for larger stacks** See how much of your stack the listed buyers want, and compare their offers with your asking price. <!-- app-note {"id":"buyer-stacks","kind":"improved"} -->
 
 ### Reliability
 
-- Keep newer scans, imports, and planning results from being replaced by older calculations.
+- **Your latest inventory stays in view** An older calculation finishing late will no longer replace your newer scan, import, or plan. <!-- app-note {"id":"newest-inventory","kind":"fixed"} -->
 
 ## Updating
 
@@ -99,7 +112,7 @@ Feedback forms and other external links now open your browser from the AppImage 
 
 ### Linux
 
-- Fix external links silently failing to open from the AppImage, including Report a bug, Suggest an improvement, and warframe.market item links. Browser launchers now use host library paths instead of the AppImage's bundled libraries.
+- **Links open your browser again** Report a bug, suggest an improvement, or open an item on warframe.market from the Linux AppImage. <!-- app-note {"id":"appimage-links","kind":"fixed","platforms":["linux"]} -->
 
 ## Updating
 

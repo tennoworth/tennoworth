@@ -103,3 +103,14 @@ it('keeps a safe install failure available after reading update status', async (
   await updateStatus();
   expect(updateDiagnostics()).toEqual({ operation: 'install', status: 'failed', error: 'not_found' });
 });
+
+it('loads installed notes locally and acknowledges the exact displayed version', async () => {
+  const { updateNotes, acknowledgeUpdateNotes, updateNotesCanPresent } = await import('./desktop-update');
+  const fixture = (await import('../../../tests/fixtures/update-notes/status.json')).default;
+  const invoke = vi.fn().mockResolvedValueOnce(fixture).mockResolvedValueOnce(true).mockResolvedValueOnce(undefined);
+  installTauri(invoke);
+  expect(await updateNotes()).toEqual(fixture);
+  expect(await updateNotesCanPresent()).toBe(true);
+  await acknowledgeUpdateNotes(fixture.current_version);
+  expect(invoke.mock.calls).toEqual([['update_notes'], ['update_notes_can_present'], ['acknowledge_update_notes', { version: '0.7.103' }]]);
+});

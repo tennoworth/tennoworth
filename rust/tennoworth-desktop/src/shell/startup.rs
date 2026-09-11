@@ -77,6 +77,9 @@ pub(crate) fn run() {
         .manage(crate::shell::update::UpdateState::default())
         .manage(Arc::new(WfmSession::new()))
         .invoke_handler(tauri::generate_handler![
+            crate::shell::update_notes::update_notes,
+            crate::shell::update_notes::acknowledge_update_notes,
+            crate::shell::update_notes::update_notes_can_present,
             health,
             crate::services::usage::get_usage_preferences,
             crate::services::usage::set_usage_preferences,
@@ -168,10 +171,12 @@ pub(crate) fn run() {
                 }
             }
             let db_path = data_dir.join("tennoworth.db");
+            let profile_existed = db_path.exists();
             let store = Db::open(&db_path)
                 .map_err(|e| format!("opening state DB {}: {e}", db_path.display()))?;
             app.manage(store);
             crate::services::usage::start(app.handle().clone());
+            crate::shell::update_notes::initialize(app.handle(), profile_existed);
             crate::services::wfm_session::publish_access_changes(app.handle().clone());
 
             let overlay_state =

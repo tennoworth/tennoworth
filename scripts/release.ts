@@ -464,6 +464,7 @@ export function releaseNotesBody(changelog: string, version: string): string {
 }
 
 export function validateReleaseNotes(body: string, version: string): ReleaseNotesSummary {
+  body = body.replace(/ <!-- app-note (\{[^\n]+\}) -->$/gm, "");
   const lines = body.replace(/\r\n/g, "\n").split("\n");
   if (/<!--|\b(?:EMOJI|TODO|TBD)\b|\[Category\]/i.test(body)) {
     throw new Error("release notes still contain template placeholders");
@@ -578,6 +579,73 @@ export function validateReleaseNotes(body: string, version: string): ReleaseNote
   };
 }
 
+// App notes are authored on the changelog bullet they describe, then bundled offline.
+const APP_NOTES_PATH = "rust/tennoworth-desktop/resources/update-notes.json";
+const APP_NOTES_SINCE = "0.7.1";
+const APP_ANNOTATION = / <!-- app-note (\{[^\n]+\}) -->$/;
+interface AppChange {
+  id: string; kind: "improved" | "fixed" | "action"; title: string; body: string;
+  platforms: string[]; supersedes: string[];
+}
+export function appNotesCatalog(changelog: string, version: string) {
+  if (!SEMVER.test(version)) throw new Error("invalid app notes version");
+  const headers = [...changelog.matchAll(/^## (\d+\.\d+\.\d+) - (\d{4}-\d{2}-\d{2})\s*$/gm)];
+  const versions = new Set<string>();
+  const releases: { version: string; date: string; changes: AppChange[] }[] = [];
+  for (const header of headers) {
+    const release = header[1];
+    if (!SEMVER.test(release) || release.split('.').some(n => !Number.isSafeInteger(Number(n)))) throw new Error("invalid release version");
+    if (versions.has(release)) throw new Error(`duplicate release ${release}`);
+    versions.add(release);
+    if (compareVersions(release, APP_NOTES_SINCE) <= 0) continue;
+    if (compareVersions(release, version) > 0) throw new Error(`future app notes ${release} exceed installed ${version}`);
+    if (!Number.isFinite(Date.parse(header[2])) || new Date(header[2]).toISOString().slice(0, 10) !== header[2]) throw new Error("invalid release date");
+    const body = releaseNotesBody(changelog, release);
+    const changes: AppChange[] = [];
+    const ids = new Set<string>();
+    for (const line of body.split('\n')) {
+      const annotation = line.match(APP_ANNOTATION);
+      if (!annotation) continue;
+      const meta = object(JSON.parse(annotation[1]), 'app-note');
+      if (Object.keys(meta).some(k => !['id', 'kind', 'platforms', 'supersedes'].includes(k))) throw new Error('unknown app-note field');
+      const text = line.replace(APP_ANNOTATION, '').match(/^- \*\*(.+?)\*\* (.+)$/);
+      if (!text || text[1].length > 100 || text[2].length > 600 || /[<>\r\n]/.test(text[1] + text[2])) throw new Error('app-note needs a short plain-text title and explanation');
+      if (typeof meta.id !== 'string' || !/^[a-z][a-z0-9-]{0,79}$/.test(meta.id) || ids.has(meta.id) || meta.id === 'replace-me') throw new Error('invalid or duplicate app-note ID');
+      ids.add(meta.id);
+      if (!['improved', 'fixed', 'action'].includes(String(meta.kind))) throw new Error('invalid app-note kind');
+      const platforms = meta.platforms ?? ['windows', 'linux'];
+      if (!Array.isArray(platforms) || !platforms.length || platforms.some(p => !['windows', 'linux'].includes(p)) || new Set(platforms).size !== platforms.length) throw new Error('invalid app-note platforms');
+      const supersedes = meta.supersedes ?? [];
+      if (!Array.isArray(supersedes) || supersedes.some(id => typeof id !== 'string' || !/^[a-z][a-z0-9-]{0,79}$/.test(id) || id === meta.id)) throw new Error('invalid app-note supersession');
+      changes.push({ id: meta.id, kind: meta.kind as AppChange['kind'], title: text[1], body: text[2], platforms, supersedes });
+    }
+    if (!changes.length) throw new Error(`release ${release} has no app notes`);
+    validateReleaseNotes(body, release);
+    releases.push({ version: release, date: header[2], changes });
+  }
+  releases.sort((a, b) => compareVersions(a.version, b.version));
+  if (!releases.some(r => r.version === version)) throw new Error(`installed version ${version} has no app notes`);
+  const earlier = new Map<string, AppChange>();
+  for (const [index, release] of releases.entries()) {
+    for (const change of release.changes) {
+      const prior = earlier.get(change.id);
+      if (prior && (prior.kind !== change.kind || JSON.stringify(prior.platforms) !== JSON.stringify(change.platforms))) throw new Error(`inconsistent app-note ID ${change.id}`);
+      earlier.set(change.id, change);
+    }
+    for (const change of release.changes) for (const id of change.supersedes) {
+      const prior = releases.slice(0, index).flatMap(r => r.changes).filter(c => c.id === id);
+      if (!prior.length || prior.some(c => c.kind === 'action')) throw new Error(`supersession ${id} must name an earlier non-action change`);
+    }
+  }
+  return { version, coverage_since: APP_NOTES_SINCE, releases };
+}
+function syncAppNotes(check: boolean) {
+  const generated = JSON.stringify(appNotesCatalog(read(CHANGELOG), cargoTomlVersion()), null, 2) + '\n';
+  if (check) {
+    if (!existsSync(join(ROOT, APP_NOTES_PATH)) || read(APP_NOTES_PATH) !== generated) throw new Error('bundled app notes are stale; run bun scripts/release.ts app-notes');
+  } else write(APP_NOTES_PATH, generated);
+}
+
 export function releaseNotesTemplate(version: string, date: string): string {
   return `## ${version} - ${date}\n\n` +
     `# EMOJI TennoWorth Desktop ${version}\n\n` +
@@ -585,7 +653,7 @@ export function releaseNotesTemplate(version: string, date: string): string {
     `<!-- Explain in one short paragraph who benefits and why this release matters. -->\n\n` +
     `## Changelog (N)\n\n` +
     `### Category\n\n` +
-    `- \n\n` +
+    `- **Short user-facing title** Explain what changed in plain English. <!-- app-note {"id":"replace-me","kind":"improved"} -->\n\n` +
     `## Updating\n\n` +
     `TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. ` +
     `Downloads for Windows and Linux are available in the assets below.\n\n`;
@@ -593,7 +661,8 @@ export function releaseNotesTemplate(version: string, date: string): string {
 
 function checkedReleaseNotes(version: string): { body: string; summary: ReleaseNotesSummary } {
   const body = releaseNotesBody(read(CHANGELOG), version);
-  return { body, summary: validateReleaseNotes(body, version) };
+  syncAppNotes(true);
+  return { body: body.replace(/ <!-- app-note (\{[^\n]+\}) -->$/gm, ""), summary: validateReleaseNotes(body, version) };
 }
 
 // ---------------------------------------------------------------------------
@@ -693,6 +762,13 @@ function cmdCheck(argv: string[]) {
     }
   }
 
+  try {
+    syncAppNotes(true);
+    const catalog = appNotesCatalog(read(CHANGELOG), version);
+    for (const released of published) {
+      if (compareVersions(released, APP_NOTES_SINCE) > 0 && compareVersions(released, version) <= 0 && !catalog.releases.some(r => r.version === released)) throw new Error(`published release ${released} is missing from bundled app notes`);
+    }
+  } catch (error) { console.error((error as Error).message); bad = true; }
   if (bad) process.exit(1);
   console.log(
     `version ${version} agrees across ${pins.length} pins` +
@@ -847,6 +923,9 @@ if (import.meta.main) {
       break;
     case "check":
       cmdCheck(rest);
+      break;
+    case "app-notes":
+      try { syncAppNotes(rest.includes("--check")); } catch (error) { fail((error as Error).message); }
       break;
     case "notes":
       cmdNotes(rest);

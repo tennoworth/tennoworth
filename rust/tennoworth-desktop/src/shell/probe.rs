@@ -60,6 +60,21 @@ const PROBE_JS: &str = r#"(function(){
       if (typeof result !== 'string' || result.indexOf('ERR:') !== 0) throw new Error('Generic settings bypassed usage consent');
       R.usageExcluded = true;
     }).then(function(){
+      return invk('update_notes');
+    }).then(function(notes){
+      if (!notes || notes.auto_show !== false || !Array.isArray(notes.releases) || !notes.releases.length) throw new Error('Installed notes unavailable or probe auto-presentation enabled');
+      R.updateNotesVersion = notes.current_version;
+      return invk('get_setting', { key: 'update-notes.history-v1' });
+    }).then(function(result){
+      if (typeof result !== 'string' || result.indexOf('ERR:') !== 0) throw new Error('Generic settings exposed update history');
+      return invk('acknowledge_update_notes', { version: '0.0.0' });
+    }).then(function(result){
+      if (typeof result !== 'string' || result.indexOf('ERR:') !== 0) throw new Error('Stale notes were acknowledged');
+      return invk('acknowledge_update_notes', { version: R.updateNotesVersion });
+    }).then(function(result){
+      if (typeof result === 'string' && result.indexOf('ERR:') === 0) throw new Error('Installed notes acknowledgement failed');
+      R.updateNotesVerified = true;
+    }).then(function(){
     return DOMAIN_CASES.reduce(function(chain, test){
       return chain.then(function(){ return invk('evaluate_domain', { request: { operation: test.operation, input: test.input } }); })
         .then(function(response){
@@ -376,6 +391,30 @@ const PROBE_JS: &str = r#"(function(){
     .then(function(){ return invkE('wfm_auth_status').then(function(v){ R.wfm.status3 = v; }); })
     // Locked again with the envelope still on disk → needs_unlock, not login.
     .then(function(){ return invkE('submit_plan', { items: [] }).then(function(v){ R.wfm.planAfterLogout = v; }); })
+    .then(function(){
+      var settings = Array.from(document.querySelectorAll('.sidebar button')).find(function(b){ return b.textContent.trim().indexOf('Settings') === 0; });
+      if (!settings) throw new Error('Settings navigation is missing');
+      settings.click();
+      return delay(300);
+    })
+    .then(function(){
+      var button = Array.from(document.querySelectorAll('.settings button')).find(function(b){ return b.textContent.trim() === 'What’s new'; });
+      if (!button) throw new Error('Installed notes entry is missing');
+      button.click();
+      return delay(1200);
+    })
+    .then(function(){
+      var notes = document.querySelector('dialog.update-notes');
+      if (!notes || !notes.open || notes.textContent.indexOf(R.updateNotesVersion) < 0) throw new Error('Installed notes did not open from Settings');
+      var done = Array.from(notes.querySelectorAll('button')).find(function(b){ return b.textContent.trim() === 'Got it'; });
+      if (!done) throw new Error('Notes dismissal is missing');
+      done.click();
+      return delay(200);
+    })
+    .then(function(){
+      if (document.querySelector('dialog.update-notes').open) throw new Error('Installed notes did not close');
+      R.updateNotesUiVerified = true;
+    })
     // Checkpoint the evidence BEFORE the lifecycle test - if close-to-tray were
     // broken and destroyed the window, the final report below would never write.
     .then(function(){ return invk('probe_report', { payload: JSON.stringify(R) }); })
