@@ -5,6 +5,7 @@ import DesktopShowcase from '../features/market-context/DesktopShowcase.svelte';
 import FeatureRail from '../features/market-context/FeatureRail.svelte';
 import ThemeSwitcher from '../ui/ThemeSwitcher.svelte';
 import Faq from './Faq.svelte';
+import UsageChart from '../features/community/UsageChart.svelte';
 import { loadMarket } from '../adapters/market';
 import { HostedTransport } from '../adapters/hosted';
 import { baroLocation, humanWindow } from '../ui/format';
@@ -105,6 +106,7 @@ function ago(ts: string | number | null | undefined) {
     <FeatureRail />
   
 
+  <UsageChart />
   <Faq />
 
   <footer data-shell class="sitefoot">

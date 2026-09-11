@@ -1,6 +1,7 @@
 <script lang="ts">
   import { useDesktopServices } from '../../ui/desktop-context';
   const { checkUpdate } = useDesktopServices();
+  import UsageSettings from './UsageSettings.svelte';
   import NotificationSettings from './NotificationSettings.svelte';
   import ThemeSwitcher from '../../ui/ThemeSwitcher.svelte';
   import { onMount } from 'svelte';
@@ -163,6 +164,7 @@ import { type UpdateStatus } from '../../contracts/update';
       {#if logoutError}<p class="error inset" role="alert">Couldn’t log out: {logoutError}</p>{/if}
       {#if wfmStatus?.logged_in || wfmStatus?.unlocked}<p class="exp inset">Logging out removes the encrypted login saved on this device, forgets its remembered unlock key, and discards any interrupted local listing batch. Your listings on warframe.market are not changed.</p>{/if}
     </section>
+    {#if transport}<UsageSettings {transport} />{/if}
     <section class="wrap tw" aria-labelledby="set-updates">
       <div class="rail"><h3 id="set-updates">Updates</h3></div>
       <div class="ui-setting-row">

@@ -9,8 +9,8 @@ The product has three components with three different trust
 characteristics:
 
 1. **The web app** (`frontend/`, deployed as static files).
-   Pure client-side informational site. No backend. We see no inventory
-   data, no credentials, no telemetry. Compromising the static host gives an
+   Client-side informational site; a separate service publishes aggregate desktop usage counts. We see no inventory
+   data, no credentials, no visitor analytics. Compromising the static host gives an
    attacker the ability to serve malicious JS to visitors.
 
 2. **The desktop app** (`rust/tennoworth-desktop`, Rust + Tauri,
@@ -58,8 +58,8 @@ characteristics:
 
 - **The web app does not exfiltrate your inventory.** All processing
   is in your browser, and there are **zero third-party origins** in
-  the CSP. The only network calls are `GET /market.json` and
-  `GET /wfstat-catalog.json` from our own origin (static files; the
+  the CSP. The data network calls include `GET /api/usage/daily`, `GET /market.json`, and
+  `GET /wfstat-catalog.json` from our own origin (usage aggregates and static files; the
   item-name catalog used to come from warframestat.us directly, but
   it's baked at build time since 2026-06).
 - **The desktop app does not transmit your accountId or nonce.** They
@@ -88,8 +88,29 @@ characteristics:
   say "reproducibly built", which was a stronger promise than the
   pipeline keeps. In-app updater artifacts are signed, and the desktop app
   verifies them against its compiled-in public key.
-- **No telemetry, no analytics, no accounts.** Verify with your
-  browser's network tab.
+- **Desktop usage sharing is opt-in and off by default.** Only after an explicit
+  choice in Settings does Rust attempt at most one daily check-in, sending a random token to our first-party
+  collector. It counts installations running that UTC day (including in the
+  tray), not people. No account details, inventory, screenshots, hardware IDs,
+  app version, or activity events are included. There are no TennoWorth accounts
+  or website visitor analytics. Reading the chart never increments the count.
+- **Usage retention is limited.** Tokens contain a date and 256 random bits,
+  change daily, and have no permanent installation identifier. The collector
+  stores only current-day token hashes, purges them at rollover (or before
+  accepting traffic after restart), and retains daily aggregate counts. Backups
+  contain aggregates only. Local daily state survives restarts and same-day
+  opt-out/opt-in to avoid duplicate counts. Withdrawal stops future requests;
+  already-delivered requests and aggregate contributions cannot be recalled.
+- **Delivery infrastructure sees IP addresses.** Caddy excludes usage routes
+  from access logging and strips identifying headers before proxying. The
+  collector does not log bodies, tokens, IP addresses, or request headers.
+  Cloudflare terminates HTTPS and may retain operational/security metadata
+  under its own policies. This is not a promise of network-level anonymity or
+  zero provider retention. Deployment must review the actual Cloudflare and
+  tunnel logging settings before enabling collection.
+
+See [the usage service runbook](docs/usage-counting.md) for deployment, aggregate
+backup/restore, testing exclusions, and known counting limitations.
 
 ## What we cannot promise
 

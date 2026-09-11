@@ -1,0 +1,23 @@
+[package]
+name = "tennoworth-usage"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+description = "Opt-in daily installation count collector"
+
+[dependencies]
+# Minimal HTTP server without request tracing or cookie/session middleware.
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+chrono = { workspace = true }
+anyhow = { workspace = true }
+rusqlite = { version = "0.32", features = ["bundled"] }
+sha2 = "0.10"
+
+[dev-dependencies]
+reqwest = { workspace = true }
+
+[lints]
+workspace = true

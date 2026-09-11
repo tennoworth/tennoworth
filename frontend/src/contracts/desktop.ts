@@ -58,7 +58,12 @@ export interface OverlayCapability {
   clearOverlayDiagnostics(): Promise<void>;
 }
 
-export interface DesktopCapabilities extends MarketCapability, InventoryCapability, OrderCapability, OverlayCapability { }
+interface UsageCapability {
+  getUsagePreferences(): Promise<import('./usage').UsagePreferences>;
+  setUsagePreferences(enabled: boolean): Promise<import('./usage').UsagePreferences>;
+}
+
+export interface DesktopCapabilities extends UsageCapability, MarketCapability, InventoryCapability, OrderCapability, OverlayCapability { }
 
 // `withGlobalTauri: true` injects `window.__TAURI__` (the public API surface,
 // with `.core.invoke`); `__TAURI_INTERNALS__` is the lower-level object the

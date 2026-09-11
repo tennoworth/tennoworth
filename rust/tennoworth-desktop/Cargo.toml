@@ -23,6 +23,10 @@ license = "MIT"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
+tokio = { workspace = true }
+# Fallible OS randomness keeps counting failures off the app startup path.
+rand = "0.8"
+
 market-domain = { path = "../market-domain" }
 ts-rs = { workspace = true }
 # `tray-icon` enables the system tray (C6). Linux tray needs libayatana-
@@ -114,6 +118,10 @@ rustix = { version = "1", features = ["event", "fs"] }
 wayland-client = "0.31"
 wayland-protocols = { version = "0.32", features = ["client", "staging", "unstable"] }
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
+
+[dev-dependencies]
+# Isolated on-disk state for consent failure and restart regressions.
+tempfile = "3.27"
 
 [lints]
 workspace = true

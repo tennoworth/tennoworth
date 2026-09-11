@@ -1,0 +1,9 @@
+[Unit]
+Description=Pull the verified usage collector build
+After=network-online.target
+Wants=network-online.target
+OnFailure=wfm-alert@%n.service
+
+[Service]
+Type=oneshot
+ExecStart=/srv/wfm/pull-usage.sh

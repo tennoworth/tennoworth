@@ -64,6 +64,34 @@
 		respond "TennoWorth package repositories have been removed. Use the Linux AppImage from https://github.com/tennoworth/tennoworth/releases/latest\n" 410
 	}
 
+	@usage path /api/usage/check-in /api/usage/daily
+	# Keep compatibility with the distribution Caddy used by deployment checks.
+	skip_log @usage
+	handle @usage {
+		reverse_proxy 127.0.0.1:8082 {
+			header_up -Forwarded
+			header_up -X-Forwarded-For
+			header_up -X-Real-IP
+			header_up -CF-*
+			header_up -Cookie
+			header_up -Authorization
+			header_up -User-Agent
+			header_up -Referer
+			transport http {
+				dial_timeout 2s
+				response_header_timeout 5s
+			}
+		}
+	}
+
+	# Handled proxy outages stay out of runtime error logs, which otherwise include client metadata.
+	# Keep debug logging disabled in production.
+	handle_errors {
+		@usageError path /api/usage/check-in /api/usage/daily
+		respond @usageError "Usage counts are currently unavailable." 503
+		respond "{http.error.status_text}" {http.error.status_code}
+	}
+
 	# The hosted site uses root-page fragments, not path-based routes. Let
 	# file_server return 404 for missing paths instead of indexing homepage copies.
 	handle {

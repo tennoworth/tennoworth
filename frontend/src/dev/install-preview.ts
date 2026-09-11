@@ -30,6 +30,7 @@ export async function installPreview() {
     ledger_rows: [], list_trades: [], list_notifications: [],
     get_notification_preferences: { popups: true, categories: Object.fromEntries(['trades', 'watches', 'scans', 'baro', 'calendar', 'digest'].map(k => [k, { enabled: true, native: true }])) },
     try_silent_unlock: false,
+    get_usage_preferences: { enabled: false, available: false },
     get_overlay_settings: { enabled: false, autoDetect: true, shortcut: 'Ctrl+Shift+O', scale: 1, livePrices: true, showOwned: true, diagnostics: false },
     overlay_status: { state: 'disabled', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true },
     setup_overlay_capture: { state: 'watching', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true },

@@ -1,0 +1,29 @@
+[Unit]
+Description=Opt-in daily installation counter
+After=network.target
+OnFailure=wfm-alert@%n.service
+
+[Service]
+User=tennoworth-usage
+Group=tennoworth-usage
+StateDirectory=tennoworth-usage
+StateDirectoryMode=0700
+UMask=0077
+ExecStart=/srv/wfm/bin/tennoworth-usage
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=256M
+TasksMax=64
+LimitNOFILE=256
+
+[Install]
+WantedBy=multi-user.target

@@ -78,6 +78,8 @@ pub(crate) fn run() {
         .manage(Arc::new(WfmSession::new()))
         .invoke_handler(tauri::generate_handler![
             health,
+            crate::services::usage::get_usage_preferences,
+            crate::services::usage::set_usage_preferences,
             crate::services::wfm_session::wfm_access_status,
             commands::domain::evaluate_domain,
             commands::inventory::scan_inventory,
@@ -169,6 +171,7 @@ pub(crate) fn run() {
             let store = Db::open(&db_path)
                 .map_err(|e| format!("opening state DB {}: {e}", db_path.display()))?;
             app.manage(store);
+            crate::services::usage::start(app.handle().clone());
             crate::services::wfm_session::publish_access_changes(app.handle().clone());
 
             let overlay_state =

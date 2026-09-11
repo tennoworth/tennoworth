@@ -1,6 +1,6 @@
 //! The "scan broke" report flow (Phase C7's second half).
 //!
-//! No telemetry backend, by design - nothing is collected, and nothing leaves
+//! Scan reports have no collection backend; nothing leaves
 //! the machine unless the user clicks. The app opens a GitHub issue with the
 //! boring parts already filled in (app version, OS, the error text the scan
 //! actually produced), because the report that never gets filed is the one that
@@ -45,7 +45,10 @@ fn encode(s: &str) -> String {
 /// truncation exists to prevent.
 pub fn issue_url(app_version: &str, os: &str, error: Option<&str>) -> String {
     const MAX_ERROR: usize = 600;
-    let mut err = error.unwrap_or("(no error text captured)").trim().to_string();
+    let mut err = error
+        .unwrap_or("(no error text captured)")
+        .trim()
+        .to_string();
     if err.chars().count() > MAX_ERROR {
         err = err.chars().take(MAX_ERROR).collect::<String>() + "… (truncated)";
     }
@@ -194,7 +197,10 @@ mod tests {
     fn a_huge_error_is_truncated_so_the_url_stays_openable() {
         let long = "x".repeat(5000);
         let u = issue_url("0.3.6", "linux", Some(&long));
-        assert!(u.contains(&encode("… (truncated)")), "truncation is visible");
+        assert!(
+            u.contains(&encode("… (truncated)")),
+            "truncation is visible"
+        );
         // Comfortably under the ~8k that browsers and GitHub start refusing.
         assert!(u.len() < 4000, "url was {} bytes", u.len());
     }

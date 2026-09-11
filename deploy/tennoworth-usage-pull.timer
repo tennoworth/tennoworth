@@ -1,0 +1,7 @@
+[Unit]
+Description=Check for usage collector updates
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+[Install]
+WantedBy=timers.target
