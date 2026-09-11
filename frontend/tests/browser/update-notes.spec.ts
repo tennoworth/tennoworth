@@ -70,3 +70,26 @@ test('another dialog and loss of native focus defer automatic notes',async ({pag
   await expect(dialog).toBeVisible();
   for(let i=0;i<12;i++){await page.keyboard.press('Tab');expect(await dialog.evaluate(el=>el.contains(document.activeElement))).toBe(true);}
 });
+test('manual Settings entry opens when Windows focus reporting lags',async ({page})=>{
+  await page.addInitScript(()=>{
+    Object.defineProperty(document,'hasFocus',{configurable:true,value:()=>false});
+    let runtime: any;
+    let tauri: any;
+    Object.defineProperty(window,'__TAURI__',{configurable:true,get:()=>tauri,set:value=>{
+      const invoke=value.core.invoke;
+      value.core.invoke=(cmd:string,args:unknown)=>cmd==='update_notes_can_present'?Promise.resolve(false):invoke(cmd,args);
+      tauri=value;
+    }});
+    Object.defineProperty(window,'__TAURI_INTERNALS__',{configurable:true,get:()=>runtime,set:value=>{
+      const invoke=value.invoke;
+      value.invoke=(cmd:string,args:unknown)=>cmd==='update_notes_can_present'?Promise.resolve(false):invoke(cmd,args);
+      runtime=value;
+    }});
+  });
+  await page.goto('/?preview-desktop&sample=update-notes');
+  const dialog=page.getByRole('dialog',{name:'What’s new'});
+  await page.waitForTimeout(1000);await expect(dialog).not.toBeVisible();
+  await page.locator('.sidebar').getByRole('button',{name:/^Settings/}).click();
+  await page.getByRole('button',{name:'What’s new',exact:true}).click();
+  await expect(dialog).toBeVisible();
+});

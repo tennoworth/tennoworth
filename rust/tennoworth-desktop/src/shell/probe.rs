@@ -432,7 +432,10 @@ const PROBE_JS: &str = r#"(function(){
         });
       }
     })
-    .catch(function(e){ try { R.fatal='ERR:'+(e && e.message || e); localStorage.setItem('__tennoworth_probe_report__', JSON.stringify(R)); invk('probe_report', { payload: JSON.stringify(R) }); } catch(_){} });
+    .catch(function(e){
+      try { R.fatal='ERR:'+(e && e.message || e); localStorage.setItem('__tennoworth_probe_report__', JSON.stringify(R)); } catch(_){}
+      invk('probe_report', { payload: JSON.stringify(R) }).catch(function(){}).then(function(){ return invk('probe_exit'); });
+    });
   }
   // Document load can precede asynchronous shell imports and store hydration.
   // Observe the mounted surface rather than recording a fixed-delay snapshot.

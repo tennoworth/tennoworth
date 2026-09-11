@@ -138,6 +138,8 @@ jobs:
         env:
           TENNOWORTH_PROBE: '1'
           TENNOWORTH_PROBE_OUT: '${{ runner.temp }}\probe-report.json'
+          TENNOWORTH_JWT_PATH: '${{ runner.temp }}\wfm-jwt.enc'
+          TENNOWORTH_PENDING_PATH: '${{ runner.temp }}\pending-plan.json'
           WEBVIEW2_USER_DATA_FOLDER: '${{ runner.temp }}\webview2-data'
         timeout-minutes: 5
         run: |

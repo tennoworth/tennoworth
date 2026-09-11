@@ -22,23 +22,25 @@
     { name: 'New & improved', kind: 'improved', changes: visible.filter(change => change.kind === 'improved') },
     { name: 'Fixes', kind: 'fixed', changes: visible.filter(change => change.kind === 'fixed') },
   ]);
-  function unobstructed() {
-    if (document.visibilityState !== 'visible' || !document.hasFocus()) return false;
+  function unobstructed(manualRequest = false) {
+    if (document.visibilityState !== 'visible' || (!manualRequest && !document.hasFocus())) return false;
     return ![...document.querySelectorAll('dialog[open], [role="dialog"], [aria-modal="true"]')]
       .some(element => element !== dialog && element.getClientRects().length > 0);
   }
   async function present() {
-    if (disposed || pending || dialog?.open || !data || !unobstructed()) return;
-    if (!requested && (!data.auto_show || !ready || blocked)) return;
+    const manualRequest = requested;
+    if (disposed || pending || dialog?.open || !data || !unobstructed(manualRequest)) return;
+    if (!manualRequest && (!data.auto_show || !ready || blocked)) return;
     pending = true;
     try {
-      if (!await services.updateNotesCanPresent() || disposed || !unobstructed() || (!requested && (!ready || blocked))) return;
-      manual = requested;
+      if (!manualRequest && !await services.updateNotesCanPresent()) return;
+      if (disposed || !unobstructed(manualRequest) || (!manualRequest && (!ready || blocked))) return;
+      manual = manualRequest;
       requested = false;
       expanded = false;
       returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
       await tick();
-      if (disposed || !unobstructed()) return;
+      if (disposed || !unobstructed(manualRequest)) return;
       dialog.showModal();
       title?.focus();
     } catch { /* Optional notes must not interrupt startup when the native window is unavailable. */ }
