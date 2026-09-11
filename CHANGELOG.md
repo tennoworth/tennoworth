@@ -54,6 +54,37 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.7.104 - 2026-09-11
+
+# 🧭 TennoWorth Desktop 0.7.104
+
+TennoWorth Desktop 0.7.104 makes inventory advice useful sooner and safer to act on.
+
+See protected opportunities before connecting WFM, recover without losing sight of your last good scan, and review exactly what changed after an update. Daily installation counting remains off unless you choose to enable it.
+
+## Changelog (5)
+
+### Selling
+
+- **Get protected estimates before connecting WFM** Scan or restore inventory to see estimated selling and ducat opportunities that honor your keep rules. The new What I’m keeping summary makes quantities and item rules easier to review. <!-- app-note {"id":"protected-estimates","kind":"improved"} -->
+- **Post only from the inventory you reviewed** Listing changes and recovered batches now require the matching current game scan. If your inventory changed, TennoWorth keeps your edits and tells you whether to scan or recheck quantities. <!-- app-note {"id":"listing-scan-identity","kind":"fixed"} -->
+
+### Recovery
+
+- **Keep your last good inventory after a scan problem** Failed scans and scans with no tradeable items leave the last successful inventory visible with its real age. Retry, update, Settings, and reporting actions remain available. <!-- app-note {"id":"inventory-recovery","kind":"fixed"} -->
+
+### Privacy
+
+- **Choose whether to share a daily installation count** Sharing is off by default. If enabled in Settings, TennoWorth sends a rotating daily token without account, inventory, hardware, version, or activity details. <!-- app-note {"id":"daily-installation-count","kind":"improved"} -->
+
+### Updates
+
+- **Read what changed after an update** TennoWorth brings together the bundled notes for every release you skipped and lets you reopen them from Settings → Updates → What’s new. <!-- app-note {"id":"installed-update-notes","kind":"improved"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.7.103 - 2026-09-08
 
 # 🔧 TennoWorth Desktop 0.7.103

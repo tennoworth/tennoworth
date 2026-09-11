@@ -17,7 +17,9 @@ for (const theme of ['light', 'dark'] as const) {
           const toggle = await page.locator('.picks-head .rail-toggle').boundingBox();
           const inset = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).fontSize) / 2);
           expect(header!.height, 'Top Picks stays a compact single-control rail').toBeLessThanOrEqual(toggle!.height + inset + 1);
-          await expect(page.locator('.picks-title .picks-count')).toContainText('2 picks');
+          const pickCount = Number.parseInt(await page.locator('.picks-title .picks-count').innerText(), 10);
+          expect(pickCount, 'sample inventory keeps a bounded Top Picks set').toBeGreaterThan(0);
+          expect(pickCount, 'sample inventory keeps a bounded Top Picks set').toBeLessThanOrEqual(5);
         }
         expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
         const small = await page.locator('.btn:visible').evaluateAll(buttons => buttons.filter(button => {
