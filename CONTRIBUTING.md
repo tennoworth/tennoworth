@@ -41,10 +41,26 @@ Sample account operations are simulated and reset on reload. These development
 surfaces are excluded from production. They do not prove native capture,
 window placement, memory access, or real account behavior.
 
+## Plan a complete increment
+
+Before implementation, describe the problem, expected behavior, exclusions,
+affected platforms, and a few acceptance examples in the issue or PR. Reproduce
+bugs first. Investigate the uncertain boundary early: a browser preview cannot
+settle a native capture question. Record consequential architecture or stored-data
+decisions in the relevant existing design document; routine fixes need no separate
+design document.
+
+Keep each PR focused on one coherent, independently verifiable change. Include
+its tests and documentation, and separate unrelated refactoring. Split larger
+features into increments that keep the integrated product usable. A line-count
+limit is not a substitute for a change a reviewer can understand.
+
 ## Choose a contribution tier
 
+This section is the authoritative matrix for required contribution evidence.
 Tiers describe the consequences of a change, not contributor seniority. A PR
-that crosses boundaries takes the checks of the highest affected tier.
+that crosses boundaries takes the highest affected tier and the checks for every
+affected surface. A higher tier does not require unrelated platform or UI checks.
 
 | Tier | Typical work | Evidence to include |
 |---|---|---|
@@ -53,6 +69,20 @@ that crosses boundaries takes the checks of the highest affected tier.
 | 3 — Domain rules | Pricing, scoring, item resolution | Behavior tests including missing/invalid data; shared Rust/TypeScript fixtures when logic overlaps |
 | 4 — I/O and state | Adapters, cache, pipeline, SQLite | Failure/retry tests, freshness and persistence evidence, affected native checks |
 | 5 — Native and account operations | Capture, scan, authentication, order mutation, startup | Native Windows and Linux verification; interrupted operations and permission failures; relevant probes |
+
+Use the command sections below for the affected surface: frontend, native, or
+domain/pipeline without the desktop toolchain. Maintenance and deployment changes
+also use the maintenance checks. Dependency changes require the corresponding
+dependency audit. Documentation-only changes require link/path checks and execution
+of changed commands where practical, not application builds or runtime suites.
+
+During implementation, run focused checks for quick feedback. Before pushing,
+run the complete applicable set. Required CI gates remain mandatory; local hooks
+are optional feedback and cannot replace them. Record any environment or platform
+gap and obtain the missing evidence before treating that boundary as verified.
+When changing check commands or applicability, update this guide and the relevant
+CI workflow together; other instructions should link here rather than copy the
+matrix. A CI path filter is not proof that an indirectly affected surface is safe.
 
 Read [architecture.md](docs/architecture.md) before crossing module boundaries
 and [design-system.md](docs/design-system.md) before changing UI. Keep feature
@@ -149,11 +179,14 @@ From `rust/`, run the native checks:
 cargo check --workspace
 cargo test --workspace
 cargo clippy --workspace --all-targets
-cargo nextest run
 cargo shear
 cargo audit --deny warnings
-cargo test -p tennoworth-desktop real_three_reward_capture_survives_common_display_shapes -- --ignored
 ```
+
+As an alternative to `cargo test --workspace`, run both
+`cargo nextest run --workspace` and `cargo test --workspace --doc`; nextest
+does not run doctests. For reward recognition/capture changes, also run
+`cargo test -p tennoworth-desktop real_three_reward_capture_survives_common_display_shapes -- --ignored`.
 
 Install the separate check tools with `cargo install cargo-nextest cargo-shear cargo-audit --locked`. The ordinary
 suite uses local fixtures and mock servers; the opt-in live DE endpoint test
@@ -203,6 +236,13 @@ behavior, checks run, and any verification still pending. For visual changes,
 include both themes and relevant sizes. For risky boundaries, explain recovery
 and failure behavior. Keep unrelated edits and generated data out of the diff.
 
+Review the final diff for architecture fit, correctness, concurrent operations,
+failure handling, and unnecessary complexity. Check that tests detect the behavior
+they claim to protect, including the original failure for a regression when
+practical. Keep evidence tied to the tested revision; subsequent changes require
+rerunning the checks they affect. Style preferences outside the established rules
+are suggestions, not additional merge requirements.
+
 Never commit inventory captures, game session secrets, account credentials,
 JWTs, private keys, local databases, or diagnostic logs containing personal
 information. Use fictional or redacted fixtures. See [SECURITY.md](SECURITY.md)
@@ -228,3 +268,21 @@ through `wfm-client::transport`, including retries. Keep mutation reconciliation
 the trading services; never retry an ambiguous create. Cover mixed request traffic,
 cancellation, throttling and pending-plan recovery with request-budget tests. See
 [WFM access controls](docs/wfm-access.md) for the policy and rollout contract.
+
+## Finish integration and follow the release
+
+After integration, remove the completed worktree with `git worktree remove`,
+delete its merged local branch, and prune obsolete remote-tracking references.
+Use the repository's remote name when fetching with `--prune`. Do not discard
+uncommitted work or a checkout still in use. Squash merges may not preserve branch
+ancestry; establish the merged PR and matching final content before force-deleting
+such a branch. Remove task-specific build outputs and temporary evidence after
+retaining the useful results in the PR. Keep personal data and credentials out of
+that evidence.
+
+Track merged desktop work as awaiting release until a version ships. Close delivery
+with the released version or deployed commit, relevant production checks, and the
+recovery action if verification fails. Follow [releasing.md](docs/releasing.md) for
+desktop publication; integration alone does not authorize production promotion.
+Turn escaped defects into a focused regression check or a concrete procedure
+change. Remove obsolete guidance when the underlying failure mechanism is gone.
