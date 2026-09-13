@@ -13,22 +13,73 @@ env:
 on:
   push:
     branches: [main]
-    paths:
-      - 'rust/wfm-scrape/**'
-      - 'rust/wfm-client/**'
-      - 'rust/market-math/**'
-      - 'rust/Cargo.toml'
-      - 'rust/Cargo.lock'
-      - '.github/workflows/build-scrape.yml'
-      - '.github/actions/setup-rust/**'
-      - '.github/actions/publish-rolling-release/**'
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
+  # The input list used to sit on `on.push`, which is the wrong place for a
+  # publisher. GitHub evaluates only the first 300 files of a diff: a promotion
+  # large enough to push these crates past that window would leave this workflow
+  # not running at all, and the box would silently keep executing the previous
+  # pipeline binary. A workflow that never starts also leaves no trace to
+  # notice. Moving the decision into a job keeps the whole diff and makes a skip
+  # a visible skipped job.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      build: ${{ steps.decide.outputs.value }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          # The default `some` quantifier ORs the patterns independently, so the
+          # markdown exclusion below would match every other path instead of
+          # excluding it.
+          predicate-quantifier: 'some-with-excludes'
+          list-files: json
+          filters: |
+            build:
+              - 'rust/wfm-scrape/**'
+              - 'rust/wfm-client/**'
+              - 'rust/market-math/**'
+              - 'rust/Cargo.toml'
+              - 'rust/Cargo.lock'
+              - '!**/*.md'
+              - '.github/workflows/build-scrape.yml'
+              - '.github/actions/setup-rust/**'
+              - '.github/actions/publish-rolling-release/**'
+            changed:
+              - '**'
+
+      # `build` is the closed set of inputs to the binary, not a fail-closed net:
+      # an unrelated change - a frontend-only promotion - must not republish the
+      # pipeline binary. Adding a crate dependency moves rust/Cargo.toml and
+      # rust/Cargo.lock, both listed, so this only needs extending when a direct
+      # input sits outside these crates. A diff the action could not read is an
+      # anomaly rather than "nothing happened". Manual dispatch always publishes,
+      # because it is the recovery path.
+      - name: Publish only when the binary's inputs changed
+        id: decide
+        env:
+          RESULTS: ${{ toJson(steps.filter.outputs) }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          build=$(echo "$RESULTS" | jq -r '.build')
+          changed=$(echo "$RESULTS" | jq -r '.changed_files | fromjson | length')
+          if [ "$EVENT" = "workflow_dispatch" ] || [ "$build" = "true" ] || [ "$changed" = "0" ]; then
+            echo "value=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=false" >> "$GITHUB_OUTPUT"
+            echo "No input to wfm-scrape changed; leaving scrape-latest as it is."
+          fi
+
   build:
+    needs: changes
+    if: needs.changes.outputs.build == 'true'
     # ubuntu-22.04 for its glibc 2.35 - same rationale as release-desktop.yml's
     # linux-binary job (backward- but no forward-compat).
     runs-on: ubuntu-22.04
