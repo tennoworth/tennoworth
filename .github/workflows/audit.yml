@@ -56,6 +56,14 @@ jobs:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
+          # The default `some` quantifier ORs the patterns independently, so a
+          # negated `!pattern` matches every other path instead of excluding it
+          # and its filter reports true for almost any change. Only this mode
+          # applies pattern order, so the exclusions in rust_code depend on it.
+          predicate-quantifier: 'some-with-excludes'
+          # Needed by the unclassified check below, which compares each file
+          # against the union of what every filter matched.
+          list-files: json
           filters: |
             frontend_runtime:
               - 'frontend/src/**'
@@ -123,25 +131,39 @@ jobs:
             docs_only:
               - '**/*.md'
               - 'docs/**'
+            changed:
+              - '**'
 
       # A path no filter recognizes must count as affecting everything, not as
       # affecting nothing. dorny/paths-filter reports false for files it was
       # never told about, and audit-gate counts an all-skipped run as success, so
       # an unlisted new file (a fresh scripts/*.ts, an extra frontend/public
-      # asset, a new top-level directory) could otherwise merge with zero checks
-      # executed. Documentation-only changes stay exempt, which is what
+      # asset, a root file like .gitignore) could otherwise merge with zero
+      # checks executed. Documentation-only changes stay exempt, which is what
       # CONTRIBUTING.md promises for them.
+      #
+      # The test is per file, not per workflow. A diff that matches one filter
+      # and also carries an unlisted path passes every aggregate-boolean check,
+      # so this subtracts the union of every filter's matched files from the
+      # changed set and stands down only when that difference is empty.
       - name: Treat unclassified changes as affecting every surface
         id: unclassified
         env:
           RESULTS: ${{ toJson(steps.filter.outputs) }}
         run: |
           set -euo pipefail
-          code=$(echo "$RESULTS" | jq -r '[to_entries[] | select(.key != "docs_only") | select(.value == "true")] | length')
-          docs=$(echo "$RESULTS" | jq -r '.docs_only')
-          if [ "$code" = "0" ] && [ "$docs" != "true" ]; then
+          changed=$(echo "$RESULTS" | jq -r '.changed_files | fromjson | length')
+          unmatched=$(echo "$RESULTS" | jq -r '
+            (.changed_files | fromjson) as $all
+            | ([ to_entries[]
+                 | select(.key != "changed_files")
+                 | select(.key | endswith("_files"))
+                 | .value | fromjson ] | add // [] | unique) as $matched
+            | ($all - $matched) | length
+          ')
+          if [ "$changed" = "0" ] || [ "$unmatched" != "0" ]; then
             echo "value=true" >> "$GITHUB_OUTPUT"
-            echo "No path filter matched and this is not a documentation-only change; every gate will run."
+            echo "$unmatched path(s) matched no filter (of $changed changed); every gate will run."
           else
             echo "value=false" >> "$GITHUB_OUTPUT"
           fi

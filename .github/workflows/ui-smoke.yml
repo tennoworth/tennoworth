@@ -56,12 +56,19 @@ jobs:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
+          # The default `some` quantifier ORs the patterns independently, so a
+          # negated `!pattern` matches every other path instead of excluding it.
+          predicate-quantifier: 'some-with-excludes'
+          # Needed by the unclassified check below, which compares each file
+          # against the union of what every filter matched.
+          list-files: json
           filters: |
             desktop:
               - 'rust/Cargo.lock'
               - 'rust/Cargo.toml'
               - 'rust/tennoworth-desktop/**'
               - 'rust/wfm-client/**'
+              - 'rust/market-domain/**'
               - 'rust/market-math/**'
               - 'rust/wfm-core/**'
               - 'frontend/src/**'
@@ -86,21 +93,35 @@ jobs:
             docs_only:
               - '**/*.md'
               - 'docs/**'
+            changed:
+              - '**'
 
       # Mirrors audit.yml: a path no filter recognizes counts as affecting the
       # desktop app. An all-skipped run still reports ui-gate success, so an
       # unlisted file could otherwise merge with no probe run at all.
+      #
+      # The test is per file, not per workflow. A diff that matches one filter
+      # and also carries an unlisted path passes every aggregate-boolean check,
+      # so this subtracts the union of every filter's matched files from the
+      # changed set and stands down only when that difference is empty.
       - name: Treat unclassified changes as affecting the desktop app
         id: unclassified
         env:
           RESULTS: ${{ toJson(steps.filter.outputs) }}
         run: |
           set -euo pipefail
-          code=$(echo "$RESULTS" | jq -r '[to_entries[] | select(.key != "docs_only") | select(.value == "true")] | length')
-          docs=$(echo "$RESULTS" | jq -r '.docs_only')
-          if [ "$code" = "0" ] && [ "$docs" != "true" ]; then
+          changed=$(echo "$RESULTS" | jq -r '.changed_files | fromjson | length')
+          unmatched=$(echo "$RESULTS" | jq -r '
+            (.changed_files | fromjson) as $all
+            | ([ to_entries[]
+                 | select(.key != "changed_files")
+                 | select(.key | endswith("_files"))
+                 | .value | fromjson ] | add // [] | unique) as $matched
+            | ($all - $matched) | length
+          ')
+          if [ "$changed" = "0" ] || [ "$unmatched" != "0" ]; then
             echo "value=true" >> "$GITHUB_OUTPUT"
-            echo "No path filter matched and this is not a documentation-only change; the probes will run."
+            echo "$unmatched path(s) matched no filter (of $changed changed); the probes will run."
           else
             echo "value=false" >> "$GITHUB_OUTPUT"
           fi
