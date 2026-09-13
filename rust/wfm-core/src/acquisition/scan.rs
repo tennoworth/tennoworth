@@ -129,9 +129,12 @@ pub struct PatternRejection {
 /// the point of shipping this is to fix a broken scan without a release, and a
 /// remote file that can brick the scanner would defeat that.
 ///
-/// Validation is three checks, and the arity one is not cosmetic: the match
-/// loop indexes `cap[1]` and `cap[2]`, so a pattern with too few capture groups
-/// would panic mid-scan on the user's machine.
+/// Validation is three checks. The arity one rejects a pattern that cannot fit
+/// the contract at all, but it is NOT a safety guarantee: it counts capture
+/// groups, and a group that exists in the pattern can still be absent from a
+/// given match - a top-level alternation or an optional group is enough. The
+/// match loop therefore reads the required groups as Options and skips matches
+/// that cannot yield a value, so no accepted pattern can abort a scan.
 ///
 /// ReDoS is not among the risks - the `regex` crate has no backtracking and is
 /// linear in input size - but the length cap still bounds what we agree to
@@ -230,20 +233,32 @@ pub fn current_patterns() -> Arc<ScanPatterns> {
 
 fn aggregate_match(haystack: &[u8], pats: &ScanPatterns, counts: &mut PatternCounts) {
     for cap in pats.cred.captures_iter(haystack) {
-        let aid = String::from_utf8_lossy(&cap[1]).to_ascii_lowercase();
-        let nonce = String::from_utf8_lossy(&cap[2]).into_owned();
+        // A definitions file is remote input. The install-time arity check can
+        // only count capture groups, so a group that exists in the pattern may
+        // still be absent from a particular match - a top-level alternation or
+        // an optional group is enough. Indexing a group that did not
+        // participate panics, and release builds abort, so the required groups
+        // are read as Options and an unusable match is counted instead.
+        let (Some(aid), Some(nonce)) = (cap.get(1), cap.get(2)) else {
+            counts.cred_matches_without_groups += 1;
+            continue;
+        };
+        let aid = String::from_utf8_lossy(aid.as_bytes()).to_ascii_lowercase();
+        let nonce = String::from_utf8_lossy(nonce.as_bytes()).into_owned();
         *counts.creds.entry((aid, nonce)).or_insert(0) += 1;
     }
     for cap in pats.build.captures_iter(haystack) {
+        let Some(m) = cap.get(1) else { continue };
         *counts
             .builds
-            .entry(String::from_utf8_lossy(&cap[1]).into_owned())
+            .entry(String::from_utf8_lossy(m.as_bytes()).into_owned())
             .or_insert(0) += 1;
     }
     for cap in pats.ct.captures_iter(haystack) {
+        let Some(m) = cap.get(1) else { continue };
         *counts
             .cts
-            .entry(String::from_utf8_lossy(&cap[1]).into_owned())
+            .entry(String::from_utf8_lossy(m.as_bytes()).into_owned())
             .or_insert(0) += 1;
     }
 }
@@ -253,17 +268,18 @@ struct PatternCounts {
     creds: HashMap<(String, String), usize>,
     builds: HashMap<String, usize>,
     cts: HashMap<String, usize>,
+    /// Cred matches that could not yield a value because their required groups
+    /// did not participate. Non-zero means the installed pattern is unusable,
+    /// which is worth telling the user instead of a bare "nothing found".
+    cred_matches_without_groups: usize,
 }
 
 fn pick_dominant(counts: PatternCounts) -> Result<SessionInfo> {
     let total_distinct = counts.creds.len();
+    let unusable = counts.cred_matches_without_groups;
     let ((aid, nonce), hits) = match counts.creds.into_iter().max_by_key(|(_, v)| *v) {
         Some(pair) => pair,
-        None => bail!(
-            "No accountId/nonce pair found in WF memory.\n\
-             Make sure you're past the login screen and a recent network\n\
-             call has fired (opening the trade or profile screen is reliable)."
-        ),
+        None => bail!("{}", no_creds_message(unusable)),
     };
     let build = counts
         .builds
@@ -284,6 +300,28 @@ fn pick_dominant(counts: PatternCounts) -> Result<SessionInfo> {
         cred_hits: hits,
         distinct_creds: total_distinct,
     })
+}
+
+/// Why a scan produced no credentials.
+///
+/// A pattern that matched but could not yield a value is a different problem
+/// from a pattern that never matched, and the user can only fix the first one
+/// by correcting the definitions file - so say which happened.
+fn no_creds_message(cred_matches_without_groups: usize) -> String {
+    let mut msg = String::from(
+        "No accountId/nonce pair found in WF memory.\n\
+         Make sure you're past the login screen and a recent network\n\
+         call has fired (opening the trade or profile screen is reliable).",
+    );
+    if cred_matches_without_groups > 0 {
+        msg.push_str(&format!(
+            "\n\nThe configured cred pattern matched {cred_matches_without_groups} time(s), \
+             but capture groups 1 and 2 did not both participate, so no value can be read. \
+             A top-level alternation or an optional group breaks the pattern; it must capture \
+             the account id and the nonce as groups 1 and 2."
+        ));
+    }
+    msg
 }
 
 // ---- Linux ---------------------------------------------------------------
@@ -564,16 +602,17 @@ mod tests {
         }
     }
 
-    /// The scan reads cap[1]/cap[2]; this mirrors that so a pattern which would
-    /// panic mid-scan fails here instead.
+    /// The scan reads groups 1 and 2 as Options and skips a match that cannot
+    /// supply both; this mirrors that so a pattern the scan would decline to
+    /// read does not panic here either.
     fn creds_found(p: &ScanPatterns, hay: &[u8]) -> Vec<(String, String)> {
         p.cred
             .captures_iter(hay)
-            .map(|c| {
-                (
-                    String::from_utf8_lossy(&c[1]).into_owned(),
-                    String::from_utf8_lossy(&c[2]).into_owned(),
-                )
+            .filter_map(|c| {
+                Some((
+                    String::from_utf8_lossy(c.get(1)?.as_bytes()).into_owned(),
+                    String::from_utf8_lossy(c.get(2)?.as_bytes()).into_owned(),
+                ))
             })
             .collect()
     }
@@ -713,5 +752,51 @@ mod tests {
         assert!(d.build_pattern.is_none(), "absent fields must not error");
         let (_, rej) = patterns_from_definitions(&d);
         assert!(rej.is_empty());
+    }
+
+    #[test]
+    fn an_alternation_pattern_cannot_abort_the_scan() {
+        // A "DE rotated the parameter name" push written as a top-level
+        // alternation. The arity check counts capture groups, so it is accepted
+        // - but only one side's groups participate in any given match, so the
+        // other side's `cap[1]`/`cap[2]` are absent.
+        let (p, rej) = patterns_from_definitions(&defs(
+            Some(
+                r"accountId=([0-9a-fA-F]{24})&nonce=([0-9]{6,})|acct=([0-9a-fA-F]{24})&n=([0-9]{6,})",
+            ),
+            None,
+            None,
+        ));
+        assert!(
+            rej.is_empty(),
+            "the arity check accepts this pattern today: {rej:?}"
+        );
+
+        // Matches the SECOND alternative, so groups 1 and 2 do not participate.
+        let mut counts = PatternCounts::default();
+        aggregate_match(b"acct=0123456789abcdef01234567&n=123456 ", &p, &mut counts);
+
+        // The scan must survive, and must not fabricate a credential from the
+        // groups that were absent.
+        assert!(
+            counts.creds.is_empty(),
+            "a match with absent required groups must not yield a credential: {:?}",
+            counts.creds
+        );
+    }
+
+    #[test]
+    fn a_substituted_pattern_that_never_yields_creds_stays_scannable() {
+        // Whatever the pattern does, the other patterns and the fallback path
+        // must keep working - the definitions file is remote input.
+        let (p, _) = patterns_from_definitions(&defs(
+            Some(r"(?:z=([0-9a-f]{24}))?(?:&q=([0-9]{6,}))?"),
+            None,
+            None,
+        ));
+        let mut counts = PatternCounts::default();
+        aggregate_match(b"nothing to see here ", &p, &mut counts);
+        assert!(counts.creds.is_empty());
+        assert!(p.ct.is_match(SAMPLE), "untouched patterns still work");
     }
 }

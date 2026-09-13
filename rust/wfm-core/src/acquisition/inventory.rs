@@ -52,21 +52,40 @@ pub fn fetch_inventory_bytes(
         .get(INVENTORY_URL)
         .query(&params)
         .send()
+        .map_err(without_url)
         .context("inventory request failed")?;
     let status = resp.status();
-    let bytes = resp.bytes().context("reading inventory response")?;
+    let bytes = resp
+        .bytes()
+        .map_err(without_url)
+        .context("reading inventory response")?;
     if !status.is_success() || bytes.len() < 1024 {
-        let preview = bytes
-            .get(..bytes.len().min(400))
-            .map(String::from_utf8_lossy)
-            .unwrap_or_default();
-        bail!(
-            "Inventory endpoint returned HTTP {status} ({} bytes).\nBody:\n{preview}\n\n\
-             If the response was small or 4xx, DE may have rotated something.",
-            bytes.len()
-        );
+        bail!("{}", short_response_message(status, bytes.len()));
     }
     Ok((bytes.to_vec(), info))
+}
+
+/// Drop the request URL from a `reqwest` error.
+///
+/// `reqwest` embeds the full URL in the error it returns, and this endpoint
+/// carries the live `accountId` and `nonce` in its query string - so an
+/// ordinary connection failure would otherwise put session credentials into the
+/// tray log and the webview. Removing it here keeps them out of the error chain
+/// entirely; [`crate::acquisition::error::redact_session_creds`] is the second
+/// boundary for text that arrives some other way.
+fn without_url(e: reqwest::Error) -> anyhow::Error {
+    anyhow::Error::from(e.without_url())
+}
+
+/// Message for a response that is too small or not a success.
+///
+/// It carries no excerpt of the body on purpose: an upstream error page can
+/// echo the request, credentials included.
+fn short_response_message(status: reqwest::StatusCode, len: usize) -> String {
+    format!(
+        "Inventory endpoint returned HTTP {status} ({len} bytes).\n\n\
+         If the response was small or 4xx, DE may have rotated something."
+    )
 }
 
 /// Serializes memory scans so two concurrent callers never run two scans at
@@ -101,5 +120,39 @@ impl InventoryScanner {
             Err(std::sync::TryLockError::Poisoned(p)) => p.into_inner(),
         };
         fetch_inventory_bytes(pid, platform_tag).map_err(ScanError::Failed)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SENTINEL_AID: &str = "0123456789abcdef01234567";
+    const SENTINEL_NONCE: &str = "918273645";
+
+    /// A real send failure carrying the same query parameters the inventory
+    /// request puts on the wire. Port 1 on loopback refuses immediately, so
+    /// this is deterministic and never reaches the network.
+    fn send_failure_with_session_creds() -> reqwest::Error {
+        let client = Client::builder().build().expect("build client");
+        client
+            .get("http://127.0.0.1:1/api/inventory.php")
+            .query(&[("accountId", SENTINEL_AID), ("nonce", SENTINEL_NONCE)])
+            .send()
+            .expect_err("port 1 refuses the connection")
+    }
+
+    #[test]
+    fn a_send_failure_never_exposes_the_session_credentials() {
+        let err: anyhow::Error = send_failure_with_session_creds().into();
+        let msg = ScanError::Failed(err.context("inventory request failed")).into_message();
+        assert!(
+            !msg.contains(SENTINEL_AID),
+            "accountId leaked into the scan error: {msg}"
+        );
+        assert!(
+            !msg.contains(SENTINEL_NONCE),
+            "nonce leaked into the scan error: {msg}"
+        );
     }
 }

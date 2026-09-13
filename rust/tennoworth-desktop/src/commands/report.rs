@@ -39,16 +39,22 @@ fn encode(s: &str) -> String {
 /// Pure and separately tested: the encoding and the field layout are where this
 /// can actually be wrong, whereas "does the browser open" is the plugin's job.
 ///
-/// `error` is whatever the scan reported. It is truncated because a scan error
-/// can carry a long tail, and browsers/servers cap URL length - a report that
-/// silently fails to open because the URL was too long is the failure mode this
-/// truncation exists to prevent.
+/// `error` is whatever the scan reported, so it is treated as untrusted text:
+/// the issue URL is opened in a browser the moment the user clicks, which
+/// transmits it to GitHub before anyone submits anything, and a submitted issue
+/// is public. Session credentials are removed here rather than relying on the
+/// caller - this is the boundary that faces the network.
+///
+/// Redaction happens before truncation on purpose: truncating first could cut a
+/// credential in half, and half a credential no longer matches what the redactor
+/// looks for. `error` is truncated because a scan error can carry a long tail and
+/// browsers/servers cap URL length - a report that silently fails to open because
+/// the URL was too long is the failure mode this truncation exists to prevent.
 pub fn issue_url(app_version: &str, os: &str, error: Option<&str>) -> String {
     const MAX_ERROR: usize = 600;
-    let mut err = error
-        .unwrap_or("(no error text captured)")
-        .trim()
-        .to_string();
+    let mut err = wfm_core::acquisition::error::redact_session_creds(
+        error.unwrap_or("(no error text captured)").trim(),
+    );
     if err.chars().count() > MAX_ERROR {
         err = err.chars().take(MAX_ERROR).collect::<String>() + "… (truncated)";
     }
@@ -211,5 +217,22 @@ mod tests {
         let long = "日".repeat(5000);
         let u = issue_url("0.3.6", "linux", Some(&long));
         assert!(u.contains(&encode("… (truncated)")));
+    }
+
+    #[test]
+    fn session_credentials_never_reach_the_report_url() {
+        // The report is prefilled from whatever the scan reported and is opened
+        // in a browser immediately, so it is a disclosure path independent of
+        // the acquisition boundary: an error string arriving here unredacted
+        // must still be scrubbed before it becomes a URL.
+        let leaky = "inventory request failed: error sending request for url \
+                     (https://api.warframe.com/api/inventory.php\
+                     ?accountId=0123456789abcdef01234567&nonce=918273645)";
+        let u = issue_url("0.3.6", "linux", Some(leaky));
+        assert!(!u.contains("0123456789abcdef01234567"), "{u}");
+        assert!(!u.contains("918273645"), "{u}");
+        // Still filable, and still says which endpoint failed.
+        assert!(u.contains("inventory.php"), "{u}");
+        assert!(u.contains(&encode("inventory request failed")), "{u}");
     }
 }

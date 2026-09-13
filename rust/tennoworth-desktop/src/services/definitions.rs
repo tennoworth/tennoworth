@@ -14,9 +14,15 @@
 //! `TIMEOUT`) are imported rather than re-implemented.
 //!
 //! Fail-open at every step, which is the whole safety argument for letting a
-//! remote file steer the scanner: offline, 404, garbage JSON, an unparseable
-//! pattern, a pattern with the wrong capture arity - every one of them leaves
-//! scanning exactly as it was compiled. The worst a bad push can do is nothing.
+//! remote file steer the scanner: offline, 404, garbage JSON and an unparseable
+//! pattern each leave scanning exactly as it was compiled.
+//!
+//! The arity check is the one step that does NOT buy that on its own: it counts
+//! capture groups, so a pattern whose required groups can be absent from a match
+//! (a top-level alternation or an optional group) passes it. The match loop
+//! handles that by reading the required groups as Options, so the worst a bad
+//! push can do is match nothing and produce a clear scan error - never abort the
+//! app, which is what indexing an absent group used to do.
 
 use std::path::{Path, PathBuf};
 
