@@ -269,6 +269,12 @@ the gap rather than treating another platform as equivalent. Ordinary feature
 PRs do not bump desktop versions. Maintainers handle production promotion and
 release tags under [releasing.md](docs/releasing.md).
 
+A change to any `AGENTS.md` instruction file also runs
+`bun scripts/check-agent-instructions.ts` from the repository root. It checks
+that the files' relative links resolve and that every tracked `*/AGENTS.md` is
+reachable from the root router, which is what keeps the router honest as the
+per-domain files change.
+
 ### WFM request budgets
 
 Classify each new WFM endpoint as a read, contract search, authentication request,

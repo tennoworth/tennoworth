@@ -6,8 +6,10 @@ Before any UI markup, style, layout, or interaction-state change, read
 [`../docs/design-system.md`](../docs/design-system.md) completely. Reuse its
 tokens and patterns, preserve behavior and edits during resizing, and verify
 both themes and narrow/short/wide layouts in the actual styled app. Generic
-design suggestions do not override this product's visual contract. Follow the
-root instruction setup rule for fresh worktrees; this file is not tracked.
+design suggestions do not override this product's visual contract.
+
+This gate is repeated in the root and rust instruction files on purpose: missing
+it is expensive, and each copy is read where UI work starts.
 
 Shared frontend for the desktop app, overlay, and static informational site.
 The hosted surface has no accounts or inventory input; the desktop app owns
@@ -227,11 +229,10 @@ copies, so the hosted CSP stays byte-identical.
 
 ## Hygiene
 
-- **No comments that restate the code.** Comments explain *why*.
-- **No backwards-compat shims** for code that hasn't shipped yet.
-  Renaming a state field? Bump the storage key version and move on.
-- **Edit existing files** in preference to creating new ones.
-- **Match the scope of the request.** Bug fix ≠ refactor pass.
+The shared hygiene rules - no comments that restate the code, no
+backwards-compat shims, edit existing files, match the scope of the request -
+are in the root instruction file. These are frontend-specific:
+
 - **No native `alert()` / `confirm()` in the SPA** - use the
   `Toast.svelte` corner stack and inline row-confirms. Browser-native
   dialogs read as "the app broke".
