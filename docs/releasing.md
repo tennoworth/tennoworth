@@ -95,9 +95,11 @@ the desktop release contains the complete, tested `main` commit.
 5. From `main`, run **Actions → release-desktop** with that version. Its
    preflight rejects a repository snapshot older than 24 hours, so skipping the
    explicit refresh is visible before either platform starts compiling.
-6. Let the workflow build, sign, verify, publish the immutable `desktop-vX.Y.Z`
-   release, and refresh the `desktop-latest` updater feed. Do not replace these
-   steps with a hand-created tag or GitHub Release.
+6. Let the workflow build and sign both packages. Before publication, it silently
+   installs and probes the final Windows NSIS package and runs the final repacked
+   Linux AppImage under the same native probe contract. It then publishes the
+   immutable `desktop-vX.Y.Z` release and refreshes the `desktop-latest` updater
+   feed. Do not replace these steps with a hand-created tag or GitHub Release.
 7. Verify the public release assets and updater manifest. For an urgent
    regression, ship a newer hotfix; never mutate a published versioned release.
 
