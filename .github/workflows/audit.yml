@@ -50,6 +50,7 @@ jobs:
       deploy: ${{ steps.filter.outputs.deploy == 'true' || steps.unclassified.outputs.value == 'true' }}
       version: ${{ steps.filter.outputs.version == 'true' || steps.unclassified.outputs.value == 'true' }}
       ci: ${{ steps.filter.outputs.ci == 'true' || steps.unclassified.outputs.value == 'true' }}
+      instructions: ${{ steps.filter.outputs.instructions == 'true' || steps.unclassified.outputs.value == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -78,6 +79,11 @@ jobs:
               - '!rust/Cargo.toml'
               - '!rust/**/Cargo.toml'
               - '!rust/.cargo/audit.toml'
+              # Instruction files under rust/ are documentation. Without this
+              # they match rust/** and a prose edit would run the native and
+              # desktop-probe jobs, which the root instruction file promises a
+              # documentation-only change does not do.
+              - '!**/AGENTS.md'
               - 'tests/fixtures/**'
             rust_deps:
               - 'rust/Cargo.lock'
@@ -109,6 +115,11 @@ jobs:
             ci:
               - '.github/workflows/**'
               - '.github/actions/**'
+            instructions:
+              - '**/AGENTS.md'
+              - 'AGENTS.local.md.example'
+              - 'scripts/check-agent-instructions.ts'
+              - 'CONTRIBUTING.md'
             docs_only:
               - '**/*.md'
               - 'docs/**'
@@ -410,6 +421,25 @@ jobs:
       - name: Caddyfile syntax
         run: caddy validate --config deploy/Caddyfile --adapter caddyfile
 
+  # The instruction files are tracked policy with no compiler behind them. This
+  # is the only thing that runs check-agent-instructions.ts, so without it a
+  # link to a moved file or an unreachable domain file would merge unnoticed.
+  instruction-check:
+    needs: changes
+    if: >-
+      needs.changes.outputs.instructions == 'true' ||
+      needs.changes.outputs.ci == 'true' ||
+      github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      # No install step: the check reads the git index and the filesystem only.
+      - name: instruction files
+        run: bun scripts/check-agent-instructions.ts
+
   # This is the required audit status. It runs even when a prerequisite is
   # skipped and fails only when a relevant job failed or was cancelled.
   audit-gate:
@@ -425,6 +455,7 @@ jobs:
       - version-pins
       - market-data
       - deploy-validation
+      - instruction-check
     runs-on: ubuntu-latest
     steps:
       - name: Require every applicable check to pass
