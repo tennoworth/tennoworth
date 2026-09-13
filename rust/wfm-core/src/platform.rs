@@ -104,6 +104,8 @@ mod tests {
     use super::*;
     use std::env;
 
+    // Only the unix 0600 test below uses this, and Windows drops that test.
+    #[cfg(unix)]
     fn tmp_path(name: &str) -> PathBuf {
         let mut p = env::temp_dir();
         p.push(format!("wfmcore-test-{}-{}.bin", std::process::id(), name));
