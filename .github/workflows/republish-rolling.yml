@@ -1,0 +1,47 @@
+name: republish-rolling
+
+# The publishers decide from the pushed range, so a publication that fails stays
+# failed until some later push happens to touch the same inputs again. Nothing
+# watches for that, and a red run is easy to miss, which is how production can sit
+# on a stale artifact indefinitely.
+#
+# A manual dispatch of a publisher skips classification entirely - that is what
+# `!cancelled()` in its publish guard exists for - so dispatching the three of
+# them repairs whatever was left behind. Doing it on a schedule bounds how long
+# that can last, and doubles as a weekly canary for the whole publish path.
+#
+# This is a bound, not a guarantee: GitHub can drop a scheduled run, and the
+# dispatch only repairs what a publisher then rebuilds from `main`. Nothing here
+# records what production is actually serving, which is deliberate - tracking that
+# would mean a marker that can itself disagree with the artifacts.
+on:
+  schedule:
+    # Monday, after audit's 04:17 and ui-smoke's 05:47 crons, so the caches they
+    # seed are there to reuse rather than being warmed twice in parallel.
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Only so this can dispatch the publishers. Nothing here builds or publishes.
+  actions: write
+
+jobs:
+  republish:
+    runs-on: ubuntu-latest
+    strategy:
+      # One publisher failing must not stop the other two from being dispatched.
+      fail-fast: false
+      matrix:
+        workflow: [build-web.yml, build-scrape.yml, build-usage.yml]
+    steps:
+      # A scheduled run's own context is the default branch (`develop`), and the
+      # publishers only publish from `main`, so the target ref has to be explicit.
+      # Without `--ref main` the dispatch would still succeed and then every
+      # publisher would skip itself on its own main-ref guard - the silent
+      # failure this workflow exists to avoid.
+      - name: Dispatch ${{ matrix.workflow }} on main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WORKFLOW: ${{ matrix.workflow }}
+        run: gh workflow run "$WORKFLOW" --ref main
