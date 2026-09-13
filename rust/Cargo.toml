@@ -60,6 +60,13 @@ panic_in_result_fn = "deny"
 panic = "deny"
 exit = "deny"
 
+# Both platforms compile the desktop crate, so a helper whose callers are
+# platform-gated but whose definition is not becomes unreachable on the other
+# platform. As a warning it hides among whatever is already there; as an error
+# it forces the platform boundary to be declared at the definition.
+[workspace.lints.rust]
+dead_code = "deny"
+
 # Shared by every member.
 [profile.release]
 strip = true
