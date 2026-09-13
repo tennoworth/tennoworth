@@ -1,11 +1,28 @@
 name: audit
 
 # Runs the full applicable gate set on pull requests, weekly, and on demand.
-# Main/develop pushes already passed these checks as pull requests; deployment
-# workflows remain responsible for producing artifacts from main.
-
+# Deployment workflows remain responsible for producing artifacts from main.
+#
+# The develop trigger is not here to re-validate a merge - the pull request
+# already ran against the same tree. It is here because a cache only counts for
+# a pull request when it lives on the default branch, and rust-cache folds the
+# Cargo manifests into its key. Measured 2026-09-13: with only the weekly cron
+# seeding develop, Cargo.lock changes on Sep 8, 9 and 11 each rotated every Rust
+# cache key and every subsequent pull request logged "No cache found" - cargo
+# test 5m54s instead of 2m49s, cargo-audit 3m11s instead of 0m10s. The paths
+# filter keeps this to merges that can actually rotate a cached key.
 on:
   pull_request:
+  push:
+    branches: [develop]
+    paths:
+      - 'rust/Cargo.lock'
+      - 'rust/Cargo.toml'
+      - 'rust/**/Cargo.toml'
+      - 'frontend/bun.lock'
+      - 'frontend/package.json'
+      - '.github/actions/setup-rust/**'
+      - '.github/workflows/audit.yml'
   schedule:
     - cron: '17 4 * * 1'  # every Monday at 04:17 UTC
   workflow_dispatch:
@@ -21,15 +38,18 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      frontend_runtime: ${{ steps.filter.outputs.frontend_runtime }}
-      frontend_deps: ${{ steps.filter.outputs.frontend_deps }}
-      rust_code: ${{ steps.filter.outputs.rust_code }}
-      rust_deps: ${{ steps.filter.outputs.rust_deps }}
-      rust_audit: ${{ steps.filter.outputs.rust_audit }}
-      market_data: ${{ steps.filter.outputs.market_data }}
-      deploy: ${{ steps.filter.outputs.deploy }}
-      version: ${{ steps.filter.outputs.version }}
-      ci: ${{ steps.filter.outputs.ci }}
+      # Every filter output carries the unclassified term, so a change no filter
+      # recognizes makes every surface applicable without repeating that OR in
+      # nine separate job conditions.
+      frontend_runtime: ${{ steps.filter.outputs.frontend_runtime == 'true' || steps.unclassified.outputs.value == 'true' }}
+      frontend_deps: ${{ steps.filter.outputs.frontend_deps == 'true' || steps.unclassified.outputs.value == 'true' }}
+      rust_code: ${{ steps.filter.outputs.rust_code == 'true' || steps.unclassified.outputs.value == 'true' }}
+      rust_deps: ${{ steps.filter.outputs.rust_deps == 'true' || steps.unclassified.outputs.value == 'true' }}
+      rust_audit: ${{ steps.filter.outputs.rust_audit == 'true' || steps.unclassified.outputs.value == 'true' }}
+      market_data: ${{ steps.filter.outputs.market_data == 'true' || steps.unclassified.outputs.value == 'true' }}
+      deploy: ${{ steps.filter.outputs.deploy == 'true' || steps.unclassified.outputs.value == 'true' }}
+      version: ${{ steps.filter.outputs.version == 'true' || steps.unclassified.outputs.value == 'true' }}
+      ci: ${{ steps.filter.outputs.ci == 'true' || steps.unclassified.outputs.value == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -89,6 +109,31 @@ jobs:
             ci:
               - '.github/workflows/**'
               - '.github/actions/**'
+            docs_only:
+              - '**/*.md'
+              - 'docs/**'
+
+      # A path no filter recognizes must count as affecting everything, not as
+      # affecting nothing. dorny/paths-filter reports false for files it was
+      # never told about, and audit-gate counts an all-skipped run as success, so
+      # an unlisted new file (a fresh scripts/*.ts, an extra frontend/public
+      # asset, a new top-level directory) could otherwise merge with zero checks
+      # executed. Documentation-only changes stay exempt, which is what
+      # CONTRIBUTING.md promises for them.
+      - name: Treat unclassified changes as affecting every surface
+        id: unclassified
+        env:
+          RESULTS: ${{ toJson(steps.filter.outputs) }}
+        run: |
+          set -euo pipefail
+          code=$(echo "$RESULTS" | jq -r '[to_entries[] | select(.key != "docs_only") | select(.value == "true")] | length')
+          docs=$(echo "$RESULTS" | jq -r '.docs_only')
+          if [ "$code" = "0" ] && [ "$docs" != "true" ]; then
+            echo "value=true" >> "$GITHUB_OUTPUT"
+            echo "No path filter matched and this is not a documentation-only change; every gate will run."
+          else
+            echo "value=false" >> "$GITHUB_OUTPUT"
+          fi
 
   frontend-check:
     needs: changes
@@ -107,8 +152,25 @@ jobs:
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
+      # Several hundred MB of browser downloads that setup-bun does not cover.
+      # Keyed on the lockfile, which is what pins the Playwright version, and
+      # restore-only on pull requests for the same scope reason setup-rust
+      # documents. Reaches the cache through the develop trigger only.
+      - name: Restore responsive-test browsers
+        id: playwright-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('frontend/bun.lock') }}
       - name: Install responsive-test browsers
         run: bunx playwright install --with-deps chromium webkit
+      - name: Save responsive-test browsers
+        if: github.event_name != 'pull_request' && steps.playwright-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
       - name: tests
         run: bun run test
       - name: responsive browser gate
@@ -164,10 +226,12 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup-rust
-      # Reads as an expensive from-source build and isn't: Swatinem/rust-cache
-      # in setup-rust caches ~/.cargo/bin, so this resolves as already-installed.
-      # Measured on run 30705176923 - 0 s for this step, 23 s for the whole job.
-      # Don't "optimize" it into a prebuilt-binary action without re-measuring.
+      # Compiles cargo-audit from source whenever setup-rust's ~/.cargo/bin
+      # cache misses, which was every pull request while the default branch had
+      # no seeded cache: re-measured 2026-09-13 on run 34728226930 at 2m51s of a
+      # 3m07s job, against the 0m10s the job takes once that cache is warm.
+      # setup-rust now keeps the default branch seeded (see the develop trigger),
+      # so re-measure before replacing this with a prebuilt-binary action.
       - name: Install cargo-audit (cached by setup-rust)
         run: cargo install --locked cargo-audit
       - name: cargo audit

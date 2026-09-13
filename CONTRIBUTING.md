@@ -83,6 +83,13 @@ gap and obtain the missing evidence before treating that boundary as verified.
 When changing check commands or applicability, update this guide and the relevant
 CI workflow together; other instructions should link here rather than copy the
 matrix. A CI path filter is not proof that an indirectly affected surface is safe.
+For the same reason the workflows fail closed on paths they do not recognize: a
+change that matches no filter runs every gate, and only documentation-only
+changes (`**/*.md`, `docs/**`) skip them. If you add a file type with its own
+checks, give it a filter rather than relying on that fallback. `audit` and
+`ui-smoke` also run on pushes to `develop` for the files that rotate a CI cache
+key, which is what keeps pull-request builds warm; see
+[rust-toolkit-2026-lessons.md](docs/rust-toolkit-2026-lessons.md).
 
 Read [architecture.md](docs/architecture.md) before crossing module boundaries
 and [design-system.md](docs/design-system.md) before changing UI. Keep feature

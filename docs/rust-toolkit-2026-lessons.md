@@ -63,12 +63,17 @@ own groups. Linux Ubuntu 22.04 release, smoke debug and OCR installer groups
 are separate, with runner image identity included. Tool-install, preflight,
 scraper and audit jobs keep their existing job-specific caches.
 
-The weekly smoke schedule runs on the default branch (`develop`), warming a
-cache that releases on `main` can restore. Pull-request caches are scoped to
-the PR merge ref and cannot seed a production release. Feature-branch
-benchmarks prove restoration within that branch; after integration, confirm
-a scheduled or manually dispatched smoke run on `develop` saves the shared
-cache. Production timing is confirmed at the next authorized release.
+The default branch (`develop`) is the only scope a pull request can restore from
+beyond its own merge ref, so it must be seeded by a non-PR run. Two triggers do
+that: the weekly smoke/audit crons, and a `push` trigger on `develop` filtered to
+the files that rotate a cached key (Cargo manifests and lockfiles,
+`frontend/bun.lock`, and the setup actions themselves). The weekly cron alone
+proved insufficient - see "Cache scope fix" below. A cache a pull request writes
+goes to its merge ref and cannot seed anything else, which is also why pull
+requests are now restore-only. Feature-branch benchmarks prove restoration
+within that branch; after integration, confirm a scheduled, pushed or manually
+dispatched run on `develop` saves the shared cache. Production timing is
+confirmed at the next authorized release.
 
 For cold/warm measurements, manually dispatch `ui-smoke` or
 `ocr-windows-test` twice on the same revision with the same unique
@@ -76,8 +81,9 @@ For cold/warm measurements, manually dispatch `ui-smoke` or
 namespace prefixes both the native archive identity and the downstream
 Windows Rust compatibility key. Omit it for ordinary runs. Do not delete
 shared caches or dispatch a production release for benchmarking. The OCR
-installer workflow's PR jobs retain their existing branch restriction;
-use manual dispatch for these benchmarks.
+installer workflow no longer has a `pull_request` trigger - its job-level
+branch guard had gone dead once that branch merged - so use manual dispatch for
+these benchmarks.
 
 Record runner image, Rust version, resolved cache keys, archive sizes,
 restore/save durations, vcpkg restored-package counts, build time and total
@@ -109,6 +115,41 @@ Controls: [audit run 34290649818, attempts 2–4](https://github.com/tennoworth/
 Shared samples: [1](https://github.com/tennoworth/tennoworth/actions/runs/34294765431),
 [2](https://github.com/tennoworth/tennoworth/actions/runs/34295140317),
 [3](https://github.com/tennoworth/tennoworth/actions/runs/34295564135).
+
+### Cache scope fix (September 13)
+
+Every pull request was compiling cold. `gh cache list` showed no entries on
+`refs/heads/develop` at all, while 9.46 GiB of the repository's 11.29 GiB sat on
+ephemeral `refs/pull/*/merge` refs that no other run may read. The logs named the
+mechanism directly: run 34728226930 logged `No cache found.` in `cargo-test`,
+`cargo-clippy`, `cargo-shear` and `cargo-audit`, and run 34603856882's Windows
+probe logged `Cache not found for input keys:
+vcpkg-Windows-x64-windows-static-md-...-20260907.229.1`, then `Restored 0
+package(s)` and `Total install time: 18 min`. The key matched exactly and the
+entry existed - on refs a pull request is not allowed to restore from.
+
+The cause was cadence, not configuration. `rust-cache` hashes the Cargo
+manifests into its key, `rust/Cargo.lock` changed on September 8, 9 and 11, and
+the only writer to develop's scope was a Monday cron. Each dependency merge
+rotated every Rust key and left the rest of the week cold: `cargo-test` at 5m54s
+against a 2m49s warm run, `cargo-audit` at 3m11s against 0m10s, and the Windows
+probe at a 31m31s median against a 9m30s best case. The cron's cache had not so
+much been evicted as outrun.
+
+Three changes follow. `setup-rust` now passes `save-if` so pull requests restore
+without saving, which stops merge-ref archives from consuming the 10 GB
+repository budget and evicting the seeds. `setup-windows-ocr` splits
+`actions/cache/restore` from `actions/cache/save` for the same reason, and both
+save steps carry `continue-on-error` so losing a save race cannot fail a build.
+`audit` and `ui-smoke` now also trigger on pushes to `develop`, restricted to the
+files that rotate a cached key, so a new key is seeded within minutes of the
+merge that created it rather than the following Monday.
+
+Sharing audit's Rust caches was deliberately not revisited; the September 9
+experiment below measured that separately, and this was a different fault.
+Publishing the vcpkg archive as a release asset was considered and dropped: the
+key already matched, so only the ref was wrong, and the scoping fix addresses
+that without new machinery.
 
 ## Measured and rejected
 

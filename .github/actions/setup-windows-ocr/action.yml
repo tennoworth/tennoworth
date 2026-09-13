@@ -31,8 +31,14 @@ runs:
         "key=$key" >> $env:GITHUB_OUTPUT
 
     # vcpkg ABI hashes validate each package even when GitHub restores the archive.
+    # Restore-only on pull requests, for the scope reason setup-rust documents:
+    # a merge-ref archive is unreadable by every other run. Measured 2026-09-13
+    # on run 34603856882 - the key matched exactly, the restore still reported
+    # "Cache not found", and vcpkg rebuilt tesseract for 18 minutes, because the
+    # only copies lived on refs/heads/main and other PRs' merge refs.
     - name: Restore vcpkg binary packages
-      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      id: vcpkg-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ github.workspace }}\vcpkg-binary-cache
         key: ${{ steps.native.outputs.key }}
@@ -42,3 +48,16 @@ runs:
       run: |
         & "$env:VCPKG_ROOT\vcpkg.exe" install tesseract:x64-windows-static-md
         if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+    # After the install, so the archive contains the packages it just built.
+    # cache-hit is an exact-match flag and no restore-keys are passed, so a
+    # false value means the key is genuinely absent. continue-on-error keeps the
+    # combined action's old semantics: two non-PR runs can still race for the
+    # same key, and losing that race must never fail a release build.
+    - name: Save vcpkg binary packages
+      if: github.event_name != 'pull_request' && steps.vcpkg-cache.outputs.cache-hit != 'true'
+      continue-on-error: true
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ github.workspace }}\vcpkg-binary-cache
+        key: ${{ steps.vcpkg-cache.outputs.cache-primary-key }}
