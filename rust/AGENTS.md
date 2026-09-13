@@ -164,6 +164,20 @@ without checking every regex still compiles.
   `unreachable!()` into async wrappers (spanned at the fn signature) and
   `generate_context!()` expands to `process::exit` - the desktop
   command files and main() allow those file/statement-locally.
+- **Dead code is denied workspace-wide.** `[workspace.lints.rust] dead_code =
+  "deny"` (root Cargo.toml) exists because both platforms compile the desktop
+  crate: a helper whose callers are `#[cfg]`-gated but whose definition is not
+  becomes unreachable on the other platform, and as a warning it hides among the
+  warnings a normal build already prints. The lint forces the platform boundary
+  to be declared at the definition, which is how `set_presentation_backend`,
+  `proton_log_path` and `tmp_path` acquired the cfg their call sites already
+  had. Release compiles differently here (`[profile.release]` sets
+  `panic = "abort"`, `lto = "fat"`, `codegen-units = 1`), so on 2026-09-13 it
+  was also checked in that profile - `cargo check --workspace --all-targets
+  --release` - rather than only by the debug `cargo clippy --workspace
+  --all-targets` in the required set. There is no standing release-profile
+  gate: the verdict can only diverge through a profile-derived cfg gating an
+  item, and the tree has none.
 - **New dependencies get `cargo info <crate>` before `cargo add`**:
   license, `rust-version` vs the toolchain floor, and the feature list.
   Prefer rustls-based stacks (reqwest/tungstenite already are) so the

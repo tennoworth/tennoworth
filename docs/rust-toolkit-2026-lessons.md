@@ -9,6 +9,7 @@ and which were measured and rejected.
 | Lesson | Where it landed |
 |---|---|
 | Deny-panics Clippy policy | `rust/Cargo.toml` `[workspace.lints.clippy]`, `rust/clippy.toml`, and the `cargo-clippy` job feeding `audit-gate` |
+| Deny-dead-code policy | `rust/Cargo.toml` `[workspace.lints.rust]`; the platform boundary is declared at each definition rather than left as a warning on the other platform |
 | Local, reasoned lint exceptions | Sites unreachable by construction carry `#[allow(<lint>, reason = "...")]` beside the invariant |
 | `cargo shear` | Local dead-dependency sweep; the Rust counterpart to `knip` |
 | `cargo nextest` | Faster local test runner; `cargo test` remains the CI command |
