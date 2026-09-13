@@ -1,0 +1,36 @@
+# AGENTS.local.md - machine-local instruction overlay (example)
+
+Copy this file to `AGENTS.local.md` beside it and fill in what applies to this
+checkout. `AGENTS.local.md` is gitignored: never commit it, never put
+credentials or key material in it, and never move a rule into it that another
+checkout also needs.
+
+The instruction loader reads it after the base files, so it can refine or
+override them for this machine. It is the right home for:
+
+- host names, addresses and SSH details for build or test machines;
+- local paths, profile directories and toolchain locations;
+- environment quirks specific to this box;
+- anything else that identifies this checkout or its operator.
+
+## Windows build host (example)
+
+The dedicated Windows host is reachable over key-only SSH as `<user>@<host>`,
+using `<path-to-private-key>` with `IdentitiesOnly=yes`, `BatchMode=yes`, and
+`StrictHostKeyChecking=yes`. It is a manually driven build host, not a CI
+runner. The account is a standard user, so resolve its registered profile
+explicitly rather than assuming it matches the account name; the checkout and
+the package manager live under that profile.
+
+Keep private keys and signing credentials out of transfers. Compare both working
+trees before transferring changes - the Windows checkout may hold an earlier
+snapshot of uncommitted work, and other sessions may be editing Linux
+concurrently. Consult the Windows test runbook before interpreting probe results
+or rebuilding the installer.
+
+## Local environment (example)
+
+Record any local constraint that changes how checks should be run - a small
+temporary filesystem, a restricted sandbox, a specific toolchain location. Keep
+the portable rule in the tracked instruction files and put only the
+machine-specific value here.

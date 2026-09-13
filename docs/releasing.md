@@ -90,8 +90,24 @@ the desktop release contains the complete, tested `main` commit.
    entry together. One file may be byte-identical to the previous copy; the
    command still captured and validated the pair. Open the normal
    release-preparation PR into `develop`.
-4. After its required checks pass, merge the release-preparation PR and promote
-   `develop` to `main` using the repository's documented fast-forward procedure.
+4. Promote. Open a production PR from `develop` to `main` and satisfy its
+   required checks and approval; promotion additionally requires explicit
+   maintainer authorization. **A production PR does not make GitHub's merge
+   button safe.** Before opening it, require
+   `git merge-base --is-ancestor main develop`. If that fails, an earlier
+   promotion was never merged back and the fast-forward promotion is
+   impossible: merge `main` into `develop`, verify the sync changes no files
+   when it carries promotion commits only
+   (`git diff <old-develop> <sync-commit>` must be empty), and only then open
+   the PR. Once it passes, advance `main` with an explicit non-forced
+   `develop:main` push - that records the PR as merged without adding another
+   production merge commit. Never use this path to bypass review without
+   explicit authorization; the applied rulesets and their bypass scope are in
+   [github-rulesets/](github-rulesets/).
+
+   A hotfix is the one case that does not start from `develop`: branch it from
+   `main`, merge to `main`, then merge `main` back into `develop` immediately,
+   so the next promotion does not have to repair ancestry first.
 5. From `main`, run **Actions → release-desktop** with that version. Its
    preflight rejects a repository snapshot older than 24 hours, so skipping the
    explicit refresh is visible before either platform starts compiling.

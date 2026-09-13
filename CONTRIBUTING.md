@@ -269,6 +269,14 @@ the gap rather than treating another platform as equivalent. Ordinary feature
 PRs do not bump desktop versions. Maintainers handle production promotion and
 release tags under [releasing.md](docs/releasing.md).
 
+A change to any `AGENTS.md` instruction file also runs
+`bun scripts/check-agent-instructions.ts` from the repository root. It reads the
+git index and fails when a relative link does not resolve to a tracked path, or
+when a per-domain file is no longer reachable from the root router - the two
+failures that otherwise rot silently. The `instruction-check` job runs it in CI
+and reports into `audit-gate`, so an instruction-only change is gated without
+starting any native or UI work.
+
 ### WFM request budgets
 
 Classify each new WFM endpoint as a read, contract search, authentication request,

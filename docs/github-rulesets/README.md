@@ -43,6 +43,11 @@ long-lived branches. Create that ruleset before removing those rules from the
 integration ruleset. The existing history rules in the production ruleset are
 retained as well.
 
+Snapshot the live settings before a ruleset change and read them back after it,
+so the before and after states are both recorded rather than inferred. Do not
+broaden bypass to all administrators or contributors - the narrower the actor
+list, the less a single compromised or mistaken account can do.
+
 The production ruleset and release-tag ruleset were not changed. Production
 still declares one approval and both completion gates, with its pre-existing
 administrator bypass. That bypass permits the documented non-forced
@@ -56,7 +61,7 @@ on the production PR; pushing directly to `main` does not rerun these workflows.
 
 The original snapshots are preserved at commit
 `088b27ac5e91c7553d2efc91003f0c0a2cccfbe4`. The change-time live backup is also
-saved locally at `/tmp/tennoworth-rulesets-before-20260905.json`; use the git
+saved locally; use the git
 snapshots if that temporary file is no longer available.
 
 1. Restore `develop-integration.json` from that commit and PUT it to ruleset

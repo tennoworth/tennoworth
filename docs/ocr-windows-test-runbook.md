@@ -96,6 +96,24 @@ diagnostics directory is expected until diagnostics are enabled and created.
 System-wide CIM process enumeration can be denied to this standard account;
 use narrowly scoped process checks instead of broadening its privileges.
 
+## Windows shutdown and scope history
+
+The installed probe once wrote success and then stalled after `ExitRequested`
+over Windows SSH. Moving `app.exit(0)` to `Ready`, and separately releasing the
+single-instance plugin, did not fix it. Explicit Tauri cleanup and process exit
+from `Ready`, after setup returns, passed three installed Windows runs and the
+Linux OCR probe. That path creates no WebView2 window, so the original hang must
+not be attributed to WebView2. The complete Linux GUI smoke needed an isolated
+D-Bus session so the running app did not intercept the single-instance launch.
+
+Authorized Windows log inspection found ordinary four- and three-reward
+ready/slot/close batches; the three-reward slot markers arrived within two
+milliseconds and closure followed about 15 seconds later. That rules out a
+distinct three-player event format in that log - not a missed application
+trigger, and not a capture or OCR failure. Live gameplay testing was deferred by
+the maintainer at that point. The deferral is scoped to that decision: it is not
+a standing blocker, and it does not replace the baseline below.
+
 ## Physical gameplay baseline
 
 1. Open the feature PR's successful **OCR Windows test installer** workflow,

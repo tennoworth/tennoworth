@@ -35,13 +35,14 @@ wfm_inventory_sellable.csv
 /docs/rust-port-phase3.md
 
 # AI tooling config - kept locally, not part of the public project surface.
+# The AGENTS.md instruction files are project policy and are tracked; only
+# machine-local overlays and third-party tool config stay ignored.
 /.opencode/
 /opencode.json
 /vibeguard.config.json
-/AGENTS.md
-/rust/AGENTS.md
-/frontend/AGENTS.md
-/scripts/AGENTS.md
+# Machine-specific instruction overlay, loaded after the base files. Holds local
+# paths, host details and anything else that is not for the public repository.
+AGENTS.local.md
 
 # Maintainer-only. The GitHub repo is the PUBLIC surface: source, user docs,
 # packaging recipes, CI. Planning, ops runbooks and internal audits live with
@@ -87,3 +88,5 @@ wfm_inventory_sellable.csv
 **/.wfm-output.lock
 wfm-cooldown.json
 /wfm-policy.json
+# Task worktrees created by the local agent harness.
+.dsh-worktrees/
