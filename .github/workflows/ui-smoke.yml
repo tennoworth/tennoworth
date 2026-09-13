@@ -10,9 +10,24 @@ name: ui-smoke
 # import bug passed bun run check, svelte-check AND knip.
 #
 # Linux uses the same probe under Xvfb with an isolated D-Bus session.
+#
+# The develop trigger exists to seed the default-branch caches these probes
+# restore from. A pull_request run's caches are scoped to its own merge ref and
+# are unreadable by any other run, so without a non-PR writer every pull request
+# rebuilt tesseract through vcpkg (measured 18 minutes) and the release binary
+# from scratch. audit.yml records the measurement in full.
 
 on:
   pull_request:
+  push:
+    branches: [develop]
+    paths:
+      - 'rust/Cargo.lock'
+      - 'rust/Cargo.toml'
+      - 'rust/**/Cargo.toml'
+      - '.github/actions/setup-rust/**'
+      - '.github/actions/setup-windows-ocr/**'
+      - '.github/workflows/ui-smoke.yml'
   schedule:
     # Keeps a default-branch vcpkg cache available to pull requests. PR-created
     # caches are scoped to their merge ref and cannot seed later PRs.
@@ -35,7 +50,7 @@ jobs:
   changes:
     runs-on: ubuntu-latest
     outputs:
-      desktop: ${{ steps.filter.outputs.desktop }}
+      desktop: ${{ steps.filter.outputs.desktop == 'true' || steps.unclassified.outputs.value == 'true' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
@@ -68,6 +83,27 @@ jobs:
               - '.github/actions/setup-rust/**'
               - '.github/actions/setup-windows-ocr/**'
               - '.github/workflows/ui-smoke.yml'
+            docs_only:
+              - '**/*.md'
+              - 'docs/**'
+
+      # Mirrors audit.yml: a path no filter recognizes counts as affecting the
+      # desktop app. An all-skipped run still reports ui-gate success, so an
+      # unlisted file could otherwise merge with no probe run at all.
+      - name: Treat unclassified changes as affecting the desktop app
+        id: unclassified
+        env:
+          RESULTS: ${{ toJson(steps.filter.outputs) }}
+        run: |
+          set -euo pipefail
+          code=$(echo "$RESULTS" | jq -r '[to_entries[] | select(.key != "docs_only") | select(.value == "true")] | length')
+          docs=$(echo "$RESULTS" | jq -r '.docs_only')
+          if [ "$code" = "0" ] && [ "$docs" != "true" ]; then
+            echo "value=true" >> "$GITHUB_OUTPUT"
+            echo "No path filter matched and this is not a documentation-only change; the probes will run."
+          else
+            echo "value=false" >> "$GITHUB_OUTPUT"
+          fi
 
   probe-smoke:
     needs: changes

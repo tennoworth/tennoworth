@@ -25,6 +25,16 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
+      # Several hundred MB of browsers re-downloaded on every main push.
+      # Keyed on the lockfile, which pins the Playwright version. This workflow
+      # only runs on main and manual dispatch, so there is no pull request to
+      # keep restore-only.
+      - name: Cache responsive-test browsers
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('frontend/bun.lock') }}
+
       # This publisher owns its test/build verdict: audit.yml does not run on
       # main pushes, and a deployable artifact must be validated in the workflow
       # that produces it.

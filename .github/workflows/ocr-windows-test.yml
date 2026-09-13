@@ -8,21 +8,16 @@ on:
         required: false
         default: ''
         type: string
-  pull_request:
-    paths:
-      - '.github/workflows/ocr-windows-test.yml'
-      - '.github/actions/setup-rust/**'
-      - '.github/actions/setup-windows-ocr/**'
-      - 'rust/tennoworth-desktop/**'
-      - 'rust/Cargo.*'
-      - 'frontend/**'
-
+# Deliberately no pull_request trigger. The PR path existed to exercise the
+# relic-OCR installer branch while it was in flight; that branch has merged, so
+# the job-level `head_ref` guard below it could only ever report a skipped check
+# on every pull request - 52 of the last 55 runs did no work. Installer
+# validation and cache benchmarks still dispatch this workflow on demand.
 permissions:
   contents: read
 
 jobs:
   build-and-probe:
-    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'feat/relic-ocr-windows'
     runs-on: windows-latest
     timeout-minutes: 60
     env:
@@ -97,7 +92,6 @@ jobs:
           retention-days: 7
 
   linux-bundle-probe:
-    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'feat/relic-ocr-windows'
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     env:

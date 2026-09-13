@@ -33,3 +33,14 @@ runs:
         shared-key: ${{ inputs.shared-key }}
         key: ${{ inputs.key }}
         cache-workspace-crates: false
+        # Restore-only on pull requests. A cache a pull_request run writes is
+        # scoped to that PR's merge ref, so no other pull request and no branch
+        # can ever read it, while every PR re-writes roughly the same archives.
+        # Measured 2026-09-13: 23 entries totalling 11.29 GiB against GitHub's
+        # 10 GB per-repository limit, 9.46 GiB of it stranded on merge refs.
+        # That pressure evicts the default-branch entries a pull request can
+        # actually restore from, so PRs compiled cold *and* re-uploaded the
+        # result - the cache thrashing GitHub documents. push, schedule and
+        # workflow_dispatch runs still save; those are the runs whose caches a
+        # pull request is allowed to read.
+        save-if: ${{ github.event_name != 'pull_request' }}
