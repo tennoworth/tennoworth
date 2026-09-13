@@ -242,6 +242,9 @@ impl OverlayState {
         let _ = app.emit(EVENT_STATUS, status.clone());
     }
 
+    // Seeded from `preferred_presentation_backend()` at construction; only the
+    // Linux presentation path ever changes it at runtime.
+    #[cfg(target_os = "linux")]
     fn set_presentation_backend(&self, app: &AppHandle, backend: &str) {
         let mut status = self.status.lock().unwrap_or_else(|e| e.into_inner());
         status.presentation_backend = backend.into();
