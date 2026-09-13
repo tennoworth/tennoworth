@@ -151,8 +151,42 @@ Publishing the vcpkg archive as a release asset was considered and dropped: the
 key already matched, so only the ref was wrong, and the scoping fix addresses
 that without new machinery.
 
+### Probe watchdog (September 13)
+
+Two `ui-smoke` failures on September 11 were read as flaky five-minute hangs.
+The artifacts said otherwise: the probe had finished, written a `CHECKPOINT`
+report carrying `"fatal":"ERR:Installed notes did not open from Settings"`, and
+then never printed `PROBE_EXIT`. The product fault was real and `3a8f759` fixed
+it, along with the harness fault behind the timeout - the scenario chain's
+`.catch` called `probe_report` but never `probe_exit`, so a failing run could
+only ever end by being killed.
+
+That left one gap: the chain has no overall deadline. The mount check is the
+only timer, so a promise that never settles - the close-to-tray/show round trip,
+or a request the harness never answers - keeps the process alive until the
+step's five-minute backstop. `run()` now arms a 90 s watchdog that reports and
+exits. The value is chosen from evidence rather than taste: the last 18
+successful runs finished the probe step in 13-27 s, so 90 s is 3.3x the slowest
+observed run and still well inside the backstop. `scripts/probe-readiness.test.ts`
+covers it with an unsettled fetch, and that test was confirmed to fail with the
+watchdog removed.
+
+`ui-smoke.yml` also now prints the report and the stdout tail when the probe
+step fails, and asserts the report whenever the probe ran at all. Previously a
+timeout skipped the assertion entirely, so the run's own diagnosis never reached
+the log.
+
 ## Measured and rejected
 
+- Playwright sharding: splitting the responsive gate across a matrix would cut
+  it from about 2m58s to roughly 1m55s per shard, but it cannot shorten a pull
+  request. Both gates are required and run in parallel, so the wait is
+  `max(audit, ui-smoke)`, and the Windows probe dominates at a 31m31s cold
+  median against audit's 6m. Once the cache fix warms the probe, audit is
+  expected near 4m20s against roughly 9-12m for `ui-smoke`, so sharding would
+  buy nothing on the critical path while adding a matrix job, per-shard artifact
+  names and a `CONTRIBUTING.md` update. Revisit if `ui-smoke` falls below about
+  5 minutes, at which point audit becomes the gate that decides the wait.
 - `arithmetic_side_effects`: roughly 31 distinct sites, dominated by index
   counters and deliberate date arithmetic; no useful finding.
 - `as_conversions`: roughly 15 sites, mostly date math and bounded conversions.

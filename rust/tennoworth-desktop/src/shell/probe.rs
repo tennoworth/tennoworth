@@ -110,6 +110,14 @@ const PROBE_JS: &str = r#"(function(){
     if (!inv) return Promise.resolve('NO_INVOKE_FN');
     return inv(cmd, args).catch(function(e){ return 'ERR:'+(e && e.message || e); });
   }
+  // Every terminal path funnels through here, so a run asks to exit exactly
+  // once and the watchdog can tell "finished" from "stalled in the chain".
+  var exitRequested = false;
+  function requestExit(){
+    if (exitRequested) return;
+    exitRequested = true;
+    invk('probe_exit');
+  }
   // Like invk, but keeps the typed CmdError shape: rejections come back as
   // { ok:false, code, message } so the report can assert needs_login vs
   // needs_unlock vs bad_passphrase instead of a flattened string.
@@ -198,6 +206,19 @@ const PROBE_JS: &str = r#"(function(){
     var marker = R.runtag + '@' + new Date().toISOString();
     try { R.priorMarker = localStorage.getItem('__tennoworth_probe_marker__'); } catch(e){ R.priorMarker = 'ERR:'+e; }
     try { localStorage.setItem('__tennoworth_probe_marker__', marker); R.wroteMarker = marker; } catch(e){ R.wroteMarker='ERR:'+e; }
+    // The scenario chain has no overall deadline - the mount check below is the
+    // only one - so a promise that never settles leaves the process alive until
+    // the workflow's step timeout, which reports "timed out" and hides the run's
+    // actual state. The 2026-09-11 failures were exactly that shape: the report
+    // carried a real fatal, but nothing ever called probe_exit. Healthy runs
+    // finish in 13-27 s (last 18 successful probe-smoke runs), the step backstop
+    // is 5 minutes, and 90 s sits between them with 3.3x headroom over the
+    // slowest observed run.
+    setTimeout(function(){
+      if (exitRequested) return;
+      try { R.fatal = R.fatal || 'ERR:probe watchdog exceeded 90000ms'; localStorage.setItem('__tennoworth_probe_report__', JSON.stringify(R)); } catch(_){}
+      invk('probe_report', { payload: JSON.stringify(R) }).catch(function(){}).then(requestExit);
+    }, 90000);
     probeFetch('/market.json')
     .then(function(x){ R.fetchMarket = x; })
     .then(function(){ return probeFetch('/wfstat-catalog.json').then(function(x){ R.fetchCatalog = x; }); })
@@ -428,13 +449,13 @@ const PROBE_JS: &str = r#"(function(){
       var inv = invokeFn();
       if (inv) {
         inv('probe_report', { payload: json }).catch(function(){}).then(function(){
-          setTimeout(function(){ inv('probe_exit').catch(function(){}); }, 400);
+          setTimeout(requestExit, 400);
         });
       }
     })
     .catch(function(e){
       try { R.fatal='ERR:'+(e && e.message || e); localStorage.setItem('__tennoworth_probe_report__', JSON.stringify(R)); } catch(_){}
-      invk('probe_report', { payload: JSON.stringify(R) }).catch(function(){}).then(function(){ return invk('probe_exit'); });
+      invk('probe_report', { payload: JSON.stringify(R) }).catch(function(){}).then(requestExit);
     });
   }
   // Document load can precede asynchronous shell imports and store hydration.
@@ -446,7 +467,7 @@ const PROBE_JS: &str = r#"(function(){
       if (app && app.childElementCount > 0) { run(); return; }
       if (Date.now() >= deadline) {
         R.fatal = 'ERR:SPA did not mount within 15000ms';
-        invk('probe_report', { payload: JSON.stringify(R) }).then(function(){ return invk('probe_exit'); });
+        invk('probe_report', { payload: JSON.stringify(R) }).then(requestExit);
         return;
       }
       setTimeout(check, 50);

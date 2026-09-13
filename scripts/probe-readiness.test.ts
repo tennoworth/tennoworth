@@ -83,6 +83,21 @@ describe('native probe startup readiness', () => {
     expect(JSON.parse(report!.args!.payload).fatal).toContain('Probe usage reporting was not disabled');
     expect(h.calls.some(call => call.command === 'probe_exit')).toBe(true);
   });
+
+  test('reports and exits when a scenario stalls without settling', async () => {
+    // harness() leaves fetch unsettled, so the chain hangs after the first
+    // request and only the watchdog can end the run.
+    const h = harness();
+    h.mount();
+    await h.advance(50);
+    expect(h.fetches).toBe(1);
+    expect(h.calls.some(call => call.command === 'probe_exit')).toBe(false);
+    await h.advance(90000);
+    await new Promise(resolve => globalThis.setTimeout(resolve, 0));
+    const report = h.calls.find(call => call.command === 'probe_report');
+    expect(JSON.parse(report!.args!.payload).fatal).toContain('watchdog');
+    expect(h.calls.some(call => call.command === 'probe_exit')).toBe(true);
+  });
 });
 
 test.skipIf(process.platform === 'win32')('packaged probe runs the supplied AppImage without rebuilding it', () => {

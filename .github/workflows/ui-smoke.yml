@@ -170,6 +170,7 @@ jobs:
       # never hurts and avoids the default-folder edge cases); the app also adds
       # probe-only Chromium flags when the probe is active (main.rs).
       - name: Run the app under the probe
+        id: probe
         shell: pwsh
         env:
           TENNOWORTH_PROBE: '1'
@@ -187,7 +188,22 @@ jobs:
           }
           Get-Content "${{ runner.temp }}\probe-stdout.log" | Select-String -Pattern 'PROBE_REPORT_BEGIN FINAL' | Select-Object -First 1
 
+      # A probe killed by the step timeout used to fail with nothing but "timed
+      # out after 5 minutes": the assert below was skipped, so the report naming
+      # the real fault was never read. Print it on failure, and let the assert
+      # run whenever the probe ran at all rather than only when it passed.
+      - name: Show probe evidence after a failure
+        if: failure()
+        shell: pwsh
+        run: |
+          $report = "${{ runner.temp }}\probe-report.json"
+          if (Test-Path $report) { Write-Host '--- probe-report.json ---'; Get-Content $report -Raw }
+          else { Write-Host 'probe-report.json was never written' }
+          $log = "${{ runner.temp }}\probe-stdout.log"
+          if (Test-Path $log) { Write-Host '--- probe-stdout.log (last 40 lines) ---'; Get-Content $log -Tail 40 }
+
       - name: Assert the probe report
+        if: always() && steps.probe.outcome != 'skipped'
         run: bun scripts/check-probe-report.ts "${{ runner.temp }}\probe-report.json"
 
       - name: Upload probe evidence
