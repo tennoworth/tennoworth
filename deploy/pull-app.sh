@@ -15,7 +15,7 @@
 #
 # This is not `git pull`, and the difference matters:
 #
-#   Caddy serves /market.json and /wfstat-catalog.json from prototype/public/
+#   Caddy serves /market.json and /wfstat-catalog.json from frontend/public/
 #   (the @livedata matcher), NOT from dist/. Those two files are the LIVE
 #   production snapshot and the box's copies are normally newer than the repo's
 #   release-time bootstrap pair. A plain pull either refuses because they're
