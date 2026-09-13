@@ -40,8 +40,13 @@ jobs:
       # Without `--ref main` the dispatch would still succeed and then every
       # publisher would skip itself on its own main-ref guard - the silent
       # failure this workflow exists to avoid.
+      #
+      # `--repo` is required for the same reason there is no checkout here: `gh`
+      # otherwise infers the repository from a local git remote and fails with
+      # "not a git repository". This job never touches the working tree, so
+      # telling `gh` where to dispatch is cheaper than checking the repo out.
       - name: Dispatch ${{ matrix.workflow }} on main
         env:
           GH_TOKEN: ${{ github.token }}
           WORKFLOW: ${{ matrix.workflow }}
-        run: gh workflow run "$WORKFLOW" --ref main
+        run: gh workflow run "$WORKFLOW" --ref main --repo "$GITHUB_REPOSITORY"
