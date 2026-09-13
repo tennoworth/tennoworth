@@ -325,6 +325,9 @@ pub fn locate_log() -> Option<PathBuf> {
     }
 }
 
+/// Steam/Proton library layout, used by the non-Windows EE.log discovery.
+/// `test` keeps it compiled on Windows, where only its unit test refers to it.
+#[cfg(any(not(target_os = "windows"), test))]
 pub fn proton_log_path(steam_library: &Path) -> PathBuf {
     steam_library.join(
         "steamapps/compatdata/230410/pfx/drive_c/users/steamuser/AppData/Local/Warframe/EE.log",
@@ -332,6 +335,8 @@ pub fn proton_log_path(steam_library: &Path) -> PathBuf {
 }
 
 /// `"path"  "/mnt/games/SteamLibrary"` lines out of libraryfolders.vdf.
+/// `test` keeps it compiled on Windows, where only its unit test refers to it.
+#[cfg(any(not(target_os = "windows"), test))]
 #[allow(
     clippy::string_slice,
     reason = "the ASCII path marker length is always a UTF-8 boundary"
