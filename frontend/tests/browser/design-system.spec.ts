@@ -135,7 +135,11 @@ test('selling tables label pick facts and retain readable item identities', asyn
     expect(widths.length).toBeGreaterThan(0);
     for (const width of widths) expect(width).toBeGreaterThanOrEqual(319);
   }
+  // The banner above the results appears once the snapshot is stale, so the
+  // table's distance from the top is not fixed. Bring it into view before
+  // asserting the horizontal scroll reveals the last column.
   const scroll = page.locator('.results > .scroll');
+  await scroll.scrollIntoViewIfNeeded();
   await scroll.evaluate(el => { el.scrollLeft = el.scrollWidth; });
   await expect(page.getByRole('columnheader', { name: /Potential/ })).toBeInViewport();
 });
