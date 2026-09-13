@@ -29,24 +29,67 @@ permissions:
 jobs:
   republish:
     runs-on: ubuntu-latest
+    # The measurement below waits for each dispatched publisher to finish, and the
+    # web build is the slow one.
+    timeout-minutes: 45
     strategy:
       # One publisher failing must not stop the other two from being dispatched.
       fail-fast: false
       matrix:
         workflow: [build-web.yml, build-scrape.yml, build-usage.yml]
     steps:
-      # A scheduled run's own context is the default branch (`develop`), and the
-      # publishers only publish from `main`, so the target ref has to be explicit.
-      # Without `--ref main` the dispatch would still succeed and then every
-      # publisher would skip itself on its own main-ref guard - the silent
-      # failure this workflow exists to avoid.
-      #
-      # `--repo` is required for the same reason there is no checkout here: `gh`
-      # otherwise infers the repository from a local git remote and fails with
-      # "not a git repository". This job never touches the working tree, so
-      # telling `gh` where to dispatch is cheaper than checking the repo out.
-      - name: Dispatch ${{ matrix.workflow }} on main
+      # Dispatch `${{ matrix.workflow }}` on `main` and then require it to have
+      # actually done something. `gh workflow run` exits 0 as soon as the run is
+      # created, and a publisher that refuses the ref still reports its own jobs
+      # as skipped rather than failing, so the exit code alone cannot distinguish
+      # a repair from a no-op. Observed live: dispatching a publisher without
+      # `--ref main` produced `branch=develop completed/skipped` with both jobs
+      # skipped. Without this check, dropping `--ref main` here would leave the
+      # weekly repair green and permanently useless.
+      - name: Dispatch and require ${{ matrix.workflow }} to publish
         env:
           GH_TOKEN: ${{ github.token }}
           WORKFLOW: ${{ matrix.workflow }}
-        run: gh workflow run "$WORKFLOW" --ref main --repo "$GITHUB_REPOSITORY"
+        run: |
+          set -euo pipefail
+
+          # The id of the newest dispatch run before we fire, so the wait below
+          # cannot mistake someone else's run for ours.
+          before=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$WORKFLOW" \
+            --branch main --event workflow_dispatch --limit 1 \
+            --json databaseId --jq '.[0].databaseId // 0')
+
+          # A scheduled run's own context is the default branch (`develop`), and
+          # the publishers only publish from `main`, so the ref is explicit.
+          # `--repo` is required because `gh` otherwise infers the repository from
+          # a local git remote, and this job never checks one out.
+          gh workflow run "$WORKFLOW" --ref main --repo "$GITHUB_REPOSITORY"
+
+          id=""
+          for _ in $(seq 1 30); do
+            id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow "$WORKFLOW" \
+              --branch main --event workflow_dispatch --limit 1 \
+              --json databaseId --jq '.[0].databaseId // 0')
+            if [ -n "$id" ] && [ "$id" != "0" ] && [ "$id" != "$before" ]; then break; fi
+            id=""
+            sleep 5
+          done
+          if [ -z "$id" ]; then
+            echo "::error::$WORKFLOW was dispatched but no run appeared on main."
+            exit 1
+          fi
+
+          gh run watch "$id" --repo "$GITHUB_REPOSITORY" --interval 20 >/dev/null || true
+          conclusion=$(gh run view "$id" --repo "$GITHUB_REPOSITORY" --json conclusion --jq '.conclusion')
+          echo "$WORKFLOW run $id concluded: $conclusion"
+          # `skipped` is the wrong-ref signature: the publisher's own guard turned
+          # the build away. Anything other than success means the repair did not
+          # happen, and a repair that silently does not happen is the failure this
+          # workflow exists to prevent.
+          case "$conclusion" in
+            success) ;;
+            *)
+              echo "::error::$WORKFLOW run $id concluded '$conclusion', not success."
+              exit 1
+              ;;
+          esac
