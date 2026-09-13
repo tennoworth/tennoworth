@@ -22,7 +22,14 @@ jobs:
   # the decision into a job keeps the whole diff and makes a skip a visible
   # skipped job.
   changes:
+    # A manual publish is the recovery path for a bundle that did not update on
+    # its own, so it must not run classification at all: checkout, the diff and
+    # the parse below are each things that can fail, and the recovery path cannot
+    # depend on the machinery it exists to recover from.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       build: ${{ steps.decide.outputs.value }}
     steps:
@@ -30,36 +37,45 @@ jobs:
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
+          # Without an explicit `base` the action falls back to the repository
+          # default branch, which is `develop` here. A push to `main` would then
+          # compare main against develop through their merge base; since main is
+          # normally an ancestor of develop that diff is empty, so every push
+          # published and a revert on main could still be missed. Compare the
+          # pushed range itself.
+          base: ${{ github.event.before }}
+          ref: ${{ github.sha }}
           # The default `some` quantifier ORs the patterns independently, so the
-          # markdown exclusion below would match every other path instead of
-          # excluding it.
+          # exclusion below would match every other path instead of excluding it.
           predicate-quantifier: 'some-with-excludes'
-          list-files: json
           filters: |
             build:
               - 'frontend/**'
-              - '!**/*.md'
+              - '!**/AGENTS.md'
               - '.github/workflows/build-web.yml'
               - '.github/actions/publish-rolling-release/**'
-            changed:
-              - '**'
 
-      # `build` is the closed set of inputs to the bundle, not a fail-closed net:
-      # an unrelated change - a Rust-only promotion - must not republish the
-      # site, so a new input has to be added to the list above. The exception is
-      # a diff the action could not read at all, which is an anomaly rather than
-      # "nothing happened". Manual dispatch always publishes, because it is the
-      # recovery path for a bundle that did not update on its own.
+      # `build` covers the application inputs to the bundle, not a fail-closed
+      # net: an unrelated change - a Rust-only promotion - must not republish the
+      # site, so a new input has to be added to the list above. Note this is not
+      # "paths that change the output bytes": vite.config.ts bakes the build
+      # commit into the bundle, so every commit would qualify. The footer's commit
+      # therefore advances only when the bundle is rebuilt, which is right - a
+      # commit touching none of these inputs does not change what users are
+      # served. The prebuild and test steps also read scripts/ and
+      # tests/fixtures/, left out deliberately: they affect whether the build
+      # passes, not what it emits, and the pull-request gates already run them.
       - name: Publish only when the bundle's inputs changed
         id: decide
         env:
           RESULTS: ${{ toJson(steps.filter.outputs) }}
-          EVENT: ${{ github.event_name }}
+          BEFORE: ${{ github.event.before }}
         run: |
           set -euo pipefail
           build=$(echo "$RESULTS" | jq -r '.build')
-          changed=$(echo "$RESULTS" | jq -r '.changed_files | fromjson | length')
-          if [ "$EVENT" = "workflow_dispatch" ] || [ "$build" = "true" ] || [ "$changed" = "0" ]; then
+          # An absent or all-zero `before` means there is no previous tree to
+          # compare against, so publish rather than trust the action's fallback.
+          if [ "$build" = "true" ] || [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
             echo "value=true" >> "$GITHUB_OUTPUT"
           else
             echo "value=false" >> "$GITHUB_OUTPUT"
@@ -68,7 +84,30 @@ jobs:
 
   build:
     needs: changes
-    if: needs.changes.outputs.build == 'true'
+    # Serialize publishers of this rolling release, and only them. The box pulls
+    # whichever asset is newest by timestamp, so two concurrent builds of this
+    # artifact could let the older tree win. This sits on the job rather than the
+    # workflow so a run that classifies as "nothing to publish" never holds or
+    # evicts a slot - a skipped job never enters the queue, and a queued one is
+    # replaced by the next arrival. `cancel-in-progress` stays false so an
+    # in-flight publication is not interrupted; a later run may not repeat it.
+    concurrency:
+      group: build-web
+      cancel-in-progress: false
+    # `!cancelled()` is load-bearing, not decoration: a job whose `needs`
+    # dependency was skipped is itself skipped unless its condition includes a
+    # status function, so a manual publish - which skips classification by
+    # design - would otherwise never run. The push branch still requires the
+    # classifier to have succeeded, so a failed classification blocks publication
+    # instead of publishing blind. The `branches` filter on `push` does not
+    # restrict `workflow_dispatch`, hence the main-ref guard.
+    if: >-
+      !cancelled() &&
+      github.ref == 'refs/heads/main' &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (needs.changes.result == 'success' && needs.changes.outputs.build == 'true')
+      )
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
