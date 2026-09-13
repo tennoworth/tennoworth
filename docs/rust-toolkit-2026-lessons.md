@@ -143,7 +143,8 @@ repository budget and evicting the seeds. `setup-windows-ocr` splits
 save steps carry `continue-on-error` so losing a save race cannot fail a build.
 `audit` and `ui-smoke` now also trigger on pushes to `develop`, restricted to the
 files that rotate a cached key, so a new key is seeded within minutes of the
-merge that created it rather than the following Monday.
+merge that created it rather than the following Monday. On one unchanged commit
+the Rust job time went from 12m10s cold to 4m32s warm once the seed existed.
 
 Sharing audit's Rust caches was deliberately not revisited; the September 9
 experiment below measured that separately, and this was a different fault.

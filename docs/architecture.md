@@ -46,6 +46,59 @@ tests/fixtures/             shared parity and pipeline inputs/expectations
 deploy/                      live-data refresh and deployment operations
 ```
 
+## Runtime shape
+
+Three runtime surfaces share one codebase: a public hosted site, an installed
+Windows/Linux desktop app, and the in-game reward overlay. Host inventory is
+acquired by scanning the running game process; the hosted surface never sees it.
+
+```
+┌─ Warframe game ──────────────────────────────────┐
+│   /proc/<pid>/mem  or  ReadProcessMemory         │
+└────────────────────────┬─────────────────────────┘
+                         │ scrape accountId+nonce
+                         ▼
+        ┌── desktop app (tennoworth-desktop, Tauri) ──┐
+        │  same-origin webview (the SPA)              │
+        │  scan_inventory → wfm-core → IPC            │
+        │  wfm_login → wfm-jwt.enc (AES, Rust-side)   │
+        │  listing / orders → wfm-core → WFM          │
+        └────────────────────────┬────────────────────┘
+                                 │
+                 ┌───────────────┴──────────────────┐
+                 ▼                                 ▼
+       ┌── informational site (frontend/) ──┐    market.json
+       │  market browse + desktop showcase    │    (published by the host
+       │  no accounts, no files, no scan      │     pipeline on a schedule)
+       └──────────────────────────────────────┘
+                            ▲
+                            │ GET market.json
+              ┌─────────────┴────────────────────────────┐
+              │  wfm-scrape scrape  (Rust)               │
+              │  → CSV → wfm-scrape build                │
+              └──────────────────────────────────────────┘
+```
+
+The desktop app is the only interactive product. The standalone companion CLI
+(`wfm-fetch-inventory` with `fetch`/`login`/`serve`) was removed on 2026-08-02,
+and the dormant advisor command and implementation were removed after it. The
+hosted site is informational only - no accounts, no file access, no scan - and
+`market.json` plus `wfstat-catalog.json` are the artifacts it consumes.
+
+## CI inventory
+
+`.github/workflows/` holds the release and verification workflows:
+`release-desktop` (desktop artifacts, cut on `desktop-v*` tags), `build-web`,
+`build-scrape`, `build-usage`, `audit`, `ui-smoke`, and the on-demand
+`ocr-windows-test` and `publish-wfm-policy`. Shared composite actions live in
+`.github/actions/`: `setup-rust`, `setup-windows-ocr` and
+`publish-rolling-release`, which the workflows above call into.
+
+Cache policy, trigger paths and the ruleset configuration are owned elsewhere:
+see [rust-toolkit-2026-lessons.md](rust-toolkit-2026-lessons.md) for the CI
+cache measurements and [github-rulesets/](github-rulesets/) for the applied
+repository rulesets.
+
 ## Dependency direction
 
 ```mermaid
