@@ -1,5 +1,8 @@
 import { describe, expect, test } from 'bun:test';
-import { readFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { runInNewContext } from 'node:vm';
 
 const source = readFileSync(new URL('../rust/tennoworth-desktop/src/shell/probe.rs', import.meta.url), 'utf8');
@@ -80,4 +83,61 @@ describe('native probe startup readiness', () => {
     expect(JSON.parse(report!.args!.payload).fatal).toContain('Probe usage reporting was not disabled');
     expect(h.calls.some(call => call.command === 'probe_exit')).toBe(true);
   });
+});
+
+test.skipIf(process.platform === 'win32')('packaged probe runs the supplied AppImage without rebuilding it', () => {
+  const root = mkdtempSync(join(tmpdir(), 'tennoworth-package-probe-'));
+  const bin = join(root, 'bin');
+  const evidence = join(root, 'evidence');
+  const artifact = join(root, 'TennoWorth.AppImage');
+  const report = {
+    updateNotesUiVerified: true,
+    updateNotesVerified: true,
+    wfm: {
+      cancelIdle: { ok: true },
+      access: {
+        ok: true,
+        value: {
+          restrictions: JSON.parse(readFileSync(new URL('../tests/fixtures/pacing.json', import.meta.url), 'utf8')),
+          revision: 0,
+          queue_count: 0,
+        },
+      },
+    },
+    usageExcluded: true,
+    domainRejectedInvalid: true,
+    domainOperations: ['normalize_inventory', 'score_inventory', 'trade_session', 'advisor', 'history', 'relic_plan', 'set_recos', 'ducat_plan', 'build_plan'],
+    done: true,
+    consoleErrors: [],
+    cspViolations: [],
+    appMounted: true,
+    desktopBadge: true,
+    scanButtonFound: true,
+  };
+  try {
+    mkdirSync(bin);
+    for (const [name, body] of [
+      ['xvfb-run', 'if [ "${1:-}" = "-a" ]; then shift; fi\nexec "$@"'],
+      ['dbus-run-session', 'if [ "${1:-}" = "--" ]; then shift; fi\nexec "$@"'],
+    ]) {
+      const path = join(bin, name);
+      writeFileSync(path, `#!/bin/sh\n${body}\n`);
+      chmodSync(path, 0o755);
+    }
+    symlinkSync(process.execPath, join(bin, 'bun'));
+    writeFileSync(artifact, `#!/bin/sh
+test "${'${APPIMAGE_EXTRACT_AND_RUN:-}'}" = 1
+printf '%s' '${JSON.stringify(report)}' > "${'${TENNOWORTH_PROBE_OUT}'}"
+`);
+    chmodSync(artifact, 0o755);
+
+    const output = execFileSync('bash', ['scripts/probe-smoke-linux.sh', '--artifact', artifact], {
+      cwd: new URL('..', import.meta.url),
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, TENNOWORTH_PROBE_EVIDENCE_DIR: evidence },
+      encoding: 'utf8',
+    });
+    expect(output).toContain('probe-smoke: OK');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });

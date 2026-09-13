@@ -35,7 +35,7 @@ name: release-desktop
 #
 #   preflight        validate the version against every pin, the tag, the
 #                    published history and Cargo.lock. Capture the main SHA.
-#   build-windows    ─┐ parallel, contents: read, publish nothing
+#   build-windows    ─┐ parallel; build and smoke the final packages
 #   build-linux      ─┘ every output uploaded as a workflow artifact
 #   publish          verify inventory + signatures, tag, draft, upload, flip
 #   desktop-latest   refresh the legacy rolling updater endpoint
@@ -290,6 +290,77 @@ jobs:
           # the same hash was one file too many.
           ls -la dist
 
+      # Exercise the installer users receive. The ordinary UI smoke runs the
+      # adjacent release binary, which cannot catch an incomplete NSIS payload,
+      # a wrong install path, or an installed app that fails to start.
+      #
+      # The install root and executable name below are the bundle contract,
+      # not an observed guess: bundle.installMode is unset, so the installer
+      # is currentUser and lands in %LOCALAPPDATA%\<productName>, and
+      # mainBinaryName is unset, so the payload keeps Cargo's binary name.
+      # Setting either key moves the files this step must find.
+      - name: Install and probe the final NSIS package
+        shell: pwsh
+        env:
+          TENNOWORTH_PROBE: '1'
+          TENNOWORTH_PROBE_OUT: '${{ runner.temp }}\package-probe-report.json'
+          TENNOWORTH_JWT_PATH: '${{ runner.temp }}\package-probe-jwt.enc'
+          TENNOWORTH_PENDING_PATH: '${{ runner.temp }}\package-probe-pending.json'
+          WEBVIEW2_USER_DATA_FOLDER: '${{ runner.temp }}\package-probe-webview2'
+        timeout-minutes: 5
+        run: |
+          $installer = Get-ChildItem .\dist\*_x64-setup.exe
+          if (@($installer).Count -ne 1) {
+            throw "Expected one NSIS installer, found $(@($installer).Count)."
+          }
+
+          & $installer.FullName /S
+          if ($LASTEXITCODE -ne 0) {
+            throw "NSIS installation failed with exit code $LASTEXITCODE."
+          }
+
+          $installRoot = Join-Path $env:LOCALAPPDATA 'TennoWorth'
+          $failure = $null
+          try {
+            $app = Get-ChildItem $installRoot -Filter 'tennoworth-desktop.exe' -Recurse
+            if (@($app).Count -ne 1) {
+              throw "Expected one installed desktop executable, found $(@($app).Count)."
+            }
+            & $app.FullName 2>&1 |
+              Tee-Object -FilePath "${{ runner.temp }}\package-probe-stdout.log"
+            if ($LASTEXITCODE -ne 0) {
+              throw "Installed app exited with code $LASTEXITCODE."
+            }
+            bun scripts/check-probe-report.ts "$env:TENNOWORTH_PROBE_OUT"
+            if ($LASTEXITCODE -ne 0) {
+              throw "Installed app probe report failed with code $LASTEXITCODE."
+            }
+          } catch {
+            $failure = $_
+          } finally {
+            $uninstaller = Get-ChildItem $installRoot -Filter 'uninstall.exe' -Recurse -ErrorAction SilentlyContinue
+            if (@($uninstaller).Count -eq 1) {
+              & $uninstaller.FullName /S
+              if ($LASTEXITCODE -ne 0 -and $null -eq $failure) {
+                $failure = "NSIS uninstall failed with exit code $LASTEXITCODE."
+              }
+            } elseif ($null -eq $failure) {
+              $failure = "Installed package did not contain one uninstaller."
+            }
+          }
+          if ($null -ne $failure) { throw $failure }
+
+      - name: Upload Windows package-probe evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-probe-evidence-windows
+          path: |
+            ${{ runner.temp }}/package-probe-report.json
+            ${{ runner.temp }}/package-probe-stdout.log
+          if-no-files-found: ignore
+          retention-days: 7
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: windows-bundles
@@ -341,6 +412,7 @@ jobs:
           sudo apt-get update && sudo apt-get install -y --no-install-recommends
           libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
           librsvg2-dev libtesseract-dev libleptonica-dev libxcb1-dev
+          xvfb xauth dbus-x11
 
       - name: Stage OCR language model
         run: |
@@ -422,6 +494,23 @@ jobs:
           cd dist
           sha256sum TennoWorth-x86_64.AppImage | tee TennoWorth-x86_64.AppImage.sha256
           test -f TennoWorth-x86_64.AppImage.sig
+
+      # Run the repacked and re-signed AppImage. This happens after the
+      # libwayland surgery because those bytes, not Tauri's first bundle, are
+      # what the publish job exposes to users.
+      - name: Probe the final AppImage
+        env:
+          TENNOWORTH_PROBE_EVIDENCE_DIR: '${{ runner.temp }}/package-probe-linux'
+        run: bash scripts/probe-smoke-linux.sh --artifact dist/TennoWorth-x86_64.AppImage
+
+      - name: Upload Linux package-probe evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-probe-evidence-linux
+          path: ${{ runner.temp }}/package-probe-linux/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:

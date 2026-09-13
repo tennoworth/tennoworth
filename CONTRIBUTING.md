@@ -196,8 +196,10 @@ permission or disk-space failures before changing product code.
 On Linux, from the repository root, run `bash scripts/probe-smoke-linux.sh`.
 It rebuilds the desktop bundle and binary, opens the real app under Xvfb and an
 isolated D-Bus session, checks the report, and prints the evidence directory.
-It tests startup and IPC, not live gameplay capture. On either platform, use
-the relevant native workflow/runbook for capture changes.
+Pass `--artifact <AppImage>` to probe an already-built package instead of
+rebuilding; the release workflow uses that mode on the final repacked AppImage
+before publication. The probe tests startup and IPC, not live gameplay capture.
+On either platform, use the relevant native workflow/runbook for capture changes.
 
 For large local builds, put `CARGO_TARGET_DIR` and `TMPDIR` on a disk with
 sufficient space; a small memory-backed `/tmp` can fill during linking.
