@@ -8,6 +8,7 @@ license = "MIT"
 [dependencies]
 anyhow = { workspace = true }
 regex = "1"
+regex-syntax = { workspace = true }
 wfm-client = { path = "../wfm-client" }
 reqwest = { workspace = true }
 tungstenite = { workspace = true }

@@ -42,6 +42,12 @@ ts-rs = { version = "12.0.1", features = ["serde-json-impl"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "blocking", "gzip", "json", "cookies"] }
 # Blocking WebSocket client for WFM's live order stream (rustls to match reqwest).
 tungstenite = { version = "0.24", default-features = false, features = ["rustls-tls-webpki-roots", "handshake"] }
+# The regex crate's own parser, used to prove that a remote definitions pattern's
+# required capture groups always participate before the pattern is accepted.
+# Already in the tree at this version as `regex`'s dependency, so this promotes a
+# transitive crate rather than introducing one; keep the version in step with
+# `regex` so the parse and the compile agree on syntax.
+regex-syntax = "0.8"
 
 # A panic in a Tauri command crashes the process and poisons its mutexes, so
 # production code denies the crash family workspace-wide. Tests re-allow the

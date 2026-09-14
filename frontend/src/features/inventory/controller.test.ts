@@ -47,6 +47,36 @@ describe('inventory lifecycle', () => {
     expect(c.pullingInventory).toBe(false);
     expect(c.pullError).toBe('Warframe is not running');
   });
+
+  it('reports a scan failure through the native command without building a URL from the text', async () => {
+    // The error text can carry session credentials inside a request URL. The SPA
+    // hands it to the native command, which classifies it and returns a URL built
+    // from its own allowlist - the SPA must never assemble one itself.
+    const sentinel = 'inventory request failed: url (https://api.warframe.com/api/inventory.php?accountId=0123456789abcdef01234567&nonce=918273645)';
+    const nativeUrl = 'https://github.com/tennoworth/tennoworth/issues/new?labels=scan-broke&body=Category';
+    const reportScanIssue = vi.fn(async () => ({ url: nativeUrl, opened: false }));
+    const c = new InventoryController(store(), {
+      loadCachedMarket: vi.fn(), refreshMarket: vi.fn(), fetchInventory: vi.fn(), reportScanIssue,
+    }, sources);
+    c.pullError = sentinel;
+    await c.reportScanBroke();
+    expect(reportScanIssue).toHaveBeenCalledWith(sentinel);
+    expect(c.reportUrl).toBe(nativeUrl);
+    expect(c.reportUrl).not.toContain('0123456789abcdef01234567');
+  });
+
+  it('offers no report URL at all when the native report command fails', async () => {
+    // The fallback must not be a client-built URL: the SPA has no classifier, so
+    // it has no way to build a safe one.
+    const reportScanIssue = vi.fn(async () => { throw new Error('no registered browser'); });
+    const c = new InventoryController(store(), {
+      loadCachedMarket: vi.fn(), refreshMarket: vi.fn(), fetchInventory: vi.fn(), reportScanIssue,
+    }, sources);
+    c.pullError = 'boom';
+    await c.reportScanBroke();
+    expect(c.reportUrl).toBeNull();
+    expect(c.pullError).toContain("Couldn't build a report");
+  });
 });
 
 describe('listing lifecycle', () => {

@@ -6563,6 +6563,7 @@ dependencies = [
  "pbkdf2",
  "rand 0.8.6",
  "regex",
+ "regex-syntax",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
