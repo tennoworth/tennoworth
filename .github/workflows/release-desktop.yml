@@ -198,27 +198,12 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: read
-    env:
-      # Generated offline by a human, never in CI, never committed - see
-      # the maintainer signing runbook §9. Absent secrets make `tauri build` fail
-      # loudly rather than publish a release the updater can never install
-      # (bundle.createUpdaterArtifacts is on, and signing them needs the key).
-      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       # Pinned to the SHA preflight captured, not to whatever main points at
       # now: a push landing mid-release must not end up inside the build.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.preflight.outputs.sha }}
-
-      - name: Refuse to build without the updater signing key
-        shell: bash
-        run: |
-          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
-            echo "::error title=No updater signing key::TAURI_SIGNING_PRIVATE_KEY is not set. Generate the keypair offline (the maintainer signing runbook §9) and add it as a repo secret. Publishing unsigned bundles would produce a latest.json no installed app can ever accept."
-            exit 1
-          fi
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
@@ -262,7 +247,13 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           projectPath: rust/tennoworth-desktop
-          args: --bundles nsis
+          # Built unsigned on purpose. The key used to live in this job's
+          # environment, so every setup, dependency-install and build step below
+          # could read it - and a build step compiles third-party code. The
+          # repacked/signed artifacts come from the `sign` job instead.
+          args: >-
+            --bundles nsis
+            --config '{"bundle":{"createUpdaterArtifacts":false}}'
 
       - name: Stage Windows artifacts
         shell: bash
@@ -380,20 +371,10 @@ jobs:
     runs-on: ubuntu-22.04
     permissions:
       contents: read
-    env:
-      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.preflight.outputs.sha }}
-
-      - name: Refuse to build without the updater signing key
-        run: |
-          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
-            echo "::error title=No updater signing key::TAURI_SIGNING_PRIVATE_KEY is not set. Generate the keypair offline (the maintainer signing runbook §9) and add it as a repo secret. Publishing unsigned bundles would produce a latest.json no installed app can ever accept."
-            exit 1
-          fi
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
@@ -439,7 +420,11 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         with:
           projectPath: rust/tennoworth-desktop
-          args: --bundles appimage
+          # Unsigned here for the same reason as Windows: the key must not be
+          # readable by the steps that install dependencies and compile.
+          args: >-
+            --bundles appimage
+            --config '{"bundle":{"createUpdaterArtifacts":false}}'
 
       # Fails the release rather than shipping a binary that won't start on a
       # user's machine. 2.35 is what ubuntu-22.04 provides; anything higher
@@ -468,9 +453,10 @@ jobs:
       # libwayland has a stable ABI and every desktop Linux ships it, so
       # using the host's is strictly more correct.
       #
-      # Repacking invalidates the build-time updater signature, so the file
-      # is re-signed afterwards - the .sig MUST be generated from the
-      # repacked bytes or self-update rejects every download.
+      # Repacking changes the bytes, so any build-time signature is void. The
+      # repacked bytes are what the `sign` job signs, and what publish uploads -
+      # the .sig MUST cover the published bytes or self-update rejects every
+      # download.
       #
       # Create dist/ here rather than depending on an earlier staging step.
       - name: Strip bundled libwayland and repack the AppImage
@@ -490,10 +476,11 @@ jobs:
           curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool
           APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 ./appimagetool -n squashfs-root dist/TennoWorth-x86_64.AppImage
-          bun x @tauri-apps/cli signer sign dist/TennoWorth-x86_64.AppImage
           cd dist
+          # The digest covers the repacked bytes. Signing does not change them -
+          # it adds a detached .sig beside the file - so this stays correct for
+          # the signed artifact the `sign` job produces.
           sha256sum TennoWorth-x86_64.AppImage | tee TennoWorth-x86_64.AppImage.sha256
-          test -f TennoWorth-x86_64.AppImage.sig
 
       # Run the repacked and re-signed AppImage. This happens after the
       # libwayland surgery because those bytes, not Tauri's first bundle, are
@@ -519,17 +506,82 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  # The signing key lives in this job and nowhere else. Signing needs the
+  # artifact bytes, not the toolchain, so it happens in a job that builds
+  # nothing. Both the key and its password are scoped to the single signing step
+  # rather than the job, so even this job's own download and setup steps cannot
+  # read them.
+  sign:
+    needs: [preflight, build-windows, build-linux]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    environment: desktop-release
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows-bundles
+          path: bundles/windows
+
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-bundles
+          path: bundles/linux
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+
+      - name: Sign the updater payloads
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
+            echo "::error title=No updater signing key::TAURI_SIGNING_PRIVATE_KEY is not set. Generate the keypair offline (the maintainer signing runbook §9) and add it as a repo secret. Publishing unsigned bundles would produce a latest.json no installed app can ever accept."
+            exit 1
+          fi
+          # Pinned deliberately. `bun x` with no version resolves whatever is
+          # latest at release time, which would let a registry change decide what
+          # signs our updates.
+          cli='@tauri-apps/cli@2.11.4'
+          exe=$(find bundles/windows -maxdepth 1 -name '*.exe' | head -1)
+          app='bundles/linux/TennoWorth-x86_64.AppImage'
+          [ -n "$exe" ] || { echo "::error title=Missing installer::no .exe under bundles/windows"; exit 1; }
+          [ -s "$app" ] || { echo "::error title=Missing AppImage::$app is absent or empty"; exit 1; }
+
+          bun x "$cli" signer sign "$exe"
+          bun x "$cli" signer sign "$app"
+
+          # An absent or empty .sig publishes a manifest no installed app can
+          # accept, and that failure surfaces on user machines rather than here.
+          # Assert it now instead of trusting the signer's exit code alone.
+          for f in "$exe.sig" "$app.sig"; do
+            [ -s "$f" ] || { echo "::error title=Empty signature::$f is missing or empty"; exit 1; }
+          done
+
+          mkdir -p signed
+          cp "$exe" "$exe.sig" signed/
+          cp "$app" "$app.sig" signed/
+          cp bundles/linux/TennoWorth-x86_64.AppImage.sha256 signed/
+          ls -la signed
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: signed-bundles
+          path: signed/
+          if-no-files-found: error
+          retention-days: 7
+
   # The atomic moment. Nothing before this job has written anything visible;
   # nothing after it can make the release less complete than it already is.
   #
   # `environment: desktop-release` is the hook for a human approval gate -
   # configure required reviewers on it in repo settings if a release should
-  # never go out unattended. It gates the flip, not the builds: the updater
-  # signing secrets are consumed by the build jobs above, which declare no
-  # environment, so they must stay repository secrets (moving them into this
-  # environment would fail both builds at their signing-key guard).
+  # never go out unattended. It gates the flip and the signing job, not the
+  # builds: the signing key is consumed only by `sign`, which shares this
+  # environment, so no build step can read it.
   publish:
-    needs: [preflight, build-windows, build-linux]
+    needs: [preflight, build-windows, build-linux, sign]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -542,10 +594,13 @@ jobs:
       SHA: ${{ needs.preflight.outputs.sha }}
       NOTES: ${{ needs.preflight.outputs.notes }}
     steps:
+      # Exactly one artifact, by name. Downloading every artifact and merging
+      # them let an unsigned copy of a filename land beside the signed one, and
+      # it also dragged the package-probe evidence into the release assets.
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
+          name: signed-bundles
           path: dist
-          merge-multiple: true
 
       # Refuses to publish an incomplete release instead of publishing one and
       # patching it. Every name here is depended on by something: the updater
