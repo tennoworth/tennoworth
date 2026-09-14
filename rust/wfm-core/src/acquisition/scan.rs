@@ -13,7 +13,7 @@ use anyhow::{bail, Result};
 use regex::bytes::Regex;
 
 use crate::poison::{read_guard, write_guard};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, LazyLock, RwLock};
 use std::time::{Duration, Instant};
 use sysinfo::System;
@@ -123,6 +123,65 @@ pub struct PatternRejection {
     pub reason: String,
 }
 
+/// Capture-group indices that are guaranteed to participate in **every** match
+/// of `pattern`, or `None` if the pattern cannot be parsed.
+///
+/// The `regex` crate exposes no per-group optionality, and `static_captures_len`
+/// answers a different question - it returns `Some(3)` for `(a)(b)|(c)(d)`, where
+/// group 1 is absent whenever the second branch matches. So the pattern is parsed
+/// into its intermediate representation and the guarantee is computed
+/// structurally:
+///
+/// - a capture contributes its own index plus whatever its child guarantees;
+/// - concatenation guarantees the union of its parts;
+/// - alternation guarantees only the **intersection**, because one branch that
+///   omits a group makes that group optional;
+/// - a repetition guarantees nothing when it can match zero times.
+///
+/// Deliberately conservative: it can refuse a pattern that in practice always
+/// supplies the group, and it never accepts one that can omit it. Parsed with
+/// `utf8(false)` to match `regex::bytes::Regex`, which is what the scan compiles.
+fn guaranteed_captures(pattern: &str) -> Option<HashSet<usize>> {
+    let hir = regex_syntax::ParserBuilder::new()
+        .utf8(false)
+        .build()
+        .parse(pattern)
+        .ok()?;
+    Some(guaranteed(&hir))
+}
+
+fn guaranteed(hir: &regex_syntax::hir::Hir) -> HashSet<usize> {
+    use regex_syntax::hir::HirKind;
+    match hir.kind() {
+        HirKind::Capture(capture) => {
+            let mut set = guaranteed(&capture.sub);
+            set.insert(capture.index as usize);
+            set
+        }
+        HirKind::Concat(parts) => parts.iter().flat_map(guaranteed).collect(),
+        HirKind::Alternation(branches) => {
+            let mut branches = branches.iter();
+            let Some(first) = branches.next() else {
+                return HashSet::new();
+            };
+            let mut acc = guaranteed(first);
+            for branch in branches {
+                let other = guaranteed(branch);
+                acc.retain(|index| other.contains(index));
+            }
+            acc
+        }
+        HirKind::Repetition(repetition) => {
+            if repetition.min == 0 {
+                HashSet::new()
+            } else {
+                guaranteed(&repetition.sub)
+            }
+        }
+        HirKind::Empty | HirKind::Literal(_) | HirKind::Class(_) | HirKind::Look(_) => HashSet::new(),
+    }
+}
+
 /// Compile a definitions file into a usable pattern set.
 ///
 /// Each pattern is validated INDEPENDENTLY and falls back to the compiled-in
@@ -143,8 +202,7 @@ pub struct PatternRejection {
 /// the crate's own example is `.*[^A-Z]|[A-Z]` over a long run of uppercase.
 /// Both the pattern and the haystack are untrusted here, so a definition can be
 /// quadratic by construction; the scan's own work budget is what contains that.
-pub fn patterns_from_definitions(defs: &ScanDefinitions) -> (ScanPatterns, Vec<PatternRejection>) {
-    let mut rejections = Vec::new();
+pub fn patterns_from_definitions(defs: &ScanDefinitions) -> (ScanPatterns, Vec<PatternRejection>) {    let mut rejections = Vec::new();
     let default = ScanPatterns::default();
 
     fn build_one(
@@ -182,6 +240,22 @@ pub fn patterns_from_definitions(defs: &ScanDefinitions) -> (ScanPatterns, Vec<P
             rejections.push(PatternRejection {
                 field,
                 reason: format!("needs {groups} capture group(s), has {have}"),
+            });
+            return fallback;
+        }
+        // Counting groups is not the same as proving they participate. A group
+        // inside a top-level alternation branch, or under an optional quantifier,
+        // is absent from some matches - and this is remote input, so the pattern
+        // is refused rather than relied on.
+        let required: HashSet<usize> = (1..=groups).collect();
+        if !guaranteed_captures(raw).is_some_and(|captures| required.is_subset(&captures)) {
+            rejections.push(PatternRejection {
+                field,
+                reason: format!(
+                    "capture group(s) 1..{groups} are not guaranteed to participate in every \
+                     match; a top-level alternation or an optional group makes them optional. \
+                     Put a rotated alternative inside the capture, as `(a|b)`, not around it"
+                ),
             });
             return fallback;
         }
@@ -940,30 +1014,37 @@ mod tests {
     }
 
     #[test]
-    fn an_alternation_pattern_cannot_abort_the_scan() {
+    fn an_alternation_pattern_is_refused_and_cannot_abort_a_scan() {
         // A "DE rotated the parameter name" push written as a top-level
-        // alternation. The arity check counts capture groups, so it is accepted
-        // - but only one side's groups participate in any given match, so the
-        // other side's `cap[1]`/`cap[2]` are absent.
-        let (p, rej) = patterns_from_definitions(&defs(
-            Some(
-                r"accountId=([0-9a-fA-F]{24})&nonce=([0-9]{6,})|acct=([0-9a-fA-F]{24})&n=([0-9]{6,})",
-            ),
-            None,
-            None,
-        ));
-        assert!(
-            rej.is_empty(),
-            "the arity check accepts this pattern today: {rej:?}"
-        );
+        // alternation. Only one side's groups participate in any given match, so
+        // the other side's `cap[1]`/`cap[2]` are absent.
+        let hostile =
+            r"accountId=([0-9a-fA-F]{24})&nonce=([0-9]{6,})|acct=([0-9a-fA-F]{24})&n=([0-9]{6,})";
 
-        // Matches the SECOND alternative, so groups 1 and 2 do not participate.
+        // Layer one: refused at install, falling back to the compiled-in pattern.
+        let (p, rej) = patterns_from_definitions(&defs(Some(hostile), None, None));
+        assert_eq!(rej.len(), 1, "the pattern must be refused: {rej:?}");
+        assert_eq!(creds_found(&p, SAMPLE).len(), 1, "fell back to the default");
+
+        // Layer two: if such a pattern reaches the match loop anyway - a caller
+        // that bypassed validation, or a shape this analysis does not foresee -
+        // the loop must still not abort. Constructed directly, on purpose.
+        let hostile_patterns = ScanPatterns {
+            cred: Regex::new(hostile).expect("the pattern compiles"),
+            build: p.build.clone(),
+            ct: p.ct.clone(),
+        };
         let mut counts = PatternCounts::default();
-        aggregate_match(b"acct=0123456789abcdef01234567&n=123456 ", &p, &mut counts, &ScanBudget::default())
-            .expect("within budget");
+        aggregate_match(
+            b"acct=0123456789abcdef01234567&n=123456 ",
+            &hostile_patterns,
+            &mut counts,
+            &ScanBudget::default(),
+        )
+        .expect("within budget");
 
-        // The scan must survive, and must not fabricate a credential from the
-        // groups that were absent.
+        // It must survive, and must not fabricate a credential from the groups
+        // that were absent.
         assert!(
             counts.creds.is_empty(),
             "a match with absent required groups must not yield a credential: {:?}",
@@ -1145,5 +1226,48 @@ mod tests {
             msg.contains("sudo setcap cap_sys_ptrace=eip"),
             "the per-binary capability route must survive: {msg}"
         );
+    }
+
+    #[test]
+    fn a_top_level_alternation_is_refused_at_install() {
+        // Groups 1 and 2 exist in the pattern, but only one branch supplies them,
+        // so a match against the other branch leaves them absent. Counting capture
+        // groups is not the same as proving they participate.
+        let (p, rej) = patterns_from_definitions(&defs(
+            Some(
+                r"accountId=([0-9a-fA-F]{24})&nonce=([0-9]{6,})|acct=([0-9a-fA-F]{24})&n=([0-9]{6,})",
+            ),
+            None,
+            None,
+        ));
+        assert_eq!(rej.len(), 1, "the pattern must be refused: {rej:?}");
+        assert!(rej[0].reason.contains("guaranteed"), "{}", rej[0].reason);
+        assert_eq!(creds_found(&p, SAMPLE).len(), 1, "fell back to the default");
+    }
+
+    #[test]
+    fn an_optional_group_is_refused_at_install() {
+        for raw in [
+            r"accountId=([0-9a-fA-F]{24})?&nonce=([0-9]{6,})",
+            r"(?:accountId=([0-9a-fA-F]{24}))?&nonce=([0-9]{6,})",
+        ] {
+            let (_, rej) = patterns_from_definitions(&defs(Some(raw), None, None));
+            assert_eq!(rej.len(), 1, "{raw} must be refused: {rej:?}");
+        }
+    }
+
+    #[test]
+    fn patterns_whose_groups_always_participate_are_accepted() {
+        // The guard must not refuse the correct way to write a rotated name: a
+        // rotation belongs in a non-capturing group, where both alternatives sit
+        // inside the same capture and it participates either way.
+        for raw in [
+            r"acct=([0-9a-f]{24})&n=([0-9]{6,})",
+            r"(?:accountId|acct)=([0-9a-fA-F]{24})&(?:nonce|n)=([0-9]{6,})",
+            r"acct=([0-9a-f]{0,24})&n=([0-9]{6,})",
+        ] {
+            let (_, rej) = patterns_from_definitions(&defs(Some(raw), None, None));
+            assert!(rej.is_empty(), "{raw} must be accepted: {rej:?}");
+        }
     }
 }
