@@ -624,7 +624,7 @@ fn ptrace_open_error(mem_path: &str, pid: u32, e: std::io::Error) -> anyhow::Err
         .map(|s| s.trim().to_owned());
 
     let mut msg = match &appimage {
-        Some(img) => format!(
+        Some(_) => format!(
             "Permission denied reading {mem_path} - reading the game's memory needs \
              permission to ptrace it.\n\
              `setcap` does not work for an AppImage: it runs from a temporary mount that \
@@ -633,8 +633,8 @@ fn ptrace_open_error(mem_path: &str, pid: u32, e: std::io::Error) -> anyhow::Err
              sudo sysctl kernel.yama.ptrace_scope=0\n\
              To keep it across reboots:\n  \
              echo 'kernel.yama.ptrace_scope=0' | sudo tee /etc/sysctl.d/10-tennoworth.conf\n\
-             Or run this one launch with sudo:\n  \
-             sudo \"{img}\""
+             Launching the app itself with sudo is not the alternative: it is a \
+             networked GUI that holds your WFM credentials."
         ),
         None => {
             let bin = std::env::current_exe()
@@ -646,9 +646,9 @@ fn ptrace_open_error(mem_path: &str, pid: u32, e: std::io::Error) -> anyhow::Err
                  Grant it once (no sudo needed afterwards):\n  \
                  sudo setcap cap_sys_ptrace=eip \"{bin}\"\n  \
                  {bin}\n\
-                 Or run this one invocation with sudo:\n  \
-                 sudo {bin}\n\
-                 Note: re-installing or rebuilding the binary clears the capability - re-run setcap after an upgrade."
+                 Note: re-installing or rebuilding the binary clears the capability - re-run setcap after an upgrade.\n\
+                 Launching the app itself with sudo is not the alternative: it is a \
+                 networked GUI that holds your WFM credentials."
             )
         }
     };
@@ -1118,5 +1118,32 @@ mod tests {
         let err = aggregate_match(&hay, &p, &mut counts, &budget)
             .expect_err("the clock must be checked even with no matches");
         assert!(format!("{err:#}").contains("budget"), "{err:#}");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_ptrace_guidance_never_advises_running_the_app_as_root() {
+        // The app is a networked GUI holding WFM credentials. Suggesting it be
+        // launched under sudo trades one memory-read permission for root over
+        // the whole session, including whatever the webview renders.
+        let err = ptrace_open_error(
+            "/proc/4242/mem",
+            4242,
+            std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied"),
+        );
+        let msg = format!("{err:#}");
+        let bin = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.to_str().map(str::to_owned))
+            .unwrap_or_else(|| "tennoworth-desktop".to_string());
+        assert!(
+            !msg.contains(&format!("sudo {bin}")),
+            "the guidance must not suggest launching the app itself as root: {msg}"
+        );
+        // The narrow route is the whole point of the message, so it must stay.
+        assert!(
+            msg.contains("sudo setcap cap_sys_ptrace=eip"),
+            "the per-binary capability route must survive: {msg}"
+        );
     }
 }
