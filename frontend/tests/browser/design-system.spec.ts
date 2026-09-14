@@ -242,6 +242,41 @@ test('monthly goals add, rename and remove individually', async ({ page }) => {
   await expect(page.getByRole('checkbox', { name: /Prepare Prime sets/ })).toHaveCount(0);
 });
 
+test('monthly goals reorder and keep keyboard focus in the list', async ({ page }) => {
+  await page.goto('/?preview-desktop&sample');
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.evaluate(() => localStorage.removeItem('routine-checklist'));
+    await page.reload();
+    await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
+    await page.getByRole('button', { name: 'Monthly' }).click();
+    const add = page.getByLabel('Add a monthly goal');
+    for (const text of ['First goal', 'Second goal', 'Third goal']) {
+      await add.fill(text);
+      await page.getByRole('button', { name: 'Add goal' }).click();
+    }
+    const titles = page.locator('.checklist-items .task-copy strong');
+    await expect(page.getByRole('button', { name: 'Move First goal up' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Move Third goal down' })).toBeDisabled();
+
+    await page.getByRole('button', { name: 'Move Third goal up' }).click();
+    await expect(titles).toHaveText(['First goal', 'Third goal', 'Second goal']);
+    await expect(page.getByRole('button', { name: 'Move Third goal up' })).toBeFocused();
+
+    await page.getByRole('button', { name: 'Move Third goal up' }).click();
+    await expect(titles).toHaveText(['Third goal', 'First goal', 'Second goal']);
+    await expect(page.getByRole('button', { name: 'Move Third goal down' })).toBeFocused();
+
+    await page.getByRole('button', { name: 'Remove First goal' }).click();
+    await expect(page.getByRole('button', { name: 'Remove Second goal' })).toBeFocused();
+  }
+
+  await page.reload();
+  await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
+  await page.getByRole('button', { name: 'Monthly' }).click();
+  await expect(page.locator('.checklist-items .task-copy strong')).toHaveText(['Third goal', 'Second goal']);
+});
+
 test('the monthly goal field keeps a control height at narrow widths', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 640 });
   await page.goto('/?preview-desktop&sample');

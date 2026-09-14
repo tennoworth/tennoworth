@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import type { Market, OwnedRecord } from '../../contracts/data';
   import { baroLocation, humanWindow } from '../../ui/format';
   import TraderCalendar from '../market-context/TraderCalendar.svelte';
@@ -48,25 +48,60 @@
 
   let editingId = $state<string | null>(null);
   let editDraft = $state('');
+  let panel = $state<HTMLElement | null>(null);
+
+  function focusIn(selector: string): void {
+    panel?.querySelector<HTMLElement>(selector)?.focus();
+  }
 
   function startEdit(task: RoutineTask): void {
     editingId = task.id;
     editDraft = task.title;
   }
 
-  function cancelEdit(): void {
+  function closeEditor(): void {
     editingId = null;
     editDraft = '';
   }
 
+  async function cancelEdit(): Promise<void> {
+    const id = editingId;
+    closeEditor();
+    if (!id) return;
+    await tick();
+    focusIn(`[data-edit-goal="${id}"]`);
+  }
+
   async function saveEdit(): Promise<void> {
     if (!editingId) return;
-    await routine.renameMonthlyGoal(editingId, editDraft);
-    cancelEdit();
+    const id = editingId;
+    await routine.renameMonthlyGoal(id, editDraft);
+    closeEditor();
+    await tick();
+    focusIn(`[data-edit-goal="${id}"]`);
+  }
+
+  async function removeGoal(id: string): Promise<void> {
+    const nextId = routine.state.monthlyGoals[routine.state.monthlyGoals.findIndex(goal => goal.id === id) + 1]?.id ?? null;
+    await routine.removeMonthlyGoal(id);
+    await tick();
+    if (nextId) focusIn(`[data-remove-goal="${nextId}"]`);
+    else focusIn('#monthly-routine-goal');
+  }
+
+  // Reordering keeps the keyboard on the goal being moved; when a move leaves
+  // the pressed direction disabled at an end, the opposite control takes focus
+  // so the next press still acts on the same goal.
+  async function moveGoal(id: string, direction: -1 | 1): Promise<void> {
+    await routine.moveMonthlyGoal(id, direction);
+    await tick();
+    const pressed = panel?.querySelector<HTMLButtonElement>(`[data-move-${direction === -1 ? 'up' : 'down'}="${id}"]`);
+    if (pressed && !pressed.disabled) pressed.focus();
+    else focusIn(`[data-move-${direction === -1 ? 'down' : 'up'}="${id}"]`);
   }
 
   function selectCadence(cadence: RoutineCadence): void {
-    cancelEdit();
+    closeEditor();
     routine.select(cadence);
   }
 
@@ -82,7 +117,7 @@
   <p class="lede">Mark tasks as you complete them. This checklist is manual and local to this installation; TennoWorth does not detect completion from the game.</p>
 </section>
 
-<section class="wrap tw routine-checklist" aria-labelledby="routine-checklist-title">
+<section class="wrap tw routine-checklist" aria-labelledby="routine-checklist-title" bind:this={panel}>
   <div class="rail checklist-rail">
     <h3 id="routine-checklist-title">Routine checklist</h3>
     <span class="exp" aria-live="polite">{progress}</span>
@@ -117,7 +152,7 @@
               <div class="goal-edit">
                 <input class="ui-input" aria-label="Goal text" maxlength={MAX_GOAL_LENGTH} bind:value={editDraft} />
                 <button class="btn ghost" type="button" disabled={routine.saving || !editDraft.trim()} onclick={() => void saveEdit()}>Save goal</button>
-                <button class="btn ghost" type="button" onclick={cancelEdit}>Cancel</button>
+                <button class="btn ghost" type="button" onclick={() => void cancelEdit()}>Cancel</button>
               </div>
             {:else}
               <div class="goal-row">
@@ -127,8 +162,10 @@
                 </label>
                 {#if routine.cadence === 'monthly'}
                   <div class="row-actions">
-                    <button class="btn ghost xs" type="button" aria-label={`Edit ${task.title}`} onclick={() => startEdit(task)}>Edit</button>
-                    <button class="btn ghost xs" type="button" aria-label={`Remove ${task.title}`} disabled={routine.saving} onclick={() => void routine.removeMonthlyGoal(task.id)}>Remove</button>
+                    <button class="btn ghost xs" type="button" data-move-up={task.id} aria-label={`Move ${task.title} up`} disabled={routine.state.monthlyGoals[0]?.id === task.id} onclick={() => void moveGoal(task.id, -1)}>Up</button>
+                    <button class="btn ghost xs" type="button" data-move-down={task.id} aria-label={`Move ${task.title} down`} disabled={routine.state.monthlyGoals.at(-1)?.id === task.id} onclick={() => void moveGoal(task.id, 1)}>Down</button>
+                    <button class="btn ghost xs" type="button" data-edit-goal={task.id} aria-label={`Edit ${task.title}`} onclick={() => startEdit(task)}>Edit</button>
+                    <button class="btn ghost xs" type="button" data-remove-goal={task.id} aria-label={`Remove ${task.title}`} disabled={routine.saving} onclick={() => void removeGoal(task.id)}>Remove</button>
                   </div>
                 {/if}
               </div>
@@ -196,7 +233,7 @@
   .goal-entry input { flex: 1 1 20rem; min-width: 0; }
   .goal-row { display: flex; align-items: flex-start; gap: var(--s3); }
   .goal-row > label { flex: 1 1 auto; min-width: 0; }
-  .row-actions { display: flex; flex-shrink: 0; gap: var(--s2); padding-block: var(--s3); }
+  .row-actions { display: flex; flex-wrap: wrap; flex-shrink: 0; gap: var(--s2); padding-block: var(--s3); }
   .goal-edit { display: flex; align-items: center; gap: var(--s2); padding-block: var(--s3); }
   .goal-edit input { flex: 1 1 20rem; min-width: 0; }
   .checklist-items { list-style: none; margin: 0; padding: 0; border-top: 1px var(--rule) var(--border); }

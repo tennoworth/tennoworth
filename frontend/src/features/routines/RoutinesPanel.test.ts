@@ -32,6 +32,10 @@ async function addGoals(...texts: string[]) {
   }
 }
 
+function goalTitles(): (string | null)[] {
+  return [...document.querySelectorAll('.checklist-items .task-copy strong')].map(node => node.textContent);
+}
+
 describe('RoutinesPanel', () => {
   it('shows selectable daily tasks by default and persists completion', async () => {
     const state = store();
@@ -93,5 +97,51 @@ describe('RoutinesPanel', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Remove List ranked mods' }));
     await waitFor(() => expect(screen.getByText(/Add a monthly goal to build/)).toBeTruthy());
     expect(JSON.parse(state.getSetting('routine-checklist')!).monthlyGoals).toEqual([]);
+  });
+
+  it('reorders goals with up and down controls and disables the ends', async () => {
+    await renderMonthly();
+    await addGoals('First goal', 'Second goal', 'Third goal');
+    expect((screen.getByRole('button', { name: 'Move First goal up' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Move Third goal down' }) as HTMLButtonElement).disabled).toBe(true);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Move Third goal up' }));
+    await waitFor(() => expect(goalTitles()).toEqual(['First goal', 'Third goal', 'Second goal']));
+    await fireEvent.click(screen.getByRole('button', { name: 'Move First goal down' }));
+    await waitFor(() => expect(goalTitles()).toEqual(['Third goal', 'First goal', 'Second goal']));
+  });
+
+  it('keeps focus in the list after a remove', async () => {
+    await renderMonthly();
+    await addGoals('First goal', 'Second goal');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove First goal' }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Remove Second goal' })));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove Second goal' }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Add a monthly goal')));
+  });
+
+  it('returns focus to the row after an edit finishes', async () => {
+    await renderMonthly();
+    await addGoals('First goal', 'Second goal');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit First goal' }));
+    await fireEvent.input(screen.getByLabelText('Goal text'), { target: { value: 'Renamed goal' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save goal' }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Edit Renamed goal' })));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit Second goal' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Edit Second goal' })));
+  });
+
+  it('falls back to the other direction when a move disables the control it used', async () => {
+    await renderMonthly();
+    await addGoals('First goal', 'Second goal');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Move Second goal up' }));
+    await waitFor(() => expect(goalTitles()).toEqual(['Second goal', 'First goal']));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Move Second goal down' })));
   });
 });
