@@ -399,6 +399,30 @@ impl PatternCounts {
     }
 }
 
+/// The shape DE produces for a session account id.
+fn is_account_id(value: &str) -> bool {
+    value.len() == 24 && value.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// A session nonce is a run of decimal digits.
+fn is_nonce(value: &str) -> bool {
+    (6..=32).contains(&value.len()) && value.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// A build label is a dotted numeric version, e.g. `38.1.2`.
+fn is_build_label(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 16
+        && !value.starts_with('.')
+        && !value.ends_with('.')
+        && value.bytes().all(|b| b.is_ascii_digit() || b == b'.')
+}
+
+/// A platform tag is the short uppercase token DE sends as `ct`.
+fn is_platform_tag(value: &str) -> bool {
+    (2..=4).contains(&value.len()) && value.bytes().all(|b| b.is_ascii_uppercase())
+}
+
 fn pick_dominant(counts: PatternCounts) -> Result<SessionInfo> {
     let total_distinct = counts.creds.len();
     let unusable = counts.cred_matches_without_groups;
@@ -406,14 +430,31 @@ fn pick_dominant(counts: PatternCounts) -> Result<SessionInfo> {
         Some(pair) => pair,
         None => bail!("{}", no_creds_message(unusable)),
     };
+    // A captured value is remote input: a definitions file can loosen a pattern
+    // until it captures anything at all. None of these values stays local. The
+    // account id and nonce become request parameters, the build becomes the
+    // request's User-Agent and `appVersion` and is recorded in snapshot
+    // metadata, and the platform tag becomes a request parameter - so a value
+    // with a shape DE never produces is refused rather than forwarded, and a
+    // build label carrying control characters cannot reach a header.
+    if !is_account_id(&aid) || !is_nonce(&nonce) {
+        bail!(
+            "The captured accountId/nonce pair does not have the shape DE produces: \
+             a 24-digit hexadecimal account id and a numeric nonce are required, and \
+             this pair was not used. A definitions override is the likely cause - \
+             resetting it restores the built-in patterns."
+        );
+    }
     let build = counts
         .builds
         .into_iter()
+        .filter(|(k, _)| is_build_label(k))
         .max_by_key(|(_, v)| *v)
         .map(|(k, _)| k);
     let ct = counts
         .cts
         .into_iter()
+        .filter(|(k, _)| is_platform_tag(k))
         .max_by_key(|(_, v)| *v)
         .map(|(k, _)| k)
         .unwrap_or_else(|| "STM".to_string());
@@ -991,5 +1032,56 @@ mod tests {
         let err = aggregate_match(SAMPLE, &p, &mut counts, &budget)
             .expect_err("an exhausted time budget must stop the scan");
         assert!(format!("{err:#}").contains("budget"), "{err:#}");
+    }
+
+    #[test]
+    fn a_captured_value_that_is_not_an_account_id_is_rejected() {
+        // A definitions file can loosen a pattern until it captures anything,
+        // and these values do not stay local: the captured build becomes the
+        // request's User-Agent and `appVersion`, and the platform tag becomes a
+        // request parameter. A shape DE never produces must not be forwarded.
+        let mut counts = PatternCounts::default();
+        counts.creds.insert(
+            (
+                "not-an-account-id\r\nX-Injected: 1".to_string(),
+                "123456".to_string(),
+            ),
+            1,
+        );
+        let Err(err) = pick_dominant(counts) else {
+            panic!("a malformed capture must be refused");
+        };
+        assert!(format!("{err:#}").contains("accountId"), "{err:#}");
+    }
+
+    #[test]
+    fn metadata_that_is_not_the_expected_shape_is_dropped() {
+        let mut counts = PatternCounts::default();
+        counts.creds.insert(
+            ("0123456789abcdef01234567".to_string(), "123456".to_string()),
+            1,
+        );
+        counts
+            .builds
+            .insert("evil\r\nUser-Agent: injected".to_string(), 1);
+        counts.cts.insert("toolongtag".to_string(), 1);
+        let info = pick_dominant(counts).expect("the credentials themselves are valid");
+        assert_eq!(info.build, None, "a build label must look like a version");
+        assert_eq!(info.ct, "STM", "an implausible platform tag falls back");
+    }
+
+    #[test]
+    fn valid_metadata_survives_validation() {
+        // The guard must not reject what DE actually produces.
+        let mut counts = PatternCounts::default();
+        counts.creds.insert(
+            ("0123456789abcdef01234567".to_string(), "123456".to_string()),
+            3,
+        );
+        counts.builds.insert("38.1.2".to_string(), 2);
+        counts.cts.insert("STM".to_string(), 2);
+        let info = pick_dominant(counts).expect("valid input");
+        assert_eq!(info.build.as_deref(), Some("38.1.2"));
+        assert_eq!(info.ct, "STM");
     }
 }
