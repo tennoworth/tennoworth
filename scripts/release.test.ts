@@ -314,3 +314,52 @@ describe('bundled app notes', () => {
     for (const version of cases.invalid) expect(() => appNotesCatalog(changelog, version)).toThrow();
   });
 });
+
+describe('release signing isolation', () => {
+  type Step = { name?: string; uses?: string; env?: Record<string, string>; run?: string; with?: Record<string, unknown> };
+  type Job = { needs?: string[]; environment?: string; env?: Record<string, string>; steps?: Step[] };
+  const workflow = Bun.YAML.parse(
+    readFileSync(new URL('../.github/workflows/release-desktop.yml', import.meta.url), 'utf8'),
+  ) as { jobs: Record<string, Job> };
+  const jobs = workflow.jobs;
+
+  /** Whether a job can read the updater signing key, at job or step level. */
+  const carriesKey = (job: string): boolean =>
+    JSON.stringify(jobs[job]?.env ?? {}).includes('TAURI_SIGNING_PRIVATE_KEY')
+    || (jobs[job]?.steps ?? []).some(step => JSON.stringify(step.env ?? {}).includes('TAURI_SIGNING_PRIVATE_KEY'));
+
+  const buildArgs = (job: string): string =>
+    String((jobs[job]?.steps ?? []).find(step => step.with?.args)?.with?.args ?? '');
+
+  test('the build jobs cannot read the updater signing key', () => {
+    // It used to be a job-level environment variable on both build jobs, so every
+    // setup, dependency-install and build step could read it - and a build step
+    // compiles third-party code.
+    for (const job of ['build-windows', 'build-linux']) {
+      expect(carriesKey(job), `${job} must not expose the signing key`).toBe(false);
+    }
+  });
+
+  test('one dedicated protected job is the only place the key appears', () => {
+    expect(jobs.sign, 'expected a dedicated sign job').toBeDefined();
+    expect(jobs.sign.environment, 'the sign job must sit behind the protected environment').toBe('desktop-release');
+    expect([...(jobs.sign.needs ?? [])].sort()).toEqual(['build-linux', 'build-windows', 'preflight']);
+    // Scoped to the signing step, not the whole job.
+    expect(JSON.stringify(jobs.sign.env ?? {}), 'sign job env must be key-free').not.toContain('TAURI_SIGNING_PRIVATE_KEY');
+    expect(carriesKey('sign'), 'the sign job must actually sign').toBe(true);
+    for (const name of Object.keys(jobs)) {
+      if (name === 'sign') continue;
+      expect(carriesKey(name), `${name} must not carry the signing key`).toBe(false);
+    }
+  });
+
+  test('the builds emit unsigned bundles and publish consumes only signed ones', () => {
+    for (const job of ['build-windows', 'build-linux']) {
+      expect(buildArgs(job), `${job} must disable build-time updater signing`).toContain('"createUpdaterArtifacts":false');
+    }
+    expect([...(jobs.publish.needs ?? [])].sort()).toEqual(['build-linux', 'build-windows', 'preflight', 'sign']);
+    const downloads = (jobs.publish.steps ?? []).filter(step => step.uses?.includes('download-artifact'));
+    expect(downloads, 'publish must download exactly one artifact').toHaveLength(1);
+    expect(downloads[0].with?.name, 'publish must consume only the signed bundles').toBe('signed-bundles');
+  });
+});
