@@ -31,7 +31,18 @@ if ! command -v caddy >/dev/null; then
 fi
 
 echo "==> Service user"
-id wfm >/dev/null 2>&1 || useradd --system --create-home --home-dir /srv/wfm --shell /usr/sbin/nologin wfm
+# wfm's home is a data directory rather than the deployment root. Root executes
+# the scripts under /srv/wfm, so nothing root runs may sit beneath a directory
+# the service user can write to - otherwise replacing a directory entry is
+# enough to replace the program, however the file's own mode reads.
+id wfm >/dev/null 2>&1 || useradd --system --create-home --home-dir /srv/wfm/data --shell /usr/sbin/nologin wfm
+if [ "$(getent passwd wfm | cut -d: -f6)" != /srv/wfm/data ]; then
+  # Installs that predate the split used /srv/wfm as the home. Re-point the
+  # passwd entry only; no files move, and $HOME stays writable once the
+  # deployment root becomes root-owned.
+  usermod -d /srv/wfm/data wfm
+fi
+mkdir -p /srv/wfm/data
 install -m 0755 "$DEPLOY/run-scrape.sh" /srv/wfm/run-scrape.sh
 install -m 0755 "$DEPLOY/pull-web.sh" /srv/wfm/pull-web.sh
 install -m 0755 "$DEPLOY/pull-policy.sh" /srv/wfm/pull-policy.sh
@@ -45,16 +56,38 @@ install -m 0755 "$DEPLOY/pull-app.sh" /srv/wfm/pull-app.sh
 # /etc/wfm-alert.env (ALERT_WEBHOOK_URL=...); absent means log-only.
 install -m 0755 "$DEPLOY/alert.sh" /srv/wfm/alert.sh
 mkdir -p /srv/wfm/bin
-chown -R wfm:wfm /srv/wfm
+
+# Root owns the deployment root and every script a root unit executes. A
+# blanket `chown -R wfm:wfm /srv/wfm` made all of them replaceable through
+# their parent directory, which is a direct path from the service account to
+# root. Only the paths a service genuinely writes are handed over, and each is
+# named rather than inherited from a recursive chown.
+chown root:root /srv/wfm
+chown -R root:root /srv/wfm/bin
+chown root:root /srv/wfm/*.sh
+chown wfm:wfm /srv/wfm/data
+# The policy puller runs as wfm (wfm-policy-pull.service) and publishes here.
+chown -R wfm:wfm /srv/wfm/policy
+# The scraper writes its outputs into the checkout and the git pullers move it,
+# so that subtree stays writable by wfm. This is a KNOWN REMAINING ESCALATION
+# PATH, not an oversight: root installs the executed copies from this tree, so
+# until those installs are verified (SEC-3.4) or the pipeline writes to a
+# dedicated data directory (SEC-3.6), a wfm-writable checkout is still a route
+# to code root will run.
+chown -R wfm:wfm "$REPO"
 
 # The pullers run as root against a wfm-owned checkout, which git rejects as
-# "dubious ownership" unless the path is vouched for. It must be --system:
-# --global writes /root/.gitconfig, which git only finds via HOME, and systemd
-# starts these units with no HOME set - so a --global exception works when you
-# run the script by hand over ssh and fails the moment the timer fires it.
-# safe.directory is also deliberately ignored from a repo's own local config.
-# --add unconditionally would stack a duplicate line on every re-run; this
-# script is meant to be safe to re-run.
+# "dubious ownership" unless the path is vouched for. This exception is a
+# symptom, not a fix: root should not be running git against a repository a
+# lower-privileged account can rewrite (SEC-3.3). It stays only because the
+# scraper still writes its outputs into the checkout; it can be removed once
+# the pipeline writes to /srv/wfm/data and the checkout becomes root-owned.
+# It must be --system: --global writes /root/.gitconfig, which git only finds
+# via HOME, and systemd starts these units with no HOME set - so a --global
+# exception works when you run the script by hand over ssh and fails the moment
+# the timer fires it. safe.directory is also deliberately ignored from a repo's
+# own local config. --add unconditionally would stack a duplicate line on every
+# re-run; this script is meant to be safe to re-run.
 git config --system --get-all safe.directory 2>/dev/null | grep -qx "$REPO" \
   || git config --system --add safe.directory "$REPO"
 

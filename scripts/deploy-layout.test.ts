@@ -126,8 +126,7 @@ describe.skipIf(process.platform === 'win32')('signed policy bootstrap', () => {
   });
 });
 
-describe('usage collector rollback', () => {
-  for (const failure of ['restart', 'health']) {
+describe('usage collector rollback', () => {  for (const failure of ['restart', 'health']) {
     test(`restores the preceding binary after ${failure} failure`, () => {
       const root = mkdtempSync(join(tmpdir(), 'usage-pull-'));
       directories.push(root);
@@ -164,4 +163,46 @@ exit 0
       expect(readFileSync(join(deploy, 'bin/tennoworth-usage'), 'utf8')).toBe('old-binary');
     });
   }
+});
+
+describe('caddy listener boundary', () => {
+  const caddyfile = readFileSync(fileURLToPath(new URL('../deploy/Caddyfile', import.meta.url)), 'utf8');
+
+  /** The body of the first site block addressed by a bare port (`:8081`). */
+  function barePortSite(source: string): { address: string; lines: string[] } | null {
+    const lines = source.split('\n');
+    const start = lines.findIndex(line => /^:[0-9]+ \{\s*$/.test(line));
+    if (start === -1) return null;
+    const end = lines.findIndex((line, index) => index > start && line === '}');
+    return { address: lines[start], lines: lines.slice(start + 1, end) };
+  }
+
+  test('a bare-port site address binds loopback explicitly', () => {
+    // `:8081` with no host binds every interface, so the comment claiming
+    // "loopback only" describes an intention rather than a boundary. The tunnel
+    // needs loopback; nothing else should be able to reach the listener.
+    const site = barePortSite(caddyfile);
+    expect(site, 'expected a bare-port site block in the Caddyfile').not.toBeNull();
+    const bind = site!.lines.find(line => /^\s*bind\s+/.test(line)) ?? '';
+    expect(bind, 'the site must bind loopback explicitly').toMatch(/127\.0\.0\.1/);
+    // `localhost` resolves to ::1 on hosts where IPv6 is preferred, and the
+    // tunnel dials `localhost` - so binding only IPv4 silently breaks it.
+    expect(bind, 'the bind must cover IPv6 loopback too').toMatch(/::1/);
+  });
+});
+
+describe('deployment ownership boundary', () => {
+  const setup = readFileSync(fileURLToPath(new URL('../deploy/setup-container.sh', import.meta.url)), 'utf8');
+
+  test('does not hand the whole deployment root to the service user', () => {
+    // Root executes the scripts under /srv/wfm. A recursive chown makes each of
+    // them replaceable through its parent directory even after the files
+    // themselves are root-owned, which is a direct local escalation path.
+    expect(setup).not.toMatch(/^\s*chown\s+-R\s+wfm:wfm\s+\/srv\/wfm\s*$/m);
+  });
+
+  test('root-owns the deployment root and the scripts root executes', () => {
+    expect(setup).toMatch(/^\s*chown\s+root:root\s+\/srv\/wfm\s*$/m);
+    expect(setup).toMatch(/chown\s+-R\s+root:root[^\n]*\/srv\/wfm\/bin/);
+  });
 });
