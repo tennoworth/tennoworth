@@ -287,6 +287,12 @@ fn aggregate_match(
     counts: &mut PatternCounts,
     budget: &ScanBudget,
 ) -> Result<()> {
+    // Checked before each pattern's iteration, not only per yielded match: a
+    // hostile pattern is often slow precisely because it matches little, so a
+    // per-match clock would never see it. This bounds a *sequence* of slow
+    // searches; a single search cannot be interrupted from outside the regex
+    // engine - that needs the lower-level automata API.
+    counts.charge_time(budget)?;
     for cap in pats.cred.captures_iter(haystack) {
         counts.charge_match(budget)?;
         // A definitions file is remote input. The install-time arity check can
@@ -299,30 +305,34 @@ fn aggregate_match(
             counts.cred_matches_without_groups += 1;
             continue;
         };
+        // Charged on the raw match, before the conversion below allocates: the
+        // cap exists to bound allocation, not merely retention.
+        counts.charge_value(aid.as_bytes().len(), budget)?;
+        counts.charge_value(nonce.as_bytes().len(), budget)?;
         let aid = String::from_utf8_lossy(aid.as_bytes()).to_ascii_lowercase();
         let nonce = String::from_utf8_lossy(nonce.as_bytes()).into_owned();
-        counts.charge_value(&aid, budget)?;
-        counts.charge_value(&nonce, budget)?;
         if !counts.creds.contains_key(&(aid.clone(), nonce.clone())) {
             counts.charge_entry(counts.creds.len(), budget)?;
         }
         *counts.creds.entry((aid, nonce)).or_insert(0) += 1;
     }
+    counts.charge_time(budget)?;
     for cap in pats.build.captures_iter(haystack) {
         counts.charge_match(budget)?;
         let Some(m) = cap.get(1) else { continue };
+        counts.charge_value(m.as_bytes().len(), budget)?;
         let value = String::from_utf8_lossy(m.as_bytes()).into_owned();
-        counts.charge_value(&value, budget)?;
         if !counts.builds.contains_key(&value) {
             counts.charge_entry(counts.builds.len(), budget)?;
         }
         *counts.builds.entry(value).or_insert(0) += 1;
     }
+    counts.charge_time(budget)?;
     for cap in pats.ct.captures_iter(haystack) {
         counts.charge_match(budget)?;
         let Some(m) = cap.get(1) else { continue };
+        counts.charge_value(m.as_bytes().len(), budget)?;
         let value = String::from_utf8_lossy(m.as_bytes()).into_owned();
-        counts.charge_value(&value, budget)?;
         if !counts.cts.contains_key(&value) {
             counts.charge_entry(counts.cts.len(), budget)?;
         }
@@ -357,14 +367,10 @@ struct PatternCounts {
 }
 
 impl PatternCounts {
-    /// Charge one examined match. Iterating matches is the quadratic factor, so
-    /// this is what stops a hostile pattern; the clock is the backstop for a
-    /// single search that is itself slow.
-    fn charge_match(&mut self, budget: &ScanBudget) -> Result<()> {
-        self.matches += 1;
-        if self.matches > budget.max_matches {
-            bail!("{}", budget_exceeded("matches examined", budget.max_matches as u64));
-        }
+    /// Check the clock on its own, so the time ceiling holds even when a pattern
+    /// yields no match at all - which is the shape a deliberately slow pattern
+    /// takes. Callers check this before each pattern's iteration.
+    fn charge_time(&self, budget: &ScanBudget) -> Result<()> {
         if budget.started.elapsed() >= budget.max_elapsed {
             bail!(
                 "{}",
@@ -374,16 +380,27 @@ impl PatternCounts {
         Ok(())
     }
 
-    /// Charge one retained captured value. A match count does not bound memory,
-    /// because a single capture can be arbitrarily long.
-    fn charge_value(&mut self, value: &str, budget: &ScanBudget) -> Result<()> {
-        if value.len() > budget.max_capture_len {
+    /// Charge one examined match. Iterating matches is the quadratic factor, so
+    /// this is what stops a hostile pattern.
+    fn charge_match(&mut self, budget: &ScanBudget) -> Result<()> {
+        self.matches += 1;
+        if self.matches > budget.max_matches {
+            bail!("{}", budget_exceeded("matches examined", budget.max_matches as u64));
+        }
+        self.charge_time(budget)
+    }
+
+    /// Charge `len` bytes of a captured value, before it is converted. A match
+    /// count does not bound memory, because a single capture can be arbitrarily
+    /// long; charging the raw length keeps the cap ahead of the allocation.
+    fn charge_value(&mut self, len: usize, budget: &ScanBudget) -> Result<()> {
+        if len > budget.max_capture_len {
             bail!(
                 "{}",
                 budget_exceeded("capture bytes", budget.max_capture_len as u64)
             );
         }
-        self.bytes += value.len();
+        self.bytes += len;
         if self.bytes > budget.max_bytes {
             bail!("{}", budget_exceeded("retained bytes", budget.max_bytes as u64));
         }
@@ -1083,5 +1100,23 @@ mod tests {
         let info = pick_dominant(counts).expect("valid input");
         assert_eq!(info.build.as_deref(), Some("38.1.2"));
         assert_eq!(info.ct, "STM");
+    }
+
+    #[test]
+    fn an_exhausted_time_budget_fails_even_when_nothing_matches() {
+        // The clock must not depend on a match being yielded. A pattern that is
+        // slow precisely because it finds nothing is the shape a hostile
+        // definition takes, and checking only per yielded match would never see
+        // it.
+        let (p, _) = patterns_from_definitions(&ScanDefinitions::default());
+        let mut counts = PatternCounts::default();
+        let budget = ScanBudget {
+            max_elapsed: Duration::ZERO,
+            ..ScanBudget::default()
+        };
+        let hay = b"nothing here matches the default patterns at all ".repeat(4);
+        let err = aggregate_match(&hay, &p, &mut counts, &budget)
+            .expect_err("the clock must be checked even with no matches");
+        assert!(format!("{err:#}").contains("budget"), "{err:#}");
     }
 }
