@@ -6,9 +6,15 @@
 # tunnel public hostname (e.g. wfm.yourdomain.com -> http://localhost:8081) at
 # it, and adjust the port below to match.
 #
-# Binds to loopback only - the tunnel reaches it; nothing else can.
+# Bound to loopback below - the tunnel reaches it; nothing else can. A bare
+# `:8081` with no `bind` listens on every interface, so the boundary has to be
+# stated rather than assumed.
 
 :8081 {
+	# Both loopback addresses. `localhost` resolves to ::1 on hosts where IPv6 is
+	# preferred (this one included), and cloudflared dials `localhost` - so
+	# binding only 127.0.0.1 leaves the tunnel with no listener to reach.
+	bind 127.0.0.1 ::1
 	root * /srv/wfm/app/frontend/dist
 	encode gzip zstd
 
