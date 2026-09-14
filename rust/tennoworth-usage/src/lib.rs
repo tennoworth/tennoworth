@@ -83,7 +83,13 @@ impl Store {
             };
             date = next;
         }
-        tx.execute("DELETE FROM seen WHERE day <> ?1", [&day])?;
+        // Prune only when the UTC day changes. `seen` has no index on `day`, so
+        // doing this on every tick meant every check-in - unauthenticated input -
+        // scanned and deleted across the whole table, which grows quadratically
+        // with the very traffic that triggers it.
+        if last.is_none_or(|last| last.date_naive() != now.date_naive()) {
+            tx.execute("DELETE FROM seen WHERE day <> ?1", [&day])?;
+        }
         tx.execute("INSERT INTO health VALUES (1,?1) ON CONFLICT(id) DO UPDATE SET last_tick=excluded.last_tick", [now.to_rfc3339()])?;
         tx.commit()?;
         Ok(())
@@ -459,4 +465,60 @@ mod tests {
         task.abort();
     }
     use std::future::IntoFuture;
+
+    fn at(stamp: &str) -> DateTime<Utc> {
+        stamp.parse().unwrap()
+    }
+
+    #[test]
+    fn a_check_in_does_not_prune_the_dedup_table() {
+        // The prune has no index to use, so running it on every check-in made
+        // each request scan and delete across the whole table - work driven
+        // entirely by unauthenticated input. It only needs to run when the UTC
+        // day actually changes.
+        let mut store = Store::new(Connection::open_in_memory().unwrap()).unwrap();
+        let day = at("2026-09-15T12:00:00Z");
+        store.tick(day, true).unwrap();
+        store
+            .conn
+            .execute("INSERT INTO seen VALUES (?1, ?2)", ("2026-09-14", vec![0u8; 32]))
+            .unwrap();
+        store
+            .accept(&format!("2026-09-15.{}", "a".repeat(64)), day)
+            .unwrap();
+        let stale: i64 = store
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM seen WHERE day <> ?1",
+                [day.date_naive().to_string()],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(
+            stale, 1,
+            "a check-in must not scan and delete the whole dedup table"
+        );
+    }
+
+    #[test]
+    fn a_new_day_clears_the_previous_days_dedup_rows() {
+        // The prune still has to happen - just once, at the rollover.
+        let mut store = Store::new(Connection::open_in_memory().unwrap()).unwrap();
+        let day1 = at("2026-09-14T12:00:00Z");
+        store.tick(day1, true).unwrap();
+        store
+            .accept(&format!("2026-09-14.{}", "b".repeat(64)), day1)
+            .unwrap();
+        let day2 = at("2026-09-15T00:00:01Z");
+        store.tick(day2, false).unwrap();
+        let stale: i64 = store
+            .conn
+            .query_row(
+                "SELECT COUNT(*) FROM seen WHERE day <> ?1",
+                [day2.date_naive().to_string()],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(stale, 0, "the day rollover must clear stale dedup rows");
+    }
 }
