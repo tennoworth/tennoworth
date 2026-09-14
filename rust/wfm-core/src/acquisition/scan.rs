@@ -13,8 +13,9 @@ use anyhow::{bail, Result};
 use regex::bytes::Regex;
 
 use crate::poison::{read_guard, write_guard};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, LazyLock, RwLock};
+use std::time::{Duration, Instant};
 use sysinfo::System;
 
 /// The session secrets + build metadata scraped out of the running game.
@@ -122,6 +123,65 @@ pub struct PatternRejection {
     pub reason: String,
 }
 
+/// Capture-group indices that are guaranteed to participate in **every** match
+/// of `pattern`, or `None` if the pattern cannot be parsed.
+///
+/// The `regex` crate exposes no per-group optionality, and `static_captures_len`
+/// answers a different question - it returns `Some(3)` for `(a)(b)|(c)(d)`, where
+/// group 1 is absent whenever the second branch matches. So the pattern is parsed
+/// into its intermediate representation and the guarantee is computed
+/// structurally:
+///
+/// - a capture contributes its own index plus whatever its child guarantees;
+/// - concatenation guarantees the union of its parts;
+/// - alternation guarantees only the **intersection**, because one branch that
+///   omits a group makes that group optional;
+/// - a repetition guarantees nothing when it can match zero times.
+///
+/// Deliberately conservative: it can refuse a pattern that in practice always
+/// supplies the group, and it never accepts one that can omit it. Parsed with
+/// `utf8(false)` to match `regex::bytes::Regex`, which is what the scan compiles.
+fn guaranteed_captures(pattern: &str) -> Option<HashSet<usize>> {
+    let hir = regex_syntax::ParserBuilder::new()
+        .utf8(false)
+        .build()
+        .parse(pattern)
+        .ok()?;
+    Some(guaranteed(&hir))
+}
+
+fn guaranteed(hir: &regex_syntax::hir::Hir) -> HashSet<usize> {
+    use regex_syntax::hir::HirKind;
+    match hir.kind() {
+        HirKind::Capture(capture) => {
+            let mut set = guaranteed(&capture.sub);
+            set.insert(capture.index as usize);
+            set
+        }
+        HirKind::Concat(parts) => parts.iter().flat_map(guaranteed).collect(),
+        HirKind::Alternation(branches) => {
+            let mut branches = branches.iter();
+            let Some(first) = branches.next() else {
+                return HashSet::new();
+            };
+            let mut acc = guaranteed(first);
+            for branch in branches {
+                let other = guaranteed(branch);
+                acc.retain(|index| other.contains(index));
+            }
+            acc
+        }
+        HirKind::Repetition(repetition) => {
+            if repetition.min == 0 {
+                HashSet::new()
+            } else {
+                guaranteed(&repetition.sub)
+            }
+        }
+        HirKind::Empty | HirKind::Literal(_) | HirKind::Class(_) | HirKind::Look(_) => HashSet::new(),
+    }
+}
+
 /// Compile a definitions file into a usable pattern set.
 ///
 /// Each pattern is validated INDEPENDENTLY and falls back to the compiled-in
@@ -129,15 +189,20 @@ pub struct PatternRejection {
 /// the point of shipping this is to fix a broken scan without a release, and a
 /// remote file that can brick the scanner would defeat that.
 ///
-/// Validation is three checks, and the arity one is not cosmetic: the match
-/// loop indexes `cap[1]` and `cap[2]`, so a pattern with too few capture groups
-/// would panic mid-scan on the user's machine.
+/// Validation is three checks. The arity one rejects a pattern that cannot fit
+/// the contract at all, but it is NOT a safety guarantee: it counts capture
+/// groups, and a group that exists in the pattern can still be absent from a
+/// given match - a top-level alternation or an optional group is enough. The
+/// match loop therefore reads the required groups as Options and skips matches
+/// that cannot yield a value, so no accepted pattern can abort a scan.
 ///
-/// ReDoS is not among the risks - the `regex` crate has no backtracking and is
-/// linear in input size - but the length cap still bounds what we agree to
-/// compile.
-pub fn patterns_from_definitions(defs: &ScanDefinitions) -> (ScanPatterns, Vec<PatternRejection>) {
-    let mut rejections = Vec::new();
+/// The length cap bounds what we agree to compile; it does not bound the work a
+/// scan can do. A single search is linear, but `captures_iter` is documented as
+/// `O(m * n^2)` in the worst case because each search may rescan the haystack -
+/// the crate's own example is `.*[^A-Z]|[A-Z]` over a long run of uppercase.
+/// Both the pattern and the haystack are untrusted here, so a definition can be
+/// quadratic by construction; the scan's own work budget is what contains that.
+pub fn patterns_from_definitions(defs: &ScanDefinitions) -> (ScanPatterns, Vec<PatternRejection>) {    let mut rejections = Vec::new();
     let default = ScanPatterns::default();
 
     fn build_one(
@@ -175,6 +240,22 @@ pub fn patterns_from_definitions(defs: &ScanDefinitions) -> (ScanPatterns, Vec<P
             rejections.push(PatternRejection {
                 field,
                 reason: format!("needs {groups} capture group(s), has {have}"),
+            });
+            return fallback;
+        }
+        // Counting groups is not the same as proving they participate. A group
+        // inside a top-level alternation branch, or under an optional quantifier,
+        // is absent from some matches - and this is remote input, so the pattern
+        // is refused rather than relied on.
+        let required: HashSet<usize> = (1..=groups).collect();
+        if !guaranteed_captures(raw).is_some_and(|captures| required.is_subset(&captures)) {
+            rejections.push(PatternRejection {
+                field,
+                reason: format!(
+                    "capture group(s) 1..{groups} are not guaranteed to participate in every \
+                     match; a top-level alternation or an optional group makes them optional. \
+                     Put a rotated alternative inside the capture, as `(a|b)`, not around it"
+                ),
             });
             return fallback;
         }
@@ -228,24 +309,120 @@ pub fn current_patterns() -> Arc<ScanPatterns> {
     Arc::clone(&read_guard(&INSTALLED))
 }
 
-fn aggregate_match(haystack: &[u8], pats: &ScanPatterns, counts: &mut PatternCounts) {
+/// Resource ceiling for one scan.
+///
+/// The scanner walks the game's entire address space while running patterns that
+/// come from a remote definitions file, so two things need a ceiling: how many
+/// matches we are willing to examine, and how much of what they captured we are
+/// willing to keep.
+///
+/// The match ceiling is the one that bounds CPU. Iterating matches in the
+/// `regex` crate is `O(m * n^2)` in the worst case - each search can rescan the
+/// haystack - so the number of searches is the quadratic factor, and a pattern
+/// like `.*[^A-Z]|[A-Z]` over a long run of uppercase reaches a large match count
+/// very quickly. The retention ceilings bound memory, which a match count alone
+/// does not: a single captured value is arbitrarily long.
+///
+/// Exceeding any ceiling fails the scan. It deliberately does not return what was
+/// collected first, because a partial credential set looks exactly like a
+/// complete one to everything downstream.
+#[derive(Debug, Clone)]
+pub struct ScanBudget {
+    /// Wall-clock ceiling for one scan, measured from [`ScanBudget::started`].
+    pub max_elapsed: Duration,
+    /// When the scan began.
+    pub started: Instant,
+    /// Total matches examined across every pattern.
+    pub max_matches: usize,
+    /// Longest single captured value that may be retained.
+    pub max_capture_len: usize,
+    /// Most distinct keys retained per accumulator.
+    pub max_entries: usize,
+    /// Most total bytes of retained captured values.
+    pub max_bytes: usize,
+}
+
+impl Default for ScanBudget {
+    fn default() -> Self {
+        Self {
+            max_elapsed: Duration::from_secs(120),
+            started: Instant::now(),
+            max_matches: 20_000,
+            max_capture_len: 4 * 1024,
+            max_entries: 4_096,
+            max_bytes: 1024 * 1024,
+        }
+    }
+}
+
+fn aggregate_match(
+    haystack: &[u8],
+    pats: &ScanPatterns,
+    counts: &mut PatternCounts,
+    budget: &ScanBudget,
+) -> Result<()> {
+    // Checked before each pattern's iteration, not only per yielded match: a
+    // hostile pattern is often slow precisely because it matches little, so a
+    // per-match clock would never see it. This bounds a *sequence* of slow
+    // searches; a single search cannot be interrupted from outside the regex
+    // engine - that needs the lower-level automata API.
+    counts.charge_time(budget)?;
     for cap in pats.cred.captures_iter(haystack) {
-        let aid = String::from_utf8_lossy(&cap[1]).to_ascii_lowercase();
-        let nonce = String::from_utf8_lossy(&cap[2]).into_owned();
+        counts.charge_match(budget)?;
+        // A definitions file is remote input. The install-time arity check can
+        // only count capture groups, so a group that exists in the pattern may
+        // still be absent from a particular match - a top-level alternation or
+        // an optional group is enough. Indexing a group that did not
+        // participate panics, and release builds abort, so the required groups
+        // are read as Options and an unusable match is counted instead.
+        let (Some(aid), Some(nonce)) = (cap.get(1), cap.get(2)) else {
+            counts.cred_matches_without_groups += 1;
+            continue;
+        };
+        // Charged on the raw match, before the conversion below allocates: the
+        // cap exists to bound allocation, not merely retention.
+        counts.charge_value(aid.as_bytes().len(), budget)?;
+        counts.charge_value(nonce.as_bytes().len(), budget)?;
+        let aid = String::from_utf8_lossy(aid.as_bytes()).to_ascii_lowercase();
+        let nonce = String::from_utf8_lossy(nonce.as_bytes()).into_owned();
+        if !counts.creds.contains_key(&(aid.clone(), nonce.clone())) {
+            counts.charge_entry(counts.creds.len(), budget)?;
+        }
         *counts.creds.entry((aid, nonce)).or_insert(0) += 1;
     }
+    counts.charge_time(budget)?;
     for cap in pats.build.captures_iter(haystack) {
-        *counts
-            .builds
-            .entry(String::from_utf8_lossy(&cap[1]).into_owned())
-            .or_insert(0) += 1;
+        counts.charge_match(budget)?;
+        let Some(m) = cap.get(1) else { continue };
+        counts.charge_value(m.as_bytes().len(), budget)?;
+        let value = String::from_utf8_lossy(m.as_bytes()).into_owned();
+        if !counts.builds.contains_key(&value) {
+            counts.charge_entry(counts.builds.len(), budget)?;
+        }
+        *counts.builds.entry(value).or_insert(0) += 1;
     }
+    counts.charge_time(budget)?;
     for cap in pats.ct.captures_iter(haystack) {
-        *counts
-            .cts
-            .entry(String::from_utf8_lossy(&cap[1]).into_owned())
-            .or_insert(0) += 1;
+        counts.charge_match(budget)?;
+        let Some(m) = cap.get(1) else { continue };
+        counts.charge_value(m.as_bytes().len(), budget)?;
+        let value = String::from_utf8_lossy(m.as_bytes()).into_owned();
+        if !counts.cts.contains_key(&value) {
+            counts.charge_entry(counts.cts.len(), budget)?;
+        }
+        *counts.cts.entry(value).or_insert(0) += 1;
     }
+    Ok(())
+}
+
+/// Message for a scan that spent more than its budget allows.
+fn budget_exceeded(what: &str, limit: u64) -> String {
+    format!(
+        "Scan budget exceeded: {what} reached {limit}. The scan was stopped rather than \
+         returning a partial result, because a partial credential set is indistinguishable \
+         from a complete one. A definitions override is the likely cause - resetting it \
+         restores the built-in patterns."
+    )
 }
 
 #[derive(Default)]
@@ -253,26 +430,122 @@ struct PatternCounts {
     creds: HashMap<(String, String), usize>,
     builds: HashMap<String, usize>,
     cts: HashMap<String, usize>,
+    /// Cred matches that could not yield a value because their required groups
+    /// did not participate. Non-zero means the installed pattern is unusable,
+    /// which is worth telling the user instead of a bare "nothing found".
+    cred_matches_without_groups: usize,
+    /// Matches examined across every pattern in this scan.
+    matches: usize,
+    /// Total bytes of retained captured values.
+    bytes: usize,
+}
+
+impl PatternCounts {
+    /// Check the clock on its own, so the time ceiling holds even when a pattern
+    /// yields no match at all - which is the shape a deliberately slow pattern
+    /// takes. Callers check this before each pattern's iteration.
+    fn charge_time(&self, budget: &ScanBudget) -> Result<()> {
+        if budget.started.elapsed() >= budget.max_elapsed {
+            bail!(
+                "{}",
+                budget_exceeded("elapsed seconds", budget.max_elapsed.as_secs())
+            );
+        }
+        Ok(())
+    }
+
+    /// Charge one examined match. Iterating matches is the quadratic factor, so
+    /// this is what stops a hostile pattern.
+    fn charge_match(&mut self, budget: &ScanBudget) -> Result<()> {
+        self.matches += 1;
+        if self.matches > budget.max_matches {
+            bail!("{}", budget_exceeded("matches examined", budget.max_matches as u64));
+        }
+        self.charge_time(budget)
+    }
+
+    /// Charge `len` bytes of a captured value, before it is converted. A match
+    /// count does not bound memory, because a single capture can be arbitrarily
+    /// long; charging the raw length keeps the cap ahead of the allocation.
+    fn charge_value(&mut self, len: usize, budget: &ScanBudget) -> Result<()> {
+        if len > budget.max_capture_len {
+            bail!(
+                "{}",
+                budget_exceeded("capture bytes", budget.max_capture_len as u64)
+            );
+        }
+        self.bytes += len;
+        if self.bytes > budget.max_bytes {
+            bail!("{}", budget_exceeded("retained bytes", budget.max_bytes as u64));
+        }
+        Ok(())
+    }
+
+    /// Refuse a new distinct key once the accumulator is full.
+    fn charge_entry(&self, held: usize, budget: &ScanBudget) -> Result<()> {
+        if held >= budget.max_entries {
+            bail!("{}", budget_exceeded("distinct entries", budget.max_entries as u64));
+        }
+        Ok(())
+    }
+}
+
+/// The shape DE produces for a session account id.
+fn is_account_id(value: &str) -> bool {
+    value.len() == 24 && value.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// A session nonce is a run of decimal digits.
+fn is_nonce(value: &str) -> bool {
+    (6..=32).contains(&value.len()) && value.bytes().all(|b| b.is_ascii_digit())
+}
+
+/// A build label is a dotted numeric version, e.g. `38.1.2`.
+fn is_build_label(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 16
+        && !value.starts_with('.')
+        && !value.ends_with('.')
+        && value.bytes().all(|b| b.is_ascii_digit() || b == b'.')
+}
+
+/// A platform tag is the short uppercase token DE sends as `ct`.
+fn is_platform_tag(value: &str) -> bool {
+    (2..=4).contains(&value.len()) && value.bytes().all(|b| b.is_ascii_uppercase())
 }
 
 fn pick_dominant(counts: PatternCounts) -> Result<SessionInfo> {
     let total_distinct = counts.creds.len();
+    let unusable = counts.cred_matches_without_groups;
     let ((aid, nonce), hits) = match counts.creds.into_iter().max_by_key(|(_, v)| *v) {
         Some(pair) => pair,
-        None => bail!(
-            "No accountId/nonce pair found in WF memory.\n\
-             Make sure you're past the login screen and a recent network\n\
-             call has fired (opening the trade or profile screen is reliable)."
-        ),
+        None => bail!("{}", no_creds_message(unusable)),
     };
+    // A captured value is remote input: a definitions file can loosen a pattern
+    // until it captures anything at all. None of these values stays local. The
+    // account id and nonce become request parameters, the build becomes the
+    // request's User-Agent and `appVersion` and is recorded in snapshot
+    // metadata, and the platform tag becomes a request parameter - so a value
+    // with a shape DE never produces is refused rather than forwarded, and a
+    // build label carrying control characters cannot reach a header.
+    if !is_account_id(&aid) || !is_nonce(&nonce) {
+        bail!(
+            "The captured accountId/nonce pair does not have the shape DE produces: \
+             a 24-digit hexadecimal account id and a numeric nonce are required, and \
+             this pair was not used. A definitions override is the likely cause - \
+             resetting it restores the built-in patterns."
+        );
+    }
     let build = counts
         .builds
         .into_iter()
+        .filter(|(k, _)| is_build_label(k))
         .max_by_key(|(_, v)| *v)
         .map(|(k, _)| k);
     let ct = counts
         .cts
         .into_iter()
+        .filter(|(k, _)| is_platform_tag(k))
         .max_by_key(|(_, v)| *v)
         .map(|(k, _)| k)
         .unwrap_or_else(|| "STM".to_string());
@@ -284,6 +557,28 @@ fn pick_dominant(counts: PatternCounts) -> Result<SessionInfo> {
         cred_hits: hits,
         distinct_creds: total_distinct,
     })
+}
+
+/// Why a scan produced no credentials.
+///
+/// A pattern that matched but could not yield a value is a different problem
+/// from a pattern that never matched, and the user can only fix the first one
+/// by correcting the definitions file - so say which happened.
+fn no_creds_message(cred_matches_without_groups: usize) -> String {
+    let mut msg = String::from(
+        "No accountId/nonce pair found in WF memory.\n\
+         Make sure you're past the login screen and a recent network\n\
+         call has fired (opening the trade or profile screen is reliable).",
+    );
+    if cred_matches_without_groups > 0 {
+        msg.push_str(&format!(
+            "\n\nThe configured cred pattern matched {cred_matches_without_groups} time(s), \
+             but capture groups 1 and 2 did not both participate, so no value can be read. \
+             A top-level alternation or an optional group breaks the pattern; it must capture \
+             the account id and the nonce as groups 1 and 2."
+        ));
+    }
+    msg
 }
 
 // ---- Linux ---------------------------------------------------------------
@@ -306,6 +601,7 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
     let mut mem_file = File::open(&mem_path).map_err(|e| ptrace_open_error(&mem_path, pid, e))?;
 
     let mut counts = PatternCounts::default();
+    let budget = ScanBudget::default();
     const CHUNK: usize = 4 * 1024 * 1024;
     let overlap = 96;
     // Scratch buffer reused across every chunk of every region - `hay[0..tail_len]`
@@ -360,7 +656,7 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
                 clippy::indexing_slicing,
                 reason = "total cannot exceed the initialized buffer prefix"
             )]
-            aggregate_match(&hay[..total], &pats, &mut counts);
+            aggregate_match(&hay[..total], &pats, &mut counts, &budget)?;
             let keep = std::cmp::min(overlap, n);
             hay.copy_within(total - keep..total, 0);
             tail_len = keep;
@@ -402,7 +698,7 @@ fn ptrace_open_error(mem_path: &str, pid: u32, e: std::io::Error) -> anyhow::Err
         .map(|s| s.trim().to_owned());
 
     let mut msg = match &appimage {
-        Some(img) => format!(
+        Some(_) => format!(
             "Permission denied reading {mem_path} - reading the game's memory needs \
              permission to ptrace it.\n\
              `setcap` does not work for an AppImage: it runs from a temporary mount that \
@@ -411,8 +707,8 @@ fn ptrace_open_error(mem_path: &str, pid: u32, e: std::io::Error) -> anyhow::Err
              sudo sysctl kernel.yama.ptrace_scope=0\n\
              To keep it across reboots:\n  \
              echo 'kernel.yama.ptrace_scope=0' | sudo tee /etc/sysctl.d/10-tennoworth.conf\n\
-             Or run this one launch with sudo:\n  \
-             sudo \"{img}\""
+             Launching the app itself with sudo is not the alternative: it is a \
+             networked GUI that holds your WFM credentials."
         ),
         None => {
             let bin = std::env::current_exe()
@@ -424,9 +720,9 @@ fn ptrace_open_error(mem_path: &str, pid: u32, e: std::io::Error) -> anyhow::Err
                  Grant it once (no sudo needed afterwards):\n  \
                  sudo setcap cap_sys_ptrace=eip \"{bin}\"\n  \
                  {bin}\n\
-                 Or run this one invocation with sudo:\n  \
-                 sudo {bin}\n\
-                 Note: re-installing or rebuilding the binary clears the capability - re-run setcap after an upgrade."
+                 Note: re-installing or rebuilding the binary clears the capability - re-run setcap after an upgrade.\n\
+                 Launching the app itself with sudo is not the alternative: it is a \
+                 networked GUI that holds your WFM credentials."
             )
         }
     };
@@ -485,6 +781,7 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
             .context("OpenProcess failed - not running as same user, or pid is wrong")?;
 
         let mut counts = PatternCounts::default();
+    let budget = ScanBudget::default();
         let mut addr: usize = 0;
         let mut mbi = MEMORY_BASIC_INFORMATION::default();
         let mbi_size = std::mem::size_of::<MEMORY_BASIC_INFORMATION>();
@@ -531,7 +828,7 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
                         break;
                     }
                     let total = tail_len + read_n;
-                    aggregate_match(&hay[..total], &pats, &mut counts);
+                    aggregate_match(&hay[..total], &pats, &mut counts, &budget)?;
                     let keep = std::cmp::min(overlap, read_n);
                     hay.copy_within(total - keep..total, 0);
                     tail_len = keep;
@@ -564,16 +861,17 @@ mod tests {
         }
     }
 
-    /// The scan reads cap[1]/cap[2]; this mirrors that so a pattern which would
-    /// panic mid-scan fails here instead.
+    /// The scan reads groups 1 and 2 as Options and skips a match that cannot
+    /// supply both; this mirrors that so a pattern the scan would decline to
+    /// read does not panic here either.
     fn creds_found(p: &ScanPatterns, hay: &[u8]) -> Vec<(String, String)> {
         p.cred
             .captures_iter(hay)
-            .map(|c| {
-                (
-                    String::from_utf8_lossy(&c[1]).into_owned(),
-                    String::from_utf8_lossy(&c[2]).into_owned(),
-                )
+            .filter_map(|c| {
+                Some((
+                    String::from_utf8_lossy(c.get(1)?.as_bytes()).into_owned(),
+                    String::from_utf8_lossy(c.get(2)?.as_bytes()).into_owned(),
+                ))
             })
             .collect()
     }
@@ -713,5 +1011,263 @@ mod tests {
         assert!(d.build_pattern.is_none(), "absent fields must not error");
         let (_, rej) = patterns_from_definitions(&d);
         assert!(rej.is_empty());
+    }
+
+    #[test]
+    fn an_alternation_pattern_is_refused_and_cannot_abort_a_scan() {
+        // A "DE rotated the parameter name" push written as a top-level
+        // alternation. Only one side's groups participate in any given match, so
+        // the other side's `cap[1]`/`cap[2]` are absent.
+        let hostile =
+            r"accountId=([0-9a-fA-F]{24})&nonce=([0-9]{6,})|acct=([0-9a-fA-F]{24})&n=([0-9]{6,})";
+
+        // Layer one: refused at install, falling back to the compiled-in pattern.
+        let (p, rej) = patterns_from_definitions(&defs(Some(hostile), None, None));
+        assert_eq!(rej.len(), 1, "the pattern must be refused: {rej:?}");
+        assert_eq!(creds_found(&p, SAMPLE).len(), 1, "fell back to the default");
+
+        // Layer two: if such a pattern reaches the match loop anyway - a caller
+        // that bypassed validation, or a shape this analysis does not foresee -
+        // the loop must still not abort. Constructed directly, on purpose.
+        let hostile_patterns = ScanPatterns {
+            cred: Regex::new(hostile).expect("the pattern compiles"),
+            build: p.build.clone(),
+            ct: p.ct.clone(),
+        };
+        let mut counts = PatternCounts::default();
+        aggregate_match(
+            b"acct=0123456789abcdef01234567&n=123456 ",
+            &hostile_patterns,
+            &mut counts,
+            &ScanBudget::default(),
+        )
+        .expect("within budget");
+
+        // It must survive, and must not fabricate a credential from the groups
+        // that were absent.
+        assert!(
+            counts.creds.is_empty(),
+            "a match with absent required groups must not yield a credential: {:?}",
+            counts.creds
+        );
+    }
+
+    #[test]
+    fn a_substituted_pattern_that_never_yields_creds_stays_scannable() {
+        // Whatever the pattern does, the other patterns and the fallback path
+        // must keep working - the definitions file is remote input.
+        let (p, _) = patterns_from_definitions(&defs(
+            Some(r"(?:z=([0-9a-f]{24}))?(?:&q=([0-9]{6,}))?"),
+            None,
+            None,
+        ));
+        let mut counts = PatternCounts::default();
+        aggregate_match(b"nothing to see here ", &p, &mut counts, &ScanBudget::default())
+            .expect("within budget");
+        assert!(counts.creds.is_empty());
+        assert!(p.ct.is_match(SAMPLE), "untouched patterns still work");
+    }
+
+    #[test]
+    fn too_many_matches_fail_the_scan_instead_of_returning_partial_data() {
+        // The match ceiling is what bounds the quadratic iteration: a pattern
+        // that matches constantly must stop the scan, not quietly return the
+        // matches it happened to reach first.
+        let (p, _) = patterns_from_definitions(&ScanDefinitions::default());
+        let mut counts = PatternCounts::default();
+        let hay = b"&ct=STM ".repeat(64);
+        let budget = ScanBudget {
+            max_matches: 8,
+            ..ScanBudget::default()
+        };
+        let err = aggregate_match(&hay, &p, &mut counts, &budget)
+            .expect_err("the match ceiling must stop the scan");
+        assert!(format!("{err:#}").contains("budget"), "{err:#}");
+    }
+
+    #[test]
+    fn an_overlong_capture_fails_the_scan() {
+        // A captured value is arbitrarily long, so a match count alone is not a
+        // memory bound.
+        let (p, _) = patterns_from_definitions(&ScanDefinitions::default());
+        let mut counts = PatternCounts::default();
+        let budget = ScanBudget {
+            max_capture_len: 4,
+            ..ScanBudget::default()
+        };
+        let err = aggregate_match(SAMPLE, &p, &mut counts, &budget)
+            .expect_err("an over-long capture must stop the scan");
+        assert!(format!("{err:#}").contains("budget"), "{err:#}");
+    }
+
+    #[test]
+    fn too_many_distinct_entries_fail_the_scan() {
+        let (p, _) = patterns_from_definitions(&ScanDefinitions::default());
+        let mut counts = PatternCounts::default();
+        let mut hay: Vec<u8> = Vec::new();
+        for i in 0..16u32 {
+            hay.extend_from_slice(
+                format!("accountId={:024x}&nonce={:06} ", i, 100_000 + i).as_bytes(),
+            );
+        }
+        let budget = ScanBudget {
+            max_entries: 4,
+            ..ScanBudget::default()
+        };
+        let err = aggregate_match(&hay, &p, &mut counts, &budget)
+            .expect_err("the entry ceiling must stop the scan");
+        assert!(format!("{err:#}").contains("budget"), "{err:#}");
+    }
+
+    #[test]
+    fn an_exhausted_time_budget_fails_the_scan() {
+        let (p, _) = patterns_from_definitions(&ScanDefinitions::default());
+        let mut counts = PatternCounts::default();
+        let budget = ScanBudget {
+            max_elapsed: Duration::ZERO,
+            ..ScanBudget::default()
+        };
+        let err = aggregate_match(SAMPLE, &p, &mut counts, &budget)
+            .expect_err("an exhausted time budget must stop the scan");
+        assert!(format!("{err:#}").contains("budget"), "{err:#}");
+    }
+
+    #[test]
+    fn a_captured_value_that_is_not_an_account_id_is_rejected() {
+        // A definitions file can loosen a pattern until it captures anything,
+        // and these values do not stay local: the captured build becomes the
+        // request's User-Agent and `appVersion`, and the platform tag becomes a
+        // request parameter. A shape DE never produces must not be forwarded.
+        let mut counts = PatternCounts::default();
+        counts.creds.insert(
+            (
+                "not-an-account-id\r\nX-Injected: 1".to_string(),
+                "123456".to_string(),
+            ),
+            1,
+        );
+        let Err(err) = pick_dominant(counts) else {
+            panic!("a malformed capture must be refused");
+        };
+        assert!(format!("{err:#}").contains("accountId"), "{err:#}");
+    }
+
+    #[test]
+    fn metadata_that_is_not_the_expected_shape_is_dropped() {
+        let mut counts = PatternCounts::default();
+        counts.creds.insert(
+            ("0123456789abcdef01234567".to_string(), "123456".to_string()),
+            1,
+        );
+        counts
+            .builds
+            .insert("evil\r\nUser-Agent: injected".to_string(), 1);
+        counts.cts.insert("toolongtag".to_string(), 1);
+        let info = pick_dominant(counts).expect("the credentials themselves are valid");
+        assert_eq!(info.build, None, "a build label must look like a version");
+        assert_eq!(info.ct, "STM", "an implausible platform tag falls back");
+    }
+
+    #[test]
+    fn valid_metadata_survives_validation() {
+        // The guard must not reject what DE actually produces.
+        let mut counts = PatternCounts::default();
+        counts.creds.insert(
+            ("0123456789abcdef01234567".to_string(), "123456".to_string()),
+            3,
+        );
+        counts.builds.insert("38.1.2".to_string(), 2);
+        counts.cts.insert("STM".to_string(), 2);
+        let info = pick_dominant(counts).expect("valid input");
+        assert_eq!(info.build.as_deref(), Some("38.1.2"));
+        assert_eq!(info.ct, "STM");
+    }
+
+    #[test]
+    fn an_exhausted_time_budget_fails_even_when_nothing_matches() {
+        // The clock must not depend on a match being yielded. A pattern that is
+        // slow precisely because it finds nothing is the shape a hostile
+        // definition takes, and checking only per yielded match would never see
+        // it.
+        let (p, _) = patterns_from_definitions(&ScanDefinitions::default());
+        let mut counts = PatternCounts::default();
+        let budget = ScanBudget {
+            max_elapsed: Duration::ZERO,
+            ..ScanBudget::default()
+        };
+        let hay = b"nothing here matches the default patterns at all ".repeat(4);
+        let err = aggregate_match(&hay, &p, &mut counts, &budget)
+            .expect_err("the clock must be checked even with no matches");
+        assert!(format!("{err:#}").contains("budget"), "{err:#}");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_ptrace_guidance_never_advises_running_the_app_as_root() {
+        // The app is a networked GUI holding WFM credentials. Suggesting it be
+        // launched under sudo trades one memory-read permission for root over
+        // the whole session, including whatever the webview renders.
+        let err = ptrace_open_error(
+            "/proc/4242/mem",
+            4242,
+            std::io::Error::new(std::io::ErrorKind::PermissionDenied, "denied"),
+        );
+        let msg = format!("{err:#}");
+        let bin = std::env::current_exe()
+            .ok()
+            .and_then(|p| p.to_str().map(str::to_owned))
+            .unwrap_or_else(|| "tennoworth-desktop".to_string());
+        assert!(
+            !msg.contains(&format!("sudo {bin}")),
+            "the guidance must not suggest launching the app itself as root: {msg}"
+        );
+        // The narrow route is the whole point of the message, so it must stay.
+        assert!(
+            msg.contains("sudo setcap cap_sys_ptrace=eip"),
+            "the per-binary capability route must survive: {msg}"
+        );
+    }
+
+    #[test]
+    fn a_top_level_alternation_is_refused_at_install() {
+        // Groups 1 and 2 exist in the pattern, but only one branch supplies them,
+        // so a match against the other branch leaves them absent. Counting capture
+        // groups is not the same as proving they participate.
+        let (p, rej) = patterns_from_definitions(&defs(
+            Some(
+                r"accountId=([0-9a-fA-F]{24})&nonce=([0-9]{6,})|acct=([0-9a-fA-F]{24})&n=([0-9]{6,})",
+            ),
+            None,
+            None,
+        ));
+        assert_eq!(rej.len(), 1, "the pattern must be refused: {rej:?}");
+        assert!(rej[0].reason.contains("guaranteed"), "{}", rej[0].reason);
+        assert_eq!(creds_found(&p, SAMPLE).len(), 1, "fell back to the default");
+    }
+
+    #[test]
+    fn an_optional_group_is_refused_at_install() {
+        for raw in [
+            r"accountId=([0-9a-fA-F]{24})?&nonce=([0-9]{6,})",
+            r"(?:accountId=([0-9a-fA-F]{24}))?&nonce=([0-9]{6,})",
+        ] {
+            let (_, rej) = patterns_from_definitions(&defs(Some(raw), None, None));
+            assert_eq!(rej.len(), 1, "{raw} must be refused: {rej:?}");
+        }
+    }
+
+    #[test]
+    fn patterns_whose_groups_always_participate_are_accepted() {
+        // The guard must not refuse the correct way to write a rotated name: a
+        // rotation belongs in a non-capturing group, where both alternatives sit
+        // inside the same capture and it participates either way.
+        for raw in [
+            r"acct=([0-9a-f]{24})&n=([0-9]{6,})",
+            r"(?:accountId|acct)=([0-9a-fA-F]{24})&(?:nonce|n)=([0-9]{6,})",
+            r"acct=([0-9a-f]{0,24})&n=([0-9]{6,})",
+        ] {
+            let (_, rej) = patterns_from_definitions(&defs(Some(raw), None, None));
+            assert!(rej.is_empty(), "{raw} must be accepted: {rej:?}");
+        }
     }
 }
