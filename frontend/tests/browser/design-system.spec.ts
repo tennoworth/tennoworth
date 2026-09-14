@@ -199,6 +199,46 @@ test('narrow order filters stay reachable and routines remain an actionable chec
   }
 });
 
+test('a saved monthly goal can be removed from an explicit control', async ({ page }) => {
+  await page.goto('/?preview-desktop&sample');
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.evaluate(() => localStorage.removeItem('routine-checklist'));
+    await page.reload();
+    await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
+    await page.getByRole('button', { name: 'Monthly' }).click();
+    await expect(page.getByRole('button', { name: 'Remove goal' })).toHaveCount(0);
+
+    const goal = page.getByLabel('Personal monthly goal');
+    await goal.fill('Finish the Star Chart');
+    await page.getByRole('button', { name: 'Save goal' }).click();
+    const remove = page.getByRole('button', { name: 'Remove goal' });
+    await expect(remove).toBeVisible();
+
+    await remove.click();
+    await expect(page.getByText(/Add a personal goal/)).toBeVisible();
+    await expect(remove).toHaveCount(0);
+    await expect(goal).toHaveValue('');
+  }
+
+  await page.reload();
+  await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
+  await page.getByRole('button', { name: 'Monthly' }).click();
+  await expect(page.getByText(/Add a personal goal/)).toBeVisible();
+});
+
+test('the monthly goal field keeps a control height at narrow widths', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 640 });
+  await page.goto('/?preview-desktop&sample');
+  await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
+  await page.getByRole('button', { name: 'Monthly' }).click();
+  const field = page.getByLabel('Personal monthly goal');
+  await expect(field).toBeVisible();
+  const box = await field.boundingBox();
+  expect(box!.height).toBeLessThanOrEqual(48);
+  expect(box!.x + box!.width).toBeLessThanOrEqual(360);
+});
+
 test('routine progress survives reload and failed persistence stays retryable', async ({ page }) => {
   await page.goto('/?preview-desktop&sample');
   await page.evaluate(() => localStorage.clear());
