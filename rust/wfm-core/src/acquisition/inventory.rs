@@ -31,11 +31,21 @@ pub fn fetch_inventory_bytes(
     };
     let info = scan_session(pid).context("memory scan failed")?;
     let ct = platform_tag.unwrap_or_else(|| info.ct.clone());
+    let bytes = get_inventory(INVENTORY_URL, &info, &ct)?;
+    Ok((bytes, info))
+}
 
+/// One inventory GET against `url`, carrying the session credentials.
+///
+/// Split out from [`fetch_inventory_bytes`] so the credential boundary is
+/// reachable from a test: the public entry point cannot be exercised without a
+/// running game, and this is the part that must never put the query string - and
+/// with it `accountId` and `nonce` - into an error.
+fn get_inventory(url: &str, info: &SessionInfo, ct: &str) -> Result<Vec<u8>> {
     let mut params: Vec<(&str, &str)> = vec![
         ("accountId", &info.account_id),
         ("nonce", &info.nonce),
-        ("ct", &ct),
+        ("ct", ct),
     ];
     if let Some(b) = &info.build {
         params.push(("appVersion", b.as_str()));
@@ -49,7 +59,7 @@ pub fn fetch_inventory_bytes(
         .build()
         .context("building HTTP client")?;
     let resp = client
-        .get(INVENTORY_URL)
+        .get(url)
         .query(&params)
         .send()
         .map_err(without_url)
@@ -62,7 +72,7 @@ pub fn fetch_inventory_bytes(
     if !status.is_success() || bytes.len() < 1024 {
         bail!("{}", short_response_message(status, bytes.len()));
     }
-    Ok((bytes.to_vec(), info))
+    Ok(bytes.to_vec())
 }
 
 /// Drop the request URL from a `reqwest` error.
@@ -153,6 +163,36 @@ mod tests {
         assert!(
             !msg.contains(SENTINEL_NONCE),
             "nonce leaked into the scan error: {msg}"
+        );
+    }
+
+    fn session() -> SessionInfo {
+        SessionInfo {
+            account_id: SENTINEL_AID.to_string(),
+            nonce: SENTINEL_NONCE.to_string(),
+            build: Some("38.1.2".to_string()),
+            ct: "STM".to_string(),
+            cred_hits: 1,
+            distinct_creds: 1,
+        }
+    }
+
+    /// The funnel test above builds its own `reqwest` error, so it stays green
+    /// even if the acquisition boundary stops dropping the URL. This one drives
+    /// the boundary itself: port 1 refuses, and the credentials must not survive
+    /// into the error the boundary returns.
+    #[test]
+    fn the_acquisition_boundary_drops_the_credential_query_string() {
+        let err = get_inventory("http://127.0.0.1:1/api/inventory.php", &session(), "STM")
+            .expect_err("port 1 refuses the connection");
+        let msg = format!("{err:#}");
+        assert!(
+            !msg.contains(SENTINEL_AID),
+            "accountId survived the acquisition boundary: {msg}"
+        );
+        assert!(
+            !msg.contains(SENTINEL_NONCE),
+            "nonce survived the acquisition boundary: {msg}"
         );
     }
 }

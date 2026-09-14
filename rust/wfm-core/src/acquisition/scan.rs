@@ -15,6 +15,7 @@ use regex::bytes::Regex;
 use crate::poison::{read_guard, write_guard};
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, RwLock};
+use std::time::{Duration, Instant};
 use sysinfo::System;
 
 /// The session secrets + build metadata scraped out of the running game.
@@ -234,8 +235,60 @@ pub fn current_patterns() -> Arc<ScanPatterns> {
     Arc::clone(&read_guard(&INSTALLED))
 }
 
-fn aggregate_match(haystack: &[u8], pats: &ScanPatterns, counts: &mut PatternCounts) {
+/// Resource ceiling for one scan.
+///
+/// The scanner walks the game's entire address space while running patterns that
+/// come from a remote definitions file, so two things need a ceiling: how many
+/// matches we are willing to examine, and how much of what they captured we are
+/// willing to keep.
+///
+/// The match ceiling is the one that bounds CPU. Iterating matches in the
+/// `regex` crate is `O(m * n^2)` in the worst case - each search can rescan the
+/// haystack - so the number of searches is the quadratic factor, and a pattern
+/// like `.*[^A-Z]|[A-Z]` over a long run of uppercase reaches a large match count
+/// very quickly. The retention ceilings bound memory, which a match count alone
+/// does not: a single captured value is arbitrarily long.
+///
+/// Exceeding any ceiling fails the scan. It deliberately does not return what was
+/// collected first, because a partial credential set looks exactly like a
+/// complete one to everything downstream.
+#[derive(Debug, Clone)]
+pub struct ScanBudget {
+    /// Wall-clock ceiling for one scan, measured from [`ScanBudget::started`].
+    pub max_elapsed: Duration,
+    /// When the scan began.
+    pub started: Instant,
+    /// Total matches examined across every pattern.
+    pub max_matches: usize,
+    /// Longest single captured value that may be retained.
+    pub max_capture_len: usize,
+    /// Most distinct keys retained per accumulator.
+    pub max_entries: usize,
+    /// Most total bytes of retained captured values.
+    pub max_bytes: usize,
+}
+
+impl Default for ScanBudget {
+    fn default() -> Self {
+        Self {
+            max_elapsed: Duration::from_secs(120),
+            started: Instant::now(),
+            max_matches: 20_000,
+            max_capture_len: 4 * 1024,
+            max_entries: 4_096,
+            max_bytes: 1024 * 1024,
+        }
+    }
+}
+
+fn aggregate_match(
+    haystack: &[u8],
+    pats: &ScanPatterns,
+    counts: &mut PatternCounts,
+    budget: &ScanBudget,
+) -> Result<()> {
     for cap in pats.cred.captures_iter(haystack) {
+        counts.charge_match(budget)?;
         // A definitions file is remote input. The install-time arity check can
         // only count capture groups, so a group that exists in the pattern may
         // still be absent from a particular match - a top-level alternation or
@@ -248,22 +301,44 @@ fn aggregate_match(haystack: &[u8], pats: &ScanPatterns, counts: &mut PatternCou
         };
         let aid = String::from_utf8_lossy(aid.as_bytes()).to_ascii_lowercase();
         let nonce = String::from_utf8_lossy(nonce.as_bytes()).into_owned();
+        counts.charge_value(&aid, budget)?;
+        counts.charge_value(&nonce, budget)?;
+        if !counts.creds.contains_key(&(aid.clone(), nonce.clone())) {
+            counts.charge_entry(counts.creds.len(), budget)?;
+        }
         *counts.creds.entry((aid, nonce)).or_insert(0) += 1;
     }
     for cap in pats.build.captures_iter(haystack) {
+        counts.charge_match(budget)?;
         let Some(m) = cap.get(1) else { continue };
-        *counts
-            .builds
-            .entry(String::from_utf8_lossy(m.as_bytes()).into_owned())
-            .or_insert(0) += 1;
+        let value = String::from_utf8_lossy(m.as_bytes()).into_owned();
+        counts.charge_value(&value, budget)?;
+        if !counts.builds.contains_key(&value) {
+            counts.charge_entry(counts.builds.len(), budget)?;
+        }
+        *counts.builds.entry(value).or_insert(0) += 1;
     }
     for cap in pats.ct.captures_iter(haystack) {
+        counts.charge_match(budget)?;
         let Some(m) = cap.get(1) else { continue };
-        *counts
-            .cts
-            .entry(String::from_utf8_lossy(m.as_bytes()).into_owned())
-            .or_insert(0) += 1;
+        let value = String::from_utf8_lossy(m.as_bytes()).into_owned();
+        counts.charge_value(&value, budget)?;
+        if !counts.cts.contains_key(&value) {
+            counts.charge_entry(counts.cts.len(), budget)?;
+        }
+        *counts.cts.entry(value).or_insert(0) += 1;
     }
+    Ok(())
+}
+
+/// Message for a scan that spent more than its budget allows.
+fn budget_exceeded(what: &str, limit: u64) -> String {
+    format!(
+        "Scan budget exceeded: {what} reached {limit}. The scan was stopped rather than \
+         returning a partial result, because a partial credential set is indistinguishable \
+         from a complete one. A definitions override is the likely cause - resetting it \
+         restores the built-in patterns."
+    )
 }
 
 #[derive(Default)]
@@ -275,6 +350,53 @@ struct PatternCounts {
     /// did not participate. Non-zero means the installed pattern is unusable,
     /// which is worth telling the user instead of a bare "nothing found".
     cred_matches_without_groups: usize,
+    /// Matches examined across every pattern in this scan.
+    matches: usize,
+    /// Total bytes of retained captured values.
+    bytes: usize,
+}
+
+impl PatternCounts {
+    /// Charge one examined match. Iterating matches is the quadratic factor, so
+    /// this is what stops a hostile pattern; the clock is the backstop for a
+    /// single search that is itself slow.
+    fn charge_match(&mut self, budget: &ScanBudget) -> Result<()> {
+        self.matches += 1;
+        if self.matches > budget.max_matches {
+            bail!("{}", budget_exceeded("matches examined", budget.max_matches as u64));
+        }
+        if budget.started.elapsed() >= budget.max_elapsed {
+            bail!(
+                "{}",
+                budget_exceeded("elapsed seconds", budget.max_elapsed.as_secs())
+            );
+        }
+        Ok(())
+    }
+
+    /// Charge one retained captured value. A match count does not bound memory,
+    /// because a single capture can be arbitrarily long.
+    fn charge_value(&mut self, value: &str, budget: &ScanBudget) -> Result<()> {
+        if value.len() > budget.max_capture_len {
+            bail!(
+                "{}",
+                budget_exceeded("capture bytes", budget.max_capture_len as u64)
+            );
+        }
+        self.bytes += value.len();
+        if self.bytes > budget.max_bytes {
+            bail!("{}", budget_exceeded("retained bytes", budget.max_bytes as u64));
+        }
+        Ok(())
+    }
+
+    /// Refuse a new distinct key once the accumulator is full.
+    fn charge_entry(&self, held: usize, budget: &ScanBudget) -> Result<()> {
+        if held >= budget.max_entries {
+            bail!("{}", budget_exceeded("distinct entries", budget.max_entries as u64));
+        }
+        Ok(())
+    }
 }
 
 fn pick_dominant(counts: PatternCounts) -> Result<SessionInfo> {
@@ -347,6 +469,7 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
     let mut mem_file = File::open(&mem_path).map_err(|e| ptrace_open_error(&mem_path, pid, e))?;
 
     let mut counts = PatternCounts::default();
+    let budget = ScanBudget::default();
     const CHUNK: usize = 4 * 1024 * 1024;
     let overlap = 96;
     // Scratch buffer reused across every chunk of every region - `hay[0..tail_len]`
@@ -401,7 +524,7 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
                 clippy::indexing_slicing,
                 reason = "total cannot exceed the initialized buffer prefix"
             )]
-            aggregate_match(&hay[..total], &pats, &mut counts);
+            aggregate_match(&hay[..total], &pats, &mut counts, &budget)?;
             let keep = std::cmp::min(overlap, n);
             hay.copy_within(total - keep..total, 0);
             tail_len = keep;
@@ -526,6 +649,7 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
             .context("OpenProcess failed - not running as same user, or pid is wrong")?;
 
         let mut counts = PatternCounts::default();
+    let budget = ScanBudget::default();
         let mut addr: usize = 0;
         let mut mbi = MEMORY_BASIC_INFORMATION::default();
         let mbi_size = std::mem::size_of::<MEMORY_BASIC_INFORMATION>();
@@ -572,7 +696,7 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
                         break;
                     }
                     let total = tail_len + read_n;
-                    aggregate_match(&hay[..total], &pats, &mut counts);
+                    aggregate_match(&hay[..total], &pats, &mut counts, &budget)?;
                     let keep = std::cmp::min(overlap, read_n);
                     hay.copy_within(total - keep..total, 0);
                     tail_len = keep;
@@ -777,7 +901,8 @@ mod tests {
 
         // Matches the SECOND alternative, so groups 1 and 2 do not participate.
         let mut counts = PatternCounts::default();
-        aggregate_match(b"acct=0123456789abcdef01234567&n=123456 ", &p, &mut counts);
+        aggregate_match(b"acct=0123456789abcdef01234567&n=123456 ", &p, &mut counts, &ScanBudget::default())
+            .expect("within budget");
 
         // The scan must survive, and must not fabricate a credential from the
         // groups that were absent.
@@ -798,8 +923,73 @@ mod tests {
             None,
         ));
         let mut counts = PatternCounts::default();
-        aggregate_match(b"nothing to see here ", &p, &mut counts);
+        aggregate_match(b"nothing to see here ", &p, &mut counts, &ScanBudget::default())
+            .expect("within budget");
         assert!(counts.creds.is_empty());
         assert!(p.ct.is_match(SAMPLE), "untouched patterns still work");
+    }
+
+    #[test]
+    fn too_many_matches_fail_the_scan_instead_of_returning_partial_data() {
+        // The match ceiling is what bounds the quadratic iteration: a pattern
+        // that matches constantly must stop the scan, not quietly return the
+        // matches it happened to reach first.
+        let (p, _) = patterns_from_definitions(&ScanDefinitions::default());
+        let mut counts = PatternCounts::default();
+        let hay = b"&ct=STM ".repeat(64);
+        let budget = ScanBudget {
+            max_matches: 8,
+            ..ScanBudget::default()
+        };
+        let err = aggregate_match(&hay, &p, &mut counts, &budget)
+            .expect_err("the match ceiling must stop the scan");
+        assert!(format!("{err:#}").contains("budget"), "{err:#}");
+    }
+
+    #[test]
+    fn an_overlong_capture_fails_the_scan() {
+        // A captured value is arbitrarily long, so a match count alone is not a
+        // memory bound.
+        let (p, _) = patterns_from_definitions(&ScanDefinitions::default());
+        let mut counts = PatternCounts::default();
+        let budget = ScanBudget {
+            max_capture_len: 4,
+            ..ScanBudget::default()
+        };
+        let err = aggregate_match(SAMPLE, &p, &mut counts, &budget)
+            .expect_err("an over-long capture must stop the scan");
+        assert!(format!("{err:#}").contains("budget"), "{err:#}");
+    }
+
+    #[test]
+    fn too_many_distinct_entries_fail_the_scan() {
+        let (p, _) = patterns_from_definitions(&ScanDefinitions::default());
+        let mut counts = PatternCounts::default();
+        let mut hay: Vec<u8> = Vec::new();
+        for i in 0..16u32 {
+            hay.extend_from_slice(
+                format!("accountId={:024x}&nonce={:06} ", i, 100_000 + i).as_bytes(),
+            );
+        }
+        let budget = ScanBudget {
+            max_entries: 4,
+            ..ScanBudget::default()
+        };
+        let err = aggregate_match(&hay, &p, &mut counts, &budget)
+            .expect_err("the entry ceiling must stop the scan");
+        assert!(format!("{err:#}").contains("budget"), "{err:#}");
+    }
+
+    #[test]
+    fn an_exhausted_time_budget_fails_the_scan() {
+        let (p, _) = patterns_from_definitions(&ScanDefinitions::default());
+        let mut counts = PatternCounts::default();
+        let budget = ScanBudget {
+            max_elapsed: Duration::ZERO,
+            ..ScanBudget::default()
+        };
+        let err = aggregate_match(SAMPLE, &p, &mut counts, &budget)
+            .expect_err("an exhausted time budget must stop the scan");
+        assert!(format!("{err:#}").contains("budget"), "{err:#}");
     }
 }
