@@ -181,16 +181,29 @@ struct Limit {
     started: Instant,
     requests: u32,
 }
+/// Requests allowed per wall-clock second across the public usage routes.
+///
+/// Deliberately small: this service is a counter, and the window exists to stop
+/// one source asking for unbounded work. `/health` is outside this quota.
+pub const REQUESTS_PER_WINDOW: u32 = 20;
+
 pub struct Collector {
     store: Mutex<Store>,
     limit: Mutex<Limit>,
     slots: tokio::sync::Semaphore,
+    limit_per_window: u32,
 }
 impl Collector {
     pub fn new(store: Store) -> Arc<Self> {
+        Self::with_limit(store, REQUESTS_PER_WINDOW)
+    }
+    /// A collector with an explicit public quota. Tests use this to make the
+    /// window boundary deterministic; production uses [`Collector::new`].
+    pub fn with_limit(store: Store, limit_per_window: u32) -> Arc<Self> {
         Arc::new(Self {
             store: Mutex::new(store),
             slots: tokio::sync::Semaphore::new(32),
+            limit_per_window,
             limit: Mutex::new(Limit {
                 started: Instant::now(),
                 requests: 0,
@@ -205,16 +218,21 @@ impl Collector {
     }
 }
 pub fn router(state: Arc<Collector>) -> Router {
-    Router::new()
+    // The quota and the in-flight bound cover the two public routes only.
+    // /health is loopback-only and is what the monitor and the puller's
+    // post-restart rollback check read, so a saturated public window must not be
+    // able to report the service as down - doing so turns someone else's flood
+    // into a false alarm and a possible rollback of a working binary.
+    let public = Router::new()
         .route("/api/usage/check-in", post(check_in))
         .route("/api/usage/daily", get(daily))
-        .route("/health", get(health))
         .layer(DefaultBodyLimit::max(256))
         .layer(axum::middleware::from_fn_with_state(
             state.clone(),
             bound_request,
-        ))
-        .with_state(state)
+        ));
+    let unmetered = Router::new().route("/health", get(health));
+    public.merge(unmetered).with_state(state)
 }
 async fn check_in(
     State(state): State<Arc<Collector>>,
@@ -245,6 +263,27 @@ async fn daily(
         Json(data),
     ))
 }
+/// One wall-clock second. Named because it decides the burst a caller can reach:
+/// a fixed window admits a full allowance on each side of a boundary.
+const WINDOW: Duration = Duration::from_secs(1);
+
+/// Charge one request against the fixed window, returning `false` when the caller
+/// is over quota.
+///
+/// Separate from the middleware so the window can be exercised without real time
+/// passing: `Limit` is the entire state and the allowance is a parameter.
+fn charge_window(limit: &mut Limit, allowance: u32) -> bool {
+    if limit.started.elapsed() >= WINDOW {
+        limit.started = Instant::now();
+        limit.requests = 0;
+    }
+    if limit.requests >= allowance {
+        return false;
+    }
+    limit.requests += 1;
+    true
+}
+
 async fn bound_request(
     State(state): State<Arc<Collector>>,
     request: axum::extract::Request,
@@ -255,14 +294,9 @@ async fn bound_request(
         let Ok(mut limit) = state.limit.try_lock() else {
             return StatusCode::TOO_MANY_REQUESTS.into_response();
         };
-        if limit.started.elapsed() >= Duration::from_secs(1) {
-            limit.started = Instant::now();
-            limit.requests = 0;
-        }
-        if limit.requests >= 20 {
+        if !charge_window(&mut limit, state.limit_per_window) {
             return StatusCode::TOO_MANY_REQUESTS.into_response();
         }
-        limit.requests += 1;
     }
     let Ok(_slot) = state.slots.try_acquire() else {
         return StatusCode::SERVICE_UNAVAILABLE.into_response();
@@ -501,8 +535,7 @@ mod tests {
     }
 
     #[test]
-    fn a_new_day_clears_the_previous_days_dedup_rows() {
-        // The prune still has to happen - just once, at the rollover.
+    fn a_new_day_clears_the_previous_days_dedup_rows() {        // The prune still has to happen - just once, at the rollover.
         let mut store = Store::new(Connection::open_in_memory().unwrap()).unwrap();
         let day1 = at("2026-09-14T12:00:00Z");
         store.tick(day1, true).unwrap();
@@ -520,5 +553,124 @@ mod tests {
             )
             .unwrap();
         assert_eq!(stale, 0, "the day rollover must clear stale dedup rows");
+    }
+
+    #[tokio::test]
+    async fn a_saturated_quota_does_not_take_health_down() {
+        // /health is loopback-only and is exactly what the monitor and the
+        // puller's post-restart rollback check read. If it shares the public
+        // quota then one source flooding check-ins reports the service as down -
+        // and can roll back a binary that is working.
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let state = Collector::with_limit(
+            Store::new(Connection::open_in_memory().unwrap()).unwrap(),
+            1,
+        );
+        state.tick().unwrap();
+        let task = tokio::spawn(axum::serve(listener, router(state)).into_future());
+        let client = reqwest::Client::new();
+        let token = format!("{}.{}", Utc::now().date_naive(), "d".repeat(64));
+
+        // The first request takes the whole window.
+        assert_eq!(
+            client
+                .post(format!("{url}/api/usage/check-in"))
+                .json(&serde_json::json!({"token":token}))
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            204
+        );
+        // The next is refused by the public quota ...
+        assert_eq!(
+            client
+                .post(format!("{url}/api/usage/check-in"))
+                .json(&serde_json::json!({"token":token}))
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            429
+        );
+        // ... and health still answers, so a flood cannot fake an outage.
+        assert_eq!(
+            client
+                .get(format!("{url}/health"))
+                .send()
+                .await
+                .unwrap()
+                .status(),
+            204,
+            "health must not share the public quota"
+        );
+        task.abort();
+    }
+
+    #[test]
+    fn the_quota_allows_the_allowance_then_refuses() {
+        let mut limit = Limit {
+            started: Instant::now(),
+            requests: 0,
+        };
+        for _ in 0..REQUESTS_PER_WINDOW {
+            assert!(charge_window(&mut limit, REQUESTS_PER_WINDOW));
+        }
+        assert!(
+            !charge_window(&mut limit, REQUESTS_PER_WINDOW),
+            "the request after the allowance is over quota"
+        );
+    }
+
+    #[test]
+    fn a_closed_window_starts_a_fresh_allowance() {
+        let mut limit = Limit {
+            started: Instant::now()
+                .checked_sub(Duration::from_secs(5))
+                .expect("monotonic clock has not run five seconds"),
+            requests: REQUESTS_PER_WINDOW,
+        };
+        assert!(charge_window(&mut limit, REQUESTS_PER_WINDOW));
+        assert_eq!(limit.requests, 1, "the window reset before charging");
+    }
+
+    #[test]
+    fn a_fixed_window_admits_two_allowances_across_a_boundary() {
+        // Documented behaviour, not a defect to be surprised by later: a fixed
+        // window has no memory of the previous one, so a caller can spend the
+        // full allowance on each side of the boundary - twice the nominal rate
+        // in any rolling second. Pinned so changing it is deliberate.
+        let mut limit = Limit {
+            started: Instant::now(),
+            requests: 0,
+        };
+        for _ in 0..REQUESTS_PER_WINDOW {
+            assert!(charge_window(&mut limit, REQUESTS_PER_WINDOW));
+        }
+        assert!(!charge_window(&mut limit, REQUESTS_PER_WINDOW));
+        limit.started = Instant::now()
+            .checked_sub(Duration::from_secs(2))
+            .expect("monotonic clock has not run two seconds");
+        for _ in 0..REQUESTS_PER_WINDOW {
+            assert!(
+                charge_window(&mut limit, REQUESTS_PER_WINDOW),
+                "the new window grants a full allowance again"
+            );
+        }
+        assert!(!charge_window(&mut limit, REQUESTS_PER_WINDOW));
+    }
+
+    #[test]
+    fn a_store_that_cannot_write_reports_service_unavailable() {
+        // The page cap is what eventually stops a flood filling the counter, and
+        // the HTTP layer has to present that as 503 rather than as a successful
+        // check-in. The desktop app is documented not to care either way.
+        let mut store = Store::new(Connection::open_in_memory().unwrap()).unwrap();
+        store.conn.execute("DROP TABLE seen", []).unwrap();
+        assert_eq!(
+            store.accept(&token(), now()).unwrap_err(),
+            StatusCode::SERVICE_UNAVAILABLE
+        );
     }
 }
