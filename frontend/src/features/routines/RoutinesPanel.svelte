@@ -3,7 +3,7 @@
   import type { Market, OwnedRecord } from '../../contracts/data';
   import { baroLocation, humanWindow } from '../../ui/format';
   import TraderCalendar from '../market-context/TraderCalendar.svelte';
-  import { nextRoutinePeriod, type RoutineController, type RoutineCadence } from './controller.svelte';
+  import { MAX_GOALS, MAX_GOAL_LENGTH, nextRoutinePeriod, type RoutineController, type RoutineCadence, type RoutineTask } from './controller.svelte';
 
   let {
     routine,
@@ -46,6 +46,30 @@
     return `${format.format(start)}–${format.format(end)} UTC`;
   }
 
+  let editingId = $state<string | null>(null);
+  let editDraft = $state('');
+
+  function startEdit(task: RoutineTask): void {
+    editingId = task.id;
+    editDraft = task.title;
+  }
+
+  function cancelEdit(): void {
+    editingId = null;
+    editDraft = '';
+  }
+
+  async function saveEdit(): Promise<void> {
+    if (!editingId) return;
+    await routine.renameMonthlyGoal(editingId, editDraft);
+    cancelEdit();
+  }
+
+  function selectCadence(cadence: RoutineCadence): void {
+    cancelEdit();
+    routine.select(cadence);
+  }
+
   onMount(() => routine.start());
   $effect(() => {
     const current = now;
@@ -66,7 +90,7 @@
   <div class="checklist-body">
     <div class="ui-toolbar cadence" role="group" aria-label="Checklist period">
       {#each Object.entries(cadenceLabels) as [id, label]}
-        <button class="btn" class:ghost={routine.cadence !== id} class:primary={routine.cadence === id} type="button" aria-pressed={routine.cadence === id} onclick={() => routine.select(id as RoutineCadence)}>{label}</button>
+        <button class="btn" class:ghost={routine.cadence !== id} class:primary={routine.cadence === id} type="button" aria-pressed={routine.cadence === id} onclick={() => selectCadence(id as RoutineCadence)}>{label}</button>
       {/each}
     </div>
     <div class="period-copy">
@@ -76,15 +100,12 @@
 
     {#if routine.cadence === 'monthly'}
       <div class="ui-field monthly-goal">
-        <label for="monthly-routine-goal">Personal monthly goal</label>
+        <label for="monthly-routine-goal">Add a monthly goal</label>
         <div class="goal-entry">
-          <input id="monthly-routine-goal" class="ui-input" maxlength="120" bind:value={routine.monthlyGoalDraft} placeholder="e.g. Prepare and list three ranked mods" />
-          <button class="btn ghost" type="button" disabled={routine.monthlyGoalDraft.trim() === routine.state.monthlyGoal || routine.saving} onclick={() => void routine.setMonthlyGoal(routine.monthlyGoalDraft)}>Save goal</button>
-          {#if routine.state.monthlyGoal}
-            <button class="btn ghost" type="button" disabled={routine.saving} onclick={() => void routine.setMonthlyGoal('')}>Remove goal</button>
-          {/if}
+          <input id="monthly-routine-goal" class="ui-input" maxlength={MAX_GOAL_LENGTH} bind:value={routine.monthlyGoalDraft} placeholder="e.g. Prepare and list three ranked mods" disabled={routine.goalLimitReached} />
+          <button class="btn ghost" type="button" disabled={!routine.monthlyGoalDraft.trim() || routine.goalLimitReached || routine.saving} onclick={() => void routine.addMonthlyGoal(routine.monthlyGoalDraft)}>Add goal</button>
         </div>
-        <span>Choose one selling or progression focus. It stays editable and carries forward until you change it.</span>
+        <span>{routine.goalLimitReached ? `Up to ${MAX_GOALS} goals. Remove one to add another.` : 'Each goal gets its own checkbox. Goals carry forward; their ticks reset each month.'}</span>
       </div>
     {/if}
 
@@ -92,15 +113,31 @@
       <ul class="checklist-items">
         {#each routine.tasks as task (task.id)}
           <li class:done={completed.has(task.id)}>
-            <label>
-              <input type="checkbox" checked={completed.has(task.id)} onchange={event => void routine.toggle(task.id, event.currentTarget.checked)} />
-              <span class="task-copy"><strong>{task.title}</strong><span>{task.detail}</span></span>
-            </label>
+            {#if editingId === task.id}
+              <div class="goal-edit">
+                <input class="ui-input" aria-label="Goal text" maxlength={MAX_GOAL_LENGTH} bind:value={editDraft} />
+                <button class="btn ghost" type="button" disabled={routine.saving || !editDraft.trim()} onclick={() => void saveEdit()}>Save goal</button>
+                <button class="btn ghost" type="button" onclick={cancelEdit}>Cancel</button>
+              </div>
+            {:else}
+              <div class="goal-row">
+                <label>
+                  <input type="checkbox" checked={completed.has(task.id)} onchange={event => void routine.toggle(task.id, event.currentTarget.checked)} />
+                  <span class="task-copy"><strong>{task.title}</strong><span>{task.detail}</span></span>
+                </label>
+                {#if routine.cadence === 'monthly'}
+                  <div class="row-actions">
+                    <button class="btn ghost xs" type="button" aria-label={`Edit ${task.title}`} onclick={() => startEdit(task)}>Edit</button>
+                    <button class="btn ghost xs" type="button" aria-label={`Remove ${task.title}`} disabled={routine.saving} onclick={() => void routine.removeMonthlyGoal(task.id)}>Remove</button>
+                  </div>
+                {/if}
+              </div>
+            {/if}
           </li>
         {/each}
       </ul>
     {:else}
-      <p class="empty-goal">Add a personal goal to make this month’s checklist.</p>
+      <p class="empty-goal">Add a monthly goal to build this month’s checklist.</p>
     {/if}
 
     {#if routine.saveError}
@@ -157,10 +194,15 @@
   .period-copy span, .monthly-goal > span, .save-status, .empty-goal, .advice-body { color: var(--muted); font-size: var(--text-control); line-height: var(--leading-body); }
   .goal-entry { display: flex; gap: var(--s2); align-items: stretch; }
   .goal-entry input { flex: 1 1 20rem; min-width: 0; }
+  .goal-row { display: flex; align-items: flex-start; gap: var(--s3); }
+  .goal-row > label { flex: 1 1 auto; min-width: 0; }
+  .row-actions { display: flex; flex-shrink: 0; gap: var(--s2); padding-block: var(--s3); }
+  .goal-edit { display: flex; align-items: center; gap: var(--s2); padding-block: var(--s3); }
+  .goal-edit input { flex: 1 1 20rem; min-width: 0; }
   .checklist-items { list-style: none; margin: 0; padding: 0; border-top: 1px var(--rule) var(--border); }
   .checklist-items li { border-bottom: 1px var(--rule) var(--border); }
   .checklist-items label { display: flex; align-items: flex-start; gap: var(--s3); min-height: var(--row); padding: var(--s3) 0; cursor: pointer; }
-  .checklist-items input { flex: 0 0 auto; width: 1.25rem; height: 1.25rem; margin: var(--s1) 0 0; accent-color: var(--accent); }
+  .checklist-items input[type="checkbox"] { flex: 0 0 auto; width: 1.25rem; height: 1.25rem; margin: var(--s1) 0 0; accent-color: var(--accent); }
   .task-copy { display: flex; flex-direction: column; gap: var(--s1); min-width: 0; overflow-wrap: anywhere; line-height: var(--leading-body); }
   .task-copy strong { font-weight: 600; }
   .task-copy span { color: var(--muted); font-size: var(--text-control); }
@@ -183,6 +225,8 @@
     /* The 20rem flex basis sizes a row; stacked it would become a 320px-tall field. */
     .goal-entry input { flex: 0 0 auto; }
     .goal-entry .btn, .save-error .btn { align-self: flex-start; }
+    .goal-row, .goal-edit { flex-wrap: wrap; }
+    .row-actions { padding-block: 0 var(--s3); }
     .routine-clocks { grid-template-columns: 1fr; }
     .clock { border-right: 0; border-bottom: 1px var(--rule) var(--border); }
     .clock:last-child { border-bottom: 0; }

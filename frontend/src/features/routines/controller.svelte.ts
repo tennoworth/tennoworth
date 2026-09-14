@@ -8,6 +8,11 @@ export interface RoutineTask {
   detail: string;
 }
 
+export interface MonthlyGoal {
+  id: string;
+  text: string;
+}
+
 export const ROUTINE_TASKS: Record<'daily' | 'weekly', RoutineTask[]> = {
   daily: [
     { id: 'login-tribute', title: 'Claim the Daily Tribute', detail: 'Collect the login reward when you enter the game.' },
@@ -29,13 +34,17 @@ interface PeriodState {
 }
 
 interface PersistedRoutineState {
-  version: 1;
+  version: 2;
   periods: Record<RoutineCadence, PeriodState>;
-  monthlyGoal: string;
+  monthlyGoals: MonthlyGoal[];
+  nextGoalId: number;
 }
 
-const EMPTY_GOAL = '';
-const MAX_GOAL_LENGTH = 120;
+export const MAX_GOAL_LENGTH = 120;
+export const MAX_GOALS = 8;
+
+const GOAL_DETAIL = 'Your personal focus for this calendar month.';
+const NUMBERED_GOAL_ID = /^goal-(\d+)$/;
 
 export function routinePeriodId(cadence: RoutineCadence, timestamp: number): string {
   const date = new Date(timestamp);
@@ -55,18 +64,44 @@ export function nextRoutinePeriod(cadence: Exclude<RoutineCadence, 'monthly'>, t
 
 function emptyState(now: number): PersistedRoutineState {
   return {
-    version: 1,
+    version: 2,
     periods: {
       daily: { id: routinePeriodId('daily', now), completed: [] },
       weekly: { id: routinePeriodId('weekly', now), completed: [] },
       monthly: { id: routinePeriodId('monthly', now), completed: [] },
     },
-    monthlyGoal: EMPTY_GOAL,
+    monthlyGoals: [],
+    nextGoalId: 1,
   };
 }
 
-function allowedTaskIds(cadence: RoutineCadence, monthlyGoal: string): Set<string> {
-  return new Set(cadence === 'monthly' ? (monthlyGoal ? ['personal-goal'] : []) : ROUTINE_TASKS[cadence].map(task => task.id));
+function goalText(value: unknown): string {
+  return typeof value === 'string' ? value.trim().slice(0, MAX_GOAL_LENGTH) : '';
+}
+
+// Ids the payload mentioned are never handed out again, even when the entry
+// that carried them was dropped - a stale nextGoalId would otherwise reuse one
+// and silently merge two goals into the same completion row.
+function normalizeGoals(raw: unknown, rawNextId: unknown): { goals: MonthlyGoal[]; nextGoalId: number } {
+  const goals: MonthlyGoal[] = [];
+  const seen = new Set<string>();
+  let highest = 0;
+  if (Array.isArray(raw)) {
+    for (const entry of raw) {
+      if (!entry || typeof entry !== 'object') continue;
+      const { id, text } = entry as Partial<MonthlyGoal>;
+      if (typeof id !== 'string' || !id) continue;
+      const numbered = NUMBERED_GOAL_ID.exec(id);
+      if (numbered) highest = Math.max(highest, Number(numbered[1]));
+      if (seen.has(id) || goals.length === MAX_GOALS) continue;
+      const value = goalText(text);
+      if (!value) continue;
+      seen.add(id);
+      goals.push({ id, text: value });
+    }
+  }
+  const candidate = typeof rawNextId === 'number' && Number.isInteger(rawNextId) && rawNextId > 0 ? rawNextId : 0;
+  return { goals, nextGoalId: Math.max(highest + 1, candidate, 1) };
 }
 
 export function parseRoutineState(raw: string | null, now: number): { state: PersistedRoutineState; repaired: boolean } {
@@ -74,17 +109,22 @@ export function parseRoutineState(raw: string | null, now: number): { state: Per
   if (!raw) return { state: fallback, repaired: false };
   try {
     const candidate = JSON.parse(raw) as Partial<PersistedRoutineState>;
-    if (candidate.version !== 1 || !candidate.periods || typeof candidate.monthlyGoal !== 'string') {
+    if (candidate.version !== 2 || !candidate.periods || !Array.isArray(candidate.monthlyGoals)) {
       return { state: fallback, repaired: true };
     }
-    const monthlyGoal = candidate.monthlyGoal.trim().slice(0, MAX_GOAL_LENGTH);
     const state = emptyState(now);
-    state.monthlyGoal = monthlyGoal;
+    const { goals, nextGoalId } = normalizeGoals(candidate.monthlyGoals, candidate.nextGoalId);
+    state.monthlyGoals = goals;
+    state.nextGoalId = nextGoalId;
+    const allowed: Record<RoutineCadence, Set<string>> = {
+      daily: new Set(ROUTINE_TASKS.daily.map(task => task.id)),
+      weekly: new Set(ROUTINE_TASKS.weekly.map(task => task.id)),
+      monthly: new Set(goals.map(goal => goal.id)),
+    };
     for (const cadence of ['daily', 'weekly', 'monthly'] as const) {
       const source = candidate.periods[cadence];
       if (!source || source.id !== state.periods[cadence].id || !Array.isArray(source.completed)) continue;
-      const allowed = allowedTaskIds(cadence, monthlyGoal);
-      state.periods[cadence].completed = [...new Set(source.completed.filter((id): id is string => typeof id === 'string' && allowed.has(id)))];
+      state.periods[cadence].completed = [...new Set(source.completed.filter((id): id is string => typeof id === 'string' && allowed[cadence].has(id)))];
     }
     return { state, repaired: JSON.stringify(state) !== raw };
   } catch {
@@ -109,15 +149,16 @@ export class RoutineController {
     this.now = now;
     const parsed = parseRoutineState(store.getSetting('routine-checklist'), now);
     this.state = parsed.state;
-    this.monthlyGoalDraft = parsed.state.monthlyGoal;
     this.#repairOnStart = parsed.repaired;
   }
 
   get tasks(): RoutineTask[] {
     if (this.cadence !== 'monthly') return ROUTINE_TASKS[this.cadence];
-    return this.state.monthlyGoal
-      ? [{ id: 'personal-goal', title: this.state.monthlyGoal, detail: 'Your personal focus for this calendar month.' }]
-      : [];
+    return this.state.monthlyGoals.map(goal => ({ id: goal.id, title: goal.text, detail: GOAL_DETAIL }));
+  }
+
+  get goalLimitReached(): boolean {
+    return this.state.monthlyGoals.length >= MAX_GOALS;
   }
 
   get completed(): Set<string> {
@@ -157,16 +198,39 @@ export class RoutineController {
     return this.#save();
   }
 
-  setMonthlyGoal(value: string): Promise<void> {
-    const goal = value.trim().slice(0, MAX_GOAL_LENGTH);
-    if (goal !== this.state.monthlyGoal) this.state.periods.monthly.completed = [];
-    this.state.monthlyGoal = goal;
-    this.monthlyGoalDraft = goal;
+  addMonthlyGoal(value: string): Promise<void> {
+    const text = goalText(value);
+    if (!text || this.goalLimitReached) return Promise.resolve();
+    this.state.monthlyGoals.push({ id: `goal-${this.state.nextGoalId}`, text });
+    this.state.nextGoalId += 1;
+    this.monthlyGoalDraft = '';
+    return this.#save();
+  }
+
+  renameMonthlyGoal(id: string, value: string): Promise<void> {
+    const goal = this.state.monthlyGoals.find(entry => entry.id === id);
+    const text = goalText(value);
+    if (!goal || !text || text === goal.text) return Promise.resolve();
+    goal.text = text;
+    this.#forgetCompletion(id);
+    return this.#save();
+  }
+
+  removeMonthlyGoal(id: string): Promise<void> {
+    const index = this.state.monthlyGoals.findIndex(entry => entry.id === id);
+    if (index === -1) return Promise.resolve();
+    this.state.monthlyGoals.splice(index, 1);
+    this.#forgetCompletion(id);
     return this.#save();
   }
 
   retry(): Promise<void> {
     return this.#save();
+  }
+
+  #forgetCompletion(id: string): void {
+    const period = this.state.periods.monthly;
+    if (period.completed.includes(id)) period.completed = period.completed.filter(entry => entry !== id);
   }
 
   #save(): Promise<void> {

@@ -17,11 +17,25 @@ function store(): StateStore {
   };
 }
 
+const NOW = Date.parse('2026-09-14T12:00:00Z');
+
+function renderMonthly(state: StateStore = store()) {
+  render(RoutinesPanel, { props: { routine: new RoutineController(state, NOW), market: null, owned: new Map(), now: NOW } });
+  return fireEvent.click(screen.getByRole('button', { name: 'Monthly' }));
+}
+
+async function addGoals(...texts: string[]) {
+  const add = screen.getByLabelText('Add a monthly goal');
+  for (const text of texts) {
+    await fireEvent.input(add, { target: { value: text } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Add goal' }));
+  }
+}
+
 describe('RoutinesPanel', () => {
   it('shows selectable daily tasks by default and persists completion', async () => {
     const state = store();
-    const now = Date.parse('2026-09-14T12:00:00Z');
-    render(RoutinesPanel, { props: { routine: new RoutineController(state, now), market: null, owned: new Map(), now } });
+    render(RoutinesPanel, { props: { routine: new RoutineController(state, NOW), market: null, owned: new Map(), now: NOW } });
     const tribute = screen.getByRole('checkbox', { name: /Claim the Daily Tribute/ }) as HTMLInputElement;
     expect(tribute.checked).toBe(false);
     expect(screen.getByText('0 of 5 complete')).toBeTruthy();
@@ -30,32 +44,54 @@ describe('RoutinesPanel', () => {
     expect(state.getSetting('routine-checklist')).toContain('login-tribute');
   });
 
-  it('offers a clearly personal monthly goal without inventing a game reset', async () => {
-    const now = Date.parse('2026-09-14T12:00:00Z');
-    render(RoutinesPanel, { props: { routine: new RoutineController(store(), now), market: null, owned: new Map(), now } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Monthly' }));
+  it('offers personal monthly goals without inventing a game reset', async () => {
+    await renderMonthly();
     expect(screen.getByText(/not a Warframe reset schedule/)).toBeTruthy();
-    const goal = screen.getByLabelText('Personal monthly goal');
-    await fireEvent.input(goal, { target: { value: 'Prepare three ranked mods' } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Save goal' }));
+    expect(screen.getByText(/Add a monthly goal to build/)).toBeTruthy();
+    await addGoals('Prepare three ranked mods');
     expect(await screen.findByRole('checkbox', { name: /Prepare three ranked mods/ })).toBeTruthy();
+    expect((screen.getByLabelText('Add a monthly goal') as HTMLInputElement).value).toBe('');
   });
 
-  it('removes a saved monthly goal from an explicit control', async () => {
-    const state = store();
-    const now = Date.parse('2026-09-14T12:00:00Z');
-    render(RoutinesPanel, { props: { routine: new RoutineController(state, now), market: null, owned: new Map(), now } });
-    await fireEvent.click(screen.getByRole('button', { name: 'Monthly' }));
-    expect(screen.queryByRole('button', { name: 'Remove goal' })).toBeNull();
+  it('ticks goals independently and renames one without touching the other', async () => {
+    await renderMonthly();
+    await addGoals('List ranked mods', 'Prepare Prime sets');
 
-    const goal = screen.getByLabelText('Personal monthly goal');
-    await fireEvent.input(goal, { target: { value: 'Prepare three ranked mods' } });
+    const first = screen.getByRole('checkbox', { name: /List ranked mods/ }) as HTMLInputElement;
+    const second = screen.getByRole('checkbox', { name: /Prepare Prime sets/ }) as HTMLInputElement;
+    await fireEvent.click(first);
+    await waitFor(() => expect(screen.getByText('1 of 2 complete')).toBeTruthy());
+    expect(second.checked).toBe(false);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit List ranked mods' }));
+    await fireEvent.input(screen.getByLabelText('Goal text'), { target: { value: 'List four ranked mods' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Save goal' }));
-    await screen.findByRole('checkbox', { name: /Prepare three ranked mods/ });
+    await waitFor(() => expect(screen.getByRole('checkbox', { name: /List four ranked mods/ })).toBeTruthy());
+    expect(screen.queryByRole('checkbox', { name: /List ranked mods/ })).toBeNull();
+    expect(screen.getByText('0 of 2 complete')).toBeTruthy();
+  });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Remove goal' }));
-    await waitFor(() => expect(screen.getByText(/Add a personal goal/)).toBeTruthy());
-    expect(screen.queryByRole('button', { name: 'Remove goal' })).toBeNull();
-    expect(JSON.parse(state.getSetting('routine-checklist')!).monthlyGoal).toBe('');
+  it('abandons an edit on cancel', async () => {
+    await renderMonthly();
+    await addGoals('List ranked mods');
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit List ranked mods' }));
+    await fireEvent.input(screen.getByLabelText('Goal text'), { target: { value: 'Discarded' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('checkbox', { name: /List ranked mods/ })).toBeTruthy();
+    expect(screen.queryByText('Discarded')).toBeNull();
+  });
+
+  it('removes only the chosen goal and shows the empty state when the last one goes', async () => {
+    const state = store();
+    await renderMonthly(state);
+    await addGoals('List ranked mods', 'Prepare Prime sets');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove Prepare Prime sets' }));
+    await waitFor(() => expect(screen.queryByRole('checkbox', { name: /Prepare Prime sets/ })).toBeNull());
+    expect(screen.getByRole('checkbox', { name: /List ranked mods/ })).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove List ranked mods' }));
+    await waitFor(() => expect(screen.getByText(/Add a monthly goal to build/)).toBeTruthy());
+    expect(JSON.parse(state.getSetting('routine-checklist')!).monthlyGoals).toEqual([]);
   });
 });
