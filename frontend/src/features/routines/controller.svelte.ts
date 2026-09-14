@@ -224,6 +224,15 @@ export class RoutineController {
     return this.#save();
   }
 
+  moveMonthlyGoal(id: string, direction: -1 | 1): Promise<void> {
+    const index = this.state.monthlyGoals.findIndex(entry => entry.id === id);
+    const target = index + direction;
+    if (index === -1 || target < 0 || target >= this.state.monthlyGoals.length) return Promise.resolve();
+    const [goal] = this.state.monthlyGoals.splice(index, 1);
+    this.state.monthlyGoals.splice(target, 0, goal);
+    return this.#save();
+  }
+
   retry(): Promise<void> {
     return this.#save();
   }
