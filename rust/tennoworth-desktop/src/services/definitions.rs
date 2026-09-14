@@ -29,6 +29,7 @@
 //! and memory without ever matching a credential. Only a scan-side budget
 //! contains that; "matches nothing" is not the worst a bad push can do.
 
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use wfm_core::acquisition::scan::{install_patterns, patterns_from_definitions, ScanDefinitions};
@@ -118,6 +119,16 @@ fn refresh_and_install_with(dir: &Path, url: &str) -> DefinitionsOutcome {
         // find, since the user-visible symptom would otherwise be "scan broke".
         eprintln!("tennoworth: definitions rejected {line}");
     }
+    // A cached copy that no longer compiles cleanly is not a known-good fallback
+    // any more: drop it so the next start falls back to the built-in patterns
+    // instead of re-installing something unusable on every offline start.
+    if !fetched && !rejections.is_empty() {
+        eprintln!(
+            "tennoworth: dropping cached definitions ({} unusable entry/entries)",
+            rejections.len()
+        );
+        reset_cache(dir);
+    }
     install_patterns(patterns);
     if let Err(reason) = install_reward_markers(&defs.reward_log_markers) {
         eprintln!("tennoworth: definitions rejected reward_log_markers: {reason}");
@@ -135,6 +146,11 @@ fn read_cache(dir: &Path) -> Option<String> {
         .ok()
         .filter(|s| !s.trim().is_empty())
 }
+
+/// Definitions are a few hundred bytes of patterns and reward markers. A much
+/// larger body is corrupt or hostile, and reading it whole would let the
+/// response decide how much memory the app allocates.
+const MAX_DEFINITION_BYTES: usize = 64 * 1024;
 
 /// Conditional GET. Returns a body only on a validated 200; every other
 /// outcome is None and leaves the cache untouched.
@@ -171,29 +187,78 @@ fn fetch(dir: &Path, url: &str) -> Option<String> {
         .get(reqwest::header::ETAG)
         .and_then(|v| v.to_str().ok())
         .map(str::to_string);
-    let body = resp.text().ok()?;
 
-    // Validate before caching, so a truncated 200 cannot poison the cache for
-    // every future offline start.
-    if serde_json::from_str::<DesktopDefinitions>(&body).is_err() {
+    // Read a bounded amount rather than whatever the response offers: this body
+    // decides how much memory the app allocates, and it comes from the network.
+    let mut raw = Vec::new();
+    let mut limited = resp.take((MAX_DEFINITION_BYTES + 1) as u64);
+    if limited.read_to_end(&mut raw).is_err() {
+        eprintln!("tennoworth: definitions body could not be read; keeping cache");
+        return None;
+    }
+    if raw.len() > MAX_DEFINITION_BYTES {
         eprintln!(
-            "tennoworth: definitions body invalid (len {}); keeping cache",
-            body.len()
+            "tennoworth: definitions body exceeds {MAX_DEFINITION_BYTES} bytes; keeping cache"
         );
         return None;
     }
-
-    let _ = write_atomic(&cache_path(dir), body.as_bytes());
-    match &new_etag {
-        Some(tag) => {
-            let _ = write_atomic(&etag_path(dir), tag.as_bytes());
+    let body = match String::from_utf8(raw) {
+        Ok(b) => b,
+        Err(_) => {
+            eprintln!("tennoworth: definitions body is not UTF-8; keeping cache");
+            return None;
         }
-        // No ETag means the next start does a full GET - correct, not an error.
-        None => {
-            let _ = std::fs::remove_file(etag_path(dir));
+    };
+
+    // Compile before promoting: a body that only partly compiles still installs
+    // for this run, because the fields that do compile are useful and a bad push
+    // must not disable the others. It must not become the cached known-good
+    // file, though - the cache is what every future offline start re-installs,
+    // so it holds only a definition that compiled without a single rejection.
+    let usable = match serde_json::from_str::<DesktopDefinitions>(&body) {
+        Ok(d) => {
+            let (_, rejections) = patterns_from_definitions(&d.scan);
+            if rejections.is_empty() {
+                true
+            } else {
+                eprintln!(
+                    "tennoworth: definitions body has {} unusable entry/entries; \
+                     using it for this run only",
+                    rejections.len()
+                );
+                false
+            }
+        }
+        Err(_) => {
+            eprintln!(
+                "tennoworth: definitions body invalid (len {}); keeping cache",
+                body.len()
+            );
+            return None;
+        }
+    };
+
+    if usable {
+        let _ = write_atomic(&cache_path(dir), body.as_bytes());
+        match &new_etag {
+            Some(tag) => {
+                let _ = write_atomic(&etag_path(dir), tag.as_bytes());
+            }
+            // No ETag means the next start does a full GET - correct, not an error.
+            None => {
+                let _ = std::fs::remove_file(etag_path(dir));
+            }
         }
     }
     Some(body)
+}
+
+/// Drop the cached definitions and its validator, so the next start falls back
+/// to the compiled-in patterns. This is the recovery path for a cache that turns
+/// out to be unusable.
+fn reset_cache(dir: &Path) {
+    let _ = std::fs::remove_file(cache_path(dir));
+    let _ = std::fs::remove_file(etag_path(dir));
 }
 
 #[cfg(test)]
@@ -309,6 +374,54 @@ mod tests {
         let out = refresh_and_install_with(&dir, &url);
         assert_eq!(out, DefinitionsOutcome::default());
         assert!(!cache_path(&dir).exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_body_that_only_partly_compiles_is_not_promoted_to_the_cache() {
+        let dir = temp_dir();
+        // JSON-valid, so the shape check passes - but the cred pattern cannot
+        // compile. Installing it for this run is correct (the other fields
+        // still work); persisting it is not, because the cache is the
+        // known-good fallback that every future offline start re-installs.
+        let url = serve_once(r#"{"version":1,"cred_pattern":"([unclosed"}"#, "200 OK", None);
+        let out = refresh_and_install_with(&dir, &url);
+        assert!(out.installed, "this run still gets the usable fields: {out:?}");
+        assert_eq!(out.rejected.len(), 1, "{out:?}");
+        assert!(
+            !cache_path(&dir).exists(),
+            "a partly-unusable body must not become the cached known-good file"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_oversized_body_is_refused() {
+        let dir = temp_dir();
+        let huge = format!(
+            r#"{{"version":1,"cred_pattern":"{}"}}"#,
+            "a".repeat(128 * 1024)
+        );
+        let url = serve_once(Box::leak(huge.into_boxed_str()), "200 OK", None);
+        let out = refresh_and_install_with(&dir, &url);
+        assert!(!out.installed, "an oversized body must be refused: {out:?}");
+        assert!(!out.fetched, "{out:?}");
+        assert!(!cache_path(&dir).exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_cached_definition_that_is_unusable_is_dropped() {
+        // The recovery path: a cache that turns out to be unusable must not keep
+        // re-installing itself on every offline start.
+        let dir = temp_dir();
+        std::fs::write(cache_path(&dir), r#"{"cred_pattern":"([unclosed"}"#).unwrap();
+        let out = refresh_and_install_with(&dir, "http://127.0.0.1:1/definitions.json");
+        assert!(!out.rejected.is_empty(), "{out:?}");
+        assert!(
+            !cache_path(&dir).exists(),
+            "an unusable cached definition must be dropped so the built-ins take over"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
