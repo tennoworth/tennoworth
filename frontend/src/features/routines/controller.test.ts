@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { StateStore, SettingKey } from '../../contracts/state-store';
-import { parseRoutineState, routinePeriodId, RoutineController } from './controller.svelte';
+import { MAX_GOALS, MAX_GOAL_LENGTH, parseRoutineState, routinePeriodId, RoutineController } from './controller.svelte';
 
 function memoryStore(initial: string | null = null, write = async () => {}): StateStore & { values: Map<string, string>; writes: string[] } {
   const values = new Map<string, string>();
@@ -17,6 +17,12 @@ function memoryStore(initial: string | null = null, write = async () => {}): Sta
   };
 }
 
+const NOW = Date.parse('2026-09-14T12:00:00Z');
+
+function numberedGoals(count: number) {
+  return Array.from({ length: count }, (_, index) => ({ id: `goal-${index + 1}`, text: `goal ${index + 1}` }));
+}
+
 describe('RoutineController', () => {
   it('uses UTC calendar periods across day, Monday-week, month, and year boundaries', () => {
     const sunday = Date.parse('2026-12-27T23:59:59Z');
@@ -29,61 +35,161 @@ describe('RoutineController', () => {
   });
 
   it('repairs corrupt input without crashing', () => {
-    const now = Date.parse('2026-09-14T12:00:00Z');
-    const parsed = parseRoutineState('{bad json', now);
+    const parsed = parseRoutineState('{bad json', NOW);
     expect(parsed.repaired).toBe(true);
     expect(parsed.state.periods.daily).toEqual({ id: '2026-09-14', completed: [] });
-    expect(parsed.state.monthlyGoal).toBe('');
+    expect(parsed.state.monthlyGoals).toEqual([]);
   });
 
-  it('drops malformed buckets, duplicate completions, and unknown task IDs', () => {
-    const now = Date.parse('2026-09-14T12:00:00Z');
+  it('rejects the retired single-goal shape', () => {
     const parsed = parseRoutineState(JSON.stringify({
       version: 1,
+      periods: { daily: { id: '2026-09-14', completed: [] }, weekly: { id: '2026-09-14', completed: [] }, monthly: { id: '2026-09', completed: ['personal-goal'] } },
+      monthlyGoal: 'Testium',
+    }), NOW);
+    expect(parsed.repaired).toBe(true);
+    expect(parsed.state.monthlyGoals).toEqual([]);
+  });
+
+  it('drops malformed goals, duplicate ids, over-length text, and unknown completions', () => {
+    const parsed = parseRoutineState(JSON.stringify({
+      version: 2,
       periods: {
         daily: { id: '2026-09-14', completed: ['sortie', 'sortie', 'removed-task', 42] },
         weekly: { id: '2026-09-14', completed: 'archon-hunt' },
-        monthly: { id: '2026-09', completed: ['personal-goal'] },
+        monthly: { id: '2026-09', completed: ['goal-2', 'ghost', 'goal-2', 'goal-4'] },
       },
-      monthlyGoal: '',
-    }), now);
+      monthlyGoals: [
+        { id: 'goal-2', text: '  List ranked mods  ' },
+        { id: 'goal-2', text: 'duplicate id' },
+        { id: 'goal-3', text: 'x'.repeat(200) },
+        { id: 'goal-4' },
+        'nope',
+        { id: 'goal-5', text: '   ' },
+        { id: 'goal-1', text: 'kept first' },
+      ],
+      nextGoalId: 2,
+    }), NOW);
     expect(parsed.repaired).toBe(true);
+    expect(parsed.state.monthlyGoals).toEqual([
+      { id: 'goal-2', text: 'List ranked mods' },
+      { id: 'goal-3', text: 'x'.repeat(MAX_GOAL_LENGTH) },
+      { id: 'goal-1', text: 'kept first' },
+    ]);
     expect(parsed.state.periods.daily.completed).toEqual(['sortie']);
     expect(parsed.state.periods.weekly.completed).toEqual([]);
-    expect(parsed.state.periods.monthly.completed).toEqual([]);
+    expect(parsed.state.periods.monthly.completed).toEqual(['goal-2']);
+    expect(parsed.state.nextGoalId).toBe(6);
   });
 
-  it('starts a new Monday checklist without clearing the current monthly goal', async () => {
-    const store = memoryStore();
-    const routine = new RoutineController(store, Date.parse('2026-09-20T23:59:00Z'));
-    routine.select('weekly');
-    await routine.toggle('archon-hunt', true);
+  it('caps restored goals and hands out ids that cannot collide with them', async () => {
+    const parsed = parseRoutineState(JSON.stringify({
+      version: 2,
+      periods: {},
+      monthlyGoals: numberedGoals(MAX_GOALS + 4),
+      nextGoalId: 1,
+    }), NOW);
+    expect(parsed.state.monthlyGoals).toHaveLength(MAX_GOALS);
+    expect(parsed.state.nextGoalId).toBe(MAX_GOALS + 5);
+
+    const routine = new RoutineController(memoryStore(JSON.stringify(parsed.state)), NOW);
     routine.select('monthly');
-    await routine.setMonthlyGoal('Prepare Prime sets');
-    routine.refresh(Date.parse('2026-09-21T00:01:00Z'));
-    await vi.waitFor(() => expect(routine.saving).toBe(false));
-    expect(routine.state.periods.weekly.completed).toEqual([]);
-    expect(routine.state.monthlyGoal).toBe('Prepare Prime sets');
+    await routine.addMonthlyGoal('refused at the restored cap');
+    expect(routine.state.monthlyGoals).toHaveLength(MAX_GOALS);
   });
 
-  it('resets only the elapsed cadence and preserves monthly text', async () => {
-    const before = Date.parse('2026-09-30T23:59:00Z');
+  it('adds goals with independent ids and ticks', async () => {
     const store = memoryStore();
-    const routine = new RoutineController(store, before);
+    const routine = new RoutineController(store, NOW);
+    routine.select('monthly');
+    await routine.addMonthlyGoal('List three ranked mods');
+    await routine.addMonthlyGoal('Prepare Prime sets');
+
+    const [first, second] = routine.state.monthlyGoals;
+    expect(routine.tasks.map(task => task.title)).toEqual(['List three ranked mods', 'Prepare Prime sets']);
+    expect(routine.monthlyGoalDraft).toBe('');
+
+    await routine.toggle(first.id, true);
+    expect(routine.completed).toEqual(new Set([first.id]));
+    expect(JSON.parse(store.values.get('routine-checklist')!).monthlyGoals).toHaveLength(2);
+    expect(second.id).not.toBe(first.id);
+  });
+
+  it('refuses an empty add, truncates long text, and stops at the goal cap', async () => {
+    const routine = new RoutineController(memoryStore(), NOW);
+    routine.select('monthly');
+    await routine.addMonthlyGoal('   ');
+    expect(routine.state.monthlyGoals).toEqual([]);
+
+    await routine.addMonthlyGoal('y'.repeat(200));
+    expect(routine.state.monthlyGoals[0].text).toHaveLength(MAX_GOAL_LENGTH);
+
+    for (let index = routine.state.monthlyGoals.length; index < MAX_GOALS; index++) await routine.addMonthlyGoal(`goal ${index}`);
+    expect(routine.state.monthlyGoals).toHaveLength(MAX_GOALS);
+    expect(routine.goalLimitReached).toBe(true);
+
+    await routine.addMonthlyGoal('one too many');
+    expect(routine.state.monthlyGoals).toHaveLength(MAX_GOALS);
+    expect(routine.state.monthlyGoals.at(-1)!.text).not.toBe('one too many');
+  });
+
+  it('keeps a renamed goal tick when the text is unchanged and clears only it when it changes', async () => {
+    const routine = new RoutineController(memoryStore(), NOW);
+    routine.select('monthly');
+    await routine.addMonthlyGoal('List ranked mods');
+    await routine.addMonthlyGoal('Prepare Prime sets');
+    const [first, second] = routine.state.monthlyGoals;
+    await routine.toggle(first.id, true);
+    await routine.toggle(second.id, true);
+
+    await routine.renameMonthlyGoal(first.id, `  ${first.text}  `);
+    expect(routine.completed).toEqual(new Set([first.id, second.id]));
+
+    await routine.renameMonthlyGoal(first.id, 'List four ranked mods');
+    expect(routine.tasks[0].title).toBe('List four ranked mods');
+    expect(routine.completed).toEqual(new Set([second.id]));
+  });
+
+  it('removes only the chosen goal and its tick, and empties cleanly', async () => {
+    const routine = new RoutineController(memoryStore(), NOW);
+    routine.select('monthly');
+    await routine.addMonthlyGoal('List ranked mods');
+    await routine.addMonthlyGoal('Prepare Prime sets');
+    const [first, second] = routine.state.monthlyGoals;
+    await routine.toggle(first.id, true);
+    await routine.toggle(second.id, true);
+
+    await routine.removeMonthlyGoal(first.id);
+    expect(routine.state.monthlyGoals).toEqual([second]);
+    expect(routine.completed).toEqual(new Set([second.id]));
+
+    await routine.removeMonthlyGoal(second.id);
+    expect(routine.state.monthlyGoals).toEqual([]);
+    expect(routine.tasks).toEqual([]);
+    expect(routine.goalLimitReached).toBe(false);
+  });
+
+  it('rolls the week and the month without losing the goals or their order', async () => {
+    const routine = new RoutineController(memoryStore(), Date.parse('2026-09-20T23:59:00Z'));
     await routine.toggle('login-tribute', true);
     routine.select('weekly');
     await routine.toggle('archon-hunt', true);
     routine.select('monthly');
-    await routine.setMonthlyGoal('List three ranked mods');
-    await routine.toggle('personal-goal', true);
+    await routine.addMonthlyGoal('Prepare Prime sets');
+    await routine.addMonthlyGoal('List ranked mods');
+    await routine.toggle(routine.state.monthlyGoals[1].id, true);
+
+    routine.refresh(Date.parse('2026-09-21T00:01:00Z'));
+    await vi.waitFor(() => expect(routine.saving).toBe(false));
+    expect(routine.state.periods.daily.completed).toEqual([]);
+    expect(routine.state.periods.weekly.completed).toEqual([]);
+    expect(routine.state.monthlyGoals.map(goal => goal.text)).toEqual(['Prepare Prime sets', 'List ranked mods']);
+    expect(routine.completed.size).toBe(1);
 
     routine.refresh(Date.parse('2026-10-01T00:01:00Z'));
     await vi.waitFor(() => expect(routine.saving).toBe(false));
-
-    expect(routine.state.periods.daily.completed).toEqual([]);
-    expect(routine.state.periods.weekly.completed).toEqual(['archon-hunt']);
     expect(routine.state.periods.monthly.completed).toEqual([]);
-    expect(routine.state.monthlyGoal).toBe('List three ranked mods');
+    expect(routine.state.monthlyGoals.map(goal => goal.text)).toEqual(['Prepare Prime sets', 'List ranked mods']);
   });
 
   it('reports a failed write and retries the latest rapid change serially', async () => {
@@ -94,7 +200,7 @@ describe('RoutineController', () => {
       if (attempts === 1) await new Promise<void>(resolve => { releaseFirst = resolve; });
       if (attempts <= 2) throw new Error('disk unavailable');
     });
-    const routine = new RoutineController(store, Date.parse('2026-09-14T12:00:00Z'));
+    const routine = new RoutineController(store, NOW);
     const first = routine.toggle('login-tribute', true);
     const second = routine.toggle('sortie', true);
     releaseFirst();
@@ -109,20 +215,10 @@ describe('RoutineController', () => {
     expect(store.writes).toHaveLength(3);
   });
 
-  it('does not carry completion from one monthly goal to its replacement', async () => {
-    const routine = new RoutineController(memoryStore(), Date.parse('2026-09-14T12:00:00Z'));
-    routine.select('monthly');
-    await routine.setMonthlyGoal('List ranked mods');
-    await routine.toggle('personal-goal', true);
-    await routine.setMonthlyGoal('Prepare Prime sets');
-    expect(routine.completed.size).toBe(0);
-    expect(routine.tasks[0].title).toBe('Prepare Prime sets');
-  });
-
   it('detects a browser adapter write that resolves without retaining data', async () => {
     const store = memoryStore();
     store.setSetting = async (_key, value) => { store.writes.push(value); };
-    const routine = new RoutineController(store, Date.parse('2026-09-14T12:00:00Z'));
+    const routine = new RoutineController(store, NOW);
     await routine.toggle('sortie', true);
     expect(routine.saveError).toMatch(/Retry before closing/);
   });

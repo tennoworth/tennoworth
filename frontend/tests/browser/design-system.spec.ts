@@ -187,7 +187,7 @@ test('narrow order filters stay reachable and routines remain an actionable chec
       await expect(checklist.getByText('1 of 5 complete')).toBeVisible();
       await page.getByRole('button', { name: 'Monthly' }).click();
       await expect(page.getByText(/not a Warframe reset schedule/)).toBeVisible();
-      const goal = page.getByLabel('Personal monthly goal');
+      const goal = page.getByLabel('Add a monthly goal');
       await goal.fill('Prepare an intentionally unfinished monthly goal draft');
       await page.locator('.sidebar').getByRole('button', { name: /^Sell/ }).click();
       await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
@@ -199,7 +199,7 @@ test('narrow order filters stay reachable and routines remain an actionable chec
   }
 });
 
-test('a saved monthly goal can be removed from an explicit control', async ({ page }) => {
+test('monthly goals add, rename and remove individually', async ({ page }) => {
   await page.goto('/?preview-desktop&sample');
   for (const theme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: theme });
@@ -207,24 +207,39 @@ test('a saved monthly goal can be removed from an explicit control', async ({ pa
     await page.reload();
     await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
     await page.getByRole('button', { name: 'Monthly' }).click();
-    await expect(page.getByRole('button', { name: 'Remove goal' })).toHaveCount(0);
+    await expect(page.getByText(/Add a monthly goal to build/)).toBeVisible();
 
-    const goal = page.getByLabel('Personal monthly goal');
-    await goal.fill('Finish the Star Chart');
+    const add = page.getByLabel('Add a monthly goal');
+    for (const text of ['List ranked mods', 'Prepare Prime sets']) {
+      await add.fill(text);
+      await page.getByRole('button', { name: 'Add goal' }).click();
+    }
+    await expect(page.getByRole('checkbox', { name: /List ranked mods/ })).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: /Prepare Prime sets/ })).toBeVisible();
+    await expect(add).toHaveValue('');
+
+    await page.getByRole('checkbox', { name: /List ranked mods/ }).check();
+    await expect(page.getByText('1 of 2 complete')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Edit List ranked mods' }).click();
+    const editor = page.getByLabel('Goal text');
+    await expect(editor).toHaveValue('List ranked mods');
+    expect((await editor.boundingBox())!.width).toBeGreaterThan(200);
+    await editor.fill('List four ranked mods');
     await page.getByRole('button', { name: 'Save goal' }).click();
-    const remove = page.getByRole('button', { name: 'Remove goal' });
-    await expect(remove).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: /List four ranked mods/ })).toBeVisible();
+    await expect(page.getByText('0 of 2 complete')).toBeVisible();
 
-    await remove.click();
-    await expect(page.getByText(/Add a personal goal/)).toBeVisible();
-    await expect(remove).toHaveCount(0);
-    await expect(goal).toHaveValue('');
+    await page.getByRole('button', { name: 'Remove Prepare Prime sets' }).click();
+    await expect(page.getByRole('checkbox', { name: /Prepare Prime sets/ })).toHaveCount(0);
+    await expect(page.getByRole('checkbox', { name: /List four ranked mods/ })).toBeVisible();
   }
 
   await page.reload();
   await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
   await page.getByRole('button', { name: 'Monthly' }).click();
-  await expect(page.getByText(/Add a personal goal/)).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: /List four ranked mods/ })).toBeVisible();
+  await expect(page.getByRole('checkbox', { name: /Prepare Prime sets/ })).toHaveCount(0);
 });
 
 test('the monthly goal field keeps a control height at narrow widths', async ({ page }) => {
@@ -232,7 +247,7 @@ test('the monthly goal field keeps a control height at narrow widths', async ({ 
   await page.goto('/?preview-desktop&sample');
   await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
   await page.getByRole('button', { name: 'Monthly' }).click();
-  const field = page.getByLabel('Personal monthly goal');
+  const field = page.getByLabel('Add a monthly goal');
   await expect(field).toBeVisible();
   const box = await field.boundingBox();
   expect(box!.height).toBeLessThanOrEqual(48);
