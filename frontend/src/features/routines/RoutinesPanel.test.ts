@@ -40,4 +40,22 @@ describe('RoutinesPanel', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Save goal' }));
     expect(await screen.findByRole('checkbox', { name: /Prepare three ranked mods/ })).toBeTruthy();
   });
+
+  it('removes a saved monthly goal from an explicit control', async () => {
+    const state = store();
+    const now = Date.parse('2026-09-14T12:00:00Z');
+    render(RoutinesPanel, { props: { routine: new RoutineController(state, now), market: null, owned: new Map(), now } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Monthly' }));
+    expect(screen.queryByRole('button', { name: 'Remove goal' })).toBeNull();
+
+    const goal = screen.getByLabelText('Personal monthly goal');
+    await fireEvent.input(goal, { target: { value: 'Prepare three ranked mods' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save goal' }));
+    await screen.findByRole('checkbox', { name: /Prepare three ranked mods/ });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Remove goal' }));
+    await waitFor(() => expect(screen.getByText(/Add a personal goal/)).toBeTruthy());
+    expect(screen.queryByRole('button', { name: 'Remove goal' })).toBeNull();
+    expect(JSON.parse(state.getSetting('routine-checklist')!).monthlyGoal).toBe('');
+  });
 });

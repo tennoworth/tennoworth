@@ -80,6 +80,9 @@
         <div class="goal-entry">
           <input id="monthly-routine-goal" class="ui-input" maxlength="120" bind:value={routine.monthlyGoalDraft} placeholder="e.g. Prepare and list three ranked mods" />
           <button class="btn ghost" type="button" disabled={routine.monthlyGoalDraft.trim() === routine.state.monthlyGoal || routine.saving} onclick={() => void routine.setMonthlyGoal(routine.monthlyGoalDraft)}>Save goal</button>
+          {#if routine.state.monthlyGoal}
+            <button class="btn ghost" type="button" disabled={routine.saving} onclick={() => void routine.setMonthlyGoal('')}>Remove goal</button>
+          {/if}
         </div>
         <span>Choose one selling or progression focus. It stays editable and carries forward until you change it.</span>
       </div>
@@ -177,6 +180,8 @@
   .advice-body p { margin: 0; }
   @media (max-width: 47.5rem) {
     .goal-entry, .save-error { align-items: stretch; flex-direction: column; }
+    /* The 20rem flex basis sizes a row; stacked it would become a 320px-tall field. */
+    .goal-entry input { flex: 0 0 auto; }
     .goal-entry .btn, .save-error .btn { align-self: flex-start; }
     .routine-clocks { grid-template-columns: 1fr; }
     .clock { border-right: 0; border-bottom: 1px var(--rule) var(--border); }
