@@ -20,9 +20,14 @@
 //! The arity check is the one step that does NOT buy that on its own: it counts
 //! capture groups, so a pattern whose required groups can be absent from a match
 //! (a top-level alternation or an optional group) passes it. The match loop
-//! handles that by reading the required groups as Options, so the worst a bad
-//! push can do is match nothing and produce a clear scan error - never abort the
-//! app, which is what indexing an absent group used to do.
+//! handles that by reading the required groups as Options, so it can no longer
+//! abort the app, which is what indexing an absent group used to do.
+//!
+//! Cost is a separate matter the arity check does not bound at all. Iterating
+//! matches is `O(m * n^2)` in the worst case even without backtracking, and a
+//! captured value is arbitrarily long, so a definition can spend unbounded CPU
+//! and memory without ever matching a credential. Only a scan-side budget
+//! contains that; "matches nothing" is not the worst a bad push can do.
 
 use std::path::{Path, PathBuf};
 

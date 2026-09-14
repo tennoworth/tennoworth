@@ -136,9 +136,12 @@ pub struct PatternRejection {
 /// match loop therefore reads the required groups as Options and skips matches
 /// that cannot yield a value, so no accepted pattern can abort a scan.
 ///
-/// ReDoS is not among the risks - the `regex` crate has no backtracking and is
-/// linear in input size - but the length cap still bounds what we agree to
-/// compile.
+/// The length cap bounds what we agree to compile; it does not bound the work a
+/// scan can do. A single search is linear, but `captures_iter` is documented as
+/// `O(m * n^2)` in the worst case because each search may rescan the haystack -
+/// the crate's own example is `.*[^A-Z]|[A-Z]` over a long run of uppercase.
+/// Both the pattern and the haystack are untrusted here, so a definition can be
+/// quadratic by construction; the scan's own work budget is what contains that.
 pub fn patterns_from_definitions(defs: &ScanDefinitions) -> (ScanPatterns, Vec<PatternRejection>) {
     let mut rejections = Vec::new();
     let default = ScanPatterns::default();
