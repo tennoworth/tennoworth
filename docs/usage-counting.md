@@ -81,6 +81,32 @@ production counter. Confirm retained logs contain no bodies, tokens or IPs and
 website GETs do not count. Release desktop opt-in after this verification.
 Existing users remain opted out through upgrades.
 
+## Request quota
+
+Two public routes exist - `POST /api/usage/check-in` and `GET /api/usage/daily` -
+and they share one window of **20 requests per wall-clock second**, fixed in
+`REQUESTS_PER_WINDOW` (`rust/tennoworth-usage/src/lib.rs`). It is one counter for
+the whole service, not one per source: no client identifier is read or stored, so
+there is nothing to key it by, and that is deliberate (see "Data flow and
+consent"). The consequence worth knowing is that one sender can consume the window
+for everyone. The ceiling bounds work; it is not a fairness mechanism and does not
+protect count integrity.
+
+It is a fixed one-second counter rather than a token bucket, so up to twice the
+quota can pass across a window boundary, and it is not configurable at runtime.
+
+Requests are charged **before** the body is parsed or the token is validated, so a
+malformed or oversized request still consumes quota. That is the intended trade:
+the counter exists to bound work before any parsing or database work happens, and
+validating first would let a caller buy that work for free. The cost is that a
+malformed request is indistinguishable from a valid one at the quota boundary,
+which is acceptable - both are requests.
+
+`/health` is deliberately outside the quota. It is loopback-only, and it is what
+the monitor and the puller's post-restart check read; if it shared the public
+window, someone else's flood would be reported as an outage and could roll back a
+working binary.
+
 ## Backup, recovery, rollback and monitoring
 
 Export aggregates only, as the service account. Stage output and rename only on
