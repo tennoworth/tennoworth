@@ -160,7 +160,7 @@ test('page background keeps fine repeating tiles on tall WebKit surfaces', async
   } finally { await page.close(); }
 });
 
-test('narrow order filters stay reachable and routine rails fill their panel', async ({ page }) => {
+test('narrow order filters stay reachable and routines remain an actionable checklist', async ({ page }) => {
   await page.goto('/?preview-desktop&sample');
   for (const theme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: theme });
@@ -178,15 +178,51 @@ test('narrow order filters stay reachable and routine rails fill their panel', a
         expect(button.clipped).toBe(false);
       }
       await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
-      const summary = page.locator('.routine-checklist > summary');
-      for (let state = 0; state < 2; state++) {
-        const bounds = await summary.evaluate(element => ({
-          width: element.getBoundingClientRect().width,
-          panelWidth: element.parentElement!.getBoundingClientRect().width,
-        }));
-        expect(bounds.width).toBeCloseTo(bounds.panelWidth - 2, 0);
-        await summary.click();
-      }
+      const checklist = page.locator('.routine-checklist');
+      const tribute = checklist.getByRole('checkbox', { name: /Claim the Daily Tribute/ });
+      await expect(tribute).toBeVisible();
+      if (await tribute.isChecked()) await tribute.uncheck();
+      await expect(checklist.getByText('0 of 5 complete')).toBeVisible();
+      await tribute.check();
+      await expect(checklist.getByText('1 of 5 complete')).toBeVisible();
+      await page.getByRole('button', { name: 'Monthly' }).click();
+      await expect(page.getByText(/not a Warframe reset schedule/)).toBeVisible();
+      const goal = page.getByLabel('Personal monthly goal');
+      await goal.fill('Prepare an intentionally unfinished monthly goal draft');
+      await page.locator('.sidebar').getByRole('button', { name: /^Sell/ }).click();
+      await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
+      await page.getByRole('button', { name: 'Monthly' }).click();
+      await expect(goal).toHaveValue('Prepare an intentionally unfinished monthly goal draft');
+      await page.getByRole('button', { name: 'Daily' }).click();
+      await expect(tribute).toBeChecked();
     }
   }
+});
+
+test('routine progress survives reload and failed persistence stays retryable', async ({ page }) => {
+  await page.goto('/?preview-desktop&sample');
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
+  const tribute = page.getByRole('checkbox', { name: /Claim the Daily Tribute/ });
+  await tribute.check();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem('routine-checklist'))).toContain('login-tribute');
+  await page.reload();
+  await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
+  await expect(tribute).toBeChecked();
+
+  await page.evaluate(() => {
+    (window as unknown as { originalStorageSetItem: typeof Storage.prototype.setItem }).originalStorageSetItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = () => { throw new DOMException('Storage disabled'); };
+  });
+  await tribute.uncheck();
+  await expect(page.getByRole('alert')).toContainText('Progress is only saved in this open view');
+  await page.evaluate(() => {
+    Storage.prototype.setItem = (window as unknown as { originalStorageSetItem: typeof Storage.prototype.setItem }).originalStorageSetItem;
+  });
+  await page.getByRole('button', { name: 'Retry saving' }).click();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await page.reload();
+  await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
+  await expect(tribute).not.toBeChecked();
 });

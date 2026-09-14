@@ -8,6 +8,7 @@ import type { StateStore, SettingKey } from '../contracts/state-store';
 //   - the scalar settings (reserve-copies, filters-open, view,
 //     score-explainer-dismissed, keep-copies-nudge-dismissed,
 //     tray-toast-seen, sell-onboarding-dismissed, auto-close-sold,
+//     routine-checklist,
 //     theme.mode), each a short string;
 //   - the last-owned inventory snapshot (the reload-restore copy).
 //
@@ -43,6 +44,7 @@ export const LOCAL_SETTING_KEYS: Record<SettingKey, string> = {
   'tray-toast-seen': 'wfminv:tray-toast-seen-v1',
   'sell-onboarding-dismissed': 'wfminv:sell-onboarding-dismissed-v1',
   'auto-close-sold': 'wfminv:auto-close-sold-v1',
+  'routine-checklist': 'wfminv:routine-checklist-v1',
   'theme.mode': 'wfminv:theme-mode-v1',
 };
 

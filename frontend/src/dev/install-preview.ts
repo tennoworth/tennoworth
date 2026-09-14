@@ -52,6 +52,11 @@ export async function installPreview() {
     if (cmd === 'update_notes_can_present') return Promise.resolve(true);
     if (cmd === 'acknowledge_update_notes') { notes.auto_show = false; return Promise.resolve(null); }
     if (cmd === 'evaluate_domain') return Promise.resolve().then(() => evaluateDomainPreview(args?.request as DomainRequest));
+    if (args?.key === 'routine-checklist') {
+      if (cmd === 'get_setting') return Promise.resolve(localStorage.getItem('routine-checklist'));
+      if (cmd === 'set_setting') { localStorage.setItem('routine-checklist', String(args.value)); return Promise.resolve(null); }
+      if (cmd === 'delete_setting') { localStorage.removeItem('routine-checklist'); return Promise.resolve(null); }
+    }
     if (preview && ['protection_state', 'save_protection_plan', 'get_setting', 'set_setting', 'delete_setting', 'fetch_orders', 'list_watches', 'list_trades', 'eelog_status', 'riven_comps', 'wfm_auth_status', 'wfm_logout', 'live_top_prices', 'trade_session_state', 'submit_plan', 'list_notifications', 'mark_notifications_read', 'clear_notifications', 'get_notification_preferences', 'set_notification_preferences', 'test_notification'].includes(cmd)) return preview(cmd, args);
     if (cmd === 'save_protection_plan') { protectionPlan = JSON.parse(JSON.stringify(args?.plan)) as ProtectionPlan; return Promise.resolve(null); }
     if (cmd === 'protection_state') {

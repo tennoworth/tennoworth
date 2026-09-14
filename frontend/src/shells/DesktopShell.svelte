@@ -32,6 +32,8 @@ import { NOTIFICATIONS_EVENT, MARKET_REFRESHED_EVENT, ALLOWANCE_CHANGED_EVENT } 
   import ThemeSwitcher from '../ui/ThemeSwitcher.svelte';
   import UpdateNotes from '../ui/UpdateNotes.svelte';
   import SettingsPanel from '../features/settings/SettingsPanel.svelte';
+  import RoutinesPanel from '../features/routines/RoutinesPanel.svelte';
+  import { RoutineController } from '../features/routines/controller.svelte';
   import { resolveRivens } from '../domain/rivens';
   import type { Verdict } from '../domain/advisor';
   import type { ScoredInventoryFact } from '../contracts/generated/domain';
@@ -78,6 +80,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // control in Settings → Appearance (and its footer twin) drives.
   let { store, theme }: { store: StateStore; theme: ThemeController } = $props();
   const filters = untrack(() => new FilterController(store));
+  const routines = untrack(() => new RoutineController(store));
   const inventory = untrack(() => new InventoryController(store, transport, { loadMarket, loadCatalogs, normalizeInventory: normalizeInventoryNative }));
   const protection = new ProtectionController({ desktopProtectionState, desktopSaveProtectionPlan });
   const listing = new ListingController({ getPendingPlan: () => transport.getPendingPlan(), resumePendingPlan: () => transport.resumePendingPlan(), discardPendingPlan: () => transport.discardPendingPlan(), status: desktopWfmStatus, logout: desktopWfmLogout }, (code, next) => wfmAuthDialogsRef?.open(code, next));
@@ -472,30 +475,10 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     return { phase: 'unknown', label: 'Next Baro visit', windowMs: null };
   });
 
-  // Daily/weekly profit-routine clocks. Warframe resets daily at 00:00 UTC
-  // and weekly Monday 00:00 UTC; we show only countdowns + static reminders,
-  // never completion state (acts done / Endo banked are account state the
-  // inventory+market snapshot can't carry). Date.now() isn't reactive, so
-  // these recompute on load / view change - the same non-ticking model as the
-  // Baro card, which is fine for a "next reset in ~Xh" reminder.
-  let routinesState = $derived.by(() => {
-    const now = Date.now();
-    const d = new Date(now);
-    const nextDaily = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + 1);
-    const daysToMon = ((8 - d.getUTCDay()) % 7) || 7; // 0=Sun..6=Sat → next Mon
-    const nextWeekly = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + daysToMon);
-    return { dailyMs: nextDaily - now, weeklyMs: nextWeekly - now };
-  });
-
   let relicPlan = $derived(relicResult.value);
   const RELIC_PREVIEW = 6;
   let relicShowAll = $state(false);
   let relicVisible = $derived(relicShowAll ? relicPlan : relicPlan.slice(0, RELIC_PREVIEW));
-
-  // Routine checklist is collapsed by default - the clocks carry the daily
-  // urgency, the three routine cards are a long-read. Not persisted
-  // (collapsed-by-default is the intent).
-  let routineChecklistOpen = $state(false);
 
   // Available tags = every tag that appears on a row surviving the OTHER
   // filters (price/owned/type/kept), with its live count. Empty chips
@@ -1262,77 +1245,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       </section>
 
     {:else if effectiveView === 'routines'}
-      <section data-shell class="view-header">
-        <h2 data-shell>Profit routines</h2>
-        <p data-shell class="lede">
-          Daily and weekly habits that compound - including the Endo sources that fund the
-          buy-unranked → max → resell flip. Countdowns are live; what you've already claimed
-          isn't tracked (your inventory + the market snapshot can't see account state).
-        </p>
-      </section>
-
-      <section data-shell class="baro-calendar">
-        <TraderCalendar market={inventory.market} owned={inventory.resolved.owned} />
-      </section>
-      <section data-shell class="card ui-panel routine routine-timing">
-        <div data-shell class="routine-clocks">
-          <div data-shell class="clock">
-            <span data-shell class="clock-label">Daily reset</span>
-            <strong data-shell class="clock-val">{humanWindow(routinesState.dailyMs)}</strong>
-            <span data-shell class="clock-sub">00:00 UTC</span>
-          </div>
-          <div data-shell class="clock">
-            <span data-shell class="clock-label">Weekly reset</span>
-            <strong data-shell class="clock-val">{humanWindow(routinesState.weeklyMs)}</strong>
-            <span data-shell class="clock-sub">Mon 00:00 UTC</span>
-          </div>
-          <div data-shell class="clock">
-            <span data-shell class="clock-label">{baroState?.phase === 'here' ? 'Baro leaves' : 'Baro arrives'}</span>
-            <strong data-shell class="clock-val">{voidTrader ? humanWindow(baroState?.windowMs) : '-'}</strong>
-            <span data-shell class="clock-sub">{voidTrader?.location ?? 'schedule unknown'}</span>
-          </div>
-        </div>
-      </section>
-
-      <details data-shell class="routine-checklist wrap tw" bind:open={routineChecklistOpen}>
-        <summary data-shell>{routineChecklistOpen ? 'Hide checklist' : "Show me today's checklist"}</summary>
-
-        <section data-shell class="card ui-panel routine">
-          <h3 data-shell>Daily</h3>
-        <ul data-shell class="routine-list">
-          <li data-shell><strong data-shell>Login tribute</strong> - claim it; the milestone days hand out Endo and the exclusive weapons/Forma that fund everything else.</li>
-          <li data-shell><strong data-shell>Keep the foundry busy</strong> - start a Forma or a sellable BP every day; an idle foundry is lost plat.</li>
-          <li data-shell><strong data-shell>Cap syndicate standing</strong> → buy augment mods / arcanes to flip on WFM - a steady daily plat trickle.</li>
-          <li data-shell><strong data-shell>6 Steel Path incursions</strong> → Steel Essence → Teshin's weekly rotation (Riven slivers, Kuva, Umbra Forma).</li>
-          <li data-shell><strong data-shell>Sortie</strong> - ~4,000 Endo on the Endo reward, plus a Riven chance.</li>
-        </ul>
-      </section>
-
-      <section data-shell class="card ui-panel routine">
-        <h3 data-shell>Weekly <span data-shell class="muted">· resets Monday</span></h3>
-        <ul data-shell class="routine-list">
-          <li data-shell><strong data-shell>Maroo's Ayatan Treasure Hunt</strong> - a free sculpture worth ~1,500–3,450 Endo once filled with stars.</li>
-          <li data-shell><strong data-shell>Archon Hunt</strong> - up to ~8,000 Endo in one clear, plus an Archon Shard.</li>
-          <li data-shell><strong data-shell>Nightwave acts</strong> → Cred for potatoes/Forma. This <em data-shell>saves</em> plat (those items are account-bound) - it doesn't earn it.</li>
-          <li data-shell><strong data-shell>Baro check</strong> on arrival - but buy to <strong data-shell>hold</strong>, not flip: his mods crater ~50% on arrival and recover over weeks (watch the Sell view's “hold” tags).</li>
-        </ul>
-      </section>
-
-      <section data-shell class="card ui-panel routine">
-        <h3 data-shell>Endo - to fund the rank-up flip</h3>
-        <p data-shell class="routine-note">
-          Maxing one Primed mod ≈ <strong data-shell>20,000 Endo + ~1.3M credits</strong> and roughly doubles its
-          value (e.g. Primed Continuity ~69p unranked → ~139p maxed). Best sources:
-        </p>
-        <ul data-shell class="routine-list">
-          <li data-shell><strong data-shell>Arbitrations</strong> - ~5,000–10,000 Endo/hr (the grind option; needs the full star chart cleared).</li>
-          <li data-shell><strong data-shell>Vodyanoi</strong> (Sedna, Steel Path) - the throughput king; a coordinated squad pushes far higher.</li>
-          <li data-shell><strong data-shell>Hieracon (Pluto) excavation</strong> - steady and solo-friendly, with relics as a byproduct.</li>
-          <li data-shell><strong data-shell>Archon (~8k/wk) + Sortie (~4k/day) + Maroo's weekly</strong> - passive lumps from the routines above.</li>
-          <li data-shell class="routine-avoid"><strong data-shell>Skip Eidolons &amp; Profit-Taker for Endo</strong> - they pay ~zero Endo; farm those for arcanes/plat instead.</li>
-        </ul>
-      </section>
-      </details>
+      <RoutinesPanel routine={routines} market={inventory.market} owned={inventory.resolved.owned} now={displayNow} />
 
     {:else if effectiveView === 'meta'}
       <MetaDriftPanel market={inventory.market} />

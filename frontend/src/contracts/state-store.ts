@@ -15,6 +15,8 @@ export type SettingKey =
   /** Desktop: EE.log sold-detection may adjust WFM listings ('on' | 'off'). The
    *  Rust tailer reads the same `setting` row (trades.rs SETTING_AUTO_CLOSE). */
   | 'auto-close-sold'
+  /** Manual Routine checklist state, versioned and validated by the feature. */
+  | 'routine-checklist'
   /** Visual theme: `theme.mode` = 'system' | 'light' | 'dark'. Also read RAW
    *  from localStorage by public/theme-boot.js before first paint (the one
    *  sanctioned raw read) - keep the key name below in step with it.
