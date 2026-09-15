@@ -5,8 +5,16 @@
 //! the row entirely from [`market_math`] heuristics, gate on `--min-volume`,
 //! and write the CSV atomically. The scoring/filtering math lives in
 //! `market-math`; this module only wires it together.
+//!
+//! Items are scanned by a small worker pool sized to the concurrency the signed
+//! policy grants: the governor deliberately allows two requests in flight, and
+//! a serial loop spends the sweep waiting on one response at a time.
 
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::mpsc;
+use std::sync::Mutex;
 
 use serde_json::Value;
 
@@ -337,6 +345,157 @@ pub struct ScrapeSummary {
     pub scanned: usize,
     pub kept: usize,
     pub coercions: u64,
+    pub workers: usize,
+}
+
+/// One item as a worker reports it back. `coercions` is a delta, so the
+/// collector can accumulate the process-wide budget without the workers
+/// contending on a shared counter.
+struct ItemOutcome {
+    index: usize,
+    coercions: u64,
+    row: Option<AnalyzedRow>,
+}
+
+/// How many item workers to run for a policy allowing `concurrency` requests in
+/// flight. The governor, not this loop, paces WFM: one request start per
+/// `spacing_ms`, at most `concurrency` in flight. A serial loop leaves the rest
+/// of that budget idle and pays every response's latency end to end, which is
+/// what made a sweep take nearly twice its floor. Capping at the work available
+/// also keeps a small `--limit` off the thread pool.
+fn worker_count(concurrency: usize, items: usize) -> usize {
+    concurrency.clamp(1, items.max(1))
+}
+
+/// Fetch and analyze one catalog item. The statistics call goes first: its 48h
+/// volume decides the min-volume gate on its own, so an item that would be
+/// dropped anyway never costs the orders call (~30% of the catalog is
+/// zero-volume over 48h). The kept set and every row in it are identical to
+/// fetching both unconditionally.
+fn scan_item(
+    http: &dyn ScrapeHttp,
+    sleeper: &dyn Sleeper,
+    cfg: &ScrapeConfig,
+    item: &CatalogItem,
+    co: &mut Coercions,
+) -> Result<Option<AnalyzedRow>, String> {
+    let stats = fetch_json(http, sleeper, &format!("{API_ROOT}/v1/items/{}/statistics", item.slug)).ok_or_else(|| format!("WFM statistics failed for {}; publication aborted", item.slug))?;
+    let stage = analyze_stats(item, Some(stats), co)?;
+    match stage {
+        Some(stage) if stage.volume_48h >= cfg.min_volume as f64 => {
+            let orders = fetch_json(http, sleeper, &format!("{API_ROOT}/v2/orders/item/{}", item.slug)).ok_or_else(|| format!("WFM orders failed for {}; publication aborted", item.slug))?;
+            analyze_orders(item, &stage, Some(orders), co)
+        }
+        _ => Ok(None),
+    }
+}
+
+/// Scan every item with `workers` threads and return the kept rows in catalog
+/// order, plus the final coercion count.
+///
+/// Work is claimed by index rather than split into slices, so one slow item
+/// delays only itself. The first failure to arrive - a failed fetch, a hard type
+/// error, or the coercion budget - stops the sweep and is the one reported; the
+/// rest are consequences of it. `partial` is written from the collector thread
+/// only, so checkpoints stay a single-writer artifact in catalog order.
+fn sweep_items(
+    http: &dyn ScrapeHttp,
+    sleeper: &dyn Sleeper,
+    cfg: &ScrapeConfig,
+    items: &[CatalogItem],
+    partial: &Path,
+    workers: usize,
+) -> Result<(Vec<AnalyzedRow>, u64), String> {
+    let next = AtomicUsize::new(0);
+    let abort = AtomicBool::new(false);
+    let failure: Mutex<Option<String>> = Mutex::new(None);
+    let (tx, rx) = mpsc::channel::<ItemOutcome>();
+    let context = wfm_client::governor::context();
+
+    // Declared outside the scope: a spawned thread may outlive any local
+    // declared inside the scope closure.
+    let report = |message: String| {
+        let mut slot = failure.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        if slot.is_none() {
+            *slot = Some(message);
+        }
+        abort.store(true, Ordering::Release);
+    };
+
+    let mut by_index: BTreeMap<usize, AnalyzedRow> = BTreeMap::new();
+    let mut completed = 0usize;
+    let mut total = Coercions::new();
+    let mut write_error: Option<String> = None;
+
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            let tx = tx.clone();
+            let report = &report;
+            let next = &next;
+            let abort = &abort;
+            let context = context.clone();
+            scope.spawn(move || {
+                // The context is thread-local; carry the caller's cancellation
+                // and expiry into the workers instead of letting them run with
+                // the default.
+                wfm_client::governor::with_context(context, || {
+                    let mut co = Coercions::new();
+                    let mut reported = 0u64;
+                    while !abort.load(Ordering::Acquire) {
+                        let index = next.fetch_add(1, Ordering::Relaxed);
+                        let Some(item) = items.get(index) else { break };
+                        match scan_item(http, sleeper, cfg, item, &mut co) {
+                            Ok(row) => {
+                                // The budget is process-wide, so report this
+                                // item's share of it and let the collector own
+                                // the running total.
+                                let delta = co.count.saturating_sub(reported);
+                                reported = co.count;
+                                if tx.send(ItemOutcome { index, coercions: delta, row }).is_err() {
+                                    break;
+                                }
+                            }
+                            Err(message) => {
+                                report(message);
+                                break;
+                            }
+                        }
+                    }
+                });
+            });
+        }
+        drop(tx);
+
+        for outcome in rx {
+            total.count += outcome.coercions;
+            if total.exceeds(cfg.max_coercions) {
+                report(format!(
+                    "aborting: {} numeric-string coercions exceed the budget of {} - WFM field types look drifted",
+                    total.count, cfg.max_coercions
+                ));
+                continue;
+            }
+            if let Some(row) = outcome.row {
+                by_index.insert(outcome.index, row);
+            }
+            completed += 1;
+            if cfg.checkpoint_every > 0 && completed.is_multiple_of(cfg.checkpoint_every) {
+                let rows: Vec<AnalyzedRow> = by_index.values().cloned().collect();
+                if let Err(e) = write_csv(&rows, partial) {
+                    write_error = Some(e);
+                    break;
+                }
+            }
+        }
+    });
+
+    if let Some(e) = write_error {
+        return Err(e);
+    }
+    if let Some(message) = failure.into_inner().unwrap_or_else(|poisoned| poisoned.into_inner()) {
+        return Err(message);
+    }
+    Ok((by_index.into_values().collect(), total.count))
 }
 
 /// Run the full scrape. `http` and `sleeper` are injected so fixture mode and
@@ -367,8 +526,11 @@ pub fn run_scrape(
     }
 
     let total = items.len();
-    let mut results: Vec<AnalyzedRow> = Vec::new();
-    let mut co = Coercions::new();
+    let concurrency = wfm_client::governor::process()
+        .status()
+        .restrictions
+        .concurrency;
+    let workers = worker_count(concurrency, total);
 
     // CHECKPOINT SAFETY - a DELIBERATE DIVERGENCE from Python: Python's
     // checkpoints atomic-replace `--out` itself mid-run, so an abort past a
@@ -380,51 +542,21 @@ pub fn run_scrape(
     // masquerade as a finished snapshot.
     let partial = PathBuf::from(format!("{}.partial", cfg.out.display()));
 
-    // Per item the STATS call goes first: its 48h volume decides the
-    // min-volume gate on its own, so an item that would be dropped anyway never
-    // costs the orders call (~30% of the catalog is zero-volume over 48h). The
-    // kept set and every row in it are identical to fetching both
-    // unconditionally.
-    for (idx, item) in items.iter().enumerate() {
-        let stats = fetch_json(http, sleeper, &format!("{API_ROOT}/v1/items/{}/statistics", item.slug)).ok_or_else(|| format!("WFM statistics failed for {}; publication aborted", item.slug))?;
-        let stage = analyze_stats(item, Some(stats), &mut co)?;
-
-        let row = match stage {
-            Some(stage) if stage.volume_48h >= cfg.min_volume as f64 => {
-                        let orders = fetch_json(http, sleeper, &format!("{API_ROOT}/v2/orders/item/{}", item.slug)).ok_or_else(|| format!("WFM orders failed for {}; publication aborted", item.slug))?;
-                analyze_orders(item, &stage, Some(orders), &mut co)?
-            }
-            _ => None,
-        };
-
-        // The permissive-parsing budget, enforced INCREMENTALLY (Python only
-        // checks equivalently at the end). A systemic upstream shape drift (WFM
-        // sending numeric fields as strings) trips the budget within the first
-        // fraction of items; aborting here - before the volume gate, the
-        // checkpoint write, or any further fetch - fails the run loudly and
-        // promptly, leaving `--out` untouched, rather than promoting a
-        // silently-reshaped snapshot.
-        if co.exceeds(cfg.max_coercions) {
-            return Err(format!(
-                "aborting: {} numeric-string coercions exceed the budget of {} - WFM field types look drifted",
-                co.count, cfg.max_coercions
-            ));
-        }
-
-        if let Some(row) = row {
-            results.push(row);
-        }
-
-        if cfg.checkpoint_every > 0 && (idx + 1) % cfg.checkpoint_every == 0 {
-            write_csv(&results, &partial)?;
-        }
-    }
+    // The permissive-parsing budget is checked INCREMENTALLY (Python only
+    // checks equivalently at the end) against the sum of the workers' tallies. A
+    // systemic upstream shape drift (WFM sending numeric fields as strings)
+    // trips the budget within the first fraction of items; stopping here - before
+    // the final write and any further fetch - fails the run loudly and promptly,
+    // leaving `--out` untouched, rather than promoting a silently-reshaped
+    // snapshot. Workers may be one item past the trip point before they see the
+    // abort; nothing they fetch is published.
+    let (rows, coercions) = sweep_items(http, sleeper, cfg, &items, &partial, workers)?;
 
     // A run that kept nothing must not report success: `--out` is never
     // replaced, so a caller that counts the file on disk - run-scrape.sh does,
     // then rebuilds from it - would republish the previous generation under a
     // fresh timestamp. Fail instead, leaving `--out` untouched.
-    if results.is_empty() {
+    if rows.is_empty() {
         return Err(format!(
             "kept 0 of {total} scanned items (min-volume {}); refusing to replace {}",
             cfg.min_volume,
@@ -432,21 +564,22 @@ pub fn run_scrape(
         ));
     }
 
-    // The single, final replacement of `--out` - reached only when every item
-    // was scanned without tripping the coercion budget.
-    write_csv(&results, &cfg.out)?;
+    // The single, final replacement of `--out`.
+    write_csv(&rows, &cfg.out)?;
 
     Ok(ScrapeSummary {
         scanned: total,
-        kept: results.len(),
-        coercions: co.count,
+        kept: rows.len(),
+        coercions,
+        workers,
     })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::http::{FixtureScrapeHttp, NoopSleeper, RecordingSleeper};
+    use crate::http::{FixtureScrapeHttp, HttpOutcome, NoopSleeper, RecordingSleeper};
+    use std::time::Duration;
     use serde_json::json;
     use std::collections::HashMap;
 
@@ -512,6 +645,111 @@ mod tests {
         assert!(text.starts_with(&HEADER.join(",")));
         assert!(text.contains("volt_prime_barrel"));
         assert!(!text.contains("thin_item"));
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn worker_count_saturates_the_policy_without_overrunning_the_work() {
+        // The compiled policy allows two requests in flight; a policy that
+        // tightens concurrency to one must serialise the sweep again.
+        assert_eq!(worker_count(2, 1000), 2);
+        assert_eq!(worker_count(1, 1000), 1);
+        assert_eq!(worker_count(2, 1), 1);
+    }
+
+    /// Holds the first item's statistics response until some other response has
+    /// been served, so the two workers provably complete out of catalog order -
+    /// no reliance on thread-start timing.
+    struct GatedFirst {
+        responses: HashMap<String, Value>,
+        gate_url: String,
+        opened: Mutex<bool>,
+        opened_cv: std::sync::Condvar,
+        completed: Mutex<Vec<String>>,
+    }
+
+    impl ScrapeHttp for GatedFirst {
+        fn get(&self, url: &str) -> HttpOutcome {
+            if url == self.gate_url {
+                let opened = self.opened.lock().unwrap_or_else(|e| e.into_inner());
+                let (guard, _timeout) = self
+                    .opened_cv
+                    .wait_timeout_while(opened, Duration::from_secs(5), |opened| !*opened)
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                drop(guard);
+            } else {
+                *self.opened.lock().unwrap_or_else(|e| e.into_inner()) = true;
+                self.opened_cv.notify_all();
+            }
+            self.completed
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .push(url.to_string());
+            match self.responses.get(url) {
+                Some(body) => HttpOutcome::Ok(body.clone()),
+                None => HttpOutcome::Transport(format!("{url} not in fixture set")),
+            }
+        }
+    }
+
+    #[test]
+    fn sweep_keeps_catalog_order_when_workers_finish_out_of_order() {
+        let n = 6usize;
+        let gate_url = format!("{API_ROOT}/v1/items/item_0000/statistics");
+        let mut responses: HashMap<String, Value> = HashMap::new();
+        let mut items = Vec::new();
+        for i in 0..n {
+            let slug = format!("item_{i:04}");
+            items.push(json!({"slug": slug, "i18n": {"en": {"name": slug}}}));
+            responses.insert(
+                format!("{API_ROOT}/v2/orders/item/{slug}"),
+                json!({"data": [ing("buy", 20), ing("sell", 25)]}),
+            );
+            // Identical bodies, so every row scores the same and the CSV's
+            // stable sort preserves whatever order the sweep produced.
+            responses.insert(
+                format!("{API_ROOT}/v1/items/{slug}/statistics"),
+                stats_days("48hours", json!([{"median": 25, "max_price": 30, "volume": 5, "avg_price": 25.0}])),
+            );
+        }
+        responses.insert(format!("{API_ROOT}/v2/items"), json!({"data": items}));
+        let http = GatedFirst {
+            responses,
+            gate_url: gate_url.clone(),
+            opened: Mutex::new(false),
+            opened_cv: std::sync::Condvar::new(),
+            completed: Mutex::new(Vec::new()),
+        };
+
+        let dir = std::env::temp_dir().join(format!("wfmscrape_order_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let out = dir.join("run.csv");
+        let summary = run_scrape(&http, &NoopSleeper, &cfg(&out)).unwrap();
+        assert_eq!(summary.kept, n);
+        assert_eq!(
+            summary.workers, 2,
+            "the compiled policy allows two requests in flight"
+        );
+
+        let completed = http.completed.lock().unwrap_or_else(|e| e.into_inner()).clone();
+        assert_eq!(completed.len(), n * 2 + 1, "catalog + statistics + orders per item");
+        assert_ne!(
+            completed.first().map(String::as_str),
+            Some(gate_url.as_str()),
+            "a serial sweep would have answered item 0 first"
+        );
+
+        let csv = std::fs::read_to_string(&out).unwrap();
+        let slugs: Vec<String> = csv
+            .lines()
+            .skip(1)
+            .map(|line| line.split(',').next().unwrap_or_default().to_string())
+            .collect();
+        assert_eq!(
+            slugs,
+            (0..n).map(|i| format!("item_{i:04}")).collect::<Vec<String>>(),
+            "the CSV must be in catalog order, not completion order"
+        );
         std::fs::remove_dir_all(&dir).ok();
     }
 
