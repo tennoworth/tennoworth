@@ -47,6 +47,21 @@ fn main() -> std::process::ExitCode {
             return std::process::ExitCode::FAILURE;
         }
     };
+    // One line per invocation, success or failure: the counters are the only
+    // record of what this process asked WFM for, and a failed run is when that
+    // matters most - it will be repeated. Only scrape and build touch WFM.
+    if matches!(command.as_str(), "scrape" | "build") {
+        let published = if command == "scrape" {
+            extract_flag(&args, "--out").unwrap_or_else(|| "wfm_results.csv".into())
+        } else {
+            "frontend/public/market.json".to_string()
+        };
+        eprintln!(
+            "{}",
+            wfm_scrape::http::metrics()
+                .line(wfm_scrape::http::snapshot_age_s(std::path::Path::new(&published)))
+        );
+    }
     match result {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(e) => {
@@ -147,9 +162,6 @@ fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
         summary.coercions,
         cfg.out.display()
     );
-    if summary.kept == 0 {
-        eprintln!("No items matched your criteria. Try lowering --min-volume.");
-    }
     Ok(())
 }
 
