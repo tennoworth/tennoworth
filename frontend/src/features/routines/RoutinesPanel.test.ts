@@ -36,6 +36,18 @@ function goalTitles(): (string | null)[] {
   return [...document.querySelectorAll('.checklist-items .task-copy strong')].map(node => node.textContent);
 }
 
+// jsdom reports a zero-size box, which would make every pointer position the
+// bottom half and hide the top-half branch.
+function stubRowHeight(row: HTMLElement, height: number): void {
+  row.getBoundingClientRect = () => ({ top: 100, height, bottom: 100 + height, left: 0, right: 0, width: 0, x: 0, y: 100, toJSON: () => ({}) }) as DOMRect;
+}
+
+// jsdom has no DragEvent, so testing-library falls back to a plain Event and
+// drops clientY - which the drop geometry depends on.
+function dragAt(type: string, clientY: number): MouseEvent {
+  return new MouseEvent(type, { clientY, bubbles: true, cancelable: true });
+}
+
 describe('RoutinesPanel', () => {
   it('shows selectable daily tasks by default and persists completion', async () => {
     const state = store();
@@ -143,5 +155,51 @@ describe('RoutinesPanel', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Move Second goal up' }));
     await waitFor(() => expect(goalTitles()).toEqual(['Second goal', 'First goal']));
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Move Second goal down' })));
+  });
+
+  it('reorders goals by dragging a handle onto the top half of another row', async () => {
+    await renderMonthly();
+    await addGoals('First goal', 'Second goal', 'Third goal');
+    const rows = [...document.querySelectorAll<HTMLElement>('.checklist-items li')];
+    const handles = [...document.querySelectorAll<HTMLElement>('[data-drag-handle]')];
+    expect(handles).toHaveLength(3);
+    expect(rows[0].draggable).toBe(false);
+    stubRowHeight(rows[0], 100);
+
+    await fireEvent.dragStart(handles[2]);
+    await fireEvent(rows[0], dragAt('dragover', 105));
+    expect(rows[0].classList.contains('drop-before')).toBe(true);
+    await fireEvent(rows[0], dragAt('drop', 105));
+    await waitFor(() => expect(goalTitles()).toEqual(['Third goal', 'First goal', 'Second goal']));
+    expect((screen.getByRole('checkbox', { name: /First goal/ }) as HTMLInputElement).checked).toBe(false);
+    expect(rows[0].classList.contains('drop-before')).toBe(false);
+  });
+
+  it('marks a drop at the end of the list and clears the marking when the drag ends', async () => {
+    await renderMonthly();
+    await addGoals('First goal', 'Second goal');
+    const rows = [...document.querySelectorAll<HTMLElement>('.checklist-items li')];
+    const handles = [...document.querySelectorAll<HTMLElement>('[data-drag-handle]')];
+    stubRowHeight(rows[1], 100);
+
+    await fireEvent.dragStart(handles[0]);
+    await fireEvent(rows[1], dragAt('dragover', 180));
+    const list = document.querySelector('.checklist-items')!;
+    expect(list.classList.contains('drop-end')).toBe(true);
+
+    await fireEvent.dragEnd(handles[0]);
+    expect(list.classList.contains('drop-end')).toBe(false);
+    expect(goalTitles()).toEqual(['First goal', 'Second goal']);
+  });
+
+  it('leaves the order alone when a drag ends outside a row', async () => {
+    await renderMonthly();
+    await addGoals('First goal', 'Second goal');
+    const handles = [...document.querySelectorAll<HTMLElement>('[data-drag-handle]')];
+
+    await fireEvent.dragStart(handles[1]);
+    await fireEvent.dragEnd(handles[1]);
+    expect(goalTitles()).toEqual(['First goal', 'Second goal']);
+    expect(document.querySelector('.checklist-items')!.className).not.toContain('drop-end');
   });
 });

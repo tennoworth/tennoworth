@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import rewardFixture from '../../../tests/fixtures/relic-ocr/result.json' with { type: 'json' };
 
 const views = ['Sell', 'Trade Session', 'Set picks', 'Relics', 'Rivens', 'Baro', 'Routines', 'Meta Drift', 'My orders', 'Price watches', 'Ledger', 'FAQ', 'Settings'];
@@ -275,6 +275,62 @@ test('monthly goals reorder and keep keyboard focus in the list', async ({ page 
   await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
   await page.getByRole('button', { name: 'Monthly' }).click();
   await expect(page.locator('.checklist-items .task-copy strong')).toHaveText(['Third goal', 'Second goal']);
+});
+
+async function openMonthlyGoals(page: Page, goals: string[]) {
+  await page.goto('/?preview-desktop&sample');
+  await page.evaluate(() => localStorage.removeItem('routine-checklist'));
+  await page.reload();
+  await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
+  await page.getByRole('button', { name: 'Monthly' }).click();
+  const add = page.getByLabel('Add a monthly goal');
+  for (const text of goals) {
+    await add.fill(text);
+    await page.getByRole('button', { name: 'Add goal' }).click();
+  }
+}
+
+test('monthly goals expose a drag handle and keep it on the title line', async ({ page }) => {
+  await openMonthlyGoals(page, ['First goal', 'Second goal', 'Third goal']);
+  const handles = page.locator('[data-drag-handle]');
+  const firstRow = page.locator('.checklist-items li').first();
+  await expect(handles).toHaveCount(3);
+  expect(await handles.first().getAttribute('draggable')).toBe('true');
+  expect(await firstRow.getAttribute('draggable')).toBeNull();
+  expect(await page.getByRole('checkbox', { name: /First goal/ }).getAttribute('draggable')).toBeNull();
+
+  // Native dragging cannot be automated in WebKit (microsoft/playwright#31539),
+  // so the wiring is asserted on every engine and the geometry reorder below
+  // runs where the browser can actually be driven.
+  await handles.first().evaluate(element => element.dispatchEvent(new Event('dragstart', { bubbles: true })));
+  await expect(firstRow).toHaveClass(/dragging/);
+  await handles.first().evaluate(element => element.dispatchEvent(new Event('dragend', { bubbles: true })));
+  await expect(firstRow).not.toHaveClass(/dragging/);
+
+  await page.setViewportSize({ width: 360, height: 760 });
+  const handleBox = await handles.first().boundingBox();
+  const titleBox = await page.locator('.checklist-items .task-copy strong').first().boundingBox();
+  expect(handleBox!.y).toBeLessThan(titleBox!.y + titleBox!.height);
+  expect(titleBox!.y).toBeLessThan(handleBox!.y + handleBox!.height);
+});
+
+test('monthly goals can be dragged by their handle to a new position', async ({ page, browserName }) => {
+  test.skip(browserName !== 'chromium', 'Playwright cannot drive native HTML5 drag in WebKit (microsoft/playwright#31539)');
+  await openMonthlyGoals(page, ['First goal', 'Second goal', 'Third goal']);
+  const titles = page.locator('.checklist-items .task-copy strong');
+  const handles = page.locator('[data-drag-handle]');
+  const rows = page.locator('.checklist-items li');
+
+  await handles.nth(2).dragTo(rows.nth(0), { targetPosition: { x: 40, y: 6 } });
+  await expect(titles).toHaveText(['Third goal', 'First goal', 'Second goal']);
+
+  await handles.nth(0).dragTo(rows.nth(2), { targetPosition: { x: 40, y: 60 } });
+  await expect(titles).toHaveText(['First goal', 'Second goal', 'Third goal']);
+
+  await page.reload();
+  await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
+  await page.getByRole('button', { name: 'Monthly' }).click();
+  await expect(titles).toHaveText(['First goal', 'Second goal', 'Third goal']);
 });
 
 test('the monthly goal field keeps a control height at narrow widths', async ({ page }) => {

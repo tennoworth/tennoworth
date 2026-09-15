@@ -233,6 +233,22 @@ export class RoutineController {
     return this.#save();
   }
 
+  // `beforeGoalId` names the row the goal should land in front of; null means
+  // the end of the list. Building the result first makes "already there" a
+  // comparison rather than index arithmetic, so a drop in place writes nothing.
+  reorderMonthlyGoal(id: string, beforeGoalId: string | null): Promise<void> {
+    const goals = this.state.monthlyGoals;
+    const goal = goals.find(entry => entry.id === id);
+    if (!goal || beforeGoalId === id) return Promise.resolve();
+    const next = goals.filter(entry => entry.id !== id);
+    const at = beforeGoalId === null ? next.length : next.findIndex(entry => entry.id === beforeGoalId);
+    if (at === -1) return Promise.resolve();
+    next.splice(at, 0, goal);
+    if (next.every((entry, index) => entry.id === goals[index].id)) return Promise.resolve();
+    this.state.monthlyGoals = next;
+    return this.#save();
+  }
+
   retry(): Promise<void> {
     return this.#save();
   }
