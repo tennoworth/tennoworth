@@ -27,6 +27,14 @@ and never trigger automatic mutation replay. Interrupted batches remain saved.
 Resume requires explicit action and fresh reconciliation before every item. Stop after
 the current request cancels unsent work while retaining the saved batch.
 
+The bulk reader is patient only within limits, because abandoning a cycle costs
+more traffic later. It waits out a cooldown when a single one is five seconds or
+less, at most four times and twenty seconds in total per process; anything longer
+stops the run for the next scheduled cycle, and a throttle whose deadline cannot
+be read is never retried on a guess. Each throttle is recorded once - the wait
+comes from the deadline the transport stored, so one response never grows the
+backoff twice.
+
 ## Host pipeline footprint
 
 The scraper is the only client that reads WFM in bulk. These are the production
@@ -51,8 +59,9 @@ free: the summed response time of that sample roughly doubled while two requests
 were in flight, which is why the floor, not half the latency, is the bound.
 
 Each `scrape` and `build` run prints a `sweep metrics:` line with its attempt,
-retry and byte counters, including runs that fail - refresh this table from that
-line rather than from the arithmetic. The measured cost of the endpoints the
+retry, throttle and byte counters, plus the cooldown waits it spent, including on
+runs that fail - refresh this table from that line rather than from the
+arithmetic. The measured cost of the endpoints the
 sweep chooses between is not uniform: one item's full order book was 96 KB,
 while `/v2/orders/item/{slug}/top` answered the same item in 3.8 KB and the
 `/v2/orders/recent` delta window in 216 KB.

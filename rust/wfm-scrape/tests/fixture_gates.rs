@@ -324,6 +324,11 @@ fn failed_sweep_still_reports_request_metrics() {
         class_metric(line, "failed", "orders") == 1,
         "the aborting request must be counted as failed: {line}"
     );
+    assert_eq!(
+        metric(line, "cooldown_waits="),
+        0,
+        "a throttle with no recorded deadline must not spend patience: {line}"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 
