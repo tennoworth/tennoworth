@@ -101,16 +101,212 @@ fn unwrap_payload_first(body: Value) -> Value {
     body
 }
 
+// ---- sweep metrics ---------------------------------------------------------
+//
+// One process is one sweep, so these counters are process-global rather than
+// threaded through every call site. They are the only record of what we asked
+// WFM for, and a failed sweep must report them too - it will be repeated.
+
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::OnceLock;
+use std::time::{Instant, SystemTime};
+
+/// Endpoint family, so the footprint reads per class rather than as one number.
+#[derive(Clone, Copy)]
+pub enum RequestClass {
+    Catalog,
+    Statistics,
+    Orders,
+    Riven,
+    Other,
+}
+
+impl RequestClass {
+    const ALL: [RequestClass; 5] = [
+        RequestClass::Catalog,
+        RequestClass::Statistics,
+        RequestClass::Orders,
+        RequestClass::Riven,
+        RequestClass::Other,
+    ];
+
+    fn label(self) -> &'static str {
+        match self {
+            RequestClass::Catalog => "catalog",
+            RequestClass::Statistics => "statistics",
+            RequestClass::Orders => "orders",
+            RequestClass::Riven => "riven",
+            RequestClass::Other => "other",
+        }
+    }
+}
+
+/// Classify a request URL. The scrape's endpoints are fixed, so this is a
+/// prefix match rather than a lookup table.
+pub fn classify_url(url: &str) -> RequestClass {
+    if url.ends_with("/v2/items") {
+        RequestClass::Catalog
+    } else if url.contains("/statistics") {
+        RequestClass::Statistics
+    } else if url.contains("/v2/orders/item/") {
+        RequestClass::Orders
+    } else if url.contains("/v2/riven/") {
+        RequestClass::Riven
+    } else {
+        RequestClass::Other
+    }
+}
+
+#[derive(Default)]
+struct ClassCounters {
+    attempts: AtomicU64,
+    retries: AtomicU64,
+    ok: AtomicU64,
+    failed: AtomicU64,
+    elapsed_ms: AtomicU64,
+    decoded_bytes: AtomicU64,
+    transferred_bytes: AtomicU64,
+}
+
+/// What one sweep spent, by class. Named fields rather than an array: the
+/// workspace denies indexing, and a class is a fixed set.
+#[derive(Default)]
+pub struct SweepMetrics {
+    catalog: ClassCounters,
+    statistics: ClassCounters,
+    orders: ClassCounters,
+    riven: ClassCounters,
+    other: ClassCounters,
+}
+
+impl SweepMetrics {
+    fn class(&self, class: RequestClass) -> &ClassCounters {
+        match class {
+            RequestClass::Catalog => &self.catalog,
+            RequestClass::Statistics => &self.statistics,
+            RequestClass::Orders => &self.orders,
+            RequestClass::Riven => &self.riven,
+            RequestClass::Other => &self.other,
+        }
+    }
+
+    pub fn record_attempt(&self, class: RequestClass) {
+        self.class(class).attempts.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn record_retry(&self, class: RequestClass) {
+        self.class(class).retries.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn record_ok(&self, class: RequestClass) {
+        self.class(class).ok.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn record_failed(&self, class: RequestClass) {
+        self.class(class).failed.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn record_elapsed(&self, class: RequestClass, elapsed: Duration) {
+        self.class(class)
+            .elapsed_ms
+            .fetch_add(elapsed.as_millis() as u64, Ordering::Relaxed);
+    }
+    /// `transferred` is what crossed the wire (Content-Length, before any
+    /// decompression); `decoded` is the body actually parsed.
+    pub fn record_bytes(&self, class: RequestClass, transferred: u64, decoded: u64) {
+        let counters = self.class(class);
+        counters
+            .transferred_bytes
+            .fetch_add(transferred, Ordering::Relaxed);
+        counters.decoded_bytes.fetch_add(decoded, Ordering::Relaxed);
+    }
+
+    /// One line for the sweep log. `snapshot_age_s` is how old the CSV on disk
+    /// is when the sweep ends, or None when there is no snapshot yet.
+    pub fn line(&self, snapshot_age_s: Option<u64>) -> String {
+        let mut attempts = String::new();
+        let mut ok = String::new();
+        let mut failed = String::new();
+        let (mut retries, mut elapsed, mut decoded, mut transferred) = (0, 0, 0, 0);
+        for class in RequestClass::ALL {
+            let counters = self.class(class);
+            if !attempts.is_empty() {
+                attempts.push(' ');
+                ok.push(' ');
+                failed.push(' ');
+            }
+            attempts.push_str(&format!(
+                "{}={}",
+                class.label(),
+                counters.attempts.load(Ordering::Relaxed)
+            ));
+            ok.push_str(&format!(
+                "{}={}",
+                class.label(),
+                counters.ok.load(Ordering::Relaxed)
+            ));
+            failed.push_str(&format!(
+                "{}={}",
+                class.label(),
+                counters.failed.load(Ordering::Relaxed)
+            ));
+            retries += counters.retries.load(Ordering::Relaxed);
+            elapsed += counters.elapsed_ms.load(Ordering::Relaxed);
+            decoded += counters.decoded_bytes.load(Ordering::Relaxed);
+            transferred += counters.transferred_bytes.load(Ordering::Relaxed);
+        }
+        format!(
+            "sweep metrics: attempts[{attempts}] ok[{ok}] failed[{failed}] retries={retries} \
+             wire_requests={} decoded_bytes={decoded} transferred_bytes={transferred} \
+             elapsed_ms={elapsed} snapshot_age_s={}",
+            wfm_client::governor::process().status().requests,
+            snapshot_age_s.map_or_else(|| "none".to_string(), |s| s.to_string())
+        )
+    }
+}
+
+/// Process-wide counters - a running process is a sweep.
+pub fn metrics() -> &'static SweepMetrics {
+    static METRICS: OnceLock<SweepMetrics> = OnceLock::new();
+    METRICS.get_or_init(SweepMetrics::default)
+}
+
+/// Age of the snapshot on disk, for the sweep log's freshness term.
+pub fn snapshot_age_s(path: &std::path::Path) -> Option<u64> {
+    let modified = std::fs::metadata(path).ok()?.modified().ok()?;
+    Some(SystemTime::now().duration_since(modified).ok()?.as_secs())
+}
+
 /// Retry transient reads; throttling, policy blocks and ordinary client errors abort.
 pub fn fetch_json(http: &dyn ScrapeHttp, sleeper: &dyn Sleeper, url: &str) -> Option<Value> {
+    let class = classify_url(url);
+    let sweep = metrics();
     for attempt in 0..RETRIES {
-        match http.get(url) {
-            HttpOutcome::Ok(body) => return Some(unwrap_payload_first(body)),
-            HttpOutcome::RateLimited => { eprintln!("WFM throttled the request; publication is stopped. Retry after market access recovers."); return None; }
-            HttpOutcome::Access(reason) => { eprintln!("WFM request stopped: {reason}"); return None; }
-            HttpOutcome::HttpError(status) if status < 500 || status == 509 => return None,
+        if attempt > 0 {
+            sweep.record_retry(class);
+        }
+        sweep.record_attempt(class);
+        let started = Instant::now();
+        let outcome = http.get(url);
+        sweep.record_elapsed(class, started.elapsed());
+        match outcome {
+            HttpOutcome::Ok(body) => {
+                sweep.record_ok(class);
+                return Some(unwrap_payload_first(body));
+            }
+            HttpOutcome::RateLimited => {
+                sweep.record_failed(class);
+                eprintln!("WFM throttled the request; publication is stopped. Retry after market access recovers.");
+                return None;
+            }
+            HttpOutcome::Access(reason) => {
+                sweep.record_failed(class);
+                eprintln!("WFM request stopped: {reason}");
+                return None;
+            }
+            HttpOutcome::HttpError(status) if status < 500 || status == 509 => {
+                sweep.record_failed(class);
+                return None;
+            }
             HttpOutcome::HttpError(_) | HttpOutcome::Transport(_) => {
                 if attempt + 1 == RETRIES {
+                    sweep.record_failed(class);
                     return None;
                 }
                 sleeper.sleep(backoff(attempt));
@@ -141,6 +337,15 @@ impl ScrapeHttp for LiveScrapeHttp {
         match resp {
             Ok(r) => {
                 let status = r.status();
+                // Content-Length is the wire size, before any decompression; it
+                // is absent for a chunked response, which reads as 0.
+                let transferred = r
+                    .headers()
+                    .get(reqwest::header::CONTENT_LENGTH)
+                    .and_then(|value| value.to_str().ok())
+                    .and_then(|value| value.parse::<u64>().ok())
+                    .unwrap_or(0);
+                let class = classify_url(url);
                 if status.as_u16() == 429 {
                     return HttpOutcome::RateLimited;
                 }
@@ -148,10 +353,13 @@ impl ScrapeHttp for LiveScrapeHttp {
                     return HttpOutcome::Access(format!("WFM HTTP {status}; request retries exhausted"));
                 }
                 match r.text() {
-                    Ok(body) => match serde_json::from_str(&body) {
-                        Ok(v) => HttpOutcome::Ok(v),
-                        Err(e) => HttpOutcome::Access(format!("{url}: JSON parse: {e}")),
-                    },
+                    Ok(body) => {
+                        metrics().record_bytes(class, transferred, body.len() as u64);
+                        match serde_json::from_str(&body) {
+                            Ok(v) => HttpOutcome::Ok(v),
+                            Err(e) => HttpOutcome::Access(format!("{url}: JSON parse: {e}")),
+                        }
+                    }
                     Err(e) => HttpOutcome::Access(format!("{url}: read body: {e}")),
                 }
             }
@@ -242,6 +450,9 @@ impl ScrapeHttp for FixtureScrapeHttp {
             cur
         };
         let (status, body) = response_at(value, i);
+        // Fixture bodies are small and uncompressed, so transferred == decoded.
+        let size = serde_json::to_vec(&body).map(|b| b.len() as u64).unwrap_or(0);
+        metrics().record_bytes(classify_url(url), size, size);
         outcome_for(status, body)
     }
 }

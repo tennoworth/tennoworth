@@ -206,3 +206,44 @@ describe('deployment ownership boundary', () => {
     expect(setup).toMatch(/chown\s+-R\s+root:root[^\n]*\/srv\/wfm\/bin/);
   });
 });
+
+// ---- run-scrape.sh: a run that publishes nothing must not republish --------
+
+function runScrapeFixture(scrape: string) {
+  const app = mkdtempSync(join(tmpdir(), 'run-scrape-'));
+  directories.push(app);
+  // A previous generation that clears the row-count floor, so the floor alone
+  // cannot catch a scrape that exits 0 without replacing the file.
+  writeFileSync(join(app, 'wfm_results.csv'), `url_name,median_90d\n${'prior,1\n'.repeat(1000)}`);
+  const bin = join(app, 'scrape-stub');
+  writeFileSync(
+    bin,
+    ['#!/bin/sh', 'case "$1" in', `  scrape) ${scrape} ;;`, '  build) exit 0 ;;', '  history) exit 0 ;;', 'esac', 'exit 0', ''].join('\n'),
+  );
+  chmodSync(bin, 0o755);
+  const run = () => spawnSync('bash', [fileURLToPath(new URL('../deploy/run-scrape.sh', import.meta.url))], {
+    env: { ...process.env, APP: app, SCRAPE_BIN: bin, HISTORY: '0' },
+    encoding: 'utf8',
+  });
+  return { app, run };
+}
+
+const REPLACE_CSV =
+  'rm -f wfm_results.csv; { printf "url_name,median_90d\\n"; i=0; while [ "$i" -lt 1000 ]; do printf "row%s,1\\n" "$i"; i=$((i+1)); done; } > wfm_results.csv';
+
+describe('run-scrape publication guard', () => {
+  test('a scrape that exits 0 without replacing the CSV aborts instead of rebuilding', () => {
+    const { run } = runScrapeFixture('exit 0');
+    const result = run();
+    expect(result.status, 'must not publish the previous generation').not.toBe(0);
+    expect(result.stderr).toContain('without replacing');
+  });
+
+  test('a scrape that replaces the CSV still publishes', () => {
+    const { app, run } = runScrapeFixture(REPLACE_CSV);
+    const result = run();
+    expect(result.stderr, result.stderr).not.toContain('without replacing');
+    expect(result.status, result.stderr).toBe(0);
+    expect(readFileSync(join(app, 'wfm_results.csv'), 'utf8')).toContain('row999');
+  });
+});

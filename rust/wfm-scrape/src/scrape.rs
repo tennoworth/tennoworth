@@ -420,11 +420,21 @@ pub fn run_scrape(
         }
     }
 
+    // A run that kept nothing must not report success: `--out` is never
+    // replaced, so a caller that counts the file on disk - run-scrape.sh does,
+    // then rebuilds from it - would republish the previous generation under a
+    // fresh timestamp. Fail instead, leaving `--out` untouched.
+    if results.is_empty() {
+        return Err(format!(
+            "kept 0 of {total} scanned items (min-volume {}); refusing to replace {}",
+            cfg.min_volume,
+            cfg.out.display()
+        ));
+    }
+
     // The single, final replacement of `--out` - reached only when every item
     // was scanned without tripping the coercion budget.
-    if !results.is_empty() {
-        write_csv(&results, &cfg.out)?;
-    }
+    write_csv(&results, &cfg.out)?;
 
     Ok(ScrapeSummary {
         scanned: total,

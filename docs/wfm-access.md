@@ -27,6 +27,28 @@ and never trigger automatic mutation replay. Interrupted batches remain saved.
 Resume requires explicit action and fresh reconciliation before every item. Stop after
 the current request cancels unsent work while retaining the saved batch.
 
+## Host pipeline footprint
+
+The scraper is the only client that reads WFM in bulk. These are the production
+host's numbers on 2026-09-15, under the signed policy then in force - revision 1
+of 2026-09-09, whose scraper restrictions are the compiled defaults above.
+
+| Measure | Value | Basis |
+|---|---|---|
+| Hard ceiling | 2 request starts per second | governor spacing and in-flight cap |
+| Requests per sweep | 6,438 | 1 catalog + 3,840 statistics + 2,597 orders, from the run's own summary |
+| Sweep wall time | 60-89 minutes that day | `journalctl -u wfm-scrape.service` |
+| Floor if nothing else were spent | 54 minutes | 6,438 x 500 ms |
+| Cadence | every 2 hours plus up to 10 minutes of jitter | `deploy/wfm-scrape.timer` |
+| Mean over a day | ~0.9 request starts per second | derived from the rows above |
+
+Each `scrape` and `build` run prints a `sweep metrics:` line with its attempt,
+retry and byte counters, including runs that fail - refresh this table from that
+line rather than from the arithmetic. The measured cost of the endpoints the
+sweep chooses between is not uniform: one item's full order book was 96 KB,
+while `/v2/orders/item/{slug}/top` answered the same item in 3.8 KB and the
+`/v2/orders/recent` delta window in 216 KB.
+
 ## Dedicated signing key
 
 Generate a dedicated, passphrase-encrypted Minisign key on the maintainer's local
