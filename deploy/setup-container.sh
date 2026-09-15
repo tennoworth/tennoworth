@@ -152,8 +152,9 @@ cat <<'NEXT'
 3. Kick a first scrape and watch it:
      systemctl start wfm-scrape.service
      journalctl -u wfm-scrape.service -f
-   Watch for repeated 429/403 (WFM 1015). The UA is now a real browser string,
-   so this should be fine from a residential IP - but verify.
+   Watch for repeated 429/403 (WFM 1015). The UA is a descriptive project
+   string - the form WFM's rules require and the only one verified accepted -
+   so this should be fine from a residential IP, but verify.
 
 4. Verify the hosted page and data headers on the live HTTPS URL:
      curl -sI https://wfm.yourdomain.com | grep -iE 'strict-transport|frame-options|content-security'
