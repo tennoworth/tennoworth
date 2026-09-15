@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Refresh market.json: full WFM scrape (~60-90 min at the signed policy's 500 ms
-# start-to-start pacing with two requests in flight; items under the volume gate
-# skip the orders call) → CSV, then rebuild the full-shape snapshot. This is the
-# ONE production scrape entrypoint, driven by the self-hosted systemd timer.
+# Refresh market.json: full WFM scrape (~55-65 min; one worker per request the
+# signed policy allows in flight, so the 500 ms start-to-start pacing is what
+# binds, and items under the volume gate skip the orders call) → CSV, then
+# rebuild the full-shape snapshot. This is the ONE production scrape entrypoint,
+# driven by the self-hosted systemd timer.
 #
 # Rust-only since 2026-08 (Python retired): `wfm-scrape scrape` produces
 # wfm_results.csv and `wfm-scrape build` renders BOTH frontend/public/market.json
