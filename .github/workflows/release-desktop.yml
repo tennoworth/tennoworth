@@ -305,9 +305,13 @@ jobs:
             throw "Expected one NSIS installer, found $(@($installer).Count)."
           }
 
-          & $installer.FullName /S
-          if ($LASTEXITCODE -ne 0) {
-            throw "NSIS installation failed with exit code $LASTEXITCODE."
+          # The NSIS setup is a GUI-subsystem executable. Called with `&` and
+          # without a pipeline, PowerShell neither waits for it nor sets
+          # $LASTEXITCODE, so the previous form threw "exit code " (empty) on
+          # every run. Start-Process -Wait is the form that waits and reports.
+          $install = Start-Process -FilePath $installer.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($install.ExitCode -ne 0) {
+            throw "NSIS installation failed with exit code $($install.ExitCode)."
           }
 
           $installRoot = Join-Path $env:LOCALAPPDATA 'TennoWorth'
@@ -331,9 +335,9 @@ jobs:
           } finally {
             $uninstaller = Get-ChildItem $installRoot -Filter 'uninstall.exe' -Recurse -ErrorAction SilentlyContinue
             if (@($uninstaller).Count -eq 1) {
-              & $uninstaller.FullName /S
-              if ($LASTEXITCODE -ne 0 -and $null -eq $failure) {
-                $failure = "NSIS uninstall failed with exit code $LASTEXITCODE."
+              $uninstall = Start-Process -FilePath $uninstaller.FullName -ArgumentList '/S' -Wait -PassThru
+              if ($uninstall.ExitCode -ne 0 -and $null -eq $failure) {
+                $failure = "NSIS uninstall failed with exit code $($uninstall.ExitCode)."
               }
             } elseif ($null -eq $failure) {
               $failure = "Installed package did not contain one uninstaller."
