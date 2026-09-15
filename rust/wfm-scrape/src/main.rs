@@ -86,8 +86,9 @@ fn extract_flag(args: &[String], flag: &str) -> Option<String> {
 /// Wire the `scrape` subcommand.
 ///
 /// Accepts the exact flags run-scrape.sh passes (`--filter --exclude
-/// --min-volume --out`) plus the rest of the argparse surface
-/// (`--platform --limit --checkpoint-every`), all with matching defaults.
+/// --min-volume --out --observations-dir`) plus the rest of the argparse
+/// surface (`--platform --limit --checkpoint-every --now`), all with matching
+/// defaults.
 /// `--fixtures-dir <DIR>` swaps live HTTP for a frozen `fixture_responses.json`
 /// (URL→body) and disables real sleeps, so the fixture regression tests run
 /// offline and instantly. `--now` is accepted for symmetry with `build` but is
@@ -128,6 +129,11 @@ fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
             .transpose()?
             .unwrap_or(100),
         max_coercions: wfm_scrape::coerce::DEFAULT_MAX_COERCIONS,
+        observations: extract_flag(args, "--observations-dir").map(PathBuf::from),
+        now: extract_flag(args, "--now")
+            .map(|s| wfm_scrape::clock::parse_stamp(&s).ok_or_else(|| format!("invalid --now stamp: {s}")))
+            .transpose()?
+            .unwrap_or_else(Utc::now),
     };
 
     let (http, sleeper): (Box<dyn ScrapeHttp>, Box<dyn Sleeper>) = if let Some(fd) = &fixtures_dir {

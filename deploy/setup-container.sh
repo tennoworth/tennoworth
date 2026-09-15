@@ -43,6 +43,7 @@ if [ "$(getent passwd wfm | cut -d: -f6)" != /srv/wfm/data ]; then
   usermod -d /srv/wfm/data wfm
 fi
 mkdir -p /srv/wfm/data
+mkdir -p /srv/wfm/observations
 install -m 0755 "$DEPLOY/run-scrape.sh" /srv/wfm/run-scrape.sh
 install -m 0755 "$DEPLOY/pull-web.sh" /srv/wfm/pull-web.sh
 install -m 0755 "$DEPLOY/pull-policy.sh" /srv/wfm/pull-policy.sh
@@ -66,6 +67,8 @@ chown root:root /srv/wfm
 chown -R root:root /srv/wfm/bin
 chown root:root /srv/wfm/*.sh
 chown wfm:wfm /srv/wfm/data
+chown wfm:wfm /srv/wfm/observations
+chmod 750 /srv/wfm/observations
 # The policy puller runs as wfm (wfm-policy-pull.service) and publishes here.
 chown -R wfm:wfm /srv/wfm/policy
 # The scraper writes its outputs into the checkout and the git pullers move it,

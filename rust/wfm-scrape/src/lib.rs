@@ -22,6 +22,7 @@ pub mod de_extract;
 pub mod history;
 pub mod http;
 pub mod ingest;
+pub mod observations;
 pub mod orders;
 pub mod pipeline;
 pub mod reconcile;
