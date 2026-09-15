@@ -386,8 +386,8 @@ fn sweep_metrics_count_attempts_retries_and_bytes() {
     );
     assert_eq!(metric(line, "retries="), 2, "two 503s are retried: {line}");
     assert!(
-        metric(line, "decoded_bytes=") > 0 && metric(line, "transferred_bytes=") > 0,
-        "bytes are counted: {line}"
+        metric(line, "decoded_bytes=") > 0,
+        "the payload we parsed is counted: {line}"
     );
     let _ = std::fs::remove_dir_all(&dir);
 }

@@ -30,13 +30,22 @@ pub enum HttpOutcome {
 
 /// Status-aware GET. Every scrape endpoint goes through this so a fixture can
 /// stand in for the network.
-pub trait ScrapeHttp {
+///
+/// `Send + Sync` because the sweep runs one worker thread per request the
+/// governor allows in flight, and they share one transport and one sleeper.
+pub trait ScrapeHttp: Send + Sync {
     fn get(&self, url: &str) -> HttpOutcome;
 }
 
 /// Injected sleeper so backoff + pacing are deterministic in tests.
-pub trait Sleeper {
+pub trait Sleeper: Send + Sync {
     fn sleep(&self, dur: Duration);
+}
+
+/// A poisoned lock means a worker panicked; the data behind it is a counter, so
+/// reading the last value beats propagating the panic into the abort path.
+fn lock<T>(value: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    value.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 /// Real time - the production sleeper.
@@ -56,16 +65,16 @@ impl Sleeper for NoopSleeper {
 /// Records requested sleeps instead of sleeping - lets tests assert the exact
 /// backoff/pacing schedule.
 pub struct RecordingSleeper {
-    pub sleeps: std::cell::RefCell<Vec<Duration>>,
+    pub sleeps: std::sync::Mutex<Vec<Duration>>,
 }
 impl RecordingSleeper {
     pub fn new() -> Self {
         RecordingSleeper {
-            sleeps: std::cell::RefCell::new(Vec::new()),
+            sleeps: std::sync::Mutex::new(Vec::new()),
         }
     }
     pub fn recorded(&self) -> Vec<Duration> {
-        self.sleeps.borrow().clone()
+        lock(&self.sleeps).clone()
     }
 }
 impl Default for RecordingSleeper {
@@ -75,7 +84,7 @@ impl Default for RecordingSleeper {
 }
 impl Sleeper for RecordingSleeper {
     fn sleep(&self, dur: Duration) {
-        self.sleeps.borrow_mut().push(dur);
+        lock(&self.sleeps).push(dur);
     }
 }
 
@@ -165,7 +174,6 @@ struct ClassCounters {
     failed: AtomicU64,
     elapsed_ms: AtomicU64,
     decoded_bytes: AtomicU64,
-    transferred_bytes: AtomicU64,
 }
 
 /// What one sweep spent, by class. Named fields rather than an array: the
@@ -207,14 +215,13 @@ impl SweepMetrics {
             .elapsed_ms
             .fetch_add(elapsed.as_millis() as u64, Ordering::Relaxed);
     }
-    /// `transferred` is what crossed the wire (Content-Length, before any
-    /// decompression); `decoded` is the body actually parsed.
-    pub fn record_bytes(&self, class: RequestClass, transferred: u64, decoded: u64) {
-        let counters = self.class(class);
-        counters
-            .transferred_bytes
-            .fetch_add(transferred, Ordering::Relaxed);
-        counters.decoded_bytes.fetch_add(decoded, Ordering::Relaxed);
+    /// Payload size as parsed, which is the only size WFM lets us see: it
+    /// answers gzip-compressed and sends no Content-Length, so a wire counter
+    /// would read zero on every production request.
+    pub fn record_bytes(&self, class: RequestClass, decoded: u64) {
+        self.class(class)
+            .decoded_bytes
+            .fetch_add(decoded, Ordering::Relaxed);
     }
 
     /// One line for the sweep log. `snapshot_age_s` is how old the CSV on disk
@@ -223,7 +230,7 @@ impl SweepMetrics {
         let mut attempts = String::new();
         let mut ok = String::new();
         let mut failed = String::new();
-        let (mut retries, mut elapsed, mut decoded, mut transferred) = (0, 0, 0, 0);
+        let (mut retries, mut elapsed, mut decoded) = (0, 0, 0);
         for class in RequestClass::ALL {
             let counters = self.class(class);
             if !attempts.is_empty() {
@@ -249,11 +256,10 @@ impl SweepMetrics {
             retries += counters.retries.load(Ordering::Relaxed);
             elapsed += counters.elapsed_ms.load(Ordering::Relaxed);
             decoded += counters.decoded_bytes.load(Ordering::Relaxed);
-            transferred += counters.transferred_bytes.load(Ordering::Relaxed);
         }
         format!(
             "sweep metrics: attempts[{attempts}] ok[{ok}] failed[{failed}] retries={retries} \
-             wire_requests={} decoded_bytes={decoded} transferred_bytes={transferred} \
+             wire_requests={} decoded_bytes={decoded} \
              elapsed_ms={elapsed} snapshot_age_s={}",
             wfm_client::governor::process().status().requests,
             snapshot_age_s.map_or_else(|| "none".to_string(), |s| s.to_string())
@@ -337,14 +343,6 @@ impl ScrapeHttp for LiveScrapeHttp {
         match resp {
             Ok(r) => {
                 let status = r.status();
-                // Content-Length is the wire size, before any decompression; it
-                // is absent for a chunked response, which reads as 0.
-                let transferred = r
-                    .headers()
-                    .get(reqwest::header::CONTENT_LENGTH)
-                    .and_then(|value| value.to_str().ok())
-                    .and_then(|value| value.parse::<u64>().ok())
-                    .unwrap_or(0);
                 let class = classify_url(url);
                 if status.as_u16() == 429 {
                     return HttpOutcome::RateLimited;
@@ -354,7 +352,7 @@ impl ScrapeHttp for LiveScrapeHttp {
                 }
                 match r.text() {
                     Ok(body) => {
-                        metrics().record_bytes(class, transferred, body.len() as u64);
+                        metrics().record_bytes(class, body.len() as u64);
                         match serde_json::from_str(&body) {
                             Ok(v) => HttpOutcome::Ok(v),
                             Err(e) => HttpOutcome::Access(format!("{url}: JSON parse: {e}")),
@@ -383,20 +381,20 @@ impl ScrapeHttp for LiveScrapeHttp {
 ///     arrays, so a top-level array is unambiguously a sequence.
 pub struct FixtureScrapeHttp {
     pub responses: std::collections::HashMap<String, Value>,
-    cursors: std::cell::RefCell<std::collections::HashMap<String, usize>>,
+    cursors: std::sync::Mutex<std::collections::HashMap<String, usize>>,
 }
 
 impl FixtureScrapeHttp {
     pub fn new(responses: std::collections::HashMap<String, Value>) -> Self {
         FixtureScrapeHttp {
             responses,
-            cursors: std::cell::RefCell::new(std::collections::HashMap::new()),
+            cursors: std::sync::Mutex::new(std::collections::HashMap::new()),
         }
     }
 
     /// Whether `url` has been requested at least once (fixture-present or not).
     pub fn was_fetched(&self, url: &str) -> bool {
-        self.cursors.borrow().contains_key(url)
+        lock(&self.cursors).contains_key(url)
     }
 }
 
@@ -443,16 +441,15 @@ impl ScrapeHttp for FixtureScrapeHttp {
             None => return HttpOutcome::Transport(format!("{url}: not in fixture set")),
         };
         let i = {
-            let mut cursors = self.cursors.borrow_mut();
+            let mut cursors = lock(&self.cursors);
             let n = cursors.entry(url.to_string()).or_insert(0);
             let cur = *n;
             *n += 1;
             cur
         };
         let (status, body) = response_at(value, i);
-        // Fixture bodies are small and uncompressed, so transferred == decoded.
         let size = serde_json::to_vec(&body).map(|b| b.len() as u64).unwrap_or(0);
-        metrics().record_bytes(classify_url(url), size, size);
+        metrics().record_bytes(classify_url(url), size);
         outcome_for(status, body)
     }
 }
@@ -461,26 +458,24 @@ impl ScrapeHttp for FixtureScrapeHttp {
 mod tests {
     use super::*;
     use serde_json::json;
-    use std::cell::RefCell;
     use std::collections::{HashMap, VecDeque};
 
     /// Per-URL scripted outcomes - pop one per call to drive retry sequences.
     struct ScriptedHttp {
-        scripts: RefCell<HashMap<String, VecDeque<HttpOutcome>>>,
+        scripts: std::sync::Mutex<HashMap<String, VecDeque<HttpOutcome>>>,
     }
     impl ScriptedHttp {
         fn new(url: &str, seq: Vec<HttpOutcome>) -> Self {
             let mut m = HashMap::new();
             m.insert(url.to_string(), seq.into_iter().collect());
             ScriptedHttp {
-                scripts: RefCell::new(m),
+                scripts: std::sync::Mutex::new(m),
             }
         }
     }
     impl ScrapeHttp for ScriptedHttp {
         fn get(&self, url: &str) -> HttpOutcome {
-            self.scripts
-                .borrow_mut()
+            lock(&self.scripts)
                 .get_mut(url)
                 .and_then(|q| q.pop_front())
                 .unwrap_or_else(|| HttpOutcome::Transport("exhausted".into()))

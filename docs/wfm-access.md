@@ -42,6 +42,14 @@ of 2026-09-09, whose scraper restrictions are the compiled defaults above.
 | Cadence | every 2 hours plus up to 10 minutes of jitter | `deploy/wfm-scrape.timer` |
 | Mean over a day | ~0.9 request starts per second | derived from the rows above |
 
+The item loop runs one worker per request the policy allows in flight, rather
+than one at a time: the same 176-request sample took 111 s serially and 91 s with
+two workers, against an 88 s pacing floor. The request count, the cadence and the
+ceiling are unchanged - the sweep stops paying for one response at a time, so its
+wall time converges on the floor the pacing already implied. Overlapping is not
+free: the summed response time of that sample roughly doubled while two requests
+were in flight, which is why the floor, not half the latency, is the bound.
+
 Each `scrape` and `build` run prints a `sweep metrics:` line with its attempt,
 retry and byte counters, including runs that fail - refresh this table from that
 line rather than from the arithmetic. The measured cost of the endpoints the

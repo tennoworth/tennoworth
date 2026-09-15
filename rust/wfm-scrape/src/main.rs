@@ -156,10 +156,11 @@ fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
 
     let summary = run_scrape(http.as_ref(), sleeper.as_ref(), &cfg)?;
     eprintln!(
-        "scrape complete: scanned {}, kept {}, coercions {} → {}",
+        "scrape complete: scanned {}, kept {}, coercions {}, workers {} → {}",
         summary.scanned,
         summary.kept,
         summary.coercions,
+        summary.workers,
         cfg.out.display()
     );
     Ok(())
