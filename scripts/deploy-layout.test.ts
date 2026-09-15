@@ -205,6 +205,21 @@ describe('deployment ownership boundary', () => {
     expect(setup).toMatch(/^\s*chown\s+root:root\s+\/srv\/wfm\s*$/m);
     expect(setup).toMatch(/chown\s+-R\s+root:root[^\n]*\/srv\/wfm\/bin/);
   });
+
+  test('gives the observation log directory to the service user alone', () => {
+    // The unit runs with ProtectSystem=strict, so the sweep can only write the
+    // paths it is granted. Nothing but the pipeline needs to read these rows.
+    expect(setup).toMatch(/mkdir\s+-p\s+\/srv\/wfm\/observations/);
+    expect(setup).toMatch(/^\s*chown\s+wfm:wfm\s+\/srv\/wfm\/observations\s*$/m);
+    expect(setup).toMatch(/^\s*chmod\s+750\s+\/srv\/wfm\/observations\s*$/m);
+    const unit = readFileSync(
+      fileURLToPath(new URL('../deploy/wfm-scrape.service', import.meta.url)),
+      'utf8',
+    );
+    expect(unit, 'the unit must be allowed to write it').toMatch(
+      /^\s*ReadWritePaths=.*\/srv\/wfm\/observations/m,
+    );
+  });
 });
 
 // ---- run-scrape.sh: a run that publishes nothing must not republish --------

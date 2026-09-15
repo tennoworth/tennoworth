@@ -12,6 +12,8 @@
 # Environment (all optional):
 #   APP      repo root to run in          (default /srv/wfm/app - the LXC layout)
 #   SCRAPE_BIN  Rust pipeline binary      (default /srv/wfm/bin/wfm-scrape)
+#   OBSERVATIONS  per-item observation log directory (default
+#               /srv/wfm/observations); empty disables the log
 #   HISTORY     1 (default) also refresh history.json from relics.run after the
 #               build; 0 skips it for a one-off local scrape
 set -euo pipefail
@@ -35,6 +37,11 @@ prior=0
 SCRAPE_BIN="${SCRAPE_BIN:-/srv/wfm/bin/wfm-scrape}"
 [ -x "$SCRAPE_BIN" ] || { echo "ABORT: $SCRAPE_BIN is missing - the box needs it (wfm-scrape-pull.timer installs it)." >&2; exit 1; }
 SCRAPE_ARGS=(--filter "" --exclude "" --min-volume 1 --out "$CSV")
+# The observation log is evidence for a later statistics-refresh decision, never
+# a publication input: the binary warns and carries on when it cannot be
+# written, so a missing directory costs nothing but the log.
+OBSERVATIONS="${OBSERVATIONS-/srv/wfm/observations}"
+[ -n "$OBSERVATIONS" ] && SCRAPE_ARGS+=(--observations-dir "$OBSERVATIONS")
 
 # Identity of the generation on disk right now. The binary refuses a run that
 # keeps nothing, but this is the independent check: a replaced or older binary

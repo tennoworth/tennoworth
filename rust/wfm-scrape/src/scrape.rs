@@ -26,6 +26,7 @@ use market_math::{
 
 use crate::coerce::{Coercions, DEFAULT_MAX_COERCIONS};
 use crate::http::{fetch_json, ScrapeHttp, Sleeper};
+use crate::observations;
 use crate::orders::{live_orders, parse_orders};
 use crate::stats::parse_stats;
 
@@ -170,7 +171,7 @@ pub fn analyze_orders(
     stage: &StatsStage,
     orders: Option<Value>,
     co: &mut Coercions,
-) -> Result<Option<AnalyzedRow>, String> {
+) -> Result<Option<Analyzed>, String> {
     let orders = match orders {
         Some(v) => v,
         None => return Ok(None),
@@ -188,11 +189,14 @@ pub fn analyze_orders(
 
     let top = top_buy(&live_buys);
     let low = low_sell(&live_sells);
-    let low5 = clamp_low5(avg_lowest_asks(&live_sells, 5), median_90d, low);
+    let lowest_asks = avg_lowest_asks(&live_sells, 5);
+    let low5 = clamp_low5(lowest_asks, median_90d, low);
     let ratio = demand_ratio(live_buys.len(), live_sells.len());
     let sc = score(volume_48h, avg_price_48h, ratio);
 
-    Ok(Some(AnalyzedRow {
+    Ok(Some(Analyzed {
+        low5_avg_unclamped: lowest_asks,
+        row: AnalyzedRow {
         url_name: item.slug.clone(),
         name: item.name.clone(),
         tags: item.tags.clone(),
@@ -212,6 +216,7 @@ pub fn analyze_orders(
         donch_top_90d: donch_top,
         donch_bot_90d: donch_bot,
         score: round_dp(sc, 1),
+        },
     }))
 }
 
@@ -231,7 +236,7 @@ pub fn analyze_item(
         return Ok(None);
     }
     match analyze_stats(item, stats, co)? {
-        Some(stage) => analyze_orders(item, &stage, orders, co),
+        Some(stage) => Ok(analyze_orders(item, &stage, orders, co)?.map(|analyzed| analyzed.row)),
         None => Ok(None),
     }
 }
@@ -322,6 +327,13 @@ pub struct ScrapeConfig {
     pub out: PathBuf,
     pub checkpoint_every: usize,
     pub max_coercions: u64,
+    /// Where the per-item observation log goes, or None to keep none. The log is
+    /// evidence for a later refresh-schedule decision, never a publication
+    /// input.
+    pub observations: Option<PathBuf>,
+    /// The injected clock. The crate reads no other time source, so a fixture
+    /// run reproduces the same stamps as production.
+    pub now: chrono::DateTime<chrono::Utc>,
 }
 
 impl Default for ScrapeConfig {
@@ -335,6 +347,8 @@ impl Default for ScrapeConfig {
             out: PathBuf::from("wfm_results.csv"),
             checkpoint_every: 100,
             max_coercions: DEFAULT_MAX_COERCIONS,
+            observations: None,
+            now: chrono::DateTime::UNIX_EPOCH,
         }
     }
 }
@@ -355,6 +369,22 @@ struct ItemOutcome {
     index: usize,
     coercions: u64,
     row: Option<AnalyzedRow>,
+    observation: observations::Item,
+}
+
+/// One item's scan: the row when it earned one, and always the observation the
+/// log keeps.
+struct Scanned {
+    row: Option<AnalyzedRow>,
+    observation: observations::Item,
+}
+
+/// A kept row plus the book facts the CSV does not keep.
+pub struct Analyzed {
+    pub row: AnalyzedRow,
+    /// Before clamping. The CSV keeps only the clamped lowest-five average, and
+    /// the clamp depends on the statistics baseline a replay varies.
+    pub low5_avg_unclamped: f64,
 }
 
 /// How many item workers to run for a policy allowing `concurrency` requests in
@@ -365,6 +395,27 @@ struct ItemOutcome {
 /// also keeps a small `--limit` off the thread pool.
 fn worker_count(concurrency: usize, items: usize) -> usize {
     concurrency.clamp(1, items.max(1))
+}
+
+/// The observation for an item whose statistics payload was empty: it was never
+/// read, and the log says so rather than inventing zeroes for a real item.
+fn unread(item: &CatalogItem) -> observations::Item {
+    observations::Item {
+        slug: item.slug.clone(),
+        name: item.name.clone(),
+        tags: item.tags.clone(),
+        ducats: item.ducats,
+        outcome: observations::Outcome::NoStatistics,
+        subtype: None,
+        volume_48h: 0.0,
+        median_now: 0.0,
+        median_90d: 0.0,
+        medians_7d: vec![],
+        avg_price_48h: 0.0,
+        donch_top_90d: 0.0,
+        donch_bot_90d: 0.0,
+        book: None,
+    }
 }
 
 /// Fetch and analyze one catalog item. The statistics call goes first: its 48h
@@ -378,16 +429,62 @@ fn scan_item(
     cfg: &ScrapeConfig,
     item: &CatalogItem,
     co: &mut Coercions,
-) -> Result<Option<AnalyzedRow>, String> {
+) -> Result<Scanned, String> {
     let stats = fetch_json(http, sleeper, &format!("{API_ROOT}/v1/items/{}/statistics", item.slug)).ok_or_else(|| format!("WFM statistics failed for {}; publication aborted", item.slug))?;
-    let stage = analyze_stats(item, Some(stats), co)?;
-    match stage {
-        Some(stage) if stage.volume_48h >= cfg.min_volume as f64 => {
-            let orders = fetch_json(http, sleeper, &format!("{API_ROOT}/v2/orders/item/{}", item.slug)).ok_or_else(|| format!("WFM orders failed for {}; publication aborted", item.slug))?;
-            analyze_orders(item, &stage, Some(orders), co)
+    let stage = match analyze_stats(item, Some(stats), co)? {
+        Some(stage) => stage,
+        // The item was skipped without being read at all, which is itself worth
+        // recording: a schedule decides who gets read.
+        None => {
+            return Ok(Scanned {
+                row: None,
+                observation: unread(item),
+            })
         }
-        _ => Ok(None),
+    };
+
+    let (median_now, median_90d, medians_7d, donch_top, donch_bot) = series_stats(&stage.nineties);
+    let mut observed = observations::Item {
+        slug: item.slug.clone(),
+        name: item.name.clone(),
+        tags: item.tags.clone(),
+        ducats: item.ducats,
+        outcome: observations::Outcome::BelowVolume,
+        subtype: stage.pick.clone(),
+        volume_48h: stage.volume_48h,
+        median_now,
+        median_90d,
+        medians_7d,
+        avg_price_48h: weighted_avg_48h(&stage.recent, median_90d),
+        donch_top_90d: donch_top,
+        donch_bot_90d: donch_bot,
+        book: None,
+    };
+    if stage.volume_48h < cfg.min_volume as f64 {
+        return Ok(Scanned {
+            row: None,
+            observation: observed,
+        });
     }
+
+    let orders = fetch_json(http, sleeper, &format!("{API_ROOT}/v2/orders/item/{}", item.slug)).ok_or_else(|| format!("WFM orders failed for {}; publication aborted", item.slug))?;
+    let analyzed = analyze_orders(item, &stage, Some(orders), co)?;
+    if let Some(analyzed) = &analyzed {
+        observed.outcome = observations::Outcome::Kept;
+        observed.book = Some(observations::Book {
+            live_buys: analyzed.row.live_buys,
+            live_sells: analyzed.row.live_sells,
+            buy_sell_ratio: analyzed.row.buy_sell_ratio,
+            top_buy_price: analyzed.row.top_buy_price,
+            low_sell_price: analyzed.row.low_sell_price,
+            low5_avg_unclamped: analyzed.low5_avg_unclamped,
+            score: analyzed.row.score,
+        });
+    }
+    Ok(Scanned {
+        row: analyzed.map(|analyzed| analyzed.row),
+        observation: observed,
+    })
 }
 
 /// Scan every item with `workers` threads and return the kept rows in catalog
@@ -405,6 +502,7 @@ fn sweep_items(
     items: &[CatalogItem],
     partial: &Path,
     workers: usize,
+    mut log: Option<&mut observations::Log>,
 ) -> Result<(Vec<AnalyzedRow>, u64), String> {
     let next = AtomicUsize::new(0);
     let abort = AtomicBool::new(false);
@@ -445,13 +543,19 @@ fn sweep_items(
                         let index = next.fetch_add(1, Ordering::Relaxed);
                         let Some(item) = items.get(index) else { break };
                         match scan_item(http, sleeper, cfg, item, &mut co) {
-                            Ok(row) => {
+                            Ok(scanned) => {
                                 // The budget is process-wide, so report this
                                 // item's share of it and let the collector own
                                 // the running total.
                                 let delta = co.count.saturating_sub(reported);
                                 reported = co.count;
-                                if tx.send(ItemOutcome { index, coercions: delta, row }).is_err() {
+                                let outcome = ItemOutcome {
+                                    index,
+                                    coercions: delta,
+                                    row: scanned.row,
+                                    observation: scanned.observation,
+                                };
+                                if tx.send(outcome).is_err() {
                                     break;
                                 }
                             }
@@ -467,6 +571,12 @@ fn sweep_items(
         drop(tx);
 
         for outcome in rx {
+            // Every attempted item goes to the log first, including the ones the
+            // coercion budget or the volume gate rejected: a schedule's cost is
+            // paid in the items it decides not to read.
+            if let Some(log) = log.as_deref_mut() {
+                log.item(outcome.observation);
+            }
             total.count += outcome.coercions;
             if total.exceeds(cfg.max_coercions) {
                 report(format!(
@@ -542,6 +652,23 @@ pub fn run_scrape(
     // masquerade as a finished snapshot.
     let partial = PathBuf::from(format!("{}.partial", cfg.out.display()));
 
+    let mut log = cfg.observations.as_deref().map(|directory| {
+        observations::Log::start(
+            directory,
+            observations::Run {
+                format: observations::FORMAT,
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                platform: cfg.platform.clone(),
+                filter: cfg.filter.clone(),
+                exclude: cfg.exclude.clone(),
+                min_volume: cfg.min_volume,
+                items: total,
+                workers,
+                started_at: crate::clock::iso_z(cfg.now),
+            },
+        )
+    });
+
     // The permissive-parsing budget is checked INCREMENTALLY (Python only
     // checks equivalently at the end) against the sum of the workers' tallies. A
     // systemic upstream shape drift (WFM sending numeric fields as strings)
@@ -550,7 +677,8 @@ pub fn run_scrape(
     // leaving `--out` untouched, rather than promoting a silently-reshaped
     // snapshot. Workers may be one item past the trip point before they see the
     // abort; nothing they fetch is published.
-    let (rows, coercions) = sweep_items(http, sleeper, cfg, &items, &partial, workers)?;
+    let (rows, coercions) =
+        sweep_items(http, sleeper, cfg, &items, &partial, workers, log.as_mut())?;
 
     // A run that kept nothing must not report success: `--out` is never
     // replaced, so a caller that counts the file on disk - run-scrape.sh does,
@@ -566,6 +694,16 @@ pub fn run_scrape(
 
     // The single, final replacement of `--out`.
     write_csv(&rows, &cfg.out)?;
+
+    // Only a completed sweep publishes its log; a failed one leaves the partial
+    // behind as evidence instead of a file that reads like a cross-section.
+    if let Some(log) = log {
+        log.finish(observations::Summary {
+            scanned: total,
+            kept: rows.len(),
+            coercions,
+        });
+    }
 
     Ok(ScrapeSummary {
         scanned: total,
@@ -751,6 +889,88 @@ mod tests {
             "the CSV must be in catalog order, not completion order"
         );
         std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn observations_record_the_kept_and_the_dropped_item_alike() {
+        use crate::observations::{Outcome, Record};
+
+        let dir = std::env::temp_dir().join(format!("wfmscrape_obs_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let out = dir.join("run.csv");
+        let observations = dir.join("observations");
+        let mut c = cfg(&out);
+        c.observations = Some(observations.clone());
+        c.now = crate::clock::parse_stamp("2026-09-15T22:07:20Z").unwrap();
+        let summary = run_scrape(&fixture(), &NoopSleeper, &c).unwrap();
+        assert_eq!(summary.kept, 1);
+
+        let complete = observations.join("sweep-2026-09-15T22-07-20Z.jsonl");
+        let text = std::fs::read_to_string(&complete).unwrap();
+        let records: Vec<Record> = text
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        assert!(matches!(&records[0], Record::Run(run) if run.items == 2 && run.min_volume == 1));
+
+        let kept = records
+            .iter()
+            .find_map(|r| match r {
+                Record::Item(item) if item.slug == "volt_prime_barrel" => Some(item),
+                _ => None,
+            })
+            .expect("the kept item is logged");
+        assert_eq!(kept.outcome, Outcome::Kept);
+        let book = kept.book.as_ref().expect("a kept item carries its book");
+        assert_eq!(book.live_buys, 2);
+        assert_eq!(book.live_sells, 2);
+        assert!(book.low5_avg_unclamped > 0.0, "{book:?}");
+
+        let dropped = records
+            .iter()
+            .find_map(|r| match r {
+                Record::Item(item) if item.slug == "thin_item" => Some(item),
+                _ => None,
+            })
+            .expect("the dropped item is logged too");
+        assert_eq!(dropped.outcome, Outcome::BelowVolume);
+        assert_eq!(dropped.volume_48h, 0.0);
+        assert!(dropped.book.is_none(), "no book was fetched for it");
+        assert!(matches!(&records[records.len() - 1], Record::Summary(s) if s.kept == 1));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn an_aborted_sweep_leaves_its_observations_unpublished() {
+        let dir = std::env::temp_dir().join(format!("wfmscrape_obs_abort_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut r: HashMap<String, Value> = HashMap::new();
+        r.insert(
+            format!("{API_ROOT}/v2/items"),
+            json!({"data": [{"slug": "drift", "i18n": {"en": {"name": "Drift"}}}]}),
+        );
+        r.insert(format!("{API_ROOT}/v2/orders/item/drift"), json!({"data": []}));
+        r.insert(
+            format!("{API_ROOT}/v1/items/drift/statistics"),
+            stats_days("48hours", json!([{"median": "1", "volume": "2", "avg_price": "3", "max_price": "4"}])),
+        );
+        let out = dir.join("run.csv");
+        let observations = dir.join("observations");
+        let mut c = cfg(&out);
+        c.max_coercions = 1;
+        c.observations = Some(observations.clone());
+        c.now = crate::clock::parse_stamp("2026-09-15T22:07:20Z").unwrap();
+        assert!(run_scrape(&FixtureScrapeHttp::new(r), &NoopSleeper, &c).is_err());
+
+        assert!(
+            observations.join("sweep-2026-09-15T22-07-20Z.jsonl.partial").exists(),
+            "an aborted sweep keeps its rows for post-mortem"
+        );
+        assert!(
+            !observations.join("sweep-2026-09-15T22-07-20Z.jsonl").exists(),
+            "and never publishes them as a completed cross-section"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
