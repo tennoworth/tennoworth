@@ -7,6 +7,7 @@
 //! retry loop can reproduce that behavior exactly, and stays fixture-driven so
 //! backoff, pacing, and exhaustion are all testable with zero real sleeps.
 
+use std::sync::Mutex;
 use std::time::Duration;
 
 use serde_json::Value;
@@ -188,6 +189,15 @@ struct ClassCounters {
     decoded_bytes: AtomicU64,
 }
 
+/// The sweep's throttle patience. Both figures move together, so they are
+/// reserved under one lock: separate counters let two workers each pass the last
+/// check and overspend a limit that is documented as a limit.
+#[derive(Default)]
+struct CooldownBudget {
+    waits: u64,
+    wait_ms: u64,
+}
+
 /// What one sweep spent, by class. Named fields rather than an array: the
 /// workspace denies indexing, and a class is a fixed set.
 #[derive(Default)]
@@ -197,8 +207,7 @@ pub struct SweepMetrics {
     orders: ClassCounters,
     riven: ClassCounters,
     other: ClassCounters,
-    cooldown_waits: AtomicU64,
-    cooldown_wait_ms: AtomicU64,
+    cooldown: Mutex<CooldownBudget>,
 }
 
 impl SweepMetrics {
@@ -238,21 +247,28 @@ impl SweepMetrics {
             .fetch_add(decoded, Ordering::Relaxed);
     }
 
-    /// Admit one wait of `wait_ms` against the sweep's throttle patience. Two
-    /// workers can pass this check together, so the totals are a soft bound -
-    /// the point is that a throttling server never gets a patient client, not
-    /// that the last millisecond is accounted for.
+    /// Admit one wait of `wait_ms` against the sweep's throttle patience, or
+    /// refuse it because the wait alone is too long or the patience is spent.
+    /// The reservation is atomic, so workers sharing the sweep cannot both spend
+    /// the last of it.
     fn admit_cooldown_wait(&self, wait_ms: u64) -> bool {
-        let waits = self.cooldown_waits.load(Ordering::Relaxed);
-        let spent = self.cooldown_wait_ms.load(Ordering::Relaxed);
-        if waits >= MAX_COOLDOWN_WAITS
-            || spent.saturating_add(wait_ms) > MAX_COOLDOWN_WAIT_TOTAL_MS
+        let mut budget = lock(&self.cooldown);
+        if budget.waits >= MAX_COOLDOWN_WAITS
+            || budget.wait_ms.saturating_add(wait_ms) > MAX_COOLDOWN_WAIT_TOTAL_MS
         {
             return false;
         }
-        self.cooldown_waits.fetch_add(1, Ordering::Relaxed);
-        self.cooldown_wait_ms.fetch_add(wait_ms, Ordering::Relaxed);
+        budget.waits += 1;
+        budget.wait_ms += wait_ms;
         true
+    }
+
+    fn cooldown_waits(&self) -> u64 {
+        lock(&self.cooldown).waits
+    }
+
+    fn cooldown_wait_ms(&self) -> u64 {
+        lock(&self.cooldown).wait_ms
     }
 
     /// One line for the sweep log. `snapshot_age_s` is how old the CSV on disk
@@ -295,8 +311,8 @@ impl SweepMetrics {
              elapsed_ms={elapsed} snapshot_age_s={}",
             governor.requests,
             governor.throttles,
-            self.cooldown_waits.load(Ordering::Relaxed),
-            self.cooldown_wait_ms.load(Ordering::Relaxed),
+            self.cooldown_waits(),
+            self.cooldown_wait_ms(),
             snapshot_age_s.map_or_else(|| "none".to_string(), |s| s.to_string())
         )
     }
@@ -623,7 +639,7 @@ mod tests {
         assert_eq!(admitted_cooldown_wait(&sweep, 0, 1_000), None);
         assert_eq!(admitted_cooldown_wait(&sweep, 1_000, 1_000), None);
         assert_eq!(
-            sweep.cooldown_waits.load(Ordering::Relaxed),
+            sweep.cooldown_waits(),
             0,
             "a cooldown with nothing left to wait for is not patience"
         );
@@ -642,9 +658,38 @@ mod tests {
         }
         assert!(extra < MAX_COOLDOWN_WAITS, "{extra} extra waits");
         assert!(
-            sweep.cooldown_wait_ms.load(Ordering::Relaxed) <= MAX_COOLDOWN_WAIT_TOTAL_MS,
+            sweep.cooldown_wait_ms() <= MAX_COOLDOWN_WAIT_TOTAL_MS,
             "the total cap binds too"
         );
+    }
+
+    #[test]
+    fn workers_racing_for_the_last_of_the_patience_only_one_get_it() {
+        // Repeated rounds: a check-then-reserve implementation often serialises
+        // by luck, and one round would let it pass.
+        for round in 0..8 {
+            let sweep = SweepMetrics::default();
+            for _ in 0..MAX_COOLDOWN_WAITS - 1 {
+                assert!(sweep.admit_cooldown_wait(MAX_COOLDOWN_WAIT_MS));
+            }
+            let start = std::sync::Barrier::new(32);
+            let mut admitted = 0;
+            std::thread::scope(|scope| {
+                let mut tasks = Vec::new();
+                for _ in 0..32 {
+                    tasks.push(scope.spawn(|| {
+                        start.wait();
+                        sweep.admit_cooldown_wait(MAX_COOLDOWN_WAIT_MS)
+                    }));
+                }
+                for task in tasks {
+                    admitted += usize::from(task.join().unwrap_or(false));
+                }
+            });
+            assert_eq!(admitted, 1, "round {round}: one slot was left, and it is one slot");
+            assert_eq!(sweep.cooldown_waits(), MAX_COOLDOWN_WAITS);
+            assert!(sweep.cooldown_wait_ms() <= MAX_COOLDOWN_WAIT_TOTAL_MS);
+        }
     }
 
     #[test]

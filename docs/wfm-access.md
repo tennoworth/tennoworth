@@ -55,13 +55,16 @@ than one at a time: the same 176-request sample took 111 s serially and 91 s wit
 two workers, against an 88 s pacing floor. The request count, the cadence and the
 ceiling are unchanged - the sweep stops paying for one response at a time, so its
 wall time converges on the floor the pacing already implied. Overlapping is not
-free: the summed response time of that sample roughly doubled while two requests
-were in flight, which is why the floor, not half the latency, is the bound.
+free: the summed fetch time of that sample - each attempt's wait for a governor
+slot plus its request - rose from 110 s to about 190 s under two workers, which is
+why the floor, not half the latency, is the bound. That counter is fetch time,
+not upstream response time; the queue wait is inside it.
 
 Each `scrape` and `build` run prints a `sweep metrics:` line with its attempt,
 retry, throttle and byte counters, plus the cooldown waits it spent, including on
 runs that fail - refresh this table from that line rather than from the
-arithmetic. The measured cost of the endpoints the
+arithmetic. Its `elapsed_ms` is fetch time including the governor's pacing wait,
+so it tracks wall time for a serial loop and exceeds it when workers overlap. The measured cost of the endpoints the
 sweep chooses between is not uniform: one item's full order book was 96 KB,
 while `/v2/orders/item/{slug}/top` answered the same item in 3.8 KB and the
 `/v2/orders/recent` delta window in 216 KB.
