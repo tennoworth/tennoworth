@@ -105,6 +105,47 @@
     routine.select(cadence);
   }
 
+  // Dragging is the pointer path; the Up/Down buttons stay the keyboard one,
+  // so the handle is hidden from assistive tech rather than made focusable.
+  let draggingId = $state<string | null>(null);
+  let dropBefore = $state<string | null | undefined>(undefined);
+
+  function dropTargetFor(event: DragEvent, id: string): string | null {
+    const bounds = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    if (event.clientY - bounds.top <= bounds.height / 2) return id;
+    const index = routine.state.monthlyGoals.findIndex(goal => goal.id === id);
+    return routine.state.monthlyGoals[index + 1]?.id ?? null;
+  }
+
+  function startDrag(event: DragEvent, id: string): void {
+    draggingId = id;
+    dropBefore = undefined;
+    event.dataTransfer?.setData('text/plain', id);
+    const row = (event.currentTarget as HTMLElement).closest('li');
+    if (row) event.dataTransfer?.setDragImage(row, 12, 12);
+  }
+
+  function endDrag(): void {
+    draggingId = null;
+    dropBefore = undefined;
+  }
+
+  function dragOverRow(event: DragEvent, id: string): void {
+    if (!draggingId) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    dropBefore = dropTargetFor(event, id);
+  }
+
+  async function dropOnRow(event: DragEvent, id: string): Promise<void> {
+    if (!draggingId) return;
+    event.preventDefault();
+    const dragged = draggingId;
+    const target = dropTargetFor(event, id);
+    endDrag();
+    await routine.reorderMonthlyGoal(dragged, target);
+  }
+
   onMount(() => routine.start());
   $effect(() => {
     const current = now;
@@ -145,9 +186,9 @@
     {/if}
 
     {#if routine.tasks.length}
-      <ul class="checklist-items">
+      <ul class="checklist-items" class:drop-end={dropBefore === null}>
         {#each routine.tasks as task (task.id)}
-          <li class:done={completed.has(task.id)}>
+          <li class:done={completed.has(task.id)} class:dragging={draggingId === task.id} class:drop-before={dropBefore === task.id} ondragover={event => dragOverRow(event, task.id)} ondrop={event => void dropOnRow(event, task.id)}>
             {#if editingId === task.id}
               <div class="goal-edit">
                 <input class="ui-input" aria-label="Goal text" maxlength={MAX_GOAL_LENGTH} bind:value={editDraft} />
@@ -156,10 +197,15 @@
               </div>
             {:else}
               <div class="goal-row">
-                <label>
-                  <input type="checkbox" checked={completed.has(task.id)} onchange={event => void routine.toggle(task.id, event.currentTarget.checked)} />
-                  <span class="task-copy"><strong>{task.title}</strong><span>{task.detail}</span></span>
-                </label>
+                <div class="goal-main">
+                  {#if routine.cadence === 'monthly'}
+                    <span class="drag-handle" data-drag-handle={task.id} draggable="true" aria-hidden="true" ondragstart={event => startDrag(event, task.id)} ondragend={endDrag}>⠿</span>
+                  {/if}
+                  <label>
+                    <input type="checkbox" checked={completed.has(task.id)} onchange={event => void routine.toggle(task.id, event.currentTarget.checked)} />
+                    <span class="task-copy"><strong>{task.title}</strong><span>{task.detail}</span></span>
+                  </label>
+                </div>
                 {#if routine.cadence === 'monthly'}
                   <div class="row-actions">
                     <button class="btn ghost xs" type="button" data-move-up={task.id} aria-label={`Move ${task.title} up`} disabled={routine.state.monthlyGoals[0]?.id === task.id} onclick={() => void moveGoal(task.id, -1)}>Up</button>
@@ -232,7 +278,13 @@
   .goal-entry { display: flex; gap: var(--s2); align-items: stretch; }
   .goal-entry input { flex: 1 1 20rem; min-width: 0; }
   .goal-row { display: flex; align-items: flex-start; gap: var(--s3); }
-  .goal-row > label { flex: 1 1 auto; min-width: 0; }
+  .goal-main { display: flex; align-items: flex-start; gap: var(--s3); flex: 1 1 auto; min-width: 0; }
+  .goal-main > label { flex: 1 1 auto; min-width: 0; }
+  .drag-handle { display: flex; align-items: center; align-self: stretch; padding-block: var(--s3); color: var(--muted); cursor: grab; user-select: none; }
+  .drag-handle:active { cursor: grabbing; }
+  .checklist-items li.dragging { background: var(--panel-2); }
+  .checklist-items li.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+  .checklist-items.drop-end { border-bottom: 2px solid var(--accent); }
   .row-actions { display: flex; flex-wrap: wrap; flex-shrink: 0; gap: var(--s2); padding-block: var(--s3); }
   .goal-edit { display: flex; align-items: center; gap: var(--s2); padding-block: var(--s3); }
   .goal-edit input { flex: 1 1 20rem; min-width: 0; }

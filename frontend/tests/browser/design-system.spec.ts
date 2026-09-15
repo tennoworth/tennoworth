@@ -277,6 +277,41 @@ test('monthly goals reorder and keep keyboard focus in the list', async ({ page 
   await expect(page.locator('.checklist-items .task-copy strong')).toHaveText(['Third goal', 'Second goal']);
 });
 
+test('monthly goals can be dragged by their handle to a new position', async ({ page }) => {
+  await page.goto('/?preview-desktop&sample');
+  await page.evaluate(() => localStorage.removeItem('routine-checklist'));
+  await page.reload();
+  await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
+  await page.getByRole('button', { name: 'Monthly' }).click();
+  const add = page.getByLabel('Add a monthly goal');
+  for (const text of ['First goal', 'Second goal', 'Third goal']) {
+    await add.fill(text);
+    await page.getByRole('button', { name: 'Add goal' }).click();
+  }
+  const titles = page.locator('.checklist-items .task-copy strong');
+  const handles = page.locator('[data-drag-handle]');
+  const rows = page.locator('.checklist-items li');
+  await expect(handles).toHaveCount(3);
+
+  await handles.nth(2).dragTo(rows.nth(0), { targetPosition: { x: 40, y: 6 } });
+  await expect(titles).toHaveText(['Third goal', 'First goal', 'Second goal']);
+
+  await handles.nth(0).dragTo(rows.nth(2), { targetPosition: { x: 40, y: 60 } });
+  await expect(titles).toHaveText(['First goal', 'Second goal', 'Third goal']);
+
+  await page.reload();
+  await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
+  await page.getByRole('button', { name: 'Monthly' }).click();
+  await expect(titles).toHaveText(['First goal', 'Second goal', 'Third goal']);
+
+  // Wrapped rows must keep the handle on the title's line, not above it.
+  await page.setViewportSize({ width: 360, height: 760 });
+  const handleBox = await page.locator('[data-drag-handle]').first().boundingBox();
+  const titleBox = await page.locator('.checklist-items .task-copy strong').first().boundingBox();
+  expect(handleBox!.y).toBeLessThan(titleBox!.y + titleBox!.height);
+  expect(titleBox!.y).toBeLessThan(handleBox!.y + handleBox!.height);
+});
+
 test('the monthly goal field keeps a control height at narrow widths', async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 640 });
   await page.goto('/?preview-desktop&sample');

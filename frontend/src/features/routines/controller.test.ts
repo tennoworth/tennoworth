@@ -205,6 +205,46 @@ describe('RoutineController', () => {
     expect(store.writes).toHaveLength(writes);
   });
 
+  it('reorders a goal before an anchor or to the end without touching its text or tick', async () => {
+    const store = memoryStore();
+    const routine = new RoutineController(store, NOW);
+    routine.select('monthly');
+    for (const text of ['first', 'second', 'third']) await routine.addMonthlyGoal(text);
+    const [first, , third] = routine.state.monthlyGoals;
+    await routine.toggle(third.id, true);
+
+    await routine.reorderMonthlyGoal(third.id, first.id);
+    expect(routine.state.monthlyGoals.map(goal => goal.text)).toEqual(['third', 'first', 'second']);
+    expect(routine.completed).toEqual(new Set([third.id]));
+    expect(JSON.parse(store.values.get('routine-checklist')!).monthlyGoals.map((goal: { text: string }) => goal.text))
+      .toEqual(['third', 'first', 'second']);
+
+    await routine.reorderMonthlyGoal(third.id, null);
+    expect(routine.state.monthlyGoals.map(goal => goal.text)).toEqual(['first', 'second', 'third']);
+    expect(routine.completed).toEqual(new Set([third.id]));
+
+    await routine.reorderMonthlyGoal(first.id, third.id);
+    expect(routine.state.monthlyGoals.map(goal => goal.text)).toEqual(['second', 'first', 'third']);
+  });
+
+  it('writes nothing for a drop that cannot change the order', async () => {
+    const store = memoryStore();
+    const routine = new RoutineController(store, NOW);
+    routine.select('monthly');
+    await routine.addMonthlyGoal('first');
+    await routine.addMonthlyGoal('second');
+    const [first, second] = routine.state.monthlyGoals;
+    const writes = store.writes.length;
+
+    await routine.reorderMonthlyGoal(first.id, first.id);
+    await routine.reorderMonthlyGoal(first.id, second.id);
+    await routine.reorderMonthlyGoal(second.id, null);
+    await routine.reorderMonthlyGoal('goal-999', first.id);
+    await routine.reorderMonthlyGoal(first.id, 'goal-999');
+    expect(routine.state.monthlyGoals.map(goal => goal.id)).toEqual([first.id, second.id]);
+    expect(store.writes).toHaveLength(writes);
+  });
+
   it('rolls the week and the month without losing the goals or their order', async () => {
     const routine = new RoutineController(memoryStore(), Date.parse('2026-09-20T23:59:00Z'));
     await routine.toggle('login-tribute', true);
