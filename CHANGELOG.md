@@ -54,6 +54,34 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.7.105 - 2026-09-15
+
+# 📋 TennoWorth Desktop 0.7.105
+
+TennoWorth Desktop 0.7.105 turns Routines into a checklist you can actually keep.
+
+Track the daily and weekly habits that compound, and add the monthly goals you are working toward - each with its own tick. Put them in the order you want with the buttons or by dragging, and the list remembers where you left it. This release also updates the TLS library the app uses for market connections.
+
+## Changelog (5)
+
+### Routines
+
+- **Tick off what you have already done** Routines is a real checklist now: mark a daily or weekly task as you finish it, and the tick stays until that period resets. <!-- app-note {"id":"routine-checklist","kind":"improved"} -->
+- **Keep a list of monthly goals** Add as many goals as you are genuinely working on, rename one in place, or remove it. Each goal carries its own tick, and the ticks reset with the month while the goals stay. <!-- app-note {"id":"monthly-goals","kind":"improved"} -->
+- **Put the list in the order you want** Move a goal with the Up and Down buttons, or drag it by the handle to any position. The order is kept between sessions. <!-- app-note {"id":"goal-reordering","kind":"improved"} -->
+
+### Scanning
+
+- **Steadier inventory scanning** Capture rejects values that do not match the shape the game produces, keeps session details out of error messages, and bounds its own resource use. <!-- app-note {"id":"capture-hardening","kind":"fixed"} -->
+
+### Security
+
+- **Updated the library that secures market connections** TennoWorth now uses a rustls release that rejects TLS 1.3 handshake messages sent at the wrong encryption level. <!-- app-note {"id":"rustls-2026-0285","kind":"fixed"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.7.104 - 2026-09-11
 
 # 🧭 TennoWorth Desktop 0.7.104

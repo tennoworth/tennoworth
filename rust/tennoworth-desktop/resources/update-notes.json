@@ -1,5 +1,5 @@
 {
-  "version": "0.7.104",
+  "version": "0.7.105",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -149,6 +149,67 @@
           "kind": "improved",
           "title": "Read what changed after an update",
           "body": "TennoWorth brings together the bundled notes for every release you skipped and lets you reopen them from Settings → Updates → What’s new.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.7.105",
+      "date": "2026-09-15",
+      "changes": [
+        {
+          "id": "routine-checklist",
+          "kind": "improved",
+          "title": "Tick off what you have already done",
+          "body": "Routines is a real checklist now: mark a daily or weekly task as you finish it, and the tick stays until that period resets.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "monthly-goals",
+          "kind": "improved",
+          "title": "Keep a list of monthly goals",
+          "body": "Add as many goals as you are genuinely working on, rename one in place, or remove it. Each goal carries its own tick, and the ticks reset with the month while the goals stay.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "goal-reordering",
+          "kind": "improved",
+          "title": "Put the list in the order you want",
+          "body": "Move a goal with the Up and Down buttons, or drag it by the handle to any position. The order is kept between sessions.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "capture-hardening",
+          "kind": "fixed",
+          "title": "Steadier inventory scanning",
+          "body": "Capture rejects values that do not match the shape the game produces, keeps session details out of error messages, and bounds its own resource use.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "rustls-2026-0285",
+          "kind": "fixed",
+          "title": "Updated the library that secures market connections",
+          "body": "TennoWorth now uses a rustls release that rejects TLS 1.3 handshake messages sent at the wrong encryption level.",
           "platforms": [
             "windows",
             "linux"
