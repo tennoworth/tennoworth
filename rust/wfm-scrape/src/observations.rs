@@ -28,7 +28,14 @@ pub const FORMAT: u32 = 1;
 
 /// Retention. Observations are only useful while they overlap a schedule being
 /// tested, and the host's disk is small; the oldest logs go first.
-const MAX_BYTES: u64 = 512 * 1024 * 1024;
+///
+/// The first production log measured 1.52 MiB, which is 510 MiB for the 336
+/// sweeps that 28 days holds at one every two hours - under the old 512 MiB cap
+/// by about one percent, with a transient partial on top. A cap that close to
+/// the working set deletes data on a slightly larger sweep, so it is set to a
+/// gibibyte: roughly eight weeks at the measured size, still cheap against the
+/// box's 6 GiB of free disk.
+const MAX_BYTES: u64 = 1024 * 1024 * 1024;
 const MAX_AGE: Duration = Duration::from_secs(28 * 24 * 60 * 60);
 
 /// What the sweep concluded about one item.
