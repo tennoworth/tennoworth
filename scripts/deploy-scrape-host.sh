@@ -2,11 +2,11 @@
 # Deploy the wfm-scrape pipeline to the host directly, from a reviewed revision.
 #
 # The scrape is host-only infrastructure - the pipeline binary, the verifier
-# built with it to prove its key, one driver script, two units, and nothing a
-# user installs contains any of them - so it does not need the GitHub release
-# relay the web bundle and desktop app need. Commits still live in the monorepo
-# and are still reviewed; this script installs an immutable revision of them, and
-# nothing else.
+# built with it to prove its key, one driver script, the corpus readiness check
+# and their units, and nothing a user installs contains any of them - so it does
+# not need the GitHub release relay the web bundle and desktop app need. Commits
+# still live in the monorepo and are still reviewed; this script installs an
+# immutable revision of them, and nothing else.
 #
 # Order of operations, all of which are load-bearing:
 #   1. the tree is clean and the revision is already on the remote,
@@ -20,7 +20,9 @@
 #      while the live paths still run the previous release,
 #   6. only then are the live paths replaced, so a rejection leaves what is
 #      running exactly as it was,
-#   7. /srv/wfm/deployed.json records what ran and what it was checked against.
+#   7. /srv/wfm/deployed.json records what ran and what it was checked against,
+#   8. the sweep schedule is restored, and only then are the monitors armed -
+#      the readiness check requires the archive receipt the pull timer fetches.
 #
 # Environment:
 #   HOST          ssh target                (default wfm)
@@ -129,8 +131,12 @@ TIMER_HELD=1
 restore_timer() {
   [ "${TIMER_HELD:-0}" = 1 ] || return 0
   TIMER_HELD=0
-  $SSH "$HOST" "systemctl start wfm-scrape.timer" \
-    || say "WARNING: restore the timer by hand and confirm it: systemctl list-timers wfm-scrape.timer; systemctl start wfm-scrape.timer"
+  # Return non-zero when the restore does not take effect. In the EXIT trap the
+  # status is discarded, but the success path calls this explicitly and a deploy
+  # that leaves the box with no schedule must not report success.
+  $SSH "$HOST" "systemctl start wfm-scrape.timer" && return 0
+  say "WARNING: restore the timer by hand and confirm it: systemctl list-timers wfm-scrape.timer; systemctl start wfm-scrape.timer"
+  return 1
 }
 trap restore_timer EXIT
 
@@ -173,6 +179,8 @@ $SSH "$HOST" "install -d -m 0755 -o root -g root '$STAGING'"
 $SCP -q "$ARTIFACT" "$HOST:$STAGING/wfm-scrape"
 $SCP -q "$VERIFIER_ARTIFACT" "$HOST:$STAGING/wfm-policy"
 $SCP -q deploy/run-scrape.sh deploy/wfm-scrape.service deploy/wfm-scrape.timer "$HOST:$STAGING/"
+$SCP -q deploy/observations-check.sh deploy/wfm-observations-check.service deploy/wfm-observations-check.timer "$HOST:$STAGING/"
+$SCP -q deploy/pull-archive-receipt.sh deploy/wfm-archive-receipt-pull.service deploy/wfm-archive-receipt-pull.timer "$HOST:$STAGING/"
 
 # ---- 6. install and prove the release before the live paths move -----------
 # The live paths keep running the previous release until this one is proven on
@@ -186,6 +194,12 @@ install -m 0755 "$STAGING/wfm-policy" "$RELEASES/$REVISION/wfm-policy"
 install -m 0755 "$STAGING/run-scrape.sh" "$RELEASES/$REVISION/run-scrape.sh"
 install -m 0644 "$STAGING/wfm-scrape.service" "$RELEASES/$REVISION/wfm-scrape.service"
 install -m 0644 "$STAGING/wfm-scrape.timer" "$RELEASES/$REVISION/wfm-scrape.timer"
+install -m 0755 "$STAGING/observations-check.sh" "$RELEASES/$REVISION/observations-check.sh"
+install -m 0644 "$STAGING/wfm-observations-check.service" "$RELEASES/$REVISION/wfm-observations-check.service"
+install -m 0644 "$STAGING/wfm-observations-check.timer" "$RELEASES/$REVISION/wfm-observations-check.timer"
+install -m 0755 "$STAGING/pull-archive-receipt.sh" "$RELEASES/$REVISION/pull-archive-receipt.sh"
+install -m 0644 "$STAGING/wfm-archive-receipt-pull.service" "$RELEASES/$REVISION/wfm-archive-receipt-pull.service"
+install -m 0644 "$STAGING/wfm-archive-receipt-pull.timer" "$RELEASES/$REVISION/wfm-archive-receipt-pull.timer"
 REMOTE_RELEASE
 
 SCRAPER="$RELEASES/$REVISION/wfm-scrape"
@@ -215,11 +229,21 @@ install -m 0755 "$RELEASES/$REVISION/wfm-scrape" "/srv/wfm/bin/wfm-scrape"
 install -m 0755 "$RELEASES/$REVISION/run-scrape.sh" "/srv/wfm/run-scrape.sh"
 install -m 0644 "$RELEASES/$REVISION/wfm-scrape.service" /etc/systemd/system/wfm-scrape.service
 install -m 0644 "$RELEASES/$REVISION/wfm-scrape.timer" /etc/systemd/system/wfm-scrape.timer
+install -m 0755 "$RELEASES/$REVISION/observations-check.sh" "/srv/wfm/observations-check.sh"
+install -m 0644 "$RELEASES/$REVISION/wfm-observations-check.service" /etc/systemd/system/wfm-observations-check.service
+install -m 0644 "$RELEASES/$REVISION/wfm-observations-check.timer" /etc/systemd/system/wfm-observations-check.timer
+install -m 0755 "$RELEASES/$REVISION/pull-archive-receipt.sh" "/srv/wfm/pull-archive-receipt.sh"
+install -m 0644 "$RELEASES/$REVISION/wfm-archive-receipt-pull.service" /etc/systemd/system/wfm-archive-receipt-pull.service
+install -m 0644 "$RELEASES/$REVISION/wfm-archive-receipt-pull.timer" /etc/systemd/system/wfm-archive-receipt-pull.timer
+# ProtectSystem=strict in both new units grants write access to exactly this
+# path, and systemd refuses to start a unit whose ReadWritePaths does not exist.
+install -d -m 0750 -o root -g root "$HOST_ROOT/data/observations-check"
 systemctl daemon-reload
 # A fresh box otherwise has the units and nothing scheduled: setup-container no
 # longer enables the scrape timer, because this script owns the pipeline now.
 # Arming the timer here with enable --now would reopen the window the hold above
-# exists to close; the EXIT trap starts it once every check has passed.
+# exists to close; the EXIT trap starts it once every check has passed, and the
+# monitoring timers are deliberately armed after that.
 systemctl enable wfm-scrape.timer
 REMOTE_ACTIVATE
 
@@ -236,5 +260,40 @@ $SSH "$HOST" "cat > '$HOST_ROOT/deployed.json'" <<RECORD
   "glibc_on_box": "$BOX_GLIBC"
 }
 RECORD
+
+# ---- 9. restore the schedule, then arm the monitors ------------------------
+# Both monitors read the deployment record and the sweep schedule, so they are
+# armed only after those are settled: a persistent timer enabled earlier can
+# fire into the intermediate state and report on a box that is still deploying.
+# restore_timer is the same call the failure path makes, made deliberately here
+# so the schedule is running before anything watches it - and disarms the trap
+# so success does not start it twice.
+restore_timer
+
+$SSH "$HOST" "systemctl enable --now wfm-archive-receipt-pull.timer wfm-observations-check.timer"
+
+# ---- 10. run the pair once, in order --------------------------------------
+# Two persistent timers can elapse in either order after downtime, and a check
+# that runs before the pull reads yesterday's receipt. The first run is therefore
+# explicit: the pull first, then the check. The pull may fail because the archive
+# host is not configured yet - that is the units' own alert to raise, not this
+# script's - but a check that leaves no report at all means the installed units
+# are broken, and a check that is not ready means the box is not ready to be left
+# unattended.
+$SSH "$HOST" "systemctl start wfm-archive-receipt-pull.service" \
+  || say "WARNING: the first receipt pull failed; the readiness check will report the archive as unmonitored"
+$SSH "$HOST" "systemctl start wfm-observations-check.service" || true
+$SSH "$HOST" "test -s '$HOST_ROOT/data/observations-check/report.json'" \
+  || die "the readiness check produced no report - the installed units are not working"
+READY="$($SSH "$HOST" "grep -o '\"ready\":[a-z ]*' '$HOST_ROOT/data/observations-check/report.json' 2>/dev/null | head -1")"
+case "$READY" in
+  *true*)
+    say "readiness: ready ($HOST_ROOT/data/observations-check/report.json on the box)";;
+  *)
+    # The release is installed and the schedule is running; what failed is the
+    # gate this deployment is required to pass.
+    say "readiness: NOT READY ($READY)"
+    die "the readiness check does not pass on the box - the archive path is not working end to end; fix it rather than disabling the check (report at $HOST_ROOT/data/observations-check/report.json)";;
+esac
 
 say "deployed $(git rev-parse --short "$REVISION"); rollback: install a previous $RELEASES/<rev>/ by hand and daemon-reload"

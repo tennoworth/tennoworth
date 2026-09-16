@@ -1,0 +1,12 @@
+[Unit]
+Description=Check the observation corpus
+
+[Timer]
+# Hourly: the archive freshness deadline is 36 hours, and a daily evaluation can
+# let a breach stand for most of another day. UTC is explicit because an
+# OnCalendar without it follows the host's local time.
+OnCalendar=*-*-* *:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

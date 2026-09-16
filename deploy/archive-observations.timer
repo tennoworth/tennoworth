@@ -1,0 +1,13 @@
+[Unit]
+Description=Archive the box's observation logs
+
+[Timer]
+# Daily. The box's deadline is 36 hours and it pulls this host's receipt hourly,
+# so a missed run here is visible within an hour of the deadline. UTC is explicit
+# because an OnCalendar without it follows this host's local time. Persistent so
+# a host that was off still archives on the next boot rather than skipping a day.
+OnCalendar=*-*-* 05:30:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

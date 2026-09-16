@@ -1,0 +1,30 @@
+[Unit]
+Description=Fetch the observation archive receipt from the archive host
+Wants=network-online.target
+After=network-online.target
+# An archive that stops running is exactly what this step exists to make
+# visible, so a fetch that cannot complete pages like any other failure.
+OnFailure=wfm-alert@%n.service
+
+[Service]
+Type=oneshot
+# ARCHIVE_RECEIPT_SOURCE=user@archive-host:/path/to/receipt.jsonl, plus optional
+# SCP. Absent means there is nothing to fetch, and the readiness check will say
+# the archive is unmonitored rather than pass it quietly.
+EnvironmentFile=-/etc/wfm-archive-receipt.env
+ExecStart=/srv/wfm/pull-archive-receipt.sh
+Nice=10
+
+# This is the only unit in the set that needs the network, which is why it is
+# separate from the check: the check itself stays address-family-restricted to
+# its own sockets so its verdict cannot depend on a remote host.
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/srv/wfm/data/observations-check
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallFilter=@system-service

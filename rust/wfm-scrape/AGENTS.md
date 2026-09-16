@@ -71,7 +71,12 @@ contract, so it lives in [`../AGENTS.md`](../AGENTS.md) rather than here.
 JSONL file per sweep, `src/observations.rs`) holding what each attempted item's
 statistics and book said; it is evidence for the statistics-refresh decision and
 no publication input, so a log that cannot be written warns instead of failing
-the sweep. `replay` (`src/replay.rs`) reads those logs back and simulates a
+the sweep. Retention is 56 days or 2 GiB, whichever binds first, sized so the
+four-week evaluation window closes before the corpus starts losing its earliest
+days; those two bounds are restated in shell by the host readiness check, and
+`tests/fixtures/observation-retention.json` is the shared gate that keeps the
+Rust constants and the shell defaults from drifting apart. `replay`
+(`src/replay.rs`) reads those logs back and simulates a
 statistics-refresh schedule without touching WFM: it must refresh only on
 evidence a production run could have had (cached state, catalog, a response
 already fetched), and a book result the policy could not observe is reported as
@@ -80,3 +85,17 @@ UNKNOWN rather than zero. Its report is deterministic and pinned by
 freshly built binary (`env!("CARGO_BIN_EXE_wfm-scrape")`) against the frozen
 fixtures in `tests/fixtures/{scrape,convert}` - cargo rebuilds the binary first,
 so a stale one cannot green them.
+
+The corpus's operational owners are host-only, next to the pipeline:
+`deploy/observations-check.sh` (with `wfm-observations-check.service`/`.timer`,
+installed by `scripts/deploy-scrape-host.sh`) reports whether the corpus is sound,
+complete and preserved, and `scripts/archive-observations.sh` copies it off the
+box with a verified manifest and publishes a receipt the box pulls hourly with
+`deploy/pull-archive-receipt.sh` (`scripts/install-archive-host.sh` provisions
+the archive host). The check answers collection-readiness only; the schedule
+decision belongs to `replay`. Archive evidence is required: a missing, stale,
+future-dated or disagreeing receipt, or a completed log past its archival
+deadline, is a failure, so an unmonitored archive cannot read as ready. The check
+ties its journal evidence to one systemd invocation and one sweep, and a start
+that cannot be paired is an explicit failure rather than a skipped gate. It never
+ends without a report: an absent field is reported as absent and failed.
