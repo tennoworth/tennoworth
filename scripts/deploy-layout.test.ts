@@ -1402,7 +1402,7 @@ describe.skipIf(process.platform === 'win32')('observation corpus readiness', ()
 });
 
 describe.skipIf(process.platform === 'win32')('observation archive', () => {
-  function archiveFixture(options: { corrupt?: boolean } = {}) {
+  function archiveFixture(options: { corrupt?: boolean; complete?: number } = {}) {
     const root = mkdtempSync(join(tmpdir(), 'obs-archive-')); directories.push(root);
     const remote = join(root, 'remote'), bin = join(root, 'bin'), dest = join(root, 'dest');
     for (const path of [remote, bin, dest]) mkdirSync(path);
@@ -1438,7 +1438,10 @@ describe.skipIf(process.platform === 'win32')('observation archive', () => {
     chmodSync(join(bin, 'fake-ssh'), 0o755);
     chmodSync(join(bin, 'fake-scp'), 0o755);
     const body = '{"kind":"run","format":1}\n';
-    writeFileSync(join(remote, 'sweep-2026-09-16T12-02-42Z.jsonl'), body.repeat(20));
+    for (let i = 0; i < (options.complete ?? 1); i++) {
+      const stamp = new Date((1789560162 + i * 60) * 1000).toISOString().replace('.000Z', 'Z');
+      writeFileSync(join(remote, `sweep-${stamp.replaceAll(':', '-')}.jsonl`), body.repeat(20));
+    }
     writeFileSync(join(remote, 'sweep-2026-09-16T14-05-32Z.jsonl.partial'), 'half a sweep\n');
     writeFileSync(join(remote, 'deployed.json'), '{\n  "revision": "fixture-rev",\n  "sha256": "deadbeef"\n}\n');
     const run = (env: Record<string, string> = {}) => spawnSync('bash', [archiveScript], {
@@ -1570,6 +1573,30 @@ describe.skipIf(process.platform === 'win32')('observation archive', () => {
     expect(rows).toHaveLength(2);
     expect(readFileSync(f.receiptPath, 'utf8')).not.toBe(receiptBefore);
   });
+
+  test('exactly 256 unverifiable claims still block publication', () => {
+    // A shell status is taken modulo 256, so returning the count made exactly
+    // 256 failures indistinguishable from success - and published a receipt
+    // over 256 missing artifacts.
+    const f = archiveFixture({ complete: 256 });
+    const first = f.run();
+    expect(first.status, first.stderr).toBe(0);
+    const receiptBefore = readFileSync(f.receiptPath, 'utf8');
+    const archived = readdirSync(f.remote).filter(name => name.endsWith('.jsonl'));
+    expect(archived).toHaveLength(256);
+    for (const name of archived) {
+      rmSync(join(f.remote, name));
+      rmSync(join(f.dest, `${name}.gz`));
+    }
+    // A later sweep keeps the listing non-empty, as it would be on the box.
+    writeFileSync(join(f.remote, 'sweep-2026-09-17T00-00-00Z.jsonl'), '{"kind":"run","format":1}\n'.repeat(10));
+    const result = f.run();
+    expect(result.status, '256 failures must not read as success').not.toBe(0);
+    expect((result.stdout.match(/still claimed but its stored artifact is gone/g) ?? [])).toHaveLength(256);
+    expect(result.stderr).toContain('can no longer be verified');
+    expect(readFileSync(f.receiptPath, 'utf8')).toBe(receiptBefore);
+    // Hashing 256 artifacts twice is real work for a test process.
+  }, 60_000);
 
   test('a transfer that does not match the box fails non-zero and stores nothing', () => {
     const f = archiveFixture({ corrupt: true });

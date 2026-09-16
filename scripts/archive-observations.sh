@@ -142,7 +142,10 @@ verify_manifest() {
       continue
     fi
   done < "$MANIFEST"
-  return "$bad"
+  # A boolean, never the count: a shell status is taken modulo 256, so returning
+  # 256 would report success and publish exactly the receipt this exists to
+  # withhold.
+  [ "$bad" -eq 0 ]
 }
 
 # The receipt is what the box reads, so it carries the source identity and the
