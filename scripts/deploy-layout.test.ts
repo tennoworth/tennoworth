@@ -214,10 +214,13 @@ describe('host-direct scrape deploy script', () => {
     expect(stop, 'the timer must be stopped, not merely observed').toBeGreaterThan(-1);
     // Restoring only after the last check leaves the box with no schedule at all
     // whenever an earlier step fails - silent until someone notices the data is
-    // stale - so the restore has to ride the one path both endings take.
+    // stale - so the restore has to ride the one path both endings take, and it
+    // has to be armed no later than the stop in case that call dies in flight.
     const trap = deploy.indexOf('trap restore_timer EXIT');
-    expect(trap, 'the restore must be an EXIT trap').toBeGreaterThan(stop);
-    expect(deploy).toMatch(/systemctl start wfm-scrape\.timer/);
+    expect(trap, 'the restore must be an EXIT trap').toBeGreaterThan(-1);
+    expect(trap, 'the restore must be armed before the timer is stopped').toBeLessThan(stop);
+    // Pin the call, not the warning text that names the same command.
+    expect(deploy, 'the trap must actually start the timer').toMatch(/\$SSH "\$HOST" "systemctl start wfm-scrape\.timer"/);
     // `enable --now` re-arms the timer in the middle of the very window the hold
     // exists to protect; only `enable` may run inside it.
     expect(deploy).toMatch(/systemctl enable wfm-scrape\.timer/);

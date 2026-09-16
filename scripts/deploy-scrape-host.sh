@@ -110,14 +110,14 @@ fi
 # can fire at any point in the install, and the live files are replaced one at a
 # time, so a single sweep could run `scrape` from one release and `build` from
 # the next. The timer has to be stopped for the whole operation.
-$SSH "$HOST" "systemctl stop wfm-scrape.timer >/dev/null 2>&1 || true; ! systemctl is-active --quiet wfm-scrape.timer" \
-  || die "could not stop wfm-scrape.timer; refusing to install under a live schedule"
 
 # The schedule must come back on the failure path as well as the success one. A
 # deploy that dies with the timer stopped leaves the box with no schedule at all
-# and no error anyone sees until the data is stale. Nothing can run this after a
-# SIGKILL, so the unit stays enabled: a reboot re-arms it through timers.target
-# even then.
+# and no error anyone sees until the data is stale. Arm the restore before the
+# stop: if the SSH session dies after the remote systemctl stopped the timer but
+# before this script sees that, a trap armed afterwards would never run. Nothing
+# can run this after a SIGKILL, so the unit stays enabled: a reboot re-arms it
+# through timers.target even then.
 TIMER_HELD=1
 restore_timer() {
   [ "${TIMER_HELD:-0}" = 1 ] || return 0
@@ -126,6 +126,9 @@ restore_timer() {
     || say "WARNING: the timer is still stopped; start it by hand: systemctl start wfm-scrape.timer"
 }
 trap restore_timer EXIT
+
+$SSH "$HOST" "systemctl stop wfm-scrape.timer >/dev/null 2>&1 || true; ! systemctl is-active --quiet wfm-scrape.timer" \
+  || die "could not stop wfm-scrape.timer; refusing to install under a live schedule"
 
 # Stopping the timer does not stop a sweep a previous elapse already started.
 # Wait that one out before writing anything: a single sample of the state can
