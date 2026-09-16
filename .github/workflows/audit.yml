@@ -433,6 +433,9 @@ jobs:
           sudo install -d -m 0755 /srv/wfm/app
           sudo install -m 0755 deploy/*.sh /srv/wfm/
           sudo install -D -m 0755 /bin/true /srv/wfm/bin/tennoworth-usage
+          # The archive host's unit lives in deploy/ too, and its ExecStart is
+          # /usr/local/bin on THAT host; verify only needs the path to resolve.
+          sudo install -D -m 0755 /bin/true /usr/local/bin/archive-observations.sh
           systemd-analyze verify deploy/*.service deploy/*.timer
       - name: CSP copies agree
         run: bun scripts/sync-csp.ts --check
