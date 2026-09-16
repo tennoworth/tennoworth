@@ -368,8 +368,7 @@ jobs:
   # ubuntu-22.04 is load-bearing, not incidental: glibc is backward- but not
   # forward-compatible, so the build host's glibc becomes the floor for every
   # user. 22.04's 2.35 runs everywhere current; a binary built on a rolling
-  # distro would demand a glibc most users don't have yet. Same reasoning as
-  # build-scrape.yml's Linux leg.
+  # distro would demand a glibc most users don't have yet.
   build-linux:
     needs: preflight
     runs-on: ubuntu-22.04

@@ -219,8 +219,9 @@ and its development-only `?styleguide` reference.
 
 `develop` is the integration branch. `main` is production and deploys the web
 app; production promotion is fast-forward only. Desktop releases are built
-from `main` and tagged `desktop-v<version>`. The site and market/scraper
-artifacts use rolling release tags and are not desktop versions.
+from `main` and tagged `desktop-v<version>`. The site, usage collector and
+signed policy use rolling release tags and are not desktop versions; the
+host-only scrape pipeline is deployed directly from a reviewed revision.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for desktop release history and
 [`docs/releasing.md`](docs/releasing.md) for the release policy and procedure.

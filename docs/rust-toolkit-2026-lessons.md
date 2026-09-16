@@ -61,8 +61,8 @@ exclude workspace crates. The pinned rust-cache action ignores `key` when
 Windows release and smoke share a release-profile
 group keyed by the native compatibility identity. OCR installers have their
 own groups. Linux Ubuntu 22.04 release, smoke debug and OCR installer groups
-are separate, with runner image identity included. Tool-install, preflight,
-scraper and audit jobs keep their existing job-specific caches.
+are separate, with runner image identity included. Tool-install, preflight
+and audit jobs keep their existing job-specific caches.
 
 The default branch (`develop`) is the only scope a pull request can restore from
 beyond its own merge ref, so it must be seeded by a non-PR run. Two triggers do

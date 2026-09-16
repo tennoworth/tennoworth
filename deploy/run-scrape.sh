@@ -35,7 +35,7 @@ prior=0
 [ -f "$CSV" ] && prior=$(( $(wc -l < "$CSV") - 1 ))
 
 SCRAPE_BIN="${SCRAPE_BIN:-/srv/wfm/bin/wfm-scrape}"
-[ -x "$SCRAPE_BIN" ] || { echo "ABORT: $SCRAPE_BIN is missing - the box needs it (wfm-scrape-pull.timer installs it)." >&2; exit 1; }
+[ -x "$SCRAPE_BIN" ] || { echo "ABORT: $SCRAPE_BIN is missing - the box needs it (scripts/deploy-scrape-host.sh installs it)." >&2; exit 1; }
 SCRAPE_ARGS=(--filter "" --exclude "" --min-volume 1 --out "$CSV")
 # The observation log is evidence for a later statistics-refresh decision, never
 # a publication input: the binary warns and carries on when it cannot be

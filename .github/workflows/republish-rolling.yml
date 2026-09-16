@@ -6,8 +6,8 @@ name: republish-rolling
 # on a stale artifact indefinitely.
 #
 # A manual dispatch of a publisher skips classification entirely - that is what
-# `!cancelled()` in its publish guard exists for - so dispatching the three of
-# them repairs whatever was left behind. Doing it on a schedule bounds how long
+# `!cancelled()` in its publish guard exists for - so dispatching each of them
+# repairs whatever was left behind. Doing it on a schedule bounds how long
 # that can last, and doubles as a weekly canary for the whole publish path.
 #
 # This is a bound, not a guarantee: GitHub can drop a scheduled run, and the
@@ -33,10 +33,10 @@ jobs:
     # web build is the slow one.
     timeout-minutes: 45
     strategy:
-      # One publisher failing must not stop the other two from being dispatched.
+      # One publisher failing must not stop the other from being dispatched.
       fail-fast: false
       matrix:
-        workflow: [build-web.yml, build-scrape.yml, build-usage.yml]
+        workflow: [build-web.yml, build-usage.yml]
     steps:
       # Dispatch `${{ matrix.workflow }}` on `main` and then require it to have
       # actually done something. `gh workflow run` exits 0 as soon as the run is

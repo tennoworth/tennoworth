@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -221,6 +221,15 @@ describe('host-direct scrape deploy script', () => {
     expect(deploy).not.toMatch(/wfm-policy\.key/);
     expect(deploy).not.toMatch(/minisign -S[mG]/);
   });
+
+  test('is the only installer of the driver script and the units', () => {
+    // Everything the units execute moves together here, so a change to the
+    // pipeline cannot reach the box without passing the gates above. A second
+    // installer is the regression: it can advance one piece on its own.
+    expect(deploy).toMatch(/install -m 0755 "[^"]*\/run-scrape\.sh" "\/srv\/wfm\/run-scrape\.sh"/);
+    expect(deploy).toMatch(/install -m 0644 "[^"]*\/wfm-scrape\.service" \/etc\/systemd\/system\/wfm-scrape\.service/);
+    expect(deploy).toMatch(/install -m 0644 "[^"]*\/wfm-scrape\.timer" \/etc\/systemd\/system\/wfm-scrape\.timer/);
+  });
 });
 
 describe('deployment ownership boundary', () => {
@@ -251,6 +260,39 @@ describe('deployment ownership boundary', () => {
     expect(unit, 'the unit must be allowed to write it').toMatch(
       /^\s*ReadWritePaths=.*\/srv\/wfm\/observations/m,
     );
+  });
+
+  test('leaves the scrape pipeline for the deploy script to install', () => {
+    // The pipeline has exactly one installer now. The box ran a weeks-old
+    // run-scrape.sh because setup-container.sh installed a copy of its own and
+    // nothing reconciled it with the checkout.
+    for (const file of ['run-scrape.sh', 'pull-scrape.sh', 'wfm-scrape.service', 'wfm-scrape.timer', 'wfm-scrape-pull.service', 'wfm-scrape-pull.timer']) {
+      expect(setup, `${file} must not be installed here`).not.toMatch(new RegExp(`install[^\\n]*${file.replace(/\./g, '\\.')}`));
+    }
+  });
+});
+
+describe('scrape pipeline delivery boundary', () => {
+  const pullApp = readFileSync(fileURLToPath(new URL('../deploy/pull-app.sh', import.meta.url)), 'utf8');
+
+  test('the checkout puller never installs or drift-reports a scrape-owned file', () => {
+    // scripts/deploy-scrape-host.sh is the only writer of the pipeline. The box
+    // once ran a weeks-old copy because the checkout puller and setup-container
+    // both installed one; a name reappearing in either list re-opens that.
+    expect(pullApp).not.toMatch(/for f in [^;]*run-scrape\.sh/);
+    expect(pullApp).not.toMatch(/for f in [^;]*pull-scrape\.sh/);
+    expect(pullApp).not.toMatch(/for u in [^;]*wfm-scrape(-pull)?( |$)/m);
+  });
+
+  test('no workflow republishes the pipeline through a GitHub release', () => {
+    // Host-direct deploy is the only delivery path now; a workflow that still
+    // published scrape-latest or ran pull-scrape would reopen the relay.
+    const dir = fileURLToPath(new URL('../.github/workflows', import.meta.url));
+    for (const name of readdirSync(dir)) {
+      const body = readFileSync(join(dir, name), 'utf8');
+      expect(body, `${name} must not publish a scrape-latest release`).not.toContain('scrape-latest');
+      expect(body, `${name} must not reference the retired puller`).not.toContain('pull-scrape');
+    }
   });
 });
 
