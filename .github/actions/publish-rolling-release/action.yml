@@ -1,18 +1,18 @@
 name: Publish rolling release
 description: >
   softprops/action-gh-release with the shared policy for TennoWorth's rolling
-  "-latest" releases (scrape-latest, web-latest): draft off, prerelease on
-  and make_latest off (both keep a rolling build out of the repo's "Latest
-  release" badge - that's reserved for the versioned desktop-v* tags). Per-release
-  tag/name/files/body stay caller-supplied so the two releases can't
-  silently diverge on the policy while still describing themselves
+  "-latest" releases (web-latest, usage-latest, wfm-policy-latest): draft off,
+  prerelease on and make_latest off (each keeps a rolling build out of the
+  repo's "Latest release" badge - that's reserved for the versioned desktop-v*
+  tags). Per-release tag/name/files/body stay caller-supplied so the releases
+  can't silently diverge on the policy while still describing themselves
   differently.
 inputs:
   tag_name:
-    description: The rolling tag to update, e.g. scrape-latest.
+    description: The rolling tag to update, e.g. web-latest.
     required: true
   release_name:
-    description: The release title, e.g. "scrape-latest (auto-built)".
+    description: The release title, e.g. "web-latest (auto-built)".
     required: true
   files:
     description: Newline-separated list of asset paths to attach.

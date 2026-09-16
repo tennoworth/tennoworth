@@ -16,10 +16,10 @@ the old source directory after advancing the checkout.
    enabled timer state. Confirm that the authoritative remote is named `github`
    and points to the intended GitHub repository. If an existing deployment uses
    another name for that same remote, rename it or pass `REMOTE` explicitly.
-2. Stop `wfm-app-pull.timer`, `wfm-web-pull.timer`, `wfm-scrape-pull.timer`, and
-   `wfm-scrape.timer`. Wait for all four corresponding services to become
-   inactive or failed. Do not kill an in-flight scrape or replace a running
-   shell script. The puller independently rejects an activating scrape.
+2. Stop `wfm-app-pull.timer`, `wfm-web-pull.timer`, and `wfm-scrape.timer`.
+   Wait for the three corresponding services to become inactive or failed. Do
+   not kill an in-flight scrape or replace a running shell script. The puller
+   independently rejects an activating scrape.
 3. Make a private backup outside the deployment directory, with `umask 077`.
    Preserve the checkout including its Git state, `bin/`, installed scripts,
    asset stamps, and the deployed Caddy configuration. Include the live
@@ -35,9 +35,11 @@ contributor needs access to this host or its credentials.
 
 ## Transition
 
-After authorized production promotion, wait for the matching `build-web` and
-`build-scrape` workflows to succeed. Confirm their source commit before using
-the rolling artifacts. Keep all deployment timers stopped.
+After authorized production promotion, wait for the matching `build-web`
+workflow to succeed. Confirm its source commit before using the rolling web
+artifact; the scrape pipeline is deployed from a reviewed revision by
+`scripts/deploy-scrape-host.sh`, not built by a workflow. Keep all deployment
+timers stopped.
 
 From the deployment account, run the installed migration-aware puller:
 
@@ -59,8 +61,9 @@ Then:
 
 1. Compare checksums of the live market/catalog pair, definitions, history, and CSV with the
    pre-transition copies. They must be unchanged by the source update.
-2. Run the newly installed `pull-scrape.sh` and `pull-web.sh`. Verify the
-   installed binary and bundle came from the successful matching workflows.
+2. Deploy the scrape pipeline with `scripts/deploy-scrape-host.sh` and run the
+   newly installed `pull-web.sh`. Verify the deployed binary carries the
+   transition commit and the bundle came from the successful web workflow.
    Do not let a binary built for the old source paths run the new checkout.
 3. Install `deploy/Caddyfile`, validate it with `caddy validate --config
    /etc/caddy/Caddyfile --adapter caddyfile`, and reload Caddy. Install any
@@ -83,7 +86,7 @@ production checkout.
 
 ## Rollback
 
-Stop the four timers again and wait for in-flight services to settle. Save
+Stop the timers again and wait for in-flight services to settle. Save
 any live snapshots, definitions, history, CSV, and checkpoints produced since the original
 backup into another private directory. Retain the failed deployment separately
 for inspection.

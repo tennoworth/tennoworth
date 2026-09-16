@@ -1,17 +1,13 @@
 #!/usr/bin/env bash
 # Update the box's repo checkout at /srv/wfm/app.
 #
-# The other pullers cover built artifacts, not the checkout itself, so
-# deploy/run-scrape.sh and the systemd units only move when
-# a human moves them - which is how the box sat on a phase-3 commit while main
-# was many commits ahead.
+# The other pullers cover built artifacts, not the checkout itself, so without
+# this the checkout only moves when a human moves it - which is how the box sat
+# on a phase-3 commit while main was many commits ahead.
 #
-# It also re-installs the deployed copies. The units do NOT execute the files
-# in the checkout - wfm-scrape.service runs /srv/wfm/run-scrape.sh, a copy
-# setup-container.sh made once. On 2026-08-01 that copy was from Jul 19 08:56
-# while the repo's copy from 14:59 the same day differed - nothing reconciled
-# them, so the box ran the old pipeline script for two weeks while the repo
-# copy looked current.
+# It also re-installs the deployed copies of the web, policy and usage pieces.
+# The scrape pipeline is not one of them: scripts/deploy-scrape-host.sh is the
+# only installer of run-scrape.sh, the binary and the units.
 #
 # This is not `git pull`, and the difference matters:
 #
@@ -24,9 +20,9 @@
 #
 # So: stash the live artifacts, fast-forward, put them back.
 #
-# Refuses to run while a scrape is in flight. Bash reads a script incrementally,
-# so replacing run-scrape.sh underneath a running instance can make it resume
-# mid-file at a byte offset that is now different code.
+# Refuses to run while a scrape is in flight: the fast-forward rewrites the
+# checkout and restores the live artifacts the sweep reads and writes, and this
+# script does not take run-scrape.sh's output lock.
 set -euo pipefail
 
 APP="${APP:-/srv/wfm/app}"
@@ -60,8 +56,7 @@ cd "$APP"
 # returns non-zero for the entire hour the scrape is actually running, and the
 # guard sailed through in precisely the window it exists to block. Observed on
 # the box 2026-08-11: `is-active` printed `activating` while a scrape was
-# mid-run and the pull proceeded anyway; it was harmless only because
-# run-scrape.sh happened not to differ in that commit range.
+# mid-run and the pull proceeded anyway.
 #
 # Test the settled states instead, so any not-settled state counts as busy.
 scrape_state=$(systemctl show wfm-scrape.service -p ActiveState --value 2>/dev/null || true)
@@ -194,11 +189,14 @@ done
 git merge --ff-only "$REMOTE/$BRANCH"
 echo "pulled: $before -> $target"
 
-# Pulling the checkout is NOT enough. The units execute COPIES under /srv/wfm
-# (ExecStart=/srv/wfm/run-scrape.sh), installed once by setup-container.sh and
-# never refreshed since. The running /srv/wfm/run-scrape.sh was six hours older
-# than the repo's - a pull that leaves the copies stale is cosmetic.
-# Re-install anything that drifted, or a pull is cosmetic.
+# Pulling the checkout is NOT enough: the units execute COPIES under /srv/wfm
+# that nothing else refreshes, so a pull that leaves the copies stale is
+# cosmetic. Re-install anything that drifted.
+#
+# Scrape-owned files stay out of this list and out of the drift report below.
+# scripts/deploy-scrape-host.sh is their only writer, and two writers is how the
+# box once ran a weeks-old run-scrape.sh for two weeks while the repo's copy
+# looked current.
 #
 # pull-app.sh reinstalls ITSELF as well, or a fix to this script is the one
 # thing that still needs a human. That makes the install METHOD load-bearing:
@@ -207,7 +205,7 @@ echo "pulled: $before -> $target"
 # at a byte offset that is now different code (the same hazard the scrape guard
 # above exists for). Stage beside the target and rename over it: rename swaps
 # the inode, so the running shell keeps reading the copy it started with.
-for f in run-scrape.sh alert.sh pull-app.sh pull-web.sh pull-scrape.sh pull-policy.sh pull-usage.sh monitor-usage.sh; do
+for f in alert.sh pull-app.sh pull-web.sh pull-policy.sh pull-usage.sh monitor-usage.sh; do
   src="deploy/$f"
   [ -f "$src" ] || continue
   if ! cmp -s "$src" "$DEPLOY_ROOT/$f" 2>/dev/null; then
@@ -230,7 +228,7 @@ fi
 
 # Units need root plus a daemon-reload, so report rather than act - a puller
 # that silently restarts systemd units is a different and larger promise.
-for u in wfm-scrape wfm-app-pull wfm-web-pull wfm-scrape-pull wfm-policy-pull tennoworth-usage tennoworth-usage-pull tennoworth-usage-monitor; do
+for u in wfm-app-pull wfm-web-pull wfm-policy-pull tennoworth-usage tennoworth-usage-pull tennoworth-usage-monitor; do
   for ext in service timer; do
     src="deploy/$u.$ext"; dst="/etc/systemd/system/$u.$ext"
     [ -f "$src" ] && [ -f "$dst" ] || continue

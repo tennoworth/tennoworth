@@ -27,8 +27,6 @@ characteristics:
    - `build-web.yml` - on a push touching `frontend/`, builds the
      static web bundle and publishes it as a rolling `web-latest`
      prerelease asset (the self-host box pulls it with a plain curl).
-   - `build-scrape.yml` - builds the host-only market pipeline when its
-     Rust sources change; the production box pulls that rolling artifact.
    - `audit.yml` - on pull requests, weekly, and on demand, routes changes
      through proportional dependency, frontend, Rust, generated-data, and
      deployment checks while keeping one stable required gate.
@@ -50,9 +48,10 @@ characteristics:
    Production serving is **not** GitHub-hosted: a self-hosted box (an
    unprivileged LXC, reached only through a Cloudflare Tunnel, fronted
    by Caddy) pulls the CI-built web bundle and runs its own scrape
-   timer. That box is a trust boundary the repo's public CI does not
-   cover - compromising it would let an attacker serve malicious JS or
-   a stale snapshot to visitors.
+   timer, whose binary and units are installed directly from a reviewed
+   revision by `scripts/deploy-scrape-host.sh`. That box is a trust
+   boundary the repo's public CI does not cover - compromising it would
+   let an attacker serve malicious JS or a stale snapshot to visitors.
 
 ## What we commit to
 
