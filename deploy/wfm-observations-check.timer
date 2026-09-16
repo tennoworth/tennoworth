@@ -1,0 +1,13 @@
+[Unit]
+Description=Check the observation corpus once a day
+
+[Timer]
+# 06:30 rather than a sweep boundary: the check reads complete logs and counts
+# partials, so it does not need an idle box, but off-boundary keeps its report
+# from being dominated by a sweep that started minutes earlier.
+OnCalendar=*-*-* 06:30:00
+# A box that was off overnight should still produce a report on the next boot.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

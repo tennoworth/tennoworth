@@ -1,9 +1,11 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gunzipSync } from 'node:zlib';
 
 const directories: string[] = [];
 afterEach(() => { for (const dir of directories.splice(0)) rmSync(dir, { recursive: true, force: true }); });
@@ -323,7 +325,10 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
   mkdirSync(join(root, 'rust'), { recursive: true });
   // The script stages these from the checkout with relative paths, as it does
   // from the repository root.
-  for (const unit of ['run-scrape.sh', 'wfm-scrape.service', 'wfm-scrape.timer']) write(join(root, 'deploy', unit), `# ${unit}\n`);
+  for (const unit of ['run-scrape.sh', 'wfm-scrape.service', 'wfm-scrape.timer',
+    'observations-check.sh', 'wfm-observations-check.service', 'wfm-observations-check.timer']) {
+    write(join(root, 'deploy', unit), `# ${unit}\n`);
+  }
   write(join(wfm, 'policy/wfm-policy.json'), '{}');
 
   write(join(root, 'artifacts/wfm-scrape'), '#!/bin/sh\nprintf "usage: wfm-scrape\\n"\n');
@@ -604,3 +609,385 @@ describe('run-scrape publication guard', () => {
     expect(readFileSync(join(app, 'wfm_results.csv'), 'utf8')).toContain('row999');
   });
 });
+
+// ---- observation corpus: readiness check and off-box archive ---------------
+
+const checkScript = fileURLToPath(new URL('../deploy/observations-check.sh', import.meta.url));
+const archiveScript = fileURLToPath(new URL('./archive-observations.sh', import.meta.url));
+const retentionFixture = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../tests/fixtures/observation-retention.json', import.meta.url)), 'utf8'),
+) as { max_bytes: number; max_age_days: number };
+
+describe('observation corpus check wiring', () => {
+  const deploy = readFileSync(fileURLToPath(new URL('./deploy-scrape-host.sh', import.meta.url)), 'utf8');
+  const setup = readFileSync(fileURLToPath(new URL('../deploy/setup-container.sh', import.meta.url)), 'utf8');
+  const pullApp = readFileSync(fileURLToPath(new URL('../deploy/pull-app.sh', import.meta.url)), 'utf8');
+  const check = readFileSync(checkScript, 'utf8');
+  const unit = readFileSync(fileURLToPath(new URL('../deploy/wfm-observations-check.service', import.meta.url)), 'utf8');
+  const timer = readFileSync(fileURLToPath(new URL('../deploy/wfm-observations-check.timer', import.meta.url)), 'utf8');
+  const rust = readFileSync(fileURLToPath(new URL('../rust/wfm-scrape/src/observations.rs', import.meta.url)), 'utf8');
+
+  test('the deploy script is the only installer of the check and its units', () => {
+    // The check reads scrape-owned state and is host-only infrastructure, so it
+    // travels with the pipeline that writes that state. A second installer is
+    // the regression this pins: it could advance the check on its own, judging a
+    // corpus by a ruleset the deployed pipeline does not have.
+    for (const file of ['observations-check.sh', 'wfm-observations-check.service', 'wfm-observations-check.timer']) {
+      expect(deploy, `${file} must be staged`).toContain(`$STAGING/${file}`);
+      expect(deploy, `${file} must land in the release`).toContain(`$RELEASES/$REVISION/${file}`);
+    }
+    expect(deploy).toMatch(/install -m 0755 "\$RELEASES\/\$REVISION\/observations-check\.sh" "\/srv\/wfm\/observations-check\.sh"/);
+    expect(deploy).toMatch(/install -m 0644 "\$RELEASES\/\$REVISION\/wfm-observations-check\.service" \/etc\/systemd\/system\/wfm-observations-check\.service/);
+    expect(deploy).toMatch(/install -m 0644 "\$RELEASES\/\$REVISION\/wfm-observations-check\.timer" \/etc\/systemd\/system\/wfm-observations-check\.timer/);
+    // ProtectSystem=strict grants write access to exactly this path, and systemd
+    // refuses to start a unit whose ReadWritePaths is missing.
+    expect(deploy).toMatch(/install -d -m 0750 -o root -g root "\$HOST_ROOT\/data\/observations-check"/);
+    expect(deploy).toMatch(/systemctl enable --now wfm-observations-check\.timer/);
+    for (const file of ['observations-check.sh', 'wfm-observations-check.service', 'wfm-observations-check.timer']) {
+      expect(setup, `${file} must not be installed by provisioning`).not.toContain(file);
+      expect(pullApp, `${file} must not be installed by the checkout puller`).not.toContain(file);
+    }
+  });
+
+  test('the check unit fails closed and can write only its report', () => {
+    expect(unit).toMatch(/^Type=oneshot$/m);
+    expect(unit).toMatch(/^OnFailure=wfm-alert@%n\.service$/m);
+    expect(unit).toMatch(/^ProtectSystem=strict$/m);
+    expect(unit).toMatch(/^ReadWritePaths=\/srv\/wfm\/data\/observations-check$/m);
+    expect(unit).toMatch(/^ExecStart=\/srv\/wfm\/observations-check\.sh --observations \/srv\/wfm\/observations --out \/srv\/wfm\/data\/observations-check\/report\.json$/m);
+    expect(timer).toMatch(/^OnCalendar=\*-\*-\* 06:30:00$/m);
+    expect(timer).toMatch(/^WantedBy=timers\.target$/m);
+  });
+
+  test('the log contract is pinned by a shared fixture on both sides', () => {
+    // The writer stamps the format and prunes with Rust constants, the box check
+    // reads the format and judges the corpus against shell defaults. The fixture
+    // is the only place the two can disagree loudly; the Rust side reads it in
+    // observations::tests::log_contract_matches_the_shared_fixture.
+    expect(rust, 'the writer must keep its side of the fixture gate').toContain('observation-retention.json');
+    expect(Number(check.match(/FORMAT_SUPPORTED=(\d+)/)![1])).toBe(retentionFixture.format);
+    expect(Number(check.match(/RETENTION_BYTES=(\d+)/)![1])).toBe(retentionFixture.max_bytes);
+    expect(Number(check.match(/RETENTION_AGE_DAYS=(\d+)/)![1])).toBe(retentionFixture.max_age_days);
+    expect(retentionFixture.format).toBe(1);
+    expect(retentionFixture.max_bytes).toBe(2 * 1024 * 1024 * 1024);
+    expect(retentionFixture.max_age_days).toBe(56);
+  });
+
+  test('the readiness check reads the catalog count instead of hard-coding it', () => {
+    // 3,840 is today's catalog. Written into the check it would silently stop
+    // matching the log it is verifying the first time the catalog moves.
+    expect(check).not.toContain('3840');
+    expect(check).toMatch(/record_field "\$header" items/);
+    expect(check).toMatch(/baseline_items=/);
+  });
+
+  test('collection readiness stays separate from the schedule decision', () => {
+    // "The corpus is sound" and "the proposed refresh schedule meets its
+    // thresholds" are different questions; folding the second into the first
+    // would let a good collection pass for a good schedule. The check may name
+    // that other owner, but it must never invoke it.
+    expect(check, 'the scope must be stated in the script').toMatch(/is the corpus sound and complete/);
+    expect(check).not.toMatch(/--schedule/);
+    expect(check).not.toMatch(/\breplay\b[^\n]*--/);
+  });
+
+  test('the archive script is incremental, verified, and writes atomically', () => {
+    const archive = readFileSync(archiveScript, 'utf8');
+    expect(archive).toMatch(/SSH="\$\{SSH:-ssh\}"/);
+    expect(archive).toMatch(/SCP="\$\{SCP:-scp\}"/);
+    expect(archive).toMatch(/DEST="\$\{DEST:-\$HOME\/\.local\/share\/tennoworth\/observations-archive\}"/);
+    expect(archive).toMatch(/gzip -9 -c/);
+    // Verification has to decompress the stored bytes, not trust the compress
+    // step: comparing the pre-compression file proves nothing about the .gz.
+    expect(archive).toMatch(/gzip -dc "\$packed_tmp" \| sha256sum/);
+    expect(archive).toMatch(/mv "\$packed_tmp" "\$packed"/);
+    for (const field of ['"name"', '"bytes"', '"sha256"', '"gz_sha256"', '"archived_at"', '"source_revision"']) {
+      expect(archive, `the manifest must record ${field}`).toContain(field);
+    }
+    expect(archive).toMatch(/\[ "\$failed" = 0 \] \|\| die/);
+    expect(archive, 'the box is read-only to this script').not.toMatch(/\$SSH[^\n]*\b(rm|mv|cp|install)\b/);
+  });
+});
+
+/** One sweep's JSONL in the shape `src/observations.rs` writes. */
+function sweepLog(startSeconds: number, items: number, kept: number, format = 1): string {
+  const stamp = new Date(startSeconds * 1000).toISOString().replace('.000Z', 'Z');
+  const lines = [JSON.stringify({
+    kind: 'run', format, version: '0.1.0', platform: 'pc', filter: '', exclude: '',
+    min_volume: 1, items, workers: 2, started_at: stamp,
+  })];
+  for (let i = 0; i < items - kept; i++) {
+    lines.push(JSON.stringify({
+      kind: 'item', slug: `thin_${startSeconds}_${i}`, name: 'Thin', tags: [], ducats: null,
+      outcome: 'below_volume', subtype: null, volume_48h: 1, median_now: 1, median_90d: 1,
+      medians_7d: [1], avg_price_48h: 1, donch_top_90d: 1, donch_bot_90d: 1,
+    }));
+  }
+  for (let i = 0; i < kept; i++) {
+    lines.push(JSON.stringify({
+      kind: 'item', slug: `kept_${startSeconds}_${i}`, name: 'Kept', tags: [], ducats: null,
+      outcome: 'kept', subtype: null, volume_48h: 9, median_now: 9, median_90d: 9,
+      medians_7d: [9], avg_price_48h: 9, donch_top_90d: 9, donch_bot_90d: 9,
+      book: { live_buys: 1, live_sells: 1, buy_sell_ratio: 1, top_buy_price: 1, low_sell_price: 1, low5_avg_unclamped: 1, score: 1 },
+    }));
+  }
+  lines.push(JSON.stringify({ kind: 'summary', scanned: items, kept, coercions: 0 }));
+  return lines.join('\n') + '\n';
+}
+
+// A box fixture: three completed sweeps two hours apart, the newest an hour
+// before the evaluation instant, with the snapshot, CSV and deployment record
+// they imply. `journalctl` and `systemctl` are stubs on PATH, as in the
+// host-direct deploy tests - the script's own control flow is what is observed.
+function corpusFixture() {
+  const root = mkdtempSync(join(tmpdir(), 'obs-check-')); directories.push(root);
+  const box = join(root, 'box'), bin = join(root, 'bin');
+  for (const path of [join(box, 'observations'), join(box, 'app/frontend/public'), join(box, 'bin'), bin]) {
+    mkdirSync(path, { recursive: true });
+  }
+  const now = 1789580078;
+  const newestStart = now - 6000;
+  const firstStart = newestStart - 2 * 7200;
+  const names: string[] = [];
+  for (let i = 0; i < 3; i++) {
+    const start = firstStart + i * 7200;
+    const stamp = new Date(start * 1000).toISOString().replace('.000Z', 'Z');
+    const name = `sweep-${stamp.replaceAll(':', '-')}.jsonl`;
+    const path = join(box, 'observations', name);
+    writeFileSync(path, sweepLog(start, 4, 2));
+    utimesSync(path, start + 4200, start + 4200);
+    names.push(name);
+  }
+  writeFileSync(join(box, 'app/wfm_results.csv'), 'url_name,median_90d\nkept_a,1\nkept_b,1\n');
+  const snapshot = join(box, 'app/frontend/public/market.json');
+  writeFileSync(snapshot, '{"catalog":{}}');
+  utimesSync(snapshot, now - 1700, now - 1700);
+  const binary = join(box, 'bin/wfm-scrape');
+  writeFileSync(binary, '#!/bin/sh\necho wfm-scrape\n');
+  const sha256 = createHash('sha256').update(readFileSync(binary)).digest('hex');
+  writeFileSync(join(box, 'deployed.json'), `{\n  "revision": "fixture-rev",\n  "sha256": "${sha256}"\n}\n`);
+
+  const short = (seconds: number) => new Date(seconds * 1000).toISOString().replace('.000Z', '+00:00');
+  const journal = join(root, 'journal');
+  writeFileSync(journal, [
+    `${short(newestStart)} host systemd[1]: Starting wfm-scrape.service - Refresh Warframe market.json from warframe.market + warframestat...`,
+    `${short(newestStart + 4200)} host run-scrape.sh[1]: sweep metrics: attempts[catalog=1 statistics=4 orders=2 riven=0 other=0] ok[catalog=1 statistics=4 orders=2 riven=0 other=0] failed[catalog=0 statistics=0 orders=0 riven=0 other=0] retries=0 wire_requests=7 throttles=0 cooldown_waits=0 cooldown_wait_ms=0 decoded_bytes=1 elapsed_ms=1000 snapshot_age_s=0`,
+    `${short(newestStart + 4200)} host systemd[1]: wfm-scrape.service: Deactivated successfully.`,
+  ].join('\n') + '\n');
+
+  write(join(bin, 'systemctl'), [
+    '#!/bin/sh',
+    'if [ "$1" = "is-enabled" ]; then printf "%s\\n" "${FIXTURE_RETIRED:-disabled}"; exit 0; fi',
+    'unit="$2"; prop="$4"',
+    'case "$unit:$prop" in',
+    '  wfm-scrape.service:ActiveState) printf "inactive\\n";;',
+    '  wfm-scrape.service:Result) printf "success\\n";;',
+    '  wfm-scrape.timer:UnitFileState) printf "enabled\\n";;',
+    '  wfm-scrape.timer:ActiveState) printf "active\\n";;',
+    '  wfm-scrape.timer:NextElapseUSecRealtime) printf "Fri 2026-09-18 06:30:00 UTC\\n";;',
+    'esac',
+    'exit 0',
+    '',
+  ].join('\n'));
+  write(join(bin, 'journalctl'), '#!/bin/sh\ncat "${FIXTURE_JOURNAL:?}"\n');
+  chmodSync(join(bin, 'systemctl'), 0o755);
+  chmodSync(join(bin, 'journalctl'), 0o755);
+
+  const reportPath = join(root, 'report.json');
+  const run = (env: Record<string, string> = {}, extraArgs: string[] = []) => spawnSync('bash', [
+    checkScript,
+    '--observations', join(box, 'observations'),
+    '--out', reportPath,
+    '--csv', join(box, 'app/wfm_results.csv'),
+    '--snapshot', snapshot,
+    '--deployed', join(box, 'deployed.json'),
+    '--binary', binary,
+    '--now', '2026-09-16T17:34:38Z',
+    ...extraArgs,
+  ], {
+    encoding: 'utf8',
+    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_JOURNAL: journal, ...env },
+  });
+  const report = () => JSON.parse(readFileSync(reportPath, 'utf8'));
+  const observationPath = (name: string) => join(box, 'observations', name);
+  return { root, box, names, run, report, observationPath };
+}
+
+describe.skipIf(process.platform === 'win32')('observation corpus readiness', () => {
+  test('a sound corpus is ready and reports the window it holds', () => {
+    const f = corpusFixture();
+    const result = f.run();
+    expect(result.status, result.stderr).toBe(0);
+    const report = f.report();
+    expect(report.ready).toBe(true);
+    expect(report.sweeps.valid).toBe(3);
+    expect(report.sweeps.expected).toBe(3);
+    expect(report.sweeps.missing).toBe(0);
+    expect(report.anomalies).toEqual({ partial: 0, malformed: 0, missing_summary: 0, unsupported_format: 0 });
+    expect(report.completeness.failed).toEqual([]);
+    expect(report.retention.bytes).toBeGreaterThan(0);
+    expect(report.retention.max_age_seconds).toBe(retentionFixture.max_age_days * 86400);
+    expect(report.retention.cap_bytes).toBe(retentionFixture.max_bytes);
+    expect(report.csv.rows).toBe(2);
+    expect(report.timers.sweep_enabled).toBe('enabled');
+  });
+
+  test('a completed sweep with no log is not ready', () => {
+    const f = corpusFixture();
+    rmSync(f.observationPath(f.names[1]!));
+    const result = f.run();
+    expect(result.status).not.toBe(0);
+    const report = f.report();
+    expect(report.ready).toBe(false);
+    expect(report.sweeps.expected).toBe(3);
+    expect(report.sweeps.valid).toBe(2);
+    expect(report.errors.join('\n')).toContain('have no log');
+  });
+
+  test('a malformed log is not ready', () => {
+    const f = corpusFixture();
+    writeFileSync(f.observationPath(f.names[2]!), 'not a record at all\n', { flag: 'a' });
+    const result = f.run();
+    expect(result.status).not.toBe(0);
+    expect(f.report().anomalies.malformed).toBe(1);
+    expect(f.report().errors.join('\n')).toContain('malformed');
+  });
+
+  test('a log without a summary is not ready', () => {
+    const f = corpusFixture();
+    const path = f.observationPath(f.names[2]!);
+    const lines = readFileSync(path, 'utf8').trimEnd().split('\n');
+    writeFileSync(path, lines.slice(0, -1).join('\n') + '\n');
+    const result = f.run();
+    expect(result.status).not.toBe(0);
+    expect(f.report().anomalies.missing_summary).toBe(1);
+    expect(f.report().errors.join('\n')).toContain('no summary');
+  });
+
+  test('an unsupported observation format is not ready', () => {
+    const f = corpusFixture();
+    const path = f.observationPath(f.names[2]!);
+    writeFileSync(path, readFileSync(path, 'utf8').replace('"format":1', '"format":2'));
+    const result = f.run();
+    expect(result.status).not.toBe(0);
+    expect(f.report().anomalies.unsupported_format).toBe(1);
+    expect(f.report().errors.join('\n')).toContain('unsupported observation format');
+  });
+
+  test('a partial log old enough to be a stuck sweep is not ready', () => {
+    const f = corpusFixture();
+    const partial = f.observationPath('sweep-2026-09-16T19-04-38Z.jsonl.partial');
+    writeFileSync(partial, '');
+    utimesSync(partial, 1789580078 - 4 * 3600, 1789580078 - 4 * 3600);
+    const result = f.run();
+    expect(result.status).not.toBe(0);
+    expect(f.report().anomalies.partial).toBe(1);
+    expect(f.report().errors.join('\n')).toContain('stuck');
+  });
+
+  test('a sweep that missed its own CSV row count is not ready', () => {
+    const f = corpusFixture();
+    writeFileSync(join(f.box, 'app/wfm_results.csv'), 'url_name,median_90d\nkept_a,1\nkept_b,1\nkept_c,1\n');
+    const result = f.run();
+    expect(result.status).not.toBe(0);
+    expect(f.report().errors.join('\n')).toContain('holds 3');
+  });
+
+  test('an archive that lags the box is not ready', () => {
+    const f = corpusFixture();
+    const manifest = join(f.root, 'manifest.jsonl');
+    const entries = f.names.slice(0, 2).map(name => JSON.stringify({
+      name, bytes: 1, sha256: 'aa', gz_sha256: 'bb', archived_at: '2026-09-16T17:00:00Z', source_revision: 'fixture-rev',
+    }));
+    writeFileSync(manifest, entries.join('\n') + '\n');
+    const result = f.run({}, ['--archive-manifest', manifest]);
+    expect(result.status, 'the manifest must be passed through the run').not.toBe(0);
+    expect(f.report().archive.unarchived).toBe(1);
+    expect(f.report().errors.join('\n')).toContain('not in the archive manifest');
+  });
+
+  test('an unreadable archive manifest is an error, not an absent check', () => {
+    const f = corpusFixture();
+    const result = f.run({}, ['--archive-manifest', join(f.root, 'does-not-exist.jsonl')]);
+    expect(result.status).not.toBe(0);
+    expect(f.report().archive.status).toBe('unreadable');
+    expect(f.report().errors.join('\n')).toContain('not readable');
+  });
+
+  test('a missing corpus is not ready', () => {
+    const f = corpusFixture();
+    rmSync(join(f.box, 'observations'), { recursive: true });
+    const result = f.run();
+    expect(result.status).not.toBe(0);
+    expect(f.report().errors.join('\n')).toContain('does not exist');
+  });
+});
+
+describe.skipIf(process.platform === 'win32')('observation archive', () => {
+  function archiveFixture(options: { corrupt?: boolean } = {}) {
+    const root = mkdtempSync(join(tmpdir(), 'obs-archive-')); directories.push(root);
+    const remote = join(root, 'remote'), bin = join(root, 'bin'), dest = join(root, 'dest');
+    for (const path of [remote, bin, dest]) mkdirSync(path);
+    // `ssh` runs the remote command locally; SOURCE_DIR and DEPLOYED point into
+    // the fixture, so the script's own listing and hashing run unmodified.
+    write(join(bin, 'fake-ssh'), '#!/bin/sh\nhost="$1"; shift\nexec sh -c "$*"\n');
+    write(join(bin, 'fake-scp'), [
+      '#!/bin/sh',
+      '[ "$1" = "-q" ] && shift',
+      'src="$1"; dest="$2"',
+      options.corrupt ? 'printf "tampered bytes" > "$dest"' : 'cp "${src#*:}" "$dest"',
+      '',
+    ].join('\n'));
+    chmodSync(join(bin, 'fake-ssh'), 0o755);
+    chmodSync(join(bin, 'fake-scp'), 0o755);
+    const body = '{"kind":"run","format":1}\n';
+    writeFileSync(join(remote, 'sweep-2026-09-16T12-02-42Z.jsonl'), body.repeat(20));
+    writeFileSync(join(remote, 'sweep-2026-09-16T14-05-32Z.jsonl.partial'), 'half a sweep\n');
+    writeFileSync(join(remote, 'deployed.json'), '{\n  "revision": "fixture-rev",\n  "sha256": "deadbeef"\n}\n');
+    const run = () => spawnSync('bash', [archiveScript], {
+      encoding: 'utf8',
+      env: {
+        ...process.env, SSH: join(bin, 'fake-ssh'), SCP: join(bin, 'fake-scp'),
+        SOURCE_DIR: remote, DEPLOYED: join(remote, 'deployed.json'), DEST: dest,
+      },
+    });
+    const manifestPath = join(dest, 'manifest.jsonl');
+    return { root, remote, dest, run, manifestPath };
+  }
+
+  test('verifies each file after transfer and skips what is already archived', () => {
+    const f = archiveFixture();
+    const first = f.run();
+    expect(first.stderr, first.stderr).toBe('');
+    expect(first.status, first.stderr).toBe(0);
+    const manifest = readFileSync(f.manifestPath, 'utf8').trimEnd().split('\n');
+    expect(manifest).toHaveLength(1);
+    const entry = JSON.parse(manifest[0]!);
+    const source = readFileSync(join(f.remote, 'sweep-2026-09-16T12-02-42Z.jsonl'));
+    expect(entry.name).toBe('sweep-2026-09-16T12-02-42Z.jsonl');
+    expect(entry.bytes).toBe(source.length);
+    expect(entry.sha256).toBe(createHash('sha256').update(source).digest('hex'));
+    expect(entry.source_revision).toBe('fixture-rev');
+    expect(entry.archived_at).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    const stored = readFileSync(join(f.dest, `${entry.name}.gz`));
+    expect(gunzipSync(stored).equals(source)).toBe(true);
+    expect(entry.gz_sha256).toBe(createHash('sha256').update(stored).digest('hex'));
+    expect(readdirSync(f.dest).filter(name => name.includes('partial'))).toEqual([]);
+
+    const second = f.run();
+    expect(second.status, second.stderr).toBe(0);
+    expect(readFileSync(f.manifestPath, 'utf8')).toBe(manifest.join('\n') + '\n');
+    expect(second.stdout).toContain('0 new, 1 already present');
+  });
+
+  test('a transfer that does not match the box fails non-zero and stores nothing', () => {
+    const f = archiveFixture({ corrupt: true });
+    const result = f.run();
+    expect(result.status, 'a bad archive must not pass silently').not.toBe(0);
+    expect(result.stderr).toContain('failed verification');
+    expect(existsSync(f.manifestPath)).toBe(false);
+    expect(readdirSync(f.dest).filter(name => name.endsWith('.gz'))).toEqual([]);
+    expect(readdirSync(f.dest).filter(name => !name.startsWith('.'))).toEqual([]);
+  });
+});
+

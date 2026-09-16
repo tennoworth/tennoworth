@@ -1,0 +1,28 @@
+[Unit]
+Description=Check that the observation corpus is sound and complete
+# OnFailure is the delivery mechanism for "not ready": the check exits non-zero
+# whenever evidence is missing, so an unready corpus pages exactly like a failed
+# sweep instead of waiting to be noticed in a report nobody reads.
+OnFailure=wfm-alert@%n.service
+
+[Service]
+Type=oneshot
+# Root, unlike the sweep: the corpus directory is 0750 wfm:wfm and the service
+# health evidence is in wfm-scrape.service's journal, and this process only
+# reads both. It writes exactly one file, the report below.
+ExecStart=/srv/wfm/observations-check.sh --observations /srv/wfm/observations --out /srv/wfm/data/observations-check/report.json
+Nice=10
+
+# Nothing here needs the network or the ability to change the box; the journal
+# and systemd are reached over their own sockets.
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/srv/wfm/data/observations-check
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictAddressFamilies=AF_UNIX
+SystemCallFilter=@system-service

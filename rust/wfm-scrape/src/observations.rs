@@ -29,14 +29,14 @@ pub const FORMAT: u32 = 1;
 /// Retention. Observations are only useful while they overlap a schedule being
 /// tested, and the host's disk is small; the oldest logs go first.
 ///
-/// The first production log measured 1.52 MiB, which is 510 MiB for the 336
-/// sweeps that 28 days holds at one every two hours - under the old 512 MiB cap
-/// by about one percent, with a transient partial on top. A cap that close to
-/// the working set deletes data on a slightly larger sweep, so it is set to a
-/// gibibyte: roughly eight weeks at the measured size, still cheap against the
-/// box's 6 GiB of free disk.
-const MAX_BYTES: u64 = 1024 * 1024 * 1024;
-const MAX_AGE: Duration = Duration::from_secs(28 * 24 * 60 * 60);
+/// The evaluation window is four weeks, so retention has to outlast it: at the
+/// old 28 days the corpus lost its earliest days exactly as fast as it gained
+/// new ones, and the window it existed to measure never closed. Production logs
+/// measure ~1.55 MB per sweep at 12 sweeps a day, about 18.6 MB/day, so 56 days
+/// is roughly a gibibyte of steady state. The size cap is the backstop for a
+/// sweep that suddenly writes far more; the age rule is the working limit.
+const MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+const MAX_AGE: Duration = Duration::from_secs(56 * 24 * 60 * 60);
 
 /// What the sweep concluded about one item.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -404,6 +404,34 @@ mod tests {
         assert!(!stale.exists(), "the expired log goes when the sweep finishes");
         assert!(dir.join("sweep-2026-09-15T22-07-20Z.jsonl").exists());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The log's format and retention bounds are restated in shell - the host
+    /// readiness check reads both - so a one-sided bump would leave the box
+    /// judging the corpus by numbers the pipeline no longer writes or prunes
+    /// with. The shared fixture is the only thing that can see that drift.
+    #[test]
+    fn log_contract_matches_the_shared_fixture() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/observation-retention.json"
+        ))
+        .expect("observation contract fixture parses");
+        assert_eq!(
+            fixture["format"].as_u64(),
+            Some(u64::from(FORMAT)),
+            "FORMAT drifted from tests/fixtures/observation-retention.json"
+        );
+        assert_eq!(
+            fixture["max_bytes"].as_u64(),
+            Some(MAX_BYTES),
+            "MAX_BYTES drifted from tests/fixtures/observation-retention.json"
+        );
+        let days = fixture["max_age_days"].as_u64().expect("max_age_days");
+        assert_eq!(
+            MAX_AGE,
+            Duration::from_secs(days * 24 * 60 * 60),
+            "MAX_AGE drifted from tests/fixtures/observation-retention.json"
+        );
     }
 
     /// A sweep that dies never reaches `finish`, so cleanup cannot live only

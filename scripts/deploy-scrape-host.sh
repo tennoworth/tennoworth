@@ -2,11 +2,11 @@
 # Deploy the wfm-scrape pipeline to the host directly, from a reviewed revision.
 #
 # The scrape is host-only infrastructure - the pipeline binary, the verifier
-# built with it to prove its key, one driver script, two units, and nothing a
-# user installs contains any of them - so it does not need the GitHub release
-# relay the web bundle and desktop app need. Commits still live in the monorepo
-# and are still reviewed; this script installs an immutable revision of them, and
-# nothing else.
+# built with it to prove its key, one driver script, the corpus readiness check
+# and their units, and nothing a user installs contains any of them - so it does
+# not need the GitHub release relay the web bundle and desktop app need. Commits
+# still live in the monorepo and are still reviewed; this script installs an
+# immutable revision of them, and nothing else.
 #
 # Order of operations, all of which are load-bearing:
 #   1. the tree is clean and the revision is already on the remote,
@@ -173,6 +173,7 @@ $SSH "$HOST" "install -d -m 0755 -o root -g root '$STAGING'"
 $SCP -q "$ARTIFACT" "$HOST:$STAGING/wfm-scrape"
 $SCP -q "$VERIFIER_ARTIFACT" "$HOST:$STAGING/wfm-policy"
 $SCP -q deploy/run-scrape.sh deploy/wfm-scrape.service deploy/wfm-scrape.timer "$HOST:$STAGING/"
+$SCP -q deploy/observations-check.sh deploy/wfm-observations-check.service deploy/wfm-observations-check.timer "$HOST:$STAGING/"
 
 # ---- 6. install and prove the release before the live paths move -----------
 # The live paths keep running the previous release until this one is proven on
@@ -186,6 +187,9 @@ install -m 0755 "$STAGING/wfm-policy" "$RELEASES/$REVISION/wfm-policy"
 install -m 0755 "$STAGING/run-scrape.sh" "$RELEASES/$REVISION/run-scrape.sh"
 install -m 0644 "$STAGING/wfm-scrape.service" "$RELEASES/$REVISION/wfm-scrape.service"
 install -m 0644 "$STAGING/wfm-scrape.timer" "$RELEASES/$REVISION/wfm-scrape.timer"
+install -m 0755 "$STAGING/observations-check.sh" "$RELEASES/$REVISION/observations-check.sh"
+install -m 0644 "$STAGING/wfm-observations-check.service" "$RELEASES/$REVISION/wfm-observations-check.service"
+install -m 0644 "$STAGING/wfm-observations-check.timer" "$RELEASES/$REVISION/wfm-observations-check.timer"
 REMOTE_RELEASE
 
 SCRAPER="$RELEASES/$REVISION/wfm-scrape"
@@ -215,12 +219,21 @@ install -m 0755 "$RELEASES/$REVISION/wfm-scrape" "/srv/wfm/bin/wfm-scrape"
 install -m 0755 "$RELEASES/$REVISION/run-scrape.sh" "/srv/wfm/run-scrape.sh"
 install -m 0644 "$RELEASES/$REVISION/wfm-scrape.service" /etc/systemd/system/wfm-scrape.service
 install -m 0644 "$RELEASES/$REVISION/wfm-scrape.timer" /etc/systemd/system/wfm-scrape.timer
+install -m 0755 "$RELEASES/$REVISION/observations-check.sh" "/srv/wfm/observations-check.sh"
+install -m 0644 "$RELEASES/$REVISION/wfm-observations-check.service" /etc/systemd/system/wfm-observations-check.service
+install -m 0644 "$RELEASES/$REVISION/wfm-observations-check.timer" /etc/systemd/system/wfm-observations-check.timer
+# ProtectSystem=strict in the check's unit grants write access to exactly this
+# path, and systemd refuses to start a unit whose ReadWritePaths does not exist.
+install -d -m 0750 -o root -g root "$HOST_ROOT/data/observations-check"
 systemctl daemon-reload
 # A fresh box otherwise has the units and nothing scheduled: setup-container no
 # longer enables the scrape timer, because this script owns the pipeline now.
 # Arming the timer here with enable --now would reopen the window the hold above
-# exists to close; the EXIT trap starts it once every check has passed.
+# exists to close; the EXIT trap starts it once every check has passed. The
+# readiness timer is not part of that window - it reads and writes nothing the
+# sweep phase touches - so it is armed directly.
 systemctl enable wfm-scrape.timer
+systemctl enable --now wfm-observations-check.timer
 REMOTE_ACTIVATE
 
 [ "$($SSH "$HOST" "sha256sum /srv/wfm/bin/wfm-scrape | cut -d' ' -f1")" = "$CHECKSUM" ] \
