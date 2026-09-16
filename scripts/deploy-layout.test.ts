@@ -203,7 +203,75 @@ describe('host-direct scrape deploy script', () => {
     // A build without it silently ignores the signed policy, so the script must
     // fail loudly instead of shipping a scraper that cannot verify one.
     expect(deploy).toMatch(/TENNOWORTH_WFM_POLICY_PUBLIC_KEY:\?/);
-    expect(deploy).toMatch(/wfm-policy \"\$HOST_ROOT\/policy\/wfm-policy.json|wfm-policy \/srv\/wfm\/policy/);
+  });
+
+  test('holds the sweep timer across the install and restores it on every exit', () => {
+    // Live files are rewritten one at a time, so a timer elapse inside that
+    // window lets a single sweep run the `scrape` phase from one release and the
+    // `build` phase from the next. The schedule has to be held for the whole
+    // operation, not just checked before it.
+    const stop = deploy.indexOf('systemctl stop wfm-scrape.timer');
+    expect(stop, 'the timer must be stopped, not merely observed').toBeGreaterThan(-1);
+    // Restoring only after the last check leaves the box with no schedule at all
+    // whenever an earlier step fails - silent until someone notices the data is
+    // stale - so the restore has to ride the one path both endings take, and it
+    // has to be armed no later than the stop in case that call dies in flight.
+    const trap = deploy.indexOf('trap restore_timer EXIT');
+    expect(trap, 'the restore must be an EXIT trap').toBeGreaterThan(-1);
+    expect(trap, 'the restore must be armed before the timer is stopped').toBeLessThan(stop);
+    // Pin the call, not the warning text that names the same command.
+    expect(deploy, 'the trap must actually start the timer').toMatch(/\$SSH "\$HOST" "systemctl start wfm-scrape\.timer"/);
+    // `enable --now` re-arms the timer in the middle of the very window the hold
+    // exists to protect; only `enable` may run inside it.
+    expect(deploy).toMatch(/systemctl enable wfm-scrape\.timer/);
+    expect(deploy).not.toMatch(/enable --now wfm-scrape\.timer/);
+  });
+
+  test('installs only after the schedule is held and a running sweep is drained', () => {
+    const stop = deploy.indexOf('systemctl stop wfm-scrape.timer');
+    const recheck = deploy.indexOf('systemctl is-active wfm-scrape.service');
+    const liveInstall = deploy.indexOf('install -m 0755 "$RELEASES/$REVISION/wfm-scrape" "/srv/wfm/bin/wfm-scrape"');
+    expect(recheck, 'the service must be re-checked after the timer stop').toBeGreaterThan(stop);
+    expect(liveInstall, 'live files must not be written before the re-check').toBeGreaterThan(recheck);
+    // Stopping the timer does not stop a sweep a previous elapse already
+    // started, and one sample can leave it running through the install, so the
+    // re-check has to loop until the state is terminal.
+    expect(deploy, 'the re-check must loop').toMatch(/while :; do[\s\S]*sweep_state/);
+    // Transitional states are still a running sweep; only inactive and failed
+    // may end the wait.
+    expect(deploy, 'transitional states must keep waiting').toMatch(/active\|activating\|deactivating\)/);
+    expect(deploy, 'only a terminal state may end the wait').toMatch(/inactive\|failed\) break/);
+    // An empty or unrecognised query result used to read as idle and install
+    // over a live sweep.
+    expect(deploy, 'an unreadable state must abort').toMatch(/could not read wfm-scrape\.service state/);
+  });
+
+  test('proves the deployed revision itself against the live policy or aborts', () => {
+    // The proof used to run whatever /srv/wfm/bin/wfm-policy already existed:
+    // a binary from some other revision, whose success said nothing about the
+    // scraper being installed. The verifier now comes from this revision.
+    expect(deploy).toMatch(/cargo build[^\n]*-p wfm-client --bin wfm-policy/);
+    expect(deploy).toMatch(/\$RELEASES\/\$REVISION\/wfm-policy/);
+    // The proof has to run the verifier installed with this release; pointing it
+    // back at /srv/wfm/bin/wfm-policy is the original defect.
+    expect(deploy, 'the proof must run the release verifier').toMatch(/VERIFIER="\$RELEASES\/\$REVISION\/wfm-policy"/);
+    // The checksum has to be compared, not merely computed: an unverified
+    // verifier is one more binary of unknown provenance.
+    expect(deploy, 'the installed verifier must be the one that was built')
+      .toMatch(/sha256sum '\$VERIFIER'[\s\S]{0,80}VERIFIER_CHECKSUM/);
+    // Missing inputs used to warn and continue, which is exactly the case the
+    // check exists for: fail open and a scraper built without the key - or a box
+    // whose policy never arrived - ships with the key unproven.
+    expect(deploy, 'a missing verifier must abort').toMatch(/test -x [^\n]*\|\| die/);
+    expect(deploy, 'a missing policy must abort').toMatch(/test -f [^\n]*policy\/wfm-policy\.json[^\n]*\|\| die/);
+    expect(deploy, 'a rejected policy must abort').toMatch(/\$VERIFIER' '\$HOST_ROOT\/policy\/wfm-policy\.json'[\s\S]{0,80}\|\| die/);
+    expect(deploy, 'the fail-open branch must be gone').not.toContain('no verifier or policy on the box yet');
+    // The proof runs against the release on the box, and the live paths move
+    // only after it passes, so a rejection leaves the running release alone.
+    const proof = deploy.indexOf("'$VERIFIER' '$HOST_ROOT/policy/wfm-policy.json'");
+    const liveInstall = deploy.indexOf('install -m 0755 "$RELEASES/$REVISION/wfm-scrape" "/srv/wfm/bin/wfm-scrape"');
+    expect(proof, 'the release verifier must run').toBeGreaterThan(-1);
+    expect(liveInstall, 'the live paths must not move before the proof').toBeGreaterThan(proof);
   });
 
   test('gates the artifact on the box glibc and on its checksum', () => {
@@ -212,7 +280,7 @@ describe('host-direct scrape deploy script', () => {
     expect(deploy).toMatch(/sha256sum \"\$ARTIFACT\"/);
   });
 
-  test('refuses to install while a sweep is running and keeps the release', () => {
+  test('checks the sweep service before installing and keeps the release', () => {
     expect(deploy).toMatch(/systemctl is-active wfm-scrape\.service/);
     expect(deploy).toMatch(/install -d -m 0755 -o root -g root \"\$RELEASES\/\$REVISION\"/);
   });
@@ -229,6 +297,206 @@ describe('host-direct scrape deploy script', () => {
     expect(deploy).toMatch(/install -m 0755 "[^"]*\/run-scrape\.sh" "\/srv\/wfm\/run-scrape\.sh"/);
     expect(deploy).toMatch(/install -m 0644 "[^"]*\/wfm-scrape\.service" \/etc\/systemd\/system\/wfm-scrape\.service/);
     expect(deploy).toMatch(/install -m 0644 "[^"]*\/wfm-scrape\.timer" \/etc\/systemd\/system\/wfm-scrape\.timer/);
+  });
+});
+
+// Runs the real deploy script against a stubbed box. `ssh`/`scp` execute
+// locally, `install` remaps the hard-coded /srv and /etc live paths into the
+// fixture, and `systemctl` reads its sweep state from a file so a sequence of
+// states can be replayed. The point is that the script's own control flow is
+// what the assertions observe, not a copy of it.
+function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, string> } = {}) {
+  const root = mkdtempSync(join(tmpdir(), 'scrape-deploy-')); directories.push(root);
+  const bin = join(root, 'bin'); mkdirSync(bin);
+  const wfm = join(root, 'wfm'); mkdirSync(wfm, { recursive: true });
+  const live = join(root, 'live'); mkdirSync(join(live, 'srv/wfm/bin'), { recursive: true });
+  const target = join(root, 'target'); mkdirSync(join(target, 'release'), { recursive: true });
+  const order = join(root, 'order'); writeFileSync(order, '');
+  const states = join(root, 'states'); writeFileSync(states, (options.states ?? []).map(state => state + '\n').join(''));
+  const revision = 'fixture-rev';
+  const realInstall = execFileSync('sh', ['-c', 'command -v install'], { encoding: 'utf8' }).trim();
+
+  // The box already runs a deployment; every failure path asserts it survives.
+  writeFileSync(join(live, 'srv/wfm/bin/wfm-scrape'), 'old-live-binary');
+  writeFileSync(join(live, 'srv/wfm/run-scrape.sh'), 'old-live-run-scrape');
+  mkdirSync(join(live, 'etc/systemd/system'), { recursive: true });
+  mkdirSync(join(root, 'rust'), { recursive: true });
+  // The script stages these from the checkout with relative paths, as it does
+  // from the repository root.
+  for (const unit of ['run-scrape.sh', 'wfm-scrape.service', 'wfm-scrape.timer']) write(join(root, 'deploy', unit), `# ${unit}\n`);
+  write(join(wfm, 'policy/wfm-policy.json'), '{}');
+
+  write(join(root, 'artifacts/wfm-scrape'), '#!/bin/sh\nprintf "usage: wfm-scrape\\n"\n');
+  write(join(root, 'artifacts/wfm-policy'), '#!/bin/sh\nexit "${FIXTURE_POLICY_EXIT:-0}"\n');
+  chmodSync(join(root, 'artifacts/wfm-scrape'), 0o755);
+  chmodSync(join(root, 'artifacts/wfm-policy'), 0o755);
+
+  write(join(bin, 'git'), [
+    '#!/bin/sh',
+    'case "$*" in',
+    '  "status --porcelain") exit 0;;',
+    `  "rev-parse HEAD") printf '%s\\n' '${revision}';;`,
+    `  "rev-parse --short "*|"rev-parse --short") printf '%s\\n' '${revision}';;`,
+    `  "rev-parse --show-toplevel") printf '%s\\n' '${root}';;`,
+    '  "rev-parse --verify --quiet "*) exit 0;;',
+    '  "merge-base --is-ancestor "*) exit 0;;',
+    '  "branch --show-current") printf "fixture\\n";;',
+    'esac',
+    'exit 0',
+    '',
+  ].join('\n'));
+  write(join(bin, 'cargo'), [
+    '#!/bin/sh',
+    'if [ "$1" = "build" ]; then',
+    '  mkdir -p "$CARGO_TARGET_DIR/release"',
+    '  cp "$FIXTURE_ROOT/artifacts/wfm-scrape" "$CARGO_TARGET_DIR/release/wfm-scrape"',
+    '  cp "$FIXTURE_ROOT/artifacts/wfm-policy" "$CARGO_TARGET_DIR/release/wfm-policy"',
+    '  chmod +x "$CARGO_TARGET_DIR/release/wfm-scrape" "$CARGO_TARGET_DIR/release/wfm-policy"',
+    'fi',
+    'exit 0',
+    '',
+  ].join('\n'));
+  write(join(bin, 'objdump'), '#!/bin/sh\nprintf "GLIBC_2.34\\n"\n');
+  write(join(bin, 'ldd'), '#!/bin/sh\nprintf "ldd (fixture GLIBC) 2.34\\n"\n');
+  write(join(bin, 'sleep'), '#!/bin/sh\nexit 0\n');
+  // Remote paths are remapped here as well as in `install`, so a remote
+  // `sha256sum /srv/wfm/bin/wfm-scrape` reads the copy the stub wrote.
+  write(join(bin, 'ssh'), [
+    '#!/bin/bash',
+    'shift',
+    'cmd="$*"',
+    'cmd="$(printf "%s" "$cmd" | sed "s#/srv/#$FIXTURE_LIVE/srv/#g; s#/etc/#$FIXTURE_LIVE/etc/#g")"',
+    'eval "$cmd"',
+    '',
+  ].join('\n'));
+  write(join(bin, 'scp'), [
+    '#!/bin/sh',
+    '[ "$1" = "-q" ] && shift',
+    'last=""',
+    'for a in "$@"; do last="$a"; done',
+    'dest="${last#*:}"',
+    'case "$dest" in */) mkdir -p "$dest";; esac',
+    'for a in "$@"; do',
+    '  [ "$a" = "$last" ] && continue',
+    '  cp "$a" "$dest"',
+    'done',
+    '',
+  ].join('\n'));
+  write(join(bin, 'install'), [
+    '#!/bin/bash',
+    'args=()',
+    'skip=0',
+    'for a in "$@"; do',
+    '  if [ "$skip" = 1 ]; then skip=0; continue; fi',
+    '  case "$a" in',
+    '    -o|-g) skip=1; continue;;',
+    '    /srv/*|/etc/*) a="${FIXTURE_LIVE}${a}";;',
+    '  esac',
+    '  args+=("$a")',
+    'done',
+    'for a in "${args[@]}"; do',
+    '  case "$a" in */bin/wfm-scrape) printf "live-install\\n" >> "$FIXTURE_ORDER";; esac',
+    'done',
+    `exec ${realInstall} "\${args[@]}"`,
+    '',
+  ].join('\n'));
+  write(join(bin, 'systemctl'), [
+    '#!/bin/bash',
+    'if [ "$1" = "is-active" ]; then',
+    '  shift',
+    '  quiet=0',
+    '  if [ "$1" = "--quiet" ]; then quiet=1; shift; fi',
+    '  unit="$1"',
+    '  case "$unit" in',
+    '    wfm-scrape.service)',
+    '      if [ "${FIXTURE_QUERY_FAIL:-0}" = 1 ]; then exit 255; fi',
+    '      next=$(sed -n 1p "$FIXTURE_STATES" 2>/dev/null)',
+    '      if [ -n "$next" ]; then sed -i 1d "$FIXTURE_STATES"; else next="${FIXTURE_SWEEP_STATE:-inactive}"; fi',
+    '      printf "is-active %s\\n" "$next" >> "$FIXTURE_ORDER"',
+    '      printf "%s\\n" "$next"',
+    '      exit 0;;',
+    '    wfm-scrape.timer)',
+    '      state="${FIXTURE_TIMER_STATE:-inactive}"',
+    '      if [ "$quiet" = 1 ]; then [ "$state" = active ] && exit 0 || exit 3; fi',
+    '      printf "%s\\n" "$state"',
+    '      exit 0;;',
+    '  esac',
+    '  exit 0',
+    'fi',
+    'printf "%s\\n" "$*" >> "$FIXTURE_SYSTEMCTL"',
+    'exit 0',
+    '',
+  ].join('\n'));
+  for (const command of ['git', 'cargo', 'objdump', 'ldd', 'sleep', 'ssh', 'scp', 'install', 'systemctl']) chmodSync(join(bin, command), 0o755);
+
+  const run = (env: Record<string, string> = {}) => spawnSync('bash', [fileURLToPath(new URL('./deploy-scrape-host.sh', import.meta.url))], {
+    cwd: root,
+    encoding: 'utf8',
+    env: {
+      ...process.env, PATH: `${bin}:${process.env.PATH}`,
+      HOST: 'fixture', HOST_ROOT: wfm, REVISION: revision, CARGO_TARGET_DIR: target,
+      TENNOWORTH_WFM_POLICY_PUBLIC_KEY: 'fixture-key',
+      FIXTURE_ROOT: root, FIXTURE_LIVE: live, FIXTURE_ORDER: order, FIXTURE_STATES: states,
+      FIXTURE_SYSTEMCTL: join(root, 'systemctl.log'),
+      ...options.env, ...env,
+    },
+  });
+  return { root, wfm, live, order, revision, run };
+}
+
+describe.skipIf(process.platform === 'win32')('host-direct scrape deploy failure paths', () => {
+  const liveBinary = (f: ReturnType<typeof scrapeDeployFixture>) => readFileSync(join(f.live, 'srv/wfm/bin/wfm-scrape'), 'utf8');
+
+  test('aborts before installing when the sweep state cannot be read', () => {
+    // Wrapping the query in `|| true` turns a dead connection or a broken
+    // systemctl into an empty state, and an empty state ended the wait. A query
+    // that produced nothing must abort instead of installing over a sweep.
+    const f = scrapeDeployFixture();
+    const result = f.run({ FIXTURE_QUERY_FAIL: '1' });
+    expect(result.status, result.stderr).not.toBe(0);
+    expect(result.stderr).toContain('could not read wfm-scrape.service state');
+    expect(liveBinary(f), 'the previous release must still be live').toBe('old-live-binary');
+  });
+
+  test('aborts before installing on a sweep state it cannot interpret', () => {
+    const f = scrapeDeployFixture({ states: ['maintenance'] });
+    const result = f.run();
+    expect(result.status, result.stderr).not.toBe(0);
+    expect(result.stderr).toContain('could not read wfm-scrape.service state');
+    expect(liveBinary(f)).toBe('old-live-binary');
+  });
+
+  test('waits through transitional sweep states before installing', () => {
+    // `deactivating` is a running phase, not a terminal one: replacing files
+    // during it still lets one sweep span two releases.
+    const f = scrapeDeployFixture({ states: ['deactivating', 'active'] });
+    const result = f.run();
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('a sweep is deactivating');
+    expect(result.stdout).toContain('a sweep is active');
+    const order = readFileSync(f.order, 'utf8').split('\n').filter(Boolean);
+    expect(order.filter(line => line === 'is-active active')).toHaveLength(1);
+    expect(order.indexOf('live-install'), 'live files must wait for a terminal state').toBeGreaterThan(order.lastIndexOf('is-active active'));
+  });
+
+  test('leaves the live paths on the previous release when the policy is rejected', () => {
+    // The release is installed and proven first; only a passing proof may move
+    // the live paths, otherwise a rejected policy leaves a half-swapped tree
+    // that the restored timer then runs against.
+    const f = scrapeDeployFixture();
+    const result = f.run({ FIXTURE_POLICY_EXIT: '1' });
+    expect(result.status, result.stderr).not.toBe(0);
+    expect(result.stderr).toContain('rejects the live policy');
+    expect(liveBinary(f)).toBe('old-live-binary');
+    expect(existsSync(join(f.wfm, 'releases', f.revision, 'wfm-policy')), 'the release install must have run').toBe(true);
+  });
+
+  test('replaces the live paths once the release and its policy proof pass', () => {
+    const f = scrapeDeployFixture();
+    const result = f.run();
+    expect(result.status, result.stderr).toBe(0);
+    expect(liveBinary(f)).not.toBe('old-live-binary');
+    expect(readFileSync(join(f.wfm, 'deployed.json'), 'utf8')).toContain(f.revision);
   });
 });
 
