@@ -5,6 +5,8 @@
 //! - `build`: reads `wfm_results.csv`, fetches upstreams, reconciles with the
 //!   prior snapshot, and writes `market.json` + `wfstat-catalog.json`.
 //! - `scrape`: the full WFM scrape to `wfm_results.csv`.
+//! - `replay`: offline simulation of statistics-refresh schedules over the
+//!   per-sweep observation logs. Fetches nothing and publishes nothing.
 //!
 //! Flags:
 //! - `--fixtures-dir <DIR>`: run offline using frozen fixture files.
@@ -21,7 +23,7 @@ use wfm_scrape::{clock, ingest::LiveHttp};
 fn main() -> std::process::ExitCode {
     let args: Vec<String> = std::env::args().collect();
     let Some(command) = args.get(1) else {
-        eprintln!("usage: wfm-scrape build|scrape|history [--fixtures-dir <DIR>] [--now <ISO>]");
+        eprintln!("usage: wfm-scrape build|scrape|history|replay [--fixtures-dir <DIR>] [--now <ISO>]");
         return std::process::ExitCode::FAILURE;
     };
     let _output_lock = if extract_flag(&args, "--fixtures-dir").is_none() && matches!(command.as_str(), "scrape" | "build") {
@@ -42,6 +44,7 @@ fn main() -> std::process::ExitCode {
             build(fixtures_path, now_arg.as_deref())
         }
         "scrape" => run_scrape_cmd(&args),
+        "replay" => run_replay_cmd(&args),
         _ => {
             eprintln!("unknown subcommand: {command}");
             return std::process::ExitCode::FAILURE;
@@ -169,6 +172,48 @@ fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
         summary.workers,
         cfg.out.display()
     );
+    Ok(())
+}
+
+/// `wfm-scrape replay --observations <DIR> [--schedule 4h,6h,12h,24h]`
+///                    `[--from <DATE>] [--to <DATE>] [--out <report.json>]`
+///
+/// Reads the per-sweep observation logs and simulates statistics-refresh
+/// schedules over them offline. It fetches nothing and publishes nothing, so it
+/// takes no output lock and prints no request metrics.
+fn run_replay_cmd(args: &[String]) -> Result<(), String> {
+    use wfm_scrape::replay::{self, ReplayOptions};
+
+    let directory =
+        extract_flag(args, "--observations").ok_or("--observations <DIR> is required")?;
+    let schedule = replay::parse_schedule(
+        &extract_flag(args, "--schedule").unwrap_or_else(|| "4h,6h,12h,24h".into()),
+    )?;
+    let from = extract_flag(args, "--from")
+        .map(|s| replay::parse_bound(&s, false))
+        .transpose()?;
+    let to = extract_flag(args, "--to")
+        .map(|s| replay::parse_bound(&s, true))
+        .transpose()?;
+    let report = replay::run(&ReplayOptions {
+        observations: PathBuf::from(directory),
+        schedule,
+        from,
+        to,
+    })?;
+    print!("{}", replay::summary(&report));
+    if let Some(out) = extract_flag(args, "--out") {
+        let out = PathBuf::from(out);
+        if let Some(parent) = out.parent().filter(|p| !p.as_os_str().is_empty()) {
+            std::fs::create_dir_all(parent).map_err(|e| format!("mkdir {parent:?}: {e}"))?;
+        }
+        let json = serde_json::to_string_pretty(&report)
+            .map_err(|e| format!("serialize replay report: {e}"))?;
+        let tmp = PathBuf::from(format!("{}.tmp", out.display()));
+        std::fs::write(&tmp, &json).map_err(|e| format!("write {tmp:?}: {e}"))?;
+        std::fs::rename(&tmp, &out).map_err(|e| format!("rename {tmp:?} → {out:?}: {e}"))?;
+        eprintln!("replay report: {}", out.display());
+    }
     Ok(())
 }
 
