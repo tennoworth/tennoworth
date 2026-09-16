@@ -1,0 +1,12 @@
+[Unit]
+Description=Archive the box's observation logs
+
+[Timer]
+# Daily, early enough that the archive host's receipt is published before the
+# box pulls it at 06:15. Persistent so a host that was off still archives on the
+# next boot rather than skipping a day.
+OnCalendar=*-*-* 05:30:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

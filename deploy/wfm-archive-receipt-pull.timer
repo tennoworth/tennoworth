@@ -1,0 +1,11 @@
+[Unit]
+Description=Fetch the observation archive receipt
+
+[Timer]
+# Ahead of the readiness check at 06:30 so the check reads the receipt this
+# elapse fetched, never yesterday's.
+OnCalendar=*-*-* 06:15:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

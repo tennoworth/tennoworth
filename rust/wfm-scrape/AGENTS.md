@@ -88,7 +88,12 @@ so a stale one cannot green them.
 
 The corpus's operational owners are host-only, next to the pipeline:
 `deploy/observations-check.sh` (with `wfm-observations-check.service`/`.timer`,
-installed by `scripts/deploy-scrape-host.sh`) reports whether the corpus is sound
-and complete, and `scripts/archive-observations.sh` copies it off the box with a
-verified manifest. The check answers collection-readiness only; the schedule
-decision belongs to `replay`.
+installed by `scripts/deploy-scrape-host.sh`) reports whether the corpus is sound,
+complete and preserved, and `scripts/archive-observations.sh` copies it off the
+box with a verified manifest and publishes a receipt the box pulls with
+`deploy/pull-archive-receipt.sh`. The check answers collection-readiness only;
+the schedule decision belongs to `replay`. Archive evidence is required: a
+missing, stale or disagreeing receipt, or a completed log past its archival
+deadline, is a failure, so an unmonitored archive cannot read as ready. The check
+ties its journal evidence to one systemd invocation and one sweep, and a start
+that cannot be paired is an explicit failure rather than a skipped gate.

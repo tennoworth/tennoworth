@@ -20,7 +20,9 @@
 #      while the live paths still run the previous release,
 #   6. only then are the live paths replaced, so a rejection leaves what is
 #      running exactly as it was,
-#   7. /srv/wfm/deployed.json records what ran and what it was checked against.
+#   7. /srv/wfm/deployed.json records what ran and what it was checked against,
+#   8. the sweep schedule is restored, and only then are the monitors armed -
+#      the readiness check requires the archive receipt the pull timer fetches.
 #
 # Environment:
 #   HOST          ssh target                (default wfm)
@@ -174,6 +176,7 @@ $SCP -q "$ARTIFACT" "$HOST:$STAGING/wfm-scrape"
 $SCP -q "$VERIFIER_ARTIFACT" "$HOST:$STAGING/wfm-policy"
 $SCP -q deploy/run-scrape.sh deploy/wfm-scrape.service deploy/wfm-scrape.timer "$HOST:$STAGING/"
 $SCP -q deploy/observations-check.sh deploy/wfm-observations-check.service deploy/wfm-observations-check.timer "$HOST:$STAGING/"
+$SCP -q deploy/pull-archive-receipt.sh deploy/wfm-archive-receipt-pull.service deploy/wfm-archive-receipt-pull.timer "$HOST:$STAGING/"
 
 # ---- 6. install and prove the release before the live paths move -----------
 # The live paths keep running the previous release until this one is proven on
@@ -190,6 +193,9 @@ install -m 0644 "$STAGING/wfm-scrape.timer" "$RELEASES/$REVISION/wfm-scrape.time
 install -m 0755 "$STAGING/observations-check.sh" "$RELEASES/$REVISION/observations-check.sh"
 install -m 0644 "$STAGING/wfm-observations-check.service" "$RELEASES/$REVISION/wfm-observations-check.service"
 install -m 0644 "$STAGING/wfm-observations-check.timer" "$RELEASES/$REVISION/wfm-observations-check.timer"
+install -m 0755 "$STAGING/pull-archive-receipt.sh" "$RELEASES/$REVISION/pull-archive-receipt.sh"
+install -m 0644 "$STAGING/wfm-archive-receipt-pull.service" "$RELEASES/$REVISION/wfm-archive-receipt-pull.service"
+install -m 0644 "$STAGING/wfm-archive-receipt-pull.timer" "$RELEASES/$REVISION/wfm-archive-receipt-pull.timer"
 REMOTE_RELEASE
 
 SCRAPER="$RELEASES/$REVISION/wfm-scrape"
@@ -222,18 +228,19 @@ install -m 0644 "$RELEASES/$REVISION/wfm-scrape.timer" /etc/systemd/system/wfm-s
 install -m 0755 "$RELEASES/$REVISION/observations-check.sh" "/srv/wfm/observations-check.sh"
 install -m 0644 "$RELEASES/$REVISION/wfm-observations-check.service" /etc/systemd/system/wfm-observations-check.service
 install -m 0644 "$RELEASES/$REVISION/wfm-observations-check.timer" /etc/systemd/system/wfm-observations-check.timer
-# ProtectSystem=strict in the check's unit grants write access to exactly this
+install -m 0755 "$RELEASES/$REVISION/pull-archive-receipt.sh" "/srv/wfm/pull-archive-receipt.sh"
+install -m 0644 "$RELEASES/$REVISION/wfm-archive-receipt-pull.service" /etc/systemd/system/wfm-archive-receipt-pull.service
+install -m 0644 "$RELEASES/$REVISION/wfm-archive-receipt-pull.timer" /etc/systemd/system/wfm-archive-receipt-pull.timer
+# ProtectSystem=strict in both new units grants write access to exactly this
 # path, and systemd refuses to start a unit whose ReadWritePaths does not exist.
 install -d -m 0750 -o root -g root "$HOST_ROOT/data/observations-check"
 systemctl daemon-reload
 # A fresh box otherwise has the units and nothing scheduled: setup-container no
 # longer enables the scrape timer, because this script owns the pipeline now.
 # Arming the timer here with enable --now would reopen the window the hold above
-# exists to close; the EXIT trap starts it once every check has passed. The
-# readiness timer is not part of that window - it reads and writes nothing the
-# sweep phase touches - so it is armed directly.
+# exists to close; the EXIT trap starts it once every check has passed, and the
+# monitoring timers are deliberately armed after that.
 systemctl enable wfm-scrape.timer
-systemctl enable --now wfm-observations-check.timer
 REMOTE_ACTIVATE
 
 [ "$($SSH "$HOST" "sha256sum /srv/wfm/bin/wfm-scrape | cut -d' ' -f1")" = "$CHECKSUM" ] \
@@ -249,5 +256,16 @@ $SSH "$HOST" "cat > '$HOST_ROOT/deployed.json'" <<RECORD
   "glibc_on_box": "$BOX_GLIBC"
 }
 RECORD
+
+# ---- 9. restore the schedule, then arm the monitors ------------------------
+# Both monitors read the deployment record and the sweep schedule, so they are
+# armed only after those are settled: a persistent timer enabled earlier can
+# fire into the intermediate state and report on a box that is still deploying.
+# restore_timer is the same call the failure path makes, made deliberately here
+# so the schedule is running before anything watches it - and disarms the trap
+# so success does not start it twice.
+restore_timer
+
+$SSH "$HOST" "systemctl enable --now wfm-archive-receipt-pull.timer wfm-observations-check.timer"
 
 say "deployed $(git rev-parse --short "$REVISION"); rollback: install a previous $RELEASES/<rev>/ by hand and daemon-reload"

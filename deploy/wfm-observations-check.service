@@ -7,10 +7,11 @@ OnFailure=wfm-alert@%n.service
 
 [Service]
 Type=oneshot
-# Root, unlike the sweep: the corpus directory is 0750 wfm:wfm and the service
-# health evidence is in wfm-scrape.service's journal, and this process only
-# reads both. It writes exactly one file, the report below.
-ExecStart=/srv/wfm/observations-check.sh --observations /srv/wfm/observations --out /srv/wfm/data/observations-check/report.json
+# Root, unlike the sweep: the corpus directory is 0750 wfm:wfm, the service
+# health evidence is in wfm-scrape.service's journal, and the archive receipt is
+# written by another unit. This process only reads all three, and writes exactly
+# one file, the report below.
+ExecStart=/srv/wfm/observations-check.sh --observations /srv/wfm/observations --archive-receipt /srv/wfm/data/observations-check/archive-receipt.jsonl --out /srv/wfm/data/observations-check/report.json
 Nice=10
 
 # Nothing here needs the network or the ability to change the box; the journal

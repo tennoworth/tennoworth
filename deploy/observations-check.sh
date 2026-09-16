@@ -8,10 +8,16 @@
 # an unsound corpus look signed off. Every check here is therefore written to
 # fail closed: missing evidence is an error, not an empty result.
 #
-# Scope: this answers "is the corpus sound and complete". Whether a proposed
-# refresh schedule meets its acceptance thresholds is a different question with
-# a different owner (`wfm-scrape replay`); nothing here may answer it, or a
-# schedule could be declared good because the collection ran.
+# The same rule applies to the archive. A corpus that is sound but not being
+# preserved is one disk failure away from being no corpus at all, so the receipt
+# the archive host publishes is required evidence: absent, stale, disagreeing
+# with the box, or missing a completed file past its archival deadline are all
+# failures, and an unmonitored archive can never render as ready.
+#
+# Scope: this answers "is the corpus sound, complete and preserved". Whether a
+# proposed refresh schedule meets its acceptance thresholds is a different
+# question with a different owner (`wfm-scrape replay`); nothing here may answer
+# it, or a schedule could be declared good because the collection ran.
 #
 # Runs on the box from wfm-observations-check.timer, and locally against any
 # directory through --observations/--out.
@@ -30,7 +36,13 @@ usage: observations-check.sh [options]
   --snapshot <path>           published snapshot (default /srv/wfm/app/frontend/public/market.json)
   --deployed <path>           deployment record (default /srv/wfm/deployed.json)
   --binary <path>             installed scraper (default /srv/wfm/bin/wfm-scrape)
-  --archive-manifest <path>   archive manifest to check for lag; omit when off-box
+  --archive-receipt <path>    receipt published by the archive host (default
+                              /srv/wfm/data/observations-check/archive-receipt.jsonl)
+  --archive-deadline-seconds <n>  age at which an unarchived log or an unrefreshed
+                              receipt is late (default 129600 = a daily run plus
+                              half a day of grace)
+  --pair-tolerance-seconds <n>    how far a sweep's journal start may sit from the
+                              log header it ran (default 300)
   --interval-seconds <n>      scheduled sweep spacing (default 7200)
   --retention-bytes <n>       observation cap (default 2147483648)
   --retention-age-days <n>    observation age limit (default 56)
@@ -45,7 +57,9 @@ CSV="/srv/wfm/app/wfm_results.csv"
 SNAPSHOT="/srv/wfm/app/frontend/public/market.json"
 DEPLOYED="/srv/wfm/deployed.json"
 BINARY="/srv/wfm/bin/wfm-scrape"
-ARCHIVE_MANIFEST=""
+ARCHIVE_RECEIPT="/srv/wfm/data/observations-check/archive-receipt.jsonl"
+ARCHIVE_DEADLINE_SECONDS=$((36 * 60 * 60))
+PAIR_TOLERANCE_SECONDS=300
 INTERVAL_SECONDS=7200
 # Kept in step with rust/wfm-scrape/src/observations.rs through
 # tests/fixtures/observation-retention.json; the deploy-layout test pins all
@@ -69,7 +83,9 @@ while [ $# -gt 0 ]; do
     --snapshot) SNAPSHOT="$2"; shift 2;;
     --deployed) DEPLOYED="$2"; shift 2;;
     --binary) BINARY="$2"; shift 2;;
-    --archive-manifest) ARCHIVE_MANIFEST="$2"; shift 2;;
+    --archive-receipt) ARCHIVE_RECEIPT="$2"; shift 2;;
+    --archive-deadline-seconds) ARCHIVE_DEADLINE_SECONDS="$2"; shift 2;;
+    --pair-tolerance-seconds) PAIR_TOLERANCE_SECONDS="$2"; shift 2;;
     --interval-seconds) INTERVAL_SECONDS="$2"; shift 2;;
     --retention-bytes) RETENTION_BYTES="$2"; shift 2;;
     --retention-age-days) RETENTION_AGE_DAYS="$2"; shift 2;;
@@ -130,12 +146,19 @@ name_stamp() {
 # One record per line and the tag first, because that is how the writer emits
 # them; anything else is a log this check cannot read as evidence. The
 # whitespace tolerance is for /srv/wfm/deployed.json, which is pretty-printed.
+#
+# Absence is a result, not a failure: with `set -o pipefail` a grep that finds
+# no match would abort the run before any report existed, which is the one
+# outcome a fail-closed check must never produce - a missing field has to be
+# visible in the report as absent.
 record_field() {
-  printf '%s' "$1" \
-    | grep -o "\"$2\"[[:space:]]*:[[:space:]]*[^,}]*" \
+  local value
+  value="$(printf '%s' "$1" \
+    | grep -o "\"$2\"[[:space:]]*:[[:space:]]*[^,}]*" 2>/dev/null \
     | head -1 \
     | sed 's/^[^:]*:[[:space:]]*//' \
-    | tr -d '"'
+    | tr -d '"')" || true
+  printf '%s' "$value"
 }
 
 if [ -n "$NOW" ]; then
@@ -166,7 +189,13 @@ oldest_partial_age=""
 completeness_failures=()
 day_counts="$(mktemp)"
 starts_file="$(mktemp)"
-trap 'rm -f "$day_counts" "$starts_file"' EXIT
+# One row per log with a readable header: start|name|items|kept. The service
+# section pairs a journal invocation back to the sweep it ran by these stamps.
+log_rows="$(mktemp)"
+# Completed logs only: name|mtime, so the archive rules can ask which of them
+# have waited past the archival deadline.
+completed_rows="$(mktemp)"
+trap 'rm -f "$day_counts" "$starts_file" "$log_rows" "$completed_rows"' EXIT
 
 if [ ! -d "$OBSERVATIONS" ]; then
   error "observations directory $OBSERVATIONS does not exist"
@@ -195,7 +224,7 @@ else
     kept="$(grep -c '"outcome":"kept"' "$path" || true)"
     rejected="$(grep -c '"outcome":"below_volume"\|"outcome":"no_statistics"' "$path" || true)"
     books="$(grep -c '"book":{' "$path" || true)"
-    unique_slugs="$(grep -o '"slug":"[^"]*"' "$path" | sort -u | wc -l)"
+    unique_slugs="$(grep -o '"slug":"[^"]*"' "$path" | sort -u | wc -l || true)"
     runs="$(grep -c '^{"kind":"run"' "$path" || true)"
     summaries="$(grep -c '^{"kind":"summary"' "$path" || true)"
     unreadable="$(grep -vc '^{"kind":"\(run\|item\|summary\)"' "$path" || true)"
@@ -221,17 +250,24 @@ else
       continue
     fi
 
-    if [ "$summaries" != 1 ] || ! printf '%s' "$footer" | grep -q '^{"kind":"summary"'; then
-      missing_summary=$((missing_summary + 1))
-      error "$base has no summary - the sweep did not complete"
+    started="$(record_field "$header" started_at)"
+    [ -n "$started" ] || started="$(name_stamp "$base")"
+    run_items="$(record_field "$header" items)"
+    start_epoch="$(iso_to_epoch "$started")" || true
+    if [ -z "${start_epoch:-}" ]; then
+      error "$base has an unreadable start stamp '$started'"
       continue
     fi
 
-    run_items="$(record_field "$header" items)"
+    if [ "$summaries" != 1 ] || ! printf '%s' "$footer" | grep -q '^{"kind":"summary"'; then
+      missing_summary=$((missing_summary + 1))
+      error "$base has no summary - the sweep did not complete"
+      printf '%s|%s|%s|\n' "$start_epoch" "$base" "${run_items:-}" >> "$log_rows"
+      continue
+    fi
+
     scanned="$(record_field "$footer" scanned)"
     sum_kept="$(record_field "$footer" kept)"
-    started="$(record_field "$header" started_at)"
-    [ -n "$started" ] || started="$(name_stamp "$base")"
 
     log_failures=()
     [ "${items:-0}" = "${run_items:-x}" ] || log_failures+=("$items item rows against run.items=$run_items")
@@ -253,12 +289,9 @@ else
     valid=$((valid + 1))
     printf '%s\n' "$started" >> "$starts_file"
     printf '%s\n' "${started%%T*}" >> "$day_counts"
+    printf '%s|%s|%s|%s\n' "$start_epoch" "$base" "${run_items:-}" "${sum_kept:-}" >> "$log_rows"
+    printf '%s|%s\n' "$base" "$(mtime_of "$path")" >> "$completed_rows"
 
-    start_epoch="$(iso_to_epoch "$started")" || true
-    if [ -z "${start_epoch:-}" ]; then
-      error "$base has an unreadable start stamp '$started'"
-      continue
-    fi
     if [ -z "$oldest_start" ] || [ "$start_epoch" -lt "$(iso_to_epoch "$oldest_start")" ]; then
       oldest_start="$started"
     fi
@@ -376,32 +409,78 @@ elif [ "$free_bytes" -lt "$DISK_FLOOR_BYTES" ]; then
 fi
 
 # ---- archive ----------------------------------------------------------------
+# The receipt is the archive host's heartbeat. A missing one means archival is
+# unmonitored, which is a failure in its own right: the whole point of the
+# archive is that this corpus survives something happening to the box.
 
-archive_status="not_configured"
-archive_archived=""
-archive_missing=""
-archive_newest_age=""
-if [ -n "$ARCHIVE_MANIFEST" ]; then
-  if [ ! -f "$ARCHIVE_MANIFEST" ]; then
+archive_status="missing"
+archive_verified=""
+archive_age=""
+archive_covered=""
+archive_receipt_revision=""
+archive_producer_unknown=0
+overdue=()
+mismatched=()
+
+if [ ! -f "$ARCHIVE_RECEIPT" ]; then
+  error "no archive receipt at $ARCHIVE_RECEIPT - the corpus is not being preserved"
+else
+  receipt_header="$(head -1 "$ARCHIVE_RECEIPT")"
+  if ! printf '%s' "$receipt_header" | grep -q '"kind":"archive_receipt"'; then
     archive_status="unreadable"
-    error "archive manifest $ARCHIVE_MANIFEST is not readable"
+    error "$ARCHIVE_RECEIPT is not an archive receipt"
   else
-    archive_status="present"
-    archive_archived="$(grep -o '"name":"[^"]*"' "$ARCHIVE_MANIFEST" | wc -l)"
-    unarchived=()
-    for path in "$OBSERVATIONS"/sweep-*.jsonl; do
-      [ -e "$path" ] || continue
-      base="$(basename "$path")"
-      grep -qF "\"name\":\"$base\"" "$ARCHIVE_MANIFEST" || unarchived+=("$base")
-    done
-    archive_missing="${#unarchived[@]}"
-    if [ "$archive_missing" != 0 ]; then
-      error "$archive_missing completed sweep(s) are not in the archive manifest"
+    archive_status="ok"
+    archive_verified="$(record_field "$receipt_header" verified_at)"
+    archive_receipt_revision="$(record_field "$receipt_header" deployed_revision_at_archive)"
+    archive_covered="$(grep -c '"name":' "$ARCHIVE_RECEIPT" || true)"
+    archive_producer_unknown="$(grep -c '"producer_revision":null' "$ARCHIVE_RECEIPT" || true)"
+
+    verified_epoch=""
+    if [ -n "$archive_verified" ]; then
+      verified_epoch="$(iso_to_epoch "$archive_verified")" || true
     fi
-    newest_archived="$(grep -o '"archived_at":"[^"]*"' "$ARCHIVE_MANIFEST" | tail -1 | cut -d: -f2- | tr -d '"')"
-    if [ -n "$newest_archived" ]; then
-      archived_epoch="$(iso_to_epoch "$newest_archived")" || true
-      [ -n "${archived_epoch:-}" ] && archive_newest_age=$((NOW_EPOCH - archived_epoch))
+    if [ -z "${verified_epoch:-}" ]; then
+      archive_status="unreadable"
+      error "the archive receipt has no readable verified_at"
+    else
+      archive_age=$((NOW_EPOCH - verified_epoch))
+      if [ "$archive_age" -gt "$ARCHIVE_DEADLINE_SECONDS" ]; then
+        archive_status="stale"
+        error "the archive receipt is $((archive_age / 3600)) hours old - the archive job has not succeeded"
+      fi
+    fi
+
+    # A receipt that names a file the box no longer has is not a failure (the
+    # box prunes), but one that disagrees about a file still here means the
+    # archived copy is not this file.
+    while read -r line; do
+      [ -n "$line" ] || continue
+      name=""
+      sha=""
+      if [[ "$line" =~ \"name\":\"([^\"]*)\" ]]; then name="${BASH_REMATCH[1]}"; fi
+      if [[ "$line" =~ \"sha256\":\"([0-9a-f]*)\" ]]; then sha="${BASH_REMATCH[1]}"; fi
+      [ -n "$name" ] || continue
+      [ -f "$OBSERVATIONS/$name" ] || continue
+      if [ -n "$sha" ]; then
+        got="$(sha256sum "$OBSERVATIONS/$name" 2>/dev/null | cut -d' ' -f1 || true)"
+        [ "$got" = "$sha" ] || mismatched+=("$name")
+      fi
+    done < <(grep '"name":' "$ARCHIVE_RECEIPT" || true)
+    if [ "${#mismatched[@]}" -gt 0 ]; then
+      error "the archived copy of ${#mismatched[@]} log(s) does not match the box: ${mismatched[*]}"
+    fi
+
+    # A daily archive plus half a day of grace: a log renamed moments before the
+    # run waits for the next one, and anything older than that has been missed.
+    while IFS='|' read -r name mtime; do
+      [ -n "$name" ] || continue
+      [ "$((NOW_EPOCH - mtime))" -gt "$ARCHIVE_DEADLINE_SECONDS" ] || continue
+      grep -qF "\"name\":\"$name\"" "$ARCHIVE_RECEIPT" || overdue+=("$name")
+    done < "$completed_rows"
+    if [ "${#overdue[@]}" -gt 0 ]; then
+      archive_status="lagging"
+      error "${#overdue[@]} completed log(s) are past their archival deadline: ${overdue[*]}"
     fi
   fi
 fi
@@ -410,8 +489,14 @@ fi
 # The `sweep metrics:` line is the sweep's own record of what it asked WFM for.
 # Its `elapsed_ms` is the sum of per-request latencies across workers - on a
 # healthy two-worker sweep it is about twice the wall clock - so the elapsed
-# thresholds gate on the wall clock the journal's own timestamps give, and the
+# thresholds gate on the wall clock of the same systemd invocation, and the
 # metrics line is quoted alongside for context rather than used as the clock.
+#
+# The invocation id is what ties the metrics line, the start and the end
+# together: matching on "the nearest Starting line" can pair one sweep's start
+# with another's end, and it cannot tell a missing start from a complete
+# invocation. A start that cannot be established for the same invocation is an
+# explicit failure, never a silently skipped gate.
 JOURNALCTL="${JOURNALCTL:-journalctl}"
 SYSTEMCTL="${SYSTEMCTL:-systemctl}"
 
@@ -419,6 +504,9 @@ service_state=""
 service_result=""
 metrics_found=false
 metrics_line=""
+invocation=""
+sweep_log=""
+pair_delta=""
 wall_seconds=""
 metrics_elapsed_ms=""
 throttles=""
@@ -426,55 +514,98 @@ failed_requests=""
 statistics_attempts=""
 catalog_attempts=""
 orders_attempts=""
+drift_checked=false
 
-journal="$("$JOURNALCTL" -u wfm-scrape.service -o short-iso --no-pager -n 400 2>/dev/null || true)"
+journal="$("$JOURNALCTL" -u wfm-scrape.service -o json --no-pager -n 1000 2>/dev/null || true)"
 if [ -z "$journal" ]; then
   error "no journal entries for wfm-scrape.service"
 else
   mapfile -t jlines <<< "$journal"
-  index=-1
-  for i in "${!jlines[@]}"; do
-    case "${jlines[$i]}" in
+  jts=(); jinv=(); jmsg=()
+  for line in "${jlines[@]}"; do
+    t=""; v=""; m=""
+    if [[ "$line" =~ \"__REALTIME_TIMESTAMP\":\"([0-9]+)\" ]]; then t="${BASH_REMATCH[1]}"; fi
+    if [[ "$line" =~ \"_SYSTEMD_INVOCATION_ID\":\"([0-9a-fA-F]+)\" ]]; then v="${BASH_REMATCH[1]}"; fi
+    if [[ "$line" =~ \"MESSAGE\":\"([^\"]*)\" ]]; then m="${BASH_REMATCH[1]}"; fi
+    jts+=("$t"); jinv+=("$v"); jmsg+=("$m")
+  done
+
+  metrics_index=-1
+  for i in "${!jmsg[@]}"; do
+    case "${jmsg[$i]}" in
       *"sweep metrics:"*)
-        if printf '%s' "${jlines[$i]}" | grep -q 'attempts\[catalog=[1-9]'; then
-          index="$i"
+        if printf '%s' "${jmsg[$i]}" | grep -q 'attempts\[catalog=[1-9]'; then
+          metrics_index="$i"
         fi
         ;;
     esac
   done
-  if [ "$index" -lt 0 ]; then
-    for i in "${!jlines[@]}"; do
-      case "${jlines[$i]}" in *"sweep metrics:"*) index="$i";; esac
+  if [ "$metrics_index" -lt 0 ]; then
+    for i in "${!jmsg[@]}"; do
+      case "${jmsg[$i]}" in *"sweep metrics:"*) metrics_index="$i";; esac
     done
   fi
-  if [ "$index" -ge 0 ]; then
+
+  if [ "$metrics_index" -lt 0 ]; then
+    error "the journal holds no sweep metrics line"
+  else
     metrics_found=true
-    metrics_line="${jlines[$index]}"
-    start_iso=""
-    for i in $(seq 0 "$index"); do
-      case "${jlines[$i]}" in
-        *"Starting wfm-scrape.service"*) start_iso="$(printf '%s' "${jlines[$i]}" | awk '{print $1}')";;
-      esac
-    done
-    end_iso=""
-    for i in $(seq $((index + 1)) $(( ${#jlines[@]} - 1 ))); do
-      case "${jlines[$i]}" in
-        *"Deactivated successfully"*|*"Finished wfm-scrape.service"*)
-          [ -n "$end_iso" ] || end_iso="$(printf '%s' "${jlines[$i]}" | awk '{print $1}')"
-          ;;
-      esac
-    done
-    start_epoch=""
-    [ -n "$start_iso" ] && start_epoch="$(iso_to_epoch "$start_iso")" || true
-    end_epoch=""
-    if [ -n "$end_iso" ]; then end_epoch="$(iso_to_epoch "$end_iso")" || true; fi
-    [ -n "${end_epoch:-}" ] || end_epoch="$NOW_EPOCH"
-    if [ -n "${start_epoch:-}" ] && [ "$end_epoch" -ge "$start_epoch" ]; then
-      wall_seconds=$((end_epoch - start_epoch))
+    metrics_line="${jmsg[$metrics_index]}"
+    invocation="${jinv[$metrics_index]}"
+    if [ -z "$invocation" ]; then
+      error "the most recent sweep metrics line carries no invocation id, so its duration cannot be established"
+    else
+      block_start="$metrics_index"
+      while [ "$block_start" -gt 0 ] && [ "${jinv[$((block_start - 1))]}" = "$invocation" ]; do
+        block_start=$((block_start - 1))
+      done
+      block_end="$metrics_index"
+      while [ "$block_end" -lt $(( ${#jmsg[@]} - 1 )) ] && [ "${jinv[$((block_end + 1))]}" = "$invocation" ]; do
+        block_end=$((block_end + 1))
+      done
+
+      ambiguous=false
+      for i in "${!jinv[@]}"; do
+        if [ "$i" -lt "$block_start" ] || [ "$i" -gt "$block_end" ]; then
+          [ "${jinv[$i]}" = "$invocation" ] && ambiguous=true
+        fi
+      done
+      if [ "$ambiguous" = true ]; then
+        error "the journal interleaves invocation $invocation with another sweep - start and end cannot be paired"
+      elif [ "$block_start" -eq 0 ]; then
+        error "the journal window is truncated before the most recent sweep's start"
+      elif [ "${jinv[$((block_start - 1))]}" != "" ]; then
+        error "the most recent sweep's invocation is not contiguous in the journal"
+      elif ! printf '%s' "${jmsg[$((block_start - 1))]}" | grep -q "Starting wfm-scrape.service"; then
+        error "no start timestamp for the most recent sweep's invocation ($invocation)"
+      else
+        start_seconds=$(( ${jts[$((block_start - 1))]} / 1000000 ))
+        end_seconds="$start_seconds"
+        for i in $(seq "$block_start" "$block_end"); do
+          seconds=$(( ${jts[$i]} / 1000000 ))
+          [ "$seconds" -gt "$end_seconds" ] && end_seconds="$seconds"
+        done
+        if [ "$end_seconds" -ge "$start_seconds" ]; then
+          wall_seconds=$((end_seconds - start_seconds))
+        fi
+
+        # The invocation is only evidence about the corpus if it ran the sweep
+        # the corpus records: pair its start with the log written at that start.
+        matched="$(awk -F'|' -v t="$start_seconds" -v tol="$PAIR_TOLERANCE_SECONDS" \
+          'BEGIN { best=""; bd=1e18 } { d=$1-t; if (d<0) d=-d; if (d<bd) { bd=d; best=$0 } } END { if (best != "" && bd<=tol) print best }' \
+          "$log_rows")"
+        if [ -z "$matched" ]; then
+          error "the most recent sweep's invocation does not pair with any observation log"
+        else
+          sweep_log="$(printf '%s' "$matched" | cut -d'|' -f2)"
+          pair_delta=$(( start_seconds - $(printf '%s' "$matched" | cut -d'|' -f1) ))
+          [ "$pair_delta" -lt 0 ] && pair_delta=$((-pair_delta))
+        fi
+      fi
     fi
 
-    metrics_elapsed_ms="$(printf '%s' "$metrics_line" | grep -o 'elapsed_ms=[0-9]*' | head -1 | cut -d= -f2)"
-    throttles="$(printf '%s' "$metrics_line" | grep -o 'throttles=[0-9]*' | head -1 | cut -d= -f2)"
+    metrics_elapsed_ms="$(printf '%s' "$metrics_line" | grep -o 'elapsed_ms=[0-9]*' 2>/dev/null | head -1 | cut -d= -f2)"
+    throttles="$(printf '%s' "$metrics_line" | grep -o 'throttles=[0-9]*' 2>/dev/null | head -1 | cut -d= -f2)"
     attempts_body="$(printf '%s' "$metrics_line" | sed -n 's/.*attempts\[\([^]]*\)\].*/\1/p')"
     failed_body="$(printf '%s' "$metrics_line" | sed -n 's/.*failed\[\([^]]*\)\].*/\1/p')"
     statistics_attempts="$(printf '%s' "$attempts_body" | tr ' ' '\n' | sed -n 's/^statistics=\([0-9]*\)$/\1/p')"
@@ -484,9 +615,9 @@ else
 
     if [ -n "${wall_seconds:-}" ]; then
       if [ "$wall_seconds" -ge "$URGENT_ELAPSED_SECONDS" ]; then
-        error "the most recent sweep took $((wall_seconds / 60)) minutes - close to the unit's timeout"
+        error "the most recent sweep invocation took $((wall_seconds / 60)) minutes - close to the unit's timeout"
       elif [ "$wall_seconds" -ge "$WARN_ELAPSED_SECONDS" ]; then
-        warn "the most recent sweep took $((wall_seconds / 60)) minutes"
+        warn "the most recent sweep invocation took $((wall_seconds / 60)) minutes"
       fi
     fi
     attempts_total="$(printf '%s' "$attempts_body" | tr ' ' '\n' | sed -n 's/^[^=]*=\([0-9]*\)$/\1/p' | awk '{s+=$1} END {print s+0}')"
@@ -509,23 +640,42 @@ else
       fi
     fi
 
-    # The baseline is the catalog the sweep itself recorded: one catalog fetch,
+    # The baseline is the sweep the invocation actually ran: one catalog fetch,
     # one statistics call per catalog item, one orders call per kept item. A
     # count more than 10% off that means requests were dropped or repeated, and
-    # the observation rows that follow cannot be read as a cross-section.
-    baseline_items="$(grep -o '"items":[0-9]*' "$OBSERVATIONS/$newest_name" 2>/dev/null | head -1 | cut -d: -f2 || true)"
-    if [ -n "${catalog_attempts:-}" ] && [ "$catalog_attempts" != 1 ]; then
-      warn "the most recent sweep made $catalog_attempts catalog requests (baseline 1)"
-    fi
-    if [ -n "${baseline_items:-}" ] && [ "${statistics_attempts:-0}" -gt 0 ]; then
-      delta=$((statistics_attempts - baseline_items))
-      [ "$delta" -lt 0 ] && delta=$((-delta))
-      if [ $((delta * 10)) -gt "$baseline_items" ]; then
-        error "the most recent sweep made $statistics_attempts statistics requests against a $baseline_items-item catalog"
+    # the observation rows that follow cannot be read as a cross-section. A zero
+    # or absent count is not agreement - it is a missing measurement, and the
+    # check cannot pass what it never saw.
+    if [ -n "$sweep_log" ]; then
+      baseline_items="$(printf '%s' "$matched" | cut -d'|' -f3)"
+      baseline_kept="$(printf '%s' "$matched" | cut -d'|' -f4)"
+      drift_checked=true
+      if [ -n "${catalog_attempts:-}" ] && [ "$catalog_attempts" != 1 ]; then
+        warn "the most recent sweep made $catalog_attempts catalog requests (baseline 1)"
+      fi
+      if [ -z "${baseline_items:-}" ]; then
+        error "cannot check request drift: $sweep_log has no catalog size"
+      elif [ -z "${statistics_attempts:-}" ] || [ "$statistics_attempts" -eq 0 ]; then
+        error "the most recent sweep recorded no statistics requests against a $baseline_items-item catalog"
+      else
+        delta=$((statistics_attempts - baseline_items))
+        [ "$delta" -lt 0 ] && delta=$((-delta))
+        if [ $((delta * 10)) -gt "$baseline_items" ]; then
+          error "the most recent sweep made $statistics_attempts statistics requests against a $baseline_items-item catalog"
+        fi
+      fi
+      if [ -z "${baseline_kept:-}" ]; then
+        error "cannot check orders requests: $sweep_log has no summary"
+      elif [ -z "${orders_attempts:-}" ]; then
+        error "the most recent sweep recorded no orders requests against $baseline_kept kept rows"
+      else
+        delta=$((orders_attempts - baseline_kept))
+        [ "$delta" -lt 0 ] && delta=$((-delta))
+        if [ $((delta * 10)) -gt "$baseline_kept" ]; then
+          error "the most recent sweep made $orders_attempts orders requests against $baseline_kept kept rows"
+        fi
       fi
     fi
-  else
-    error "the journal holds no sweep metrics line"
   fi
 
   service_state="$("$SYSTEMCTL" show wfm-scrape.service -p ActiveState --value 2>/dev/null || true)"
@@ -580,7 +730,7 @@ else
   error "$DEPLOYED is missing"
 fi
 if [ -f "$BINARY" ]; then
-  installed_sha="$(sha256sum "$BINARY" 2>/dev/null | cut -d' ' -f1)"
+  installed_sha="$(sha256sum "$BINARY" 2>/dev/null | cut -d' ' -f1 || true)"
   if [ -n "$recorded_sha" ] && [ "$installed_sha" != "$recorded_sha" ]; then
     error "the installed scraper is not the recorded revision's binary"
   fi
@@ -645,17 +795,26 @@ report="$(cat <<EOF
   },
   "archive": {
     "status": $(jstr "$archive_status"),
-    "manifest": $(jstr "$ARCHIVE_MANIFEST"),
-    "archived": $(jnum "$archive_archived"),
-    "unarchived": $(jnum "$archive_missing"),
-    "newest_age_seconds": $(jnum "$archive_newest_age")
+    "receipt": $(jstr "$ARCHIVE_RECEIPT"),
+    "verified_at": $(jstr_or_null "$archive_verified"),
+    "age_seconds": $(jnum "$archive_age"),
+    "deadline_seconds": $ARCHIVE_DEADLINE_SECONDS,
+    "covered": $(jnum "$archive_covered"),
+    "overdue": $(jarr "${overdue[@]+"${overdue[@]}"}"),
+    "hash_mismatch": $(jarr "${mismatched[@]+"${mismatched[@]}"}"),
+    "deployed_revision_at_archive": $(jstr_or_null "$archive_receipt_revision"),
+    "producer_revision_unknown": $archive_producer_unknown
   },
   "service": {
     "metrics": $metrics_found,
+    "invocation": $(jstr_or_null "$invocation"),
     "state": $(jstr "$service_state"),
     "result": $(jstr "$service_result"),
     "wall_seconds": $(jnum "$wall_seconds"),
     "metrics_elapsed_ms": $(jnum "$metrics_elapsed_ms"),
+    "sweep_log": $(jstr_or_null "$sweep_log"),
+    "pair_delta_seconds": $(jnum "$pair_delta"),
+    "drift_checked": $drift_checked,
     "throttles": $(jnum "$throttles"),
     "failed_requests": $(jnum "$failed_requests"),
     "statistics_attempts": $(jnum "$statistics_attempts"),
