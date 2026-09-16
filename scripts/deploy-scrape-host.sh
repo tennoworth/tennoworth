@@ -30,7 +30,8 @@ set -euo pipefail
 
 HOST="${HOST:-wfm}"
 # Overridable because a session that cannot read the system ssh config must pass
-# its own (for example SSH='ssh -F /home/you/.ssh/config').
+# its own. Deliberately unquoted at the call sites so SSH can carry options:
+# SSH='ssh -F /home/you/.ssh/config'.
 SSH="${SSH:-ssh}"
 SCP="${SCP:-scp}"
 HOST_ROOT="${HOST_ROOT:-/srv/wfm}"
@@ -74,7 +75,7 @@ ARTIFACT="$TARGET_DIR/release/wfm-scrape"
 # The box is newer than the build host in practice (Debian 13 today), but glibc
 # has no forward compatibility: a binary needing a symbol newer than the box's
 # fails at start. Compare symbol versions rather than trusting the build host.
-BOX_GLIBC="$("$SSH" "$HOST" "ldd --version | head -1 | grep -oE '[0-9]+\.[0-9]+$'")"
+BOX_GLIBC="$($SSH "$HOST" "ldd --version | head -1 | grep -oE '[0-9]+\.[0-9]+$'")"
 [ -n "$BOX_GLIBC" ] || die "could not read the box's glibc version"
 WANTED_GLIBC="$(objdump -T "$ARTIFACT" | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sed 's/GLIBC_//' | sort -V | tail -1)"
 [ -n "$WANTED_GLIBC" ] || die "could not read the artifact's required glibc symbols"
@@ -95,17 +96,17 @@ fi
 # Installing file by file is not atomic across the release, and a sweep runs for
 # the better part of an hour every two. Rather than let one sweep span two
 # binaries, refuse while anything is running.
-state="$("$SSH" "$HOST" "systemctl is-active wfm-scrape.service" || true)"
+state="$($SSH "$HOST" "systemctl is-active wfm-scrape.service" || true)"
 [ "$state" != "activating" ] && [ "$state" != "active" ] \
   || die "a sweep is $state; deploy between sweeps (systemctl list-timers wfm-scrape.timer)"
 
 # ---- 5. stage, then install the whole release in one window ---------------
 say "staging to $STAGING"
-"$SSH" "$HOST" "install -d -m 0755 -o root -g root '$STAGING'"
-"$SCP" -q "$ARTIFACT" "$HOST:$STAGING/wfm-scrape"
-"$SCP" -q deploy/run-scrape.sh deploy/wfm-scrape.service deploy/wfm-scrape.timer "$HOST:$STAGING/"
+$SSH "$HOST" "install -d -m 0755 -o root -g root '$STAGING'"
+$SCP -q "$ARTIFACT" "$HOST:$STAGING/wfm-scrape"
+$SCP -q deploy/run-scrape.sh deploy/wfm-scrape.service deploy/wfm-scrape.timer "$HOST:$STAGING/"
 
-"$SSH" "$HOST" bash -s <<REMOTE_INSTALL
+$SSH "$HOST" bash -s <<REMOTE_INSTALL
 set -euo pipefail
 install -d -m 0755 -o root -g root "$RELEASES/$REVISION"
 install -m 0755 "$STAGING/wfm-scrape" "$RELEASES/$REVISION/wfm-scrape"
@@ -123,16 +124,16 @@ systemctl daemon-reload
 REMOTE_INSTALL
 
 # ---- 6. the deployed pair actually works ----------------------------------
-"$SSH" "$HOST" "'/srv/wfm/bin/wfm-scrape' 2>&1 | grep -q 'usage: wfm-scrape'" \
+$SSH "$HOST" "'/srv/wfm/bin/wfm-scrape' 2>&1 | grep -q 'usage: wfm-scrape'" \
   || die "the installed binary does not run on the box"
-[ "$("$SSH" "$HOST" "sha256sum /srv/wfm/bin/wfm-scrape | cut -d' ' -f1")" = "$CHECKSUM" ] \
+[ "$($SSH "$HOST" "sha256sum /srv/wfm/bin/wfm-scrape | cut -d' ' -f1")" = "$CHECKSUM" ] \
   || die "the installed binary is not the one that was built"
 
 # The verifier embeds the same public key the build used, so a successful run
 # proves both that the key reached the binary and that the live policy verifies
 # under it. A missing key would have fallen back to compiled defaults silently.
-if "$SSH" "$HOST" "test -x /srv/wfm/bin/wfm-policy && test -f /srv/wfm/policy/wfm-policy.json"; then
-  "$SSH" "$HOST" "/srv/wfm/bin/wfm-policy /srv/wfm/policy/wfm-policy.json" \
+if $SSH "$HOST" "test -x /srv/wfm/bin/wfm-policy && test -f /srv/wfm/policy/wfm-policy.json"; then
+  $SSH "$HOST" "/srv/wfm/bin/wfm-policy /srv/wfm/policy/wfm-policy.json" \
     || die "the deployed verifier rejects the deployed policy - key mismatch"
   say "policy: deployed verifier accepts the live policy"
 else
@@ -140,7 +141,7 @@ else
 fi
 
 # ---- 7. record it ---------------------------------------------------------
-"$SSH" "$HOST" "cat > '$HOST_ROOT/deployed.json'" <<RECORD
+$SSH "$HOST" "cat > '$HOST_ROOT/deployed.json'" <<RECORD
 {
   "revision": "$REVISION",
   "built_at": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
