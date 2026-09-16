@@ -71,7 +71,12 @@ contract, so it lives in [`../AGENTS.md`](../AGENTS.md) rather than here.
 JSONL file per sweep, `src/observations.rs`) holding what each attempted item's
 statistics and book said; it is evidence for the statistics-refresh decision and
 no publication input, so a log that cannot be written warns instead of failing
-the sweep. The fixture regression gates in `tests/` shell the freshly built binary
-(`env!("CARGO_BIN_EXE_wfm-scrape")`) against the frozen fixtures in
-`tests/fixtures/{scrape,convert}` - cargo rebuilds the binary first, so a stale
-one cannot green them.
+the sweep. `replay` (`src/replay.rs`) reads those logs back and simulates a
+statistics-refresh schedule without touching WFM: it must refresh only on
+evidence a production run could have had (cached state, catalog, a response
+already fetched), and a book result the policy could not observe is reported as
+UNKNOWN rather than zero. Its report is deterministic and pinned by
+`tests/fixtures/replay/`. The fixture regression gates in `tests/` shell the
+freshly built binary (`env!("CARGO_BIN_EXE_wfm-scrape")`) against the frozen
+fixtures in `tests/fixtures/{scrape,convert}` - cargo rebuilds the binary first,
+so a stale one cannot green them.

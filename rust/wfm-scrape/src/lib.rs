@@ -27,5 +27,6 @@ pub mod orders;
 pub mod pipeline;
 pub mod reconcile;
 pub mod render;
+pub mod replay;
 pub mod scrape;
 pub mod stats;

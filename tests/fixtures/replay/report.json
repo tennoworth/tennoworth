@@ -1,0 +1,501 @@
+{
+  "format": 1,
+  "logs_seen": 3,
+  "logs_read": 3,
+  "skipped_incomplete": 0,
+  "skipped_out_of_range": 0,
+  "skipped_malformed": [],
+  "min_volume": 5,
+  "schedule": [
+    "1h",
+    "2h",
+    "4h"
+  ],
+  "sweeps": [
+    {
+      "file": "sweep-2026-09-15T00-00-00Z.jsonl",
+      "started_at": "2026-09-15T00:00:00Z",
+      "items": 6,
+      "kept": 4
+    },
+    {
+      "file": "sweep-2026-09-15T02-00-00Z.jsonl",
+      "started_at": "2026-09-15T02:00:00Z",
+      "items": 6,
+      "kept": 4
+    },
+    {
+      "file": "sweep-2026-09-15T04-00-00Z.jsonl",
+      "started_at": "2026-09-15T04:00:00Z",
+      "items": 6,
+      "kept": 5
+    }
+  ],
+  "fresh": {
+    "catalog_calls": 3,
+    "statistics_calls": 18,
+    "book_calls": 13,
+    "total_requests": 34,
+    "estimated_decoded_bytes": 4092780.0
+  },
+  "intervals": [
+    {
+      "label": "1h",
+      "interval_seconds": 3600,
+      "identity": true,
+      "calls": {
+        "statistics_calls": 18,
+        "book_calls": 13,
+        "total_requests": 34,
+        "fresh_statistics_calls": 18,
+        "fresh_book_calls": 13,
+        "fresh_total_requests": 34,
+        "saving_requests": 0,
+        "saving_ratio": 0.0
+      },
+      "estimated_decoded_bytes": 4092780.0,
+      "bytes_are_estimates": true,
+      "refresh_reasons": {
+        "bootstrap": 6,
+        "scheduled": 10,
+        "unusable_cache": 2
+      },
+      "forced_refreshes": 8,
+      "false_exclusions": {
+        "count": 0,
+        "total": 13,
+        "rate": 0.0
+      },
+      "unknown_books": {
+        "known": 13,
+        "unknown": 0,
+        "coverage": 1.0,
+        "unknown_no_fresh_book": 0,
+        "unknown_subtype_change": 0
+      },
+      "recall": {
+        "eligibility": {
+          "count": 13,
+          "total": 13,
+          "rate": 1.0
+        },
+        "top20": {
+          "reference": 13,
+          "matched_optimistic": 13,
+          "recall_optimistic": 1.0,
+          "matched_pessimistic": 13,
+          "recall_pessimistic": 1.0
+        },
+        "top100": {
+          "reference": 13,
+          "matched_optimistic": 13,
+          "recall_optimistic": 1.0,
+          "matched_pessimistic": 13,
+          "recall_pessimistic": 1.0
+        },
+        "discovery_delay": {
+          "reference_candidates": 13,
+          "missing_at_their_sweep": 0,
+          "observed": 0,
+          "censored": 0,
+          "p50_sweeps": 0.0,
+          "p95_sweeps": 0.0,
+          "max_sweeps": 0.0,
+          "p95_seconds": 0.0,
+          "beyond_one_sweep": 0,
+          "beyond_one_sweep_rate": 0.0
+        }
+      },
+      "price_error": {
+        "reference": 13,
+        "matched": 13,
+        "p50_absolute": 0.0,
+        "p95_absolute": 0.0,
+        "max_absolute": 0.0,
+        "within_tolerance": 13,
+        "within_tolerance_rate": 1.0,
+        "tolerance": "absolute error vs max(1p, 5% of reference)"
+      },
+      "clamped_low5_error": {
+        "reference": 13,
+        "matched": 13,
+        "p50_absolute": 0.0,
+        "p95_absolute": 0.0,
+        "max_absolute": 0.0,
+        "within_tolerance": 13,
+        "within_tolerance_rate": 1.0,
+        "tolerance": "absolute error vs max(1p, 5% of reference)"
+      },
+      "production_score_relative_error": {
+        "reference": 13,
+        "matched": 13,
+        "p50_absolute": 0.0,
+        "p95_absolute": 0.0,
+        "max_absolute": 0.0,
+        "within_tolerance": 0,
+        "within_tolerance_rate": 0.0,
+        "tolerance": "relative error |sim - ref| / max(|ref|, 1); diagnostic, no pass threshold"
+      },
+      "strata": {
+        "book_depth": [
+          {
+            "stratum": "deep",
+            "observations": 3,
+            "false_exclusions": 0,
+            "false_exclusion_rate": 0.0,
+            "unknown_books": 0,
+            "unknown_rate": 0.0
+          },
+          {
+            "stratum": "medium",
+            "observations": 7,
+            "false_exclusions": 0,
+            "false_exclusion_rate": 0.0,
+            "unknown_books": 0,
+            "unknown_rate": 0.0
+          },
+          {
+            "stratum": "thin",
+            "observations": 3,
+            "false_exclusions": 0,
+            "false_exclusion_rate": 0.0,
+            "unknown_books": 0,
+            "unknown_rate": 0.0
+          }
+        ],
+        "volume_cutoff": [
+          {
+            "stratum": "far_from_cutoff",
+            "observations": 10,
+            "false_exclusions": 0,
+            "false_exclusion_rate": 0.0,
+            "unknown_books": 0,
+            "unknown_rate": 0.0
+          },
+          {
+            "stratum": "near_cutoff",
+            "observations": 3,
+            "false_exclusions": 0,
+            "false_exclusion_rate": 0.0,
+            "unknown_books": 0,
+            "unknown_rate": 0.0
+          }
+        ]
+      },
+      "diagnostics": {
+        "oracle_note": "diagnostic bound only - production cannot observe these triggers without fetching fresh statistics, so they are excluded from statistics_calls and every headline metric",
+        "oracle_gate_crossings": 0,
+        "oracle_subtype_changes": 0,
+        "oracle_extra_refreshes": 0
+      }
+    },
+    {
+      "label": "2h",
+      "interval_seconds": 7200,
+      "identity": true,
+      "calls": {
+        "statistics_calls": 18,
+        "book_calls": 13,
+        "total_requests": 34,
+        "fresh_statistics_calls": 18,
+        "fresh_book_calls": 13,
+        "fresh_total_requests": 34,
+        "saving_requests": 0,
+        "saving_ratio": 0.0
+      },
+      "estimated_decoded_bytes": 4092780.0,
+      "bytes_are_estimates": true,
+      "refresh_reasons": {
+        "bootstrap": 6,
+        "scheduled": 10,
+        "unusable_cache": 2
+      },
+      "forced_refreshes": 8,
+      "false_exclusions": {
+        "count": 0,
+        "total": 13,
+        "rate": 0.0
+      },
+      "unknown_books": {
+        "known": 13,
+        "unknown": 0,
+        "coverage": 1.0,
+        "unknown_no_fresh_book": 0,
+        "unknown_subtype_change": 0
+      },
+      "recall": {
+        "eligibility": {
+          "count": 13,
+          "total": 13,
+          "rate": 1.0
+        },
+        "top20": {
+          "reference": 13,
+          "matched_optimistic": 13,
+          "recall_optimistic": 1.0,
+          "matched_pessimistic": 13,
+          "recall_pessimistic": 1.0
+        },
+        "top100": {
+          "reference": 13,
+          "matched_optimistic": 13,
+          "recall_optimistic": 1.0,
+          "matched_pessimistic": 13,
+          "recall_pessimistic": 1.0
+        },
+        "discovery_delay": {
+          "reference_candidates": 13,
+          "missing_at_their_sweep": 0,
+          "observed": 0,
+          "censored": 0,
+          "p50_sweeps": 0.0,
+          "p95_sweeps": 0.0,
+          "max_sweeps": 0.0,
+          "p95_seconds": 0.0,
+          "beyond_one_sweep": 0,
+          "beyond_one_sweep_rate": 0.0
+        }
+      },
+      "price_error": {
+        "reference": 13,
+        "matched": 13,
+        "p50_absolute": 0.0,
+        "p95_absolute": 0.0,
+        "max_absolute": 0.0,
+        "within_tolerance": 13,
+        "within_tolerance_rate": 1.0,
+        "tolerance": "absolute error vs max(1p, 5% of reference)"
+      },
+      "clamped_low5_error": {
+        "reference": 13,
+        "matched": 13,
+        "p50_absolute": 0.0,
+        "p95_absolute": 0.0,
+        "max_absolute": 0.0,
+        "within_tolerance": 13,
+        "within_tolerance_rate": 1.0,
+        "tolerance": "absolute error vs max(1p, 5% of reference)"
+      },
+      "production_score_relative_error": {
+        "reference": 13,
+        "matched": 13,
+        "p50_absolute": 0.0,
+        "p95_absolute": 0.0,
+        "max_absolute": 0.0,
+        "within_tolerance": 0,
+        "within_tolerance_rate": 0.0,
+        "tolerance": "relative error |sim - ref| / max(|ref|, 1); diagnostic, no pass threshold"
+      },
+      "strata": {
+        "book_depth": [
+          {
+            "stratum": "deep",
+            "observations": 3,
+            "false_exclusions": 0,
+            "false_exclusion_rate": 0.0,
+            "unknown_books": 0,
+            "unknown_rate": 0.0
+          },
+          {
+            "stratum": "medium",
+            "observations": 7,
+            "false_exclusions": 0,
+            "false_exclusion_rate": 0.0,
+            "unknown_books": 0,
+            "unknown_rate": 0.0
+          },
+          {
+            "stratum": "thin",
+            "observations": 3,
+            "false_exclusions": 0,
+            "false_exclusion_rate": 0.0,
+            "unknown_books": 0,
+            "unknown_rate": 0.0
+          }
+        ],
+        "volume_cutoff": [
+          {
+            "stratum": "far_from_cutoff",
+            "observations": 10,
+            "false_exclusions": 0,
+            "false_exclusion_rate": 0.0,
+            "unknown_books": 0,
+            "unknown_rate": 0.0
+          },
+          {
+            "stratum": "near_cutoff",
+            "observations": 3,
+            "false_exclusions": 0,
+            "false_exclusion_rate": 0.0,
+            "unknown_books": 0,
+            "unknown_rate": 0.0
+          }
+        ]
+      },
+      "diagnostics": {
+        "oracle_note": "diagnostic bound only - production cannot observe these triggers without fetching fresh statistics, so they are excluded from statistics_calls and every headline metric",
+        "oracle_gate_crossings": 0,
+        "oracle_subtype_changes": 0,
+        "oracle_extra_refreshes": 0
+      }
+    },
+    {
+      "label": "4h",
+      "interval_seconds": 14400,
+      "identity": false,
+      "calls": {
+        "statistics_calls": 12,
+        "book_calls": 13,
+        "total_requests": 28,
+        "fresh_statistics_calls": 18,
+        "fresh_book_calls": 13,
+        "fresh_total_requests": 34,
+        "saving_requests": 6,
+        "saving_ratio": 0.17647058823529413
+      },
+      "estimated_decoded_bytes": 3964170.0,
+      "bytes_are_estimates": true,
+      "refresh_reasons": {
+        "bootstrap": 6,
+        "scheduled": 4,
+        "unusable_cache": 2
+      },
+      "forced_refreshes": 8,
+      "false_exclusions": {
+        "count": 1,
+        "total": 13,
+        "rate": 0.07692307692307693
+      },
+      "unknown_books": {
+        "known": 11,
+        "unknown": 2,
+        "coverage": 0.8461538461538461,
+        "unknown_no_fresh_book": 1,
+        "unknown_subtype_change": 1
+      },
+      "recall": {
+        "eligibility": {
+          "count": 11,
+          "total": 13,
+          "rate": 0.8461538461538461
+        },
+        "top20": {
+          "reference": 13,
+          "matched_optimistic": 11,
+          "recall_optimistic": 0.8461538461538461,
+          "matched_pessimistic": 11,
+          "recall_pessimistic": 0.8461538461538461
+        },
+        "top100": {
+          "reference": 13,
+          "matched_optimistic": 11,
+          "recall_optimistic": 0.8461538461538461,
+          "matched_pessimistic": 11,
+          "recall_pessimistic": 0.8461538461538461
+        },
+        "discovery_delay": {
+          "reference_candidates": 13,
+          "missing_at_their_sweep": 2,
+          "observed": 1,
+          "censored": 1,
+          "p50_sweeps": 1.0,
+          "p95_sweeps": 1.0,
+          "max_sweeps": 1.0,
+          "p95_seconds": 7200.0,
+          "beyond_one_sweep": 1,
+          "beyond_one_sweep_rate": 0.07692307692307693
+        }
+      },
+      "price_error": {
+        "reference": 13,
+        "matched": 11,
+        "p50_absolute": 0.0,
+        "p95_absolute": 90.0,
+        "max_absolute": 90.0,
+        "within_tolerance": 10,
+        "within_tolerance_rate": 0.9090909090909091,
+        "tolerance": "absolute error vs max(1p, 5% of reference)"
+      },
+      "clamped_low5_error": {
+        "reference": 13,
+        "matched": 11,
+        "p50_absolute": 0.0,
+        "p95_absolute": 0.0,
+        "max_absolute": 0.0,
+        "within_tolerance": 11,
+        "within_tolerance_rate": 1.0,
+        "tolerance": "absolute error vs max(1p, 5% of reference)"
+      },
+      "production_score_relative_error": {
+        "reference": 13,
+        "matched": 11,
+        "p50_absolute": 0.0,
+        "p95_absolute": 0.09933283914010393,
+        "max_absolute": 0.09933283914010393,
+        "within_tolerance": 0,
+        "within_tolerance_rate": 0.0,
+        "tolerance": "relative error |sim - ref| / max(|ref|, 1); diagnostic, no pass threshold"
+      },
+      "strata": {
+        "book_depth": [
+          {
+            "stratum": "deep",
+            "observations": 3,
+            "false_exclusions": 0,
+            "false_exclusion_rate": 0.0,
+            "unknown_books": 0,
+            "unknown_rate": 0.0
+          },
+          {
+            "stratum": "medium",
+            "observations": 7,
+            "false_exclusions": 1,
+            "false_exclusion_rate": 0.14285714285714285,
+            "unknown_books": 1,
+            "unknown_rate": 0.14285714285714285
+          },
+          {
+            "stratum": "thin",
+            "observations": 3,
+            "false_exclusions": 0,
+            "false_exclusion_rate": 0.0,
+            "unknown_books": 0,
+            "unknown_rate": 0.0
+          }
+        ],
+        "volume_cutoff": [
+          {
+            "stratum": "far_from_cutoff",
+            "observations": 10,
+            "false_exclusions": 0,
+            "false_exclusion_rate": 0.0,
+            "unknown_books": 1,
+            "unknown_rate": 0.1
+          },
+          {
+            "stratum": "near_cutoff",
+            "observations": 3,
+            "false_exclusions": 1,
+            "false_exclusion_rate": 0.3333333333333333,
+            "unknown_books": 0,
+            "unknown_rate": 0.0
+          }
+        ]
+      },
+      "diagnostics": {
+        "oracle_note": "diagnostic bound only - production cannot observe these triggers without fetching fresh statistics, so they are excluded from statistics_calls and every headline metric",
+        "oracle_gate_crossings": 2,
+        "oracle_subtype_changes": 1,
+        "oracle_extra_refreshes": 2
+      }
+    }
+  ],
+  "notes": [
+    "decoded bytes are ESTIMATES from the documented per-request constants; the observation logs carry no per-item byte counter",
+    "candidates are ranked with the production sell-priority score at its owner limit (owned = inf => units_today = daily_sales); the logs carry no inventory",
+    "oracle_* is a diagnostic bound only and is excluded from every headline number",
+    "series_stats and weighted_avg_48h outputs are consumed as the sweep stored them; the raw daily rows they need are not logged, so they are not re-run",
+    "cache age is measured from each sweep's start stamp; the logs carry no per-item fetch time, so a real cache entry is at most one sweep younger and the simulated schedule refreshes at least as often as production would",
+    "discovery delay reads the optimistic known top-100; the pessimistic ranking overlap is the conservative bound for the same candidates"
+  ]
+}
