@@ -203,7 +203,59 @@ describe('host-direct scrape deploy script', () => {
     // A build without it silently ignores the signed policy, so the script must
     // fail loudly instead of shipping a scraper that cannot verify one.
     expect(deploy).toMatch(/TENNOWORTH_WFM_POLICY_PUBLIC_KEY:\?/);
-    expect(deploy).toMatch(/wfm-policy \"\$HOST_ROOT\/policy\/wfm-policy.json|wfm-policy \/srv\/wfm\/policy/);
+  });
+
+  test('holds the sweep timer across the install and restores it on every exit', () => {
+    // Live files are rewritten one at a time, so a timer elapse inside that
+    // window lets a single sweep run the `scrape` phase from one release and the
+    // `build` phase from the next. The schedule has to be held for the whole
+    // operation, not just checked before it.
+    const stop = deploy.indexOf('systemctl stop wfm-scrape.timer');
+    expect(stop, 'the timer must be stopped, not merely observed').toBeGreaterThan(-1);
+    // Restoring only after the last check leaves the box with no schedule at all
+    // whenever an earlier step fails - silent until someone notices the data is
+    // stale - so the restore has to ride the one path both endings take.
+    const trap = deploy.indexOf('trap restore_timer EXIT');
+    expect(trap, 'the restore must be an EXIT trap').toBeGreaterThan(stop);
+    expect(deploy).toMatch(/systemctl start wfm-scrape\.timer/);
+    // `enable --now` re-arms the timer in the middle of the very window the hold
+    // exists to protect; only `enable` may run inside it.
+    expect(deploy).toMatch(/systemctl enable wfm-scrape\.timer/);
+    expect(deploy).not.toMatch(/enable --now wfm-scrape\.timer/);
+  });
+
+  test('installs only after the schedule is held and a running sweep is drained', () => {
+    const stop = deploy.indexOf('systemctl stop wfm-scrape.timer');
+    const recheck = deploy.indexOf('systemctl is-active wfm-scrape.service');
+    const liveInstall = deploy.indexOf('install -m 0755 "$RELEASES/$REVISION/wfm-scrape" "/srv/wfm/bin/wfm-scrape"');
+    expect(recheck, 'the service must be re-checked after the timer stop').toBeGreaterThan(stop);
+    expect(liveInstall, 'live files must not be written before the re-check').toBeGreaterThan(recheck);
+    // Stopping the timer does not stop a sweep a previous elapse already
+    // started. A single sample can still leave one running through the install,
+    // so the re-check has to wait it out.
+    expect(deploy.slice(recheck), 'the re-check must drain, not sample').toMatch(/(while|until)[\s\S]*is-active wfm-scrape\.service/);
+  });
+
+  test('proves the deployed revision itself against the live policy or aborts', () => {
+    // The proof used to run whatever /srv/wfm/bin/wfm-policy already existed:
+    // a binary from some other revision, whose success said nothing about the
+    // scraper being installed. The verifier now comes from this revision.
+    expect(deploy).toMatch(/cargo build[^\n]*-p wfm-client --bin wfm-policy/);
+    expect(deploy).toMatch(/\$RELEASES\/\$REVISION\/wfm-policy/);
+    // The proof has to run the verifier installed with this release; pointing it
+    // back at /srv/wfm/bin/wfm-policy is the original defect.
+    expect(deploy, 'the proof must run the release verifier').toMatch(/VERIFIER="\$RELEASES\/\$REVISION\/wfm-policy"/);
+    // The checksum has to be compared, not merely computed: an unverified
+    // verifier is one more binary of unknown provenance.
+    expect(deploy, 'the installed verifier must be the one that was built')
+      .toMatch(/sha256sum '\$VERIFIER'[\s\S]{0,80}VERIFIER_CHECKSUM/);
+    // Missing inputs used to warn and continue, which is exactly the case the
+    // check exists for: fail open and a scraper built without the key - or a box
+    // whose policy never arrived - ships with the key unproven.
+    expect(deploy, 'a missing verifier must abort').toMatch(/test -x [^\n]*\|\| die/);
+    expect(deploy, 'a missing policy must abort').toMatch(/test -f [^\n]*policy\/wfm-policy\.json[^\n]*\|\| die/);
+    expect(deploy, 'a rejected policy must abort').toMatch(/\$VERIFIER' '\$HOST_ROOT\/policy\/wfm-policy\.json'[\s\S]{0,80}\|\| die/);
+    expect(deploy, 'the fail-open branch must be gone').not.toContain('no verifier or policy on the box yet');
   });
 
   test('gates the artifact on the box glibc and on its checksum', () => {
@@ -212,7 +264,7 @@ describe('host-direct scrape deploy script', () => {
     expect(deploy).toMatch(/sha256sum \"\$ARTIFACT\"/);
   });
 
-  test('refuses to install while a sweep is running and keeps the release', () => {
+  test('checks the sweep service before installing and keeps the release', () => {
     expect(deploy).toMatch(/systemctl is-active wfm-scrape\.service/);
     expect(deploy).toMatch(/install -d -m 0755 -o root -g root \"\$RELEASES\/\$REVISION\"/);
   });

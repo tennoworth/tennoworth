@@ -1,22 +1,24 @@
 #!/usr/bin/env bash
 # Deploy the wfm-scrape pipeline to the host directly, from a reviewed revision.
 #
-# The scrape is host-only infrastructure - one binary, one driver script, two
-# units, and nothing a user installs contains any of them - so it does not need
-# the GitHub release relay the web bundle and desktop app need. Commits still
-# live in the monorepo and are still reviewed; this script installs an immutable
-# revision of them, and nothing else.
+# The scrape is host-only infrastructure - the pipeline binary, the verifier
+# built with it to prove its key, one driver script, two units, and nothing a
+# user installs contains any of them - so it does not need the GitHub release
+# relay the web bundle and desktop app need. Commits still live in the monorepo
+# and are still reviewed; this script installs an immutable revision of them, and
+# nothing else.
 #
 # Order of operations, all of which are load-bearing:
 #   1. the tree is clean and the revision is already on the remote,
 #   2. the crate's own gates pass (they are the only thing that catches field
 #      drift and crash-family regressions in this pipeline),
 #   3. the artifact links no glibc newer than the box's,
-#   4. the box is idle, so one sweep cannot span two releases,
+#   4. the sweep timer is held stopped and any sweep it already started is
+#      drained, so one sweep cannot span two releases,
 #   5. the whole release is installed in one window, with the previous one kept,
-#   6. the deployed verifier accepts the deployed policy - a binary built
-#      without the public key silently ignores signed policy, which is exactly
-#      the failure this check exists for,
+#   6. the verifier built alongside the scraper accepts the live policy - a
+#      binary built without the public key silently ignores signed policy, which
+#      is exactly the failure this check exists for,
 #   7. /srv/wfm/deployed.json records what ran and what it was checked against.
 #
 # Environment:
@@ -66,18 +68,28 @@ say "checks: cargo test + clippy -p wfm-scrape"
 say "build: release, locked, policy key compiled in"
 (cd "$ROOT/rust" && TENNOWORTH_WFM_POLICY_PUBLIC_KEY="$TENNOWORTH_WFM_POLICY_PUBLIC_KEY" \
   cargo build --release --locked -p wfm-scrape)
+# The policy proof has to come from this revision's own verifier. Whatever
+# /srv/wfm/bin/wfm-policy already held was built from some other revision, so its
+# success said nothing about the scraper being installed. Both binaries compile
+# wfm-client's single option_env! into PUBLIC_KEY, so a verifier built here, in
+# the same tree and with the same key, accepts the live policy only when the key
+# this revision was built with is the key that signed it.
+(cd "$ROOT/rust" && TENNOWORTH_WFM_POLICY_PUBLIC_KEY="$TENNOWORTH_WFM_POLICY_PUBLIC_KEY" \
+  cargo build --release --locked -p wfm-client --bin wfm-policy)
 # Honor CARGO_TARGET_DIR: CI and sandboxes set it, and the artifact is not under
 # rust/target when they do.
 TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/rust/target}"
 ARTIFACT="$TARGET_DIR/release/wfm-scrape"
+VERIFIER_ARTIFACT="$TARGET_DIR/release/wfm-policy"
 [ -x "$ARTIFACT" ] || die "no artifact at $ARTIFACT"
+[ -x "$VERIFIER_ARTIFACT" ] || die "no verifier at $VERIFIER_ARTIFACT"
 
 # The box is newer than the build host in practice (Debian 13 today), but glibc
 # has no forward compatibility: a binary needing a symbol newer than the box's
 # fails at start. Compare symbol versions rather than trusting the build host.
 BOX_GLIBC="$($SSH "$HOST" "ldd --version | head -1 | grep -oE '[0-9]+\.[0-9]+$'")"
 [ -n "$BOX_GLIBC" ] || die "could not read the box's glibc version"
-WANTED_GLIBC="$(objdump -T "$ARTIFACT" | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sed 's/GLIBC_//' | sort -V | tail -1)"
+WANTED_GLIBC="$(objdump -T "$ARTIFACT" "$VERIFIER_ARTIFACT" | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sed 's/GLIBC_//' | sort -V | tail -1)"
 [ -n "$WANTED_GLIBC" ] || die "could not read the artifact's required glibc symbols"
 newest="$(printf '%s\n%s\n' "$BOX_GLIBC" "$WANTED_GLIBC" | sort -V | tail -1)"
 [ "$newest" = "$BOX_GLIBC" ] \
@@ -85,6 +97,7 @@ newest="$(printf '%s\n%s\n' "$BOX_GLIBC" "$WANTED_GLIBC" | sort -V | tail -1)"
 say "glibc: needs <= $WANTED_GLIBC, box has $BOX_GLIBC"
 
 CHECKSUM="$(sha256sum "$ARTIFACT" | cut -d' ' -f1)"
+VERIFIER_CHECKSUM="$(sha256sum "$VERIFIER_ARTIFACT" | cut -d' ' -f1)"
 say "sha256 $CHECKSUM"
 
 if [ "$DRY_RUN" = 1 ]; then
@@ -92,24 +105,50 @@ if [ "$DRY_RUN" = 1 ]; then
   exit 0
 fi
 
-# ---- 4. the box is idle ----------------------------------------------------
-# Installing file by file is not atomic across the release, and a sweep runs for
-# the better part of an hour every two. Rather than let one sweep span two
-# binaries, refuse while anything is running.
+# ---- 4. hold the schedule, then drain what it already started --------------
+# Checking for an idle box before staging does not close the window: the timer
+# can fire at any point in the install, and the live files are replaced one at a
+# time, so a single sweep could run `scrape` from one release and `build` from
+# the next. The timer has to be stopped for the whole operation.
+$SSH "$HOST" "systemctl stop wfm-scrape.timer >/dev/null 2>&1 || true; ! systemctl is-active --quiet wfm-scrape.timer" \
+  || die "could not stop wfm-scrape.timer; refusing to install under a live schedule"
+
+# The schedule must come back on the failure path as well as the success one. A
+# deploy that dies with the timer stopped leaves the box with no schedule at all
+# and no error anyone sees until the data is stale. Nothing can run this after a
+# SIGKILL, so the unit stays enabled: a reboot re-arms it through timers.target
+# even then.
+TIMER_HELD=1
+restore_timer() {
+  [ "${TIMER_HELD:-0}" = 1 ] || return 0
+  TIMER_HELD=0
+  $SSH "$HOST" "systemctl start wfm-scrape.timer" \
+    || say "WARNING: the timer is still stopped; start it by hand: systemctl start wfm-scrape.timer"
+}
+trap restore_timer EXIT
+
+# Stopping the timer does not stop a sweep a previous elapse already started.
+# Wait that one out before writing anything: a single sample of the state can
+# still leave it running through the install.
 state="$($SSH "$HOST" "systemctl is-active wfm-scrape.service" || true)"
-[ "$state" != "activating" ] && [ "$state" != "active" ] \
-  || die "a sweep is $state; deploy between sweeps (systemctl list-timers wfm-scrape.timer)"
+while [ "$state" = "activating" ] || [ "$state" = "active" ]; do
+  say "a sweep is $state; holding the schedule until it finishes"
+  sleep 30
+  state="$($SSH "$HOST" "systemctl is-active wfm-scrape.service" || true)"
+done
 
 # ---- 5. stage, then install the whole release in one window ---------------
 say "staging to $STAGING"
 $SSH "$HOST" "install -d -m 0755 -o root -g root '$STAGING'"
 $SCP -q "$ARTIFACT" "$HOST:$STAGING/wfm-scrape"
+$SCP -q "$VERIFIER_ARTIFACT" "$HOST:$STAGING/wfm-policy"
 $SCP -q deploy/run-scrape.sh deploy/wfm-scrape.service deploy/wfm-scrape.timer "$HOST:$STAGING/"
 
 $SSH "$HOST" bash -s <<REMOTE_INSTALL
 set -euo pipefail
 install -d -m 0755 -o root -g root "$RELEASES/$REVISION"
 install -m 0755 "$STAGING/wfm-scrape" "$RELEASES/$REVISION/wfm-scrape"
+install -m 0755 "$STAGING/wfm-policy" "$RELEASES/$REVISION/wfm-policy"
 install -m 0755 "$STAGING/run-scrape.sh" "$RELEASES/$REVISION/run-scrape.sh"
 install -m 0644 "$STAGING/wfm-scrape.service" "$RELEASES/$REVISION/wfm-scrape.service"
 install -m 0644 "$STAGING/wfm-scrape.timer" "$RELEASES/$REVISION/wfm-scrape.timer"
@@ -123,7 +162,9 @@ install -m 0644 "$RELEASES/$REVISION/wfm-scrape.timer" /etc/systemd/system/wfm-s
 systemctl daemon-reload
 # A fresh box otherwise has the units and nothing scheduled: setup-container no
 # longer enables the scrape timer, because this script owns the pipeline now.
-systemctl enable --now wfm-scrape.timer
+# `enable --now` would arm the timer mid-install, which is the window the hold
+# above exists to close; the EXIT trap starts it once every check has passed.
+systemctl enable wfm-scrape.timer
 REMOTE_INSTALL
 
 # ---- 6. the deployed pair actually works ----------------------------------
@@ -132,16 +173,16 @@ $SSH "$HOST" "'/srv/wfm/bin/wfm-scrape' 2>&1 | grep -q 'usage: wfm-scrape'" \
 [ "$($SSH "$HOST" "sha256sum /srv/wfm/bin/wfm-scrape | cut -d' ' -f1")" = "$CHECKSUM" ] \
   || die "the installed binary is not the one that was built"
 
-# The verifier embeds the same public key the build used, so a successful run
-# proves both that the key reached the binary and that the live policy verifies
-# under it. A missing key would have fallen back to compiled defaults silently.
-if $SSH "$HOST" "test -x /srv/wfm/bin/wfm-policy && test -f /srv/wfm/policy/wfm-policy.json"; then
-  $SSH "$HOST" "/srv/wfm/bin/wfm-policy /srv/wfm/policy/wfm-policy.json" \
-    || die "the deployed verifier rejects the deployed policy - key mismatch"
-  say "policy: deployed verifier accepts the live policy"
-else
-  say "policy: no verifier or policy on the box yet; the built-in key is unproven"
-fi
+# Both inputs are required and a rejection is fatal: a missing verifier or policy
+# is exactly when the key needs proving, and warning past it is how a scraper
+# built without the key silently ignores the signed policy.
+VERIFIER="$RELEASES/$REVISION/wfm-policy"
+$SSH "$HOST" "test -x '$VERIFIER'" || die "no verifier in $RELEASES/$REVISION"
+$SSH "$HOST" "test -f '$HOST_ROOT/policy/wfm-policy.json'" || die "no policy at $HOST_ROOT/policy/wfm-policy.json"
+[ "$($SSH "$HOST" "sha256sum '$VERIFIER' | cut -d' ' -f1")" = "$VERIFIER_CHECKSUM" ] \
+  || die "the installed verifier is not the one that was built"
+$SSH "$HOST" "'$VERIFIER' '$HOST_ROOT/policy/wfm-policy.json'" || die "the revision's verifier rejects the live policy - key mismatch"
+say "policy: revision-bound verifier accepts the live policy"
 
 # ---- 7. record it ---------------------------------------------------------
 $SSH "$HOST" "cat > '$HOST_ROOT/deployed.json'" <<RECORD
