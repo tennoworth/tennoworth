@@ -119,6 +119,7 @@ pub enum Record {
 /// a file and rows arrive in completion order rather than catalog order - every
 /// row carries its slug and the header carries the sweep's stamp.
 pub struct Log {
+    directory: PathBuf,
     partial: PathBuf,
     complete: PathBuf,
     writer: Option<BufWriter<File>>,
@@ -132,11 +133,15 @@ impl Log {
     pub fn start(directory: &Path, header: Run) -> Log {
         let name = format!("sweep-{}.jsonl", header.started_at.replace(':', "-"));
         let mut log = Log {
+            directory: directory.to_path_buf(),
             partial: directory.join(format!("{name}.partial")),
             complete: directory.join(name),
             writer: None,
             failed: false,
         };
+        // Before writing anything: a sweep that died mid-run never reached
+        // `finish`, so cleanup cannot depend on this one completing.
+        prune(directory, MAX_BYTES, MAX_AGE);
         match std::fs::create_dir_all(directory).and_then(|_| File::create(&log.partial)) {
             Ok(file) => {
                 log.writer = Some(BufWriter::new(file));
@@ -170,7 +175,8 @@ impl Log {
             self.fail(format!("observation log not published: {e}"));
             return;
         }
-        prune(&self.complete, MAX_BYTES, MAX_AGE);
+        // This sweep's own file can be what pushes the directory over the cap.
+        prune(&self.directory, MAX_BYTES, MAX_AGE);
     }
 
     fn write(&mut self, record: &Record) {
@@ -355,6 +361,58 @@ mod tests {
             coercions: 0,
         });
         assert_eq!(std::fs::read(&blocked).expect("blocker intact"), b"file");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Age a file past the horizon without waiting for it.
+    fn expire(path: &Path) {
+        let old = SystemTime::now() - Duration::from_secs(MAX_AGE.as_secs() + 60);
+        std::fs::File::options()
+            .write(true)
+            .open(path)
+            .expect("open the seeded log")
+            .set_times(std::fs::FileTimes::new().set_modified(old))
+            .expect("set its mtime");
+    }
+
+    /// The bug this exists for: `finish` pruned the file it had just renamed
+    /// instead of the directory, so `read_dir` failed silently and the cap was
+    /// only a promise in the docs. The unit test above could not see it.
+    #[test]
+    fn finishing_a_sweep_prunes_its_directory() {
+        let dir = dir("finish-prunes");
+        std::fs::create_dir_all(&dir).expect("dir");
+        let stale = dir.join("sweep-2026-01-01T00-00-00Z.jsonl");
+        std::fs::write(&stale, b"old").expect("seed");
+        expire(&stale);
+
+        let mut log = Log::start(&dir, header("2026-09-15T22:07:20Z"));
+        log.item(item("kept_item", Outcome::Kept));
+        log.finish(Summary {
+            scanned: 1,
+            kept: 1,
+            coercions: 0,
+        });
+
+        assert!(!stale.exists(), "the expired log goes when the sweep finishes");
+        assert!(dir.join("sweep-2026-09-15T22-07-20Z.jsonl").exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A sweep that dies never reaches `finish`, so cleanup cannot live only
+    /// there or partials accumulate until the disk fills.
+    #[test]
+    fn starting_a_sweep_prunes_what_a_dead_one_left() {
+        let dir = dir("start-prunes");
+        std::fs::create_dir_all(&dir).expect("dir");
+        let stale = dir.join("sweep-2026-01-01T00-00-00Z.jsonl.partial");
+        std::fs::write(&stale, b"half a sweep").expect("seed");
+        expire(&stale);
+
+        let log = Log::start(&dir, header("2026-09-15T22:07:20Z"));
+        drop(log);
+
+        assert!(!stale.exists(), "the stale partial goes when the next sweep starts");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
