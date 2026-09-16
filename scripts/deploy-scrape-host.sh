@@ -15,10 +15,11 @@
 #   3. the artifact links no glibc newer than the box's,
 #   4. the sweep timer is held stopped and any sweep it already started is
 #      drained, so one sweep cannot span two releases,
-#   5. the whole release is installed in one window, with the previous one kept,
-#   6. the verifier built alongside the scraper accepts the live policy - a
-#      binary built without the public key silently ignores signed policy, which
-#      is exactly the failure this check exists for,
+#   5. the release is installed on the box and proven there - checksums, the
+#      usage banner, and the revision's own verifier accepting the live policy -
+#      while the live paths still run the previous release,
+#   6. only then are the live paths replaced, so a rejection leaves what is
+#      running exactly as it was,
 #   7. /srv/wfm/deployed.json records what ran and what it was checked against.
 #
 # Environment:
@@ -115,15 +116,21 @@ fi
 # deploy that dies with the timer stopped leaves the box with no schedule at all
 # and no error anyone sees until the data is stale. Arm the restore before the
 # stop: if the SSH session dies after the remote systemctl stopped the timer but
-# before this script sees that, a trap armed afterwards would never run. Nothing
-# can run this after a SIGKILL, so the unit stays enabled: a reboot re-arms it
-# through timers.target even then.
+# before this script sees that, a trap armed afterwards would never run. Killing
+# only the ssh child does not reliably skip this trap - the parent shell still
+# exits through it - but a connection lost after the stop and before the start
+# takes effect leaves the timer stopped with nobody left to notice, so that state
+# has to be detectable by hand:
+#   systemctl list-timers wfm-scrape.timer
+#   systemctl start wfm-scrape.timer
+# A SIGKILL or a host power loss runs none of this; the unit stays enabled, so a
+# reboot re-arms it through timers.target even then.
 TIMER_HELD=1
 restore_timer() {
   [ "${TIMER_HELD:-0}" = 1 ] || return 0
   TIMER_HELD=0
   $SSH "$HOST" "systemctl start wfm-scrape.timer" \
-    || say "WARNING: the timer is still stopped; start it by hand: systemctl start wfm-scrape.timer"
+    || say "WARNING: restore the timer by hand and confirm it: systemctl list-timers wfm-scrape.timer; systemctl start wfm-scrape.timer"
 }
 trap restore_timer EXIT
 
@@ -131,23 +138,47 @@ $SSH "$HOST" "systemctl stop wfm-scrape.timer >/dev/null 2>&1 || true; ! systemc
   || die "could not stop wfm-scrape.timer; refusing to install under a live schedule"
 
 # Stopping the timer does not stop a sweep a previous elapse already started.
-# Wait that one out before writing anything: a single sample of the state can
-# still leave it running through the install.
-state="$($SSH "$HOST" "systemctl is-active wfm-scrape.service" || true)"
-while [ "$state" = "activating" ] || [ "$state" = "active" ]; do
-  say "a sweep is $state; holding the schedule until it finishes"
-  sleep 30
-  state="$($SSH "$HOST" "systemctl is-active wfm-scrape.service" || true)"
+# `systemctl is-active` exits non-zero for inactive and failed, so its exit
+# status cannot separate "the box says terminal" from "the query never ran".
+# Read the state string and accept only what systemd can report for a oneshot: an
+# empty or unrecognised result is a dead connection or a missing systemctl, and
+# treating that as idle is how this check fails open.
+sweep_state() {
+  local state
+  if ! state="$($SSH "$HOST" "systemctl is-active wfm-scrape.service" 2>/dev/null)"; then
+    : # inactive and failed exit non-zero; the state string below decides
+  fi
+  case "$state" in
+    active|activating|deactivating|inactive|failed) printf '%s\n' "$state" ;;
+    *) die "could not read wfm-scrape.service state (got '${state:-nothing}'); refusing to install" ;;
+  esac
+}
+
+# Wait the sweep out before writing anything. A transitional state means the
+# service is still running, and one sample can leave it running through the
+# install; only a terminal state lets the deploy continue.
+while :; do
+  state="$(sweep_state)"
+  case "$state" in
+    active|activating|deactivating)
+      say "a sweep is $state; holding the schedule until it reaches a terminal state"
+      sleep 30 ;;
+    inactive|failed) break ;;
+  esac
 done
 
-# ---- 5. stage, then install the whole release in one window ---------------
+# ---- 5. stage the whole release -------------------------------------------
 say "staging to $STAGING"
 $SSH "$HOST" "install -d -m 0755 -o root -g root '$STAGING'"
 $SCP -q "$ARTIFACT" "$HOST:$STAGING/wfm-scrape"
 $SCP -q "$VERIFIER_ARTIFACT" "$HOST:$STAGING/wfm-policy"
 $SCP -q deploy/run-scrape.sh deploy/wfm-scrape.service deploy/wfm-scrape.timer "$HOST:$STAGING/"
 
-$SSH "$HOST" bash -s <<REMOTE_INSTALL
+# ---- 6. install and prove the release before the live paths move -----------
+# The live paths keep running the previous release until this one is proven on
+# the box. A rejected policy has to leave what is deployed exactly as it was,
+# not a half-swapped tree that the restored timer then runs against.
+$SSH "$HOST" bash -s <<REMOTE_RELEASE
 set -euo pipefail
 install -d -m 0755 -o root -g root "$RELEASES/$REVISION"
 install -m 0755 "$STAGING/wfm-scrape" "$RELEASES/$REVISION/wfm-scrape"
@@ -155,7 +186,29 @@ install -m 0755 "$STAGING/wfm-policy" "$RELEASES/$REVISION/wfm-policy"
 install -m 0755 "$STAGING/run-scrape.sh" "$RELEASES/$REVISION/run-scrape.sh"
 install -m 0644 "$STAGING/wfm-scrape.service" "$RELEASES/$REVISION/wfm-scrape.service"
 install -m 0644 "$STAGING/wfm-scrape.timer" "$RELEASES/$REVISION/wfm-scrape.timer"
+REMOTE_RELEASE
 
+SCRAPER="$RELEASES/$REVISION/wfm-scrape"
+VERIFIER="$RELEASES/$REVISION/wfm-policy"
+
+$SSH "$HOST" "'$SCRAPER' 2>&1 | grep -q 'usage: wfm-scrape'" \
+  || die "the built binary does not run on the box"
+[ "$($SSH "$HOST" "sha256sum '$SCRAPER' | cut -d' ' -f1")" = "$CHECKSUM" ] \
+  || die "the release binary is not the one that was built"
+[ "$($SSH "$HOST" "sha256sum '$VERIFIER' | cut -d' ' -f1")" = "$VERIFIER_CHECKSUM" ] \
+  || die "the release verifier is not the one that was built"
+
+# Both inputs are required and a rejection is fatal: a missing verifier or policy
+# is exactly when the key needs proving, and warning past it is how a scraper
+# built without the key silently ignores the signed policy.
+$SSH "$HOST" "test -x '$VERIFIER'" || die "no verifier in $RELEASES/$REVISION"
+$SSH "$HOST" "test -f '$HOST_ROOT/policy/wfm-policy.json'" || die "no policy at $HOST_ROOT/policy/wfm-policy.json"
+$SSH "$HOST" "'$VERIFIER' '$HOST_ROOT/policy/wfm-policy.json'" || die "the revision's verifier rejects the live policy - key mismatch"
+say "policy: revision-bound verifier accepts the live policy"
+
+# ---- 7. activate the proven release ---------------------------------------
+$SSH "$HOST" bash -s <<REMOTE_ACTIVATE
+set -euo pipefail
 # The running paths stay where the units expect them; the release directory is
 # the rollback unit, not a new layout.
 install -m 0755 "$RELEASES/$REVISION/wfm-scrape" "/srv/wfm/bin/wfm-scrape"
@@ -165,29 +218,15 @@ install -m 0644 "$RELEASES/$REVISION/wfm-scrape.timer" /etc/systemd/system/wfm-s
 systemctl daemon-reload
 # A fresh box otherwise has the units and nothing scheduled: setup-container no
 # longer enables the scrape timer, because this script owns the pipeline now.
-# `enable --now` would arm the timer mid-install, which is the window the hold
-# above exists to close; the EXIT trap starts it once every check has passed.
+# Arming the timer here with enable --now would reopen the window the hold above
+# exists to close; the EXIT trap starts it once every check has passed.
 systemctl enable wfm-scrape.timer
-REMOTE_INSTALL
+REMOTE_ACTIVATE
 
-# ---- 6. the deployed pair actually works ----------------------------------
-$SSH "$HOST" "'/srv/wfm/bin/wfm-scrape' 2>&1 | grep -q 'usage: wfm-scrape'" \
-  || die "the installed binary does not run on the box"
 [ "$($SSH "$HOST" "sha256sum /srv/wfm/bin/wfm-scrape | cut -d' ' -f1")" = "$CHECKSUM" ] \
-  || die "the installed binary is not the one that was built"
+  || die "the live binary is not the one that was built"
 
-# Both inputs are required and a rejection is fatal: a missing verifier or policy
-# is exactly when the key needs proving, and warning past it is how a scraper
-# built without the key silently ignores the signed policy.
-VERIFIER="$RELEASES/$REVISION/wfm-policy"
-$SSH "$HOST" "test -x '$VERIFIER'" || die "no verifier in $RELEASES/$REVISION"
-$SSH "$HOST" "test -f '$HOST_ROOT/policy/wfm-policy.json'" || die "no policy at $HOST_ROOT/policy/wfm-policy.json"
-[ "$($SSH "$HOST" "sha256sum '$VERIFIER' | cut -d' ' -f1")" = "$VERIFIER_CHECKSUM" ] \
-  || die "the installed verifier is not the one that was built"
-$SSH "$HOST" "'$VERIFIER' '$HOST_ROOT/policy/wfm-policy.json'" || die "the revision's verifier rejects the live policy - key mismatch"
-say "policy: revision-bound verifier accepts the live policy"
-
-# ---- 7. record it ---------------------------------------------------------
+# ---- 8. record it ---------------------------------------------------------
 $SSH "$HOST" "cat > '$HOST_ROOT/deployed.json'" <<RECORD
 {
   "revision": "$REVISION",
