@@ -46,18 +46,21 @@ die() { printf 'ABORT: %s\n' "$*" >&2; exit 1; }
 git rev-parse --verify --quiet "$REMOTE/develop" >/dev/null || die "fetch $REMOTE first"
 git merge-base --is-ancestor "$REVISION" "$REMOTE/develop" \
   || die "$REVISION is not on $REMOTE/develop - deploy a reviewed revision"
-say "deploying $(git rev-parse --short "$REVISION") from $(git branch --show-current)"
+ROOT="$(git rev-parse --show-toplevel)"
+say "deploying $(git rev-parse --short "$REVISION") from ${BASH_REMATCH[0]:-$(git branch --show-current 2>/dev/null || echo 'a detached HEAD')}"
 
 # ---- 2. the pipeline's own gates -------------------------------------------
 say "checks: cargo test + clippy -p wfm-scrape"
-cargo test -p wfm-scrape
-cargo clippy -p wfm-scrape --all-targets
+# The workspace root is rust/, not the repository root - the dry run caught the
+# script running cargo where there is no Cargo.toml.
+(cd "$ROOT/rust" && cargo test -p wfm-scrape)
+(cd "$ROOT/rust" && cargo clippy -p wfm-scrape --all-targets)
 
 # ---- 3. build, then refuse an artifact the box cannot load ------------------
 say "build: release, locked, policy key compiled in"
-TENNOWORTH_WFM_POLICY_PUBLIC_KEY="$TENNOWORTH_WFM_POLICY_PUBLIC_KEY" \
-  cargo build --release --locked -p wfm-scrape
-ARTIFACT="$(git rev-parse --show-toplevel)/rust/target/release/wfm-scrape"
+(cd "$ROOT/rust" && TENNOWORTH_WFM_POLICY_PUBLIC_KEY="$TENNOWORTH_WFM_POLICY_PUBLIC_KEY" \
+  cargo build --release --locked -p wfm-scrape)
+ARTIFACT="$ROOT/rust/target/release/wfm-scrape"
 [ -x "$ARTIFACT" ] || die "no artifact at $ARTIFACT"
 
 # The box is newer than the build host in practice (Debian 13 today), but glibc
