@@ -191,6 +191,38 @@ describe('caddy listener boundary', () => {
   });
 });
 
+describe('host-direct scrape deploy script', () => {
+  const deploy = readFileSync(fileURLToPath(new URL('./deploy-scrape-host.sh', import.meta.url)), 'utf8');
+
+  test('refuses anything but a reviewed, clean revision', () => {
+    expect(deploy).toMatch(/git status --porcelain/);
+    expect(deploy).toMatch(/merge-base --is-ancestor "\$REVISION" "\$REMOTE\/develop"/);
+  });
+
+  test('refuses to build without the policy public key', () => {
+    // A build without it silently ignores the signed policy, so the script must
+    // fail loudly instead of shipping a scraper that cannot verify one.
+    expect(deploy).toMatch(/TENNOWORTH_WFM_POLICY_PUBLIC_KEY:\?/);
+    expect(deploy).toMatch(/wfm-policy \"\$HOST_ROOT\/policy\/wfm-policy.json|wfm-policy \/srv\/wfm\/policy/);
+  });
+
+  test('gates the artifact on the box glibc and on its checksum', () => {
+    expect(deploy).toMatch(/objdump -T/);
+    expect(deploy).toMatch(/GLIBC_\[0-9\]/);
+    expect(deploy).toMatch(/sha256sum \"\$ARTIFACT\"/);
+  });
+
+  test('refuses to install while a sweep is running and keeps the release', () => {
+    expect(deploy).toMatch(/systemctl is-active wfm-scrape\.service/);
+    expect(deploy).toMatch(/install -d -m 0755 -o root -g root \"\$RELEASES\/\$REVISION\"/);
+  });
+
+  test('never carries a private signing key', () => {
+    expect(deploy).not.toMatch(/wfm-policy\.key/);
+    expect(deploy).not.toMatch(/minisign -S[mG]/);
+  });
+});
+
 describe('deployment ownership boundary', () => {
   const setup = readFileSync(fileURLToPath(new URL('../deploy/setup-container.sh', import.meta.url)), 'utf8');
 
