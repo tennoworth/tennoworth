@@ -60,7 +60,10 @@ say "checks: cargo test + clippy -p wfm-scrape"
 say "build: release, locked, policy key compiled in"
 (cd "$ROOT/rust" && TENNOWORTH_WFM_POLICY_PUBLIC_KEY="$TENNOWORTH_WFM_POLICY_PUBLIC_KEY" \
   cargo build --release --locked -p wfm-scrape)
-ARTIFACT="$ROOT/rust/target/release/wfm-scrape"
+# Honor CARGO_TARGET_DIR: CI and sandboxes set it, and the artifact is not under
+# rust/target when they do.
+TARGET_DIR="${CARGO_TARGET_DIR:-$ROOT/rust/target}"
+ARTIFACT="$TARGET_DIR/release/wfm-scrape"
 [ -x "$ARTIFACT" ] || die "no artifact at $ARTIFACT"
 
 # The box is newer than the build host in practice (Debian 13 today), but glibc
