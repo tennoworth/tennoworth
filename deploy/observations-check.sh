@@ -59,6 +59,9 @@ DEPLOYED="/srv/wfm/deployed.json"
 BINARY="/srv/wfm/bin/wfm-scrape"
 ARCHIVE_RECEIPT="/srv/wfm/data/observations-check/archive-receipt.jsonl"
 ARCHIVE_DEADLINE_SECONDS=$((36 * 60 * 60))
+# Clocks are not perfectly synchronised, so a receipt may be a little ahead of
+# this host; anything further ahead is not freshness.
+ARCHIVE_FUTURE_SKEW_SECONDS=600
 PAIR_TOLERANCE_SECONDS=300
 INTERVAL_SECONDS=7200
 # Kept in step with rust/wfm-scrape/src/observations.rs through
@@ -205,7 +208,13 @@ else
     [ -e "$path" ] || continue
     found=1
     base="$(basename "$path")"
-    size="$(stat -c %s "$path")"
+    # A file that cannot be sized or read is an error in the report, not an
+    # arithmetic failure that ends the run before one exists.
+    size="$(stat -c %s "$path" 2>/dev/null || true)"
+    if [ -z "$size" ]; then
+      error "$base cannot be read"
+      continue
+    fi
     total_bytes=$((total_bytes + size))
 
     case "$base" in
@@ -219,7 +228,7 @@ else
         ;;
     esac
 
-    total_lines="$(wc -l < "$path")"
+    total_lines="$(wc -l < "$path" 2>/dev/null || true)"
     items="$(grep -c '"kind":"item"' "$path" || true)"
     kept="$(grep -c '"outcome":"kept"' "$path" || true)"
     rejected="$(grep -c '"outcome":"below_volume"\|"outcome":"no_statistics"' "$path" || true)"
@@ -229,14 +238,14 @@ else
     summaries="$(grep -c '^{"kind":"summary"' "$path" || true)"
     unreadable="$(grep -vc '^{"kind":"\(run\|item\|summary\)"' "$path" || true)"
 
-    if [ "$unreadable" != 0 ] || [ "$total_lines" = 0 ]; then
+    if [ -z "$total_lines" ] || [ "$unreadable" != 0 ] || [ "$total_lines" = 0 ]; then
       malformed=$((malformed + 1))
       error "$base is malformed ($unreadable line(s) are not readable records)"
       continue
     fi
 
-    header="$(head -1 "$path")"
-    footer="$(tail -1 "$path")"
+    header="$(head -1 "$path" 2>/dev/null || true)"
+    footer="$(tail -1 "$path" 2>/dev/null || true)"
     if [ "$runs" != 1 ] || ! printf '%s' "$header" | grep -q '^{"kind":"run"'; then
       malformed=$((malformed + 1))
       error "$base does not begin with exactly one run header"
@@ -379,10 +388,17 @@ csv_sweep="$newest_name"
 if [ -n "$newest_name" ]; then
   if [ -f "$CSV" ]; then
     csv_state="checked"
-    csv_rows=$(( $(wc -l < "$CSV") - 1 ))
-    kept_newest="$(grep -c '"outcome":"kept"' "$OBSERVATIONS/$newest_name" || true)"
-    if [ "$csv_rows" != "$kept_newest" ]; then
-      error "$newest_name kept $kept_newest rows but $CSV holds $csv_rows"
+    csv_rows="$(wc -l < "$CSV" 2>/dev/null || true)"
+    if [ -z "$csv_rows" ]; then
+      csv_state="unreadable"
+      error "cannot read $CSV"
+      csv_rows=""
+    else
+      csv_rows=$((csv_rows - 1))
+      kept_newest="$(grep -c '"outcome":"kept"' "$OBSERVATIONS/$newest_name" || true)"
+      if [ "$csv_rows" != "$kept_newest" ]; then
+        error "$newest_name kept $kept_newest rows but $CSV holds $csv_rows"
+      fi
     fi
   else
     error "no CSV at $CSV to compare the newest sweep against"
@@ -425,8 +441,17 @@ mismatched=()
 if [ ! -f "$ARCHIVE_RECEIPT" ]; then
   error "no archive receipt at $ARCHIVE_RECEIPT - the corpus is not being preserved"
 else
-  receipt_header="$(head -1 "$ARCHIVE_RECEIPT")"
-  if ! printf '%s' "$receipt_header" | grep -q '"kind":"archive_receipt"'; then
+  # An unreadable receipt is still a verdict: without the guard, an I/O or
+  # permission error here aborts the run before any report is written, which is
+  # the outcome this check exists to make impossible.
+  receipt_header=""
+  if ! receipt_header="$(head -1 "$ARCHIVE_RECEIPT" 2>/dev/null)"; then
+    receipt_header=""
+  fi
+  if [ -z "$receipt_header" ]; then
+    archive_status="unreadable"
+    error "cannot read the archive receipt at $ARCHIVE_RECEIPT"
+  elif ! printf '%s' "$receipt_header" | grep -q '"kind":"archive_receipt"'; then
     archive_status="unreadable"
     error "$ARCHIVE_RECEIPT is not an archive receipt"
   else
@@ -448,6 +473,11 @@ else
       if [ "$archive_age" -gt "$ARCHIVE_DEADLINE_SECONDS" ]; then
         archive_status="stale"
         error "the archive receipt is $((archive_age / 3600)) hours old - the archive job has not succeeded"
+      elif [ "$archive_age" -lt $((0 - ARCHIVE_FUTURE_SKEW_SECONDS)) ]; then
+        # A claim dated in the future is not freshness; it is a broken clock or a
+        # fabricated receipt, and either way it must not read as current.
+        archive_status="future"
+        error "the archive receipt is dated $((0 - archive_age)) seconds in the future"
       fi
     fi
 
@@ -604,8 +634,17 @@ else
       fi
     fi
 
-    metrics_elapsed_ms="$(printf '%s' "$metrics_line" | grep -o 'elapsed_ms=[0-9]*' 2>/dev/null | head -1 | cut -d= -f2)"
-    throttles="$(printf '%s' "$metrics_line" | grep -o 'throttles=[0-9]*' 2>/dev/null | head -1 | cut -d= -f2)"
+    # Absent fields are reported as absent and failed, never as a skipped gate -
+    # and never as an abort: these pipelines used to exit the whole run before a
+    # report existed when the metrics line carried no such field.
+    metrics_elapsed_ms="$(printf '%s' "$metrics_line" | grep -o 'elapsed_ms=[0-9]*' 2>/dev/null | head -1 | cut -d= -f2 || true)"
+    throttles="$(printf '%s' "$metrics_line" | grep -o 'throttles=[0-9]*' 2>/dev/null | head -1 | cut -d= -f2 || true)"
+    if [ -z "${metrics_elapsed_ms:-}" ]; then
+      error "the most recent sweep metrics line reports no elapsed_ms"
+    fi
+    if [ -z "${throttles:-}" ]; then
+      error "the most recent sweep metrics line reports no throttles count"
+    fi
     attempts_body="$(printf '%s' "$metrics_line" | sed -n 's/.*attempts\[\([^]]*\)\].*/\1/p')"
     failed_body="$(printf '%s' "$metrics_line" | sed -n 's/.*failed\[\([^]]*\)\].*/\1/p')"
     statistics_attempts="$(printf '%s' "$attempts_body" | tr ' ' '\n' | sed -n 's/^statistics=\([0-9]*\)$/\1/p')"

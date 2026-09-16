@@ -15,12 +15,17 @@
 #                           archive@host:/srv/archive/receipt.jsonl
 #                           (no default; without it there is nothing to fetch)
 #   SCP                     scp command (default "scp")
+#   SCP_OPTS / COMMAND_TIMEOUT  connection and whole-command bounds; an
+#                           unreachable or stalled peer must fail this run rather
+#                           than hold it open until the next elapse
 #   OUT                     local destination (default
 #                           /srv/wfm/data/observations-check/archive-receipt.jsonl)
 set -euo pipefail
 
 SOURCE="${ARCHIVE_RECEIPT_SOURCE:-}"
 SCP="${SCP:-scp}"
+SCP_OPTS="${SCP_OPTS:--o BatchMode=yes -o ConnectTimeout=15}"
+COMMAND_TIMEOUT="${COMMAND_TIMEOUT:-120}"
 OUT="${OUT:-/srv/wfm/data/observations-check/archive-receipt.jsonl}"
 
 die() { printf 'ABORT: %s\n' "$*" >&2; exit 1; }
@@ -31,11 +36,11 @@ die() { printf 'ABORT: %s\n' "$*" >&2; exit 1; }
 mkdir -p "$(dirname "$OUT")"
 tmp="$OUT.tmp"
 rm -f "$tmp"
-$SCP -q "$SOURCE" "$tmp" || die "could not fetch $SOURCE"
+timeout "$COMMAND_TIMEOUT" $SCP $SCP_OPTS -q "$SOURCE" "$tmp" || die "could not fetch $SOURCE"
 
 # A half-written or unrelated file must never become the evidence the check
 # reads; the header is the cheapest thing that tells the two apart.
-if ! head -1 "$tmp" | grep -q '"kind":"archive_receipt"'; then
+if ! head -1 "$tmp" 2>/dev/null | grep -q '"kind":"archive_receipt"'; then
   rm -f "$tmp"
   die "$SOURCE is not an archive receipt"
 fi

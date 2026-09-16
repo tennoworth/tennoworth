@@ -27,6 +27,8 @@
 #   DEPLOYED     deployment record on the box     (default /srv/wfm/deployed.json)
 #   DEST         local archive directory          (default
 #                $HOME/.local/share/tennoworth/observations-archive)
+#   SSH_OPTS / SCP_OPTS / COMMAND_TIMEOUT
+#                connection and whole-command bounds for unattended runs
 set -euo pipefail
 
 HOST="${HOST:-wfm}"
@@ -35,6 +37,12 @@ HOST="${HOST:-wfm}"
 # SSH='ssh -F /home/you/.ssh/config'.
 SSH="${SSH:-ssh}"
 SCP="${SCP:-scp}"
+# Unattended runs must not hang. These bound the connection, so an unreachable
+# peer fails in seconds, and the whole command, so a stalled peer fails this run
+# instead of holding it open until the next elapse.
+SSH_OPTS="${SSH_OPTS:--o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4}"
+SCP_OPTS="${SCP_OPTS:--o BatchMode=yes -o ConnectTimeout=15}"
+COMMAND_TIMEOUT="${COMMAND_TIMEOUT:-300}"
 SOURCE_DIR="${SOURCE_DIR:-/srv/wfm/observations}"
 DEPLOYED="${DEPLOYED:-/srv/wfm/deployed.json}"
 DEST="${DEST:-$HOME/.local/share/tennoworth/observations-archive}"
@@ -58,7 +66,7 @@ json_str() {
 # the box keeps partials for post-mortem and the readiness check counts them.
 # The name is checked before it is used as a path or embedded in the manifest.
 remote_list() {
-  $SSH "$HOST" "cd '$SOURCE_DIR' || exit 1; for f in sweep-*.jsonl; do [ -e \"\$f\" ] || continue; printf '%s %s %s\n' \"\$f\" \"\$(stat -c %s \"\$f\")\" \"\$(sha256sum \"\$f\" | cut -d' ' -f1)\"; done"
+  timeout "$COMMAND_TIMEOUT" $SSH $SSH_OPTS "$HOST" "cd '$SOURCE_DIR' || exit 1; for f in sweep-*.jsonl; do [ -e \"\$f\" ] || continue; printf '%s %s %s\n' \"\$f\" \"\$(stat -c %s \"\$f\")\" \"\$(sha256sum \"\$f\" | cut -d' ' -f1)\"; done"
 }
 
 manifest_field() { # <name> <key>
@@ -103,6 +111,40 @@ stored_ok() { # <name> <box-sha256>
   [ "$(gzip -dc "$DEST/$name.gz" | sha256sum | cut -d' ' -f1)" = "$recorded_sha" ] || return 1
 }
 
+# Every claim in the manifest is re-verified before a receipt renews it. The
+# per-file loop above only visits what the box still lists, so a log the box has
+# since pruned would otherwise keep its row in a fresh receipt forever,
+# unexamined - and once the source is gone a missing or damaged artifact cannot
+# be repaired, which is exactly when the claim has to stop rather than renew.
+verify_manifest() {
+  local bad=0 row name sha gz
+  [ -f "$MANIFEST" ] || return 0
+  while IFS= read -r row; do
+    [ -n "$row" ] || continue
+    name=""; sha=""; gz=""
+    if [[ "$row" =~ \"name\":\"([^\"]*)\" ]]; then name="${BASH_REMATCH[1]}"; fi
+    if [[ "$row" =~ \"sha256\":\"([0-9a-f]*)\" ]]; then sha="${BASH_REMATCH[1]}"; fi
+    if [[ "$row" =~ \"gz_sha256\":\"([0-9a-f]*)\" ]]; then gz="${BASH_REMATCH[1]}"; fi
+    [ -n "$name" ] || continue
+    if [ ! -f "$DEST/$name.gz" ]; then
+      say "FAILED: $name is still claimed but its stored artifact is gone"
+      bad=$((bad + 1))
+      continue
+    fi
+    if [ -n "$gz" ] && [ "$(sha256sum "$DEST/$name.gz" | cut -d' ' -f1 || true)" != "$gz" ]; then
+      say "FAILED: $name does not match its recorded compressed hash"
+      bad=$((bad + 1))
+      continue
+    fi
+    if [ -n "$sha" ] && [ "$(gzip -dc "$DEST/$name.gz" | sha256sum | cut -d' ' -f1 || true)" != "$sha" ]; then
+      say "FAILED: $name does not decompress to its recorded content"
+      bad=$((bad + 1))
+      continue
+    fi
+  done < "$MANIFEST"
+  return "$bad"
+}
+
 # The receipt is what the box reads, so it carries the source identity and the
 # verification instant as well as the covered rows. Written through a temp file
 # and renamed, and only after a run in which nothing failed.
@@ -122,12 +164,19 @@ publish_receipt() {
 
 mkdir -p "$DEST" "$STAGE"
 
+# One archive at a time. Two runs share the manifest, the staging directory and
+# the receipt, so an overlap could publish a claim the other run is still
+# assembling - and an elapse that fires while the previous run is slow is normal
+# once receipts are pulled hourly.
+exec 9>"$DEST/.lock"
+flock -n 9 || die "another archive run holds $DEST/.lock"
+
 # Provenance is not optional: an archive whose rows cannot be tied to the
 # deployment that was live when they were collected cannot be replayed against
 # that revision's code. This is the deployment *observed at archive time* - it
 # is not a claim about which revision produced each file, which nothing in the
 # log header records, so that field stays explicitly null.
-record="$($SSH "$HOST" "cat '$DEPLOYED'")" \
+record="$(timeout "$COMMAND_TIMEOUT" $SSH $SSH_OPTS "$HOST" "cat '$DEPLOYED'")" \
   || die "cannot read $DEPLOYED on $HOST - refusing to archive without provenance"
 revision="$(printf '%s' "$record" | sed -n 's/.*"revision"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)"
 [ -n "$revision" ] || die "$DEPLOYED on $HOST has no revision field"
@@ -166,7 +215,7 @@ while read -r name size sha; do
     say "archiving $name ($size bytes)"
   fi
 
-  if ! $SCP -q "$HOST:$SOURCE_DIR/$name" "$raw"; then
+  if ! timeout "$COMMAND_TIMEOUT" $SCP $SCP_OPTS -q "$HOST:$SOURCE_DIR/$name" "$raw"; then
     say "FAILED: $name did not transfer"
     rm -f "$raw"
     failed=$((failed + 1))
@@ -213,6 +262,13 @@ done <<< "$listing"
 if [ "$failed" != 0 ]; then
   say "archive: $archived new, $repaired repaired, $skipped intact, $failed failed -> $DEST"
   die "$failed file(s) failed verification; the archive is incomplete and no receipt was published"
+fi
+
+# The per-file loop proves what the box still lists; this proves everything the
+# receipt is about to claim.
+if ! verify_manifest; then
+  say "archive: $archived new, $repaired repaired, $skipped intact, $failed failed -> $DEST"
+  die "the manifest claims files that can no longer be verified; no receipt was published"
 fi
 
 publish_receipt

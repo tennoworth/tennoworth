@@ -131,8 +131,12 @@ TIMER_HELD=1
 restore_timer() {
   [ "${TIMER_HELD:-0}" = 1 ] || return 0
   TIMER_HELD=0
-  $SSH "$HOST" "systemctl start wfm-scrape.timer" \
-    || say "WARNING: restore the timer by hand and confirm it: systemctl list-timers wfm-scrape.timer; systemctl start wfm-scrape.timer"
+  # Return non-zero when the restore does not take effect. In the EXIT trap the
+  # status is discarded, but the success path calls this explicitly and a deploy
+  # that leaves the box with no schedule must not report success.
+  $SSH "$HOST" "systemctl start wfm-scrape.timer" && return 0
+  say "WARNING: restore the timer by hand and confirm it: systemctl list-timers wfm-scrape.timer; systemctl start wfm-scrape.timer"
+  return 1
 }
 trap restore_timer EXIT
 
@@ -267,5 +271,29 @@ RECORD
 restore_timer
 
 $SSH "$HOST" "systemctl enable --now wfm-archive-receipt-pull.timer wfm-observations-check.timer"
+
+# ---- 10. run the pair once, in order --------------------------------------
+# Two persistent timers can elapse in either order after downtime, and a check
+# that runs before the pull reads yesterday's receipt. The first run is therefore
+# explicit: the pull first, then the check. The pull may fail because the archive
+# host is not configured yet - that is the units' own alert to raise, not this
+# script's - but a check that leaves no report at all means the installed units
+# are broken, and a check that is not ready means the box is not ready to be left
+# unattended.
+$SSH "$HOST" "systemctl start wfm-archive-receipt-pull.service" \
+  || say "WARNING: the first receipt pull failed; the readiness check will report the archive as unmonitored"
+$SSH "$HOST" "systemctl start wfm-observations-check.service" || true
+$SSH "$HOST" "test -s '$HOST_ROOT/data/observations-check/report.json'" \
+  || die "the readiness check produced no report - the installed units are not working"
+READY="$($SSH "$HOST" "grep -o '\"ready\":[a-z ]*' '$HOST_ROOT/data/observations-check/report.json' 2>/dev/null | head -1")"
+case "$READY" in
+  *true*)
+    say "readiness: ready ($HOST_ROOT/data/observations-check/report.json on the box)";;
+  *)
+    # The release is installed and the schedule is running; what failed is the
+    # gate this deployment is required to pass.
+    say "readiness: NOT READY ($READY)"
+    die "the readiness check does not pass on the box - the archive path is not working end to end; fix it rather than disabling the check (report at $HOST_ROOT/data/observations-check/report.json)";;
+esac
 
 say "deployed $(git rev-parse --short "$REVISION"); rollback: install a previous $RELEASES/<rev>/ by hand and daemon-reload"

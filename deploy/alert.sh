@@ -18,13 +18,16 @@
 set -uo pipefail
 
 UNIT="${1:-unknown.service}"
-LOG="${WFM_ALERT_LOG:-/srv/wfm/alerts.log}"
-ENV_FILE="${WFM_ALERT_ENV:-/etc/wfm-alert.env}"
 
-# Optional config: ALERT_WEBHOOK_URL=... (anything that accepts a POST body -
-# ntfy, a Discord/Slack webhook, healthchecks.io's /fail endpoint).
+# Optional config: WFM_ALERT_LOG=... (where incidents are appended) and
+# ALERT_WEBHOOK_URL=... (anything that accepts a POST body - ntfy, a
+# Discord/Slack webhook, healthchecks.io's /fail endpoint). Sourced before the
+# log path is defaulted, or a host that configures its own path would keep
+# writing to the box's.
+ENV_FILE="${WFM_ALERT_ENV:-/etc/wfm-alert.env}"
 # shellcheck disable=SC1090
 [ -r "$ENV_FILE" ] && . "$ENV_FILE"
+LOG="${WFM_ALERT_LOG:-/srv/wfm/alerts.log}"
 
 stamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 result=$(systemctl show "$UNIT" -p Result --value 2>/dev/null || echo unknown)

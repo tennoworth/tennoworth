@@ -30,9 +30,13 @@ for required checks and ../docs/releasing.md for release preparation.
   stored copy whose artifact or hashes no longer match, and exits non-zero on
   any mismatch without refreshing the receipt; read it before changing what it
   stores, because the replay evidence is only as good as the archive.
-  `deploy/archive-observations.{service,timer}` schedule it on the archive host.
-  `deploy/observations-check.sh` is its on-box counterpart and consumes the
-  receipt `deploy/pull-archive-receipt.sh` fetches; the check itself has no
-  network access.
+  `deploy/archive-observations.{service,timer}` schedule it on the archive host,
+  and `install-archive-host.sh` installs those units, the alert template and the
+  alert handler on that host and verifies them - `OnFailure=wfm-alert@%n.service`
+  provisions nothing by itself. Before a receipt renews any claim, the script
+  re-verifies every artifact the manifest names, not only the files the box still
+  lists. `deploy/observations-check.sh` is its on-box counterpart and consumes
+  the receipt `deploy/pull-archive-receipt.sh` fetches hourly; the check itself
+  has no network access.
 
 Tests live in `tests/` (Rust + TS suites; no pytest).

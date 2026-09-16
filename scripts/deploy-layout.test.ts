@@ -331,6 +331,10 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
     write(join(root, 'deploy', unit), `# ${unit}\n`);
   }
   write(join(wfm, 'policy/wfm-policy.json'), '{}');
+  // The readiness check runs once as part of a deploy, and its verdict gates the
+  // deploy; this is the report a sound box would have produced. HOST_ROOT is the
+  // fixture's /srv/wfm, which the check's --out also points at in production.
+  write(join(wfm, 'data/observations-check/report.json'), '{"ready": true, "errors": []}');
 
   write(join(root, 'artifacts/wfm-scrape'), '#!/bin/sh\nprintf "usage: wfm-scrape\\n"\n');
   write(join(root, 'artifacts/wfm-policy'), '#!/bin/sh\nexit "${FIXTURE_POLICY_EXIT:-0}"\n');
@@ -430,6 +434,7 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
     '  exit 0',
     'fi',
     'printf "%s\\n" "$*" >> "$FIXTURE_SYSTEMCTL"',
+    'if [ "$1" = "start" ] && [ "${FIXTURE_START_FAIL:-0}" = 1 ]; then exit 1; fi',
     'exit 0',
     '',
   ].join('\n'));
@@ -447,7 +452,7 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
       ...options.env, ...env,
     },
   });
-  return { root, wfm, live, order, revision, run };
+  return { root, wfm, live, order, revision, run, systemctlLog: join(root, 'systemctl.log') };
 }
 
 describe.skipIf(process.platform === 'win32')('host-direct scrape deploy failure paths', () => {
@@ -503,6 +508,48 @@ describe.skipIf(process.platform === 'win32')('host-direct scrape deploy failure
     expect(result.status, result.stderr).toBe(0);
     expect(liveBinary(f)).not.toBe('old-live-binary');
     expect(readFileSync(join(f.wfm, 'deployed.json'), 'utf8')).toContain(f.revision);
+  });
+
+  test('a deploy that cannot restore the sweep timer does not report success', () => {
+    // The failure path swallows this into a warning; the success path must not,
+    // or a deploy can leave the box with no schedule and exit zero.
+    const f = scrapeDeployFixture();
+    const result = f.run({ FIXTURE_START_FAIL: '1' });
+    expect(result.status, result.stderr).not.toBe(0);
+    expect(result.stdout).toContain('restore the timer by hand');
+    const calls = readFileSync(f.systemctlLog, 'utf8');
+    expect(calls, 'the monitors must not be armed without a running schedule')
+      .not.toContain('enable --now wfm-archive-receipt-pull.timer');
+  });
+
+  test('the first pull runs before the first check, as part of the deploy', () => {
+    // Two persistent timers can elapse in either order after downtime, so the
+    // initial pair is explicit rather than left to them.
+    const f = scrapeDeployFixture();
+    expect(f.run().status).toBe(0);
+    const calls = readFileSync(f.systemctlLog, 'utf8').split('\n');
+    const pull = calls.indexOf('start wfm-archive-receipt-pull.service');
+    const check = calls.indexOf('start wfm-observations-check.service');
+    expect(pull, 'the pull must be started').toBeGreaterThan(-1);
+    expect(check, 'the check must be started').toBeGreaterThan(pull);
+  });
+
+  test('a first check that is not ready fails the deploy', () => {
+    // Deployment is held until the archive path works end to end; the installer
+    // is where that gate is enforced, so it cannot be passed by ignoring it.
+    const f = scrapeDeployFixture();
+    writeFileSync(join(f.wfm, 'data/observations-check/report.json'), '{"ready": false, "errors": ["no archive receipt"]}');
+    const result = f.run();
+    expect(result.status, result.stderr).not.toBe(0);
+    expect(result.stderr).toContain('does not pass on the box');
+  });
+
+  test('a first check that produced no report at all fails the install', () => {
+    const f = scrapeDeployFixture();
+    rmSync(join(f.wfm, 'data/observations-check/report.json'));
+    const result = f.run();
+    expect(result.status, result.stderr).not.toBe(0);
+    expect(result.stderr).toContain('produced no report');
   });
 });
 
@@ -680,7 +727,7 @@ describe('observation corpus check wiring', () => {
     const pull = readFileSync(pullScript, 'utf8');
     expect(pull).toMatch(/SCP="\$\{SCP:-scp\}"/);
     expect(pull).toMatch(/ARCHIVE_RECEIPT_SOURCE:-\}/);
-    expect(pull).toMatch(/\$SCP -q "\$SOURCE" "\$tmp"/);
+    expect(pull).toMatch(/\$SCP \$SCP_OPTS -q "\$SOURCE" "\$tmp"/);
     expect(pull).toMatch(/mv "\$tmp" "\$OUT"/);
     expect(pull).toMatch(/"kind":"archive_receipt"/);
     expect(unit).toMatch(/^RestrictAddressFamilies=AF_UNIX$/m);
@@ -692,10 +739,60 @@ describe('observation corpus check wiring', () => {
     // The pull has to run before the check, or the check reads yesterday's
     // receipt and calls a stopped archive fresh.
     const pullTimer = readFileSync(fileURLToPath(new URL('../deploy/wfm-archive-receipt-pull.timer', import.meta.url)), 'utf8');
-    const at = (body: string) => body.match(/^OnCalendar=\*-\*-\* (\d{2}):(\d{2}):\d{2}$/m)!.slice(1).map(Number);
-    const [pullHour, pullMinute] = at(pullTimer);
-    const [checkHour, checkMinute] = at(timer);
-    expect(pullHour! * 60 + pullMinute!).toBeLessThan(checkHour! * 60 + checkMinute!);
+    const at = (body: string) => {
+      const match = body.match(/^OnCalendar=\S+ (\S+):(\d{2}):\d{2} UTC$/m);
+      expect(match, 'every timer states its timezone explicitly').not.toBeNull();
+      return { hour: match![1]!, minute: Number(match![2]) };
+    };
+    const pullMinutes = at(pullTimer);
+    const checkMinutes = at(timer);
+    expect(pullMinutes.hour, 'the pull must run hourly, not once a day').toBe('*');
+    expect(checkMinutes.hour, 'the check must run hourly too').toBe('*');
+    expect(pullMinutes.minute).toBeLessThan(checkMinutes.minute);
+  });
+
+  test('the monitors run hourly in UTC and the check pulls before it reads', () => {
+    // A 36-hour deadline evaluated once a day can breach and stand for most of
+    // another day; both sides of the pair therefore run hourly, in UTC, and the
+    // check starts the pull itself so two persistent timers cannot elapse in the
+    // wrong order after downtime.
+    expect(timer).toMatch(/^OnCalendar=\*-\*-\* \*:30:00 UTC$/m);
+    const pullTimer = readFileSync(fileURLToPath(new URL('../deploy/wfm-archive-receipt-pull.timer', import.meta.url)), 'utf8');
+    expect(pullTimer).toMatch(/^OnCalendar=\*-\*-\* \*:15:00 UTC$/m);
+    const archiveTimer = readFileSync(fileURLToPath(new URL('../deploy/archive-observations.timer', import.meta.url)), 'utf8');
+    expect(archiveTimer).toMatch(/^OnCalendar=\*-\*-\* 05:30:00 UTC$/m);
+    expect(unit).toMatch(/^Wants=wfm-archive-receipt-pull\.service$/m);
+    expect(unit).toMatch(/^After=wfm-archive-receipt-pull\.service$/m);
+  });
+
+  test('the archive host installer provisions and verifies the alert path', () => {
+    // `OnFailure=wfm-alert@%n.service` provisions nothing: without the template
+    // and the handler on that host, an archive failure alerts nobody.
+    const install = readFileSync(fileURLToPath(new URL('./install-archive-host.sh', import.meta.url)), 'utf8');
+    for (const file of ['archive-observations.sh', 'alert.sh', 'wfm-alert@.service',
+      'archive-observations.service', 'archive-observations.timer']) {
+      expect(install, `${file} must be installed`).toContain(file);
+    }
+    expect(install, 'the template path must be rewritten for this host').toMatch(/s#\/srv\/wfm\/alert\.sh#\$PREFIX\/alert\.sh#/);
+    expect(install).toMatch(/SYSTEMD_ANALYZE:-systemd-analyze/);
+    expect(install).toMatch(/"\$SYSTEMD_ANALYZE" verify/);
+    expect(install, 'the handler must actually be run').toMatch(/"\$PREFIX\/alert\.sh" archive-observations\.service/);
+    expect(install, 'and required to have recorded something').toMatch(/\[ -s "\$recorded_log" \]/);
+    expect(install).toMatch(/enable --now archive-observations\.timer/);
+  });
+
+  test('the pull and the deploy gate are bounded and cannot be skipped', () => {
+    const pull = readFileSync(pullScript, 'utf8');
+    expect(pull).toMatch(/timeout "\$COMMAND_TIMEOUT" \$SCP \$SCP_OPTS/);
+    expect(pull).toMatch(/connecttimeout|ConnectTimeout/);
+    // The deploy refuses to report success on a box the check says is not ready,
+    // and it runs the pair itself rather than trusting timer ordering.
+    expect(deploy).toMatch(/systemctl start wfm-archive-receipt-pull\.service/);
+    expect(deploy).toMatch(/test -s '\$HOST_ROOT\/data\/observations-check\/report\.json'/);
+    const pullStart = deploy.indexOf('systemctl start wfm-archive-receipt-pull.service');
+    const checkStart = deploy.indexOf('systemctl start wfm-observations-check.service');
+    expect(checkStart).toBeGreaterThan(pullStart);
+    expect(deploy).toMatch(/the readiness check does not pass on the box/);
   });
 
   test('the archive host has its own schedule and failure notification', () => {
@@ -716,7 +813,7 @@ describe('observation corpus check wiring', () => {
     expect(unit).toMatch(/^ProtectSystem=strict$/m);
     expect(unit).toMatch(/^ReadWritePaths=\/srv\/wfm\/data\/observations-check$/m);
     expect(unit).toMatch(/^ExecStart=\/srv\/wfm\/observations-check\.sh --observations \/srv\/wfm\/observations --archive-receipt \/srv\/wfm\/data\/observations-check\/archive-receipt\.jsonl --out \/srv\/wfm\/data\/observations-check\/report\.json$/m);
-    expect(timer).toMatch(/^OnCalendar=\*-\*-\* 06:30:00$/m);
+    expect(timer).toMatch(/^OnCalendar=\*-\*-\* \*:30:00 UTC$/m);
     expect(timer).toMatch(/^WantedBy=timers\.target$/m);
   });
 
@@ -771,6 +868,15 @@ describe('observation corpus check wiring', () => {
     // after a run in which nothing failed.
     expect(archive).toMatch(/mv "\$STAGE\/receipt\.jsonl" "\$RECEIPT"/);
     expect(archive).toMatch(/if \[ "\$failed" != 0 \]; then[\s\S]*die /);
+    // Every claim is re-verified before the receipt renews it, because the
+    // per-file loop only sees what the box still lists.
+    expect(archive).toMatch(/verify_manifest\(\)/);
+    expect(archive, 'all claims must be verified before the receipt publishes')
+      .toMatch(/if ! verify_manifest; then[\s\S]*no receipt was published[\s\S]*publish_receipt/);
+    // Unattended runs are bounded, and two of them cannot share the manifest.
+    expect(archive).toMatch(/timeout "\$COMMAND_TIMEOUT" \$SSH \$SSH_OPTS/);
+    expect(archive).toMatch(/timeout "\$COMMAND_TIMEOUT" \$SCP \$SCP_OPTS/);
+    expect(archive).toMatch(/flock -n 9/);
     for (const field of ['"name"', '"bytes"', '"sha256"', '"gz_sha256"', '"archived_at"',
       '"deployed_revision_at_archive"', '"producer_revision":null', '"kind":"archive_receipt"', '"verified_at"']) {
       expect(archive, `the manifest must record ${field}`).toContain(field);
@@ -1088,6 +1194,56 @@ describe.skipIf(process.platform === 'win32')('observation corpus readiness', ()
     expect(f.report().archive.producer_revision_unknown).toBe(3);
   });
 
+  test('an unreadable receipt still produces a report and fails', () => {
+    // An existing receipt that cannot be read (permissions, I/O) is a verdict
+    // about the archive, not a reason to die with no evidence.
+    const f = corpusFixture();
+    chmodSync(f.receipt, 0o000);
+    const result = f.run();
+    expect(existsSync(join(f.root, 'report.json')), 'the report must still be written').toBe(true);
+    expect(result.status, result.stderr).not.toBe(0);
+    expect(f.report().archive.status).toBe('unreadable');
+    expect(f.report().errors.join('\n')).toContain('cannot read the archive receipt');
+  });
+
+  test('a metrics line with no elapsed_ms is a failure, not a missing report', () => {
+    const f = corpusFixture();
+    f.writeJournal([
+      { at: f.newestStart, message: 'Starting wfm-scrape.service - x' },
+      { at: f.newestStart, message: 'scraper: x', invocation: FIXTURE_INVOCATION },
+      { at: f.newestStart + 4200, message: sweepMetrics().replace('elapsed_ms=1000 ', ''), invocation: FIXTURE_INVOCATION },
+    ]);
+    const result = f.run();
+    expect(existsSync(join(f.root, 'report.json')), 'the report must still be written').toBe(true);
+    expect(result.status, result.stderr).not.toBe(0);
+    expect(f.report().service.metrics_elapsed_ms).toBeNull();
+    expect(f.report().errors.join('\n')).toContain('no elapsed_ms');
+  });
+
+  test('a metrics line with no throttles count is a failure, not a missing report', () => {
+    const f = corpusFixture();
+    f.writeJournal([
+      { at: f.newestStart, message: 'Starting wfm-scrape.service - x' },
+      { at: f.newestStart, message: 'scraper: x', invocation: FIXTURE_INVOCATION },
+      { at: f.newestStart + 4200, message: sweepMetrics().replace('throttles=0 ', ''), invocation: FIXTURE_INVOCATION },
+    ]);
+    const result = f.run();
+    expect(existsSync(join(f.root, 'report.json')), 'the report must still be written').toBe(true);
+    expect(result.status, result.stderr).not.toBe(0);
+    expect(f.report().service.throttles).toBeNull();
+    expect(f.report().errors.join('\n')).toContain('no throttles count');
+  });
+
+  test('a receipt dated materially in the future is not ready', () => {
+    // Modest clock skew is allowed; a claim dated hours ahead is not freshness.
+    const f = corpusFixture();
+    f.writeReceipt({ verifiedAt: FIXTURE_NOW + 7200 });
+    const result = f.run();
+    expect(result.status).not.toBe(0);
+    expect(f.report().archive.status).toBe('future');
+    expect(f.report().errors.join('\n')).toContain('in the future');
+  });
+
   test('a missing corpus is not ready', () => {
     const f = corpusFixture();
     rmSync(join(f.box, 'observations'), { recursive: true });
@@ -1251,11 +1407,30 @@ describe.skipIf(process.platform === 'win32')('observation archive', () => {
     const remote = join(root, 'remote'), bin = join(root, 'bin'), dest = join(root, 'dest');
     for (const path of [remote, bin, dest]) mkdirSync(path);
     // `ssh` runs the remote command locally; SOURCE_DIR and DEPLOYED point into
-    // the fixture, so the script's own listing and hashing run unmodified.
-    write(join(bin, 'fake-ssh'), '#!/bin/sh\nhost="$1"; shift\nexec sh -c "$*"\n');
+    // the fixture, so the script's own listing and hashing run unmodified. The
+    // connection bounds the script now passes are skipped like ssh would.
+    write(join(bin, 'fake-ssh'), [
+      '#!/bin/sh',
+      'while [ $# -gt 0 ]; do',
+      '  case "$1" in',
+      '    -o) shift 2;;',
+      '    -*) shift;;',
+      '    *) break;;',
+      '  esac',
+      'done',
+      'host="$1"; shift',
+      'exec sh -c "$*"',
+      '',
+    ].join('\n'));
     write(join(bin, 'fake-scp'), [
       '#!/bin/sh',
-      '[ "$1" = "-q" ] && shift',
+      'while [ $# -gt 0 ]; do',
+      '  case "$1" in',
+      '    -o) shift 2;;',
+      '    -*) shift;;',
+      '    *) break;;',
+      '  esac',
+      'done',
       'src="$1"; dest="$2"',
       options.corrupt ? 'printf "tampered bytes" > "$dest"' : 'cp "${src#*:}" "$dest"',
       '',
@@ -1365,6 +1540,37 @@ describe.skipIf(process.platform === 'win32')('observation archive', () => {
     expect(readFileSync(f.receiptPath, 'utf8')).toBe(receiptBefore);
   });
 
+  test('a claim whose source was pruned is not renewed when its artifact is gone', () => {
+    // The verification loop only visits what the box still lists. Once the box
+    // prunes a log, a fresh receipt would otherwise renew a claim nobody ever
+    // re-checks - and the file can no longer be repaired from the source.
+    const f = archiveFixture();
+    expect(f.run().status).toBe(0);
+    const receiptBefore = readFileSync(f.receiptPath, 'utf8');
+    rmSync(join(f.remote, 'sweep-2026-09-16T12-02-42Z.jsonl'));
+    rmSync(join(f.dest, 'sweep-2026-09-16T12-02-42Z.jsonl.gz'));
+    // A later sweep keeps the listing non-empty, as it would be on the box.
+    writeFileSync(join(f.remote, 'sweep-2026-09-16T16-07-14Z.jsonl'), '{"kind":"run","format":1}\n'.repeat(10));
+    const result = f.run();
+    expect(result.status, 'a claim that cannot be verified must stop the run').not.toBe(0);
+    expect(result.stdout).toContain('still claimed but its stored artifact is gone');
+    expect(result.stderr).toContain('can no longer be verified');
+    expect(readFileSync(f.receiptPath, 'utf8')).toBe(receiptBefore);
+  });
+
+  test('a pruned source whose artifact is intact leaves the claim verified', () => {
+    const f = archiveFixture();
+    expect(f.run().status).toBe(0);
+    const receiptBefore = readFileSync(f.receiptPath, 'utf8');
+    rmSync(join(f.remote, 'sweep-2026-09-16T12-02-42Z.jsonl'));
+    writeFileSync(join(f.remote, 'sweep-2026-09-16T16-07-14Z.jsonl'), '{"kind":"run","format":1}\n'.repeat(10));
+    const result = f.run();
+    expect(result.status, result.stderr).toBe(0);
+    const rows = readFileSync(f.manifestPath, 'utf8').trimEnd().split('\n');
+    expect(rows).toHaveLength(2);
+    expect(readFileSync(f.receiptPath, 'utf8')).not.toBe(receiptBefore);
+  });
+
   test('a transfer that does not match the box fails non-zero and stores nothing', () => {
     const f = archiveFixture({ corrupt: true });
     const result = f.run();
@@ -1376,4 +1582,78 @@ describe.skipIf(process.platform === 'win32')('observation archive', () => {
     expect(readdirSync(f.dest).filter(name => !name.startsWith('.'))).toEqual([]);
   });
 });
+
+// The archive host is a different machine with a different layout, so its
+// installer is exercised against a temp prefix and stubbed systemd. It must
+// install the alert template and handler too - `OnFailure=` alone provisions
+// nothing - and it must prove the handler runs rather than assume it.
+describe.skipIf(process.platform === 'win32')('archive host installation', () => {
+  const installScript = fileURLToPath(new URL('./install-archive-host.sh', import.meta.url));
+  const repoRoot = fileURLToPath(new URL('..', import.meta.url));
+
+  function installFixture() {
+    const root = mkdtempSync(join(tmpdir(), 'archive-host-')); directories.push(root);
+    const prefix = join(root, 'bin'), units = join(root, 'units'), stub = join(root, 'stub');
+    for (const path of [prefix, units, stub]) mkdirSync(path);
+    write(join(stub, 'id'), '#!/bin/sh\nprintf "0\\n"\n');
+    write(join(stub, 'systemctl'), [
+      '#!/bin/sh',
+      'printf "%s\\n" "$*" >> "$FIXTURE_SYSTEMCTL"',
+      'if [ "$1" = "is-enabled" ]; then printf "enabled\\n"; fi',
+      'exit 0',
+      '',
+    ].join('\n'));
+    write(join(stub, 'systemd-analyze'), '#!/bin/sh\nprintf "%s\\n" "$*" >> "$FIXTURE_ANALYZE"\nexit 0\n');
+    write(join(stub, 'journalctl'), '#!/bin/sh\nexit 0\n');
+    for (const command of ['id', 'systemctl', 'systemd-analyze', 'journalctl']) chmodSync(join(stub, command), 0o755);
+
+    const envFile = join(root, 'tennoworth-archive.env');
+    const alertEnv = join(root, 'wfm-alert.env');
+    const alertLog = join(root, 'alerts.log');
+    const run = (env: Record<string, string> = {}) => spawnSync('bash', [installScript], {
+      encoding: 'utf8',
+      env: {
+        ...process.env, PATH: `${stub}:${process.env.PATH}`,
+        PREFIX: prefix, UNIT_DIR: units, ENV_FILE: envFile, ALERT_ENV_FILE: alertEnv,
+        ALERT_LOG: alertLog, REPO_ROOT: repoRoot,
+        FIXTURE_SYSTEMCTL: join(root, 'systemctl.log'),
+        FIXTURE_ANALYZE: join(root, 'analyze.log'),
+        ...env,
+      },
+    });
+    return { root, prefix, units, envFile, alertEnv, alertLog, run };
+  }
+
+  test('installs every piece and proves the alert path runs', () => {
+    const f = installFixture();
+    const result = f.run();
+    expect(result.status, result.stderr).toBe(0);
+    for (const file of ['archive-observations.sh', 'alert.sh']) {
+      expect(existsSync(join(f.prefix, file)), `${file} must land in the prefix`).toBe(true);
+    }
+    for (const unit of ['wfm-alert@.service', 'archive-observations.service', 'archive-observations.timer']) {
+      expect(existsSync(join(f.units, unit)), `${unit} must be installed`).toBe(true);
+    }
+    // The box's handler path does not exist here, so the template is rewritten.
+    expect(readFileSync(join(f.units, 'wfm-alert@.service'), 'utf8')).toContain(`${f.prefix}/alert.sh`);
+    expect(readFileSync(join(f.units, 'wfm-alert@.service'), 'utf8')).not.toContain('/srv/wfm/alert.sh');
+    // Verification is not a claim: systemd parsed the units and the handler ran
+    // and recorded its own test line.
+    expect(readFileSync(join(f.root, 'analyze.log'), 'utf8')).toContain('verify');
+    expect(readFileSync(join(f.alertLog), 'utf8')).toContain('archive-observations.service');
+    expect(readFileSync(join(f.root, 'systemctl.log'), 'utf8')).toContain('enable --now archive-observations.timer');
+  });
+
+  test('never repoints an existing archive destination', () => {
+    const f = installFixture();
+    expect(f.run().status).toBe(0);
+    const first = readFileSync(f.envFile, 'utf8');
+    writeFileSync(f.envFile, `${first}\nHOST=already-configured\n`);
+    const second = f.run();
+    expect(second.status, second.stderr).toBe(0);
+    expect(second.stdout).toContain('keeping existing');
+    expect(readFileSync(f.envFile, 'utf8')).toContain('HOST=already-configured');
+  });
+});
+
 
