@@ -781,7 +781,7 @@ function corpusFixture() {
     'unit="$2"; prop="$4"',
     'case "$unit:$prop" in',
     '  wfm-scrape.service:ActiveState) printf "inactive\\n";;',
-    '  wfm-scrape.service:Result) printf "success\\n";;',
+    '  wfm-scrape.service:Result) printf "%s\\n" "${FIXTURE_SERVICE_RESULT:-success}";;',
     '  wfm-scrape.timer:UnitFileState) printf "enabled\\n";;',
     '  wfm-scrape.timer:ActiveState) printf "active\\n";;',
     '  wfm-scrape.timer:NextElapseUSecRealtime) printf "Fri 2026-09-18 06:30:00 UTC\\n";;',
@@ -920,6 +920,77 @@ describe.skipIf(process.platform === 'win32')('observation corpus readiness', ()
     const result = f.run();
     expect(result.status).not.toBe(0);
     expect(f.report().errors.join('\n')).toContain('does not exist');
+  });
+
+  test('a timed-out sweep unit is not ready', () => {
+    const f = corpusFixture();
+    const result = f.run({ FIXTURE_SERVICE_RESULT: 'timeout' });
+    expect(result.status).not.toBe(0);
+    expect(f.report().service.result).toBe('timeout');
+    expect(f.report().errors.join('\n')).toContain('timed out');
+  });
+
+  test('an enabled retired pull timer is not ready', () => {
+    const f = corpusFixture();
+    const result = f.run({ FIXTURE_RETIRED: 'enabled' });
+    expect(result.status).not.toBe(0);
+    expect(f.report().timers.retired_pull).toBe('enabled');
+    expect(f.report().errors.join('\n')).toContain('retired wfm-scrape-pull.timer');
+  });
+
+  test('a binary that is not the recorded revision is not ready', () => {
+    const f = corpusFixture();
+    writeFileSync(join(f.box, 'bin/wfm-scrape'), '#!/bin/sh\necho tampered\n');
+    const result = f.run();
+    expect(result.status).not.toBe(0);
+    const report = f.report();
+    expect(report.deployment.recorded_sha256).not.toBe(report.deployment.installed_sha256);
+    expect(report.errors.join('\n')).toContain('not the recorded revision');
+  });
+
+  test('a sweep approaching the unit timeout is urgent, and one merely slow warns', () => {
+    const f = corpusFixture();
+    const finished = 1789580078 - 60;
+    // elapsed_ms is deliberately absurd: the thresholds must gate the wall
+    // clock, because the metrics field is a sum of per-request latencies.
+    const journal = (minutes: number) => {
+      const start = finished - minutes * 60;
+      const short = (seconds: number) => new Date(seconds * 1000).toISOString().replace('.000Z', '+00:00');
+      return [
+        `${short(start)} host systemd[1]: Starting wfm-scrape.service - Refresh Warframe market.json from warframe.market + warframestat...`,
+        `${short(finished)} host run-scrape.sh[1]: sweep metrics: attempts[catalog=1 statistics=4 orders=2 riven=0 other=0] ok[catalog=1 statistics=4 orders=2 riven=0 other=0] failed[catalog=0 statistics=0 orders=0 riven=0 other=0] retries=0 wire_requests=7 throttles=0 cooldown_waits=0 cooldown_wait_ms=0 decoded_bytes=1 elapsed_ms=8755006 snapshot_age_s=0`,
+        `${short(finished)} host systemd[1]: wfm-scrape.service: Deactivated successfully.`,
+      ].join('\n') + '\n';
+    };
+    const urgentJournal = join(f.root, 'urgent-journal');
+    writeFileSync(urgentJournal, journal(106));
+    const urgent = f.run({ FIXTURE_JOURNAL: urgentJournal });
+    expect(urgent.status).not.toBe(0);
+    expect(f.report().service.wall_seconds).toBe(106 * 60);
+    expect(f.report().errors.join('\n')).toContain('close to the unit');
+
+    const slowJournal = join(f.root, 'slow-journal');
+    writeFileSync(slowJournal, journal(95));
+    const slow = f.run({ FIXTURE_JOURNAL: slowJournal });
+    expect(slow.status, slow.stderr).toBe(0);
+    expect(f.report().ready).toBe(true);
+    expect(f.report().warnings.join('\n')).toContain('took 95 minutes');
+  });
+
+  test('a throttled sweep is flagged', () => {
+    const f = corpusFixture();
+    const journal = join(f.root, 'throttled-journal');
+    const short = (seconds: number) => new Date(seconds * 1000).toISOString().replace('.000Z', '+00:00');
+    const start = 1789580078 - 4300;
+    writeFileSync(journal, [
+      `${short(start)} host systemd[1]: Starting wfm-scrape.service - Refresh Warframe market.json from warframe.market + warframestat...`,
+      `${short(start + 4200)} host run-scrape.sh[1]: sweep metrics: attempts[catalog=1 statistics=4 orders=2 riven=0 other=0] ok[catalog=1 statistics=4 orders=2 riven=0 other=0] failed[catalog=0 statistics=0 orders=0 riven=0 other=0] retries=0 wire_requests=107 throttles=100 cooldown_waits=0 cooldown_wait_ms=0 decoded_bytes=1 elapsed_ms=1 snapshot_age_s=0`,
+      `${short(start + 4200)} host systemd[1]: wfm-scrape.service: Deactivated successfully.`,
+    ].join('\n') + '\n');
+    const result = f.run({ FIXTURE_JOURNAL: journal });
+    expect(result.status).not.toBe(0);
+    expect(f.report().service.throttles).toBe(100);
+    expect(f.report().errors.join('\n')).toContain('throttle');
   });
 });
 
