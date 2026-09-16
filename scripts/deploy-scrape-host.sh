@@ -109,6 +109,9 @@ install -m 0755 "$RELEASES/$REVISION/run-scrape.sh" "/srv/wfm/run-scrape.sh"
 install -m 0644 "$RELEASES/$REVISION/wfm-scrape.service" /etc/systemd/system/wfm-scrape.service
 install -m 0644 "$RELEASES/$REVISION/wfm-scrape.timer" /etc/systemd/system/wfm-scrape.timer
 systemctl daemon-reload
+# A fresh box otherwise has the units and nothing scheduled: setup-container no
+# longer enables the scrape timer, because this script owns the pipeline now.
+systemctl enable --now wfm-scrape.timer
 REMOTE_INSTALL
 
 # ---- 6. the deployed pair actually works ----------------------------------
