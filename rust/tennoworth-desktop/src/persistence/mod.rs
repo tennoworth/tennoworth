@@ -1091,4 +1091,49 @@ mod notification_tests {
             .unwrap()
             .is_none());
     }
+    #[test]
+    fn stored_preferences_keep_only_categories_still_in_the_contract() {
+        let db = Db::open_in_memory().unwrap();
+        // The settings UI echoes the loaded map straight back on save, so a key
+        // retired from the contract has to disappear at the read boundary or
+        // every later save is rejected as an incomplete category set.
+        db.set_setting(
+            "notifications-v1",
+            r#"{"popups":false,"categories":{"trades":{"enabled":true,"native":true},"watches":{"enabled":true,"native":true},"scans":{"enabled":true,"native":true},"baro":{"enabled":false,"native":true},"calendar":{"enabled":true,"native":true},"digest":{"enabled":true,"native":true}}}"#,
+        )
+        .unwrap();
+        let prefs = db.notification_preferences().unwrap();
+        let mut keys: Vec<&str> = prefs.categories.keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        let mut expected = crate::services::notifications::CATEGORIES.to_vec();
+        expected.sort_unstable();
+        assert_eq!(keys, expected);
+        assert!(!prefs.categories.contains_key("scans"));
+        assert!(!prefs.popups);
+        assert!(!prefs.categories["baro"].enabled);
+        // The same predicate `set_notification_preferences` uses to accept a save.
+        assert!(crate::services::notifications::categories_match_contract(
+            &prefs.categories
+        ));
+    }
+    #[test]
+    fn prune_drops_rows_whose_category_left_the_contract() {
+        let db = Db::open_in_memory().unwrap();
+        let mut stale = candidate();
+        stale.key = "scan:1".into();
+        stale.category = "scans".into();
+        assert!(db
+            .insert_notification(&stale, 1000, false, true)
+            .unwrap()
+            .is_some());
+        assert!(db
+            .insert_notification(&candidate(), 1001, false, true)
+            .unwrap()
+            .is_some());
+        assert_eq!(db.list_notifications().unwrap().len(), 2);
+        db.prune_notifications(1001).unwrap();
+        let rows = db.list_notifications().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].category, "baro");
+    }
 }

@@ -235,4 +235,4 @@ export interface NotificationPreferences {
   categories: Record<NotificationCategory, { enabled: boolean; native: boolean }>;
 }
 
-export const NOTIFICATION_CATEGORIES = ['trades', 'watches', 'scans', 'baro', 'calendar', 'digest'] as const;
+export const NOTIFICATION_CATEGORIES = ['trades', 'watches', 'baro', 'calendar', 'digest'] as const;

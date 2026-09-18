@@ -297,19 +297,19 @@ const PROBE_JS: &str = r#"(function(){
     // C6 (top_sellables): rank the imported snapshot × bundled market. With a
     // clean data dir (reserve 0) this is the deterministic 3-item ranking.
     .then(function(){ return invk('top_sellables', { limit: 5 }).then(function(v){ R.topSellables = v; }); })
-    // C6 (notification): run the post-scan surface path against the latest
-    // snapshot (probe-only, so it works with no game) → payload {count,total}.
+    // C6 (post-scan): run the post-scan surface path against the latest snapshot
+    // (probe-only, so it works with no game) → payload {count,total}. It records
+    // the payload for the tray but no longer notifies, so the pass must leave the
+    // inbox without a scan entry.
     .then(function(){ return invk('debug_post_scan').then(function(v){ R.debugNotify = v; }); })
     .then(function(){ return invk('list_notifications').then(function(rows){
       R.notificationInbox = rows;
-      if (!Array.isArray(rows) || !rows.some(function(n){ return n.category === 'scans' && n.target === 'sell'; })) throw new Error('post-scan notification missing from inbox');
-      var id = rows[0].id;
-      return invk('mark_notifications_read', { id: id }).then(function(){ return invk('list_notifications'); }).then(function(next){
-        if (!next.some(function(n){ return n.id === id && n.read; })) throw new Error('notification read state did not persist');
-      });
+      if (!Array.isArray(rows)) throw new Error('notification inbox unavailable');
+      if (rows.some(function(n){ return n.category === 'scans'; })) throw new Error('a scan notification was produced');
     }); })
     .then(function(){ return invk('get_notification_preferences').then(function(p){
       if (!p.categories.baro.enabled || !p.popups) throw new Error('notification defaults missing');
+      if (p.categories.scans) throw new Error('removed notification category is still served');
       p.popups = false;
       return invk('set_notification_preferences', { preferences: p }).then(function(){ return invk('get_notification_preferences'); }).then(function(saved){
         if (saved.popups) throw new Error('notification popup pause did not persist');
@@ -320,7 +320,7 @@ const PROBE_JS: &str = r#"(function(){
       if (!nav) throw new Error('notification navigation missing');
       nav.click();
       return delay(500).then(function(){
-        if (!document.querySelector('[aria-label="Notification history"] li')) throw new Error('notification inbox did not render');
+        if (!document.querySelector('[aria-label="Notification history"]')) throw new Error('notification inbox did not render');
         R.notificationUi = true;
         var sell = Array.from(document.querySelectorAll('.sidebar button')).find(function(b){return b.textContent.trim().indexOf('Sell') === 0;});
         if (sell) sell.click();
