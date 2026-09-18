@@ -307,11 +307,20 @@ describe('host-direct scrape deploy script', () => {
 // fixture, and `systemctl` reads its sweep state from a file so a sequence of
 // states can be replayed. The point is that the script's own control flow is
 // what the assertions observe, not a copy of it.
-function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, string> } = {}) {
+//
+// With `runCheck` the same harness proves the deployed readiness path end to
+// end: a real corpus lives under the remapped box, the deploy stages and
+// installs the real check script and its real unit, and `systemctl start
+// wfm-observations-check.service` runs the unit's own ExecStart with the
+// EnvironmentFile the deploy wrote. HOST_ROOT becomes the production /srv/wfm
+// so the unit's paths and the deploy's reads resolve to the same files.
+function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, string>; runCheck?: boolean } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'scrape-deploy-')); directories.push(root);
   const bin = join(root, 'bin'); mkdirSync(bin);
   const wfm = join(root, 'wfm'); mkdirSync(wfm, { recursive: true });
   const live = join(root, 'live'); mkdirSync(join(live, 'srv/wfm/bin'), { recursive: true });
+  const box = join(live, 'srv/wfm');
+  const hostRoot = options.runCheck ? '/srv/wfm' : wfm;
   const target = join(root, 'target'); mkdirSync(join(target, 'release'), { recursive: true });
   const order = join(root, 'order'); writeFileSync(order, '');
   const states = join(root, 'states'); writeFileSync(states, (options.states ?? []).map(state => state + '\n').join(''));
@@ -330,11 +339,42 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
     'pull-archive-receipt.sh', 'wfm-archive-receipt-pull.service', 'wfm-archive-receipt-pull.timer']) {
     write(join(root, 'deploy', unit), `# ${unit}\n`);
   }
-  write(join(wfm, 'policy/wfm-policy.json'), '{}');
-  // The readiness check runs once as part of a deploy, and its verdict gates the
-  // deploy; this is the report a sound box would have produced. HOST_ROOT is the
-  // fixture's /srv/wfm, which the check's --out also points at in production.
-  write(join(wfm, 'data/observations-check/report.json'), '{"ready": true, "errors": []}');
+  if (options.runCheck) {
+    // The real script and its unit travel to the box, so the stubbed systemd
+    // runs what the deploy actually installed rather than a stand-in.
+    for (const name of ['observations-check.sh', 'wfm-observations-check.service']) {
+      write(join(root, 'deploy', name), readFileSync(new URL(`../deploy/${name}`, import.meta.url), 'utf8'));
+    }
+    write(join(box, 'policy/wfm-policy.json'), '{}');
+    // A sound corpus under the box paths the unit names. The check's own
+    // defaults for the paths the unit does not pass are supplied by the
+    // systemctl stub below.
+    const newestStart = FIXTURE_NOW - 6000;
+    for (let i = 0; i < 3; i++) {
+      const start = newestStart - (2 - i) * 7200;
+      const stamp = new Date(start * 1000).toISOString().replace('.000Z', 'Z');
+      const path = join(box, 'observations', `sweep-${stamp.replaceAll(':', '-')}.jsonl`);
+      write(path, sweepLog(start, 4, 2));
+      utimesSync(path, start + 4200, start + 4200);
+    }
+    write(join(box, 'app/wfm_results.csv'), 'url_name,median_90d\nkept_a,1\nkept_b,1\n');
+    const snapshot = join(box, 'app/frontend/public/market.json');
+    write(snapshot, '{"catalog":{}}');
+    utimesSync(snapshot, FIXTURE_NOW - 100, FIXTURE_NOW - 100);
+    writeFileSync(join(root, 'journal'), journalText([
+      { at: newestStart, message: 'Starting wfm-scrape.service - Refresh Warframe market.json from warframe.market + warframestat...' },
+      { at: newestStart, message: 'scraper: /srv/wfm/bin/wfm-scrape scrape', invocation: FIXTURE_INVOCATION },
+      { at: newestStart + 4200, message: sweepMetrics(), invocation: FIXTURE_INVOCATION },
+      { at: newestStart + 4200, message: 'wfm-scrape.service: Deactivated successfully.' },
+    ]));
+    write(join(bin, 'journalctl'), '#!/bin/sh\ncat "$FIXTURE_JOURNAL"\n');
+  } else {
+    write(join(wfm, 'policy/wfm-policy.json'), '{}');
+    // The readiness check runs once as part of a deploy, and its verdict gates the
+    // deploy; this is the report a sound box would have produced. HOST_ROOT is the
+    // fixture's /srv/wfm, which the check's --out also points at in production.
+    write(join(wfm, 'data/observations-check/report.json'), '{"ready": true, "errors": []}');
+  }
 
   write(join(root, 'artifacts/wfm-scrape'), '#!/bin/sh\nprintf "usage: wfm-scrape\\n"\n');
   write(join(root, 'artifacts/wfm-policy'), '#!/bin/sh\nexit "${FIXTURE_POLICY_EXIT:-0}"\n');
@@ -385,6 +425,9 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
     'last=""',
     'for a in "$@"; do last="$a"; done',
     'dest="${last#*:}"',
+    // The same remap the ssh and install stubs apply, so a deploy whose
+    // HOST_ROOT is the production /srv/wfm lands in the fixture too.
+    'dest="$(printf "%s" "$dest" | sed "s#/srv/#$FIXTURE_LIVE/srv/#g; s#/etc/#$FIXTURE_LIVE/etc/#g")"',
     'case "$dest" in */) mkdir -p "$dest";; esac',
     'for a in "$@"; do',
     '  [ "$a" = "$last" ] && continue',
@@ -410,7 +453,7 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
     `exec ${realInstall} "\${args[@]}"`,
     '',
   ].join('\n'));
-  write(join(bin, 'systemctl'), [
+  const systemctl = [
     '#!/bin/bash',
     'if [ "$1" = "is-active" ]; then',
     '  shift',
@@ -433,26 +476,74 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
     '  esac',
     '  exit 0',
     'fi',
-    'printf "%s\\n" "$*" >> "$FIXTURE_SYSTEMCTL"',
+  ];
+  if (options.runCheck) {
+    // The queries the readiness check makes of systemd, and the one action that
+    // matters: `start wfm-observations-check.service` runs the installed unit's
+    // own ExecStart with the EnvironmentFile the deploy wrote. The unit passes
+    // only the paths it names; the check's remaining defaults are supplied here
+    // under the remapped root, which is the same value they have in production.
+    systemctl.push(
+      'if [ "$1" = "is-enabled" ]; then',
+      '  case "$2" in',
+      '    wfm-scrape-pull.timer) printf "disabled\\n";;',
+      '    *) printf "%s\\n" "${FIXTURE_RETIRED:-disabled}";;',
+      '  esac',
+      '  exit 0',
+      'fi',
+      'if [ "$1" = "show" ]; then',
+      '  unit="$2"; prop="$4"',
+      '  case "$unit:$prop" in',
+      '    wfm-scrape.service:ActiveState) printf "inactive\\n";;',
+      '    wfm-scrape.service:Result) printf "success\\n";;',
+      '    wfm-scrape.timer:UnitFileState) printf "enabled\\n";;',
+      '    wfm-scrape.timer:ActiveState) printf "active\\n";;',
+      '    wfm-scrape.timer:NextElapseUSecRealtime) LC_ALL=C date -u -d "+2 hours" "+%a %Y-%m-%d %H:%M:%S UTC";;',
+      '  esac',
+      '  exit 0',
+      'fi',
+    );
+  }
+  systemctl.push('printf "%s\\n" "$*" >> "$FIXTURE_SYSTEMCTL"');
+  if (options.runCheck) {
+    systemctl.push(
+      'if [ "$1" = "start" ] && [ "$2" = "wfm-observations-check.service" ]; then',
+      '  unit="$FIXTURE_LIVE/etc/systemd/system/wfm-observations-check.service"',
+      '  exec_line="$(sed -n \'s/^ExecStart=//p\' "$unit" | head -1)"',
+      '  exec_line="$(printf "%s" "$exec_line" | sed "s#/srv/#$FIXTURE_LIVE/srv/#g; s#/etc/#$FIXTURE_LIVE/etc/#g")"',
+      '  env_file="$(sed -n \'s/^EnvironmentFile=-*//p\' "$unit" | head -1)"',
+      '  env_file="$(printf "%s" "$env_file" | sed "s#/etc/#$FIXTURE_LIVE/etc/#g")"',
+      '  if [ -n "$env_file" ] && [ -f "$env_file" ]; then set -a; . "$env_file"; set +a; fi',
+      '  eval "$exec_line --csv $FIXTURE_LIVE/srv/wfm/app/wfm_results.csv --snapshot $FIXTURE_LIVE/srv/wfm/app/frontend/public/market.json --deployed $FIXTURE_LIVE/srv/wfm/deployed.json --binary $FIXTURE_LIVE/srv/wfm/bin/wfm-scrape"',
+      '  exit $?',
+      'fi',
+    );
+  }
+  systemctl.push(
     'if [ "$1" = "start" ] && [ "${FIXTURE_START_FAIL:-0}" = 1 ]; then exit 1; fi',
     'exit 0',
     '',
-  ].join('\n'));
-  for (const command of ['git', 'cargo', 'objdump', 'ldd', 'sleep', 'ssh', 'scp', 'install', 'systemctl']) chmodSync(join(bin, command), 0o755);
+  );
+  write(join(bin, 'systemctl'), systemctl.join('\n'));
+  for (const command of ['git', 'cargo', 'objdump', 'ldd', 'sleep', 'ssh', 'scp', 'install', 'systemctl', ...(options.runCheck ? ['journalctl'] : [])]) chmodSync(join(bin, command), 0o755);
 
   const run = (env: Record<string, string> = {}) => spawnSync('bash', [fileURLToPath(new URL('./deploy-scrape-host.sh', import.meta.url))], {
     cwd: root,
     encoding: 'utf8',
     env: {
       ...process.env, PATH: `${bin}:${process.env.PATH}`,
-      HOST: 'fixture', HOST_ROOT: wfm, REVISION: revision, CARGO_TARGET_DIR: target,
+      HOST: 'fixture', HOST_ROOT: hostRoot, REVISION: revision, CARGO_TARGET_DIR: target,
       TENNOWORTH_WFM_POLICY_PUBLIC_KEY: 'fixture-key',
       FIXTURE_ROOT: root, FIXTURE_LIVE: live, FIXTURE_ORDER: order, FIXTURE_STATES: states,
+      ...(options.runCheck ? { FIXTURE_JOURNAL: join(root, 'journal') } : {}),
       FIXTURE_SYSTEMCTL: join(root, 'systemctl.log'),
       ...options.env, ...env,
     },
   });
-  return { root, wfm, live, order, revision, run, systemctlLog: join(root, 'systemctl.log') };
+  return {
+    root, wfm, live, box, order, revision, run, systemctlLog: join(root, 'systemctl.log'),
+    reportPath: join(box, 'data/observations-check/report.json'),
+  };
 }
 
 describe.skipIf(process.platform === 'win32')('host-direct scrape deploy failure paths', () => {
@@ -564,6 +655,58 @@ describe.skipIf(process.platform === 'win32')('host-direct scrape deploy failure
     const result = f.run();
     expect(result.status, result.stderr).not.toBe(0);
     expect(result.stderr).toContain('produced no report');
+  });
+});
+
+// The whole deployment path, not a wiring assertion: the real deploy script runs
+// with the real check script and unit installed, the stubbed systemd executes
+// the unit's own ExecStart, and the assertions read the readiness report the
+// check actually produced. No archive receipt exists or is produced anywhere.
+describe.skipIf(process.platform === 'win32')('external-backup deployment readiness', () => {
+  test('a receipt-free deploy comes out ready and declares preservation external', () => {
+    const f = scrapeDeployFixture({ runCheck: true });
+    const result = f.run();
+    expect(result.status, result.stderr).toBe(0);
+    expect(existsSync(join(f.box, 'data/observations-check/archive-receipt.jsonl'))).toBe(false);
+
+    // The archive path is present as files but is neither run nor armed, and a
+    // leftover pull timer from the previous deployment is switched off.
+    const calls = readFileSync(f.systemctlLog, 'utf8');
+    expect(calls, 'the receipt pull must not run').not.toContain('start wfm-archive-receipt-pull.service');
+    expect(calls, 'nor be enabled').not.toContain('enable --now wfm-archive-receipt-pull.timer');
+    expect(calls).toContain('disable --now wfm-archive-receipt-pull.timer');
+    expect(calls).toContain('start wfm-observations-check.service');
+
+    // The check ran with the deployment's own declaration and dependency reset.
+    expect(readFileSync(join(f.live, 'etc/wfm-observations-check.env'), 'utf8'))
+      .toContain('OBSERVATIONS_PRESERVATION=external-backup');
+    expect(existsSync(join(f.live, 'etc/systemd/system/wfm-observations-check.service.d/preservation.conf'))).toBe(true);
+    expect(readFileSync(join(f.live, 'etc/systemd/system/wfm-observations-check.service.d/preservation.conf'), 'utf8'))
+      .toMatch(/^Wants=$/m);
+
+    // And the report it produced is ready, honest about what was not verified.
+    const report = JSON.parse(readFileSync(f.reportPath, 'utf8'));
+    expect(report.ready).toBe(true);
+    expect(report.errors).toEqual([]);
+    expect(report.preservation.mode).toBe('external-backup');
+    expect(report.preservation.status).toBe('declared-external');
+    expect(report.preservation.independently_verified_from_this_host).toBe(false);
+    expect(report.archive.status).toBe('not-applicable');
+  });
+
+  test('the same box in on-box-archive mode is not ready without a receipt', () => {
+    const f = scrapeDeployFixture({ runCheck: true, env: { PRESERVATION_MODE: 'on-box-archive' } });
+    const result = f.run();
+    expect(result.status, result.stderr).not.toBe(0);
+    expect(result.stderr).toContain('does not pass on the box');
+    // The check really ran and returned its own verdict, rather than the deploy
+    // failing before the check existed.
+    const report = JSON.parse(readFileSync(f.reportPath, 'utf8'));
+    expect(report.ready).toBe(false);
+    expect(report.preservation.mode).toBe('on-box-archive');
+    expect(report.archive.status).toBe('missing');
+    expect(report.errors.join('\n')).toContain('not being preserved');
+    expect(existsSync(join(f.box, 'data/observations-check/archive-receipt.jsonl'))).toBe(false);
   });
 });
 
@@ -839,6 +982,10 @@ describe('observation corpus check wiring', () => {
     // observations::tests::log_contract_matches_the_shared_fixture.
     expect(rust, 'the writer must keep its side of the fixture gate').toContain('observation-retention.json');
     expect(Number(check.match(/FORMAT_SUPPORTED=(\d+)/)![1])).toBe(retentionFixture.format);
+    // The backup job reads the archived logs by the same format rule, so it has
+    // to agree with the writer and the box check as well.
+    const backup = readFileSync(backupScript, 'utf8');
+    expect(Number(backup.match(/FORMAT_SUPPORTED=(\d+)/)![1])).toBe(retentionFixture.format);
     expect(Number(check.match(/RETENTION_BYTES=(\d+)/)![1])).toBe(retentionFixture.max_bytes);
     expect(Number(check.match(/RETENTION_AGE_DAYS=(\d+)/)![1])).toBe(retentionFixture.max_age_days);
     expect(retentionFixture.format).toBe(1);
@@ -946,7 +1093,12 @@ describe('observation corpus check wiring', () => {
     // The whole point is receipt-side verification, not a trusted copy.
     expect(backup).toMatch(/zstd -t/);
     expect(backup).toMatch(/tar --zstd -tf/);
-    expect(backup).toMatch(/"kind":"run"/);
+    // The run header is parsed as JSON, not pattern-matched: a prefix test and a
+    // grep for `"items":` accepted a truncated record, trailing text after the
+    // object, and a wrong format as a verified backup.
+    expect(backup).toMatch(/json\.loads/);
+    expect(backup).toMatch(/command -v python3/);
+    expect(backup, 'the prefix test must be gone').not.toContain("'{\"kind\":\"run\"'*)");
     expect(backup).toMatch(/--dry-run/);
   });
 });
@@ -1974,14 +2126,37 @@ describe.skipIf(process.platform === 'win32')('lxc backup pull and verify', () =
       },
     },
     {
-      label: 'a corpus log whose first record is not a run header',
-      message: /run header/,
-      make: (f, name) => f.archive(name, { header: '{"kind":"item"}\n', mtime: 2000 }),
+      label: 'a corpus log whose first record has a kind other than run',
+      message: /kind/,
+      make: (f, name) => f.archive(name, { header: '{"kind":"item","format":1,"items":3}\n', mtime: 2000 }),
     },
     {
       label: 'a run header that reports no items',
-      message: /items/,
+      message: /positive integer/,
       make: (f, name) => f.archive(name, { header: '{"kind":"run","format":1,"items":0}\n', mtime: 2000 }),
+    },
+    {
+      // A prefix test accepted this: the line starts with `{"kind":"run"` and a
+      // greedy grep finds `"items":3`. A truncated record is not a run header,
+      // and a replay cannot read the fields out of a line that is not JSON.
+      label: 'a truncated run header',
+      message: /valid JSON/,
+      make: (f, name) => f.archive(name, { header: '{"kind":"run","format":1,"items":3', mtime: 2000 }),
+    },
+    {
+      label: 'a run header followed by text that is not part of the object',
+      message: /valid JSON/,
+      make: (f, name) => f.archive(name, { header: '{"kind":"run","format":1,"items":3} trailing\n', mtime: 2000 }),
+    },
+    {
+      label: 'a run header for an unsupported format',
+      message: /format/,
+      make: (f, name) => f.archive(name, { header: '{"kind":"run","format":2,"items":3}\n', mtime: 2000 }),
+    },
+    {
+      label: 'a run header whose items is a string rather than a number',
+      message: /positive integer/,
+      make: (f, name) => f.archive(name, { header: '{"kind":"run","format":1,"items":"3"}\n', mtime: 2000 }),
     },
   ];
 

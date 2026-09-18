@@ -32,6 +32,10 @@
 #   CORPUS_MATCH  extended regex a tar member must match to be a corpus log
 #                 (default 'observations/sweep-[^/]*\.jsonl$')
 #
+# Requires python3 to parse the corpus run header as JSON. A record is only the
+# header a replay can use if it parses; a hand-rolled field match cannot tell a
+# complete record from a truncated one.
+#
 # Usage: check-lxc-backup.sh [--dry-run]
 #
 # Exit status: 0 the newest archive is present and proven, 1 a refusal or a
@@ -58,6 +62,8 @@ Environment:
               connection and whole-command bounds for unattended runs
   CORPUS_MATCH  extended regex a tar member must match to be a corpus log
               (default 'observations/sweep-[^/]*\.jsonl$')
+
+Requires python3: the corpus run header is parsed as JSON, not pattern-matched.
 USAGE
 }
 
@@ -84,6 +90,10 @@ DUMP_DIR="${DUMP_DIR:-/var/lib/vz/dump}"
 DEST="${DEST:-$HOME/backups/tennoworth}"
 KEEP="${KEEP:-30}"
 CORPUS_MATCH="${CORPUS_MATCH:-observations/sweep-[^/]*\.jsonl$}"
+# The observation format this backup must hold, kept in step with
+# deploy/observations-check.sh through tests/fixtures/observation-retention.json;
+# the deploy-layout test pins all three together.
+FORMAT_SUPPORTED=1
 
 MANIFEST="$DEST/manifest.jsonl"
 
@@ -113,6 +123,11 @@ case "$KEEP" in
   ''|*[!0-9]*) die "KEEP must be a positive integer (got '$KEEP')";;
 esac
 [ "$KEEP" -ge 1 ] || die "KEEP must be at least 1 - retaining none would delete the archive this run proves"
+
+# A missing parser would make every archive unverifiable, and verification is the
+# whole point of the run; refuse up front rather than discover it mid-transfer.
+command -v python3 >/dev/null 2>&1 \
+  || die "python3 is required to parse the corpus run header as JSON"
 
 # ---- the newest dump on the node --------------------------------------------
 
@@ -208,8 +223,47 @@ manifest_drop() { # <name>
 # is the same field-level shape deploy/observations-check.sh reads the live
 # corpus by. A member is passed back to tar exactly as the listing spelled it,
 # leading ./ included - GNU tar matches the stored name, not a normalised one.
+# The first record has to be a complete run header: JSON that parses, with
+# kind "run", the supported format, and a positive integer items. Reading it with
+# a prefix test and a grep for `"items":` accepted a truncated line, a record
+# with trailing text, and a wrong format - all of them things a replay cannot
+# use, reported as a verified backup. The parser reads one line from stdin and
+# prints the item count on success.
+parse_run_header() { # <member>; first record on stdin
+  python3 -c '
+import json
+import sys
+
+member = sys.argv[1]
+supported = int(sys.argv[2])
+raw = sys.stdin.readline()
+try:
+    record = json.loads(raw)
+except ValueError as exc:
+    print(f"verify: the first record of {member} is not valid JSON: {exc}", file=sys.stderr)
+    sys.exit(1)
+if not isinstance(record, dict):
+    print(f"verify: the first record of {member} is not a JSON object", file=sys.stderr)
+    sys.exit(1)
+kind = record.get("kind")
+if kind != "run":
+    print(f"verify: the first record of {member} has kind {kind!r}, not \"run\"", file=sys.stderr)
+    sys.exit(1)
+fmt = record.get("format")
+# bool is an int subclass in Python, and `true` is not a format.
+if isinstance(fmt, bool) or not isinstance(fmt, int) or fmt != supported:
+    print(f"verify: the first record of {member} has format {fmt!r}, not the supported {supported}", file=sys.stderr)
+    sys.exit(1)
+items = record.get("items")
+if isinstance(items, bool) or not isinstance(items, int) or items <= 0:
+    print(f"verify: the first record of {member} reports items={items!r}, which is not a positive integer", file=sys.stderr)
+    sys.exit(1)
+print(items)
+' "$1" "$FORMAT_SUPPORTED"
+}
+
 verify_archive() { # <path>; prints "<corpus_logs>|<newest_corpus_log>"
-  local path="$1" listing members count newest_member first items
+  local path="$1" listing members count newest_member first_line items
   if ! zstd -t "$path" >/dev/null 2>&1; then
     printf 'verify: zstd -t rejects %s - the copy is not an intact zstd stream\n' "$path" >&2
     return 1
@@ -230,17 +284,12 @@ verify_archive() { # <path>; prints "<corpus_logs>|<newest_corpus_log>"
   # head closes the pipe after the first record, which can make tar exit on
   # SIGPIPE for a large log; the status is deliberately discarded and an empty
   # first line is the failure test instead.
-  first="$(tar --zstd -xOf "$path" "$newest_member" 2>/dev/null | head -1 || true)"
-  case "$first" in
-    '{"kind":"run"'*) ;;
-    *)
-      printf 'verify: the newest corpus log %s does not begin with a run header\n' "$newest_member" >&2
-      return 1
-      ;;
-  esac
-  items="$(printf '%s' "$first" | grep -o '"items":[0-9]*' | head -1 | cut -d: -f2 || true)"
-  if ! [ "${items:-0}" -gt 0 ] 2>/dev/null; then
-    printf 'verify: the newest corpus log %s reports no items (%s)\n' "$newest_member" "${items:-none}" >&2
+  first_line="$(tar --zstd -xOf "$path" "$newest_member" 2>/dev/null | head -1 || true)"
+  if [ -z "$first_line" ]; then
+    printf 'verify: the newest corpus log %s has no first record to read\n' "$newest_member" >&2
+    return 1
+  fi
+  if ! items="$(printf '%s\n' "$first_line" | parse_run_header "$newest_member")"; then
     return 1
   fi
   printf '%s|%s\n' "$count" "${newest_member#./}"
