@@ -128,6 +128,7 @@ test.skipIf(process.platform === 'win32')('packaged probe runs the supplied AppI
     appMounted: true,
     desktopBadge: true,
     scanButtonFound: true,
+    debugNotify: { count: 3, total_plat: 2175 },
   };
   try {
     mkdirSync(bin);
