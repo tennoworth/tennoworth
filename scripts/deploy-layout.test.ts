@@ -12,6 +12,13 @@ afterEach(() => { for (const dir of directories.splice(0)) rmSync(dir, { recursi
 const puller = fileURLToPath(new URL('../deploy/pull-app.sh', import.meta.url));
 function write(path: string, body: string) { mkdirSync(join(path, '..'), { recursive: true }); writeFileSync(path, body); }
 function git(cwd: string, ...args: string[]) { return execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim(); }
+// An `undefined` entry means the variable is genuinely absent for the child, not
+// the string "undefined" - tests that exercise an unset variable depend on that.
+function withoutUndefined(env: Record<string, string | undefined>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) if (value !== undefined) out[key] = value;
+  return out;
+}
 
 function fixture(rename = true) {
   const root = mkdtempSync(join(tmpdir(), 'deployment-layout-')); directories.push(root);
@@ -527,18 +534,21 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
   write(join(bin, 'systemctl'), systemctl.join('\n'));
   for (const command of ['git', 'cargo', 'objdump', 'ldd', 'sleep', 'ssh', 'scp', 'install', 'systemctl', ...(options.runCheck ? ['journalctl'] : [])]) chmodSync(join(bin, command), 0o755);
 
-  const run = (env: Record<string, string> = {}) => spawnSync('bash', [fileURLToPath(new URL('./deploy-scrape-host.sh', import.meta.url))], {
+  const run = (env: Record<string, string | undefined> = {}) => spawnSync('bash', [fileURLToPath(new URL('./deploy-scrape-host.sh', import.meta.url))], {
     cwd: root,
     encoding: 'utf8',
-    env: {
+    env: withoutUndefined({
       ...process.env, PATH: `${bin}:${process.env.PATH}`,
       HOST: 'fixture', HOST_ROOT: hostRoot, REVISION: revision, CARGO_TARGET_DIR: target,
       TENNOWORTH_WFM_POLICY_PUBLIC_KEY: 'fixture-key',
+      // The declaration the operator must make. The deploy itself has no default;
+      // a test that exercises an undeclared mode removes this entry.
+      PRESERVATION_MODE: 'external-backup',
       FIXTURE_ROOT: root, FIXTURE_LIVE: live, FIXTURE_ORDER: order, FIXTURE_STATES: states,
       ...(options.runCheck ? { FIXTURE_JOURNAL: join(root, 'journal') } : {}),
       FIXTURE_SYSTEMCTL: join(root, 'systemctl.log'),
       ...options.env, ...env,
-    },
+    }),
   });
   return {
     root, wfm, live, box, order, revision, run, systemctlLog: join(root, 'systemctl.log'),
@@ -656,6 +666,23 @@ describe.skipIf(process.platform === 'win32')('host-direct scrape deploy failure
     expect(result.status, result.stderr).not.toBe(0);
     expect(result.stderr).toContain('produced no report');
   });
+
+  for (const [label, mode] of [['omitted', undefined], ['empty', '']] as const) {
+    test(`refuses an ${label} preservation mode before touching the box`, () => {
+      // A deploy that never says how the corpus is preserved must not fall back
+      // to a mode and produce a ready report claiming preservation it never
+      // declared. The refusal happens before any ssh, scp or systemctl call.
+      const f = scrapeDeployFixture();
+      const result = f.run({ PRESERVATION_MODE: mode });
+      expect(result.status, result.stderr).not.toBe(0);
+      // The refusal must name the missing declaration, not read as an unknown
+      // value: an omitted mode is undeclared, not a typo to correct.
+      expect(result.stderr).toContain('PRESERVATION_MODE is not declared');
+      expect(existsSync(f.systemctlLog), 'nothing may be armed or started').toBe(false);
+      expect(liveBinary(f), 'the running release must be untouched').toBe('old-live-binary');
+      expect(existsSync(join(f.live, 'srv/wfm/releases')), 'nothing may be installed').toBe(false);
+    });
+  }
 });
 
 // The whole deployment path, not a wiring assertion: the real deploy script runs
@@ -665,7 +692,7 @@ describe.skipIf(process.platform === 'win32')('host-direct scrape deploy failure
 describe.skipIf(process.platform === 'win32')('external-backup deployment readiness', () => {
   test('a receipt-free deploy comes out ready and declares preservation external', () => {
     const f = scrapeDeployFixture({ runCheck: true });
-    const result = f.run();
+    const result = f.run({ PRESERVATION_MODE: 'external-backup' });
     expect(result.status, result.stderr).toBe(0);
     expect(existsSync(join(f.box, 'data/observations-check/archive-receipt.jsonl'))).toBe(false);
 
@@ -1062,7 +1089,12 @@ describe('observation corpus check wiring', () => {
   });
 
   test('the deploy declares the preservation mode and releases the receipt dependency for it', () => {
-    expect(deploy).toMatch(/PRESERVATION_MODE="\$\{PRESERVATION_MODE:-external-backup\}"/);
+    expect(deploy).toMatch(/PRESERVATION_MODE="\$\{PRESERVATION_MODE:-\}"/);
+    // No default: a deploy that does not declare the mode must refuse, because
+    // a fallback would let a report claim preservation nobody declared.
+    expect(deploy, 'an omitted or empty mode must be refused').toMatch(/\[ -n "\$PRESERVATION_MODE" \]/);
+    expect(deploy).toContain('PRESERVATION_MODE is not declared');
+    expect(deploy, 'there must be no default mode').not.toContain('PRESERVATION_MODE:-external-backup');
     expect(deploy).toContain('/etc/wfm-observations-check.env');
     expect(deploy, 'the declaration must actually be written').toMatch(/^OBSERVATIONS_PRESERVATION=\$PRESERVATION_MODE$/m);
     // external-backup cannot see the host-level backups, so the check must not
@@ -1230,7 +1262,7 @@ function corpusFixture() {
   chmodSync(join(bin, 'journalctl'), 0o755);
 
   const reportPath = join(root, 'report.json');
-  const run = (env: Record<string, string> = {}, extraArgs: string[] = []) => spawnSync('bash', [
+  const run = (env: Record<string, string | undefined> = {}, extraArgs: string[] = []) => spawnSync('bash', [
     checkScript,
     '--observations', join(box, 'observations'),
     '--out', reportPath,
@@ -1244,11 +1276,12 @@ function corpusFixture() {
   ], {
     encoding: 'utf8',
     // The unit gets the mode from EnvironmentFile=/etc/wfm-observations-check.env,
-    // which the deploy writes; a test overrides it the same way a redeploy would.
-    env: {
+    // which the deploy writes; a test overrides it the same way a redeploy would,
+    // and an undefined value removes it to simulate the file being absent.
+    env: withoutUndefined({
       ...process.env, PATH: `${bin}:${process.env.PATH}`,
       OBSERVATIONS_PRESERVATION: 'on-box-archive', FIXTURE_JOURNAL: journal, ...env,
-    },
+    }),
   });
   const report = () => JSON.parse(readFileSync(reportPath, 'utf8'));
   const observationPath = (name: string) => join(box, 'observations', name);
@@ -1661,18 +1694,23 @@ describe.skipIf(process.platform === 'win32')('observation corpus readiness', ()
     expect(f.report().errors.join('\n')).toContain('not being preserved');
   });
 
-  test('an undeclared preservation mode is not ready', () => {
-    // No mode is not the same as the friendly mode. The report has to say the
-    // declaration is missing instead of leaving preservation unmentioned.
-    const f = corpusFixture();
-    const result = f.run({ OBSERVATIONS_PRESERVATION: '' });
-    expect(result.status, result.stderr).not.toBe(0);
-    const report = f.report();
-    expect(report.ready).toBe(false);
-    expect(report.preservation.mode).toBeNull();
-    expect(report.preservation.status).toBe('undeclared');
-    expect(report.errors.join('\n')).toContain('preservation mode not declared');
-  });
+  for (const [label, value] of [['unset', undefined], ['empty', '']] as const) {
+    test(`an ${label} preservation mode is not ready`, () => {
+      // No mode is not the same as the friendly mode, and an empty assignment is
+      // not a declaration either. The unit's EnvironmentFile is optional, so a
+      // missing file reaches this path with the variable absent; the report has
+      // to say the declaration is missing instead of leaving preservation
+      // unmentioned or defaulting to something green.
+      const f = corpusFixture();
+      const result = f.run({ OBSERVATIONS_PRESERVATION: value });
+      expect(result.status, result.stderr).not.toBe(0);
+      const report = f.report();
+      expect(report.ready).toBe(false);
+      expect(report.preservation.mode).toBeNull();
+      expect(report.preservation.status).toBe('undeclared');
+      expect(report.errors.join('\n')).toContain('preservation mode not declared');
+    });
+  }
 
   test('an unrecognised preservation mode is not ready', () => {
     const f = corpusFixture();

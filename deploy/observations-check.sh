@@ -74,7 +74,10 @@ BINARY="/srv/wfm/bin/wfm-scrape"
 ARCHIVE_RECEIPT="/srv/wfm/data/observations-check/archive-receipt.jsonl"
 # Where preservation lives. Named explicitly by the deployment - there is no
 # permissive default, because a check that guesses would report a claim nobody
-# made.
+# made. The expansion is `:-`, so an absent variable (the unit's EnvironmentFile
+# is optional, and a box the deploy never touched has no file at all) and an
+# empty assignment both arrive as the empty string and are refused identically:
+# neither is a declaration.
 PRESERVATION="${OBSERVATIONS_PRESERVATION:-}"
 ARCHIVE_DEADLINE_SECONDS=$((36 * 60 * 60))
 # Clocks are not perfectly synchronised, so a receipt may be a little ahead of
@@ -124,7 +127,9 @@ error() { ERRORS+=("$1"); }
 warn() { WARNINGS+=("$1"); }
 
 # Validated after error() exists, so an undeclared or unrecognised mode lands in
-# the report as a reason instead of ending the run before one is written.
+# the report as a reason instead of ending the run before one is written. The
+# empty string is undeclared, not a mode: it is what an absent EnvironmentFile
+# and an empty assignment both produce.
 case "$PRESERVATION" in
   external-backup|on-box-archive) ;;
   '') error "preservation mode not declared - set --preservation or OBSERVATIONS_PRESERVATION";;

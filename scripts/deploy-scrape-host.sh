@@ -21,11 +21,11 @@
 #   6. only then are the live paths replaced, so a rejection leaves what is
 #      running exactly as it was,
 #   7. /srv/wfm/deployed.json records what ran and what it was checked against,
-#   8. the sweep schedule is restored, the preservation mode is declared, and
-#      only then are the monitors armed. external-backup (the default) keeps the
-#      check but drops its receipt dependency, because the corpus is protected by
-#      a host-level backup this box cannot see; on-box-archive keeps the pair and
-#      requires the receipt.
+#   8. the sweep schedule is restored, the declared preservation mode is written
+#      where the check reads it, and only then are the monitors armed. The mode
+#      is required: external-backup keeps the check but drops its receipt
+#      dependency, because the corpus is protected by a host-level backup this
+#      box cannot see; on-box-archive keeps the pair and requires the receipt.
 #
 # Environment:
 #   HOST          ssh target                (default wfm)
@@ -33,7 +33,9 @@
 #   HOST_ROOT     deployment root on the box (default /srv/wfm)
 #   SSH / SCP     ssh and scp commands  (default "ssh" and "scp")
 #   DRY_RUN       1 builds and checks, then prints what it would install
-#   PRESERVATION_MODE  external-backup (default) or on-box-archive
+#   PRESERVATION_MODE  required: external-backup or on-box-archive. There is no
+#                 default - a deploy that never says how the corpus is preserved
+#                 must not come out ready claiming that it is.
 #   TENNOWORTH_WFM_POLICY_PUBLIC_KEY  required; the base64 Minisign public key
 set -euo pipefail
 
@@ -49,18 +51,23 @@ DRY_RUN="${DRY_RUN:-0}"
 RELEASES="$HOST_ROOT/releases"
 STAGING="$HOST_ROOT/staging/$REVISION"
 REMOTE="${REMOTE:-github}"
-# Where the corpus is preserved. external-backup is this deployment: a daily
-# host-level Proxmox backup of the whole container, verified by an operator-run
-# pull-and-verify job on another machine. on-box-archive is the archive host path
-# this box reads a receipt from; the machinery for it stays installed and
-# selectable, it is simply not what this deployment uses.
-PRESERVATION_MODE="${PRESERVATION_MODE:-external-backup}"
+# Where the corpus is preserved, declared explicitly by the operator. There is no
+# default: the check turns this declaration into a ready report, so a deploy that
+# stayed silent about preservation would produce a green box on a claim nobody
+# made - exactly the evidence-free success the readiness check exists to refuse.
+# external-backup is a daily host-level Proxmox backup of the whole container,
+# verified by an operator-run job on another machine; on-box-archive is the
+# archive host path this box reads a receipt from, kept installed and selectable.
+PRESERVATION_MODE="${PRESERVATION_MODE:-}"
 
 : "${TENNOWORTH_WFM_POLICY_PUBLIC_KEY:?set TENNOWORTH_WFM_POLICY_PUBLIC_KEY - without it the deployed scraper silently ignores the signed policy}"
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'ABORT: %s\n' "$*" >&2; exit 1; }
 
+# An omitted and an empty value are the same refusal: neither declares anything.
+[ -n "$PRESERVATION_MODE" ] \
+  || die "PRESERVATION_MODE is not declared - set it explicitly to external-backup or on-box-archive"
 case "$PRESERVATION_MODE" in
   external-backup|on-box-archive) ;;
   *) die "PRESERVATION_MODE must be external-backup or on-box-archive (got '$PRESERVATION_MODE')";;
