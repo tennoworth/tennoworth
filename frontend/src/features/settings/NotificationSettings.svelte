@@ -10,7 +10,7 @@ import { type NotificationPreferences, type NotificationCategory } from '../../c
   let error = $state('');
   let message = $state('');
   let busy = $state(false);
-  const labels = { trades: 'Completed trades and listing follow-up', watches: 'Price watches', scans: 'Inventory scan summary', baro: 'Baro arrival and departure', calendar: 'Events affecting your holdings', digest: 'Daily sell opportunities' };
+  const labels = { trades: 'Completed trades and listing follow-up', watches: 'Price watches', baro: 'Baro arrival and departure', calendar: 'Events affecting your holdings', digest: 'Daily sell opportunities' };
   async function load() {
     error = '';
     try {

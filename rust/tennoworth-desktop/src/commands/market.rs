@@ -19,7 +19,7 @@ use crate::services::sellables::{self, SellableRow};
 use crate::services::wfm_session::{CmdError, WfmSession};
 use crate::shell::tray::{rebuild_tray, TrayState};
 
-/// The tray labels the last rebuild pushed + the last notification payload -
+/// The tray labels the last rebuild pushed + the last post-scan summary -
 /// evidence surface for the probe (the GTK menu isn't screenshot-able headless)
 /// and the backing for a later in-window "last scan" recap.
 #[derive(serde::Serialize)]

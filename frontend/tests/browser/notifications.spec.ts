@@ -20,6 +20,8 @@ for (const theme of ['light', 'dark'] as const) {
     await page.getByRole('button', { name: 'Notification settings', exact: true }).click();
     await page.getByLabel('Desktop popups', { exact: true }).uncheck();
     await expect(page.getByText('Preferences saved.')).toBeVisible();
+    await expect(page.getByRole('checkbox', { name: /enabled$/ })).toHaveCount(5);
+    await expect(page.getByLabel('Inventory scan summary enabled', { exact: true })).toHaveCount(0);
     await expect(page.getByLabel('Price watches popups', { exact: true })).toBeDisabled();
     await page.getByLabel('Baro arrival and departure enabled', { exact: true }).uncheck();
     await page.getByRole('button', { name: 'Send test notification', exact: true }).click();

@@ -48,7 +48,7 @@ pub struct SellableRow {
     pub score: f64,
 }
 
-/// The post-scan notification payload: how many items are worth listing and
+/// The post-scan summary payload: how many items are worth listing and
 /// their total realizable plat (Σ sellable_qty × clearing price).
 #[derive(serde::Serialize, Debug, Clone, Copy, PartialEq)]
 pub struct ScanNotification {

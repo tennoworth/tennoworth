@@ -46,6 +46,8 @@ if (!Array.isArray(report.cspViolations) || report.cspViolations.length > 0)
 if (report.appMounted !== true) problems.push("appMounted is not true (SPA did not mount)");
 if (report.desktopBadge !== true) problems.push("desktopBadge is not true (SPA is not in Tauri IPC mode)");
 if (report.scanButtonFound !== true) problems.push("scanButtonFound is not true (sell-view scan CTA did not render)");
+if (typeof report.debugNotify?.count !== 'number' || typeof report.debugNotify?.total_plat !== 'number')
+  problems.push('post-scan tray payload was not produced');
 
 if (problems.length > 0) {
   console.error("Probe smoke gate FAILED:");

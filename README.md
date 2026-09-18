@@ -68,8 +68,8 @@ set-completion plays, relic expected value, Riven context, and listing health.
 - Reads confirmed trades from `EE.log` into a local platinum ledger and can
   shrink or close the matching listing after a sale.
 - Keeps a persistent notification inbox for completed trades, price watches,
-  scan summaries, Baro reminders, relevant events, and daily sell opportunities,
-  with category controls and optional desktop popups.
+  Baro reminders, relevant events, and daily sell opportunities, with category
+  controls and optional desktop popups.
 - Offers an opt-in relic reward overlay. A bounded local capture is OCR'd after
   a reward event or the default `Ctrl+Shift+O` shortcut, recognizes English reward names,
   and adds platinum, ducats, owned count, and recognition confidence. It does

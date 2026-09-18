@@ -1,8 +1,8 @@
-//! System tray: menu build/rebuild, the post-scan notification, and window
+//! System tray: menu build/rebuild, the post-scan summary payload, and window
 //! show/rescan handlers wired to tray events. Rebuilds run at startup, after
 //! every inventory scan, and after a market refresh - all three call
-//! [`rebuild_tray`] so the tray and the post-scan notification never disagree
-//! on what's ranked.
+//! [`rebuild_tray`] so the tray and the recorded summary never disagree on
+//! what's ranked.
 
 use std::sync::Mutex;
 use tauri::menu::{Menu, MenuBuilder, MenuItem};
@@ -25,11 +25,10 @@ const TRAY_LIMIT: usize = 5;
 /// gate the two against each other across the language boundary).
 pub const EVENT_TRAY_HINT: &str = "tray-hint";
 
-/// Evidence-facing view of what the tray/notification code last produced. The
-/// GTK tray menu isn't reliably screenshot-able under headless Wayland, so the
-/// probe reads the labels the rebuild actually pushed and the last notification
-/// payload from here instead. Also the single home for the "last notification"
-/// so a later window can surface it.
+/// Evidence-facing view of what the tray/post-scan code last produced. The GTK
+/// tray menu isn't reliably screenshot-able under headless Wayland, so the probe
+/// reads the labels the rebuild actually pushed and the last post-scan payload
+/// from here instead.
 #[derive(Default)]
 pub struct TrayState {
     /// The sellable labels ("Name - Np") the last rebuild put in the menu.
@@ -93,7 +92,7 @@ fn sellable_labels(top: &[SellableRow]) -> Vec<String> {
 /// a menu-build error or a missing tray (init failed / de-scoped) is logged and
 /// swallowed - the window and notifications must keep working regardless. Called
 /// at startup, after each scan, and after a market refresh. Returns the full
-/// ranked list so a caller (the scan path) can reuse it for the notification.
+/// ranked list so a caller (the scan path) can reuse it for the post-scan payload.
 pub fn rebuild_tray(app: &AppHandle) -> Vec<SellableRow> {
     let rows = rank_all(app);
     let top: Vec<SellableRow> = rows.iter().take(TRAY_LIMIT).cloned().collect();
@@ -112,31 +111,15 @@ pub fn rebuild_tray(app: &AppHandle) -> Vec<SellableRow> {
     rows
 }
 
-/// After a successful scan: rebuild the tray off the new snapshot and fire the
-/// post-scan notification - but only when something is actually sellable. No
-/// notification on an empty result (build_notification returns None).
+/// After a successful scan: rebuild the tray off the new snapshot and record
+/// the payload the scan produced - but only when something is actually
+/// sellable. An empty result records nothing (build_notification returns None).
+/// A completed scan deliberately produces no notification: the inbox entry and
+/// its desktop popup were removed as noise beside the daily sell digest.
 pub fn post_scan_surfaces(app: &AppHandle) {
     let rows = rebuild_tray(app);
     if let Some(n) = sellables::build_notification(&rows) {
         *guard(&app.state::<TrayState>().last_notification) = Some(n);
-        let noun = if n.count == 1 { "item" } else { "items" };
-        let body = format!("{} {} worth ~{}p to sell", n.count, noun, n.total_plat);
-        let db = app.state::<Db>();
-        if let Ok(snapshots) = db.list_snapshots(1) {
-            if let Some(snapshot) = snapshots.first() {
-                crate::services::notifications::send(
-                    app,
-                    crate::services::notifications::Candidate::once(
-                        format!("scan:{}", snapshot.id),
-                        "scans",
-                        "Inventory ready to sell".into(),
-                        body,
-                        "sell",
-                        crate::services::notifications::now(),
-                    ),
-                );
-            }
-        }
     }
 }
 
