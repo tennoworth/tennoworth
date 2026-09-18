@@ -21,8 +21,11 @@
 #   6. only then are the live paths replaced, so a rejection leaves what is
 #      running exactly as it was,
 #   7. /srv/wfm/deployed.json records what ran and what it was checked against,
-#   8. the sweep schedule is restored, and only then are the monitors armed -
-#      the readiness check requires the archive receipt the pull timer fetches.
+#   8. the sweep schedule is restored, the declared preservation mode is written
+#      where the check reads it, and only then are the monitors armed. The mode
+#      is required: external-backup keeps the check but drops its receipt
+#      dependency, because the corpus is protected by a host-level backup this
+#      box cannot see; on-box-archive keeps the pair and requires the receipt.
 #
 # Environment:
 #   HOST          ssh target                (default wfm)
@@ -30,6 +33,9 @@
 #   HOST_ROOT     deployment root on the box (default /srv/wfm)
 #   SSH / SCP     ssh and scp commands  (default "ssh" and "scp")
 #   DRY_RUN       1 builds and checks, then prints what it would install
+#   PRESERVATION_MODE  required: external-backup or on-box-archive. There is no
+#                 default - a deploy that never says how the corpus is preserved
+#                 must not come out ready claiming that it is.
 #   TENNOWORTH_WFM_POLICY_PUBLIC_KEY  required; the base64 Minisign public key
 set -euo pipefail
 
@@ -45,11 +51,27 @@ DRY_RUN="${DRY_RUN:-0}"
 RELEASES="$HOST_ROOT/releases"
 STAGING="$HOST_ROOT/staging/$REVISION"
 REMOTE="${REMOTE:-github}"
+# Where the corpus is preserved, declared explicitly by the operator. There is no
+# default: the check turns this declaration into a ready report, so a deploy that
+# stayed silent about preservation would produce a green box on a claim nobody
+# made - exactly the evidence-free success the readiness check exists to refuse.
+# external-backup is a daily host-level Proxmox backup of the whole container,
+# verified by an operator-run job on another machine; on-box-archive is the
+# archive host path this box reads a receipt from, kept installed and selectable.
+PRESERVATION_MODE="${PRESERVATION_MODE:-}"
 
 : "${TENNOWORTH_WFM_POLICY_PUBLIC_KEY:?set TENNOWORTH_WFM_POLICY_PUBLIC_KEY - without it the deployed scraper silently ignores the signed policy}"
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'ABORT: %s\n' "$*" >&2; exit 1; }
+
+# An omitted and an empty value are the same refusal: neither declares anything.
+[ -n "$PRESERVATION_MODE" ] \
+  || die "PRESERVATION_MODE is not declared - set it explicitly to external-backup or on-box-archive"
+case "$PRESERVATION_MODE" in
+  external-backup|on-box-archive) ;;
+  *) die "PRESERVATION_MODE must be external-backup or on-box-archive (got '$PRESERVATION_MODE')";;
+esac
 
 # ---- 1. reviewed, clean revision -------------------------------------------
 [ -z "$(git status --porcelain)" ] || die "the working tree is dirty; deploy a committed revision"
@@ -261,7 +283,7 @@ $SSH "$HOST" "cat > '$HOST_ROOT/deployed.json'" <<RECORD
 }
 RECORD
 
-# ---- 9. restore the schedule, then arm the monitors ------------------------
+# ---- 9. restore the schedule, declare the mode, then arm the monitor --------
 # Both monitors read the deployment record and the sweep schedule, so they are
 # armed only after those are settled: a persistent timer enabled earlier can
 # fire into the intermediate state and report on a box that is still deploying.
@@ -270,30 +292,68 @@ RECORD
 # so success does not start it twice.
 restore_timer
 
-$SSH "$HOST" "systemctl enable --now wfm-archive-receipt-pull.timer wfm-observations-check.timer"
+# The mode is a deployment fact the check cannot infer, so it is written where
+# the unit reads it. An undeclared mode is a not-ready verdict by design.
+$SSH "$HOST" "cat > /etc/wfm-observations-check.env" <<ENV
+# Set by scripts/deploy-scrape-host.sh. external-backup declares that the corpus
+# is protected by host-level Proxmox backups of this container, verified by an
+# operator-run job elsewhere; on-box-archive requires the archive host receipt.
+OBSERVATIONS_PRESERVATION=$PRESERVATION_MODE
+ENV
 
-# ---- 10. run the pair once, in order --------------------------------------
-# Two persistent timers can elapse in either order after downtime, and a check
-# that runs before the pull reads yesterday's receipt. The first run is therefore
-# explicit: the pull first, then the check. The pull may fail because the archive
-# host is not configured yet - that is the units' own alert to raise, not this
-# script's - but a check that leaves no report at all means the installed units
-# are broken, and a check that is not ready means the box is not ready to be left
-# unattended.
-$SSH "$HOST" "systemctl start wfm-archive-receipt-pull.service" \
-  || say "WARNING: the first receipt pull failed; the readiness check will report the archive as unmonitored"
+if [ "$PRESERVATION_MODE" = on-box-archive ]; then
+  # The check unit's own Wants/After pull the receipt in before it runs, which is
+  # exactly right here, so a drop-in left by an earlier external deployment is
+  # removed rather than shadowing them.
+  $SSH "$HOST" "rm -f /etc/systemd/system/wfm-observations-check.service.d/preservation.conf; rmdir /etc/systemd/system/wfm-observations-check.service.d 2>/dev/null || true"
+  $SSH "$HOST" "systemctl daemon-reload"
+  $SSH "$HOST" "systemctl enable --now wfm-archive-receipt-pull.timer wfm-observations-check.timer"
+else
+  # external-backup: this box cannot see the host-level backups, so the check
+  # must not wait on, or pull, a receipt nobody produces. The drop-in resets the
+  # base unit's dependency, which stays there for the archive mode.
+  $SSH "$HOST" "install -d -m 0755 -o root -g root /etc/systemd/system/wfm-observations-check.service.d"
+  $SSH "$HOST" "cat > /etc/systemd/system/wfm-observations-check.service.d/preservation.conf" <<'PRESERVATION_CONF'
+[Unit]
+# Preservation for this deployment is the host-level Proxmox backup of the whole
+# container, verified by an operator-run pull-and-verify job on another machine.
+# This check cannot see it, so it must not pull or wait on the archive host's
+# receipt, which would gate the corpus on evidence nobody produces.
+Wants=
+After=
+PRESERVATION_CONF
+  $SSH "$HOST" "systemctl daemon-reload"
+  # A box switched away from the archive must stop fetching receipts that no
+  # longer gate anything; a timer left enabled would keep the old path alive and
+  # make stale evidence look current.
+  $SSH "$HOST" "systemctl disable --now wfm-archive-receipt-pull.timer >/dev/null 2>&1 || true"
+  $SSH "$HOST" "systemctl enable --now wfm-observations-check.timer"
+fi
+
+# ---- 10. run the check once, in order ---------------------------------------
+# In on-box-archive mode two persistent timers can elapse in either order after
+# downtime, and a check that runs before the pull reads yesterday's receipt, so
+# the first run is explicit: pull, then check. The pull may fail because the
+# archive host is not configured yet - that is the units' own alert to raise, not
+# this script's. In external-backup mode there is nothing to pull. A check that
+# leaves no report at all means the installed units are broken, and a check that
+# is not ready means the box is not ready to be left unattended.
+if [ "$PRESERVATION_MODE" = on-box-archive ]; then
+  $SSH "$HOST" "systemctl start wfm-archive-receipt-pull.service" \
+    || say "WARNING: the first receipt pull failed; the readiness check will report the archive as unmonitored"
+fi
 $SSH "$HOST" "systemctl start wfm-observations-check.service" || true
 $SSH "$HOST" "test -s '$HOST_ROOT/data/observations-check/report.json'" \
   || die "the readiness check produced no report - the installed units are not working"
 READY="$($SSH "$HOST" "grep -o '\"ready\":[a-z ]*' '$HOST_ROOT/data/observations-check/report.json' 2>/dev/null | head -1")"
 case "$READY" in
   *true*)
-    say "readiness: ready ($HOST_ROOT/data/observations-check/report.json on the box)";;
+    say "readiness: ready ($HOST_ROOT/data/observations-check/report.json on the box, preservation=$PRESERVATION_MODE)";;
   *)
     # The release is installed and the schedule is running; what failed is the
     # gate this deployment is required to pass.
     say "readiness: NOT READY ($READY)"
-    die "the readiness check does not pass on the box - the archive path is not working end to end; fix it rather than disabling the check (report at $HOST_ROOT/data/observations-check/report.json)";;
+    die "the readiness check does not pass on the box (preservation=$PRESERVATION_MODE) - fix what it reports rather than disabling the check (report at $HOST_ROOT/data/observations-check/report.json)";;
 esac
 
 say "deployed $(git rev-parse --short "$REVISION"); rollback: install a previous $RELEASES/<rev>/ by hand and daemon-reload"
