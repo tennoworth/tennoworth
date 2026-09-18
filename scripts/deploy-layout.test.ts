@@ -522,16 +522,30 @@ describe.skipIf(process.platform === 'win32')('host-direct scrape deploy failure
       .not.toContain('enable --now wfm-archive-receipt-pull.timer');
   });
 
-  test('the first pull runs before the first check, as part of the deploy', () => {
+  test('the external-backup deploy neither runs nor arms the receipt pull', () => {
+    // Preservation for this deployment is the host-level Proxmox backup, so the
+    // receipt pull has nothing to gate and must not be started or enabled; a
+    // leftover timer from an earlier archive deployment has to be switched off.
+    const f = scrapeDeployFixture();
+    expect(f.run().status).toBe(0);
+    const calls = readFileSync(f.systemctlLog, 'utf8');
+    expect(calls, 'external backups do not fetch a receipt').not.toContain('start wfm-archive-receipt-pull.service');
+    expect(calls, 'the check still runs').toContain('start wfm-observations-check.service');
+    expect(calls).toContain('enable --now wfm-observations-check.timer');
+    expect(calls, 'a switched deployment must stop the old pull').toContain('disable --now wfm-archive-receipt-pull.timer');
+  });
+
+  test('the on-box archive deploy still runs the pull before the check', () => {
     // Two persistent timers can elapse in either order after downtime, so the
     // initial pair is explicit rather than left to them.
-    const f = scrapeDeployFixture();
+    const f = scrapeDeployFixture({ env: { PRESERVATION_MODE: 'on-box-archive' } });
     expect(f.run().status).toBe(0);
     const calls = readFileSync(f.systemctlLog, 'utf8').split('\n');
     const pull = calls.indexOf('start wfm-archive-receipt-pull.service');
     const check = calls.indexOf('start wfm-observations-check.service');
     expect(pull, 'the pull must be started').toBeGreaterThan(-1);
     expect(check, 'the check must be started').toBeGreaterThan(pull);
+    expect(calls).toContain('enable --now wfm-archive-receipt-pull.timer wfm-observations-check.timer');
   });
 
   test('a first check that is not ready fails the deploy', () => {
@@ -663,6 +677,7 @@ describe('run-scrape publication guard', () => {
 const checkScript = fileURLToPath(new URL('../deploy/observations-check.sh', import.meta.url));
 const archiveScript = fileURLToPath(new URL('./archive-observations.sh', import.meta.url));
 const pullScript = fileURLToPath(new URL('../deploy/pull-archive-receipt.sh', import.meta.url));
+const backupScript = fileURLToPath(new URL('./check-lxc-backup.sh', import.meta.url));
 const retentionFixture = JSON.parse(
   readFileSync(fileURLToPath(new URL('../tests/fixtures/observation-retention.json', import.meta.url)), 'utf8'),
 ) as { max_bytes: number; max_age_days: number };
@@ -844,7 +859,7 @@ describe('observation corpus check wiring', () => {
     // thresholds" are different questions; folding the second into the first
     // would let a good collection pass for a good schedule. The check may name
     // that other owner, but it must never invoke it.
-    expect(check, 'the scope must be stated in the script').toMatch(/is the corpus sound, complete and preserved/);
+    expect(check, 'the scope must be stated in the script').toMatch(/is the corpus sound and complete/);
     expect(check).not.toMatch(/--schedule/);
     expect(check).not.toMatch(/\breplay\b[^\n]*--/);
   });
@@ -882,6 +897,57 @@ describe('observation corpus check wiring', () => {
       expect(archive, `the manifest must record ${field}`).toContain(field);
     }
     expect(archive, 'the box is read-only to this script').not.toMatch(/\$SSH[^\n]*\b(rm|mv|cp|install)\b/);
+  });
+
+  test('the preservation mode is an explicit input that fails closed when absent', () => {
+    // The check can only see this box. A mode it was never told must not read as
+    // "no news is good news": undeclared preservation is a not-ready verdict,
+    // and the report has to say which claim it is making.
+    expect(check).toMatch(/PRESERVATION="\$\{OBSERVATIONS_PRESERVATION:-\}"/);
+    expect(check).toMatch(/--preservation\) PRESERVATION="\$2"/);
+    expect(check).toContain('external-backup');
+    expect(check).toContain('on-box-archive');
+    expect(check).toContain('preservation mode not declared');
+    expect(check).toMatch(/independently_verified_from_this_host/);
+    // The unit gets the mode from a file the deploy writes, so the declaration
+    // travels with the deployment rather than living in a shell default.
+    expect(unit).toMatch(/^EnvironmentFile=-\/etc\/wfm-observations-check\.env$/m);
+  });
+
+  test('the deploy declares the preservation mode and releases the receipt dependency for it', () => {
+    expect(deploy).toMatch(/PRESERVATION_MODE="\$\{PRESERVATION_MODE:-external-backup\}"/);
+    expect(deploy).toContain('/etc/wfm-observations-check.env');
+    expect(deploy, 'the declaration must actually be written').toMatch(/^OBSERVATIONS_PRESERVATION=\$PRESERVATION_MODE$/m);
+    // external-backup cannot see the host-level backups, so the check must not
+    // wait on or pull the archive host's receipt in that mode. A drop-in resets
+    // the unit's own Wants/After, which stay in the unit for the archive mode.
+    expect(deploy).toMatch(/wfm-observations-check\.service\.d\/preservation\.conf/);
+    expect(deploy).toMatch(/^Wants=$/m);
+    expect(deploy).toMatch(/^After=$/m);
+    expect(deploy).toMatch(/if \[ "\$PRESERVATION_MODE" = on-box-archive \]; then/);
+    // The on-box branch is kept, not replaced: the archive machinery is intact
+    // and selectable, it is simply not what this deployment uses.
+    expect(deploy).toMatch(/systemctl enable --now wfm-archive-receipt-pull\.timer wfm-observations-check\.timer/);
+  });
+
+  test('the backup pull-and-verify script hard-codes no node, vmid or local path', () => {
+    const backup = readFileSync(backupScript, 'utf8');
+    expect(backup).toMatch(/HOST="\$\{HOST:-\}"/);
+    expect(backup).toMatch(/VMID="\$\{VMID:-\}"/);
+    expect(backup).toMatch(/DUMP_DIR="\$\{DUMP_DIR:-\/var\/lib\/vz\/dump\}"/);
+    expect(backup).toMatch(/DEST="\$\{DEST:-\$HOME\/backups\/tennoworth\}"/);
+    expect(backup).toMatch(/KEEP="\$\{KEEP:-30\}"/);
+    // A sandboxed session cannot read the system ssh config, so SSH and SCP have
+    // to carry their own options and stay unquoted at the call sites.
+    expect(backup).toMatch(/SSH="\$\{SSH:-ssh\}"/);
+    expect(backup).toMatch(/SCP="\$\{SCP:-scp\}"/);
+    expect(backup).toMatch(/\$SSH \$SSH_OPTS "\$HOST"/);
+    expect(backup).toMatch(/\$SCP \$SCP_OPTS/);
+    // The whole point is receipt-side verification, not a trusted copy.
+    expect(backup).toMatch(/zstd -t/);
+    expect(backup).toMatch(/tar --zstd -tf/);
+    expect(backup).toMatch(/"kind":"run"/);
+    expect(backup).toMatch(/--dry-run/);
   });
 });
 
@@ -1025,7 +1091,12 @@ function corpusFixture() {
     ...extraArgs,
   ], {
     encoding: 'utf8',
-    env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_JOURNAL: journal, ...env },
+    // The unit gets the mode from EnvironmentFile=/etc/wfm-observations-check.env,
+    // which the deploy writes; a test overrides it the same way a redeploy would.
+    env: {
+      ...process.env, PATH: `${bin}:${process.env.PATH}`,
+      OBSERVATIONS_PRESERVATION: 'on-box-archive', FIXTURE_JOURNAL: journal, ...env,
+    },
   });
   const report = () => JSON.parse(readFileSync(reportPath, 'utf8'));
   const observationPath = (name: string) => join(box, 'observations', name);
@@ -1399,6 +1470,65 @@ describe.skipIf(process.platform === 'win32')('observation corpus readiness', ()
     expect(f.report().service.sweep_log).toBeNull();
     expect(f.report().errors.join('\n')).toContain('does not pair with any observation log');
   });
+
+  test('external-backup is ready with no receipt and says preservation is not verified here', () => {
+    // The corpus is protected by host-level backups of the whole container,
+    // which this check cannot see. Requiring a receipt it knows nothing about
+    // would report a preserved corpus as broken; claiming the backup is verified
+    // would report an unverified one as safe. The report has to say which.
+    const f = corpusFixture();
+    const missing = join(f.root, 'no-receipt.jsonl');
+    const result = f.run(
+      { OBSERVATIONS_PRESERVATION: 'external-backup' },
+      ['--archive-receipt', missing],
+    );
+    expect(result.status, result.stderr).toBe(0);
+    const report = f.report();
+    expect(report.ready).toBe(true);
+    expect(report.preservation.mode).toBe('external-backup');
+    expect(report.preservation.status).toBe('declared-external');
+    expect(report.preservation.independently_verified_from_this_host).toBe(false);
+    expect(report.archive.status).toBe('not-applicable');
+    expect(report.errors).toEqual([]);
+    expect(report.errors.join('\n')).not.toMatch(/preserv/i);
+  });
+
+  test('the --preservation flag overrides the mode the unit declared', () => {
+    const f = corpusFixture();
+    const result = f.run({}, ['--preservation', 'external-backup', '--archive-receipt', join(f.root, 'gone.jsonl')]);
+    expect(result.status, result.stderr).toBe(0);
+    expect(f.report().preservation.mode).toBe('external-backup');
+  });
+
+  test('on-box-archive still requires a fresh receipt', () => {
+    const f = corpusFixture();
+    const result = f.run({}, ['--archive-receipt', join(f.root, 'does-not-exist.jsonl')]);
+    expect(result.status).not.toBe(0);
+    expect(f.report().preservation.mode).toBe('on-box-archive');
+    expect(f.report().archive.status).toBe('missing');
+    expect(f.report().errors.join('\n')).toContain('not being preserved');
+  });
+
+  test('an undeclared preservation mode is not ready', () => {
+    // No mode is not the same as the friendly mode. The report has to say the
+    // declaration is missing instead of leaving preservation unmentioned.
+    const f = corpusFixture();
+    const result = f.run({ OBSERVATIONS_PRESERVATION: '' });
+    expect(result.status, result.stderr).not.toBe(0);
+    const report = f.report();
+    expect(report.ready).toBe(false);
+    expect(report.preservation.mode).toBeNull();
+    expect(report.preservation.status).toBe('undeclared');
+    expect(report.errors.join('\n')).toContain('preservation mode not declared');
+  });
+
+  test('an unrecognised preservation mode is not ready', () => {
+    const f = corpusFixture();
+    const result = f.run({ OBSERVATIONS_PRESERVATION: 'tape-drive' });
+    expect(result.status, result.stderr).not.toBe(0);
+    expect(f.report().preservation.status).toBe('undeclared');
+    expect(f.report().errors.join('\n')).toContain("unrecognised preservation mode 'tape-drive'");
+  });
 });
 
 describe.skipIf(process.platform === 'win32')('observation archive', () => {
@@ -1684,3 +1814,263 @@ describe.skipIf(process.platform === 'win32')('archive host installation', () =>
 });
 
 
+
+// ---- LXC backup pull-and-verify --------------------------------------------
+//
+// The real tar and zstd run here. The point of the script is that it proves the
+// archive it stored is listable and its corpus readable; a stub would only prove
+// that it called a stub. ssh and scp run locally against a fixture dump
+// directory, in the same shape as the archive tests above.
+
+function tarZstd(staging: string, outDir: string, name: string, members: Array<{ path: string; body: string }>): string {
+  const stage = join(staging, name);
+  for (const member of members) write(join(stage, member.path), member.body);
+  const out = join(outDir, name);
+  const built = spawnSync('tar', ['--zstd', '-cf', out, '-C', stage, '.'], { encoding: 'utf8' });
+  expect(built.status, built.stderr).toBe(0);
+  return out;
+}
+
+const CORPUS_HEADER = '{"kind":"run","format":1,"items":3800,"workers":2}\n';
+
+describe.skipIf(process.platform === 'win32')('lxc backup pull and verify', () => {
+  function fixture() {
+    const root = mkdtempSync(join(tmpdir(), 'lxc-backup-')); directories.push(root);
+    const dump = join(root, 'dump'), dest = join(root, 'dest'), bin = join(root, 'bin'), staging = join(root, 'staging');
+    for (const path of [dump, dest, bin, staging]) mkdirSync(path);
+    // ssh runs the remote command locally, so the script's own listing and
+    // stat calls run unmodified against the fixture. scp copies locally and
+    // records that it ran, which is how the dry run proves it fetched nothing.
+    write(join(bin, 'fake-ssh'), [
+      '#!/bin/sh',
+      'while [ $# -gt 0 ]; do',
+      '  case "$1" in',
+      '    -o) shift 2;;',
+      '    -*) shift;;',
+      '    *) break;;',
+      '  esac',
+      'done',
+      'host="$1"; shift',
+      'exec sh -c "$*"',
+      '',
+    ].join('\n'));
+    write(join(bin, 'fake-scp'), [
+      '#!/bin/sh',
+      'printf "%s\\n" "$*" >> "$FIXTURE_SCP_CALLS"',
+      'while [ $# -gt 0 ]; do',
+      '  case "$1" in',
+      '    -o) shift 2;;',
+      '    -*) shift;;',
+      '    *) break;;',
+      '  esac',
+      'done',
+      'src="$1"; dest="$2"',
+      'cp "${src#*:}" "$dest"',
+      '',
+    ].join('\n'));
+    chmodSync(join(bin, 'fake-ssh'), 0o755);
+    chmodSync(join(bin, 'fake-scp'), 0o755);
+    const scpCalls = join(root, 'scp.calls');
+    writeFileSync(scpCalls, '');
+
+    // One sweep's JSONL in the shape the writer emits, inside the container
+    // path a vzdump archive stores it under.
+    const sweep = (name: string, header = CORPUS_HEADER) => ({
+      path: `srv/wfm/observations/${name}`,
+      body: header + '{"kind":"item","slug":"x","outcome":"kept"}\n{"kind":"summary","scanned":1,"kept":1}\n',
+    });
+    const archive = (name: string, options: { logs?: string[]; header?: string; mtime?: number } = {}) => {
+      const logs = options.logs ?? ['sweep-2026-09-17T01-04-38Z.jsonl'];
+      const path = tarZstd(staging, dump, name, logs.map(log => sweep(log, options.header)));
+      utimesSync(path, options.mtime ?? 1000, options.mtime ?? 1000);
+      return path;
+    };
+    const sidecar = (name: string) => writeFileSync(join(dump, name.replace(/\.tar\.zst$/, '.log')), 'INFO: Backup finished\n');
+    const manifestPath = join(dest, 'manifest.jsonl');
+    const run = (args: string[] = [], env: Record<string, string> = {}) => spawnSync('bash', [backupScript, ...args], {
+      encoding: 'utf8',
+      env: {
+        ...process.env, HOST: 'fixture-node', VMID: '110', DUMP_DIR: dump, DEST: dest,
+        SSH: join(bin, 'fake-ssh'), SCP: join(bin, 'fake-scp'),
+        FIXTURE_SCP_CALLS: scpCalls, ...env,
+      },
+    });
+    return {
+      root, dump, dest, staging, sidecar, archive, run, manifestPath,
+      manifest: () => readFileSync(manifestPath, 'utf8'),
+    };
+  }
+
+  test('a nightly archive is copied and proven restorable, and the receipt records it', () => {
+    const f = fixture();
+    const name = 'vzdump-lxc-110-2026_09_17-03_00_02.tar.zst';
+    const logs = [
+      'sweep-2026-09-15T01-04-38Z.jsonl',
+      'sweep-2026-09-16T01-04-38Z.jsonl',
+      'sweep-2026-09-17T01-04-38Z.jsonl',
+    ];
+    f.archive(name, { mtime: 1000, logs });
+    f.sidecar(name);
+    const result = f.run();
+    expect(result.status, result.stderr).toBe(0);
+    const local = join(f.dest, name);
+    expect(existsSync(local), 'the archive must be copied').toBe(true);
+    expect(existsSync(join(f.dest, name.replace(/\.tar\.zst$/, '.log'))), 'and its log').toBe(true);
+    const rows = f.manifest().trimEnd().split('\n').map(line => JSON.parse(line));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].name).toBe(name);
+    expect(rows[0].bytes).toBe(readFileSync(local).length);
+    expect(rows[0].sha256).toBe(createHash('sha256').update(readFileSync(local)).digest('hex'));
+    expect(rows[0].verified_at).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+    expect(rows[0].corpus_logs).toBe(3);
+    expect(rows[0].newest_corpus_log).toBe('srv/wfm/observations/sweep-2026-09-17T01-04-38Z.jsonl');
+  });
+
+  test('re-running with the same newest archive downloads nothing and repeats nothing', () => {
+    const f = fixture();
+    const name = 'vzdump-lxc-110-2026_09_17-03_00_02.tar.zst';
+    f.archive(name, { mtime: 1000 });
+    expect(f.run().status).toBe(0);
+    const before = f.manifest();
+    writeFileSync(join(f.root, 'scp.calls'), '');
+    const second = f.run();
+    expect(second.status, second.stderr).toBe(0);
+    expect(second.stdout).toContain('already verified');
+    expect(readFileSync(join(f.root, 'scp.calls'), 'utf8'), 'nothing may be re-fetched').toBe('');
+    expect(f.manifest()).toBe(before);
+  });
+
+  test('--dry-run reports the archive without fetching it', () => {
+    const f = fixture();
+    const name = 'vzdump-lxc-110-2026_09_17-03_00_02.tar.zst';
+    f.archive(name, { mtime: 1000 });
+    const result = f.run(['--dry-run']);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain(name);
+    expect(readFileSync(join(f.root, 'scp.calls'), 'utf8')).toBe('');
+    expect(readdirSync(f.dest)).toEqual([]);
+    expect(existsSync(f.manifestPath)).toBe(false);
+  });
+
+  // A corrupt archive must fail loudly and must not touch what was already
+  // proven: the .part download is verified before it can replace a good copy.
+  const corruptions: Array<{ label: string; message: RegExp; make: (f: ReturnType<typeof fixture>, name: string) => void }> = [
+    {
+      label: 'a body that is not a zstd stream',
+      message: /zstd/,
+      make: (f, name) => {
+        const path = join(f.dump, name);
+        writeFileSync(path, 'this is not a zstd stream');
+        utimesSync(path, 2000, 2000);
+      },
+    },
+    {
+      label: 'a zstd stream that is not a tar archive',
+      message: /tar/,
+      make: (f, name) => {
+        const path = join(f.dump, name);
+        spawnSync('zstd', ['-q', '-f', '-o', path], { input: Buffer.from('this is not a tar archive') });
+        utimesSync(path, 2000, 2000);
+      },
+    },
+    {
+      label: 'a corpus log whose first record is not a run header',
+      message: /run header/,
+      make: (f, name) => f.archive(name, { header: '{"kind":"item"}\n', mtime: 2000 }),
+    },
+    {
+      label: 'a run header that reports no items',
+      message: /items/,
+      make: (f, name) => f.archive(name, { header: '{"kind":"run","format":1,"items":0}\n', mtime: 2000 }),
+    },
+  ];
+
+  for (const corruption of corruptions) {
+    test(`a new archive with ${corruption.label} is not recorded as good`, () => {
+      const f = fixture();
+      const good = 'vzdump-lxc-110-2026_09_17-03_00_02.tar.zst';
+      f.archive(good, { mtime: 1000 });
+      expect(f.run().status).toBe(0);
+      const before = f.manifest();
+      const corrupt = 'vzdump-lxc-110-2026_09_18-03_00_02.tar.zst';
+      corruption.make(f, corrupt);
+      const result = f.run();
+      expect(result.status, 'a corrupt archive must not pass').not.toBe(0);
+      expect(result.stderr).toMatch(corruption.message);
+      expect(f.manifest(), 'the previous receipt must survive').toBe(before);
+      expect(existsSync(join(f.dest, good)), 'the proven archive must survive').toBe(true);
+      expect(existsSync(join(f.dest, corrupt)), 'the failed copy must not land').toBe(false);
+    });
+  }
+
+  test('a transfer that cannot reach the node records nothing', () => {
+    const f = fixture();
+    f.archive('vzdump-lxc-110-2026_09_17-03_00_02.tar.zst', { mtime: 1000 });
+    const result = f.run([], { SCP: join(f.root, 'no-such-scp') });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('could not fetch');
+    expect(existsSync(f.manifestPath)).toBe(false);
+    expect(readdirSync(f.dest)).toEqual([]);
+  });
+
+  test('a corrupted re-fetch of the same name leaves the proven copy and receipt in place', () => {
+    // The transfer verifies before it replaces anything: a bad copy of an
+    // archive already held must not overwrite the bytes that were proven.
+    const f = fixture();
+    const name = 'vzdump-lxc-110-2026_09_17-03_00_02.tar.zst';
+    f.archive(name, { mtime: 1000 });
+    expect(f.run().status).toBe(0);
+    const before = f.manifest();
+    const original = readFileSync(join(f.dest, name));
+    writeFileSync(join(f.dump, name), 'truncated');
+    utimesSync(join(f.dump, name), 3000, 3000);
+    const result = f.run();
+    expect(result.status).not.toBe(0);
+    expect(f.manifest()).toBe(before);
+    expect(readFileSync(join(f.dest, name)).equals(original), 'the proven archive must be byte-for-byte intact').toBe(true);
+  });
+
+  test('a dump directory with no matching archive is a refusal, not an empty success', () => {
+    const f = fixture();
+    const result = f.run();
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('no vzdump');
+    expect(existsSync(f.dest)).toBe(true);
+    expect(readdirSync(f.dest)).toEqual([]);
+  });
+
+  test('rotation keeps the newest KEEP archives and drops their receipts with them', () => {
+    const f = fixture();
+    const names = ['2026_09_14', '2026_09_15', '2026_09_16', '2026_09_17']
+      .map(stamp => `vzdump-lxc-110-${stamp}-03_00_02.tar.zst`);
+    for (const [index, name] of names.entries()) {
+      f.archive(name, { mtime: 1000 + index });
+      f.sidecar(name);
+      expect(f.run([], { KEEP: '2' }).status).toBe(0);
+    }
+    expect(readdirSync(f.dest).filter(entry => entry.endsWith('.tar.zst')).sort()).toEqual([names[2]!, names[3]!]);
+    expect(readdirSync(f.dest).filter(entry => entry.endsWith('.log')).sort())
+      .toEqual([names[2]!.replace(/\.tar\.zst$/, '.log'), names[3]!.replace(/\.tar\.zst$/, '.log')]);
+    const rows = f.manifest().trimEnd().split('\n').map(line => JSON.parse(line));
+    expect(rows.map(row => row.name).sort()).toEqual([names[2]!, names[3]!]);
+  });
+
+  test('a KEEP below one is refused rather than deleting what was just proven', () => {
+    const f = fixture();
+    f.archive('vzdump-lxc-110-2026_09_17-03_00_02.tar.zst', { mtime: 1000 });
+    const result = f.run([], { KEEP: '0' });
+    expect(result.status).not.toBe(0);
+    expect(result.stderr).toContain('KEEP');
+    expect(readdirSync(f.dest)).toEqual([]);
+  });
+
+  test('a missing HOST or VMID aborts before anything is fetched', () => {
+    const f = fixture();
+    f.archive('vzdump-lxc-110-2026_09_17-03_00_02.tar.zst', { mtime: 1000 });
+    for (const env of [{ HOST: '' }, { VMID: '' }]) {
+      const result = f.run([], env);
+      expect(result.status).not.toBe(0);
+      expect(readFileSync(join(f.root, 'scp.calls'), 'utf8')).toBe('');
+    }
+  });
+});
