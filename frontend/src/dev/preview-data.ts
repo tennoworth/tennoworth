@@ -74,6 +74,7 @@ export function createPreview(scenario: string) {
       id: 'sample-comp', price: 60, buyout_price: 60, starting_price: 60, top_bid: null,
       is_direct_sell: true, owner: 'Sample seller', owner_status: 'online', mod_rank: 0,
       mastery_level: 12, re_rolls: 2, polarity: 'madurai', name: 'Sample riven', platform: 'pc',
+      created: '2026-07-01T12:00:00.000+00:00', updated: '2026-09-01T12:00:00.000+00:00',
       attributes: [{ url_name: 'critical_damage', value: 88, positive: true }],
     }],
     wfm_auth_status: { logged_in: scenario !== 'logged-out', unlocked: scenario !== 'logged-out' },

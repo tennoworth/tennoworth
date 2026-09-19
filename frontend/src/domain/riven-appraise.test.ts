@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   appraise,
+  describeComps,
   distributionOf,
   judgeOffer,
   MIN_POPULATION,
@@ -11,6 +12,7 @@ import {
   rerollRead,
   skewOf,
 } from './riven-appraise';
+import type { RivenAuction } from '../contracts/desktop';
 import type { RivenStatTier } from '../contracts/data';
 
 function tier(over: Partial<RivenStatTier>): RivenStatTier {
@@ -218,5 +220,59 @@ describe('appraise', () => {
     const a = appraise(0, tier({}), 0);
     expect(a.placement).toBeNull();
     expect(a.reroll).toBeNull();
+  });
+});
+
+function comp(over: Partial<RivenAuction>): RivenAuction {
+  return {
+    id: 'a', price: 100, buyout_price: 100, starting_price: 100, top_bid: null,
+    is_direct_sell: true, owner: 'Someone', owner_status: 'online', mod_rank: 0,
+    mastery_level: 10, re_rolls: 0, polarity: null, created: null, updated: null,
+    name: null, platform: 'pc', attributes: [],
+    ...over,
+  };
+}
+
+describe('describeComps', () => {
+  const now = Date.parse('2026-09-19T00:00:00Z');
+
+  it('describes an empty sample without inventing ages or a verdict', () => {
+    expect(describeComps([], now)).toEqual({
+      size: 0, dated: 0, oldestAskDays: null, newestAskDays: null,
+      status: { online: 0, ingame: 0, offline: 0, unknown: 0 },
+    });
+  });
+
+  it('reports the span of dated asks and how many carry a usable instant', () => {
+    const read = describeComps([
+      comp({ id: 'old', created: '2026-09-09T00:00:00Z' }),
+      comp({ id: 'new', created: '2026-09-16T00:00:00Z' }),
+      comp({ id: 'undated', created: null }),
+    ], now);
+    expect(read.size).toBe(3);
+    expect(read.dated).toBe(2);
+    expect(read.oldestAskDays).toBe(10);
+    expect(read.newestAskDays).toBe(3);
+  });
+
+  it('keeps future and malformed instants out of the age span', () => {
+    const read = describeComps([
+      comp({ created: '2026-09-25T00:00:00Z' }),
+      comp({ created: 'not a date' }),
+      comp({ created: '2026-09-18T00:00:00Z' }),
+    ], now);
+    expect(read.dated).toBe(1);
+    expect(read.oldestAskDays).toBe(1);
+  });
+
+  it('counts an unrecognized owner status as unknown, never offline', () => {
+    const read = describeComps([
+      comp({ owner_status: 'online' }),
+      comp({ owner_status: 'ingame' }),
+      comp({ owner_status: 'offline' }),
+      comp({ owner_status: 'busy' }),
+      comp({ owner_status: null }),
+    ], now);
+    expect(read.status).toEqual({ online: 1, ingame: 1, offline: 1, unknown: 2 });
   });
 });

@@ -16,6 +16,7 @@ import { type RivenAuction } from '../../contracts/desktop';
     rivenSimilarity,
     type OwnedRiven,
   } from '../../domain/rivens';
+  import { describeComps } from '../../domain/riven-appraise';
   import type { Market, RivenAttribute } from '../../contracts/data';
 
   interface Props {
@@ -61,8 +62,26 @@ import { type RivenAuction } from '../../contracts/desktop';
     return {
       price: band.median > 0 ? band.median.toFixed(0) + 'p' : '-',
       range: band.min > 0 || band.max > 0 ? band.min.toFixed(0) + '–' + band.max.toFixed(0) + 'p' : '',
-      note: (usedOther ? 'closest band · ' : '') + (rerolled ? 'rolled' : 'unrolled') + ' · n=' + band.pop,
+      note: (usedOther ? 'closest band · ' : '') + (rerolled ? 'rolled' : 'unrolled') + ' · DE sold n=' + band.pop,
     };
+  }
+
+  async function loadComps(slug: string, force: boolean): Promise<void> {
+    if (compsBusy === slug) return;
+    if (!force && compsCache.has(slug)) return;
+    compsBusy = slug;
+    compsError = new Map(compsError).set(slug, '');
+    try {
+      const auctions = await desktopRivenComps(slug);
+      compsCache = new Map(compsCache).set(slug, auctions);
+      if (auctions.length === 0) {
+        compsError = new Map(compsError).set(slug, 'No open auctions for this weapon right now.');
+      }
+    } catch (e) {
+      compsError = new Map(compsError).set(slug, e instanceof DesktopCmdError ? e.message : humanError(e));
+    } finally {
+      compsBusy = null;
+    }
   }
 
   async function showComps(r: OwnedRiven): Promise<void> {
@@ -72,22 +91,36 @@ import { type RivenAuction } from '../../contracts/desktop';
       return;
     }
     openSlug = r.slug;
-    if (compsCache.has(r.slug) || compsBusy === r.slug) return;
-    compsBusy = r.slug;
-    compsError = new Map(compsError).set(r.slug, '');
-    try {
-      const auctions = await desktopRivenComps(r.slug);
-      const next = new Map(compsCache);
-      next.set(r.slug, auctions);
-      compsCache = next;
-      if (auctions.length === 0) {
-        compsError = new Map(compsError).set(r.slug, 'No open auctions for this weapon right now.');
-      }
-    } catch (e) {
-      compsError = new Map(compsError).set(r.slug, e instanceof DesktopCmdError ? e.message : humanError(e));
-    } finally {
-      compsBusy = null;
-    }
+    await loadComps(r.slug, false);
+  }
+
+  /** Whole days since a listing instant; null when it is missing, malformed or
+   *  in the future - an unknown age is never rendered as a fresh listing. */
+  function listedDaysAgo(iso: string | null): number | null {
+    const at = Date.parse(iso ?? '');
+    if (!Number.isFinite(at)) return null;
+    const days = Math.floor((Date.now() - at) / 86_400_000);
+    return days < 0 ? null : days;
+  }
+
+  /** What this sample is, stated as facts. Listing age is not time-to-sale, so
+   *  the line describes the sample and stops there. */
+  function sampleLine(slug: string): string {
+    const read = describeComps(compsCache.get(slug) ?? [], Date.now());
+    const parts = [`${read.size} cheapest live ask${read.size === 1 ? '' : 's'} in this sample`];
+    parts.push(read.dated === 0
+      ? 'no listing dates in this response'
+      : `${read.dated} dated · oldest ${read.oldestAskDays} d, newest ${read.newestAskDays} d`);
+    const { online, ingame, offline, unknown } = read.status;
+    const sellers = [
+      online ? `${online} online` : '',
+      ingame ? `${ingame} in game` : '',
+      offline ? `${offline} offline` : '',
+      unknown ? `${unknown} status unknown` : '',
+    ].filter(Boolean);
+    if (sellers.length) parts.push(`sellers ${sellers.join(', ')}`);
+    parts.push('listing age is not time-to-sale');
+    return parts.join(' · ');
   }
 
   function statLines(r: OwnedRiven): string[] {
@@ -205,6 +238,15 @@ import { type RivenAuction } from '../../contracts/desktop';
                     <div class="muted">No comps to show.</div>
                   {:else}
                     <div class="comps">
+                      <div class="comps-sample">
+                        <span class="muted small" data-testid="comps-sample">{sampleLine(r.slug)}</span>
+                        <button
+                          class="btn ghost xs"
+                          onclick={() => openSlug && loadComps(openSlug, true)}
+                          disabled={compsBusy !== null}
+                          title="Ask warframe.market again for the cheapest auctions on this weapon."
+                        >Refresh sample</button>
+                      </div>
                       {#each compsCache.get(r.slug) ?? [] as a (a.id)}
                         {@const similarity = rivenSimilarity(r, a.attributes, attrs)}
                         <div class="comp">
@@ -224,6 +266,7 @@ import { type RivenAuction } from '../../contracts/desktop';
                             {#if a.name}<span class="riven-name" title="The riven's rolled name">{a.name}</span>{/if}
                             <span>MR {a.mastery_level}</span>
                             <span>{a.re_rolls} reroll{a.re_rolls === 1 ? '' : 's'}</span>
+                            {#if listedDaysAgo(a.created) != null}<span>listed {listedDaysAgo(a.created)} d ago</span>{/if}
                             {#if a.mod_rank > 0}<span>rank {a.mod_rank}</span>{/if}
                             {#if a.polarity}<span>{a.polarity}</span>{/if}
                           </div>
@@ -270,6 +313,7 @@ import { type RivenAuction } from '../../contracts/desktop';
   /* Comps expand as an inset drawer under the row, on the panel-2 ground. */
   .comps-row td { background: var(--panel-2); height: auto; text-align: left; }
   .comps { display: flex; flex-direction: column; gap: var(--s1); max-height: 320px; overflow: auto; padding: var(--s1) 0; }
+  .comps-sample { display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap; }
   .comp { border: 1px solid var(--border); border-radius: var(--radius-ctl); padding: var(--s2); display: flex; flex-direction: column; gap: 4px; background: var(--panel); }
   .comp-head { display: flex; align-items: baseline; gap: var(--s2); }
   .comp .price { font-weight: 700; font-size: var(--text-body); }
