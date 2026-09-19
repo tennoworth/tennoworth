@@ -189,7 +189,9 @@ test('missing allocation keeps known estimates while unavailable sets and scrap 
   await expect(page.getByRole('group', { name: 'Sell summary' })).toContainText('Unavailable');
   await page.getByRole('button', { name: /^Set picks/ }).click();
   await expect(page.getByText('Set recommendations will appear once quantities are available.')).toBeVisible();
-  await page.getByRole('button', { name: 'Baro', exact: true }).click();
+  // The nav item's accessible name gains a "here" badge while Baro is
+  // visiting, so match the label rather than the whole name.
+  await page.getByRole('button', { name: /^Baro\b/ }).click();
   await expect(page.getByText(/Scrap quantities unavailable/)).toBeVisible();
   await expect(page.getByText(/Scrapping every spare/)).toHaveCount(0);
 });
