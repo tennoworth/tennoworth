@@ -62,6 +62,7 @@ const AUCTIONS = [
     is_direct_sell: true, owner: 'Eleven041110', owner_status: 'offline',
     mod_rank: 0, mastery_level: 12, re_rolls: 0, polarity: 'madurai',
     name: 'arma-purado', platform: 'pc',
+    created: '2026-08-01T00:00:00.000+00:00', updated: '2026-08-02T00:00:00.000+00:00',
     attributes: [
       { url_name: 'critical_damage', value: 88, positive: true },
       { url_name: 'status_duration', value: 40, positive: false },
@@ -71,7 +72,7 @@ const AUCTIONS = [
     id: 'a2', price: 60, buyout_price: null, starting_price: 60, top_bid: 45,
     is_direct_sell: false, owner: 'Someone', owner_status: 'online',
     mod_rank: 0, mastery_level: 15, re_rolls: 5, polarity: 'vazarin',
-    name: null, platform: 'pc', attributes: [],
+    name: null, platform: 'pc', created: null, updated: null, attributes: [],
   },
 ];
 
@@ -97,7 +98,7 @@ describe('RivensPanel', () => {
     expect(screen.getByText('-Status Duration')).toBeTruthy();
     // DE weekly band: rerolled → rolled tier median 100p, n=12
     expect(screen.getByText('100p')).toBeTruthy();
-    expect(screen.getByText(/rolled · n=12/)).toBeTruthy();
+    expect(screen.getByText(/rolled · DE sold n=12/)).toBeTruthy();
     // disposition move from the change log
     expect(screen.getByText('▲ 5%')).toBeTruthy();
     // veiled riven renders without a weapon
@@ -127,6 +128,29 @@ describe('RivensPanel', () => {
     expect(screen.getByText('100% stat match')).toBeTruthy();
     expect(screen.getByText('5 rerolls')).toBeTruthy();
     expect(screen.getByText(/Eleven041110/)).toBeTruthy();
+  });
+
+  it('describes the comps sample as a sample, and can ask for a fresh one', async () => {
+    const invoke = makeInvoke();
+    installTauri(invoke, undefined);
+    const rivens = resolveRivens(RAW_RIVENS, market);
+    render(RivensPanel, { props: { market, rivens } });
+
+    await fireEvent.click((await screen.findAllByRole('button', { name: 'Comps' }))[0]);
+    const sample = await screen.findByTestId('comps-sample');
+    expect(sample.textContent).toContain('2 cheapest live asks');
+    expect(sample.textContent).toContain('1 dated');
+    expect(sample.textContent).toContain('1 online');
+    expect(sample.textContent).toContain('1 offline');
+    expect(sample.textContent).toContain('listing age is not time-to-sale');
+    // The fixture's second auction carries no instant, so its age is unknown
+    // rather than zero.
+    expect(sample.textContent).not.toContain('no listing dates');
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Refresh sample' }));
+    await waitFor(() => expect(
+      invoke.mock.calls.filter((call) => call[0] === 'riven_comps').length,
+    ).toBe(2));
   });
 
   it('surfaces a comps fetch failure inline without crashing', async () => {

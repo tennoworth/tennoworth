@@ -42,6 +42,11 @@ pub struct RivenAuction {
     pub mastery_level: u32,
     pub re_rolls: u32,
     pub polarity: Option<String>,
+    /// WFM's own instants for the auction, kept verbatim. `None` when WFM omits
+    /// or malforms them: an unknown age must never render as a fresh listing,
+    /// and an update is not evidence that the seller is reachable.
+    pub created: Option<String>,
+    pub updated: Option<String>,
     pub name: Option<String>,
     pub platform: Option<String>,
     pub attributes: Vec<RivenAuctionAttribute>,
@@ -138,6 +143,8 @@ pub fn parse_auctions(body: &serde_json::Value) -> Result<Vec<RivenAuction>> {
                 .and_then(|i| i.get("polarity"))
                 .and_then(|v| v.as_str())
                 .map(String::from),
+            created: a.get("created").and_then(|v| v.as_str()).map(String::from),
+            updated: a.get("updated").and_then(|v| v.as_str()).map(String::from),
             name: item
                 .and_then(|i| i.get("name"))
                 .and_then(|v| v.as_str())
@@ -240,4 +247,33 @@ mod tests {
         assert!(parse_auctions(&body).is_err());
     }
 
+    #[test]
+    fn auction_instants_are_kept_verbatim_and_unusable_ones_stay_unknown() {
+        let mut stamped = auction("dated", 40, false);
+        stamped["created"] = json!("2026-09-15T20:38:13.000+00:00");
+        stamped["updated"] = json!("2026-09-16T01:02:03.000+00:00");
+        let mut wrong_type = auction("wrong", 20, false);
+        wrong_type["created"] = json!(42);
+        wrong_type["updated"] = json!(null);
+        let body = json!({"payload": {"auctions": [
+            stamped,
+            wrong_type,
+            auction("absent", 10, false)
+        ]}});
+
+        let got = parse_auctions(&body).unwrap();
+        let by_id = |id: &str| got.iter().find(|a| a.id == id).unwrap();
+        assert_eq!(
+            by_id("dated").created.as_deref(),
+            Some("2026-09-15T20:38:13.000+00:00")
+        );
+        assert_eq!(
+            by_id("dated").updated.as_deref(),
+            Some("2026-09-16T01:02:03.000+00:00")
+        );
+        assert_eq!(by_id("wrong").created, None, "42 is not an instant");
+        assert_eq!(by_id("wrong").updated, None);
+        assert_eq!(by_id("absent").created, None);
+        assert_eq!(by_id("absent").updated, None);
+    }
 }

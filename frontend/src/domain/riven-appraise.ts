@@ -20,6 +20,7 @@
 // how skewed the market is, and what rerolling costs. The price still comes
 // from the USER - an offer they received, or their own estimate.
 
+import type { RivenAuction } from '../contracts/desktop';
 import type { RivenStatTier } from '../contracts/data';
 
 /** Below this many observed trades the distribution is not a distribution.
@@ -248,5 +249,57 @@ export function appraise(
     reroll: rerollRead(price, dist, rerolls),
     skewed,
     caveats,
+  };
+}
+
+/** Owner-status buckets. Anything unrecognized stays `unknown` rather than
+ *  being folded into `offline`, which would be a claim WFM did not make. */
+export interface CompsStatusCounts {
+  online: number;
+  ingame: number;
+  offline: number;
+  unknown: number;
+}
+
+/**
+ * What the comps sample on screen actually is.
+ *
+ * The sample is the cheapest eligible auctions for one weapon, not
+ * attribute-matched comparables and not a record of completed sales. Listing
+ * age is not time-to-sale, and an update is not evidence that a seller is
+ * reachable - so this describes the sample and stops there: no verdict, no
+ * liquidity score, no "how fast this sells".
+ */
+export interface CompsSampleRead {
+  size: number;
+  dated: number;
+  oldestAskDays: number | null;
+  newestAskDays: number | null;
+  status: CompsStatusCounts;
+}
+
+export function describeComps(
+  comps: readonly RivenAuction[],
+  nowMs: number,
+): CompsSampleRead {
+  const status: CompsStatusCounts = { online: 0, ingame: 0, offline: 0, unknown: 0 };
+  const ages: number[] = [];
+  for (const comp of comps) {
+    const state = comp.owner_status;
+    if (state === 'online' || state === 'ingame' || state === 'offline') status[state] += 1;
+    else status.unknown += 1;
+
+    const created = Date.parse(comp.created ?? '');
+    if (!Number.isFinite(created) || !Number.isFinite(nowMs)) continue;
+    const days = Math.floor((nowMs - created) / 86_400_000);
+    if (days < 0) continue;
+    ages.push(days);
+  }
+  return {
+    size: comps.length,
+    dated: ages.length,
+    oldestAskDays: ages.length ? Math.max(...ages) : null,
+    newestAskDays: ages.length ? Math.min(...ages) : null,
+    status,
   };
 }
