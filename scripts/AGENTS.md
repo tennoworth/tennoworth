@@ -23,6 +23,12 @@ for required checks and ../docs/releasing.md for release preparation.
   the root router. Run it from the repository root. It reads the git index, so a
   new instruction file must be staged before it is visible here, and it
   deliberately does not check backticked paths.
+- `check-public-surface.ts` - the gate for what may be published. It fails when
+  maintainer-local material (research, plans, audits, host runbooks) is tracked
+  despite the ignore rules, and when a tracked document under `docs/` is
+  referenced from nowhere outside `docs/`. Run it from the repository root; it
+  reads the git index only, so it needs no install step and runs on
+  documentation-only changes. The rule it enforces is stated in ../AGENTS.md.
 - `archive-observations.sh` - copies the host's observation logs to an off-box
   destination, gzipped, with a manifest that records each file's uncompressed
   and compressed hashes and the deployment observed at archive time, and a
