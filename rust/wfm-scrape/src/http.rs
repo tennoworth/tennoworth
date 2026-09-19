@@ -7,6 +7,7 @@
 //! retry loop can reproduce that behavior exactly, and stays fixture-driven so
 //! backoff, pacing, and exhaustion are all testable with zero real sleeps.
 
+use std::sync::Mutex;
 use std::time::Duration;
 
 use serde_json::Value;
@@ -14,12 +15,24 @@ use serde_json::Value;
 /// Number of attempts per request - Python's `fetch_json(retries=3)`.
 pub const RETRIES: u32 = 3;
 
+/// Longest single cooldown the sweep waits out instead of abandoning the run. A
+/// `Retry-After` at or below this is WFM saying when to come back; waiting keeps
+/// a two-hour tick from being lost to a momentary throttle.
+const MAX_COOLDOWN_WAIT_MS: u64 = 5_000;
+/// Total patience per sweep, and how many separate waits it may be spent on. A
+/// client that keeps getting throttled wants to send less, not to wait longer.
+const MAX_COOLDOWN_WAIT_TOTAL_MS: u64 = 20_000;
+const MAX_COOLDOWN_WAITS: u64 = 4;
+
 /// Outcome of a single GET, preserving enough status to drive Python's retry.
 pub enum HttpOutcome {
     /// 2xx with a successfully-parsed JSON body.
     Ok(Value),
-    /// HTTP 429 - Cloudflare/WFM rate limit. Backs off and retries.
-    RateLimited,
+    /// HTTP 429/509 - Cloudflare/WFM rate limit, carrying the cooldown deadline
+    /// recorded for it (unix ms, 0 when none could be read). [`fetch_json`]
+    /// waits out a short one; an unknown one stops the sweep, because retrying a
+    /// throttle with no deadline is how a client gets blocked.
+    RateLimited { cooldown_until_ms: u64 },
     /// Any other non-2xx (4xx/5xx). Python's `raise_for_status()` path.
     HttpError(u16),
     /// Connection/timeout/read/parse failure. Python's other
@@ -30,13 +43,22 @@ pub enum HttpOutcome {
 
 /// Status-aware GET. Every scrape endpoint goes through this so a fixture can
 /// stand in for the network.
-pub trait ScrapeHttp {
+///
+/// `Send + Sync` because the sweep runs one worker thread per request the
+/// governor allows in flight, and they share one transport and one sleeper.
+pub trait ScrapeHttp: Send + Sync {
     fn get(&self, url: &str) -> HttpOutcome;
 }
 
 /// Injected sleeper so backoff + pacing are deterministic in tests.
-pub trait Sleeper {
+pub trait Sleeper: Send + Sync {
     fn sleep(&self, dur: Duration);
+}
+
+/// A poisoned lock means a worker panicked; the data behind it is a counter, so
+/// reading the last value beats propagating the panic into the abort path.
+fn lock<T>(value: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    value.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 /// Real time - the production sleeper.
@@ -56,16 +78,16 @@ impl Sleeper for NoopSleeper {
 /// Records requested sleeps instead of sleeping - lets tests assert the exact
 /// backoff/pacing schedule.
 pub struct RecordingSleeper {
-    pub sleeps: std::cell::RefCell<Vec<Duration>>,
+    pub sleeps: std::sync::Mutex<Vec<Duration>>,
 }
 impl RecordingSleeper {
     pub fn new() -> Self {
         RecordingSleeper {
-            sleeps: std::cell::RefCell::new(Vec::new()),
+            sleeps: std::sync::Mutex::new(Vec::new()),
         }
     }
     pub fn recorded(&self) -> Vec<Duration> {
-        self.sleeps.borrow().clone()
+        lock(&self.sleeps).clone()
     }
 }
 impl Default for RecordingSleeper {
@@ -75,7 +97,7 @@ impl Default for RecordingSleeper {
 }
 impl Sleeper for RecordingSleeper {
     fn sleep(&self, dur: Duration) {
-        self.sleeps.borrow_mut().push(dur);
+        lock(&self.sleeps).push(dur);
     }
 }
 
@@ -101,16 +123,282 @@ fn unwrap_payload_first(body: Value) -> Value {
     body
 }
 
-/// Retry transient reads; throttling, policy blocks and ordinary client errors abort.
+// ---- sweep metrics ---------------------------------------------------------
+//
+// One process is one sweep, so these counters are process-global rather than
+// threaded through every call site. They are the only record of what we asked
+// WFM for, and a failed sweep must report them too - it will be repeated.
+
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::OnceLock;
+use std::time::{Instant, SystemTime};
+
+/// Endpoint family, so the footprint reads per class rather than as one number.
+#[derive(Clone, Copy)]
+pub enum RequestClass {
+    Catalog,
+    Statistics,
+    Orders,
+    Riven,
+    Other,
+}
+
+impl RequestClass {
+    const ALL: [RequestClass; 5] = [
+        RequestClass::Catalog,
+        RequestClass::Statistics,
+        RequestClass::Orders,
+        RequestClass::Riven,
+        RequestClass::Other,
+    ];
+
+    fn label(self) -> &'static str {
+        match self {
+            RequestClass::Catalog => "catalog",
+            RequestClass::Statistics => "statistics",
+            RequestClass::Orders => "orders",
+            RequestClass::Riven => "riven",
+            RequestClass::Other => "other",
+        }
+    }
+}
+
+/// Classify a request URL. The scrape's endpoints are fixed, so this is a
+/// prefix match rather than a lookup table.
+pub fn classify_url(url: &str) -> RequestClass {
+    if url.ends_with("/v2/items") {
+        RequestClass::Catalog
+    } else if url.contains("/statistics") {
+        RequestClass::Statistics
+    } else if url.contains("/v2/orders/item/") {
+        RequestClass::Orders
+    } else if url.contains("/v2/riven/") {
+        RequestClass::Riven
+    } else {
+        RequestClass::Other
+    }
+}
+
+#[derive(Default)]
+struct ClassCounters {
+    attempts: AtomicU64,
+    retries: AtomicU64,
+    ok: AtomicU64,
+    failed: AtomicU64,
+    elapsed_ms: AtomicU64,
+    decoded_bytes: AtomicU64,
+}
+
+/// The sweep's throttle patience. Both figures move together, so they are
+/// reserved under one lock: separate counters let two workers each pass the last
+/// check and overspend a limit that is documented as a limit.
+#[derive(Default)]
+struct CooldownBudget {
+    waits: u64,
+    wait_ms: u64,
+}
+
+/// What one sweep spent, by class. Named fields rather than an array: the
+/// workspace denies indexing, and a class is a fixed set.
+#[derive(Default)]
+pub struct SweepMetrics {
+    catalog: ClassCounters,
+    statistics: ClassCounters,
+    orders: ClassCounters,
+    riven: ClassCounters,
+    other: ClassCounters,
+    cooldown: Mutex<CooldownBudget>,
+}
+
+impl SweepMetrics {
+    fn class(&self, class: RequestClass) -> &ClassCounters {
+        match class {
+            RequestClass::Catalog => &self.catalog,
+            RequestClass::Statistics => &self.statistics,
+            RequestClass::Orders => &self.orders,
+            RequestClass::Riven => &self.riven,
+            RequestClass::Other => &self.other,
+        }
+    }
+
+    pub fn record_attempt(&self, class: RequestClass) {
+        self.class(class).attempts.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn record_retry(&self, class: RequestClass) {
+        self.class(class).retries.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn record_ok(&self, class: RequestClass) {
+        self.class(class).ok.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn record_failed(&self, class: RequestClass) {
+        self.class(class).failed.fetch_add(1, Ordering::Relaxed);
+    }
+    pub fn record_elapsed(&self, class: RequestClass, elapsed: Duration) {
+        self.class(class)
+            .elapsed_ms
+            .fetch_add(elapsed.as_millis() as u64, Ordering::Relaxed);
+    }
+    /// Payload size as parsed, which is the only size WFM lets us see: it
+    /// answers gzip-compressed and sends no Content-Length, so a wire counter
+    /// would read zero on every production request.
+    pub fn record_bytes(&self, class: RequestClass, decoded: u64) {
+        self.class(class)
+            .decoded_bytes
+            .fetch_add(decoded, Ordering::Relaxed);
+    }
+
+    /// Admit one wait of `wait_ms` against the sweep's throttle patience, or
+    /// refuse it because the wait alone is too long or the patience is spent.
+    /// The reservation is atomic, so workers sharing the sweep cannot both spend
+    /// the last of it.
+    fn admit_cooldown_wait(&self, wait_ms: u64) -> bool {
+        let mut budget = lock(&self.cooldown);
+        if budget.waits >= MAX_COOLDOWN_WAITS
+            || budget.wait_ms.saturating_add(wait_ms) > MAX_COOLDOWN_WAIT_TOTAL_MS
+        {
+            return false;
+        }
+        budget.waits += 1;
+        budget.wait_ms += wait_ms;
+        true
+    }
+
+    fn cooldown_waits(&self) -> u64 {
+        lock(&self.cooldown).waits
+    }
+
+    fn cooldown_wait_ms(&self) -> u64 {
+        lock(&self.cooldown).wait_ms
+    }
+
+    /// One line for the sweep log. `snapshot_age_s` is how old the CSV on disk
+    /// is when the sweep ends, or None when there is no snapshot yet.
+    pub fn line(&self, snapshot_age_s: Option<u64>) -> String {
+        let mut attempts = String::new();
+        let mut ok = String::new();
+        let mut failed = String::new();
+        let (mut retries, mut elapsed, mut decoded) = (0, 0, 0);
+        for class in RequestClass::ALL {
+            let counters = self.class(class);
+            if !attempts.is_empty() {
+                attempts.push(' ');
+                ok.push(' ');
+                failed.push(' ');
+            }
+            attempts.push_str(&format!(
+                "{}={}",
+                class.label(),
+                counters.attempts.load(Ordering::Relaxed)
+            ));
+            ok.push_str(&format!(
+                "{}={}",
+                class.label(),
+                counters.ok.load(Ordering::Relaxed)
+            ));
+            failed.push_str(&format!(
+                "{}={}",
+                class.label(),
+                counters.failed.load(Ordering::Relaxed)
+            ));
+            retries += counters.retries.load(Ordering::Relaxed);
+            elapsed += counters.elapsed_ms.load(Ordering::Relaxed);
+            decoded += counters.decoded_bytes.load(Ordering::Relaxed);
+        }
+        let governor = wfm_client::governor::process().status();
+        format!(
+            "sweep metrics: attempts[{attempts}] ok[{ok}] failed[{failed}] retries={retries} \
+             wire_requests={} throttles={} cooldown_waits={} cooldown_wait_ms={} decoded_bytes={decoded} \
+             elapsed_ms={elapsed} snapshot_age_s={}",
+            governor.requests,
+            governor.throttles,
+            self.cooldown_waits(),
+            self.cooldown_wait_ms(),
+            snapshot_age_s.map_or_else(|| "none".to_string(), |s| s.to_string())
+        )
+    }
+}
+
+/// Process-wide counters - a running process is a sweep.
+pub fn metrics() -> &'static SweepMetrics {
+    static METRICS: OnceLock<SweepMetrics> = OnceLock::new();
+    METRICS.get_or_init(SweepMetrics::default)
+}
+
+/// Age of the snapshot on disk, for the sweep log's freshness term.
+pub fn snapshot_age_s(path: &std::path::Path) -> Option<u64> {
+    let modified = std::fs::metadata(path).ok()?.modified().ok()?;
+    Some(SystemTime::now().duration_since(modified).ok()?.as_secs())
+}
+
+/// The wait to spend on a throttle cooling down until `cooldown_until_ms`, or
+/// None when the sweep should stop instead. The deadline comes from the
+/// transport, which already recorded this response's `Retry-After` with the
+/// governor: calling `throttled()` again here would only double one throttle's
+/// backoff, so this reads the stored deadline rather than re-reporting it.
+fn admitted_cooldown_wait(sweep: &SweepMetrics, cooldown_until_ms: u64, now_ms: u64) -> Option<u64> {
+    let wait = cooldown_until_ms.saturating_sub(now_ms);
+    if wait == 0 || wait > MAX_COOLDOWN_WAIT_MS || !sweep.admit_cooldown_wait(wait) {
+        return None;
+    }
+    Some(wait)
+}
+
+/// A throttle is not a generic access failure: the governor has stored the
+/// deadline the response asked for, and the sweep can sometimes wait it out.
+/// Everything else - a pause, a cancellation, a transport error - stops the run
+/// as before.
+fn transport_error_outcome(error: &wfm_client::governor::AccessError) -> HttpOutcome {
+    match error {
+        wfm_client::governor::AccessError::Cooldown(deadline) => HttpOutcome::RateLimited {
+            cooldown_until_ms: *deadline,
+        },
+        other => HttpOutcome::Access(other.to_string()),
+    }
+}
+
+/// Retry transient reads; policy blocks and ordinary client errors abort.
 pub fn fetch_json(http: &dyn ScrapeHttp, sleeper: &dyn Sleeper, url: &str) -> Option<Value> {
+    let class = classify_url(url);
+    let sweep = metrics();
     for attempt in 0..RETRIES {
-        match http.get(url) {
-            HttpOutcome::Ok(body) => return Some(unwrap_payload_first(body)),
-            HttpOutcome::RateLimited => { eprintln!("WFM throttled the request; publication is stopped. Retry after market access recovers."); return None; }
-            HttpOutcome::Access(reason) => { eprintln!("WFM request stopped: {reason}"); return None; }
-            HttpOutcome::HttpError(status) if status < 500 || status == 509 => return None,
+        if attempt > 0 {
+            sweep.record_retry(class);
+        }
+        sweep.record_attempt(class);
+        let started = Instant::now();
+        let outcome = http.get(url);
+        sweep.record_elapsed(class, started.elapsed());
+        match outcome {
+            HttpOutcome::Ok(body) => {
+                sweep.record_ok(class);
+                return Some(unwrap_payload_first(body));
+            }
+            HttpOutcome::RateLimited { cooldown_until_ms } => {
+                sweep.record_failed(class);
+                let now = wfm_client::governor::unix_ms();
+                match admitted_cooldown_wait(sweep, cooldown_until_ms, now) {
+                    Some(wait) => {
+                        eprintln!("WFM throttled the request; waiting {wait} ms for the cooldown to end.");
+                        sleeper.sleep(Duration::from_millis(wait));
+                    }
+                    None => {
+                        eprintln!("WFM throttled the request; publication is stopped. Retry after market access recovers.");
+                        return None;
+                    }
+                }
+            }
+            HttpOutcome::Access(reason) => {
+                sweep.record_failed(class);
+                eprintln!("WFM request stopped: {reason}");
+                return None;
+            }
+            HttpOutcome::HttpError(status) if status < 500 || status == 509 => {
+                sweep.record_failed(class);
+                return None;
+            }
             HttpOutcome::HttpError(_) | HttpOutcome::Transport(_) => {
                 if attempt + 1 == RETRIES {
+                    sweep.record_failed(class);
                     return None;
                 }
                 sleeper.sleep(backoff(attempt));
@@ -141,21 +429,29 @@ impl ScrapeHttp for LiveScrapeHttp {
         match resp {
             Ok(r) => {
                 let status = r.status();
+                let class = classify_url(url);
                 if status.as_u16() == 429 {
-                    return HttpOutcome::RateLimited;
+                    return HttpOutcome::RateLimited {
+                        cooldown_until_ms: wfm_client::governor::process()
+                            .status()
+                            .cooldown_until_ms,
+                    };
                 }
                 if !status.is_success() {
                     return HttpOutcome::Access(format!("WFM HTTP {status}; request retries exhausted"));
                 }
                 match r.text() {
-                    Ok(body) => match serde_json::from_str(&body) {
-                        Ok(v) => HttpOutcome::Ok(v),
-                        Err(e) => HttpOutcome::Access(format!("{url}: JSON parse: {e}")),
-                    },
+                    Ok(body) => {
+                        metrics().record_bytes(class, body.len() as u64);
+                        match serde_json::from_str(&body) {
+                            Ok(v) => HttpOutcome::Ok(v),
+                            Err(e) => HttpOutcome::Access(format!("{url}: JSON parse: {e}")),
+                        }
+                    }
                     Err(e) => HttpOutcome::Access(format!("{url}: read body: {e}")),
                 }
             }
-            Err(e) => HttpOutcome::Access(e.to_string()),
+            Err(error) => transport_error_outcome(&error),
         }
     }
 }
@@ -175,20 +471,20 @@ impl ScrapeHttp for LiveScrapeHttp {
 ///     arrays, so a top-level array is unambiguously a sequence.
 pub struct FixtureScrapeHttp {
     pub responses: std::collections::HashMap<String, Value>,
-    cursors: std::cell::RefCell<std::collections::HashMap<String, usize>>,
+    cursors: std::sync::Mutex<std::collections::HashMap<String, usize>>,
 }
 
 impl FixtureScrapeHttp {
     pub fn new(responses: std::collections::HashMap<String, Value>) -> Self {
         FixtureScrapeHttp {
             responses,
-            cursors: std::cell::RefCell::new(std::collections::HashMap::new()),
+            cursors: std::sync::Mutex::new(std::collections::HashMap::new()),
         }
     }
 
     /// Whether `url` has been requested at least once (fixture-present or not).
     pub fn was_fetched(&self, url: &str) -> bool {
-        self.cursors.borrow().contains_key(url)
+        lock(&self.cursors).contains_key(url)
     }
 }
 
@@ -223,7 +519,11 @@ fn response_at(value: &Value, i: usize) -> (u16, Value) {
 fn outcome_for(status: u16, body: Value) -> HttpOutcome {
     match status {
         200..=299 => HttpOutcome::Ok(body),
-        429 | 509 => HttpOutcome::RateLimited,
+        // A fixture has no deadline to carry, so a scripted 429 stops the sweep
+        // exactly as an unreadable Retry-After would.
+        429 | 509 => HttpOutcome::RateLimited {
+            cooldown_until_ms: 0,
+        },
         other => HttpOutcome::HttpError(other),
     }
 }
@@ -235,13 +535,15 @@ impl ScrapeHttp for FixtureScrapeHttp {
             None => return HttpOutcome::Transport(format!("{url}: not in fixture set")),
         };
         let i = {
-            let mut cursors = self.cursors.borrow_mut();
+            let mut cursors = lock(&self.cursors);
             let n = cursors.entry(url.to_string()).or_insert(0);
             let cur = *n;
             *n += 1;
             cur
         };
         let (status, body) = response_at(value, i);
+        let size = serde_json::to_vec(&body).map(|b| b.len() as u64).unwrap_or(0);
+        metrics().record_bytes(classify_url(url), size);
         outcome_for(status, body)
     }
 }
@@ -250,26 +552,24 @@ impl ScrapeHttp for FixtureScrapeHttp {
 mod tests {
     use super::*;
     use serde_json::json;
-    use std::cell::RefCell;
     use std::collections::{HashMap, VecDeque};
 
     /// Per-URL scripted outcomes - pop one per call to drive retry sequences.
     struct ScriptedHttp {
-        scripts: RefCell<HashMap<String, VecDeque<HttpOutcome>>>,
+        scripts: std::sync::Mutex<HashMap<String, VecDeque<HttpOutcome>>>,
     }
     impl ScriptedHttp {
         fn new(url: &str, seq: Vec<HttpOutcome>) -> Self {
             let mut m = HashMap::new();
             m.insert(url.to_string(), seq.into_iter().collect());
             ScriptedHttp {
-                scripts: RefCell::new(m),
+                scripts: std::sync::Mutex::new(m),
             }
         }
     }
     impl ScrapeHttp for ScriptedHttp {
         fn get(&self, url: &str) -> HttpOutcome {
-            self.scripts
-                .borrow_mut()
+            lock(&self.scripts)
                 .get_mut(url)
                 .and_then(|q| q.pop_front())
                 .unwrap_or_else(|| HttpOutcome::Transport("exhausted".into()))
@@ -302,10 +602,113 @@ mod tests {
 
     #[test]
     fn throttling_aborts_without_retrying_or_sleeping() {
-        let http = ScriptedHttp::new(URL, vec![HttpOutcome::RateLimited, HttpOutcome::Ok(json!({"data": 1}))]);
+        let http = ScriptedHttp::new(URL, vec![
+                HttpOutcome::RateLimited { cooldown_until_ms: 0 },
+                HttpOutcome::Ok(json!({"data": 1})),
+            ]);
         let sleeper = RecordingSleeper::new();
         assert_eq!(fetch_json(&http, &sleeper, URL), None);
         assert!(sleeper.recorded().is_empty());
+    }
+
+    #[test]
+    fn a_short_recorded_cooldown_is_waited_out_and_the_request_retried() {
+        let deadline = wfm_client::governor::unix_ms() + 150;
+        let http = ScriptedHttp::new(
+            URL,
+            vec![
+                HttpOutcome::RateLimited {
+                    cooldown_until_ms: deadline,
+                },
+                HttpOutcome::Ok(json!({"data": 4})),
+            ],
+        );
+        let sleeper = RecordingSleeper::new();
+        assert_eq!(fetch_json(&http, &sleeper, URL), Some(json!(4)));
+        let sleeps = sleeper.recorded();
+        assert_eq!(sleeps.len(), 1, "the cooldown is waited out once: {sleeps:?}");
+        assert!(
+            sleeps[0] > Duration::ZERO && sleeps[0] <= Duration::from_millis(150),
+            "the wait is the deadline's remainder: {sleeps:?}"
+        );
+    }
+
+    #[test]
+    fn throttle_patience_is_bounded_and_an_unknown_deadline_is_never_guessed() {
+        let sweep = SweepMetrics::default();
+        assert_eq!(admitted_cooldown_wait(&sweep, 0, 1_000), None);
+        assert_eq!(admitted_cooldown_wait(&sweep, 1_000, 1_000), None);
+        assert_eq!(
+            sweep.cooldown_waits(),
+            0,
+            "a cooldown with nothing left to wait for is not patience"
+        );
+        assert_eq!(
+            admitted_cooldown_wait(&sweep, 1_000 + MAX_COOLDOWN_WAIT_MS + 1, 1_000),
+            None,
+            "a long cooldown belongs to the next tick"
+        );
+        assert_eq!(
+            admitted_cooldown_wait(&sweep, 1_000 + MAX_COOLDOWN_WAIT_MS, 1_000),
+            Some(MAX_COOLDOWN_WAIT_MS)
+        );
+        let mut extra = 0;
+        while admitted_cooldown_wait(&sweep, 1_000 + MAX_COOLDOWN_WAIT_MS, 1_000).is_some() {
+            extra += 1;
+        }
+        assert!(extra < MAX_COOLDOWN_WAITS, "{extra} extra waits");
+        assert!(
+            sweep.cooldown_wait_ms() <= MAX_COOLDOWN_WAIT_TOTAL_MS,
+            "the total cap binds too"
+        );
+    }
+
+    #[test]
+    fn workers_racing_for_the_last_of_the_patience_only_one_get_it() {
+        // Repeated rounds: a check-then-reserve implementation often serialises
+        // by luck, and one round would let it pass.
+        for round in 0..8 {
+            let sweep = SweepMetrics::default();
+            for _ in 0..MAX_COOLDOWN_WAITS - 1 {
+                assert!(sweep.admit_cooldown_wait(MAX_COOLDOWN_WAIT_MS));
+            }
+            let start = std::sync::Barrier::new(32);
+            let mut admitted = 0;
+            std::thread::scope(|scope| {
+                let mut tasks = Vec::new();
+                for _ in 0..32 {
+                    tasks.push(scope.spawn(|| {
+                        start.wait();
+                        sweep.admit_cooldown_wait(MAX_COOLDOWN_WAIT_MS)
+                    }));
+                }
+                for task in tasks {
+                    admitted += usize::from(task.join().unwrap_or(false));
+                }
+            });
+            assert_eq!(admitted, 1, "round {round}: one slot was left, and it is one slot");
+            assert_eq!(sweep.cooldown_waits(), MAX_COOLDOWN_WAITS);
+            assert!(sweep.cooldown_wait_ms() <= MAX_COOLDOWN_WAIT_TOTAL_MS);
+        }
+    }
+
+    #[test]
+    fn a_throttle_reaches_the_sweep_as_a_throttle_not_a_generic_failure() {
+        use wfm_client::governor::AccessError;
+        assert!(matches!(
+            transport_error_outcome(&AccessError::Cooldown(7)),
+            HttpOutcome::RateLimited {
+                cooldown_until_ms: 7
+            }
+        ));
+        assert!(matches!(
+            transport_error_outcome(&AccessError::Paused("paused".into())),
+            HttpOutcome::Access(_)
+        ));
+        assert!(matches!(
+            transport_error_outcome(&AccessError::Transport),
+            HttpOutcome::Access(_)
+        ));
     }
 
     #[test]
@@ -388,8 +791,8 @@ mod tests {
             json!([{"status": 429, "body": {}}, {"status": 429, "body": {}}, {"data": 7}]),
         );
         let http = FixtureScrapeHttp::new(r);
-        assert!(matches!(http.get(URL), HttpOutcome::RateLimited));
-        assert!(matches!(http.get(URL), HttpOutcome::RateLimited));
+        assert!(matches!(http.get(URL), HttpOutcome::RateLimited { .. }));
+        assert!(matches!(http.get(URL), HttpOutcome::RateLimited { .. }));
         assert!(matches!(http.get(URL), HttpOutcome::Ok(_)));
         // Sticky last: a 4th call keeps returning the final element.
         assert!(matches!(http.get(URL), HttpOutcome::Ok(_)));

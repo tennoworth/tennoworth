@@ -89,10 +89,13 @@ hosted site is informational only - no accounts, no file access, no scan - and
 
 `.github/workflows/` holds the release and verification workflows:
 `release-desktop` (desktop artifacts, cut on `desktop-v*` tags), `build-web`,
-`build-scrape`, `build-usage`, `audit`, `ui-smoke`, and the on-demand
-`ocr-windows-test` and `publish-wfm-policy`. Shared composite actions live in
-`.github/actions/`: `setup-rust`, `setup-windows-ocr` and
-`publish-rolling-release`, which the workflows above call into.
+`build-usage`, `audit`, `ui-smoke`, and the on-demand `ocr-windows-test` and
+`publish-wfm-policy`. Shared composite actions live in `.github/actions/`:
+`setup-rust`, `setup-windows-ocr` and `publish-rolling-release`, which the
+workflows above call into. The host-only scrape pipeline has no workflow: it is
+deployed directly by
+[`scripts/deploy-scrape-host.sh`](../scripts/deploy-scrape-host.sh), which is
+its only installer.
 
 Cache policy, trigger paths and the ruleset configuration are owned elsewhere:
 see [rust-toolkit-2026-lessons.md](rust-toolkit-2026-lessons.md) for the CI

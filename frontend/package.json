@@ -1,5 +1,8 @@
 {
   "name": "tennoworth-frontend",
+  "overrides": {
+    "devalue": "^5.9.2"
+  },
   "private": true,
   "type": "module",
   "scripts": {

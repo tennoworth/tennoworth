@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# Refresh market.json: full WFM scrape (~37 min @ 3 req/s, paced start-to-start;
-# zero-volume items skip the orders call) → CSV, then rebuild the full-shape
-# snapshot. This is the ONE production scrape entrypoint, driven by the
-# self-hosted systemd timer.
+# Refresh market.json: full WFM scrape (~55-65 min; one worker per request the
+# signed policy allows in flight, so the 500 ms start-to-start pacing is what
+# binds, and items under the volume gate skip the orders call) → CSV, then
+# rebuild the full-shape snapshot. This is the ONE production scrape entrypoint,
+# driven by the self-hosted systemd timer.
 #
 # Rust-only since 2026-08 (Python retired): `wfm-scrape scrape` produces
 # wfm_results.csv and `wfm-scrape build` renders BOTH frontend/public/market.json
@@ -11,6 +12,8 @@
 # Environment (all optional):
 #   APP      repo root to run in          (default /srv/wfm/app - the LXC layout)
 #   SCRAPE_BIN  Rust pipeline binary      (default /srv/wfm/bin/wfm-scrape)
+#   OBSERVATIONS  per-item observation log directory (default
+#               /srv/wfm/observations); empty disables the log
 #   HISTORY     1 (default) also refresh history.json from relics.run after the
 #               build; 0 skips it for a one-off local scrape
 set -euo pipefail
@@ -32,11 +35,29 @@ prior=0
 [ -f "$CSV" ] && prior=$(( $(wc -l < "$CSV") - 1 ))
 
 SCRAPE_BIN="${SCRAPE_BIN:-/srv/wfm/bin/wfm-scrape}"
-[ -x "$SCRAPE_BIN" ] || { echo "ABORT: $SCRAPE_BIN is missing - the box needs it (wfm-scrape-pull.timer installs it)." >&2; exit 1; }
+[ -x "$SCRAPE_BIN" ] || { echo "ABORT: $SCRAPE_BIN is missing - the box needs it (scripts/deploy-scrape-host.sh installs it)." >&2; exit 1; }
 SCRAPE_ARGS=(--filter "" --exclude "" --min-volume 1 --out "$CSV")
+# The observation log is evidence for a later statistics-refresh decision, never
+# a publication input: the binary warns and carries on when it cannot be
+# written, so a missing directory costs nothing but the log.
+OBSERVATIONS="${OBSERVATIONS-/srv/wfm/observations}"
+[ -n "$OBSERVATIONS" ] && SCRAPE_ARGS+=(--observations-dir "$OBSERVATIONS")
+
+# Identity of the generation on disk right now. The binary refuses a run that
+# keeps nothing, but this is the independent check: a replaced or older binary
+# that exits 0 without writing the CSV would otherwise fall through to the floor
+# below, which counts the PREVIOUS file, passes, and republishes it.
+identity() { stat -c '%i:%s:%Y' "$CSV" 2>/dev/null || echo absent; }
+csv_before=$(identity)
 
 echo "scraper: $SCRAPE_BIN scrape"
 "$SCRAPE_BIN" scrape "${SCRAPE_ARGS[@]}"
+
+if [ "$(identity)" = "$csv_before" ]; then
+  echo "ABORT: scrape exited 0 without replacing $CSV - refusing to rebuild the snapshot from the previous generation." >&2
+  exit 1
+fi
+
 now=$(( $(wc -l < "$CSV") - 1 ))
 
 if [ "$now" -lt "$MIN_ROWS" ] || { [ "$prior" -gt 0 ] && [ "$now" -lt $(( prior * 3 / 4 )) ]; }; then

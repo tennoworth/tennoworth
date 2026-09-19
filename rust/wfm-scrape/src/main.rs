@@ -5,6 +5,8 @@
 //! - `build`: reads `wfm_results.csv`, fetches upstreams, reconciles with the
 //!   prior snapshot, and writes `market.json` + `wfstat-catalog.json`.
 //! - `scrape`: the full WFM scrape to `wfm_results.csv`.
+//! - `replay`: offline simulation of statistics-refresh schedules over the
+//!   per-sweep observation logs. Fetches nothing and publishes nothing.
 //!
 //! Flags:
 //! - `--fixtures-dir <DIR>`: run offline using frozen fixture files.
@@ -21,7 +23,7 @@ use wfm_scrape::{clock, ingest::LiveHttp};
 fn main() -> std::process::ExitCode {
     let args: Vec<String> = std::env::args().collect();
     let Some(command) = args.get(1) else {
-        eprintln!("usage: wfm-scrape build|scrape|history [--fixtures-dir <DIR>] [--now <ISO>]");
+        eprintln!("usage: wfm-scrape build|scrape|history|replay [--fixtures-dir <DIR>] [--now <ISO>]");
         return std::process::ExitCode::FAILURE;
     };
     let _output_lock = if extract_flag(&args, "--fixtures-dir").is_none() && matches!(command.as_str(), "scrape" | "build") {
@@ -42,11 +44,27 @@ fn main() -> std::process::ExitCode {
             build(fixtures_path, now_arg.as_deref())
         }
         "scrape" => run_scrape_cmd(&args),
+        "replay" => run_replay_cmd(&args),
         _ => {
             eprintln!("unknown subcommand: {command}");
             return std::process::ExitCode::FAILURE;
         }
     };
+    // One line per invocation, success or failure: the counters are the only
+    // record of what this process asked WFM for, and a failed run is when that
+    // matters most - it will be repeated. Only scrape and build touch WFM.
+    if matches!(command.as_str(), "scrape" | "build") {
+        let published = if command == "scrape" {
+            extract_flag(&args, "--out").unwrap_or_else(|| "wfm_results.csv".into())
+        } else {
+            "frontend/public/market.json".to_string()
+        };
+        eprintln!(
+            "{}",
+            wfm_scrape::http::metrics()
+                .line(wfm_scrape::http::snapshot_age_s(std::path::Path::new(&published)))
+        );
+    }
     match result {
         Ok(()) => std::process::ExitCode::SUCCESS,
         Err(e) => {
@@ -71,8 +89,9 @@ fn extract_flag(args: &[String], flag: &str) -> Option<String> {
 /// Wire the `scrape` subcommand.
 ///
 /// Accepts the exact flags run-scrape.sh passes (`--filter --exclude
-/// --min-volume --out`) plus the rest of the argparse surface
-/// (`--platform --limit --checkpoint-every`), all with matching defaults.
+/// --min-volume --out --observations-dir`) plus the rest of the argparse
+/// surface (`--platform --limit --checkpoint-every --now`), all with matching
+/// defaults.
 /// `--fixtures-dir <DIR>` swaps live HTTP for a frozen `fixture_responses.json`
 /// (URL→body) and disables real sleeps, so the fixture regression tests run
 /// offline and instantly. `--now` is accepted for symmetry with `build` but is
@@ -113,6 +132,11 @@ fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
             .transpose()?
             .unwrap_or(100),
         max_coercions: wfm_scrape::coerce::DEFAULT_MAX_COERCIONS,
+        observations: extract_flag(args, "--observations-dir").map(PathBuf::from),
+        now: extract_flag(args, "--now")
+            .map(|s| wfm_scrape::clock::parse_stamp(&s).ok_or_else(|| format!("invalid --now stamp: {s}")))
+            .transpose()?
+            .unwrap_or_else(Utc::now),
     };
 
     let (http, sleeper): (Box<dyn ScrapeHttp>, Box<dyn Sleeper>) = if let Some(fd) = &fixtures_dir {
@@ -141,14 +165,54 @@ fn run_scrape_cmd(args: &[String]) -> Result<(), String> {
 
     let summary = run_scrape(http.as_ref(), sleeper.as_ref(), &cfg)?;
     eprintln!(
-        "scrape complete: scanned {}, kept {}, coercions {} → {}",
+        "scrape complete: scanned {}, kept {}, coercions {}, workers {} → {}",
         summary.scanned,
         summary.kept,
         summary.coercions,
+        summary.workers,
         cfg.out.display()
     );
-    if summary.kept == 0 {
-        eprintln!("No items matched your criteria. Try lowering --min-volume.");
+    Ok(())
+}
+
+/// `wfm-scrape replay --observations <DIR> [--schedule 4h,6h,12h,24h]`
+///                    `[--from <DATE>] [--to <DATE>] [--out <report.json>]`
+///
+/// Reads the per-sweep observation logs and simulates statistics-refresh
+/// schedules over them offline. It fetches nothing and publishes nothing, so it
+/// takes no output lock and prints no request metrics.
+fn run_replay_cmd(args: &[String]) -> Result<(), String> {
+    use wfm_scrape::replay::{self, ReplayOptions};
+
+    let directory =
+        extract_flag(args, "--observations").ok_or("--observations <DIR> is required")?;
+    let schedule = replay::parse_schedule(
+        &extract_flag(args, "--schedule").unwrap_or_else(|| "4h,6h,12h,24h".into()),
+    )?;
+    let from = extract_flag(args, "--from")
+        .map(|s| replay::parse_bound(&s, false))
+        .transpose()?;
+    let to = extract_flag(args, "--to")
+        .map(|s| replay::parse_bound(&s, true))
+        .transpose()?;
+    let report = replay::run(&ReplayOptions {
+        observations: PathBuf::from(directory),
+        schedule,
+        from,
+        to,
+    })?;
+    print!("{}", replay::summary(&report));
+    if let Some(out) = extract_flag(args, "--out") {
+        let out = PathBuf::from(out);
+        if let Some(parent) = out.parent().filter(|p| !p.as_os_str().is_empty()) {
+            std::fs::create_dir_all(parent).map_err(|e| format!("mkdir {parent:?}: {e}"))?;
+        }
+        let json = serde_json::to_string_pretty(&report)
+            .map_err(|e| format!("serialize replay report: {e}"))?;
+        let tmp = PathBuf::from(format!("{}.tmp", out.display()));
+        std::fs::write(&tmp, &json).map_err(|e| format!("write {tmp:?}: {e}"))?;
+        std::fs::rename(&tmp, &out).map_err(|e| format!("rename {tmp:?} → {out:?}: {e}"))?;
+        eprintln!("replay report: {}", out.display());
     }
     Ok(())
 }

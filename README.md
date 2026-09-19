@@ -68,8 +68,8 @@ set-completion plays, relic expected value, Riven context, and listing health.
 - Reads confirmed trades from `EE.log` into a local platinum ledger and can
   shrink or close the matching listing after a sale.
 - Keeps a persistent notification inbox for completed trades, price watches,
-  scan summaries, Baro reminders, relevant events, and daily sell opportunities,
-  with category controls and optional desktop popups.
+  Baro reminders, relevant events, and daily sell opportunities, with category
+  controls and optional desktop popups.
 - Offers an opt-in relic reward overlay. A bounded local capture is OCR'd after
   a reward event or the default `Ctrl+Shift+O` shortcut, recognizes English reward names,
   and adds platinum, ducats, owned count, and recognition confidence. It does
@@ -219,8 +219,9 @@ and its development-only `?styleguide` reference.
 
 `develop` is the integration branch. `main` is production and deploys the web
 app; production promotion is fast-forward only. Desktop releases are built
-from `main` and tagged `desktop-v<version>`. The site and market/scraper
-artifacts use rolling release tags and are not desktop versions.
+from `main` and tagged `desktop-v<version>`. The site, usage collector and
+signed policy use rolling release tags and are not desktop versions; the
+host-only scrape pipeline is deployed directly from a reviewed revision.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for desktop release history and
 [`docs/releasing.md`](docs/releasing.md) for the release policy and procedure.

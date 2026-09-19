@@ -19,10 +19,11 @@ TimeoutStartSec=7200
 Nice=10
 
 # Sandboxing - the scraper rewrites files under its repo (market.json,
-# wfstat-catalog.json, wfm_results.csv).
+# wfstat-catalog.json, wfm_results.csv) and streams the per-item observation log
+# next to them.
 NoNewPrivileges=true
 ProtectSystem=strict
-ReadWritePaths=/srv/wfm/app
+ReadWritePaths=/srv/wfm/app /srv/wfm/observations
 ProtectHome=true
 PrivateTmp=true
 ProtectKernelTunables=true

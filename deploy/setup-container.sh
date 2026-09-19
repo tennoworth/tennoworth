@@ -6,6 +6,10 @@
 #
 # Idempotent-ish: safe to re-run. Edit the CLOUDFLARED_TOKEN line or run the
 # `cloudflared service install` step by hand.
+#
+# The pipeline itself is not installed here: scripts/deploy-scrape-host.sh owns
+# the scrape binary, its driver script and the wfm-scrape units, and installs
+# them from a reviewed revision. This script provisions the box around it.
 set -euo pipefail
 
 REPO=/srv/wfm/app          # the git repo (Rust pipeline binary + frontend/public + frontend/dist)
@@ -43,11 +47,10 @@ if [ "$(getent passwd wfm | cut -d: -f6)" != /srv/wfm/data ]; then
   usermod -d /srv/wfm/data wfm
 fi
 mkdir -p /srv/wfm/data
-install -m 0755 "$DEPLOY/run-scrape.sh" /srv/wfm/run-scrape.sh
+mkdir -p /srv/wfm/observations
 install -m 0755 "$DEPLOY/pull-web.sh" /srv/wfm/pull-web.sh
 install -m 0755 "$DEPLOY/pull-policy.sh" /srv/wfm/pull-policy.sh
 mkdir -p /srv/wfm/policy
-install -m 0755 "$DEPLOY/pull-scrape.sh" /srv/wfm/pull-scrape.sh
 # Without this the checkout at /srv/wfm/app only moves when a human moves it,
 # and the copies under /srv/wfm drift from the repo silently - the box ran a
 # retired pipeline 19 commits behind main for a week that way.
@@ -66,6 +69,8 @@ chown root:root /srv/wfm
 chown -R root:root /srv/wfm/bin
 chown root:root /srv/wfm/*.sh
 chown wfm:wfm /srv/wfm/data
+chown wfm:wfm /srv/wfm/observations
+chmod 750 /srv/wfm/observations
 # The policy puller runs as wfm (wfm-policy-pull.service) and publishes here.
 chown -R wfm:wfm /srv/wfm/policy
 # The scraper writes its outputs into the checkout and the git pullers move it,
@@ -114,18 +119,17 @@ if [ -x /srv/wfm/bin/wfm-policy ]; then
   systemctl enable --now wfm-policy-pull.timer
 fi
 
-echo "==> Scrape + app-pull + web-pull + scrape-pull timers"
+# The scrape units come with the binary they execute, from
+# scripts/deploy-scrape-host.sh; provisioning the box never creates half that
+# set on its own.
+echo "==> App-pull + web-pull timers"
 install -m 0644 "$DEPLOY/wfm-alert@.service"      /etc/systemd/system/wfm-alert@.service
-install -m 0644 "$DEPLOY/wfm-scrape.service"      /etc/systemd/system/wfm-scrape.service
-install -m 0644 "$DEPLOY/wfm-scrape.timer"        /etc/systemd/system/wfm-scrape.timer
 install -m 0644 "$DEPLOY/wfm-app-pull.service"    /etc/systemd/system/wfm-app-pull.service
 install -m 0644 "$DEPLOY/wfm-app-pull.timer"      /etc/systemd/system/wfm-app-pull.timer
 install -m 0644 "$DEPLOY/wfm-web-pull.service"    /etc/systemd/system/wfm-web-pull.service
 install -m 0644 "$DEPLOY/wfm-web-pull.timer"      /etc/systemd/system/wfm-web-pull.timer
-install -m 0644 "$DEPLOY/wfm-scrape-pull.service" /etc/systemd/system/wfm-scrape-pull.service
-install -m 0644 "$DEPLOY/wfm-scrape-pull.timer"   /etc/systemd/system/wfm-scrape-pull.timer
 systemctl daemon-reload
-systemctl enable --now wfm-scrape.timer wfm-app-pull.timer wfm-web-pull.timer wfm-scrape-pull.timer
+systemctl enable --now wfm-app-pull.timer wfm-web-pull.timer
 
 echo "==> Unattended security upgrades"
 apt-get install -y unattended-upgrades
@@ -149,11 +153,16 @@ cat <<'NEXT'
    exposed box). From CI or your dev machine, place the Vite build at
    $REPO/frontend/dist  (see the deploy runbook "Build / deploy").
 
-3. Kick a first scrape and watch it:
+3. Deploy the scrape pipeline from the maintainer checkout
+   (scripts/deploy-scrape-host.sh). It installs the binary, its driver script
+   and the wfm-scrape units, and refuses a revision that is not reviewed and
+   clean. Then enable and kick a first sweep here:
+     systemctl enable --now wfm-scrape.timer
      systemctl start wfm-scrape.service
      journalctl -u wfm-scrape.service -f
-   Watch for repeated 429/403 (WFM 1015). The UA is now a real browser string,
-   so this should be fine from a residential IP - but verify.
+   Watch for repeated 429/403 (WFM 1015). The UA is a descriptive project
+   string - the form WFM's rules require and the only one verified accepted -
+   so this should be fine from a residential IP, but verify.
 
 4. Verify the hosted page and data headers on the live HTTPS URL:
      curl -sI https://wfm.yourdomain.com | grep -iE 'strict-transport|frame-options|content-security'

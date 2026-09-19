@@ -27,6 +27,48 @@ and never trigger automatic mutation replay. Interrupted batches remain saved.
 Resume requires explicit action and fresh reconciliation before every item. Stop after
 the current request cancels unsent work while retaining the saved batch.
 
+The bulk reader is patient only within limits, because abandoning a cycle costs
+more traffic later. It waits out a cooldown when a single one is five seconds or
+less, at most four times and twenty seconds in total per process; anything longer
+stops the run for the next scheduled cycle, and a throttle whose deadline cannot
+be read is never retried on a guess. Each throttle is recorded once - the wait
+comes from the deadline the transport stored, so one response never grows the
+backoff twice.
+
+## Host pipeline footprint
+
+The scraper is the only client that reads WFM in bulk. These are the production
+host's numbers on 2026-09-15, under the signed policy then in force - revision 1
+of 2026-09-09, whose scraper restrictions are the compiled defaults above.
+
+| Measure | Value | Basis |
+|---|---|---|
+| Hard ceiling | 2 request starts per second | governor spacing and in-flight cap |
+| Requests per sweep | 6,438 | 1 catalog + 3,840 statistics + 2,597 orders, from the run's own summary |
+| Sweep wall time | 60-89 minutes that day | `journalctl -u wfm-scrape.service` |
+| Floor if nothing else were spent | 54 minutes | 6,438 x 500 ms |
+| Cadence | every 2 hours plus up to 10 minutes of jitter | `deploy/wfm-scrape.timer` |
+| Mean over a day | ~0.9 request starts per second | derived from the rows above |
+
+The item loop runs one worker per request the policy allows in flight, rather
+than one at a time: the same 176-request sample took 111 s serially and 91 s with
+two workers, against an 88 s pacing floor. The request count, the cadence and the
+ceiling are unchanged - the sweep stops paying for one response at a time, so its
+wall time converges on the floor the pacing already implied. Overlapping is not
+free: the summed fetch time of that sample - each attempt's wait for a governor
+slot plus its request - rose from 110 s to about 190 s under two workers, which is
+why the floor, not half the latency, is the bound. That counter is fetch time,
+not upstream response time; the queue wait is inside it.
+
+Each `scrape` and `build` run prints a `sweep metrics:` line with its attempt,
+retry, throttle and byte counters, plus the cooldown waits it spent, including on
+runs that fail - refresh this table from that line rather than from the
+arithmetic. Its `elapsed_ms` is fetch time including the governor's pacing wait,
+so it tracks wall time for a serial loop and exceeds it when workers overlap. The measured cost of the endpoints the
+sweep chooses between is not uniform: one item's full order book was 96 KB,
+while `/v2/orders/item/{slug}/top` answered the same item in 3.8 KB and the
+`/v2/orders/recent` delta window in 216 KB.
+
 ## Dedicated signing key
 
 Generate a dedicated, passphrase-encrypted Minisign key on the maintainer's local

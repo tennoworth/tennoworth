@@ -1,0 +1,42 @@
+[Unit]
+Description=Check that the observation corpus is sound and complete
+# The check reads the receipt the pull stores, so the pull is ordered before it
+# and started as part of this unit. Two independent persistent timers can elapse
+# in either order after downtime, and a check that ran first would report a stale
+# receipt that was about to be refreshed. A deployment whose preservation is a
+# host-level backup has no receipt to read, and drops both dependencies with a
+# drop-in rather than carrying a second unit.
+Wants=wfm-archive-receipt-pull.service
+After=wfm-archive-receipt-pull.service
+# OnFailure is the delivery mechanism for "not ready": the check exits non-zero
+# whenever evidence is missing, so an unready corpus pages exactly like a failed
+# sweep instead of waiting to be noticed in a report nobody reads.
+OnFailure=wfm-alert@%n.service
+
+[Service]
+Type=oneshot
+# Root, unlike the sweep: the corpus directory is 0750 wfm:wfm, the service
+# health evidence is in wfm-scrape.service's journal, and the archive receipt is
+# written by another unit. This process only reads all three, and writes exactly
+# one file, the report below.
+# Where preservation lives is a deployment fact, so the deploy declares it here
+# rather than letting the check fall back to a default. An undeclared mode is a
+# not-ready verdict, which is why the file is optional to systemd but not to a
+# green report.
+EnvironmentFile=-/etc/wfm-observations-check.env
+ExecStart=/srv/wfm/observations-check.sh --observations /srv/wfm/observations --archive-receipt /srv/wfm/data/observations-check/archive-receipt.jsonl --out /srv/wfm/data/observations-check/report.json
+Nice=10
+
+# Nothing here needs the network or the ability to change the box; the journal
+# and systemd are reached over their own sockets.
+NoNewPrivileges=true
+ProtectSystem=strict
+ReadWritePaths=/srv/wfm/data/observations-check
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictAddressFamilies=AF_UNIX
+SystemCallFilter=@system-service

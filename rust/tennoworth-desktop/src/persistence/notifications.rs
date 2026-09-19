@@ -5,10 +5,13 @@ impl Db {
     pub fn notification_preferences(
         &self,
     ) -> Result<crate::services::notifications::Preferences, String> {
-        self.get_setting("notifications-v1")
+        let stored: crate::services::notifications::Preferences = self
+            .get_setting("notifications-v1")
             .map_err(|e| e.to_string())?
             .map(|s| serde_json::from_str(&s).map_err(|e| e.to_string()))
-            .unwrap_or_else(|| Ok(Default::default()))
+            .transpose()?
+            .unwrap_or_default();
+        Ok(normalize_preferences(stored))
     }
 
     pub fn list_notifications(
@@ -55,8 +58,16 @@ impl Db {
     }
 
     pub fn prune_notifications(&self, now: i64) -> rusqlite::Result<()> {
+        use crate::services::notifications::CATEGORIES;
         let conn = guard(&self.conn);
         conn.execute("DELETE FROM notification WHERE created_at < ?1 OR id NOT IN (SELECT id FROM notification ORDER BY id DESC LIMIT 1000)", [now - 30 * 86400])?;
+        // A category retired from the contract must not keep rendering: the app
+        // can no longer explain it and offers no preference to control it.
+        let placeholders = vec!["?"; CATEGORIES.len()].join(",");
+        conn.execute(
+            &format!("DELETE FROM notification WHERE category NOT IN ({placeholders})"),
+            rusqlite::params_from_iter(CATEGORIES.iter()),
+        )?;
         conn.execute(
             "DELETE FROM notification_checkpoint WHERE expires_at < ?1",
             [now],
@@ -102,5 +113,29 @@ impl Db {
         };
         tx.commit()?;
         Ok(id)
+    }
+}
+
+/// Rebuild the category map over the current contract. A key retired since the
+/// setting was written must not survive the read: the settings UI echoes the
+/// loaded map straight back on save, and `set_notification_preferences` rejects
+/// any category set that does not match `CATEGORIES` exactly.
+fn normalize_preferences(
+    stored: crate::services::notifications::Preferences,
+) -> crate::services::notifications::Preferences {
+    use crate::services::notifications::Preferences;
+    // Iterate the contract's own defaults, not the stored map: a key retired
+    // since the setting was written is dropped, and one added since is filled in.
+    let categories = Preferences::default()
+        .categories
+        .into_iter()
+        .map(|(key, fallback)| {
+            let value = stored.categories.get(&key).cloned().unwrap_or(fallback);
+            (key, value)
+        })
+        .collect();
+    Preferences {
+        popups: stored.popups,
+        categories,
     }
 }

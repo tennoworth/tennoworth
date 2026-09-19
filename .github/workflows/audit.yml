@@ -421,6 +421,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - name: Backup verification tools
+        # check-lxc-backup.sh proves a received backup with the real zstd and
+        # tar, and the deploy-layout tests build fixture archives with them. The
+        # dependency is declared here rather than assumed from the runner image.
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends zstd
       - name: Deployment layout regression tests
         run: bun test scripts/deploy-layout.test.ts
       - name: Shell syntax
@@ -433,6 +438,9 @@ jobs:
           sudo install -d -m 0755 /srv/wfm/app
           sudo install -m 0755 deploy/*.sh /srv/wfm/
           sudo install -D -m 0755 /bin/true /srv/wfm/bin/tennoworth-usage
+          # The archive host's unit lives in deploy/ too, and its ExecStart is
+          # /usr/local/bin on THAT host; verify only needs the path to resolve.
+          sudo install -D -m 0755 /bin/true /usr/local/bin/archive-observations.sh
           systemd-analyze verify deploy/*.service deploy/*.timer
       - name: CSP copies agree
         run: bun scripts/sync-csp.ts --check

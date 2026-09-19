@@ -36,7 +36,7 @@ export async function installPreview() {
     refresh_market: { updated: false, status: 'offline' },
     top_sellables: [], list_watches: [], list_listing_log: [], list_snapshots: [],
     ledger_rows: [], list_trades: [], list_notifications: [],
-    get_notification_preferences: { popups: true, categories: Object.fromEntries(['trades', 'watches', 'scans', 'baro', 'calendar', 'digest'].map(k => [k, { enabled: true, native: true }])) },
+    get_notification_preferences: { popups: true, categories: Object.fromEntries(['trades', 'watches', 'baro', 'calendar', 'digest'].map(k => [k, { enabled: true, native: true }])) },
     try_silent_unlock: false,
     get_usage_preferences: { enabled: false, available: false },
     get_overlay_settings: { enabled: false, autoDetect: true, shortcut: 'Ctrl+Shift+O', scale: 1, livePrices: true, showOwned: true, diagnostics: false },

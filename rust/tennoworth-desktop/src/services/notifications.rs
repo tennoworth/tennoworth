@@ -5,7 +5,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_notification::NotificationExt;
 
 pub const EVENT: &str = "notifications-changed";
-pub const CATEGORIES: &[&str] = &["trades", "watches", "scans", "baro", "calendar", "digest"];
+pub const CATEGORIES: &[&str] = &["trades", "watches", "baro", "calendar", "digest"];
 
 #[derive(Clone, serde::Serialize, serde::Deserialize)]
 pub struct CategoryPreference {
@@ -35,6 +35,11 @@ impl Default for Preferences {
                 .collect(),
         }
     }
+}
+/// The category set storage and the settings UI must agree on. One predicate so
+/// the read-side normalization and the write-side rejection cannot drift.
+pub fn categories_match_contract(categories: &BTreeMap<String, CategoryPreference>) -> bool {
+    categories.len() == CATEGORIES.len() && CATEGORIES.iter().all(|k| categories.contains_key(*k))
 }
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct Notification {
@@ -154,11 +159,7 @@ pub fn set_notification_preferences(
     db: State<'_, Db>,
     preferences: Preferences,
 ) -> Result<Preferences, String> {
-    if preferences.categories.len() != CATEGORIES.len()
-        || CATEGORIES
-            .iter()
-            .any(|k| !preferences.categories.contains_key(*k))
-    {
+    if !categories_match_contract(&preferences.categories) {
         return Err("Notification categories are incomplete".into());
     }
     db.set_setting(
