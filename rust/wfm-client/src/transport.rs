@@ -121,8 +121,21 @@ pub struct ReadKey {
     pub platform: String,
     pub account: Option<String>,
 }
+/// A cached read: the decoded body plus the instant that body was decoded.
+///
+/// Anything that shows a user "checked at" must carry `observed_at`, not the
+/// time the caller received the value - a cache hit would otherwise look as
+/// fresh as a live request.
+#[derive(Clone)]
+pub struct Observed {
+    pub value: serde_json::Value,
+    pub observed_at: std::time::SystemTime,
+}
+
 struct Cached {
-    result: std::sync::Mutex<Option<Result<serde_json::Value, AccessError>>>,
+    /// Payload and its observation instant are published together, so a waiter
+    /// cannot see one without the other.
+    payload: std::sync::Mutex<Option<Result<Observed, AccessError>>>,
     completed: std::sync::Mutex<Option<std::time::Instant>>,
 }
 type Cache = std::collections::HashMap<ReadKey, std::sync::Arc<Cached>>;
@@ -142,12 +155,27 @@ pub fn read_json(
     ttl: std::time::Duration,
     fresh: bool,
 ) -> Result<serde_json::Value, AccessError> {
+    read_json_observed(builder, kind, key, ttl, fresh).map(|observed| observed.value)
+}
+
+/// [`read_json`], keeping the instant the served body was decoded.
+pub fn read_json_observed(
+    builder: RequestBuilder,
+    kind: Kind,
+    key: ReadKey,
+    ttl: std::time::Duration,
+    fresh: bool,
+) -> Result<Observed, AccessError> {
     let load = || {
         let response = send(builder, kind)?;
         if !response.status().is_success() {
             return Err(AccessError::Http(response.status().as_u16()));
         }
-        response.json().map_err(|_| AccessError::Transport)
+        let value = response.json().map_err(|_| AccessError::Transport)?;
+        Ok(Observed {
+            value,
+            observed_at: std::time::SystemTime::now(),
+        })
     };
     if fresh {
         process().cache_observed(false);
@@ -170,7 +198,7 @@ pub fn read_json(
                 }
             }
             let entry = std::sync::Arc::new(Cached {
-                result: std::sync::Mutex::new(None),
+                payload: std::sync::Mutex::new(None),
                 completed: std::sync::Mutex::new(None),
             });
             cache.insert(key.clone(), entry.clone());
@@ -180,7 +208,7 @@ pub fn read_json(
     process().cache_observed(!owner);
     if owner {
         let result = load();
-        *crate::governor::lock(&entry.result) = Some(result.clone());
+        *crate::governor::lock(&entry.payload) = Some(result.clone());
         *crate::governor::lock(&entry.completed) = Some(std::time::Instant::now());
         if result.is_err() {
             let mut cache = crate::governor::lock(cache());
@@ -194,7 +222,7 @@ pub fn read_json(
         result
     } else {
         loop {
-            if let Some(result) = crate::governor::lock(&entry.result).clone() {
+            if let Some(result) = crate::governor::lock(&entry.payload).clone() {
                 return result;
             }
             process().check(kind, &context())?;
@@ -429,5 +457,66 @@ mod tests {
         load(key, true);
         task.join().unwrap();
         assert_eq!(starts.lock().unwrap().len(), 6);
+    }
+
+    #[test]
+    fn a_cache_hit_reuses_the_observation_instant_and_an_expired_entry_takes_a_new_one() {
+        let _serial = SERIAL.lock().unwrap();
+        invalidate_reads();
+        let (url, starts, task) = server(vec![OK, OK]);
+        let client = crate::build_client(5).unwrap();
+        let key = ReadKey {
+            url: url.clone(),
+            platform: "pc".into(),
+            account: None,
+        };
+        let load = |ttl| {
+            read_json_observed(client.get(&url), Kind::Read, key.clone(), ttl, false).unwrap()
+        };
+        let first = load(Duration::from_secs(15));
+        std::thread::sleep(Duration::from_millis(1100));
+        let cached = load(Duration::from_secs(15));
+        assert_eq!(
+            cached.observed_at, first.observed_at,
+            "a cache hit must not take a new observation instant"
+        );
+        let refreshed = load(Duration::from_millis(1));
+        assert!(
+            refreshed.observed_at > cached.observed_at,
+            "an expired entry must be fetched and stamped again"
+        );
+        task.join().unwrap();
+        assert_eq!(starts.lock().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn a_failed_read_is_not_remembered_as_a_result() {
+        let _serial = SERIAL.lock().unwrap();
+        invalidate_reads();
+        const NOT_FOUND: &str =
+            "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
+        let (url, starts, task) = server(vec![NOT_FOUND, NOT_FOUND]);
+        let client = crate::build_client(5).unwrap();
+        let key = ReadKey {
+            url: url.clone(),
+            platform: "pc".into(),
+            account: None,
+        };
+        for _ in 0..2 {
+            assert!(read_json_observed(
+                client.get(&url),
+                Kind::Read,
+                key.clone(),
+                Duration::from_secs(15),
+                false
+            )
+            .is_err());
+        }
+        task.join().unwrap();
+        assert_eq!(
+            starts.lock().unwrap().len(),
+            2,
+            "a failed read must reach the network again instead of being cached"
+        );
     }
 }

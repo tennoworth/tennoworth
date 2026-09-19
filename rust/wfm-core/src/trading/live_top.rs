@@ -270,19 +270,37 @@ fn fetch_one(
     q: &LiveTopQuery,
     me: Option<&str>,
 ) -> Result<LiveTop> {
-    let url = top_url(q);
-    let body = wfm_client::transport::read_json(
+    fetch_one_at(client, top_url(q), platform, q, me)
+}
+
+/// [`fetch_one`] with the URL spelled out, so a test can aim it at a local
+/// server instead of the live endpoint.
+fn fetch_one_at(
+    client: &Client,
+    url: String,
+    platform: &str,
+    q: &LiveTopQuery,
+    me: Option<&str>,
+) -> Result<LiveTop> {
+    let observed = wfm_client::transport::read_json_observed(
         wfm_client::wfm_headers(client.get(&url), platform), Kind::Read,
         wfm_client::transport::ReadKey { url, platform: platform.into(), account: me.map(String::from) },
         std::time::Duration::from_secs(15), false,
     )?;
-    let mut top = parse_top(q, &body, me)?;
+    let mut top = parse_top(q, &observed.value, me)?;
+    stamp_observed(&mut top, platform, &observed);
+    Ok(top)
+}
+
+/// Stamp the buyer book with the instant its payload was observed. The instant
+/// comes from the transport, never from a clock read here: a cache hit would
+/// otherwise be reported as a fresh observation.
+fn stamp_observed(top: &mut LiveTop, platform: &str, observed: &wfm_client::transport::Observed) {
     if let Some(book) = &mut top.buyer_book {
         book.orders
             .retain(|order| order.platform == platform || order.crossplay);
-        book.observed_at = Some(crate::time::chrono_now_iso());
+        book.observed_at = Some(crate::time::iso_from(observed.observed_at));
     }
-    Ok(top)
 }
 
 /// Look up every query through the shared request budget. Per-item
@@ -484,5 +502,33 @@ mod tests {
         let t2 = parse_top(&q("primed_flow", Some(0), None), &body, None).unwrap();
         assert_eq!(t2.own_ask, None);
         assert_eq!(t2.low_sell, Some(12.0));
+    }
+
+    /// The wiring gate: if the stamp ever goes back to a clock read taken while
+    /// stamping, this fails, because the instant it is handed is two hours old.
+    #[test]
+    fn the_book_is_stamped_with_the_observation_instant_not_the_current_clock() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/buyer-alternatives/book.json"
+        ))
+        .unwrap();
+        let query: LiveTopQuery = serde_json::from_value(fixture["query"].clone()).unwrap();
+        let mut top = parse_top(&query, &fixture["body"], None).unwrap();
+        let two_hours_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(7200);
+
+        stamp_observed(
+            &mut top,
+            "pc",
+            &wfm_client::transport::Observed {
+                value: serde_json::Value::Null,
+                observed_at: two_hours_ago,
+            },
+        );
+
+        assert_eq!(
+            top.buyer_book.unwrap().observed_at,
+            Some(crate::time::iso_from(two_hours_ago)),
+            "the stamp must describe when the payload was observed, not when it was read"
+        );
     }
 }

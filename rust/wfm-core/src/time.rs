@@ -1,7 +1,14 @@
 pub fn chrono_now_iso() -> String {
+    iso_from(std::time::SystemTime::now())
+}
+
+/// The wire's ISO-8601 UTC stamp for an observation instant. Whole seconds are
+/// deliberate: every freshness rule reading this works in whole seconds, and a
+/// coarser stamp can never look fresher than the instant it describes.
+pub fn iso_from(at: std::time::SystemTime) -> String {
     // We don't pull in chrono just for this; format manually from SystemTime.
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now()
+    use std::time::UNIX_EPOCH;
+    let secs = at
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
         .unwrap_or(0);
