@@ -151,6 +151,10 @@ export interface RivenAuction {
   mastery_level: number;
   re_rolls: number;
   polarity: string | null;
+  /** WFM's own instants for the auction, verbatim. Null when WFM omits or
+   *  malforms them - an unknown age is never rendered as a fresh listing. */
+  created: string | null;
+  updated: string | null;
   name: string | null;
   platform: string | null;
   attributes: RivenAuctionAttribute[];

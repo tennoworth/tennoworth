@@ -148,10 +148,13 @@ test('open editors and disclosures survive resizing in both directions', async (
   await page.locator('.sidebar').getByRole('button', { name: /^Rivens/ }).click();
   await page.getByRole('button', { name: 'Comps', exact: true }).first().click();
   await expect(page.getByText('Sample seller')).toBeVisible();
+  await expect(page.getByTestId('comps-sample')).toContainText('cheapest live ask');
+  await expect(page.getByTestId('comps-sample')).toContainText('listing age is not time-to-sale');
   for (const width of [320, 901, 1440]) {
     await page.setViewportSize({ width, height: 480 });
     await assertDocumentFits(page);
     await expect(page.getByText('Sample seller')).toBeVisible();
+    await expect(page.getByTestId('comps-sample')).toBeVisible();
   }
 });
 
