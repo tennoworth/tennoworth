@@ -127,7 +127,10 @@ jobs:
               - '**/AGENTS.md'
               - 'AGENTS.local.md.example'
               - 'scripts/check-agent-instructions.ts'
+              - 'scripts/check-public-surface.ts'
               - 'CONTRIBUTING.md'
+              - '.github/pull_request_template.md'
+              - 'docs/**'
             docs_only:
               - '**/*.md'
               - 'docs/**'
@@ -451,9 +454,10 @@ jobs:
       - name: Caddyfile syntax
         run: caddy validate --config deploy/Caddyfile --adapter caddyfile
 
-  # The instruction files are tracked policy with no compiler behind them. This
-  # is the only thing that runs check-agent-instructions.ts, so without it a
-  # link to a moved file or an unreachable domain file would merge unnoticed.
+  # The instruction files and the public-surface rule are tracked policy with no
+  # compiler behind them. This is the only job that runs both checks, so without
+  # it a link to a moved file, an unreachable domain file, or maintainer-local
+  # material tracked into the repository would merge unnoticed.
   instruction-check:
     needs: changes
     if: >-
@@ -466,9 +470,11 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-      # No install step: the check reads the git index and the filesystem only.
+      # No install step: the checks read the git index and the filesystem only.
       - name: instruction files
         run: bun scripts/check-agent-instructions.ts
+      - name: public surface
+        run: bun scripts/check-public-surface.ts
 
   # This is the required audit status. It runs even when a prerequisite is
   # skipped and fails only when a relevant job failed or was cancelled.

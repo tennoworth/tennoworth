@@ -68,6 +68,26 @@ missing, resolve that before UI edits rather than inventing replacement rules.
 
 ---
 
+## Repository is the public surface
+
+The GitHub repo carries source, user documentation, packaging recipes and CI -
+nothing else. Research notes, findings, investigations, audits, spike
+write-ups, plans, and maintainer or host operations runbooks are
+**maintainer-local**: their single home is `.planning/`, which `.gitignore`
+keeps out of git. Write them there, never into `docs/` or any other tracked
+path. A procedure CONTRIBUTING tells a contributor to follow is contributor
+documentation and belongs here; a note only the maintainer needs does not.
+
+`bun scripts/check-public-surface.ts` is the gate. It fails when anything under
+an ignored internal home is tracked, and when a tracked document under `docs/`
+is referenced from nowhere outside `docs/`, so a new public document has to be
+linked from README, AGENTS.md or CONTRIBUTING.md - and if it cannot be, it is
+not public documentation.
+
+If maintainer material does reach a commit, remove the commits and rebuild the
+branch. A removal commit leaves the text in the merged history, so it is not a
+remedy.
+
 ## Where things live
 
 [`docs/architecture.md`](docs/architecture.md) owns this: the repository map,

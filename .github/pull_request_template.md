@@ -3,6 +3,9 @@
 <!-- Describe the problem and resulting behavior. Link the issue if there is one;
 include acceptance examples and exclusions when they clarify the scope. -->
 
+- [ ] Nothing maintainer-local here: research, findings, audits, plans and
+      runbooks live in `.planning/` (gitignored), never in this PR.
+
 ## Evidence
 
 <!-- Choose tier 1–5 from CONTRIBUTING.md. Name affected surfaces/platforms,
