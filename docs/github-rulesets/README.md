@@ -51,7 +51,9 @@ list, the less a single compromised or mistaken account can do.
 The production ruleset and release-tag ruleset were not changed. Production
 still declares one approval and both completion gates, with its pre-existing
 administrator bypass. That bypass permits the documented non-forced
-fast-forward promotion after the production PR has been checked and approved;
+fast-forward promotion after the production PR has been checked and approved
+(for a self-authored maintainer PR, exact-commit authorization substitutes for
+the approval, as specified in `../releasing.md`);
 the new history rule also allows a fast-forward push. Do not use GitHub's merge
 button to create a divergent production merge commit. Repository policy still
 requires explicit authorization to promote production. Checks must be verified

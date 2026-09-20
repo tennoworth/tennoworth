@@ -873,7 +873,7 @@ function cmdPrepare(argv: string[]) {
     `\nDone. Review the diff, write the changelog entry, and commit all of it ` +
       `together:\n  git add -A && git commit -m "desktop ${next}"\n` +
       `Open the release-preparation PR into develop, then promote it to main ` +
-      `and dispatch release-desktop with version=${next}.`,
+      `and dispatch release-desktop with version=${next} and expected_sha set to the full approved promotion commit.`,
   );
 }
 
