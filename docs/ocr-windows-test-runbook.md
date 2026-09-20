@@ -8,7 +8,9 @@ behavior.
 
 The physical Windows host can compile and test through its standard-user
 SSH account. It does not run GitHub Actions jobs. Local results do not remove
-required GitHub checks or replace testing capture in the gaming desktop.
+required GitHub checks or replace testing capture in the gaming desktop. Host
+address, key and profile layout are maintainer-local; host access and incident
+history are recorded under `.planning/ops/`.
 
 Verified on 2026-09-04: Windows 11 Pro 25H2, MSVC 14.44.35207, Windows SDK
 10.0.26100.0, Rust/Cargo 1.98.1, Bun 1.4.1, Tauri CLI 2.11.4, and Tesseract
@@ -26,12 +28,29 @@ project version pins.
   `[System.IO.DriveInfo]::new('C').AvailableFreeSpace` to check disk space;
   `Get-PSDrive` reported an incorrect zero in the SSH session.
 - Download `eng.traineddata` from the URL and verify the SHA-256 recorded in
-  the Windows workflow before building. Build `frontend/dist-desktop`
-  before running plain Cargo builds.
+  the Windows workflow before building.
 - For the unsigned isolated installer, set
   `$env:TENNOWORTH_OCR_TEST_BUILD = '1'` and run
   `cargo tauri build --config tauri.ocr-test.conf.json --bundles nsis` from
   `rust/tennoworth-desktop`. This flag disables ordinary updater support.
+
+Build the desktop app in this order, because the Rust build embeds the frontend
+bundle at compile time:
+
+```
+cd frontend
+bun.cmd install --frozen-lockfile
+bun.cmd run build:desktop
+cd ../rust
+cargo build --release -p tennoworth-desktop
+```
+
+The artifact is `rust/target/release/tennoworth-desktop.exe`; a cold release
+build took 3m48s. **Long builds do not survive SSH detach on that host.** A
+child process is killed when the SSH session closes, and a Scheduled Task
+created by the standard account with `/sc once` never runs because it needs an
+interactive logon. Keep the SSH session open for the duration, or run it from
+the console.
 
 The transferred reward-regression snapshot passed 121 desktop Rust tests,
 four overlay component tests, Svelte checking, and the release build on
@@ -39,7 +58,7 @@ Windows. Its real three-reward OCR regression passed native 1440p, scaled
 1080p/720p, ultrawide, and 16:10 variants. Fixture recognition does not prove
 live capture, trigger timing, or overlay presentation.
 
-## Probe and log-access lessons
+## Probe isolation and evidence
 
 The full `TENNOWORTH_PROBE` run modifies notification preferences and imports
 fictional inventory into application storage. A new `WEBVIEW2_USER_DATA_FOLDER`
@@ -49,70 +68,25 @@ check because a previous probe saved different preferences. For a fresh-default
 run, build with `cargo tauri build --debug --no-bundle --config <probe-config>`
 and give that temporary JSON configuration a unique per-run `identifier`.
 Preserve existing application data; do not clear a gaming profile to reset a
-probe. Check the final report and clean process exit, not just a checkpoint.
+probe.
 
-The original installed OCR boot probe wrote
-`OCR_BOOT_PROBE_OK backend=windows-window`, but did not exit within 120 seconds
-under SSH. Lifecycle tracing reached `ExitRequested` without reaching `Exit`.
-Moving the asynchronous exit request to `Ready` did not resolve it. The probe
-now waits for `Ready`, calls Tauri's `cleanup_before_exit`, and terminates
-explicitly after setup returns. Three consecutive installed Windows launches
-passed with exit code 0 in 0.31, 0.05, and 0.05 seconds on 2026-09-05; the Linux
-OCR probe also passed. Normal application shutdown is unchanged. The workflow
-requires both success evidence and a clean exit, with a 120-second guard.
-This probe returns before creating the webview, so the original timeout was
-not evidence of WebView2 initialization failure.
-Record the exact launched PID and inspect evidence even after a timeout.
+Check the final report and a clean process exit, not just a checkpoint. The
+workflow requires both success evidence and a clean exit, with a 120-second
+guard. Record the exact launched PID and inspect evidence even after a timeout.
 Never stop another TennoWorth process based on its name alone: an inaccessible
-process in interactive session 1 remained after this probe was stopped.
+process in an interactive session can outlive a probe that was stopped.
 
-Incomplete OCR rows now preserve their missing-reward positions and suppress
+Incomplete OCR rows preserve their missing-reward positions and suppress
 best-pick marks. Complete centered two-reward and solo rows must omit the
 unoccupied outer positions of the four- and three-column detection grids;
 those are not missing rewards. Dedicated assembly tests cover this distinction
 both with and without an expected slot count. Browser checks cover partial
-two-, three-, and four-card rows. These checks do not establish the cause of
-the originally reported live Windows run. A subsequent inspection of the
-available Windows log found a four-reward batch followed by a three-reward
-batch. Both had the usual ready marker, the corresponding slot-marker count
-within two milliseconds, and a close marker about 15 seconds later. The
-three-reward batch therefore uses the event format already handled by the
-overlay. This does not prove the application received the events or identify
-the failed capture/OCR stage; application diagnostics and physical gameplay
-evidence are still needed to establish that cause.
+two-, three-, and four-card rows.
 
-For log access, grant the dedicated account inheritable `(OI)(CI)(RX)` on
-the gaming user's `AppData\Local\Warframe` and the relevant TennoWorth cache
-directory, preserving ownership and existing permissions. Scope access to
-`relic-overlay-diagnostics` when that directory exists; granting the cache
-parent also makes future diagnostics inherit access. Production uses
-`app.tennoworth.desktop`; the isolated installer uses `app.tennoworth.ocr-test`.
-Do not grant access across the entire gaming profile.
-
-Verify from the SSH account by opening `EE.log` with read access and
-`FileShare.ReadWrite | FileShare.Delete`, then closing without reading bytes.
-Directory enumeration and metadata suffice to verify permissions. A missing
-diagnostics directory is expected until diagnostics are enabled and created.
-System-wide CIM process enumeration can be denied to this standard account;
-use narrowly scoped process checks instead of broadening its privileges.
-
-## Windows shutdown and scope history
-
-The installed probe once wrote success and then stalled after `ExitRequested`
-over Windows SSH. Moving `app.exit(0)` to `Ready`, and separately releasing the
-single-instance plugin, did not fix it. Explicit Tauri cleanup and process exit
-from `Ready`, after setup returns, passed three installed Windows runs and the
-Linux OCR probe. That path creates no WebView2 window, so the original hang must
-not be attributed to WebView2. The complete Linux GUI smoke needed an isolated
-D-Bus session so the running app did not intercept the single-instance launch.
-
-Authorized Windows log inspection found ordinary four- and three-reward
-ready/slot/close batches; the three-reward slot markers arrived within two
-milliseconds and closure followed about 15 seconds later. That rules out a
-distinct three-player event format in that log - not a missed application
-trigger, and not a capture or OCR failure. Live gameplay testing was deferred by
-the maintainer at that point. The deferral is scoped to that decision: it is not
-a standing blocker, and it does not replace the baseline below.
+That recognition behavior does not establish the cause of a reported live
+Windows failure. Application diagnostics and physical gameplay evidence are
+what settle that; a log or a fixture alone does not prove the application
+received the events or which capture or OCR stage failed.
 
 ## Physical gameplay baseline
 
