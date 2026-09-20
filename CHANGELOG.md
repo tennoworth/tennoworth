@@ -54,6 +54,36 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.7.106 - 2026-09-20
+
+# 🧩 TennoWorth Desktop 0.7.106
+
+TennoWorth Desktop 0.7.106 counts the prime parts your inventory always had.
+
+The game files an unbuilt prime part under a Blueprint path that TennoWorth did not look up, so those parts were missing from the sell view, from set planning and from the Baro ducat total - one real inventory was short nine parts and 590 ducats. They resolve now. The riven comparables drawer also explains the sample it is showing and how old each listing is, a re-checked quote stops reporting itself as fresher than it is, and the inventory-ready popup that fired after every scan is gone.
+
+## Changelog (4)
+
+### Inventory
+
+- **Prime parts are no longer missing from what you own** Unbuilt prime parts are filed under a Blueprint path that TennoWorth did not recognise, so they were dropped from the owned inventory - one real inventory was short nine parts and 590 ducats. They now resolve, and they count again in the sell view, in set planning and in the Baro ducat total. <!-- app-note {"id":"blueprint-prime-parts","kind":"fixed"} -->
+
+### Rivens
+
+- **The comparables drawer accounts for its sample** It reports how many asks are in the sample, how many carry a listing time, the newest-to-oldest span, and the seller-status counts; each auction says how long ago it was listed; and the DE band note says plainly that its number is a sold count. A single Refresh replaces keeping the first fetch for the life of the view. <!-- app-note {"id":"riven-comps-sample","kind":"improved"} -->
+
+### Selling
+
+- **A re-checked quote stops looking fresher than it is** A cached buyer read was stamped with the clock at the moment it was served instead of when the payload was decoded, so re-checking inside the cache window moved the check time forward while the data stayed the same. The displayed check time now reflects when the quote was actually observed. <!-- app-note {"id":"live-quote-observed-at","kind":"fixed"} -->
+
+### Scanning
+
+- **No more inventory-ready popup after every scan** The post-scan pass still rebuilds the tray and records its summary, but it no longer writes an inbox entry or fires a desktop notice that duplicated the daily sell digest. The retired notification category is gone from settings, and stored preferences and inbox rows are cleaned up when they are read. <!-- app-note {"id":"drop-scan-notification","kind":"improved"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.7.105 - 2026-09-15
 
 # 📋 TennoWorth Desktop 0.7.105

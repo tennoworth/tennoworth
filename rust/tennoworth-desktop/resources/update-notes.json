@@ -1,5 +1,5 @@
 {
-  "version": "0.7.105",
+  "version": "0.7.106",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -210,6 +210,56 @@
           "kind": "fixed",
           "title": "Updated the library that secures market connections",
           "body": "TennoWorth now uses a rustls release that rejects TLS 1.3 handshake messages sent at the wrong encryption level.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.7.106",
+      "date": "2026-09-20",
+      "changes": [
+        {
+          "id": "blueprint-prime-parts",
+          "kind": "fixed",
+          "title": "Prime parts are no longer missing from what you own",
+          "body": "Unbuilt prime parts are filed under a Blueprint path that TennoWorth did not recognise, so they were dropped from the owned inventory - one real inventory was short nine parts and 590 ducats. They now resolve, and they count again in the sell view, in set planning and in the Baro ducat total.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "riven-comps-sample",
+          "kind": "improved",
+          "title": "The comparables drawer accounts for its sample",
+          "body": "It reports how many asks are in the sample, how many carry a listing time, the newest-to-oldest span, and the seller-status counts; each auction says how long ago it was listed; and the DE band note says plainly that its number is a sold count. A single Refresh replaces keeping the first fetch for the life of the view.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "live-quote-observed-at",
+          "kind": "fixed",
+          "title": "A re-checked quote stops looking fresher than it is",
+          "body": "A cached buyer read was stamped with the clock at the moment it was served instead of when the payload was decoded, so re-checking inside the cache window moved the check time forward while the data stayed the same. The displayed check time now reflects when the quote was actually observed.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "drop-scan-notification",
+          "kind": "improved",
+          "title": "No more inventory-ready popup after every scan",
+          "body": "The post-scan pass still rebuilds the tray and records its summary, but it no longer writes an inbox entry or fires a desktop notice that duplicated the daily sell digest. The retired notification category is gone from settings, and stored preferences and inbox rows are cleaned up when they are read.",
           "platforms": [
             "windows",
             "linux"
