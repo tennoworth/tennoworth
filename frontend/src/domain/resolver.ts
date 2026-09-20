@@ -40,6 +40,28 @@ export function pathNameGuess(path: string): string | null {
   return base.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
 }
 
+// Display-name candidates for a path no catalog resolved, in the order the
+// last-resort lookup should try them against WFM's own catalog.
+//
+// `pathNameGuess` strips the `Blueprint`/`Component` suffix, but WFM keeps
+// `Blueprint` in a part's name ("Caliban Prime Systems Blueprint") while the
+// DE path carries it too - so the stripped guess alone can never match one.
+// WFM also calls a prime Warframe's helmet slot "Neuroptics" where the path
+// says "Helmet". Only an exact market.catalog hit counts, so a wider candidate
+// list cannot fabricate an item. Mirrored in Rust (market_domain::inventory's
+// `path_guess_candidates`) and checked against tests/fixtures/name-guess.
+export function pathGuessCandidates(path: string): string[] {
+  const guess = pathNameGuess(path);
+  if (!guess) return [];
+  const base = path.split('/').pop() ?? '';
+  const names = [guess];
+  if (base.endsWith('Blueprint') || base.endsWith('Component')) names.push(`${guess} Blueprint`);
+  for (const name of [...names]) {
+    if (name.includes('Helmet')) names.push(name.replace('Helmet', 'Neuroptics'));
+  }
+  return names;
+}
+
 // Refinement levels in warframestat.us relic names. All four share a WFM
 // slug (axi_k2_relic) but WFM lists them as distinct subtypes when
 // creating an order. We preserve the refinement so each variant is a
@@ -101,18 +123,17 @@ export function resolvePath(
     }
   }
   if (!info) {
-    // Last resort: guess the display name from the path itself and check it
+    // Last resort: guess the display name from the path basename and check it
     // against WFM's own catalog. That catalog is refreshed on every scrape
     // and lists new primes the day they release - weeks before warframestat
-    // indexes their /Lotus/ paths - and weapon-part codenames usually ARE
-    // the display name (BurstonPrimeBarrel → "Burston Prime Barrel").
-    // Strict on purpose: only an exact market.catalog hit counts, so a bad
-    // guess can never fabricate an item. Category stays null; the caller
-    // falls back to the inventory key.
-    const guess = pathNameGuess(path);
-    const guessSlug = guess ? market?.catalog?.[guess.toLowerCase()] : undefined;
-    if (guess && guessSlug) {
-      return { name: guess, slug: guessSlug, category: null, subtype: null };
+    // indexes their /Lotus/ paths. Strict on purpose: only an exact
+    // market.catalog hit counts, so a bad guess can never fabricate an item.
+    // Category stays null; the caller falls back to the inventory key.
+    for (const candidate of pathGuessCandidates(path)) {
+      const guessSlug = market?.catalog?.[candidate.toLowerCase()];
+      if (guessSlug) {
+        return { name: candidate, slug: guessSlug, category: null, subtype: null };
+      }
     }
     return { name: null, slug: null, category: null, subtype: null };
   }

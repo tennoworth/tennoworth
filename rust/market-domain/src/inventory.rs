@@ -164,12 +164,17 @@ fn resolve(
         })
     });
     let Some(info) = info else {
-        let name = path_name_guess(path)?;
-        let slug = market
-            .catalog
-            .get(&name.to_lowercase())
-            .filter(|s| !s.is_empty())?;
-        return Some((name, slug.clone(), None, None));
+        let (name, slug) = path_guess_candidates(path)
+            .into_iter()
+            .find_map(|candidate| {
+                let slug = market
+                    .catalog
+                    .get(&candidate.to_lowercase())
+                    .filter(|s| !s.is_empty())?
+                    .clone();
+                Some((candidate, slug))
+            })?;
+        return Some((name, slug, None, None));
     };
     if let Some((base, refinement)) = info.name.rsplit_once(' ') {
         if ["Intact", "Exceptional", "Flawless", "Radiant"].contains(&refinement) {
@@ -263,6 +268,33 @@ pub fn path_name_guess(path: &str) -> Option<String> {
         return None;
     }
     Some(decamel(base))
+}
+
+/// Display-name candidates for a path no catalog resolved, in the order the
+/// last-resort lookup should try them against WFM's own catalog.
+///
+/// `path_name_guess` strips the `Blueprint`/`Component` suffix, but WFM keeps
+/// `Blueprint` in a part's name ("Caliban Prime Systems Blueprint") while the DE
+/// path carries it too - so the stripped guess alone can never match one. WFM
+/// also calls a prime Warframe's helmet slot "Neuroptics" where the path says
+/// "Helmet". Only an exact catalog hit counts, so a wider candidate list cannot
+/// fabricate an item.
+pub fn path_guess_candidates(path: &str) -> Vec<String> {
+    let Some(guess) = path_name_guess(path) else {
+        return Vec::new();
+    };
+    let base = path.rsplit('/').next().unwrap_or("");
+    let mut names = vec![guess.clone()];
+    if base.ends_with("Blueprint") || base.ends_with("Component") {
+        names.push(format!("{guess} Blueprint"));
+    }
+    let aliases: Vec<String> = names
+        .iter()
+        .filter(|name| name.contains("Helmet"))
+        .map(|name| name.replace("Helmet", "Neuroptics"))
+        .collect();
+    names.extend(aliases);
+    names
 }
 
 /// Insert a space between a lowercase/digit and an uppercase letter, matching

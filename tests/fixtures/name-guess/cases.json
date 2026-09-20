@@ -67,5 +67,37 @@
       "name": "Paracesis",
       "expected": "paracesis"
     }
+  ],
+  "guess_candidates_cases": [
+    {
+      "comment": "WFM keeps `Blueprint` in a prime part's name, so the stripped guess only matches once the suffix is put back",
+      "path": "/Lotus/Types/Recipes/WarframeRecipes/CalibanPrimeSystemsBlueprint",
+      "expected": ["Caliban Prime Systems", "Caliban Prime Systems Blueprint"]
+    },
+    {
+      "comment": "WFM names a prime Warframe's helmet slot Neuroptics where the DE path says Helmet; both suffixed and bare aliases are offered",
+      "path": "/Lotus/Types/Recipes/WarframeRecipes/BaruukPrimeHelmetBlueprint",
+      "expected": [
+        "Baruuk Prime Helmet",
+        "Baruuk Prime Helmet Blueprint",
+        "Baruuk Prime Neuroptics",
+        "Baruuk Prime Neuroptics Blueprint"
+      ]
+    },
+    {
+      "comment": "the Component spelling warframestat publishes offers the same Blueprint candidate",
+      "path": "/Lotus/Types/Recipes/WarframeRecipes/VoltPrimeChassisComponent",
+      "expected": ["Volt Prime Chassis", "Volt Prime Chassis Blueprint"]
+    },
+    {
+      "comment": "no suffix to restore - the bare guess is the only candidate",
+      "path": "/Lotus/Types/Recipes/Weapons/WeaponParts/AthodaiPrimeReceiver",
+      "expected": ["Athodai Prime Receiver"]
+    },
+    {
+      "comment": "empty basename yields no candidates",
+      "path": "/Lotus/Foo/",
+      "expected": []
+    }
   ]
 }

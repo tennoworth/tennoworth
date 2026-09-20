@@ -196,11 +196,22 @@ fn absorb_parent(
         } else if slug.ends_with("_blueprint") && !full_name.ends_with("Blueprint") {
             display_name = format!("{full_name} Blueprint");
         }
-        path_to_info.insert(
-            un.to_string(),
-            serde_json::json!({"name": display_name, "slug": slug, "category": parent_cat}),
-        );
-        if set_slug != Some(&slug) {
+        let own_item = set_slug != Some(&slug);
+        let info = serde_json::json!({"name": display_name, "slug": slug, "category": parent_cat});
+        // The game stores an unbuilt prime part under a `...Blueprint` path while
+        // warframestat lists the component as `...Component`; both name the same
+        // WFM item. Register the sibling spelling too, or the form the inventory
+        // actually carries resolves to nothing and the part silently vanishes
+        // from the owned map - it cost one real inventory 590 ducats.
+        if own_item {
+            if let Some(stem) = un.strip_suffix("Component") {
+                path_to_info
+                    .entry(format!("{stem}Blueprint"))
+                    .or_insert_with(|| info.clone());
+            }
+        }
+        path_to_info.insert(un.to_string(), info);
+        if own_item {
             let quantity = comp
                 .get("itemCount")
                 .and_then(|v| v.as_u64())
@@ -284,4 +295,171 @@ pub fn fetch_wfstat_raw() -> Result<serde_json::Value, String> {
         return Err(format!("{url}: HTTP {status}"));
     }
     serde_json::from_str(&body).map_err(|e| format!("{url}: JSON: {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    const SYSTEMS_COMPONENT: &str =
+        "/Lotus/Types/Recipes/WarframeRecipes/CalibanPrimeSystemsComponent";
+    const SYSTEMS_BLUEPRINT: &str =
+        "/Lotus/Types/Recipes/WarframeRecipes/CalibanPrimeSystemsBlueprint";
+
+    fn parent() -> serde_json::Value {
+        json!({
+            "name": "Caliban Prime",
+            "category": "Warframes",
+            "components": [
+                { "uniqueName": SYSTEMS_COMPONENT, "name": "Systems Blueprint", "itemCount": 1 }
+            ]
+        })
+    }
+
+    fn catalogs(entries: &[(&str, &str)]) -> HashMap<String, String> {
+        entries
+            .iter()
+            .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+            .collect()
+    }
+
+    fn absorb(catalog: &HashMap<String, String>) -> HashMap<String, serde_json::Value> {
+        let mut path_to_info = HashMap::new();
+        let mut set_to_parts = HashMap::new();
+        absorb_parent(
+            &parent(),
+            "Warframes",
+            catalog,
+            &mut path_to_info,
+            &mut set_to_parts,
+        );
+        path_to_info
+    }
+
+    /// The game stores an unbuilt prime part under a `...Blueprint` path while
+    /// warframestat's component list carries `...Component`; both name the same
+    /// WFM item. Baking only the Component spelling dropped nine parts from a
+    /// real inventory and undercounted Baro's ducat total by 590.
+    #[test]
+    fn prime_part_component_also_registers_the_blueprint_path() {
+        let catalog = catalogs(&[
+            ("caliban prime set", "caliban_prime_set"),
+            (
+                "caliban prime systems blueprint",
+                "caliban_prime_systems_blueprint",
+            ),
+        ]);
+        let path_to_info = absorb(&catalog);
+
+        let entry = path_to_info
+            .get(SYSTEMS_BLUEPRINT)
+            .expect("the blueprint path the game stores must be registered");
+        assert_eq!(entry["slug"], "caliban_prime_systems_blueprint");
+        assert_eq!(entry["name"], "Caliban Prime Systems Blueprint");
+    }
+
+    /// Coverage form of the rule: every Component path the bake emits needs its
+    /// Blueprint sibling, whatever the part is called.
+    #[test]
+    fn every_component_path_gets_a_blueprint_sibling() {
+        let catalog = catalogs(&[
+            ("caliban prime set", "caliban_prime_set"),
+            (
+                "caliban prime systems blueprint",
+                "caliban_prime_systems_blueprint",
+            ),
+            (
+                "caliban prime chassis blueprint",
+                "caliban_prime_chassis_blueprint",
+            ),
+            (
+                "caliban prime neuroptics blueprint",
+                "caliban_prime_neuroptics_blueprint",
+            ),
+        ]);
+        let parent = json!({
+            "name": "Caliban Prime",
+            "category": "Warframes",
+            "components": [
+                {
+                    "uniqueName": "/Lotus/Types/Recipes/WarframeRecipes/CalibanPrimeSystemsComponent",
+                    "name": "Systems Blueprint",
+                    "itemCount": 1
+                },
+                {
+                    "uniqueName": "/Lotus/Types/Recipes/WarframeRecipes/CalibanPrimeChassisComponent",
+                    "name": "Chassis Blueprint",
+                    "itemCount": 1
+                },
+                {
+                    "uniqueName": "/Lotus/Types/Recipes/WarframeRecipes/CalibanPrimeHelmetComponent",
+                    "name": "Neuroptics Blueprint",
+                    "itemCount": 1
+                }
+            ]
+        });
+        let mut path_to_info = HashMap::new();
+        let mut set_to_parts = HashMap::new();
+        absorb_parent(
+            &parent,
+            "Warframes",
+            &catalog,
+            &mut path_to_info,
+            &mut set_to_parts,
+        );
+
+        let components: Vec<String> = path_to_info
+            .keys()
+            .filter(|key| key.ends_with("Component"))
+            .cloned()
+            .collect();
+        assert_eq!(components.len(), 3, "expected three baked components");
+        for component in &components {
+            let stem = component.strip_suffix("Component").unwrap_or(component);
+            assert!(
+                path_to_info.contains_key(&format!("{stem}Blueprint")),
+                "no Blueprint sibling for {component}"
+            );
+        }
+    }
+
+    /// A component that resolved only through its set must not hand that set
+    /// slug to the blueprint path - a set is not the part the kiosk takes.
+    #[test]
+    fn component_resolved_only_to_its_set_registers_no_blueprint_path() {
+        let catalog = catalogs(&[("caliban prime set", "caliban_prime_set")]);
+        let path_to_info = absorb(&catalog);
+
+        assert!(path_to_info.contains_key(SYSTEMS_COMPONENT));
+        assert!(!path_to_info.contains_key(SYSTEMS_BLUEPRINT));
+    }
+
+    /// A blueprint path upstream already supplied wins; the sibling covers the
+    /// spelling warframestat omits rather than overriding what it gave us.
+    #[test]
+    fn an_existing_blueprint_path_is_left_alone() {
+        let catalog = catalogs(&[
+            ("caliban prime set", "caliban_prime_set"),
+            (
+                "caliban prime systems blueprint",
+                "caliban_prime_systems_blueprint",
+            ),
+        ]);
+        let mut path_to_info = HashMap::new();
+        path_to_info.insert(
+            SYSTEMS_BLUEPRINT.to_string(),
+            json!({"name": "Upstream Name", "slug": "upstream_slug", "category": "Upstream"}),
+        );
+        let mut set_to_parts = HashMap::new();
+        absorb_parent(
+            &parent(),
+            "Warframes",
+            &catalog,
+            &mut path_to_info,
+            &mut set_to_parts,
+        );
+
+        assert_eq!(path_to_info[SYSTEMS_BLUEPRINT]["slug"], "upstream_slug");
+    }
 }
