@@ -13,7 +13,8 @@ name: release-desktop
 #     bun scripts/release.ts snapshot
 #     bun scripts/release.ts prepare <major|minor|patch|X.Y.Z>
 #   Fill the changelog entry, merge the release-prep PR, promote to `main`, then:
-#     Actions → release-desktop → Run workflow, from `main`, version = X.Y.Z
+#     Actions → release-desktop → Run workflow, from `main`, version = X.Y.Z,
+#     expected_sha = the full approved promotion commit
 #   Policy and release decision: docs/releasing.md
 #
 # There is deliberately NO tag trigger. The tag is no longer the *input* to a
@@ -50,6 +51,10 @@ env:
 on:
   workflow_dispatch:
     inputs:
+      expected_sha:
+        description: 'Full approved main commit SHA (must match the dispatched revision)'
+        required: true
+        type: string
       version:
         description: 'Version to release, X.Y.Z (no leading v, no prerelease suffix)'
         required: true
@@ -81,6 +86,17 @@ jobs:
       tag: ${{ steps.check.outputs.tag }}
       notes: ${{ steps.notes.outputs.body }}
     steps:
+      - name: Verify approved release revision
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          ACTUAL_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$EXPECTED_SHA" != "$ACTUAL_SHA" ]]; then
+            echo "::error::Release revision does not match the approved full commit SHA."
+            exit 1
+          fi
+
       # The ref is not just a convention here: `publish` creates the tag at the
       # SHA this job captured, so allowing a dispatch from a feature branch
       # would mean tagging a release at a commit that was never on main.

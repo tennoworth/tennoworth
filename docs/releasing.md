@@ -92,7 +92,12 @@ the desktop release contains the complete, tested `main` commit.
    release-preparation PR into `develop`.
 4. Promote. Open a production PR from `develop` to `main` and satisfy its
    required checks and approval; promotion additionally requires explicit
-   maintainer authorization. **A production PR does not make GitHub's merge
+   maintainer authorization naming the candidate commit. For a maintainer's
+   own production PR, that authorization substitutes for the approval they
+   cannot give themselves. The existing administrator bypass permits only
+   this reviewed fast-forward path; it does not waive successful required
+   checks, resolved review threads, or history protection.
+   **A production PR does not make GitHub's merge
    button safe.** Before opening it, require
    `git merge-base --is-ancestor main develop`. If that fails, an earlier
    promotion was never merged back and the fast-forward promotion is
@@ -108,7 +113,12 @@ the desktop release contains the complete, tested `main` commit.
    A hotfix is the one case that does not start from `develop`: branch it from
    `main`, merge to `main`, then merge `main` back into `develop` immediately,
    so the next promotion does not have to repair ancestry first.
-5. From `main`, run **Actions → release-desktop** with that version. Its
+5. From `main`, run **Actions → release-desktop** with that version and
+   `expected_sha` set to the full approved promotion commit. Preflight rejects
+   a dispatch whose captured commit differs, even if its version is unchanged.
+   Record the run URL and verify its commit before treating it as release evidence.
+   The `desktop-release` environment is an approval gate only if its live
+   protection rules configure one; its name alone grants no authorization. Its
    preflight rejects a repository snapshot older than 24 hours, so skipping the
    explicit refresh is visible before either platform starts compiling.
 6. Let the workflow build and sign both packages. Before publication, it silently
@@ -118,6 +128,20 @@ the desktop release contains the complete, tested `main` commit.
    feed. Do not replace these steps with a hand-created tag or GitHub Release.
 7. Verify the public release assets and updater manifest. For an urgent
    regression, ship a newer hotfix; never mutate a published versioned release.
+
+If promotion already advanced `main`, resume delivery verification from the
+recorded candidate and run IDs; do not push again or dispatch a duplicate
+release. Inspect any existing release and updater state before retrying the
+failed workflow job. A new candidate needs its own authorization.
+
+For website delivery, retain the currently deployed bundle and its commit and
+checksum before replacing the rolling artifact. Verify the new deployed commit,
+the main page and its assets, and market-data loading. Allow up to 15 minutes
+after publication for the host pull; on timeout report promotion as complete
+and deployment as unverified. Recovery must identify a retained known-good
+bundle or a reviewed revert/hotfix through the normal promotion path. Do not
+reset `main`, assume the rolling asset retains history, or restore an old bundle
+without deployment authorization.
 
 Updater checks keep using `desktop-latest/latest.json`, while each platform's
 download URL points to its immutable `desktop-vX.Y.Z` release. Supported older

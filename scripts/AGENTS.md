@@ -22,7 +22,9 @@ for required checks and ../docs/releasing.md for release preparation.
   relative links resolve and that every tracked `*/AGENTS.md` is reachable from
   the root router. Run it from the repository root. It reads the git index, so a
   new instruction file must be staged before it is visible here, and it
-  deliberately does not check backticked paths.
+  deliberately does not check backticked paths. Its optional `--local` mode
+  checks installed skill frontmatter/links and local adapter instruction targets
+  on disk; it is not a publication gate and requires no provider runtime.
 - `check-public-surface.ts` - the gate for what may be published. It fails when
   maintainer-local material (research, plans, audits, host runbooks) is tracked
   despite the ignore rules, and when a tracked document under `docs/` is

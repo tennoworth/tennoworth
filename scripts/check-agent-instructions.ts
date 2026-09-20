@@ -25,12 +25,94 @@
 //
 // Usage: bun scripts/check-agent-instructions.ts   (from the repository root)
 import { posix, resolve } from "node:path";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 
 const ROOT = resolve(import.meta.dir, "..");
 // The root sat at 24.5 KB before this restructuring and 16 KB after it, so warn
 // with headroom rather than on every run - an always-on warning gets ignored.
 const WARN_BYTES = 20_000;
 const ROOT_FILE = "AGENTS.md";
+
+if (process.argv.slice(2).includes("--local")) {
+  checkLocal();
+  process.exit(0);
+}
+if (process.argv.length > 2) {
+  console.error("Usage: bun scripts/check-agent-instructions.ts [--local]");
+  process.exit(2);
+}
+
+function checkLocal() {
+  if (process.argv.length !== 3) {
+    console.error("Usage: bun scripts/check-agent-instructions.ts --local");
+    process.exit(2);
+  }
+  const errors: string[] = [];
+  let count = 0;
+  const checkLinks = (file: string, text: string) => {
+    for (const target of linksIn(text)) {
+      if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("#")) continue;
+      const path = resolve(ROOT, posix.dirname(file), target.split("#")[0]);
+      if (!existsSync(path)) errors.push(`${file}: missing reference ${target}`);
+    }
+  };
+  if (!existsSync(resolve(ROOT, ROOT_FILE))) {
+    errors.push("AGENTS.md is missing");
+  } else {
+    checkLinks(ROOT_FILE, readFileSync(resolve(ROOT, ROOT_FILE), "utf8"));
+  }
+  const skills = resolve(ROOT, ".agents/skills");
+  if (existsSync(skills)) {
+    for (const entry of readdirSync(skills, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const file = `.agents/skills/${entry.name}/SKILL.md`;
+      const path = resolve(ROOT, file);
+      if (!existsSync(path)) {
+        errors.push(`${file}: missing entrypoint`);
+        continue;
+      }
+      count++;
+      const text = readFileSync(path, "utf8");
+      const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(text);
+      try {
+        const data = frontmatter ? Bun.YAML.parse(frontmatter[1]) as Record<string, unknown> : null;
+        if (!data || data.name !== entry.name || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(entry.name)
+          || typeof data.description !== "string" || !data.description.trim()) {
+          errors.push(`${file}: expected matching name and nonempty description`);
+        }
+      } catch {
+        errors.push(`${file}: malformed YAML frontmatter`);
+      }
+      checkLinks(file, text);
+    }
+  }
+  const adapter = resolve(ROOT, "opencode.json");
+  if (existsSync(adapter)) {
+    try {
+      const data = JSON.parse(readFileSync(adapter, "utf8"));
+      if (data.instructions !== undefined && (!Array.isArray(data.instructions)
+        || data.instructions.some((path: unknown) => typeof path !== "string"))) {
+        errors.push("opencode.json: instructions must be an array of paths");
+      } else {
+        for (const target of data.instructions ?? []) {
+          if (/^https?:\/\//.test(target)) continue;
+          if (!existsSync(resolve(ROOT, target))) {
+            errors.push(`opencode.json: missing instruction target ${target}`);
+          }
+        }
+      }
+    } catch {
+      errors.push("opencode.json: malformed configuration");
+    }
+  }
+  if (errors.length) {
+    console.error(errors.join("\n"));
+    process.exit(1);
+  }
+  console.log(`check-agent-instructions --local: ok (${count} installed skills; ${existsSync(adapter) ? "OpenCode adapter checked" : "no local adapter"}).`);
+  if (!count) console.log("No local skills installed; a clean clone does not include maintainer procedures.");
+  console.log("This validates files and references, not automatic discovery by a tool.");
+}
 
 const problems: string[] = [];
 

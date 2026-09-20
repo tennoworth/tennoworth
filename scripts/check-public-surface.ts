@@ -3,8 +3,9 @@
 //
 // The GitHub repo is source, user documentation, packaging recipes and CI.
 // Research notes, findings, investigations, audits, spike write-ups, plans and
-// maintainer/ops runbooks are maintainer-local: `/.planning/` is their single
-// home and `.gitignore` keeps it out of git. AGENTS.md states the rule; this is
+// maintainer/ops runbooks are maintainer-local: `/.planning/` holds working
+// material and `/.agents/skills/` holds reusable procedures, both gitignored.
+// AGENTS.md states the rule; this is
 // what makes it fail closed, because a rule with no gate is a comment.
 //
 // WHAT IT VALIDATES, AND AGAINST WHAT
@@ -29,7 +30,7 @@
 import { posix, resolve } from "node:path";
 
 const ROOT = resolve(import.meta.dir, "..");
-const INTERNAL_HOMES = [".planning/", ".research/", ".mockups/", "docs/mockups/"];
+const INTERNAL_HOMES = [".planning/", ".agents/skills/", ".research/", ".mockups/", "docs/mockups/"];
 const problems: string[] = [];
 
 function git(args: string[]) {

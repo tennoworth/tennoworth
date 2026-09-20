@@ -5,13 +5,21 @@ checkout. `AGENTS.local.md` is gitignored: never commit it, never put
 credentials or key material in it, and never move a rule into it that another
 checkout also needs.
 
-The instruction loader reads it after the base files, so it can refine or
-override them for this machine. It is the right home for:
+Read it explicitly after the applicable base instructions; automatic loading
+is tool-dependent. It refines machine setup, not repository-wide policy or
+production authorization. It is the right home for:
 
 - host names, addresses and SSH details for build or test machines;
 - local paths, profile directories and toolchain locations;
 - environment quirks specific to this box;
 - anything else that identifies this checkout or its operator.
+
+Keep dated investigations and execution evidence in `.planning/`, and reusable
+procedures in `.agents/skills/`. A fresh clone contains neither the local
+overlay nor local skills. Copy only the required skills from a trusted checkout,
+then run `bun scripts/check-agent-instructions.ts --local`. If a worktree uses
+skills from another checkout, record that absolute location here; validate policy
+against the worktree's candidate, not the location containing the skill.
 
 ## Windows build host (example)
 

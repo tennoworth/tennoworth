@@ -23,8 +23,9 @@ to edit **before** you edit it:
 - [`scripts/AGENTS.md`](scripts/AGENTS.md) - release, CSP, probe, and
   deployment tools and shared fixtures.
 
-`AGENTS.local.md` is a gitignored, machine-local overlay loaded after these
-files. If it exists, read it and follow it - it carries host, path and
+`AGENTS.local.md` is a gitignored, machine-local overlay. Explicitly read it
+after the applicable instruction files if it exists; do not assume a tool
+loaded it automatically. It carries host, path and
 environment details that do not belong in the repository.
 
 ## Required design reference for UI work
@@ -57,10 +58,23 @@ that checkout; each clone, including the Windows build host, keeps its own.
 
 A fresh worktree or clone does not receive `AGENTS.local.md`: it is ignored, so
 Git does not copy it. Create it from the example when the work needs
-host-specific detail. The instruction loader used here reads the overlay
-automatically after the base files; other tools may not, so treat it as
-configuration the reader has to be told about rather than something guaranteed
-to have been loaded.
+host-specific detail. Each tool must follow this explicit read contract,
+whether or not its own loader supports local overlays.
+
+Reusable local procedures live in `.agents/skills/<task>/SKILL.md`. Inspect
+their names and descriptions when selecting a procedure, then read the matching
+skill and its required references. If a requested skill is missing, report it;
+do not silently substitute a provider's unrelated skill. These files are
+gitignored and must be copied deliberately from a trusted checkout, or read
+there by absolute path. Never copy credentials as part of skill setup.
+
+Keep provider configuration as a thin adapter to these instructions. Plugin,
+permission and runtime settings stay in the tool's required configuration file;
+project rules and procedures have one owner here and under `.agents/skills/`.
+Do not add unused provider directories or depend on automatic discovery for
+correctness. Run `bun scripts/check-agent-instructions.ts --local` after local
+skill or adapter changes. It checks the files on disk; the default command
+continues to check only tracked instructions from the index.
 
 `docs/design-system.md` is public source documentation and must exist in the
 revision you are working in. If it, or an applicable instruction file, is
@@ -74,9 +88,15 @@ The GitHub repo carries source, user documentation, packaging recipes and CI -
 nothing else. Research notes, findings, investigations, audits, spike
 write-ups, plans, and maintainer or host operations runbooks are
 **maintainer-local**: their single home is `.planning/`, which `.gitignore`
-keeps out of git. Write them there, never into `docs/` or any other tracked
-path. A procedure CONTRIBUTING tells a contributor to follow is contributor
-documentation and belongs here; a note only the maintainer needs does not.
+keeps out of git. Reusable maintainer skills are the exception: their single
+home is `.agents/skills/`, also gitignored. Inspect matching
+`.agents/skills/*/SKILL.md` files when a task invokes a local procedure; these
+use portable Markdown and scripts, with no provider-specific metadata. They
+must be copied explicitly to fresh clones or accessed from their original
+checkout. Write other maintainer material into `.planning/`, never into
+`docs/` or any other tracked path. A procedure CONTRIBUTING tells a contributor
+to follow is contributor documentation and belongs here; a note only the
+maintainer needs does not.
 
 `bun scripts/check-public-surface.ts` is the gate. It fails when anything under
 an ignored internal home is tracked, and when a tracked document under `docs/`

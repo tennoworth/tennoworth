@@ -18,6 +18,41 @@ import {
 
 const NOW = Date.parse("2026-09-02T12:00:00Z");
 
+describe("approved desktop release revision", () => {
+  const workflow = Bun.YAML.parse(readFileSync(
+    new URL("../.github/workflows/release-desktop.yml", import.meta.url), "utf8",
+  )) as any;
+  const guard = workflow.jobs.preflight.steps.find(
+    (step: any) => step.name === "Verify approved release revision",
+  );
+  const approved = "a".repeat(40);
+
+  test("requires the expected SHA and checks it before building", () => {
+    expect(workflow.on.workflow_dispatch.inputs.expected_sha.required).toBe(true);
+    expect(workflow.jobs.preflight.steps[0]).toBe(guard);
+    expect(guard.env).toEqual({
+      EXPECTED_SHA: "${{ inputs.expected_sha }}",
+      ACTUAL_SHA: "${{ github.sha }}",
+    });
+  });
+
+  for (const [expected, actual, passes] of [
+    [approved, approved, true],
+    [approved, "b".repeat(40), false],
+    ["", approved, false],
+    ["a".repeat(7), approved, false],
+    ["z".repeat(40), "z".repeat(40), false],
+    ["$(exit 0)", approved, false],
+  ] as const) {
+    test(`dispatch revision ${JSON.stringify(expected)} / ${actual.slice(0, 7)}`, () => {
+      const result = Bun.spawnSync(["bash", "-c", guard.run], {
+        env: { ...process.env, EXPECTED_SHA: expected, ACTUAL_SHA: actual },
+      });
+      expect(result.exitCode === 0).toBe(passes);
+    });
+  }
+});
+
 function validMarket() {
   return {
     updated_at: "2026-09-02T10:00:00Z",
