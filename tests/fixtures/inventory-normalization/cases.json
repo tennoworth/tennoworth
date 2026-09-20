@@ -741,6 +741,163 @@
         "unresolved": {},
         "flat_count": 11
       }
+    },
+    {
+      "name": "prime warframe part blueprint resolves by re-adding the stripped suffix",
+      "request": {
+        "inventory": {
+          "Recipes": [
+            {
+              "ItemType": "/Lotus/Types/Recipes/WarframeRecipes/CalibanPrimeSystemsBlueprint",
+              "ItemCount": 1
+            }
+          ]
+        },
+        "catalog": [],
+        "market": {
+          "catalog": {
+            "caliban prime systems blueprint": "caliban_prime_systems_blueprint"
+          },
+          "path_to_info": {
+            "/Lotus/Types/Recipes/WarframeRecipes/CalibanPrimeSystemsComponent": {
+              "name": "Caliban Prime Systems Blueprint",
+              "slug": "caliban_prime_systems_blueprint",
+              "category": "Warframes"
+            }
+          }
+        }
+      },
+      "expected": {
+        "owned": [
+          [
+            "caliban_prime_systems_blueprint|",
+            {
+              "count": 1,
+              "name": "Caliban Prime Systems Blueprint",
+              "type": "Recipes",
+              "slug": "caliban_prime_systems_blueprint",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "unresolved": {},
+        "flat_count": 1
+      }
+    },
+    {
+      "name": "prime warframe helmet blueprint resolves through the neuroptics alias",
+      "request": {
+        "inventory": {
+          "Recipes": [
+            {
+              "ItemType": "/Lotus/Types/Recipes/WarframeRecipes/BaruukPrimeHelmetBlueprint",
+              "ItemCount": 1
+            }
+          ]
+        },
+        "catalog": [],
+        "market": {
+          "catalog": {
+            "baruuk prime neuroptics blueprint": "baruuk_prime_neuroptics_blueprint"
+          },
+          "path_to_info": {
+            "/Lotus/Types/Recipes/WarframeRecipes/BaruukPrimeHelmetComponent": {
+              "name": "Baruuk Prime Neuroptics Blueprint",
+              "slug": "baruuk_prime_neuroptics_blueprint",
+              "category": "Warframes"
+            }
+          }
+        }
+      },
+      "expected": {
+        "owned": [
+          [
+            "baruuk_prime_neuroptics_blueprint|",
+            {
+              "count": 1,
+              "name": "Baruuk Prime Neuroptics Blueprint",
+              "type": "Recipes",
+              "slug": "baruuk_prime_neuroptics_blueprint",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "unresolved": {},
+        "flat_count": 1
+      }
+    },
+    {
+      "name": "prime warframe main blueprint still resolves through path_to_info",
+      "request": {
+        "inventory": {
+          "Recipes": [
+            {
+              "ItemType": "/Lotus/Types/Recipes/WarframeRecipes/VorunaPrimeBlueprint",
+              "ItemCount": 1
+            }
+          ]
+        },
+        "catalog": [],
+        "market": {
+          "catalog": {},
+          "path_to_info": {
+            "/Lotus/Types/Recipes/WarframeRecipes/VorunaPrimeBlueprint": {
+              "name": "Voruna Prime Blueprint",
+              "slug": "voruna_prime_blueprint",
+              "category": "Warframes"
+            }
+          }
+        }
+      },
+      "expected": {
+        "owned": [
+          [
+            "voruna_prime_blueprint|",
+            {
+              "count": 1,
+              "name": "Voruna Prime Blueprint",
+              "type": "Warframes",
+              "slug": "voruna_prime_blueprint",
+              "subtype": null,
+              "kept_lvl": null,
+              "leveled": 0
+            }
+          ]
+        ],
+        "unresolved": {},
+        "flat_count": 1
+      }
+    },
+    {
+      "name": "untradeable part blueprint stays unresolved instead of guessing a near miss",
+      "request": {
+        "inventory": {
+          "Recipes": [
+            {
+              "ItemType": "/Lotus/Types/Recipes/WarframeRecipes/FrostChassisBlueprint",
+              "ItemCount": 2
+            }
+          ]
+        },
+        "catalog": [],
+        "market": {
+          "catalog": {
+            "frost prime chassis blueprint": "frost_prime_chassis_blueprint"
+          },
+          "path_to_info": {}
+        }
+      },
+      "expected": {
+        "owned": [],
+        "unresolved": {
+          "Recipes": 1
+        },
+        "flat_count": 1
+      }
     }
   ]
 }

@@ -22,7 +22,7 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 use std::sync::OnceLock;
 
-use market_domain::inventory::{path_name_guess, slug_guess};
+use market_domain::inventory::{path_guess_candidates, slug_guess};
 use market_math::sell_priority::{self, PricedEntry};
 use serde::{Deserialize, Deserializer};
 
@@ -316,9 +316,14 @@ impl MarketData {
         //    accept it ONLY on an exact market.catalog hit (strict, like the TS -
         //    a bad guess can never fabricate an item).
         let Some(info) = info else {
-            let guess = path_name_guess(path)?;
-            let slug = self.catalog.get(&guess.to_lowercase())?;
-            return Some((guess, slug.clone()));
+            let (name, slug) = path_guess_candidates(path)
+                .into_iter()
+                .find_map(|candidate| {
+                    self.catalog
+                        .get(&candidate.to_lowercase())
+                        .map(|slug| (candidate, slug.clone()))
+                })?;
+            return Some((name, slug));
         };
 
         // 4. name → slug via the market catalog, else a slug guess (which may not
@@ -522,6 +527,7 @@ pub fn build_notification(sellables: &[SellableRow]) -> Option<ScanNotification>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use market_domain::inventory::path_name_guess;
 
     // ---- cross-language ranking parity (Rust consumer side) ---------------
     // The TS canonical side lives in frontend/src/lib/sell-priority.parity.test.ts;
@@ -750,9 +756,15 @@ mod tests {
         expected: String,
     }
     #[derive(Deserialize)]
+    struct GuessCandidatesCase {
+        path: String,
+        expected: Vec<String>,
+    }
+    #[derive(Deserialize)]
     struct NameGuessFixture {
         path_name_guess_cases: Vec<PathGuessCase>,
         slug_guess_cases: Vec<SlugGuessCase>,
+        guess_candidates_cases: Vec<GuessCandidatesCase>,
     }
 
     #[test]
@@ -779,6 +791,14 @@ mod tests {
                 c.expected,
                 "slug_guess({:?}) diverged from resolver.ts's slugGuess",
                 c.name
+            );
+        }
+        for c in &fx.guess_candidates_cases {
+            assert_eq!(
+                path_guess_candidates(&c.path),
+                c.expected,
+                "path_guess_candidates({:?}) diverged from resolver.ts's pathGuessCandidates",
+                c.path
             );
         }
     }
