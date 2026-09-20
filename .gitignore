@@ -29,6 +29,7 @@ wfm_inventory_sellable.csv
 /docs/mockups/
 /.research/
 /.planning/
+/.agents/skills/
 /rust/tennoworth-desktop/resources/tessdata/eng.traineddata
 /.loop-journal.md
 /docs/onboarding-friction.md
@@ -49,6 +50,8 @@ AGENTS.local.md
 # the maintainer, not in a public repo that has no other contributors to serve.
 # (These were tracked before 2026-08-01 and remain in history - untracking
 # stops future exposure, it does not retroactively remove them.)
+# Their retained content now lives under `.planning/archive/`; these rules stay
+# so a stray copy recreated at the old path stays uncommittable.
 /docs/branching.md
 /docs/desktop-spike-findings.md
 /docs/onboarding-gates.md

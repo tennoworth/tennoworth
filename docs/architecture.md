@@ -88,7 +88,8 @@ hosted site is informational only - no accounts, no file access, no scan - and
 ## CI inventory
 
 `.github/workflows/` holds the release and verification workflows:
-`release-desktop` (desktop artifacts, cut on `desktop-v*` tags), `build-web`,
+`release-desktop` (manual dispatch bound to an approved commit; creates the
+immutable `desktop-v*` tag during publication), `build-web`,
 `build-usage`, `audit`, `ui-smoke`, and the on-demand `ocr-windows-test` and
 `publish-wfm-policy`. Shared composite actions live in `.github/actions/`:
 `setup-rust`, `setup-windows-ocr` and `publish-rolling-release`, which the
