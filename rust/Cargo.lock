@@ -6560,6 +6560,7 @@ dependencies = [
  "directories",
  "hmac",
  "libc",
+ "market-domain",
  "pbkdf2",
  "rand 0.8.6",
  "regex",

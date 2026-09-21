@@ -120,6 +120,7 @@ flowchart TD
   Desktop --> Core[wfm-core]
   Desktop --> Math[market-math]
   Core --> Client[wfm-client]
+  Core --> Market[market-domain]
   Scrape[wfm-scrape] --> Math
   Scrape --> Client
 ```
@@ -177,6 +178,14 @@ combines anonymous scraping with authenticated order mutation. `market-math`
 has no I/O or clock dependency. `market-domain` is the sixth workspace member:
 it isolates decision contracts and computations from both Tauri and the network
 core, so shared fixtures and contract generation can run without the GUI stack.
+
+That is why `wfm-core` depends on `market-domain` rather than the reverse, and
+only where a transport response has to become a typed contract. The
+market's own-orders response is decoded once, in `wfm-core::trading::orders`,
+into the vendor-neutral `market-domain::orders` types; a response it cannot read
+whole is refused as a whole rather than partly reconciled. Consumers read the
+decoded order and never the response body, so two surfaces cannot resolve the
+same row to different orders.
 
 ## Data and failure boundaries
 

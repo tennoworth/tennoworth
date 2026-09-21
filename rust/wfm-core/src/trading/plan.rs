@@ -13,9 +13,11 @@ use crate::identity::random_token;
 use crate::time::chrono_now_iso;
 use crate::trading::catalog::WfmCatalogItem;
 use crate::trading::listing::{
-    list_user_orders, patch_one_order, send_mutation, Unlocked, MAX_PLATINUM,
+    decode_user_orders, list_user_orders, patch_one_order, send_mutation, Unlocked, MAX_PLATINUM,
 };
+use crate::trading::orders::DecodedOrders;
 use crate::trading::pending::{clear_pending, write_pending_atomic, PendingItem, PendingPlan};
+use market_domain::orders::{NormalizedOrder, OrderRow, OrderSide};
 
 /// Resets a plan-in-flight flag on scope exit - including early return and
 /// panic - so a rejected or crashed request can't leave plan execution wedged.
@@ -269,7 +271,9 @@ pub fn run_pending(
     };
 
     run_pending_with(pending_path, pending, validate, |item, validate| {
-        execute_one(&http, unlocked, item, &mut || list_user_orders(unlocked), validate)
+        execute_one(&http, unlocked, item, &mut || {
+            decode_user_orders(unlocked, &list_user_orders(unlocked)?)
+        }, validate)
     })
 }
 
@@ -446,33 +450,13 @@ pub struct ExistingOrder {
     pub ambiguous: bool,
 }
 
-/// (itemId, order type, rank, subtype) - the identity WFM enforces uniqueness
-/// on (a second order with the same key 403s with
-/// `app.order.error.exceededOrderLimitSamePrice`).
-pub type OrderKey = (String, String, Option<u64>, Option<String>);
+/// The identity the market enforces uniqueness on - a second order with the
+/// same key 403s with `app.order.error.exceededOrderLimitSamePrice`. The
+/// contract owns the shape; this alias keeps the call sites reading as they did.
+pub type OrderKey = market_domain::orders::OrderKey;
 
-fn index_one_order(
-    out: &mut BTreeMap<OrderKey, ExistingOrder>,
-    o: &serde_json::Value,
-    bucket_type: Option<&str>,
-) {
-    let Some(id) = o.get("id").and_then(|v| v.as_str()) else {
-        return;
-    };
-    let Some(item_id) = o.get("itemId").and_then(|v| v.as_str()) else {
-        return;
-    };
-    let Some(ty) = o.get("type").and_then(|v| v.as_str()).or(bucket_type) else {
-        return;
-    };
-    let key = (
-        item_id.to_string(),
-        ty.to_string(),
-        o.get("rank").and_then(|v| v.as_u64()),
-        o.get("subtype")
-            .and_then(|v| v.as_str())
-            .map(str::to_string),
-    );
+fn index_one_order(out: &mut BTreeMap<OrderKey, ExistingOrder>, order: &NormalizedOrder) {
+    let key = order.key();
     if let Some(prior) = out.get_mut(&key) {
         prior.ambiguous = true;
         return;
@@ -480,35 +464,24 @@ fn index_one_order(
     out.insert(
         key,
         ExistingOrder {
-            id: id.to_string(),
-            platinum: o.get("platinum").and_then(|v| v.as_u64()).unwrap_or(0),
-            quantity: o.get("quantity").and_then(|v| v.as_u64()).unwrap_or(0),
-            per_trade: o.get("perTrade").and_then(|v| v.as_u64()),
-            visible: o.get("visible").and_then(|v| v.as_bool()),
+            id: order.id.clone(),
+            platinum: order.platinum,
+            quantity: order.quantity,
+            per_trade: order.per_trade,
+            visible: order.visible,
             ambiguous: false,
         },
     );
 }
 
-/// Index a /v2/orders/user/<username> response by OrderKey. Tolerates both
-/// shapes WFM has shipped ({data:{sell,buy}} and flat {data:[...]}), same as
-/// catalog::enrich_orders_with_names.
-pub fn index_existing_orders(body: &serde_json::Value) -> BTreeMap<OrderKey, ExistingOrder> {
+/// Index a decoded orders response by [`OrderKey`]. Rows the decoder could not
+/// read whole are absent rather than guessed at, so a plan cannot reconcile
+/// against an order nobody could describe.
+pub fn index_existing_orders(decoded: &DecodedOrders) -> BTreeMap<OrderKey, ExistingOrder> {
     let mut out = BTreeMap::new();
-    let Some(data) = body.get("data") else {
-        return out;
-    };
-    if let Some(arr) = data.as_array() {
-        for o in arr {
-            index_one_order(&mut out, o, None);
-        }
-        return out;
-    }
-    for bucket in ["sell", "buy"] {
-        if let Some(arr) = data.get(bucket).and_then(|v| v.as_array()) {
-            for o in arr {
-                index_one_order(&mut out, o, Some(bucket));
-            }
+    for row in &decoded.orders {
+        if let OrderRow::Supported(order) = row {
+            index_one_order(&mut out, order);
         }
     }
     out
@@ -530,7 +503,15 @@ pub fn plan_item_key(item: &PlanItem, cat: &WfmCatalogItem) -> OrderKey {
                 .unwrap_or_else(|| cat.subtypes.first().cloned().unwrap_or_default()),
         )
     };
-    (cat.item_id.clone(), item.order_type.clone(), rank, subtype)
+    OrderKey {
+        item_id: cat.item_id.clone(),
+        side: match item.order_type.as_str() {
+            "buy" => OrderSide::Buy,
+            _ => OrderSide::Sell,
+        },
+        rank,
+        subtype,
+    }
 }
 
 // Constructs the JSON body for `POST /v2/order`. Per-field rules captured
@@ -587,7 +568,7 @@ fn execute_one(
     http: &Client,
     unlocked: &Unlocked,
     item: &PlanItem,
-    read_orders: &mut impl FnMut() -> anyhow::Result<serde_json::Value>,
+    read_orders: &mut impl FnMut() -> anyhow::Result<DecodedOrders>,
     validate: &mut dyn FnMut() -> Result<(), PlanValidationError>,
 ) -> ItemResult {
     let mk_err = |msg: String| ItemResult {
@@ -634,7 +615,7 @@ fn execute_one(
     }
 
     let existing = match read_orders() {
-        Ok(body) => index_existing_orders(&body),
+        Ok(decoded) => index_existing_orders(&decoded),
         Err(error) => return ItemResult { slug: item.slug.clone(), status: "pending".into(), message: Some(format!("Could not revalidate current orders: {error}")), order_id: None, action: None },
     };
     if let Some(reviewed) = &item.reviewed_order {
@@ -796,6 +777,35 @@ fn review_matches(reviewed: &ReviewedOrder, prior: Option<&ExistingOrder>) -> bo
 mod tests {
     use super::*;
 
+    /// The whole path an orders response takes to become a reconciliation
+    /// index, starting from the body the endpoint would return. A catalogue
+    /// constrains nothing here so a test states the row shape alone.
+    fn index_orders_body(
+        body: &serde_json::Value,
+    ) -> anyhow::Result<BTreeMap<OrderKey, ExistingOrder>> {
+        Ok(index_existing_orders(&crate::trading::orders::decode_orders(
+            body,
+            &Unconstrained,
+        )?))
+    }
+
+    struct Unconstrained;
+
+    impl market_domain::orders::ItemConstraints for Unconstrained {
+        fn accepts(&self, _item_id: &str, _rank: Option<u64>, _subtype: Option<&str>) -> bool {
+            true
+        }
+    }
+
+    fn key(item_id: &str, side: OrderSide, rank: Option<u64>, subtype: Option<&str>) -> OrderKey {
+        OrderKey {
+            item_id: item_id.into(),
+            side,
+            rank,
+            subtype: subtype.map(str::to_string),
+        }
+    }
+
     #[test]
     fn interrupted_final_validation_persists_unsent_items_for_explicit_resume() {
         use wfm_client::governor::AccessError;
@@ -853,7 +863,7 @@ mod tests {
                         item,
                         &mut || {
                             validating_order.set(true);
-                            Ok(serde_json::json!({"data": []}))
+                            Ok(DecodedOrders::empty())
                         },
                         validate,
                     )
@@ -931,7 +941,7 @@ mod tests {
             &http,
             &session,
             &item,
-            &mut || Ok(serde_json::json!({"data": []})),
+            &mut || Ok(DecodedOrders::empty()),
             &mut || Err("Inventory changed".into()),
         );
         assert_eq!(response.status, "error");
@@ -989,10 +999,10 @@ mod tests {
 
     #[test]
     fn duplicate_order_keys_remain_ambiguous() {
-        let orders = index_existing_orders(&serde_json::json!({"data":[
-            {"id":"one","itemId":"item","type":"sell","quantity":1},
-            {"id":"two","itemId":"item","type":"sell","quantity":2}
-        ]}));
+        let orders = index_orders_body(&serde_json::json!({"data":[
+            {"id":"one","itemId":"item","type":"sell","quantity":1,"platinum":10},
+            {"id":"two","itemId":"item","type":"sell","quantity":2,"platinum":20}
+        ]})).unwrap();
         assert!(orders.values().next().unwrap().ambiguous);
     }
 
@@ -1122,7 +1132,7 @@ mod tests {
             .build()
             .unwrap();
         let mut reads = 0;
-        let result = execute_one(&http, &unlocked, &item, &mut || { reads += 1; Ok(serde_json::json!({"data": []})) }, &mut || Ok(()));
+        let result = execute_one(&http, &unlocked, &item, &mut || { reads += 1; Ok(DecodedOrders::empty()) }, &mut || Ok(()));
         assert_eq!(reads, 0);
         assert_eq!(result.status, "error");
         assert!(result.message.unwrap().contains("divide quantity"));
@@ -1143,15 +1153,15 @@ mod tests {
                 ]
             }
         });
-        let idx = index_existing_orders(&bucketed);
+        let idx = index_orders_body(&bucketed).unwrap();
         let sell = idx
-            .get(&("item-a".into(), "sell".into(), Some(0), None))
+            .get(&key("item-a", OrderSide::Sell, Some(0), None))
             .unwrap();
         assert_eq!(
             (sell.id.as_str(), sell.platinum, sell.quantity),
             ("o1", 20, 3)
         );
-        assert!(idx.contains_key(&("item-a".into(), "buy".into(), Some(0), None)));
+        assert!(idx.contains_key(&key("item-a", OrderSide::Buy, Some(0), None)));
 
         // Flat shape: type is a field on the order.
         let flat = serde_json::json!({
@@ -1160,8 +1170,8 @@ mod tests {
                  "subtype": "radiant"},
             ]
         });
-        let idx = index_existing_orders(&flat);
-        assert!(idx.contains_key(&("item-b".into(), "sell".into(), None, Some("radiant".into()))));
+        let idx = index_orders_body(&flat).unwrap();
+        assert!(idx.contains_key(&key("item-b", OrderSide::Sell, None, Some("radiant"))));
     }
 
     #[test]
@@ -1192,8 +1202,8 @@ mod tests {
         };
         let key = plan_item_key(&item, &ranked);
         let body = build_order_body(&item, &ranked);
-        assert_eq!(key.2, body.get("rank").and_then(|v| v.as_u64()));
-        assert_eq!(key.3, None);
+        assert_eq!(key.rank, body.get("rank").and_then(|v| v.as_u64()));
+        assert_eq!(key.subtype, None);
 
         // Subtyped item, bogus requested subtype: both fall back to the
         // catalog's first entry.
@@ -1212,12 +1222,12 @@ mod tests {
         };
         let key = plan_item_key(&item, &relic);
         let body = build_order_body(&item, &relic);
-        assert_eq!(key.2, None);
+        assert_eq!(key.rank, None);
         assert_eq!(
-            key.3.as_deref(),
+            key.subtype.as_deref(),
             body.get("subtype").and_then(|v| v.as_str())
         );
-        assert_eq!(key.3.as_deref(), Some("intact"));
+        assert_eq!(key.subtype.as_deref(), Some("intact"));
     }
 
     fn cat(name: &str, max_rank: Option<u32>, subtypes: &[&str]) -> WfmCatalogItem {
@@ -1397,7 +1407,7 @@ mod tests {
         let http = Client::builder().retry(reqwest::retry::never()).redirect(wfm_client::redirect_policy()).proxy(reqwest::Proxy::all("http://127.0.0.1:9").unwrap()).timeout(Duration::from_millis(100)).build().unwrap();
         let pending = execute_one(&http, &session, &item, &mut || Err(anyhow::anyhow!("offline")), &mut || Ok(()));
         assert_eq!(serde_json::to_value(pending).unwrap()["status"], fixture["pending"]["status"]);
-        let uncertain = execute_one(&http, &session, &item, &mut || Ok(serde_json::json!({"data": []})), &mut || Ok(()));
+        let uncertain = execute_one(&http, &session, &item, &mut || Ok(DecodedOrders::empty()), &mut || Ok(()));
         assert_eq!(serde_json::to_value(uncertain).unwrap()["status"], fixture["uncertain_mutation"]["status"]);
     }
 
