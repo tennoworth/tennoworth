@@ -230,7 +230,7 @@ pub fn execute_plan(
     }
 
     let response = run_pending(pending_path, unlocked, &mut pending, validate);
-    if pending.items.iter().all(|i| i.status != "pending") {
+    if pending.items.iter().all(|i| i.status != crate::trading::pending::STATUS_PENDING) {
         clear_pending(pending_path);
     }
     response
@@ -292,7 +292,7 @@ fn run_pending_with(
         let Some(item) = pending.items.get_mut(i) else {
             continue;
         };
-        if item.status != "pending" {
+        if item.status != crate::trading::pending::STATUS_PENDING {
             continue;
         }
         if let Err(error) = wfm_client::governor::process().check(
@@ -303,12 +303,16 @@ fn run_pending_with(
         }
         let plan_item = PlanItem::from(&*item);
         let result = execute(&plan_item, &mut validate);
-        let interrupted = matches!(result.status.as_str(), "pending" | "uncertain_mutation");
-        item.status = if interrupted {
-            "pending".into()
-        } else {
-            result.status.clone()
-        };
+        // Both stop the batch, but they do not mean the same thing and the
+        // journal must not say they do. `pending` was never dispatched, so
+        // re-offering it is safe. `uncertain_mutation` may already have been
+        // applied, so it is recorded as itself and the resume loop - which only
+        // re-offers `pending` - leaves it for explicit reconciliation.
+        let interrupted = matches!(
+            result.status.as_str(),
+            crate::trading::pending::STATUS_PENDING | crate::trading::pending::STATUS_UNCERTAIN
+        );
+        item.status = result.status.clone();
         item.message = result.message.clone();
         item.order_id = result.order_id.clone();
         item.action = result.action.clone();
@@ -341,7 +345,7 @@ fn validation_failure(pending: &PendingPlan, error: impl Into<PlanValidationErro
     let message = error.to_string();
     if matches!(error, PlanValidationError::Market(_)) {
         return PlanResponse { plan_id: pending.plan_id.clone(), results: pending.items.iter().map(|item| ItemResult {
-            slug: item.slug.clone(), status: item.status.clone(), message: if item.status == "pending" { Some(message.clone()) } else { item.message.clone() }, order_id: item.order_id.clone(), action: item.action.clone(),
+            slug: item.slug.clone(), status: item.status.clone(), message: if item.status == crate::trading::pending::STATUS_PENDING { Some(message.clone()) } else { item.message.clone() }, order_id: item.order_id.clone(), action: item.action.clone(),
         }).collect() };
     }
     PlanResponse {
@@ -795,6 +799,84 @@ fn review_matches(reviewed: &ReviewedOrder, prior: Option<&ExistingOrder>) -> bo
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A send whose outcome is unknown is not the same as a send that never
+    /// happened. The governor says so - `pending` means "saved for explicit
+    /// resume" while `uncertain_mutation` means "refresh and reconcile before
+    /// resending" - and the journal has to keep that distinction, because the
+    /// resume loop only re-offers what it believes was never sent.
+    ///
+    /// Collapsing the two made the journal claim "never sent" about a request
+    /// that may already have been applied, and let the plan be cleared while
+    /// that claim stood.
+    #[test]
+    fn an_uncertain_send_stays_uncertain_in_the_journal_and_is_not_reoffered() {
+        let path = std::env::temp_dir().join(format!("uncertain-{}.json", random_token(8)));
+        let mut pending: PendingPlan = serde_json::from_value(serde_json::json!({
+            "plan_id":"uncertain", "started_at":"test", "items":[
+                {"slug":"ambiguous","quantity":1,"platinum":12,"order_type":"sell","visible":false,"status":"pending"},
+                {"slug":"later","quantity":1,"platinum":12,"order_type":"sell","visible":false,"status":"pending"}
+            ]
+        })).unwrap();
+        write_pending_atomic(&path, &pending).unwrap();
+
+        let mut attempted: Vec<String> = Vec::new();
+        let response = run_pending_with(
+            &path,
+            &mut pending,
+            || Ok(()),
+            |item, _validate| {
+                attempted.push(item.slug.clone());
+                ItemResult {
+                    slug: item.slug.clone(),
+                    status: "uncertain_mutation".into(),
+                    message: Some("The listing may have been applied, but its response could not be read. Resume to reconcile.".into()),
+                    order_id: None,
+                    action: None,
+                }
+            },
+        );
+
+        // Only the first item was attempted: an unresolved outcome stops the
+        // batch rather than sending later items ahead of it.
+        assert_eq!(attempted, ["ambiguous"]);
+        assert_eq!(
+            response.results.iter().map(|row| row.status.as_str()).collect::<Vec<_>>(),
+            ["uncertain_mutation", "pending"]
+        );
+
+        // The journal records what actually happened, and the later item is
+        // still waiting.
+        let saved = crate::trading::pending::load_pending(&path).expect("journal kept");
+        assert_eq!(
+            saved.items[0].status, "uncertain_mutation",
+            "an unknown outcome must not be recorded as never-sent"
+        );
+        assert_eq!(saved.items[1].status, "pending");
+
+        // And a resume must not re-send it as though nothing had been sent.
+        let mut resumed: Vec<String> = Vec::new();
+        run_pending_with(
+            &path,
+            &mut pending,
+            || Ok(()),
+            |item, _validate| {
+                resumed.push(item.slug.clone());
+                ItemResult { slug: item.slug.clone(), status: "ok".into(), message: None, order_id: Some("o".into()), action: None }
+            },
+        );
+        // The unresolved item is skipped; the rest of the batch is not held
+        // behind it. Collapsing to `pending` did the opposite: it re-offered the
+        // ambiguous send AND blocked every later item behind a decision nobody
+        // had made.
+        assert_eq!(
+            resumed,
+            ["later"],
+            "an unresolved outcome is left for reconciliation, and does not block the batch"
+        );
+
+        let _ = std::fs::remove_file(&path);
+    }
 
     #[test]
     fn interrupted_final_validation_persists_unsent_items_for_explicit_resume() {
