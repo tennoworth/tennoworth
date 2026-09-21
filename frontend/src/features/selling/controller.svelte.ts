@@ -18,6 +18,47 @@ export class ListingController {
   sessionEpoch = $state(0);
   listingOpen = $state(false);
   reviewRowsOverride = $state<ListingCandidate[] | null>(null);
+  /** A send is in flight, so the saved plan is not yet a settled record. */
+  submitting = $state(false);
+  /** A pending read was asked for while a send was in flight. */
+  private refreshAfterSend = false;
+  /** Re-read the saved batch.
+   *
+   * While a send is in flight the saved file is a snapshot of *work in
+   * progress*, not a record of unfinished work: the native side writes it
+   * before the first request and deletes it once the batch completes. Reading
+   * it mid-send therefore captures an all-pending plan that is about to stop
+   * existing, and nothing re-reads it afterwards - so a close during a send
+   * would leave a phantom "interrupted batch" that Resume cannot act on. A
+   * request made during a send is held and replayed once the send settles.
+   */
+  async refreshPendingPlan(): Promise<void> {
+    if (this.submitting) {
+      this.refreshAfterSend = true;
+      return;
+    }
+    try {
+      this.pendingPlan = await this.port.getPendingPlan();
+    } catch {
+      // A read failure leaves the last known state alone rather than inventing
+      // an absent batch.
+    }
+  }
+
+  /** Mark a send in flight, and on release read the settled plan. */
+  async trackSend<T>(send: () => Promise<T>): Promise<T> {
+    this.submitting = true;
+    try {
+      return await send();
+    } finally {
+      this.submitting = false;
+      if (this.refreshAfterSend) {
+        this.refreshAfterSend = false;
+        await this.refreshPendingPlan();
+      }
+    }
+  }
+
   async doResume() {
     if (this.resumePhase === 'running') return;
     this.resumePhase = 'running';
@@ -25,7 +66,7 @@ export class ListingController {
     try {
       const resp = await this.port.resumePendingPlan();
       this.resumeResults = resp?.results ?? [];
-      this.pendingPlan = await this.port.getPendingPlan();
+      await this.refreshPendingPlan();
       this.resumePhase = this.pendingPlan ? 'idle' : 'done';
     } catch (e) {
       // Desktop locked-session rejection: keep the banner (the plan is still

@@ -1538,7 +1538,8 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   rows={listing.reviewRowsOverride ?? listableRows.slice(0, 50).map(row => ({ ...row, inventory_snapshot_id: inventory.nativeSnapshotId ?? undefined }))}
   {transport}
   onauthrequired={(code) => wfmAuthDialogsRef?.open(code, 'list')}
-  onclose={() => { listing.reviewRowsOverride = null; void protection.refresh(); void transport.getPendingPlan().then(plan => listing.pendingPlan = plan); }}
+  sendThrough={(send) => listing.trackSend(send)}
+  onclose={() => { listing.reviewRowsOverride = null; void protection.refresh(); void listing.refreshPendingPlan(); }}
 />
 
 
