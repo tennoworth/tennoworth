@@ -102,6 +102,19 @@ struct SessionState {
 #[cfg(test)]
 type WarmHook = fn(&WfmSession, String, String) -> Result<Unlocked, CmdError>;
 
+/// Which persisted trace a keyring change would leave: the derived key stored
+/// for silent unlock, or the entry removed.
+#[derive(Clone, Copy)]
+enum KeyringIntent<'a> {
+    Remember(&'a [u8; 32]),
+    Forget,
+}
+
+/// One keyring decision, recorded instead of performed so a test can observe the
+/// ordering rule without a Secret Service daemon.
+#[cfg(test)]
+type KeyringHook = fn(KeyringIntent<'_>, bool);
+
 /// The desktop WFM credential session. One instance is managed by Tauri; every
 /// listing command borrows it via `State`.
 pub struct WfmSession {
@@ -128,6 +141,10 @@ pub struct WfmSession {
     /// field, so no shipping path can bypass authentication.
     #[cfg(test)]
     warm_hook: Option<WarmHook>,
+    /// Reports each keyring intent to a test instead of performing it. The
+    /// decision itself is real code; only the OS call is replaced.
+    #[cfg(test)]
+    keyring_hook: Option<KeyringHook>,
 }
 
 #[derive(Default)]
@@ -177,6 +194,8 @@ impl WfmSession {
             use_keyring,
             #[cfg(test)]
             warm_hook: None,
+            #[cfg(test)]
+            keyring_hook: None,
         }
     }
 
@@ -219,6 +238,50 @@ impl WfmSession {
         (self.jwt_path.exists(), self.is_unlocked())
     }
 
+    /// Apply a keyring change that belongs to the session `generation`, unless a
+    /// logout has superseded it.
+    ///
+    /// The persisted traces are the second half of "logout wins": an unlock or
+    /// login publishes its session and then reaches for the OS keyring, and a
+    /// logout landing in that gap would clear the session and forget the key only
+    /// for the straggler to store it again - leaving the next launch able to
+    /// silently re-unlock a session the user discarded. A logout advances the
+    /// generation, so a mismatched generation means the decision is void.
+    ///
+    /// This is a check-then-write, not a transaction. Making it atomic would mean
+    /// holding the session lock across Secret Service I/O, which on a locked or
+    /// absent wallet blocks every command behind a timeout - worse than the
+    /// window it closes. The residual window is the store call itself, and what
+    /// it leaves is a stale keyring entry rather than a stale session: the entry
+    /// is salt-bound to the login file logout deletes, so a later silent unlock
+    /// finds no file and falls back to the passphrase modal.
+    fn apply_keyring(&self, generation: u64, intent: KeyringIntent) {
+        if !self.use_keyring {
+            return;
+        }
+        // The hook stands in for the two OS calls below, not for this decision:
+        // it receives the intent even when the decision refuses it, so a test
+        // observes what would have been attempted.
+        #[cfg(test)]
+        let hook = self.keyring_hook;
+        if self.session_generation() != generation {
+            #[cfg(test)]
+            if let Some(hook) = hook {
+                hook(intent, false);
+            }
+            return;
+        }
+        #[cfg(test)]
+        if let Some(hook) = hook {
+            hook(intent, true);
+            return;
+        }
+        match intent {
+            KeyringIntent::Remember(key) => crate::persistence::keyring_store::store_key(key),
+            KeyringIntent::Forget => crate::persistence::keyring_store::forget_key(),
+        }
+    }
+
     /// Log out, scrub the in-memory JWT, and remove the encrypted login saved on
     /// this device. Best-effort scrub:
     /// if a listing call is in flight it holds a clone of the Arc, so we can't be
@@ -255,21 +318,21 @@ impl WfmSession {
         // section, so an unlock still authenticating cannot publish into the slot
         // it started from. Advanced even when the slot is already empty: that is
         // exactly the startup case where a silent unlock is in flight.
-        let taken = {
+        let (taken, generation) = {
             let mut state = guard(&self.inner);
             state.generation = state.generation.checked_add(1).ok_or_else(|| {
                 CmdError::internal("Session generation exhausted; restart the application.")
             })?;
-            state.unlocked.take()
+            (state.unlocked.take(), state.generation)
         };
         if let Some(arc) = taken {
             if let Ok(mut unlocked) = Arc::try_unwrap(arc) {
                 unlocked.jwt.zeroize();
             }
         }
-        if self.use_keyring {
-            crate::persistence::keyring_store::forget_key();
-        }
+        // The generation this logout established, so the forget is keyed to the
+        // session state it created rather than the one it replaced.
+        self.apply_keyring(generation, KeyringIntent::Forget);
         Ok(())
     }
 
@@ -375,14 +438,17 @@ impl WfmSession {
         let unlocked = self.warm_session(jwt, platform)?;
         wfm_client::transport::invalidate_reads();
         self.install_unlocked(generation, unlocked)?;
-        if self.use_keyring {
+        // A silent re-unlock must not outlive the logout that ended the session
+        // it belongs to, so the keyring change is tied to `generation` too.
+        self.apply_keyring(
+            generation,
             if remember {
-                crate::persistence::keyring_store::store_key(&key);
+                KeyringIntent::Remember(&key)
             } else {
                 // Unticking the box is an explicit "stop remembering".
-                crate::persistence::keyring_store::forget_key();
-            }
-        }
+                KeyringIntent::Forget
+            },
+        );
         Ok(())
     }
 
@@ -410,7 +476,11 @@ impl WfmSession {
         let jwt = match decrypt_jwt_with_key(&blob, &key) {
             Ok(jwt) => jwt,
             Err(_) => {
-                crate::persistence::keyring_store::forget_key();
+                // The key no longer opens the file, so the entry is stale - but
+                // only for the login it was read against. A sign-in that landed
+                // meanwhile wrote an entry for the file it just persisted, and
+                // this failure must not delete that one.
+                self.apply_keyring(generation, KeyringIntent::Forget);
                 return false;
             }
         };
@@ -478,17 +548,17 @@ impl WfmSession {
         let unlocked = self.warm_session(jwt, platform.to_string())?;
         wfm_client::transport::invalidate_reads();
         self.install_unlocked(generation, unlocked)?;
-        if self.use_keyring {
-            if remember {
-                // A fresh login rotated the salt, so derive against the blob we
-                // just persisted - any older keyring entry is overwritten.
-                match derive_jwt_key(&encrypted, passphrase) {
-                    Ok(key) => crate::persistence::keyring_store::store_key(&key),
-                    Err(e) => eprintln!("tennoworth: deriving remember-key failed: {e}"),
-                }
-            } else {
-                crate::persistence::keyring_store::forget_key();
+        if remember {
+            // A fresh login rotated the salt, so derive against the blob we just
+            // persisted - any older keyring entry is overwritten. A derivation
+            // failure leaves the session usable and costs a passphrase prompt
+            // next launch, so it is not worth failing the sign-in over.
+            match derive_jwt_key(&encrypted, passphrase) {
+                Ok(key) => self.apply_keyring(generation, KeyringIntent::Remember(&key)),
+                Err(e) => eprintln!("tennoworth: deriving remember-key failed: {e}"),
             }
+        } else {
+            self.apply_keyring(generation, KeyringIntent::Forget);
         }
         Ok(())
     }
@@ -665,6 +735,7 @@ mod tests {
             // Tests must never read or write the developer's real OS keyring.
             use_keyring: false,
             warm_hook: None,
+            keyring_hook: None,
         }
     }
 
@@ -676,6 +747,129 @@ mod tests {
             catalog: Arc::new(BTreeMap::new()),
             id_to_item: Arc::new(BTreeMap::new()),
         }
+    }
+
+    // --- keyring ordering -------------------------------------------------
+    //
+    // The keyring is the persisted half of a session. These drive the real
+    // install path and record the intent instead of calling the OS, so the
+    // ordering rule is observable on a build host with no Secret Service.
+
+    static KEYRING_LOG: Mutex<Vec<(bool, bool)>> = Mutex::new(Vec::new());
+
+    /// Serialises the tests that share `KEYRING_LOG`; each takes it for its whole
+    /// body so another test cannot append between a reset and its assertion.
+    static KEYRING_TESTS: Mutex<()> = Mutex::new(());
+
+    /// Applies the decision in place of the OS call. `permitted` is computed by
+    /// `apply_keyring` from the generation it was given, so a test can drive an
+    /// interleaving and then ask what that decision would have done.
+    fn record_keyring(intent: KeyringIntent<'_>, permitted: bool) {
+        KEYRING_LOG
+            .lock()
+            .expect("keyring log")
+            .push((matches!(intent, KeyringIntent::Remember(_)), permitted));
+    }
+
+    fn reset_keyring_log() {
+        KEYRING_LOG.lock().expect("keyring log").clear();
+    }
+
+    fn keyring_log() -> Vec<(bool, bool)> {
+        KEYRING_LOG.lock().expect("keyring log").clone()
+    }
+
+    /// A session with a real encrypted login on disk, the writing half of the
+    /// keyring enabled, and its decisions recorded.
+    fn keyring_session(tag: &str) -> WfmSession {
+        let path = tmp_path(tag);
+        fs::write(
+            &path,
+            serde_json::to_vec(
+                &encrypt_jwt("jwt.header.body.sig", PASSPHRASE, "pc").expect("encrypt"),
+            )
+            .expect("serialize"),
+        )
+        .expect("write login file");
+        let mut s = session_with(path);
+        s.use_keyring = true;
+        s.keyring_hook = Some(record_keyring);
+        s
+    }
+
+    const PASSPHRASE: &str = "correct horse battery";
+
+    /// A logout that lands after the session is published but before the keyring
+    /// write must take the keyring entry with it.
+    ///
+    /// This is the window the publish guard cannot cover: the unlock genuinely
+    /// succeeded, so only the keyring decision's own generation check stands
+    /// between a discarded session and an entry that would silently re-unlock it
+    /// on the next launch. The interleaving is driven between the guard and the
+    /// action because that is where production separates them.
+    #[test]
+    fn a_logout_at_the_keyring_decision_stops_the_entry_being_restored() {
+        let _serial = KEYRING_TESTS.lock().expect("keyring tests");
+        reset_keyring_log();
+        let s = keyring_session("keyring-logout-at-decision");
+
+        // The logout runs first, then the interrupted unlock reaches the keyring
+        // with the generation it captured before its session was discarded.
+        let read_generation = s.session_generation();
+        s.logout().expect("logout lands while the unlock is still in flight");
+        s.apply_keyring(read_generation, KeyringIntent::Remember(&[7_u8; 32]));
+
+        // The logout's own forget is permitted; the straggler's store is not.
+        assert_eq!(keyring_log(), vec![(false, true), (true, false)]);
+    }
+
+    /// The positive control: with no logout in the way, the same path still
+    /// stores the key. Without this the guard above could pass by refusing
+    /// every write.
+    #[test]
+    fn an_uninterrupted_unlock_still_stores_the_keyring_entry() {
+        let _serial = KEYRING_TESTS.lock().expect("keyring tests");
+        reset_keyring_log();
+        let mut s = keyring_session("keyring-store");
+        s.warm_hook = Some(|_session, _jwt, _platform| Ok(dummy_unlocked()));
+
+        s.unlock(PASSPHRASE, true).expect("unlock publishes");
+
+        assert_eq!(keyring_log(), vec![(true, true)]);
+    }
+
+    /// A sign-in that completes during a silent unlock's warm replaces the login
+    /// file and writes its own keyring entry. That unlock's decryption failure
+    /// describes the file it read, not the new one, so it must not forget the
+    /// entry the sign-in just wrote. The generation the unlock read is the one
+    /// from before the sign-in.
+    #[test]
+    fn a_stale_silent_unlock_does_not_forget_a_newer_sign_ins_key() {
+        let _serial = KEYRING_TESTS.lock().expect("keyring tests");
+        reset_keyring_log();
+        let mut s = keyring_session("keyring-stale-forget");
+        s.keyring_hook = Some(record_keyring);
+        let read_generation = s.session_generation();
+        // The sign-in that superseded it.
+        s.logout().expect("sign-in replaced the session");
+
+        s.apply_keyring(read_generation, KeyringIntent::Forget);
+
+        assert_eq!(keyring_log().last(), Some(&(false, false)));
+    }
+
+    /// The same decision made against the current generation is permitted, so
+    /// the test above is not passing because `apply_keyring` refuses everything.
+    #[test]
+    fn a_stale_key_is_forgotten_while_its_session_still_stands() {
+        let _serial = KEYRING_TESTS.lock().expect("keyring tests");
+        reset_keyring_log();
+        let mut s = keyring_session("keyring-forget");
+        s.keyring_hook = Some(record_keyring);
+
+        s.apply_keyring(s.session_generation(), KeyringIntent::Forget);
+
+        assert_eq!(keyring_log(), vec![(false, true)]);
     }
 
     #[test]
