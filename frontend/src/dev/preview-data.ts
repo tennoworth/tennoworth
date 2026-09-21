@@ -43,6 +43,10 @@ export function createPreview(scenario: string) {
     ['score-explainer-dismissed', '1'],
   ]);
   const empty = scenario === 'empty';
+  // One listing the sample inventory does not own (so the health check has a
+  // real issue to report) beside one composed set it cannot report at all: a
+  // scan holds set parts, never the assembled set.
+  const unownedSample = scenario === 'orders-unowned';
   if (sessionSample) settings.set('view', 'session');
   let notifications = empty ? [] : [{ id: 1, category: 'trades', title: 'Sold Pyrana Prime Set for 90p', body: 'Pyrana Prime Set ×1 · Listing update failed; review My Orders. Your completed trade is saved in the Ledger.', target: 'orders', created_at: Math.floor(Date.now() / 1000), read: false, delivery: 'failed' }];
   let notificationPreferences = { popups: true, categories: Object.fromEntries(['trades', 'watches', 'baro', 'calendar', 'digest'].map(k => [k, { enabled: true, native: true }])) };
@@ -51,6 +55,10 @@ export function createPreview(scenario: string) {
       { id: 'preview-order', platinum: 90, visible: true, quantity: 2, item: { name: 'Pyrana Prime Set', slug: 'pyrana_prime_set' } },
       ...(sessionSample ? [{ id: 'preview-flow', platinum: 26, visible: true, quantity: 5, rank: 0, item: { name: 'Primed Flow', slug: 'primed_flow' } }] : []),
       ...(sessionSample ? [{ id: 'preview-arcane', platinum: 48, perTrade: 6, visible: false, quantity: 12, rank: 0, item: { name: 'Arcane Energize', slug: 'arcane_energize' } }] : []),
+      ...(unownedSample ? [
+        { id: 'preview-unowned', platinum: 12, visible: true, quantity: 1, rank: 0, item: { name: 'Vitality', slug: 'vitality' } },
+        { id: 'preview-set', platinum: 200, visible: true, quantity: 1, item: { name: 'Akbolto Prime Set', slug: 'akbolto_prime_set' } },
+      ] : []),
     ], buy: [] } },
     list_watches: empty ? [] : [{
       id: 1, slug: 'pyrana_prime_set', name: 'Pyrana Prime Set', side: 'sell', threshold: 70,
