@@ -68,7 +68,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   let updateNotesRef: UpdateNotes;
   let notesReady = $state(false);
   const notesServices = useDesktopServices();
-  const isDesktop = true;
   const transport = new TauriTransport();
   const marketAccess = new WfmAccessController({ desktopAccessStatus, listenForTauriEvent });
   onMount(() => marketAccess.start());
@@ -168,7 +167,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   let effectiveView = $derived.by<View>(() => {
     if (filters.view === 'baro' && !showBaroCard) return 'sell';
     if (filters.view === 'meta' && !buildMetaDrift(inventory.market)) return 'sell';
-    if ((filters.view === 'session' || filters.view === 'orders' || filters.view === 'watches' || filters.view === 'ledger' || filters.view === 'notifications' || filters.view === 'rivens') && !isDesktop) return 'sell';
     return filters.view;
   });
 
@@ -261,7 +259,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
 
   let unreadNotifications = $state(0);
   onMount(() => {
-    if (!isDesktop) return;
     let active = true;
     let request = 0;
     const reload = async () => {
@@ -279,7 +276,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
 
   let marketRefreshLoop: MarketRefreshLoop | null = null;
   onMount(() => {
-    if (!isDesktop) return;
     const loop = startMarketRefreshLoop(() => inventory.refreshMarketInBackground());
     marketRefreshLoop = loop;
     return () => {
@@ -289,7 +285,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   });
 
   onMount(() => {
-    if (!isDesktop) return;
     return listenForTauriEvent(TRAY_HINT_EVENT, () => {
       if (store.getSetting('tray-toast-seen') !== '1') {
         trayHint = true;
@@ -303,29 +298,21 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // a dependency, so writing `resolved` here and then reading it via
   // recomputeResults caused an infinite re-run loop.
   onMount(async () => {
-    // Desktop mode: a best-effort `health` invoke confirms wfm-core is linked
-    // and records the platform for display; failure is non-fatal (the dashboard
-    // still works). The hosted site is informational - it has no account
-    // features.
-    if (isDesktop) {
-      try {
-        const h = await transport.health();
-        desktopPlatform = h?.platform ?? null;
-      } catch (e) {
-        console.error('desktop health check failed', e);
-      }
-      // C5 update-available handshake now lives entirely in
-      // DesktopUpdateBanner.svelte's own onMount.
-      // Interrupted-batch recovery: get_pending_plan is JWT-free, so this needs
-      // no unlock. Best-effort - a failure just hides the Resume banner.
-      try {
-        listing.pendingPlan = await transport.getPendingPlan();
-      } catch (e) {
-        console.error('desktop pending-plan check failed', e);
-      }
+    // A best-effort `health` invoke confirms wfm-core is linked and records the
+    // platform for display; failure is non-fatal.
+    try {
+      const h = await transport.health();
+      desktopPlatform = h?.platform ?? null;
+    } catch (e) {
+      console.error('desktop health check failed', e);
     }
+    // C5 update-available handshake now lives entirely in
+    // DesktopUpdateBanner.svelte's own onMount.
+    // Interrupted-batch recovery: get_pending_plan is JWT-free, so this needs no
+    // unlock. Best-effort - a failure just hides the Resume banner.
+    await listing.refreshPendingPlan();
 
-    if (isDesktop) await inventory.restore();
+    await inventory.restore();
 
     // Cold landing (no saved inventory): preload the snapshot so the no-install
     // MarketBrowser has data to show. Best-effort - a failure just hides the
@@ -467,7 +454,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // Render the Baro card when (a) we got a voidTrader response and
   // (b) the user has a meaningful pile of ducat-earning inventory.
   // 500 ducats ≈ 5 prime junk parts; below that the card is noise.
-  let showBaroCard = $derived(voidTrader != null && (isDesktop || ducatStats.total >= 500));
+  let showBaroCard = $derived(voidTrader != null);
 
   // Pre-format strings so the template stays clean.
   let baroState = $derived.by(() => {
@@ -625,7 +612,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
 
 
   $effect(() => {
-    if (!isDesktop) return;
     void listing.sessionEpoch;
     desktopWfmStatus().then((s) => { listing.wfmStatus = s; }).catch(() => { listing.wfmStatus = null; });
   });
@@ -851,7 +837,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
             <span data-shell class="badge">{relicResult.phase === 'done' ? relicPlan.length : '—'}</span>
           </button>
         {/if}
-        {#if isDesktop && resolvedRivens.length > 0}
+        {#if resolvedRivens.length > 0}
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'rivens'} onclick={() => filters.setView('rivens')}>
             <span data-shell>Rivens</span>
             <span data-shell class="badge">{resolvedRivens.length}</span>
@@ -978,7 +964,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         {visibleColumns} {presetSort} {emptyReason}
         activePreset={filters.activePreset} reserveCopies={filters.reserveCopies} filtersOpen={filters.filtersOpen} scoreExplainerDismissed={filters.scoreExplainerDismissed}
         sellOnboardingDismissed={filters.sellOnboardingDismissed} keepCopiesNudgeDismissed={filters.keepCopiesNudgeDismissed}
-        {isDesktop}
         applyPreset={(name) => filters.applyPreset(name)} setReserveCopies={(value) => filters.setReserveCopies(value)} toggleFiltersOpen={(event) => filters.toggleFiltersOpen(event)}
         dismissSellOnboarding={() => filters.dismissSellOnboarding()} dismissKeepCopiesNudge={() => filters.dismissKeepCopiesNudge()}
         openListingFlow={(rows) => { if (calculationsReady && !estimatedGuidance) listing.openListingFlow((Array.isArray(rows) ? rows : rows ? [rows] : listableRows).map(row => ({ ...row, inventory_snapshot_id: inventory.nativeSnapshotId ?? undefined }))); }}
@@ -1292,7 +1277,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       <Faq desktop />
 
     {:else if effectiveView === 'settings'}
-      <SettingsPanel onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} {isDesktop} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} />
+      <SettingsPanel onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} />
     {/if}
 
     {/if}
@@ -1385,7 +1370,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       <b data-shell>{marketStaleness ?? '-'}</b>
       {#if marketFreshness !== 'unknown'}<span data-shell>· {marketFreshness}</span>{/if}
     </div>
-    {#if inShell && isDesktop && ordersToFix > 0}
+    {#if inShell && ordersToFix > 0}
       <div data-shell class="cell attn">
         <b data-shell>{ordersToFix}</b>
         <span data-shell>{ordersToFix === 1 ? 'order' : 'orders'} to fix</span>
@@ -1468,7 +1453,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       </div>
     {/if}
   {/if}
-  {#if isDesktop && trayHint}
+  {#if trayHint}
     <div data-shell class="card ui-panel warn-banner general-banner" role="status">
       <div data-shell class="gb-body">
         Still running in your tray. Closing the window keeps TennoWorth in the
@@ -1485,7 +1470,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
 {/snippet}
 
 {#snippet pendingBanner()}
-  {#if isDesktop && (listing.pendingPlan || listing.resumePhase !== 'idle')}
+  {#if listing.pendingPlan || listing.resumePhase !== 'idle'}
     <section data-shell class="card ui-panel pending-banner">
       {#if listing.resumePhase === 'running'}
         <div data-shell class="row">
