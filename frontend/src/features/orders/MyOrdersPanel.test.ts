@@ -72,6 +72,23 @@ describe('MyOrdersPanel listing health', () => {
     expect(screen.getByRole('button', { name: 'Delete' })).toBeTruthy();
   });
 
+  it('keeps focus on the control that replaces the one that was activated', async () => {
+    const transport = makeTransport();
+    const ownedQty = new Map([['primed_flow|', 1], ['ash_prime_blueprint|', 0]]);
+    render(MyOrdersPanel, { props: { transport, ownedQty } });
+    await screen.findByText('1 not owned');
+
+    const remove = screen.getByRole('button', { name: 'Delete' });
+    remove.focus();
+    await fireEvent.click(remove);
+    // Arming replaces the button the user was on; focus must follow it rather
+    // than dropping to the document body.
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Confirm' }));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancel delete' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Delete' }));
+  });
+
   it('flags a listing quantity above what you own and Set qty patches it', async () => {
     const transport = makeTransport();
     const ownedQty = new Map([['primed_flow|', 1], ['ash_prime_blueprint|', 2]]);
