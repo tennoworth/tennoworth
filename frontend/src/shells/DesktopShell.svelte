@@ -1,5 +1,6 @@
 <script lang="ts">
   import { sellableQty } from '../domain/sell-priority';
+  import { listingBlockReason as listingEligibilityBlockReason, listingActionLabel as listingEligibilityActionLabel } from '../features/selling/eligibility';
   import { loadMarket } from '../adapters/market';
   import { loadCatalogs } from '../adapters/catalogs';
   import { TauriTransport } from '../adapters/desktop';
@@ -88,24 +89,34 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   let allocationMatches = $derived(protection.matchesInventory(inventory.resolved.owned, inventory.nativeSnapshotId));
   let unknownSlugs = $derived(new Set([...supportedOwned.values()].filter(row => !allocationMatches || protection.state?.items[row.slug]?.estimated == null).map(row => row.slug)));
   let guidanceUnavailable = $derived(supportedOwned.size > 0 && unknownSlugs.size === supportedOwned.size);
+  // The gate's rules live in features/selling/eligibility so they can be tested
+  // without mounting this component; the shell only supplies their inputs.
+  let eligibilityInputs = $derived({
+    hasSnapshot: !!inventory.nativeSnapshotId,
+    pullingInventory: inventory.pullingInventory,
+    allocationMatches,
+    hasProtection: !!protection.state,
+    protectionSnapshotId: protection.state?.snapshot_id ?? null,
+    nativeSnapshotId: inventory.nativeSnapshotId,
+    protectionError: protection.error,
+    supportedSlugs: [...supportedOwned.values()].map(row => row.slug),
+    // An allocation computed against a different inventory places nothing, so
+    // every item reads as unknown.
+    known: allocationMatches ? [...protection.state?.items ? Object.keys(protection.state.items).filter(slug => protection.state?.items[slug]?.estimated != null) : []] : [],
+  });
   let listingBlockReason = $derived.by(() => {
-    if (!inventory.nativeSnapshotId) return 'Scan the game to verify this inventory before listing. Imported backups provide estimates only.';
-    if (inventory.pullingInventory) return 'A scan is in progress. Your review edits are kept.';
-    if (!allocationMatches || !protection.state) return 'Inventory protection is unavailable. Recheck quantities before listing.';
-    if (protection.state.snapshot_id !== inventory.nativeSnapshotId) return 'The displayed inventory does not match the latest game scan. Scan again before listing.';
-    if (protection.error || unknownSlugs.size) return 'Protection quantities are unavailable for some items. Recheck before listing.';
+    const gate = listingEligibilityBlockReason(eligibilityInputs);
+    if (gate) return gate;
+    // The two checks the eligibility rules do not cover: minting a listing needs
+    // a live WFM session, and a listing whose price could not be read cannot be
+    // safely posted over.
     if (!listing.wfmStatus?.unlocked) return 'Connect WFM to check current listings before posting.';
     if ([...supportedOwned.values()].some(row => protection.state?.items[row.slug]?.available == null)) return 'Current WFM listings could not be checked. Recheck before posting.';
     return null;
   });
   let listingQuantitiesKnown = $derived(!listingBlockReason);
   let estimatedGuidance = $derived(!listingQuantitiesKnown);
-  let listingActionLabel = $derived.by(() => {
-    if (!inventory.nativeSnapshotId) return 'Scan game';
-    if (!allocationMatches || !protection.state) return 'Recheck protection';
-    if (protection.state.snapshot_id !== inventory.nativeSnapshotId) return 'Scan game';
-    return protection.error || unknownSlugs.size ? 'Recheck protection' : 'Check WFM listings';
-  });
+  let listingActionLabel = $derived(listingEligibilityActionLabel(eligibilityInputs));
   let availability = $derived(new Map([...inventory.resolved.owned].map(([key, row]) => [key,
     listingQuantitiesKnown && supportedOwned.has(key) ? Math.min(sellableQty(row.count, filters.reserveCopies, row.leveled ?? 0), protection.state?.items[row.slug]?.available ?? 0) : 0,
   ])));
