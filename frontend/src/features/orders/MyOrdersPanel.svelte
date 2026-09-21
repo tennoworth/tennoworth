@@ -70,6 +70,10 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   // Inline delete confirmation - the destructive click is one tap, the row
   // tints and the button becomes "Confirm"; a second tap (or the ×) resolves.
   let confirmId = $state<string | null>(null);
+  // The same inline confirmation for the health queue's destructive fix. Kept
+  // apart from `confirmId` on purpose: one order can appear in both the queue
+  // and the table, and arming one must not arm the other.
+  let healthConfirmId = $state<string | null>(null);
   let bulkBusy = $state(false);
 
   // Toasts are component-local. Each toast owns its auto-dismiss timer id so
@@ -394,6 +398,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
         o.quantity = issue.suggested;
         pushToast(`${issue.name} quantity set to ${issue.suggested}.`);
       } else if (issue.kind === 'not-owned') {
+        healthConfirmId = null;
         await transport.deleteOrder(issue.id);
         orders = orders.filter((x) => x.id !== issue.id);
         pushToast(`Deleted ${issue.name}.`);
@@ -485,6 +490,15 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   function healthAction(h: HealthIssue): string {
     return h.kind === 'not-owned' ? 'Delete' : h.kind === 'excess-qty' ? 'Set qty' : 'Reprice';
   }
+  // The queue's destructive fix arms first, matching the table's inline delete.
+  // A repricing or quantity fix is reversible, so it stays single-click.
+  function armOrFix(h: HealthIssue): void {
+    if (h.kind === 'not-owned') {
+      healthConfirmId = h.id;
+      return;
+    }
+    void applyFix(h);
+  }
   function driftWhy(d: DriftRow): string {
     const pct = Math.round(d.delta_pct * 100);
     return d.kind === 'overpriced'
@@ -564,7 +578,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
           {@const o = orderById(q.id)}
           {@const t = o ? liveForOrder(o) : null}
           {@const busy = busyIds.has(q.id)}
-          <tr class:busy>
+          <tr class:busy class:confirming={q.kind === 'health' && healthConfirmId === q.id}>
             <td class="l" title={q.slug}>{q.name}</td>
             <td>{o?.quantity ?? '?'}</td>
             <td class="fg">{o && orderUnitPrice(o.platinum, o.perTrade) != null ? Number(orderUnitPrice(o.platinum, o.perTrade)!.toFixed(2)) : '?'}<span class="unit">p / unit</span></td>
@@ -584,7 +598,12 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
                 {/if}
               </td>
               <td class="act">
-                <button class="btn xs" class:bad={q.h.kind === 'not-owned'} onclick={() => applyFix(q.h)} disabled={busy} title={q.h.why}>{healthAction(q.h)}</button>
+                {#if q.h.kind === 'not-owned' && healthConfirmId === q.id}
+                  <button class="btn xs bad" onclick={() => applyFix(q.h)} disabled={busy} title="Confirm delete">Confirm</button>
+                  <button class="btn xs x" onclick={() => (healthConfirmId = null)} title="Cancel" aria-label="Cancel delete">×</button>
+                {:else}
+                  <button class="btn xs" class:bad={q.h.kind === 'not-owned'} onclick={() => armOrFix(q.h)} disabled={busy} title={q.h.why}>{healthAction(q.h)}</button>
+                {/if}
               </td>
             {:else}
               <td class="reason" class:warn={q.d.kind === 'overpriced'} title={driftWhy(q.d)}>

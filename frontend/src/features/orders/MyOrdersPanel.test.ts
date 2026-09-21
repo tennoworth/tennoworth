@@ -45,13 +45,31 @@ describe('MyOrdersPanel listing health', () => {
     await waitFor(() => expect(unlisten).toHaveBeenCalledTimes(1));
   });
 
-  it('flags a listing the last scan says you no longer own, and Delete removes it', async () => {
+  it('flags a listing the last scan says you no longer own, and deleting it takes a confirmation', async () => {
     const transport = makeTransport();
     const ownedQty = new Map([['primed_flow|', 1], ['ash_prime_blueprint|', 0]]);
     render(MyOrdersPanel, { props: { transport, ownedQty } });
     await screen.findByText('1 not owned');
     await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    // Removing a live listing is consequential: one click arms, it does not act.
+    expect(transport.deleteOrder).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
     await waitFor(() => expect(transport.deleteOrder).toHaveBeenCalledWith('o2'));
+  });
+
+  it('shows no confirmation until the destructive fix is armed, and cancel restores it', async () => {
+    const transport = makeTransport();
+    const ownedQty = new Map([['primed_flow|', 1], ['ash_prime_blueprint|', 0]]);
+    render(MyOrdersPanel, { props: { transport, ownedQty } });
+    await screen.findByText('1 not owned');
+    expect(screen.queryByRole('button', { name: 'Confirm' })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByRole('button', { name: 'Confirm' })).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancel delete' }));
+    expect(screen.queryByRole('button', { name: 'Confirm' })).toBeNull();
+    expect(transport.deleteOrder).not.toHaveBeenCalled();
+    // The listing is still there, and still fixable.
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeTruthy();
   });
 
   it('flags a listing quantity above what you own and Set qty patches it', async () => {
