@@ -11,7 +11,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   import { MAX_PLATINUM, MIN_PLATINUM } from '../../domain/limits';
   import { humanError } from '../../contracts/errors';
   import { selectDrifted, type DriftRow } from '../../domain/order-drift';
-  import { assessListings, summarize, ownedKey, type HealthIssue } from '../../domain/listing-health';
+  import { assessListings, summarize, ownedEvidence, type HealthIssue } from '../../domain/listing-health';
   import { LIQUID_VOL } from '../../domain/sell-priority';
   import type { Market } from '../../contracts/data';
   import { orderUnitPrice, orderLotPrice, cachedUnitMarket } from '../../domain/order-prices';
@@ -352,6 +352,10 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     }
   }
 
+  // Composed items - prime sets are assembled from parts, so a scan of
+  // individual items can never report the set itself. See `ownedEvidence`.
+  let composedSlugs = $derived(new Set(Object.keys(market?.set_to_parts ?? {})));
+
   let health = $derived.by((): HealthIssue[] => {
     if (live.size === 0 && !ownedQty) return [];
     return assessListings(
@@ -363,7 +367,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
             id: o.id, slug, name: itemName(o),
             platinum: orderUnitPrice(o.platinum, o.perTrade) ?? NaN, quantity: o.quantity ?? 1, type: 'sell' as const,
             live: slug ? liveForOrder(o) : null,
-            owned: ownedQty && slug ? (ownedQty.get(ownedKey(slug, o.subtype ?? null)) ?? 0) : null,
+            owned: slug ? ownedEvidence(slug, o.subtype ?? null, ownedQty, composedSlugs) : null,
           };
         })
         .filter((r) => r.slug !== '' && Number.isFinite(r.platinum)),
