@@ -141,6 +141,10 @@ where
 /// The three maps the join needs from a market snapshot, ignoring the rest.
 #[derive(Deserialize)]
 pub struct MarketData {
+    /// The snapshot's own stamp. Read only to order the app-data cache against
+    /// the bundled floor; older cached files predate it, hence the default.
+    #[serde(default)]
+    updated_at: Option<String>,
     #[serde(default)]
     items: HashMap<String, MarketEntry>,
     /// name (lowercased) → WFM slug.
@@ -228,19 +232,53 @@ impl MarketData {
         Ok(owned)
     }
     /// Load the freshest market we hold: the app-data cache (last known-good from
-    /// tennoworth.app) if present and parseable, else the compile-time bundle.
+    /// tennoworth.app) when it is at least as fresh as the compile-time bundle,
+    /// else the bundle.
+    ///
+    /// "Freshest", not "cached": the bundle ships with each release, so a user
+    /// who upgraded while holding a cache written before a rollback has a cache
+    /// that is older than the bundle they just installed. Preferring the cache
+    /// unconditionally would pin every native consumer to the rolled-back
+    /// snapshot even though a newer one is compiled in.
     pub fn load(cache: &MarketCache) -> MarketData {
-        if let Some(body) = cache.cached() {
-            if let Ok(mut m) = serde_json::from_str::<MarketData>(&body) {
+        let cached = cache
+            .cached()
+            .and_then(|body| serde_json::from_str::<MarketData>(&body).ok());
+        match cached {
+            Some(mut m) if !Self::is_older_than_bundle(&m) => {
                 m.build_usage_parent_index();
-                return m;
+                m
             }
+            _ => Self::bundled(),
         }
-        Self::bundled()
+    }
+
+    /// Whether `candidate` is strictly older than the compiled-in bundle.
+    ///
+    /// Unknown stamps answer false on both sides: a snapshot we cannot place in
+    /// time is not evidence that the other one is newer, and treating it as older
+    /// would silently swap the user back to the bundle for good.
+    fn is_older_than_bundle(candidate: &MarketData) -> bool {
+        let bundle = match serde_json::from_str::<MarketData>(BUNDLED_MARKET) {
+            Ok(bundle) => bundle,
+            Err(_) => return false,
+        };
+        let parse = |stamp: Option<&String>| {
+            stamp
+                .and_then(|stamp| chrono::DateTime::parse_from_rfc3339(stamp).ok())
+        };
+        match (
+            parse(candidate.updated_at.as_ref()),
+            parse(bundle.updated_at.as_ref()),
+        ) {
+            (Some(candidate), Some(bundle)) => candidate < bundle,
+            _ => false,
+        }
     }
 
     fn bundled() -> MarketData {
         let mut market = serde_json::from_str(BUNDLED_MARKET).unwrap_or(MarketData {
+            updated_at: None,
             items: HashMap::new(),
             catalog: HashMap::new(),
             path_to_info: HashMap::new(),
@@ -253,8 +291,7 @@ impl MarketData {
         market
     }
 
-    fn build_usage_parent_index(&mut self) {
-        let mut index: HashMap<String, Option<String>> = HashMap::new();
+    fn build_usage_parent_index(&mut self) {        let mut index: HashMap<String, Option<String>> = HashMap::new();
         for (parent, set) in &self.set_to_parts {
             for part in &set.parts {
                 if part.slug.is_empty() {
@@ -529,6 +566,19 @@ mod tests {
     use super::*;
     use market_domain::inventory::path_name_guess;
 
+    /// A unique empty dir per test, so a parallel run never shares a cache.
+    fn temp_dir(tag: &str) -> std::path::PathBuf {
+        static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "tennoworth-sellables-{}-{}-{}",
+            tag,
+            std::process::id(),
+            N.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
     // ---- cross-language ranking parity (Rust consumer side) ---------------
     // The TS canonical side lives in frontend/src/lib/sell-priority.parity.test.ts;
     // both rank the SAME fixture into `expected_order`. If this fails but the TS
@@ -738,6 +788,79 @@ mod tests {
         assert!(market.usage_parent_by_part.is_empty());
 
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// The bundle ships with each release, so a cache written before an upstream
+    /// rollback can be older than the bundle the user just installed. Native
+    /// consumers must not stay pinned to it.
+    #[test]
+    fn load_prefers_the_bundle_over_a_cache_older_than_it() {
+        let dir = temp_dir("older-cache");
+        std::fs::write(
+            dir.join("market.json"),
+            r#"{"updated_at":"2020-01-01T00:00:00Z","items":{"rolled_back_only":{"vol":1,"low_sell":1}}}"#,
+        )
+        .unwrap();
+
+        let market = MarketData::load(&MarketCache::new(dir.clone()));
+
+        assert!(
+            !market.items.contains_key("rolled_back_only"),
+            "the pre-rollback cache must not win over a newer bundle"
+        );
+        assert!(
+            market.items.contains_key("acceltra_prime_barrel"),
+            "the bundle's own rows should be what we loaded"
+        );
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// The other direction still holds: a cache newer than the bundle wins, which
+    /// is the whole reason the cache exists.
+    #[test]
+    fn load_prefers_a_cache_newer_than_the_bundle() {
+        let dir = temp_dir("newer-cache");
+        std::fs::write(
+            dir.join("market.json"),
+            r#"{"updated_at":"2999-01-01T00:00:00Z","items":{"live_only":{"vol":1,"low_sell":1}}}"#,
+        )
+        .unwrap();
+
+        let market = MarketData::load(&MarketCache::new(dir.clone()));
+
+        assert!(market.items.contains_key("live_only"));
+        assert!(
+            !market.items.contains_key("acceltra_prime_barrel"),
+            "a newer cache replaces the bundle rather than merging with it"
+        );
+
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    /// A cache with no usable stamp cannot be placed in time, so it is not
+    /// evidence that the bundle is newer - loading it keeps today's behaviour
+    /// instead of silently discarding a perfectly good snapshot.
+    #[test]
+    fn load_keeps_a_cache_whose_stamp_is_missing_or_unreadable() {
+        for (tag, body) in [
+            ("no-stamp", r#"{"items":{"unstamped_only":{"vol":1,"low_sell":1}}}"#),
+            (
+                "bad-stamp",
+                r#"{"updated_at":"whenever","items":{"unstamped_only":{"vol":1,"low_sell":1}}}"#,
+            ),
+        ] {
+            let dir = temp_dir(tag);
+            std::fs::write(dir.join("market.json"), body).unwrap();
+
+            let market = MarketData::load(&MarketCache::new(dir.clone()));
+
+            assert!(
+                market.items.contains_key("unstamped_only"),
+                "{tag}: an unorderable cache is still the best snapshot we hold"
+            );
+            let _ = std::fs::remove_dir_all(dir);
+        }
     }
 
     // ---- name-guess parity (Rust consumer side) ----------------------------
