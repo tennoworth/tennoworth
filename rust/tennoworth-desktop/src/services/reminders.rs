@@ -332,7 +332,14 @@ fn evaluate(app: &AppHandle) {
         eprintln!("tennoworth: notification cleanup failed: {e}");
     }
 }
-pub fn start(app: AppHandle) {
+/// Start the reminder loop.
+///
+/// `on_market_refresh` is the presentation work a refreshed market implies -
+/// today, rebuilding the tray so it stops offering prices that were just
+/// replaced. It is injected by the composition root rather than called here
+/// because the tray is the shell's, and a service that names the shell layer
+/// cannot be used without it.
+pub fn start(app: AppHandle, on_market_refresh: impl Fn(&AppHandle) + Send + 'static) {
     if let Err(e) = std::thread::Builder::new()
         .name("notification-reminders".into())
         .spawn(move || {
@@ -341,7 +348,7 @@ pub fn start(app: AppHandle) {
                 if refreshed.is_none_or(|t| t.elapsed() >= Duration::from_secs(15 * 60)) {
                     let result = market::refresh(&app.state::<MarketCache>().dir());
                     if result.updated {
-                        crate::shell::tray::rebuild_tray(&app);
+                        on_market_refresh(&app);
                         let _ = app.emit(MARKET_EVENT, ());
                     }
                     refreshed = Some(Instant::now());

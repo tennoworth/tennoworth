@@ -166,11 +166,15 @@ fn the_scope_stops_at_use_statements() {
         "an inline qualified call is not an import and this gate does not see it"
     );
 
-    // And that blind spot is live, not hypothetical.
+    // The one inline call that existed is gone: reminders reaches the tray
+    // through a callback passed in by the composition root. Asserted here by
+    // reading the file, because that is the only mechanism that can see this
+    // class of edge at all while the scanner stays import-only.
     let reminders = std::fs::read_to_string(crate_src().join("services/reminders.rs"))
         .expect("services/reminders.rs");
     assert!(
-        reminders.contains("crate::shell::tray::rebuild_tray"),
-        "if this stops being true, the gate can be widened and this test removed"
+        !reminders.contains("crate::shell"),
+        "services/reminders.rs must reach presentation through its injected callback, \
+         not by naming the shell layer"
     );
 }
