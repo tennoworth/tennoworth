@@ -1,6 +1,7 @@
 <script lang="ts">
   import { sellableQty } from '../domain/sell-priority';
   import { listingBlockReason as listingEligibilityBlockReason, listingActionLabel as listingEligibilityActionLabel } from '../features/selling/eligibility';
+  import { advisorInput, relicInput, scoreInput, setInput, type CalcInputs } from '../features/selling/calc-inputs';
   import { loadMarket } from '../adapters/market';
   import { loadCatalogs } from '../adapters/catalogs';
   import { TauriTransport } from '../adapters/desktop';
@@ -221,6 +222,20 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // degrade gracefully to the calendar-only rules until it lands.
   const historyResult = new DomainResult<History | null>(() => null);
   let advisorHistory = $derived(historyResult.value);
+  // The per-calculation gates live in features/selling/calc-inputs so they can be
+  // tested without mounting this component. The effects below supply the inputs
+  // and the recompute epoch; the policies decide whether there is anything to run.
+  let calcInputs = $derived<CalcInputs>({
+    owned: inventory.resolved.owned,
+    previousOwned: inventory.previousOwned,
+    availableOwned,
+    market: inventory.market,
+    reserve: filters.reserveCopies,
+    available: guidanceAvailability,
+    sparesOnly,
+    advisorHistory,
+  });
+
   $effect(() => {
     const wanted = filters.activePreset === 'holdsell' || effectiveView === 'sets';
     if (!wanted || untrack(() => historyResult.phase === 'done')) return;
@@ -230,15 +245,12 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   const advisorResult = new DomainResult<Map<string, Verdict>>(() => new Map());
   $effect(() => {
     void calculationEpoch;
-    const owned = inventory.resolved.owned;
-    const market = inventory.market;
-    const history = advisorHistory;
-    if (!owned.size || !market?.calendar?.primes) {
+    const run = advisorInput(calcInputs);
+    if (!run) {
       untrack(() => advisorResult.clear());
       return;
     }
-    const slugs = [...owned.values()].map(row => row.slug);
-    return untrack(() => advisorResult.start(async () => new Map(Object.entries(await evaluateAdvisor({ slugs, market, history, now_ms: Date.now() })))));
+    return untrack(() => advisorResult.start(async () => new Map(Object.entries(await evaluateAdvisor({ slugs: run.slugs, market: run.market, history: run.history, now_ms: Date.now() })))));
   });
   let adviceMap = $derived(advisorResult.value);
 
@@ -347,31 +359,21 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
 
   $effect(() => {
     void calculationEpoch;
-    const owned = inventory.resolved.owned;
-    const market = inventory.market;
-    const reserve = filters.reserveCopies;
-    const available = guidanceAvailability;
-    if (!owned.size || !market) { untrack(() => defaultFacts.clear()); return; }
-    return untrack(() => defaultFacts.start(() => scoreInventoryNative(owned, market, reserve, false, available)));
+    const run = scoreInput(calcInputs, 'default');
+    if (!run) { untrack(() => defaultFacts.clear()); return; }
+    return untrack(() => defaultFacts.start(() => scoreInventoryNative(run.owned, run.market, run.reserve, run.sparesOnly, run.available)));
   });
   $effect(() => {
     void calculationEpoch;
-    const wanted = sparesOnly;
-    const available = guidanceAvailability;
-    const owned = inventory.resolved.owned;
-    const market = inventory.market;
-    const reserve = filters.reserveCopies;
-    if (!wanted || !owned.size || !market) { untrack(() => spareFacts.clear()); return; }
-    return untrack(() => spareFacts.start(() => scoreInventoryNative(owned, market, reserve, true, available)));
+    const run = scoreInput(calcInputs, 'spare');
+    if (!run) { untrack(() => spareFacts.clear()); return; }
+    return untrack(() => spareFacts.start(() => scoreInventoryNative(run.owned, run.market, run.reserve, run.sparesOnly, run.available)));
   });
   $effect(() => {
     void calculationEpoch;
-    const owned = inventory.previousOwned;
-    const market = inventory.market;
-    const reserve = filters.reserveCopies;
-    const spares = sparesOnly;
-    if (!owned?.size || !market) { untrack(() => previousFacts.clear()); return; }
-    return untrack(() => previousFacts.start(() => scoreInventoryNative(owned, market, reserve, spares)));
+    const run = scoreInput(calcInputs, 'previous');
+    if (!run) { untrack(() => previousFacts.clear()); return; }
+    return untrack(() => previousFacts.start(() => scoreInventoryNative(run.owned, run.market, run.reserve, run.sparesOnly)));
   });
   let currentFacts = $derived(sparesOnly ? spareFacts : defaultFacts);
   let hasInventory = $derived(inventory.resolved.owned.size > 0);
@@ -400,17 +402,15 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   });
   $effect(() => {
     void calculationEpoch;
-    const owned = availableOwned;
-    const market = inventory.market;
-    if (guidanceUnavailable || !owned.size || !market?.set_to_parts) { untrack(() => setResult.clear()); return; }
-    return untrack(() => setResult.start(() => loadSetRecos(owned, market)));
+    const run = setInput(calcInputs);
+    if (!run || guidanceUnavailable) { untrack(() => setResult.clear()); return; }
+    return untrack(() => setResult.start(() => loadSetRecos(run.owned, run.market)));
   });
   $effect(() => {
     void calculationEpoch;
-    const owned = inventory.resolved.owned;
-    const market = inventory.market;
-    if (!owned.size || !market?.relic_rewards) { untrack(() => relicResult.clear()); return; }
-    return untrack(() => relicResult.start(() => loadRelicPlan(owned, market, Number.MAX_SAFE_INTEGER)));
+    const run = relicInput(calcInputs);
+    if (!run) { untrack(() => relicResult.clear()); return; }
+    return untrack(() => relicResult.start(() => loadRelicPlan(run.owned, run.market, Number.MAX_SAFE_INTEGER)));
   });
   let setRecos = $derived(setResult.value.filter(reco => !(inventory.market?.set_to_parts?.[reco.set_slug]?.parts ?? []).some(part => unknownSlugs.has(part.slug))));
 
