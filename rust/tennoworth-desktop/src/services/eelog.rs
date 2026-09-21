@@ -359,13 +359,42 @@ pub fn parse_steam_library_paths(vdf: &str) -> Vec<String> {
 
 /// Tail `path` forever: start at the current end (past trades are not
 /// re-announced), poll every `poll`, handle truncation (game restart writes a
-/// fresh file) by re-seeking to 0. Each confirmed trade goes to `on_trade`.
+/// fresh file) by re-seeking to 0. Each confirmed trade goes to `on_trade`,
+/// which reports whether the ledger accepted it.
 /// Blocking - run on its own thread.
 pub fn tail_forever_with_lines(
     path: &Path,
     poll: Duration,
+    on_line: impl FnMut(&str),
+    on_trade: impl FnMut(TradeEvent, LogPosition) -> bool,
+    on_gap: impl FnMut(),
+) {
+    let start = std::time::Instant::now();
+    tail_with_ticks(
+        path,
+        || {
+            std::thread::sleep(poll);
+            Some((
+                start.elapsed().as_millis() as u64,
+                crate::services::allowance::unix_now(),
+            ))
+        },
+        on_line,
+        on_trade,
+        on_gap,
+    );
+}
+
+/// The tailer loop with its tick source injected: the production entry point
+/// supplies a sleeping tick and the real clock, and a test supplies a finite
+/// script of clock readings and file appends. A tick that returns `None` ends the
+/// otherwise-forever loop, which is what keeps a broken retry a failure rather
+/// than a hang.
+fn tail_with_ticks(
+    path: &Path,
+    mut next_tick: impl FnMut() -> Option<(u64, i64)>,
     mut on_line: impl FnMut(&str),
-    mut on_trade: impl FnMut(TradeEvent, LogPosition),
+    mut on_trade: impl FnMut(TradeEvent, LogPosition) -> bool,
     mut on_gap: impl FnMut(),
 ) {
     let mut machine = TradeMachine::new();
@@ -377,17 +406,22 @@ pub fn tail_forever_with_lines(
         .unwrap_or_else(|| fallback_session.clone());
     let mut remainder = Vec::new();
     let mut line_offset = offset;
+    // Highest offset already handed to `on_line`. Rewinding for a ledger retry
+    // must not replay those lines: the overlay consumer behind `on_line` counts
+    // slot markers and triggers captures, so it is not idempotent.
+    let mut line_watermark = offset;
     let mut dialog_start = offset;
     let mut observed_after = crate::services::allowance::unix_now();
     let mut dialog_observed_after = observed_after;
-    let start = std::time::Instant::now();
-    loop {
-        std::thread::sleep(poll);
+    // Set while re-offering a trade the ledger refused. The dialog's original
+    // observation time has to survive the re-read, or a retried trade would start
+    // looking newer than the scan or UTC reset it predates.
+    let mut retrying = false;
+    while let Some((now_ms, now)) = next_tick() {
         let Ok(mut file) = std::fs::File::open(path) else {
             on_gap();
             continue;
         };
-        let now = crate::services::allowance::unix_now();
         let position = match file_position(&mut file) {
             Some(position) => position,
             None => {
@@ -411,8 +445,10 @@ pub fn tail_forever_with_lines(
             on_gap();
             offset = 0;
             line_offset = 0;
+            line_watermark = 0;
             remainder.clear();
             machine = TradeMachine::new();
+            retrying = false;
         }
         session = position.session.clone();
         if position.end == offset {
@@ -432,7 +468,6 @@ pub fn tail_forever_with_lines(
         }
         offset += buf.len() as u64;
         remainder.extend_from_slice(&buf);
-        let now_ms = start.elapsed().as_millis() as u64;
         let complete_upto = remainder
             .iter()
             .rposition(|b| *b == b'\n')
@@ -450,19 +485,34 @@ pub fn tail_forever_with_lines(
             let line = line.trim_end_matches(['\r', '\n']);
             if line.contains(DIALOG_START) {
                 dialog_start = beginning;
-                dialog_observed_after = observed_after;
+                if !retrying {
+                    dialog_observed_after = observed_after;
+                }
             }
-            on_line(line);
+            if line_offset > line_watermark {
+                line_watermark = line_offset;
+                on_line(line);
+            }
             if let Some(t) = machine.feed(line, now_ms) {
-                on_trade(
-                    t,
-                    LogPosition {
-                        session: position.session.clone(),
-                        start: dialog_start,
-                        end: line_offset,
-                        observed_after: dialog_observed_after,
-                    },
-                );
+                let trade_position = LogPosition {
+                    session: position.session.clone(),
+                    start: dialog_start,
+                    end: line_offset,
+                    observed_after: dialog_observed_after,
+                };
+                if on_trade(t, trade_position) {
+                    retrying = false;
+                } else {
+                    // Hold the cursor at the dialog that failed, so the next poll
+                    // re-offers exactly this trade, and stop here: nothing later in
+                    // the batch may be dispatched ahead of an unrecorded one.
+                    offset = dialog_start;
+                    line_offset = dialog_start;
+                    remainder.clear();
+                    machine = TradeMachine::new();
+                    retrying = true;
+                    break;
+                }
             } else if line.contains(TRADE_SUCCESS) {
                 on_gap();
             }
@@ -741,5 +791,126 @@ mod tests {
             vec!["/home/me/.local/share/Steam", "/mnt/games/SteamLibrary"]
         );
         assert!(proton_log_path(Path::new("/mnt/games/SteamLibrary")).ends_with("Warframe/EE.log"));
+    }
+
+    fn trade_text(n: u32, partner: &str) -> String {
+        format!(
+            "{n}0.0 Sys [Info]: Dialog.lua: Dialog::CreateOkCancel(description=Are you sure you want to accept this trade?\n\
+             You are offering:\n\
+             Primed Flow\n\
+             and will receive from {partner} the following:\n\
+             Platinum x 45, leftItem=/Menu/Confirm_Item_Ok)\n\
+             {n}5.0 Sys [Info]: The trade was successful!\n"
+        )
+    }
+
+    /// A trade the ledger refuses must be offered again before anything later in
+    /// the batch, and the retry must not replay its lines to the line consumer:
+    /// the overlay behind `on_line` counts slot markers and triggers captures, so
+    /// it is not idempotent.
+    #[test]
+    fn a_refused_trade_is_retried_before_later_trades_without_replaying_lines() {
+        use std::cell::Cell;
+        use std::io::Write;
+
+        let path = std::env::temp_dir().join(format!(
+            "eelog-ack-{}",
+            wfm_core::identity::random_token(12)
+        ));
+        let header =
+            "0.1 Sys [Diag]: Current time: Mon Sep 7 10:00:00 2026 [UTC: Mon Sep 7 09:00:00 2026]\n";
+        std::fs::write(&path, format!("{header}{}\n", "a".repeat(4096)).as_bytes()).unwrap();
+
+        let lead = trade_text(1, "Lead");
+        let first = trade_text(2, "First");
+        let second = trade_text(3, "Second");
+        let third = trade_text(4, "Third");
+        let cut = third.len() / 2;
+        let (third_head, third_tail) = third.split_at(cut);
+        let batch = format!("{lead}{first}{second}{third_head}");
+
+        let tick = Cell::new(0usize);
+        let mut refusals = 0usize;
+        let mut attempts: Vec<(usize, String, LogPosition)> = Vec::new();
+        let mut lines: Vec<String> = Vec::new();
+        let now = crate::services::allowance::unix_now();
+
+        tail_with_ticks(
+            &path,
+            || {
+                let next = tick.get() + 1;
+                tick.set(next);
+                if next > 3 {
+                    return None;
+                }
+                let appended = match next {
+                    1 => Some(batch.as_bytes()),
+                    3 => Some(third_tail.as_bytes()),
+                    _ => None,
+                };
+                if let Some(bytes) = appended {
+                    let mut file = std::fs::OpenOptions::new()
+                        .append(true)
+                        .open(&path)
+                        .expect("append");
+                    file.write_all(bytes).expect("append batch");
+                }
+                Some((next as u64 * 250, now))
+            },
+            |line| lines.push(line.to_string()),
+            |trade, position| {
+                let refuse = trade.partner == "First" && refusals < 2;
+                if refuse {
+                    refusals += 1;
+                }
+                attempts.push((tick.get(), trade.partner.clone(), position));
+                !refuse
+            },
+            || {},
+        );
+
+        std::fs::remove_file(&path).expect("cleanup");
+
+        let order: Vec<(usize, &str)> = attempts
+            .iter()
+            .map(|(at, partner, _)| (*at, partner.as_str()))
+            .collect();
+        assert_eq!(
+            order,
+            vec![
+                (1, "Lead"),
+                (1, "First"),
+                (2, "First"),
+                (3, "First"),
+                (3, "Second"),
+                (3, "Third"),
+            ],
+            "a refused trade is re-offered before anything later in the batch"
+        );
+
+        // The retry must be the same event at the same log position: that identity
+        // is what the ledger dedupes on, so offering it again cannot double-record
+        // or let an old trade look newer than the scan it predates.
+        let retries: Vec<&(usize, String, LogPosition)> = attempts
+            .iter()
+            .filter(|(_, partner, _)| partner == "First")
+            .collect();
+        assert_eq!(retries.len(), 3);
+        assert_eq!(retries[0].2.start, retries[1].2.start);
+        for pair in retries.windows(2) {
+            assert_eq!(pair[0].2, pair[1].2);
+        }
+
+        // Every line reaches the consumer exactly once, retry or not.
+        assert_eq!(
+            lines.iter().filter(|l| l.contains(DIALOG_START)).count(),
+            4,
+            "each dialog line is delivered once"
+        );
+        assert_eq!(
+            lines.iter().filter(|l| l.contains(TRADE_SUCCESS)).count(),
+            4,
+            "each success line is delivered once"
+        );
     }
 }

@@ -178,20 +178,30 @@ fn adjustment_follow_up(
 }
 
 /// Record + notify + adjust. Blocking; called from the tailer thread.
+/// What the ledger did with one confirmed trade. The tailer retries anything that
+/// is not acknowledged, so "already known" counts as success: re-offering a trade
+/// must not become a second adjustment or a duplicate row.
+pub enum LedgerOutcome {
+    /// Stored; the automatic adjustment and notification follow from here.
+    Recorded,
+    /// This log position was already recorded - the identity a retry arrives on.
+    AlreadyKnown,
+    /// The write failed. The event must be offered again.
+    Failed(String),
+}
+
+/// Record + notify + adjust. Blocking; called from the tailer thread.
 pub fn handle_trade(
     app: &AppHandle,
     trade: TradeEvent,
     position: crate::services::eelog::LogPosition,
-) {
+) -> LedgerOutcome {
     let db = app.state::<Db>();
     let now = unix_now();
     let id = match db.insert_trade(&trade, now, &position) {
         Ok(Some(id)) => id,
-        Ok(None) => return,
-        Err(e) => {
-            eprintln!("tennoworth: ledger insert failed: {e}");
-            return;
-        }
+        Ok(None) => return LedgerOutcome::AlreadyKnown,
+        Err(e) => return LedgerOutcome::Failed(e.to_string()),
     };
     let _ = app.emit(crate::services::allowance::EVENT_ALLOWANCE_CHANGED, ());
     let mut adjusted: Vec<(String, i64)> = Vec::new();
@@ -325,6 +335,48 @@ pub fn handle_trade(
             adjusted,
         },
     );
+    LedgerOutcome::Recorded
+}
+
+/// Surface a trade the ledger could not store. Called once per blocked event,
+/// not once per retry: an unacknowledged trade is re-offered every poll, so
+/// reporting each attempt would flood the log and the notification inbox.
+///
+/// The notification is supplementary history, not proof the user saw anything -
+/// delivering it goes through the same database that just failed.
+fn report_ledger_blocked(
+    app: &AppHandle,
+    error: &str,
+    position: &crate::services::eelog::LogPosition,
+) {
+    eprintln!("tennoworth: trade recording paused; ledger insert failed: {error}");
+    // The failed transaction is also the one that advances the allowance, so the
+    // figure on screen is now behind it. Best effort: the same database may
+    // refuse this marking too, and nothing can restore the tracked figure
+    // afterwards - a new scan is what confirms the remaining trades.
+    match app.state::<Db>().allowance_gap() {
+        Ok(true) => {
+            let _ = app.emit(crate::services::allowance::EVENT_ALLOWANCE_CHANGED, ());
+        }
+        Ok(false) => {}
+        Err(e) => eprintln!("tennoworth: could not mark the trade allowance uncertain: {e}"),
+    }
+    crate::services::notifications::send(
+        app,
+        crate::services::notifications::Candidate::once(
+            format!("ledger-blocked:{}:{}", position.session, position.end),
+            "trades",
+            "Trade recording paused".into(),
+            format!(
+                "A completed trade could not be saved. It is being retried, and later trades \
+                 wait behind it, so the ledger and automatic listing updates are delayed. \
+                 Remaining trades may be stale - scan again to confirm them. Restarting can \
+                 lose the pending record. ({error})"
+            ),
+            "ledger",
+            unix_now(),
+        ),
+    );
 }
 
 /// Start tailing EE.log if it can be found. Silent no-op otherwise (the SPA
@@ -338,6 +390,7 @@ pub fn start_tailer(app: AppHandle) -> Option<std::path::PathBuf> {
         .name("eelog-tailer".into())
         .spawn(move || {
             let overlay_app = app.clone();
+            let mut blocked: Option<(String, u64)> = None;
             crate::services::eelog::tail_forever_with_lines(
                 &p,
                 // Reward choices live for only 15 seconds. A two-second poll
@@ -345,7 +398,20 @@ pub fn start_tailer(app: AppHandle) -> Option<std::path::PathBuf> {
                 // scan before the four slot markers had arrived.
                 std::time::Duration::from_millis(250),
                 move |line| crate::overlay::handle_log_line(&overlay_app, line),
-                |trade, position| handle_trade(&app, trade, position),
+                |trade, position| match handle_trade(&app, trade, position.clone()) {
+                    LedgerOutcome::Failed(error) => {
+                        let id = (position.session.clone(), position.end);
+                        if blocked.as_ref() != Some(&id) {
+                            blocked = Some(id);
+                            report_ledger_blocked(&app, &error, &position);
+                        }
+                        false
+                    }
+                    _ => {
+                        blocked = None;
+                        true
+                    }
+                },
                 || {
                     if app.state::<Db>().allowance_gap().unwrap_or(false) {
                         let _ = app.emit(crate::services::allowance::EVENT_ALLOWANCE_CHANGED, ());
