@@ -291,6 +291,20 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // $effect) is critical: $effect tracks any state read inside its body as
   // a dependency, so writing `resolved` here and then reading it via
   // recomputeResults caused an infinite re-run loop.
+  // Interrupted-batch recovery, in one place so both callers agree on what a
+  // failure means. A journal that is there but unreadable rejects: that is not
+  // "no interrupted batch", and hiding it leaves a damaged saved batch with no
+  // way for the user to learn about it or clear it.
+  async function refreshPendingPlan(): Promise<void> {
+    try {
+      listing.pendingPlan = await transport.getPendingPlan();
+    } catch (e) {
+      console.error('desktop pending-plan check failed', e);
+      listing.resumeError = humanError(e);
+      listing.resumePhase = 'error';
+    }
+  }
+
   onMount(async () => {
     // Desktop mode: a best-effort `health` invoke confirms wfm-core is linked
     // and records the platform for display; failure is non-fatal (the dashboard
@@ -306,12 +320,8 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       // C5 update-available handshake now lives entirely in
       // DesktopUpdateBanner.svelte's own onMount.
       // Interrupted-batch recovery: get_pending_plan is JWT-free, so this needs
-      // no unlock. Best-effort - a failure just hides the Resume banner.
-      try {
-        listing.pendingPlan = await transport.getPendingPlan();
-      } catch (e) {
-        console.error('desktop pending-plan check failed', e);
-      }
+      // no unlock.
+      await refreshPendingPlan();
     }
 
     if (isDesktop) await inventory.restore();
@@ -1538,7 +1548,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   rows={listing.reviewRowsOverride ?? listableRows.slice(0, 50).map(row => ({ ...row, inventory_snapshot_id: inventory.nativeSnapshotId ?? undefined }))}
   {transport}
   onauthrequired={(code) => wfmAuthDialogsRef?.open(code, 'list')}
-  onclose={() => { listing.reviewRowsOverride = null; void protection.refresh(); void transport.getPendingPlan().then(plan => listing.pendingPlan = plan); }}
+  onclose={() => { listing.reviewRowsOverride = null; void protection.refresh(); void refreshPendingPlan(); }}
 />
 
 

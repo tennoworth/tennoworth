@@ -74,13 +74,84 @@ pub fn write_pending_atomic(path: &Path, plan: &PendingPlan) -> Result<()> {
     Ok(())
 }
 
-pub fn load_pending(path: &Path) -> Option<PendingPlan> {
-    let data = fs::read(path).ok()?;
-    serde_json::from_slice(&data).ok()
+/// Why the pending-plan journal could not be read or removed. Both used to be
+/// collapsed into "no journal", which is how an unreadable file came to look
+/// exactly like an absent one.
+#[derive(Debug)]
+pub enum PendingStoreError {
+    /// The file exists but could not be read or parsed. Its contents are the only
+    /// record of what was already sent, so this is evidence to preserve, not an
+    /// absence to paper over.
+    Unreadable(String),
+    /// The file exists but could not be removed.
+    Undeletable(String),
 }
 
-pub fn clear_pending(path: &Path) {
-    let _ = fs::remove_file(path);
+impl std::fmt::Display for PendingStoreError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unreadable(detail) => write!(f, "the saved batch could not be read: {detail}"),
+            Self::Undeletable(detail) => write!(f, "the saved batch could not be removed: {detail}"),
+        }
+    }
+}
+
+impl std::error::Error for PendingStoreError {}
+
+/// What the journal says about starting a new batch. `Unreadable` is deliberately
+/// not `Absent`: submitting would replace the only record of what was sent.
+#[derive(Debug)]
+pub enum JournalState {
+    /// Nothing saved.
+    Absent,
+    /// Saved, and nothing is left to send.
+    Finished,
+    /// Saved, with at least one item still pending or of unknown outcome.
+    Unfinished,
+    /// Saved but unreadable.
+    Unreadable(String),
+}
+
+/// Read the journal's state for a submit/recovery decision. The only case that
+/// permits replacing the file is a journal that is absent or fully finished.
+pub fn journal_state(path: &Path) -> JournalState {
+    match load_pending(path) {
+        Ok(None) => JournalState::Absent,
+        Ok(Some(plan)) => {
+            if plan.items.iter().any(|item| item.status == "pending") {
+                JournalState::Unfinished
+            } else {
+                JournalState::Finished
+            }
+        }
+        Err(error) => JournalState::Unreadable(error.to_string()),
+    }
+}
+
+pub fn load_pending(path: &Path) -> Result<Option<PendingPlan>, PendingStoreError> {
+    match fs::read(path) {
+        Ok(data) => serde_json::from_slice(&data).map(Some).map_err(|e| {
+            PendingStoreError::Unreadable(format!("{} is not a readable batch: {e}", path.display()))
+        }),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(PendingStoreError::Unreadable(format!(
+            "{}: {error}",
+            path.display()
+        ))),
+    }
+}
+
+/// Remove the journal. An already-absent file is success - only a file that is
+/// there and could not be removed is an error.
+pub fn clear_pending(path: &Path) -> Result<(), PendingStoreError> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(PendingStoreError::Undeletable(format!(
+            "{}: {error}",
+            path.display()
+        ))),
+    }
 }
 
 #[cfg(test)]
@@ -158,7 +229,9 @@ mod tests {
         let plan = sample_plan();
         write_pending_atomic(&path, &plan).unwrap();
 
-        let loaded = load_pending(&path).expect("file readable");
+        let loaded = load_pending(&path)
+            .expect("file readable")
+            .expect("present");
         assert_eq!(loaded.plan_id, plan.plan_id);
         assert_eq!(loaded.items.len(), 2);
         assert_eq!(loaded.items[0].status, "ok");
@@ -166,8 +239,8 @@ mod tests {
         assert_eq!(loaded.items[0].per_trade, Some(1));
         assert_eq!(loaded.items[1].per_trade, None);
 
-        clear_pending(&path);
-        assert!(load_pending(&path).is_none());
+        let _ = clear_pending(&path);
+        assert!(load_pending(&path).expect("readable").is_none());
     }
 
     #[test]
@@ -183,21 +256,21 @@ mod tests {
         });
         plan.items[1].reviewed_order = Some(crate::trading::plan::ReviewedOrder::New);
         write_pending_atomic(&path, &plan).unwrap();
-        let loaded = load_pending(&path).unwrap();
+        let loaded = load_pending(&path).expect("readable").expect("present");
         assert_eq!(loaded.items[1].quantity, 12);
         assert_eq!(loaded.items[1].per_trade, Some(3));
         let resumed = crate::trading::plan::PlanItem::from(&loaded.items[1]);
         assert_eq!(resumed.per_trade, Some(3));
         assert_eq!(resumed.session, plan.items[1].session);
         assert_eq!(resumed.reviewed_order, plan.items[1].reviewed_order);
-        clear_pending(&path);
+        let _ = clear_pending(&path);
     }
 
     #[test]
     fn load_pending_returns_none_when_missing() {
         let path = tmp_path("missing");
         let _ = std::fs::remove_file(&path);
-        assert!(load_pending(&path).is_none());
+        assert!(load_pending(&path).expect("readable").is_none());
     }
 
     #[test]
@@ -210,12 +283,12 @@ mod tests {
               {"slug":"a","platinum":5,"quantity":1,"order_type":"sell","visible":false,"rank":null,"status":"pending"}
             ]}"#;
         std::fs::write(&path, raw).unwrap();
-        let loaded = load_pending(&path).expect("parses");
+        let loaded = load_pending(&path).expect("readable").expect("parses");
         assert_eq!(loaded.items.len(), 1);
         assert!(loaded.items[0].order_id.is_none());
         assert!(loaded.items[0].reference_low_sell.is_none());
         assert!(loaded.items[0].per_trade.is_none());
-        clear_pending(&path);
+        let _ = clear_pending(&path);
     }
 
     #[test]
@@ -225,6 +298,62 @@ mod tests {
         let tmp = path.with_extension("json.tmp");
         assert!(!tmp.exists(), "tmp file should be renamed away");
         assert!(path.exists());
-        clear_pending(&path);
+        let _ = clear_pending(&path);
+    }
+
+    /// The only states that permit replacing the journal are "nothing saved" and
+    /// "nothing left to send". A file that is there but unreadable is neither:
+    /// starting a batch would overwrite the sole record of what was already sent.
+    #[test]
+    fn journal_state_distinguishes_a_corrupt_journal_from_an_absent_one() {
+        let path = tmp_path("journal-corrupt");
+        let _ = std::fs::remove_file(&path);
+        assert!(
+            matches!(journal_state(&path), JournalState::Absent),
+            "no file at all is absent"
+        );
+
+        std::fs::write(&path, b"{ this is not a batch").unwrap();
+        assert!(
+            matches!(journal_state(&path), JournalState::Unreadable(_)),
+            "a journal that exists but cannot be read is not an absent one"
+        );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn journal_state_reports_unfinished_and_finished() {
+        let path = tmp_path("journal-states");
+        write_pending_atomic(&path, &sample_plan()).unwrap();
+        assert!(
+            matches!(journal_state(&path), JournalState::Unfinished),
+            "a plan with a pending item blocks a new batch"
+        );
+
+        let mut finished = sample_plan();
+        for item in &mut finished.items {
+            item.status = "ok".into();
+        }
+        write_pending_atomic(&path, &finished).unwrap();
+        assert!(
+            matches!(journal_state(&path), JournalState::Finished),
+            "a fully sent plan does not block a new batch"
+        );
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// Discarding reports success only when the file is really gone. An absent file
+    /// is success too - clearing twice is not an error.
+    #[test]
+    fn clear_pending_reports_a_file_it_could_not_remove() {
+        let path = tmp_path("clear-fails");
+        let _ = std::fs::remove_file(&path);
+        std::fs::create_dir_all(&path).unwrap();
+        assert!(
+            clear_pending(&path).is_err(),
+            "a path that is there and was not removed is not a successful discard"
+        );
+        std::fs::remove_dir_all(&path).unwrap();
+        assert!(clear_pending(&path).is_ok(), "already absent is success");
     }
 }

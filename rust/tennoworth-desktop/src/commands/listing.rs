@@ -15,7 +15,9 @@ use wfm_core::trading::listing::{
     update_order as core_update_order, PerOrderResult, UpdateRequest, VisibilityRequest,
     MAX_PLATINUM,
 };
-use wfm_core::trading::pending::{clear_pending, load_pending, PendingPlan};
+use wfm_core::trading::pending::{
+    clear_pending, journal_state, load_pending, JournalState, PendingPlan,
+};
 use wfm_core::trading::plan::{
     execute_plan as core_execute_plan, run_pending, PlanItem, PlanRequest, PlanResponse,
     PlanValidationError,
@@ -296,8 +298,18 @@ pub async fn submit_plan(
             .begin_plan()
             .ok_or_else(|| CmdError::of("busy", PLAN_BUSY_MSG))?;
         let unlocked = s.require_unlocked()?;
-        if load_pending(s.pending_path()).is_some_and(|plan| plan.items.iter().any(|item| item.status == "pending")) {
-            return Err(CmdError::of("busy", "An unfinished batch is saved. Resume or discard it before sending another."));
+        match journal_state(s.pending_path()) {
+            JournalState::Unfinished => {
+                return Err(CmdError::of("busy", "An unfinished batch is saved. Resume or discard it before sending another."));
+            }
+            // Not the same as "nothing saved": the file is there, and replacing it
+            // would destroy the only record of what was already sent.
+            JournalState::Unreadable(detail) => {
+                return Err(CmdError::internal(format!(
+                    "The saved batch could not be read, so a new one cannot safely replace it. {detail}"
+                )));
+            }
+            JournalState::Absent | JournalState::Finished => {}
         }
         Ok::<_, CmdError>(wfm_client::governor::with_context(request.context(), || core_execute_plan(
             s.pending_path(),
@@ -314,17 +326,22 @@ pub async fn submit_plan(
 }
 
 /// The last interrupted plan, or null. No auth - mirrors serve's JWT-free
-/// GET /plan/pending, so the SPA can poll it before any unlock.
+/// GET /plan/pending, so the SPA can poll it before any unlock. A journal that is
+/// there but unreadable rejects instead of reporting "nothing saved".
 #[tauri::command]
-pub fn get_pending_plan(session: State<'_, Arc<WfmSession>>) -> Option<PendingPlan> {
-    load_pending(session.pending_path())
+pub fn get_pending_plan(
+    session: State<'_, Arc<WfmSession>>,
+) -> Result<Option<PendingPlan>, CmdError> {
+    // An unreadable journal is not "nothing to resume": the SPA has to be able to
+    // tell the user their saved batch is damaged rather than hide it.
+    load_pending(session.pending_path()).map_err(|error| CmdError::internal(error.to_string()))
 }
 
 #[tauri::command]
 pub fn discard_pending_plan(session: State<'_, Arc<WfmSession>>) -> Result<(), CmdError> {
     let _guard = session.begin_plan().ok_or_else(|| CmdError::of("busy", PLAN_BUSY_MSG))?;
-    clear_pending(session.pending_path());
-    Ok(())
+    clear_pending(session.pending_path())
+        .map_err(|error| CmdError::internal(format!("The saved batch was not discarded. {error}")))
 }
 #[tauri::command]
 pub fn cancel_plan(session: State<'_, Arc<WfmSession>>, request_id: String) -> Result<(), CmdError> {
@@ -343,8 +360,15 @@ pub async fn resume_pending_plan(
     let (response, price_qty) = tauri::async_runtime::spawn_blocking(move || {
         // Pending-first ordering mirrors serve (its 404 outranks auth): with
         // nothing to resume the user must not be bounced into a login dialog.
-        let mut pending = load_pending(s.pending_path())
-            .ok_or_else(|| CmdError::of("no_pending", "No pending plan to resume."))?;
+        let mut pending = match load_pending(s.pending_path()) {
+            Ok(Some(plan)) => plan,
+            Ok(None) => return Err(CmdError::of("no_pending", "No pending plan to resume.")),
+            Err(error) => {
+                return Err(CmdError::internal(format!(
+                    "The saved batch could not be read, so it cannot be resumed. {error}"
+                )))
+            }
+        };
         let request = s.claim_plan_request(request_id)?;
         let _guard = s
             .begin_plan()
@@ -361,7 +385,7 @@ pub async fn resume_pending_plan(
             validate_session_plan(&app, &reviewed)
         }));
         if pending.items.iter().all(|i| i.status != "pending") {
-            clear_pending(s.pending_path());
+            let _ = clear_pending(s.pending_path());
         }
         Ok::<_, CmdError>((response, price_qty))
     })
