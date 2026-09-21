@@ -60,7 +60,16 @@ export function createPreview(scenario: string) {
       id: 1, at: now, partner: 'Sample trading partner with a long name', kind: 'sale', plat: 90,
       items: [{ name: 'Pyrana Prime Set', qty: 1, direction: 'given' }], log_stamp: null, wfm_closed: true,
     }],
-    eelog_status: { path: '/sample/Warframe/EE.log', auto_close: false },
+    eelog_status: {
+      path: '/sample/Warframe/EE.log',
+      auto_close: false,
+      recording:
+        scenario === 'ledger-paused'
+          ? { paused: { ledger: { error: 'database is locked' } } }
+          : scenario === 'log-unreadable'
+            ? { paused: { log: { error: 'the game log could not be read' } } }
+            : 'recording',
+    },
     trade_session_state: {
       set_recipes: scenario === 'session-sets' ? { akbolto_prime_set: sampleRecipe } : {},
       allowance: { remaining: scenario === 'zero-trades' ? 0 : scenario === 'unknown-trades' ? null : 24,

@@ -357,17 +357,53 @@ pub fn parse_steam_library_paths(vdf: &str) -> Vec<String> {
     out
 }
 
+/// Why the tailer could not account for a stretch of the log.
+///
+/// The callers do not all want the same thing from a gap: the allowance logic
+/// treats every kind as "stop certifying the tracked figure", while the recording
+/// health only reports the kinds that mean trades are going unread. Rotation is
+/// the ordinary case - the game rewriting its own log - and reporting it as a
+/// fault would leave the ledger surface permanently warning about normal play.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GapKind {
+    /// The log could not be opened, positioned, sought, or decoded, or it grew
+    /// past what one poll will buffer. Trades may be happening unobserved.
+    Io,
+    /// A completed trade the machine could not parse. The log says a trade
+    /// happened and we have no record of its contents.
+    Unrecognized,
+    /// The log was replaced or truncated and re-read from the start. Ordinary.
+    Rotated,
+}
+
+impl GapKind {
+    /// Whether this gap means trades may be going unread.
+    pub fn is_unread(self) -> bool {
+        !matches!(self, Self::Rotated)
+    }
+
+    /// What to tell the user, or `None` for a gap they need not know about.
+    pub fn explanation(self) -> Option<&'static str> {
+        match self {
+            Self::Io => Some("the game log could not be read"),
+            Self::Unrecognized => Some("a completed trade in the game log could not be read"),
+            Self::Rotated => None,
+        }
+    }
+}
+
 /// Tail `path` forever: start at the current end (past trades are not
 /// re-announced), poll every `poll`, handle truncation (game restart writes a
 /// fresh file) by re-seeking to 0. Each confirmed trade goes to `on_trade`,
-/// which reports whether the ledger accepted it.
+/// which reports whether the ledger accepted it, and each stretch the tailer
+/// could not account for goes to `on_gap` with the reason.
 /// Blocking - run on its own thread.
 pub fn tail_forever_with_lines(
     path: &Path,
     poll: Duration,
     on_line: impl FnMut(&str),
     on_trade: impl FnMut(TradeEvent, LogPosition) -> bool,
-    on_gap: impl FnMut(),
+    on_gap: impl FnMut(GapKind),
 ) {
     let start = std::time::Instant::now();
     tail_with_ticks(
@@ -395,7 +431,7 @@ fn tail_with_ticks(
     mut next_tick: impl FnMut() -> Option<(u64, i64)>,
     mut on_line: impl FnMut(&str),
     mut on_trade: impl FnMut(TradeEvent, LogPosition) -> bool,
-    mut on_gap: impl FnMut(),
+    mut on_gap: impl FnMut(GapKind),
 ) {
     let mut machine = TradeMachine::new();
     let initial = log_position(path);
@@ -419,13 +455,13 @@ fn tail_with_ticks(
     let mut retrying = false;
     while let Some((now_ms, now)) = next_tick() {
         let Ok(mut file) = std::fs::File::open(path) else {
-            on_gap();
+            on_gap(GapKind::Io);
             continue;
         };
         let position = match file_position(&mut file) {
             Some(position) => position,
             None => {
-                on_gap();
+                on_gap(GapKind::Io);
                 let Ok(meta) = file.metadata() else { continue };
                 if meta.len() < offset {
                     fallback_session = wfm_core::identity::random_token(16);
@@ -442,7 +478,7 @@ fn tail_with_ticks(
         // scan_boundary cannot certify their accounting identity.
         let gained_identity = session == fallback_session && position.session != fallback_session;
         if position.end < offset || (session != position.session && !gained_identity) {
-            on_gap();
+            on_gap(GapKind::Rotated);
             offset = 0;
             line_offset = 0;
             line_watermark = 0;
@@ -458,12 +494,12 @@ fn tail_with_ticks(
             continue;
         }
         if file.seek(SeekFrom::Start(offset)).is_err() {
-            on_gap();
+            on_gap(GapKind::Io);
             continue;
         }
         let mut buf = Vec::new();
         if file.take(1024 * 1024).read_to_end(&mut buf).is_err() {
-            on_gap();
+            on_gap(GapKind::Io);
             continue;
         }
         offset += buf.len() as u64;
@@ -478,7 +514,7 @@ fn tail_with_ticks(
             let beginning = line_offset;
             line_offset += raw.len() as u64;
             let Ok(line) = std::str::from_utf8(raw) else {
-                on_gap();
+                on_gap(GapKind::Io);
                 machine = TradeMachine::new();
                 continue;
             };
@@ -514,11 +550,11 @@ fn tail_with_ticks(
                     break;
                 }
             } else if line.contains(TRADE_SUCCESS) {
-                on_gap();
+                on_gap(GapKind::Unrecognized);
             }
         }
         if remainder.len() > 256 * 1024 {
-            on_gap();
+            on_gap(GapKind::Io);
             remainder.clear();
             line_offset = offset;
             machine = TradeMachine::new();
@@ -569,6 +605,24 @@ pub fn watch_recent_text(path: &Path, poll: Duration, mut on_text: impl FnMut(&s
 
 #[cfg(test)]
 mod tests {
+    /// Rotation is the game rewriting its own log, which happens on every
+    /// restart. Treating it as an unread stretch would leave the ledger warning
+    /// about ordinary play, so the kind has to carry the distinction rather than
+    /// every gap looking alike to the caller.
+    #[test]
+    fn only_the_gaps_that_lose_trades_count_as_unread() {
+        assert!(!GapKind::Rotated.is_unread());
+        assert_eq!(GapKind::Rotated.explanation(), None);
+
+        for kind in [GapKind::Io, GapKind::Unrecognized] {
+            assert!(kind.is_unread());
+            assert!(
+                kind.explanation().is_some(),
+                "an unread gap needs copy the user can act on"
+            );
+        }
+    }
+
     use super::*;
 
     #[test]
@@ -833,6 +887,7 @@ mod tests {
         let mut refusals = 0usize;
         let mut attempts: Vec<(usize, String, LogPosition)> = Vec::new();
         let mut lines: Vec<String> = Vec::new();
+        let mut gaps: Vec<GapKind> = Vec::new();
         let now = crate::services::allowance::unix_now();
 
         tail_with_ticks(
@@ -866,7 +921,7 @@ mod tests {
                 attempts.push((tick.get(), trade.partner.clone(), position));
                 !refuse
             },
-            || {},
+            |kind| gaps.push(kind),
         );
 
         std::fs::remove_file(&path).expect("cleanup");

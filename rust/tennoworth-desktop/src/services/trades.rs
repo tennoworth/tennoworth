@@ -379,9 +379,32 @@ fn report_ledger_blocked(
     );
 }
 
-/// Start tailing EE.log if it can be found. Silent no-op otherwise (the SPA
-/// shows the "not found" state via `eelog_status`).
-pub fn start_tailer(app: AppHandle) -> Option<std::path::PathBuf> {
+/// Publish this poll's recording health, emitting only on a transition - the
+/// tailer polls four times a second and every listener would otherwise wake to
+/// news that nothing changed.
+fn announce_recording(
+    app: &AppHandle,
+    outcome: &crate::services::recording::PollOutcome,
+    recorder: &crate::services::recording::Recorder,
+) {
+    if crate::services::recording::observe(recorder, outcome).is_some() {
+        let _ = app.emit(EVENT_RECORDING_CHANGED, ());
+    }
+}
+
+/// Emitted when recording health changes, so a ledger surface that is already
+/// open updates without waiting for its next poll. The state is also readable on
+/// demand through `eelog_status`, which is what a surface mounting later uses -
+/// an event alone cannot answer "what is true now".
+pub const EVENT_RECORDING_CHANGED: &str = "recording-changed";
+
+/// Start tailing EE.log if it can be found, publishing recording health to
+/// `recorder`. Silent no-op otherwise (the SPA shows the "not found" state via
+/// `eelog_status`).
+pub fn start_tailer(
+    app: AppHandle,
+    recorder: std::sync::Arc<crate::services::recording::Recorder>,
+) -> Option<std::path::PathBuf> {
     let path = crate::services::eelog::locate_log()?;
     let p = path.clone();
     let reward_path = path.clone();
@@ -391,6 +414,11 @@ pub fn start_tailer(app: AppHandle) -> Option<std::path::PathBuf> {
         .spawn(move || {
             let overlay_app = app.clone();
             let mut blocked: Option<(String, u64)> = None;
+            // Both callbacks describe the same poll, so the outcome is shared
+            // rather than owned by either closure.
+            let outcome =
+                std::cell::RefCell::new(crate::services::recording::PollOutcome::default());
+            let recorder = recorder.clone();
             crate::services::eelog::tail_forever_with_lines(
                 &p,
                 // Reward choices live for only 15 seconds. A two-second poll
@@ -405,14 +433,25 @@ pub fn start_tailer(app: AppHandle) -> Option<std::path::PathBuf> {
                             blocked = Some(id);
                             report_ledger_blocked(&app, &error, &position);
                         }
+                        outcome.borrow_mut().ledger_error = Some(error);
+                        announce_recording(&app, &outcome.borrow(), &recorder);
                         false
                     }
                     _ => {
                         blocked = None;
+                        outcome.borrow_mut().accepted();
+                        announce_recording(&app, &outcome.borrow(), &recorder);
                         true
                     }
                 },
-                || {
+                |kind| {
+                    outcome.borrow_mut().log_error = match kind.is_unread() {
+                        true => kind.explanation().map(str::to_string),
+                        // Rotation is what the game does on every restart; it is
+                        // not a fault and must not leave a warning on screen.
+                        false => None,
+                    };
+                    announce_recording(&app, &outcome.borrow(), &recorder);
                     if app.state::<Db>().allowance_gap().unwrap_or(false) {
                         let _ = app.emit(crate::services::allowance::EVENT_ALLOWANCE_CHANGED, ());
                     }
