@@ -16,6 +16,17 @@
 //! an intra-crate import. It reads the files at test time rather than
 //! `include_str!`-ing them, so it covers modules that do not exist yet - a new
 //! file cannot escape the gate by being new.
+//!
+//! SCOPE: this gate reads `use` statements. A fully qualified call such as
+//! `crate::shell::tray::rebuild_tray(app)` creates the same dependency and is
+//! NOT seen. That blind spot is deliberate rather than overlooked: widening the
+//! scan to every `crate::` path immediately found three more violations that are
+//! each their own extraction - `services/reminders.rs` calls into the tray, and
+//! `persistence/trades.rs` and `persistence/records.rs` take the eelog and
+//! allowance vocabulary as parameters. Extracting those contracts is a
+//! multi-module change, so this gate enforces the edges it can enforce today and
+//! `the_scope_stops_at_use_statements` pins the limitation so it stays visible
+//! and is not mistaken for full coverage.
 
 use std::path::{Path, PathBuf};
 
@@ -40,16 +51,14 @@ fn rust_files(dir: &Path) -> Vec<PathBuf> {
     out
 }
 
-/// The `crate::<module>` paths a file imports, which is how an intra-crate
-/// dependency is always spelled.
+/// The `crate::<module>` paths a file names in its `use` statements.
 fn imported_modules(source: &str) -> Vec<String> {
     let mut out = Vec::new();
     for line in source.lines() {
         let line = line.trim_start();
         let rest = match line.strip_prefix("use crate::") {
             Some(rest) => rest,
-            // A leading `pub use` or a path inside `pub(crate) use` matters just
-            // as much as a plain `use`.
+            // `pub use` and `pub(crate) use` re-export, which is the same edge.
             None => match line.split_once("use crate::").map(|(_, rest)| rest) {
                 Some(rest) if line.starts_with("pub ") => rest,
                 _ => continue,
@@ -62,6 +71,8 @@ fn imported_modules(source: &str) -> Vec<String> {
             }
         }
     }
+    out.sort();
+    out.dedup();
     out
 }
 
@@ -132,10 +143,34 @@ fn the_gate_reads_real_sources_and_real_imports() {
         "shell/tray.rs must be among the scanned files"
     );
 
-    let sample = "use crate::services::market::MarketCache;\nuse crate::commands::x;\n";
-    assert_eq!(imported_modules(sample), vec!["services", "commands"]);
+    // A plain import and a re-export are both edges.
+    assert_eq!(
+        imported_modules("use crate::services::market::MarketCache;"),
+        vec!["services"]
+    );
+    assert_eq!(
+        imported_modules("pub use crate::commands::x;"),
+        vec!["commands"]
+    );
+}
 
-    // And the checker's own rule: a shell file importing commands is caught.
-    let root = crate_src().join("shell");
-    assert!(root.is_dir(), "shell/ must exist for the gate to mean anything");
+/// The gate's documented blind spot, asserted so it cannot be quietly assumed
+/// away. When the remaining extractions land, widen `imported_modules` to read
+/// every `crate::` path and turn this test into its opposite.
+#[test]
+fn the_scope_stops_at_use_statements() {
+    let inline_call = "fn f(app: &AppHandle) { crate::shell::tray::rebuild_tray(app); }";
+    assert_eq!(
+        imported_modules(inline_call),
+        Vec::<String>::new(),
+        "an inline qualified call is not an import and this gate does not see it"
+    );
+
+    // And that blind spot is live, not hypothetical.
+    let reminders = std::fs::read_to_string(crate_src().join("services/reminders.rs"))
+        .expect("services/reminders.rs");
+    assert!(
+        reminders.contains("crate::shell::tray::rebuild_tray"),
+        "if this stops being true, the gate can be widened and this test removed"
+    );
 }
