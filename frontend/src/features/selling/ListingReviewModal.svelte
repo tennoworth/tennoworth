@@ -417,7 +417,10 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     try {
       const resp = await transport.bulkVisibility(ids, true);
       visibilityResults = resp?.results || [];
-      visibilityDone = true;
+      // "Buyers can see them now" is a claim that WFM accepted the toggle, so it
+      // takes at least one confirmed row: the call returning is not the change
+      // landing. The counts beside it already report how many failed.
+      visibilityDone = visibilityResults.some((r) => r.status === 'ok');
     } catch (e) {
       // A lock-state rejection here (desktop logout between send and toggle)
       // must not dump the user to the error phase and lose the results table.
@@ -688,7 +691,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
             </tbody>
           </table>
         </div>
-        {#if visibilityDone}
+        {#if visibilityResults.length > 0}
           <p class="lead">
             Visibility toggled. <span class="ok">{visibleOkCount} now visible</span>
             {#if visibleErrCount > 0}· <span class="bad">{visibleErrCount} failed</span>{/if}.

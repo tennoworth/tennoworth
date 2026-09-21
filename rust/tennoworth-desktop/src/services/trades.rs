@@ -177,6 +177,17 @@ fn adjustment_follow_up(
         .collect()
 }
 
+/// Whether a per-order WFM status may be reported to the user as an adjustment
+/// that happened. The transport's `Ok` only says the request was sent; a status of
+/// `pending` or `uncertain_mutation` means the outcome is unknown, and claiming it
+/// as applied tells the user their listing changed when nothing confirmed it.
+fn mutation_accepted(status: &str) -> bool {
+    // Only a literal "ok" is WFM confirming the change. Anything else - a rejected
+    // request, a queued one that was never sent, or an ambiguous transport outcome -
+    // leaves the listing as it was.
+    status == "ok"
+}
+
 /// Record + notify + adjust. Blocking; called from the tailer thread.
 pub fn handle_trade(
     app: &AppHandle,
@@ -216,8 +227,10 @@ pub fn handle_trade(
                     let tiered = tiered_slugs(&unlocked);
                     follow_up.extend(adjustment_follow_up(&trade, &names, &orders, &tiered));
                     for (order, new_qty) in plan_adjustments(&trade, &names, &orders, &tiered) {
-                        let res = if new_qty == 0 {
-                            delete_order(&unlocked, &order.id).map(|_| ())
+                        // A delete answers with plain Ok; an update carries a per-order
+                        // status that has to be read before anything is claimed.
+                        let outcome: Result<bool, anyhow::Error> = if new_qty == 0 {
+                            delete_order(&unlocked, &order.id).map(|()| true)
                         } else {
                             update_order(
                                 &unlocked,
@@ -229,10 +242,16 @@ pub fn handle_trade(
                                     rank: None,
                                 },
                             )
-                            .map(|_| ())
+                            .map(|result| mutation_accepted(&result.status))
                         };
-                        match res {
-                            Ok(()) => {
+                        match outcome {
+                            Ok(false) => {
+                                follow_up.push(format!(
+                                    "{}: listing update was not confirmed; review My Orders.",
+                                    order.slug
+                                ));
+                            }
+                            Ok(true) => {
                                 let name = trade
                                     .items
                                     .iter()
@@ -670,5 +689,22 @@ mod tests {
             {"id": "c", "type": "buy", "quantity": 1, "item": {"slug": "x"}}
         ]});
         assert_eq!(own_sell_orders(&flat), vec![order("a", "primed_flow", 1)]);
+    }
+
+    /// A trade is only "adjusted" when WFM said so. The transport answers `Ok` for a
+    /// request it managed to send, so reading that as success marks the trade closed
+    /// and tells the user their listing changed while it still shows the old quantity.
+    #[test]
+    fn only_a_confirmed_status_counts_as_an_applied_adjustment() {
+        assert!(mutation_accepted("ok"));
+        assert!(
+            !mutation_accepted("pending"),
+            "a request that was not accepted is not an applied adjustment"
+        );
+        assert!(
+            !mutation_accepted("uncertain_mutation"),
+            "an ambiguous mutation is not an applied adjustment"
+        );
+        assert!(!mutation_accepted("error"));
     }
 }
