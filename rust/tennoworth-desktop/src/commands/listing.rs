@@ -292,10 +292,10 @@ pub async fn submit_plan(
     let reviewed = items.clone();
     let response = tauri::async_runtime::spawn_blocking(move || {
         let request = s.claim_plan_request(request_id)?;
-        let _guard = s
-            .begin_plan()
-            .ok_or_else(|| CmdError::of("busy", PLAN_BUSY_MSG))?;
-        let unlocked = s.require_unlocked()?;
+        let mutations = crate::services::order_mutations::OrderMutations::new(Arc::clone(&s));
+        let (_guard, unlocked) = mutations.begin(
+            crate::services::order_mutations::MutationOrigin::ReviewedPlan,
+        )?;
         if load_pending(s.pending_path()).is_some_and(|plan| plan.items.iter().any(|item| item.status == "pending")) {
             return Err(CmdError::of("busy", "An unfinished batch is saved. Resume or discard it before sending another."));
         }
@@ -346,10 +346,10 @@ pub async fn resume_pending_plan(
         let mut pending = load_pending(s.pending_path())
             .ok_or_else(|| CmdError::of("no_pending", "No pending plan to resume."))?;
         let request = s.claim_plan_request(request_id)?;
-        let _guard = s
-            .begin_plan()
-            .ok_or_else(|| CmdError::of("busy", PLAN_BUSY_MSG))?;
-        let unlocked = s.require_unlocked()?;
+        let mutations = crate::services::order_mutations::OrderMutations::new(Arc::clone(&s));
+        let (_guard, unlocked) = mutations.begin(
+            crate::services::order_mutations::MutationOrigin::ReviewedPlan,
+        )?;
         // Stable plan positions let history upsert prior successes during resume.
         let price_qty: Vec<(i64, i64)> = pending
             .items
