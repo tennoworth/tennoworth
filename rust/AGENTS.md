@@ -103,6 +103,17 @@ Linux clears file capabilities whenever the binary is replaced. Every
 `cargo build --release` therefore wipes `cap_sys_ptrace`. Document
 this in any "how to run the app" instructions you write.
 
+### A background scan must not run during an interactive listing flow
+Every scan records a new snapshot, and two gates require the snapshot a listing
+submits to be the LATEST one: `services::protection::validate_snapshot` and
+`Db::session_allowance`. So a scan landing while a listing review or Trade
+Session batch is being prepared fails the submit with "prepare a new batch" and
+throws the user's review away. The automatic scanner
+(`services/auto_scan.rs`) is therefore held by the webview for as long as
+`listing.listingOpen` or the Trade Session view is active, and the SPA defers
+adoption rather than swapping rows under an open review. Do not remove that
+hold, and do not let a new background scan path skip it.
+
 ### The desktop build embeds `dist-desktop` at compile time
 `cargo build` bakes `frontend/dist-desktop` (via `frontendDist`) into the
 binary. Rebuild the frontend (`bun run build:desktop`) FIRST and let cargo

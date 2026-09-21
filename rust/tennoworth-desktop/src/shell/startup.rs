@@ -87,6 +87,10 @@ pub(crate) fn run() {
             commands::domain::evaluate_domain,
             commands::inventory::scan_inventory,
             commands::inventory::import_snapshot,
+            commands::auto_scan::get_auto_scan_settings,
+            commands::auto_scan::update_auto_scan_settings,
+            commands::auto_scan::auto_scan_status,
+            commands::auto_scan::set_auto_scan_hold,
             commands::settings::get_setting,
             commands::settings::set_setting,
             commands::settings::get_reserves,
@@ -174,6 +178,7 @@ pub(crate) fn run() {
             let profile_existed = db_path.exists();
             let store = Db::open(&db_path)
                 .map_err(|e| format!("opening state DB {}: {e}", db_path.display()))?;
+            app.manage(crate::services::auto_scan::AutoScanState::from_db(&store));
             app.manage(store);
             crate::services::usage::start(app.handle().clone());
             crate::shell::update_notes::initialize(app.handle(), profile_existed);
@@ -315,6 +320,10 @@ pub(crate) fn run() {
                 // Fast path beside the poll: WFM's live order stream fires a
                 // matching watch in seconds (see ws_watch.rs).
                 crate::services::ws_watch::start_stream(app.handle().clone());
+                // Automatic scanning is off by default; the loop only idles
+                // until the user turns it on (see auto_scan.rs). Not in probe
+                // runs - the probe must not scan on a timer.
+                crate::services::auto_scan::start(app.handle().clone());
             }
 
             // C5: launch update check, off the main thread so it can never

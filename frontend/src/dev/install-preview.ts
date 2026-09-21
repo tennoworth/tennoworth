@@ -43,6 +43,10 @@ export async function installPreview() {
     overlay_status: { state: 'disabled', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true },
     setup_overlay_capture: { state: 'watching', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true },
   };
+  // The automatic-scan status mirrors the stored preferences in the real app
+  // (the loop republishes them every tick), so the preview carries the two
+  // together rather than letting a stale status contradict the toggle.
+  let autoScanSettings = { enabled: false, cadenceMinutes: 30, adoptAutomatically: true };
   // The desktop store keeps settings + the reload-restore snapshot in SQLite
   // via get_setting/set_setting; back those onto localStorage so a seeded
   // browser snapshot round-trips exactly like the real thing.
@@ -70,11 +74,34 @@ export async function installPreview() {
     if (cmd === 'set_setting') { localStorage.setItem(String(args?.key), String(args?.value)); return Promise.resolve(null); }
     if (cmd === 'delete_setting') { localStorage.removeItem(String(args?.key)); return Promise.resolve(null); }
     if (cmd === 'set_notification_preferences') return Promise.resolve(args?.preferences);
+    if (cmd === 'get_auto_scan_settings') return Promise.resolve({ ...autoScanSettings });
+    if (cmd === 'update_auto_scan_settings') {
+      autoScanSettings = (args?.settings as typeof autoScanSettings) ?? autoScanSettings;
+      return Promise.resolve({ ...autoScanSettings });
+    }
+    if (cmd === 'auto_scan_status') return Promise.resolve({
+      ...autoScanSettings, held: false, gameRunning: false, lastScanAt: null, lastError: null, nextCheckAt: null,
+    });
     if (cmd === 'test_notification') return Promise.resolve('Test sent (preview).');
     if (cmd === 'update_overlay_settings') return Promise.resolve(args?.settings ?? null);
     return Promise.resolve(cmd in empties ? empties[cmd] : null);
   };
   const w = globalThis as Record<string, unknown>;
   w.__TAURI_INTERNALS__ = { invoke };
-  w.__TAURI__ = { core: { invoke }, event: { listen: () => Promise.resolve(() => { }) } };
+  // Event-driven UI (background-scan results, notifications) is invisible in a
+  // preview whose listen() is a no-op. Registering handlers and exposing one
+  // emit entry point lets a browser check drive those surfaces, the same way
+  // the native app pushes them.
+  const handlers = new Map<string, (event: { payload: unknown }) => void>();
+  w.__TENNOWORTH_PREVIEW_EMIT__ = (name: string, payload: unknown) =>
+    handlers.get(name)?.({ payload });
+  w.__TAURI__ = {
+    core: { invoke },
+    event: {
+      listen: (name: string, handler: (event: { payload: unknown }) => void) => {
+        handlers.set(name, handler);
+        return Promise.resolve(() => handlers.delete(name));
+      },
+    },
+  };
 }

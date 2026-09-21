@@ -11,6 +11,25 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use crate::persistence::Db;
 use crate::shell::tray::post_scan_surfaces;
 
+/// Emitted with [`ScannedInventory`] after a scan the app started on its own -
+/// the automatic scanner, or the tray's Rescan. The webview's own
+/// `scan_inventory` call already receives the same payload as its response, so
+/// it emits nothing.
+pub const EVENT_INVENTORY_SCANNED: &str = "inventory-scanned";
+
+/// Single-flight guard for the whole scan-and-record boundary: a second
+/// concurrent scan - a tick landing on a user's click - must not walk the game's
+/// address space twice, and must not record a snapshot ahead of the first one's
+/// accounting.
+static SCAN_ACTIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Whether a scan already owns the scanner. The automatic scanner asks before it
+/// spends an attempt, so a collision with a user-clicked scan is a silent skip
+/// rather than a failed attempt against the user's cadence.
+pub(crate) fn scan_in_progress() -> bool {
+    SCAN_ACTIVE.load(std::sync::atomic::Ordering::SeqCst)
+}
+
 fn scan_boundary(app: &AppHandle) -> Option<crate::services::eelog::LogPosition> {
     let state = app.try_state::<crate::services::eelog_state::EeLogState>()?;
     crate::services::eelog::log_position(state.path.as_deref()?)
@@ -57,17 +76,22 @@ fn record_game_scan(
     snapshot_id
 }
 
-#[derive(serde::Serialize)]
+#[derive(Clone, serde::Serialize)]
 pub struct ScannedInventory {
-    inventory: String,
-    snapshot_id: Option<i64>,
+    pub(crate) inventory: String,
+    pub(crate) snapshot_id: Option<i64>,
+}
+
+/// Hand a completed background scan to the webview so the open app can adopt it
+/// or offer it, instead of showing an inventory a cadence out of date.
+pub(crate) fn publish_scan(app: &AppHandle, payload: &ScannedInventory) {
+    let _ = app.emit(EVENT_INVENTORY_SCANNED, payload);
 }
 
 pub(crate) fn scan_and_record(app: &AppHandle) -> Result<ScannedInventory, String> {
     // Keep acquisition and its accounting boundary under the same single-flight
     // guard; a tray scan must not persist newer data before this scan is recorded.
-    static ACTIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-    let _guard = wfm_core::trading::plan::PlanGuard::acquire(&ACTIVE)
+    let _guard = wfm_core::trading::plan::PlanGuard::acquire(&SCAN_ACTIVE)
         .ok_or("An inventory scan is already running.")?;
     let started_at = crate::services::allowance::unix_now();
     let before = scan_boundary(app);
@@ -133,12 +157,29 @@ pub fn import_snapshot(db: State<'_, Db>, inventory_json: String) -> Result<i64,
 
 #[cfg(test)]
 mod tests {
-    use super::ScannedInventory;
+    use super::{scan_in_progress, ScannedInventory, SCAN_ACTIVE};
 
     #[test]
     fn scan_response_matches_the_frontend_transport_fixture() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!("../../../../tests/fixtures/protection/scan-response.json")).unwrap();
         let result = ScannedInventory { inventory: r#"{"Suits":[{"a":1}]}"#.into(), snapshot_id: Some(7) };
         assert_eq!(serde_json::to_value(result).unwrap(), fixture);
+    }
+
+    /// The background scanner decides `Scan` and then asks
+    /// [`scan_in_progress`] before spending an attempt. If that query watched a
+    /// different flag than [`scan_and_record`] claims, a tick colliding with a
+    /// user-clicked scan would spend the cadence on a scan it never started.
+    #[test]
+    fn the_scheduler_sees_the_same_single_flight_flag_the_scan_takes() {
+        assert!(!scan_in_progress());
+        let held = wfm_core::trading::plan::PlanGuard::acquire(&SCAN_ACTIVE)
+            .expect("no other test holds the scan flag");
+        assert!(
+            scan_in_progress(),
+            "a held scan must be visible to the scheduler"
+        );
+        drop(held);
+        assert!(!scan_in_progress());
     }
 }

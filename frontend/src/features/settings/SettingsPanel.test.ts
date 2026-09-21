@@ -8,6 +8,8 @@ import { renderDesktop as render } from '../../dev/render-desktop';
 import SettingsPanel from './SettingsPanel.svelte';
 import type { ModePref, ThemeController } from '../../ui/theme';
 import type { DesktopCapabilities } from '../../contracts/desktop';
+import { AUTO_SCAN_CADENCE_CHOICES, type AutoScanSettings, type AutoScanStatus } from '../../contracts/desktop';
+import { AutoScanController } from '../inventory/auto-scan.svelte';
 import type { OverlaySettings } from '../../contracts/data';
 import { installTauri, removeTauri } from '../../dev/test-utils';
 
@@ -201,5 +203,81 @@ describe('SettingsPanel', () => {
     });
     expect(screen.getByText('Not signed in')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Log out' })).toBeNull();
+  });
+});
+
+describe('SettingsPanel automatic scanning', () => {
+  async function autoScan(settings: AutoScanSettings, status: Partial<AutoScanStatus> = {}) {
+    const port = {
+      getAutoScanSettings: vi.fn(async () => settings),
+      updateAutoScanSettings: vi.fn(async (next: AutoScanSettings) => next),
+      autoScanStatus: vi.fn(async () => ({
+        enabled: true, cadenceMinutes: 30, adoptAutomatically: true, held: false,
+        gameRunning: true, lastScanAt: null, lastError: null, nextCheckAt: null,
+        ...status,
+      }) as AutoScanStatus),
+      setAutoScanHold: vi.fn(async () => {}),
+      listenForTauriEvent: vi.fn(() => () => {}),
+    };
+    const controller = new AutoScanController({
+      settings: port as never,
+      listen: port.listenForTauriEvent as never,
+      parse: (raw) => ({ data: {}, snapshotId: raw.snapshot_id }) as never,
+      adopt: vi.fn(),
+      isInteractive: () => false,
+    });
+    await controller.load();
+    return { controller, port };
+  }
+
+  it('is off with the cadence hidden, and turns on through the transport', async () => {
+    const { theme } = fakeTheme();
+    const { controller, port } = await autoScan({ enabled: false, cadenceMinutes: 30, adoptAutomatically: true });
+    render(SettingsPanel, { props: { theme, isDesktop: true, autoScan: controller } });
+
+    const toggle = screen.getByRole('checkbox', { name: /Scan automatically while Warframe is running/ }) as HTMLInputElement;
+    expect(toggle.checked).toBe(false);
+    expect(screen.queryByRole('combobox', { name: /Scan every/ })).toBeNull();
+
+    await fireEvent.click(toggle);
+    expect(port.updateAutoScanSettings).toHaveBeenCalledWith({ enabled: true, cadenceMinutes: 30, adoptAutomatically: true });
+    expect(await screen.findByRole('combobox', { name: /Scan every/ })).toBeTruthy();
+  });
+
+  it('offers exactly the cadences the loop accepts', async () => {
+    const { theme } = fakeTheme();
+    const { controller, port } = await autoScan({ enabled: true, cadenceMinutes: 15, adoptAutomatically: true });
+    render(SettingsPanel, { props: { theme, isDesktop: true, autoScan: controller } });
+
+    const select = screen.getByRole('combobox', { name: /Scan every/ }) as HTMLSelectElement;
+    expect([...select.options].map((option) => Number(option.value))).toEqual([...AUTO_SCAN_CADENCE_CHOICES]);
+    await fireEvent.change(select, { target: { value: '60' } });
+    expect(port.updateAutoScanSettings).toHaveBeenCalledWith({ enabled: true, cadenceMinutes: 60, adoptAutomatically: true });
+  });
+
+  it('writes the adopt preference, which covers any background scan', async () => {
+    const { theme } = fakeTheme();
+    const { controller, port } = await autoScan({ enabled: true, cadenceMinutes: 30, adoptAutomatically: true });
+    render(SettingsPanel, { props: { theme, isDesktop: true, autoScan: controller } });
+
+    await fireEvent.click(screen.getByRole('checkbox', { name: /Update the open app automatically/ }));
+    expect(port.updateAutoScanSettings).toHaveBeenCalledWith({ enabled: true, cadenceMinutes: 30, adoptAutomatically: false });
+  });
+
+  it('reports what the loop is doing, including a failure and a paused scan', async () => {
+    const { theme } = fakeTheme();
+    const waiting = await autoScan({ enabled: true, cadenceMinutes: 30, adoptAutomatically: true }, { gameRunning: false });
+    render(SettingsPanel, { props: { theme, isDesktop: true, autoScan: waiting.controller } });
+    expect(screen.getByText(/Waiting for Warframe/)).toBeTruthy();
+
+    cleanup();
+    const failed = await autoScan({ enabled: true, cadenceMinutes: 30, adoptAutomatically: true }, { gameRunning: true, lastError: 'No accountId/nonce pair found in WF memory.' });
+    render(SettingsPanel, { props: { theme, isDesktop: true, autoScan: failed.controller } });
+    expect(screen.getByText(/No accountId\/nonce pair found/)).toBeTruthy();
+
+    cleanup();
+    const held = await autoScan({ enabled: true, cadenceMinutes: 30, adoptAutomatically: true }, { held: true });
+    render(SettingsPanel, { props: { theme, isDesktop: true, autoScan: held.controller } });
+    expect(screen.getByText(/paused while a listing review or Trade Session/)).toBeTruthy();
   });
 });

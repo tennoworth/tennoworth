@@ -7,6 +7,8 @@
   import { onMount } from 'svelte';
   import type { ThemeController } from '../../ui/theme';
   import type { DesktopWfmStatus, DesktopCapabilities } from '../../contracts/desktop';
+  import { AUTO_SCAN_CADENCE_CHOICES, type AutoScanSettings, type AutoScanStatus } from '../../contracts/desktop';
+  import type { AutoScanController } from '../inventory/auto-scan.svelte';
   import type { OverlaySettings, OverlayStatus } from '../../contracts/data';
   
 import { type UpdateStatus } from '../../contracts/update';
@@ -17,11 +19,14 @@ import { type UpdateStatus } from '../../contracts/update';
     theme: ThemeController;
     onwhatsnew?: () => void;
     transport?: DesktopCapabilities;
+    /** Desktop only. The shell owns the instance, so the panel and the shell
+     *  read one source of truth for these preferences and this status. */
+    autoScan?: AutoScanController;
     isDesktop?: boolean;
     wfmStatus?: DesktopWfmStatus | null;
     onwfmlogout?: () => Promise<void>;
   }
-  let { theme, onwhatsnew, transport, isDesktop = false, wfmStatus = null, onwfmlogout }: Props = $props();
+  let { theme, onwhatsnew, transport, autoScan, isDesktop = false, wfmStatus = null, onwfmlogout }: Props = $props();
 
   let overlay = $state<OverlaySettings | null>(null);
   let overlayStatus = $state<OverlayStatus | null>(null);
@@ -33,6 +38,7 @@ import { type UpdateStatus } from '../../contracts/update';
   let confirmingLogout = $state(false);
   let loggingOut = $state(false);
   let logoutError = $state('');
+  let savingAutoScan = $state(false);
 
   $effect(() => {
     void wfmStatus?.logged_in;
@@ -50,9 +56,36 @@ import { type UpdateStatus } from '../../contracts/update';
       .then((status) => { overlayStatus = status; })
       .catch(() => {});
     void initial();
-    const timer = window.setInterval(() => { void refreshStatus(); }, 1000);
+    const timer = window.setInterval(() => {
+      void refreshStatus();
+      // The loop's own view: whether the game is up, when the next scan is due,
+      // and why the last one failed.
+      void autoScan?.refreshStatus();
+    }, 1000);
     return () => window.clearInterval(timer);
   });
+
+  /** What the background loop is doing right now, in the user's terms. */
+  function autoScanStatusText(status: AutoScanStatus | null): string {
+    if (!status) return 'Reading status…';
+    if (!status.enabled) return 'Manual scans only.';
+    if (status.held) return 'Automatic scan paused while a listing review or Trade Session is open.';
+    if (status.lastError) return `Last automatic scan failed: ${status.lastError}`;
+    if (!status.gameRunning) return 'Waiting for Warframe. Nothing is scanned while the game is closed.';
+    if (status.lastScanAt) return `Last automatic scan ${new Date(status.lastScanAt * 1000).toLocaleTimeString()}.`;
+    if (status.nextCheckAt) return `Next scan around ${new Date(status.nextCheckAt * 1000).toLocaleTimeString()}.`;
+    return 'Watching for Warframe.';
+  }
+
+  async function saveAutoScan(next: AutoScanSettings) {
+    if (!autoScan) return;
+    savingAutoScan = true;
+    try {
+      await autoScan.save(next);
+    } finally {
+      savingAutoScan = false;
+    }
+  }
 
   async function saveOverlay(next: OverlaySettings) {
     if (!transport) return;
@@ -181,8 +214,34 @@ import { type UpdateStatus } from '../../contracts/update';
       </div>
       {#if updateError}<p class="error inset" role="alert">{updateError}</p>{/if}
     </section>
-    <section class="wrap tw" aria-labelledby="set-relic-overlay">
-      <div class="rail"><h3 id="set-relic-overlay">Relic reward overlay</h3></div>
+    {#if autoScan}
+    <section class="wrap tw" aria-labelledby="set-auto-scan">
+      <div class="rail"><h3 id="set-auto-scan">Automatic scan</h3></div>
+      {#if autoScan.settings}
+        <div class="ui-setting-row">
+          <div class="ui-setting-copy"><label for="auto-scan-enabled">Scan automatically while Warframe is running</label><p>Off: TennoWorth scans only when you ask. On: it looks for the game and rescans on the cadence below. Nothing is scanned while the game is closed, and a rescan never interrupts a listing review.</p></div>
+          <label class="ui-setting-check"><input id="auto-scan-enabled" type="checkbox" checked={autoScan.settings.enabled} disabled={savingAutoScan} onchange={(event) => saveAutoScan({ ...autoScan!.settings!, enabled: event.currentTarget.checked })}><span>Enabled</span></label>
+        </div>
+        <div class="ui-section-group">
+          {#if autoScan.settings.enabled}
+          <div class="ui-setting-row">
+            <div class="ui-setting-copy"><label for="auto-scan-cadence">Scan every</label><p>Each rescan reads the game's memory and requests your account inventory from Digital Extremes. A closed or logged-out game is never scanned.</p></div>
+            <div class="ui-setting-control"><select id="auto-scan-cadence" class="ui-input" value={autoScan.settings.cadenceMinutes} disabled={savingAutoScan} onchange={(event) => saveAutoScan({ ...autoScan!.settings!, cadenceMinutes: Number(event.currentTarget.value) })}>{#each AUTO_SCAN_CADENCE_CHOICES as minutes}<option value={minutes}>{minutes} minutes</option>{/each}</select></div>
+          </div>
+          {/if}
+          <div class="ui-setting-row">
+            <div class="ui-setting-copy"><label for="auto-scan-adopt">Update the open app automatically</label><p>When a scan finishes in the background - the cadence above, or Rescan from the tray - replace the inventory on screen. While a listing review or Trade Session is being prepared the scan waits for “Load new scan” instead.</p></div>
+            <label class="ui-setting-check"><input id="auto-scan-adopt" type="checkbox" checked={autoScan.settings.adoptAutomatically} disabled={savingAutoScan} onchange={(event) => saveAutoScan({ ...autoScan!.settings!, adoptAutomatically: event.currentTarget.checked })}><span>Automatic</span></label>
+          </div>
+          <div class="ui-setting-row">
+            <div class="ui-setting-copy"><strong>Status</strong><p>{autoScanStatusText(autoScan.status)}</p></div>
+          </div>
+        </div>
+      {:else}<p class="exp inset">Loading automatic-scan settings…</p>{/if}
+      {#if autoScan.settingsError}<p class="error inset" role="alert">{autoScan.settingsError}</p>{/if}
+    </section>
+    {/if}
+    <section class="wrap tw" aria-labelledby="set-relic-overlay">      <div class="rail"><h3 id="set-relic-overlay">Relic reward overlay</h3></div>
       {#if overlay}
         <div class="ui-setting-row">
           <div class="ui-setting-copy"><label for="overlay-enabled">Enable local screen recognition</label><p>Captures only after a reward event or your retry shortcut. Frames stay in memory and are never uploaded.</p></div>

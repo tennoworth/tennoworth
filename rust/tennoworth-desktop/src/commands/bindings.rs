@@ -7,12 +7,24 @@ fn desktop_bindings_match_rust() {
     types.add::<wfm_client::governor::AccessStatus>();
     types.add::<crate::services::wfm_session::CmdError>();
     types.add::<crate::services::watch::WatchOutcome>();
+    types.add::<crate::services::auto_scan::AutoScanSettings>();
+    types.add::<crate::services::auto_scan::AutoScanStatus>();
     let mut expected = types.finish().expect("unique wire types");
     expected.push_str(&format!(
         "\nexport const WATCH_FIRED_EVENT = {:?} as const;\n",
         crate::services::watch::EVENT_WATCH_FIRED
     ));
     expected.push_str(&format!("\nexport const WFM_ACCESS_EVENT = {:?} as const;\n", crate::services::wfm_session::WFM_ACCESS_EVENT));
+    expected.push_str(&format!(
+        "\nexport const INVENTORY_SCANNED_EVENT = {:?} as const;\n",
+        super::inventory::EVENT_INVENTORY_SCANNED
+    ));
+    // The cadences the setting offers live in Rust; the selector reads them from
+    // here rather than repeating the list, so the two cannot drift.
+    expected.push_str(&format!(
+        "\nexport const AUTO_SCAN_CADENCE_CHOICES = {:?} as const;\n",
+        crate::services::auto_scan::CADENCE_CHOICES
+    ));
     let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../frontend/src/contracts/generated/desktop.ts");
     if std::env::var_os("TENNOWORTH_UPDATE_BINDINGS").is_some() {

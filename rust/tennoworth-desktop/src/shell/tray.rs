@@ -11,7 +11,7 @@ use tauri::{AppHandle, Manager, Wry};
 
 use wfm_core::poison::guard;
 
-use crate::commands::inventory::scan_and_record;
+use crate::commands::inventory::{publish_scan, scan_and_record};
 use crate::persistence::Db;
 use crate::services::market::MarketCache;
 use crate::services::sellables::{self, MarketData, ScanNotification, SellableRow};
@@ -134,14 +134,16 @@ pub(crate) fn show_main_window(app: &AppHandle) {
 }
 
 /// Run a scan from the tray "Rescan" item: scan → record snapshot → refresh the
-/// tray + notification. Runs on its own thread (the menu-event callback must not
-/// block), and mirrors what the SPA-driven `scan_inventory` command does. A scan
-/// error is logged, not surfaced (there's no banner behind a tray click).
+/// tray + notification, then hand the payload to the webview. Runs on its own
+/// thread (the menu-event callback must not block), and mirrors what the
+/// SPA-driven `scan_inventory` command does. A scan error is logged, not
+/// surfaced (there's no banner behind a tray click).
 fn tray_rescan(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || match scan_and_record(&app) {
-        Ok(_) => {
+        Ok(payload) => {
             post_scan_surfaces(&app);
+            publish_scan(&app, &payload);
         }
         Err(e) => eprintln!("tennoworth: tray rescan failed: {e}"),
     });
