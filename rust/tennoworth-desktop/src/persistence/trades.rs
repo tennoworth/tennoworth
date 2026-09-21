@@ -5,9 +5,9 @@ impl Db {
     /// None means already recorded: callers must not notify or auto-close again.
     pub fn insert_trade(
         &self,
-        t: &crate::services::eelog::TradeEvent,
+        t: &crate::trading_contract::TradeEvent,
         at: i64,
-        position: &crate::services::eelog::LogPosition,
+        position: &crate::trading_contract::LogPosition,
     ) -> rusqlite::Result<Option<i64>> {
         let mut conn = guard(&self.conn);
         let tx = conn.transaction()?;
@@ -45,7 +45,7 @@ impl Db {
 
     pub fn save_allowance(
         &self,
-        mut observation: crate::services::allowance::Observation,
+        mut observation: crate::trading_contract::Observation,
     ) -> rusqlite::Result<()> {
         let mut conn = guard(&self.conn);
         let tx = conn.transaction()?;
@@ -73,11 +73,11 @@ impl Db {
     pub fn trade_allowance(
         &self,
         now: i64,
-    ) -> rusqlite::Result<crate::services::allowance::AllowanceView> {
+    ) -> rusqlite::Result<crate::trading_contract::AllowanceView> {
         let conn = guard(&self.conn);
         Ok(read_allowance(&conn)?
             .map(|o| o.view(&self.run_id, now))
-            .unwrap_or_else(|| crate::services::allowance::unknown(now)))
+            .unwrap_or_else(|| crate::trading_contract::unknown(now)))
     }
 
     pub fn session_allowance(
@@ -85,7 +85,7 @@ impl Db {
         snapshot_id: i64,
         utc_day: i64,
         now: i64,
-    ) -> Result<crate::services::allowance::AllowanceView, String> {
+    ) -> Result<crate::trading_contract::AllowanceView, String> {
         let conn = guard(&self.conn);
         let observation = read_allowance(&conn)
             .map_err(|e| e.to_string())?
@@ -146,7 +146,7 @@ impl Db {
         })?;
         let mut names = std::collections::BTreeSet::new();
         for row in rows {
-            let items: Vec<crate::services::eelog::TradeItem> = serde_json::from_str(&row?)
+            let items: Vec<crate::trading_contract::TradeItem> = serde_json::from_str(&row?)
                 .map_err(|e| {
                     rusqlite::Error::FromSqlConversionFailure(
                         0,
