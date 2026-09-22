@@ -231,7 +231,12 @@ pub fn execute_plan(
 
     let response = run_pending(pending_path, unlocked, &mut pending, validate);
     if pending.items.iter().all(|i| i.status != "pending") {
-        clear_pending(pending_path);
+        // Every item reached a terminal state, so the batch is finished either way -
+        // but a file that will not delete is offered as resumable on the next
+        // launch, so say so instead of reporting a clean finish.
+        if let Err(error) = clear_pending(pending_path) {
+            eprintln!("tennoworth: finished batch left its journal behind: {error}");
+        }
     }
     response
 }
@@ -868,7 +873,7 @@ mod tests {
                     .collect::<Vec<_>>(),
                 ["ok", "pending", "pending"]
             );
-            let mut saved = crate::trading::pending::load_pending(&path).unwrap();
+            let mut saved = crate::trading::pending::load_pending(&path).expect("readable").expect("present");
             assert_eq!(saved.items[1].status, "pending");
             assert_eq!(
                 saved.items[1].message.as_deref(),
@@ -901,7 +906,8 @@ mod tests {
             assert!(validations.get() >= resumed.len());
             assert!(response.results.iter().all(|item| item.status == "ok"));
             assert!(crate::trading::pending::load_pending(&path)
-                .unwrap()
+                .expect("readable")
+                .expect("present")
                 .items
                 .iter()
                 .all(|item| item.status == "ok"));
