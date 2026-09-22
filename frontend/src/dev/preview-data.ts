@@ -78,6 +78,22 @@ export function createPreview(scenario: string) {
             ? { paused: { log: { error: 'the game log could not be read' } } }
             : 'recording',
     },
+    // An interrupted batch the SPA has to describe. `batch-pending` is work that
+    // was never sent; `batch-uncertain` is work whose outcome the market never
+    // confirmed, which must not be offered as a retry.
+    get_pending_plan:
+      scenario === 'batch-pending' || scenario === 'batch-uncertain'
+        ? {
+            plan_id: 'preview-plan',
+            started_at: new Date(now * 1000 - 3_600_000).toISOString(),
+            items: [
+              { slug: 'pyrana_prime_set', platinum: 90, quantity: 1, order_type: 'sell', visible: false, status: 'ok' },
+              scenario === 'batch-pending'
+                ? { slug: 'primed_flow', platinum: 26, quantity: 2, order_type: 'sell', visible: false, status: 'pending' }
+                : { slug: 'primed_flow', platinum: 26, quantity: 2, order_type: 'sell', visible: false, status: 'uncertain_mutation' },
+            ],
+          }
+        : null,
     trade_session_state: {
       set_recipes: scenario === 'session-sets' ? { akbolto_prime_set: sampleRecipe } : {},
       allowance: { remaining: scenario === 'zero-trades' ? 0 : scenario === 'unknown-trades' ? null : 24,

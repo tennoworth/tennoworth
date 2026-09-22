@@ -563,7 +563,9 @@ interface PendingPlanItem {
   rank?: number | null;
   subtype?: string | null;
   reference_low_sell?: number | null;
-  status: 'pending' | 'ok' | 'error';
+  /** Mirrors the journal's vocabulary, including an outcome the market never
+   *  confirmed - see `PendingItem`'s status constants in `wfm-core`. */
+  status: 'pending' | 'uncertain_mutation' | 'ok' | 'error';
   message?: string | null;
   order_id?: string | null;
 }

@@ -44,6 +44,7 @@ import { NOTIFICATIONS_EVENT, MARKET_REFRESHED_EVENT, ALLOWANCE_CHANGED_EVENT } 
 import { startMarketRefreshLoop, type MarketRefreshLoop } from '../adapters/market';
   import { computeResults as computeFilteredResults, computeAvailableTags, computeEmptyReason, type FilterState } from '../domain/filter-engine';
   import { PRESETS, presetStillMatches } from '../domain/presets';
+  import { interruptedBatch } from '../domain/listing-plan';
 
   const APP_COMMIT = __APP_COMMIT__;
   import type { SetReco } from '../domain/set-recos';
@@ -667,13 +668,14 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
           // Platform the desktop session reports (from /health), for display.
   let desktopPlatform = $state<string | null>(null);
 
-  let pendingRemaining = $derived(
-    listing.pendingPlan?.items?.filter((i) => i.status === 'pending').length ?? 0
-  );
-  let ordersToFix = $derived((listing.ordersSummary?.issues ?? 0) + (listing.pendingPlan && pendingRemaining > 0 ? pendingRemaining : 0));
-  let pendingDone = $derived(
-    listing.pendingPlan?.items?.filter((i) => i.status === 'ok').length ?? 0
-  );
+  // One classification for the interrupted batch: an item that was never sent
+  // and an item whose send outcome is unknown are different work, and the
+  // banner has to offer different things for each.
+  let batch = $derived(interruptedBatch(listing.pendingPlan));
+  let pendingRemaining = $derived(batch?.pending ?? 0);
+  let uncertainRemaining = $derived(batch?.uncertain ?? 0);
+  let outstanding = $derived(pendingRemaining + uncertainRemaining);
+  let ordersToFix = $derived((listing.ordersSummary?.issues ?? 0) + (listing.pendingPlan ? outstanding : 0));
 
   let resumeOk = $derived(listing.resumeResults.filter((r) => r.status === 'ok').length);
   let resumeErr = $derived(listing.resumeResults.filter((r) => r.status !== 'ok').length);
@@ -877,7 +879,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         <div data-shell class="nav-label">Manage</div>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'orders'} onclick={() => filters.setView('orders')}>
           <span data-shell>My orders</span>
-          {#if listing.pendingPlan && pendingRemaining > 0}<span data-shell class="badge warn">{pendingRemaining}</span>{/if}
+          {#if listing.pendingPlan && outstanding > 0}<span data-shell class="badge warn">{outstanding}</span>{/if}
         </button>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'watches'} onclick={() => filters.setView('watches')}>
           <span data-shell>Price watches</span>
@@ -1521,17 +1523,24 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
             <button data-shell class="ghost" onclick={() => listing.doDiscard()}>Discard pending</button>
           </div>
         </div>
-      {:else if listing.pendingPlan && pendingRemaining > 0}
+      {:else if listing.pendingPlan && batch}
         <div data-shell class="row">
           <div data-shell class="src">
             <span data-shell class="dot aging" aria-hidden="true"></span>
             <strong data-shell>Interrupted batch from {new Date(listing.pendingPlan.started_at).toLocaleString()}</strong>
-            <span data-shell class="muted">
-              · {pendingRemaining} pending{pendingDone > 0 ? `, ${pendingDone} already done` : ''}
-            </span>
+            <span data-shell class="muted">{batch.detail}</span>
+            {#if uncertainRemaining > 0}
+              <span data-shell class="muted">
+                A listing whose outcome the market never confirmed may already be live. Check My Orders before listing it again.
+              </span>
+            {/if}
           </div>
           <div data-shell class="row gap-sm">
-            <button data-shell onclick={() => listing.doResume()} disabled={marketAccess.mutationsBlocked}>Resume</button>
+            {#if batch.resumable}
+              <button data-shell onclick={() => listing.doResume()} disabled={marketAccess.mutationsBlocked}>Resume</button>
+            {:else}
+              <button data-shell onclick={() => filters.setView('orders')}>Review in My Orders</button>
+            {/if}
             <button data-shell class="ghost" onclick={() => listing.doDiscard()}>Discard</button>
           </div>
         </div>
@@ -1563,4 +1572,4 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   onimport={(result) => inventory.handleImported(result)}
 />
 
-<UpdateNotes bind:this={updateNotesRef} services={notesServices} ready={notesReady} blocked={pendingRemaining > 0 || listing.resumePhase !== 'idle'} />
+<UpdateNotes bind:this={updateNotesRef} services={notesServices} ready={notesReady} blocked={outstanding > 0 || listing.resumePhase !== 'idle'} />

@@ -21,6 +21,26 @@ pub struct PendingPlan {
     pub items: Vec<PendingItem>,
 }
 
+/// Journal status for an item whose send has not been resolved.
+///
+/// "Saved for explicit resume" - the request was never dispatched, or the
+/// governor refused it before it went out. Safe to offer again.
+pub const STATUS_PENDING: &str = "pending";
+
+/// Journal status for an item whose send outcome is unknown.
+///
+/// The request may have reached the market and been applied. Deliberately NOT
+/// `pending`: the resume loop re-offers everything it believes was never sent,
+/// so recording an unknown outcome as `pending` would both misreport the journal
+/// and retry a mutation that may already have landed.
+pub const STATUS_UNCERTAIN: &str = "uncertain_mutation";
+
+/// Journal status for an item the market accepted.
+pub const STATUS_OK: &str = "ok";
+
+/// Journal status for an item the market refused.
+pub const STATUS_ERROR: &str = "error";
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct PendingItem {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -42,7 +62,8 @@ pub struct PendingItem {
     pub subtype: Option<String>,
     #[serde(default)]
     pub reference_low_sell: Option<u32>,
-    /// "pending" | "ok" | "error"
+    /// One of [`STATUS_PENDING`], [`STATUS_UNCERTAIN`], [`STATUS_OK`] or
+    /// [`STATUS_ERROR`].
     pub status: String,
     #[serde(default)]
     pub message: Option<String>,
