@@ -5,6 +5,7 @@ mod notification_contract;
 mod overlay;
 mod persistence;
 mod services;
+mod trading_contract;
 mod shell;
 
 fn main() {

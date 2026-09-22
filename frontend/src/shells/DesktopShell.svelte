@@ -1,5 +1,7 @@
 <script lang="ts">
   import { sellableQty } from '../domain/sell-priority';
+  import { listingBlockReason as listingEligibilityBlockReason, listingActionLabel as listingEligibilityActionLabel } from '../features/selling/eligibility';
+  import { advisorInput, relicInput, scoreInput, setInput, type CalcInputs } from '../features/selling/calc-inputs';
   import { loadMarket } from '../adapters/market';
   import { loadCatalogs } from '../adapters/catalogs';
   import { TauriTransport } from '../adapters/desktop';
@@ -68,7 +70,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   let updateNotesRef: UpdateNotes;
   let notesReady = $state(false);
   const notesServices = useDesktopServices();
-  const isDesktop = true;
   const transport = new TauriTransport();
   const marketAccess = new WfmAccessController({ desktopAccessStatus, listenForTauriEvent });
   onMount(() => marketAccess.start());
@@ -89,24 +90,34 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   let allocationMatches = $derived(protection.matchesInventory(inventory.resolved.owned, inventory.nativeSnapshotId));
   let unknownSlugs = $derived(new Set([...supportedOwned.values()].filter(row => !allocationMatches || protection.state?.items[row.slug]?.estimated == null).map(row => row.slug)));
   let guidanceUnavailable = $derived(supportedOwned.size > 0 && unknownSlugs.size === supportedOwned.size);
+  // The gate's rules live in features/selling/eligibility so they can be tested
+  // without mounting this component; the shell only supplies their inputs.
+  let eligibilityInputs = $derived({
+    hasSnapshot: !!inventory.nativeSnapshotId,
+    pullingInventory: inventory.pullingInventory,
+    allocationMatches,
+    hasProtection: !!protection.state,
+    protectionSnapshotId: protection.state?.snapshot_id ?? null,
+    nativeSnapshotId: inventory.nativeSnapshotId,
+    protectionError: protection.error,
+    supportedSlugs: [...supportedOwned.values()].map(row => row.slug),
+    // An allocation computed against a different inventory places nothing, so
+    // every item reads as unknown.
+    known: allocationMatches ? [...protection.state?.items ? Object.keys(protection.state.items).filter(slug => protection.state?.items[slug]?.estimated != null) : []] : [],
+  });
   let listingBlockReason = $derived.by(() => {
-    if (!inventory.nativeSnapshotId) return 'Scan the game to verify this inventory before listing. Imported backups provide estimates only.';
-    if (inventory.pullingInventory) return 'A scan is in progress. Your review edits are kept.';
-    if (!allocationMatches || !protection.state) return 'Inventory protection is unavailable. Recheck quantities before listing.';
-    if (protection.state.snapshot_id !== inventory.nativeSnapshotId) return 'The displayed inventory does not match the latest game scan. Scan again before listing.';
-    if (protection.error || unknownSlugs.size) return 'Protection quantities are unavailable for some items. Recheck before listing.';
+    const gate = listingEligibilityBlockReason(eligibilityInputs);
+    if (gate) return gate;
+    // The two checks the eligibility rules do not cover: minting a listing needs
+    // a live WFM session, and a listing whose price could not be read cannot be
+    // safely posted over.
     if (!listing.wfmStatus?.unlocked) return 'Connect WFM to check current listings before posting.';
     if ([...supportedOwned.values()].some(row => protection.state?.items[row.slug]?.available == null)) return 'Current WFM listings could not be checked. Recheck before posting.';
     return null;
   });
   let listingQuantitiesKnown = $derived(!listingBlockReason);
   let estimatedGuidance = $derived(!listingQuantitiesKnown);
-  let listingActionLabel = $derived.by(() => {
-    if (!inventory.nativeSnapshotId) return 'Scan game';
-    if (!allocationMatches || !protection.state) return 'Recheck protection';
-    if (protection.state.snapshot_id !== inventory.nativeSnapshotId) return 'Scan game';
-    return protection.error || unknownSlugs.size ? 'Recheck protection' : 'Check WFM listings';
-  });
+  let listingActionLabel = $derived(listingEligibilityActionLabel(eligibilityInputs));
   let availability = $derived(new Map([...inventory.resolved.owned].map(([key, row]) => [key,
     listingQuantitiesKnown && supportedOwned.has(key) ? Math.min(sellableQty(row.count, filters.reserveCopies, row.leveled ?? 0), protection.state?.items[row.slug]?.available ?? 0) : 0,
   ])));
@@ -158,7 +169,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   let effectiveView = $derived.by<View>(() => {
     if (filters.view === 'baro' && !showBaroCard) return 'sell';
     if (filters.view === 'meta' && !buildMetaDrift(inventory.market)) return 'sell';
-    if ((filters.view === 'session' || filters.view === 'orders' || filters.view === 'watches' || filters.view === 'ledger' || filters.view === 'notifications' || filters.view === 'rivens') && !isDesktop) return 'sell';
     return filters.view;
   });
 
@@ -213,6 +223,20 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // degrade gracefully to the calendar-only rules until it lands.
   const historyResult = new DomainResult<History | null>(() => null);
   let advisorHistory = $derived(historyResult.value);
+  // The per-calculation gates live in features/selling/calc-inputs so they can be
+  // tested without mounting this component. The effects below supply the inputs
+  // and the recompute epoch; the policies decide whether there is anything to run.
+  let calcInputs = $derived<CalcInputs>({
+    owned: inventory.resolved.owned,
+    previousOwned: inventory.previousOwned,
+    availableOwned,
+    market: inventory.market,
+    reserve: filters.reserveCopies,
+    available: guidanceAvailability,
+    sparesOnly,
+    advisorHistory,
+  });
+
   $effect(() => {
     const wanted = filters.activePreset === 'holdsell' || effectiveView === 'sets';
     if (!wanted || untrack(() => historyResult.phase === 'done')) return;
@@ -222,15 +246,12 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   const advisorResult = new DomainResult<Map<string, Verdict>>(() => new Map());
   $effect(() => {
     void calculationEpoch;
-    const owned = inventory.resolved.owned;
-    const market = inventory.market;
-    const history = advisorHistory;
-    if (!owned.size || !market?.calendar?.primes) {
+    const run = advisorInput(calcInputs);
+    if (!run) {
       untrack(() => advisorResult.clear());
       return;
     }
-    const slugs = [...owned.values()].map(row => row.slug);
-    return untrack(() => advisorResult.start(async () => new Map(Object.entries(await evaluateAdvisor({ slugs, market, history, now_ms: Date.now() })))));
+    return untrack(() => advisorResult.start(async () => new Map(Object.entries(await evaluateAdvisor({ slugs: run.slugs, market: run.market, history: run.history, now_ms: Date.now() })))));
   });
   let adviceMap = $derived(advisorResult.value);
 
@@ -251,7 +272,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
 
   let unreadNotifications = $state(0);
   onMount(() => {
-    if (!isDesktop) return;
     let active = true;
     let request = 0;
     const reload = async () => {
@@ -269,7 +289,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
 
   let marketRefreshLoop: MarketRefreshLoop | null = null;
   onMount(() => {
-    if (!isDesktop) return;
     const loop = startMarketRefreshLoop(() => inventory.refreshMarketInBackground());
     marketRefreshLoop = loop;
     return () => {
@@ -279,7 +298,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   });
 
   onMount(() => {
-    if (!isDesktop) return;
     return listenForTauriEvent(TRAY_HINT_EVENT, () => {
       if (store.getSetting('tray-toast-seen') !== '1') {
         trayHint = true;
@@ -296,36 +314,22 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // failure means. A journal that is there but unreadable rejects: that is not
   // "no interrupted batch", and hiding it leaves a damaged saved batch with no
   // way for the user to learn about it or clear it.
-  async function refreshPendingPlan(): Promise<void> {
-    try {
-      listing.pendingPlan = await transport.getPendingPlan();
-    } catch (e) {
-      console.error('desktop pending-plan check failed', e);
-      listing.resumeError = humanError(e);
-      listing.resumePhase = 'error';
-    }
-  }
-
   onMount(async () => {
-    // Desktop mode: a best-effort `health` invoke confirms wfm-core is linked
-    // and records the platform for display; failure is non-fatal (the dashboard
-    // still works). The hosted site is informational - it has no account
-    // features.
-    if (isDesktop) {
-      try {
-        const h = await transport.health();
-        desktopPlatform = h?.platform ?? null;
-      } catch (e) {
-        console.error('desktop health check failed', e);
-      }
-      // C5 update-available handshake now lives entirely in
-      // DesktopUpdateBanner.svelte's own onMount.
-      // Interrupted-batch recovery: get_pending_plan is JWT-free, so this needs
-      // no unlock.
-      await refreshPendingPlan();
+    // A best-effort `health` invoke confirms wfm-core is linked and records the
+    // platform for display; failure is non-fatal.
+    try {
+      const h = await transport.health();
+      desktopPlatform = h?.platform ?? null;
+    } catch (e) {
+      console.error('desktop health check failed', e);
     }
+    // C5 update-available handshake now lives entirely in
+    // DesktopUpdateBanner.svelte's own onMount.
+    // Interrupted-batch recovery: get_pending_plan is JWT-free, so this needs no
+    // unlock. Read failures remain visible in the recovery state.
+    await listing.refreshPendingPlan();
 
-    if (isDesktop) await inventory.restore();
+    await inventory.restore();
 
     // Cold landing (no saved inventory): preload the snapshot so the no-install
     // MarketBrowser has data to show. Best-effort - a failure just hides the
@@ -360,31 +364,21 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
 
   $effect(() => {
     void calculationEpoch;
-    const owned = inventory.resolved.owned;
-    const market = inventory.market;
-    const reserve = filters.reserveCopies;
-    const available = guidanceAvailability;
-    if (!owned.size || !market) { untrack(() => defaultFacts.clear()); return; }
-    return untrack(() => defaultFacts.start(() => scoreInventoryNative(owned, market, reserve, false, available)));
+    const run = scoreInput(calcInputs, 'default');
+    if (!run) { untrack(() => defaultFacts.clear()); return; }
+    return untrack(() => defaultFacts.start(() => scoreInventoryNative(run.owned, run.market, run.reserve, run.sparesOnly, run.available)));
   });
   $effect(() => {
     void calculationEpoch;
-    const wanted = sparesOnly;
-    const available = guidanceAvailability;
-    const owned = inventory.resolved.owned;
-    const market = inventory.market;
-    const reserve = filters.reserveCopies;
-    if (!wanted || !owned.size || !market) { untrack(() => spareFacts.clear()); return; }
-    return untrack(() => spareFacts.start(() => scoreInventoryNative(owned, market, reserve, true, available)));
+    const run = scoreInput(calcInputs, 'spare');
+    if (!run) { untrack(() => spareFacts.clear()); return; }
+    return untrack(() => spareFacts.start(() => scoreInventoryNative(run.owned, run.market, run.reserve, run.sparesOnly, run.available)));
   });
   $effect(() => {
     void calculationEpoch;
-    const owned = inventory.previousOwned;
-    const market = inventory.market;
-    const reserve = filters.reserveCopies;
-    const spares = sparesOnly;
-    if (!owned?.size || !market) { untrack(() => previousFacts.clear()); return; }
-    return untrack(() => previousFacts.start(() => scoreInventoryNative(owned, market, reserve, spares)));
+    const run = scoreInput(calcInputs, 'previous');
+    if (!run) { untrack(() => previousFacts.clear()); return; }
+    return untrack(() => previousFacts.start(() => scoreInventoryNative(run.owned, run.market, run.reserve, run.sparesOnly)));
   });
   let currentFacts = $derived(sparesOnly ? spareFacts : defaultFacts);
   let hasInventory = $derived(inventory.resolved.owned.size > 0);
@@ -413,17 +407,15 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   });
   $effect(() => {
     void calculationEpoch;
-    const owned = availableOwned;
-    const market = inventory.market;
-    if (guidanceUnavailable || !owned.size || !market?.set_to_parts) { untrack(() => setResult.clear()); return; }
-    return untrack(() => setResult.start(() => loadSetRecos(owned, market)));
+    const run = setInput(calcInputs);
+    if (!run || guidanceUnavailable) { untrack(() => setResult.clear()); return; }
+    return untrack(() => setResult.start(() => loadSetRecos(run.owned, run.market)));
   });
   $effect(() => {
     void calculationEpoch;
-    const owned = inventory.resolved.owned;
-    const market = inventory.market;
-    if (!owned.size || !market?.relic_rewards) { untrack(() => relicResult.clear()); return; }
-    return untrack(() => relicResult.start(() => loadRelicPlan(owned, market, Number.MAX_SAFE_INTEGER)));
+    const run = relicInput(calcInputs);
+    if (!run) { untrack(() => relicResult.clear()); return; }
+    return untrack(() => relicResult.start(() => loadRelicPlan(run.owned, run.market, Number.MAX_SAFE_INTEGER)));
   });
   let setRecos = $derived(setResult.value.filter(reco => !(inventory.market?.set_to_parts?.[reco.set_slug]?.parts ?? []).some(part => unknownSlugs.has(part.slug))));
 
@@ -467,7 +459,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // Render the Baro card when (a) we got a voidTrader response and
   // (b) the user has a meaningful pile of ducat-earning inventory.
   // 500 ducats ≈ 5 prime junk parts; below that the card is noise.
-  let showBaroCard = $derived(voidTrader != null && (isDesktop || ducatStats.total >= 500));
+  let showBaroCard = $derived(voidTrader != null);
 
   // Pre-format strings so the template stays clean.
   let baroState = $derived.by(() => {
@@ -625,7 +617,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
 
 
   $effect(() => {
-    if (!isDesktop) return;
     void listing.sessionEpoch;
     desktopWfmStatus().then((s) => { listing.wfmStatus = s; }).catch(() => { listing.wfmStatus = null; });
   });
@@ -852,7 +843,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
             <span data-shell class="badge">{relicResult.phase === 'done' ? relicPlan.length : '—'}</span>
           </button>
         {/if}
-        {#if isDesktop && resolvedRivens.length > 0}
+        {#if resolvedRivens.length > 0}
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'rivens'} onclick={() => filters.setView('rivens')}>
             <span data-shell>Rivens</span>
             <span data-shell class="badge">{resolvedRivens.length}</span>
@@ -979,7 +970,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         {visibleColumns} {presetSort} {emptyReason}
         activePreset={filters.activePreset} reserveCopies={filters.reserveCopies} filtersOpen={filters.filtersOpen} scoreExplainerDismissed={filters.scoreExplainerDismissed}
         sellOnboardingDismissed={filters.sellOnboardingDismissed} keepCopiesNudgeDismissed={filters.keepCopiesNudgeDismissed}
-        {isDesktop}
         applyPreset={(name) => filters.applyPreset(name)} setReserveCopies={(value) => filters.setReserveCopies(value)} toggleFiltersOpen={(event) => filters.toggleFiltersOpen(event)}
         dismissSellOnboarding={() => filters.dismissSellOnboarding()} dismissKeepCopiesNudge={() => filters.dismissKeepCopiesNudge()}
         openListingFlow={(rows) => { if (calculationsReady && !estimatedGuidance) listing.openListingFlow((Array.isArray(rows) ? rows : rows ? [rows] : listableRows).map(row => ({ ...row, inventory_snapshot_id: inventory.nativeSnapshotId ?? undefined }))); }}
@@ -1293,7 +1283,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       <Faq desktop />
 
     {:else if effectiveView === 'settings'}
-      <SettingsPanel onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} {isDesktop} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} />
+      <SettingsPanel onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} />
     {/if}
 
     {/if}
@@ -1386,7 +1376,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       <b data-shell>{marketStaleness ?? '-'}</b>
       {#if marketFreshness !== 'unknown'}<span data-shell>· {marketFreshness}</span>{/if}
     </div>
-    {#if inShell && isDesktop && ordersToFix > 0}
+    {#if inShell && ordersToFix > 0}
       <div data-shell class="cell attn">
         <b data-shell>{ordersToFix}</b>
         <span data-shell>{ordersToFix === 1 ? 'order' : 'orders'} to fix</span>
@@ -1469,7 +1459,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       </div>
     {/if}
   {/if}
-  {#if isDesktop && trayHint}
+  {#if trayHint}
     <div data-shell class="card ui-panel warn-banner general-banner" role="status">
       <div data-shell class="gb-body">
         Still running in your tray. Closing the window keeps TennoWorth in the
@@ -1486,7 +1476,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
 {/snippet}
 
 {#snippet pendingBanner()}
-  {#if isDesktop && (listing.pendingPlan || listing.resumePhase !== 'idle')}
+  {#if listing.pendingPlan || listing.resumePhase !== 'idle'}
     <section data-shell class="card ui-panel pending-banner">
       {#if listing.resumePhase === 'running'}
         <div data-shell class="row">
@@ -1557,7 +1547,8 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   rows={listing.reviewRowsOverride ?? listableRows.slice(0, 50).map(row => ({ ...row, inventory_snapshot_id: inventory.nativeSnapshotId ?? undefined }))}
   {transport}
   onauthrequired={(code) => wfmAuthDialogsRef?.open(code, 'list')}
-  onclose={() => { listing.reviewRowsOverride = null; void protection.refresh(); void refreshPendingPlan(); }}
+  sendThrough={(send) => listing.trackSend(send)}
+  onclose={() => { listing.reviewRowsOverride = null; void protection.refresh(); void listing.refreshPendingPlan(); }}
 />
 
 

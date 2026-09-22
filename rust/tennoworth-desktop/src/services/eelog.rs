@@ -17,14 +17,7 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct LogPosition {
-    pub session: String,
-    pub start: u64,
-    pub end: u64,
-    /// Lower observation bound, not the callback's delivery time.
-    pub observed_after: i64,
-}
+pub use crate::trading_contract::{LogPosition, TradeEvent, TradeItem};
 
 fn file_position(file: &mut std::fs::File) -> Option<LogPosition> {
     let meta = file.metadata().ok()?;
@@ -52,30 +45,6 @@ fn file_position(file: &mut std::fs::File) -> Option<LogPosition> {
 
 pub fn log_position(path: &Path) -> Option<LogPosition> {
     file_position(&mut std::fs::File::open(path).ok()?)
-}
-
-/// A trade the game confirmed.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct TradeEvent {
-    /// The other Tenno's in-game name (platform glyph stripped).
-    pub partner: String,
-    /// "sale" (we received plat only), "purchase" (we gave plat only), "trade".
-    pub kind: String,
-    /// Plat that changed hands: received on a sale, spent on a purchase.
-    pub plat: i64,
-    pub items: Vec<TradeItem>,
-    /// The game's uptime stamp at the head of the dialog line, if present -
-    /// distinguishes two identical trades in one session.
-    pub log_stamp: Option<String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-pub struct TradeItem {
-    /// Display name as the game printed it ("Primed Flow", "Lith C5 Relic").
-    pub name: String,
-    pub qty: i64,
-    /// "given" (left our inventory) or "received".
-    pub direction: String,
 }
 
 pub const DIALOG_START: &str = "Are you sure you want to accept this trade?";

@@ -63,12 +63,16 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
      *  resends after authenticating. */
     onauthrequired?: (code: 'needs_login' | 'needs_unlock') => void;
     onclose?: () => void;
+    /** Wraps the send so the caller can track it as in-flight and re-read the
+     *  saved batch once it settles. Passed in rather than known here: this
+     *  component sends, it does not own the batch's lifecycle. */
+    sendThrough?: <T>(send: () => Promise<T>) => Promise<T>;
     listingBlockReason?: string | null;
     onrecheck?: () => void;
     listingActionLabel?: string;
     currentSnapshotId?: number | null;
   }
-  let { open = $bindable(false), rows, transport, onauthrequired, onclose, listingBlockReason = null, onrecheck, listingActionLabel = 'Check WFM listings', currentSnapshotId }: Props = $props();
+  let { open = $bindable(false), rows, transport, onauthrequired, onclose, sendThrough = (send) => send(), listingBlockReason = null, onrecheck, listingActionLabel = 'Check WFM listings', currentSnapshotId }: Props = $props();
 
   let plan = $state<PlanRow[]>([]);
   let reviewBlockReason = $derived(listingBlockReason ?? (currentSnapshotId !== undefined && plan.some(row => row.inventory_snapshot_id !== currentSnapshotId)
@@ -367,7 +371,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
         reference_low_sell: r.reference_low_sell || undefined,
       }));
     try {
-      const resp = await transport.submitPlan(items);
+      const resp = await sendThrough(() => transport.submitPlan(items));
       serverResults = resp.results || [];
       phase = 'results';
     } catch (e) {

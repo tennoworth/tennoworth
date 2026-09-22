@@ -12,6 +12,7 @@ use std::time::Duration;
 use crate::identity::random_token;
 use crate::time::chrono_now_iso;
 use crate::trading::catalog::WfmCatalogItem;
+use crate::trading::outcome::MutationOutcome;
 use crate::trading::listing::{
     decode_user_orders, list_user_orders, patch_one_order, send_mutation, Unlocked, MAX_PLATINUM,
 };
@@ -720,14 +721,15 @@ fn execute_one(
     let resp = match resp {
         Ok(r) => r,
         Err(e) => return ItemResult {
-            slug: item.slug.clone(), status: if matches!(e, wfm_client::governor::AccessError::UncertainMutation) { "uncertain_mutation" } else { "pending" }.into(),
+            slug: item.slug.clone(),
+            status: MutationOutcome::from(&e).status_str().into(),
             message: Some(e.to_string()), order_id: None, action: None,
         },
     };
     let status = resp.status();
     let resp_body: serde_json::Value = match resp.json() {
         Ok(body) => body,
-        Err(_) if status.is_success() => return ItemResult { slug: item.slug.clone(), status: "uncertain_mutation".into(), message: Some("The listing may have been applied, but its response could not be read. Resume to reconcile.".into()), order_id: None, action: None },
+        Err(_) if status.is_success() => return ItemResult { slug: item.slug.clone(), status: MutationOutcome::Uncertain.status_str().into(), message: Some("The listing may have been applied, but its response could not be read. Resume to reconcile.".into()), order_id: None, action: None },
         Err(_) => serde_json::Value::Null,
     };
     if !status.is_success() {
@@ -747,7 +749,7 @@ fn execute_one(
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
     if order_id.is_none() {
-        return ItemResult { slug: item.slug.clone(), status: "uncertain_mutation".into(), message: Some("The listing response had no order identity. Resume to reconcile before another send.".into()), order_id: None, action: None };
+        return ItemResult { slug: item.slug.clone(), status: MutationOutcome::Uncertain.status_str().into(), message: Some("The listing response had no order identity. Resume to reconcile before another send.".into()), order_id: None, action: None };
     }
     ItemResult {
         slug: item.slug.clone(),

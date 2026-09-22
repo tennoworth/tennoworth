@@ -87,7 +87,7 @@ describe('SettingsPanel', () => {
       openOverlayDiagnostics: vi.fn(async () => {}),
       clearOverlayDiagnostics: vi.fn(async () => {}),
     } as unknown as DesktopCapabilities;
-    render(SettingsPanel, { props: { theme, transport, isDesktop: true } });
+    render(SettingsPanel, { props: { theme, transport } });
 
     const consent = await screen.findByRole('checkbox', { name: /Enable local screen recognition/ });
     expect((consent as HTMLInputElement).checked).toBe(false);
@@ -110,7 +110,7 @@ describe('SettingsPanel', () => {
       throw new Error(`unexpected command: ${command}`);
     });
     installTauri(invoke, undefined);
-    render(SettingsPanel, { props: { theme, isDesktop: true } });
+    render(SettingsPanel, { props: { theme } });
 
     await fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
     expect(invoke).toHaveBeenCalledWith('check_update');
@@ -127,7 +127,7 @@ describe('SettingsPanel', () => {
       version: null,
       notes: null,
     }), undefined);
-    render(SettingsPanel, { props: { theme, isDesktop: true } });
+    render(SettingsPanel, { props: { theme } });
 
     await fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
     expect(await screen.findByText(/This install can’t update itself/)).toBeTruthy();
@@ -144,7 +144,7 @@ describe('SettingsPanel', () => {
       version: null,
       notes: null,
     }), undefined);
-    render(SettingsPanel, { props: { theme, isDesktop: true } });
+    render(SettingsPanel, { props: { theme } });
 
     await fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
     expect(await screen.findByText('Updates are disabled in this test build.')).toBeTruthy();
@@ -157,7 +157,7 @@ describe('SettingsPanel', () => {
     render(SettingsPanel, {
       props: {
         theme,
-        isDesktop: true,
+        
         wfmStatus: { logged_in: true, unlocked: true },
         onwfmlogout,
       },
@@ -176,7 +176,7 @@ describe('SettingsPanel', () => {
     render(SettingsPanel, {
       props: {
         theme,
-        isDesktop: true,
+        
         wfmStatus: { logged_in: true, unlocked: false },
         onwfmlogout,
       },
@@ -191,13 +191,13 @@ describe('SettingsPanel', () => {
   it('distinguishes locked and signed-out session states', async () => {
     const { theme } = fakeTheme();
     render(SettingsPanel, {
-      props: { theme, isDesktop: true, wfmStatus: { logged_in: true, unlocked: false } },
+      props: { theme, wfmStatus: { logged_in: true, unlocked: false } },
     });
     expect(screen.getByText('Signed in · session locked')).toBeTruthy();
 
     cleanup();
     render(SettingsPanel, {
-      props: { theme, isDesktop: true, wfmStatus: { logged_in: false, unlocked: false } },
+      props: { theme, wfmStatus: { logged_in: false, unlocked: false } },
     });
     expect(screen.getByText('Not signed in')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Log out' })).toBeNull();

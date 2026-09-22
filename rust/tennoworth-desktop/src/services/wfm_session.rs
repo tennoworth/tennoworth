@@ -199,6 +199,24 @@ impl WfmSession {
         }
     }
 
+    /// A session rooted at explicit paths, with the OS keyring off.
+    ///
+    /// [`Self::new`] reads `TENNOWORTH_JWT_PATH` and friends from the
+    /// environment, so two tests constructing a session concurrently could
+    /// observe each other's overrides. Production keeps using `new`.
+    #[cfg(test)]
+    pub(crate) fn for_test(jwt_path: PathBuf) -> Self {
+        let key_dir = config_dir_for(&jwt_path);
+        Self {
+            jwt_path,
+            pending_path: key_dir.join("pending_plan.json"),
+            inner: Mutex::new(None),
+            plan_running: AtomicBool::new(false),
+            plan_requests: Arc::new(Mutex::new(PlanRequests::default())),
+            use_keyring: false,
+        }
+    }
+
     pub fn pending_path(&self) -> &Path {
         &self.pending_path
     }

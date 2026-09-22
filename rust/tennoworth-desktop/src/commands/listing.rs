@@ -294,10 +294,10 @@ pub async fn submit_plan(
     let reviewed = items.clone();
     let response = tauri::async_runtime::spawn_blocking(move || {
         let request = s.claim_plan_request(request_id)?;
-        let _guard = s
-            .begin_plan()
-            .ok_or_else(|| CmdError::of("busy", PLAN_BUSY_MSG))?;
-        let unlocked = s.require_unlocked()?;
+        let mutations = crate::services::order_mutations::OrderMutations::new(Arc::clone(&s));
+        let (_guard, unlocked) = mutations.begin(
+            crate::services::order_mutations::MutationOrigin::ReviewedPlan,
+        )?;
         match journal_state(s.pending_path()) {
             JournalState::Unfinished => {
                 return Err(CmdError::of("busy", "An unfinished batch is saved. Resume or discard it before sending another."));
@@ -370,10 +370,10 @@ pub async fn resume_pending_plan(
             }
         };
         let request = s.claim_plan_request(request_id)?;
-        let _guard = s
-            .begin_plan()
-            .ok_or_else(|| CmdError::of("busy", PLAN_BUSY_MSG))?;
-        let unlocked = s.require_unlocked()?;
+        let mutations = crate::services::order_mutations::OrderMutations::new(Arc::clone(&s));
+        let (_guard, unlocked) = mutations.begin(
+            crate::services::order_mutations::MutationOrigin::ReviewedPlan,
+        )?;
         // Stable plan positions let history upsert prior successes during resume.
         let price_qty: Vec<(i64, i64)> = pending
             .items
@@ -427,8 +427,10 @@ pub async fn update_order(
     }
     let s = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
-        let unlocked = s.require_unlocked()?;
-        let _guard = s.begin_plan().ok_or_else(|| CmdError::of("busy", PLAN_BUSY_MSG))?;
+        let mutations = crate::services::order_mutations::OrderMutations::new(Arc::clone(&s));
+        let (_guard, unlocked) = mutations.begin(
+            crate::services::order_mutations::MutationOrigin::ManualEdit,
+        )?;
         let protection = crate::services::protection::ProtectionPlan::load(&app.state::<Db>()).map_err(CmdError::internal)?;
         if protection.active(&app.state::<Db>()).map_err(CmdError::internal)? && (patch.quantity.is_some() || patch.rank.is_some()) {
             let market = crate::services::sellables::MarketData::load(&app.state::<crate::services::market::MarketCache>());
@@ -459,7 +461,10 @@ pub async fn delete_order(
 ) -> Result<(), CmdError> {
     let s = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
-        let unlocked = s.require_unlocked()?;
+        let mutations = crate::services::order_mutations::OrderMutations::new(Arc::clone(&s));
+        let (_guard, unlocked) = mutations.begin(
+            crate::services::order_mutations::MutationOrigin::Delete,
+        )?;
         core_delete_order(&unlocked, &order_id).map_err(CmdError::wfm)
     })
     .await
@@ -476,7 +481,10 @@ pub async fn bulk_visibility(
 ) -> Result<Vec<PerOrderResult>, CmdError> {
     let s = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
-        let unlocked = s.require_unlocked()?;
+        let mutations = crate::services::order_mutations::OrderMutations::new(Arc::clone(&s));
+        let (_guard, unlocked) = mutations.begin(
+            crate::services::order_mutations::MutationOrigin::BulkVisibility,
+        )?;
         Ok(bulk_set_visibility(
             &unlocked,
             &VisibilityRequest { order_ids, visible },

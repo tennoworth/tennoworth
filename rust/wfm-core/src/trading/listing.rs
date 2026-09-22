@@ -14,6 +14,7 @@ use std::sync::Arc;
 
 use crate::http::{browser_client, wfm_client};
 use crate::trading::auth::fetch_wfm_me;
+use crate::trading::outcome::MutationOutcome;
 use crate::trading::catalog::{fetch_wfm_catalog, index_item_meta, ItemMeta, WfmCatalogItem};
 use crate::trading::orders::{decode_orders, DecodedOrders};
 
@@ -201,7 +202,7 @@ pub(crate) fn patch_one_order(
         }
         Err(e) => PerOrderResult {
             order_id: id.into(),
-            status: if matches!(e, wfm_client::governor::AccessError::UncertainMutation) { "uncertain_mutation" } else { "pending" }.into(),
+            status: MutationOutcome::from(&e).status_str().into(),
             message: Some(e.to_string()),
         },
     }

@@ -88,7 +88,7 @@ impl Db {
 
 fn read_allowance(
     conn: &Connection,
-) -> rusqlite::Result<Option<crate::services::allowance::Observation>> {
+) -> rusqlite::Result<Option<crate::trading_contract::Observation>> {
     let raw: Option<String> = conn
         .query_row(
             "SELECT observation FROM trade_allowance WHERE id = 1",
@@ -106,7 +106,7 @@ fn read_allowance(
 
 fn write_allowance(
     conn: &Connection,
-    observation: &crate::services::allowance::Observation,
+    observation: &crate::trading_contract::Observation,
 ) -> rusqlite::Result<()> {
     let raw = serde_json::to_string(observation)
         .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
@@ -930,7 +930,7 @@ mod tests {
         assert_eq!(view.observed_at, Some(102));
         assert_eq!(
             view.confidence,
-            crate::services::allowance::Confidence::Estimated
+            crate::trading_contract::Confidence::Estimated
         );
         assert!(!view.monitoring);
         assert_eq!(

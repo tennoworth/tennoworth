@@ -229,7 +229,17 @@ pub fn handle_trade(
     }
     if trade.kind == "sale" && auto_close_on {
         let session = app.state::<Arc<WfmSession>>();
-        if let Ok(unlocked) = session.require_unlocked() {
+        // A completion can land while a reviewed batch is mid-flight, and that
+        // batch reconciled against the orders this adjustment is about to
+        // change. Taking the account here is what stops the two interleaving;
+        // if the batch holds it, this trade is left for the next pass rather
+        // than edited underneath it.
+        let mutations = crate::services::order_mutations::OrderMutations::new(Arc::clone(&session));
+        // Bound before the branch: an `if let` scrutinee's temporary outlives
+        // the binding, so the guard would be dropped after the coordinator it
+        // borrows from.
+        let claim = mutations.begin(crate::services::order_mutations::MutationOrigin::AutoAdjustment);
+        if let Ok((_guard, unlocked)) = claim {
             match list_user_orders(&unlocked) {
                 Ok(body) => {
                     let orders = own_sell_orders(&body);
