@@ -18,15 +18,13 @@
 //! that as one method would either lose the differences or grow into the
 //! abstraction the plan explicitly rules out.
 
-use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::Arc;
 
 use wfm_core::trading::plan::PlanGuard;
 
 use crate::services::wfm_session::{CmdError, WfmSession};
 
-/// Which of the five origins is asking. Carried so a refusal can say what is in
-/// the way, and so the ledger can name where a change came from.
+/// Which of the five origins is asking.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MutationOrigin {
     /// The reviewed batch the user confirmed.
@@ -41,56 +39,14 @@ pub enum MutationOrigin {
     AutoAdjustment,
 }
 
-impl MutationOrigin {
-    /// A stable slot value; 0 means "nobody holds it".
-    fn code(self) -> u8 {
-        match self {
-            Self::ReviewedPlan => 1,
-            Self::ManualEdit => 2,
-            Self::Delete => 3,
-            Self::BulkVisibility => 4,
-            Self::AutoAdjustment => 5,
-        }
-    }
-
-    fn from_code(code: u8) -> Self {
-        match code {
-            1 => Self::ReviewedPlan,
-            2 => Self::ManualEdit,
-            3 => Self::Delete,
-            4 => Self::BulkVisibility,
-            _ => Self::AutoAdjustment,
-        }
-    }
-
-    /// How this origin reads mid-sentence, in a refusal the user sees.
-    pub fn describe(self) -> &'static str {
-        match self {
-            Self::ReviewedPlan => "a listing batch",
-            Self::ManualEdit => "a listing edit",
-            Self::Delete => "a listing removal",
-            Self::BulkVisibility => "a visibility change",
-            Self::AutoAdjustment => "an automatic listing update",
-        }
-    }
-}
-
 /// The account-mutation coordinator.
 pub struct OrderMutations {
     session: Arc<WfmSession>,
-    /// Which origin holds the account, so a refusal can name what is actually in
-    /// the way. Reporting the *asking* origin instead produces advice the user
-    /// cannot act on - "an automatic listing update is already running" when the
-    /// blocker is the batch they are looking at.
-    holder: AtomicU8,
 }
 
 impl OrderMutations {
     pub fn new(session: Arc<WfmSession>) -> Self {
-        Self {
-            session,
-            holder: AtomicU8::new(0),
-        }
+        Self { session }
     }
 
     /// Authorize one mutation and hand back the account to perform it with.
@@ -110,32 +66,17 @@ impl OrderMutations {
     /// The guard alone, for a caller that already holds an account or needs to
     /// do its own error mapping - the batch plan resumes from an account it
     /// decrypted earlier, and the tailer has no account until it reads one.
-    pub fn begin_only(&self, origin: MutationOrigin) -> Result<AccountGuard<'_>, CmdError> {
+    pub fn begin_only(&self, _origin: MutationOrigin) -> Result<AccountGuard<'_>, CmdError> {
         let guard = self.session.begin_plan().ok_or_else(|| {
-            let holder = MutationOrigin::from_code(self.holder.load(Ordering::SeqCst));
-            CmdError::of("busy", format!("{} is already running.", holder.describe()))
+            CmdError::of("busy", "Another order change is already running.")
         })?;
-        self.holder.store(origin.code(), Ordering::SeqCst);
-        Ok(AccountGuard {
-            guard,
-            holder: &self.holder,
-        })
+        Ok(AccountGuard { _guard: guard })
     }
 }
 
-/// The account is held until this is dropped, and the recorded holder is
-/// cleared with it so the next refusal names the right origin.
+/// The account is held until this is dropped.
 pub(crate) struct AccountGuard<'a> {
-    guard: PlanGuard<'a>,
-    holder: &'a AtomicU8,
-}
-
-impl Drop for AccountGuard<'_> {
-    fn drop(&mut self) {
-        self.holder.store(0, Ordering::SeqCst);
-        // `guard` releases the session's claim when this struct's fields drop.
-        let _ = &self.guard;
-    }
+    _guard: PlanGuard<'a>,
 }
 
 #[cfg(test)]
@@ -172,9 +113,8 @@ mod tests {
             .err()
             .expect("a completion mid-batch must not also mutate");
         assert_eq!(refused.code, "busy");
-        // The message names what is in the way, not just that something is.
         assert!(
-            refused.message.contains("listing batch"),
+            refused.message.contains("order change"),
             "got {:?}",
             refused.message
         );
@@ -184,6 +124,25 @@ mod tests {
             mutations.begin_only(MutationOrigin::Delete).is_ok(),
             "the account is released when the holder finishes"
         );
+    }
+
+    #[test]
+    fn a_different_coordinator_never_names_its_own_origin_as_the_holder() {
+        let session = Arc::new(WfmSession::for_test(tmp_path("two-instances")));
+        let listing = OrderMutations::new(Arc::clone(&session));
+        let automatic = OrderMutations::new(Arc::clone(&session));
+        let batch = listing.begin_only(MutationOrigin::ReviewedPlan).unwrap();
+
+        let refused = automatic
+            .begin_only(MutationOrigin::AutoAdjustment)
+            .err()
+            .unwrap();
+        assert_eq!(refused.code, "busy");
+        assert!(!refused.message.contains("automatic listing update"), "{}", refused.message);
+        assert!(refused.message.contains("order change"), "{}", refused.message);
+
+        drop(batch);
+        assert!(automatic.begin_only(MutationOrigin::AutoAdjustment).is_ok());
     }
 
     /// The two origins that previously took no guard at all.

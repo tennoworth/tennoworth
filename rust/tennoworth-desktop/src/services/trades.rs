@@ -201,6 +201,14 @@ pub enum LedgerOutcome {
     Failed(String),
 }
 
+fn unavailable_adjustment_follow_up(error: &crate::services::wfm_session::CmdError) -> &'static str {
+    match error.code {
+        "busy" => "Another order change blocked the automatic adjustment for this sale. Review My Orders after it finishes; the sold listing was not adjusted.",
+        "needs_login" | "needs_unlock" => "Sign in or unlock your market login to review sell orders.",
+        _ => "Could not adjust the sold listing automatically. Review My Orders.",
+    }
+}
+
 /// Record + notify + adjust. Blocking; called from the tailer thread.
 pub fn handle_trade(
     app: &AppHandle,
@@ -231,9 +239,9 @@ pub fn handle_trade(
         let session = app.state::<Arc<WfmSession>>();
         // A completion can land while a reviewed batch is mid-flight, and that
         // batch reconciled against the orders this adjustment is about to
-        // change. Taking the account here is what stops the two interleaving;
-        // if the batch holds it, this trade is left for the next pass rather
-        // than edited underneath it.
+        // change. Taking the account here stops the two interleaving. When
+        // busy, the sale stays recorded but the listing needs manual review:
+        // trade deduplication will not run this adjustment again.
         let mutations = crate::services::order_mutations::OrderMutations::new(Arc::clone(&session));
         // Bound before the branch: an `if let` scrutinee's temporary outlives
         // the binding, so the guard would be dropped after the coordinator it
@@ -300,8 +308,8 @@ pub fn handle_trade(
                     eprintln!("tennoworth: auto-close: could not list orders: {e}");
                 }
             }
-        } else {
-            follow_up.push("Sign in or unlock your market login to review sell orders.".into());
+        } else if let Err(error) = claim {
+            follow_up.push(unavailable_adjustment_follow_up(&error).into());
         }
     }
 
@@ -513,6 +521,8 @@ pub fn start_tailer(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::order_mutations::{MutationOrigin, OrderMutations};
+    use std::sync::atomic::{AtomicU32, Ordering};
     use wfm_core::trading::catalog::WfmCatalogItem;
 
     fn names() -> BTreeMap<String, String> {
@@ -548,6 +558,41 @@ mod tests {
                 .collect(),
             log_stamp: None,
         }
+    }
+
+    #[test]
+    fn reviewed_batch_contention_leaves_auto_adjustment_for_manual_review() {
+        static N: AtomicU32 = AtomicU32::new(0);
+        let path = std::env::temp_dir().join(format!(
+            "trade-contention-{}-{}",
+            std::process::id(),
+            N.fetch_add(1, Ordering::SeqCst)
+        ));
+        let session = Arc::new(WfmSession::for_test(path));
+        let listing = OrderMutations::new(Arc::clone(&session));
+        let automatic = OrderMutations::new(Arc::clone(&session));
+        let _batch = listing.begin_only(MutationOrigin::ReviewedPlan).unwrap();
+
+        let error = automatic.begin(MutationOrigin::AutoAdjustment).err().unwrap();
+        let follow_up = unavailable_adjustment_follow_up(&error);
+        assert_eq!(error.code, "busy");
+        assert!(follow_up.contains("Review My Orders"), "{follow_up}");
+        assert!(!follow_up.contains("Sign in"), "{follow_up}");
+        assert!(!follow_up.contains("next pass"), "{follow_up}");
+        assert!(!follow_up.contains("updated"), "{follow_up}");
+    }
+
+    #[test]
+    fn unavailable_adjustment_distinguishes_auth_from_other_failures() {
+        for error in [
+            crate::services::wfm_session::CmdError::needs_login(),
+            crate::services::wfm_session::CmdError::needs_unlock(),
+        ] {
+            assert!(unavailable_adjustment_follow_up(&error).contains("Sign in or unlock"));
+        }
+        let error = crate::services::wfm_session::CmdError::internal("temporary failure");
+        assert!(unavailable_adjustment_follow_up(&error).contains("Review My Orders"));
+        assert!(!unavailable_adjustment_follow_up(&error).contains("Sign in"));
     }
 
     #[test]
