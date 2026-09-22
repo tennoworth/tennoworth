@@ -1,3 +1,4 @@
+pub(crate) mod acquisition;
 pub(crate) mod allowance;
 pub(crate) mod browser;
 pub(crate) mod definitions;

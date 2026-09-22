@@ -6,103 +6,12 @@
     reason = "tauri::command injects unreachable code into async wrappers"
 )]
 
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, State};
 
 use crate::persistence::Db;
+use crate::services::acquisition::{record_snapshot, scan_and_record, ScannedInventory};
 use crate::shell::tray::post_scan_surfaces;
 
-fn scan_boundary(app: &AppHandle) -> Option<crate::services::eelog::LogPosition> {
-    let state = app.try_state::<crate::services::eelog_state::EeLogState>()?;
-    crate::services::eelog::log_position(state.path.as_deref()?)
-}
-
-fn record_game_scan(
-    app: &AppHandle,
-    bytes: &[u8],
-    info: &wfm_core::acquisition::scan::SessionInfo,
-    before: Option<crate::services::eelog::LogPosition>,
-    started_at: i64,
-) -> Option<i64> {
-    let after = scan_boundary(app);
-    let observed_at = crate::services::allowance::unix_now();
-    let db = app.state::<Db>();
-    let recorded = (|| -> Result<i64, String> {
-        let id = record_snapshot(&db, "memory", info.build.as_deref(), bytes)?;
-        let raw = serde_json::from_slice(bytes).map_err(|e| format!("read scan metadata: {e}"))?;
-        let account_key = wfm_core::identity::local_fingerprint(
-            "tennoworth-account-v1",
-            info.account_id.to_lowercase().as_bytes(),
-        );
-        let observation = crate::services::allowance::Observation::scanned(
-            account_key,
-            id,
-            &raw,
-            before,
-            after,
-            started_at,
-            observed_at,
-        );
-        db.save_allowance(observation)
-            .map_err(|e| format!("save allowance: {e}"))?;
-        Ok(id)
-    })();
-    let snapshot_id = recorded.as_ref().ok().copied();
-    if let Err(error) = recorded {
-        // A successful scan may be a different account. Never retain the
-        // previous account's allowance when recording the new one fails.
-        let _ = db.clear_allowance();
-        eprintln!("tennoworth: scan observation not recorded: {error}");
-    }
-    let _ = app.emit(crate::services::allowance::EVENT_ALLOWANCE_CHANGED, ());
-    snapshot_id
-}
-
-#[derive(serde::Serialize)]
-pub struct ScannedInventory {
-    inventory: String,
-    snapshot_id: Option<i64>,
-}
-
-pub(crate) fn scan_and_record(app: &AppHandle) -> Result<ScannedInventory, String> {
-    // Keep acquisition and its accounting boundary under the same single-flight
-    // guard; a tray scan must not persist newer data before this scan is recorded.
-    static ACTIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-    let _guard = wfm_core::trading::plan::PlanGuard::acquire(&ACTIVE)
-        .ok_or("An inventory scan is already running.")?;
-    let started_at = crate::services::allowance::unix_now();
-    let before = scan_boundary(app);
-    let (bytes, info) = crate::services::inventory::scanner()
-        .scan(None, None)
-        .map_err(|e| e.into_message())?;
-    let snapshot_id = record_game_scan(app, &bytes, &info, before, started_at);
-    Ok(ScannedInventory { inventory: String::from_utf8(bytes).map_err(|_| "Inventory response was not valid UTF-8.".to_string())?, snapshot_id })
-}
-
-/// Extract snapshot rows from raw inventory bytes and append them to history as
-/// one transactional snapshot. Shared by the memory scan and the probe's
-/// import_snapshot seeding. Returns the new snapshot id.
-pub(crate) fn record_snapshot(
-    db: &Db,
-    source: &str,
-    game_version: Option<&str>,
-    bytes: &[u8],
-) -> Result<i64, String> {
-    let items = crate::persistence::snapshot::extract_items(bytes)
-        .map_err(|e| format!("parse inventory for snapshot: {e}"))?;
-    db.insert_snapshot(source, None, game_version, &items)
-        .map_err(|e| format!("insert snapshot: {e}"))
-}
-
-/// Return inventory JSON together with the identity recorded under the scan guard.
-/// Async + spawn_blocking
-/// so the (potentially slow) scan never blocks the webview event loop. A busy
-/// guard or a missing/unscannable game becomes a rejected invoke carrying
-/// wfm-core's graceful, actionable message (e.g. "Warframe doesn't appear to be
-/// running…") - the SPA surfaces it verbatim in its error banner.
-///
-/// On success it also appends a `source='memory'` history snapshot. That insert
-/// is best-effort: a failure is logged to stderr and swallowed - losing a
-/// history row must never cost the user their scan (scan value > history value).
 #[tauri::command]
 pub async fn scan_inventory(app: AppHandle) -> Result<ScannedInventory, String> {
     let scan_app = app.clone();
@@ -131,14 +40,3 @@ pub fn import_snapshot(db: State<'_, Db>, inventory_json: String) -> Result<i64,
     record_snapshot(&db, "import", None, inventory_json.as_bytes())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::ScannedInventory;
-
-    #[test]
-    fn scan_response_matches_the_frontend_transport_fixture() {
-        let fixture: serde_json::Value = serde_json::from_str(include_str!("../../../../tests/fixtures/protection/scan-response.json")).unwrap();
-        let result = ScannedInventory { inventory: r#"{"Suits":[{"a":1}]}"#.into(), snapshot_id: Some(7) };
-        assert_eq!(serde_json::to_value(result).unwrap(), fixture);
-    }
-}

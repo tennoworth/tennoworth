@@ -319,7 +319,9 @@ pub(crate) fn run() {
             // the probe must not make WFM calls on a timer.
             if !probe {
                 crate::services::watch::start_checker(app.handle().clone());
-                crate::services::reminders::start(app.handle().clone());
+                crate::services::reminders::start(app.handle().clone(), |app| {
+                    crate::shell::tray::rebuild_tray(app);
+                });
                 // Fast path beside the poll: WFM's live order stream fires a
                 // matching watch in seconds (see ws_watch.rs).
                 crate::services::ws_watch::start_stream(app.handle().clone());
