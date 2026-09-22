@@ -95,6 +95,25 @@ describe('staleSurfaceTimestamp', () => {
     },
   );
 
+  // A partial merge that carried rows writes the age of those rows, because
+  // nothing re-observed them. This is the consumer end of that contract: if the
+  // producer ever goes back to stamping the merge time, or this function starts
+  // exempting 'merged_partial', the warning below silently stops appearing.
+  it('warns about a partial merge that carried rows from an older fetch', async () => {
+    const { staleSurfaceTimestamp } = await freshMarket();
+    const market = {
+      surface_provenance: {
+        set_to_parts: {
+          disposition: 'merged_partial',
+          attempted_at: '2026-09-03T00:00:00Z',
+          data_fetched_at: OLD,
+        },
+      },
+    };
+
+    expect(staleSurfaceTimestamp(market, 'set_to_parts', NOW)).toBe(OLD);
+  });
+
   it('keeps the legacy timestamp fallback for snapshots without provenance', async () => {
     const { staleSurfaceTimestamp } = await freshMarket();
     const market = { surface_fetched_at: { relic_rewards: OLD } };

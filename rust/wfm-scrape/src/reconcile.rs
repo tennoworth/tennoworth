@@ -8,10 +8,13 @@
 //! 1. Unavailable, unchanged, or invalid observations keep prior data and its
 //!    data timestamp. These states are distinct in provenance even though the
 //!    data transition is the same.
-//! 2. A usable partial fetch with prior data merges fresh over
-//!    prior (old entries the fresh fetch didn't cover are kept), stamp
-//!    NOW. Whole-surface stamp on partial merge is INTENTIONAL - retained
-//!    entries were just re-validated as still-best-known.
+//! 2. A usable partial fetch with prior data merges fresh over prior (old
+//!    entries the fresh fetch didn't cover are kept) and keeps the PRIOR
+//!    stamp: only the fresh entries were re-observed, so the surface is as old
+//!    as the entries it carried. A merge that carried nothing takes NOW. The
+//!    retained entries are still-best-known, but nothing re-validated them, and
+//!    stamping the surface NOW is what let a partition that stopped updating
+//!    report itself as current - the case the age warning exists to reveal.
 //! 3. Authoritative empty is data. It clears a prior surface and stamps NOW;
 //!    it must never fall into preserve-on-empty.
 //! 4. Otherwise → return usable data, stamp NOW.
@@ -266,7 +269,19 @@ pub fn reconcile<T: Mergeable + Default>(
             let recovered = merged.len().saturating_sub(fresh.len());
             Reconciled {
                 data: merged,
-                fetched_at: clock::iso_z(now),
+                // Only `fresh`'s keys were re-observed, so a surface holding
+                // carried rows is exactly as old as the oldest of them. Stamping
+                // it NOW is what let a partition that stopped updating report
+                // itself as current, which is the case the age warning exists to
+                // reveal. A merge that carried nothing takes the current time.
+                fetched_at: if recovered > 0 {
+                    prior_stamp
+                        .filter(|stamp| !stamp.is_empty())
+                        .map(str::to_string)
+                        .unwrap_or_else(|| clock::iso_z(now))
+                } else {
+                    clock::iso_z(now)
+                },
                 attempted_at,
                 disposition: Disposition::MergedPartial,
                 stale_warning: None,
@@ -379,17 +394,102 @@ mod tests {
     // ---- Rule 2: partial fetch merges fresh over prior ------------------
 
     #[test]
-    fn partial_fetch_merges_fresh_over_prior_and_stamps_now() {
+    fn partial_fetch_merges_fresh_over_prior_keeping_the_prior_stamp() {
         let prior = hm(&[("a", 1), ("b", 2), ("c", 3)]);
         let fresh = hm(&[("a", 10), ("d", 40)]);
         let now = utc(2026, 7, 1, 0, 0, 0);
+        let prior_stamp = "2026-06-20T00:00:00Z";
 
-        let r = reconcile("test", fresh, Some(&prior), None, now, false, 7);
+        let r = reconcile("test", fresh, Some(&prior), Some(prior_stamp), now, false, 7);
 
         assert_eq!(r.data, hm(&[("a", 10), ("b", 2), ("c", 3), ("d", 40)]));
-        assert_eq!(r.fetched_at, clock::iso_z(now));
+        assert_eq!(
+            r.fetched_at, prior_stamp,
+            "two rows were carried, so the surface is still that old"
+        );
+        assert_eq!(r.attempted_at, clock::iso_z(now), "the attempt is recorded");
         assert_eq!(r.recovered, 2); // b + c were kept
         assert!(r.stale_warning.is_none());
+    }
+
+    /// The failure the stale-data warning exists to reveal is a surface that
+    /// quietly stops updating. A partition whose parent keeps partially
+    /// succeeding reaches the merge above on every run, and the entries that
+    /// partition owns are carried from the prior map - never re-fetched. If the
+    /// merge stamps NOW, a surface whose real evidence is four weeks old reports
+    /// itself as fetched this minute, and the consumer's age warning - which
+    /// exists to reveal exactly this - stays suppressed forever. The carried
+    /// entries are the prior map's values, taken unchanged, which is the whole
+    /// difference from the `preserved_unchanged` case the consumer exempts.
+    #[test]
+    fn a_partial_merge_keeps_the_evidence_age_of_the_rows_it_carried() {
+        let prior = hm(&[("live", 1), ("carried", 2)]);
+        let fresh = hm(&[("live", 10)]);
+        let first_seen = "2026-07-01T00:00:00Z";
+
+        let later = reconcile(
+            "set_to_parts",
+            fresh,
+            Some(&prior),
+            Some(first_seen),
+            utc(2026, 7, 29, 0, 0, 0),
+            false,
+            7,
+        );
+
+        // The carried value is byte-for-byte the prior one - never re-fetched.
+        assert_eq!(later.data.get("carried"), prior.get("carried"));
+        assert_eq!(later.recovered, 1);
+        // So the surface's evidence age is still the day that row arrived, not
+        // the day it was last copied forward.
+        assert_eq!(later.fetched_at, first_seen);
+        // The attempt itself is still recorded separately.
+        assert_eq!(later.attempted_at, clock::iso_z(utc(2026, 7, 29, 0, 0, 0)));
+        assert_eq!(later.disposition, Disposition::MergedPartial);
+    }
+
+    /// The counterpart: when the partial fetch covered everything the prior
+    /// snapshot held, nothing was carried and every row in the result is freshly
+    /// observed, so it takes the current stamp and must not inherit the old one.
+    #[test]
+    fn a_partial_merge_that_carried_nothing_is_stamped_now() {
+        let prior = hm(&[("live", 1), ("also", 2)]);
+        let fresh = hm(&[("live", 10), ("also", 20)]);
+
+        let r = reconcile(
+            "set_to_parts",
+            fresh,
+            Some(&prior),
+            Some("2026-07-01T00:00:00Z"),
+            utc(2026, 7, 29, 0, 0, 0),
+            false,
+            7,
+        );
+
+        assert_eq!(r.recovered, 0, "every prior row was re-fetched");
+        assert_eq!(r.fetched_at, clock::iso_z(utc(2026, 7, 29, 0, 0, 0)));
+    }
+
+    /// No prior snapshot means no prior stamp to inherit, so the fallback is the
+    /// current time rather than an empty stamp the consumer would read as
+    /// "unknown, never warn".
+    #[test]
+    fn a_partial_merge_without_a_prior_stamp_falls_back_to_now() {
+        let prior = hm(&[("carried", 2)]);
+        let fresh = hm(&[("live", 10)]);
+
+        let r = reconcile(
+            "set_to_parts",
+            fresh,
+            Some(&prior),
+            None,
+            utc(2026, 7, 29, 0, 0, 0),
+            false,
+            7,
+        );
+
+        assert_eq!(r.recovered, 1);
+        assert_eq!(r.fetched_at, clock::iso_z(utc(2026, 7, 29, 0, 0, 0)));
     }
 
     #[test]
