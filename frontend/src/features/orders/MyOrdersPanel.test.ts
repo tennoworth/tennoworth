@@ -109,4 +109,38 @@ describe('MyOrdersPanel listing health', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Reprice' }));
     await waitFor(() => expect(transport.updateOrder).toHaveBeenCalledWith('bulk', { platinum: 44 }));
   });
+
+  // A request the transport managed to send is not a change WFM accepted. The
+  // panel used to apply the local edit anyway, so the row showed a quantity the
+  // live listing did not have.
+  it('leaves the row alone when the remote outcome was not confirmed', async () => {
+    const transport = makeTransport({
+      updateOrder: vi.fn().mockResolvedValue({ status: 'pending', message: 'not sent yet' }),
+    });
+    const ownedQty = new Map([['primed_flow|', 1], ['ash_prime_blueprint|', 2]]);
+    render(MyOrdersPanel, { props: { transport, ownedQty } });
+    await screen.findByText('1 over-quantity');
+    await fireEvent.click(screen.getByRole('button', { name: 'Set qty' }));
+    await waitFor(() => expect(transport.updateOrder).toHaveBeenCalled());
+    // Still listed ×3 against 2 owned, because nothing confirmed the change.
+    expect(screen.queryByText('1 over-quantity')).not.toBeNull();
+  });
+
+  it('applies bulk visibility only to the rows WFM confirmed', async () => {
+    const transport = makeTransport({
+      bulkVisibility: vi.fn().mockResolvedValue({
+        results: [
+          { order_id: 'o1', status: 'ok' },
+          { order_id: 'o2', status: 'error', message: 'WFM said no' },
+        ],
+      }),
+    });
+    render(MyOrdersPanel, { props: { transport } });
+    await screen.findByText('Primed Flow');
+    expect(screen.queryAllByTitle('Click to make visible')).toHaveLength(0);
+    await fireEvent.click(screen.getByRole('button', { name: 'All hidden' }));
+    await waitFor(() => expect(transport.bulkVisibility).toHaveBeenCalled());
+    // Only the confirmed row is hidden; o2 still says ON.
+    expect(screen.getAllByTitle('Click to make visible')).toHaveLength(1);
+  });
 });

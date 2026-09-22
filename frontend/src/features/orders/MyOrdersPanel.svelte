@@ -174,7 +174,14 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   // the edit locally while WFM kept the old value - silent desync.
   function assertOrderOk(r: unknown): void {
     const res = r as { status?: string; message?: string } | null;
+    // Only a literal 'ok' is WFM accepting the change. 'pending' and
+    // 'uncertain_mutation' mean the outcome is unknown; letting those fall through
+    // as success is the same silent desync in a different disguise.
+    if (res?.status === 'ok') return;
     if (res?.status === 'error') throw new Error(res.message || 'WFM rejected the update');
+    throw new Error(
+      `WFM did not confirm the update${res?.status ? ` (${res.status})` : ''}. Recheck My Orders before trusting this row.`,
+    );
   }
 
   async function toggleVisible(o: WfmOrder): Promise<void> {
@@ -240,11 +247,18 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     bulkBusy = true;
     try {
       const resp = await transport.bulkVisibility(ids, visible);
-      // Count status==='ok' - the server can skip rows (already in that state,
-      // gone since fetch), so ids.length would over-report.
-      const ok = (resp?.results ?? []).filter((r) => r.status === 'ok').length;
-      for (const o of orders) if (ids.includes(o.id)) o.visible = visible;
+      // The server can skip rows (already in that state, gone since fetch), so the
+      // count comes from the per-order results rather than ids.length - and only a
+      // confirmed row may have its local state changed, or a failed row renders as
+      // done while the live listing is untouched.
+      const confirmed = new Set(
+        (resp?.results ?? [])
+          .filter((r) => r.status === 'ok' && r.order_id)
+          .map((r) => r.order_id as string),
+      );
+      for (const o of orders) if (confirmed.has(o.id)) o.visible = visible;
       orders = [...orders];
+      const ok = confirmed.size;
       pushToast(
         visible
           ? `${ok} listing${ok === 1 ? '' : 's'} made visible.`
