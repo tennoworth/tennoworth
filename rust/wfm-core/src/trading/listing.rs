@@ -228,8 +228,10 @@ pub fn delete_order(unlocked: &Unlocked, id: &str) -> Result<()> {
 fn validate_orders_body(body: &serde_json::Value, unlocked: &Unlocked) -> Result<()> {
     let data = body.get("data").context("Orders response has no data; refusing to assume an empty account.")?;
     let valid_row = |row: &serde_json::Value, bucket: Option<&str>| {
+        let side = row.get("type").and_then(|v| v.as_str());
         ["id", "itemId"].iter().all(|key| row.get(key).and_then(|v| v.as_str()).is_some_and(|s| !s.is_empty()))
-            && matches!(row.get("type").and_then(|v| v.as_str()).or(bucket), Some("buy" | "sell"))
+            && bucket.is_none_or(|bucket| side.is_none_or(|side| side == bucket))
+            && matches!(side.or(bucket), Some("buy" | "sell"))
             && ["quantity", "platinum"].iter().all(|key| row.get(key).and_then(|v| v.as_u64()).is_some_and(|n| n > 0))
             && row.get("rank").is_none_or(|v| v.is_null() || v.as_u64().is_some())
             && row.get("subtype").is_none_or(|v| v.is_null() || v.as_str().is_some_and(|s| !s.is_empty()))
@@ -260,6 +262,29 @@ mod response_tests {
         }
         assert!(validate_orders_body(&serde_json::json!({"data": []}), &unlocked()).is_ok());
         assert!(validate_orders_body(&serde_json::json!({"data": {"sell": [], "buy": []}}), &unlocked()).is_ok());
+    }
+
+    /// A row may take its side from its bucket or state it explicitly - but not
+    /// contradict both. Consumers disagree about which one wins (plan indexing
+    /// trusts the explicit side, My Orders overwrites it with the bucket), so
+    /// accepting the contradiction makes one row a buy to one consumer and a sell
+    /// to another. Refuse the body instead of picking a winner.
+    #[test]
+    fn a_row_whose_explicit_side_contradicts_its_bucket_is_rejected() {
+        let contradicts = serde_json::json!({"data": {"sell": [
+            {"id": "order", "itemId": "item", "type": "buy", "quantity": 1, "platinum": 10}
+        ], "buy": []}});
+        assert!(validate_orders_body(&contradicts, &unlocked()).is_err());
+
+        // Agreeing, or stating nothing and taking the bucket's side, stay valid.
+        let agrees = serde_json::json!({"data": {"sell": [
+            {"id": "order", "itemId": "item", "type": "sell", "quantity": 1, "platinum": 10}
+        ], "buy": []}});
+        assert!(validate_orders_body(&agrees, &unlocked()).is_ok());
+        let bucket_only = serde_json::json!({"data": {"sell": [
+            {"id": "order", "itemId": "item", "quantity": 1, "platinum": 10}
+        ], "buy": []}});
+        assert!(validate_orders_body(&bucket_only, &unlocked()).is_ok());
     }
     #[test]
     fn missing_variant_metadata_cannot_hide_an_existing_order() {
