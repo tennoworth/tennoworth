@@ -299,12 +299,20 @@ pub(crate) fn run() {
             // EE.log tailer: trade detection → ledger + notification +
             // auto-close of the sold WFM listing (see trades.rs). Read-only on
             // the game's own log. Not in probe runs.
-            let ee_path = if probe { None } else { crate::services::trades::start_tailer(app.handle().clone()) };
+            //
+            // The recorder is created before the tailer and handed to it, so a
+            // surface that mounts after a pause can still ask what is true.
+            let recording = crate::services::recording::Recorder::new();
+            let ee_path = if probe {
+                None
+            } else {
+                crate::services::trades::start_tailer(app.handle().clone(), recording.clone())
+            };
             match &ee_path {
                 Some(p) => eprintln!("tennoworth: tailing EE.log at {}", p.display()),
                 None => eprintln!("tennoworth: EE.log not found - trade detection off (set TENNOWORTH_EELOG to override)"),
             }
-            app.manage(crate::services::eelog_state::EeLogState { path: ee_path });
+            app.manage(crate::services::eelog_state::EeLogState { path: ee_path, recording });
 
             // Price-watch checker: a background pass every CHECK_INTERVAL
             // over the user's watches (see watch.rs). Not in probe runs -
