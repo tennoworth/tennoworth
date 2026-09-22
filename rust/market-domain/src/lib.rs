@@ -8,3 +8,4 @@ pub mod scoring;
 pub mod trade_session;
 
 pub mod dispatch;
+pub mod orders;
