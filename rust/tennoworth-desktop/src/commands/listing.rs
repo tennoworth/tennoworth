@@ -16,7 +16,7 @@ use wfm_core::trading::listing::{
     MAX_PLATINUM,
 };
 use wfm_core::trading::pending::{
-    clear_pending, journal_state, load_pending, JournalState, PendingPlan,
+    clear_finished_pending, clear_pending, journal_state, load_pending, JournalState, PendingPlan,
 };
 use wfm_core::trading::plan::{
     execute_plan as core_execute_plan, run_pending, PlanItem, PlanRequest, PlanResponse,
@@ -384,8 +384,8 @@ pub async fn resume_pending_plan(
         let response = wfm_client::governor::with_context(request.context(), || run_pending(s.pending_path(), &unlocked, &mut pending, || {
             validate_session_plan(&app, &reviewed)
         }));
-        if pending.items.iter().all(|i| i.status != "pending") {
-            let _ = clear_pending(s.pending_path());
+        if let Err(error) = clear_finished_pending(s.pending_path(), &pending) {
+            eprintln!("tennoworth: finished batch left its journal behind: {error}");
         }
         Ok::<_, CmdError>((response, price_qty))
     })

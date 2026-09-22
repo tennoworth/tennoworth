@@ -17,7 +17,7 @@ use crate::trading::listing::{
     decode_user_orders, list_user_orders, patch_one_order, send_mutation, Unlocked, MAX_PLATINUM,
 };
 use crate::trading::orders::DecodedOrders;
-use crate::trading::pending::{clear_pending, write_pending_atomic, PendingItem, PendingPlan};
+use crate::trading::pending::{clear_finished_pending, journal_state, write_pending_atomic, JournalState, PendingItem, PendingPlan};
 use market_domain::orders::{NormalizedOrder, OrderRow, OrderSide};
 
 /// Resets a plan-in-flight flag on scope exit - including early return and
@@ -171,6 +171,17 @@ pub fn execute_plan(
     plan: PlanRequest,
     validate: impl FnMut() -> Result<(), PlanValidationError>,
 ) -> PlanResponse {
+    execute_plan_with(pending_path, unlocked, plan, |path, unlocked, pending| {
+        run_pending(path, unlocked, pending, validate)
+    })
+}
+
+fn execute_plan_with(
+    pending_path: &std::path::Path,
+    unlocked: &Unlocked,
+    plan: PlanRequest,
+    run: impl FnOnce(&std::path::Path, &Unlocked, &mut PendingPlan) -> PlanResponse,
+) -> PlanResponse {
     let plan_id = random_token(8);
 
     if plan.items.is_empty() {
@@ -195,6 +206,34 @@ pub fn execute_plan(
                 action: None,
             }],
         };
+    }
+
+    match journal_state(pending_path) {
+        JournalState::Unfinished => {
+            return PlanResponse {
+                plan_id,
+                results: vec![ItemResult {
+                    slug: "<batch>".into(),
+                    status: "error".into(),
+                    message: Some("An unfinished batch is saved. Resume or discard it before sending another.".into()),
+                    order_id: None,
+                    action: None,
+                }],
+            };
+        }
+        JournalState::Unreadable(detail) => {
+            return PlanResponse {
+                plan_id,
+                results: vec![ItemResult {
+                    slug: "<batch>".into(),
+                    status: "error".into(),
+                    message: Some(format!("The saved batch could not be read, so a new one cannot safely replace it. {detail}")),
+                    order_id: None,
+                    action: None,
+                }],
+            };
+        }
+        JournalState::Absent | JournalState::Finished => {}
     }
 
     // Seed the pending file before the first POST so a crash here is
@@ -232,14 +271,9 @@ pub fn execute_plan(
         );
     }
 
-    let response = run_pending(pending_path, unlocked, &mut pending, validate);
-    if pending.items.iter().all(|i| i.status != crate::trading::pending::STATUS_PENDING) {
-        // Every item reached a terminal state, so the batch is finished either way -
-        // but a file that will not delete is offered as resumable on the next
-        // launch, so say so instead of reporting a clean finish.
-        if let Err(error) = clear_pending(pending_path) {
-            eprintln!("tennoworth: finished batch left its journal behind: {error}");
-        }
+    let response = run(pending_path, unlocked, &mut pending);
+    if let Err(error) = clear_finished_pending(pending_path, &pending) {
+        eprintln!("tennoworth: finished batch left its journal behind: {error}");
     }
     response
 }
@@ -817,6 +851,63 @@ mod tests {
         }
     }
 
+    #[test]
+    fn uncertain_only_or_final_send_survives_execution_and_restart() {
+        use crate::trading::pending::{journal_state, load_pending, JournalState, STATUS_UNCERTAIN};
+
+        let unlocked = Unlocked {
+            jwt: "fixture".into(),
+            username: "fixture".into(),
+            platform: "pc".into(),
+            catalog: std::sync::Arc::new(BTreeMap::new()),
+            id_to_item: std::sync::Arc::new(BTreeMap::new()),
+        };
+        for item_count in [1, 2] {
+            let path = std::env::temp_dir().join(format!("uncertain-boundary-{}.json", random_token(8)));
+            let items = (0..item_count)
+                .map(|index| plan_item(&format!("item-{index}"), None, None))
+                .collect();
+            let response = execute_plan_with(
+                &path,
+                &unlocked,
+                PlanRequest { items },
+                |path, _, pending| {
+                    run_pending_with(path, pending, || Ok(()), |item, _| ItemResult {
+                        slug: item.slug.clone(),
+                        status: if item.slug == format!("item-{}", item_count - 1) {
+                            STATUS_UNCERTAIN.into()
+                        } else {
+                            "ok".into()
+                        },
+                        message: None,
+                        order_id: None,
+                        action: None,
+                    })
+                },
+            );
+            assert_eq!(response.results.last().unwrap().status, STATUS_UNCERTAIN);
+            let mut restarted = load_pending(&path).unwrap().expect("unresolved journal survives");
+            assert!(matches!(journal_state(&path), JournalState::Unfinished));
+            let replacement = execute_plan_with(
+                &path,
+                &unlocked,
+                PlanRequest { items: vec![plan_item("replacement", None, None)] },
+                |_, _, _| panic!("an unresolved journal must block execution"),
+            );
+            assert_eq!(replacement.results[0].status, "error");
+            assert_eq!(load_pending(&path).unwrap().unwrap().plan_id, restarted.plan_id);
+            let mut resent = Vec::new();
+            run_pending_with(&path, &mut restarted, || Ok(()), |item, _| {
+                resent.push(item.slug.clone());
+                ItemResult { slug: item.slug.clone(), status: "ok".into(), message: None, order_id: None, action: None }
+            });
+            clear_finished_pending(&path, &restarted).unwrap();
+            assert!(resent.is_empty(), "restart must not replay an uncertain send");
+            assert!(matches!(journal_state(&path), JournalState::Unfinished));
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+
     /// A send whose outcome is unknown is not the same as a send that never
     /// happened. The governor says so - `pending` means "saved for explicit
     /// resume" while `uncertain_mutation` means "refresh and reconcile before
@@ -864,7 +955,7 @@ mod tests {
 
         // The journal records what actually happened, and the later item is
         // still waiting.
-        let saved = crate::trading::pending::load_pending(&path).expect("journal kept");
+        let saved = crate::trading::pending::load_pending(&path).expect("journal readable").expect("journal kept");
         assert_eq!(
             saved.items[0].status, "uncertain_mutation",
             "an unknown outcome must not be recorded as never-sent"
@@ -872,6 +963,7 @@ mod tests {
         assert_eq!(saved.items[1].status, "pending");
 
         // And a resume must not re-send it as though nothing had been sent.
+        let mut pending = crate::trading::pending::load_pending(&path).unwrap().unwrap();
         let mut resumed: Vec<String> = Vec::new();
         run_pending_with(
             &path,
@@ -891,6 +983,8 @@ mod tests {
             ["later"],
             "an unresolved outcome is left for reconciliation, and does not block the batch"
         );
+        clear_finished_pending(&path, &pending).unwrap();
+        assert!(matches!(journal_state(&path), JournalState::Unfinished));
 
         let _ = std::fs::remove_file(&path);
     }

@@ -21,6 +21,15 @@ pub struct PendingPlan {
     pub items: Vec<PendingItem>,
 }
 
+impl PendingPlan {
+    /// Only confirmed outcomes make a journal safe to replace or remove.
+    pub fn is_finished(&self) -> bool {
+        self.items
+            .iter()
+            .all(|item| matches!(item.status.as_str(), STATUS_OK | STATUS_ERROR))
+    }
+}
+
 /// Journal status for an item whose send has not been resolved.
 ///
 /// "Saved for explicit resume" - the request was never dispatched, or the
@@ -139,10 +148,10 @@ pub fn journal_state(path: &Path) -> JournalState {
     match load_pending(path) {
         Ok(None) => JournalState::Absent,
         Ok(Some(plan)) => {
-            if plan.items.iter().any(|item| item.status == "pending") {
-                JournalState::Unfinished
-            } else {
+            if plan.is_finished() {
                 JournalState::Finished
+            } else {
+                JournalState::Unfinished
             }
         }
         Err(error) => JournalState::Unreadable(error.to_string()),
@@ -173,6 +182,14 @@ pub fn clear_pending(path: &Path) -> Result<(), PendingStoreError> {
             path.display()
         ))),
     }
+}
+
+/// Keep unresolved outcomes available for reconciliation after the other rows complete.
+pub fn clear_finished_pending(path: &Path, plan: &PendingPlan) -> Result<(), PendingStoreError> {
+    if plan.is_finished() {
+        clear_pending(path)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
