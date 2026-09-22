@@ -11,7 +11,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   import { MAX_PLATINUM, MIN_PLATINUM } from '../../domain/limits';
   import { humanError } from '../../contracts/errors';
   import { selectDrifted, type DriftRow } from '../../domain/order-drift';
-  import { assessListings, summarize, ownedKey, type HealthIssue } from '../../domain/listing-health';
+  import { assessListings, summarize, ownedEvidence, type HealthIssue } from '../../domain/listing-health';
   import { LIQUID_VOL } from '../../domain/sell-priority';
   import type { Market } from '../../contracts/data';
   import { orderUnitPrice, orderLotPrice, cachedUnitMarket } from '../../domain/order-prices';
@@ -70,6 +70,13 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   // Inline delete confirmation - the destructive click is one tap, the row
   // tints and the button becomes "Confirm"; a second tap (or the ×) resolves.
   let confirmId = $state<string | null>(null);
+  // The same inline confirmation for the health queue's destructive fix. Kept
+  // apart from `confirmId` on purpose: one order can appear in both the queue
+  // and the table, and arming one must not arm the other.
+  let healthConfirmId = $state<string | null>(null);
+  // Which row's Delete button should take focus back once a cancel replaces the
+  // confirmation. Null everywhere else, so an ordinary render cannot steal it.
+  let restoreFocusTo = $state<string | null>(null);
   let bulkBusy = $state(false);
 
   // Toasts are component-local. Each toast owns its auto-dismiss timer id so
@@ -366,6 +373,10 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     }
   }
 
+  // Composed items - prime sets are assembled from parts, so a scan of
+  // individual items can never report the set itself. See `ownedEvidence`.
+  let composedSlugs = $derived(new Set(Object.keys(market?.set_to_parts ?? {})));
+
   let health = $derived.by((): HealthIssue[] => {
     if (live.size === 0 && !ownedQty) return [];
     return assessListings(
@@ -377,7 +388,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
             id: o.id, slug, name: itemName(o),
             platinum: orderUnitPrice(o.platinum, o.perTrade) ?? NaN, quantity: o.quantity ?? 1, type: 'sell' as const,
             live: slug ? liveForOrder(o) : null,
-            owned: ownedQty && slug ? (ownedQty.get(ownedKey(slug, o.subtype ?? null)) ?? 0) : null,
+            owned: slug ? ownedEvidence(slug, o.subtype ?? null, ownedQty, composedSlugs) : null,
           };
         })
         .filter((r) => r.slug !== '' && Number.isFinite(r.platinum)),
@@ -404,6 +415,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
         o.quantity = issue.suggested;
         pushToast(`${issue.name} quantity set to ${issue.suggested}.`);
       } else if (issue.kind === 'not-owned') {
+        healthConfirmId = null;
         await transport.deleteOrder(issue.id);
         orders = orders.filter((x) => x.id !== issue.id);
         pushToast(`Deleted ${issue.name}.`);
@@ -495,6 +507,26 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   function healthAction(h: HealthIssue): string {
     return h.kind === 'not-owned' ? 'Delete' : h.kind === 'excess-qty' ? 'Set qty' : 'Reprice';
   }
+  // The queue's destructive fix arms first, matching the table's inline delete.
+  // A repricing or quantity fix is reversible, so it stays single-click.
+  function armOrFix(h: HealthIssue): void {
+    if (h.kind === 'not-owned') {
+      restoreFocusTo = null;
+      healthConfirmId = h.id;
+      return;
+    }
+    void applyFix(h);
+  }
+  function cancelDelete(id: string): void {
+    healthConfirmId = null;
+    restoreFocusTo = id;
+  }
+  // Arming replaces the control the user activated, and cancelling replaces it
+  // back. Focus follows the replacement so a keyboard user keeps their place
+  // instead of being dropped on the document body.
+  function focusIf(node: HTMLElement, should: boolean): void {
+    if (should) node.focus();
+  }
   function driftWhy(d: DriftRow): string {
     const pct = Math.round(d.delta_pct * 100);
     return d.kind === 'overpriced'
@@ -574,7 +606,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
           {@const o = orderById(q.id)}
           {@const t = o ? liveForOrder(o) : null}
           {@const busy = busyIds.has(q.id)}
-          <tr class:busy>
+          <tr class:busy class:confirming={q.kind === 'health' && healthConfirmId === q.id}>
             <td class="l" title={q.slug}>{q.name}</td>
             <td>{o?.quantity ?? '?'}</td>
             <td class="fg">{o && orderUnitPrice(o.platinum, o.perTrade) != null ? Number(orderUnitPrice(o.platinum, o.perTrade)!.toFixed(2)) : '?'}<span class="unit">p / unit</span></td>
@@ -594,7 +626,12 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
                 {/if}
               </td>
               <td class="act">
-                <button class="btn xs" class:bad={q.h.kind === 'not-owned'} onclick={() => applyFix(q.h)} disabled={busy} title={q.h.why}>{healthAction(q.h)}</button>
+                {#if q.h.kind === 'not-owned' && healthConfirmId === q.id}
+                  <button class="btn xs bad" use:focusIf={true} onclick={() => applyFix(q.h)} disabled={busy} title="Confirm delete">Confirm</button>
+                  <button class="btn xs x" onclick={() => cancelDelete(q.id)} title="Cancel" aria-label="Cancel delete">×</button>
+                {:else}
+                  <button class="btn xs" class:bad={q.h.kind === 'not-owned'} use:focusIf={restoreFocusTo === q.id} onclick={() => armOrFix(q.h)} disabled={busy} title={q.h.why}>{healthAction(q.h)}</button>
+                {/if}
               </td>
             {:else}
               <td class="reason" class:warn={q.d.kind === 'overpriced'} title={driftWhy(q.d)}>

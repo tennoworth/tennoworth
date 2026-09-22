@@ -6,6 +6,7 @@ import { screen, fireEvent, waitFor, cleanup } from '@testing-library/svelte';
 import { renderDesktop as render } from '../../dev/render-desktop';
 import MyOrdersPanel from './MyOrdersPanel.svelte';
 import type { DesktopCapabilities } from '../../contracts/desktop';
+import type { Market } from '../../contracts/data';
 import { installTauri, removeTauri } from '../../dev/test-utils';
 
 afterEach(() => { cleanup(); removeTauri(); });
@@ -44,13 +45,48 @@ describe('MyOrdersPanel listing health', () => {
     await waitFor(() => expect(unlisten).toHaveBeenCalledTimes(1));
   });
 
-  it('flags a listing the last scan says you no longer own, and Delete removes it', async () => {
+  it('flags a listing the last scan says you no longer own, and deleting it takes a confirmation', async () => {
     const transport = makeTransport();
     const ownedQty = new Map([['primed_flow|', 1], ['ash_prime_blueprint|', 0]]);
     render(MyOrdersPanel, { props: { transport, ownedQty } });
     await screen.findByText('1 not owned');
     await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    // Removing a live listing is consequential: one click arms, it does not act.
+    expect(transport.deleteOrder).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole('button', { name: 'Confirm' }));
     await waitFor(() => expect(transport.deleteOrder).toHaveBeenCalledWith('o2'));
+  });
+
+  it('shows no confirmation until the destructive fix is armed, and cancel restores it', async () => {
+    const transport = makeTransport();
+    const ownedQty = new Map([['primed_flow|', 1], ['ash_prime_blueprint|', 0]]);
+    render(MyOrdersPanel, { props: { transport, ownedQty } });
+    await screen.findByText('1 not owned');
+    expect(screen.queryByRole('button', { name: 'Confirm' })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByRole('button', { name: 'Confirm' })).toBeTruthy();
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancel delete' }));
+    expect(screen.queryByRole('button', { name: 'Confirm' })).toBeNull();
+    expect(transport.deleteOrder).not.toHaveBeenCalled();
+    // The listing is still there, and still fixable.
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeTruthy();
+  });
+
+  it('keeps focus on the control that replaces the one that was activated', async () => {
+    const transport = makeTransport();
+    const ownedQty = new Map([['primed_flow|', 1], ['ash_prime_blueprint|', 0]]);
+    render(MyOrdersPanel, { props: { transport, ownedQty } });
+    await screen.findByText('1 not owned');
+
+    const remove = screen.getByRole('button', { name: 'Delete' });
+    remove.focus();
+    await fireEvent.click(remove);
+    // Arming replaces the button the user was on; focus must follow it rather
+    // than dropping to the document body.
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Confirm' }));
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancel delete' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Delete' }));
   });
 
   it('flags a listing quantity above what you own and Set qty patches it', async () => {
@@ -142,5 +178,33 @@ describe('MyOrdersPanel listing health', () => {
     await waitFor(() => expect(transport.bulkVisibility).toHaveBeenCalled());
     // Only the confirmed row is hidden; o2 still says ON.
     expect(screen.getAllByTitle('Click to make visible')).toHaveLength(1);
+  });
+
+  // A prime set is assembled from parts, so a scan of individual items can
+  // never contain the set itself. Its absence from the owned map is therefore
+  // absence of evidence, not evidence of absence - and the verdict it used to
+  // produce offered a one-click delete of a live listing the user can build.
+  const SET_ORDER = { data: { sell: [
+    { id: 'set1', platinum: 120, visible: true, quantity: 1, rank: 0, item: { name: 'Ash Prime Set', slug: 'ash_prime_set' } },
+  ], buy: [] } };
+  const SET_MARKET = { set_to_parts: { ash_prime_set: { parts: [{ slug: 'ash_prime_blueprint', quantity: 1 }] } } };
+
+  it('stays silent about a listed set the scan cannot report, and offers no delete', async () => {
+    const transport = makeTransport({ fetchOrders: vi.fn().mockResolvedValue(SET_ORDER) });
+    // The scan holds a component of the set, never the assembled set.
+    const ownedQty = new Map([['ash_prime_blueprint|', 1]]);
+    render(MyOrdersPanel, { props: { transport, ownedQty, market: SET_MARKET as unknown as Market } });
+    // The set appears in the orders table either way; wait for the load to settle.
+    await screen.findAllByText('Ash Prime Set');
+    expect(screen.queryByText(/not owned/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
+  });
+
+  it('still flags a set the scan holds real evidence about', async () => {
+    const transport = makeTransport({ fetchOrders: vi.fn().mockResolvedValue(SET_ORDER) });
+    // Present in the map with a real count: the evidence exists, so assess it.
+    const ownedQty = new Map([['ash_prime_set|', 0]]);
+    render(MyOrdersPanel, { props: { transport, ownedQty, market: SET_MARKET as unknown as Market } });
+    await screen.findByText('1 not owned');
   });
 });
