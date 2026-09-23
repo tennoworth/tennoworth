@@ -39,4 +39,3 @@ pub fn import_snapshot(db: State<'_, Db>, inventory_json: String) -> Result<i64,
     }
     record_snapshot(&db, "import", None, inventory_json.as_bytes())
 }
-

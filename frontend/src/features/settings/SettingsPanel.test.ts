@@ -157,7 +157,7 @@ describe('SettingsPanel', () => {
     render(SettingsPanel, {
       props: {
         theme,
-        
+
         wfmStatus: { logged_in: true, unlocked: true },
         onwfmlogout,
       },
@@ -176,7 +176,7 @@ describe('SettingsPanel', () => {
     render(SettingsPanel, {
       props: {
         theme,
-        
+
         wfmStatus: { logged_in: true, unlocked: false },
         onwfmlogout,
       },

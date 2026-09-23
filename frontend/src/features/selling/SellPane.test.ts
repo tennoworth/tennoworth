@@ -38,7 +38,7 @@ function renderPane(props: Partial<ComponentProps<typeof SellPane>> = {}) {
     visibleColumns: null, presetSort: null, emptyReason: null,
     activePreset: null, reserveCopies: 0, filtersOpen: false,
     scoreExplainerDismissed: true, sellOnboardingDismissed: true, keepCopiesNudgeDismissed: true,
-    
+
     applyPreset: vi.fn(), setReserveCopies: vi.fn(), toggleFiltersOpen: vi.fn(),
     dismissSellOnboarding: vi.fn(), dismissKeepCopiesNudge: vi.fn(),
     openListingFlow: vi.fn(), pendingBanner: createRawSnippet(() => ({ render: () => '<span></span>' })),
