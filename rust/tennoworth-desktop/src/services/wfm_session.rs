@@ -210,10 +210,12 @@ impl WfmSession {
         Self {
             jwt_path,
             pending_path: key_dir.join("pending_plan.json"),
-            inner: Mutex::new(None),
+            inner: Mutex::new(SessionState::default()),
             plan_running: AtomicBool::new(false),
             plan_requests: Arc::new(Mutex::new(PlanRequests::default())),
             use_keyring: false,
+            warm_hook: None,
+            keyring_hook: None,
         }
     }
 
