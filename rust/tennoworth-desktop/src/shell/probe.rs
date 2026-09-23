@@ -340,6 +340,7 @@ const PROBE_JS: &str = r#"(function(){
     .then(function(){ return invkE('wfm_auth_status').then(function(v){ R.wfm.status0 = v; }); })
     // No login file → typed needs_login (the desktop analogue of serve's 401).
     .then(function(){ return invkE('submit_plan', { items: [] }).then(function(v){ R.wfm.planNoLogin = v; }); })
+    .then(function(){ return invkE('fetch_orders').then(function(v){ R.wfm.ordersNoLogin = v; if (v.ok || v.code !== 'needs_login') throw new Error('fetch_orders did not require login'); }); })
     // Real Sell CTA with no login → the login dialog opens (proactive check).
     .then(function(){
       var btn = document.querySelector('[data-testid="desktop-list"]');
@@ -357,6 +358,7 @@ const PROBE_JS: &str = r#"(function(){
     .then(function(){ return invkE('debug_write_login', { passphrase: 'probe-pass-123456' }).then(function(v){ R.wfm.wroteLogin = v; }); })
     .then(function(){ return invkE('wfm_auth_status').then(function(v){ R.wfm.status1 = v; }); })
     .then(function(){ return invkE('submit_plan', { items: [] }).then(function(v){ R.wfm.planLocked = v; }); })
+    .then(function(){ return invkE('fetch_orders').then(function(v){ R.wfm.ordersLocked = v; if (v.ok || v.code !== 'needs_unlock') throw new Error('fetch_orders did not require unlock'); }); })
     // Real CTA again → unlock dialog; drive the REAL form with a wrong
     // passphrase → bad_passphrase surfaces in the dialog, which stays open.
     .then(function(){
@@ -412,6 +414,7 @@ const PROBE_JS: &str = r#"(function(){
     .then(function(){ return invkE('wfm_auth_status').then(function(v){ R.wfm.status3 = v; }); })
     // Locked again with the envelope still on disk → needs_unlock, not login.
     .then(function(){ return invkE('submit_plan', { items: [] }).then(function(v){ R.wfm.planAfterLogout = v; }); })
+    .then(function(){ return invkE('fetch_orders').then(function(v){ R.wfm.ordersAfterLogout = v; if (v.ok || v.code !== 'needs_unlock') throw new Error('fetch_orders lost the locked session state'); }); })
     .then(function(){
       var settings = Array.from(document.querySelectorAll('.sidebar button')).find(function(b){ return b.textContent.trim().indexOf('Settings') === 0; });
       if (!settings) throw new Error('Settings navigation is missing');

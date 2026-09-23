@@ -51,15 +51,15 @@ export function createPreview(scenario: string) {
   let notifications = empty ? [] : [{ id: 1, category: 'trades', title: 'Sold Pyrana Prime Set for 90p', body: 'Pyrana Prime Set ×1 · Listing update failed; review My Orders. Your completed trade is saved in the Ledger.', target: 'orders', created_at: Math.floor(Date.now() / 1000), read: false, delivery: 'failed' }];
   let notificationPreferences = { popups: true, categories: Object.fromEntries(['trades', 'watches', 'baro', 'calendar', 'digest'].map(k => [k, { enabled: true, native: true }])) };
   const responses: Record<string, unknown> = {
-    fetch_orders: { data: { sell: empty || scenario.startsWith('buyers') ? [] : [
-      { id: 'preview-order', platinum: 90, visible: true, quantity: 2, item: { name: 'Pyrana Prime Set', slug: 'pyrana_prime_set' } },
-      ...(sessionSample ? [{ id: 'preview-flow', platinum: 26, visible: true, quantity: 5, rank: 0, item: { name: 'Primed Flow', slug: 'primed_flow' } }] : []),
-      ...(sessionSample ? [{ id: 'preview-arcane', platinum: 48, perTrade: 6, visible: false, quantity: 12, rank: 0, item: { name: 'Arcane Energize', slug: 'arcane_energize' } }] : []),
+    fetch_orders: empty || scenario.startsWith('buyers') ? [] : [
+      { id: 'preview-order', platinum: 90, visible: true, quantity: 2, name: 'Pyrana Prime Set', slug: 'pyrana_prime_set', item_id: 'pyrana_prime_set', side: 'sell' as const, per_trade: null, subtype: null },
+      ...(sessionSample ? [{ id: 'preview-flow', platinum: 26, visible: true, quantity: 5, rank: 0, name: 'Primed Flow', slug: 'primed_flow', item_id: 'primed_flow', side: 'sell' as const, per_trade: null, subtype: null }] : []),
+      ...(sessionSample ? [{ id: 'preview-arcane', platinum: 48, visible: false, quantity: 12, rank: 0, name: 'Arcane Energize', slug: 'arcane_energize', item_id: 'arcane_energize', side: 'sell' as const, per_trade: 6, subtype: null }] : []),
       ...(unownedSample ? [
-        { id: 'preview-unowned', platinum: 12, visible: true, quantity: 1, rank: 0, item: { name: 'Vitality', slug: 'vitality' } },
-        { id: 'preview-set', platinum: 200, visible: true, quantity: 1, item: { name: 'Akbolto Prime Set', slug: 'akbolto_prime_set' } },
+        { id: 'preview-unowned', platinum: 12, visible: true, quantity: 1, rank: 0, name: 'Vitality', slug: 'vitality', item_id: 'vitality', side: 'sell' as const, per_trade: null, subtype: null },
+        { id: 'preview-set', platinum: 200, visible: true, quantity: 1, name: 'Akbolto Prime Set', slug: 'akbolto_prime_set', item_id: 'akbolto_prime_set', side: 'sell' as const, per_trade: null, subtype: null },
       ] : []),
-    ], buy: [] } },
+    ],
     list_watches: empty ? [] : [{
       id: 1, slug: 'pyrana_prime_set', name: 'Pyrana Prime Set', side: 'sell', threshold: 70,
       rank: 0, subtype: null, created_at: now, last_price: 76, last_checked_at: now, last_fired_at: null,
@@ -122,7 +122,7 @@ export function createPreview(scenario: string) {
     if (command === 'wfm_logout') { responses.wfm_auth_status = { logged_in: false, unlocked: false }; return null; }
     if (command === 'protection_state') {
       const unknown = scenario === 'protection-error' || !(responses.wfm_auth_status as { unlocked: boolean }).unlocked;
-      const listed = new Map((responses.fetch_orders as {data:{sell:Array<{quantity:number,item:{slug:string}}>}}).data.sell.map(row => [row.item.slug, row.quantity]));
+      const listed = new Map((responses.fetch_orders as Array<{quantity:number,slug:string}>).map(row => [row.slug, row.quantity]));
       return sampleGuidance({ plan: structuredClone(protectionPlan), snapshot_id: empty ? null : 1,
         items: Object.fromEntries([...owned.values()].filter(row => !row.subtype && !row.slug.endsWith('_set')).map(row => [row.slug,
           sampleAllocation(row.count, row.leveled, Number(settings.get('reserve-copies') ?? 0),

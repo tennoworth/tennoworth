@@ -189,13 +189,22 @@ fn decode_row(
         );
     }
 
+    let per_trade = match row.get("perTrade") {
+        None => None,
+        Some(value) if value.is_null() => None,
+        Some(value) => match value.as_u64() {
+            Some(lot) if (1..=6).contains(&lot) && quantity % lot == 0 => Some(lot),
+            _ => return unfilled(row, "row carries an invalid trade lot"),
+        },
+    };
+
     OrderRow::Supported(NormalizedOrder {
         id: id.to_string(),
         item_id: item_id.to_string(),
         side,
         platinum,
         quantity,
-        per_trade: row.get("perTrade").and_then(|value| value.as_u64()),
+        per_trade,
         visible: row.get("visible").and_then(|value| value.as_bool()),
         rank,
         subtype,
@@ -328,6 +337,18 @@ mod tests {
             (
                 serde_json::json!({"id": "o", "itemId": "i", "type": "sell", "platinum": 1, "quantity": 1, "subtype": ""}),
                 "subtype",
+            ),
+            (
+                serde_json::json!({"id": "o", "itemId": "i", "type": "sell", "platinum": 1, "quantity": 7, "perTrade": 2}),
+                "trade lot",
+            ),
+            (
+                serde_json::json!({"id": "o", "itemId": "i", "type": "sell", "platinum": 1, "quantity": 1, "perTrade": 0}),
+                "trade lot",
+            ),
+            (
+                serde_json::json!({"id": "o", "itemId": "i", "type": "sell", "platinum": 1, "quantity": 12, "perTrade": 12}),
+                "trade lot",
             ),
         ] {
             let body = serde_json::json!({"data": {"sell": [row], "buy": []}});

@@ -41,7 +41,7 @@ export interface OrderCapability {
   getPendingPlan(): Promise<PendingPlan | null>;
   resumePendingPlan(): Promise<PlanResponse>;
   discardPendingPlan(): Promise<unknown>;
-  fetchOrders(): Promise<unknown>;
+  fetchOrders(): Promise<import('./generated/desktop').OwnOrder[]>;
   updateOrder(orderId: string, patch: OrderPatch): Promise<unknown>;
   deleteOrder(orderId: string): Promise<unknown>;
   bulkVisibility(orderIds: string[], visible: boolean): Promise<{ results: ItemResult[] }>;

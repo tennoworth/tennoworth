@@ -11,15 +11,10 @@ import { installTauri, removeTauri } from '../../dev/test-utils';
 
 afterEach(() => { cleanup(); removeTauri(); });
 
-const ORDERS = {
-  data: {
-    sell: [
-      { id: 'o1', platinum: 20, visible: true, quantity: 1, rank: 0, item: { name: 'Primed Flow', slug: 'primed_flow' } },
-      { id: 'o2', platinum: 30, visible: true, quantity: 3, item: { name: 'Ash Prime Blueprint', slug: 'ash_prime_blueprint' } },
-    ],
-    buy: [],
-  },
-};
+const ORDERS = [
+      { id: 'o1', platinum: 20, visible: true, quantity: 1, rank: 0, name: 'Primed Flow', slug: 'primed_flow', item_id: 'primed_flow', side: 'sell' as const, per_trade: null, subtype: null },
+      { id: 'o2', platinum: 30, visible: true, quantity: 3, name: 'Ash Prime Blueprint', slug: 'ash_prime_blueprint', item_id: 'ash_prime_blueprint', side: 'sell' as const, per_trade: null, subtype: null },
+  ];
 
 function makeTransport(overrides: Partial<DesktopCapabilities> = {}) {
   return {
@@ -32,6 +27,19 @@ function makeTransport(overrides: Partial<DesktopCapabilities> = {}) {
 }
 
 describe('MyOrdersPanel listing health', () => {
+  it('keeps an unreported visibility state unknown and blocks its toggle', async () => {
+    const transport = makeTransport({ fetchOrders: vi.fn().mockResolvedValue([
+      { ...ORDERS[0], visible: null },
+    ]) });
+    render(MyOrdersPanel, { props: { transport } });
+    await screen.findByText('Primed Flow');
+    const toggle = screen.getByTitle('Visibility unavailable; refresh orders') as HTMLButtonElement;
+    expect(toggle.disabled).toBe(true);
+    expect(toggle.textContent).toContain('?');
+    expect(screen.getByRole('button', { name: 'Hidden 0' })).toBeTruthy();
+    expect(transport.updateOrder).not.toHaveBeenCalled();
+  });
+
   it('unregisters a lazily armed live-progress listener on unmount', async () => {
     const unlisten = vi.fn();
     const listen = vi.fn().mockResolvedValue(unlisten);
@@ -134,10 +142,10 @@ describe('MyOrdersPanel listing health', () => {
       slug: 'arcane_energize', rank: 0, subtype: null, sells: [7.2], buys: [],
       low_sell: 7.2, top_buy: null, own_ask: 8, own_bid: null, error: null,
     }]), undefined);
-    const transport = makeTransport({ fetchOrders: vi.fn().mockResolvedValue({ data: { sell: [{
-      id: 'bulk', platinum: 48, perTrade: 6, quantity: 12, visible: false, rank: 0,
-      item: { name: 'Arcane Energize', slug: 'arcane_energize' },
-    }], buy: [] } }) });
+    const transport = makeTransport({ fetchOrders: vi.fn().mockResolvedValue([{
+      id: 'bulk', platinum: 48, quantity: 12, visible: false, rank: 0,
+      name: 'Arcane Energize', slug: 'arcane_energize', item_id: 'arcane_energize', side: 'sell' as const, per_trade: 6, subtype: null,
+    }]) });
     render(MyOrdersPanel, { props: { transport } });
     await screen.findByText('Arcane Energize');
     await fireEvent.click(screen.getByRole('button', { name: 'Check live' }));
@@ -184,9 +192,9 @@ describe('MyOrdersPanel listing health', () => {
   // never contain the set itself. Its absence from the owned map is therefore
   // absence of evidence, not evidence of absence - and the verdict it used to
   // produce offered a one-click delete of a live listing the user can build.
-  const SET_ORDER = { data: { sell: [
-    { id: 'set1', platinum: 120, visible: true, quantity: 1, rank: 0, item: { name: 'Ash Prime Set', slug: 'ash_prime_set' } },
-  ], buy: [] } };
+  const SET_ORDER = [
+    { id: 'set1', platinum: 120, visible: true, quantity: 1, rank: 0, name: 'Ash Prime Set', slug: 'ash_prime_set', item_id: 'ash_prime_set', side: 'sell' as const, per_trade: null, subtype: null },
+  ];
   const SET_MARKET = { set_to_parts: { ash_prime_set: { parts: [{ slug: 'ash_prime_blueprint', quantity: 1 }] } } };
 
   it('stays silent about a listed set the scan cannot report, and offers no delete', async () => {

@@ -47,11 +47,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     market?: MarketItemEntry;
   }
 
-  interface ReviewOrderWire {
-    id: string; platinum: number; quantity: number; visible: boolean;
-    perTrade?: number | null; rank?: number; subtype?: string | null;
-    type?: string; item?: { slug?: string };
-  }
+  import type { OwnOrder } from '../../contracts/generated/desktop';
 
   interface Props {
     open?: boolean;
@@ -195,22 +191,19 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     ordersBusy = true;
     try {
       if (!await refreshSession()) return false;
-      const body = await transport.fetchOrders() as { data?: { sell?: ReviewOrderWire[] } | ReviewOrderWire[]; sell?: ReviewOrderWire[] };
+      const orders: OwnOrder[] = await transport.fetchOrders();
       if (!open || epoch !== reviewEpoch) return false;
-      const data = body?.data ?? body;
-      const orders = Array.isArray(data) ? data.filter(o => o.type === 'sell') : data?.sell;
-      if (!Array.isArray(orders)) throw new Error('Could not read existing orders. Retry before submitting.');
       let changed = false;
       for (const row of plan) {
-        const matches = orders.filter(o => o.item?.slug === row.slug && (o.rank ?? 0) === row.rank && (o.subtype ?? null) === row.subtype);
+        const matches = orders.filter(o => o.side === 'sell' && o.slug === row.slug && (o.rank ?? 0) === row.rank && (o.subtype ?? null) === row.subtype);
         if (matches.length > 1) throw new Error(`${row.name} has ambiguous existing orders. Resolve them in My orders first.`);
         const prior = matches[0];
         if (prior && (typeof prior.id !== 'string' || typeof prior.visible !== 'boolean' || !Number.isSafeInteger(prior.platinum) || !Number.isSafeInteger(prior.quantity)
-          || (prior.perTrade != null && (!Number.isSafeInteger(prior.perTrade) || prior.perTrade < 1 || prior.perTrade > 6)))) {
+          || (prior.per_trade != null && (!Number.isSafeInteger(prior.per_trade) || prior.per_trade < 1 || prior.per_trade > 6)))) {
           throw new Error(`Existing order details are incomplete for ${row.name}.`);
         }
         const next: ReviewedOrder = prior ? { state: 'existing', id: prior.id, platinum: prior.platinum,
-          quantity: prior.quantity, per_trade: prior.perTrade ?? null, visible: prior.visible } : { state: 'new' };
+          quantity: prior.quantity, per_trade: prior.per_trade, visible: prior.visible as boolean } : { state: 'new' };
         if (JSON.stringify(row.reviewed_order) !== JSON.stringify(next)) changed = true;
         row.reviewed_order = next;
       }

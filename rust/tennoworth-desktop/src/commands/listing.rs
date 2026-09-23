@@ -7,6 +7,7 @@
     reason = "tauri::command injects unreachable code into async wrappers"
 )]
 
+use market_domain::orders::{NormalizedOrder, OrderRow, OrderSide};
 use std::sync::Arc;
 use tauri::{AppHandle, Manager, State};
 
@@ -396,15 +397,63 @@ pub async fn resume_pending_plan(
     Ok(response)
 }
 
-/// The user's current WFM listings, enriched with display names (GET /orders).
+/// A decoded account order with the catalogue metadata needed by the webview.
+#[derive(serde::Serialize, ts_rs::TS)]
+pub struct OwnOrder {
+    pub id: String,
+    pub item_id: String,
+    pub slug: Option<String>,
+    pub name: Option<String>,
+    pub side: OrderSide,
+    pub platinum: u64,
+    pub quantity: u64,
+    pub per_trade: Option<u64>,
+    pub visible: Option<bool>,
+    pub rank: Option<u64>,
+    pub subtype: Option<String>,
+}
+
+fn display_order(
+    order: NormalizedOrder,
+    unlocked: &wfm_core::trading::listing::Unlocked,
+) -> OwnOrder {
+    let meta = unlocked.id_to_item.get(&order.item_id);
+    OwnOrder {
+        id: order.id,
+        item_id: order.item_id,
+        slug: meta.map(|item| item.slug.clone()),
+        name: meta.map(|item| item.name.clone()),
+        side: order.side,
+        platinum: order.platinum,
+        quantity: order.quantity,
+        per_trade: order.per_trade,
+        visible: order.visible,
+        rank: order.rank,
+        subtype: order.subtype,
+    }
+}
+
+/// The user's current WFM listings, decoded before crossing IPC (GET /orders).
 #[tauri::command]
 pub async fn fetch_orders(
     session: State<'_, Arc<WfmSession>>,
-) -> Result<serde_json::Value, CmdError> {
+) -> Result<Vec<OwnOrder>, CmdError> {
     let s = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
         let unlocked = s.require_unlocked()?;
-        wfm_core::trading::listing::cached_user_orders(&unlocked).map_err(CmdError::wfm)
+        let body = wfm_core::trading::listing::cached_user_orders(&unlocked).map_err(CmdError::wfm)?;
+        let decoded = wfm_core::trading::listing::decode_user_orders(&unlocked, &body).map_err(CmdError::wfm)?;
+        decoded
+            .orders
+            .into_iter()
+            .map(|row| match row {
+                OrderRow::Supported(order) => Ok(display_order(order, &unlocked)),
+                OrderRow::Unsupported(_) | OrderRow::Ambiguous(_) => Err(CmdError::of(
+                    "wfm",
+                    "Current orders contain a row this version cannot display; refresh or resolve it on WFM.",
+                )),
+            })
+            .collect()
     })
     .await
     .map_err(|e| CmdError::internal(format!("orders task failed to run: {e}")))?
