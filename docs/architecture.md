@@ -136,11 +136,22 @@ pretend to support scanning, authentication, or orders through no-op methods.
 Desktop services and the standalone overlay are dynamically loaded. Overlay
 document styles are surface-scoped so they cannot disable hosted-page scrolling.
 
-`frontend/src/dev/architecture.test.ts` checks static import cycles, direct
-feature/adapter separation, pure-domain runtime access, hosted transitive
-imports, and production component type-check coverage. This is a bounded
-static gate: it does not establish runtime lifecycle correctness or inspect
-arbitrary dynamic imports. Behavior and browser tests cover those concerns.
+`frontend/src/dev/architecture.test.ts` checks static imports and re-exports in
+both component script blocks, direct feature/adapter separation, pure-domain
+runtime access, hosted transitive imports, and the ban on component type-check
+suppression. Type-only edges constrain ownership but do not create runtime
+cycles. Svelte diagnostics run separately. This bounded gate does not establish
+runtime lifecycle correctness or inspect arbitrary dynamic imports; behavior
+and browser tests cover those concerns.
+
+The native module gate parses absolute `crate::` imports, grouped re-exports,
+calls and type paths. Services cannot depend on shell or command adapters,
+persistence cannot depend on those adapters or services, and shell code calls
+services directly. Test-only modules are excluded without hiding production
+items later in the file. Relative `super::` paths and macro-generated paths
+remain outside this source gate; it is not a compiler dependency graph. Startup
+registers command paths inside `tauri::generate_handler!`; that composition is
+permitted and does not call command adapters from shell behavior.
 
 ## Feature state and composition
 

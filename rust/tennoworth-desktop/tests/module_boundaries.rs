@@ -17,16 +17,12 @@
 //! `include_str!`-ing them, so it covers modules that do not exist yet - a new
 //! file cannot escape the gate by being new.
 //!
-//! SCOPE: this gate reads `use` statements. A fully qualified call such as
-//! `crate::shell::tray::rebuild_tray(app)` creates the same dependency and is
-//! NOT seen. That blind spot is deliberate rather than overlooked: widening the
-//! scan to every `crate::` path immediately found three more violations that are
-//! each their own extraction - `services/reminders.rs` calls into the tray, and
-//! `persistence/trades.rs` and `persistence/records.rs` take the eelog and
-//! allowance vocabulary as parameters. Extracting those contracts is a
-//! multi-module change, so this gate enforces the edges it can enforce today and
-//! `the_scope_stops_at_use_statements` pins the limitation so it stays visible
-//! and is not mistaken for full coverage.
+//! SCOPE: parses absolute `crate::` imports, re-exports, calls and type paths,
+//! including grouped imports. Test-only modules are excluded without truncating
+//! the remaining production file. Relative `super::` paths and paths generated
+//! inside macro bodies are not resolved; this is not a compiler dependency graph.
+
+#![cfg(test)]
 
 use std::path::{Path, PathBuf};
 
@@ -37,11 +33,11 @@ fn crate_src() -> PathBuf {
 /// Every `.rs` file under `dir`, recursively.
 fn rust_files(dir: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
-    let Ok(entries) = std::fs::read_dir(dir) else {
-        return out;
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
+    let entries = std::fs::read_dir(dir).expect("dependency gate must read every source directory");
+    for entry in entries {
+        let path = entry
+            .expect("dependency gate must read every source entry")
+            .path();
         if path.is_dir() {
             out.extend(rust_files(&path));
         } else if path.extension().is_some_and(|ext| ext == "rs") {
@@ -51,42 +47,82 @@ fn rust_files(dir: &Path) -> Vec<PathBuf> {
     out
 }
 
-/// The `crate::<module>` paths a file names in its `use` statements.
 fn imported_modules(source: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    for line in source.lines() {
-        let line = line.trim_start();
-        let rest = match line.strip_prefix("use crate::") {
-            Some(rest) => rest,
-            // `pub use` and `pub(crate) use` re-export, which is the same edge.
-            None => match line.split_once("use crate::").map(|(_, rest)| rest) {
-                Some(rest) if line.starts_with("pub ") => rest,
-                _ => continue,
-            },
-        };
-        if let Some(module) = rest.split("::").next() {
-            let module = module.trim_end_matches(';');
-            if !module.is_empty() {
-                out.push(module.to_string());
+    use syn::visit::Visit;
+
+    #[derive(Default)]
+    struct Dependencies(std::collections::BTreeSet<String>);
+
+    fn use_roots(tree: &syn::UseTree, out: &mut std::collections::BTreeSet<String>) {
+        match tree {
+            syn::UseTree::Path(path) => {
+                out.insert(path.ident.to_string());
             }
+            syn::UseTree::Name(name) => {
+                out.insert(name.ident.to_string());
+            }
+            syn::UseTree::Rename(rename) => {
+                out.insert(rename.ident.to_string());
+            }
+            syn::UseTree::Group(group) => {
+                for tree in &group.items {
+                    use_roots(tree, out);
+                }
+            }
+            syn::UseTree::Glob(_) => {}
         }
     }
-    out.sort();
-    out.dedup();
-    out
+
+    impl<'ast> Visit<'ast> for Dependencies {
+        fn visit_item_mod(&mut self, item: &'ast syn::ItemMod) {
+            if item.attrs.iter().any(|attr| {
+                attr.path().is_ident("cfg")
+                    && attr
+                        .parse_args::<syn::Path>()
+                        .is_ok_and(|path| path.is_ident("test"))
+            }) {
+                return;
+            }
+            syn::visit::visit_item_mod(self, item);
+        }
+
+        fn visit_use_tree(&mut self, tree: &'ast syn::UseTree) {
+            if let syn::UseTree::Path(path) = tree {
+                if path.ident == "crate" {
+                    use_roots(&path.tree, &mut self.0);
+                    return;
+                }
+            }
+            syn::visit::visit_use_tree(self, tree);
+        }
+
+        fn visit_path(&mut self, path: &'ast syn::Path) {
+            let mut segments = path.segments.iter();
+            if segments
+                .next()
+                .is_some_and(|segment| segment.ident == "crate")
+            {
+                if let Some(module) = segments.next() {
+                    self.0.insert(module.ident.to_string());
+                }
+            }
+            syn::visit::visit_path(self, path);
+        }
+    }
+
+    let ast = syn::parse_file(source).expect("native source must parse for the dependency gate");
+    let mut dependencies = Dependencies::default();
+    dependencies.visit_file(&ast);
+    dependencies.0.into_iter().collect()
 }
 
 fn violations(layer: &str, forbidden: &[&str]) -> Vec<String> {
     let root = crate_src().join(layer);
     let mut found = Vec::new();
     for file in rust_files(&root) {
-        let Ok(source) = std::fs::read_to_string(&file) else {
-            continue;
-        };
-        // The tests inside a file may bend the layering to build a fixture; the
-        // production module may not.
-        let production = source.split("#[cfg(test)]").next().unwrap_or(&source);
-        for module in imported_modules(production) {
+        let source =
+            std::fs::read_to_string(&file).expect("dependency gate must read every source file");
+        for module in imported_modules(&source) {
             if forbidden.contains(&module.as_str()) {
                 let name = file.strip_prefix(crate_src()).unwrap_or(&file);
                 found.push(format!("{} imports crate::{module}", name.display()));
@@ -154,27 +190,33 @@ fn the_gate_reads_real_sources_and_real_imports() {
     );
 }
 
-/// The gate's documented blind spot, asserted so it cannot be quietly assumed
-/// away. When the remaining extractions land, widen `imported_modules` to read
-/// every `crate::` path and turn this test into its opposite.
 #[test]
-fn the_scope_stops_at_use_statements() {
-    let inline_call = "fn f(app: &AppHandle) { crate::shell::tray::rebuild_tray(app); }";
+fn qualified_calls_and_types_are_dependencies() {
     assert_eq!(
-        imported_modules(inline_call),
-        Vec::<String>::new(),
-        "an inline qualified call is not an import and this gate does not see it"
+        imported_modules("fn f(x: crate::services::Model) { crate::shell::tray::refresh(x); }"),
+        vec!["services", "shell"]
     );
+}
 
-    // The one inline call that existed is gone: reminders reaches the tray
-    // through a callback passed in by the composition root. Asserted here by
-    // reading the file, because that is the only mechanism that can see this
-    // class of edge at all while the scanner stays import-only.
-    let reminders = std::fs::read_to_string(crate_src().join("services/reminders.rs"))
-        .expect("services/reminders.rs");
-    assert!(
-        !reminders.contains("crate::shell"),
-        "services/reminders.rs must reach presentation through its injected callback, \
-         not by naming the shell layer"
+#[test]
+fn grouped_reexports_are_dependencies() {
+    assert_eq!(
+        imported_modules("pub(crate) use crate::{services::Model, commands::{one, two}};"),
+        vec!["commands", "services"]
+    );
+}
+
+#[test]
+fn fixtures_and_test_modules_do_not_hide_later_production_paths() {
+    assert_eq!(
+        imported_modules(
+            r###"
+        // crate::commands::ignored();
+        const TEXT: &str = "crate::shell::not_code";
+        #[cfg(test)] mod tests { use crate::commands::fixture; }
+        fn after_tests() { crate::services::run(); }
+    "###
+        ),
+        vec!["services"]
     );
 }
