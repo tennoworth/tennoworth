@@ -400,6 +400,29 @@ mod tests {
         json!({"baro": {"activation": START, "expiry": END, "location": "Pluto Relay", "inventory_for": START, "inventory": [{"item":"Primed Flow", "slug":"primed_flow"}]}, "surface_provenance":{"baro":{"data_fetched_at": START}}})
     }
     #[test]
+    fn freshness_dispositions_follow_shared_consumer_cases() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/surface-freshness/cases.json"
+        ))
+        .unwrap();
+        let now = stamp(fixture["now"].as_str().unwrap()).unwrap();
+        for case in fixture["cases"].as_array().unwrap() {
+            let mut market = json!({"surface_fetched_at": {"baro": case["data_fetched_at"]}});
+            if !case["disposition"].is_null() {
+                market["surface_provenance"] = json!({"baro": {
+                    "disposition": case["disposition"],
+                    "data_fetched_at": case["data_fetched_at"]
+                }});
+            }
+            assert_eq!(
+                surface_fresh(&market, "baro", now),
+                case["reminder_fresh"].as_bool().unwrap(),
+                "{}",
+                case["name"].as_str().unwrap()
+            );
+        }
+    }
+    #[test]
     fn phase_boundaries_and_resume_only_choose_the_current_phase() {
         let start = stamp(START).unwrap();
         let end = stamp(END).unwrap();

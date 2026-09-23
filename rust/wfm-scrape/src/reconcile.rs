@@ -200,7 +200,7 @@ pub fn reconcile<T: Mergeable + Default>(
     let preserve = |disposition: Disposition| {
         if let Some(old) = prior {
             let kept_since = prior_stamp.unwrap_or("");
-            let stamp = if kept_since.is_empty() { clock::iso_z(now) } else { kept_since.to_string() };
+            let stamp = kept_since.to_string();
             // A matching content hash proves the retained payload is still
             // current. Only a failed or invalid observation makes its age an
             // operational warning.
@@ -275,10 +275,7 @@ pub fn reconcile<T: Mergeable + Default>(
                 // itself as current, which is the case the age warning exists to
                 // reveal. A merge that carried nothing takes the current time.
                 fetched_at: if recovered > 0 {
-                    prior_stamp
-                        .filter(|stamp| !stamp.is_empty())
-                        .map(str::to_string)
-                        .unwrap_or_else(|| clock::iso_z(now))
+                    prior_stamp.unwrap_or("").to_string()
                 } else {
                     clock::iso_z(now)
                 },
@@ -371,13 +368,13 @@ mod tests {
     }
 
     #[test]
-    fn empty_fresh_no_prior_stamp_uses_now_and_no_warning() {
+    fn empty_fresh_no_prior_stamp_keeps_unknown_age() {
         let prior = hm(&[("a", 1)]);
         let fresh: HashMap<String, i32> = HashMap::new();
         let now = utc(2026, 7, 1, 0, 0, 0);
 
         let r = reconcile("test", fresh, Some(&prior), None, now, true, 7);
-        assert_eq!(r.fetched_at, clock::iso_z(now));
+        assert_eq!(r.fetched_at, "");
         assert!(r.stale_warning.is_none());
     }
 
@@ -470,11 +467,10 @@ mod tests {
         assert_eq!(r.fetched_at, clock::iso_z(utc(2026, 7, 29, 0, 0, 0)));
     }
 
-    /// No prior snapshot means no prior stamp to inherit, so the fallback is the
-    /// current time rather than an empty stamp the consumer would read as
-    /// "unknown, never warn".
+    /// A legacy snapshot can hold rows without a source stamp. Their age is
+    /// unknown even after a later attempt partially refreshes the surface.
     #[test]
-    fn a_partial_merge_without_a_prior_stamp_falls_back_to_now() {
+    fn a_partial_merge_without_a_prior_stamp_keeps_unknown_age() {
         let prior = hm(&[("carried", 2)]);
         let fresh = hm(&[("live", 10)]);
 
@@ -489,7 +485,7 @@ mod tests {
         );
 
         assert_eq!(r.recovered, 1);
-        assert_eq!(r.fetched_at, clock::iso_z(utc(2026, 7, 29, 0, 0, 0)));
+        assert_eq!(r.fetched_at, "");
     }
 
     #[test]

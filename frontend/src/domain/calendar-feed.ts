@@ -11,6 +11,7 @@
 // unknown; absent still beats inventing a guaranteed basket.
 
 import type { DailyDeal, EventRewardEntry, Market, OwnedRecord, VaultRotation } from '../contracts/data';
+import { surfaceHasEvidence } from './market';
 
 export type CalendarKind = 'baro' | 'vault' | 'deal' | 'event';
 export type CalendarReach = 'scan' | 'none' | 'hits' | 'partial-hits' | 'unknown';
@@ -198,19 +199,6 @@ function dealItems(market: Market | null | undefined): CalendarItem[] {
  * `preserved_invalid` surface carries a stamp minutes old while holding no
  * evidence. Only the dispositions that represent observed data may be measured.
  */
-const UNOBSERVED = new Set([
-  'empty_invalid',
-  'empty_unavailable',
-  'empty_unchanged',
-  'preserved_invalid',
-  'preserved_unavailable',
-]);
-
-function observedEvidence(provenance: { disposition?: string } | undefined): boolean {
-  // Absent provenance is judged by its stamp, which is a genuine fetch time.
-  if (!provenance?.disposition) return true;
-  return !UNOBSERVED.has(provenance.disposition);
-}
 
 function eventItems(
   market: Market | null | undefined,
@@ -228,7 +216,7 @@ function eventItems(
     // age from it would report an event whose child was never observed as
     // freshly updated. Its true age is unknown, which is what an absent stamp
     // already reports.
-    const stamp = observedEvidence(provenance) ? provenance?.data_fetched_at : undefined;
+    const stamp = surfaceHasEvidence(provenance?.disposition) ? provenance?.data_fetched_at : undefined;
     const stampMs = stamp ? Date.parse(stamp) : NaN;
     const dataAgeDays = Number.isFinite(stampMs)
       ? Math.max(0, Math.floor((now - stampMs) / 86_400_000))

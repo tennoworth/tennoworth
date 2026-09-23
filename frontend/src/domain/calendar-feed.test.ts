@@ -95,7 +95,7 @@ const EVENT_MARKET = {
   },
   surface_provenance: {
     'world.goals': {
-      disposition: 'used_current',
+      disposition: 'published_fresh',
       attempted_at: '2026-08-22T00:00:00Z',
       data_fetched_at: '2026-08-22T00:00:00Z',
     },
@@ -270,7 +270,7 @@ describe('buildCalendar', () => {
       },
     };
     market.surface_provenance!['world.events'] = {
-      disposition: 'carried_prior',
+      disposition: 'merged_partial',
       attempted_at: '2026-08-22T00:00:00Z',
       data_fetched_at: '2026-08-01T00:00:00Z',
     };
@@ -316,7 +316,7 @@ describe('buildCalendar', () => {
       'empty_unchanged',
       'preserved_invalid',
       'preserved_unavailable',
-    ]) {
+    ] as const) {
       const market = structuredClone(EVENT_MARKET) as Market;
       market.event_rewards!.events = {
         event: { ...market.event_rewards!.goals!.complete, id: 'event', source: 'event', title: 'Event Reward' },

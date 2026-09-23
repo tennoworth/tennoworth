@@ -564,7 +564,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // retained payload keeps its original download timestamp.
   function surfaceAge(key: string) {
     const stamp = staleSurfaceTimestamp(inventory.market, key, displayNow);
-    return stamp ? ago(stamp) : null;
+    return stamp === 'unknown' ? 'age unknown' : stamp ? ago(stamp) : null;
   }
   let baroSurfaceAge = $derived(surfaceAge('baro'));
   let relicSurfaceAge = $derived(surfaceAge('relic_rewards'));

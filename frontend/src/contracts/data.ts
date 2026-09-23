@@ -223,7 +223,9 @@ export interface Market {
   usage_history?: UsageHistorySurface | null;
   event_rewards?: EventRewardsSurface | null;
   surface_provenance?: Record<string, {
-    disposition: string;
+    disposition: 'published_fresh' | 'merged_partial' | 'cleared_authoritative_empty'
+      | 'preserved_unavailable' | 'preserved_unchanged' | 'preserved_invalid'
+      | 'empty_unavailable' | 'empty_unchanged' | 'empty_invalid';
     attempted_at: string;
     data_fetched_at: string;
     source?: string;
