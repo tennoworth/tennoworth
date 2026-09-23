@@ -382,7 +382,7 @@ const PROBE_JS: &str = r#"(function(){
     })
     // Seed an unlocked session (probe-only, synthetic bundle - no network),
     // then the CTA opens the review modal with the staged fixture rows.
-    .then(function(){ return invkE('debug_seed_unlocked').then(function(v){ R.wfm.seeded = v; }); })
+    .then(function(){ return invkE('debug_seed_unlocked').then(function(v){ R.wfm.seeded = v; if (!v.ok) throw new Error('Native contention probe failed: ' + v.message); }); })
     .then(function(){ return invkE('wfm_auth_status').then(function(v){ R.wfm.status2 = v; }); })
     .then(function(){
       var btn = document.querySelector('[data-testid="desktop-list"]');
@@ -534,7 +534,7 @@ pub fn debug_write_login(
 /// (empty catalog, fake JWT) - no network. Listing commands then exercise
 /// their offline validation paths; anything that would hit WFM fails per-item.
 #[tauri::command]
-pub fn debug_seed_unlocked(session: State<'_, Arc<WfmSession>>) -> Result<(), CmdError> {
+pub fn debug_seed_unlocked(app: AppHandle, session: State<'_, Arc<WfmSession>>) -> Result<(), CmdError> {
     if std::env::var("TENNOWORTH_PROBE").ok().as_deref() != Some("1") {
         return Err(CmdError::internal("debug_seed_unlocked is probe-only"));
     }
@@ -545,6 +545,45 @@ pub fn debug_seed_unlocked(session: State<'_, Arc<WfmSession>>) -> Result<(), Cm
         catalog: Arc::new(BTreeMap::new()),
         id_to_item: Arc::new(BTreeMap::new()),
     });
+    check_trade_contention(&app, &session)
+}
+
+fn check_trade_contention(app: &AppHandle, session: &Arc<WfmSession>) -> Result<(), CmdError> {
+    use crate::services::order_mutations::{MutationOrigin, OrderMutations};
+    use crate::services::trades::{handle_trade, LedgerOutcome};
+    use crate::trading_contract::{LogPosition, TradeEvent, TradeItem};
+
+    let mutations = OrderMutations::new(Arc::clone(session));
+    let _reviewed = mutations.begin_only(MutationOrigin::ReviewedPlan)?;
+    let trade = TradeEvent {
+        partner: "Contention fixture".into(),
+        kind: "sale".into(),
+        plat: 12,
+        items: vec![TradeItem { name: "Fixture item".into(), qty: 1, direction: "given".into() }],
+        log_stamp: None,
+    };
+    let position = LogPosition {
+        session: "probe-contention".into(), start: 0, end: 1, observed_after: 0,
+    };
+    if !matches!(handle_trade(app, trade.clone(), position.clone()), LedgerOutcome::Recorded) {
+        return Err(CmdError::internal("Contended sale was not recorded"));
+    }
+    let db = app.state::<crate::persistence::Db>();
+    let rows = db.list_trades(100).map_err(|e| CmdError::internal(e.to_string()))?;
+    let sales: Vec<_> = rows.iter().filter(|r| r.partner == trade.partner).collect();
+    if sales.len() != 1 || sales.iter().any(|r| r.wfm_closed) {
+        return Err(CmdError::internal("Contended sale was duplicated or marked adjusted"));
+    }
+    let notices = db.list_notifications().map_err(|e| CmdError::internal(e.to_string()))?;
+    if !notices.iter().any(|n| n.category == "trades" && n.target == "orders"
+        && n.body.contains("Review My Orders") && n.body.contains("was not adjusted")
+        && !n.body.contains("Sign in") && !n.body.contains("listing updated")) {
+        return Err(CmdError::internal("Contended sale lacks accurate follow-up"));
+    }
+    if !matches!(handle_trade(app, trade, position), LedgerOutcome::AlreadyKnown)
+        || db.list_notifications().map_err(|e| CmdError::internal(e.to_string()))?.len() != notices.len() {
+        return Err(CmdError::internal("Acknowledged sale was processed twice"));
+    }
     Ok(())
 }
 
