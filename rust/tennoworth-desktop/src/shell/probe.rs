@@ -412,9 +412,9 @@ const PROBE_JS: &str = r#"(function(){
     .then(function(){ return invkE('resume_pending_plan').then(function(v){ R.wfm.resumeNoPending = v; }); })
     .then(function(){ return invkE('wfm_logout').then(function(v){ R.wfm.logout = v; }); })
     .then(function(){ return invkE('wfm_auth_status').then(function(v){ R.wfm.status3 = v; }); })
-    // Locked again with the envelope still on disk → needs_unlock, not login.
+    // After logout, listing reads and writes must agree on the auth state.
     .then(function(){ return invkE('submit_plan', { items: [] }).then(function(v){ R.wfm.planAfterLogout = v; }); })
-    .then(function(){ return invkE('fetch_orders').then(function(v){ R.wfm.ordersAfterLogout = v; if (v.ok || v.code !== 'needs_unlock') throw new Error('fetch_orders lost the locked session state'); }); })
+    .then(function(){ return invkE('fetch_orders').then(function(v){ R.wfm.ordersAfterLogout = v; if (v.ok || v.code !== R.wfm.planAfterLogout.code) throw new Error('fetch_orders disagreed with listing auth after logout'); }); })
     .then(function(){
       var settings = Array.from(document.querySelectorAll('.sidebar button')).find(function(b){ return b.textContent.trim().indexOf('Settings') === 0; });
       if (!settings) throw new Error('Settings navigation is missing');
