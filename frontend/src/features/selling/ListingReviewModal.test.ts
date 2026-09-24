@@ -165,6 +165,18 @@ describe('ListingReviewModal', () => {
     expect(screen.getByText('1 saved for resume')).toBeTruthy();
   });
 
+  it('shows a local recording failure alongside the confirmed listing outcome', async () => {
+    openModal({ transport: makeTransport({ submitPlan: vi.fn().mockResolvedValue({
+      plan_id: 'durability',
+      results: [{ slug: 'accelerated_blast', status: 'ok', action: 'created', order_id: 'remote-1' }],
+      durability_error: 'Could not save the confirmed listing result: disk full.',
+    }) }) });
+    await fireEvent.click(screen.getByRole('button', { name: /Send 2 listings/ }));
+    await screen.findByText('1 created');
+    expect(screen.getByRole('alert').textContent).toContain('Could not save the confirmed listing result');
+    expect(screen.getByText('remote-1')).toBeTruthy();
+  });
+
   describe('live prices (desktop only)', () => {
     afterEach(removeTauri);
 

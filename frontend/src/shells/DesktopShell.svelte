@@ -1518,6 +1518,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
           <div data-shell class="src">
             <span data-shell class="dot aging" aria-hidden="true"></span>
             <strong data-shell>Interrupted batch from {new Date(listing.pendingPlan.started_at).toLocaleString()}</strong>
+            {#if listing.durabilityError}<span data-shell class="bad" role="alert">{listing.durabilityError}</span>{/if}
             <span data-shell class="muted">{batch.detail}</span>
             {#if uncertainRemaining > 0}
               <span data-shell class="muted">
@@ -1532,6 +1533,19 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
               <button data-shell onclick={() => filters.setView('orders')}>Review in My Orders</button>
             {/if}
             <button data-shell class="ghost" onclick={() => listing.doDiscard()}>Discard</button>
+          </div>
+        </div>
+      {:else if listing.pendingPlan}
+        <div data-shell class="row">
+          <div data-shell class="src">
+            <span data-shell class="dot stale" aria-hidden="true"></span>
+            <strong data-shell>Completed batch still saved.</strong>
+            <span data-shell class="muted">{listing.durabilityError ?? 'The saved batch could not be cleared. Check My Orders, then discard this record.'}</span>
+          </div>
+          <div data-shell class="row gap-sm">
+            <button data-shell onclick={() => listing.doResume()}>Retry saving</button>
+            <button data-shell onclick={() => filters.setView('orders')}>Review in My Orders</button>
+            <button data-shell class="ghost" onclick={() => listing.doDiscard()}>Discard record</button>
           </div>
         </div>
       {/if}

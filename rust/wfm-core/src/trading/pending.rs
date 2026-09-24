@@ -1,7 +1,8 @@
 //! Pending-plan persistence - crash-recovery for a listing batch.
 //!
 //! Every plan is written to `~/.config/wfminv/pending_plan.json` before the
-//! first POST, rewritten after each item, and deleted on clean completion. The
+//! first POST, marked uncertain before each send, rewritten after each result,
+//! and deleted on clean completion. The
 //! browser polls it on (re)connect and offers Resume / Discard. Writes are
 //! atomic (tmp + rename) so a concurrent read never sees a torn file - same
 //! convention as `os.replace` in the retired Python pipeline - and the tmp
@@ -96,8 +97,14 @@ pub fn write_pending_atomic(path: &Path, plan: &PendingPlan) -> Result<()> {
     // contain unsubmitted listing details, not OK to leak to other local
     // users even briefly.
     write_restricted(&tmp, &bytes)?;
+    fs::OpenOptions::new().write(true).open(&tmp)?.sync_all()
+        .context("syncing pending-plan contents")?;
     fs::rename(&tmp, path)
         .with_context(|| format!("renaming {} → {}", tmp.display(), path.display()))?;
+    #[cfg(unix)]
+    if let Some(parent) = path.parent() {
+        fs::File::open(parent)?.sync_all().context("syncing pending-plan directory")?;
+    }
     // chown the final path back to the real user so a sudo invocation of
     // `serve` doesn't leave a root-owned file in their config dir.
     chown_to_real_user(path);
@@ -128,8 +135,8 @@ impl std::fmt::Display for PendingStoreError {
 
 impl std::error::Error for PendingStoreError {}
 
-/// What the journal says about starting a new batch. `Unreadable` is deliberately
-/// not `Absent`: submitting would replace the only record of what was sent.
+/// What the journal says about starting a new batch. Any saved record must be
+/// recovered or explicitly discarded before another submit can replace it.
 #[derive(Debug)]
 pub enum JournalState {
     /// Nothing saved.
@@ -142,8 +149,8 @@ pub enum JournalState {
     Unreadable(String),
 }
 
-/// Read the journal's state for a submit/recovery decision. The only case that
-/// permits replacing the file is a journal that is absent or fully finished.
+/// Read the journal's state for a submit/recovery decision. Only an absent
+/// record permits starting a new batch.
 pub fn journal_state(path: &Path) -> JournalState {
     match load_pending(path) {
         Ok(None) => JournalState::Absent,
@@ -186,8 +193,15 @@ pub fn clear_pending(path: &Path) -> Result<(), PendingStoreError> {
 
 /// Keep unresolved outcomes available for reconciliation after the other rows complete.
 pub fn clear_finished_pending(path: &Path, plan: &PendingPlan) -> Result<(), PendingStoreError> {
-    if plan.is_finished() {
-        clear_pending(path)?;
+    if !plan.is_finished() {
+        return Ok(());
+    }
+    if let Some(saved) = load_pending(path)? {
+        // A failed result write can leave memory finished while the durable
+        // record still says the market mutation needs reconciliation.
+        if saved.plan_id == plan.plan_id && saved.is_finished() {
+            clear_pending(path)?;
+        }
     }
     Ok(())
 }

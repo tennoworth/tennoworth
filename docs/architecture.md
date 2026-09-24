@@ -216,6 +216,15 @@ keys, encrypted envelopes, and published data shapes. Tests must consume the
 current implementation, including freshly built binaries where applicable.
 Shared cross-language behavior uses fixtures under `tests/fixtures/`.
 
+Reviewed listing batches write an uncertain marker to the pending-plan file
+before each market mutation, then write the observed result. The desktop holds
+the account mutation guard through SQLite history recording and journal cleanup.
+A failed result write or history transaction leaves the journal for recovery;
+finished records can retry history and cleanup without contacting the market.
+Only an absent journal permits a new batch, and an explicit discard removes a
+saved record. The existing JSON journal and SQLite listing log keep their
+formats; this ordering requires no schema migration.
+
 ## Structural choices and remaining limits
 
 The old single application component mixed runtime selection, feature state,

@@ -20,7 +20,7 @@ use wfm_core::trading::pending::{
     clear_finished_pending, clear_pending, journal_state, load_pending, JournalState, PendingPlan,
 };
 use wfm_core::trading::plan::{
-    execute_plan as core_execute_plan, run_pending, PlanItem, PlanRequest, PlanResponse,
+    execute_plan as core_execute_plan, run_pending, ItemResult, PlanItem, PlanRequest, PlanResponse,
     PlanValidationError,
 };
 
@@ -236,11 +236,7 @@ fn validate_session_contents(
     Ok(())
 }
 
-/// Append a finished plan run to `listing_log`.
-///
-/// Best-effort by design: the orders already exist on WFM by the time this
-/// runs, so a store write must never turn a successful listing into a reported
-/// failure. Losing a local row is strictly less bad than lying about the trade.
+/// Append confirmed plan outcomes to `listing_log` before the journal is cleared.
 ///
 /// `price_qty` is the plan's own items, positionally aligned with
 /// `response.results` - `run_pending` emits exactly one result per item, in
@@ -248,12 +244,12 @@ fn validate_session_contents(
 /// (empty batch, over the item cap, HTTP client build failure) and returned a
 /// single synthetic `<batch>` result that maps to no item, including when the
 /// original plan contained only one item. Neither case belongs in item history.
-fn record_plan(db: &Db, response: &PlanResponse, price_qty: &[(i64, i64)]) {
+fn record_plan(db: &Db, response: &PlanResponse, price_qty: &[(i64, i64)]) -> rusqlite::Result<()> {
     if response.results.is_empty()
         || response.results.len() != price_qty.len()
         || response.results.iter().any(|r| r.slug == "<batch>")
     {
-        return;
+        return Ok(());
     }
     let rows: Vec<ListingLogRow> = response
         .results
@@ -269,8 +265,56 @@ fn record_plan(db: &Db, response: &PlanResponse, price_qty: &[(i64, i64)]) {
             message: r.message.clone(),
         })
         .collect();
-    if let Err(e) = db.insert_listing_log(&response.plan_id, &rows) {
-        eprintln!("warning: could not record listing log: {e}");
+    db.insert_listing_log(&response.plan_id, &rows)?;
+    Ok(())
+}
+
+fn finish_recorded_plan(path: &std::path::Path, db: &Db, response: &mut PlanResponse, price_qty: &[(i64, i64)]) {
+    finish_recorded_plan_with(path, db, response, price_qty, record_plan)
+}
+
+fn finish_recorded_plan_with(
+    path: &std::path::Path,
+    db: &Db,
+    response: &mut PlanResponse,
+    price_qty: &[(i64, i64)],
+    record: impl FnOnce(&Db, &PlanResponse, &[(i64, i64)]) -> rusqlite::Result<()>,
+) {
+    if let Err(error) = record(db, response, price_qty) {
+        let message = format!("Could not save listing history: {error}. The batch remains saved; retry saving after checking My Orders.");
+        response.durability_error = Some(match response.durability_error.take() {
+            Some(previous) => format!("{previous} {message}"),
+            None => message,
+        });
+        return;
+    }
+    if response.durability_error.is_some() {
+        return;
+    }
+    match load_pending(path) {
+        Ok(Some(saved)) if saved.plan_id == response.plan_id => {
+            if let Err(error) = clear_finished_pending(path, &saved) {
+                response.durability_error = Some(format!("The finished batch could not be cleared from local storage: {error}. Check My Orders before starting another batch."));
+            }
+        }
+        Ok(_) => {}
+        Err(error) => {
+            response.durability_error = Some(format!("The saved batch could not be checked for cleanup: {error}. Check My Orders before starting another batch."));
+        }
+    }
+}
+
+fn finished_plan_response(pending: &PendingPlan) -> PlanResponse {
+    PlanResponse {
+        plan_id: pending.plan_id.clone(),
+        results: pending.items.iter().map(|item| ItemResult {
+            slug: item.slug.clone(),
+            status: item.status.clone(),
+            message: item.message.clone(),
+            order_id: item.order_id.clone(),
+            action: item.action.clone(),
+        }).collect(),
+        durability_error: None,
     }
 }
 
@@ -280,7 +324,6 @@ fn record_plan(db: &Db, response: &PlanResponse, price_qty: &[(i64, i64)]) {
 pub async fn submit_plan(
     app: AppHandle,
     session: State<'_, Arc<WfmSession>>,
-    db: State<'_, Db>,
     items: Vec<PlanItem>,
     request_id: String,
 ) -> Result<PlanResponse, CmdError> {
@@ -310,19 +353,23 @@ pub async fn submit_plan(
                     "The saved batch could not be read, so a new one cannot safely replace it. {detail}"
                 )));
             }
-            JournalState::Absent | JournalState::Finished => {}
+            JournalState::Finished => {
+                return Err(CmdError::of("busy", "A completed batch is still saved. Retry saving or discard its record before sending another."));
+            }
+            JournalState::Absent => {}
         }
-        Ok::<_, CmdError>(wfm_client::governor::with_context(request.context(), || core_execute_plan(
+        let mut response = wfm_client::governor::with_context(request.context(), || core_execute_plan(
             s.pending_path(),
             &unlocked,
             PlanRequest { items },
             || validate_session_plan(&app, &reviewed),
-        )))
+        ));
+        finish_recorded_plan(s.pending_path(), &app.state::<Db>(), &mut response, &price_qty);
+        Ok::<_, CmdError>(response)
     })
     .await
     .map_err(|e| CmdError::internal(format!("plan task failed to run: {e}")))??;
 
-    record_plan(&db, &response, &price_qty);
     Ok(response)
 }
 
@@ -354,11 +401,10 @@ pub fn cancel_plan(session: State<'_, Arc<WfmSession>>, request_id: String) -> R
 pub async fn resume_pending_plan(
     app: AppHandle,
     session: State<'_, Arc<WfmSession>>,
-    db: State<'_, Db>,
     request_id: String,
 ) -> Result<PlanResponse, CmdError> {
     let s = Arc::clone(&session);
-    let (response, price_qty) = tauri::async_runtime::spawn_blocking(move || {
+    let response = tauri::async_runtime::spawn_blocking(move || {
         // Pending-first ordering mirrors serve (its 404 outranks auth): with
         // nothing to resume the user must not be bounced into a login dialog.
         let mut pending = match load_pending(s.pending_path()) {
@@ -372,28 +418,31 @@ pub async fn resume_pending_plan(
         };
         let request = s.claim_plan_request(request_id)?;
         let mutations = crate::services::order_mutations::OrderMutations::new(Arc::clone(&s));
-        let (_guard, unlocked) = mutations.begin(
-            crate::services::order_mutations::MutationOrigin::ReviewedPlan,
-        )?;
-        // Stable plan positions let history upsert prior successes during resume.
         let price_qty: Vec<(i64, i64)> = pending
             .items
             .iter()
             .map(|i| (i.platinum as i64, i.quantity as i64))
             .collect();
+        if pending.is_finished() {
+            let _guard = mutations.begin_only(crate::services::order_mutations::MutationOrigin::ReviewedPlan)?;
+            let mut response = finished_plan_response(&pending);
+            finish_recorded_plan(s.pending_path(), &app.state::<Db>(), &mut response, &price_qty);
+            return Ok::<_, CmdError>(response);
+        }
+        let (_guard, unlocked) = mutations.begin(
+            crate::services::order_mutations::MutationOrigin::ReviewedPlan,
+        )?;
+        // Stable plan positions let history upsert prior successes during resume.
         let reviewed: Vec<PlanItem> = pending.items.iter().map(PlanItem::from).collect();
-        let response = wfm_client::governor::with_context(request.context(), || run_pending(s.pending_path(), &unlocked, &mut pending, || {
+        let mut response = wfm_client::governor::with_context(request.context(), || run_pending(s.pending_path(), &unlocked, &mut pending, || {
             validate_session_plan(&app, &reviewed)
         }));
-        if let Err(error) = clear_finished_pending(s.pending_path(), &pending) {
-            eprintln!("tennoworth: finished batch left its journal behind: {error}");
-        }
-        Ok::<_, CmdError>((response, price_qty))
+        finish_recorded_plan(s.pending_path(), &app.state::<Db>(), &mut response, &price_qty);
+        Ok::<_, CmdError>(response)
     })
     .await
     .map_err(|e| CmdError::internal(format!("resume task failed to run: {e}")))??;
 
-    record_plan(&db, &response, &price_qty);
     Ok(response)
 }
 
@@ -548,7 +597,76 @@ mod tests {
     use super::*;
     use std::collections::BTreeMap;
     use wfm_core::trading::catalog::WfmCatalogItem;
+    use wfm_core::trading::pending::write_pending_atomic;
     use wfm_core::trading::plan::SessionConstraint;
+
+    #[test]
+    fn failed_history_write_keeps_finished_journal_for_idempotent_retry() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pending_plan.json");
+        let pending: PendingPlan = serde_json::from_value(serde_json::json!({
+            "plan_id": "finished-plan",
+            "started_at": "2026-09-24T00:00:00Z",
+            "items": [{
+                "slug": "finished_item", "platinum": 40, "quantity": 2,
+                "order_type": "sell", "visible": false, "status": "ok",
+                "order_id": "remote-order", "action": "created"
+            }]
+        })).unwrap();
+        write_pending_atomic(&path, &pending).unwrap();
+        let db = Db::open_in_memory().unwrap();
+        let mut response = finished_plan_response(&pending);
+        finish_recorded_plan_with(&path, &db, &mut response, &[(40, 2)], |_, _, _| {
+            Err(rusqlite::Error::InvalidQuery)
+        });
+        assert!(response.durability_error.as_deref().unwrap().contains("Could not save listing history"));
+        assert!(path.exists());
+        assert!(db.list_listing_log(10).unwrap().is_empty());
+
+        let saved = load_pending(&path).unwrap().unwrap();
+        let mut retried = finished_plan_response(&saved);
+        finish_recorded_plan(&path, &db, &mut retried, &[(40, 2)]);
+        assert!(retried.durability_error.is_none());
+        assert!(!path.exists());
+        let rows = db.list_listing_log(10).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].order_id.as_deref(), Some("remote-order"));
+        assert_eq!(rows[0].price, 40);
+        assert_eq!(rows[0].qty, 2);
+        record_plan(&db, &retried, &[(40, 2)]).unwrap();
+        assert_eq!(db.list_listing_log(10).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn known_remote_result_reaches_history_when_journal_rewrite_failed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("pending_plan.json");
+        let pending: PendingPlan = serde_json::from_value(serde_json::json!({
+            "plan_id": "uncertain-on-disk",
+            "started_at": "2026-09-24T00:00:00Z",
+            "items": [{
+                "slug": "listed_item", "platinum": 25, "quantity": 1,
+                "order_type": "sell", "visible": false,
+                "status": "uncertain_mutation"
+            }]
+        })).unwrap();
+        write_pending_atomic(&path, &pending).unwrap();
+        let db = Db::open_in_memory().unwrap();
+        let mut response = PlanResponse {
+            plan_id: pending.plan_id.clone(),
+            results: vec![ItemResult {
+                slug: "listed_item".into(), status: "ok".into(), message: None,
+                order_id: Some("known-remote-order".into()), action: Some("created".into()),
+            }],
+            durability_error: Some("Could not save the confirmed listing result".into()),
+        };
+        finish_recorded_plan(&path, &db, &mut response, &[(25, 1)]);
+        assert!(response.durability_error.is_some());
+        assert_eq!(load_pending(&path).unwrap().unwrap().items[0].status, "uncertain_mutation");
+        let rows = db.list_listing_log(10).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].order_id.as_deref(), Some("known-remote-order"));
+    }
 
     #[test]
     fn protection_checks_projected_orders_and_recipe_multiplicity() {

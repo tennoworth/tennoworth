@@ -15,6 +15,7 @@ export class ListingController {
   resumePhase = $state<'idle' | 'running' | 'done' | 'error'>('idle');
   resumeError = $state<string | null>(null);
   resumeResults = $state<ItemResult[]>([]);
+  durabilityError = $state<string | null>(null);
   sessionEpoch = $state(0);
   listingOpen = $state(false);
   reviewRowsOverride = $state<ListingCandidate[] | null>(null);
@@ -72,6 +73,7 @@ export class ListingController {
     try {
       const resp = await this.port.resumePendingPlan();
       this.resumeResults = resp?.results ?? [];
+      this.durabilityError = resp?.durability_error ?? null;
       if (!await this.refreshPendingPlan()) return;
       this.resumePhase = this.pendingPlan ? 'idle' : 'done';
     } catch (e) {
@@ -91,6 +93,7 @@ export class ListingController {
     this.pendingPlan = null;
     this.resumePhase = 'idle';
     this.resumeResults = [];
+    this.durabilityError = null;
   }
   handleWfmUnlocked(next: string | null) {
     this.sessionEpoch += 1;

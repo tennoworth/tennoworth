@@ -82,7 +82,7 @@ export function createPreview(scenario: string) {
     // was never sent; `batch-uncertain` is work whose outcome the market never
     // confirmed, which must not be offered as a retry.
     get_pending_plan:
-      scenario === 'batch-pending' || scenario === 'batch-uncertain'
+      scenario === 'batch-pending' || scenario === 'batch-uncertain' || scenario === 'batch-finished'
         ? {
             plan_id: 'preview-plan',
             started_at: new Date(now * 1000 - 3_600_000).toISOString(),
@@ -90,7 +90,7 @@ export function createPreview(scenario: string) {
               { slug: 'pyrana_prime_set', platinum: 90, quantity: 1, order_type: 'sell', visible: false, status: 'ok' },
               scenario === 'batch-pending'
                 ? { slug: 'primed_flow', platinum: 26, quantity: 2, order_type: 'sell', visible: false, status: 'pending' }
-                : { slug: 'primed_flow', platinum: 26, quantity: 2, order_type: 'sell', visible: false, status: 'uncertain_mutation' },
+                : { slug: 'primed_flow', platinum: 26, quantity: 2, order_type: 'sell', visible: false, status: scenario === 'batch-finished' ? 'ok' : 'uncertain_mutation' },
             ],
           }
         : null,

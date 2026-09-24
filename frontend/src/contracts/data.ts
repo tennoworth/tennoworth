@@ -550,6 +550,8 @@ export interface ItemResult {
 export interface PlanResponse {
   plan_id: string;
   results: ItemResult[];
+  /** Local journal recording failed after an outcome was observed. */
+  durability_error?: string | null;
 }
 
 /** Pending-plan persistence shape - kept on disk in `pending_plan.json`. */

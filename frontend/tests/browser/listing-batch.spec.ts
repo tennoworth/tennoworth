@@ -60,3 +60,19 @@ test('the banner stays readable at every required size in both themes', async ({
     }
   }
 });
+
+test('a completed journal left on disk stays visible and removable', async ({ page }) => {
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.goto('/?preview-desktop&sample=batch-finished');
+    const banner = page.locator('section', { hasText: 'Completed batch still saved.' }).last();
+    await expect(banner).toBeVisible();
+    await expect(banner.getByRole('button', { name: 'Discard record' })).toBeVisible();
+    for (const [width, height] of [[1200, 700], [320, 480]] as const) {
+      await page.setViewportSize({ width, height });
+      await banner.scrollIntoViewIfNeeded();
+      await expect(banner).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    }
+  }
+});

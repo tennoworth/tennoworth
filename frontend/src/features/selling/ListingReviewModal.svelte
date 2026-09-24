@@ -79,6 +79,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   let cancellationRequested = $state(false);
   let serverResults = $state<ItemResult[]>([]);
   let networkError = $state<string | null>(null);
+  let durabilityError = $state<string | null>(null);
 
   function initialPlanFor(rows: InputRow[]): PlanRow[] {
     return rows.map((r) => {
@@ -145,6 +146,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
       phase = 'review';
       serverResults = [];
       networkError = null;
+      durabilityError = null;
       ordersReady = false;
       sessionRemaining = null;
       sessionProblem = null;
@@ -366,6 +368,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     try {
       const resp = await sendThrough(() => transport.submitPlan(items));
       serverResults = resp.results || [];
+      durabilityError = resp.durability_error ?? null;
       phase = 'results';
     } catch (e) {
       if (handleAuthCode(e)) return;
@@ -656,8 +659,11 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
         {#if networkError}<p class="ui-notice" data-tone="bad">{networkError}</p>{/if}
         <button class="btn" onclick={stopSending} disabled={cancellationRequested}>Stop after current request</button>
       {:else if phase === 'results'}
+        {#if durabilityError}
+          <p class="ui-notice" data-tone="bad" role="alert">{durabilityError}</p>
+        {/if}
         <p class="lead">
-          {pendingCount > 0 ? 'Batch interrupted. Close this review and use Resume to revalidate the saved items.' : 'Done.'} <span class="ok">{okCount} created</span>
+          {durabilityError ? 'Batch results need attention.' : pendingCount > 0 ? 'Batch interrupted. Close this review and use Resume to revalidate the saved items.' : 'Done.'} <span class="ok">{okCount} created</span>
           {#if updatedCount > 0}· <span class="ok">{updatedCount} updated</span>{/if}
           {#if errCount > 0}· <span class="bad">{errCount} failed</span>{/if}
           {#if pendingCount > 0}· <span class="warn">{pendingCount} saved for resume</span>{/if}.
