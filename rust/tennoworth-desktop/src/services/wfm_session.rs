@@ -115,6 +115,11 @@ enum KeyringIntent<'a> {
 #[cfg(test)]
 type KeyringHook = fn(KeyringIntent<'_>, bool);
 
+/// Stands in for reading the keyring entry, so a test can change what it holds
+/// between two reads.
+#[cfg(test)]
+type KeyReadHook = fn() -> Option<[u8; 32]>;
+
 /// The desktop WFM credential session. One instance is managed by Tauri; every
 /// listing command borrows it via `State`.
 pub struct WfmSession {
@@ -145,6 +150,8 @@ pub struct WfmSession {
     /// decision itself is real code; only the OS call is replaced.
     #[cfg(test)]
     keyring_hook: Option<KeyringHook>,
+    #[cfg(test)]
+    key_read_hook: Option<KeyReadHook>,
 }
 
 #[derive(Default)]
@@ -196,6 +203,8 @@ impl WfmSession {
             warm_hook: None,
             #[cfg(test)]
             keyring_hook: None,
+            #[cfg(test)]
+            key_read_hook: None,
         }
     }
 
@@ -216,6 +225,7 @@ impl WfmSession {
             use_keyring: false,
             warm_hook: None,
             keyring_hook: None,
+            key_read_hook: None,
         }
     }
 
@@ -300,6 +310,14 @@ impl WfmSession {
             KeyringIntent::Remember(key) => crate::persistence::keyring_store::store_key(key),
             KeyringIntent::Forget => crate::persistence::keyring_store::forget_key(),
         }
+    }
+
+    fn load_keyring_key(&self) -> Option<[u8; 32]> {
+        #[cfg(test)]
+        if let Some(hook) = self.key_read_hook {
+            return hook();
+        }
+        crate::persistence::keyring_store::load_key()
     }
 
     /// Log out, scrub the in-memory JWT, and remove the encrypted login saved on
@@ -486,7 +504,7 @@ impl WfmSession {
         if !self.use_keyring || !self.jwt_path.exists() {
             return false;
         }
-        let Some(key) = crate::persistence::keyring_store::load_key() else {
+        let Some(key) = self.load_keyring_key() else {
             return false;
         };
         let Ok(blob) = self.read_blob() else {
@@ -497,10 +515,13 @@ impl WfmSession {
             Ok(jwt) => jwt,
             Err(_) => {
                 // The key no longer opens the file, so the entry is stale - but
-                // only for the login it was read against. A sign-in that landed
-                // meanwhile wrote an entry for the file it just persisted, and
-                // this failure must not delete that one.
-                self.apply_keyring(generation, KeyringIntent::Forget);
+                // only if it is still the entry that failed. A sign-in that
+                // landed meanwhile rotated the salt and stored a different key,
+                // and the generation cannot reveal it: only logout advances it.
+                // What is left is the gap between this read and the delete.
+                if self.load_keyring_key() == Some(key) {
+                    self.apply_keyring(generation, KeyringIntent::Forget);
+                }
                 return false;
             }
         };
@@ -756,6 +777,7 @@ mod tests {
             use_keyring: false,
             warm_hook: None,
             keyring_hook: None,
+            key_read_hook: None,
         }
     }
 
@@ -858,20 +880,16 @@ mod tests {
         assert_eq!(keyring_log(), vec![(true, true)]);
     }
 
-    /// A sign-in that completes during a silent unlock's warm replaces the login
-    /// file and writes its own keyring entry. That unlock's decryption failure
-    /// describes the file it read, not the new one, so it must not forget the
-    /// entry the sign-in just wrote. The generation the unlock read is the one
-    /// from before the sign-in.
+    /// A forget decided before a logout belongs to the session the logout
+    /// discarded, so it is void.
     #[test]
-    fn a_stale_silent_unlock_does_not_forget_a_newer_sign_ins_key() {
+    fn a_forget_decided_before_a_logout_is_void() {
         let _serial = KEYRING_TESTS.lock().expect("keyring tests");
         reset_keyring_log();
         let mut s = keyring_session("keyring-stale-forget");
         s.keyring_hook = Some(record_keyring);
         let read_generation = s.session_generation();
-        // The sign-in that superseded it.
-        s.logout().expect("sign-in replaced the session");
+        s.logout().expect("logout");
 
         s.apply_keyring(read_generation, KeyringIntent::Forget);
 
@@ -890,6 +908,41 @@ mod tests {
         s.apply_keyring(s.session_generation(), KeyringIntent::Forget);
 
         assert_eq!(keyring_log(), vec![(false, true)]);
+    }
+
+    /// Keyring reads served to `try_silent_unlock`, in order.
+    static KEY_READS: Mutex<Vec<[u8; 32]>> = Mutex::new(Vec::new());
+
+    fn next_key_read() -> Option<[u8; 32]> {
+        let mut reads = KEY_READS.lock().expect("key reads");
+        (!reads.is_empty()).then(|| reads.remove(0))
+    }
+
+    fn silent_unlock_forgets(reads: [[u8; 32]; 2]) -> Vec<(bool, bool)> {
+        let _serial = KEYRING_TESTS.lock().expect("keyring tests");
+        reset_keyring_log();
+        *KEY_READS.lock().expect("key reads") = reads.to_vec();
+        let mut s = keyring_session("keyring-silent-forget");
+        s.key_read_hook = Some(next_key_read);
+
+        assert!(!s.try_silent_unlock(), "the key does not open the login file");
+        keyring_log()
+    }
+
+    /// A sign-in that finishes while a silent unlock is decrypting replaces the
+    /// login file and stores a new key. The unlock's failure is about the key it
+    /// read, so it must not delete the one the sign-in stored. Sign-in does not
+    /// advance the session generation, so only the entry itself can show this.
+    #[test]
+    fn a_silent_unlock_does_not_forget_a_key_a_sign_in_just_stored() {
+        assert_eq!(silent_unlock_forgets([[1; 32], [2; 32]]), vec![]);
+    }
+
+    /// The positive control: an entry that still holds the failing key is stale
+    /// and is removed.
+    #[test]
+    fn a_silent_unlock_forgets_a_key_that_no_longer_opens_the_login() {
+        assert_eq!(silent_unlock_forgets([[1; 32], [1; 32]]), vec![(false, true)]);
     }
 
     #[test]
