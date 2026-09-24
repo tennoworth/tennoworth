@@ -32,6 +32,16 @@ cycle, with the descriptive UA, and never from a visitor's browser.
   `None` otherwise. ~87% of relic reward refs resolve; the rest (Forma, Kuva,
   Exilus adapters) are genuinely untradeable and *should* stay unresolved. A
   wrong price is worse than no price.
+- **New items reach `path_to_info` through warframe.market's `gameRef`.**
+  warframestat lags each content update by days; WFM lists the item with its
+  exact DE path from day one. `add_game_ref_paths` fills only the paths
+  warframestat lacks - a lookup, not a guess - and `sets_from_recipes` derives
+  a missing prime set from `ExportRecipes`, published only when its parts'
+  ducats sum to the set's. A snapshot built from the prior-catalog fallback has
+  no gameRefs, so both surfaces are then partial and reconcile keeps the prior
+  entries.
+- **`ExportRelicArcane` is always fetched.** Relic rewards resolve through
+  `path_to_info`, which changes without DE's hash moving; see `ALWAYS_FETCH`.
 - **The live contract test is opt-in**, and is the thing that tells us when an
   endpoint moves:
   `cargo test -p wfm-scrape -- --ignored de_endpoints_are_still_alive`

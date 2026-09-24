@@ -12,8 +12,8 @@ pub use calendar::{
     WFSTAT_VAULT_TRADER_URL,
 };
 pub use catalog::{
-    fetch_catalog_wfm, fetch_parent_data, fetch_wfstat_raw, fetch_wfstat_slim, slim_wfstat_items,
-    CatalogFetch, WFSTAT_ITEMS_URL,
+    add_game_ref_paths, fetch_catalog_wfm, fetch_parent_data, fetch_wfstat_raw, fetch_wfstat_slim,
+    slim_wfstat_items, CatalogFetch, WFSTAT_ITEMS_URL,
 };
 pub use relics::fetch_relic_rewards;
 pub use rivens::{

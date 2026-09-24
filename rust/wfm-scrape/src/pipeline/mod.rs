@@ -185,9 +185,11 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         .unwrap_or_default();
 
     eprintln!("Fetching warframe.market master catalog...");
-    let (catalog, mut meta_by_slug) =
+    // `catalog_fresh` is false on the prior-snapshot fallback: that copy has
+    // no gameRefs, so the resolver surfaces built from it are partial.
+    let (catalog, mut meta_by_slug, catalog_fresh) =
         match ingest::fetch_catalog_wfm(http.as_ref(), "https://api.warframe.market/v2/items") {
-            Ok(v) => v,
+            Ok((catalog, meta)) => (catalog, meta, true),
             Err(e) => {
                 let Some(prior_catalog) = prior.get("catalog").and_then(|c| c.as_object()) else {
                     return Err(format!("{e} - and no prior snapshot to fall back on."));
@@ -219,15 +221,14 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
                                             })
                                             .unwrap_or_default(),
                                         ducats: it.get("ducats").and_then(|d| d.as_i64()),
-                                        max_rank: None,
-                                        subtypes: vec![],
+                                        ..Default::default()
                                     },
                                 )
                             })
                             .collect()
                     })
                     .unwrap_or_default();
-                (cat, items_meta)
+                (cat, items_meta, false)
             }
         };
     eprintln!("  {} items", catalog.len());
@@ -249,13 +250,16 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     };
 
     eprintln!("Fetching warframestat component path map + sets...");
-    let (path_to_info, set_to_parts, parents_complete) =
+    let (mut path_to_info, mut set_to_parts, parents_complete) =
         ingest::fetch_parent_data(http.as_ref(), &catalog, wfstat_raw.as_ref());
     eprintln!(
         "  {} component paths · {} prime sets",
         path_to_info.len(),
         set_to_parts.len()
     );
+    let game_ref_paths = ingest::add_game_ref_paths(&meta_by_slug, &mut path_to_info);
+    eprintln!("  {game_ref_paths} paths from warframe.market gameRefs that warframestat lacks");
+    let path_to_info_complete = parents_complete && catalog_fresh;
 
     // ---- Digital Extremes first-party ingest -------------------------------
     // Runs after path_to_info because every DE join resolves `/Lotus/...`
@@ -316,6 +320,19 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // values. The failure path therefore re-applies the last known-good
     // override from the prior snapshot.
     let de_recipes = de_snap.manifests.get("ExportRecipes_en.json");
+
+    // Prime sets warframestat has not published yet, from DE's recipes. Runs
+    // before the DE ducat override below: the completeness check compares the
+    // parts against the set total on warframe.market's side. Without recipes
+    // this cycle the surface is partial, so reconcile keeps the prior entries.
+    if let Some(recipes) = de_recipes {
+        let derived =
+            de_extract::sets_from_recipes(recipes, &path_to_info, &meta_by_slug, &set_to_parts);
+        eprintln!("  {} prime sets derived from DE recipes", derived.len());
+        set_to_parts.extend(derived);
+    }
+    let set_to_parts_complete = parents_complete && catalog_fresh && de_recipes.is_some();
+
     // Slugs DE set, this cycle or carried from the last one. Written into the
     // snapshot as provenance so a later failure knows which values were ours.
     let mut de_ducats: std::collections::BTreeMap<String, i64> = std::collections::BTreeMap::new();
@@ -898,7 +915,7 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     };
     let r_p2i = reconcile(
         "path_to_info",
-        observation(path_to_info, parents_complete),
+        observation(path_to_info, path_to_info_complete),
         p2i_old.as_ref(),
         prior_stamps.get("path_to_info").map(|s| s.as_str()),
         now,
@@ -906,7 +923,7 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     );
     let r_s2p = reconcile(
         "set_to_parts",
-        observation(set_to_parts, parents_complete),
+        observation(set_to_parts, set_to_parts_complete),
         s2p_old.as_ref(),
         prior_stamps.get("set_to_parts").map(|s| s.as_str()),
         now,

@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use serde_json::Value;
 
 use crate::de::{de_millis, manifest_rows_for, relay_name};
+use crate::render::CatalogItemMeta;
 
 // ---------------------------------------------------------------------------
 // Path resolution
@@ -348,6 +349,147 @@ pub fn recipes_from_export(
         out.insert(slug.to_string(), Value::Object(entry));
     }
     (out, collisions)
+}
+
+// ---------------------------------------------------------------------------
+// Recipes → prime set composition
+// ---------------------------------------------------------------------------
+
+/// Set → parts for prime sets warframestat has not published yet.
+///
+/// A WFM set's `gameRef` is the built item, which is exactly the `resultType`
+/// of its main blueprint in `ExportRecipes`; that blueprint plus its
+/// ingredients are the set's parts. Warframe ingredients are built
+/// `...Component` paths, so they are walked back to the recipe that makes them
+/// - the blueprint players actually trade.
+///
+/// Only parts named under the set's own slug stem count: an Ak- pistol's
+/// recipe also consumes two of the single pistol, which is a different set.
+/// A breakdown is published only when its parts' ducats add up to the set's
+/// ducats on warframe.market - a partial set would price the set-vs-parts
+/// comparison wrongly, which is worse than having none. Against the live
+/// data this reproduced every set warframestat publishes.
+///
+/// `meta` must carry WFM's own ducats (before the DE override), since that is
+/// the side the set total comes from. Sets already in `known` are skipped.
+pub fn sets_from_recipes(
+    recipes: &Value,
+    path_to_info: &HashMap<String, Value>,
+    meta: &HashMap<String, CatalogItemMeta>,
+    known: &HashMap<String, Value>,
+) -> HashMap<String, Value> {
+    let alias = recipe_alias(recipes);
+    let mut by_result: HashMap<&str, Vec<&Value>> = HashMap::new();
+    let mut recipe_for: HashMap<&str, &str> = HashMap::new();
+    for row in manifest_rows_for(recipes, "ExportRecipes_en.json") {
+        let (Some(unique), Some(result)) = (
+            row.get("uniqueName").and_then(|v| v.as_str()),
+            row.get("resultType").and_then(|v| v.as_str()),
+        ) else {
+            continue;
+        };
+        by_result.entry(result).or_default().push(row);
+        recipe_for.entry(result).or_insert(unique);
+    }
+    let slug_of = |path: &str| -> Option<&str> {
+        resolve_path(path, path_to_info, &alias)
+            .or_else(|| {
+                recipe_for
+                    .get(path)
+                    .and_then(|recipe| resolve_path(recipe, path_to_info, &alias))
+            })
+            .and_then(|info| info.get("slug"))
+            .and_then(|v| v.as_str())
+    };
+
+    let mut out = HashMap::new();
+    for (set_slug, set) in meta {
+        if known.contains_key(set_slug)
+            || !(set.tags.iter().any(|t| t == "set") && set.tags.iter().any(|t| t == "prime"))
+        {
+            continue;
+        }
+        let (Some(game_ref), Some(name), Some(set_ducats), Some(stem)) = (
+            set.game_ref.as_deref(),
+            set.name.as_deref(),
+            set.ducats,
+            set_slug.strip_suffix("set"),
+        ) else {
+            continue;
+        };
+        let Some(rows) = by_result.get(game_ref) else {
+            continue;
+        };
+        let is_part = |slug: &str| slug.starts_with(stem) && !slug.ends_with("_set");
+
+        let mut parts: std::collections::BTreeMap<&str, i64> = std::collections::BTreeMap::new();
+        for row in rows {
+            if let Some(bp) = row
+                .get("uniqueName")
+                .and_then(|v| v.as_str())
+                .and_then(slug_of)
+                .filter(|s| is_part(s))
+            {
+                parts.entry(bp).or_insert(1);
+            }
+            for ing in row
+                .get("ingredients")
+                .and_then(|v| v.as_array())
+                .into_iter()
+                .flatten()
+            {
+                let Some(slug) = ing
+                    .get("ItemType")
+                    .and_then(|v| v.as_str())
+                    .and_then(slug_of)
+                    .filter(|s| is_part(s))
+                else {
+                    continue;
+                };
+                let count = ing
+                    .get("ItemCount")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(1)
+                    .max(1);
+                // Max, not sum: alternate recipes for one item list the same
+                // parts again.
+                let q = parts.entry(slug).or_insert(count);
+                *q = (*q).max(count);
+            }
+        }
+        if parts.len() < 2 {
+            continue;
+        }
+        let parts_ducats: Option<i64> = parts
+            .iter()
+            .map(|(slug, q)| meta.get(*slug).and_then(|m| m.ducats).map(|d| d * q))
+            .sum();
+        if parts_ducats != Some(set_ducats) {
+            continue;
+        }
+
+        let parent_name = name.strip_suffix(" Set").unwrap_or(name);
+        let prefix = format!("{parent_name} ");
+        let rows: Vec<Value> = parts
+            .iter()
+            .map(|(slug, q)| {
+                let part_name = meta
+                    .get(*slug)
+                    .and_then(|m| m.name.as_deref())
+                    .unwrap_or(slug);
+                serde_json::json!({
+                    "slug": slug,
+                    "component_name": part_name.strip_prefix(&prefix).unwrap_or(part_name),
+                    "quantity": q,
+                })
+            })
+            .collect();
+        out.insert(
+            set_slug.clone(),
+            serde_json::json!({"name": parent_name, "parts": rows}),
+        );
+    }
+    out
 }
 
 // ---------------------------------------------------------------------------
@@ -1258,5 +1400,101 @@ mod tests {
         assert_eq!(d[0]["discount"], 40);
         assert_eq!(d[0]["sale_price"], 114);
         assert_eq!(d[0]["item"], "Revolver Pistol");
+    }
+
+    fn ak_meta(set_ducats: i64) -> HashMap<String, CatalogItemMeta> {
+        let meta = |name: &str, tags: &[&str], ducats: i64, game_ref: &str| CatalogItemMeta {
+            tags: tags.iter().map(|t| t.to_string()).collect(),
+            ducats: Some(ducats),
+            name: Some(name.to_string()),
+            game_ref: Some(game_ref.to_string()),
+            ..Default::default()
+        };
+        HashMap::from([
+            (
+                "akbronco_prime_set".to_string(),
+                meta(
+                    "Akbronco Prime Set",
+                    &["prime", "set"],
+                    set_ducats,
+                    "/W/AkBroncoPrime",
+                ),
+            ),
+            (
+                "akbronco_prime_blueprint".to_string(),
+                meta(
+                    "Akbronco Prime Blueprint",
+                    &["prime"],
+                    15,
+                    "/R/AkBroncoPrimeBlueprint",
+                ),
+            ),
+            (
+                "akbronco_prime_link".to_string(),
+                meta(
+                    "Akbronco Prime Link",
+                    &["prime"],
+                    45,
+                    "/R/AkBroncoPrimeLink",
+                ),
+            ),
+        ])
+    }
+
+    fn ak_inputs() -> (Value, HashMap<String, Value>) {
+        let recipes = serde_json::json!({"ExportRecipes": [{
+        "uniqueName": "/R/AkBroncoPrimeBlueprint", "resultType": "/W/AkBroncoPrime",
+        "ingredients": [
+            {"ItemType": "/R/AkBroncoPrimeLink", "ItemCount": 1},
+            {"ItemType": "/W/BroncoPrime", "ItemCount": 2},
+            {"ItemType": "/Lotus/Types/Items/MiscItems/OrokinCell", "ItemCount": 10}
+        ]}]});
+        let p2i = HashMap::from([
+            (
+                "/R/AkBroncoPrimeBlueprint".to_string(),
+                serde_json::json!({"slug": "akbronco_prime_blueprint"}),
+            ),
+            (
+                "/R/AkBroncoPrimeLink".to_string(),
+                serde_json::json!({"slug": "akbronco_prime_link"}),
+            ),
+            // warframestat hangs the consumed single pistol off the dual set.
+            (
+                "/W/BroncoPrime".to_string(),
+                serde_json::json!({"slug": "akbronco_prime_set"}),
+            ),
+        ]);
+        (recipes, p2i)
+    }
+
+    /// The dual pistol's recipe also eats two single pistols. Those are a
+    /// different item, so the set is its blueprint and link only.
+    #[test]
+    fn set_from_recipes_keeps_only_its_own_parts() {
+        let (recipes, p2i) = ak_inputs();
+        let sets = sets_from_recipes(&recipes, &p2i, &ak_meta(60), &HashMap::new());
+        assert_eq!(
+            sets["akbronco_prime_set"],
+            serde_json::json!({"name": "Akbronco Prime", "parts": [
+                {"slug": "akbronco_prime_blueprint", "component_name": "Blueprint", "quantity": 1},
+                {"slug": "akbronco_prime_link", "component_name": "Link", "quantity": 1}
+            ]})
+        );
+    }
+
+    /// Parts whose ducats do not add up to the set's are an incomplete
+    /// breakdown - publishing it would misprice set against parts.
+    #[test]
+    fn set_from_recipes_rejects_a_breakdown_that_misses_ducats() {
+        let (recipes, p2i) = ak_inputs();
+        let sets = sets_from_recipes(&recipes, &p2i, &ak_meta(160), &HashMap::new());
+        assert!(sets.is_empty(), "{sets:?}");
+    }
+
+    #[test]
+    fn set_from_recipes_leaves_known_sets_to_warframestat() {
+        let (recipes, p2i) = ak_inputs();
+        let known = HashMap::from([("akbronco_prime_set".to_string(), serde_json::json!({}))]);
+        assert!(sets_from_recipes(&recipes, &p2i, &ak_meta(60), &known).is_empty());
     }
 }

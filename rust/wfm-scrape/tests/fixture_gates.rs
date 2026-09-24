@@ -1057,13 +1057,16 @@ fn build_skips_manifests_whose_hash_has_not_moved() {
     assert!(second.status.success());
     let second_err = String::from_utf8_lossy(&second.stderr).to_string();
     assert!(
-        second_err.contains("4 skipped as unchanged") && second_err.contains("2 fetched"),
-        "a warm run skips the four carryable manifests and still pulls the two \
+        second_err.contains("3 skipped as unchanged") && second_err.contains("3 fetched"),
+        "a warm run skips the three carryable manifests and still pulls the three \
          whose data cannot be carried:\n{second_err}"
     );
+    // The relic manifest is never skipped: its table resolves through
+    // path_to_info, which grows independently of DE's hash. A carried table
+    // stayed blind to the 2026-09-23 Prime Access rewards.
     assert!(
-        second_err.contains("Relic tables hash-verified unchanged - carrying the prior DE surface"),
-        "the warm run must distinguish a successful hash check from an outage:\n{second_err}"
+        second_err.contains("Building relic tables from DE Public Export"),
+        "a warm run must rebuild relic tables against the current resolver:\n{second_err}"
     );
     assert!(
         !second_err.contains("WARNING: relic_rewards has been stale"),
@@ -1119,15 +1122,147 @@ fn build_skips_manifests_whose_hash_has_not_moved() {
     );
     assert_eq!(
         snap["surface_provenance"]["relic_rewards"]["disposition"],
-        "preserved_unchanged"
+        "published_fresh"
     );
     assert_eq!(
         snap["surface_provenance"]["relic_rewards"]["data_fetched_at"],
-        "2026-07-01T12:00:00Z"
-    );
-    assert_eq!(
-        snap["surface_provenance"]["relic_rewards"]["attempted_at"],
         "2026-07-11T12:00:00Z"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Every content update ships items warframe.market lists on day one and
+/// warframestat learns days later. Until then the only path→slug mapping is
+/// WFM's own `gameRef`; without it the 2026-09-23 Prime Access relics lost
+/// their new rewards, the new sets had no breakdown, and Corufell Prime's
+/// stock - `CorufellPrimeBarrel` to DE - resolved to nothing in inventory.
+#[test]
+fn items_only_warframe_market_knows_reach_every_resolver_surface() {
+    let dir = stage_fixtures("convert");
+    let path = dir.join("fixture_responses.json");
+    let mut responses: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+
+    let wfm_item = |slug: &str, name: &str, tags: &[&str], ducats: i64, game_ref: &str| {
+        serde_json::json!({"slug": slug, "i18n": {"en": {"name": name}}, "tags": tags,
+                           "ducats": ducats, "subtypes": [], "gameRef": game_ref})
+    };
+    responses["https://api.warframe.market/v2/items"]["data"]
+        .as_array_mut()
+        .unwrap()
+        .extend([
+            wfm_item(
+                "citrine_prime_set",
+                "Citrine Prime Set",
+                &["warframe", "prime", "set"],
+                115,
+                "/Lotus/Powersuits/Geode/CitrinePrime",
+            ),
+            wfm_item(
+                "citrine_prime_blueprint",
+                "Citrine Prime Blueprint",
+                &["warframe", "prime", "blueprint"],
+                100,
+                "/Lotus/Types/Recipes/WarframeRecipes/CitrinePrimeBlueprint",
+            ),
+            wfm_item(
+                "citrine_prime_neuroptics_blueprint",
+                "Citrine Prime Neuroptics Blueprint",
+                &["warframe", "prime", "component", "blueprint"],
+                15,
+                "/Lotus/Types/Recipes/WarframeRecipes/CitrinePrimeHelmetBlueprint",
+            ),
+            wfm_item(
+                "corufell_prime_stock",
+                "Corufell Prime Stock",
+                &["weapon", "component", "prime"],
+                15,
+                "/Lotus/Types/Recipes/Weapons/WeaponParts/CorufellPrimeBarrel",
+            ),
+        ]);
+    responses["https://content.warframe.com/PublicExport/Manifest/ExportRecipes_en.json!00_rECIPEShash"]
+        ["ExportRecipes"]
+        .as_array_mut()
+        .unwrap()
+        .extend([
+            serde_json::json!({
+                "uniqueName": "/Lotus/Types/Recipes/WarframeRecipes/CitrinePrimeBlueprint",
+                "resultType": "/Lotus/Powersuits/Geode/CitrinePrime",
+                "ingredients": [
+                    {"ItemType": "/Lotus/Types/Recipes/WarframeRecipes/CitrinePrimeHelmetComponent", "ItemCount": 1},
+                    {"ItemType": "/Lotus/Types/Items/MiscItems/OrokinCell", "ItemCount": 5}
+                ]
+            }),
+            serde_json::json!({
+                "uniqueName": "/Lotus/Types/Recipes/WarframeRecipes/CitrinePrimeHelmetBlueprint",
+                "resultType": "/Lotus/Types/Recipes/WarframeRecipes/CitrinePrimeHelmetComponent",
+                "ingredients": []
+            }),
+        ]);
+    for relic in responses
+        ["https://content.warframe.com/PublicExport/Manifest/ExportRelicArcane_en.json!00_rELICShash"]
+        ["ExportRelicArcane"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .filter(|r| r["name"] == "Lith V1 Relic")
+    {
+        relic["relicRewards"].as_array_mut().unwrap().push(serde_json::json!({
+            "itemCount": 1, "rarity": "UNCOMMON", "tier": 0,
+            "rewardName": "/Lotus/StoreItems/Types/Recipes/WarframeRecipes/CitrinePrimeHelmetBlueprint"
+        }));
+    }
+    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
+
+    let out = run(
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-01T12:00:00Z",
+        ],
+        &dir,
+    );
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let snap: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+
+    let p2i = &snap["path_to_info"];
+    let neuroptics = &p2i["/Lotus/Types/Recipes/WarframeRecipes/CitrinePrimeHelmetBlueprint"];
+    assert_eq!(neuroptics["slug"], "citrine_prime_neuroptics_blueprint");
+    assert_eq!(neuroptics["name"], "Citrine Prime Neuroptics Blueprint");
+    assert_eq!(neuroptics["category"], "Warframes");
+    assert_eq!(
+        p2i["/Lotus/Types/Recipes/Weapons/WeaponParts/CorufellPrimeBarrel"]["slug"],
+        "corufell_prime_stock",
+        "DE's name for a part may differ from WFM's; the gameRef is what joins them"
+    );
+    assert!(
+        p2i.get("/Lotus/Powersuits/Geode/CitrinePrime").is_none(),
+        "a set's gameRef is the built item, which is not what the set trades as"
+    );
+
+    assert_eq!(
+        snap["set_to_parts"]["citrine_prime_set"],
+        serde_json::json!({"name": "Citrine Prime", "parts": [
+            {"slug": "citrine_prime_blueprint", "component_name": "Blueprint", "quantity": 1},
+            {"slug": "citrine_prime_neuroptics_blueprint",
+             "component_name": "Neuroptics Blueprint", "quantity": 1}
+        ]})
+    );
+
+    let rewards = snap["relic_rewards"]["lith_v1_relic"].as_array().unwrap();
+    assert!(
+        rewards
+            .iter()
+            .any(|r| r["reward_slug"] == "citrine_prime_neuroptics_blueprint"),
+        "a relic reward only WFM can name must still reach the relic table: {rewards:?}"
     );
 
     let _ = std::fs::remove_dir_all(&dir);
