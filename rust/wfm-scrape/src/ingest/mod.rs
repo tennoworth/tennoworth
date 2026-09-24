@@ -13,7 +13,7 @@ pub use calendar::{
 };
 pub use catalog::{
     add_game_ref_paths, fetch_catalog_wfm, fetch_parent_data, fetch_wfstat_raw, fetch_wfstat_slim,
-    slim_wfstat_items, CatalogFetch, WFSTAT_ITEMS_URL,
+    slim_wfstat_items, wfstat_categories, CatalogFetch, WFSTAT_ITEMS_URL,
 };
 pub use relics::fetch_relic_rewards;
 pub use rivens::{

@@ -1253,7 +1253,7 @@ fn items_only_warframe_market_knows_reach_every_resolver_surface() {
         serde_json::json!({"name": "Citrine Prime", "parts": [
             {"slug": "citrine_prime_blueprint", "component_name": "Blueprint", "quantity": 1},
             {"slug": "citrine_prime_neuroptics_blueprint",
-             "component_name": "Neuroptics Blueprint", "quantity": 1}
+             "component_name": "Neuroptics", "quantity": 1}
         ]})
     );
 
@@ -1263,6 +1263,34 @@ fn items_only_warframe_market_knows_reach_every_resolver_surface() {
             .iter()
             .any(|r| r["reward_slug"] == "citrine_prime_neuroptics_blueprint"),
         "a relic reward only WFM can name must still reach the relic table: {rewards:?}"
+    );
+
+    // Once warframestat lists the set, a cycle where its parents fail must carry
+    // warframestat's breakdown rather than re-derive one over it.
+    let mut prior = snap.clone();
+    prior["set_to_parts"]["citrine_prime_set"]["parts"][1]["component_name"] =
+        "Neuroptics (warframestat)".into();
+    std::fs::write(dir.join("prior-market.json"), serde_json::to_vec(&prior).unwrap()).unwrap();
+    responses
+        .remove("https://api.warframestat.us/warframes/")
+        .expect("fixture serves the warframe parents");
+    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
+    let out = run(
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-02T12:00:00Z",
+        ],
+        &dir,
+    );
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let partial: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(
+        partial["set_to_parts"]["citrine_prime_set"], prior["set_to_parts"]["citrine_prime_set"],
+        "a set carried through a partial parent fetch is not re-derived"
     );
 
     let _ = std::fs::remove_dir_all(&dir);

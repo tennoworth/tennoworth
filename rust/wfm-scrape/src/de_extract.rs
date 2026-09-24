@@ -477,9 +477,14 @@ pub fn sets_from_recipes(
                     .get(*slug)
                     .and_then(|m| m.name.as_deref())
                     .unwrap_or(slug);
+                // warframestat names a part by its component ("Neuroptics"), and
+                // the main blueprint just "Blueprint"; match it so every set's
+                // parts read the same.
+                let component = part_name.strip_prefix(&prefix).unwrap_or(part_name);
+                let component = component.strip_suffix(" Blueprint").unwrap_or(component);
                 serde_json::json!({
                     "slug": slug,
-                    "component_name": part_name.strip_prefix(&prefix).unwrap_or(part_name),
+                    "component_name": component,
                     "quantity": q,
                 })
             })

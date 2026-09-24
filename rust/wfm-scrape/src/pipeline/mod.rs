@@ -257,7 +257,20 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         path_to_info.len(),
         set_to_parts.len()
     );
-    let game_ref_paths = ingest::add_game_ref_paths(&meta_by_slug, &mut path_to_info);
+    // The catalogue the resolvers will read beside path_to_info: this cycle's,
+    // or the preserved file when the bulk fetch failed.
+    let wfstat_slim_for_paths: Vec<serde_json::Value> = match wfstat_raw.as_ref() {
+        Some(raw) => ingest::slim_wfstat_items(raw, ingest::WFSTAT_ITEMS_URL).unwrap_or_default(),
+        None => std::fs::read(&catalog_out)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+            .unwrap_or_default(),
+    };
+    let game_ref_paths = ingest::add_game_ref_paths(
+        &meta_by_slug,
+        &mut path_to_info,
+        &ingest::wfstat_categories(&wfstat_slim_for_paths),
+    );
     eprintln!("  {game_ref_paths} paths from warframe.market gameRefs that warframestat lacks");
     let path_to_info_complete = parents_complete && catalog_fresh;
 
@@ -326,8 +339,18 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // parts against the set total on warframe.market's side. Without recipes
     // this cycle the surface is partial, so reconcile keeps the prior entries.
     if let Some(recipes) = de_recipes {
-        let derived =
-            de_extract::sets_from_recipes(recipes, &path_to_info, &meta_by_slug, &set_to_parts);
+        // With warframestat's parents only partly fetched, a set it normally
+        // lists can be missing this cycle; the prior entry is carried by the
+        // partial merge and must not be replaced by a derived breakdown.
+        let mut known = set_to_parts.clone();
+        if !parents_complete {
+            if let Some(prior_sets) = prior.get("set_to_parts").and_then(|v| v.as_object()) {
+                for (slug, parts) in prior_sets {
+                    known.entry(slug.clone()).or_insert_with(|| parts.clone());
+                }
+            }
+        }
+        let derived = de_extract::sets_from_recipes(recipes, &path_to_info, &meta_by_slug, &known);
         eprintln!("  {} prime sets derived from DE recipes", derived.len());
         set_to_parts.extend(derived);
     }
