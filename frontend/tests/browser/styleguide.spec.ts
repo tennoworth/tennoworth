@@ -57,7 +57,9 @@ test('reference stays readable in both themes and narrow, short, wide windows', 
       const pairs = [
         ['--bad', '--panel'], ['--bad', '--panel-2'], ['--good', '--panel'], ['--warn', '--panel'],
         ['--fg', '--bg'], ['--fg', '--panel'], ['--muted', '--panel'], ['--muted', '--panel-2'],
-        ['--on-accent', '--accent'], ['--on-ink', '--ink-bar'], ['--on-ink-muted', '--ink-bar'],
+        ['--good', '--panel-2'], ['--warn', '--panel-2'], ['--vault', '--panel'], ['--vault', '--panel-2'],
+        ['--fg', '--panel-2'], ['--on-accent', '--accent'], ['--on-ink', '--ink-bar'], ['--on-ink-muted', '--ink-bar'],
+        ['--rail-fg', '--rail-bg'], ['--rail-muted', '--rail-bg'],
       ];
       return pairs.map(([fg, bg]) => {
         const a = luminance(styles.getPropertyValue(fg));

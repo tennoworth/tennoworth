@@ -111,18 +111,28 @@ html[data-look="yorha"] {
   --panel-2: #CBC6AC;   /* table header, inactive segments, hover, popovers */
   --border: #706B57;    /* container outlines - 3.6:1 on panel */
   --hairline: #B5B097;  /* inner dividers - always dotted here */
-  --fg: #46422F;        /* grey-brown ink */
-  --muted: #57523F;
+  --fg: #34301F;        /* grey-brown ink - 9.1:1 on panel, 8.1:1 on bg, 7.7:1 on panel-2, 1.7:1 above muted */
+  --muted: #57523F;     /* 5.4:1 on panel, 4.8:1 on bg, 4.6:1 on panel-2 */
   --faint: #8B8670;     /* decorative only */
-  --accent: #46422F;    /* = ink; active state is inversion, not a hue */
-  --good: #2A6350;
-  --warn: #77541C;
-  --bad: #98201D;
-  --ducat: #77541C;
+  --accent: #34301F;    /* = ink; active state is inversion, not a hue */
+  /* Status hues clear 4.5:1 on --panel-2 too: tags sit on header, hover and
+     filter rows, not only on --panel. */
+  --good: #235746;      /* 5.7:1 on panel, 4.8:1 on panel-2 */
+  --warn: #6A4A16;      /* 5.6:1 on panel, 4.7:1 on panel-2 */
+  --bad: #98201D;       /* 5.7:1 on panel, 4.8:1 on panel-2 */
+  --ducat: #6A4A16;
+  /* Vaulted is market fact, not status: a cool slate so it cannot read as
+     good/warn/bad. 6.1:1 on panel, 5.1:1 on panel-2. */
+  --vault: #3F4A66;
   --ink-bar: #4B4739;   /* the one filled surface */
   --on-ink: #DBD7BF;
-  --on-ink-muted: #CBC6AC;
+  --on-ink-muted: #CBC6AC; /* 5.4:1 on ink-bar */
   --on-accent: #DBD7BF;
+  /* Panel title rails. Separate from the selected-state inversion so a mode
+     can give rails their own surface. */
+  --rail-bg: var(--ink-bar);
+  --rail-fg: var(--on-ink);
+  --rail-muted: var(--on-ink-muted);
   --grid: rgba(70, 66, 47, 0.07);
   --hatch: rgba(70, 66, 47, 0.035);
   --scrim: rgba(70, 66, 47, 0.45);
@@ -155,8 +165,9 @@ html[data-look="yorha"][data-mode="dark"] {
   --accent: #D3C7A6;    /* = ink; active state is inversion, not a hue */
   --good: #84AE85;      /* 6.2:1 on panel */
   --warn: #CBA05A;      /* 6.5:1 on panel */
-  --bad: #F18C85;
+  --bad: #F18C85;       /* 6.5:1 on panel */
   --ducat: #CBA05A;
+  --vault: #A9B2CE;     /* 7.4:1 on panel, 6.4:1 on panel-2 */
   --ink-bar: #C0B187;   /* the bar is now rag */
   --on-ink: #1E1913;
   --on-ink-muted: #342D23;
@@ -216,6 +227,28 @@ input[type="text"], input[type="number"] {
   padding: 6px 10px;
 }
 input::placeholder { color: var(--faint); }
+/* One themed box everywhere: the native one is OS blue when checked and
+   white on paper when not. Checked is the ink inversion, like every other
+   selected state. Components may resize it; they must not recolour it. */
+input:is([type="checkbox"], [type="radio"]) {
+  appearance: none;
+  display: inline-grid; place-content: center; flex: 0 0 auto;
+  width: var(--s4); height: var(--s4); margin: 0;
+  vertical-align: middle;
+  color: var(--on-ink); background: transparent;
+  border: 1px solid var(--border); border-radius: var(--radius-input);
+  cursor: pointer;
+}
+input:is([type="checkbox"], [type="radio"]):hover:not(:disabled) { border-color: var(--fg); }
+input[type="checkbox"]:checked { background: var(--ink-bar); border-color: var(--ink-bar); }
+input[type="checkbox"]:checked::before {
+  content: ""; width: 0.55em; height: 0.3em;
+  border: solid currentColor; border-width: 0 0 2px 2px;
+  transform: translateY(-15%) rotate(-45deg);
+}
+input[type="radio"]:checked::before { content: ""; width: 0.5em; height: 0.5em; background: var(--ink-bar); }
+input:is([type="checkbox"], [type="radio"]):disabled { border-style: dotted; cursor: not-allowed; }
+input[type="checkbox"]:checked:disabled { background: var(--muted); border-color: var(--muted); }
 /* Headings and tracked labels take the look's UI face. Baseline points
    --font-ui at the body stack, so this is a no-op there. */
 h1, h2, h3, h4, th, .nav-label, .clock-label,
@@ -354,7 +387,7 @@ dialog.cryptobox footer {
   min-width: 0;
 }
 .wrap.tw > .rail > *, .wrap.tw > .bar > *, .wrap.tw > .line > *, .wrap.tw > .foot > * { flex-shrink: 0; }
-.wrap.tw > .rail > h3 { flex-shrink: 1; min-width: 0; overflow-wrap: anywhere; }
+.wrap.tw > .rail > :is(h2, h3) { flex-shrink: 1; min-width: 0; overflow-wrap: anywhere; }
 .wrap.tw > .rail {
   min-height: var(--rail);
   padding-block: var(--s2);
@@ -363,7 +396,7 @@ dialog.cryptobox footer {
   font-size: var(--text-caption);
   color: var(--muted);
 }
-.wrap.tw > .rail h3, .wrap.tw > .bar h3 { margin: 0; font-size: var(--text-control); font-weight: 600; color: var(--fg); line-height: 1rem; }
+.wrap.tw > .rail :is(h2, h3), .wrap.tw > .bar h3 { margin: 0; font-size: var(--text-control); font-weight: 600; color: var(--fg); line-height: 1rem; }
 .wrap.tw > .bar { min-height: var(--bar); border-bottom: 1px solid var(--border); font-size: var(--text-caption); color: var(--muted); }
 .wrap.tw > .line { min-height: var(--rail); padding-block: var(--s2); border-top: 1px var(--rule) var(--hairline); font-size: var(--text-caption); color: var(--muted); }
 .wrap.tw > .foot { min-height: var(--bar); border-top: 1px solid var(--border); font-size: var(--text-caption); color: var(--muted); }
@@ -431,6 +464,9 @@ table.tw td.fg { color: var(--fg); }
 table.tw th.sorted { color: var(--accent); }
 table.tw tr.dim td, table.tw tr.dim td.l, table.tw tr.dim td.l a { color: var(--muted); font-weight: 400; }
 table.tw td.act { text-align: right; overflow: visible; }
+/* One-word actions: breaking "List" into "Lis / t" is worse than the table
+   scrolling, and every .tw table already scrolls locally. */
+table.tw td.act .btn { white-space: nowrap; overflow-wrap: normal; }
 table.tw td.reason { font-family: var(--font-body); text-align: left; color: var(--muted); font-size: var(--text-caption); }
 table.tw td.reason.warn { color: var(--warn); }
 table.tw td.reason.bad { color: var(--bad); }
@@ -563,7 +599,6 @@ table.tw tr.busy td { color: var(--faint); }
 .ui-setting-control > input:not([type="checkbox"]) { min-width: 0; max-width: 100%; }
 .ui-setting-control > input[type="range"] { flex: 1; }
 .ui-setting-check { display: flex; align-items: center; gap: var(--s2); min-height: var(--ctl-lg); cursor: pointer; }
-.ui-setting-check input { width: var(--s4); height: var(--s4); margin: 0; accent-color: var(--accent); }
 .ui-section-group { padding: var(--s4) 0; border-top: 1px var(--rule) var(--border); }
 .ui-section-group > h4 { margin: 0; padding: 0 var(--inset) var(--s3); font: 600 var(--text-caption)/var(--leading-body) var(--font-ui); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
 .ui-section-group > .ui-setting-row:first-of-type { padding-top: 0; }
@@ -663,12 +698,14 @@ html[data-look="yorha"] .list-cta:hover:not(:disabled),
 html[data-look="yorha"] .refresh-pop .rp-primary:hover:not(:disabled),
 html[data-look="yorha"] .btn.primary:hover:not(:disabled) { background: var(--fg); color: var(--panel); filter: none; }
 /* Shared .wrap.tw rails are ink title bars too (same as .picks-head). */
-html[data-look="yorha"] .wrap.tw > .rail { background: var(--ink-bar); color: var(--on-ink-muted); border-bottom: 0; }
-html[data-look="yorha"] .wrap.tw > .rail h3 { color: var(--on-ink); font: 500 var(--text-caption)/1rem var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
-html[data-look="yorha"] .wrap.tw > .rail .exp, html[data-look="yorha"] .wrap.tw > .rail a, html[data-look="yorha"] .wrap.tw > .rail .btn.link { color: var(--on-ink-muted); border-bottom-color: var(--on-ink-muted); }
-html[data-look="yorha"] .wrap.tw > .rail .lbl.good, html[data-look="yorha"] .wrap.tw > .rail .lbl.bad { color: var(--on-ink); }
-html[data-look="yorha"] .wrap.tw > .rail .rail-toggle { color: var(--on-ink-muted); }
-html[data-look="yorha"] .wrap.tw > .rail .rail-toggle:hover { color: var(--on-ink); }
+/* Anything placed in a rail must take the rail's text pair: the base .count,
+   .glyph and similar rules colour for --panel and vanish on the bar. */
+html[data-look="yorha"] .wrap.tw > .rail { background: var(--rail-bg); color: var(--rail-muted); border-bottom: 0; }
+html[data-look="yorha"] .wrap.tw > .rail :is(h2, h3) { margin: 0; color: var(--rail-fg); font: 500 var(--text-caption)/1rem var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
+html[data-look="yorha"] .wrap.tw > .rail .exp, html[data-look="yorha"] .wrap.tw > .rail .count, html[data-look="yorha"] .wrap.tw > .rail a, html[data-look="yorha"] .wrap.tw > .rail .btn.link { color: var(--rail-muted); border-bottom-color: var(--rail-muted); }
+html[data-look="yorha"] .wrap.tw > .rail .count b, html[data-look="yorha"] .wrap.tw > .rail .glyph, html[data-look="yorha"] .wrap.tw > .rail .lbl.good, html[data-look="yorha"] .wrap.tw > .rail .lbl.bad { color: var(--rail-fg); }
+html[data-look="yorha"] .wrap.tw > .rail .rail-toggle { color: var(--rail-muted); }
+html[data-look="yorha"] .wrap.tw > .rail .rail-toggle:hover { color: var(--rail-fg); }
 html[data-look="yorha"] .wrap.tw > .bar { border-bottom-style: dotted; }
 html[data-look="yorha"] .wrap.tw .lbl { font-weight: 500; letter-spacing: 0.14em; }
 html[data-look="yorha"] .seg > button:not(:first-child) { border-left-style: dotted; }
@@ -695,7 +732,7 @@ html[data-look="yorha"] dialog.cryptobox header { padding: 8px 12px; margin: -20
 html[data-look="yorha"] dialog.cryptobox header p { color: var(--on-ink-muted); }
 /* Focus ring on the ink surfaces: the global ring is --accent, which in this
    look IS the ink (~1.1:1 on the bar) - paint it in the bar's foreground. */
-html[data-look="yorha"] .wrap.tw > .rail :focus-visible,
+html[data-look="yorha"] .wrap.tw > .rail :focus-visible { outline-color: var(--rail-fg); }
 html[data-look="yorha"] .picks-head :focus-visible,
 html[data-look="yorha"] .card > h3:first-child :focus-visible,
 html[data-look="yorha"] .faq > h2 :focus-visible,
