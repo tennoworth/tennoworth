@@ -566,6 +566,131 @@ mod tests {
     use super::*;
     use market_domain::inventory::path_name_guess;
 
+    #[derive(Deserialize)]
+    struct CompositionInventoryRow {
+        path: String,
+        name: String,
+        slug: String,
+        count: i64,
+        xp: i64,
+    }
+
+    #[derive(Deserialize)]
+    struct CompositionExpectedRow {
+        slug: String,
+        sellable_qty: i64,
+    }
+
+    #[derive(Deserialize)]
+    struct CompositionExpected {
+        shared_order: Vec<String>,
+        tray: Vec<CompositionExpectedRow>,
+    }
+
+    #[derive(Deserialize)]
+    struct CompositionFixture {
+        reserve_copies: i64,
+        inventory: Vec<CompositionInventoryRow>,
+        market: serde_json::Value,
+        protected: BTreeMap<String, u32>,
+        legacy_reserves: BTreeMap<String, i64>,
+        traded_after_scan: String,
+        expected: CompositionExpected,
+    }
+
+    #[test]
+    fn tray_composes_the_shared_scan_with_local_protection_and_trade_history() {
+        let raw = include_str!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/tray-table-composition/cases.json"
+        ));
+        let fixture: CompositionFixture = serde_json::from_str(raw).unwrap();
+        let mut market_json = fixture.market;
+        let path_to_info: serde_json::Map<String, serde_json::Value> = fixture
+            .inventory
+            .iter()
+            .map(|row| {
+                (
+                    row.path.clone(),
+                    serde_json::json!({ "name": row.name, "slug": row.slug }),
+                )
+            })
+            .collect();
+        market_json["path_to_info"] = serde_json::Value::Object(path_to_info);
+        let market: MarketData = serde_json::from_value(market_json).unwrap();
+        let db = Db::open_in_memory().unwrap();
+        let snapshot: Vec<crate::persistence::SnapshotItem> = fixture
+            .inventory
+            .iter()
+            .map(|row| crate::persistence::SnapshotItem {
+                slug: row.path.clone(),
+                count: row.count,
+                leveled: if row.xp > 0 { row.count } else { 0 },
+            })
+            .collect();
+        let scan_id = db
+            .insert_snapshot("memory", Some("1970-01-01T00:01:40Z"), None, &snapshot)
+            .unwrap();
+        db.set_setting("reserve-copies", &fixture.reserve_copies.to_string())
+            .unwrap();
+        for (slug, keep) in fixture.legacy_reserves {
+            db.set_reserve(&slug, keep).unwrap();
+        }
+        crate::services::protection::ProtectionPlan {
+            reserves: fixture.protected,
+            goal: None,
+        }
+        .save(&db, &market)
+        .unwrap();
+        let boundary = crate::services::eelog::LogPosition {
+            session: "composition".into(),
+            start: 100,
+            end: 100,
+            observed_after: 100,
+        };
+        db.save_allowance(crate::services::allowance::Observation::scanned(
+            "account".into(),
+            scan_id,
+            &serde_json::json!({"TradesRemaining": 8}),
+            Some(boundary.clone()),
+            Some(boundary.clone()),
+            100,
+            100,
+        ))
+        .unwrap();
+        db.insert_trade(
+            &crate::services::eelog::TradeEvent {
+                partner: "Buyer".into(),
+                kind: "sale".into(),
+                plat: 50,
+                log_stamp: Some("110".into()),
+                items: vec![crate::services::eelog::TradeItem {
+                    name: fixture.traded_after_scan,
+                    qty: 1,
+                    direction: "given".into(),
+                }],
+            },
+            110,
+            &crate::services::eelog::LogPosition {
+                start: 101,
+                end: 120,
+                observed_after: 110,
+                ..boundary
+            },
+        )
+        .unwrap();
+
+        let ranked = rank_sellables(&db, &market);
+        assert_eq!(
+            ranked.iter().map(|row| (&row.slug, row.sellable_qty)).collect::<Vec<_>>(),
+            fixture.expected.tray.iter().map(|row| (&row.slug, row.sellable_qty)).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            ranked.iter().map(|row| row.slug.clone()).collect::<Vec<_>>(),
+            fixture.expected.shared_order
+        );
+    }
+
     /// A unique empty dir per test, so a parallel run never shares a cache.
     fn temp_dir(tag: &str) -> std::path::PathBuf {
         static N: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
