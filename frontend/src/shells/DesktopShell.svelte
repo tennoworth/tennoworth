@@ -226,16 +226,19 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // The per-calculation gates live in features/selling/calc-inputs so they can be
   // tested without mounting this component. The effects below supply the inputs
   // and the recompute epoch; the policies decide whether there is anything to run.
-  let calcInputs = $derived<CalcInputs>({
-    owned: inventory.resolved.owned,
-    previousOwned: inventory.previousOwned,
-    availableOwned,
-    market: inventory.market,
-    reserve: filters.reserveCopies,
-    available: guidanceAvailability,
-    sparesOnly,
-    advisorHistory,
-  });
+  // Getters, not a $derived object: each effect then depends only on the fields
+  // its policy reads. One derived object made every calculation restart when any
+  // input changed, so toggling "spares only" blanked the default scoring.
+  const calcInputs: CalcInputs = {
+    get owned() { return inventory.resolved.owned; },
+    get previousOwned() { return inventory.previousOwned; },
+    get availableOwned() { return availableOwned; },
+    get market() { return inventory.market; },
+    get reserve() { return filters.reserveCopies; },
+    get available() { return guidanceAvailability; },
+    get sparesOnly() { return sparesOnly; },
+    get advisorHistory() { return advisorHistory; },
+  };
 
   $effect(() => {
     const wanted = filters.activePreset === 'holdsell' || effectiveView === 'sets';
