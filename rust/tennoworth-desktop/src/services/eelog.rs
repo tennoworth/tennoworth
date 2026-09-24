@@ -365,7 +365,9 @@ impl GapKind {
 /// re-announced), poll every `poll`, handle truncation (game restart writes a
 /// fresh file) by re-seeking to 0. Each confirmed trade goes to `on_trade`,
 /// which reports whether the ledger accepted it, and each stretch the tailer
-/// could not account for goes to `on_gap` with the reason.
+/// could not account for goes to `on_gap` with the reason. After a gap that
+/// left the log unreadable, the first poll that reads it again calls
+/// `on_readable`.
 /// Blocking - run on its own thread.
 pub fn tail_forever_with_lines(
     path: &Path,
@@ -373,6 +375,7 @@ pub fn tail_forever_with_lines(
     on_line: impl FnMut(&str),
     on_trade: impl FnMut(TradeEvent, LogPosition) -> bool,
     on_gap: impl FnMut(GapKind),
+    on_readable: impl FnMut(),
 ) {
     let start = std::time::Instant::now();
     tail_with_ticks(
@@ -387,6 +390,7 @@ pub fn tail_forever_with_lines(
         on_line,
         on_trade,
         on_gap,
+        on_readable,
     );
 }
 
@@ -401,6 +405,7 @@ fn tail_with_ticks(
     mut on_line: impl FnMut(&str),
     mut on_trade: impl FnMut(TradeEvent, LogPosition) -> bool,
     mut on_gap: impl FnMut(GapKind),
+    mut on_readable: impl FnMut(),
 ) {
     let mut machine = TradeMachine::new();
     let initial = log_position(path);
@@ -411,26 +416,41 @@ fn tail_with_ticks(
         .unwrap_or_else(|| fallback_session.clone());
     let mut remainder = Vec::new();
     let mut line_offset = offset;
-    // Highest offset already handed to `on_line`. Rewinding for a ledger retry
-    // must not replay those lines: the overlay consumer behind `on_line` counts
-    // slot markers and triggers captures, so it is not idempotent.
-    let mut line_watermark = offset;
     let mut dialog_start = offset;
     let mut observed_after = crate::services::allowance::unix_now();
     let mut dialog_observed_after = observed_after;
-    // Set while re-offering a trade the ledger refused. The dialog's original
-    // observation time has to survive the re-read, or a retried trade would start
-    // looking newer than the scan or UTC reset it predates.
-    let mut retrying = false;
+    // Trades the ledger has not yet accepted, oldest first. A refused trade is
+    // held here and re-offered each poll, and every later trade queues behind
+    // it, so none is recorded ahead of an earlier one. Holding the parsed event
+    // instead of rewinding the read keeps `on_line` live: the overlay behind it
+    // must keep seeing the log while the ledger is down, and its consumer counts
+    // slot markers, so no line may reach it twice.
+    let mut held: std::collections::VecDeque<(TradeEvent, LogPosition)> =
+        std::collections::VecDeque::new();
+    // Set by a gap that left the log unreadable, so the next clean read can
+    // withdraw the warning it raised.
+    let mut unreadable = false;
     while let Some((now_ms, now)) = next_tick() {
+        while let Some((trade, position)) = held.pop_front() {
+            if !on_trade(trade.clone(), position.clone()) {
+                held.push_front((trade, position));
+                break;
+            }
+        }
         let Ok(mut file) = std::fs::File::open(path) else {
             on_gap(GapKind::Io);
+            unreadable = true;
             continue;
         };
+        // An unidentifiable log is still read, but it is a gap on every poll;
+        // reporting recovery in the same poll would flap the warning 4x a second.
+        let mut identified = true;
         let position = match file_position(&mut file) {
             Some(position) => position,
             None => {
                 on_gap(GapKind::Io);
+                unreadable = true;
+                identified = false;
                 let Ok(meta) = file.metadata() else { continue };
                 if meta.len() < offset {
                     fallback_session = wfm_core::identity::random_token(16);
@@ -450,26 +470,32 @@ fn tail_with_ticks(
             on_gap(GapKind::Rotated);
             offset = 0;
             line_offset = 0;
-            line_watermark = 0;
             remainder.clear();
             machine = TradeMachine::new();
-            retrying = false;
         }
         session = position.session.clone();
         if position.end == offset {
             if remainder.is_empty() {
                 observed_after = now;
             }
+            if identified && std::mem::take(&mut unreadable) {
+                on_readable();
+            }
             continue;
         }
         if file.seek(SeekFrom::Start(offset)).is_err() {
             on_gap(GapKind::Io);
+            unreadable = true;
             continue;
         }
         let mut buf = Vec::new();
         if file.take(1024 * 1024).read_to_end(&mut buf).is_err() {
             on_gap(GapKind::Io);
+            unreadable = true;
             continue;
+        }
+        if identified && std::mem::take(&mut unreadable) {
+            on_readable();
         }
         offset += buf.len() as u64;
         remainder.extend_from_slice(&buf);
@@ -490,14 +516,9 @@ fn tail_with_ticks(
             let line = line.trim_end_matches(['\r', '\n']);
             if line.contains(DIALOG_START) {
                 dialog_start = beginning;
-                if !retrying {
-                    dialog_observed_after = observed_after;
-                }
+                dialog_observed_after = observed_after;
             }
-            if line_offset > line_watermark {
-                line_watermark = line_offset;
-                on_line(line);
-            }
+            on_line(line);
             if let Some(t) = machine.feed(line, now_ms) {
                 let trade_position = LogPosition {
                     session: position.session.clone(),
@@ -505,18 +526,8 @@ fn tail_with_ticks(
                     end: line_offset,
                     observed_after: dialog_observed_after,
                 };
-                if on_trade(t, trade_position) {
-                    retrying = false;
-                } else {
-                    // Hold the cursor at the dialog that failed, so the next poll
-                    // re-offers exactly this trade, and stop here: nothing later in
-                    // the batch may be dispatched ahead of an unrecorded one.
-                    offset = dialog_start;
-                    line_offset = dialog_start;
-                    remainder.clear();
-                    machine = TradeMachine::new();
-                    retrying = true;
-                    break;
+                if !held.is_empty() || !on_trade(t.clone(), trade_position.clone()) {
+                    held.push_back((t, trade_position));
                 }
             } else if line.contains(TRADE_SUCCESS) {
                 on_gap(GapKind::Unrecognized);
@@ -891,6 +902,7 @@ mod tests {
                 !refuse
             },
             |kind| gaps.push(kind),
+            || {},
         );
 
         std::fs::remove_file(&path).expect("cleanup");
@@ -936,5 +948,156 @@ mod tests {
             4,
             "each success line is delivered once"
         );
+    }
+
+    /// While the ledger keeps refusing a trade, the log must keep reaching the
+    /// line consumer. The overlay behind `on_line` hides itself on the reward
+    /// close marker; a tailer that parked at the refused trade silenced it for
+    /// as long as the database stayed down.
+    #[test]
+    fn a_trade_the_ledger_keeps_refusing_does_not_starve_the_line_consumer() {
+        use std::cell::Cell;
+        use std::io::Write;
+
+        let path = std::env::temp_dir().join(format!(
+            "eelog-stuck-{}",
+            wfm_core::identity::random_token(12)
+        ));
+        let header =
+            "0.1 Sys [Diag]: Current time: Mon Sep 7 10:00:00 2026 [UTC: Mon Sep 7 09:00:00 2026]\n";
+        std::fs::write(&path, header.as_bytes()).unwrap();
+
+        let stuck = trade_text(1, "Stuck");
+        let later = trade_text(2, "Later");
+        let tick = Cell::new(0usize);
+        let mut offered: Vec<String> = Vec::new();
+        let mut lines: Vec<String> = Vec::new();
+        let now = crate::services::allowance::unix_now();
+
+        tail_with_ticks(
+            &path,
+            || {
+                let next = tick.get() + 1;
+                tick.set(next);
+                if next > 4 {
+                    return None;
+                }
+                let appended = match next {
+                    1 => Some(stuck.clone()),
+                    2 => Some("30.0 Sys [Info]: after the refused trade\n".to_string()),
+                    3 => Some(later.clone()),
+                    _ => None,
+                };
+                if let Some(text) = appended {
+                    let mut file = std::fs::OpenOptions::new()
+                        .append(true)
+                        .open(&path)
+                        .expect("append");
+                    file.write_all(text.as_bytes()).expect("append");
+                }
+                Some((next as u64 * 250, now))
+            },
+            |line| lines.push(line.to_string()),
+            |trade, _| {
+                offered.push(trade.partner.clone());
+                false
+            },
+            |_| {},
+            || {},
+        );
+
+        std::fs::remove_file(&path).expect("cleanup");
+
+        assert!(
+            lines.iter().any(|l| l.contains("after the refused trade")),
+            "lines written after a refused trade still reach the consumer"
+        );
+        assert_eq!(
+            lines.iter().filter(|l| l.contains(TRADE_SUCCESS)).count(),
+            2,
+            "each line is delivered once, however often the trade is retried"
+        );
+        assert!(
+            offered.iter().all(|partner| partner == "Stuck"),
+            "nothing is offered ahead of the refused trade: {offered:?}"
+        );
+        assert_eq!(offered.len(), 4, "the refused trade is retried every poll");
+    }
+
+    /// An unreadable log raises a warning; the tailer has to say when the log
+    /// reads again, or the warning outlives the fault.
+    #[test]
+    fn a_log_that_reads_again_is_reported_once() {
+        use std::cell::Cell;
+
+        let path = std::env::temp_dir().join(format!(
+            "eelog-readable-{}",
+            wfm_core::identity::random_token(12)
+        ));
+        let tick = Cell::new(0usize);
+        let mut gaps: Vec<GapKind> = Vec::new();
+        let readable = Cell::new(0usize);
+        let now = crate::services::allowance::unix_now();
+
+        tail_with_ticks(
+            &path,
+            || {
+                let next = tick.get() + 1;
+                tick.set(next);
+                if next > 3 {
+                    return None;
+                }
+                if next == 2 {
+                    let header = "0.1 Sys [Diag]: Current time: Mon Sep 7 10:00:00 2026 [UTC: Mon Sep 7 09:00:00 2026]\n";
+                    std::fs::write(&path, format!("{header}{}\n", "a".repeat(4096)))
+                        .expect("create log");
+                }
+                Some((next as u64 * 250, now))
+            },
+            |_| {},
+            |_, _| true,
+            |kind| gaps.push(kind),
+            || readable.set(readable.get() + 1),
+        );
+
+        let _ = std::fs::remove_file(&path);
+
+        assert_eq!(gaps.first(), Some(&GapKind::Io), "the missing log is a gap");
+        assert_eq!(readable.get(), 1, "recovery is reported once, not per poll");
+    }
+
+    /// A log the tailer can read but not identify is a gap on every poll. It
+    /// must not also report recovery each poll, or the warning would flap.
+    #[test]
+    fn an_unidentified_log_does_not_report_recovery() {
+        use std::cell::Cell;
+
+        let path = std::env::temp_dir().join(format!(
+            "eelog-unidentified-{}",
+            wfm_core::identity::random_token(12)
+        ));
+        std::fs::write(&path, "0.1 Sys [Info]: no startup header\n").unwrap();
+        let tick = Cell::new(0usize);
+        let mut gaps = 0usize;
+        let readable = Cell::new(0usize);
+        let now = crate::services::allowance::unix_now();
+
+        tail_with_ticks(
+            &path,
+            || {
+                let next = tick.get() + 1;
+                tick.set(next);
+                (next <= 3).then_some((next as u64 * 250, now))
+            },
+            |_| {},
+            |_, _| true,
+            |_| gaps += 1,
+            || readable.set(readable.get() + 1),
+        );
+
+        std::fs::remove_file(&path).expect("cleanup");
+
+        assert_eq!(gaps, 3, "every poll reports the unidentified log");
+        assert_eq!(readable.get(), 0);
     }
 }

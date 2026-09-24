@@ -117,9 +117,14 @@ impl PollOutcome {
             })
     }
 
-    /// Record that the ledger accepted a trade, which clears a held trade.
+    /// Record that the ledger accepted a trade. That clears a held trade, and
+    /// also a log warning: the log was read through a trade that is now
+    /// recorded. Without this a single unparsable trade line left recording
+    /// reported as paused until the game restarted, while every later trade
+    /// was recorded normally.
     pub fn accepted(&mut self) {
         self.ledger_error = None;
+        self.log_error = None;
     }
 }
 
@@ -237,6 +242,23 @@ mod tests {
         recovered.accepted();
         assert_eq!(
             observe(&recorder, &recovered),
+            Some(RecordingState::Recording)
+        );
+    }
+
+    #[test]
+    fn an_accepted_trade_clears_a_log_warning() {
+        let recorder = Recorder::new();
+        let mut outcome = PollOutcome {
+            log_error: Some("a completed trade in the game log could not be read".into()),
+            ..PollOutcome::default()
+        };
+        observe(&recorder, &outcome);
+        assert!(matches!(recorder.state(), RecordingState::Paused(_)));
+
+        outcome.accepted();
+        assert_eq!(
+            observe(&recorder, &outcome),
             Some(RecordingState::Recording)
         );
     }

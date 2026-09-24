@@ -493,6 +493,10 @@ pub fn start_tailer(
                         let _ = app.emit(crate::services::allowance::EVENT_ALLOWANCE_CHANGED, ());
                     }
                 },
+                || {
+                    outcome.borrow_mut().log_error = None;
+                    announce_recording(&app, &outcome.borrow(), &recorder);
+                },
             );
         });
     match spawned {
