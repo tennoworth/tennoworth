@@ -147,9 +147,9 @@ export class TauriTransport implements DesktopCapabilities {
       rethrowInvoke(e);
     }
   }
-  async fetchOrders(): Promise<unknown> {
+  async fetchOrders(): Promise<import('../contracts/generated/desktop').OwnOrder[]> {
     try {
-      return await resolveInvoke()<unknown>('fetch_orders');
+      return await resolveInvoke()<import('../contracts/generated/desktop').OwnOrder[]>('fetch_orders');
     } catch (e) {
       rethrowInvoke(e);
     }

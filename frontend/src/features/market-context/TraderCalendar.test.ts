@@ -27,7 +27,7 @@ function market(completeness: 'complete' | 'partial' | 'unknown', fetched = '202
       },
     },
     surface_provenance: {
-      'world.goals': { disposition: 'used_current', attempted_at: fetched, data_fetched_at: fetched },
+      'world.goals': { disposition: 'published_fresh', attempted_at: fetched, data_fetched_at: fetched },
     },
   } as unknown as Market;
 }

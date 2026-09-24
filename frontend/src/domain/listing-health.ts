@@ -118,3 +118,27 @@ export function summarize(issues: HealthIssue[]): HealthSummary {
 export function ownedKey(slug: string, subtype: string | null | undefined): string {
   return `${slug}|${subtype ?? ''}`;
 }
+
+/** Ownership evidence for one listing, from the last scan's counts.
+ *
+ *  `null` means "not assessable" and suppresses every ownership verdict.
+ *
+ *  A composed item - a prime set, assembled from parts - is never reported by a
+ *  scan that reads individual items, so its absence from the map is absence of
+ *  evidence rather than evidence of absence. Reading that absence as `0`
+ *  produced a false "you don't own this" and offered a one-click delete of a
+ *  live listing the user could in fact build.
+ *
+ *  Evidence that IS present is always used, so a set the scan really carries a
+ *  count for is still assessed. A count of `0` is evidence, not absence. */
+export function ownedEvidence(
+  slug: string,
+  subtype: string | null | undefined,
+  ownedQty: ReadonlyMap<string, number> | null | undefined,
+  composed?: ReadonlySet<string>,
+): number | null {
+  if (!ownedQty) return null;
+  const known = ownedQty.get(ownedKey(slug, subtype));
+  if (known != null) return known;
+  return composed?.has(slug) ? null : 0;
+}

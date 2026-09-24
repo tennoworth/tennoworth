@@ -47,11 +47,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     market?: MarketItemEntry;
   }
 
-  interface ReviewOrderWire {
-    id: string; platinum: number; quantity: number; visible: boolean;
-    perTrade?: number | null; rank?: number; subtype?: string | null;
-    type?: string; item?: { slug?: string };
-  }
+  import type { OwnOrder } from '../../contracts/generated/desktop';
 
   interface Props {
     open?: boolean;
@@ -63,12 +59,16 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
      *  resends after authenticating. */
     onauthrequired?: (code: 'needs_login' | 'needs_unlock') => void;
     onclose?: () => void;
+    /** Wraps the send so the caller can track it as in-flight and re-read the
+     *  saved batch once it settles. Passed in rather than known here: this
+     *  component sends, it does not own the batch's lifecycle. */
+    sendThrough?: <T>(send: () => Promise<T>) => Promise<T>;
     listingBlockReason?: string | null;
     onrecheck?: () => void;
     listingActionLabel?: string;
     currentSnapshotId?: number | null;
   }
-  let { open = $bindable(false), rows, transport, onauthrequired, onclose, listingBlockReason = null, onrecheck, listingActionLabel = 'Check WFM listings', currentSnapshotId }: Props = $props();
+  let { open = $bindable(false), rows, transport, onauthrequired, onclose, sendThrough = (send) => send(), listingBlockReason = null, onrecheck, listingActionLabel = 'Check WFM listings', currentSnapshotId }: Props = $props();
 
   let plan = $state<PlanRow[]>([]);
   let reviewBlockReason = $derived(listingBlockReason ?? (currentSnapshotId !== undefined && plan.some(row => row.inventory_snapshot_id !== currentSnapshotId)
@@ -79,6 +79,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   let cancellationRequested = $state(false);
   let serverResults = $state<ItemResult[]>([]);
   let networkError = $state<string | null>(null);
+  let durabilityError = $state<string | null>(null);
 
   function initialPlanFor(rows: InputRow[]): PlanRow[] {
     return rows.map((r) => {
@@ -145,6 +146,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
       phase = 'review';
       serverResults = [];
       networkError = null;
+      durabilityError = null;
       ordersReady = false;
       sessionRemaining = null;
       sessionProblem = null;
@@ -191,22 +193,19 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     ordersBusy = true;
     try {
       if (!await refreshSession()) return false;
-      const body = await transport.fetchOrders() as { data?: { sell?: ReviewOrderWire[] } | ReviewOrderWire[]; sell?: ReviewOrderWire[] };
+      const orders: OwnOrder[] = await transport.fetchOrders();
       if (!open || epoch !== reviewEpoch) return false;
-      const data = body?.data ?? body;
-      const orders = Array.isArray(data) ? data.filter(o => o.type === 'sell') : data?.sell;
-      if (!Array.isArray(orders)) throw new Error('Could not read existing orders. Retry before submitting.');
       let changed = false;
       for (const row of plan) {
-        const matches = orders.filter(o => o.item?.slug === row.slug && (o.rank ?? 0) === row.rank && (o.subtype ?? null) === row.subtype);
+        const matches = orders.filter(o => o.side === 'sell' && o.slug === row.slug && (o.rank ?? 0) === row.rank && (o.subtype ?? null) === row.subtype);
         if (matches.length > 1) throw new Error(`${row.name} has ambiguous existing orders. Resolve them in My orders first.`);
         const prior = matches[0];
         if (prior && (typeof prior.id !== 'string' || typeof prior.visible !== 'boolean' || !Number.isSafeInteger(prior.platinum) || !Number.isSafeInteger(prior.quantity)
-          || (prior.perTrade != null && (!Number.isSafeInteger(prior.perTrade) || prior.perTrade < 1 || prior.perTrade > 6)))) {
+          || (prior.per_trade != null && (!Number.isSafeInteger(prior.per_trade) || prior.per_trade < 1 || prior.per_trade > 6)))) {
           throw new Error(`Existing order details are incomplete for ${row.name}.`);
         }
         const next: ReviewedOrder = prior ? { state: 'existing', id: prior.id, platinum: prior.platinum,
-          quantity: prior.quantity, per_trade: prior.perTrade ?? null, visible: prior.visible } : { state: 'new' };
+          quantity: prior.quantity, per_trade: prior.per_trade, visible: prior.visible as boolean } : { state: 'new' };
         if (JSON.stringify(row.reviewed_order) !== JSON.stringify(next)) changed = true;
         row.reviewed_order = next;
       }
@@ -367,8 +366,9 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
         reference_low_sell: r.reference_low_sell || undefined,
       }));
     try {
-      const resp = await transport.submitPlan(items);
+      const resp = await sendThrough(() => transport.submitPlan(items));
       serverResults = resp.results || [];
+      durabilityError = resp.durability_error ?? null;
       phase = 'results';
     } catch (e) {
       if (handleAuthCode(e)) return;
@@ -417,7 +417,10 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     try {
       const resp = await transport.bulkVisibility(ids, true);
       visibilityResults = resp?.results || [];
-      visibilityDone = true;
+      // "Buyers can see them now" is a claim that WFM accepted the toggle, so it
+      // takes at least one confirmed row: the call returning is not the change
+      // landing. The counts beside it already report how many failed.
+      visibilityDone = visibilityResults.some((r) => r.status === 'ok');
     } catch (e) {
       // A lock-state rejection here (desktop logout between send and toggle)
       // must not dump the user to the error phase and lose the results table.
@@ -656,8 +659,11 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
         {#if networkError}<p class="ui-notice" data-tone="bad">{networkError}</p>{/if}
         <button class="btn" onclick={stopSending} disabled={cancellationRequested}>Stop after current request</button>
       {:else if phase === 'results'}
+        {#if durabilityError}
+          <p class="ui-notice" data-tone="bad" role="alert">{durabilityError}</p>
+        {/if}
         <p class="lead">
-          {pendingCount > 0 ? 'Batch interrupted. Close this review and use Resume to revalidate the saved items.' : 'Done.'} <span class="ok">{okCount} created</span>
+          {durabilityError ? 'Batch results need attention.' : pendingCount > 0 ? 'Batch interrupted. Close this review and use Resume to revalidate the saved items.' : 'Done.'} <span class="ok">{okCount} created</span>
           {#if updatedCount > 0}· <span class="ok">{updatedCount} updated</span>{/if}
           {#if errCount > 0}· <span class="bad">{errCount} failed</span>{/if}
           {#if pendingCount > 0}· <span class="warn">{pendingCount} saved for resume</span>{/if}.
@@ -688,7 +694,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
             </tbody>
           </table>
         </div>
-        {#if visibilityDone}
+        {#if visibilityResults.length > 0}
           <p class="lead">
             Visibility toggled. <span class="ok">{visibleOkCount} now visible</span>
             {#if visibleErrCount > 0}· <span class="bad">{visibleErrCount} failed</span>{/if}.

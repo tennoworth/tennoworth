@@ -41,7 +41,7 @@ export interface OrderCapability {
   getPendingPlan(): Promise<PendingPlan | null>;
   resumePendingPlan(): Promise<PlanResponse>;
   discardPendingPlan(): Promise<unknown>;
-  fetchOrders(): Promise<unknown>;
+  fetchOrders(): Promise<import('./generated/desktop').OwnOrder[]>;
   updateOrder(orderId: string, patch: OrderPatch): Promise<unknown>;
   deleteOrder(orderId: string): Promise<unknown>;
   bulkVisibility(orderIds: string[], visible: boolean): Promise<{ results: ItemResult[] }>;
@@ -215,7 +215,19 @@ export interface EeLogStatus {
   /** EE.log path being tailed, or null when the game's log wasn't found. */
   path: string | null;
   auto_close: boolean;
+  /**
+   * Whether completed trades are being recorded right now. Read from native
+   * memory rather than the database, so it stays answerable when the database is
+   * what broke. `paused` carries why, because the two reasons need different
+   * next steps from the user.
+   */
+  recording: EeLogRecording;
 }
+
+export type EeLogRecording =
+  | 'off'
+  | 'recording'
+  | { paused: { ledger: { error: string } } | { log: { error: string } } };
 
 export interface TradeDetected {
   id: number;

@@ -876,8 +876,6 @@ fn event_reward_fixture_keeps_groups_and_reconciles_goals_independently() {
     );
 
     std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
-    responses["https://api.warframe.com/cdn/worldState.php"]["Goals"] = serde_json::json!([]);
-    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
     assert!(run(
         &[
             "build",
@@ -885,6 +883,41 @@ fn event_reward_fixture_keeps_groups_and_reconciles_goals_independently() {
             dir.to_str().unwrap(),
             "--now",
             "2026-07-03T12:00:00Z"
+        ],
+        &dir
+    )
+    .status
+    .success());
+    let repeated: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(
+        repeated["surface_provenance"]["world.events"]["data_fetched_at"],
+        "2026-06-01T12:00:00Z",
+        "a second partial publication must retain the original evidence time"
+    );
+    assert_eq!(
+        repeated["surface_provenance"]["world.goals"]["data_fetched_at"],
+        "2026-07-01T12:00:00Z"
+    );
+
+    std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
+    responses["https://api.warframe.com/cdn/worldState.php"]["Goals"] = serde_json::json!([]);
+    let prior_path = dir.join("prior-market.json");
+    let mut legacy: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&prior_path).unwrap()).unwrap();
+    legacy["de"]["child_fetched_at"]
+        .as_object_mut()
+        .unwrap()
+        .remove("world.events");
+    std::fs::write(&prior_path, serde_json::to_vec(&legacy).unwrap()).unwrap();
+    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
+    assert!(run(
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-04T12:00:00Z"
         ],
         &dir
     )
@@ -904,6 +937,31 @@ fn event_reward_fixture_keeps_groups_and_reconciles_goals_independently() {
         third["surface_provenance"]["world.goals"]["disposition"],
         "cleared_authoritative_empty"
     );
+    assert_eq!(
+        third["surface_provenance"]["world.goals"]["data_fetched_at"],
+        "2026-07-04T12:00:00Z",
+        "an authoritative empty observation is current evidence"
+    );
+    assert_eq!(
+        third["surface_provenance"]["world.events"]["data_fetched_at"],
+        "",
+        "carried legacy rows without a source stamp must keep unknown age"
+    );
+
+    std::fs::copy(dir.join("market.json"), &prior_path).unwrap();
+    responses["https://api.warframe.com/cdn/worldState.php"]["Events"] =
+        observed["Events"].clone();
+    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
+    assert!(run(
+        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-05T12:00:00Z"],
+        &dir
+    )
+    .status
+    .success());
+    let recovered: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(recovered["surface_provenance"]["world.events"]["disposition"], "published_fresh");
+    assert_eq!(recovered["surface_provenance"]["world.events"]["data_fetched_at"], "2026-07-05T12:00:00Z");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

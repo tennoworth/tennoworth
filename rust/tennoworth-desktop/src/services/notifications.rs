@@ -1,89 +1,17 @@
 //! Durable notifications. Producers describe evidence; this module owns delivery.
 use crate::persistence::Db;
-use std::collections::BTreeMap;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_notification::NotificationExt;
 
-pub const EVENT: &str = "notifications-changed";
-pub const CATEGORIES: &[&str] = &["trades", "watches", "baro", "calendar", "digest"];
+// The contract lives beside the layers that share it; re-exported here because
+// every producer already names it through this module.
+pub use crate::notification_contract::{
+    categories_match_contract, Candidate, Notification, Preferences,
+};
 
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
-pub struct CategoryPreference {
-    pub enabled: bool,
-    pub native: bool,
-}
-#[derive(Clone, serde::Serialize, serde::Deserialize)]
-pub struct Preferences {
-    pub popups: bool,
-    pub categories: BTreeMap<String, CategoryPreference>,
-}
-impl Default for Preferences {
-    fn default() -> Self {
-        Self {
-            popups: true,
-            categories: CATEGORIES
-                .iter()
-                .map(|k| {
-                    (
-                        k.to_string(),
-                        CategoryPreference {
-                            enabled: true,
-                            native: true,
-                        },
-                    )
-                })
-                .collect(),
-        }
-    }
-}
-/// The category set storage and the settings UI must agree on. One predicate so
-/// the read-side normalization and the write-side rejection cannot drift.
-pub fn categories_match_contract(categories: &BTreeMap<String, CategoryPreference>) -> bool {
-    categories.len() == CATEGORIES.len() && CATEGORIES.iter().all(|k| categories.contains_key(*k))
-}
-#[derive(Clone, Debug, serde::Serialize)]
-pub struct Notification {
-    pub id: i64,
-    pub category: String,
-    pub title: String,
-    pub body: String,
-    pub target: String,
-    pub created_at: i64,
-    pub read: bool,
-    pub delivery: String,
-}
-#[derive(Clone, Debug)]
-pub struct Candidate {
-    pub key: String,
-    pub stage: i64,
-    pub expires_at: i64,
-    pub cooldown: i64,
-    pub category: String,
-    pub title: String,
-    pub body: String,
-    pub target: String,
-}
-impl Candidate {
-    pub fn once(
-        key: String,
-        category: &str,
-        title: String,
-        body: String,
-        target: &str,
-        now: i64,
-    ) -> Self {
-        Self {
-            key,
-            stage: 1,
-            expires_at: now + 31 * 86400,
-            cooldown: 0,
-            category: category.into(),
-            title,
-            body,
-            target: target.into(),
-        }
-    }
-}
+/// Emitted when the inbox changes, so an open surface reloads without polling.
+pub const EVENT: &str = "notifications-changed";
+
 pub fn now() -> i64 {
     chrono::Utc::now().timestamp()
 }
@@ -190,7 +118,10 @@ mod tests {
         .unwrap();
         assert_eq!(EVENT, v["event"]);
         assert_eq!(crate::services::reminders::MARKET_EVENT, v["market_event"]);
-        assert_eq!(serde_json::to_value(CATEGORIES).unwrap(), v["categories"]);
+        assert_eq!(
+            serde_json::to_value(crate::notification_contract::CATEGORIES).unwrap(),
+            v["categories"]
+        );
         let defaults = Preferences::default();
         assert!(defaults.popups && defaults.categories.values().all(|c| c.enabled && c.native));
     }

@@ -4,6 +4,10 @@ export type AccessStatus = { revision: number, reason: string, cooldown_until_ms
 
 export type CmdError = { code: string, message: string, };
 
+export type OrderSide = "sell" | "buy";
+
+export type OwnOrder = { id: string, item_id: string, slug: string | null, name: string | null, side: OrderSide, platinum: number, quantity: number, per_trade: number | null, visible: boolean | null, rank: number | null, subtype: string | null, };
+
 export type Restrictions = { spacing_ms: number, concurrency: number, contract_spacing_ms: number, watch_interval_ms: number, pause_all: boolean, pause_background: boolean, pause_contracts: boolean, pause_mutations: boolean, pause_websockets: boolean, };
 
 export type ScanReport = { url: string, opened: boolean, };

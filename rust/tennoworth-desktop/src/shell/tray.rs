@@ -11,7 +11,7 @@ use tauri::{AppHandle, Manager, Wry};
 
 use wfm_core::poison::guard;
 
-use crate::commands::inventory::scan_and_record;
+use crate::services::acquisition::scan_and_record;
 use crate::persistence::Db;
 use crate::services::market::MarketCache;
 use crate::services::sellables::{self, MarketData, ScanNotification, SellableRow};
