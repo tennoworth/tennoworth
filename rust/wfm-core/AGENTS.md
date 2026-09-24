@@ -25,8 +25,11 @@ Driven by the desktop's IPC commands (`submit_plan` / `get_pending_plan` /
   invariant in [`../AGENTS.md`](../AGENTS.md).
 - Pending-plan recovery: every plan is persisted to
   `~/.config/wfminv/pending_plan.json` (atomic tmp+rename) before the
-  first POST, updated after each item, and deleted on clean
-  completion. `get_pending_plan` / `resume_pending_plan` /
+  first POST. Each item is marked uncertain on disk before its execution,
+  then updated with the known outcome; a failed outcome write leaves the
+  uncertain marker for recovery. The desktop records confirmed results in
+  SQLite before deleting a finished journal; failed history recording leaves
+  it available for retry. `get_pending_plan` / `resume_pending_plan` /
   `discard_pending_plan` expose this to the webview.
 
 ## Cross-platform memory access

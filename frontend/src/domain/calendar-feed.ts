@@ -11,6 +11,7 @@
 // unknown; absent still beats inventing a guaranteed basket.
 
 import type { DailyDeal, EventRewardEntry, Market, OwnedRecord, VaultRotation } from '../contracts/data';
+import { surfaceHasEvidence } from './market';
 
 export type CalendarKind = 'baro' | 'vault' | 'deal' | 'event';
 export type CalendarReach = 'scan' | 'none' | 'hits' | 'partial-hits' | 'unknown';
@@ -189,6 +190,16 @@ function dealItems(market: Market | null | undefined): CalendarItem[] {
   }));
 }
 
+/**
+ * Whether a surface's provenance records an actual observation.
+ *
+ * The producer writes `data_fetched_at` from the prior snapshot when a surface
+ * was carried forward, but stamps *both* timestamps with the attempt when the
+ * read failed and there was nothing to carry - so an `empty_*` or
+ * `preserved_invalid` surface carries a stamp minutes old while holding no
+ * evidence. Only the dispositions that represent observed data may be measured.
+ */
+
 function eventItems(
   market: Market | null | undefined,
   owned: Map<string, OwnedRecord> | null | undefined,
@@ -200,7 +211,12 @@ function eventItems(
   if (owned) for (const record of owned.values()) held.add(record.slug);
   const rows = [...Object.values(surface.goals ?? {}), ...Object.values(surface.events ?? {})];
   return rows.map((event: EventRewardEntry) => {
-    const stamp = market?.surface_provenance?.[`world.${event.source}s`]?.data_fetched_at;
+    const provenance = market?.surface_provenance?.[`world.${event.source}s`];
+    // A failed read records the *attempt* as the data timestamp, so measuring
+    // age from it would report an event whose child was never observed as
+    // freshly updated. Its true age is unknown, which is what an absent stamp
+    // already reports.
+    const stamp = surfaceHasEvidence(provenance?.disposition) ? provenance?.data_fetched_at : undefined;
     const stampMs = stamp ? Date.parse(stamp) : NaN;
     const dataAgeDays = Number.isFinite(stampMs)
       ? Math.max(0, Math.floor((now - stampMs) / 86_400_000))

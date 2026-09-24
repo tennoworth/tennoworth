@@ -43,15 +43,23 @@ export function createPreview(scenario: string) {
     ['score-explainer-dismissed', '1'],
   ]);
   const empty = scenario === 'empty';
+  // One listing the sample inventory does not own (so the health check has a
+  // real issue to report) beside one composed set it cannot report at all: a
+  // scan holds set parts, never the assembled set.
+  const unownedSample = scenario === 'orders-unowned';
   if (sessionSample) settings.set('view', 'session');
   let notifications = empty ? [] : [{ id: 1, category: 'trades', title: 'Sold Pyrana Prime Set for 90p', body: 'Pyrana Prime Set ×1 · Listing update failed; review My Orders. Your completed trade is saved in the Ledger.', target: 'orders', created_at: Math.floor(Date.now() / 1000), read: false, delivery: 'failed' }];
   let notificationPreferences = { popups: true, categories: Object.fromEntries(['trades', 'watches', 'baro', 'calendar', 'digest'].map(k => [k, { enabled: true, native: true }])) };
   const responses: Record<string, unknown> = {
-    fetch_orders: { data: { sell: empty || scenario.startsWith('buyers') ? [] : [
-      { id: 'preview-order', platinum: 90, visible: true, quantity: 2, item: { name: 'Pyrana Prime Set', slug: 'pyrana_prime_set' } },
-      ...(sessionSample ? [{ id: 'preview-flow', platinum: 26, visible: true, quantity: 5, rank: 0, item: { name: 'Primed Flow', slug: 'primed_flow' } }] : []),
-      ...(sessionSample ? [{ id: 'preview-arcane', platinum: 48, perTrade: 6, visible: false, quantity: 12, rank: 0, item: { name: 'Arcane Energize', slug: 'arcane_energize' } }] : []),
-    ], buy: [] } },
+    fetch_orders: empty || scenario.startsWith('buyers') ? [] : [
+      { id: 'preview-order', platinum: 90, visible: true, quantity: 2, name: 'Pyrana Prime Set', slug: 'pyrana_prime_set', item_id: 'pyrana_prime_set', side: 'sell' as const, per_trade: null, subtype: null },
+      ...(sessionSample ? [{ id: 'preview-flow', platinum: 26, visible: true, quantity: 5, rank: 0, name: 'Primed Flow', slug: 'primed_flow', item_id: 'primed_flow', side: 'sell' as const, per_trade: null, subtype: null }] : []),
+      ...(sessionSample ? [{ id: 'preview-arcane', platinum: 48, visible: false, quantity: 12, rank: 0, name: 'Arcane Energize', slug: 'arcane_energize', item_id: 'arcane_energize', side: 'sell' as const, per_trade: 6, subtype: null }] : []),
+      ...(unownedSample ? [
+        { id: 'preview-unowned', platinum: 12, visible: true, quantity: 1, rank: 0, name: 'Vitality', slug: 'vitality', item_id: 'vitality', side: 'sell' as const, per_trade: null, subtype: null },
+        { id: 'preview-set', platinum: 200, visible: true, quantity: 1, name: 'Akbolto Prime Set', slug: 'akbolto_prime_set', item_id: 'akbolto_prime_set', side: 'sell' as const, per_trade: null, subtype: null },
+      ] : []),
+    ],
     list_watches: empty ? [] : [{
       id: 1, slug: 'pyrana_prime_set', name: 'Pyrana Prime Set', side: 'sell', threshold: 70,
       rank: 0, subtype: null, created_at: now, last_price: 76, last_checked_at: now, last_fired_at: null,
@@ -60,7 +68,32 @@ export function createPreview(scenario: string) {
       id: 1, at: now, partner: 'Sample trading partner with a long name', kind: 'sale', plat: 90,
       items: [{ name: 'Pyrana Prime Set', qty: 1, direction: 'given' }], log_stamp: null, wfm_closed: true,
     }],
-    eelog_status: { path: '/sample/Warframe/EE.log', auto_close: false },
+    eelog_status: {
+      path: '/sample/Warframe/EE.log',
+      auto_close: false,
+      recording:
+        scenario === 'ledger-paused'
+          ? { paused: { ledger: { error: 'database is locked' } } }
+          : scenario === 'log-unreadable'
+            ? { paused: { log: { error: 'the game log could not be read' } } }
+            : 'recording',
+    },
+    // An interrupted batch the SPA has to describe. `batch-pending` is work that
+    // was never sent; `batch-uncertain` is work whose outcome the market never
+    // confirmed, which must not be offered as a retry.
+    get_pending_plan:
+      scenario === 'batch-pending' || scenario === 'batch-uncertain' || scenario === 'batch-finished'
+        ? {
+            plan_id: 'preview-plan',
+            started_at: new Date(now * 1000 - 3_600_000).toISOString(),
+            items: [
+              { slug: 'pyrana_prime_set', platinum: 90, quantity: 1, order_type: 'sell', visible: false, status: 'ok' },
+              scenario === 'batch-pending'
+                ? { slug: 'primed_flow', platinum: 26, quantity: 2, order_type: 'sell', visible: false, status: 'pending' }
+                : { slug: 'primed_flow', platinum: 26, quantity: 2, order_type: 'sell', visible: false, status: scenario === 'batch-finished' ? 'ok' : 'uncertain_mutation' },
+            ],
+          }
+        : null,
     trade_session_state: {
       set_recipes: scenario === 'session-sets' ? { akbolto_prime_set: sampleRecipe } : {},
       allowance: { remaining: scenario === 'zero-trades' ? 0 : scenario === 'unknown-trades' ? null : 24,
@@ -89,7 +122,7 @@ export function createPreview(scenario: string) {
     if (command === 'wfm_logout') { responses.wfm_auth_status = { logged_in: false, unlocked: false }; return null; }
     if (command === 'protection_state') {
       const unknown = scenario === 'protection-error' || !(responses.wfm_auth_status as { unlocked: boolean }).unlocked;
-      const listed = new Map((responses.fetch_orders as {data:{sell:Array<{quantity:number,item:{slug:string}}>}}).data.sell.map(row => [row.item.slug, row.quantity]));
+      const listed = new Map((responses.fetch_orders as Array<{quantity:number,slug:string}>).map(row => [row.slug, row.quantity]));
       return sampleGuidance({ plan: structuredClone(protectionPlan), snapshot_id: empty ? null : 1,
         items: Object.fromEntries([...owned.values()].filter(row => !row.subtype && !row.slug.endsWith('_set')).map(row => [row.slug,
           sampleAllocation(row.count, row.leveled, Number(settings.get('reserve-copies') ?? 0),
