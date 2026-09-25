@@ -1,5 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import rewardFixture from '../../../tests/fixtures/relic-ocr/result.json' with { type: 'json' };
+
+// The committed snapshot is refreshed at every desktop release, so its own age
+// cannot be what makes the shell show a stale market.
+const baseMarket = JSON.parse(readFileSync(new URL('../../public/market.json', import.meta.url), 'utf8'));
 
 // Text placed on a filled title rail must take the rail's own pair; a rule
 // written for --panel (a count, a glyph) vanishes at ~1.2:1 on the bar.
@@ -55,6 +60,8 @@ const views = ['Sell', 'Trade Session', 'Set picks', 'Relics', 'Rivens', 'Baro',
 for (const theme of ['light', 'dark'] as const) {
   test(`${theme} migrated screens retain content and shared control targets`, async ({ page }, testInfo) => {
     await page.emulateMedia({ colorScheme: theme });
+    const market = { ...baseMarket, updated_at: new Date(Date.now() - 4 * 86_400_000).toISOString() };
+    await page.route('**/market.json', route => route.fulfill({ json: market }));
     await page.goto('/?preview-desktop&sample');
     await expect(page.locator('.shell')).toBeVisible();
     await expect(page.locator('.statusbar .tag.stale'), 'a days-old snapshot is flagged as a caution, not a dot').toHaveText(/stale/i);
