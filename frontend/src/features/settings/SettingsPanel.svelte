@@ -155,7 +155,7 @@ import { type UpdateStatus } from '../../contracts/update';
       <div class="ui-setting-row">
         <div class="ui-setting-copy"><strong>Account session</strong><p>Manage the encrypted login saved on this device.</p></div>
         <div class="ui-setting-control">
-          <span class="status">{#if !wfmStatus}Checking session…{:else if wfmStatus.unlocked}Signed in · session unlocked{:else if wfmStatus.logged_in}Signed in · session locked{:else}Not signed in{/if}</span>
+          <span class="status" class:ok={wfmStatus?.unlocked}>{#if !wfmStatus}Checking session…{:else if wfmStatus.unlocked}Signed in · session unlocked{:else if wfmStatus.logged_in}Signed in · session locked{:else}Not signed in{/if}</span>
           {#if wfmStatus?.logged_in || wfmStatus?.unlocked}
             <button class="btn" class:bad={confirmingLogout} onclick={logOutWfm} disabled={loggingOut}>{loggingOut ? 'Logging out…' : confirmingLogout ? 'Confirm log out' : 'Log out'}</button>
             {#if confirmingLogout}<button class="btn ghost" onclick={() => { confirmingLogout = false; logoutError = ''; }} disabled={loggingOut}>Cancel</button>{/if}
@@ -226,8 +226,10 @@ import { type UpdateStatus } from '../../contracts/update';
   .exp { margin: 0; font-size: var(--text-control); line-height: var(--leading-body); color: var(--muted); max-width: 85ch; }
   .shortcut { width: 100%; font-family: var(--font-mono); }
   input[type='range'] { width: 8rem; min-height: var(--ctl-lg); accent-color: var(--accent); }
-  .mono, .status { font-family: var(--font-mono); font-size: var(--text-caption); color: var(--muted); }
-  .status { overflow-wrap: anywhere; }
+  .mono { font-family: var(--font-mono); font-size: var(--text-caption); color: var(--muted); }
+  /* Status words are prose, not data: body face, with a square for "signed in". */
+  .status { font-size: var(--text-control); color: var(--muted); overflow-wrap: anywhere; }
+  .status.ok::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: var(--s2); background: var(--good); vertical-align: 1px; }
   .good { color: var(--good); }
   .diagnostics { padding: var(--s3) var(--inset) 0; display: flex; flex-direction: column; gap: var(--s3); }
   .warning { margin: 0; padding-left: var(--s3); border-left: 2px solid var(--warn); color: var(--warn); font-size: var(--text-control); line-height: var(--leading-body); }

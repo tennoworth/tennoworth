@@ -184,7 +184,7 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
   .kind.purchase { color: var(--warn); border-color: var(--warn); }
   .good { color: var(--good); }
   .bad { color: var(--bad); }
-  .muted { color: var(--muted); }
+  .muted { color: var(--muted); font-family: var(--font-body); }
   .empty { padding: 10px 0; }
   .scroll { overflow: auto; }
   @media (max-width: 35rem) {

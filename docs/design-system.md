@@ -58,7 +58,7 @@ The active look is `yorha`; the resolved modes are `light` and `dark`.
 | Decoration | `--faint`, `--hairline`, `--grid`, `--hatch` | Nonessential ornament; not essential text |
 | Boundaries | `--border`, `--rule` | Solid outer outlines, dotted inner dividers |
 | Emphasis | `--accent`, `--on-accent`, `--ink-bar`, `--on-ink`, `--on-ink-muted` | Use matching foreground/background pairs |
-| Title rails | `--rail-bg`, `--rail-fg`, `--rail-muted` | Panel title rails; separate from the selected-state inversion |
+| Title rails | `--rail-bg`, `--rail-fg`, `--rail-muted`, `--rail-edge` | Panel, card, FAQ and dialog title rails. Light: the ink bar. Dark: a raised `--panel-2` band under a 2px rag rule, because the ink fill is reserved for selected state |
 | Meaning | `--good`, `--warn`, `--bad`, `--ducat`, `--vault` | Success, caution, error, ducat data, and vaulted status; not decoration |
 | Type | `--font-ui`, `--font-body`, `--font-mono` | Headings/labels, reading, numeric/technical data |
 | Type scale | `--text-caption`, `--text-control`, `--text-body`, `--text-section`, `--text-heading`, `--text-dialog-title`, `--text-metric`, `--text-metric-lg`, `--leading-body`, `--leading-control` | Shared text roles and line heights; extend centrally rather than per panel |
@@ -70,8 +70,10 @@ The active look is `yorha`; the resolved modes are `light` and `dark`.
 - Archivo Narrow (`--font-ui`) is for headings and short labels. Uppercase and
   tracking stay limited to short labels, not paragraphs or long item names.
 - IBM Plex Sans (`--font-body`) is for names, explanations, instructions, and
-  other reading. IBM Plex Mono (`--font-mono`) is for numeric and technical
-  data; align comparable numeric columns consistently and keep units clear.
+  other reading. IBM Plex Mono (`--font-mono`) is for numerals, units attached
+  to numerals, IDs and hashes, and keyboard shortcuts only; status words use
+  `--font-ui` and sentences use `--font-body`, even inside a mono table cell.
+  Align comparable numeric columns consistently and keep units clear.
 - Use relative text sizes and readable line heights. Never shrink text as a
   responsive escape hatch. Exact semantic type-size consolidation belongs in
   the shared stylesheet, not a new per-panel scale.
@@ -138,9 +140,9 @@ narrow and enlarged layouts. This is a measured layout value, not a fixed spacer
 
 | Pattern | Contract |
 |---|---|
-| Panels and title rails | Clear heading, restrained inversion, dotted internal separation; titles and adjacent status copy may wrap. Anything placed on a rail uses the `--rail-*` pair, whatever its heading level |
+| Panels and title rails | Clear heading, restrained inversion, dotted internal separation. Panel and dialog titles are always rails; controls may sit in a rail, status chips may not; titles and adjacent status copy may wrap. Anything placed on a rail uses the `--rail-*` pair, whatever its heading level |
 | Toolbars | Group related controls; allow wrapping without changing the logical or keyboard order |
-| Buttons and links | Clear action labels, consistent emphasis, visible focus; navigation uses links and actions use buttons |
+| Buttons and links | Clear action labels, consistent emphasis, visible focus; navigation uses links and actions use buttons. Links inside table cells show their dotted rule only on row hover or focus |
 | Fields | Persistent accessible labels, units and constraints nearby, actionable validation; placeholders are not labels. Checkboxes and radios use the shared square box in `app.css` (checked is the ink inversion); components may size it, not recolour it. Text-entry focus draws over the field's own border so it reads as one frame. Number fields hide spinner arrows; arrow keys still step. Option labels do not repeat the field label |
 | Mode selectors | Explicit selected state and accessible semantics; descriptions remain readable when the group wraps. Single-choice groups use `.ui-segmented` (joined, dotted inner rules, wraps rather than scrolls); the selected option is always the ink inversion, whether it is marked with `aria-pressed`, `aria-checked` or `aria-selected`. Mode cards that carry descriptions keep the card shape but use the same selected fill, with a title that outranks the description |
 | Status and notices | Explain what happened, its consequence, and any next action; never rely on color or a transient toast alone for critical information. A 3px left edge is reserved for meaning (toned notices, toned toasts, action-needed notes, Baro's visit window); never nest one edged surface in another. Stale market data is a caution: an outlined `--warn` chip in the header and a warn-toned notice, not a red dot |

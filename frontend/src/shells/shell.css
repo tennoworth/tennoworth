@@ -115,6 +115,9 @@
   .statusbar .cell.inv[data-shell] { flex: 1 1 23rem; }
   .statusbar .cell.inv .file[data-shell] { flex: 1 1 6rem; }
   .statusbar .refresh-wrap[data-shell] { flex: none; margin-left: auto; }
+  /* The timestamp starts the second line, beside Refresh, so a long file name
+     keeps the first line to itself. */
+  .statusbar .cell.inv time[data-shell] { flex: 1 1 55%; }
   .statusbar.shell-strip .brand + .cell[data-shell] { border-left: none; }
   .statusbar .cell.end[data-shell] { padding-right: var(--inset); }
   .statusbar .cell b[data-shell] {
@@ -219,19 +222,18 @@
     border-left-color: var(--accent);
     background: var(--panel-2);
   }
+  /* Counts are plain numerals; only something waiting for the user (unread
+     notifications) gets a filled badge, so "3 to sell" and "1 unread" no
+     longer look alike. */
   .nav-item .badge[data-shell] {
     font-family: var(--font-mono);
     font-size: var(--text-caption);
     color: var(--muted);
-    background: var(--panel-2);
-    border: 1px solid var(--border);
+    border: 1px solid transparent;
     border-radius: var(--radius-tag);
-    padding: 0 5px;
+    padding: 0 var(--s1);
   }
-  .nav-item.active .badge[data-shell] {
-    color: var(--accent);
-    border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
-  }
+  .nav-item .badge.unread[data-shell] { color: var(--on-ink); background: var(--ink-bar); font-weight: 600; }
   .nav-item .badge.warn[data-shell] { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, var(--border)); }
   .nav-item .badge.here[data-shell] {
     color: var(--ducat);
@@ -246,7 +248,7 @@
     font-size: var(--text-caption);
   }
 
-  .feedback-trigger[data-shell] { width: 100%; justify-content: flex-start; gap: var(--s2); min-height: var(--ctl-lg); }
+  .feedback-trigger[data-shell] { display: inline-flex; align-items: center; gap: var(--s2); }
   .feedback-trigger svg[data-shell] { width: var(--s4); height: var(--s4); fill: none; stroke: currentColor; stroke-width: 1.5; flex: none; }
   .feedback-dialog[data-shell] { max-height: calc(100dvh - var(--s6)); overflow-y: auto; }
   .feedback-note[data-shell] { margin: 0; color: var(--muted); font-family: var(--font-body); line-height: 1.5; }
@@ -266,21 +268,25 @@
     flex-direction: column;
     gap: var(--s2);
   }
+  /* One quiet list: project links, then feedback beside the build label. */
   .sfoot .project-links[data-shell] {
     display: flex;
     flex-direction: column;
-    border: 1px solid var(--border);
   }
-  .sfoot .project-link[data-shell] {
-    min-height: var(--ctl-lg);
-    padding: 0 var(--s2);
-    color: var(--fg);
+  .sfoot .project-link[data-shell],
+  .sfoot .feedback-trigger[data-shell] {
+    justify-content: flex-start;
+    min-height: var(--ctl);
+    padding: 0 var(--s1);
+    font: inherit;
+    color: var(--muted);
+    background: transparent;
+    border: 0;
     text-decoration: none;
+    cursor: pointer;
   }
-  .sfoot .project-link + .project-link[data-shell] {
-    border-top: 1px var(--rule) var(--hairline);
-  }
-  .sfoot .project-link:hover[data-shell] { color: var(--on-ink); background: var(--ink-bar); }
+  .sfoot .project-link:hover[data-shell],
+  .sfoot .feedback-trigger:hover[data-shell] { color: var(--fg); background: transparent; text-decoration: underline dotted; }
   .sfoot .ver[data-shell] { padding: 0 var(--s1); }
 
   /* Refresh ▾ in the strip: a 24px control inside the 40px bar. */
@@ -328,6 +334,10 @@
     gap: var(--s2);
     white-space: normal;
     text-align: left;
+    /* Menu copy is prose; the strip around it uses the label face. */
+    font-family: var(--font-body);
+    text-transform: none;
+    letter-spacing: normal;
     background: var(--panel-2);
     border: 1px solid var(--accent);
     border-radius: var(--radius-panel);
@@ -457,11 +467,7 @@
     .statusbar.shell-strip .cell .file[data-shell] { flex: 1 1 8rem; min-width: 0; }
     .statusbar.shell-strip > .grow[data-shell] { display: none; }
     .sfoot[data-shell] { padding: var(--s1) var(--s3); flex-direction: row; flex-wrap: wrap; align-items: center; }
-    .sfoot .project-links[data-shell] { flex-direction: row; align-self: flex-start; flex: 0 0 auto; }
-    .sfoot .project-link + .project-link[data-shell] {
-      border-top: none;
-      border-left: 1px var(--rule) var(--hairline);
-    }
+    .sfoot .project-links[data-shell] { flex-direction: row; align-self: flex-start; flex: 0 0 auto; gap: var(--s3); }
     main.workspace[data-shell] { padding: 16px 16px 32px; overflow: visible; }
   }
   @media (max-width: 560px), (max-height: 480px) {

@@ -16,7 +16,8 @@ async function unreadableRailText(page: Page) {
       }
       return [255, 255, 255];
     };
-    return [...document.querySelectorAll('.wrap.tw > .rail, .wrap.tw > .rail *')].filter(element => {
+    const rails = '.wrap.tw > .rail, .picks-head, .card > h3:first-child, .faq > h2, .modal > header, dialog.cryptobox header, .routine-advice > summary, .keep-head';
+    return [...document.querySelectorAll(rails.split(', ').flatMap(rail => [rail, `${rail} *`]).join(', '))].filter(element => {
       const text = [...element.childNodes].some(node => node.nodeType === Node.TEXT_NODE && node.textContent!.trim());
       if (!text || !element.getClientRects().length) return false;
       const a = luminance(rgb(getComputedStyle(element).color)), b = luminance(background(element));
@@ -84,6 +85,17 @@ for (const theme of ['light', 'dark'] as const) {
           expect(await unreadableRailText(page), `${view} rail text`).toEqual([]);
           expect(await redTags(page), `${view} tags`).toEqual([]);
           expect(await unevenSelection(page), `${view} selected options`).toEqual([]);
+          if (theme === 'dark') {
+            const filledRails = await page.locator('.wrap.tw > .rail:visible, .picks-head:visible').evaluateAll(rails => {
+              const probe = document.createElement('span');
+              probe.style.background = 'var(--ink-bar)';
+              document.body.append(probe);
+              const ink = getComputedStyle(probe).backgroundColor;
+              probe.remove();
+              return rails.filter(rail => getComputedStyle(rail).backgroundColor === ink).map(rail => rail.textContent!.trim().slice(0, 40));
+            });
+            expect(filledRails, `${view}: the ink fill is reserved for selected state in dark mode`).toEqual([]);
+          }
         }
         await page.screenshot({ path: testInfo.outputPath(`${view.replaceAll(' ', '-')}-${theme}-${width}.png`) });
       }
