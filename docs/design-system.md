@@ -146,7 +146,8 @@ narrow and enlarged layouts. This is a measured layout value, not a fixed spacer
 | Fields | Persistent accessible labels, units and constraints nearby, actionable validation; placeholders are not labels. Checkboxes and radios use the shared square box in `app.css` (checked is the ink inversion); components may size it, not recolour it. Text-entry focus draws over the field's own border so it reads as one frame. Number fields hide spinner arrows; arrow keys still step. Option labels do not repeat the field label |
 | Mode selectors | Explicit selected state and accessible semantics; descriptions remain readable when the group wraps. Single-choice groups use `.ui-segmented` (joined, dotted inner rules, wraps rather than scrolls); the selected option is always the ink inversion, whether it is marked with `aria-pressed`, `aria-checked` or `aria-selected`. Mode cards that carry descriptions keep the card shape but use the same selected fill, with a title that outranks the description |
 | Status and notices | Explain what happened, its consequence, and any next action; never rely on color or a transient toast alone for critical information. A 3px left edge is reserved for meaning (toned notices, toned toasts, action-needed notes, Baro's visit window); never nest one edged surface in another. Stale market data is a caution: an outlined `--warn` chip in the header and a warn-toned notice, not a red dot |
-| Tables | Preserve meaningful columns and item identity; align comparable numbers; contain horizontal scrolling within the table region |
+| Tables | Preserve meaningful columns and item identity; align comparable numbers; contain horizontal scrolling within the table region. The price a row is about (`td.price`) is ink at 600 with a quiet unit; volume and other context stay muted |
+| Sparklines | `Sparkline.svelte` draws recent medians in ink, a dotted `--faint` rule at the 90-day median, and an endpoint dot coloured by the move against that median. The baseline shares the line's scale, so its distance from the line is honest |
 | Disclosures | `<details>` summaries share one glyph from `app.css`: ▸ closed, ▾ open, in the label face. Menus keep a trailing ▾; `+` marks add actions only. Rail section toggles pair the glyph with Show or Hide |
 | Dialogs and popovers | Stay within the viewport; provide reachable dismissal and actions, visible focus, and appropriate keyboard behavior |
 | Review surfaces | Make consequential changes explicit, preserve edits, and distinguish existing state from proposed state |
@@ -180,7 +181,9 @@ Error notices use a red outline and restrained tinted background in both themes.
 
 Show one primary quantity failure and its recovery action. Suppress derived
 failure notices and ordinary “no picks” messaging while calculations are blocked.
-Keep settings appear in a compact “What I’m keeping” summary; the editor is a
+Keep settings appear as a one-line “What I’m keeping” strip under each view’s
+title and stale-data notices (Sell, Trade Session, Set picks, Baro); failures
+surface as notices above it rather than by expanding it. The editor is a
 keyboard-contained dialog, and the complete quantity table is opt-in. Show actual
 saved minimum-copy settings, automatic leveled exclusions, and crafting/item
 rules. Never advertise a last-copy default that is not enabled. Missing data stays

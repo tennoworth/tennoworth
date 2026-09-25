@@ -1,7 +1,8 @@
 <script lang="ts">
   import CopyBtn from '../../ui/CopyBtn.svelte';
   import { plat, wfmItemUrl } from '../../ui/format';
-  import { sparklinePoints } from '../../ui/sparkline';
+  import Sparkline from '../../ui/Sparkline.svelte';
+  import { hasSparkline } from '../../ui/sparkline';
   import type { HandoffRow } from '../../domain/market-browse';
 
   // The hand-off panel on the informational landing (hosted site only -
@@ -144,13 +145,11 @@
                   {:else}<span class="flat">·</span>{/if}
                 </td>
                 <td>
-                  {#if sparklinePoints(r.medians_7d, 60, 18)}
-                    <svg class="spark" viewBox="0 0 60 18" width="60" height="18" aria-hidden="true">
-                      <polyline points={sparklinePoints(r.medians_7d, 60, 18)} fill="none" stroke="currentColor" stroke-width="1.25" />
-                    </svg>
+                  {#if hasSparkline(r.medians_7d)}
+                    <Sparkline series={r.medians_7d} baseline={r.median90} trend={r.deltaPct} />
                   {:else}<span class="faint">-</span>{/if}
                 </td>
-                <td class="fg">{plat(r.avg)}</td>
+                <td class="price">{plat(r.avg)}{#if plat(r.avg) !== '-'}<span class="unit">p</span>{/if}</td>
                 <td>{plat(r.lowSell)}</td>
                 <td>{r.vol.toLocaleString()}</td>
                 <td class="you y1">{r.owned}</td>

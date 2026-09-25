@@ -16,6 +16,8 @@ export interface BrowseRow {
   vault?: VaultStatus;
   // Move vs the 90-day baseline, in percent. null when not computable.
   deltaPct: number | null;
+  // The 90-day median itself, drawn as the sparkline's reference line.
+  median90: number | null;
   // Top-of-book + demand + ducats, so the landing tables can carry the same
   // columns as the workspace (Low sell · Top buy · Demand · Ducats).
   lowSell: number;
@@ -84,6 +86,7 @@ function toRow(
     medians_7d: e.medians_7d,
     vault,
     deltaPct: itemDeltaPct(e),
+    median90: typeof e.median_90d === 'number' && e.median_90d > 0 ? e.median_90d : null,
     lowSell: e.low_sell,
     topBuy: e.top_buy,
     ratio: e.ratio,

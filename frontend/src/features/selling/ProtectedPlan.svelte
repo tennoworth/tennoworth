@@ -19,6 +19,11 @@
   let goalName = $derived(controller.savedPlan?.goal ? (market?.set_to_parts?.[controller.savedPlan.goal]?.name ?? controller.savedPlan.goal) : null);
   let manualCount = $derived(Object.keys(controller.savedPlan?.reserves ?? {}).length);
   let conflicts = $derived(Object.values(controller.state?.items ?? {}).some(row => row.protected + (row.listed ?? 0) > row.owned));
+  let keepRules = $derived([
+    `${reserveCopies} ${reserveCopies === 1 ? 'copy' : 'copies'} of each item`,
+    'Leveled copies stay out',
+    ...(controller.savedPlan ? [goalName ? `Parts for ${goalName}` : 'No saved crafting goal', `${manualCount} extra item ${manualCount === 1 ? 'rule' : 'rules'}`] : []),
+  ].join(' · '));
   let invalidInventory = $derived(controller.error?.includes('Inventory quantities are invalid') ?? false);
   async function changeKeep(value: number) {
     keepBusy = true; formError = null;
@@ -61,12 +66,13 @@
 {:else if unavailableCount && !controller.loading}
   <p class="ui-notice" data-tone="warn">△ Quantities unavailable for {unavailableCount} {unavailableCount === 1 ? 'item' : 'items'}. These items are excluded from opportunities and totals. <button class="btn" onclick={() => controller.refresh()}>Recheck quantities</button></p>
 {/if}
-<section class="ui-panel ui-stack keeping" aria-label="What I’m keeping">
-  <div class="ui-toolbar keeping-header"><div><h3>What I’m keeping</h3>
-    <p>{reserveCopies} {reserveCopies === 1 ? 'copy' : 'copies'} of each item · Leveled copies stay out</p>
-    {#if controller.savedPlan}<p class="muted">{goalName ? `Parts for ${goalName}` : 'No saved crafting goal'} · {manualCount} extra item {manualCount === 1 ? 'rule' : 'rules'}</p>{/if}
-  </div><button class="btn" onclick={edit} disabled={controller.saving}>Change what I keep</button></div>
+<!-- One line while healthy: problems already surface as the notices above, so
+     the settings themselves stay quiet. Details open below the line. -->
+<section class="keeping" aria-label="What I’m keeping">
+  <h3>What I’m keeping</h3>
+  <p class="keep-rules">{keepRules}</p>
   <p class="keep-status" class:verified={!conflicts && !unavailable && !unavailableCount && !!controller.state && !controller.loading && !controller.error}>{controller.loading ? 'Checking quantities…' : unavailable ? 'Waiting for valid quantities' : conflicts ? 'Some quantities need review' : unavailableCount ? 'Applied to items with known quantities' : controller.state ? '✓ Keep rules applied to this inventory' : 'Waiting for inventory'}</p>
+  <button class="btn xs change" onclick={edit} disabled={controller.saving}>Change what I keep</button>
   <details>
     <summary>View quantity details</summary>
     <div class="ui-toolbar"><button class="btn" onclick={() => controller.refresh()} disabled={controller.loading || controller.saving}>{controller.loading ? 'Checking quantities…' : 'Recheck quantities'}</button>
@@ -131,8 +137,14 @@
   p, ul { margin-bottom: 0; }
   .ui-input { max-width: 100%; }
   input[type="number"] { width: 8rem; }
-  .keeping-header { justify-content: space-between; }
   h3, p { margin: 0; }
+  .keeping { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s3); min-width: 0; padding: var(--s2) var(--inset); background: var(--panel); border: 1px solid var(--border); font-size: var(--text-control); }
+  .keeping h3 { font: 500 var(--text-caption)/var(--leading-control) var(--font-ui); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+  .keep-rules { min-width: 0; overflow-wrap: anywhere; }
+  .keeping .change { margin-left: auto; }
+  /* Closed, the disclosure sits at the end of the line; open, it takes a row. */
+  .keeping > details { min-width: 0; }
+  .keeping > details[open] { flex: 1 0 100%; }
   .keep-status { color: var(--muted); }
   .keep-status.verified { color: var(--good); }
   .keep-dialog { width: min(40rem, calc(100vw - var(--s6))); max-height: calc(100dvh - var(--s6)); overflow: auto; padding: var(--s5); background: var(--panel); color: var(--fg); border: 1px solid var(--border); }

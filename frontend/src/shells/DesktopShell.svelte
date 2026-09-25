@@ -943,17 +943,8 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       <div class="ui-notice" data-tone="warn" role="status">Hold/sell advice unavailable: {advisorResult.error} <button class="btn" onclick={() => calculationEpoch += 1}>Retry calculations</button></div>
     {/if}
 
-    {#if ['sell', 'session', 'sets', 'baro'].includes(effectiveView)}
-      <ProtectedPlan controller={protection} owned={inventory.resolved.owned} market={inventory.market} onconnect={connectForListings}
-        reserveCopies={filters.reserveCopies} onsetKeep={async (value) => { await store.setSetting('reserve-copies', String(value)); filters.reserveCopies = value; }}
-        unavailableCount={unknownSlugs.size} unavailable={guidanceUnavailable} scanning={inventory.pullingInventory} onscan={() => inventory.pullInventory()} />
-      {#if estimatedGuidance && !guidanceUnavailable}
-        <p class="ui-notice" role="status" aria-label="Estimated guidance">Estimates apply your keep rules. Existing WFM listings are not subtracted. Check WFM listings before posting.</p>
-      {/if}
-    {/if}
-
     {#if effectiveView === 'sell'}
-      <SellPane
+      <SellPane keep={keepSection}
         bind:minPrice={filters.minPrice} bind:minOwned={filters.minOwned} bind:typeFilter={filters.typeFilter} bind:hideAtLvl={filters.hideAtLvl} bind:activeTags={filters.activeTags}
         bind:tableView
         resolved={inventory.resolved} allocation={allocationMatches ? protection.state : null} {results} deltas={inventory.deltas} {totalPotential}
@@ -977,7 +968,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       {:else if defaultFacts.error}
         <div class="ui-notice" data-tone="bad" role="alert">Sale calculations unavailable: {defaultFacts.error} <button class="btn" onclick={() => calculationEpoch += 1}>Retry calculations</button></div>
       {/if}
-      <TradeSessionPane {listingBlockReason} onrecheck={checkListingRequirements} {listingActionLabel} owned={inventory.resolved.owned} market={inventory.market} reserveCopies={filters.reserveCopies} advice={adviceMap} nativeFacts={defaultFacts.value} {availability}
+      <TradeSessionPane keep={keepSection} {listingBlockReason} onrecheck={checkListingRequirements} {listingActionLabel} owned={inventory.resolved.owned} market={inventory.market} reserveCopies={filters.reserveCopies} advice={adviceMap} nativeFacts={defaultFacts.value} {availability}
         scanning={inventory.pullingInventory} onscan={async () => { await inventory.pullInventory(); await protection.refresh(); }} onreview={(rows, budget, state) => { if (!listingQuantitiesKnown) return; listing.openListingFlow(rows.map(r => ({
           ...r, inventory_snapshot_id: inventory.nativeSnapshotId ?? undefined, proposed_quantity: r.quantity, clearing_price: r.platinum, low_sell: r.platinum,
           avg_price: r.market.avg, session: { snapshot_id: state.allowance.snapshot_id!, utc_day: state.allowance.utc_day, budget },
@@ -993,6 +984,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
           {/if}
         </p>
       </section>
+      {@render keepSection()}
       {#if guidanceUnavailable}<p class="muted">Set recommendations will appear once quantities are available.</p>
       {:else if setResult.phase === 'loading'}
         <div class="ui-notice" role="status">Calculating set opportunities…</div>
@@ -1199,6 +1191,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
           {/if}
         </p>
       </section>
+      {@render keepSection()}
       <section data-shell class="card ui-panel baro-card" class:here={baroState?.phase === 'here'}>
         <div data-shell class="row">
           <div data-shell class="src">
@@ -1283,6 +1276,15 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     {/if}
   </main>
 </div>
+
+{#snippet keepSection()}
+  <ProtectedPlan controller={protection} owned={inventory.resolved.owned} market={inventory.market} onconnect={connectForListings}
+    reserveCopies={filters.reserveCopies} onsetKeep={async (value) => { await store.setSetting('reserve-copies', String(value)); filters.reserveCopies = value; }}
+    unavailableCount={unknownSlugs.size} unavailable={guidanceUnavailable} scanning={inventory.pullingInventory} onscan={() => inventory.pullInventory()} />
+  {#if estimatedGuidance && !guidanceUnavailable}
+    <p class="ui-notice" role="status" aria-label="Estimated guidance">Estimates apply your keep rules. Existing WFM listings are not subtracted. Check WFM listings before posting.</p>
+  {/if}
+{/snippet}
 
 {#snippet projectLinkAnchors()}
   <a data-shell class="project-link" href="https://github.com/tennoworth/tennoworth" target="_blank" rel="noopener noreferrer">

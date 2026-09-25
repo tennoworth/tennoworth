@@ -81,6 +81,13 @@ for (const theme of ['light', 'dark'] as const) {
           return header.textContent?.trim() && header.getBoundingClientRect().width < 20;
         }).map(header => header.textContent));
         expect(collapsed, `${view} column headings at ${width}`).toEqual([]);
+        if (width === 1200 && ['Sell', 'Trade Session', 'Set picks', 'Baro'].includes(view)) {
+          // Each view opens with its own title; healthy keep rules are one quiet strip below it.
+          const title = await page.locator('main .view-header').first().boundingBox();
+          const keeping = await page.getByRole('region', { name: 'What I’m keeping', exact: true }).boundingBox();
+          expect(keeping!.y, `${view} title precedes the keep strip`).toBeGreaterThan(title!.y);
+          expect(keeping!.height, `${view} healthy keep strip stays compact`).toBeLessThanOrEqual(80);
+        }
         if (width === 1200) {
           expect(await unreadableRailText(page), `${view} rail text`).toEqual([]);
           expect(await redTags(page), `${view} tags`).toEqual([]);

@@ -12,7 +12,8 @@
     type BrowseRow,
     type HandoffRow,
   } from '../../domain/market-browse';
-  import { sparklinePoints } from '../../ui/sparkline';
+  import Sparkline from '../../ui/Sparkline.svelte';
+  import { hasSparkline } from '../../ui/sparkline';
   import { weekly, yearStats, type History } from '../../domain/history';
   import MetaDriftPanel from './MetaDriftPanel.svelte';
 
@@ -190,24 +191,23 @@
   {#if yearMode}
     {@const y = yearFor(r.slug)}
     {#if y}
-      {#if sparklinePoints(y.spark, w, h)}
-        <svg class="spark year" viewBox="0 0 {w} {h}" width={w} height={h} aria-hidden="true">
-          <title>Weekly medians over the last year: low {y.stats.low}p, high {y.stats.high}p, {y.stats.tradedDays} traded days</title>
-          <polyline points={sparklinePoints(y.spark, w, h)} fill="none" stroke="currentColor" stroke-width="1.25" />
-        </svg>
+      {#if hasSparkline(y.spark)}
+        <Sparkline class="spark year" series={y.spark} width={w} height={h}
+          title="Weekly medians over the last year: low {y.stats.low}p, high {y.stats.high}p, {y.stats.tradedDays} traded days" />
       {/if}
     {:else}
       <span class="thin-hist" title="Fewer than 20 traded days in the last year">thin history</span>
     {/if}
-  {:else if sparklinePoints(r.medians_7d, w, h)}
-    <svg class="spark" viewBox="0 0 {w} {h}" width={w} height={h} aria-hidden="true">
-      <title>7-day medians: {r.medians_7d?.join(', ')}</title>
-      <polyline points={sparklinePoints(r.medians_7d, w, h)} fill="none" stroke="currentColor" stroke-width="1.25" />
-    </svg>
+  {:else if hasSparkline(r.medians_7d)}
+    <Sparkline series={r.medians_7d} width={w} height={h} baseline={r.median90} trend={r.deltaPct}
+      title="7-day medians: {r.medians_7d.join(', ')}{r.median90 != null ? ` · 90-day median ${r.median90}` : ''}" />
   {:else}
     <span class="faint">-</span>
   {/if}
 {/snippet}
+
+<!-- A price cell's value; missing stays "-" without a unit. -->
+{#snippet price(v: number | null | undefined)}{plat(v)}{#if plat(v) !== '-'}<span class="unit">p</span>{/if}{/snippet}
 
 <!-- Mini table: Item · Δ 90d · Trend · Avg · Vol 48h (+ Ducats) - movers and vaulted. -->
 {#snippet miniTable(rows: BrowseRow[], sortedKey: 'delta' | 'avg', ducats: boolean, emptyText: string)}
@@ -236,7 +236,7 @@
             <td class="l">{@render itemCell(r)}</td>
             <td>{@render deltaCell(r)}</td>
             <td>{@render trendCell(r, 56, 16)}</td>
-            <td class="fg">{plat(r.avg)}</td>
+            <td class="price">{@render price(r.avg)}</td>
             <td>{r.vol.toLocaleString()}</td>
             {#if ducats}<td>{#if r.ducats != null}<span class="ducat">{r.ducats}</span>{:else}<span class="faint">-</span>{/if}</td>{/if}
           </tr>
@@ -314,7 +314,7 @@
                 <td class="l">{@render itemCell(r)}</td>
                 <td>{@render deltaCell(r)}</td>
                 <td>{@render trendCell(r, 60, 18)}</td>
-                <td class="fg">{plat(r.avg)}</td>
+                <td class="price">{@render price(r.avg)}</td>
                 <td>{plat(r.lowSell)}</td>
                 <td>{plat(r.topBuy)}</td>
                 <td>{r.vol.toLocaleString()}</td>
