@@ -117,8 +117,11 @@ the desktop release contains the complete, tested `main` commit.
    `expected_sha` set to the full approved promotion commit. Preflight rejects
    a dispatch whose captured commit differs, even if its version is unchanged.
    Record the run URL and verify its commit before treating it as release evidence.
-   The `desktop-release` environment is an approval gate only if its live
-   protection rules configure one; its name alone grants no authorization. Its
+   The `desktop-release` environment requires the maintainer's approval: the
+   run pauses before `sign` and again before `publish`, and each needs an
+   approval under **Review deployments**. Check the live protection rules
+   rather than assuming them; the environment's name alone grants no
+   authorization. The workflow's
    preflight rejects a repository snapshot older than 24 hours, so skipping the
    explicit refresh is visible before either platform starts compiling.
 6. Let the workflow build and sign both packages. Before publication, it silently
