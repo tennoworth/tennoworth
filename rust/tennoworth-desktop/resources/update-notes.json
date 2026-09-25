@@ -1,5 +1,5 @@
 {
-  "version": "0.7.106",
+  "version": "0.7.107",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -260,6 +260,111 @@
           "kind": "improved",
           "title": "No more inventory-ready popup after every scan",
           "body": "The post-scan pass still rebuilds the tray and records its summary, but it no longer writes an inbox entry or fires a desktop notice that duplicated the daily sell digest. The retired notification category is gone from settings, and stored preferences and inbox rows are cleaned up when they are read.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.7.107",
+      "date": "2026-09-25",
+      "changes": [
+        {
+          "id": "auto-scan",
+          "kind": "improved",
+          "title": "Scan automatically while the game is running",
+          "body": "An opt-in setting scans every 15, 30 or 60 minutes, only while Warframe is running. A freshly launched game is given time to finish logging in first, failures are shown in Settings instead of as notifications, and nothing changes for anyone who leaves it off.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "day-one-items",
+          "kind": "fixed",
+          "title": "New Prime Access items resolve on day one",
+          "body": "Items warframe.market lists before the community item data catches up - such as Citrine, Steflos and Corufell Prime - now resolve in inventory, with their set breakdowns and relic rewards.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "sell-columns",
+          "kind": "improved",
+          "title": "Sell starts with the columns that decide a sale",
+          "body": "The default preset shows ownership, score, price, trend, volume, advice and potential without scrolling sideways, and a Columns menu adds or removes any column per preset. The first run leads with the scan button.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "confirmed-order-changes",
+          "kind": "fixed",
+          "title": "Order changes are reported only when confirmed",
+          "body": "A repricing, quantity change or visibility change that warframe.market did not confirm is now reported as unconfirmed instead of as done, and an interrupted batch whose outcome is unknown can always be reviewed or discarded.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "listed-set-ownership",
+          "kind": "fixed",
+          "title": "A listed prime set is no longer called unowned",
+          "body": "A scan never reports a set itself, so the orders panel read a listed set as not owned and offered to delete it. It no longer does, and deleting a listing from the health fixes now asks for a second click.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "trade-ledger-retry",
+          "kind": "fixed",
+          "title": "A trade the ledger could not save is retried",
+          "body": "A confirmed trade that failed to record was lost for good. The log reader now holds its place until the trade is saved and offers it again, without recording it twice.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "logout-precedence",
+          "kind": "fixed",
+          "title": "Logging out always wins",
+          "body": "A logout that landed while the app was still unlocking or signing in could be undone, leaving the app signed in. Logout now takes precedence, and a new sign-in is no longer lost when a silent unlock fails.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "interface-refresh",
+          "kind": "improved",
+          "title": "A quieter, more readable interface",
+          "body": "Each view leads with its title, prices and trend lines are drawn to be read first, status tags share one style, light-mode text is darker, and stale market data is flagged as a caution rather than an error.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "no-older-snapshot",
+          "kind": "fixed",
+          "title": "Prices never step backwards to an older snapshot",
+          "body": "The app refuses a downloaded market snapshot older than the one it already holds, so the tray and the dashboard stay on the same, newest prices.",
           "platforms": [
             "windows",
             "linux"

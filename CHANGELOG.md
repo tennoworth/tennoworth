@@ -54,6 +54,47 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.7.107 - 2026-09-25
+
+# 🔄 TennoWorth Desktop 0.7.107
+
+TennoWorth Desktop 0.7.107 can keep your inventory current on its own.
+
+Turn on automatic scanning and the app scans every 15, 30 or 60 minutes while Warframe is running, and never while it is closed. The app also has a quieter, more legible look, a Sell table that starts with the columns that decide a sale, and items from the latest Prime Access that now resolve on day one. Order changes are only reported once warframe.market confirms them, and a listed prime set is no longer offered for one-click deletion as "not owned".
+
+## Changelog (9)
+
+### Scanning
+
+- **Scan automatically while the game is running** An opt-in setting scans every 15, 30 or 60 minutes, only while Warframe is running. A freshly launched game is given time to finish logging in first, failures are shown in Settings instead of as notifications, and nothing changes for anyone who leaves it off. <!-- app-note {"id":"auto-scan","kind":"improved"} -->
+- **New Prime Access items resolve on day one** Items warframe.market lists before the community item data catches up - such as Citrine, Steflos and Corufell Prime - now resolve in inventory, with their set breakdowns and relic rewards. <!-- app-note {"id":"day-one-items","kind":"fixed"} -->
+
+### Selling
+
+- **Sell starts with the columns that decide a sale** The default preset shows ownership, score, price, trend, volume, advice and potential without scrolling sideways, and a Columns menu adds or removes any column per preset. The first run leads with the scan button. <!-- app-note {"id":"sell-columns","kind":"improved"} -->
+- **Order changes are reported only when confirmed** A repricing, quantity change or visibility change that warframe.market did not confirm is now reported as unconfirmed instead of as done, and an interrupted batch whose outcome is unknown can always be reviewed or discarded. <!-- app-note {"id":"confirmed-order-changes","kind":"fixed"} -->
+- **A listed prime set is no longer called unowned** A scan never reports a set itself, so the orders panel read a listed set as not owned and offered to delete it. It no longer does, and deleting a listing from the health fixes now asks for a second click. <!-- app-note {"id":"listed-set-ownership","kind":"fixed"} -->
+
+### Trades
+
+- **A trade the ledger could not save is retried** A confirmed trade that failed to record was lost for good. The log reader now holds its place until the trade is saved and offers it again, without recording it twice. <!-- app-note {"id":"trade-ledger-retry","kind":"fixed"} -->
+
+### Account
+
+- **Logging out always wins** A logout that landed while the app was still unlocking or signing in could be undone, leaving the app signed in. Logout now takes precedence, and a new sign-in is no longer lost when a silent unlock fails. <!-- app-note {"id":"logout-precedence","kind":"fixed"} -->
+
+### Appearance
+
+- **A quieter, more readable interface** Each view leads with its title, prices and trend lines are drawn to be read first, status tags share one style, light-mode text is darker, and stale market data is flagged as a caution rather than an error. <!-- app-note {"id":"interface-refresh","kind":"improved"} -->
+
+### Market data
+
+- **Prices never step backwards to an older snapshot** The app refuses a downloaded market snapshot older than the one it already holds, so the tray and the dashboard stay on the same, newest prices. <!-- app-note {"id":"no-older-snapshot","kind":"fixed"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.7.106 - 2026-09-20
 
 # 🧩 TennoWorth Desktop 0.7.106
