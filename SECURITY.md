@@ -23,6 +23,15 @@ characteristics:
    PBKDF2-600k passphrase). The core logic it drives lives in
    `rust/wfm-core`.
 
+   Scanning is manual by default. An opt-in **Automatic scan** setting
+   (Settings) has the app check, on a user-chosen cadence, whether the game
+   process is running and - only then - perform the same read-only scan a
+   manual scan performs. Nothing is scanned while the game is closed, the
+   cadence is the user's (15/30/60 minutes), and the setting can be switched
+   off again at any time. No new data leaves the machine: the automatic scan
+   requests the same account inventory from Digital Extremes that the manual
+   scan does.
+
 3. **Our build + release pipeline** (GitHub Actions):
    - `build-web.yml` - on a push touching `frontend/`, builds the
      static web bundle and publishes it as a rolling `web-latest`

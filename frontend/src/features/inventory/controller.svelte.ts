@@ -213,6 +213,15 @@ export class InventoryController {
     }
   }
 
+  /**
+   * Adopt a scan the app took on its own (see auto-scan.svelte.ts). Same path as
+   * a user-requested scan, minus the request: the payload is already parsed and
+   * validated, so nothing here may report "couldn't scan".
+   */
+  async adoptScan(data: Inventory, snapshotId: number | null): Promise<void> {
+    await this.handleInventory({ name: 'inventory (from game)', data, snapshotId });
+  }
+
   async restore() {
     // Startup can reach this after a user acts while the health check awaits IPC.
     if (this.generation !== 0) return;

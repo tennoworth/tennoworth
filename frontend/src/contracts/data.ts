@@ -223,7 +223,9 @@ export interface Market {
   usage_history?: UsageHistorySurface | null;
   event_rewards?: EventRewardsSurface | null;
   surface_provenance?: Record<string, {
-    disposition: string;
+    disposition: 'published_fresh' | 'merged_partial' | 'cleared_authoritative_empty'
+      | 'preserved_unavailable' | 'preserved_unchanged' | 'preserved_invalid'
+      | 'empty_unavailable' | 'empty_unchanged' | 'empty_invalid';
     attempted_at: string;
     data_fetched_at: string;
     source?: string;
@@ -548,6 +550,8 @@ export interface ItemResult {
 export interface PlanResponse {
   plan_id: string;
   results: ItemResult[];
+  /** Local journal recording failed after an outcome was observed. */
+  durability_error?: string | null;
 }
 
 /** Pending-plan persistence shape - kept on disk in `pending_plan.json`. */
@@ -563,7 +567,9 @@ interface PendingPlanItem {
   rank?: number | null;
   subtype?: string | null;
   reference_low_sell?: number | null;
-  status: 'pending' | 'ok' | 'error';
+  /** Mirrors the journal's vocabulary, including an outcome the market never
+   *  confirmed - see `PendingItem`'s status constants in `wfm-core`. */
+  status: 'pending' | 'uncertain_mutation' | 'ok' | 'error';
   message?: string | null;
   order_id?: string | null;
 }

@@ -177,21 +177,50 @@ fn adjustment_follow_up(
         .collect()
 }
 
+/// Whether a per-order WFM status may be reported to the user as an adjustment
+/// that happened. The transport's `Ok` only says the request was sent; a status of
+/// `pending` or `uncertain_mutation` means the outcome is unknown, and claiming it
+/// as applied tells the user their listing changed when nothing confirmed it.
+fn mutation_accepted(status: &str) -> bool {
+    // Only a literal "ok" is WFM confirming the change. Anything else - a rejected
+    // request, a queued one that was never sent, or an ambiguous transport outcome -
+    // leaves the listing as it was.
+    status == "ok"
+}
+
+/// Record + notify + adjust. Blocking; called from the tailer thread.
+/// What the ledger did with one confirmed trade. The tailer retries anything that
+/// is not acknowledged, so "already known" counts as success: re-offering a trade
+/// must not become a second adjustment or a duplicate row.
+pub enum LedgerOutcome {
+    /// Stored; the automatic adjustment and notification follow from here.
+    Recorded,
+    /// This log position was already recorded - the identity a retry arrives on.
+    AlreadyKnown,
+    /// The write failed. The event must be offered again.
+    Failed(String),
+}
+
+fn unavailable_adjustment_follow_up(error: &crate::services::wfm_session::CmdError) -> &'static str {
+    match error.code {
+        "busy" => "Another order change blocked the automatic adjustment for this sale. Review My Orders after it finishes; the sold listing was not adjusted.",
+        "needs_login" | "needs_unlock" => "Sign in or unlock your market login to review sell orders.",
+        _ => "Could not adjust the sold listing automatically. Review My Orders.",
+    }
+}
+
 /// Record + notify + adjust. Blocking; called from the tailer thread.
 pub fn handle_trade(
     app: &AppHandle,
     trade: TradeEvent,
     position: crate::services::eelog::LogPosition,
-) {
+) -> LedgerOutcome {
     let db = app.state::<Db>();
     let now = unix_now();
     let id = match db.insert_trade(&trade, now, &position) {
         Ok(Some(id)) => id,
-        Ok(None) => return,
-        Err(e) => {
-            eprintln!("tennoworth: ledger insert failed: {e}");
-            return;
-        }
+        Ok(None) => return LedgerOutcome::AlreadyKnown,
+        Err(e) => return LedgerOutcome::Failed(e.to_string()),
     };
     let _ = app.emit(crate::services::allowance::EVENT_ALLOWANCE_CHANGED, ());
     let mut adjusted: Vec<(String, i64)> = Vec::new();
@@ -208,7 +237,17 @@ pub fn handle_trade(
     }
     if trade.kind == "sale" && auto_close_on {
         let session = app.state::<Arc<WfmSession>>();
-        if let Ok(unlocked) = session.require_unlocked() {
+        // A completion can land while a reviewed batch is mid-flight, and that
+        // batch reconciled against the orders this adjustment is about to
+        // change. Taking the account here stops the two interleaving. When
+        // busy, the sale stays recorded but the listing needs manual review:
+        // trade deduplication will not run this adjustment again.
+        let mutations = crate::services::order_mutations::OrderMutations::new(Arc::clone(&session));
+        // Bound before the branch: an `if let` scrutinee's temporary outlives
+        // the binding, so the guard would be dropped after the coordinator it
+        // borrows from.
+        let claim = mutations.begin(crate::services::order_mutations::MutationOrigin::AutoAdjustment);
+        if let Ok((_guard, unlocked)) = claim {
             match list_user_orders(&unlocked) {
                 Ok(body) => {
                     let orders = own_sell_orders(&body);
@@ -216,8 +255,10 @@ pub fn handle_trade(
                     let tiered = tiered_slugs(&unlocked);
                     follow_up.extend(adjustment_follow_up(&trade, &names, &orders, &tiered));
                     for (order, new_qty) in plan_adjustments(&trade, &names, &orders, &tiered) {
-                        let res = if new_qty == 0 {
-                            delete_order(&unlocked, &order.id).map(|_| ())
+                        // A delete answers with plain Ok; an update carries a per-order
+                        // status that has to be read before anything is claimed.
+                        let outcome: Result<bool, anyhow::Error> = if new_qty == 0 {
+                            delete_order(&unlocked, &order.id).map(|()| true)
                         } else {
                             update_order(
                                 &unlocked,
@@ -229,10 +270,16 @@ pub fn handle_trade(
                                     rank: None,
                                 },
                             )
-                            .map(|_| ())
+                            .map(|result| mutation_accepted(&result.status))
                         };
-                        match res {
-                            Ok(()) => {
+                        match outcome {
+                            Ok(false) => {
+                                follow_up.push(format!(
+                                    "{}: listing update was not confirmed; review My Orders.",
+                                    order.slug
+                                ));
+                            }
+                            Ok(true) => {
                                 let name = trade
                                     .items
                                     .iter()
@@ -261,8 +308,8 @@ pub fn handle_trade(
                     eprintln!("tennoworth: auto-close: could not list orders: {e}");
                 }
             }
-        } else {
-            follow_up.push("Sign in or unlock your market login to review sell orders.".into());
+        } else if let Err(error) = claim {
+            follow_up.push(unavailable_adjustment_follow_up(&error).into());
         }
     }
 
@@ -325,11 +372,76 @@ pub fn handle_trade(
             adjusted,
         },
     );
+    LedgerOutcome::Recorded
 }
 
-/// Start tailing EE.log if it can be found. Silent no-op otherwise (the SPA
-/// shows the "not found" state via `eelog_status`).
-pub fn start_tailer(app: AppHandle) -> Option<std::path::PathBuf> {
+/// Surface a trade the ledger could not store. Called once per blocked event,
+/// not once per retry: an unacknowledged trade is re-offered every poll, so
+/// reporting each attempt would flood the log and the notification inbox.
+///
+/// The notification is supplementary history, not proof the user saw anything -
+/// delivering it goes through the same database that just failed.
+fn report_ledger_blocked(
+    app: &AppHandle,
+    error: &str,
+    position: &crate::services::eelog::LogPosition,
+) {
+    eprintln!("tennoworth: trade recording paused; ledger insert failed: {error}");
+    // The failed transaction is also the one that advances the allowance, so the
+    // figure on screen is now behind it. Best effort: the same database may
+    // refuse this marking too, and nothing can restore the tracked figure
+    // afterwards - a new scan is what confirms the remaining trades.
+    match app.state::<Db>().allowance_gap() {
+        Ok(true) => {
+            let _ = app.emit(crate::services::allowance::EVENT_ALLOWANCE_CHANGED, ());
+        }
+        Ok(false) => {}
+        Err(e) => eprintln!("tennoworth: could not mark the trade allowance uncertain: {e}"),
+    }
+    crate::services::notifications::send(
+        app,
+        crate::services::notifications::Candidate::once(
+            format!("ledger-blocked:{}:{}", position.session, position.end),
+            "trades",
+            "Trade recording paused".into(),
+            format!(
+                "A completed trade could not be saved. It is being retried, and later trades \
+                 wait behind it, so the ledger and automatic listing updates are delayed. \
+                 Remaining trades may be stale - scan again to confirm them. Restarting can \
+                 lose the pending record. ({error})"
+            ),
+            "ledger",
+            unix_now(),
+        ),
+    );
+}
+
+/// Publish this poll's recording health, emitting only on a transition - the
+/// tailer polls four times a second and every listener would otherwise wake to
+/// news that nothing changed.
+fn announce_recording(
+    app: &AppHandle,
+    outcome: &crate::services::recording::PollOutcome,
+    recorder: &crate::services::recording::Recorder,
+) {
+    if crate::services::recording::observe(recorder, outcome).is_some() {
+        let _ = app.emit(EVENT_RECORDING_CHANGED, ());
+    }
+}
+
+/// Emitted when recording health changes, so a ledger surface that is already
+/// open updates without waiting for its next poll. The state is also readable on
+/// demand through `eelog_status`, which is what a surface mounting later uses -
+/// an event alone cannot answer "what is true now".
+pub const EVENT_RECORDING_CHANGED: &str = "recording-changed";
+
+/// Start tailing EE.log if it can be found, publishing recording health to
+/// `recorder`. Silent no-op otherwise (the SPA shows the "not found" state via
+/// `eelog_status`).
+pub fn start_tailer(
+    app: AppHandle,
+    recorder: std::sync::Arc<crate::services::recording::Recorder>,
+) -> Option<std::path::PathBuf> {
     let path = crate::services::eelog::locate_log()?;
     let p = path.clone();
     let reward_path = path.clone();
@@ -338,6 +450,12 @@ pub fn start_tailer(app: AppHandle) -> Option<std::path::PathBuf> {
         .name("eelog-tailer".into())
         .spawn(move || {
             let overlay_app = app.clone();
+            let mut blocked: Option<(String, u64)> = None;
+            // Both callbacks describe the same poll, so the outcome is shared
+            // rather than owned by either closure.
+            let outcome =
+                std::cell::RefCell::new(crate::services::recording::PollOutcome::default());
+            let recorder = recorder.clone();
             crate::services::eelog::tail_forever_with_lines(
                 &p,
                 // Reward choices live for only 15 seconds. A two-second poll
@@ -345,11 +463,39 @@ pub fn start_tailer(app: AppHandle) -> Option<std::path::PathBuf> {
                 // scan before the four slot markers had arrived.
                 std::time::Duration::from_millis(250),
                 move |line| crate::overlay::handle_log_line(&overlay_app, line),
-                |trade, position| handle_trade(&app, trade, position),
-                || {
+                |trade, position| match handle_trade(&app, trade, position.clone()) {
+                    LedgerOutcome::Failed(error) => {
+                        let id = (position.session.clone(), position.end);
+                        if blocked.as_ref() != Some(&id) {
+                            blocked = Some(id);
+                            report_ledger_blocked(&app, &error, &position);
+                        }
+                        outcome.borrow_mut().ledger_error = Some(error);
+                        announce_recording(&app, &outcome.borrow(), &recorder);
+                        false
+                    }
+                    _ => {
+                        blocked = None;
+                        outcome.borrow_mut().accepted();
+                        announce_recording(&app, &outcome.borrow(), &recorder);
+                        true
+                    }
+                },
+                |kind| {
+                    outcome.borrow_mut().log_error = match kind.is_unread() {
+                        true => kind.explanation().map(str::to_string),
+                        // Rotation is what the game does on every restart; it is
+                        // not a fault and must not leave a warning on screen.
+                        false => None,
+                    };
+                    announce_recording(&app, &outcome.borrow(), &recorder);
                     if app.state::<Db>().allowance_gap().unwrap_or(false) {
                         let _ = app.emit(crate::services::allowance::EVENT_ALLOWANCE_CHANGED, ());
                     }
+                },
+                || {
+                    outcome.borrow_mut().log_error = None;
+                    announce_recording(&app, &outcome.borrow(), &recorder);
                 },
             );
         });
@@ -379,6 +525,8 @@ pub fn start_tailer(app: AppHandle) -> Option<std::path::PathBuf> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::order_mutations::{MutationOrigin, OrderMutations};
+    use std::sync::atomic::{AtomicU32, Ordering};
     use wfm_core::trading::catalog::WfmCatalogItem;
 
     fn names() -> BTreeMap<String, String> {
@@ -414,6 +562,41 @@ mod tests {
                 .collect(),
             log_stamp: None,
         }
+    }
+
+    #[test]
+    fn reviewed_batch_contention_leaves_auto_adjustment_for_manual_review() {
+        static N: AtomicU32 = AtomicU32::new(0);
+        let path = std::env::temp_dir().join(format!(
+            "trade-contention-{}-{}",
+            std::process::id(),
+            N.fetch_add(1, Ordering::SeqCst)
+        ));
+        let session = Arc::new(WfmSession::for_test(path));
+        let listing = OrderMutations::new(Arc::clone(&session));
+        let automatic = OrderMutations::new(Arc::clone(&session));
+        let _batch = listing.begin_only(MutationOrigin::ReviewedPlan).unwrap();
+
+        let error = automatic.begin(MutationOrigin::AutoAdjustment).err().unwrap();
+        let follow_up = unavailable_adjustment_follow_up(&error);
+        assert_eq!(error.code, "busy");
+        assert!(follow_up.contains("Review My Orders"), "{follow_up}");
+        assert!(!follow_up.contains("Sign in"), "{follow_up}");
+        assert!(!follow_up.contains("next pass"), "{follow_up}");
+        assert!(!follow_up.contains("updated"), "{follow_up}");
+    }
+
+    #[test]
+    fn unavailable_adjustment_distinguishes_auth_from_other_failures() {
+        for error in [
+            crate::services::wfm_session::CmdError::needs_login(),
+            crate::services::wfm_session::CmdError::needs_unlock(),
+        ] {
+            assert!(unavailable_adjustment_follow_up(&error).contains("Sign in or unlock"));
+        }
+        let error = crate::services::wfm_session::CmdError::internal("temporary failure");
+        assert!(unavailable_adjustment_follow_up(&error).contains("Review My Orders"));
+        assert!(!unavailable_adjustment_follow_up(&error).contains("Sign in"));
     }
 
     #[test]
@@ -670,5 +853,22 @@ mod tests {
             {"id": "c", "type": "buy", "quantity": 1, "item": {"slug": "x"}}
         ]});
         assert_eq!(own_sell_orders(&flat), vec![order("a", "primed_flow", 1)]);
+    }
+
+    /// A trade is only "adjusted" when WFM said so. The transport answers `Ok` for a
+    /// request it managed to send, so reading that as success marks the trade closed
+    /// and tells the user their listing changed while it still shows the old quantity.
+    #[test]
+    fn only_a_confirmed_status_counts_as_an_applied_adjustment() {
+        assert!(mutation_accepted("ok"));
+        assert!(
+            !mutation_accepted("pending"),
+            "a request that was not accepted is not an applied adjustment"
+        );
+        assert!(
+            !mutation_accepted("uncertain_mutation"),
+            "an ambiguous mutation is not an applied adjustment"
+        );
+        assert!(!mutation_accepted("error"));
     }
 }

@@ -231,8 +231,19 @@ describe('inventory replacement races', () => {
   });
 });
 
-it('ignores a late startup restore after the user has imported an inventory', async () => {
-  const c = normalizationController(vi.fn(), store(snapshot));
+describe('background scans', () => {
+  it('adopts a scan the app took on its own through the same path as a user scan', async () => {
+    const storage = store();
+    const c = normalizationController(vi.fn(async () => normalized('background')), storage);
+    await c.adoptScan({ Suits: [] } as import('../../contracts/data').Inventory, 42);
+    expect(c.nativeSnapshotId).toBe(42);
+    expect([...c.resolved.owned.keys()]).toEqual(['background']);
+    // The adopted scan is persisted like any other, so a reload restores it.
+    expect(storage.saveSnapshot).toHaveBeenCalledTimes(1);
+  });
+});
+
+it('ignores a late startup restore after the user has imported an inventory', async () => {  const c = normalizationController(vi.fn(), store(snapshot));
   await c.handleImported({ invName: 'import', ts: 123, ownedMap: normalized('import').owned });
   await c.restore();
   expect(c.inventoryName).toBe('import');

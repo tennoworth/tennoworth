@@ -76,6 +76,12 @@ jobs:
               - 'frontend/playwright.config.ts'
               - 'frontend/tests/browser/**'
               - 'frontend/public/theme-boot.js'
+              # The browser suite renders the committed snapshot (see
+              # tests/browser/freshness.spec.ts), and build-web no longer reruns
+              # it on main, so a snapshot-only change must reach it here.
+              - 'frontend/public/market.json'
+              - 'frontend/public/wfstat-catalog.json'
+              - 'frontend/public/definitions.json'
               - 'scripts/sync-csp.ts'
               - 'tests/fixtures/**'
             frontend_deps:

@@ -5,7 +5,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { installTauri, removeTauri } from '../dev/test-utils.js';
 import { isDesktopRuntime, installDesktopExternalLinkHandler } from './runtime';
 import { HostedTransport } from './hosted';
-import { TauriTransport, desktopWfmStatus, desktopWfmLogout, desktopWfmLogin, desktopWfmUnlock, desktopTrySilentUnlock } from './desktop';
+import { TauriTransport, desktopWfmStatus, desktopWfmLogout, desktopWfmLogin, desktopWfmUnlock, desktopTrySilentUnlock, parseScanPayload } from './desktop';
 import { DesktopCmdError } from '../contracts/errors';
 
 // The desktop sniff and TauriTransport read the Tauri globals; install/remove
@@ -69,8 +69,13 @@ describe('TauriTransport op → invoke mapping', () => {
     expect(invoke).toHaveBeenCalledWith('scan_inventory');
   });
 
-  it('fetchInventory() surfaces the command rejection verbatim (graceful no-game text)', async () => {
-    const invoke = vi
+  it('refuses a scan identity that cannot name a recorded snapshot', async () => {
+    const invoke = vi.fn().mockResolvedValue({ inventory: '{"Suits":[]}', snapshot_id: 0 });
+    installTauri(invoke);
+    await expect(new TauriTransport().fetchInventory()).rejects.toThrow(/Invalid inventory scan identity/);
+  });
+
+  it('fetchInventory() surfaces the command rejection verbatim (graceful no-game text)', async () => {    const invoke = vi
       .fn()
       .mockRejectedValue("Warframe doesn't appear to be running.\nStart the game, log past the title screen, then retry.");
     installTauri(invoke);
@@ -242,6 +247,22 @@ describe('TauriTransport op → invoke mapping', () => {
     const res = await new TauriTransport().bulkVisibility(['o1'], true);
     expect(invoke).toHaveBeenCalledWith('bulk_visibility', { orderIds: ['o1'], visible: true });
     expect(res).toEqual({ results: [{ order_id: 'o1', status: 'ok', message: null }] });
+  });
+});
+
+describe('parseScanPayload', () => {
+  // Both scan routes share this: the `scan_inventory` response and the
+  // `inventory-scanned` event carry the same Rust struct, and the webview must
+  // not adopt a scan whose identity cannot name the snapshot it recorded.
+  it('accepts an absent identity and a positive integer one', () => {
+    expect(parseScanPayload({ inventory: '{"Suits":[]}', snapshot_id: null })).toEqual({ data: { Suits: [] }, snapshotId: null });
+    expect(parseScanPayload({ inventory: '{"Suits":[]}', snapshot_id: 12 }).snapshotId).toBe(12);
+  });
+
+  it('refuses an identity that is not a recorded snapshot', () => {
+    for (const snapshot_id of [0, -1, 1.5, Number.NaN]) {
+      expect(() => parseScanPayload({ inventory: '{"Suits":[]}', snapshot_id })).toThrow(/Invalid inventory scan identity/);
+    }
   });
 });
 

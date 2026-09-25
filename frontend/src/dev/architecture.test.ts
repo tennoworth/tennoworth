@@ -3,10 +3,31 @@ import ts from 'typescript';
 
 const sources = import.meta.glob<string>(['../**/*.ts', '../**/*.svelte', '!../**/*.test.ts', '!../dev/**'], { query: '?raw', import: 'default', eager: true });
 
-function imports(source: string): string[] {
-  const script = source.includes('<script') ? source.match(/<script[^>]*>([\s\S]*?)<\/script>/)?.[1] ?? '' : source;
-  const ast = ts.createSourceFile('source.ts', script, ts.ScriptTarget.Latest, true);
-  return ast.statements.flatMap(node => ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier) ? [node.moduleSpecifier.text] : []);
+function imports(source: string, runtimeOnly = false): string[] {
+  const scripts = source.includes('<script')
+    ? Array.from(source.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g), match => match[1])
+    : [source];
+  return scripts.flatMap(script => {
+    const ast = ts.createSourceFile('source.ts', script, ts.ScriptTarget.Latest, true);
+    return ast.statements.flatMap(node => {
+      if ((!ts.isImportDeclaration(node) && !ts.isExportDeclaration(node))
+        || !node.moduleSpecifier || !ts.isStringLiteral(node.moduleSpecifier)) return [];
+      if (runtimeOnly) {
+        if (ts.isImportDeclaration(node)) {
+          if (node.importClause?.isTypeOnly) return [];
+          const bindings = node.importClause?.namedBindings;
+          if (bindings && ts.isNamedImports(bindings) && !node.importClause?.name
+            && bindings.elements.length > 0 && bindings.elements.every(binding => binding.isTypeOnly)) return [];
+        } else {
+          if (node.isTypeOnly) return [];
+          const bindings = node.exportClause;
+          if (bindings && ts.isNamedExports(bindings) && bindings.elements.length > 0
+            && bindings.elements.every(binding => binding.isTypeOnly)) return [];
+        }
+      }
+      return [node.moduleSpecifier.text];
+    });
+  });
 }
 
 describe('architecture boundaries', () => {
@@ -46,14 +67,8 @@ describe('architecture boundaries', () => {
 function runtimeGraph(): Map<string, string[]> {
   const graph = new Map<string, string[]>();
   for (const [path, source] of Object.entries(sources)) {
-    const script = source.includes('<script') ? source.match(/<script[^>]*>([\s\S]*?)<\/script>/)?.[1] ?? '' : source;
-    const ast = ts.createSourceFile(path, script, ts.ScriptTarget.Latest, true);
     const dependencies: string[] = [];
-    for (const node of ast.statements) {
-      if (!ts.isImportDeclaration(node) || !ts.isStringLiteral(node.moduleSpecifier) || node.importClause?.isTypeOnly) continue;
-      const bindings = node.importClause?.namedBindings;
-      if (bindings && ts.isNamedImports(bindings) && !node.importClause?.name && bindings.elements.every(binding => binding.isTypeOnly)) continue;
-      const specifier = node.moduleSpecifier.text;
+    for (const specifier of imports(source, true)) {
       if (!specifier.startsWith('.')) continue;
       const target = '..' + new URL(specifier, new URL(path, 'https://source.invalid/src/')).pathname;
       const resolved = [target, target + '.ts', target + '.svelte', target.replace(/\.js$/, '.ts')].find(candidate => candidate in sources);
@@ -82,4 +97,23 @@ it('keeps static production imports acyclic and hosted dependencies public', () 
     for (const dependency of graph.get(path) ?? []) hosted(dependency);
   }
   hosted('../shells/HostedShell.svelte');
+});
+
+it('finds dependencies in both component scripts and re-exports', () => {
+  const source = `<script context="module" lang="ts">export { service } from '../adapters/services';</script>
+    <script lang="ts">import { view } from '../features/orders/view';</script>`;
+  expect(imports(source)).toEqual(['../adapters/services', '../features/orders/view']);
+});
+
+it('keeps runtime side effects and value re-exports but omits type-only edges', () => {
+  expect(imports(`
+    import type { A } from './types-a';
+    import { type B } from './types-b';
+    export type * from './types-c';
+    export { type D } from './types-d';
+    import {} from './side-effect';
+    import './initialize';
+    export { value, type E } from './mixed';
+    export * from './public';
+  `, true)).toEqual(['./side-effect', './initialize', './mixed', './public']);
 });

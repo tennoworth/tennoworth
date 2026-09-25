@@ -16,7 +16,7 @@ use crate::clock;
 const STALE_DAYS: i64 = 7;
 use crate::csvin;
 use crate::ingest::{self, FixtureHttp, Http, LiveHttp};
-use crate::reconcile::{reconcile, Observation};
+use crate::reconcile::{reconcile, reconcile_keyed, KeyStamps, Observation};
 use crate::render::{self, assemble_snapshot, CatalogItemMeta};
 use crate::{de, de_extract};
 
@@ -183,11 +183,17 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
                 .collect()
         })
         .unwrap_or_default();
+    let prior_key_stamps: HashMap<String, KeyStamps> = prior
+        .get("surface_key_fetched_at")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
 
     eprintln!("Fetching warframe.market master catalog...");
-    let (catalog, mut meta_by_slug) =
+    // `catalog_fresh` is false on the prior-snapshot fallback: that copy has
+    // no gameRefs, so the resolver surfaces built from it are partial.
+    let (catalog, mut meta_by_slug, catalog_fresh) =
         match ingest::fetch_catalog_wfm(http.as_ref(), "https://api.warframe.market/v2/items") {
-            Ok(v) => v,
+            Ok((catalog, meta)) => (catalog, meta, true),
             Err(e) => {
                 let Some(prior_catalog) = prior.get("catalog").and_then(|c| c.as_object()) else {
                     return Err(format!("{e} - and no prior snapshot to fall back on."));
@@ -219,15 +225,14 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
                                             })
                                             .unwrap_or_default(),
                                         ducats: it.get("ducats").and_then(|d| d.as_i64()),
-                                        max_rank: None,
-                                        subtypes: vec![],
+                                        ..Default::default()
                                     },
                                 )
                             })
                             .collect()
                     })
                     .unwrap_or_default();
-                (cat, items_meta)
+                (cat, items_meta, false)
             }
         };
     eprintln!("  {} items", catalog.len());
@@ -249,13 +254,29 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     };
 
     eprintln!("Fetching warframestat component path map + sets...");
-    let (path_to_info, set_to_parts, parents_complete) =
+    let (mut path_to_info, mut set_to_parts, parents_complete) =
         ingest::fetch_parent_data(http.as_ref(), &catalog, wfstat_raw.as_ref());
     eprintln!(
         "  {} component paths · {} prime sets",
         path_to_info.len(),
         set_to_parts.len()
     );
+    // The catalogue the resolvers will read beside path_to_info: this cycle's,
+    // or the preserved file when the bulk fetch failed.
+    let wfstat_slim_for_paths: Vec<serde_json::Value> = match wfstat_raw.as_ref() {
+        Some(raw) => ingest::slim_wfstat_items(raw, ingest::WFSTAT_ITEMS_URL).unwrap_or_default(),
+        None => std::fs::read(&catalog_out)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+            .unwrap_or_default(),
+    };
+    let game_ref_paths = ingest::add_game_ref_paths(
+        &meta_by_slug,
+        &mut path_to_info,
+        &ingest::wfstat_categories(&wfstat_slim_for_paths),
+    );
+    eprintln!("  {game_ref_paths} paths from warframe.market gameRefs that warframestat lacks");
+    let path_to_info_complete = parents_complete && catalog_fresh;
 
     // ---- Digital Extremes first-party ingest -------------------------------
     // Runs after path_to_info because every DE join resolves `/Lotus/...`
@@ -316,6 +337,29 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // values. The failure path therefore re-applies the last known-good
     // override from the prior snapshot.
     let de_recipes = de_snap.manifests.get("ExportRecipes_en.json");
+
+    // Prime sets warframestat has not published yet, from DE's recipes. Runs
+    // before the DE ducat override below: the completeness check compares the
+    // parts against the set total on warframe.market's side. Without recipes
+    // this cycle the surface is partial, so reconcile keeps the prior entries.
+    if let Some(recipes) = de_recipes {
+        // With warframestat's parents only partly fetched, a set it normally
+        // lists can be missing this cycle; the prior entry is carried by the
+        // partial merge and must not be replaced by a derived breakdown.
+        let mut known = set_to_parts.clone();
+        if !parents_complete {
+            if let Some(prior_sets) = prior.get("set_to_parts").and_then(|v| v.as_object()) {
+                for (slug, parts) in prior_sets {
+                    known.entry(slug.clone()).or_insert_with(|| parts.clone());
+                }
+            }
+        }
+        let derived = de_extract::sets_from_recipes(recipes, &path_to_info, &meta_by_slug, &known);
+        eprintln!("  {} prime sets derived from DE recipes", derived.len());
+        set_to_parts.extend(derived);
+    }
+    let set_to_parts_complete = parents_complete && catalog_fresh && de_recipes.is_some();
+
     // Slugs DE set, this cycle or carried from the last one. Written into the
     // snapshot as provenance so a later failure knows which values were ours.
     let mut de_ducats: std::collections::BTreeMap<String, i64> = std::collections::BTreeMap::new();
@@ -896,22 +940,27 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
             Observation::partial(data)
         }
     };
-    let r_p2i = reconcile(
+    let mut key_stamps: HashMap<String, KeyStamps> = HashMap::new();
+    let (r_p2i, stamps) = reconcile_keyed(
         "path_to_info",
-        observation(path_to_info, parents_complete),
+        observation(path_to_info, path_to_info_complete),
         p2i_old.as_ref(),
         prior_stamps.get("path_to_info").map(|s| s.as_str()),
+        prior_key_stamps.get("path_to_info"),
         now,
         STALE_DAYS,
     );
-    let r_s2p = reconcile(
+    key_stamps.insert("path_to_info".into(), stamps);
+    let (r_s2p, stamps) = reconcile_keyed(
         "set_to_parts",
-        observation(set_to_parts, parents_complete),
+        observation(set_to_parts, set_to_parts_complete),
         s2p_old.as_ref(),
         prior_stamps.get("set_to_parts").map(|s| s.as_str()),
+        prior_key_stamps.get("set_to_parts"),
         now,
         STALE_DAYS,
     );
+    key_stamps.insert("set_to_parts".into(), stamps);
     let r_rr = reconcile(
         "relic_rewards",
         relic_observation,
@@ -927,14 +976,16 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     } else {
         Observation::partial(vault_status)
     };
-    let r_vs = reconcile(
+    let (r_vs, stamps) = reconcile_keyed(
         "vault_status",
         vault_observation,
         vs_old.as_ref(),
         prior_stamps.get("vault_status").map(|s| s.as_str()),
+        prior_key_stamps.get("vault_status"),
         now,
         STALE_DAYS,
     );
+    key_stamps.insert("vault_status".into(), stamps);
     // Before reconcile, not after: reconcile only falls back to the prior value
     // when the whole surface is empty, and Baro's never is (schedule fields keep
     // arriving between visits). His inventory is capturable only during the 48h
@@ -1265,6 +1316,7 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     );
     snapshot.de = Some(de_surface);
     snapshot.surface_provenance = surface_provenance;
+    snapshot.surface_key_fetched_at = key_stamps;
     snapshot.event_rewards = render::EventRewardsSurface {
         goals: r_world_goals.data,
         events: r_world_events.data,

@@ -1,0 +1,20 @@
+{
+  "now": "2026-09-03T00:00:00Z",
+  "cases": [
+    { "name": "fresh observation", "disposition": "published_fresh", "data_fetched_at": "2026-09-03T00:00:00Z", "calendar_evidence": true, "reminder_fresh": true, "shell_warning": null },
+    { "name": "old carried partial merge", "disposition": "merged_partial", "data_fetched_at": "2026-08-23T00:00:00Z", "calendar_evidence": true, "reminder_fresh": false, "shell_warning": "2026-08-23T00:00:00Z" },
+    { "name": "partial merge with recent prior stamp", "disposition": "merged_partial", "data_fetched_at": "2026-09-03T00:00:00Z", "calendar_evidence": true, "reminder_fresh": true, "shell_warning": null },
+    { "name": "hash verified unchanged", "disposition": "preserved_unchanged", "data_fetched_at": "2026-08-23T00:00:00Z", "calendar_evidence": true, "reminder_fresh": false, "shell_warning": null },
+    { "name": "failed read with old carried data", "disposition": "preserved_unavailable", "data_fetched_at": "2026-08-23T00:00:00Z", "calendar_evidence": false, "reminder_fresh": false, "shell_warning": "2026-08-23T00:00:00Z" },
+    { "name": "invalid read with old carried data", "disposition": "preserved_invalid", "data_fetched_at": "2026-08-23T00:00:00Z", "calendar_evidence": false, "reminder_fresh": false, "shell_warning": "2026-08-23T00:00:00Z" },
+    { "name": "failed read without prior data", "disposition": "empty_unavailable", "data_fetched_at": "2026-09-03T00:00:00Z", "calendar_evidence": false, "reminder_fresh": false, "shell_warning": "unknown" },
+    { "name": "invalid read without prior data", "disposition": "empty_invalid", "data_fetched_at": "2026-09-03T00:00:00Z", "calendar_evidence": false, "reminder_fresh": false, "shell_warning": "unknown" },
+    { "name": "unchanged read without prior data", "disposition": "empty_unchanged", "data_fetched_at": "2026-09-03T00:00:00Z", "calendar_evidence": false, "reminder_fresh": false, "shell_warning": "unknown" },
+    { "name": "unknown disposition", "disposition": "future_state", "data_fetched_at": "2026-09-03T00:00:00Z", "calendar_evidence": false, "reminder_fresh": false, "shell_warning": "unknown" },
+    { "name": "legacy recent snapshot", "disposition": null, "data_fetched_at": "2026-09-03T00:00:00Z", "calendar_evidence": true, "reminder_fresh": true, "shell_warning": null },
+    { "name": "legacy old snapshot", "disposition": null, "data_fetched_at": "2026-08-23T00:00:00Z", "calendar_evidence": true, "reminder_fresh": false, "shell_warning": "2026-08-23T00:00:00Z" },
+    { "name": "legacy snapshot without a stamp", "disposition": null, "data_fetched_at": "", "calendar_evidence": true, "reminder_fresh": false, "shell_warning": "unknown" },
+    { "name": "legacy carried rows without a prior stamp", "disposition": "merged_partial", "data_fetched_at": "", "calendar_evidence": true, "reminder_fresh": false, "shell_warning": "unknown" },
+    { "name": "missing evidence timestamp", "disposition": "published_fresh", "data_fetched_at": "", "calendar_evidence": true, "reminder_fresh": false, "shell_warning": "unknown" }
+  ]
+}

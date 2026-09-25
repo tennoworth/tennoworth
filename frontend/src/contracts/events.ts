@@ -11,8 +11,21 @@ export { WATCH_FIRED_EVENT } from './generated/desktop';
 
 
 
+/**
+ * Rust emits this after a scan the app started on its own - the automatic
+ * scanner, or the tray's Rescan - carrying the same payload the
+ * `scan_inventory` command returns. Generated from the Rust const, so both
+ * halves of the channel name are pinned by the binding export test.
+ */
+export { INVENTORY_SCANNED_EVENT } from './generated/desktop';
+
+
+
 /** Rust emits this when EE.log confirms a trade. */
 export const TRADE_DETECTED_EVENT = 'trade-detected';
+
+/** Rust emits this when trade recording starts or stops keeping up. */
+export const RECORDING_CHANGED_EVENT = 'recording-changed';
 
 
 

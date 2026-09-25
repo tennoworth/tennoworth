@@ -1,0 +1,33 @@
+{
+  "_comment": "One non-relic scan drives the native tray and browser table. Shared rows use the same market, reserve and usage data. The expected outputs record the deliberate local-protection and post-scan trade differences separately.",
+  "reserve_copies": 1,
+  "inventory": [
+    { "category": "RawUpgrades", "path": "/Lotus/Composition/AlphaA", "name": "Alpha", "slug": "alpha", "count": 2, "xp": 0 },
+    { "category": "RawUpgrades", "path": "/Lotus/Composition/AlphaB", "name": "Alpha", "slug": "alpha", "count": 1, "xp": 0 },
+    { "category": "LongGuns", "path": "/Lotus/Composition/BetaA", "name": "Beta", "slug": "beta", "count": 1, "xp": 1 },
+    { "category": "LongGuns", "path": "/Lotus/Composition/BetaB", "name": "Beta", "slug": "beta", "count": 3, "xp": 0 },
+    { "category": "RawUpgrades", "path": "/Lotus/Composition/Gamma", "name": "Gamma", "slug": "gamma", "count": 2, "xp": 0 },
+    { "category": "RawUpgrades", "path": "/Lotus/Composition/Delta", "name": "Delta", "slug": "delta", "count": 2, "xp": 0 },
+    { "category": "RawUpgrades", "path": "/Lotus/Composition/Unpriced", "name": "Unpriced", "slug": "unpriced", "count": 1, "xp": 0 }
+  ],
+  "market": {
+    "items": {
+      "alpha": { "avg": 100, "low_sell": 100, "top_buy": 90, "vol": 10, "ratio": 1, "median_now": 100, "median_90d": 100 },
+      "beta": { "avg": 80, "low_sell": 80, "top_buy": 70, "vol": 10, "ratio": 1, "median_now": 80, "median_90d": 80 },
+      "gamma": { "avg": 60, "low_sell": 60, "top_buy": 50, "vol": 10, "ratio": 1, "median_now": 60, "median_90d": 60 },
+      "delta": { "avg": 50, "low_sell": 50, "top_buy": 40, "vol": 10, "ratio": 1, "median_now": 50, "median_90d": 50 }
+    },
+    "usage": {
+      "alpha": { "name": "Alpha", "category": "Primary", "year": 2025, "share": 0.1, "peak_mr": 10, "by_mr": [1] },
+      "beta": { "name": "Beta", "category": "Primary", "year": 2025, "share": 1.2, "peak_mr": 10, "by_mr": [1] }
+    }
+  },
+  "protected": { "beta": 1 },
+  "legacy_reserves": { "gamma": 2 },
+  "traded_after_scan": "Delta",
+  "expected": {
+    "shared_order": ["beta", "alpha"],
+    "tray": [{ "slug": "beta", "sellable_qty": 2 }, { "slug": "alpha", "sellable_qty": 2 }],
+    "table": [{ "slug": "beta", "sellable": 3 }, { "slug": "alpha", "sellable": 2 }, { "slug": "gamma", "sellable": 1 }, { "slug": "delta", "sellable": 1 }]
+  }
+}

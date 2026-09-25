@@ -10,6 +10,9 @@ anyhow = { workspace = true }
 regex = "1"
 regex-syntax = { workspace = true }
 wfm-client = { path = "../wfm-client" }
+# Portable order contract: the decoder below translates this API's rows into it,
+# so consumers read a typed order instead of agreeing on a JSON shape.
+market-domain = { path = "../market-domain" }
 reqwest = { workspace = true }
 tungstenite = { workspace = true }
 serde = { workspace = true }
