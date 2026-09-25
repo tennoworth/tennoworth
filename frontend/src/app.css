@@ -482,6 +482,9 @@ table.tw tbody tr:hover td { background: var(--hover-tint); }
 table.tw td.l a { color: var(--fg); text-decoration: none; }
 table.tw td.l a:hover { color: var(--accent); text-decoration: underline; }
 table.tw td.score, table.tw td.strong { font-weight: 600; color: var(--fg); }
+/* The price is the number people came for: ink, 600, with a quiet unit. */
+table.tw td.price { font-weight: 600; color: var(--fg); }
+table.tw td.price .unit { font-weight: 400; font-size: 0.8em; }
 table.tw td.fg { color: var(--fg); }
 table.tw th.sorted { color: var(--accent); }
 table.tw tr.dim td, table.tw tr.dim td.l, table.tw tr.dim td.l a { color: var(--muted); font-weight: 400; }

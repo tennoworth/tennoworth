@@ -1,7 +1,7 @@
 <script lang="ts">
   import { useDesktopServices } from '../../ui/desktop-context';
   const { desktopTradeSessionState, desktopLiveTopPrices, listenForTauriEvent, evaluateTradeSession } = useDesktopServices();
-  import { onMount } from 'svelte';
+  import { onMount, type Snippet } from 'svelte';
   import BuyerAlternatives from './BuyerAlternatives.svelte';
   import { computeResults } from '../../domain/filter-engine';
   import { SESSION_MODES, type selectSession, type SessionMode, type SessionRow, type SessionCandidate } from '../../domain/trade-session';
@@ -15,7 +15,8 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   import type { ScoredInventoryFact } from '../../contracts/generated/domain';
   import type { Verdict } from '../../domain/advisor';
 
-  let { owned, market, reserveCopies, advice, scanning, onscan, onreview, nativeFacts = new Map(), availability, listingBlockReason = null, onrecheck, listingActionLabel = 'Check WFM listings' }: {
+  let { owned, market, reserveCopies, advice, scanning, onscan, onreview, nativeFacts = new Map(), availability, listingBlockReason = null, onrecheck, listingActionLabel = 'Check WFM listings', keep }: {
+    keep?: Snippet;
     owned: Map<string, OwnedRecord>; market: Market | null; reserveCopies: number;
     nativeFacts?: Map<string, ScoredInventoryFact>;
     advice: Map<string, Verdict>; scanning: boolean; onscan: () => Promise<void>;
@@ -159,6 +160,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   <h2>Trade Session</h2>
   <p class="lede">Choose what matters, review a batch, return to Warframe.</p>
 </section>
+{@render keep?.()}
 
 <div class="ui-stack">
   <div class="ui-toolbar modes" role="group" aria-label="Trade intent">

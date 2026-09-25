@@ -1,7 +1,8 @@
 <script lang="ts">
   import DemandCell from './DemandCell.svelte';
   import { untrack, type Snippet } from 'svelte';
-  import { sparklinePoints } from '../../ui/sparkline';
+  import Sparkline from '../../ui/Sparkline.svelte';
+  import { hasSparkline } from '../../ui/sparkline';
   import { wfmItemUrl, ownedBreakdown, LEVELED_NOTE_TITLE, keptNoteTitle } from '../../ui/format';
 
   import type { ProtectionState } from '../../contracts/protection';
@@ -316,9 +317,6 @@
     }
   }
 
-  // Build SVG polyline points for an N-point sparkline. Normalises to a
-  // fixed [1, H-1] band so a flat series doesn't render as a 0-height
-  // line. Returns null when there aren't enough points to draw.
   function rowDelta(r: Row): number {
     // Deltas come from diffOwned which keys by the composite (slug|subtype)
     // so radiant vs intact relic counts don't collide. Each row carries its
@@ -493,11 +491,9 @@
       <span class="muted">-</span>
     {/if}
   {:else if col.key === 'medians_7d'}
-    {#if r.medians_7d && r.medians_7d.length >= 2}
-      <svg class="sparkline" viewBox="0 0 60 18" width="60" height="18" aria-hidden="true">
-        <title>last 7d medians: {r.medians_7d.join(', ')}</title>
-        <polyline points={sparklinePoints(r.medians_7d, 60, 18)} fill="none" stroke="currentColor" stroke-width="1.2" />
-      </svg>
+    {#if hasSparkline(r.medians_7d)}
+      <Sparkline class="sparkline" series={r.medians_7d} baseline={r.median_90d} trend={r.delta_90d_pct}
+        title="last 7d medians: {r.medians_7d.join(', ')}{r.median_90d != null ? ` · 90-day median ${r.median_90d}` : ''}" />
     {:else}
       <span class="muted">-</span>
     {/if}
@@ -1015,15 +1011,9 @@
     color: var(--warn);
   }
 
-  /* Sparkline + Δ-90d treatment. Sparkline uses currentColor stroked at
-     1.2 px so it inherits the row colour; trend badge sits in its own
-     column with directional colour. */
+  /* Δ-90d treatment: the trend badge sits in its own column with directional colour. */
   th.nosort { cursor: default; }
   th.nosort:hover { background: var(--panel-2); }
-  .sparkline {
-    color: var(--accent);
-    vertical-align: middle;
-  }
   .trend {
     font-family: var(--font-mono);
     font-size: var(--text-caption);

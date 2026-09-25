@@ -32,6 +32,8 @@
     dismissSellOnboarding(): void; dismissKeepCopiesNudge(): void;
     openListingFlow(rows?: ListingCandidate | ListingCandidate[]): void;
     pendingBanner: Snippet;
+    // The keep-rules strip: rendered under the view title, after stale-data notices.
+    keep?: Snippet;
     calculationPending?: boolean;
     calculationError?: string | null;
     calculationErrorShown?: boolean;
@@ -62,7 +64,7 @@
     applyPreset, setReserveCopies, toggleFiltersOpen, 
     dismissSellOnboarding, dismissKeepCopiesNudge,
     openListingFlow,
-    pendingBanner, estimatedGuidance = false, canList = true, unavailableCount = 0, listingActionLabel = 'Check WFM listings', oncheckListings, calculationPending = false, calculationError = null, onretryCalculation, calculationErrorShown = false,
+    pendingBanner, keep, estimatedGuidance = false, canList = true, unavailableCount = 0, listingActionLabel = 'Check WFM listings', oncheckListings, calculationPending = false, calculationError = null, onretryCalculation, calculationErrorShown = false,
   }: Props = $props();
 
   // Was inline in the template, so it re-filtered the whole results array on
@@ -298,6 +300,8 @@
     ⚠ Prices may be outdated - this market snapshot is {marketStaleness} old. Rankings below use stale data.
   </p>
 {/if}
+
+{@render keep?.()}
 
 {#if calculationReady && results.length > 0 && allPicks.length === 0}
   <div class="card empty">
