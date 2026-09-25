@@ -123,17 +123,27 @@ pub const WANTED_MANIFESTS: &[&str] = &[
 ///    code would fall through to the legacy intact-only source. Keeping the
 ///    shared dependency always-present removes the hazard rather than
 ///    coordinating two caches.
+/// 3. **Its output depends on the resolver, which changes on its own.** Relic
+///    rewards resolve through `path_to_info`, and that map grows whenever
+///    warframe.market or warframestat learns a new item - usually days after
+///    DE's relic manifest last changed. Skipping on the relic hash froze the
+///    table against the old resolver: the 2026-09-23 Prime Access relics were
+///    published without their Citrine, Steflos and Corufell rewards, and
+///    would have stayed that way until DE next touched the manifest.
 ///
-/// Together these are ~1.9 MB a cycle against a scrape that already runs for
-/// half an hour. Correctness is worth more than the saving; the 3.2 MB relic
-/// manifest, which is a standalone carryable surface, still skips.
+/// Together these are ~5 MB a cycle against a scrape that already runs for
+/// half an hour. Correctness is worth more than the saving.
 ///
 /// **This list guarantees an ATTEMPT, not a result.** The index can answer
 /// while a manifest 500s, so every consumer must still handle the manifest
 /// being absent - for an override that means re-applying the last known-good
 /// value from the prior snapshot, never silently reverting to the other
 /// source.
-pub const ALWAYS_FETCH: &[&str] = &["ExportWeapons_en.json", "ExportRecipes_en.json"];
+pub const ALWAYS_FETCH: &[&str] = &[
+    "ExportWeapons_en.json",
+    "ExportRecipes_en.json",
+    "ExportRelicArcane_en.json",
+];
 
 // ---------------------------------------------------------------------------
 // Index

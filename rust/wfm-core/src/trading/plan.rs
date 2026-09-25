@@ -12,10 +12,13 @@ use std::time::Duration;
 use crate::identity::random_token;
 use crate::time::chrono_now_iso;
 use crate::trading::catalog::WfmCatalogItem;
+use crate::trading::outcome::MutationOutcome;
 use crate::trading::listing::{
-    list_user_orders, patch_one_order, send_mutation, Unlocked, MAX_PLATINUM,
+    decode_user_orders, list_user_orders, patch_one_order, send_mutation, Unlocked, MAX_PLATINUM,
 };
-use crate::trading::pending::{clear_pending, write_pending_atomic, PendingItem, PendingPlan};
+use crate::trading::orders::DecodedOrders;
+use crate::trading::pending::{journal_state, write_pending_atomic, JournalState, PendingItem, PendingPlan};
+use market_domain::orders::{NormalizedOrder, OrderRow, OrderSide};
 
 /// Resets a plan-in-flight flag on scope exit - including early return and
 /// panic - so a rejected or crashed request can't leave plan execution wedged.
@@ -115,6 +118,9 @@ pub enum ReviewedOrder {
 pub struct PlanResponse {
     pub plan_id: String,
     pub results: Vec<ItemResult>,
+    /// Local journal recording or cleanup failed. Results still describe this run.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub durability_error: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -168,12 +174,24 @@ pub fn execute_plan(
     plan: PlanRequest,
     validate: impl FnMut() -> Result<(), PlanValidationError>,
 ) -> PlanResponse {
+    execute_plan_with(pending_path, unlocked, plan, |path, unlocked, pending| {
+        run_pending(path, unlocked, pending, validate)
+    })
+}
+
+fn execute_plan_with(
+    pending_path: &std::path::Path,
+    unlocked: &Unlocked,
+    plan: PlanRequest,
+    run: impl FnOnce(&std::path::Path, &Unlocked, &mut PendingPlan) -> PlanResponse,
+) -> PlanResponse {
     let plan_id = random_token(8);
 
     if plan.items.is_empty() {
         return PlanResponse {
             plan_id,
             results: vec![],
+            durability_error: None,
         };
     }
 
@@ -191,7 +209,51 @@ pub fn execute_plan(
                 order_id: None,
                 action: None,
             }],
+            durability_error: None,
         };
+    }
+
+    match journal_state(pending_path) {
+        JournalState::Unfinished => {
+            return PlanResponse {
+                plan_id,
+                results: vec![ItemResult {
+                    slug: "<batch>".into(),
+                    status: "error".into(),
+                    message: Some("An unfinished batch is saved. Resume or discard it before sending another.".into()),
+                    order_id: None,
+                    action: None,
+                }],
+                durability_error: None,
+            };
+        }
+        JournalState::Unreadable(detail) => {
+            return PlanResponse {
+                plan_id,
+                results: vec![ItemResult {
+                    slug: "<batch>".into(),
+                    status: "error".into(),
+                    message: Some(format!("The saved batch could not be read, so a new one cannot safely replace it. {detail}")),
+                    order_id: None,
+                    action: None,
+                }],
+                durability_error: None,
+            };
+        }
+        JournalState::Finished => {
+            return PlanResponse {
+                plan_id,
+                results: vec![ItemResult {
+                    slug: "<batch>".into(),
+                    status: "error".into(),
+                    message: Some("A completed batch is still saved. Retry saving or discard its record before sending another.".into()),
+                    order_id: None,
+                    action: None,
+                }],
+                durability_error: None,
+            };
+        }
+        JournalState::Absent => {}
     }
 
     // Seed the pending file before the first POST so a crash here is
@@ -229,11 +291,7 @@ pub fn execute_plan(
         );
     }
 
-    let response = run_pending(pending_path, unlocked, &mut pending, validate);
-    if pending.items.iter().all(|i| i.status != "pending") {
-        clear_pending(pending_path);
-    }
-    response
+    run(pending_path, unlocked, &mut pending)
 }
 
 // Drives a PendingPlan to completion, skipping items already in a terminal
@@ -264,16 +322,31 @@ pub fn run_pending(
                     order_id: None,
                     action: None,
                 }],
+                durability_error: None,
             };
         }
     };
 
     run_pending_with(pending_path, pending, validate, |item, validate| {
-        execute_one(&http, unlocked, item, &mut || list_user_orders(unlocked), validate)
+        execute_one(&http, unlocked, item, &mut || {
+            decode_user_orders(unlocked, &list_user_orders(unlocked)?)
+        }, validate)
     })
 }
 
 fn run_pending_with(
+    pending_path: &std::path::Path,
+    pending: &mut PendingPlan,
+    validate: impl FnMut() -> Result<(), PlanValidationError>,
+    execute: impl FnMut(
+        &PlanItem,
+        &mut dyn FnMut() -> Result<(), PlanValidationError>,
+    ) -> ItemResult,
+) -> PlanResponse {
+    run_pending_with_store(pending_path, pending, validate, execute, write_pending_atomic)
+}
+
+fn run_pending_with_store(
     pending_path: &std::path::Path,
     pending: &mut PendingPlan,
     mut validate: impl FnMut() -> Result<(), PlanValidationError>,
@@ -281,6 +354,7 @@ fn run_pending_with(
         &PlanItem,
         &mut dyn FnMut() -> Result<(), PlanValidationError>,
     ) -> ItemResult,
+    mut persist: impl FnMut(&std::path::Path, &PendingPlan) -> anyhow::Result<()>,
 ) -> PlanResponse {
     if let Err(error) = validate() {
         return validation_failure(pending, error);
@@ -289,10 +363,10 @@ fn run_pending_with(
         if let Err(message) = validate() {
             return validation_failure(pending, message);
         }
-        let Some(item) = pending.items.get_mut(i) else {
+        let Some(item) = pending.items.get(i) else {
             continue;
         };
-        if item.status != "pending" {
+        if item.status != crate::trading::pending::STATUS_PENDING {
             continue;
         }
         if let Err(error) = wfm_client::governor::process().check(
@@ -301,19 +375,39 @@ fn run_pending_with(
         ) {
             return validation_failure(pending, error);
         }
-        let plan_item = PlanItem::from(&*item);
+        let plan_item = PlanItem::from(item);
+        let prior_message = item.message.clone();
+        // A crash after the market accepts the mutation but before its result
+        // reaches disk must never leave this item eligible for blind replay.
+        if let Some(item) = pending.items.get_mut(i) {
+            item.status = crate::trading::pending::STATUS_UNCERTAIN.into();
+            item.message = Some("The app stopped while handling this listing. Check My Orders before listing it again.".into());
+        }
+        if let Err(error) = persist(pending_path, pending) {
+            if let Some(item) = pending.items.get_mut(i) {
+                item.status = crate::trading::pending::STATUS_PENDING.into();
+                item.message = prior_message;
+            }
+            return durability_failure(pending, format!("Could not save the listing before sending it: {error}"));
+        }
         let result = execute(&plan_item, &mut validate);
-        let interrupted = matches!(result.status.as_str(), "pending" | "uncertain_mutation");
-        item.status = if interrupted {
-            "pending".into()
-        } else {
-            result.status.clone()
-        };
-        item.message = result.message.clone();
-        item.order_id = result.order_id.clone();
-        item.action = result.action.clone();
-        if let Err(e) = write_pending_atomic(pending_path, pending) {
-            return validation_failure(pending, format!("Could not persist pending update: {e}"));
+        // Both stop the batch, but they do not mean the same thing and the
+        // journal must not say they do. `pending` was never dispatched, so
+        // re-offering it is safe. `uncertain_mutation` may already have been
+        // applied, so it is recorded as itself and the resume loop - which only
+        // re-offers `pending` - leaves it for explicit reconciliation.
+        let interrupted = matches!(
+            result.status.as_str(),
+            crate::trading::pending::STATUS_PENDING | crate::trading::pending::STATUS_UNCERTAIN
+        );
+        if let Some(item) = pending.items.get_mut(i) {
+            item.status = result.status.clone();
+            item.message = result.message.clone();
+            item.order_id = result.order_id.clone();
+            item.action = result.action.clone();
+        }
+        if let Err(error) = persist(pending_path, pending) {
+            return durability_failure(pending, format!("Could not save the confirmed listing result: {error}. Check My Orders before resuming or listing it again."));
         }
         if interrupted {
             break;
@@ -333,16 +427,32 @@ fn run_pending_with(
                 action: i.action.clone(),
             })
             .collect(),
+        durability_error: None,
     }
+}
+
+fn durability_failure(pending: &PendingPlan, message: String) -> PlanResponse {
+    let results = pending.items.iter().map(|item| ItemResult {
+        slug: item.slug.clone(),
+        status: item.status.clone(),
+        message: item.message.clone(),
+        order_id: item.order_id.clone(),
+        action: item.action.clone(),
+    }).collect();
+    PlanResponse { plan_id: pending.plan_id.clone(), results, durability_error: Some(message) }
 }
 
 fn validation_failure(pending: &PendingPlan, error: impl Into<PlanValidationError>) -> PlanResponse {
     let error = error.into();
     let message = error.to_string();
-    if matches!(error, PlanValidationError::Market(_)) {
+    // A late validation stop must retain earlier confirmed rows so the desktop
+    // can record their order IDs even though later rows were never sent.
+    if matches!(error, PlanValidationError::Market(_))
+        || pending.items.iter().any(|item| matches!(item.status.as_str(),
+            crate::trading::pending::STATUS_OK | crate::trading::pending::STATUS_ERROR)) {
         return PlanResponse { plan_id: pending.plan_id.clone(), results: pending.items.iter().map(|item| ItemResult {
-            slug: item.slug.clone(), status: item.status.clone(), message: if item.status == "pending" { Some(message.clone()) } else { item.message.clone() }, order_id: item.order_id.clone(), action: item.action.clone(),
-        }).collect() };
+            slug: item.slug.clone(), status: item.status.clone(), message: if item.status == crate::trading::pending::STATUS_PENDING { Some(message.clone()) } else { item.message.clone() }, order_id: item.order_id.clone(), action: item.action.clone(),
+        }).collect(), durability_error: None };
     }
     PlanResponse {
         plan_id: pending.plan_id.clone(),
@@ -353,6 +463,7 @@ fn validation_failure(pending: &PendingPlan, error: impl Into<PlanValidationErro
             order_id: None,
             action: None,
         }],
+        durability_error: None,
     }
 }
 
@@ -446,33 +557,13 @@ pub struct ExistingOrder {
     pub ambiguous: bool,
 }
 
-/// (itemId, order type, rank, subtype) - the identity WFM enforces uniqueness
-/// on (a second order with the same key 403s with
-/// `app.order.error.exceededOrderLimitSamePrice`).
-pub type OrderKey = (String, String, Option<u64>, Option<String>);
+/// The identity the market enforces uniqueness on - a second order with the
+/// same key 403s with `app.order.error.exceededOrderLimitSamePrice`. The
+/// contract owns the shape; this alias keeps the call sites reading as they did.
+pub type OrderKey = market_domain::orders::OrderKey;
 
-fn index_one_order(
-    out: &mut BTreeMap<OrderKey, ExistingOrder>,
-    o: &serde_json::Value,
-    bucket_type: Option<&str>,
-) {
-    let Some(id) = o.get("id").and_then(|v| v.as_str()) else {
-        return;
-    };
-    let Some(item_id) = o.get("itemId").and_then(|v| v.as_str()) else {
-        return;
-    };
-    let Some(ty) = o.get("type").and_then(|v| v.as_str()).or(bucket_type) else {
-        return;
-    };
-    let key = (
-        item_id.to_string(),
-        ty.to_string(),
-        o.get("rank").and_then(|v| v.as_u64()),
-        o.get("subtype")
-            .and_then(|v| v.as_str())
-            .map(str::to_string),
-    );
+fn index_one_order(out: &mut BTreeMap<OrderKey, ExistingOrder>, order: &NormalizedOrder) {
+    let key = order.key();
     if let Some(prior) = out.get_mut(&key) {
         prior.ambiguous = true;
         return;
@@ -480,35 +571,24 @@ fn index_one_order(
     out.insert(
         key,
         ExistingOrder {
-            id: id.to_string(),
-            platinum: o.get("platinum").and_then(|v| v.as_u64()).unwrap_or(0),
-            quantity: o.get("quantity").and_then(|v| v.as_u64()).unwrap_or(0),
-            per_trade: o.get("perTrade").and_then(|v| v.as_u64()),
-            visible: o.get("visible").and_then(|v| v.as_bool()),
+            id: order.id.clone(),
+            platinum: order.platinum,
+            quantity: order.quantity,
+            per_trade: order.per_trade,
+            visible: order.visible,
             ambiguous: false,
         },
     );
 }
 
-/// Index a /v2/orders/user/<username> response by OrderKey. Tolerates both
-/// shapes WFM has shipped ({data:{sell,buy}} and flat {data:[...]}), same as
-/// catalog::enrich_orders_with_names.
-pub fn index_existing_orders(body: &serde_json::Value) -> BTreeMap<OrderKey, ExistingOrder> {
+/// Index a decoded orders response by [`OrderKey`]. Rows the decoder could not
+/// read whole are absent rather than guessed at, so a plan cannot reconcile
+/// against an order nobody could describe.
+pub fn index_existing_orders(decoded: &DecodedOrders) -> BTreeMap<OrderKey, ExistingOrder> {
     let mut out = BTreeMap::new();
-    let Some(data) = body.get("data") else {
-        return out;
-    };
-    if let Some(arr) = data.as_array() {
-        for o in arr {
-            index_one_order(&mut out, o, None);
-        }
-        return out;
-    }
-    for bucket in ["sell", "buy"] {
-        if let Some(arr) = data.get(bucket).and_then(|v| v.as_array()) {
-            for o in arr {
-                index_one_order(&mut out, o, Some(bucket));
-            }
+    for row in &decoded.orders {
+        if let OrderRow::Supported(order) = row {
+            index_one_order(&mut out, order);
         }
     }
     out
@@ -530,7 +610,15 @@ pub fn plan_item_key(item: &PlanItem, cat: &WfmCatalogItem) -> OrderKey {
                 .unwrap_or_else(|| cat.subtypes.first().cloned().unwrap_or_default()),
         )
     };
-    (cat.item_id.clone(), item.order_type.clone(), rank, subtype)
+    OrderKey {
+        item_id: cat.item_id.clone(),
+        side: match item.order_type.as_str() {
+            "buy" => OrderSide::Buy,
+            _ => OrderSide::Sell,
+        },
+        rank,
+        subtype,
+    }
 }
 
 // Constructs the JSON body for `POST /v2/order`. Per-field rules captured
@@ -587,7 +675,7 @@ fn execute_one(
     http: &Client,
     unlocked: &Unlocked,
     item: &PlanItem,
-    read_orders: &mut impl FnMut() -> anyhow::Result<serde_json::Value>,
+    read_orders: &mut impl FnMut() -> anyhow::Result<DecodedOrders>,
     validate: &mut dyn FnMut() -> Result<(), PlanValidationError>,
 ) -> ItemResult {
     let mk_err = |msg: String| ItemResult {
@@ -634,7 +722,7 @@ fn execute_one(
     }
 
     let existing = match read_orders() {
-        Ok(body) => index_existing_orders(&body),
+        Ok(decoded) => index_existing_orders(&decoded),
         Err(error) => return ItemResult { slug: item.slug.clone(), status: "pending".into(), message: Some(format!("Could not revalidate current orders: {error}")), order_id: None, action: None },
     };
     if let Some(reviewed) = &item.reviewed_order {
@@ -730,14 +818,15 @@ fn execute_one(
     let resp = match resp {
         Ok(r) => r,
         Err(e) => return ItemResult {
-            slug: item.slug.clone(), status: if matches!(e, wfm_client::governor::AccessError::UncertainMutation) { "uncertain_mutation" } else { "pending" }.into(),
+            slug: item.slug.clone(),
+            status: MutationOutcome::from(&e).status_str().into(),
             message: Some(e.to_string()), order_id: None, action: None,
         },
     };
     let status = resp.status();
     let resp_body: serde_json::Value = match resp.json() {
         Ok(body) => body,
-        Err(_) if status.is_success() => return ItemResult { slug: item.slug.clone(), status: "uncertain_mutation".into(), message: Some("The listing may have been applied, but its response could not be read. Resume to reconcile.".into()), order_id: None, action: None },
+        Err(_) if status.is_success() => return ItemResult { slug: item.slug.clone(), status: MutationOutcome::Uncertain.status_str().into(), message: Some("The listing may have been applied, but its response could not be read. Resume to reconcile.".into()), order_id: None, action: None },
         Err(_) => serde_json::Value::Null,
     };
     if !status.is_success() {
@@ -757,7 +846,7 @@ fn execute_one(
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
     if order_id.is_none() {
-        return ItemResult { slug: item.slug.clone(), status: "uncertain_mutation".into(), message: Some("The listing response had no order identity. Resume to reconcile before another send.".into()), order_id: None, action: None };
+        return ItemResult { slug: item.slug.clone(), status: MutationOutcome::Uncertain.status_str().into(), message: Some("The listing response had no order identity. Resume to reconcile before another send.".into()), order_id: None, action: None };
     }
     ItemResult {
         slug: item.slug.clone(),
@@ -795,6 +884,317 @@ fn review_matches(reviewed: &ReviewedOrder, prior: Option<&ExistingOrder>) -> bo
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::trading::pending::clear_finished_pending;
+
+    #[test]
+    fn late_validation_failure_preserves_confirmed_rows_for_history() {
+        let path = std::env::temp_dir().join(format!("late-validation-{}.json", random_token(8)));
+        let mut pending: PendingPlan = serde_json::from_value(serde_json::json!({
+            "plan_id":"late-validation", "started_at":"test", "items":[
+                {"slug":"sent","quantity":1,"platinum":12,"order_type":"sell","visible":false,"status":"pending"},
+                {"slug":"unsent","quantity":1,"platinum":12,"order_type":"sell","visible":false,"status":"pending"}
+            ]
+        })).unwrap();
+        write_pending_atomic(&path, &pending).unwrap();
+        let mut validations = 0;
+        let response = run_pending_with(&path, &mut pending, || {
+            validations += 1;
+            if validations == 3 { Err(PlanValidationError::Invalid("inventory changed".into())) }
+            else { Ok(()) }
+        }, |item, _| ItemResult { slug: item.slug.clone(), status: "ok".into(),
+            message: None, order_id: Some("remote-sent".into()), action: Some("created".into()) });
+        assert_eq!(response.results.len(), 2);
+        assert_eq!(response.results[0].order_id.as_deref(), Some("remote-sent"));
+        assert_eq!(response.results[1].status, crate::trading::pending::STATUS_PENDING);
+        assert!(response.results[1].message.as_deref().unwrap().contains("inventory changed"));
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn crash_after_send_keeps_a_final_or_middle_item_out_of_retryable_pending() {
+        for count in [1, 3] {
+            let path = std::env::temp_dir().join(format!("durable-crash-{}.json", random_token(8)));
+            let mut pending: PendingPlan = serde_json::from_value(serde_json::json!({
+                "plan_id":"crash", "started_at":"test", "items":(0..count).map(|index| serde_json::json!({
+                    "slug":format!("item-{index}"), "quantity":1, "platinum":12,
+                    "order_type":"sell", "visible":false, "status":"pending"
+                })).collect::<Vec<_>>()
+            })).unwrap();
+            write_pending_atomic(&path, &pending).unwrap();
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                run_pending_with(&path, &mut pending, || Ok(()), |item, _| {
+                    if item.slug == format!("item-{}", count - 1) {
+                        panic!("simulated crash after remote application");
+                    }
+                    ItemResult { slug: item.slug.clone(), status: "ok".into(), message: None,
+                        order_id: Some(item.slug.clone()), action: Some("created".into()) }
+                })
+            }));
+            assert!(result.is_err());
+            let mut restored = crate::trading::pending::load_pending(&path).unwrap().unwrap();
+            assert_eq!(restored.items[count - 1].status, crate::trading::pending::STATUS_UNCERTAIN);
+            let mut resent = Vec::new();
+            run_pending_with(&path, &mut restored, || Ok(()), |item, _| {
+                resent.push(item.slug.clone());
+                ItemResult { slug: item.slug.clone(), status: "ok".into(), message: None,
+                    order_id: None, action: None }
+            });
+            assert!(resent.is_empty());
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+
+    #[test]
+    fn failed_result_rewrite_reports_known_outcome_and_preserves_disk_marker() {
+        for count in [1, 3] {
+            let path = std::env::temp_dir().join(format!("durable-rewrite-{}.json", random_token(8)));
+            let mut pending: PendingPlan = serde_json::from_value(serde_json::json!({
+                "plan_id":"rewrite", "started_at":"test", "items":(0..count).map(|index| serde_json::json!({
+                    "slug":format!("item-{index}"), "quantity":1, "platinum":12,
+                    "order_type":"sell", "visible":false, "status":"pending"
+                })).collect::<Vec<_>>()
+            })).unwrap();
+            write_pending_atomic(&path, &pending).unwrap();
+            let mut writes = 0;
+            let response = run_pending_with_store(&path, &mut pending, || Ok(()), |item, _| {
+                ItemResult { slug: item.slug.clone(), status: "ok".into(), message: None,
+                    order_id: Some(format!("remote-{}", item.slug)), action: Some("created".into()) }
+            }, |path, plan| {
+                writes += 1;
+                if writes == count * 2 { anyhow::bail!("injected disk failure") }
+                write_pending_atomic(path, plan)
+            });
+            assert!(response.durability_error.as_deref().unwrap().contains("injected disk failure"));
+            assert_eq!(response.results[count - 1].status, "ok");
+            assert_eq!(response.results[count - 1].order_id.as_deref(), Some(format!("remote-item-{}", count - 1).as_str()));
+            let restored = crate::trading::pending::load_pending(&path).unwrap().unwrap();
+            assert_eq!(restored.items[count - 1].status, crate::trading::pending::STATUS_UNCERTAIN);
+            assert!(!restored.is_finished());
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+
+    #[test]
+    fn finished_in_memory_does_not_clear_an_unrecorded_final_result() {
+        let path = std::env::temp_dir().join(format!("durable-final-{}.json", random_token(8)));
+        let unlocked = Unlocked {
+            jwt: "fixture".into(), username: "fixture".into(), platform: "pc".into(),
+            catalog: std::sync::Arc::new(BTreeMap::new()),
+            id_to_item: std::sync::Arc::new(BTreeMap::new()),
+        };
+        let response = execute_plan_with(&path, &unlocked,
+            PlanRequest { items: vec![plan_item("final", None, None)] },
+            |path, _, pending| {
+                let mut writes = 0;
+                run_pending_with_store(path, pending, || Ok(()), |item, _| ItemResult {
+                    slug: item.slug.clone(), status: "ok".into(), message: None,
+                    order_id: Some("remote-final".into()), action: Some("created".into()),
+                }, |path, plan| {
+                    writes += 1;
+                    if writes == 2 { anyhow::bail!("injected result write failure") }
+                    write_pending_atomic(path, plan)
+                })
+            });
+        assert_eq!(response.results[0].order_id.as_deref(), Some("remote-final"));
+        assert!(response.durability_error.is_some());
+        let saved = crate::trading::pending::load_pending(&path).unwrap().expect("journal retained");
+        assert_eq!(saved.items[0].status, crate::trading::pending::STATUS_UNCERTAIN);
+        let mut finished_in_memory = saved.clone();
+        finished_in_memory.items[0].status = crate::trading::pending::STATUS_OK.into();
+        clear_finished_pending(&path, &finished_in_memory).unwrap();
+        assert!(path.exists(), "an uncertain disk marker must survive a finished memory snapshot");
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn failed_pre_send_marker_stops_before_remote_mutation() {
+        let path = std::env::temp_dir().join(format!("durable-presend-{}.json", random_token(8)));
+        let mut pending: PendingPlan = serde_json::from_value(serde_json::json!({
+            "plan_id":"presend", "started_at":"test", "items":[
+                {"slug":"unsent","quantity":1,"platinum":12,"order_type":"sell","visible":false,"status":"pending"}
+            ]
+        })).unwrap();
+        write_pending_atomic(&path, &pending).unwrap();
+        let mut sent = false;
+        let response = run_pending_with_store(&path, &mut pending, || Ok(()), |item, _| {
+            sent = true;
+            ItemResult { slug: item.slug.clone(), status: "ok".into(), message: None,
+                order_id: None, action: None }
+        }, |_, _| anyhow::bail!("injected marker write failure"));
+        assert!(!sent);
+        assert!(response.durability_error.as_deref().unwrap().contains("before sending"));
+        assert_eq!(response.results[0].status, crate::trading::pending::STATUS_PENDING);
+        assert_eq!(crate::trading::pending::load_pending(&path).unwrap().unwrap().items[0].status,
+            crate::trading::pending::STATUS_PENDING);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// The whole path an orders response takes to become a reconciliation
+    /// index, starting from the body the endpoint would return. A catalogue
+    /// constrains nothing here so a test states the row shape alone.
+    fn index_orders_body(
+        body: &serde_json::Value,
+    ) -> anyhow::Result<BTreeMap<OrderKey, ExistingOrder>> {
+        Ok(index_existing_orders(&crate::trading::orders::decode_orders(
+            body,
+            &Unconstrained,
+        )?))
+    }
+
+    struct Unconstrained;
+
+    impl market_domain::orders::ItemConstraints for Unconstrained {
+        fn accepts(&self, _item_id: &str, _rank: Option<u64>, _subtype: Option<&str>) -> bool {
+            true
+        }
+    }
+
+    fn key(item_id: &str, side: OrderSide, rank: Option<u64>, subtype: Option<&str>) -> OrderKey {
+        OrderKey {
+            item_id: item_id.into(),
+            side,
+            rank,
+            subtype: subtype.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn uncertain_only_or_final_send_survives_execution_and_restart() {
+        use crate::trading::pending::{journal_state, load_pending, JournalState, STATUS_UNCERTAIN};
+
+        let unlocked = Unlocked {
+            jwt: "fixture".into(),
+            username: "fixture".into(),
+            platform: "pc".into(),
+            catalog: std::sync::Arc::new(BTreeMap::new()),
+            id_to_item: std::sync::Arc::new(BTreeMap::new()),
+        };
+        for item_count in [1, 2] {
+            let path = std::env::temp_dir().join(format!("uncertain-boundary-{}.json", random_token(8)));
+            let items = (0..item_count)
+                .map(|index| plan_item(&format!("item-{index}"), None, None))
+                .collect();
+            let response = execute_plan_with(
+                &path,
+                &unlocked,
+                PlanRequest { items },
+                |path, _, pending| {
+                    run_pending_with(path, pending, || Ok(()), |item, _| ItemResult {
+                        slug: item.slug.clone(),
+                        status: if item.slug == format!("item-{}", item_count - 1) {
+                            STATUS_UNCERTAIN.into()
+                        } else {
+                            "ok".into()
+                        },
+                        message: None,
+                        order_id: None,
+                        action: None,
+                    })
+                },
+            );
+            assert_eq!(response.results.last().unwrap().status, STATUS_UNCERTAIN);
+            let mut restarted = load_pending(&path).unwrap().expect("unresolved journal survives");
+            assert!(matches!(journal_state(&path), JournalState::Unfinished));
+            let replacement = execute_plan_with(
+                &path,
+                &unlocked,
+                PlanRequest { items: vec![plan_item("replacement", None, None)] },
+                |_, _, _| panic!("an unresolved journal must block execution"),
+            );
+            assert_eq!(replacement.results[0].status, "error");
+            assert_eq!(load_pending(&path).unwrap().unwrap().plan_id, restarted.plan_id);
+            let mut resent = Vec::new();
+            run_pending_with(&path, &mut restarted, || Ok(()), |item, _| {
+                resent.push(item.slug.clone());
+                ItemResult { slug: item.slug.clone(), status: "ok".into(), message: None, order_id: None, action: None }
+            });
+            clear_finished_pending(&path, &restarted).unwrap();
+            assert!(resent.is_empty(), "restart must not replay an uncertain send");
+            assert!(matches!(journal_state(&path), JournalState::Unfinished));
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+
+    /// A send whose outcome is unknown is not the same as a send that never
+    /// happened. The governor says so - `pending` means "saved for explicit
+    /// resume" while `uncertain_mutation` means "refresh and reconcile before
+    /// resending" - and the journal has to keep that distinction, because the
+    /// resume loop only re-offers what it believes was never sent.
+    ///
+    /// Collapsing the two made the journal claim "never sent" about a request
+    /// that may already have been applied, and let the plan be cleared while
+    /// that claim stood.
+    #[test]
+    fn an_uncertain_send_stays_uncertain_in_the_journal_and_is_not_reoffered() {
+        let path = std::env::temp_dir().join(format!("uncertain-{}.json", random_token(8)));
+        let mut pending: PendingPlan = serde_json::from_value(serde_json::json!({
+            "plan_id":"uncertain", "started_at":"test", "items":[
+                {"slug":"ambiguous","quantity":1,"platinum":12,"order_type":"sell","visible":false,"status":"pending"},
+                {"slug":"later","quantity":1,"platinum":12,"order_type":"sell","visible":false,"status":"pending"}
+            ]
+        })).unwrap();
+        write_pending_atomic(&path, &pending).unwrap();
+
+        let mut attempted: Vec<String> = Vec::new();
+        let response = run_pending_with(
+            &path,
+            &mut pending,
+            || Ok(()),
+            |item, _validate| {
+                attempted.push(item.slug.clone());
+                ItemResult {
+                    slug: item.slug.clone(),
+                    status: "uncertain_mutation".into(),
+                    message: Some("The listing may have been applied, but its response could not be read. Resume to reconcile.".into()),
+                    order_id: None,
+                    action: None,
+                }
+            },
+        );
+
+        // Only the first item was attempted: an unresolved outcome stops the
+        // batch rather than sending later items ahead of it.
+        assert_eq!(attempted, ["ambiguous"]);
+        assert_eq!(
+            response.results.iter().map(|row| row.status.as_str()).collect::<Vec<_>>(),
+            ["uncertain_mutation", "pending"]
+        );
+
+        // The journal records what actually happened, and the later item is
+        // still waiting.
+        let saved = crate::trading::pending::load_pending(&path).expect("journal readable").expect("journal kept");
+        assert_eq!(
+            saved.items[0].status, "uncertain_mutation",
+            "an unknown outcome must not be recorded as never-sent"
+        );
+        assert_eq!(saved.items[1].status, "pending");
+
+        // And a resume must not re-send it as though nothing had been sent.
+        let mut pending = crate::trading::pending::load_pending(&path).unwrap().unwrap();
+        let mut resumed: Vec<String> = Vec::new();
+        run_pending_with(
+            &path,
+            &mut pending,
+            || Ok(()),
+            |item, _validate| {
+                resumed.push(item.slug.clone());
+                ItemResult { slug: item.slug.clone(), status: "ok".into(), message: None, order_id: Some("o".into()), action: None }
+            },
+        );
+        // The unresolved item is skipped; the rest of the batch is not held
+        // behind it. Collapsing to `pending` did the opposite: it re-offered the
+        // ambiguous send AND blocked every later item behind a decision nobody
+        // had made.
+        assert_eq!(
+            resumed,
+            ["later"],
+            "an unresolved outcome is left for reconciliation, and does not block the batch"
+        );
+        clear_finished_pending(&path, &pending).unwrap();
+        assert!(matches!(journal_state(&path), JournalState::Unfinished));
+
+        let _ = std::fs::remove_file(&path);
+    }
 
     #[test]
     fn interrupted_final_validation_persists_unsent_items_for_explicit_resume() {
@@ -853,7 +1253,7 @@ mod tests {
                         item,
                         &mut || {
                             validating_order.set(true);
-                            Ok(serde_json::json!({"data": []}))
+                            Ok(DecodedOrders::empty())
                         },
                         validate,
                     )
@@ -868,7 +1268,7 @@ mod tests {
                     .collect::<Vec<_>>(),
                 ["ok", "pending", "pending"]
             );
-            let mut saved = crate::trading::pending::load_pending(&path).unwrap();
+            let mut saved = crate::trading::pending::load_pending(&path).expect("readable").expect("present");
             assert_eq!(saved.items[1].status, "pending");
             assert_eq!(
                 saved.items[1].message.as_deref(),
@@ -901,7 +1301,8 @@ mod tests {
             assert!(validations.get() >= resumed.len());
             assert!(response.results.iter().all(|item| item.status == "ok"));
             assert!(crate::trading::pending::load_pending(&path)
-                .unwrap()
+                .expect("readable")
+                .expect("present")
                 .items
                 .iter()
                 .all(|item| item.status == "ok"));
@@ -931,7 +1332,7 @@ mod tests {
             &http,
             &session,
             &item,
-            &mut || Ok(serde_json::json!({"data": []})),
+            &mut || Ok(DecodedOrders::empty()),
             &mut || Err("Inventory changed".into()),
         );
         assert_eq!(response.status, "error");
@@ -989,10 +1390,10 @@ mod tests {
 
     #[test]
     fn duplicate_order_keys_remain_ambiguous() {
-        let orders = index_existing_orders(&serde_json::json!({"data":[
-            {"id":"one","itemId":"item","type":"sell","quantity":1},
-            {"id":"two","itemId":"item","type":"sell","quantity":2}
-        ]}));
+        let orders = index_orders_body(&serde_json::json!({"data":[
+            {"id":"one","itemId":"item","type":"sell","quantity":1,"platinum":10},
+            {"id":"two","itemId":"item","type":"sell","quantity":2,"platinum":20}
+        ]})).unwrap();
         assert!(orders.values().next().unwrap().ambiguous);
     }
 
@@ -1122,7 +1523,7 @@ mod tests {
             .build()
             .unwrap();
         let mut reads = 0;
-        let result = execute_one(&http, &unlocked, &item, &mut || { reads += 1; Ok(serde_json::json!({"data": []})) }, &mut || Ok(()));
+        let result = execute_one(&http, &unlocked, &item, &mut || { reads += 1; Ok(DecodedOrders::empty()) }, &mut || Ok(()));
         assert_eq!(reads, 0);
         assert_eq!(result.status, "error");
         assert!(result.message.unwrap().contains("divide quantity"));
@@ -1143,15 +1544,15 @@ mod tests {
                 ]
             }
         });
-        let idx = index_existing_orders(&bucketed);
+        let idx = index_orders_body(&bucketed).unwrap();
         let sell = idx
-            .get(&("item-a".into(), "sell".into(), Some(0), None))
+            .get(&key("item-a", OrderSide::Sell, Some(0), None))
             .unwrap();
         assert_eq!(
             (sell.id.as_str(), sell.platinum, sell.quantity),
             ("o1", 20, 3)
         );
-        assert!(idx.contains_key(&("item-a".into(), "buy".into(), Some(0), None)));
+        assert!(idx.contains_key(&key("item-a", OrderSide::Buy, Some(0), None)));
 
         // Flat shape: type is a field on the order.
         let flat = serde_json::json!({
@@ -1160,8 +1561,8 @@ mod tests {
                  "subtype": "radiant"},
             ]
         });
-        let idx = index_existing_orders(&flat);
-        assert!(idx.contains_key(&("item-b".into(), "sell".into(), None, Some("radiant".into()))));
+        let idx = index_orders_body(&flat).unwrap();
+        assert!(idx.contains_key(&key("item-b", OrderSide::Sell, None, Some("radiant"))));
     }
 
     #[test]
@@ -1192,8 +1593,8 @@ mod tests {
         };
         let key = plan_item_key(&item, &ranked);
         let body = build_order_body(&item, &ranked);
-        assert_eq!(key.2, body.get("rank").and_then(|v| v.as_u64()));
-        assert_eq!(key.3, None);
+        assert_eq!(key.rank, body.get("rank").and_then(|v| v.as_u64()));
+        assert_eq!(key.subtype, None);
 
         // Subtyped item, bogus requested subtype: both fall back to the
         // catalog's first entry.
@@ -1212,12 +1613,12 @@ mod tests {
         };
         let key = plan_item_key(&item, &relic);
         let body = build_order_body(&item, &relic);
-        assert_eq!(key.2, None);
+        assert_eq!(key.rank, None);
         assert_eq!(
-            key.3.as_deref(),
+            key.subtype.as_deref(),
             body.get("subtype").and_then(|v| v.as_str())
         );
-        assert_eq!(key.3.as_deref(), Some("intact"));
+        assert_eq!(key.subtype.as_deref(), Some("intact"));
     }
 
     fn cat(name: &str, max_rank: Option<u32>, subtypes: &[&str]) -> WfmCatalogItem {
@@ -1397,7 +1798,7 @@ mod tests {
         let http = Client::builder().retry(reqwest::retry::never()).redirect(wfm_client::redirect_policy()).proxy(reqwest::Proxy::all("http://127.0.0.1:9").unwrap()).timeout(Duration::from_millis(100)).build().unwrap();
         let pending = execute_one(&http, &session, &item, &mut || Err(anyhow::anyhow!("offline")), &mut || Ok(()));
         assert_eq!(serde_json::to_value(pending).unwrap()["status"], fixture["pending"]["status"]);
-        let uncertain = execute_one(&http, &session, &item, &mut || Ok(serde_json::json!({"data": []})), &mut || Ok(()));
+        let uncertain = execute_one(&http, &session, &item, &mut || Ok(DecodedOrders::empty()), &mut || Ok(()));
         assert_eq!(serde_json::to_value(uncertain).unwrap()["status"], fixture["uncertain_mutation"]["status"]);
     }
 

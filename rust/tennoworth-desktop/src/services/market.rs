@@ -134,6 +134,38 @@ fn parse_stamp(body: &str, key: &str) -> Option<String> {
     v.get(key)?.as_str().map(str::to_string)
 }
 
+/// A stamp as an instant, for ordering two snapshots. A stamp we cannot read is
+/// `None`, and every comparison below treats `None` as "no evidence about
+/// ordering" rather than as an error.
+fn stamp_instant(stamp: &str) -> Option<chrono::DateTime<chrono::FixedOffset>> {
+    chrono::DateTime::parse_from_rfc3339(stamp).ok()
+}
+
+/// Whether a fetched snapshot may replace the one on disk.
+///
+/// The webview refuses to swap in a snapshot older than the one it is showing.
+/// Native consumers read this cache directly, so without the same rule here the
+/// two surfaces disagree after an upstream rollback: the dashboard shows the
+/// newer prices it already had while the tray, sellables, protection and
+/// reminder freshness work from the older ones - and the next launch downgrades
+/// the dashboard too because the cache was overwritten.
+///
+/// The rules mirror the webview's, including its handling of unusable stamps:
+/// nothing cached (or a cached stamp we cannot read) accepts, and so does a
+/// fetched stamp we cannot read, because an unreadable stamp must not be able to
+/// freeze the cache permanently. Only a readable, strictly older snapshot is
+/// refused - the same stamp is not a regression.
+fn replaces_cache(dir: &Path, spec: &ArtifactSpec, fetched: &str) -> bool {
+    let Some(cached) = read_cache(dir, spec).as_deref().and_then(|b| parse_stamp(b, spec.stamp_key))
+    else {
+        return true;
+    };
+    let (Some(cached), Some(fetched)) = (stamp_instant(&cached), stamp_instant(fetched)) else {
+        return true;
+    };
+    fetched >= cached
+}
+
 /// Atomic write (tmp + rename), matching the repo-wide atomic-write rule - a
 /// concurrent reader never sees a half-written cache file.
 ///
@@ -258,6 +290,19 @@ fn refresh_artifact(dir: &Path, spec: &ArtifactSpec, url: &str) -> RefreshResult
         }
     };
 
+    if !replaces_cache(dir, spec, &updated_at) {
+        // A 200 carrying an older snapshot than we hold. The ETag path does not
+        // cover this: the conditional request only asks whether the copy we have
+        // is still the one the server would send, and after a rollback it is the
+        // body that changed, so the answer is a full 200 with the older snapshot
+        // in it.
+        eprintln!(
+            "tennoworth: {} refresh is older than the cache ({}); keeping cache",
+            spec.cache_file, updated_at
+        );
+        return keep_cache(dir, spec, prior_etag);
+    }
+
     if let Err(e) = write_atomic(&cache_path(dir, spec), body.as_bytes()) {
         // Couldn't persist, but the fetch succeeded - hand the SPA the fresh body
         // for THIS session anyway (next launch just re-fetches without the ETag).
@@ -315,6 +360,15 @@ mod tests {
     /// request carries a matching `If-None-Match`. Records, per request, whether
     /// `If-None-Match` was seen so the caller can assert the conditional path.
     fn spawn_mock(requests: usize) -> (String, std::thread::JoinHandle<Vec<bool>>) {
+        spawn_mock_serving(requests, BODY)
+    }
+
+    /// The same mock, serving `body` - so a test can drive what a rollback
+    /// actually delivers: a well-formed 200 carrying an older snapshot.
+    fn spawn_mock_serving(
+        requests: usize,
+        body: &'static str,
+    ) -> (String, std::thread::JoinHandle<Vec<bool>>) {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let addr = listener.local_addr().unwrap();
         let url = format!("http://{addr}/market.json");
@@ -350,8 +404,8 @@ mod tests {
                 } else {
                     format!(
                         "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nETag: {ETAG}\r\nConnection: close\r\n\r\n{}",
-                        BODY.len(),
-                        BODY
+                        body.len(),
+                        body
                     )
                 };
                 let _ = stream.write_all(resp.as_bytes());
@@ -481,6 +535,94 @@ mod tests {
         assert_eq!(cache.cached(), None, "empty cache file reads as absent");
         write_atomic(&cache_path(&dir, &MARKET), BODY.as_bytes()).unwrap();
         assert_eq!(cache.cached().as_deref(), Some(BODY));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // ---- snapshot regression -------------------------------------------------
+    //
+    // The webview refuses to swap in a snapshot older than the one it already
+    // shows. Native consumers read the cache directly, so the same rule has to
+    // hold at the cache boundary or the two surfaces disagree about prices.
+
+    #[test]
+    fn an_older_snapshot_is_refused_and_leaves_the_cache_alone() {
+        let dir = temp_dir();
+        let newer = r#"{"updated_at":"2026-07-20T10:00:00Z","platform":"pc","items":{"a":{}}}"#;
+        let older = r#"{"updated_at":"2026-07-19T10:00:00Z","platform":"pc","items":{}}"#;
+        write_atomic(&cache_path(&dir, &MARKET), newer.as_bytes()).unwrap();
+        write_atomic(&etag_path(&dir, &MARKET), b"\"stale\"").unwrap();
+
+        let (url, handle) = spawn_mock_serving(1, older);
+        let r = refresh_artifact(&dir, &MARKET, &url);
+
+        assert!(!r.updated, "a rollback must not report a new snapshot");
+        assert_eq!(r.body, None, "a rollback must not hand the SPA older prices");
+        assert_eq!(
+            read_cache(&dir, &MARKET).as_deref(),
+            Some(newer),
+            "the newer cache must survive the rollback"
+        );
+        assert_eq!(
+            r.updated_at.as_deref(),
+            Some("2026-07-20T10:00:00Z"),
+            "the reported freshness is the snapshot actually held"
+        );
+        let _ = handle.join();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_newer_snapshot_still_replaces_the_cache() {
+        let dir = temp_dir();
+        let older = r#"{"updated_at":"2026-07-19T10:00:00Z","platform":"pc","items":{}}"#;
+        let newer = r#"{"updated_at":"2026-07-20T10:00:00Z","platform":"pc","items":{}}"#;
+        write_atomic(&cache_path(&dir, &MARKET), older.as_bytes()).unwrap();
+
+        let (url, handle) = spawn_mock_serving(1, newer);
+        let r = refresh_artifact(&dir, &MARKET, &url);
+
+        assert!(r.updated);
+        assert_eq!(r.updated_at.as_deref(), Some("2026-07-20T10:00:00Z"));
+        assert_eq!(read_cache(&dir, &MARKET).as_deref(), Some(newer));
+        let _ = handle.join();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// An unparseable stored stamp cannot be compared, so it must not be allowed
+    /// to veto every future refresh - the app would be stuck on that snapshot
+    /// forever. The webview treats an unusable current stamp as "swap".
+    #[test]
+    fn an_unusable_cached_stamp_does_not_block_a_refresh() {
+        let dir = temp_dir();
+        write_atomic(
+            &cache_path(&dir, &MARKET),
+            br#"{"updated_at":"not a date","platform":"pc","items":{}}"#,
+        )
+        .unwrap();
+
+        let (url, handle) = spawn_mock(1);
+        let r = refresh_artifact(&dir, &MARKET, &url);
+
+        assert!(r.updated, "a stamp we cannot read must not freeze the cache");
+        assert_eq!(read_cache(&dir, &MARKET).as_deref(), Some(BODY));
+        let _ = handle.join();
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The same stamp is not a rollback. The server re-serving what we already
+    /// hold is a no-op only because the ETag path usually catches it, and a
+    /// strictly-newer rule must not turn that into a permanent refusal.
+    #[test]
+    fn an_identical_stamp_is_accepted() {
+        let dir = temp_dir();
+        write_atomic(&cache_path(&dir, &MARKET), BODY.as_bytes()).unwrap();
+
+        let (url, handle) = spawn_mock_serving(1, BODY);
+        let r = refresh_artifact(&dir, &MARKET, &url);
+
+        assert!(r.updated, "the same snapshot is not a regression");
+        assert_eq!(read_cache(&dir, &MARKET).as_deref(), Some(BODY));
+        let _ = handle.join();
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

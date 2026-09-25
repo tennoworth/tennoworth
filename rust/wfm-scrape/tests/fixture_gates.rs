@@ -876,8 +876,6 @@ fn event_reward_fixture_keeps_groups_and_reconciles_goals_independently() {
     );
 
     std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
-    responses["https://api.warframe.com/cdn/worldState.php"]["Goals"] = serde_json::json!([]);
-    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
     assert!(run(
         &[
             "build",
@@ -885,6 +883,41 @@ fn event_reward_fixture_keeps_groups_and_reconciles_goals_independently() {
             dir.to_str().unwrap(),
             "--now",
             "2026-07-03T12:00:00Z"
+        ],
+        &dir
+    )
+    .status
+    .success());
+    let repeated: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(
+        repeated["surface_provenance"]["world.events"]["data_fetched_at"],
+        "2026-06-01T12:00:00Z",
+        "a second partial publication must retain the original evidence time"
+    );
+    assert_eq!(
+        repeated["surface_provenance"]["world.goals"]["data_fetched_at"],
+        "2026-07-01T12:00:00Z"
+    );
+
+    std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
+    responses["https://api.warframe.com/cdn/worldState.php"]["Goals"] = serde_json::json!([]);
+    let prior_path = dir.join("prior-market.json");
+    let mut legacy: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&prior_path).unwrap()).unwrap();
+    legacy["de"]["child_fetched_at"]
+        .as_object_mut()
+        .unwrap()
+        .remove("world.events");
+    std::fs::write(&prior_path, serde_json::to_vec(&legacy).unwrap()).unwrap();
+    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
+    assert!(run(
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-04T12:00:00Z"
         ],
         &dir
     )
@@ -904,6 +937,31 @@ fn event_reward_fixture_keeps_groups_and_reconciles_goals_independently() {
         third["surface_provenance"]["world.goals"]["disposition"],
         "cleared_authoritative_empty"
     );
+    assert_eq!(
+        third["surface_provenance"]["world.goals"]["data_fetched_at"],
+        "2026-07-04T12:00:00Z",
+        "an authoritative empty observation is current evidence"
+    );
+    assert_eq!(
+        third["surface_provenance"]["world.events"]["data_fetched_at"],
+        "",
+        "carried legacy rows without a source stamp must keep unknown age"
+    );
+
+    std::fs::copy(dir.join("market.json"), &prior_path).unwrap();
+    responses["https://api.warframe.com/cdn/worldState.php"]["Events"] =
+        observed["Events"].clone();
+    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
+    assert!(run(
+        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-05T12:00:00Z"],
+        &dir
+    )
+    .status
+    .success());
+    let recovered: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(recovered["surface_provenance"]["world.events"]["disposition"], "published_fresh");
+    assert_eq!(recovered["surface_provenance"]["world.events"]["data_fetched_at"], "2026-07-05T12:00:00Z");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -1057,13 +1115,16 @@ fn build_skips_manifests_whose_hash_has_not_moved() {
     assert!(second.status.success());
     let second_err = String::from_utf8_lossy(&second.stderr).to_string();
     assert!(
-        second_err.contains("4 skipped as unchanged") && second_err.contains("2 fetched"),
-        "a warm run skips the four carryable manifests and still pulls the two \
+        second_err.contains("3 skipped as unchanged") && second_err.contains("3 fetched"),
+        "a warm run skips the three carryable manifests and still pulls the three \
          whose data cannot be carried:\n{second_err}"
     );
+    // The relic manifest is never skipped: its table resolves through
+    // path_to_info, which grows independently of DE's hash. A carried table
+    // stayed blind to the 2026-09-23 Prime Access rewards.
     assert!(
-        second_err.contains("Relic tables hash-verified unchanged - carrying the prior DE surface"),
-        "the warm run must distinguish a successful hash check from an outage:\n{second_err}"
+        second_err.contains("Building relic tables from DE Public Export"),
+        "a warm run must rebuild relic tables against the current resolver:\n{second_err}"
     );
     assert!(
         !second_err.contains("WARNING: relic_rewards has been stale"),
@@ -1119,15 +1180,175 @@ fn build_skips_manifests_whose_hash_has_not_moved() {
     );
     assert_eq!(
         snap["surface_provenance"]["relic_rewards"]["disposition"],
-        "preserved_unchanged"
+        "published_fresh"
     );
     assert_eq!(
         snap["surface_provenance"]["relic_rewards"]["data_fetched_at"],
-        "2026-07-01T12:00:00Z"
-    );
-    assert_eq!(
-        snap["surface_provenance"]["relic_rewards"]["attempted_at"],
         "2026-07-11T12:00:00Z"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Every content update ships items warframe.market lists on day one and
+/// warframestat learns days later. Until then the only path→slug mapping is
+/// WFM's own `gameRef`; without it the 2026-09-23 Prime Access relics lost
+/// their new rewards, the new sets had no breakdown, and Corufell Prime's
+/// stock - `CorufellPrimeBarrel` to DE - resolved to nothing in inventory.
+#[test]
+fn items_only_warframe_market_knows_reach_every_resolver_surface() {
+    let dir = stage_fixtures("convert");
+    let path = dir.join("fixture_responses.json");
+    let mut responses: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+
+    let wfm_item = |slug: &str, name: &str, tags: &[&str], ducats: i64, game_ref: &str| {
+        serde_json::json!({"slug": slug, "i18n": {"en": {"name": name}}, "tags": tags,
+                           "ducats": ducats, "subtypes": [], "gameRef": game_ref})
+    };
+    responses["https://api.warframe.market/v2/items"]["data"]
+        .as_array_mut()
+        .unwrap()
+        .extend([
+            wfm_item(
+                "citrine_prime_set",
+                "Citrine Prime Set",
+                &["warframe", "prime", "set"],
+                115,
+                "/Lotus/Powersuits/Geode/CitrinePrime",
+            ),
+            wfm_item(
+                "citrine_prime_blueprint",
+                "Citrine Prime Blueprint",
+                &["warframe", "prime", "blueprint"],
+                100,
+                "/Lotus/Types/Recipes/WarframeRecipes/CitrinePrimeBlueprint",
+            ),
+            wfm_item(
+                "citrine_prime_neuroptics_blueprint",
+                "Citrine Prime Neuroptics Blueprint",
+                &["warframe", "prime", "component", "blueprint"],
+                15,
+                "/Lotus/Types/Recipes/WarframeRecipes/CitrinePrimeHelmetBlueprint",
+            ),
+            wfm_item(
+                "corufell_prime_stock",
+                "Corufell Prime Stock",
+                &["weapon", "component", "prime"],
+                15,
+                "/Lotus/Types/Recipes/Weapons/WeaponParts/CorufellPrimeBarrel",
+            ),
+        ]);
+    responses["https://content.warframe.com/PublicExport/Manifest/ExportRecipes_en.json!00_rECIPEShash"]
+        ["ExportRecipes"]
+        .as_array_mut()
+        .unwrap()
+        .extend([
+            serde_json::json!({
+                "uniqueName": "/Lotus/Types/Recipes/WarframeRecipes/CitrinePrimeBlueprint",
+                "resultType": "/Lotus/Powersuits/Geode/CitrinePrime",
+                "ingredients": [
+                    {"ItemType": "/Lotus/Types/Recipes/WarframeRecipes/CitrinePrimeHelmetComponent", "ItemCount": 1},
+                    {"ItemType": "/Lotus/Types/Items/MiscItems/OrokinCell", "ItemCount": 5}
+                ]
+            }),
+            serde_json::json!({
+                "uniqueName": "/Lotus/Types/Recipes/WarframeRecipes/CitrinePrimeHelmetBlueprint",
+                "resultType": "/Lotus/Types/Recipes/WarframeRecipes/CitrinePrimeHelmetComponent",
+                "ingredients": []
+            }),
+        ]);
+    for relic in responses
+        ["https://content.warframe.com/PublicExport/Manifest/ExportRelicArcane_en.json!00_rELICShash"]
+        ["ExportRelicArcane"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .filter(|r| r["name"] == "Lith V1 Relic")
+    {
+        relic["relicRewards"].as_array_mut().unwrap().push(serde_json::json!({
+            "itemCount": 1, "rarity": "UNCOMMON", "tier": 0,
+            "rewardName": "/Lotus/StoreItems/Types/Recipes/WarframeRecipes/CitrinePrimeHelmetBlueprint"
+        }));
+    }
+    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
+
+    let out = run(
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-01T12:00:00Z",
+        ],
+        &dir,
+    );
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let snap: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+
+    let p2i = &snap["path_to_info"];
+    let neuroptics = &p2i["/Lotus/Types/Recipes/WarframeRecipes/CitrinePrimeHelmetBlueprint"];
+    assert_eq!(neuroptics["slug"], "citrine_prime_neuroptics_blueprint");
+    assert_eq!(neuroptics["name"], "Citrine Prime Neuroptics Blueprint");
+    assert_eq!(neuroptics["category"], "Warframes");
+    assert_eq!(
+        p2i["/Lotus/Types/Recipes/Weapons/WeaponParts/CorufellPrimeBarrel"]["slug"],
+        "corufell_prime_stock",
+        "DE's name for a part may differ from WFM's; the gameRef is what joins them"
+    );
+    assert!(
+        p2i.get("/Lotus/Powersuits/Geode/CitrinePrime").is_none(),
+        "a set's gameRef is the built item, which is not what the set trades as"
+    );
+
+    assert_eq!(
+        snap["set_to_parts"]["citrine_prime_set"],
+        serde_json::json!({"name": "Citrine Prime", "parts": [
+            {"slug": "citrine_prime_blueprint", "component_name": "Blueprint", "quantity": 1},
+            {"slug": "citrine_prime_neuroptics_blueprint",
+             "component_name": "Neuroptics", "quantity": 1}
+        ]})
+    );
+
+    let rewards = snap["relic_rewards"]["lith_v1_relic"].as_array().unwrap();
+    assert!(
+        rewards
+            .iter()
+            .any(|r| r["reward_slug"] == "citrine_prime_neuroptics_blueprint"),
+        "a relic reward only WFM can name must still reach the relic table: {rewards:?}"
+    );
+
+    // Once warframestat lists the set, a cycle where its parents fail must carry
+    // warframestat's breakdown rather than re-derive one over it.
+    let mut prior = snap.clone();
+    prior["set_to_parts"]["citrine_prime_set"]["parts"][1]["component_name"] =
+        "Neuroptics (warframestat)".into();
+    std::fs::write(dir.join("prior-market.json"), serde_json::to_vec(&prior).unwrap()).unwrap();
+    responses
+        .remove("https://api.warframestat.us/warframes/")
+        .expect("fixture serves the warframe parents");
+    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
+    let out = run(
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-02T12:00:00Z",
+        ],
+        &dir,
+    );
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let partial: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(
+        partial["set_to_parts"]["citrine_prime_set"], prior["set_to_parts"]["citrine_prime_set"],
+        "a set carried through a partial parent fetch is not re-derived"
     );
 
     let _ = std::fs::remove_dir_all(&dir);
@@ -2103,5 +2324,87 @@ fn throttled_scrape_preserves_the_published_csv() {
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("publication aborted"));
     assert_eq!(std::fs::read_to_string(csv).unwrap(), "previous snapshot");
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+// ---- per-key evidence age on partially fetched surfaces ---------------------
+
+/// A key upstream stopped returning, on a surface one of whose sources keeps
+/// failing: the merge carries it with its own stamp through the next build, and
+/// drops it once it is older than the stale window instead of pinning the
+/// surface's age for as long as the source stays down.
+#[test]
+fn a_carried_key_keeps_its_own_age_and_is_dropped_after_the_stale_window() {
+    let dir = stage_fixtures("convert");
+    let responses_path = dir.join("fixture_responses.json");
+    let build = |now: &str| {
+        let out = run(
+            &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", now],
+            &dir,
+        );
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
+        let market: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+        (market, String::from_utf8_lossy(&out.stderr).into_owned())
+    };
+
+    let (first, _) = build("2026-07-01T12:00:00Z");
+    assert_eq!(first["surface_provenance"]["vault_status"]["disposition"], "published_fresh");
+
+    // Upstream has dropped this key, and one vault source fails from now on.
+    let mut prior: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("prior-market.json")).unwrap()).unwrap();
+    prior["vault_status"]["ghost_prime_set"] = "vaulted".into();
+    std::fs::write(dir.join("prior-market.json"), serde_json::to_vec(&prior).unwrap()).unwrap();
+    let mut responses: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_slice(&std::fs::read(&responses_path).unwrap()).unwrap();
+    let pets = responses
+        .keys()
+        .find(|url| url.ends_with("/data/json/Pets.json"))
+        .cloned()
+        .expect("fixture serves the vault source this test fails");
+    responses.remove(&pets);
+    std::fs::write(&responses_path, serde_json::to_vec(&responses).unwrap()).unwrap();
+
+    let (second, _) = build("2026-07-03T12:00:00Z");
+    assert_eq!(second["surface_provenance"]["vault_status"]["disposition"], "merged_partial");
+    assert_eq!(second["vault_status"]["ghost_prime_set"], "vaulted");
+    assert_eq!(
+        second["surface_key_fetched_at"]["vault_status"]["carried"]["ghost_prime_set"],
+        "2026-07-01T12:00:00Z",
+        "the carried key keeps the time it was last fetched"
+    );
+    assert_eq!(
+        second["surface_provenance"]["vault_status"]["data_fetched_at"],
+        "2026-07-01T12:00:00Z"
+    );
+
+    // Read back from the snapshot the second build wrote, not reconstructed.
+    let (third, stderr) = build("2026-07-09T12:00:00Z");
+    assert!(third["vault_status"].get("ghost_prime_set").is_none());
+    assert!(third["vault_status"].get("volt_prime_set").is_some());
+    assert_eq!(
+        third["surface_provenance"]["vault_status"]["data_fetched_at"],
+        "2026-07-09T12:00:00Z"
+    );
+    assert!(
+        stderr.contains("vault_status has been stale for 8 days"),
+        "dropping a key warns the operator: {stderr}"
+    );
+
+    // The key's own stamp decides, not the surface stamp: this one is recent at
+    // the surface level and two weeks old at the key level.
+    let mut prior: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("prior-market.json")).unwrap()).unwrap();
+    prior["vault_status"]["old_prime_set"] = "vaulted".into();
+    prior["surface_key_fetched_at"]["vault_status"]["carried"] =
+        serde_json::json!({"old_prime_set": "2026-06-25T12:00:00Z"});
+    std::fs::write(dir.join("prior-market.json"), serde_json::to_vec(&prior).unwrap()).unwrap();
+    let (fourth, _) = build("2026-07-10T12:00:00Z");
+    assert!(
+        fourth["vault_status"].get("old_prime_set").is_none(),
+        "the stored per-key stamp is read back"
+    );
     std::fs::remove_dir_all(dir).unwrap();
 }

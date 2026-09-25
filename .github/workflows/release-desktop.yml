@@ -594,9 +594,8 @@ jobs:
   # The atomic moment. Nothing before this job has written anything visible;
   # nothing after it can make the release less complete than it already is.
   #
-  # `environment: desktop-release` is the hook for a human approval gate -
-  # configure required reviewers on it in repo settings if a release should
-  # never go out unattended. It gates the flip and the signing job, not the
+  # `environment: desktop-release` carries a required reviewer, so no release
+  # goes out unattended. It gates the flip and the signing job, not the
   # builds: the signing key is consumed only by `sign`, which shares this
   # environment, so no build step can read it.
   publish:

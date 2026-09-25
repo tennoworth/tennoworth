@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { describe, it, expect } from 'vitest';
-import { assessListing, assessListings, summarize, ownedKey } from './listing-health.js';
+import { assessListing, assessListings, summarize, ownedKey, ownedEvidence } from './listing-health.js';
 
 const live = (over = {}) => ({
   slug: 'x', sells: [], buys: [], low_sell: null, top_buy: null, own_ask: null, own_bid: null, error: null, ...over,
@@ -63,5 +63,42 @@ describe('summarize / ownedKey', () => {
     expect(ownedKey('lith_c5_relic', 'intact')).toBe('lith_c5_relic|intact');
     expect(ownedKey('primed_flow', null)).toBe('primed_flow|');
     expect(ownedKey('primed_flow', undefined)).toBe('primed_flow|');
+  });
+});
+
+describe('ownedEvidence', () => {
+  const owned = new Map([['primed_flow|', 3], ['lith_c5_relic|intact', 2], ['ash_prime_set|', 0]]);
+  const composed = new Set(['ash_prime_set']);
+
+  it('reports nothing assessable without a scan', () => {
+    expect(ownedEvidence('primed_flow', null, null, composed)).toBeNull();
+    expect(ownedEvidence('primed_flow', null, undefined, composed)).toBeNull();
+  });
+
+  it('uses a count the scan actually carries, including zero', () => {
+    expect(ownedEvidence('primed_flow', null, owned, composed)).toBe(3);
+    // Zero is evidence: the scan looked at this slug and found none.
+    expect(ownedEvidence('ash_prime_set', null, owned, composed)).toBe(0);
+  });
+
+  it('honours relic refinement when keying', () => {
+    expect(ownedEvidence('lith_c5_relic', 'intact', owned, composed)).toBe(2);
+    expect(ownedEvidence('lith_c5_relic', 'radiant', owned, composed)).toBe(0);
+  });
+
+  it('treats an absent composed item as unassessable, not as zero owned', () => {
+    // A set is assembled from parts, so a scan of items never reports it:
+    // absent from the map is no evidence either way.
+    const withoutSet = new Map([['ash_prime_blueprint|', 1]]);
+    expect(ownedEvidence('ash_prime_set', null, withoutSet, composed)).toBeNull();
+    // When the map does carry the set, that evidence is used as it stands.
+    expect(ownedEvidence('ash_prime_set', null, owned, composed)).toBe(0);
+  });
+
+  it('still reports an ordinary item as unowned when the scan does not list it', () => {
+    // Only composed items get the benefit of the doubt; absent really does mean
+    // absent for everything a scan can see.
+    expect(ownedEvidence('primed_flow', null, new Map(), composed)).toBe(0);
+    expect(ownedEvidence('lith_c5_relic', 'radiant', new Map(), composed)).toBe(0);
   });
 });

@@ -1,4 +1,4 @@
-use crate::{commands, overlay};
+use crate::overlay;
 use std::io::Write;
 use std::sync::atomic::Ordering;
 use std::sync::Arc;
@@ -84,39 +84,43 @@ pub(crate) fn run() {
             crate::services::usage::get_usage_preferences,
             crate::services::usage::set_usage_preferences,
             crate::services::wfm_session::wfm_access_status,
-            commands::domain::evaluate_domain,
-            commands::inventory::scan_inventory,
-            commands::inventory::import_snapshot,
-            commands::settings::get_setting,
-            commands::settings::set_setting,
-            commands::settings::get_reserves,
-            commands::settings::protection_state,
-            commands::settings::save_protection_plan,
-            commands::settings::set_reserve,
-            commands::settings::delete_reserve,
-            commands::settings::list_snapshots,
-            commands::settings::list_listing_log,
-            commands::market::cached_market,
-            commands::market::refresh_market,
-            commands::market::top_sellables,
-            commands::market::live_top_prices,
-            commands::market::riven_comps,
-            commands::market::cached_history,
-            commands::market::refresh_history,
+            crate::commands::domain::evaluate_domain,
+            crate::commands::inventory::scan_inventory,
+            crate::commands::inventory::import_snapshot,
+            crate::commands::auto_scan::get_auto_scan_settings,
+            crate::commands::auto_scan::update_auto_scan_settings,
+            crate::commands::auto_scan::auto_scan_status,
+            crate::commands::auto_scan::set_auto_scan_hold,
+            crate::commands::settings::get_setting,
+            crate::commands::settings::set_setting,
+            crate::commands::settings::get_reserves,
+            crate::commands::settings::protection_state,
+            crate::commands::settings::save_protection_plan,
+            crate::commands::settings::set_reserve,
+            crate::commands::settings::delete_reserve,
+            crate::commands::settings::list_snapshots,
+            crate::commands::settings::list_listing_log,
+            crate::commands::market::cached_market,
+            crate::commands::market::refresh_market,
+            crate::commands::market::top_sellables,
+            crate::commands::market::live_top_prices,
+            crate::commands::market::riven_comps,
+            crate::commands::market::cached_history,
+            crate::commands::market::refresh_history,
             crate::services::notifications::list_notifications,
             crate::services::notifications::mark_notifications_read,
             crate::services::notifications::clear_notifications,
             crate::services::notifications::get_notification_preferences,
             crate::services::notifications::set_notification_preferences,
             crate::services::notifications::test_notification,
-            commands::watch::list_watches,
-            commands::watch::add_watch,
-            commands::watch::delete_watch,
-            commands::watch::check_watches_now,
-            commands::trades::list_trades,
-            commands::trades::eelog_status,
-            commands::trades::trade_session_state,
-            commands::market::tray_state,
+            crate::commands::watch::list_watches,
+            crate::commands::watch::add_watch,
+            crate::commands::watch::delete_watch,
+            crate::commands::watch::check_watches_now,
+            crate::commands::trades::list_trades,
+            crate::commands::trades::eelog_status,
+            crate::commands::trades::trade_session_state,
+            crate::commands::market::tray_state,
             crate::shell::update::check_update,
             crate::shell::update::update_status,
             crate::shell::update::install_update,
@@ -126,17 +130,17 @@ pub(crate) fn run() {
             crate::services::wfm_session::unlock_jwt,
             crate::services::wfm_session::try_silent_unlock,
             crate::services::wfm_session::wfm_logout,
-            commands::listing::submit_plan,
-            commands::listing::cancel_plan,
-            commands::listing::get_pending_plan,
-            commands::listing::discard_pending_plan,
-            commands::listing::resume_pending_plan,
-            commands::listing::fetch_orders,
-            commands::listing::update_order,
-            commands::listing::delete_order,
-            commands::listing::bulk_visibility,
-            commands::report::report_scan_issue,
-            commands::report::open_external_url,
+            crate::commands::listing::submit_plan,
+            crate::commands::listing::cancel_plan,
+            crate::commands::listing::get_pending_plan,
+            crate::commands::listing::discard_pending_plan,
+            crate::commands::listing::resume_pending_plan,
+            crate::commands::listing::fetch_orders,
+            crate::commands::listing::update_order,
+            crate::commands::listing::delete_order,
+            crate::commands::listing::bulk_visibility,
+            crate::commands::report::report_scan_issue,
+            crate::commands::report::open_external_url,
             overlay::get_overlay_settings,
             overlay::update_overlay_settings,
             overlay::overlay_status,
@@ -174,6 +178,7 @@ pub(crate) fn run() {
             let profile_existed = db_path.exists();
             let store = Db::open(&db_path)
                 .map_err(|e| format!("opening state DB {}: {e}", db_path.display()))?;
+            app.manage(crate::services::auto_scan::AutoScanState::from_db(&store));
             app.manage(store);
             crate::services::usage::start(app.handle().clone());
             crate::shell::update_notes::initialize(app.handle(), profile_existed);
@@ -299,22 +304,39 @@ pub(crate) fn run() {
             // EE.log tailer: trade detection → ledger + notification +
             // auto-close of the sold WFM listing (see trades.rs). Read-only on
             // the game's own log. Not in probe runs.
-            let ee_path = if probe { None } else { crate::services::trades::start_tailer(app.handle().clone()) };
+            //
+            // The recorder is created before the tailer and handed to it, so a
+            // surface that mounts after a pause can still ask what is true.
+            let recording = crate::services::recording::Recorder::new();
+            let ee_path = if probe {
+                None
+            } else {
+                crate::services::trades::start_tailer(app.handle().clone(), recording.clone())
+            };
             match &ee_path {
                 Some(p) => eprintln!("tennoworth: tailing EE.log at {}", p.display()),
                 None => eprintln!("tennoworth: EE.log not found - trade detection off (set TENNOWORTH_EELOG to override)"),
             }
-            app.manage(crate::services::eelog_state::EeLogState { path: ee_path });
+            app.manage(crate::services::eelog_state::EeLogState { path: ee_path, recording });
 
             // Price-watch checker: a background pass every CHECK_INTERVAL
             // over the user's watches (see watch.rs). Not in probe runs -
             // the probe must not make WFM calls on a timer.
             if !probe {
                 crate::services::watch::start_checker(app.handle().clone());
-                crate::services::reminders::start(app.handle().clone());
+                crate::services::reminders::start(app.handle().clone(), |app| {
+                    crate::shell::tray::rebuild_tray(app);
+                });
                 // Fast path beside the poll: WFM's live order stream fires a
                 // matching watch in seconds (see ws_watch.rs).
                 crate::services::ws_watch::start_stream(app.handle().clone());
+                // Automatic scanning is off by default; the loop only idles
+                // until the user turns it on (see auto_scan.rs). Not in probe
+                // runs - the probe must not scan on a timer.
+                crate::services::auto_scan::start(
+                    app.handle().clone(),
+                    crate::shell::tray::post_scan_surfaces,
+                );
             }
 
             // C5: launch update check, off the main thread so it can never

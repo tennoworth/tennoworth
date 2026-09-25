@@ -2,6 +2,11 @@ import type { Market, MarketItemEntry } from '../contracts/data';
 
 const SURFACE_STALE_MS = 3 * 24 * 60 * 60 * 1000;
 
+export function surfaceHasEvidence(disposition: string | undefined): boolean {
+  return disposition === undefined || [
+    'published_fresh', 'merged_partial', 'cleared_authoritative_empty', 'preserved_unchanged',
+  ].includes(disposition);
+}
 
 export function lookup(market: Market | null | undefined, slug: string): MarketItemEntry | null {
   // Optional-chain guards a half-written `market.json` that's missing
@@ -18,16 +23,24 @@ export function staleSurfaceTimestamp(
   now: number,
 ): string | null {
   const provenance = market?.surface_provenance?.[key];
+  if (provenance?.disposition && !surfaceHasEvidence(provenance.disposition)
+    && provenance.disposition !== 'preserved_invalid'
+    && provenance.disposition !== 'preserved_unavailable') {
+    return 'unknown';
+  }
   // The old payload is byte-for-byte current when its upstream content hash
   // was just revalidated; its original download time remains audit metadata.
   if (provenance?.disposition === 'preserved_unchanged') return null;
 
   const provenanceStamp = provenance?.data_fetched_at;
-  const stamp = provenanceStamp && Number.isFinite(Date.parse(provenanceStamp))
-    ? provenanceStamp
-    : market?.surface_fetched_at?.[key];
-  if (!stamp) return null;
+  const stamp = provenanceStamp === ''
+    ? ''
+    : provenanceStamp && Number.isFinite(Date.parse(provenanceStamp))
+      ? provenanceStamp
+      : market?.surface_fetched_at?.[key];
+  if (!stamp) return provenance || (market && key in market) ? 'unknown' : null;
   const stampMs = Date.parse(stamp);
-  if (!Number.isFinite(stampMs) || now - stampMs < SURFACE_STALE_MS) return null;
+  if (!Number.isFinite(stampMs)) return 'unknown';
+  if (now - stampMs < SURFACE_STALE_MS) return null;
   return stamp;
 }
