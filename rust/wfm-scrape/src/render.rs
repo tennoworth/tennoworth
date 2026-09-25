@@ -22,6 +22,12 @@ pub struct CatalogItemMeta {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_rank: Option<i64>,
     pub subtypes: Vec<String>,
+    /// WFM's English display name and DE `gameRef` path. Pipeline inputs for
+    /// the resolver fallback, not snapshot output.
+    #[serde(skip)]
+    pub name: Option<String>,
+    #[serde(skip)]
+    pub game_ref: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -324,7 +330,7 @@ mod tests {
             tags: vec!["mod".to_string()],
             ducats: Some(0),
             max_rank: Some(10),
-            subtypes: vec![],
+            ..Default::default()
         }
     }
 
