@@ -1,6 +1,30 @@
 import { expect, test, type Page } from '@playwright/test';
 import rewardFixture from '../../../tests/fixtures/relic-ocr/result.json' with { type: 'json' };
 
+// Text placed on a filled title rail must take the rail's own pair; a rule
+// written for --panel (a count, a glyph) vanishes at ~1.2:1 on the bar.
+async function unreadableRailText(page: Page) {
+  return page.evaluate(() => {
+    const rgb = (value: string) => value.match(/[\d.]+/g)!.map(Number);
+    const luminance = ([r, g, b]: number[]) => [r, g, b].map(v => v / 255)
+      .map(v => v <= .04045 ? v / 12.92 : ((v + .055) / 1.055) ** 2.4)
+      .reduce((sum, v, i) => sum + v * [.2126, .7152, .0722][i], 0);
+    const background = (element: Element | null) => {
+      for (; element; element = element.parentElement) {
+        const colour = rgb(getComputedStyle(element).backgroundColor);
+        if ((colour[3] ?? 1) > .5) return colour;
+      }
+      return [255, 255, 255];
+    };
+    return [...document.querySelectorAll('.wrap.tw > .rail, .wrap.tw > .rail *')].filter(element => {
+      const text = [...element.childNodes].some(node => node.nodeType === Node.TEXT_NODE && node.textContent!.trim());
+      if (!text || !element.getClientRects().length) return false;
+      const a = luminance(rgb(getComputedStyle(element).color)), b = luminance(background(element));
+      return (Math.max(a, b) + .05) / (Math.min(a, b) + .05) < 4.5;
+    }).map(element => element.textContent!.trim());
+  });
+}
+
 const views = ['Sell', 'Trade Session', 'Set picks', 'Relics', 'Rivens', 'Baro', 'Routines', 'Meta Drift', 'My orders', 'Price watches', 'Ledger', 'FAQ', 'Settings'];
 
 for (const theme of ['light', 'dark'] as const) {
@@ -31,11 +55,24 @@ for (const theme of ['light', 'dark'] as const) {
           return header.textContent?.trim() && header.getBoundingClientRect().width < 20;
         }).map(header => header.textContent));
         expect(collapsed, `${view} column headings at ${width}`).toEqual([]);
+        if (width === 1200) expect(await unreadableRailText(page), `${view} rail text`).toEqual([]);
         await page.screenshot({ path: testInfo.outputPath(`${view.replaceAll(' ', '-')}-${theme}-${width}.png`) });
       }
     }
   });
 }
+
+test('hosted rails keep readable text in both themes', async ({ page }) => {
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.goto('/');
+    await expect(page.locator('#community-usage')).toBeVisible();
+    expect(await unreadableRailText(page), `hosted ${theme}`).toEqual([]);
+    const rail = await page.locator('#community-usage > .rail').boundingBox();
+    const reference = await page.locator('.wrap.tw > .rail').first().boundingBox();
+    expect(rail!.height, 'an h2 rail matches the h3 rails').toBeLessThanOrEqual(reference!.height + 1);
+  }
+});
 
 test('theme radio navigation and listing-review focus stay keyboard accessible', async ({ page }) => {
   await page.goto('/?preview-desktop&sample');

@@ -20,7 +20,7 @@
   let message = $state('');
   let dialog: HTMLDialogElement;
   let swatches = $state<{ token: string; value: string }[]>([]);
-  const tokens = ['--bg', '--panel', '--panel-2', '--fg', '--muted', '--border', '--accent', '--good', '--warn', '--bad', '--ducat'];
+  const tokens = ['--bg', '--panel', '--panel-2', '--fg', '--muted', '--border', '--accent', '--good', '--warn', '--bad', '--ducat', '--vault'];
   const rows = [
     { name: 'Ivara Prime Neuroptics Blueprint', owned: 4, price: 15, note: '2 copies kept · sample inventory' },
     { name: 'Pyrana Prime Set', owned: 30, price: 95, note: 'Existing visible order · sample inventory' },

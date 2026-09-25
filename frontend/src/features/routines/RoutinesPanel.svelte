@@ -291,7 +291,7 @@
   .checklist-items { list-style: none; margin: 0; padding: 0; border-top: 1px var(--rule) var(--border); }
   .checklist-items li { border-bottom: 1px var(--rule) var(--border); }
   .checklist-items label { display: flex; align-items: flex-start; gap: var(--s3); min-height: var(--row); padding: var(--s3) 0; cursor: pointer; }
-  .checklist-items input[type="checkbox"] { flex: 0 0 auto; width: 1.25rem; height: 1.25rem; margin: var(--s1) 0 0; accent-color: var(--accent); }
+  .checklist-items input[type="checkbox"] { flex: 0 0 auto; width: 1.25rem; height: 1.25rem; margin: var(--s1) 0 0; }
   .task-copy { display: flex; flex-direction: column; gap: var(--s1); min-width: 0; overflow-wrap: anywhere; line-height: var(--leading-body); }
   .task-copy strong { font-weight: 600; }
   .task-copy span { color: var(--muted); font-size: var(--text-control); }

@@ -86,5 +86,4 @@ import { type NotificationEntry, type NotificationTarget } from '../../contracts
   .entry-meta { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); color: var(--muted); font-size: var(--text-caption); }
   .muted { color: var(--muted); }
   label { display: flex; align-items: center; gap: var(--s2); min-height: var(--ctl); }
-  input { accent-color: var(--accent); }
 </style>

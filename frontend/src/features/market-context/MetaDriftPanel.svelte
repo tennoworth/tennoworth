@@ -102,7 +102,6 @@
     }
     .controls { align-items: stretch; flex-wrap: wrap; }
     .tabs { width: 100%; overflow-x: auto; }
-    input { margin-left: 0; flex: 1 1 10rem; min-width: 0; }
     .only-grid { grid-template-columns: 1fr; }
     table { min-width: 42rem; }
   }
