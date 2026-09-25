@@ -130,15 +130,18 @@ export function ownedKey(slug: string, subtype: string | null | undefined): stri
  *  live listing the user could in fact build.
  *
  *  Evidence that IS present is always used, so a set the scan really carries a
- *  count for is still assessed. A count of `0` is evidence, not absence. */
+ *  count for is still assessed. A count of `0` is evidence, not absence.
+ *
+ *  `composed` comes from the market snapshot. Until it is known, no absent item
+ *  can be told apart from a set, so every absence is unassessable. */
 export function ownedEvidence(
   slug: string,
   subtype: string | null | undefined,
   ownedQty: ReadonlyMap<string, number> | null | undefined,
-  composed?: ReadonlySet<string>,
+  composed: ReadonlySet<string> | null,
 ): number | null {
   if (!ownedQty) return null;
   const known = ownedQty.get(ownedKey(slug, subtype));
   if (known != null) return known;
-  return composed?.has(slug) ? null : 0;
+  return !composed || composed.has(slug) ? null : 0;
 }
