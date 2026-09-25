@@ -294,9 +294,9 @@
 {#if marketLoadError}
   <div class="card warn-banner">⚠ {marketLoadError}</div>
 {:else if marketFreshness === 'stale'}
-  <div class="card warn-banner">
+  <p class="ui-notice" data-tone="warn">
     ⚠ Prices may be outdated - this market snapshot is {marketStaleness} old. Rankings below use stale data.
-  </div>
+  </p>
 {/if}
 
 {#if calculationReady && results.length > 0 && allPicks.length === 0}
@@ -332,7 +332,7 @@
       <span class="pick-vol">({plat(p.volume_48h)} trades / 48h)</span>
     </span>
     {#if p.volume_48h < LIQUID_VOL}
-      <span class="pick-tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor - expect to wait for a buyer.">thin</span>
+      <span class="tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor - expect to wait for a buyer.">thin</span>
     {/if}
     <span class="pick-actions">
       <button class="pick-list" disabled={!calculationReady || !canList} onclick={() => { if (calculationReady && canList) openListingFlow(p); }} aria-label="List {p.name} on WFM">List</button>
@@ -805,7 +805,6 @@
   .score-expander {
     background: var(--panel);
     border: 1px solid var(--border);
-    border-left: 3px solid var(--accent);
     border-radius: var(--radius-panel);
     padding: 0 14px;
     position: relative;
@@ -855,7 +854,6 @@
     align-items: flex-start;
     justify-content: space-between;
     gap: 12px;
-    border-left: 3px solid var(--accent);
   }
   .sell-onboarding .so-body { min-width: 0; }
   .sell-onboarding strong { color: var(--fg); font-weight: 600; font-size: var(--text-control); }
@@ -980,18 +978,7 @@
   .rs.hold .t { color: var(--warn); }
   .rs.peak .t { color: var(--good); }
   .pick-vol { font-family: var(--font-mono); font-size: var(--text-caption); color: var(--muted); margin-left: 2px; }
-  .pick-tag {
-    flex-shrink: 0;
-    padding: 0 6px;
-    line-height: 14px;
-    font-size: var(--text-caption);
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    border: 1px solid currentColor;
-    border-radius: var(--radius-tag);
-    color: var(--warn);
-  }
+  .rs > .tag { flex-shrink: 0; margin-inline-start: 0; }
   .pick-actions { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
   .pick-list { font-size: var(--text-caption); height: var(--ctl-xs); padding: 0 10px; }
   .pick-snooze {

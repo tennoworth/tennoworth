@@ -43,7 +43,6 @@
     gap: 10px;
     background: var(--panel-2);
     border: 1px solid var(--border);
-    border-left: 3px solid var(--accent);
     border-radius: var(--radius-panel);
     padding: 10px 12px;
     box-shadow: var(--shadow-pop);
@@ -51,8 +50,9 @@
     line-height: 1.5;
     color: var(--fg);
   }
-  .toast.error { border-left-color: var(--bad); }
-  .toast.success { border-left-color: var(--good); }
+  /* The edge is reserved for meaning: only toned toasts carry one. */
+  .toast.error { border-left: 3px solid var(--bad); }
+  .toast.success { border-left: 3px solid var(--good); }
   .toast-text { min-width: 0; }
   .toast-dismiss {
     min-width: var(--ctl-xs);

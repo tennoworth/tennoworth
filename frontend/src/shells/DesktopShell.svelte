@@ -1027,7 +1027,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
           Inventory cross-referenced against {Object.keys(inventory.market?.set_to_parts ?? {}).length}
           prime sets. Ranked by net plat.
           {#if setSurfaceAge}
-            <span data-shell class="muted">· ⚠ set/vault data {setSurfaceAge}</span>
+            <span data-shell class="warn">· ⚠ set/vault data {setSurfaceAge}</span>
           {/if}
         </p>
       </section>
@@ -1054,7 +1054,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
                   >{r.set_name}</a>
                   <span data-shell class="reco-net-inline">+{r.net_plat}p</span>
                   {#if av}
-                    <span data-shell class="advice-chip advice-{av.advice}" title={av.reasons.join(' · ')}>
+                    <span data-shell class="tag advice advice-{av.advice}" title={av.reasons.join(' · ')}>
                       {av.advice === 'sell_now' ? 'sell now' : av.advice}
                     </span>
                   {/if}
@@ -1233,7 +1233,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
             Next visit at {voidTrader?.location}.
           {/if}
           {#if baroSurfaceAge}
-            <span data-shell class="muted">· ⚠ schedule data {baroSurfaceAge} - may be a rotation behind</span>
+            <span data-shell class="warn">· ⚠ schedule data {baroSurfaceAge} - may be a rotation behind</span>
           {/if}
         </p>
       </section>
@@ -1403,10 +1403,15 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       </div>
     
     <div data-shell class="cell">
-      <span data-shell class="dot {marketFreshness}" role="img" aria-label="Market data {marketFreshness}"></span>
-      <span data-shell>Market</span>
-      <b data-shell>{marketStaleness ?? '-'}</b>
-      {#if marketFreshness !== 'unknown'}<span data-shell>· {marketFreshness}</span>{/if}
+      {#if marketFreshness === 'stale'}
+        <span data-shell>Market</span>
+        <span data-shell class="tag stale">Stale · {marketStaleness}</span>
+      {:else}
+        <span data-shell class="dot {marketFreshness}" role="img" aria-label="Market data {marketFreshness}"></span>
+        <span data-shell>Market</span>
+        <b data-shell>{marketStaleness ?? '-'}</b>
+        {#if marketFreshness !== 'unknown'}<span data-shell>· {marketFreshness}</span>{/if}
+      {/if}
     </div>
     {#if inShell && ordersToFix > 0}
       <div data-shell class="cell attn">

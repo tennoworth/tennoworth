@@ -25,6 +25,18 @@ async function unreadableRailText(page: Page) {
   });
 }
 
+// Red is for invalid data and blocked calculations; no status tag is either.
+async function redTags(page: Page) {
+  return page.locator('.tag:visible').evaluateAll(tags => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--bad)';
+    document.body.append(probe);
+    const bad = getComputedStyle(probe).color;
+    probe.remove();
+    return tags.filter(tag => getComputedStyle(tag).color === bad).map(tag => tag.textContent!.trim());
+  });
+}
+
 const views = ['Sell', 'Trade Session', 'Set picks', 'Relics', 'Rivens', 'Baro', 'Routines', 'Meta Drift', 'My orders', 'Price watches', 'Ledger', 'FAQ', 'Settings'];
 
 for (const theme of ['light', 'dark'] as const) {
@@ -32,6 +44,7 @@ for (const theme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: theme });
     await page.goto('/?preview-desktop&sample');
     await expect(page.locator('.shell')).toBeVisible();
+    await expect(page.locator('.statusbar .tag.stale'), 'a days-old snapshot is flagged as a caution, not a dot').toHaveText(/stale/i);
     for (const view of views) {
       await page.locator('.sidebar').getByRole('button', { name: new RegExp('^' + view) }).click();
       for (const width of [1200, 320]) {
@@ -55,7 +68,10 @@ for (const theme of ['light', 'dark'] as const) {
           return header.textContent?.trim() && header.getBoundingClientRect().width < 20;
         }).map(header => header.textContent));
         expect(collapsed, `${view} column headings at ${width}`).toEqual([]);
-        if (width === 1200) expect(await unreadableRailText(page), `${view} rail text`).toEqual([]);
+        if (width === 1200) {
+          expect(await unreadableRailText(page), `${view} rail text`).toEqual([]);
+          expect(await redTags(page), `${view} tags`).toEqual([]);
+        }
         await page.screenshot({ path: testInfo.outputPath(`${view.replaceAll(' ', '-')}-${theme}-${width}.png`) });
       }
     }
@@ -68,6 +84,7 @@ test('hosted rails keep readable text in both themes', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('#community-usage')).toBeVisible();
     expect(await unreadableRailText(page), `hosted ${theme}`).toEqual([]);
+    expect(await redTags(page), `hosted ${theme} tags`).toEqual([]);
     const rail = await page.locator('#community-usage > .rail').boundingBox();
     const reference = await page.locator('.wrap.tw > .rail').first().boundingBox();
     expect(rail!.height, 'an h2 rail matches the h3 rails').toBeLessThanOrEqual(reference!.height + 1);

@@ -10,6 +10,8 @@ describe('component design contract', () => {
       expect(css.match(/#[\da-f]{3,8}\b|\brgba?\(/gi), 'literal component colors belong in app.css').toBeNull();
       expect(css.match(/font-size:\s*[\d.]+px\b|font:\s*(?:(?:\d{3}|italic|normal|bold)\s+)*[\d.]+px\b/g), 'text sizes use semantic tokens').toBeNull();
       expect(css.match(/border-radius:\s*[1-9][\d.]*px\b/g), 'control and panel shapes use tokens; circular status marks may use percentages').toBeNull();
+      const tagRules = [...css.matchAll(/([^{}]*\.tag\b[^{}]*)\{([^}]*)\}/g)].filter(([, , body]) => /(^|[;\s])(color|border(-color)?)\s*:/.test(body));
+      expect(tagRules.map(([, selector]) => selector.trim()), 'tag colours live in the shared .tag vocabulary in app.css').toEqual([]);
     });
   }
 });

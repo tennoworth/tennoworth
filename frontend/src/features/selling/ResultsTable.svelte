@@ -462,7 +462,7 @@
     {/if}
   {:else if col.key === 'advice'}
     {#if r.advice}
-      <span class="advice-chip advice-{r.advice}" title={(r.advice_reasons ?? []).join(' · ')}>
+      <span class="tag advice advice-{r.advice}" title={(r.advice_reasons ?? []).join(' · ')}>
         {r.advice === 'sell_now' ? 'sell now' : r.advice}
       </span>
     {:else}
@@ -823,13 +823,14 @@
     align-items: center;
   }
   .pill-chip {
-    margin-left: 0;
+    margin-inline-start: 0;
     cursor: pointer;
     background: transparent;
-    font-family: inherit;
     height: var(--ctl);
     display: inline-flex;
     align-items: center;
+    /* Flex drops the space between label and count, so the gap carries it. */
+    gap: var(--s1);
     /* Filter chips share .tag's outline voice; inactive chips dim their
        outline so the active one reads by border weight, not by a fill. */
     border-color: color-mix(in srgb, currentColor 45%, transparent);
@@ -1067,35 +1068,6 @@
     vertical-align: middle;
   }
 
-  /* "patience" tag - quiet so it doesn't compete with the item name, but
-     present enough that a scan picks it up. Used for items with vol_48h < 2,
-     i.e. listings that exist but rarely clear. */
-  /* Status badges: thin outlines in the tag's own colour (border rides
-     currentColor) - never filled backgrounds. */
-  .tag {
-    display: inline-block;
-    margin-left: 6px;
-    padding: 1px 6px;
-    font-size: var(--text-caption);
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    border: 1px solid currentColor;
-    border-radius: var(--radius-tag);
-    color: var(--muted);
-    vertical-align: middle;
-  }
-  .tag.patience { color: var(--muted); }
-  /* Vault: a hard sell-signal for vaulted primes, lighter signal for
-     vaulting-soon. Augment chip is informational only (re-buy cost). */
-  .tag.vaulted { color: var(--bad); }
-  .tag.vaulting-soon { color: var(--warn); }
-  .tag.augment { color: var(--accent); }
-  /* Timing: "hold" warns you're near the 90d low (don't dump into a trough -
-     e.g. a Baro-flooded mod); "peak" marks a price near its 90d high. */
-  .tag.hold { color: var(--warn); }
-  .tag.peak { color: var(--good); }
-  .tag.relic-tag { color: var(--muted); }
 
   .no-match {
     padding: 18px 14px;
@@ -1186,7 +1158,6 @@
     cursor: pointer;
     background: transparent;
     color: var(--muted);
-    font-family: inherit;
   }
   .badge-overflow-btn:hover { color: var(--accent); border-color: var(--accent); }
   .badge-overflow-popover {
@@ -1206,25 +1177,7 @@
     border-radius: var(--radius-panel);
     box-shadow: var(--shadow-pop);
   }
-  /* Advisor chip - mirror of App.svelte's .advice-chip (scoped styles
-     don't cross components). */
-  /* Advisor verdicts share the .tag anatomy (currentColor border,
-     --radius-tag, uppercase micro-label) so every look restyles them for
-     free - a rounded pill here would be the one pill in the app. */
-  .advice-chip {
-    display: inline-block;
-    padding: 1px 6px;
-    font-size: var(--text-caption);
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    border: 1px solid currentColor;
-    border-radius: var(--radius-tag);
-    color: var(--muted);
-    cursor: help;
-    white-space: nowrap;
-  }
-  .advice-chip.advice-sell_now { color: var(--good); }
-  .advice-chip.advice-hold { color: var(--warn); }
+  /* Alone in its cell, so no leading gap; the reasons live in the title. */
+  .tag.advice { margin-inline-start: 0; cursor: help; }
   .scope-row, .narrow-row, .result-actions { padding-block: var(--s3); gap: var(--s3); }
 </style>

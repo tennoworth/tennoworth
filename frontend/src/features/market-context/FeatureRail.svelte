@@ -365,7 +365,7 @@
                   {#each advisor as a (a.item)}
                     <tr>
                       <td class="l">{a.item}</td>
-                      <td class="l"><span class="tag" class:hold={a.hold} class:peak={!a.hold}>{a.verdict}</span></td>
+                      <td class="l verdict"><span class="tag" class:hold={a.hold} class:peak={!a.hold}>{a.verdict}</span></td>
                       <td class="reason">{a.reason}</td>
                     </tr>
                   {/each}
@@ -473,7 +473,9 @@
   .mini .fg { color: var(--fg); }
   /* The shared tag rule carries a left margin for the "Item …tag" case; a tag
      that IS the cell shouldn't be indented by it. */
-  .mini td.l > .tag:first-child { margin-left: 0; }
+  /* A tag alone in its cell needs no gap; one after a name keeps it - text
+     nodes are invisible to :first-child, so this cannot key off position. */
+  .mini td.verdict > .tag { margin-inline-start: 0; }
 
   .verdict {
     margin: 0;

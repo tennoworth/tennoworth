@@ -660,34 +660,17 @@
     margin-left: 4px;
   }
 
-  /* Advisor chips - shared shape with the table's advice column (its copy
-     lives in ResultsTable's scoped styles; Svelte styles don't cross
-     component boundaries, so the small duplication is deliberate). */
-  .advice-chip[data-shell] {
-    display: inline-block;
-    padding: 1px 6px;
-    font-size: var(--text-caption);
-    font-weight: 600;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    border: 1px solid currentColor;
-    border-radius: var(--radius-tag);
-    color: var(--muted);
-    cursor: help;
-    white-space: nowrap;
-  }
-  .advice-chip.advice-sell_now[data-shell] { color: var(--good); }
-  .advice-chip.advice-hold[data-shell] { color: var(--warn); }
+  .tag.advice[data-shell] { cursor: help; }
 
   /* Baro card. Quiet by default (countdown mode); flips to a warm-gold
      border when Baro is actively visiting so the user can't miss the
      window. Sibling-card pattern, same shape as set-recos / relic-planner. */
   .baro-card[data-shell] {
     padding: 14px 16px;
-    border-left: 3px solid color-mix(in srgb, var(--ducat) 60%, var(--border));
   }
+  /* The edge marks the visit window only; the countdown state stays quiet. */
   .baro-card.here[data-shell] {
-    border-left-color: var(--ducat);
+    border-left: 3px solid var(--ducat);
     background: color-mix(in srgb, var(--ducat) 6%, var(--panel));
   }
   .baro-icon[data-shell] {
@@ -774,6 +757,7 @@
   }
   .ok-text[data-shell] { color: var(--good); }
   .bad[data-shell] { color: var(--bad); }
+  .warn[data-shell] { color: var(--warn); }
 
   /* Empty state with a one-click fix instead of just shrugging. */
   .card.empty[data-shell] {

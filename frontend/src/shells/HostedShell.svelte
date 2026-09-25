@@ -137,10 +137,15 @@ function ago(ts: string | number | null | undefined) {
     </div>
     
     <div data-shell class="cell">
-      <span data-shell class="dot {marketFreshness}" role="img" aria-label="Market data {marketFreshness}"></span>
-      <span data-shell>Market</span>
-      <b data-shell>{marketStaleness ?? '-'}</b>
-      {#if marketFreshness !== 'unknown'}<span data-shell>· {marketFreshness}</span>{/if}
+      {#if marketFreshness === 'stale'}
+        <span data-shell>Market</span>
+        <span data-shell class="tag stale">Stale · {marketStaleness}</span>
+      {:else}
+        <span data-shell class="dot {marketFreshness}" role="img" aria-label="Market data {marketFreshness}"></span>
+        <span data-shell>Market</span>
+        <b data-shell>{marketStaleness ?? '-'}</b>
+        {#if marketFreshness !== 'unknown'}<span data-shell>· {marketFreshness}</span>{/if}
+      {/if}
     </div>
     
     {#if baroState && baroState.phase !== 'unknown'}
