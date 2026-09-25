@@ -30,8 +30,19 @@ pub struct Usage {
 struct DailyState {
     day: String,
     token: String,
+    /// Set only once the service has accepted the day's check-in.
     attempted: bool,
+    /// Attempts spent on this day. Absent in state written before this field
+    /// existed, hence the default.
+    #[serde(default)]
+    attempts: u32,
 }
+
+/// How many times one day may be offered before the app stops asking. The loop
+/// polls every 60 seconds, so this bounds a day of outage to ten requests per
+/// install instead of 1440, while still covering the case that loses counts today:
+/// the app started before the network was up.
+const MAX_ATTEMPTS_PER_DAY: u32 = 10;
 
 fn allowed() -> bool {
     !cfg!(any(debug_assertions, test))
@@ -97,15 +108,40 @@ fn prepare(db: &Db, day: &str) -> Result<Option<DailyState>, ()> {
             day: day.into(),
             token: format!("{day}.{random}"),
             attempted: false,
+            attempts: 0,
         };
     }
     if state.attempted {
         return Ok(None);
     }
-    state.attempted = true;
+    if state.attempts >= MAX_ATTEMPTS_PER_DAY {
+        return Ok(None);
+    }
+    // Counting here rather than marking the day done is the whole fix: the day is
+    // only finished by `confirm`, so a send that never landed leaves it retryable.
+    state.attempts += 1;
     db.set_setting(DAILY, &serde_json::to_string(&state).map_err(|_| ())?)
         .map_err(|_| ())?;
     Ok(Some(state))
+}
+
+/// Record that the service accepted this day's check-in. Scoped to the token the
+/// caller actually sent, so a send that lands after midnight cannot close the day
+/// that has since started.
+fn confirm(db: &Db, day: &str, token: &str) {
+    let Ok(Some(raw)) = db.get_setting(DAILY) else {
+        return;
+    };
+    let Ok(mut state) = serde_json::from_str::<DailyState>(&raw) else {
+        return;
+    };
+    if state.day != day || state.token != token {
+        return;
+    }
+    state.attempted = true;
+    if let Ok(json) = serde_json::to_string(&state) {
+        let _ = db.set_setting(DAILY, &json);
+    }
 }
 fn client() -> Result<reqwest::Client, reqwest::Error> {
     reqwest::Client::builder()
@@ -157,7 +193,9 @@ pub fn start(app: tauri::AppHandle) {
                 let now = Utc::now();
                 let prepared = prepare(&app.state::<Db>(), &now.date_naive().to_string());
                 if let Ok(Some(daily)) = prepared {
-                    let _ = report_if_enabled(&client, ENDPOINT, &daily.token, &mut receiver).await;
+                    if report_if_enabled(&client, ENDPOINT, &daily.token, &mut receiver).await {
+                        confirm(&app.state::<Db>(), &daily.day, &daily.token);
+                    }
                 }
             }
             tokio::select! {
@@ -268,13 +306,17 @@ mod tests {
     fn retries_restarts_rollover_and_clock_rollback() {
         let db = Db::open_in_memory().unwrap();
         let first = prepare(&db, "2026-09-11").unwrap().unwrap();
-        assert!(prepare(&db, "2026-09-11").unwrap().is_none());
-        assert!(prepare(&db, "2026-09-11").unwrap().is_none());
+        // A retry carries the day's token: that identity is what lets the service
+        // dedupe it, so offering the day again cannot inflate the count.
+        let retry = prepare(&db, "2026-09-11").unwrap().unwrap();
+        assert_eq!(first.token, retry.token);
+        confirm(&db, "2026-09-11", &retry.token);
         assert!(prepare(&db, "2026-09-11").unwrap().is_none());
         let tomorrow = prepare(&db, "2026-09-12").unwrap().unwrap();
         assert_ne!(first.token, tomorrow.token);
+        // A clock rollback must not reopen the day that was already confirmed.
         assert!(prepare(&db, "2026-09-11").unwrap().is_none());
-        assert!(prepare(&db, "2026-09-12").unwrap().is_none());
+        assert!(prepare(&db, "2026-09-12").unwrap().is_some());
     }
     #[test]
     fn persistence_failures_stop_withdrawal_and_prevent_unsaved_attempts() {
@@ -309,6 +351,13 @@ mod tests {
         let db = Db::open(&path).unwrap();
         db.set_setting(CONSENT, "false").unwrap();
         db.set_setting(CONSENT, "true").unwrap();
+        // The recorded attempt survived the reopen, so the day is still open with
+        // the same token - until the service confirms it.
+        assert_eq!(
+            prepare(&db, "2026-09-11").unwrap().unwrap().token,
+            first.token
+        );
+        confirm(&db, "2026-09-11", &first.token);
         assert!(prepare(&db, "2026-09-11").unwrap().is_none());
         assert_ne!(
             first.token,
@@ -320,5 +369,60 @@ mod tests {
         let db = Db::open_in_memory().unwrap();
         db.set_setting(DAILY, "broken").unwrap();
         assert!(prepare(&db, "2026-09-11").is_err());
+    }
+
+    /// An outage must not become a request every minute for a whole day.
+    #[test]
+    fn a_days_retries_are_bounded() {
+        let db = Db::open_in_memory().unwrap();
+        let mut offered = 0;
+        while prepare(&db, "2026-09-11").unwrap().is_some() {
+            offered += 1;
+        }
+        assert_eq!(offered, MAX_ATTEMPTS_PER_DAY);
+        // The cap is per day: tomorrow starts over.
+        assert!(prepare(&db, "2026-09-12").unwrap().is_some());
+    }
+
+    /// A confirmation belongs to the token it carries. One that lands after midnight
+    /// must not close the day that has since begun.
+    #[test]
+    fn a_late_confirmation_does_not_close_the_new_day() {
+        let db = Db::open_in_memory().unwrap();
+        let yesterday = prepare(&db, "2026-09-11").unwrap().unwrap();
+        let today = prepare(&db, "2026-09-12").unwrap().unwrap();
+        confirm(&db, "2026-09-11", &yesterday.token);
+        assert_ne!(today.token, yesterday.token);
+        assert!(prepare(&db, "2026-09-12").unwrap().is_some());
+    }
+
+    #[test]
+    fn a_confirmation_for_another_token_is_ignored() {
+        let db = Db::open_in_memory().unwrap();
+        let _ = prepare(&db, "2026-09-11").unwrap().unwrap();
+        confirm(&db, "2026-09-11", "2026-09-11.deadbeef");
+        assert!(
+            prepare(&db, "2026-09-11").unwrap().is_some(),
+            "a stale confirmation must leave the day open"
+        );
+    }
+
+    /// The day used to be marked attempted before the request went out, so a single
+    /// transient failure - offline at the one moment the app tried - lost the day
+    /// permanently. An unconfirmed day has to stay offerable.
+    #[test]
+    fn an_unconfirmed_check_in_stays_retryable() {
+        let db = Db::open_in_memory().unwrap();
+        let first = prepare(&db, "2026-09-11").unwrap().unwrap();
+        let retry = prepare(&db, "2026-09-11").unwrap();
+        assert!(
+            retry.is_some(),
+            "a day whose check-in was never confirmed must stay retryable"
+        );
+        assert_eq!(
+            first.token,
+            retry.expect("retry").token,
+            "the retry must carry the day's token, which is what lets the service dedupe it"
+        );
     }
 }

@@ -120,6 +120,7 @@ flowchart TD
   Desktop --> Core[wfm-core]
   Desktop --> Math[market-math]
   Core --> Client[wfm-client]
+  Core --> Market[market-domain]
   Scrape[wfm-scrape] --> Math
   Scrape --> Client
 ```
@@ -135,11 +136,22 @@ pretend to support scanning, authentication, or orders through no-op methods.
 Desktop services and the standalone overlay are dynamically loaded. Overlay
 document styles are surface-scoped so they cannot disable hosted-page scrolling.
 
-`frontend/src/dev/architecture.test.ts` checks static import cycles, direct
-feature/adapter separation, pure-domain runtime access, hosted transitive
-imports, and production component type-check coverage. This is a bounded
-static gate: it does not establish runtime lifecycle correctness or inspect
-arbitrary dynamic imports. Behavior and browser tests cover those concerns.
+`frontend/src/dev/architecture.test.ts` checks static imports and re-exports in
+both component script blocks, direct feature/adapter separation, pure-domain
+runtime access, hosted transitive imports, and the ban on component type-check
+suppression. Type-only edges constrain ownership but do not create runtime
+cycles. Svelte diagnostics run separately. This bounded gate does not establish
+runtime lifecycle correctness or inspect arbitrary dynamic imports; behavior
+and browser tests cover those concerns.
+
+The native module gate parses absolute `crate::` imports, grouped re-exports,
+calls and type paths. Services cannot depend on shell or command adapters,
+persistence cannot depend on those adapters or services, and shell code calls
+services directly. Test-only modules are excluded without hiding production
+items later in the file. Relative `super::` paths and macro-generated paths
+remain outside this source gate; it is not a compiler dependency graph. Startup
+registers command paths inside `tauri::generate_handler!`; that composition is
+permitted and does not call command adapters from shell behavior.
 
 ## Feature state and composition
 
@@ -178,6 +190,14 @@ has no I/O or clock dependency. `market-domain` is the sixth workspace member:
 it isolates decision contracts and computations from both Tauri and the network
 core, so shared fixtures and contract generation can run without the GUI stack.
 
+That is why `wfm-core` depends on `market-domain` rather than the reverse, and
+only where a transport response has to become a typed contract. The
+market's own-orders response is decoded once, in `wfm-core::trading::orders`,
+into the vendor-neutral `market-domain::orders` types; a response it cannot read
+whole is refused as a whole rather than partly reconciled. Consumers read the
+decoded order and never the response body, so two surfaces cannot resolve the
+same row to different orders.
+
 ## Data and failure boundaries
 
 The pipeline ingests upstream data, validates and builds the snapshot, then
@@ -195,6 +215,15 @@ This reorganization preserves IPC command names, database migrations, stored
 keys, encrypted envelopes, and published data shapes. Tests must consume the
 current implementation, including freshly built binaries where applicable.
 Shared cross-language behavior uses fixtures under `tests/fixtures/`.
+
+Reviewed listing batches write an uncertain marker to the pending-plan file
+before each market mutation, then write the observed result. The desktop holds
+the account mutation guard through SQLite history recording and journal cleanup.
+A failed result write or history transaction leaves the journal for recovery;
+finished records can retry history and cleanup without contacting the market.
+Only an absent journal permits a new batch, and an explicit discard removes a
+saved record. The existing JSON journal and SQLite listing log keep their
+formats; this ordering requires no schema migration.
 
 ## Structural choices and remaining limits
 

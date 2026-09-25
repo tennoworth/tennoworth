@@ -364,7 +364,7 @@ fn run_loop(app: AppHandle) {
             _ => None,
         };
         if decision == Decision::Scan {
-            if crate::commands::inventory::scan_in_progress() {
+            if crate::services::acquisition::scan_in_progress() {
                 // A scan the user asked for owns the scanner. Skip without
                 // spending an attempt, so a race does not consume the cadence.
                 due = Some(now + TICK);
@@ -373,7 +373,7 @@ fn run_loop(app: AppHandle) {
                     tracked.attempts += 1;
                 }
                 last_attempt_at = Some(now);
-                match crate::commands::inventory::scan_and_record(&app) {
+                match crate::services::acquisition::scan_and_record(&app) {
                     Ok(payload) => {
                         if let Some(tracked) = run.as_mut() {
                             tracked.succeeded = true;
@@ -387,7 +387,7 @@ fn run_loop(app: AppHandle) {
                             status.last_scan_at = Some(crate::services::allowance::unix_now());
                             status.last_error = None;
                         });
-                        crate::commands::inventory::publish_scan(&app, &payload);
+                        crate::services::acquisition::publish_scan(&app, &payload);
                     }
                     Err(error) => {
                         if logged_error.as_deref() != Some(error.as_str()) {

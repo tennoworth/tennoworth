@@ -14,7 +14,9 @@ use std::sync::Arc;
 
 use crate::http::{browser_client, wfm_client};
 use crate::trading::auth::fetch_wfm_me;
+use crate::trading::outcome::MutationOutcome;
 use crate::trading::catalog::{fetch_wfm_catalog, index_item_meta, ItemMeta, WfmCatalogItem};
+use crate::trading::orders::{decode_orders, DecodedOrders};
 
 // Matches WFM's own UI cap (3000) and the browser ListingReviewModal's
 // MAX_PLATINUM. Previously 999, which silently blocked maxed-Arcane and
@@ -200,7 +202,7 @@ pub(crate) fn patch_one_order(
         }
         Err(e) => PerOrderResult {
             order_id: id.into(),
-            status: if matches!(e, wfm_client::governor::AccessError::UncertainMutation) { "uncertain_mutation" } else { "pending" }.into(),
+            status: MutationOutcome::from(&e).status_str().into(),
             message: Some(e.to_string()),
         },
     }
@@ -225,26 +227,37 @@ pub fn delete_order(unlocked: &Unlocked, id: &str) -> Result<()> {
     Ok(())
 }
 
+/// The catalogue's own rank and subtype rules, handed to the order decoder so
+/// the two never state them separately. Rows carry an itemId, so the lookup
+/// goes through the itemId→slug index the session already built.
+struct CatalogConstraints<'a>(&'a Unlocked);
+
+impl market_domain::orders::ItemConstraints for CatalogConstraints<'_> {
+    fn accepts(&self, item_id: &str, rank: Option<u64>, subtype: Option<&str>) -> bool {
+        let Some(item) = self
+            .0
+            .id_to_item
+            .get(item_id)
+            .and_then(|meta| self.0.catalog.get(&meta.slug))
+        else {
+            return true;
+        };
+        item.max_rank
+            .is_none_or(|max| rank.is_some_and(|rank| rank <= u64::from(max)))
+            && (item.subtypes.is_empty()
+                || subtype.is_some_and(|subtype| item.subtypes.iter().any(|s| s == subtype)))
+    }
+}
+
+/// Decode the account's orders against this session's catalogue. This is the
+/// single reading of the endpoint: a caller that reconciles against orders uses
+/// this rather than walking the response body itself.
+pub fn decode_user_orders(unlocked: &Unlocked, body: &serde_json::Value) -> Result<DecodedOrders> {
+    decode_orders(body, &CatalogConstraints(unlocked))
+}
+
 fn validate_orders_body(body: &serde_json::Value, unlocked: &Unlocked) -> Result<()> {
-    let data = body.get("data").context("Orders response has no data; refusing to assume an empty account.")?;
-    let valid_row = |row: &serde_json::Value, bucket: Option<&str>| {
-        ["id", "itemId"].iter().all(|key| row.get(key).and_then(|v| v.as_str()).is_some_and(|s| !s.is_empty()))
-            && matches!(row.get("type").and_then(|v| v.as_str()).or(bucket), Some("buy" | "sell"))
-            && ["quantity", "platinum"].iter().all(|key| row.get(key).and_then(|v| v.as_u64()).is_some_and(|n| n > 0))
-            && row.get("rank").is_none_or(|v| v.is_null() || v.as_u64().is_some())
-            && row.get("subtype").is_none_or(|v| v.is_null() || v.as_str().is_some_and(|s| !s.is_empty()))
-            && unlocked.catalog.values().find(|item| Some(item.item_id.as_str()) == row.get("itemId").and_then(|v| v.as_str())).is_none_or(|item| {
-                item.max_rank.is_none_or(|max| row.get("rank").and_then(|v| v.as_u64()).is_some_and(|rank| rank <= u64::from(max)))
-                    && (item.subtypes.is_empty() || row.get("subtype").and_then(|v| v.as_str()).is_some_and(|subtype| item.subtypes.iter().any(|s| s == subtype)))
-            })
-    };
-    let valid = if let Some(rows) = data.as_array() {
-        rows.iter().all(|row| valid_row(row, None))
-    } else {
-        ["sell", "buy"].iter().all(|bucket| data.get(bucket).and_then(|v| v.as_array()).is_some_and(|rows| rows.iter().all(|row| valid_row(row, Some(bucket)))))
-    };
-    if !valid { bail!("Orders response is incomplete; reconcile current orders before changing listings."); }
-    Ok(())
+    decode_user_orders(unlocked, body).map(|_| ())
 }
 
 #[cfg(test)]
@@ -261,10 +274,36 @@ mod response_tests {
         assert!(validate_orders_body(&serde_json::json!({"data": []}), &unlocked()).is_ok());
         assert!(validate_orders_body(&serde_json::json!({"data": {"sell": [], "buy": []}}), &unlocked()).is_ok());
     }
+
+    /// A row may take its side from its bucket or state it explicitly - but not
+    /// contradict both. Consumers disagree about which one wins (plan indexing
+    /// trusts the explicit side, My Orders overwrites it with the bucket), so
+    /// accepting the contradiction makes one row a buy to one consumer and a sell
+    /// to another. Refuse the body instead of picking a winner.
+    #[test]
+    fn a_row_whose_explicit_side_contradicts_its_bucket_is_rejected() {
+        let contradicts = serde_json::json!({"data": {"sell": [
+            {"id": "order", "itemId": "item", "type": "buy", "quantity": 1, "platinum": 10}
+        ], "buy": []}});
+        assert!(validate_orders_body(&contradicts, &unlocked()).is_err());
+
+        // Agreeing, or stating nothing and taking the bucket's side, stay valid.
+        let agrees = serde_json::json!({"data": {"sell": [
+            {"id": "order", "itemId": "item", "type": "sell", "quantity": 1, "platinum": 10}
+        ], "buy": []}});
+        assert!(validate_orders_body(&agrees, &unlocked()).is_ok());
+        let bucket_only = serde_json::json!({"data": {"sell": [
+            {"id": "order", "itemId": "item", "quantity": 1, "platinum": 10}
+        ], "buy": []}});
+        assert!(validate_orders_body(&bucket_only, &unlocked()).is_ok());
+    }
     #[test]
     fn missing_variant_metadata_cannot_hide_an_existing_order() {
         let mut session = unlocked();
         session.catalog = Arc::new(BTreeMap::from([("fixture".into(), WfmCatalogItem { item_id: "item".into(), display_name: "Fixture".into(), bulk_tradable: false, session_supported: true, max_rank: Some(10), subtypes: vec!["revealed".into()] })]));
+        // The row an orders response carries names its item by itemId, so the
+        // session's own itemId→slug index is what reaches the catalogue.
+        session.id_to_item = Arc::new(BTreeMap::from([("item".into(), ItemMeta { name: "Fixture".into(), slug: "fixture".into() })]));
         let mut body = serde_json::json!({"data": [{"id": "order", "itemId": "item", "type": "sell", "quantity": 1, "platinum": 10}]});
         assert!(validate_orders_body(&body, &session).is_err());
         body["data"][0]["rank"] = serde_json::json!(0);

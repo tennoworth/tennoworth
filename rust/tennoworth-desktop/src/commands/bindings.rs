@@ -9,6 +9,7 @@ fn desktop_bindings_match_rust() {
     types.add::<crate::services::watch::WatchOutcome>();
     types.add::<crate::services::auto_scan::AutoScanSettings>();
     types.add::<crate::services::auto_scan::AutoScanStatus>();
+    types.add::<super::listing::OwnOrder>();
     let mut expected = types.finish().expect("unique wire types");
     expected.push_str(&format!(
         "\nexport const WATCH_FIRED_EVENT = {:?} as const;\n",
@@ -17,7 +18,7 @@ fn desktop_bindings_match_rust() {
     expected.push_str(&format!("\nexport const WFM_ACCESS_EVENT = {:?} as const;\n", crate::services::wfm_session::WFM_ACCESS_EVENT));
     expected.push_str(&format!(
         "\nexport const INVENTORY_SCANNED_EVENT = {:?} as const;\n",
-        super::inventory::EVENT_INVENTORY_SCANNED
+        crate::services::acquisition::EVENT_INVENTORY_SCANNED
     ));
     // The cadences the setting offers live in Rust; the selector reads them from
     // here rather than repeating the list, so the two cannot drift.

@@ -22,11 +22,10 @@ import { type UpdateStatus } from '../../contracts/update';
     /** Desktop only. The shell owns the instance, so the panel and the shell
      *  read one source of truth for these preferences and this status. */
     autoScan?: AutoScanController;
-    isDesktop?: boolean;
     wfmStatus?: DesktopWfmStatus | null;
     onwfmlogout?: () => Promise<void>;
   }
-  let { theme, onwhatsnew, transport, autoScan, isDesktop = false, wfmStatus = null, onwfmlogout }: Props = $props();
+  let { theme, onwhatsnew, transport, autoScan, wfmStatus = null, onwfmlogout }: Props = $props();
 
   let overlay = $state<OverlaySettings | null>(null);
   let overlayStatus = $state<OverlayStatus | null>(null);
@@ -48,7 +47,7 @@ import { type UpdateStatus } from '../../contracts/update';
   });
 
   onMount(() => {
-    if (!isDesktop || !transport) return;
+    if (!transport) return;
     const initial = () => Promise.all([transport.getOverlaySettings(), transport.overlayStatus()])
       .then(([settings, status]) => { overlay = settings; overlayStatus = status; })
       .catch((error) => { overlayError = String(error); });
@@ -182,7 +181,6 @@ import { type UpdateStatus } from '../../contracts/update';
       <div class="ui-setting-control"><ThemeSwitcher {theme} label="Colour mode" /></div>
     </div>
   </section>
-  {#if isDesktop}
     <section class="wrap tw" aria-labelledby="set-wfm-account">
       <div class="rail"><h3 id="set-wfm-account">warframe.market account</h3></div>
       <div class="ui-setting-row">
@@ -199,6 +197,7 @@ import { type UpdateStatus } from '../../contracts/update';
       {#if wfmStatus?.logged_in || wfmStatus?.unlocked}<p class="exp inset">Logging out removes the encrypted login saved on this device, forgets its remembered unlock key, and discards any interrupted local listing batch. Your listings on warframe.market are not changed.</p>{/if}
     </section>
     {#if transport}<UsageSettings {transport} />{/if}
+
     <section class="wrap tw" aria-labelledby="set-updates">
       <div class="rail"><h3 id="set-updates">Updates</h3></div>
       <div class="ui-setting-row">
@@ -275,7 +274,6 @@ import { type UpdateStatus } from '../../contracts/update';
       {#if overlayError}<p class="error inset" role="alert">{overlayError}</p>{/if}
     </section>
     <NotificationSettings />
-  {/if}
 </div>
 
 <style>

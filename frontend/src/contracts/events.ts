@@ -24,6 +24,9 @@ export { INVENTORY_SCANNED_EVENT } from './generated/desktop';
 /** Rust emits this when EE.log confirms a trade. */
 export const TRADE_DETECTED_EVENT = 'trade-detected';
 
+/** Rust emits this when trade recording starts or stops keeping up. */
+export const RECORDING_CHANGED_EVENT = 'recording-changed';
+
 
 
 export const ALLOWANCE_CHANGED_EVENT = 'trade-allowance-changed';

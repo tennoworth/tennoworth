@@ -4,8 +4,8 @@ use rusqlite::OptionalExtension;
 impl Db {
     pub fn notification_preferences(
         &self,
-    ) -> Result<crate::services::notifications::Preferences, String> {
-        let stored: crate::services::notifications::Preferences = self
+    ) -> Result<crate::notification_contract::Preferences, String> {
+        let stored: crate::notification_contract::Preferences = self
             .get_setting("notifications-v1")
             .map_err(|e| e.to_string())?
             .map(|s| serde_json::from_str(&s).map_err(|e| e.to_string()))
@@ -16,12 +16,12 @@ impl Db {
 
     pub fn list_notifications(
         &self,
-    ) -> rusqlite::Result<Vec<crate::services::notifications::Notification>> {
+    ) -> rusqlite::Result<Vec<crate::notification_contract::Notification>> {
         let conn = guard(&self.conn);
         let mut stmt = conn.prepare("SELECT id, category, title, body, target, created_at, read, delivery FROM notification ORDER BY id DESC LIMIT 1000")?;
         let rows = stmt
             .query_map([], |r| {
-                Ok(crate::services::notifications::Notification {
+                Ok(crate::notification_contract::Notification {
                     id: r.get(0)?,
                     category: r.get(1)?,
                     title: r.get(2)?,
@@ -58,7 +58,7 @@ impl Db {
     }
 
     pub fn prune_notifications(&self, now: i64) -> rusqlite::Result<()> {
-        use crate::services::notifications::CATEGORIES;
+        use crate::notification_contract::CATEGORIES;
         let conn = guard(&self.conn);
         conn.execute("DELETE FROM notification WHERE created_at < ?1 OR id NOT IN (SELECT id FROM notification ORDER BY id DESC LIMIT 1000)", [now - 30 * 86400])?;
         // A category retired from the contract must not keep rendering: the app
@@ -79,7 +79,7 @@ impl Db {
     /// cannot both claim the same watch, even if they evaluated stale copies.
     pub fn insert_notification(
         &self,
-        n: &crate::services::notifications::Candidate,
+        n: &crate::notification_contract::Candidate,
         now: i64,
         native: bool,
         enabled: bool,
@@ -121,9 +121,9 @@ impl Db {
 /// loaded map straight back on save, and `set_notification_preferences` rejects
 /// any category set that does not match `CATEGORIES` exactly.
 fn normalize_preferences(
-    stored: crate::services::notifications::Preferences,
-) -> crate::services::notifications::Preferences {
-    use crate::services::notifications::Preferences;
+    stored: crate::notification_contract::Preferences,
+) -> crate::notification_contract::Preferences {
+    use crate::notification_contract::Preferences;
     // Iterate the contract's own defaults, not the stored map: a key retired
     // since the setting was written is dropped, and one added since is filled in.
     let categories = Preferences::default()
