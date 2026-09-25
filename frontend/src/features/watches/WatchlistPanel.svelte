@@ -193,8 +193,8 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
     <label class="ui-field">
       <span>Notify when</span>
       <select class="ui-input" bind:value={side} onchange={onSideChange} aria-label="Watch side">
-        <option value="sell">Tell me when the lowest ask is ≤</option>
-        <option value="buy">Tell me when the highest bid is ≥</option>
+        <option value="sell">Lowest ask is ≤</option>
+        <option value="buy">Highest bid is ≥</option>
       </select>
     </label>
     <label class="ui-field threshold">

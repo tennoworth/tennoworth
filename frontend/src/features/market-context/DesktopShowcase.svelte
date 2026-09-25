@@ -216,14 +216,13 @@
       <span class="exp">Windows .exe · Linux AppImage · first run · how to check the build</span>
     </summary>
     <div class="disc-body">
-      <div class="seg" role="tablist" aria-label="Operating system">
+      <div class="ui-segmented" role="tablist" aria-label="Operating system">
         {#each osOrder as key (key)}
           <button
             role="tab"
             id="tab-{key}"
             aria-controls="panel-install"
             aria-selected={activeOs === key}
-            class:on={activeOs === key}
             tabindex={activeOs === key ? 0 : -1}
             onclick={() => (activeOs = key)}
             onkeydown={(e) => {
@@ -327,15 +326,10 @@
     cursor: pointer; list-style: none; user-select: none;
     font-size: var(--text-caption); color: var(--muted); white-space: nowrap;
   }
-  .disc > summary::-webkit-details-marker { display: none; }
-  .disc > summary::after {
-    content: '+'; margin-left: auto; font-family: var(--font-mono); color: var(--muted);
-  }
-  .disc[open] > summary::after { content: '−'; color: var(--accent); }
   .disc > summary:hover { color: var(--fg); }
   .disc > summary .lbl { width: auto; color: var(--fg); }
   .disc-body { padding: var(--s3) var(--inset) var(--s4); border-top: 1px var(--rule) var(--hairline); display: flex; flex-direction: column; gap: var(--s3); }
-  .disc-body .seg { align-self: flex-start; }
+  .disc-body .ui-segmented { align-self: flex-start; }
   .disc-body h4 { margin: var(--s2) 0 0; font-size: var(--text-caption); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
   .safety .note code { font-size: var(--text-caption); }
   /* The summary's one-line exp must be allowed to ellipsize on narrow

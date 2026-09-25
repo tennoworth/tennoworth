@@ -526,7 +526,7 @@
         class="rail-toggle"
         aria-expanded={picksOpen}
         onclick={() => (picksOpen = !picksOpen)}
-      >{picksOpen ? 'collapse ▴' : 'expand ▾'}</button>
+      >{picksOpen ? '▾ Hide' : '▸ Show'}</button>
     </div>
     {#if picksOpen}
       {#if picks.length > 0}
@@ -695,28 +695,22 @@
           disabled={currentPage >= maxPage}
         >Next ›</button>
         <span class="pager-spacer"></span>
-        <div class="segmented density-seg" role="group" aria-label="Row density">
+        <div class="ui-segmented density-seg" role="group" aria-label="Row density">
           <button
             type="button"
-            class="seg-btn"
-            class:active={density === 'compact'}
             aria-pressed={density === 'compact'}
             onclick={() => (density = 'compact')}
           >Compact</button>
           <button
             type="button"
-            class="seg-btn"
-            class:active={density === 'comfortable'}
             aria-pressed={density === 'comfortable'}
             onclick={() => (density = 'comfortable')}
           >Comfortable</button>
         </div>
-        <div class="segmented pagesize-seg" role="group" aria-label="Rows per page">
+        <div class="ui-segmented pagesize-seg" role="group" aria-label="Rows per page">
           {#each [20, 40, 60, 80, 100] as n}
             <button
               type="button"
-              class="seg-btn"
-              class:active={pageSize === n}
               aria-pressed={pageSize === n}
               onclick={() => (pageSize = n)}
             >{n}</button>
@@ -1127,29 +1121,6 @@
     opacity: 0.4;
     cursor: not-allowed;
   }
-  /* Segmented controls - density + page-size. Replaces the native
-     page-size <select>, which read as the one default-browser-chrome
-     control in an otherwise fully custom-styled table. */
-  .segmented {
-    display: inline-flex;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-ctl);
-    overflow: hidden;
-  }
-  .seg-btn {
-    font: inherit;
-    background: var(--panel-2);
-    border: none;
-    border-left: 1px solid var(--border);
-    color: var(--muted);
-    font-size: var(--text-caption);
-    padding: 4px 10px;
-    min-height: 24px;
-    cursor: pointer;
-  }
-  .seg-btn:first-child { border-left: none; }
-  .seg-btn:hover { color: var(--fg); background: var(--hover); }
-  .seg-btn.active { color: var(--accent); background: var(--panel); font-weight: 600; }
 
   /* "+N" badge overflow - reuses the header info-popover's click/click-
      outside interaction so a row carrying every possible badge doesn't

@@ -47,12 +47,10 @@
 </script>
 
 <div class="theme-switcher" class:compact>
-  <div class="segmented" role="radiogroup" aria-label={label}>
+  <div class="ui-segmented" class:xs={compact} role="radiogroup" aria-label={label}>
     {#each MODES as m (m.id)}
       <button
         type="button"
-        class="seg-btn"
-        class:active={modePref === m.id}
         role="radio"
         aria-checked={modePref === m.id}
         tabindex={modePref === m.id ? 0 : -1}
@@ -74,8 +72,6 @@
 </div>
 
 <style>
-  /* .segmented / .seg-btn are shared class names: app.css carries the yorha
-     structural rules for them (dotted divider, inverted active). */
   .theme-switcher {
     display: flex;
     flex-wrap: wrap;
@@ -83,39 +79,5 @@
     gap: var(--s1) var(--s3);
     font-size: var(--text-caption);
   }
-  .segmented {
-    display: inline-flex;
-    border: 1px solid var(--border);
-    border-radius: var(--radius-ctl);
-    overflow: hidden;
-  }
-  .seg-btn {
-    font: inherit;
-    font-size: var(--text-caption);
-    background: var(--panel-2);
-    border: none;
-    border-left: 1px var(--rule) var(--border);
-    color: var(--muted);
-    padding: 0 var(--s3);
-    height: var(--ctl);
-    cursor: pointer;
-    border-radius: 0;
-  }
-  .seg-btn:first-child { border-left: none; }
-  .seg-btn:hover { color: var(--fg); background: var(--hover); }
-  .seg-btn.active { color: var(--accent); background: var(--panel); font-weight: 600; }
   .hint { color: var(--muted); font-size: var(--text-caption); line-height: 1rem; }
-
-  /* Footer variant: matches the site footer's 11px type scale and stays quiet
-     - it is a convenience for a visitor who never reaches Settings, not a
-     piece of chrome that should compete with the footer's links. */
-  .compact .segmented { border-color: var(--hairline); }
-  .compact .seg-btn {
-    font-size: var(--text-caption);
-    line-height: 1rem;
-    height: var(--ctl-xs);
-    padding: 0 var(--s2);
-    background: transparent;
-  }
-  .compact .seg-btn.active { color: var(--fg); background: var(--panel-2); font-weight: 600; }
 </style>

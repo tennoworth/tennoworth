@@ -101,7 +101,7 @@ scoping: a class defined inside one component is not a shared primitive.
 Current shared selectors in `app.css`: `.btn` with `primary`, `ghost`, `bad`,
 `xs`, and `lg` variants; `.wrap.tw` and `table.tw`; `dialog.cryptobox`;
 `.ui-panel`, `.view-header`, `.general-banner`, `.ui-stack`, `.ui-toolbar`,
-`.ui-field`, `.ui-input`, and `.ui-notice`. Notices use
+`.ui-field`, `.ui-input`, `.ui-notice`, `.ui-segmented`, and `.tag`. Notices use
 `data-tone="good|warn|bad"` for their semantic edge, with explicit readable text
 for meaning. Keep feature-specific sizing local. These selectors are opt-in;
 do not globally restyle similarly named legacy component classes by accident.
@@ -141,10 +141,11 @@ narrow and enlarged layouts. This is a measured layout value, not a fixed spacer
 | Panels and title rails | Clear heading, restrained inversion, dotted internal separation; titles and adjacent status copy may wrap. Anything placed on a rail uses the `--rail-*` pair, whatever its heading level |
 | Toolbars | Group related controls; allow wrapping without changing the logical or keyboard order |
 | Buttons and links | Clear action labels, consistent emphasis, visible focus; navigation uses links and actions use buttons |
-| Fields | Persistent accessible labels, units and constraints nearby, actionable validation; placeholders are not labels. Checkboxes and radios use the shared square box in `app.css` (checked is the ink inversion); components may size it, not recolour it |
-| Mode selectors | Explicit selected state and accessible semantics; descriptions remain readable when the group wraps |
+| Fields | Persistent accessible labels, units and constraints nearby, actionable validation; placeholders are not labels. Checkboxes and radios use the shared square box in `app.css` (checked is the ink inversion); components may size it, not recolour it. Text-entry focus draws over the field's own border so it reads as one frame. Number fields hide spinner arrows; arrow keys still step. Option labels do not repeat the field label |
+| Mode selectors | Explicit selected state and accessible semantics; descriptions remain readable when the group wraps. Single-choice groups use `.ui-segmented` (joined, dotted inner rules, wraps rather than scrolls); the selected option is always the ink inversion, whether it is marked with `aria-pressed`, `aria-checked` or `aria-selected`. Mode cards that carry descriptions keep the card shape but use the same selected fill, with a title that outranks the description |
 | Status and notices | Explain what happened, its consequence, and any next action; never rely on color or a transient toast alone for critical information. A 3px left edge is reserved for meaning (toned notices, toned toasts, action-needed notes, Baro's visit window); never nest one edged surface in another. Stale market data is a caution: an outlined `--warn` chip in the header and a warn-toned notice, not a red dot |
 | Tables | Preserve meaningful columns and item identity; align comparable numbers; contain horizontal scrolling within the table region |
+| Disclosures | `<details>` summaries share one glyph from `app.css`: ▸ closed, ▾ open, in the label face. Menus keep a trailing ▾; `+` marks add actions only. Rail section toggles pair the glyph with Show or Hide |
 | Dialogs and popovers | Stay within the viewport; provide reachable dismissal and actions, visible focus, and appropriate keyboard behavior |
 | Review surfaces | Make consequential changes explicit, preserve edits, and distinguish existing state from proposed state |
 

@@ -164,9 +164,9 @@
     <span class="exp" aria-live="polite">{progress}</span>
   </div>
   <div class="checklist-body">
-    <div class="ui-toolbar cadence" role="group" aria-label="Checklist period">
+    <div class="ui-segmented cadence" role="group" aria-label="Checklist period">
       {#each Object.entries(cadenceLabels) as [id, label]}
-        <button class="btn" class:ghost={routine.cadence !== id} class:primary={routine.cadence === id} type="button" aria-pressed={routine.cadence === id} onclick={() => selectCadence(id as RoutineCadence)}>{label}</button>
+        <button type="button" aria-pressed={routine.cadence === id} onclick={() => selectCadence(id as RoutineCadence)}>{label}</button>
       {/each}
     </div>
     <div class="period-copy">
@@ -270,8 +270,8 @@
   .routine-checklist, .routine-advice { padding: 0; }
   .checklist-rail { min-height: var(--rail); }
   .checklist-body { display: flex; flex-direction: column; gap: var(--s4); padding: var(--s4) var(--inset); }
-  .cadence { gap: var(--s2); }
-  .cadence .btn { min-width: 6rem; }
+  .cadence { align-self: flex-start; }
+  .cadence > button { min-width: 6rem; justify-content: center; }
   .period-copy { display: flex; flex-direction: column; gap: var(--s1); }
   .period-copy strong { font-family: var(--font-ui); font-size: var(--text-section); }
   .period-copy span, .monthly-goal > span, .save-status, .empty-goal, .advice-body { color: var(--muted); font-size: var(--text-control); line-height: var(--leading-body); }

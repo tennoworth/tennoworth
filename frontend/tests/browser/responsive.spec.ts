@@ -28,7 +28,7 @@ async function assertDocumentFits(page: Page): Promise<void> {
     }).map(cell => cell.textContent?.trim()),
   );
   expect(clippedStatus, 'status information and actions must fit even when the shell hides overflow').toEqual([]);
-  const clippedRails = await page.locator('.rail:visible, .summary:visible, .orders .seg:visible').evaluateAll(elements =>
+  const clippedRails = await page.locator('.rail:visible, .summary:visible, .orders .ui-segmented:visible').evaluateAll(elements =>
     elements.filter(element => element.scrollWidth > element.clientWidth + 2 || element.scrollHeight > element.clientHeight + 2)
       .map(element => element.textContent?.trim()),
   );

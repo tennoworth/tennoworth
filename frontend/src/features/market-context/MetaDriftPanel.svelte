@@ -32,10 +32,10 @@
     {#if model.categoryChanges}<span class="muted"> {model.categoryChanges} category {model.categoryChanges === 1 ? 'change was' : 'changes were'} incomparable and excluded.</span>{/if}
   </div>
   <div class="controls">
-    <div class="ui-field"><span>Movement</span><div class="tabs" role="group" aria-label="Meta drift view">
-      <button class:active={tab === 'gains'} aria-pressed={tab === 'gains'} onclick={() => tab = 'gains'}>Gains</button>
-      <button class:active={tab === 'losses'} aria-pressed={tab === 'losses'} onclick={() => tab = 'losses'}>Losses</button>
-      <button class:active={tab === 'only'} aria-pressed={tab === 'only'} onclick={() => tab = 'only'}>Only in year data</button>
+    <div class="ui-field"><span>Movement</span><div class="ui-segmented" role="group" aria-label="Meta drift view">
+      <button type="button" aria-pressed={tab === 'gains'} onclick={() => tab = 'gains'}>Gains</button>
+      <button type="button" aria-pressed={tab === 'losses'} onclick={() => tab = 'losses'}>Losses</button>
+      <button type="button" aria-pressed={tab === 'only'} onclick={() => tab = 'only'}>Only in year data</button>
     </div>
     </div>
     <label class="ui-field meta-search"><span>Equipment</span><input bind:value={query} placeholder="Search equipment" aria-label="Search meta drift" /></label>
@@ -81,9 +81,7 @@
   .meta-drift { min-width: 0; }
   .intro { padding: .75rem 1rem; border-bottom: 1px dotted var(--hairline); line-height: 1.45; }
   .controls { display: flex; flex-wrap: wrap; gap: var(--s3); padding: var(--s3) var(--inset); align-items: end; border-bottom: 1px dotted var(--hairline); }
-  .tabs { display: flex; gap: .25rem; }
-  button, input, select { font: inherit; font-size: var(--text-control); min-height: var(--ctl-lg); border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--panel-2); color: inherit; padding: var(--s1) var(--s2); }
-  button.active { background: var(--ink-bar); color: var(--on-ink); }
+  input, select { font: inherit; font-size: var(--text-control); min-height: var(--ctl-lg); border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--panel-2); color: inherit; padding: var(--s1) var(--s2); }
   input { width: 100%; min-width: 0; }
   .meta-search { flex: 1 1 15rem; }
   .only-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--hairline); }
@@ -101,7 +99,6 @@
       padding-bottom: .5rem;
     }
     .controls { align-items: stretch; flex-wrap: wrap; }
-    .tabs { width: 100%; overflow-x: auto; }
     .only-grid { grid-template-columns: 1fr; }
     table { min-width: 42rem; }
   }

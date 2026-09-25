@@ -354,12 +354,10 @@
 
 <!-- Row A · SCOPE: presets · type chips · Filters popover. -->
 {#snippet scopeRow()}
-  <div class="toolbar-group presets-row">
+  <div class="ui-segmented presets-row" role="group" aria-label="Scope preset">
     {#each Object.entries(PRESETS) as [name, preset]}
       <button
         type="button"
-        class="preset"
-        class:active={activePreset === name}
         aria-pressed={activePreset === name}
         onclick={() => applyPreset(name)}
         title={preset.hint}
@@ -700,28 +698,6 @@
   .link { font: inherit; color: var(--accent); background: transparent; border: none; padding: 0 var(--s1); cursor: pointer; }
   .link:hover { text-decoration: underline; background: transparent; }
 
-  /* Preset pills - one-click filter configurations. The active pill is
-     accent-bordered AND carries a leading check mark so the selection
-     doesn't rely on colour alone. A subtle hint string trails the group. */
-  .preset {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--muted);
-    border-radius: var(--radius-ctl);
-    height: var(--ctl);
-    padding: 0 12px;
-    letter-spacing: 0.02em;
-    cursor: pointer;
-    transition: color 120ms, border-color 120ms, background 120ms;
-    font: inherit;
-    font-size: var(--text-caption);
-  }
-  .preset:hover { color: var(--fg); background: var(--panel-2); }
-  .preset.active {
-    color: var(--accent);
-    border-color: var(--accent);
-  }
-  .preset.active::before { content: '✓ '; }
   .preset-hint { font-size: var(--text-caption); }
 
   /* Filters disclosure - an inline toolbar item whose panel floats as a
@@ -823,15 +799,6 @@
     gap: 8px;
     user-select: none;
   }
-  .score-expander > summary::-webkit-details-marker { display: none; }
-  .score-expander > summary::before {
-    content: '+';
-    font-family: var(--font-mono);
-    color: var(--muted);
-    width: 10px;
-    display: inline-block;
-  }
-  .score-expander[open] > summary::before { content: '−'; color: var(--accent); }
   .score-expander > summary:hover { color: var(--accent); }
   .score-details {
     font-size: var(--text-control);
