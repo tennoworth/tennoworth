@@ -195,7 +195,10 @@ for (const theme of ['light', 'dark'] as const) {
         const box = section.getBoundingClientRect();
         return { left: box.left, right: box.right };
       }));
-      expect(bounds).toHaveLength(6);
+      // Appearance, WFM account, Usage, Updates, Automatic scan, Relic reward
+      // overlay, Notifications. The count guards against a section silently
+      // disappearing; the shared bounds below are what this test is about.
+      expect(bounds).toHaveLength(7);
       for (const box of bounds) {
         expect(box.left).toBeCloseTo(bounds[0].left, 0);
         expect(box.right).toBeCloseTo(bounds[0].right, 0);

@@ -88,7 +88,7 @@ impl Db {
 
 fn read_allowance(
     conn: &Connection,
-) -> rusqlite::Result<Option<crate::services::allowance::Observation>> {
+) -> rusqlite::Result<Option<crate::trading_contract::Observation>> {
     let raw: Option<String> = conn
         .query_row(
             "SELECT observation FROM trade_allowance WHERE id = 1",
@@ -106,7 +106,7 @@ fn read_allowance(
 
 fn write_allowance(
     conn: &Connection,
-    observation: &crate::services::allowance::Observation,
+    observation: &crate::trading_contract::Observation,
 ) -> rusqlite::Result<()> {
     let raw = serde_json::to_string(observation)
         .map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?;
@@ -930,7 +930,7 @@ mod tests {
         assert_eq!(view.observed_at, Some(102));
         assert_eq!(
             view.confidence,
-            crate::services::allowance::Confidence::Estimated
+            crate::trading_contract::Confidence::Estimated
         );
         assert!(!view.monitoring);
         assert_eq!(
@@ -955,7 +955,7 @@ mod tests {
 #[cfg(test)]
 mod notification_tests {
     use super::*;
-    use crate::services::notifications::Candidate;
+    use crate::notification_contract::Candidate;
     fn candidate() -> Candidate {
         Candidate::once(
             "baro:visit".into(),
@@ -1105,14 +1105,14 @@ mod notification_tests {
         let prefs = db.notification_preferences().unwrap();
         let mut keys: Vec<&str> = prefs.categories.keys().map(String::as_str).collect();
         keys.sort_unstable();
-        let mut expected = crate::services::notifications::CATEGORIES.to_vec();
+        let mut expected = crate::notification_contract::CATEGORIES.to_vec();
         expected.sort_unstable();
         assert_eq!(keys, expected);
         assert!(!prefs.categories.contains_key("scans"));
         assert!(!prefs.popups);
         assert!(!prefs.categories["baro"].enabled);
         // The same predicate `set_notification_preferences` uses to accept a save.
-        assert!(crate::services::notifications::categories_match_contract(
+        assert!(crate::notification_contract::categories_match_contract(
             &prefs.categories
         ));
     }

@@ -14,7 +14,13 @@ const trades = [
   { id: 1, at: NOW - 30 * 86400, partner: 'Seller', kind: 'purchase', plat: 20, items: [{ name: 'Ash Prime Blueprint', qty: 2, direction: 'received' }], log_stamp: null, wfm_closed: false },
 ];
 
-function install(status: { path: string | null; auto_close: boolean }, rows = trades) {
+type Recording = 'off' | 'recording' | { paused: { ledger: { error: string } } | { log: { error: string } } };
+
+function install(
+  status: { path: string | null; auto_close: boolean; recording?: Recording },
+  rows = trades,
+) {
+  if (status.recording === undefined) status = { ...status, recording: 'recording' };
   const invoke = vi.fn(async (cmd: string) => {
     if (cmd === 'list_trades') return rows;
     if (cmd === 'eelog_status') return status;
@@ -41,6 +47,39 @@ describe('LedgerPanel', () => {
     await screen.findByText(/Game log not found/);
     expect((screen.getByRole('checkbox') as HTMLInputElement).disabled).toBe(true);
     expect(screen.getByText(/No trades recorded yet/)).toBeTruthy();
+  });
+
+  it('says recording is paused, and why, when the ledger refused a trade', async () => {
+    install({
+      path: '/x/EE.log',
+      auto_close: true,
+      recording: { paused: { ledger: { error: 'database is locked' } } },
+    });
+    render(LedgerPanel, { props: {} });
+    await screen.findByText(/Trade recording paused/);
+    // The consequence and the cause both have to be on screen: the user needs to
+    // know their trades are missing, and what to do about it.
+    expect(screen.getByText(/not in the history below yet/)).toBeTruthy();
+    expect(screen.getByText(/database is locked/)).toBeTruthy();
+  });
+
+  it('names the log, not the ledger, when the log itself could not be read', async () => {
+    install({
+      path: '/x/EE.log',
+      auto_close: true,
+      recording: { paused: { log: { error: 'the game log could not be read' } } },
+    });
+    render(LedgerPanel, { props: {} });
+    await screen.findByText(/Trade recording paused/);
+    expect(screen.getByText(/may not be recorded/)).toBeTruthy();
+    expect(screen.queryByText(/not in the history below yet/)).toBeNull();
+  });
+
+  it('shows no pause notice while recording is healthy', async () => {
+    install({ path: '/x/EE.log', auto_close: true, recording: 'recording' });
+    render(LedgerPanel, { props: {} });
+    await screen.findByText('+25p');
+    expect(screen.queryByText(/Trade recording paused/)).toBeNull();
   });
 
   it('the auto-close toggle writes through the callback', async () => {

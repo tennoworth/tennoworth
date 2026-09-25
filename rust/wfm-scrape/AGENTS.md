@@ -32,6 +32,20 @@ cycle, with the descriptive UA, and never from a visitor's browser.
   `None` otherwise. ~87% of relic reward refs resolve; the rest (Forma, Kuva,
   Exilus adapters) are genuinely untradeable and *should* stay unresolved. A
   wrong price is worse than no price.
+- **New items reach `path_to_info` through warframe.market's `gameRef`.**
+  warframestat lags each content update by days; WFM lists the item with its
+  exact DE path from day one. `add_game_ref_paths` adds every path
+  warframestat's parent walk lacks - a lookup, not a guess - because the DE
+  joins read only `path_to_info`. Resolvers check that map before
+  warframestat's item catalogue, so a path the catalogue already knows keeps
+  the catalogue's category. `sets_from_recipes` derives a missing prime set
+  from `ExportRecipes`, published only when its parts' ducats sum to the
+  set's, never re-derives a set carried through a partial parent fetch, and
+  names parts as warframestat does. A snapshot built from the prior-catalog
+  fallback has no gameRefs, so both surfaces are then partial and reconcile
+  keeps the prior entries.
+- **`ExportRelicArcane` is always fetched.** Relic rewards resolve through
+  `path_to_info`, which changes without DE's hash moving; see `ALWAYS_FETCH`.
 - **The live contract test is opt-in**, and is the thing that tells us when an
   endpoint moves:
   `cargo test -p wfm-scrape -- --ignored de_endpoints_are_still_alive`
@@ -51,6 +65,13 @@ cycle, with the descriptive UA, and never from a visitor's browser.
   Reward containers preserve item rewards and credits separately, distinguish
   unsupported-but-dated rewards as `unknown`, accept an explicit supported
   zero (`credits: 0`, empty supported arrays), and reject an unrecognized `{}`.
+- **Partially fetchable item maps age by key.** `path_to_info`,
+  `set_to_parts` and `vault_status` merge a partial fetch over the prior map
+  through `reconcile_keyed`, which records each carried key's own stamp in
+  `surface_key_fetched_at`. The surface is as old as its oldest carried key,
+  and a key carried past the stale window, or of unknown age, is dropped with
+  the stale warning. One surface stamp pinned to the prior run let rotating
+  endpoint failures hold a surface at its oldest age indefinitely.
 - **Annual usage has two contracts.** `usage_history` stores compact immutable
   year maps; current `usage` stores the newest rich MR curve used by scoring.
   Validate them separately. A valid compact latest year must still be

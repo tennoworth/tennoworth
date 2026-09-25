@@ -8,10 +8,16 @@
 //! 1. Unavailable, unchanged, or invalid observations keep prior data and its
 //!    data timestamp. These states are distinct in provenance even though the
 //!    data transition is the same.
-//! 2. A usable partial fetch with prior data merges fresh over
-//!    prior (old entries the fresh fetch didn't cover are kept), stamp
-//!    NOW. Whole-surface stamp on partial merge is INTENTIONAL - retained
-//!    entries were just re-validated as still-best-known.
+//! 2. A usable partial fetch with prior data merges fresh over prior (old
+//!    entries the fresh fetch didn't cover are kept) and keeps the PRIOR
+//!    stamp: only the fresh entries were re-observed, so the surface is as old
+//!    as the entries it carried. A merge that carried nothing takes NOW. The
+//!    retained entries are still-best-known, but nothing re-validated them, and
+//!    stamping the surface NOW is what let a partition that stopped updating
+//!    report itself as current - the case the age warning exists to reveal.
+//!    Surfaces keyed by item (`reconcile_keyed`) refine this: each carried key
+//!    keeps its own stamp, the surface is as old as its oldest carried key,
+//!    and a key carried for `stale_days` or of unknown age is dropped.
 //! 3. Authoritative empty is data. It clears a prior surface and stamps NOW;
 //!    it must never fall into preserve-on-empty.
 //! 4. Otherwise → return usable data, stamp NOW.
@@ -21,7 +27,7 @@
 //!    passes `Some(prior_content)`, and receives `None` to signal "write
 //!    nothing" vs `Some(bytes)` to write.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::hash::Hash;
 
 use chrono::{DateTime, Utc};
@@ -197,7 +203,7 @@ pub fn reconcile<T: Mergeable + Default>(
     let preserve = |disposition: Disposition| {
         if let Some(old) = prior {
             let kept_since = prior_stamp.unwrap_or("");
-            let stamp = if kept_since.is_empty() { clock::iso_z(now) } else { kept_since.to_string() };
+            let stamp = kept_since.to_string();
             // A matching content hash proves the retained payload is still
             // current. Only a failed or invalid observation makes its age an
             // operational warning.
@@ -266,7 +272,16 @@ pub fn reconcile<T: Mergeable + Default>(
             let recovered = merged.len().saturating_sub(fresh.len());
             Reconciled {
                 data: merged,
-                fetched_at: clock::iso_z(now),
+                // Only `fresh`'s keys were re-observed, so a surface holding
+                // carried rows is exactly as old as the oldest of them. Stamping
+                // it NOW is what let a partition that stopped updating report
+                // itself as current, which is the case the age warning exists to
+                // reveal. A merge that carried nothing takes the current time.
+                fetched_at: if recovered > 0 {
+                    prior_stamp.unwrap_or("").to_string()
+                } else {
+                    clock::iso_z(now)
+                },
                 attempted_at,
                 disposition: Disposition::MergedPartial,
                 stale_warning: None,
@@ -292,6 +307,112 @@ pub fn reconcile<T: Mergeable + Default>(
             data,
         },
     }
+}
+
+/// When each key of a partially fetchable surface was last observed: every key
+/// at `fresh_at`, except the ones a partial merge carried, which keep their own.
+///
+/// One surface stamp cannot describe rows from different runs. Pinned to the
+/// prior stamp whenever anything was carried, it reported a surface as old as
+/// its oldest run for as long as some endpoint kept failing, even when every
+/// row had been refreshed within the last few runs.
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct KeyStamps {
+    pub fresh_at: String,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub carried: BTreeMap<String, String>,
+}
+
+impl KeyStamps {
+    fn of(&self, key: &str) -> &str {
+        self.carried.get(key).map_or(self.fresh_at.as_str(), String::as_str)
+    }
+}
+
+/// [`reconcile`] for a surface keyed by item, tracking each key's evidence age.
+///
+/// Everything but a partial merge over prior data behaves exactly as
+/// `reconcile`. A partial merge keeps a carried key only while its own stamp is
+/// younger than `stale_days`: a key upstream no longer returns would otherwise
+/// be carried, and age the surface, for as long as some fetch keeps failing. A
+/// key whose age cannot be established is not kept either, since nothing
+/// bounds it. Dropping keys raises the stale warning.
+pub fn reconcile_keyed<V: Clone>(
+    name: &str,
+    observation: Observation<HashMap<String, V>>,
+    prior: Option<&HashMap<String, V>>,
+    prior_stamp: Option<&str>,
+    prior_keys: Option<&KeyStamps>,
+    now: DateTime<Utc>,
+    stale_days: i64,
+) -> (Reconciled<HashMap<String, V>>, KeyStamps) {
+    let (mut data, prior_map) = match (observation, prior) {
+        (Observation::Usable { data, complete: false }, Some(prior)) if !data.is_empty() => {
+            (data, prior)
+        }
+        (observation, prior) => {
+            let r = reconcile(name, observation, prior, prior_stamp, now, stale_days);
+            let stamps = match (r.disposition, prior_keys) {
+                (
+                    Disposition::PreservedUnavailable
+                    | Disposition::PreservedUnchanged
+                    | Disposition::PreservedInvalid,
+                    Some(prior_keys),
+                ) => prior_keys.clone(),
+                _ => KeyStamps {
+                    fresh_at: r.fetched_at.clone(),
+                    carried: BTreeMap::new(),
+                },
+            };
+            return (r, stamps);
+        }
+    };
+
+    // A snapshot written before per-key stamps observed every key at once.
+    let legacy = KeyStamps {
+        fresh_at: prior_stamp.unwrap_or("").to_string(),
+        carried: BTreeMap::new(),
+    };
+    let stamps = prior_keys.unwrap_or(&legacy);
+    let mut carried = BTreeMap::new();
+    let mut oldest = now;
+    let mut dropped_days: Option<i64> = None;
+    for (key, value) in prior_map {
+        if data.contains_key(key) {
+            continue;
+        }
+        let stamp = stamps.of(key);
+        match clock::parse_stamp(stamp) {
+            Some(at) if now.signed_duration_since(at).num_days() < stale_days => {
+                oldest = oldest.min(at);
+                data.insert(key.clone(), value.clone());
+                carried.insert(key.clone(), stamp.to_string());
+            }
+            at => {
+                let days = at.map_or(stale_days, |at| now.signed_duration_since(at).num_days());
+                dropped_days = Some(dropped_days.map_or(days, |d| d.max(days)));
+            }
+        }
+    }
+    let observed = clock::iso_z(now);
+    let reconciled = Reconciled {
+        data,
+        fetched_at: clock::iso_z(oldest),
+        attempted_at: observed.clone(),
+        disposition: Disposition::MergedPartial,
+        stale_warning: dropped_days.map(|days| StaleWarning {
+            surface: name.to_string(),
+            days,
+        }),
+        recovered: carried.len(),
+    };
+    (
+        reconciled,
+        KeyStamps {
+            fresh_at: observed,
+            carried,
+        },
+    )
 }
 
 #[cfg(test)]
@@ -356,13 +477,13 @@ mod tests {
     }
 
     #[test]
-    fn empty_fresh_no_prior_stamp_uses_now_and_no_warning() {
+    fn empty_fresh_no_prior_stamp_keeps_unknown_age() {
         let prior = hm(&[("a", 1)]);
         let fresh: HashMap<String, i32> = HashMap::new();
         let now = utc(2026, 7, 1, 0, 0, 0);
 
         let r = reconcile("test", fresh, Some(&prior), None, now, true, 7);
-        assert_eq!(r.fetched_at, clock::iso_z(now));
+        assert_eq!(r.fetched_at, "");
         assert!(r.stale_warning.is_none());
     }
 
@@ -379,17 +500,251 @@ mod tests {
     // ---- Rule 2: partial fetch merges fresh over prior ------------------
 
     #[test]
-    fn partial_fetch_merges_fresh_over_prior_and_stamps_now() {
+    fn partial_fetch_merges_fresh_over_prior_keeping_the_prior_stamp() {
         let prior = hm(&[("a", 1), ("b", 2), ("c", 3)]);
         let fresh = hm(&[("a", 10), ("d", 40)]);
         let now = utc(2026, 7, 1, 0, 0, 0);
+        let prior_stamp = "2026-06-20T00:00:00Z";
 
-        let r = reconcile("test", fresh, Some(&prior), None, now, false, 7);
+        let r = reconcile("test", fresh, Some(&prior), Some(prior_stamp), now, false, 7);
 
         assert_eq!(r.data, hm(&[("a", 10), ("b", 2), ("c", 3), ("d", 40)]));
-        assert_eq!(r.fetched_at, clock::iso_z(now));
+        assert_eq!(
+            r.fetched_at, prior_stamp,
+            "two rows were carried, so the surface is still that old"
+        );
+        assert_eq!(r.attempted_at, clock::iso_z(now), "the attempt is recorded");
         assert_eq!(r.recovered, 2); // b + c were kept
         assert!(r.stale_warning.is_none());
+    }
+
+    /// The failure the stale-data warning exists to reveal is a surface that
+    /// quietly stops updating. A partition whose parent keeps partially
+    /// succeeding reaches the merge above on every run, and the entries that
+    /// partition owns are carried from the prior map - never re-fetched. If the
+    /// merge stamps NOW, a surface whose real evidence is four weeks old reports
+    /// itself as fetched this minute, and the consumer's age warning - which
+    /// exists to reveal exactly this - stays suppressed forever. The carried
+    /// entries are the prior map's values, taken unchanged, which is the whole
+    /// difference from the `preserved_unchanged` case the consumer exempts.
+    #[test]
+    fn a_partial_merge_keeps_the_evidence_age_of_the_rows_it_carried() {
+        let prior = hm(&[("live", 1), ("carried", 2)]);
+        let fresh = hm(&[("live", 10)]);
+        let first_seen = "2026-07-01T00:00:00Z";
+
+        let later = reconcile(
+            "set_to_parts",
+            fresh,
+            Some(&prior),
+            Some(first_seen),
+            utc(2026, 7, 29, 0, 0, 0),
+            false,
+            7,
+        );
+
+        // The carried value is byte-for-byte the prior one - never re-fetched.
+        assert_eq!(later.data.get("carried"), prior.get("carried"));
+        assert_eq!(later.recovered, 1);
+        // So the surface's evidence age is still the day that row arrived, not
+        // the day it was last copied forward.
+        assert_eq!(later.fetched_at, first_seen);
+        // The attempt itself is still recorded separately.
+        assert_eq!(later.attempted_at, clock::iso_z(utc(2026, 7, 29, 0, 0, 0)));
+        assert_eq!(later.disposition, Disposition::MergedPartial);
+    }
+
+    /// The counterpart: when the partial fetch covered everything the prior
+    /// snapshot held, nothing was carried and every row in the result is freshly
+    /// observed, so it takes the current stamp and must not inherit the old one.
+    #[test]
+    fn a_partial_merge_that_carried_nothing_is_stamped_now() {
+        let prior = hm(&[("live", 1), ("also", 2)]);
+        let fresh = hm(&[("live", 10), ("also", 20)]);
+
+        let r = reconcile(
+            "set_to_parts",
+            fresh,
+            Some(&prior),
+            Some("2026-07-01T00:00:00Z"),
+            utc(2026, 7, 29, 0, 0, 0),
+            false,
+            7,
+        );
+
+        assert_eq!(r.recovered, 0, "every prior row was re-fetched");
+        assert_eq!(r.fetched_at, clock::iso_z(utc(2026, 7, 29, 0, 0, 0)));
+    }
+
+    /// A legacy snapshot can hold rows without a source stamp. Their age is
+    /// unknown even after a later attempt partially refreshes the surface.
+    #[test]
+    fn a_partial_merge_without_a_prior_stamp_keeps_unknown_age() {
+        let prior = hm(&[("carried", 2)]);
+        let fresh = hm(&[("live", 10)]);
+
+        let r = reconcile(
+            "set_to_parts",
+            fresh,
+            Some(&prior),
+            None,
+            utc(2026, 7, 29, 0, 0, 0),
+            false,
+            7,
+        );
+
+        assert_eq!(r.recovered, 1);
+        assert_eq!(r.fetched_at, "");
+    }
+
+    // ---- reconcile_keyed: per-key evidence age -----------------------------
+
+    fn keyed(
+        observation: Observation<HashMap<String, i32>>,
+        prior: Option<&HashMap<String, i32>>,
+        prior_stamp: Option<&str>,
+        prior_keys: Option<&KeyStamps>,
+        now: DateTime<Utc>,
+    ) -> (Reconciled<HashMap<String, i32>>, KeyStamps) {
+        reconcile_keyed("set_to_parts", observation, prior, prior_stamp, prior_keys, now, 7)
+    }
+
+    /// Different endpoints failing on successive runs is the ordinary case. Every
+    /// row was fetched within the last run or two, so the surface must not
+    /// report the age of the first failure for as long as failures continue.
+    #[test]
+    fn rolling_partial_fetches_age_the_surface_by_its_oldest_carried_key() {
+        let t0 = utc(2026, 7, 1, 0, 0, 0);
+        let t1 = utc(2026, 7, 1, 2, 0, 0);
+        let t2 = utc(2026, 7, 1, 4, 0, 0);
+
+        let (first, stamps) = keyed(Observation::usable(hm(&[("a", 1), ("b", 2)])), None, None, None, t0);
+        assert_eq!(first.disposition, Disposition::PublishedFresh);
+
+        let (second, stamps) = keyed(
+            Observation::partial(hm(&[("a", 10)])),
+            Some(&first.data),
+            Some(&first.fetched_at),
+            Some(&stamps),
+            t1,
+        );
+        assert_eq!(second.data, hm(&[("a", 10), ("b", 2)]));
+        assert_eq!(second.fetched_at, clock::iso_z(t0), "b was last fetched at t0");
+
+        let (third, stamps) = keyed(
+            Observation::partial(hm(&[("b", 20)])),
+            Some(&second.data),
+            Some(&second.fetched_at),
+            Some(&stamps),
+            t2,
+        );
+        assert_eq!(third.data, hm(&[("a", 10), ("b", 20)]));
+        assert_eq!(
+            third.fetched_at,
+            clock::iso_z(t1),
+            "a was fetched at t1; a surface stamp would still say t0"
+        );
+        assert_eq!(third.recovered, 1);
+        assert_eq!(
+            stamps,
+            KeyStamps {
+                fresh_at: clock::iso_z(t2),
+                carried: [("a".to_string(), clock::iso_z(t1))].into(),
+            }
+        );
+    }
+
+    /// A key upstream stopped returning is carried only for the stale window;
+    /// after that it is dropped, the operator is warned, and the surface stops
+    /// aging on its account.
+    #[test]
+    fn a_key_carried_past_the_stale_window_is_dropped_with_a_warning() {
+        let prior = hm(&[("live", 1), ("gone", 2)]);
+        let prior_keys = KeyStamps {
+            fresh_at: "2026-07-20T00:00:00Z".into(),
+            carried: [("gone".to_string(), "2026-07-01T00:00:00Z".to_string())].into(),
+        };
+        let now = utc(2026, 7, 21, 0, 0, 0);
+
+        let (r, stamps) = keyed(
+            Observation::partial(hm(&[("live", 10)])),
+            Some(&prior),
+            Some("2026-07-01T00:00:00Z"),
+            Some(&prior_keys),
+            now,
+        );
+
+        assert_eq!(r.data, hm(&[("live", 10)]));
+        assert_eq!(r.fetched_at, clock::iso_z(now));
+        assert_eq!(r.recovered, 0);
+        assert_eq!(r.disposition, Disposition::MergedPartial);
+        assert_eq!(
+            r.stale_warning,
+            Some(StaleWarning { surface: "set_to_parts".into(), days: 20 })
+        );
+        assert!(stamps.carried.is_empty());
+    }
+
+    /// Inside the window the carried key stays, with its own age.
+    #[test]
+    fn a_key_inside_the_stale_window_is_kept_at_its_own_age() {
+        let prior = hm(&[("live", 1), ("carried", 2)]);
+        let prior_keys = KeyStamps {
+            fresh_at: "2026-07-18T00:00:00Z".into(),
+            carried: BTreeMap::new(),
+        };
+        let now = utc(2026, 7, 21, 0, 0, 0);
+
+        let (r, _) = keyed(
+            Observation::partial(hm(&[("live", 10)])),
+            Some(&prior),
+            Some("2026-07-18T00:00:00Z"),
+            Some(&prior_keys),
+            now,
+        );
+
+        assert_eq!(r.data.get("carried"), Some(&2));
+        assert_eq!(r.fetched_at, "2026-07-18T00:00:00Z");
+        assert!(r.stale_warning.is_none());
+    }
+
+    /// A snapshot from before per-key stamps observed every key at its surface
+    /// stamp. Without one, a carried key's age is unknown and nothing bounds it.
+    #[test]
+    fn a_legacy_prior_uses_its_surface_stamp_and_drops_keys_of_unknown_age() {
+        let prior = hm(&[("live", 1), ("carried", 2)]);
+        let now = utc(2026, 7, 21, 0, 0, 0);
+        let partial = || Observation::partial(hm(&[("live", 10)]));
+
+        let (dated, _) = keyed(partial(), Some(&prior), Some("2026-07-19T00:00:00Z"), None, now);
+        assert_eq!(dated.data.get("carried"), Some(&2));
+        assert_eq!(dated.fetched_at, "2026-07-19T00:00:00Z");
+
+        let (undated, _) = keyed(partial(), Some(&prior), None, None, now);
+        assert_eq!(undated.data, hm(&[("live", 10)]));
+        assert_eq!(undated.fetched_at, clock::iso_z(now));
+        assert!(undated.stale_warning.is_some());
+    }
+
+    /// A failed read keeps the prior rows, so it keeps their stamps too.
+    #[test]
+    fn a_preserved_surface_keeps_its_key_stamps() {
+        let prior = hm(&[("a", 1)]);
+        let prior_keys = KeyStamps {
+            fresh_at: "2026-07-18T00:00:00Z".into(),
+            carried: [("a".to_string(), "2026-07-17T00:00:00Z".to_string())].into(),
+        };
+
+        let (r, stamps) = keyed(
+            Observation::Unavailable,
+            Some(&prior),
+            Some("2026-07-17T00:00:00Z"),
+            Some(&prior_keys),
+            utc(2026, 7, 21, 0, 0, 0),
+        );
+
+        assert_eq!(r.disposition, Disposition::PreservedUnavailable);
+        assert_eq!(stamps, prior_keys);
     }
 
     #[test]
