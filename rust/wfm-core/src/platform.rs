@@ -99,20 +99,17 @@ pub fn chown_to_real_user(path: &std::path::Path) {
 #[cfg(not(unix))]
 pub fn chown_to_real_user(_path: &std::path::Path) {}
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
     use std::env;
 
-    // Only the unix 0600 test below uses this, and Windows drops that test.
-    #[cfg(unix)]
     fn tmp_path(name: &str) -> PathBuf {
         let mut p = env::temp_dir();
         p.push(format!("wfmcore-test-{}-{}.bin", std::process::id(), name));
         p
     }
 
-    #[cfg(unix)]
     #[test]
     fn write_restricted_creates_file_at_0600_from_first_syscall() {
         use std::os::unix::fs::PermissionsExt;

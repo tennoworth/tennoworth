@@ -876,8 +876,6 @@ fn event_reward_fixture_keeps_groups_and_reconciles_goals_independently() {
     );
 
     std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
-    responses["https://api.warframe.com/cdn/worldState.php"]["Goals"] = serde_json::json!([]);
-    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
     assert!(run(
         &[
             "build",
@@ -885,6 +883,41 @@ fn event_reward_fixture_keeps_groups_and_reconciles_goals_independently() {
             dir.to_str().unwrap(),
             "--now",
             "2026-07-03T12:00:00Z"
+        ],
+        &dir
+    )
+    .status
+    .success());
+    let repeated: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(
+        repeated["surface_provenance"]["world.events"]["data_fetched_at"],
+        "2026-06-01T12:00:00Z",
+        "a second partial publication must retain the original evidence time"
+    );
+    assert_eq!(
+        repeated["surface_provenance"]["world.goals"]["data_fetched_at"],
+        "2026-07-01T12:00:00Z"
+    );
+
+    std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
+    responses["https://api.warframe.com/cdn/worldState.php"]["Goals"] = serde_json::json!([]);
+    let prior_path = dir.join("prior-market.json");
+    let mut legacy: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(&prior_path).unwrap()).unwrap();
+    legacy["de"]["child_fetched_at"]
+        .as_object_mut()
+        .unwrap()
+        .remove("world.events");
+    std::fs::write(&prior_path, serde_json::to_vec(&legacy).unwrap()).unwrap();
+    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
+    assert!(run(
+        &[
+            "build",
+            "--fixtures-dir",
+            dir.to_str().unwrap(),
+            "--now",
+            "2026-07-04T12:00:00Z"
         ],
         &dir
     )
@@ -904,6 +937,31 @@ fn event_reward_fixture_keeps_groups_and_reconciles_goals_independently() {
         third["surface_provenance"]["world.goals"]["disposition"],
         "cleared_authoritative_empty"
     );
+    assert_eq!(
+        third["surface_provenance"]["world.goals"]["data_fetched_at"],
+        "2026-07-04T12:00:00Z",
+        "an authoritative empty observation is current evidence"
+    );
+    assert_eq!(
+        third["surface_provenance"]["world.events"]["data_fetched_at"],
+        "",
+        "carried legacy rows without a source stamp must keep unknown age"
+    );
+
+    std::fs::copy(dir.join("market.json"), &prior_path).unwrap();
+    responses["https://api.warframe.com/cdn/worldState.php"]["Events"] =
+        observed["Events"].clone();
+    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
+    assert!(run(
+        &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", "2026-07-05T12:00:00Z"],
+        &dir
+    )
+    .status
+    .success());
+    let recovered: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    assert_eq!(recovered["surface_provenance"]["world.events"]["disposition"], "published_fresh");
+    assert_eq!(recovered["surface_provenance"]["world.events"]["data_fetched_at"], "2026-07-05T12:00:00Z");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
@@ -2266,5 +2324,87 @@ fn throttled_scrape_preserves_the_published_csv() {
     assert!(!out.status.success());
     assert!(String::from_utf8_lossy(&out.stderr).contains("publication aborted"));
     assert_eq!(std::fs::read_to_string(csv).unwrap(), "previous snapshot");
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+// ---- per-key evidence age on partially fetched surfaces ---------------------
+
+/// A key upstream stopped returning, on a surface one of whose sources keeps
+/// failing: the merge carries it with its own stamp through the next build, and
+/// drops it once it is older than the stale window instead of pinning the
+/// surface's age for as long as the source stays down.
+#[test]
+fn a_carried_key_keeps_its_own_age_and_is_dropped_after_the_stale_window() {
+    let dir = stage_fixtures("convert");
+    let responses_path = dir.join("fixture_responses.json");
+    let build = |now: &str| {
+        let out = run(
+            &["build", "--fixtures-dir", dir.to_str().unwrap(), "--now", now],
+            &dir,
+        );
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        std::fs::copy(dir.join("market.json"), dir.join("prior-market.json")).unwrap();
+        let market: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+        (market, String::from_utf8_lossy(&out.stderr).into_owned())
+    };
+
+    let (first, _) = build("2026-07-01T12:00:00Z");
+    assert_eq!(first["surface_provenance"]["vault_status"]["disposition"], "published_fresh");
+
+    // Upstream has dropped this key, and one vault source fails from now on.
+    let mut prior: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("prior-market.json")).unwrap()).unwrap();
+    prior["vault_status"]["ghost_prime_set"] = "vaulted".into();
+    std::fs::write(dir.join("prior-market.json"), serde_json::to_vec(&prior).unwrap()).unwrap();
+    let mut responses: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_slice(&std::fs::read(&responses_path).unwrap()).unwrap();
+    let pets = responses
+        .keys()
+        .find(|url| url.ends_with("/data/json/Pets.json"))
+        .cloned()
+        .expect("fixture serves the vault source this test fails");
+    responses.remove(&pets);
+    std::fs::write(&responses_path, serde_json::to_vec(&responses).unwrap()).unwrap();
+
+    let (second, _) = build("2026-07-03T12:00:00Z");
+    assert_eq!(second["surface_provenance"]["vault_status"]["disposition"], "merged_partial");
+    assert_eq!(second["vault_status"]["ghost_prime_set"], "vaulted");
+    assert_eq!(
+        second["surface_key_fetched_at"]["vault_status"]["carried"]["ghost_prime_set"],
+        "2026-07-01T12:00:00Z",
+        "the carried key keeps the time it was last fetched"
+    );
+    assert_eq!(
+        second["surface_provenance"]["vault_status"]["data_fetched_at"],
+        "2026-07-01T12:00:00Z"
+    );
+
+    // Read back from the snapshot the second build wrote, not reconstructed.
+    let (third, stderr) = build("2026-07-09T12:00:00Z");
+    assert!(third["vault_status"].get("ghost_prime_set").is_none());
+    assert!(third["vault_status"].get("volt_prime_set").is_some());
+    assert_eq!(
+        third["surface_provenance"]["vault_status"]["data_fetched_at"],
+        "2026-07-09T12:00:00Z"
+    );
+    assert!(
+        stderr.contains("vault_status has been stale for 8 days"),
+        "dropping a key warns the operator: {stderr}"
+    );
+
+    // The key's own stamp decides, not the surface stamp: this one is recent at
+    // the surface level and two weeks old at the key level.
+    let mut prior: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("prior-market.json")).unwrap()).unwrap();
+    prior["vault_status"]["old_prime_set"] = "vaulted".into();
+    prior["surface_key_fetched_at"]["vault_status"]["carried"] =
+        serde_json::json!({"old_prime_set": "2026-06-25T12:00:00Z"});
+    std::fs::write(dir.join("prior-market.json"), serde_json::to_vec(&prior).unwrap()).unwrap();
+    let (fourth, _) = build("2026-07-10T12:00:00Z");
+    assert!(
+        fourth["vault_status"].get("old_prime_set").is_none(),
+        "the stored per-key stamp is read back"
+    );
     std::fs::remove_dir_all(dir).unwrap();
 }

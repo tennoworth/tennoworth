@@ -156,6 +156,10 @@ pub struct Snapshot {
     /// hash check is fresh evidence about old data, while an outage is not.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub surface_provenance: HashMap<String, SurfaceProvenance>,
+    /// Per-key evidence stamps for the surfaces a partial fetch can merge, read
+    /// back by the next build. See `reconcile::KeyStamps`.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub surface_key_fetched_at: HashMap<String, crate::reconcile::KeyStamps>,
     #[serde(default, skip_serializing_if = "EventRewardsSurface::is_empty")]
     pub event_rewards: EventRewardsSurface,
     /// Digital Extremes provenance + the worldState-only surfaces.
@@ -289,6 +293,7 @@ pub fn assemble_snapshot(
         usage_history,
         surface_fetched_at,
         surface_provenance: HashMap::new(),
+        surface_key_fetched_at: HashMap::new(),
         event_rewards: EventRewardsSurface::default(),
     }
 }

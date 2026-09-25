@@ -29,8 +29,36 @@ fn stamp(s: &str) -> Option<i64> {
 fn fresh(s: &str, now: i64) -> bool {
     stamp(s).is_some_and(|t| (0..=DAY).contains(&now.saturating_sub(t)))
 }
+/// Whether a surface holds evidence observed recently enough to draw a
+/// conclusion from.
+///
+/// A recent stamp is necessary but not sufficient. Several dispositions record
+/// the *attempt* as the data timestamp - `empty_invalid` and its siblings mean
+/// the read was tried and produced nothing usable, and `reconcile` stamps both
+/// fields with that attempt. Checking the stamp alone therefore reports a failed
+/// read as current, and a caller goes on to say something about a surface it
+/// never observed.
+///
+/// Only a disposition that represents an actual observation counts. A surface
+/// with no `disposition` at all is treated by its stamp: older snapshots predate
+/// the field, and their stamp is a genuine fetch time.
 fn surface_fresh(market: &Value, key: &str, now: i64) -> bool {
     let provenance = market.get("surface_provenance").and_then(|p| p.get(key));
+    if let Some(disposition) = provenance
+        .and_then(|p| p.get("disposition"))
+        .and_then(Value::as_str)
+    {
+        // `preserved_unchanged` is not here on purpose: its payload was
+        // revalidated by content hash, so it is current despite its older stamp.
+        // The stale-age question that exemption answers is a different one from
+        // "is there evidence to act on", and this caller only asks the latter.
+        if !matches!(
+            disposition,
+            "published_fresh" | "merged_partial" | "cleared_authoritative_empty"
+        ) {
+            return false;
+        }
+    }
     let source_stamp = provenance
         .and_then(|p| p.get("data_fetched_at"))
         .and_then(Value::as_str)
@@ -332,7 +360,14 @@ fn evaluate(app: &AppHandle) {
         eprintln!("tennoworth: notification cleanup failed: {e}");
     }
 }
-pub fn start(app: AppHandle) {
+/// Start the reminder loop.
+///
+/// `on_market_refresh` is the presentation work a refreshed market implies -
+/// today, rebuilding the tray so it stops offering prices that were just
+/// replaced. It is injected by the composition root rather than called here
+/// because the tray is the shell's, and a service that names the shell layer
+/// cannot be used without it.
+pub fn start(app: AppHandle, on_market_refresh: impl Fn(&AppHandle) + Send + 'static) {
     if let Err(e) = std::thread::Builder::new()
         .name("notification-reminders".into())
         .spawn(move || {
@@ -341,7 +376,7 @@ pub fn start(app: AppHandle) {
                 if refreshed.is_none_or(|t| t.elapsed() >= Duration::from_secs(15 * 60)) {
                     let result = market::refresh(&app.state::<MarketCache>().dir());
                     if result.updated {
-                        crate::shell::tray::rebuild_tray(&app);
+                        on_market_refresh(&app);
                         let _ = app.emit(MARKET_EVENT, ());
                     }
                     refreshed = Some(Instant::now());
@@ -363,6 +398,29 @@ mod tests {
     const END: &str = "2026-09-06T13:00:00Z";
     fn market() -> Value {
         json!({"baro": {"activation": START, "expiry": END, "location": "Pluto Relay", "inventory_for": START, "inventory": [{"item":"Primed Flow", "slug":"primed_flow"}]}, "surface_provenance":{"baro":{"data_fetched_at": START}}})
+    }
+    #[test]
+    fn freshness_dispositions_follow_shared_consumer_cases() {
+        let fixture: Value = serde_json::from_str(include_str!(
+            "../../../../tests/fixtures/surface-freshness/cases.json"
+        ))
+        .unwrap();
+        let now = stamp(fixture["now"].as_str().unwrap()).unwrap();
+        for case in fixture["cases"].as_array().unwrap() {
+            let mut market = json!({"surface_fetched_at": {"baro": case["data_fetched_at"]}});
+            if !case["disposition"].is_null() {
+                market["surface_provenance"] = json!({"baro": {
+                    "disposition": case["disposition"],
+                    "data_fetched_at": case["data_fetched_at"]
+                }});
+            }
+            assert_eq!(
+                surface_fresh(&market, "baro", now),
+                case["reminder_fresh"].as_bool().unwrap(),
+                "{}",
+                case["name"].as_str().unwrap()
+            );
+        }
     }
     #[test]
     fn phase_boundaries_and_resume_only_choose_the_current_phase() {
@@ -397,6 +455,75 @@ mod tests {
         m["baro"]["activation"] = json!("invalid");
         assert!(scheduled(&m, &held, now).is_empty());
     }
+    /// A surface can carry a stamp from *this attempt* without the attempt
+    /// having observed anything. `empty_invalid` means the read was attempted
+    /// and produced nothing usable, and `reconcile` records both timestamps as
+    /// that attempt - so a stamp-only freshness check calls a failed read
+    /// current and lets the caller draw conclusions from nothing.
+    ///
+    /// This is the shipped shape: `world.events` is `empty_invalid` with
+    /// `data_fetched_at == attempted_at`.
+    #[test]
+    fn a_failed_read_is_not_fresh_however_recent_its_attempt() {
+        let now = stamp(START).unwrap();
+        let attempted = START;
+        let stale_evidence = "2026-08-01T00:00:00Z";
+
+        // The attempt is a minute old, but nothing was observed.
+        let empty_invalid = json!({"surface_provenance": {"world.events": {
+            "disposition": "empty_invalid",
+            "attempted_at": attempted,
+            "data_fetched_at": attempted,
+        }}});
+        assert!(
+            !surface_fresh(&empty_invalid, "world.events", now),
+            "an unobserved surface is not current evidence"
+        );
+
+        // Every preserved/empty state is the same: the stamp is the attempt,
+        // not an observation.
+        for disposition in [
+            "preserved_unavailable",
+            "preserved_invalid",
+            "empty_unavailable",
+            "empty_unchanged",
+            "empty_invalid",
+        ] {
+            let m = json!({"surface_provenance": {"world.events": {
+                "disposition": disposition,
+                "attempted_at": attempted,
+                "data_fetched_at": attempted,
+            }}});
+            assert!(
+                !surface_fresh(&m, "world.events", now),
+                "{disposition} reports a failed read as fresh"
+            );
+        }
+
+        // A preserved surface that genuinely still holds older evidence is not
+        // fresh either - its stamp is the older one and the window catches it.
+        let kept = json!({"surface_provenance": {"world.events": {
+            "disposition": "preserved_unavailable",
+            "attempted_at": attempted,
+            "data_fetched_at": stale_evidence,
+        }}});
+        assert!(!surface_fresh(&kept, "world.events", now));
+
+        // And a real observation is still fresh, so the rule cannot pass by
+        // refusing everything.
+        for disposition in ["published_fresh", "merged_partial"] {
+            let m = json!({"surface_provenance": {"world.events": {
+                "disposition": disposition,
+                "attempted_at": attempted,
+                "data_fetched_at": attempted,
+            }}});
+            assert!(
+                surface_fresh(&m, "world.events", now),
+                "{disposition} is observed evidence and must stay fresh"
+            );
+        }
+    }
+
     #[test]
     fn calendar_requires_fresh_known_matches_and_keeps_partial_coverage() {
         let now = stamp(START).unwrap();

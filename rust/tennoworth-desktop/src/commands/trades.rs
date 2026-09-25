@@ -82,6 +82,12 @@ pub struct EeLogStatus {
     /// prefix) - the SPA explains the `TENNOWORTH_EELOG` override.
     pub path: Option<String>,
     pub auto_close: bool,
+    /// Whether completed trades are being recorded right now.
+    ///
+    /// Read from memory, deliberately not from the database: the pause this
+    /// reports is usually a database that refused a write, and a health flag
+    /// stored there would answer with the health of the thing that just failed.
+    pub recording: crate::services::recording::RecordingState,
 }
 
 #[tauri::command]
@@ -95,5 +101,6 @@ pub fn eelog_status(db: State<'_, Db>, ee: State<'_, EeLogState>) -> EeLogStatus
     EeLogStatus {
         path: ee.path.as_ref().map(|p| p.display().to_string()),
         auto_close,
+        recording: ee.recording.state(),
     }
 }

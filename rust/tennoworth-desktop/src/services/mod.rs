@@ -1,3 +1,4 @@
+pub(crate) mod acquisition;
 pub(crate) mod allowance;
 pub(crate) mod browser;
 pub(crate) mod definitions;
@@ -6,7 +7,9 @@ pub(crate) mod eelog_state;
 pub(crate) mod inventory;
 pub(crate) mod market;
 pub(crate) mod notifications;
+pub(crate) mod order_mutations;
 pub(crate) mod protection;
+pub(crate) mod recording;
 pub(crate) mod reminders;
 pub(crate) mod sellables;
 pub(crate) mod trades;

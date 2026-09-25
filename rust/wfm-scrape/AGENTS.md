@@ -65,6 +65,13 @@ cycle, with the descriptive UA, and never from a visitor's browser.
   Reward containers preserve item rewards and credits separately, distinguish
   unsupported-but-dated rewards as `unknown`, accept an explicit supported
   zero (`credits: 0`, empty supported arrays), and reject an unrecognized `{}`.
+- **Partially fetchable item maps age by key.** `path_to_info`,
+  `set_to_parts` and `vault_status` merge a partial fetch over the prior map
+  through `reconcile_keyed`, which records each carried key's own stamp in
+  `surface_key_fetched_at`. The surface is as old as its oldest carried key,
+  and a key carried past the stale window, or of unknown age, is dropped with
+  the stale warning. One surface stamp pinned to the prior run let rotating
+  endpoint failures hold a surface at its oldest age indefinitely.
 - **Annual usage has two contracts.** `usage_history` stores compact immutable
   year maps; current `usage` stores the newest rich MR curve used by scoring.
   Validate them separately. A valid compact latest year must still be

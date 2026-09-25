@@ -95,7 +95,7 @@ const EVENT_MARKET = {
   },
   surface_provenance: {
     'world.goals': {
-      disposition: 'used_current',
+      disposition: 'published_fresh',
       attempted_at: '2026-08-22T00:00:00Z',
       data_fetched_at: '2026-08-22T00:00:00Z',
     },
@@ -270,7 +270,7 @@ describe('buildCalendar', () => {
       },
     };
     market.surface_provenance!['world.events'] = {
-      disposition: 'carried_prior',
+      disposition: 'merged_partial',
       attempted_at: '2026-08-22T00:00:00Z',
       data_fetched_at: '2026-08-01T00:00:00Z',
     };
@@ -278,6 +278,79 @@ describe('buildCalendar', () => {
     expect(rows.find((item) => item.title === 'Community Goal')?.stale).toBe(false);
     expect(rows.find((item) => item.title === 'Event Reward')?.stale).toBe(true);
     expect(rows.find((item) => item.title === 'Event Reward')?.dataAgeDays).toBe(21);
+  });
+
+  // The producer stamps both fields with the *attempt* when a read failed and
+  // there was nothing to carry forward, so `empty_invalid` carries a timestamp
+  // that is minutes old while the surface holds no evidence at all. Measuring
+  // age from that stamp reports a failed read as freshly updated - the same
+  // defect that was fixed in `reminders::surface_fresh`, reached through a
+  // different reader.
+  it('does not measure age from a stamp that records a failed read', () => {
+    const market = structuredClone(EVENT_MARKET) as Market;
+    market.event_rewards!.events = {
+      event: {
+        ...market.event_rewards!.goals!.complete,
+        id: 'event',
+        source: 'event',
+        title: 'Event Reward',
+      },
+    };
+    market.surface_provenance!['world.events'] = {
+      disposition: 'empty_invalid',
+      attempted_at: '2026-08-22T00:00:00Z',
+      data_fetched_at: '2026-08-22T00:00:00Z',
+    };
+    const rows = buildCalendar(market, owned([]), NOW);
+    const event = rows.find((item) => item.title === 'Event Reward');
+    expect(event?.stale, 'a failed read is not fresh evidence').toBe(true);
+    // And its age is unknown rather than zero.
+    expect(event?.dataAgeDays).toBeUndefined();
+  });
+
+  // The same for every state that means "we tried and observed nothing".
+  it('treats every unobserved disposition as unknown age', () => {
+    for (const disposition of [
+      'empty_invalid',
+      'empty_unavailable',
+      'empty_unchanged',
+      'preserved_invalid',
+      'preserved_unavailable',
+    ] as const) {
+      const market = structuredClone(EVENT_MARKET) as Market;
+      market.event_rewards!.events = {
+        event: { ...market.event_rewards!.goals!.complete, id: 'event', source: 'event', title: 'Event Reward' },
+      };
+      market.surface_provenance!['world.events'] = {
+        disposition,
+        attempted_at: '2026-08-22T00:00:00Z',
+        data_fetched_at: '2026-08-22T00:00:00Z',
+      };
+      const event = buildCalendar(market, owned([]), NOW).find((item) => item.title === 'Event Reward');
+      expect(event?.stale, disposition).toBe(true);
+      expect(event?.dataAgeDays, disposition).toBeUndefined();
+    }
+  });
+
+  // The control: an observed surface keeps being measured by its stamp, so a
+  // recent one is fresh and an old one is stale.
+  it('still measures an observed surface by its own stamp', () => {
+    const fresh = structuredClone(EVENT_MARKET) as Market;
+    fresh.event_rewards!.events = {
+      event: { ...fresh.event_rewards!.goals!.complete, id: 'event', source: 'event', title: 'Event Reward' },
+    };
+    fresh.surface_provenance!['world.events'] = {
+      disposition: 'published_fresh',
+      attempted_at: '2026-08-22T00:00:00Z',
+      data_fetched_at: '2026-08-22T00:00:00Z',
+    };
+    expect(buildCalendar(fresh, owned([]), NOW).find((i) => i.title === 'Event Reward')?.stale).toBe(false);
+
+    const old = structuredClone(fresh) as Market;
+    old.surface_provenance!['world.events']!.data_fetched_at = '2026-08-01T00:00:00Z';
+    const aged = buildCalendar(old, owned([]), NOW).find((i) => i.title === 'Event Reward');
+    expect(aged?.stale).toBe(true);
+    expect(aged?.dataAgeDays).toBe(21);
   });
 });
 

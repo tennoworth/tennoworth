@@ -7,6 +7,7 @@ fn desktop_bindings_match_rust() {
     types.add::<wfm_client::governor::AccessStatus>();
     types.add::<crate::services::wfm_session::CmdError>();
     types.add::<crate::services::watch::WatchOutcome>();
+    types.add::<super::listing::OwnOrder>();
     let mut expected = types.finish().expect("unique wire types");
     expected.push_str(&format!(
         "\nexport const WATCH_FIRED_EVENT = {:?} as const;\n",
