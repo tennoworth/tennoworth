@@ -16,7 +16,7 @@ use crate::clock;
 const STALE_DAYS: i64 = 7;
 use crate::csvin;
 use crate::ingest::{self, FixtureHttp, Http, LiveHttp};
-use crate::reconcile::{reconcile, Observation};
+use crate::reconcile::{reconcile, reconcile_keyed, KeyStamps, Observation};
 use crate::render::{self, assemble_snapshot, CatalogItemMeta};
 use crate::{de, de_extract};
 
@@ -182,6 +182,10 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
                 .map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").to_string()))
                 .collect()
         })
+        .unwrap_or_default();
+    let prior_key_stamps: HashMap<String, KeyStamps> = prior
+        .get("surface_key_fetched_at")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
 
     eprintln!("Fetching warframe.market master catalog...");
@@ -896,22 +900,27 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
             Observation::partial(data)
         }
     };
-    let r_p2i = reconcile(
+    let mut key_stamps: HashMap<String, KeyStamps> = HashMap::new();
+    let (r_p2i, stamps) = reconcile_keyed(
         "path_to_info",
         observation(path_to_info, parents_complete),
         p2i_old.as_ref(),
         prior_stamps.get("path_to_info").map(|s| s.as_str()),
+        prior_key_stamps.get("path_to_info"),
         now,
         STALE_DAYS,
     );
-    let r_s2p = reconcile(
+    key_stamps.insert("path_to_info".into(), stamps);
+    let (r_s2p, stamps) = reconcile_keyed(
         "set_to_parts",
         observation(set_to_parts, parents_complete),
         s2p_old.as_ref(),
         prior_stamps.get("set_to_parts").map(|s| s.as_str()),
+        prior_key_stamps.get("set_to_parts"),
         now,
         STALE_DAYS,
     );
+    key_stamps.insert("set_to_parts".into(), stamps);
     let r_rr = reconcile(
         "relic_rewards",
         relic_observation,
@@ -927,14 +936,16 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     } else {
         Observation::partial(vault_status)
     };
-    let r_vs = reconcile(
+    let (r_vs, stamps) = reconcile_keyed(
         "vault_status",
         vault_observation,
         vs_old.as_ref(),
         prior_stamps.get("vault_status").map(|s| s.as_str()),
+        prior_key_stamps.get("vault_status"),
         now,
         STALE_DAYS,
     );
+    key_stamps.insert("vault_status".into(), stamps);
     // Before reconcile, not after: reconcile only falls back to the prior value
     // when the whole surface is empty, and Baro's never is (schedule fields keep
     // arriving between visits). His inventory is capturable only during the 48h
@@ -1265,6 +1276,7 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     );
     snapshot.de = Some(de_surface);
     snapshot.surface_provenance = surface_provenance;
+    snapshot.surface_key_fetched_at = key_stamps;
     snapshot.event_rewards = render::EventRewardsSurface {
         goals: r_world_goals.data,
         events: r_world_events.data,
