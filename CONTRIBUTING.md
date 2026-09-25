@@ -113,6 +113,10 @@ bunx playwright install --with-deps chromium webkit
 bun run test:responsive:all
 ```
 
+`bun run test` runs Vitest under Node, not Bun. CI uses the version in
+`.node-version` (26); Vitest supports Node 22.12+, 24, or 26+. Node 20 and 25
+are not supported.
+
 Playwright starts the development server itself unless `RESPONSIVE_BASE_URL`
 is set. Its browser dependencies require a supported host; the matching
 Playwright container is an alternative on other Linux distributions.
