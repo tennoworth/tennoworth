@@ -529,23 +529,6 @@ table.tw td .type.buy { color: var(--accent); }
 /* Sparklines: 60×18 in accent, inheriting the dim rule. */
 table.tw .spark, table.tw .sparkline { color: var(--accent); vertical-align: middle; }
 table.tw tr.dim .spark { color: var(--faint); }
-/* Inline status tags - outline in the tag's own colour, never a fill. */
-table.tw .tag {
-  display: inline-block;
-  height: 1rem; line-height: 0.875rem;
-  padding: 0 0.3rem; margin-left: var(--s2);
-  font-family: var(--font-mono);
-  font-size: var(--text-caption); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase;
-  border: 1px solid currentColor; border-radius: var(--radius-tag);
-  vertical-align: middle; color: var(--muted);
-}
-table.tw .tag.vaulted { color: var(--bad); }
-table.tw .tag.soon { color: var(--warn); }
-table.tw .tag.aug { color: var(--accent); }
-table.tw .tag.hold { color: var(--warn); }
-table.tw .tag.peak { color: var(--good); }
-table.tw .tag.deal { color: var(--ducat); }
-table.tw .tag.thin { color: var(--warn); }
 /* Vis pill in the orders table. */
 table.tw .vis { font: 600 var(--text-caption)/1rem var(--font-mono); border: 1px solid currentColor; border-radius: var(--radius-tag); padding: 0 var(--s1); color: var(--good); letter-spacing: 0.06em; }
 table.tw .vis.off { color: var(--muted); }
@@ -554,6 +537,29 @@ table.tw tr.confirming td { background: color-mix(in srgb, var(--bad) 6%, transp
 table.tw tr.confirming td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
 table.tw tr.busy td { color: var(--faint); }
 
+/* Inline status tags: an outline in the tag's own colour, never a fill. The
+   border style carries the kind as well as the hue: solid = advice (what to
+   do), dotted = fact (what it is). Red is not a tag colour - vaulted is market
+   fact, and --bad is reserved for invalid data and blocked calculations. */
+.tag {
+  display: inline-block;
+  padding: 0 0.3rem; margin-inline-start: var(--s2);
+  font: 600 var(--text-caption)/1rem var(--font-ui);
+  letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap;
+  border: 1px solid currentColor; border-radius: var(--radius-tag);
+  vertical-align: middle; color: var(--muted);
+}
+/* Advice */
+.tag:is(.peak, .flip, .advice-sell_now) { color: var(--good); }
+.tag:is(.hold, .advice-hold) { color: var(--warn); }
+.tag.deal { color: var(--ducat); }
+/* Stale data is a caution to act on (refresh), so it takes the solid edge. */
+.tag.stale { color: var(--warn); }
+/* Facts */
+.tag:is(.vaulted, .soon, .vaulting-soon, .aug, .augment, .thin, .unpriced, .relic-tag) { border-style: dotted; }
+.tag.vaulted { color: var(--vault); }
+.tag:is(.soon, .vaulting-soon, .thin) { color: var(--warn); }
+.tag:is(.aug, .augment) { color: var(--fg); }
 /* Buttons on the three heights: .btn 28 · .btn.xs 24 · .btn.lg 32. */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--s1);
@@ -634,6 +640,9 @@ table.tw tr.busy td { color: var(--faint); }
 .ui-notice[data-tone="warn"] { border-left-color: var(--warn); }
 .ui-notice[data-tone="bad"] { border-color: var(--bad); background: color-mix(in srgb, var(--bad) 8%, var(--panel)); }
 .ui-notice[data-tone="bad"] strong { color: var(--bad); }
+/* A notice that is one line of a panel keeps the panel's box and takes only
+   the semantic edge; inset so the text does not shift. */
+.wrap.tw > .line[data-tone="warn"] { box-shadow: inset 3px 0 0 var(--warn); }
 /* Segmented control on the 28px height. */
 .seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-ctl); overflow: hidden; height: var(--ctl); }
 .seg > button { font: inherit; font-size: var(--text-caption); height: 100%; padding: 0 var(--s3); background: var(--panel-2); border: none; border-left: 1px solid var(--border); border-radius: 0; color: var(--muted); cursor: pointer; }
@@ -759,5 +768,7 @@ html[data-look="yorha"] .statusbar .refresh-trigger { font-family: var(--font-mo
 /* Summary cells (view header): tracked caps keys, mono values. */
 html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.14em; }
 
-.notification-entry { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s4) var(--s3); border-top: 1px var(--rule) var(--hairline); border-left: 2px solid transparent; overflow-wrap: anywhere; }
-.notification-entry.unread { border-left-color: var(--accent); background: var(--panel-2); }
+/* Unread is carried by the raised surface and the explicit Unread label, not
+   an edge: a delivery-failure notice inside the entry already owns the edge. */
+.notification-entry { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s4) var(--s3); border-top: 1px var(--rule) var(--hairline); overflow-wrap: anywhere; }
+.notification-entry.unread { background: var(--panel-2); }

@@ -295,26 +295,10 @@
   }
 
   .tag {
-    display: inline-block;
-    padding: 0 0.35rem;
-    font-size: 0.75rem;
-    letter-spacing: 0.04em;
-    border: 1px solid currentColor;
-    white-space: nowrap;
+    margin-inline-start: 0;
     /* The verdict is also the row's only opinion, so it gets a cursor hint
        that there is a reason behind it. */
     cursor: help;
-  }
-  .tag.flip {
-    color: var(--good);
-  }
-  .tag.hold {
-    color: var(--warn);
-  }
-  .tag.thin,
-  .tag.skip,
-  .tag.unpriced {
-    color: var(--faint);
   }
 
   .more {

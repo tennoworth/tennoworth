@@ -105,6 +105,12 @@ Current shared selectors in `app.css`: `.btn` with `primary`, `ghost`, `bad`,
 `data-tone="good|warn|bad"` for their semantic edge, with explicit readable text
 for meaning. Keep feature-specific sizing local. These selectors are opt-in;
 do not globally restyle similarly named legacy component classes by accident.
+Inline status tags use the one `.tag` primitive in `app.css`; components may
+position a tag but never recolour it. The border style carries the kind as well
+as the hue: solid for advice (`peak`, `flip`, `hold`, `deal`, `stale`, advisor
+verdicts, and neutral `patience`/`skip`), dotted for facts (`vaulted`, `soon`,
+`aug`, `thin`, `unpriced`, `relic-tag`). Vaulted uses `--vault`; no tag uses
+`--bad`. Filter chips that select by a tag reuse its class.
 Use `table.tw.fixed` when declaring fixed column proportions; setting only
 `table-layout: fixed` leaves the automatic item-column sizing rule active and
 can collapse numeric columns. Verify every column, not just document overflow.
@@ -137,7 +143,7 @@ narrow and enlarged layouts. This is a measured layout value, not a fixed spacer
 | Buttons and links | Clear action labels, consistent emphasis, visible focus; navigation uses links and actions use buttons |
 | Fields | Persistent accessible labels, units and constraints nearby, actionable validation; placeholders are not labels. Checkboxes and radios use the shared square box in `app.css` (checked is the ink inversion); components may size it, not recolour it |
 | Mode selectors | Explicit selected state and accessible semantics; descriptions remain readable when the group wraps |
-| Status and notices | Explain what happened, its consequence, and any next action; never rely on color or a transient toast alone for critical information |
+| Status and notices | Explain what happened, its consequence, and any next action; never rely on color or a transient toast alone for critical information. A 3px left edge is reserved for meaning (toned notices, toned toasts, action-needed notes, Baro's visit window); never nest one edged surface in another. Stale market data is a caution: an outlined `--warn` chip in the header and a warn-toned notice, not a red dot |
 | Tables | Preserve meaningful columns and item identity; align comparable numbers; contain horizontal scrolling within the table region |
 | Dialogs and popovers | Stay within the viewport; provide reachable dismissal and actions, visible focus, and appropriate keyboard behavior |
 | Review surfaces | Make consequential changes explicit, preserve edits, and distinguish existing state from proposed state |
@@ -214,7 +220,7 @@ rendering in both engines when changing the pattern.
 
 ## Notification history
 
-Desktop history uses `.notification-entry` rows with a restrained unread edge,
+Desktop history uses `.notification-entry` rows with a raised unread surface,
 explicit Read/Unread text, timestamp, evidence, and navigation to the next step.
 Read entries retain full text contrast. Native delivery failures remain visible
 in the inbox; a transient popup is never the only record. Category controls and

@@ -143,9 +143,9 @@
   .notes-content { padding:var(--s5) var(--s6); }
   .change-group + .change-group { margin-top:var(--s5); }
   dialog.update-notes .change-group > h3 { margin:0 0 var(--s4); font:600 var(--text-caption) var(--font-ui); letter-spacing:.14em; text-transform:uppercase; color:var(--muted); }
-  .change { padding-left:var(--s4); border-left:2px solid var(--border); margin-bottom:var(--s4); }
-  .change:last-child { margin-bottom:0; }
-  .action-needed .change { border-color:var(--warn); }
+  .change + .change { margin-top:var(--s4); padding-top:var(--s4); border-top:1px var(--rule) var(--hairline); }
+  /* Only action-needed items carry an edge: it is the one group that asks the reader to do something. */
+  .action-needed .change { padding-left:var(--s4); border-left:2px solid var(--warn); }
   .change h4 { margin:0 0 var(--s1); font:600 var(--text-body)/var(--leading-body) var(--font-body); }
   .change p, .release p { margin:0; color:var(--muted); font-size:var(--text-control); }
   .platform { margin-left:var(--s2); font:var(--text-caption) var(--font-mono); color:var(--muted); }
