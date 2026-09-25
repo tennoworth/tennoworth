@@ -25,7 +25,7 @@ rust/
   tennoworth-desktop/src/
     shell/                   startup, tray, updates, probes
     commands/                IPC entry points and input validation
-    services/                inventory state, watches, trades, notifications
+    services/                inventory state, automatic scan, watches, trades, notifications
     persistence/             schema, record types, table operations, key storage
     overlay/
       capture/               platform frame acquisition

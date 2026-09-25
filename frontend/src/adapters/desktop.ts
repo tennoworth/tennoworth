@@ -1,8 +1,27 @@
 import { DesktopCmdError } from '../contracts/errors';
 import type { PingResponse, PlanItemInput, OrderPatch, PendingPlan, PlanResponse, ItemResult, Market, OverlaySettings, OverlayStatus } from '../contracts/data';
 import { isHistory, type History } from '../domain/history';
-import type { MarketRefreshResult, ScanReport, DesktopCapabilities, DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences } from '../contracts/desktop';
+import type { MarketRefreshResult, ScanReport, DesktopCapabilities, DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences, AutoScanSettings, AutoScanStatus } from '../contracts/desktop';
 import { resolveInvoke, rethrowInvoke } from './runtime';
+
+/**
+ * The Rust struct both scan paths deliver: the `scan_inventory` response and
+ * the `inventory-scanned` event payload. Field names match its serde output.
+ */
+export interface ScanPayload {
+  inventory: string;
+  snapshot_id: number | null;
+}
+
+/**
+ * Validate a scan's identity and parse its inventory. Shared by the command
+ * response and the background-scan event so an unattributable snapshot cannot
+ * reach the inventory state by either route.
+ */
+export function parseScanPayload(result: ScanPayload): { data: import('../contracts/data').Inventory; snapshotId: number | null } {
+  if (result.snapshot_id != null && (!Number.isSafeInteger(result.snapshot_id) || result.snapshot_id <= 0)) throw new Error('Invalid inventory scan identity. Scan again.');
+  return { data: JSON.parse(result.inventory), snapshotId: result.snapshot_id };
+}
 
 export async function desktopProtectionState(inventory: import('../contracts/protection').ProtectionInventory): Promise<import('../contracts/protection').ProtectionState> {
   try { return await resolveInvoke()('protection_state', { inventory }); } catch (error) { return rethrowInvoke(error); }
@@ -27,6 +46,22 @@ export class TauriTransport implements DesktopCapabilities {
 
   async overlayStatus(): Promise<OverlayStatus> {
     return await resolveInvoke()<OverlayStatus>('overlay_status');
+  }
+
+  async getAutoScanSettings(): Promise<AutoScanSettings> {
+    return await resolveInvoke()<AutoScanSettings>('get_auto_scan_settings');
+  }
+
+  async updateAutoScanSettings(settings: AutoScanSettings): Promise<AutoScanSettings> {
+    return await resolveInvoke()<AutoScanSettings>('update_auto_scan_settings', { settings });
+  }
+
+  async autoScanStatus(): Promise<AutoScanStatus> {
+    return await resolveInvoke()<AutoScanStatus>('auto_scan_status');
+  }
+
+  async setAutoScanHold(hold: boolean): Promise<void> {
+    await resolveInvoke()<void>('set_auto_scan_hold', { hold });
   }
 
   async setupOverlayCapture(): Promise<OverlayStatus> {
@@ -55,9 +90,7 @@ export class TauriTransport implements DesktopCapabilities {
   }
 
   async fetchInventory(): Promise<{ data: import('../contracts/data').Inventory; snapshotId: number | null }> {
-    const result = await resolveInvoke()<{ inventory: string; snapshot_id: number | null }>('scan_inventory');
-    if (result.snapshot_id != null && (!Number.isSafeInteger(result.snapshot_id) || result.snapshot_id <= 0)) throw new Error('Invalid inventory scan identity. Scan again.');
-    return { data: JSON.parse(result.inventory), snapshotId: result.snapshot_id };
+    return parseScanPayload(await resolveInvoke()<ScanPayload>('scan_inventory'));
   }
 
   // The `cached_market` command returns the raw cached body (or null). Parse it

@@ -23,6 +23,15 @@ export interface MarketRefreshResult {
 export type { ScanReport } from './generated/desktop';
 import type { ScanReport } from './generated/desktop';
 
+/**
+ * Automatic-scan preferences and loop status. Generated from the Rust wire
+ * contract, so the cadence list and the field names cannot drift from what the
+ * desktop loop stores and reports.
+ */
+export type { AutoScanSettings, AutoScanStatus } from './generated/desktop';
+export { AUTO_SCAN_CADENCE_CHOICES } from './generated/desktop';
+import type { AutoScanSettings, AutoScanStatus } from './generated/desktop';
+
 export interface MarketCapability {
   loadCachedMarket(): Promise<Market | null>;
   refreshMarket(): Promise<MarketRefreshResult>;
@@ -58,12 +67,24 @@ export interface OverlayCapability {
   clearOverlayDiagnostics(): Promise<void>;
 }
 
+export interface AutoScanCapability {
+  getAutoScanSettings(): Promise<AutoScanSettings>;
+  updateAutoScanSettings(settings: AutoScanSettings): Promise<AutoScanSettings>;
+  autoScanStatus(): Promise<AutoScanStatus>;
+  /**
+   * Suspend automatic scanning while an interactive listing flow is open. A
+   * background scan records a new snapshot, and a listing submit is rejected
+   * unless it names the latest one.
+   */
+  setAutoScanHold(hold: boolean): Promise<void>;
+}
+
 interface UsageCapability {
   getUsagePreferences(): Promise<import('./usage').UsagePreferences>;
   setUsagePreferences(enabled: boolean): Promise<import('./usage').UsagePreferences>;
 }
 
-export interface DesktopCapabilities extends UsageCapability, MarketCapability, InventoryCapability, OrderCapability, OverlayCapability { }
+export interface DesktopCapabilities extends UsageCapability, MarketCapability, InventoryCapability, OrderCapability, OverlayCapability, AutoScanCapability { }
 
 // `withGlobalTauri: true` injects `window.__TAURI__` (the public API surface,
 // with `.core.invoke`); `__TAURI_INTERNALS__` is the lower-level object the

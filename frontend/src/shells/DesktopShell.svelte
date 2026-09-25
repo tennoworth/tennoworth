@@ -4,7 +4,7 @@
   import { advisorInput, relicInput, scoreInput, setInput, type CalcInputs } from '../features/selling/calc-inputs';
   import { loadMarket } from '../adapters/market';
   import { loadCatalogs } from '../adapters/catalogs';
-  import { TauriTransport } from '../adapters/desktop';
+  import { TauriTransport, parseScanPayload } from '../adapters/desktop';
   import { useDesktopServices } from '../ui/desktop-context';
   const { desktopAccessStatus, desktopNotifications, desktopWfmStatus, desktopWfmLogout, listenForTauriEvent, updateStatus, updateDiagnostics, desktopOpenExternalUrl, desktopProtectionState, desktopSaveProtectionPlan, normalizeInventoryNative, scoreInventoryNative, relicPlan: loadRelicPlan, setRecos: loadSetRecos, evaluateAdvisor } = useDesktopServices();
   import { ProtectionController } from '../features/selling/protection.svelte';
@@ -17,6 +17,7 @@
   import { FilterController, type View } from '../features/selling/filters.svelte';
   import { ListingController, WfmAccessController } from '../features/selling/controller.svelte';
   import { InventoryController } from '../features/inventory/controller.svelte';
+  import { AutoScanController } from '../features/inventory/auto-scan.svelte';
   import ListingReviewModal from '../features/selling/ListingReviewModal.svelte';
   import MyOrdersPanel from '../features/orders/MyOrdersPanel.svelte';
   import WatchlistPanel from '../features/watches/WatchlistPanel.svelte';
@@ -86,6 +87,17 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   const inventory = untrack(() => new InventoryController(store, transport, { loadMarket, loadCatalogs, normalizeInventory: normalizeInventoryNative }));
   const protection = new ProtectionController({ desktopProtectionState, desktopSaveProtectionPlan });
   const listing = new ListingController({ getPendingPlan: () => transport.getPendingPlan(), resumePendingPlan: () => transport.resumePendingPlan(), discardPendingPlan: () => transport.discardPendingPlan(), status: desktopWfmStatus, logout: desktopWfmLogout }, (code, next) => wfmAuthDialogsRef?.open(code, next));
+  // Automatic scanning. The hold is driven by the two places a new snapshot
+  // would invalidate work in progress: an open review (it carries price and
+  // quantity edits) and the Trade Session view (a batch is tied to the snapshot
+  // it was prepared from).
+  const autoScan = new AutoScanController({
+    settings: transport,
+    listen: listenForTauriEvent,
+    parse: parseScanPayload,
+    adopt: (data, snapshotId) => inventory.adoptScan(data, snapshotId),
+    isInteractive: () => listing.listingOpen || effectiveView === 'session',
+  });
   let supportedOwned = $derived(new Map([...inventory.resolved.owned].filter(([, row]) => !row.subtype && !row.slug.endsWith('_set') && !row.slug.endsWith('_relic') && inventory.market?.items[row.slug])));
   let allocationMatches = $derived(protection.matchesInventory(inventory.resolved.owned, inventory.nativeSnapshotId));
   let unknownSlugs = $derived(new Set([...supportedOwned.values()].filter(row => !allocationMatches || protection.state?.items[row.slug]?.estimated == null).map(row => row.slug)));
@@ -130,12 +142,29 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   onMount(() => {
     const timer = setInterval(() => { if (!protection.loading && !protection.saving) void protection.refresh(); }, 30_000);
     const stop = listenForTauriEvent(ALLOWANCE_CHANGED_EVENT, () => void protection.refresh());
-    return () => { clearInterval(timer); stop(); protection.destroy(); };
+    const stopAutoScan = autoScan.start();
+    void autoScan.load();
+    return () => { clearInterval(timer); stop(); stopAutoScan(); protection.destroy(); };
   });
   $effect(() => {
     const owned = inventory.resolved.owned;
     const snapshotId = inventory.nativeSnapshotId;
     untrack(() => void protection.setInventory(owned, snapshotId));
+  });
+  $effect(() => {
+    // The Rust loop keeps the state; this only mirrors whether a listing flow
+    // is open, and only when the answer changes.
+    const interactive = listing.listingOpen || effectiveView === 'session';
+    untrack(() => void autoScan.setInteractive(interactive));
+  });
+  $effect(() => {
+    // A scan the app already has on screen makes an offer redundant - adopting
+    // it later would swap newer rows back to older ones.
+    const shown = inventory.nativeSnapshotId;
+    untrack(() => {
+      const offered = autoScan.pending?.snapshotId ?? null;
+      if (offered != null && shown != null && offered <= shown) autoScan.dismiss();
+    });
   });
 
   let resolvedRivens = $derived(resolveRivens(inventory.ownedRivens, inventory.market));
@@ -1286,7 +1315,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       <Faq desktop />
 
     {:else if effectiveView === 'settings'}
-      <SettingsPanel onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} />
+      <SettingsPanel onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} {autoScan} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} />
     {/if}
 
     {/if}
@@ -1470,6 +1499,18 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       </div>
       <div data-shell class="gb-actions">
         <button data-shell class="gb-dismiss" aria-label="Dismiss" onclick={() => (trayHint = false)}>×</button>
+      </div>
+    </div>
+  {/if}
+  {#if autoScan.pending}
+    <div data-shell class="card ui-panel warn-banner general-banner" role="status">
+      <div data-shell class="gb-body">
+        An automatic scan finished at {new Date(autoScan.pending.at).toLocaleTimeString()}.
+        Load it to update quantities in the tables.
+      </div>
+      <div data-shell class="gb-actions">
+        <button data-shell class="btn" onclick={() => void autoScan.loadPending()}>Load new scan</button>
+        <button data-shell class="gb-dismiss" aria-label="Dismiss" onclick={() => autoScan.dismiss()}>×</button>
       </div>
     </div>
   {/if}

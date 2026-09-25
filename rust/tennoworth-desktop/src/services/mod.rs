@@ -1,5 +1,6 @@
 pub(crate) mod acquisition;
 pub(crate) mod allowance;
+pub(crate) mod auto_scan;
 pub(crate) mod browser;
 pub(crate) mod definitions;
 pub(crate) mod eelog;
