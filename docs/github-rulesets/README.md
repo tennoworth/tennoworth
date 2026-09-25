@@ -18,7 +18,7 @@ Ids: `gh api repos/tennoworth/tennoworth/rulesets --jq '.[]|"\(.id) \(.name)"'`.
 | File | Live ruleset | Purpose |
 |---|---|---|
 | `desktop-release-tags.json` | Desktop release tags | `desktop-v*` tags can be neither deleted nor moved. No bypass actors: a wedged release is recovered by re-running its `publish` job, never by retagging. |
-| `develop-integration.json` | Integration branch (develop), ID `21067958` | PR-only integration, no required approval, and completion gates (`audit-gate`, `ui-gate`). Only `PedroAmorimP` (user ID `40967190`) can bypass through a PR. |
+| `develop-integration.json` | Integration branch (develop), ID `21067958` | PR-only integration, no required approval, and completion gates (`audit-gate`, `ui-gate`) that do not require the branch to be up to date. Only `PedroAmorimP` (user ID `40967190`) can bypass through a PR. |
 | `protected-branch-history.json` | Protected branch history, ID `22310181` | Blocks deletion and non-fast-forward updates on both `develop` and `main`, with no bypass. |
 | `main-production.json` | Production branch (main) | PR + 1 approval + required completion gates (`audit-gate`, `ui-gate`). Each gate verifies its applicable checks and accepts intentionally skipped work, so documentation-only changes do not consume desktop or Rust runners. Repository admins may bypass: the maintainer cannot approve their own promotion PRs, while contributors' PRs still need the maintainer's review. |
 
@@ -27,7 +27,15 @@ Ids: `gh api repos/tennoworth/tennoworth/rulesets --jq '.[]|"\(.id) \(.name)"'`.
 Applied and read back from GitHub on 2026-09-05. Repository-level
 `allow_auto_merge` is enabled; it is a repository setting rather than part of
 these ruleset exports. Required gate names match the workflow jobs. Both
-workflows run on PRs, on their schedules, and on demand, not on branch pushes.
+workflows run on PRs, on their schedules, and on demand; they also run on
+`develop` pushes that rotate a CI cache key, which is what seeds the caches pull
+requests restore from (see `CONTRIBUTING.md`).
+
+Since 2026-09-25 the integration ruleset does not require a PR branch to be up
+to date with `develop` before merging. With strict checks, every merge made
+every other open PR stale, and updating it re-ran the full gate set, the Windows
+desktop probe included. Production keeps strict checks, so the promotion PR
+still verifies the exact tree that reaches `main`.
 
 For routine integration, open a PR into `develop` and use auto-merge to wait
 for the applicable checks. When intentionally overriding a failing or pending

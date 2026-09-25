@@ -93,6 +93,33 @@ describe('ListingReviewModal', () => {
     await waitFor(() => expect(screen.getByText('2 now visible')).toBeTruthy());
   });
 
+  // The visibility follow-up used to be reported as done the moment the call
+  // returned, so a rejected toggle still ended with "buyers can see them now".
+  it('does not claim the listings are visible when the toggle was not accepted', async () => {
+    const transport = makeTransport({
+      submitPlan: vi.fn().mockResolvedValue({
+        plan_id: 'p1',
+        results: [
+          { slug: 'accelerated_blast', status: 'ok', action: 'created', order_id: 'abc123' },
+          { slug: 'ash_prime_blueprint', status: 'ok', action: 'created', order_id: 'def456' },
+        ],
+      }),
+      bulkVisibility: vi.fn().mockResolvedValue({
+        results: [
+          { slug: 'accelerated_blast', status: 'error', message: 'WFM said no' },
+          { slug: 'ash_prime_blueprint', status: 'pending' },
+        ],
+      }),
+    });
+    openModal({ transport });
+    await fireEvent.click(screen.getByRole('button', { name: /Send 2 listings/ }));
+    await waitFor(() => expect(screen.getByText('2 created')).toBeTruthy());
+    await fireEvent.click(screen.getByRole('button', { name: /Make 2 visible/ }));
+    await waitFor(() => expect(transport.bulkVisibility).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText(/0 now visible/)).toBeTruthy());
+    expect(screen.queryByText(/buyers can see them now/)).toBeNull();
+  });
+
   it('routes a needs_login rejection to onauthrequired and returns to review', async () => {
     const onauthrequired = vi.fn();
     const transport = makeTransport({
@@ -136,6 +163,18 @@ describe('ListingReviewModal', () => {
     await fireEvent.click(screen.getByRole('button', { name: /Send 2 listings/ }));
     await screen.findByText(/Batch interrupted/);
     expect(screen.getByText('1 saved for resume')).toBeTruthy();
+  });
+
+  it('shows a local recording failure alongside the confirmed listing outcome', async () => {
+    openModal({ transport: makeTransport({ submitPlan: vi.fn().mockResolvedValue({
+      plan_id: 'durability',
+      results: [{ slug: 'accelerated_blast', status: 'ok', action: 'created', order_id: 'remote-1' }],
+      durability_error: 'Could not save the confirmed listing result: disk full.',
+    }) }) });
+    await fireEvent.click(screen.getByRole('button', { name: /Send 2 listings/ }));
+    await screen.findByText('1 created');
+    expect(screen.getByRole('alert').textContent).toContain('Could not save the confirmed listing result');
+    expect(screen.getByText('remote-1')).toBeTruthy();
   });
 
   describe('live prices (desktop only)', () => {

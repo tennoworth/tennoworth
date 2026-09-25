@@ -120,6 +120,8 @@ wayland-protocols = { version = "0.32", features = ["client", "staging", "unstab
 wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 
 [dev-dependencies]
+# Parse native dependency paths without treating comments or fixtures as code.
+syn = { version = "2", features = ["full", "visit"] }
 # Isolated on-disk state for consent failure and restart regressions.
 tempfile = "3.27"
 

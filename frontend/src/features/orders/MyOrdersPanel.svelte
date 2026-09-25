@@ -11,27 +11,13 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   import { MAX_PLATINUM, MIN_PLATINUM } from '../../domain/limits';
   import { humanError } from '../../contracts/errors';
   import { selectDrifted, type DriftRow } from '../../domain/order-drift';
-  import { assessListings, summarize, ownedKey, type HealthIssue } from '../../domain/listing-health';
+  import { assessListings, summarize, ownedEvidence, type HealthIssue } from '../../domain/listing-health';
   import { LIQUID_VOL } from '../../domain/sell-priority';
   import type { Market } from '../../contracts/data';
   import { orderUnitPrice, orderLotPrice, cachedUnitMarket } from '../../domain/order-prices';
   import Toast from '../../ui/Toast.svelte';
 
-  // WFM order shape is open - many fields appear depending on the
-  // endpoint version (v1 vs v2). We type only what we read.
-  interface WfmOrder {
-    id: string;
-    platinum: number;
-    perTrade?: number | null;
-    visible: boolean;
-    type?: 'sell' | 'buy';
-    quantity?: number;
-    rank?: number;
-    subtype?: string | null;
-    item?: { i18n?: { en?: { name?: string } }; en?: { name?: string }; name?: string; slug?: string };
-    slug?: string;
-    itemId?: string;
-  }
+  import type { OwnOrder } from '../../contracts/generated/desktop';
 
   interface ToastMsg {
     id: number;
@@ -63,13 +49,20 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   type Phase = 'idle' | 'loading' | 'locked' | 'done' | 'error';
   let phase = $state<Phase>('idle');
   let error = $state<string | null>(null);
-  let orders = $state<WfmOrder[]>([]);
+  let orders = $state<OwnOrder[]>([]);
   let busyIds = $state<Set<string>>(new Set());
   let editingId = $state<string | null>(null);
   let editValue = $state(0);
   // Inline delete confirmation - the destructive click is one tap, the row
   // tints and the button becomes "Confirm"; a second tap (or the ×) resolves.
   let confirmId = $state<string | null>(null);
+  // The same inline confirmation for the health queue's destructive fix. Kept
+  // apart from `confirmId` on purpose: one order can appear in both the queue
+  // and the table, and arming one must not arm the other.
+  let healthConfirmId = $state<string | null>(null);
+  // Which row's Delete button should take focus back once a cancel replaces the
+  // confirmation. Null everywhere else, so an ordinary render cannot steal it.
+  let restoreFocusTo = $state<string | null>(null);
   let bulkBusy = $state(false);
 
   // Toasts are component-local. Each toast owns its auto-dismiss timer id so
@@ -115,27 +108,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     transport.fetchOrders()
       .then((r) => {
         if (gen !== loadGen) return;
-        // WFM v2 returns { data: { sell: [...], buy: [...] } } OR a flat array.
-        // Normalize to a flat list with both order types tagged.
-        const respObj = r as { data?: unknown } | null | undefined;
-        const data = (respObj?.data ?? r) as
-          | { sell?: WfmOrder[]; buy?: WfmOrder[] }
-          | WfmOrder[]
-          | null
-          | undefined;
-        const out: WfmOrder[] = [];
-        const splitData = data as { sell?: WfmOrder[]; buy?: WfmOrder[] } | null | undefined;
-        if (Array.isArray(splitData?.sell)) {
-          for (const o of splitData.sell) out.push({ ...o, type: 'sell' });
-        }
-        if (Array.isArray(splitData?.buy)) {
-          for (const o of splitData.buy) out.push({ ...o, type: 'buy' });
-        }
-        // Some endpoints flatten already
-        if (out.length === 0 && Array.isArray(data)) {
-          for (const o of data) out.push(o);
-        }
-        orders = out;
+        orders = r;
         phase = 'done';
       })
       .catch((e: unknown) => {
@@ -174,10 +147,18 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   // the edit locally while WFM kept the old value - silent desync.
   function assertOrderOk(r: unknown): void {
     const res = r as { status?: string; message?: string } | null;
+    // Only a literal 'ok' is WFM accepting the change. 'pending' and
+    // 'uncertain_mutation' mean the outcome is unknown; letting those fall through
+    // as success is the same silent desync in a different disguise.
+    if (res?.status === 'ok') return;
     if (res?.status === 'error') throw new Error(res.message || 'WFM rejected the update');
+    throw new Error(
+      `WFM did not confirm the update${res?.status ? ` (${res.status})` : ''}. Recheck My Orders before trusting this row.`,
+    );
   }
 
-  async function toggleVisible(o: WfmOrder): Promise<void> {
+  async function toggleVisible(o: OwnOrder): Promise<void> {
+    if (o.visible == null) return;
     markBusy(o.id, true);
     try {
       assertOrderOk(await transport.updateOrder(o.id, { visible: !o.visible }));
@@ -190,12 +171,12 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     }
   }
 
-  function startEdit(o: WfmOrder): void {
+  function startEdit(o: OwnOrder): void {
     editingId = o.id;
     editValue = o.platinum;
   }
 
-  async function saveEdit(o: WfmOrder): Promise<void> {
+  async function saveEdit(o: OwnOrder): Promise<void> {
     const newPrice = Number(editValue);
     if (!newPrice || newPrice < 1) return;
     if (newPrice > MAX_PLATINUM) {
@@ -215,7 +196,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     }
   }
 
-  async function removeOne(o: WfmOrder): Promise<void> {
+  async function removeOne(o: OwnOrder): Promise<void> {
     if (confirmId !== o.id) {
       confirmId = o.id;
       return;
@@ -235,16 +216,23 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
 
   async function bulkSetVisible(visible: boolean): Promise<void> {
     if (bulkBusy) return;
-    const ids = orders.filter((o) => o.visible !== visible).map((o) => o.id);
+    const ids = orders.filter((o) => o.visible != null && o.visible !== visible).map((o) => o.id);
     if (ids.length === 0) return;
     bulkBusy = true;
     try {
       const resp = await transport.bulkVisibility(ids, visible);
-      // Count status==='ok' - the server can skip rows (already in that state,
-      // gone since fetch), so ids.length would over-report.
-      const ok = (resp?.results ?? []).filter((r) => r.status === 'ok').length;
-      for (const o of orders) if (ids.includes(o.id)) o.visible = visible;
+      // The server can skip rows (already in that state, gone since fetch), so the
+      // count comes from the per-order results rather than ids.length - and only a
+      // confirmed row may have its local state changed, or a failed row renders as
+      // done while the live listing is untouched.
+      const confirmed = new Set(
+        (resp?.results ?? [])
+          .filter((r) => r.status === 'ok' && r.order_id)
+          .map((r) => r.order_id as string),
+      );
+      for (const o of orders) if (confirmed.has(o.id)) o.visible = visible;
       orders = [...orders];
+      const ok = confirmed.size;
       pushToast(
         visible
           ? `${ok} listing${ok === 1 ? '' : 's'} made visible.`
@@ -259,8 +247,8 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
 
   // The market snapshot keys on slug, so an order that never resolves to one
   // simply cannot be price-checked. Same defensive shape as itemName.
-  function itemSlug(o: WfmOrder): string {
-    return o.item?.slug || o.slug || '';
+  function itemSlug(o: OwnOrder): string {
+    return o.slug ?? '';
   }
 
   // Orders whose price has drifted from the market. Recomputed whenever the
@@ -269,16 +257,16 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     if (!market?.items) return [];
     return selectDrifted(
       orders
-        .filter((o) => o.type !== 'buy')
+        .filter((o) => o.side !== 'buy')
         .map((o) => {
           const slug = itemSlug(o);
           return {
             id: o.id,
             slug,
             name: itemName(o),
-            platinum: orderUnitPrice(o.platinum, o.perTrade) ?? NaN,
-            type: o.type,
-            m: slug && market.items[slug] ? cachedUnitMarket(market.items[slug], (o.perTrade ?? 1) > 1) : null,
+            platinum: orderUnitPrice(o.platinum, o.per_trade) ?? NaN,
+            type: o.side,
+            m: slug && market.items[slug] ? cachedUnitMarket(market.items[slug], (o.per_trade ?? 1) > 1) : null,
           };
         })
         .filter((r) => r.slug !== '' && Number.isFinite(r.platinum)),
@@ -292,7 +280,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     if (!o) return;
     markBusy(row.id, true);
     try {
-      const total = orderLotPrice(row.suggested, o.perTrade);
+      const total = orderLotPrice(row.suggested, o.per_trade);
       if (total == null || total > MAX_PLATINUM) throw new Error('Suggested lot total exceeds the listing price limit. Review the lot on WFM.');
       assertOrderOk(await transport.updateOrder(row.id, { platinum: total }));
       o.platinum = total;
@@ -322,12 +310,12 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   function liveKey(slug: string, rank: number, subtype: string | null): string {
     return `${slug}|${rank}|${subtype ?? ''}`;
   }
-  function liveForOrder(o: WfmOrder): LiveTop | null {
+  function liveForOrder(o: OwnOrder): LiveTop | null {
     return live.get(liveKey(itemSlug(o), o.rank ?? 0, o.subtype ?? null)) ?? null;
   }
 
   async function checkLive(): Promise<void> {
-    const targets = orders.filter((o) => o.type !== 'buy' && itemSlug(o) !== '');
+    const targets = orders.filter((o) => o.side !== 'buy' && itemSlug(o) !== '');
     if (targets.length === 0) return;
     if (!liveListenerArmed) {
       liveListenerArmed = true;
@@ -352,18 +340,22 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     }
   }
 
+  // Composed items - prime sets are assembled from parts, so a scan of
+  // individual items can never report the set itself. See `ownedEvidence`.
+  let composedSlugs = $derived(new Set(Object.keys(market?.set_to_parts ?? {})));
+
   let health = $derived.by((): HealthIssue[] => {
     if (live.size === 0 && !ownedQty) return [];
     return assessListings(
       orders
-        .filter((o) => o.type !== 'buy')
+        .filter((o) => o.side !== 'buy')
         .map((o) => {
           const slug = itemSlug(o);
           return {
             id: o.id, slug, name: itemName(o),
-            platinum: orderUnitPrice(o.platinum, o.perTrade) ?? NaN, quantity: o.quantity ?? 1, type: 'sell' as const,
+            platinum: orderUnitPrice(o.platinum, o.per_trade) ?? NaN, quantity: o.quantity, type: 'sell' as const,
             live: slug ? liveForOrder(o) : null,
-            owned: ownedQty && slug ? (ownedQty.get(ownedKey(slug, o.subtype ?? null)) ?? 0) : null,
+            owned: slug ? ownedEvidence(slug, o.subtype ?? null, ownedQty, composedSlugs) : null,
           };
         })
         .filter((r) => r.slug !== '' && Number.isFinite(r.platinum)),
@@ -380,7 +372,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     markBusy(issue.id, true);
     try {
       if (issue.kind === 'overpriced' || issue.kind === 'underbid') {
-        const p = orderLotPrice(Math.max(MIN_PLATINUM, issue.suggested), o.perTrade);
+        const p = orderLotPrice(Math.max(MIN_PLATINUM, issue.suggested), o.per_trade);
         if (p == null || p > MAX_PLATINUM) throw new Error('Suggested lot total exceeds the listing price limit. Review the lot on WFM.');
         assertOrderOk(await transport.updateOrder(issue.id, { platinum: p }));
         o.platinum = p;
@@ -390,6 +382,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
         o.quantity = issue.suggested;
         pushToast(`${issue.name} quantity set to ${issue.suggested}.`);
       } else if (issue.kind === 'not-owned') {
+        healthConfirmId = null;
         await transport.deleteOrder(issue.id);
         orders = orders.filter((x) => x.id !== issue.id);
         pushToast(`Deleted ${issue.name}.`);
@@ -417,15 +410,12 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     }
   }
 
-  // WFM order objects nest the item info - name lookup is defensive.
-  function itemName(o: WfmOrder): string {
+  // A missing catalogue entry still leaves the validated item id visible.
+  function itemName(o: OwnOrder): string {
     return (
-      o.item?.i18n?.en?.name ||
-      o.item?.en?.name ||
-      o.item?.name ||
-      o.item?.slug ||
+      o.name ||
       o.slug ||
-      o.itemId ||
+      o.item_id ||
       'unknown'
     );
   }
@@ -444,22 +434,22 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   });
   let counts = $derived({
     all: orders.length,
-    sell: orders.filter((o) => o.type !== 'buy').length,
-    buy: orders.filter((o) => o.type === 'buy').length,
-    hidden: orders.filter((o) => !o.visible).length,
+    sell: orders.filter((o) => o.side !== 'buy').length,
+    buy: orders.filter((o) => o.side === 'buy').length,
+    hidden: orders.filter((o) => o.visible === false).length,
     issues: issueIds.size,
   });
   let shown = $derived.by(() => {
     const f = nameFilter.trim().toLowerCase();
     return orders.filter((o) => {
-      if (show === 'sell' && o.type === 'buy') return false;
-      if (show === 'buy' && o.type !== 'buy') return false;
-      if (show === 'hidden' && o.visible) return false;
+      if (show === 'sell' && o.side === 'buy') return false;
+      if (show === 'buy' && o.side !== 'buy') return false;
+      if (show === 'hidden' && o.visible !== false) return false;
       if (show === 'issues' && !issueIds.has(o.id)) return false;
       return !f || itemName(o).toLowerCase().includes(f);
     });
   });
-  let listedValue = $derived(orders.filter((o) => o.type !== 'buy').reduce((a, o) => a + (orderUnitPrice(o.platinum, o.perTrade) ?? 0) * (o.quantity ?? 1), 0));
+  let listedValue = $derived(orders.filter((o) => o.side !== 'buy').reduce((a, o) => a + (orderUnitPrice(o.platinum, o.per_trade) ?? 0) * o.quantity, 0));
 
   // The fix queue: live/scan health issues first, then (only while no live
   // check has run) the snapshot-drift fallback for the remaining sell orders.
@@ -475,11 +465,31 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     }
     return rows;
   });
-  function orderById(id: string): WfmOrder | undefined {
+  function orderById(id: string): OwnOrder | undefined {
     return orders.find((o) => o.id === id);
   }
   function healthAction(h: HealthIssue): string {
     return h.kind === 'not-owned' ? 'Delete' : h.kind === 'excess-qty' ? 'Set qty' : 'Reprice';
+  }
+  // The queue's destructive fix arms first, matching the table's inline delete.
+  // A repricing or quantity fix is reversible, so it stays single-click.
+  function armOrFix(h: HealthIssue): void {
+    if (h.kind === 'not-owned') {
+      restoreFocusTo = null;
+      healthConfirmId = h.id;
+      return;
+    }
+    void applyFix(h);
+  }
+  function cancelDelete(id: string): void {
+    healthConfirmId = null;
+    restoreFocusTo = id;
+  }
+  // Arming replaces the control the user activated, and cancelling replaces it
+  // back. Focus follows the replacement so a keyboard user keeps their place
+  // instead of being dropped on the document body.
+  function focusIf(node: HTMLElement, should: boolean): void {
+    if (should) node.focus();
   }
   function driftWhy(d: DriftRow): string {
     const pct = Math.round(d.delta_pct * 100);
@@ -565,10 +575,10 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
           {@const o = orderById(q.id)}
           {@const t = o ? liveForOrder(o) : null}
           {@const busy = busyIds.has(q.id)}
-          <tr class:busy>
+          <tr class:busy class:confirming={q.kind === 'health' && healthConfirmId === q.id}>
             <td class="l" title={q.slug}>{q.name}</td>
             <td>{o?.quantity ?? '?'}</td>
-            <td class="fg">{o && orderUnitPrice(o.platinum, o.perTrade) != null ? Number(orderUnitPrice(o.platinum, o.perTrade)!.toFixed(2)) : '?'}<span class="unit">p / unit</span></td>
+            <td class="fg">{o && orderUnitPrice(o.platinum, o.per_trade) != null ? Number(orderUnitPrice(o.platinum, o.per_trade)!.toFixed(2)) : '?'}<span class="unit">p / unit</span></td>
             <td>{#if t && !t.error && t.low_sell != null}{t.low_sell}<span class="unit">p</span>{:else}<span class="faint">-</span>{/if}</td>
             <td>{#if t && !t.error && t.top_buy != null}{t.top_buy}<span class="unit">p</span>{:else}<span class="faint">-</span>{/if}</td>
             {#if q.kind === 'health'}
@@ -585,7 +595,12 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
                 {/if}
               </td>
               <td class="act">
-                <button class="btn xs" class:bad={q.h.kind === 'not-owned'} onclick={() => applyFix(q.h)} disabled={busy} title={q.h.why}>{healthAction(q.h)}</button>
+                {#if q.h.kind === 'not-owned' && healthConfirmId === q.id}
+                  <button class="btn xs bad" use:focusIf={true} onclick={() => applyFix(q.h)} disabled={busy} title="Confirm delete">Confirm</button>
+                  <button class="btn xs x" onclick={() => cancelDelete(q.id)} title="Cancel" aria-label="Cancel delete">×</button>
+                {:else}
+                  <button class="btn xs" class:bad={q.h.kind === 'not-owned'} use:focusIf={restoreFocusTo === q.id} onclick={() => armOrFix(q.h)} disabled={busy} title={q.h.why}>{healthAction(q.h)}</button>
+                {/if}
               </td>
             {:else}
               <td class="reason" class:warn={q.d.kind === 'overpriced'} title={driftWhy(q.d)}>
@@ -634,13 +649,13 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     <button
       class="btn ghost"
       onclick={() => bulkSetVisible(true)}
-      disabled={bulkBusy || orders.every((o) => o.visible)}
+      disabled={bulkBusy || orders.every((o) => o.visible == null || o.visible)}
       title="Make every listing visible to buyers"
     >All visible</button>
     <button
       class="btn ghost"
       onclick={() => bulkSetVisible(false)}
-      disabled={bulkBusy || orders.every((o) => !o.visible)}
+      disabled={bulkBusy || orders.every((o) => o.visible == null || !o.visible)}
       title="Hide every listing from buyers"
     >All hidden</button>
     <button class="btn" onclick={loadOrders} disabled={phase === 'loading'}>Refresh</button>
@@ -684,7 +699,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
             {@const t = live.size > 0 ? liveForOrder(o) : null}
             <tr class:busy class:confirming={confirmId === o.id}>
               <td class="l">{itemName(o)}</td>
-              <td><span class="type" class:buy={o.type === 'buy'}>{o.type ?? '?'}</span></td>
+              <td><span class="type" class:buy={o.side === 'buy'}>{o.side ?? '?'}</span></td>
               <td>{o.quantity ?? '?'}</td>
               <td class="price">
                 {#if editingId === o.id}
@@ -693,7 +708,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
                   <button class="btn xs x" onclick={() => (editingId = null)} title="Cancel">×</button>
                 {:else}
                   <span class="fg">{o.platinum}<span class="unit">p</span></span>
-                  {#if (o.perTrade ?? 1) > 1}<span class="unit"> / {o.perTrade} units</span>{/if}
+                  {#if (o.per_trade ?? 1) > 1}<span class="unit"> / {o.per_trade} units</span>{/if}
                   <button class="btn xs ghost edit" onclick={() => startEdit(o)} disabled={busy} title="Edit price">✎</button>
                 {/if}
               </td>
@@ -705,9 +720,9 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
                 <button
                   class="visbtn {o.visible ? 'on' : 'off'}"
                   onclick={() => toggleVisible(o)}
-                  disabled={busy}
-                  title={o.visible ? 'Click to make hidden' : 'Click to make visible'}
-                ><span class="vis" class:off={!o.visible}>{o.visible ? 'ON' : 'OFF'}</span></button>
+                  disabled={busy || o.visible == null}
+                  title={o.visible == null ? 'Visibility unavailable; refresh orders' : o.visible ? 'Click to make hidden' : 'Click to make visible'}
+                ><span class="vis" class:off={!o.visible}>{o.visible == null ? '?' : o.visible ? 'ON' : 'OFF'}</span></button>
               </td>
               <td class="act">
                 {#if confirmId === o.id}

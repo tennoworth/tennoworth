@@ -52,11 +52,130 @@ pub fn fetch_catalog_wfm(http: &dyn Http, url: &str) -> Result<CatalogFetch, Str
                                 .collect()
                         })
                         .unwrap_or_default(),
+                    name: (!nm.is_empty()).then(|| nm.to_string()),
+                    game_ref: it
+                        .get("gameRef")
+                        .and_then(|g| g.as_str())
+                        .filter(|g| !g.is_empty())
+                        .map(String::from),
                 },
             );
         }
     }
     Ok((catalog, meta))
+}
+
+/// Fill `path_to_info` from warframe.market's own `gameRef` paths.
+///
+/// warframestat is the primary source but lags every content update by days
+/// to weeks, and until it catches up a new item has no path: relic tables
+/// drop it, DE ducats and recipes cannot reach it, and inventory cannot see
+/// it. WFM lists the item from day one with the exact DE path, so this is a
+/// lookup rather than a guess - and it is the only mapping that knows
+/// `CorufellPrimeBarrel` is sold as "Corufell Prime Stock". Against the live
+/// catalogue every gameRef warframestat also covers named the same slug.
+///
+/// Entries warframestat supplied are never replaced. Sets are skipped because
+/// their gameRef is the built item, which is not the tradeable set; relics
+/// and rivens resolve through their own paths. A path WFM gives to more than
+/// one item is ambiguous and skipped. Returns the number of paths added.
+///
+/// Most of these paths are also in warframestat's item catalogue
+/// (`wfstat_categories`, path → category), which every resolver consults
+/// after `path_to_info`. They are still added, because the DE joins here read
+/// only `path_to_info`, but with warframestat's category: an entry checked
+/// first must not replace its category with the coarser one WFM's tags give.
+pub fn add_game_ref_paths(
+    meta: &HashMap<String, CatalogItemMeta>,
+    path_to_info: &mut HashMap<String, serde_json::Value>,
+    wfstat_categories: &HashMap<String, Option<String>>,
+) -> usize {
+    let mut by_ref: HashMap<&str, Vec<(&str, &CatalogItemMeta)>> = HashMap::new();
+    for (slug, m) in meta {
+        let Some(game_ref) = m.game_ref.as_deref() else {
+            continue;
+        };
+        if !game_ref.starts_with("/Lotus/")
+            || m.tags
+                .iter()
+                .any(|t| matches!(t.as_str(), "set" | "relic" | "riven"))
+        {
+            continue;
+        }
+        by_ref.entry(game_ref).or_default().push((slug, m));
+    }
+    let mut added = 0;
+    for (game_ref, owners) in by_ref {
+        let [(slug, m)] = owners.as_slice() else {
+            continue;
+        };
+        let Some(name) = m.name.as_deref() else {
+            continue;
+        };
+        if path_to_info.contains_key(game_ref) {
+            continue;
+        }
+        let mut info = serde_json::Map::new();
+        info.insert("name".into(), name.into());
+        info.insert("slug".into(), slug.to_string().into());
+        // The same Component/Blueprint trim the resolvers apply.
+        let known = wfstat_categories.get(game_ref).or_else(|| {
+            ["Component", "Blueprint"].iter().find_map(|suffix| {
+                game_ref
+                    .strip_suffix(suffix)
+                    .and_then(|stem| wfstat_categories.get(stem))
+            })
+        });
+        let category = known
+            .cloned()
+            .flatten()
+            .or_else(|| {
+                category_from_tags(&m.tags)
+                    .or_else(|| set_category(slug, meta))
+                    .map(str::to_string)
+            });
+        if let Some(category) = category {
+            info.insert("category".into(), category.into());
+        }
+        path_to_info.insert(game_ref.to_string(), serde_json::Value::Object(info));
+        added += 1;
+    }
+    added
+}
+
+/// A weapon part is tagged only `weapon`/`component`; its class lives on the
+/// set (`steflos_prime_barrel` → `steflos_prime_set` → Primary), which is also
+/// where warframestat's parent category comes from.
+fn set_category(slug: &str, meta: &HashMap<String, CatalogItemMeta>) -> Option<&'static str> {
+    let mut stem = slug;
+    while let Some((head, _)) = stem.rsplit_once('_') {
+        if let Some(set) = meta.get(&format!("{head}_set")) {
+            return category_from_tags(&set.tags);
+        }
+        stem = head;
+    }
+    None
+}
+
+/// warframestat's category vocabulary, from WFM tags. `mod` is tested before
+/// `warframe` because an augment carries both; anything else gets no category,
+/// which consumers already treat as unknown.
+fn category_from_tags(tags: &[String]) -> Option<&'static str> {
+    const ORDER: &[(&str, &str)] = &[
+        ("mod", "Mods"),
+        ("arcane_enhancement", "Arcanes"),
+        ("archgun", "Arch-Gun"),
+        ("archwing", "Archwing"),
+        ("warframe", "Warframes"),
+        ("sentinel", "Sentinels"),
+        ("primary", "Primary"),
+        ("secondary", "Secondary"),
+        ("melee", "Melee"),
+    ];
+    ORDER
+        .iter()
+        .find(|(tag, _)| tags.iter().any(|t| t == tag))
+        .map(|(_, category)| *category)
 }
 
 /// Fetch warframestat parent endpoints → path_to_info + set_to_parts.
@@ -230,6 +349,22 @@ fn absorb_parent(
             serde_json::json!({"name": parent_name, "parts": this_set_parts}),
         );
     }
+}
+
+/// warframestat's path → category, from the slim `[uniqueName, {name,
+/// category}]` pairs the resolver catalogue is written as.
+pub fn wfstat_categories(slim: &[serde_json::Value]) -> HashMap<String, Option<String>> {
+    slim.iter()
+        .filter_map(|pair| {
+            let path = pair.get(0)?.as_str()?;
+            let category = pair
+                .get(1)
+                .and_then(|info| info.get("category"))
+                .and_then(|c| c.as_str())
+                .map(str::to_string);
+            Some((path.to_string(), category))
+        })
+        .collect()
 }
 
 pub const WFSTAT_ITEMS_URL: &str = "https://api.warframestat.us/items/";
@@ -461,5 +596,153 @@ mod tests {
         );
 
         assert_eq!(path_to_info[SYSTEMS_BLUEPRINT]["slug"], "upstream_slug");
+    }
+
+    fn wfm(name: &str, tags: &[&str], game_ref: &str) -> CatalogItemMeta {
+        CatalogItemMeta {
+            tags: tags.iter().map(|t| t.to_string()).collect(),
+            name: Some(name.to_string()),
+            game_ref: Some(game_ref.to_string()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn game_ref_paths_fill_gaps_and_keep_warframestat_categories() {
+        let meta = HashMap::from([
+            (
+                "corufell_prime_stock".to_string(),
+                wfm(
+                    "Corufell Prime Stock",
+                    &["weapon", "component", "prime"],
+                    "/Lotus/Types/Recipes/Weapons/WeaponParts/CorufellPrimeBarrel",
+                ),
+            ),
+            (
+                "caliban_prime_systems_blueprint".to_string(),
+                wfm(
+                    "WFM Spelling",
+                    &["warframe", "prime", "component"],
+                    SYSTEMS_BLUEPRINT,
+                ),
+            ),
+            (
+                "gastroparesis".to_string(),
+                wfm(
+                    "Gastroparesis",
+                    &["warframe", "augment", "mod"],
+                    "/Lotus/Powersuits/Devourer/DevourerPassiveAugmentCard",
+                ),
+            ),
+            (
+                "citrine_prime_set".to_string(),
+                wfm(
+                    "Citrine Prime Set",
+                    &["warframe", "prime", "set"],
+                    "/Lotus/Powersuits/Geode/CitrinePrime",
+                ),
+            ),
+            (
+                "lith_c15_relic".to_string(),
+                wfm(
+                    "Lith C15 Relic",
+                    &["lith", "relic"],
+                    "/Lotus/Types/Game/Projections/T1VoidProjectionC15",
+                ),
+            ),
+            (
+                "corufell_prime_set".to_string(),
+                wfm(
+                    "Corufell Prime Set",
+                    &["weapon", "melee", "prime", "set"],
+                    "/Lotus/Weapons/Tenno/Archwing/Melee/PrimeCorufell/PrimeCorufellScytheWeapon",
+                ),
+            ),
+            (
+                "scene_a".to_string(),
+                wfm("Scene A", &["scene"], "/Lotus/Shared"),
+            ),
+            (
+                "fluctus_prime_barrel".to_string(),
+                wfm(
+                    "Fluctus Prime Barrel",
+                    &["weapon", "component", "prime"],
+                    "/Lotus/Types/Recipes/Weapons/WeaponParts/FluctusPrimeBarrelBlueprint",
+                ),
+            ),
+            (
+                "fluctus_prime_set".to_string(),
+                wfm(
+                    "Fluctus Prime Set",
+                    &["weapon", "primary", "prime", "set"],
+                    "/Lotus/Weapons/Tenno/Archwing/Primary/PrimeFluctus",
+                ),
+            ),
+            (
+                "ayatan_amber_star".to_string(),
+                wfm("Ayatan Amber Star", &["ayatan_sculpture"], "/Lotus/Types/Items/FusionTreasures/OroFusexOrnamentB"),
+            ),
+            (
+                "scene_b".to_string(),
+                wfm("Scene B", &["scene"], "/Lotus/Shared"),
+            ),
+        ]);
+        let mut path_to_info = HashMap::from([(
+            SYSTEMS_BLUEPRINT.to_string(),
+            json!({"name": "Caliban Prime Systems Blueprint",
+                   "slug": "caliban_prime_systems_blueprint", "category": "Warframes"}),
+        )]);
+
+        // warframestat's catalogue knows these two; the barrel only by the
+        // trimmed path the resolvers would retry.
+        let wfstat = HashMap::from([
+            (
+                "/Lotus/Types/Recipes/Weapons/WeaponParts/FluctusPrimeBarrel".to_string(),
+                Some("Arch-Gun".to_string()),
+            ),
+            (
+                "/Lotus/Types/Items/FusionTreasures/OroFusexOrnamentB".to_string(),
+                Some("Misc".to_string()),
+            ),
+        ]);
+
+        let added = add_game_ref_paths(&meta, &mut path_to_info, &wfstat);
+
+        assert_eq!(added, 4);
+        assert_eq!(
+            path_to_info["/Lotus/Types/Recipes/Weapons/WeaponParts/FluctusPrimeBarrelBlueprint"]
+                ["category"],
+            "Arch-Gun",
+            "a path warframestat knows keeps its category, not the set's Primary tag"
+        );
+        assert_eq!(
+            path_to_info["/Lotus/Types/Items/FusionTreasures/OroFusexOrnamentB"]["category"],
+            "Misc",
+            "and one no WFM tag maps still gets warframestat's"
+        );
+        assert_eq!(
+            path_to_info["/Lotus/Types/Recipes/Weapons/WeaponParts/CorufellPrimeBarrel"],
+            json!({"name": "Corufell Prime Stock", "slug": "corufell_prime_stock", "category": "Melee"}),
+            "a part without a class tag takes its set's category"
+        );
+        assert_eq!(
+            path_to_info["/Lotus/Powersuits/Devourer/DevourerPassiveAugmentCard"]["category"],
+            "Mods",
+            "an augment carries the warframe tag too, but it is a mod"
+        );
+        assert_eq!(
+            path_to_info[SYSTEMS_BLUEPRINT]["name"], "Caliban Prime Systems Blueprint",
+            "warframestat's entry wins"
+        );
+        for skipped in [
+            "/Lotus/Powersuits/Geode/CitrinePrime",
+            "/Lotus/Types/Game/Projections/T1VoidProjectionC15",
+            "/Lotus/Shared",
+        ] {
+            assert!(
+                !path_to_info.contains_key(skipped),
+                "{skipped} must stay unmapped"
+            );
+        }
     }
 }

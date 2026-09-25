@@ -815,6 +815,10 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
                 while offset < end {
                     let want = std::cmp::min(CHUNK, end - offset);
                     let mut read_n: usize = 0;
+                    #[allow(
+                        clippy::indexing_slicing,
+                        reason = "tail_len is bounded by overlap and the buffer reserves overlap + CHUNK"
+                    )]
                     let ok = ReadProcessMemory(
                         handle,
                         offset as *const _,
@@ -828,6 +832,10 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
                         break;
                     }
                     let total = tail_len + read_n;
+                    #[allow(
+                        clippy::indexing_slicing,
+                        reason = "ReadProcessMemory returns at most want bytes, so total fits the buffer"
+                    )]
                     aggregate_match(&hay[..total], &pats, &mut counts, &budget)?;
                     let keep = std::cmp::min(overlap, read_n);
                     hay.copy_within(total - keep..total, 0);
