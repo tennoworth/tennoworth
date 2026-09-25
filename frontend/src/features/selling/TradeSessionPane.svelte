@@ -166,7 +166,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
       <button class="btn mode" class:primary={mode === choice.id} aria-pressed={mode === choice.id}
         disabled={cap === 0 && !!retained}
         onclick={() => mode = choice.id}>
-        <span>{choice.name}</span><span class="description">{choice.description}</span>
+        <span class="mode-name">{choice.name}</span><span class="description">{choice.description}</span>
       </button>
     {/each}
   </div>
@@ -271,6 +271,8 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
 <style>
   .modes { align-items: stretch; }
   .mode { flex: 1 1 12rem; min-height: var(--ctl-lg); height: auto; display: flex; flex-direction: column; align-items: flex-start; text-align: left; white-space: normal; padding: var(--s3); }
+  /* The card title outranks its own description. */
+  .mode-name { font: 600 var(--text-section)/var(--leading-control) var(--font-ui); }
   .description { font-family: var(--font-body); font-size: var(--text-caption); line-height: var(--leading-body); text-transform: none; letter-spacing: normal; font-weight: 400; }
   .session-table { min-width: 70rem; }
   .reason { min-width: 18rem; white-space: normal; font-family: var(--font-body); }

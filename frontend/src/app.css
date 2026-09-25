@@ -207,6 +207,9 @@ body {
 }
 a { color: var(--accent); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* Text entry already has a frame; an offset ring around it reads as two boxes.
+   Draw the ring over the border so focus is one heavier frame. */
+:is(input:not([type="checkbox"], [type="radio"], [type="range"]), select, textarea):focus-visible { outline-offset: -1px; }
 button {
   font: inherit;
   color: var(--fg);
@@ -227,6 +230,17 @@ input[type="text"], input[type="number"] {
   padding: 6px 10px;
 }
 input::placeholder { color: var(--faint); }
+/* One disclosure glyph: ▸ closed, ▾ open, in the label face. Menus keep a
+   trailing ▾ of their own; "+" is kept for add actions only. */
+summary { cursor: pointer; list-style: none; }
+summary::-webkit-details-marker { display: none; }
+summary::before { content: "▸"; display: inline-block; flex: 0 0 auto; width: 1em; font-family: var(--font-ui); color: var(--muted); }
+details[open] > summary::before { content: "▾"; }
+/* Spinner arrows are tiny, unthemed and duplicate the arrow keys, which still
+   step the value. */
+input[type="number"] { appearance: textfield; -moz-appearance: textfield; }
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
 /* One themed box everywhere: the native one is OS blue when checked and
    white on paper when not. Checked is the ink inversion, like every other
    selected state. Components may resize it; they must not recolour it. */
@@ -643,12 +657,27 @@ table.tw tr.busy td { color: var(--faint); }
 /* A notice that is one line of a panel keeps the panel's box and takes only
    the semantic edge; inset so the text does not shift. */
 .wrap.tw > .line[data-tone="warn"] { box-shadow: inset 3px 0 0 var(--warn); }
-/* Segmented control on the 28px height. */
-.seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius-ctl); overflow: hidden; height: var(--ctl); }
-.seg > button { font: inherit; font-size: var(--text-caption); height: 100%; padding: 0 var(--s3); background: var(--panel-2); border: none; border-left: 1px solid var(--border); border-radius: 0; color: var(--muted); cursor: pointer; }
-.seg > button:first-child { border-left: none; }
-.seg > button:hover:not(:disabled) { color: var(--fg); background: var(--hover); }
-.seg > button.on { color: var(--accent); background: var(--panel); font-weight: 600; }
+/* The one single-choice control: joined buttons, dotted inner rules, and the
+   selected option is the ink inversion - the same "selected" as the active nav
+   item. Works for aria-pressed toggles, radio groups and tab lists alike.
+   Counts inside an option (.n) are mono. The group wraps rather than scrolls. */
+.ui-segmented { display: inline-flex; flex-wrap: wrap; max-width: 100%; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius-ctl); background: var(--panel-2); }
+.ui-segmented > :is(button, a) {
+  display: inline-flex; align-items: center; gap: var(--s1);
+  min-height: var(--ctl); padding: 0 var(--s3);
+  font: inherit; font-size: var(--text-caption); line-height: var(--leading-control); white-space: nowrap;
+  color: var(--fg); background: transparent; text-decoration: none;
+  border: 0; border-left: 1px var(--rule) var(--border); border-radius: 0;
+  cursor: pointer;
+}
+.ui-segmented > :first-child { border-left: 0; }
+.ui-segmented > :is(button, a):hover:not(:disabled) { background: var(--hover); color: var(--fg); }
+.ui-segmented > :is([aria-pressed="true"], [aria-checked="true"], [aria-selected="true"], [aria-current="true"]),
+.ui-segmented > :is([aria-pressed="true"], [aria-checked="true"], [aria-selected="true"], [aria-current="true"]):hover:not(:disabled) { background: var(--ink-bar); color: var(--on-ink); font-weight: 600; }
+.ui-segmented > :focus-visible { outline-offset: -4px; }
+.ui-segmented > :is([aria-pressed="true"], [aria-checked="true"], [aria-selected="true"], [aria-current="true"]):focus-visible { outline-color: var(--on-ink); }
+.ui-segmented .n { font-family: var(--font-mono); font-size: var(--text-caption); }
+.ui-segmented.xs > :is(button, a) { min-height: var(--ctl-xs); padding: 0 var(--s2); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
@@ -684,7 +713,7 @@ html[data-look="yorha"] .statusbar .brand h1 { font: 500 var(--text-section)/1.2
 html[data-look="yorha"] .nav-label,
 html[data-look="yorha"] th,
 html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.14em; }
-/* Ink-bar inversion - the ONLY filled surface: active nav, active preset,
+/* Ink-bar inversion - the ONLY filled surface: active nav, selected segment,
    primary CTAs, panel title bars, dialog headers. */
 html[data-look="yorha"] .nav-item.active { background: var(--ink-bar); color: var(--on-ink); border-left-color: var(--ink-bar); }
 html[data-look="yorha"] .nav-item.active .badge { color: var(--on-ink); border-color: var(--on-ink); background: transparent; }
@@ -697,9 +726,6 @@ html[data-look="yorha"] .nav-item > span:first-child::before {
   border: 1px solid currentColor; margin-right: 9px; vertical-align: 1px;
 }
 html[data-look="yorha"] .nav-item.active > span:first-child::before { background: currentColor; }
-html[data-look="yorha"] .preset.active { background: var(--ink-bar); color: var(--on-ink); border-color: var(--ink-bar); }
-html[data-look="yorha"] .preset.active::before { content: "■ "; font-size: var(--text-caption); vertical-align: 1px; }
-html[data-look="yorha"] .preset::before { content: "□ "; font-size: var(--text-caption); vertical-align: 1px; }
 html[data-look="yorha"] .list-cta,
 html[data-look="yorha"] .rp-primary,
 html[data-look="yorha"] .btn.primary { background: var(--ink-bar); color: var(--on-ink); border-color: var(--ink-bar); }
@@ -717,8 +743,6 @@ html[data-look="yorha"] .wrap.tw > .rail .rail-toggle { color: var(--rail-muted)
 html[data-look="yorha"] .wrap.tw > .rail .rail-toggle:hover { color: var(--rail-fg); }
 html[data-look="yorha"] .wrap.tw > .bar { border-bottom-style: dotted; }
 html[data-look="yorha"] .wrap.tw .lbl { font-weight: 500; letter-spacing: 0.14em; }
-html[data-look="yorha"] .seg > button:not(:first-child) { border-left-style: dotted; }
-html[data-look="yorha"] .seg > button.on { color: var(--fg); background: var(--panel); }
 /* Card heads: the picks strip's head bar and any card whose first child is
    its h3 (market browser cards) become full-width ink title bars. */
 html[data-look="yorha"] .picks-head { background: var(--ink-bar); color: var(--on-ink); border-bottom: 0; padding: var(--s1) var(--inset); }
@@ -747,9 +771,6 @@ html[data-look="yorha"] .card > h3:first-child :focus-visible,
 html[data-look="yorha"] .faq > h2 :focus-visible,
 html[data-look="yorha"] .modal > header :focus-visible,
 html[data-look="yorha"] dialog.cryptobox header :focus-visible { outline-color: var(--on-ink); }
-/* Segmented controls: dotted internal rules, paper active cell. */
-html[data-look="yorha"] .seg-btn { border-left-style: dotted; }
-html[data-look="yorha"] .seg-btn.active { color: var(--fg); background: var(--panel); }
 html[data-look="yorha"] th.active { color: var(--fg); }
 html[data-look="yorha"] .picks-head { border-bottom-style: dotted; }
 /* Freshness dot = 7px outlined square, filled by state. */

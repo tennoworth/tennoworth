@@ -624,12 +624,12 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   <div class="rail"><h3>Active listings</h3></div>
   <div class="bar order-filters">
     <div class="ui-field"><span>Show</span>
-    <span class="seg" role="group" aria-label="Show">
-      <button class:on={show === 'all'} aria-pressed={show === 'all'} onclick={() => (show = 'all')}>All {counts.all}</button>
-      <button class:on={show === 'sell'} aria-pressed={show === 'sell'} onclick={() => (show = 'sell')}>Sell {counts.sell}</button>
-      <button class:on={show === 'buy'} aria-pressed={show === 'buy'} onclick={() => (show = 'buy')}>Buy {counts.buy}</button>
-      <button class:on={show === 'hidden'} aria-pressed={show === 'hidden'} onclick={() => (show = 'hidden')}>Hidden {counts.hidden}</button>
-      <button class:on={show === 'issues'} aria-pressed={show === 'issues'} onclick={() => (show = 'issues')}>Issues {counts.issues}</button>
+    <span class="ui-segmented" role="group" aria-label="Show">
+      <button type="button" aria-pressed={show === 'all'} onclick={() => (show = 'all')}>All <span class="n">{counts.all}</span></button>
+      <button type="button" aria-pressed={show === 'sell'} onclick={() => (show = 'sell')}>Sell <span class="n">{counts.sell}</span></button>
+      <button type="button" aria-pressed={show === 'buy'} onclick={() => (show = 'buy')}>Buy <span class="n">{counts.buy}</span></button>
+      <button type="button" aria-pressed={show === 'hidden'} onclick={() => (show = 'hidden')}>Hidden <span class="n">{counts.hidden}</span></button>
+      <button type="button" class:issues={counts.issues > 0} aria-pressed={show === 'issues'} onclick={() => (show = 'issues')}>Issues <span class="n">{counts.issues}</span></button>
     </span></div>
     <label class="ui-field order-search"><span>Item</span><input class="input" type="text" placeholder="Filter by name…" bind:value={nameFilter} aria-label="Filter orders by name" /></label>
   </div>
@@ -746,8 +746,8 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   /* Bars may wrap on a narrow desk (the seg + filter + three buttons). */
   .bar { flex-wrap: wrap; row-gap: var(--s1); padding-top: var(--s1); padding-bottom: var(--s1); }
   .chips { display: inline-flex; gap: var(--s1); }
-  .orders .seg { height: auto; flex-wrap: wrap; max-width: 100%; }
-  .orders .seg > button { min-height: var(--ctl); }
+  /* Open issues are a caution to act on; the selected inversion still wins. */
+  .ui-segmented > .issues:not([aria-pressed="true"]) { color: var(--warn); }
   .chip {
     display: inline-flex; align-items: center;
     height: var(--ctl-xs);
@@ -784,7 +784,6 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   .order-search .input { width: 100%; }
   .order-actions { padding-block: var(--s3); }
   .orders .order-filters > .ui-field { flex-shrink: 1; max-width: 100%; }
-  .seg { flex-wrap: wrap; height: auto; min-height: var(--ctl-lg); overflow: visible; }
-  .seg > button { min-height: var(--ctl-lg); height: auto; white-space: nowrap; }
+  .ui-segmented > button { min-height: var(--ctl-lg); }
   .orders td:last-child .btn { white-space: nowrap; }
 </style>

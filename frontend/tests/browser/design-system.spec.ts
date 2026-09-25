@@ -37,6 +37,18 @@ async function redTags(page: Page) {
   });
 }
 
+// Single-choice groups share one selected state: the ink inversion.
+async function unevenSelection(page: Page) {
+  return page.locator('[role="group"] > [aria-pressed="true"]:visible, [role="radiogroup"] > [aria-checked="true"]:visible, [role="tablist"] > [aria-selected="true"]:visible').evaluateAll(options => {
+    const probe = document.createElement('span');
+    probe.style.background = 'var(--ink-bar)';
+    document.body.append(probe);
+    const ink = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    return options.filter(option => getComputedStyle(option).backgroundColor !== ink).map(option => option.textContent!.trim());
+  });
+}
+
 const views = ['Sell', 'Trade Session', 'Set picks', 'Relics', 'Rivens', 'Baro', 'Routines', 'Meta Drift', 'My orders', 'Price watches', 'Ledger', 'FAQ', 'Settings'];
 
 for (const theme of ['light', 'dark'] as const) {
@@ -71,6 +83,7 @@ for (const theme of ['light', 'dark'] as const) {
         if (width === 1200) {
           expect(await unreadableRailText(page), `${view} rail text`).toEqual([]);
           expect(await redTags(page), `${view} tags`).toEqual([]);
+          expect(await unevenSelection(page), `${view} selected options`).toEqual([]);
         }
         await page.screenshot({ path: testInfo.outputPath(`${view.replaceAll(' ', '-')}-${theme}-${width}.png`) });
       }
@@ -85,6 +98,7 @@ test('hosted rails keep readable text in both themes', async ({ page }) => {
     await expect(page.locator('#community-usage')).toBeVisible();
     expect(await unreadableRailText(page), `hosted ${theme}`).toEqual([]);
     expect(await redTags(page), `hosted ${theme} tags`).toEqual([]);
+    expect(await unevenSelection(page), `hosted ${theme} selected options`).toEqual([]);
     const rail = await page.locator('#community-usage > .rail').boundingBox();
     const reference = await page.locator('.wrap.tw > .rail').first().boundingBox();
     expect(rail!.height, 'an h2 rail matches the h3 rails').toBeLessThanOrEqual(reference!.height + 1);
@@ -225,7 +239,7 @@ test('narrow order filters stay reachable and routines remain an actionable chec
       await page.setViewportSize({ width, height: 480 });
       await page.locator('.sidebar').getByRole('button', { name: /^My orders/ }).click();
       const orderBounds = await page.locator('.orders').boundingBox();
-      const filterBounds = await page.locator('.orders .seg button').evaluateAll(buttons => buttons.map(button => {
+      const filterBounds = await page.locator('.orders .ui-segmented button').evaluateAll(buttons => buttons.map(button => {
         const box = button.getBoundingClientRect();
         return { right: box.right, height: box.height, clipped: button.scrollHeight > button.clientHeight + 1 };
       }));

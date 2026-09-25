@@ -800,22 +800,9 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    padding-right: 24px;
-    position: relative;
     user-select: none;
     transition: color 120ms ease;
   }
-  .faq details > summary[data-shell]::-webkit-details-marker { display: none; }
-  .faq details > summary[data-shell]::after {
-    content: '+';
-    position: absolute;
-    right: 0;
-    font-family: var(--font-mono);
-    color: var(--muted);
-    font-size: var(--text-body);
-    transition: transform 120ms ease, color 120ms ease;
-  }
-  .faq details[open] > summary[data-shell]::after { content: '−'; color: var(--accent); }
   .faq details > summary:hover[data-shell] { color: var(--accent); }
   .faq details > p[data-shell] {
     margin: 10px 0 0 0;
