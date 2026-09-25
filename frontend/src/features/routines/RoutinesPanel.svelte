@@ -305,8 +305,9 @@
   .clock-label { color: var(--muted); font-size: var(--text-caption); letter-spacing: 0.04em; text-transform: uppercase; }
   .clock-val { color: var(--fg); font-size: var(--text-heading); font-weight: 600; }
   .clock-sub { color: var(--muted); font-size: var(--text-caption); }
-  .routine-advice > summary { cursor: pointer; min-height: var(--bar); padding: var(--s3) var(--inset); background: var(--ink-bar); color: var(--on-ink); font-family: var(--font-ui); font-size: var(--text-caption); letter-spacing: 0.03em; text-transform: uppercase; }
-  .routine-advice > summary:focus-visible { outline-color: var(--on-ink); outline-offset: -3px; }
+  .routine-advice > summary { cursor: pointer; min-height: var(--bar); padding: var(--s3) var(--inset); background: var(--rail-bg); color: var(--rail-fg); box-shadow: inset 0 2px 0 var(--rail-edge); font-family: var(--font-ui); font-size: var(--text-caption); letter-spacing: 0.03em; text-transform: uppercase; }
+  .routine-advice > summary::before { color: var(--rail-muted); }
+  .routine-advice > summary:focus-visible { outline-color: var(--rail-fg); outline-offset: -3px; }
   .advice-body { display: flex; flex-direction: column; gap: var(--s3); padding: var(--s4) var(--inset); }
   .advice-body p { margin: 0; }
   @media (max-width: 47.5rem) {

@@ -133,6 +133,7 @@ html[data-look="yorha"] {
   --rail-bg: var(--ink-bar);
   --rail-fg: var(--on-ink);
   --rail-muted: var(--on-ink-muted);
+  --rail-edge: var(--ink-bar);
   --grid: rgba(70, 66, 47, 0.07);
   --hatch: rgba(70, 66, 47, 0.035);
   --scrim: rgba(70, 66, 47, 0.45);
@@ -172,6 +173,13 @@ html[data-look="yorha"][data-mode="dark"] {
   --on-ink: #1E1913;
   --on-ink-muted: #342D23;
   --on-accent: #1E1913;
+  /* Rails are a raised band under a rag rule, not a filled slab: a khaki bar
+     over every panel outshone the data, and the fill is reserved for
+     "selected". fg 8.1:1 and muted 4.7:1 on --panel-2. */
+  --rail-bg: var(--panel-2);
+  --rail-fg: var(--fg);
+  --rail-muted: var(--muted);
+  --rail-edge: var(--ink-bar);
   /* Same ground texture as light, in the palette's ink at the same alphas. */
   --grid: rgba(211, 199, 166, 0.07);
   --hatch: rgba(211, 199, 166, 0.035);
@@ -702,13 +710,18 @@ html[data-look="yorha"] body {
   font-size: 0.84375rem;
 }
 html[data-look="yorha"] a { color: var(--fg); text-decoration: none; border-bottom: 1px dotted var(--border); }
+/* In tables every item name is a link, so a standing underline turns dense
+   rows into a wall of rules. The rule appears with the row's hover or focus. */
+html[data-look="yorha"] :is(td, th) a:not(.btn) { border-bottom-color: transparent; }
+html[data-look="yorha"] tr:is(:hover, :focus-within) :is(td, th) a:not(.btn) { border-bottom-color: var(--border); }
 html[data-look="yorha"] a.btn { border-bottom-style: solid; }
 html[data-look="yorha"] input[type="text"], html[data-look="yorha"] input[type="number"] { background: var(--panel); }
 html[data-look="yorha"][data-mode="dark"] input[type="text"],
 html[data-look="yorha"][data-mode="dark"] input[type="number"] { background: var(--bg); }
 html[data-look="yorha"] ::selection { background: var(--ink-bar); color: var(--on-ink); }
-/* Tracked condensed caps for the titles; weight 400–500, never bold. */
-html[data-look="yorha"] .view-header h2 { font: 400 var(--text-metric-lg)/1.1 var(--font-ui); letter-spacing: 0.2em; text-transform: uppercase; }
+/* Tracked condensed caps for the titles; weight 500, never bold - 400 read
+   thin beside the 600 panel titles. */
+html[data-look="yorha"] .view-header h2 { font: 500 var(--text-metric-lg)/1.1 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
 html[data-look="yorha"] .statusbar .brand h1 { font: 500 var(--text-section)/1.2 var(--font-ui); letter-spacing: 0.18em; text-transform: uppercase; }
 html[data-look="yorha"] .nav-label,
 html[data-look="yorha"] th,
@@ -716,26 +729,30 @@ html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.
 /* Ink-bar inversion - the ONLY filled surface: active nav, selected segment,
    primary CTAs, panel title bars, dialog headers. */
 html[data-look="yorha"] .nav-item.active { background: var(--ink-bar); color: var(--on-ink); border-left-color: var(--ink-bar); }
-html[data-look="yorha"] .nav-item.active .badge { color: var(--on-ink); border-color: var(--on-ink); background: transparent; }
+html[data-look="yorha"] .nav-item.active .badge { color: var(--on-ink); border-color: transparent; background: transparent; }
+html[data-look="yorha"] .nav-item.active .badge.unread { color: var(--ink-bar); background: var(--on-ink); }
 html[data-look="yorha"] .nav-item.active .badge.warn { color: var(--on-ink); border-color: var(--on-ink); }
 html[data-look="yorha"] .nav-item.active .badge.here { color: var(--on-ink); border-color: var(--on-ink); }
 html[data-look="yorha"] .nav-item { border-left-width: 2px; }
-/* 6px outlined square before every nav label, filled when active. */
+/* A filled 6px square marks the active nav item only; the slot is kept (and
+   left empty) on the others so labels stay aligned. */
 html[data-look="yorha"] .nav-item > span:first-child::before {
   content: ""; display: inline-block; width: 6px; height: 6px;
-  border: 1px solid currentColor; margin-right: 9px; vertical-align: 1px;
+  border: 1px solid transparent; margin-right: 9px; vertical-align: 1px;
 }
-html[data-look="yorha"] .nav-item.active > span:first-child::before { background: currentColor; }
+html[data-look="yorha"] .nav-item.active > span:first-child::before { background: currentColor; border-color: currentColor; }
 html[data-look="yorha"] .list-cta,
 html[data-look="yorha"] .rp-primary,
 html[data-look="yorha"] .btn.primary { background: var(--ink-bar); color: var(--on-ink); border-color: var(--ink-bar); }
 html[data-look="yorha"] .list-cta:hover:not(:disabled),
 html[data-look="yorha"] .refresh-pop .rp-primary:hover:not(:disabled),
 html[data-look="yorha"] .btn.primary:hover:not(:disabled) { background: var(--fg); color: var(--panel); filter: none; }
-/* Shared .wrap.tw rails are ink title bars too (same as .picks-head). */
+/* Title rails: every panel, card, FAQ and dialog heading bar takes the
+   --rail-* surface. The 2px --rail-edge rule is an inset shadow so the rail
+   height does not change between modes. */
 /* Anything placed in a rail must take the rail's text pair: the base .count,
    .glyph and similar rules colour for --panel and vanish on the bar. */
-html[data-look="yorha"] .wrap.tw > .rail { background: var(--rail-bg); color: var(--rail-muted); border-bottom: 0; }
+html[data-look="yorha"] .wrap.tw > .rail { background: var(--rail-bg); color: var(--rail-muted); border-bottom: 0; box-shadow: inset 0 2px 0 var(--rail-edge); }
 html[data-look="yorha"] .wrap.tw > .rail :is(h2, h3) { margin: 0; color: var(--rail-fg); font: 500 var(--text-caption)/1rem var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
 html[data-look="yorha"] .wrap.tw > .rail .exp, html[data-look="yorha"] .wrap.tw > .rail .count, html[data-look="yorha"] .wrap.tw > .rail a, html[data-look="yorha"] .wrap.tw > .rail .btn.link { color: var(--rail-muted); border-bottom-color: var(--rail-muted); }
 html[data-look="yorha"] .wrap.tw > .rail .count b, html[data-look="yorha"] .wrap.tw > .rail .glyph, html[data-look="yorha"] .wrap.tw > .rail .lbl.good, html[data-look="yorha"] .wrap.tw > .rail .lbl.bad { color: var(--rail-fg); }
@@ -745,47 +762,49 @@ html[data-look="yorha"] .wrap.tw > .bar { border-bottom-style: dotted; }
 html[data-look="yorha"] .wrap.tw .lbl { font-weight: 500; letter-spacing: 0.14em; }
 /* Card heads: the picks strip's head bar and any card whose first child is
    its h3 (market browser cards) become full-width ink title bars. */
-html[data-look="yorha"] .picks-head { background: var(--ink-bar); color: var(--on-ink); border-bottom: 0; padding: var(--s1) var(--inset); }
+html[data-look="yorha"] .picks-head { background: var(--rail-bg); color: var(--rail-fg); border-bottom: 0; box-shadow: inset 0 2px 0 var(--rail-edge); padding: var(--s1) var(--inset); }
 html[data-look="yorha"] .picks-head h3 { color: inherit; font: 500 var(--text-caption)/1.6 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
-html[data-look="yorha"] .picks-head .muted, html[data-look="yorha"] .picks-head .rail-toggle, html[data-look="yorha"] .picks-head .link { color: var(--on-ink-muted); }
-html[data-look="yorha"] .picks-head .rail-toggle:hover, html[data-look="yorha"] .picks-head .link:hover { color: var(--on-ink); }
+html[data-look="yorha"] .picks-head .muted, html[data-look="yorha"] .picks-head .rail-toggle, html[data-look="yorha"] .picks-head .link { color: var(--rail-muted); }
+html[data-look="yorha"] .picks-head .rail-toggle:hover, html[data-look="yorha"] .picks-head .link:hover { color: var(--rail-fg); }
 html[data-look="yorha"] .bar .lbl { font-weight: 500; letter-spacing: 0.14em; }
 html[data-look="yorha"] .bar.raised { border-bottom-style: dotted; }
 html[data-look="yorha"] .card > h3:first-child {
   margin: -14px -16px 0; padding: 5px 12px;
-  background: var(--ink-bar); color: var(--on-ink);
+  background: var(--rail-bg); color: var(--rail-fg); box-shadow: inset 0 2px 0 var(--rail-edge);
   font: 500 var(--text-caption)/1.6 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase;
 }
-html[data-look="yorha"] .card > h3:first-child .muted { color: var(--on-ink-muted); text-transform: none; letter-spacing: 0; font-family: var(--font-body); }
-html[data-look="yorha"] .faq > h2 { background: var(--ink-bar); color: var(--on-ink); margin: -4px -18px 0; padding: 6px 12px; font: 500 var(--text-caption)/1.6 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
-html[data-look="yorha"] .modal > header, html[data-look="yorha"] dialog.cryptobox header { background: var(--ink-bar); color: var(--on-ink); border-bottom: 0; }
+html[data-look="yorha"] .card > h3:first-child .muted { color: var(--rail-muted); text-transform: none; letter-spacing: 0; font-family: var(--font-body); }
+html[data-look="yorha"] .faq > h2 { background: var(--rail-bg); color: var(--rail-fg); box-shadow: inset 0 2px 0 var(--rail-edge); margin: -4px -18px 0; padding: 6px 12px; font: 500 var(--text-caption)/1.6 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
+html[data-look="yorha"] .modal > header, html[data-look="yorha"] dialog.cryptobox header { background: var(--rail-bg); color: var(--rail-fg); border-bottom: 0; box-shadow: inset 0 2px 0 var(--rail-edge); }
 html[data-look="yorha"] .modal > header h2, html[data-look="yorha"] dialog.cryptobox h3 { color: inherit; font-family: var(--font-ui); letter-spacing: 0.16em; font-weight: 500; }
-html[data-look="yorha"] .modal > header .x { color: var(--on-ink); border-color: var(--on-ink); }
+html[data-look="yorha"] .modal > header .x { color: var(--rail-fg); border-color: var(--rail-fg); }
 html[data-look="yorha"] dialog.cryptobox header { padding: 8px 12px; margin: -20px -20px 0; }
-html[data-look="yorha"] dialog.cryptobox header p { color: var(--on-ink-muted); }
-/* Focus ring on the ink surfaces: the global ring is --accent, which in this
-   look IS the ink (~1.1:1 on the bar) - paint it in the bar's foreground. */
-html[data-look="yorha"] .wrap.tw > .rail :focus-visible { outline-color: var(--rail-fg); }
+html[data-look="yorha"] dialog.cryptobox header p { color: var(--rail-muted); }
+/* Focus ring on the rails: the global ring is --accent, which in light IS
+   the ink (~1.1:1 on the bar) - paint it in the rail's foreground. */
+html[data-look="yorha"] .wrap.tw > .rail :focus-visible,
 html[data-look="yorha"] .picks-head :focus-visible,
 html[data-look="yorha"] .card > h3:first-child :focus-visible,
 html[data-look="yorha"] .faq > h2 :focus-visible,
 html[data-look="yorha"] .modal > header :focus-visible,
-html[data-look="yorha"] dialog.cryptobox header :focus-visible { outline-color: var(--on-ink); }
+html[data-look="yorha"] dialog.cryptobox header :focus-visible { outline-color: var(--rail-fg); }
 html[data-look="yorha"] th.active { color: var(--fg); }
 html[data-look="yorha"] .picks-head { border-bottom-style: dotted; }
 /* Freshness dot = 7px outlined square, filled by state. */
 html[data-look="yorha"] .dot { border-radius: 0; }
 html[data-look="yorha"] .lede-dot { border-radius: 0; }
 html[data-look="yorha"] .info-btn { border-radius: 0; }
-/* Mono status strip: the deadpan NieR status line - mono, tracked caps for
-   the labels, dotted cell rules; the outer bottom edge stays solid. */
+/* Status strip: the deadpan NieR status line - tracked caps labels in the
+   label face, mono only for the values (ages, counts), dotted cell rules; the
+   outer bottom edge stays solid. Names and dates are prose. */
 html[data-look="yorha"] .statusbar {
-  font-family: var(--font-mono); font-size: var(--text-caption); color: var(--muted); background: var(--panel);
+  font-family: var(--font-ui); font-size: var(--text-caption); color: var(--muted); background: var(--panel);
 }
-html[data-look="yorha"] .statusbar .cell > span:not(.dot):not(.ducat) { text-transform: uppercase; letter-spacing: 0.08em; font-size: var(--text-caption); }
+html[data-look="yorha"] .statusbar .cell > span:not(.dot):not(.ducat) { text-transform: uppercase; letter-spacing: 0.12em; font-size: var(--text-caption); }
 html[data-look="yorha"] .statusbar .cell b { font-weight: 500; }
+html[data-look="yorha"] .statusbar .cell :is(b.file, time) { font-family: var(--font-body); }
 html[data-look="yorha"] .statusbar .brand .sub { font-family: var(--font-body); }
-html[data-look="yorha"] .statusbar .refresh-trigger { font-family: var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em; font-size: var(--text-caption); }
+html[data-look="yorha"] .statusbar .refresh-trigger { font-family: var(--font-ui); text-transform: uppercase; letter-spacing: 0.12em; font-size: var(--text-caption); }
 /* Summary cells (view header): tracked caps keys, mono values. */
 html[data-look="yorha"] .summary .cell .k { font-weight: 500; letter-spacing: 0.14em; }
 

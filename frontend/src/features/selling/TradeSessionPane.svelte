@@ -276,7 +276,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   .description { font-family: var(--font-body); font-size: var(--text-caption); line-height: var(--leading-body); text-transform: none; letter-spacing: normal; font-weight: 400; }
   .session-table { min-width: 70rem; }
   .reason { min-width: 18rem; white-space: normal; font-family: var(--font-body); }
-  small { display: block; font-size: var(--text-caption); color: var(--muted); line-height: var(--leading-body); }
+  small { display: block; font-family: var(--font-body); font-size: var(--text-caption); color: var(--muted); line-height: var(--leading-body); }
   h3 { font-size: var(--text-section); margin: 0; }
   p { margin: 0; }
   .ui-input { max-width: 12rem; }

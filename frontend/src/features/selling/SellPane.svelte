@@ -329,7 +329,7 @@
   <div class="rs" class:hold={p.timing === 'hold'} class:peak={p.timing === 'peak'}>
     <span class="t">
       {pickReason(p)}
-      <span class="pick-vol">({plat(p.volume_48h)} trades / 48h)</span>
+      <span class="pick-vol">· <b>{plat(p.volume_48h)}</b> trades/48h</span>
     </span>
     {#if p.volume_48h < LIQUID_VOL}
       <span class="tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor - expect to wait for a buyer.">thin</span>
@@ -944,7 +944,9 @@
      same colour, so the picks and the table below read as one vocabulary. */
   .rs.hold .t { color: var(--warn); }
   .rs.peak .t { color: var(--good); }
-  .pick-vol { font-family: var(--font-mono); font-size: var(--text-caption); color: var(--muted); margin-left: 2px; }
+  /* Only the number is data; the unit reads as prose. */
+  .pick-vol { font-size: var(--text-caption); color: var(--muted); margin-left: 2px; }
+  .pick-vol b { font-family: var(--font-mono); font-weight: 400; }
   .rs > .tag { flex-shrink: 0; margin-inline-start: 0; }
   .pick-actions { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
   .pick-list { font-size: var(--text-caption); height: var(--ctl-xs); padding: 0 10px; }

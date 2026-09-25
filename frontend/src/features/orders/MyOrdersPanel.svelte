@@ -502,7 +502,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
 <!-- Slot 2: Listing health as a fix queue - one decision, one button per row.
      Slot 3/4: controls row inside the orders table's border, then the table. -->
 <section class="wrap tw health" aria-label="Listing health">
-  <div class="bar">
+  <div class="rail">
     <h3>Listing health</h3>
     <span class="exp">
       {#if phase === 'loading' || phase === 'idle'}Fetching orders…
@@ -514,16 +514,8 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
       {:else}nothing flagged yet{#if canLive} - check live to compare your asks with the online top-of-book{/if}
       {/if}
     </span>
-    {#if health.length > 0}
-      <span class="chips">
-        {#if healthSummary.overpriced}<span class="chip warn">{healthSummary.overpriced} above the market</span>{/if}
-        {#if healthSummary.underbid}<span class="chip warn">{healthSummary.underbid} under a live bid</span>{/if}
-        {#if healthSummary.excessQty}<span class="chip">{healthSummary.excessQty} over-quantity</span>{/if}
-        {#if healthSummary.notOwned}<span class="chip bad">{healthSummary.notOwned} not owned</span>{/if}
-      </span>
-    {/if}
-    <span class="grow"></span>
     {#if canLive}
+      <span class="grow"></span>
       <button
         class="btn"
         onclick={checkLive}
@@ -535,10 +527,23 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
         {:else}Check live{/if}
       </button>
     {/if}
+  </div>
+  {#if health.length > 0 || healthSummary.overpriced + healthSummary.underbid > 1}
+  <div class="bar">
+    {#if health.length > 0}
+      <span class="chips">
+        {#if healthSummary.overpriced}<span class="chip warn">{healthSummary.overpriced} above the market</span>{/if}
+        {#if healthSummary.underbid}<span class="chip warn">{healthSummary.underbid} under a live bid</span>{/if}
+        {#if healthSummary.excessQty}<span class="chip">{healthSummary.excessQty} over-quantity</span>{/if}
+        {#if healthSummary.notOwned}<span class="chip bad">{healthSummary.notOwned} not owned</span>{/if}
+      </span>
+    {/if}
+    <span class="grow"></span>
     {#if healthSummary.overpriced + healthSummary.underbid > 1}
       <button class="btn primary" onclick={fixAllPrices} disabled={fixAllBusy} title="Reprice every flagged listing: match the lowest other ask, or meet the higher bid. Quantity fixes and deletions stay one click each.">Fix all prices</button>
     {/if}
   </div>
+  {/if}
 
   {#if liveState === 'error' && liveError}
     <div class="line bad">Live check failed: {liveError}</div>

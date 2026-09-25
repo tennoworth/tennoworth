@@ -203,7 +203,7 @@ import { type RivenAuction } from '../../contracts/desktop';
                   <div class="band" title={band.note}>
                     <span class="mono">{band.price}</span>
                     {#if band.range}<span class="muted small"> {band.range}</span>{/if}
-                    <span class="muted small"> · {band.note}</span>
+                    <span class="muted small note"> · {band.note}</span>
                   </div>
                   <!-- Still no "this riven is worth N": the offer comes from
                        the user, and we supply the arithmetic against DE's
@@ -305,7 +305,8 @@ import { type RivenAuction } from '../../contracts/desktop';
   .dispo-move { font-family: var(--font-mono); font-size: var(--text-caption); color: var(--good); margin-left: var(--s1); }
   .band { white-space: nowrap; }
   .offer-check { margin-top: 4px; white-space: normal; text-align: left; }
-  .offer-check > summary { cursor: pointer; color: var(--muted); font-size: 0.75rem; }
+  .offer-check > summary { color: var(--muted); font: var(--text-caption)/var(--leading-body) var(--font-body); }
+  .band .note { font-family: var(--font-body); }
   .small { font-size: var(--text-caption); }
   .muted { color: var(--muted); }
   .bad { color: var(--bad); }

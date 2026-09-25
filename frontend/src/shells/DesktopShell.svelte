@@ -908,7 +908,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
           <span data-shell>Price watches</span>
         </button>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'notifications'} onclick={() => filters.setView('notifications')}>
-          <span data-shell>Notifications</span>{#if unreadNotifications}<span data-shell class="badge">{unreadNotifications}</span>{/if}
+          <span data-shell>Notifications</span>{#if unreadNotifications}<span data-shell class="badge unread">{unreadNotifications}</span>{/if}
         </button>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'ledger'} onclick={() => filters.setView('ledger')}>
           <span data-shell>Ledger</span>
@@ -928,17 +928,13 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     </nav>
 
     <div data-shell class="sfoot">
-      
-        <button data-shell type="button" class="btn feedback-trigger" onclick={openFeedback}>
-          <svg data-shell viewBox="0 0 24 24" aria-hidden="true"><path data-shell d="M4 4h16v12H9l-5 4V4Z" /><path data-shell d="M8 8h8M8 12h5" /></svg>
-          Send feedback
-        </button>
-      
-      
-        <nav data-shell class="project-links" aria-label="Project links">
-          {@render projectLinkAnchors()}
-        </nav>
-      
+      <nav data-shell class="project-links" aria-label="Project links">
+        {@render projectLinkAnchors()}
+      </nav>
+      <button data-shell type="button" class="feedback-trigger" onclick={openFeedback}>
+        <svg data-shell viewBox="0 0 24 24" aria-hidden="true"><path data-shell d="M4 4h16v12H9l-5 4V4Z" /><path data-shell d="M8 8h8M8 12h5" /></svg>
+        Send feedback
+      </button>
       <div data-shell class="ver" title="build {APP_COMMIT}">Windows + Linux · {APP_COMMIT}</div>
     </div>
   </aside>
@@ -1357,7 +1353,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
           <span data-shell>{inventory.source === 'import' ? 'Imported inventory' : inventory.source === 'saved' || inventory.refreshFailed || inventory.noTradeables ? 'Using saved scan' : 'Inventory'}</span>
           <b data-shell class="file" title={inventory.inventoryName}>{inventory.inventoryName}</b>
           {#if inventoryTimestamp}
-            <span data-shell>·</span><time data-shell datetime={inventoryTimestamp}>As of {new Date(inventoryTimestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })} · {inventoryStaleness}</time>
+            <time data-shell datetime={inventoryTimestamp}>As of {new Date(inventoryTimestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })} · {inventoryStaleness}</time>
           {:else}<span data-shell>Timestamp unavailable</span>{/if}
           {#if inventory.refreshFailed}<span data-shell class="bad">Last refresh failed</span>{:else if inventory.noTradeables}<span data-shell>No tradeable items found; showing saved inventory</span>{/if}
         {:else}

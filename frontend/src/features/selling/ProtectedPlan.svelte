@@ -86,8 +86,8 @@
   </details>
 </section>
 <dialog bind:this={dialog} class="keep-dialog" aria-labelledby="keep-title" onclose={() => editing = false} onkeydown={(event) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); if (!controller.saving && !keepBusy) dialog.close(); } }} oncancel={(event) => { if (controller.saving || keepBusy) event.preventDefault(); }}>
+  <header class="keep-head"><h2 id="keep-title">What I’m keeping</h2></header>
   <div class="ui-stack">
-    <h2 id="keep-title">What I’m keeping</h2>
     <p>Choose once. Apply across your inventory.</p>
     <label class="ui-field">Copies of every item · applies immediately
       <input class="ui-input" type="number" min="0" max="1000000" step="1" value={reserveCopies} disabled={controller.saving || keepBusy} onchange={(e) => { const n = Number(e.currentTarget.value); if (Number.isSafeInteger(n) && n >= 0 && n <= 1000000) void changeKeep(n); else formError = 'Choose a whole quantity from 0 to 1000000.'; }} />
@@ -137,5 +137,8 @@
   .keep-status.verified { color: var(--good); }
   .keep-dialog { width: min(40rem, calc(100vw - var(--s6))); max-height: calc(100dvh - var(--s6)); overflow: auto; padding: var(--s5); background: var(--panel); color: var(--fg); border: 1px solid var(--border); }
   .keep-dialog::backdrop { background: var(--scrim); }
+  /* Dialog titles are rails, as in listing review. */
+  .keep-head { margin: calc(-1 * var(--s5)) calc(-1 * var(--s5)) var(--s4); padding: var(--s2) var(--s5); background: var(--rail-bg); color: var(--rail-fg); box-shadow: inset 0 2px 0 var(--rail-edge); }
+  .keep-head h2 { margin: 0; font: 500 var(--text-caption)/1.6 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
   table { min-width: 40rem; }
 </style>
