@@ -12,6 +12,9 @@ export type SettingKey =
   | 'keep-copies-nudge-dismissed'
   | 'tray-toast-seen'
   | 'sell-onboarding-dismissed'
+  /** Sell table columns the user picked, per preset (JSON: preset name, or
+   *  'custom' when none is active, to an ordered column-key list). */
+  | 'sell-columns'
   /** Desktop: EE.log sold-detection may adjust WFM listings ('on' | 'off'). The
    *  Rust tailer reads the same `setting` row (trades.rs SETTING_AUTO_CLOSE). */
   | 'auto-close-sold'

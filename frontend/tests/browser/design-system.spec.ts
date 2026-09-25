@@ -124,6 +124,62 @@ test('hosted rails keep readable text in both themes', async ({ page }) => {
   }
 });
 
+test('Sell columns fit by default and the Columns menu adds, remembers and resets a column', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/?preview-desktop&sample');
+  const table = page.locator('.scroll').filter({ has: page.locator('th', { hasText: 'Score' }) }).first();
+  expect(await table.evaluate(node => node.scrollWidth <= node.clientWidth + 1), 'Default columns fit at 1440').toBe(true);
+  const heads = page.locator('main table th .label');
+  await expect(heads.filter({ hasText: /^Ducats$/ })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Columns ▾' }).click();
+  const menu = page.getByRole('group', { name: 'Visible columns' });
+  await menu.getByRole('checkbox', { name: 'Ducats' }).check();
+  await expect(heads.filter({ hasText: /^Ducats$/ })).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  await expect(menu).toHaveCount(0);
+  // The choice belongs to the preset: another preset keeps its own columns,
+  // and coming back restores the choice.
+  const scope = page.getByRole('group', { name: 'Scope preset' });
+  await scope.getByRole('button', { name: 'Spares', exact: true }).click();
+  await expect(heads.filter({ hasText: /^Ducats$/ })).toHaveCount(0);
+  await scope.getByRole('button', { name: 'Default', exact: true }).click();
+  await expect(heads.filter({ hasText: /^Ducats$/ })).toHaveCount(1);
+  await page.getByRole('button', { name: 'Columns ▾' }).click();
+  await page.getByRole('button', { name: 'Reset to preset' }).click();
+  await expect(heads.filter({ hasText: /^Ducats$/ })).toHaveCount(0);
+});
+
+test('first run leads with the scan and keeps utilities in the header', async ({ page }) => {
+  await page.goto('/?preview-desktop');
+  const main = page.locator('main');
+  await expect(main.getByRole('button').first()).toHaveAttribute('data-testid', 'desktop-scan');
+  await expect(main.getByRole('button', { name: 'Send feedback', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: 'More ▾', exact: true }).click();
+  for (const name of ['Check for updates', 'Send feedback']) await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'More ▾', exact: true })).toBeFocused();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+});
+
+test('hosted Meta Drift shows a top ten, expands in place, and keeps Δ share in view on a phone', async ({ page }) => {
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto('/');
+    const drift = page.getByTestId('meta-drift');
+    await expect(drift.locator('tbody tr')).toHaveCount(10);
+    const delta = drift.locator('thead th', { hasText: 'Δ share' });
+    const box = await delta.boundingBox();
+    expect(box!.x + box!.width, `Δ share visible at ${width}`).toBeLessThanOrEqual(width);
+  }
+  const drift = page.getByTestId('meta-drift');
+  await drift.getByRole('button', { name: /^Show all \d+$/ }).click();
+  expect(await drift.locator('tbody tr').count()).toBeGreaterThan(10);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/');
+  expect(await page.evaluate(() => document.documentElement.scrollHeight), 'hosted page stays short with Meta Drift trimmed').toBeLessThan(3500);
+});
+
 test('theme radio navigation and listing-review focus stay keyboard accessible', async ({ page }) => {
   await page.goto('/?preview-desktop&sample');
   await page.locator('.sidebar').getByRole('button', { name: /^Settings/ }).click();

@@ -24,6 +24,10 @@
     deltas?: Map<string, number>;
     visibleColumns?: string[] | null;
     presetSort?: { key: string; dir: number } | null;
+    // The Columns menu: whether the visible set is the user's own, and where a
+    // new choice goes (null = back to the preset's columns).
+    columnsCustomized?: boolean;
+    oncolumnschange?: (columns: string[] | null) => void;
     // Emits the table's current filtered+sorted rows (all pages) and whether a
     // table-local filter is active, so the parent's "List on WFM" CTA can stage
     // exactly what the user sees instead of the unfiltered preset results.
@@ -52,7 +56,7 @@
     between?: Snippet;
   }
   let {
-    results, allocation = null, quantityStatus = false, estimatedGuidance = false, deltas = new Map(), visibleColumns = null, presetSort = null, onfiltered = undefined,
+    results, allocation = null, quantityStatus = false, estimatedGuidance = false, deltas = new Map(), visibleColumns = null, presetSort = null, onfiltered = undefined, columnsCustomized = false, oncolumnschange = undefined,
     scope = undefined, narrow = undefined, cta = undefined,
     picks = null, picksHead = undefined, pickReason = undefined, picksEmpty = undefined,
     empty = undefined, between = undefined,
@@ -157,6 +161,22 @@
   }
   const BADGE_CAP = 2;
 
+  let columnsOpen = $state(false);
+  $effect(() => {
+    if (!columnsOpen) return;
+    const click = (e: MouseEvent): void => {
+      if (!(e.target as HTMLElement | null)?.closest('.col-chooser')) columnsOpen = false;
+    };
+    const key = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return;
+      columnsOpen = false;
+      document.querySelector<HTMLButtonElement>('.col-chooser > button')?.focus();
+    };
+    document.addEventListener('click', click, true);
+    document.addEventListener('keydown', key);
+    return () => { document.removeEventListener('click', click, true); document.removeEventListener('keydown', key); };
+  });
+
   let openBadgeOverflow = $state<string | null>(null);
   function toggleBadgeOverflow(key: string, e: MouseEvent): void {
     e.stopPropagation();
@@ -248,7 +268,7 @@
     { key: 'ducats',         label: 'Ducats',   align: 'right', width: 5.5 },
     { key: 'plat_per_100d',  label: 'p/100d',   align: 'right', width: 3.5 },
     { key: 'raw_value',      label: 'Raw value', align: 'right', width: 5.5 },
-    { key: 'potential_plat', label: 'Potential', align: 'right', width: 4.75 },
+    { key: 'potential_plat', label: 'Potential', align: 'right', width: 5.25 },
   ];
 
   // Ducat-deal threshold: anything below ~20p per 100 ducats is a row
@@ -272,6 +292,16 @@
     }
     return cols;
   });
+
+  // Columns this data can fill; Item is always shown so it is not offered.
+  let choosableColumns = $derived(ALL_COLUMNS.filter((c) => c.key !== 'name'
+    && (c.key !== 'delta' || hasDeltas) && (c.key !== 'advice' || results.some((r) => r.advice))));
+  function toggleColumn(key: string, show: boolean): void {
+    // Start from the saved list, not the rendered one: Δ and Advice drop out of
+    // the render when this data has none, and must survive in the choice.
+    const current = visibleColumns?.length ? visibleColumns : ALL_COLUMNS.map((c) => c.key);
+    oncolumnschange?.(show ? [...current, key] : current.filter((k) => k !== key));
+  }
 
   /** Width the Item column keeps once every other visible column is paid for.
    *  Item is the one column a trader cannot do without, so it gets a floor
@@ -444,8 +474,7 @@
     {fmt(r.owned, col.key)}
     {#if quantityStatus}
       {@const quantity = allocation?.items[r.slug]}
-      <span class="quantity-note">Keep {quantity?.protected ?? '—'}</span>
-      <span class="quantity-note" class:quantity-unknown={quantity?.estimated == null}>Can sell {quantity?.estimated == null ? 'unavailable' : estimatedGuidance ? `${quantity.estimated} estimated` : quantity.available ?? 'unavailable'}</span>
+      <span class="quantity-note">sell {quantity?.estimated == null ? 'unavailable' : estimatedGuidance ? `${quantity.estimated} estimated` : quantity.available ?? 'unavailable'} · keep {quantity?.protected ?? '—'}</span>
     {:else if r.sellable < r.owned}
       {@const bd = ownedBreakdown(r.owned, r.sellable, r.leveled)}
       <span class="kept-note">({#if bd.leveledPart > 0}<span class="leveled-note" title={LEVELED_NOTE_TITLE}>{bd.leveledPart} leveled</span>{/if}{#if bd.leveledPart > 0 && bd.keptPart > 0} · {/if}{#if bd.keptPart > 0}<span title={keptNoteTitle(bd.keptPart)}>{bd.keptPart} kept</span>{/if})</span>
@@ -597,6 +626,19 @@
       {#if sorted.length > pageSize}· {(pageStart + 1).toLocaleString()}–{pageEnd.toLocaleString()}{/if}
     </div>
     <span class="grow"></span>
+    {#if oncolumnschange}
+      <div class="col-chooser">
+        <button type="button" class="btn" aria-expanded={columnsOpen} aria-controls="col-chooser-panel" onclick={() => (columnsOpen = !columnsOpen)}>Columns ▾</button>
+        {#if columnsOpen}
+          <div id="col-chooser-panel" class="col-panel" role="group" aria-label="Visible columns">
+            {#each choosableColumns as c (c.key)}
+              <label><input type="checkbox" checked={columns.some((col) => col.key === c.key)} onchange={(e) => toggleColumn(c.key, e.currentTarget.checked)} /> {c.label}</label>
+            {/each}
+            <button type="button" class="btn xs" disabled={!columnsCustomized} onclick={() => oncolumnschange?.(null)}>Reset to preset</button>
+          </div>
+        {/if}
+      </div>
+    {/if}
     {@render cta?.()}
   </div>
 
@@ -800,8 +842,8 @@
     padding: 0 var(--s3);
     font-size: var(--text-control);
   }
-  .quantity-note { display: block; font-size: var(--text-caption); color: var(--muted); white-space: normal; }
-  .quantity-note.quantity-unknown { color: var(--bad); }
+  /* One caption line under the count; missing quantities are unavailable, not errors. */
+  .quantity-note { display: block; font: var(--text-caption)/var(--leading-control) var(--font-body); color: var(--muted); white-space: normal; }
   .count { color: var(--muted); font-size: var(--text-caption); white-space: nowrap; }
   .count b { color: var(--fg); font-weight: 600; }
   /* Pill-filter chips reuse the badge palette (.tag.peak etc.) so the chip
@@ -1141,4 +1183,13 @@
   /* Alone in its cell, so no leading gap; the reasons live in the title. */
   .tag.advice { margin-inline-start: 0; cursor: help; }
   .scope-row, .narrow-row, .result-actions { padding-block: var(--s3); gap: var(--s3); }
+  .col-chooser { position: relative; }
+  .col-panel {
+    position: absolute; top: calc(100% + var(--s1)); right: 0; z-index: var(--layer-popover);
+    display: grid; grid-template-columns: repeat(2, minmax(7.5rem, auto)); gap: var(--s1) var(--s4);
+    padding: var(--s3); background: var(--panel-2); border: 1px solid var(--fg); box-shadow: var(--shadow-pop);
+    font-size: var(--text-control); color: var(--fg); white-space: nowrap;
+  }
+  .col-panel label { display: flex; align-items: center; gap: var(--s2); min-height: var(--ctl-xs); cursor: pointer; }
+  .col-panel .btn { grid-column: 1 / -1; justify-self: start; margin-top: var(--s1); }
 </style>

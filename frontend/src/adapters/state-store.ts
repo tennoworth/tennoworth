@@ -43,6 +43,7 @@ export const LOCAL_SETTING_KEYS: Record<SettingKey, string> = {
   'keep-copies-nudge-dismissed': 'wfminv:keep-copies-nudge-dismissed-v1',
   'tray-toast-seen': 'wfminv:tray-toast-seen-v1',
   'sell-onboarding-dismissed': 'wfminv:sell-onboarding-dismissed-v1',
+  'sell-columns': 'wfminv:sell-columns-v1',
   'auto-close-sold': 'wfminv:auto-close-sold-v1',
   'routine-checklist': 'wfminv:routine-checklist-v2',
   'theme.mode': 'wfminv:theme-mode-v1',

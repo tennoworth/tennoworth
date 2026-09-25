@@ -77,6 +77,7 @@ for (const theme of ['light', 'dark'] as const) {
     await page.goto('/?preview-desktop');
     await page.getByTestId('desktop-scan').waitFor();
     await recoveryCommands(page);
+    await page.getByRole('button', { name: 'More ▾', exact: true }).click();
     await page.getByRole('button', { name: 'Check for updates', exact: true }).click();
     const update = page.getByTestId('update-banner');
     await update.getByRole('button', { name: 'Install update', exact: true }).click();
@@ -91,6 +92,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(update).toContainText('Update installed');
     await update.getByRole('button', { name: 'Dismiss update notice' }).click();
     await expect(update).toHaveCount(0);
+    await page.getByRole('button', { name: 'More ▾', exact: true }).click();
     await page.getByRole('button', { name: 'Check for updates', exact: true }).click();
     await expect(update).toContainText('Update installed');
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
@@ -134,6 +136,7 @@ test('manual checks expose failed and unsupported outcomes; Notifications never 
   await page.getByTestId('desktop-scan').waitFor();
   await recoveryCommands(page);
   await page.evaluate(() => { (window as any).recovery.update = 'error'; });
+  await page.getByRole('button', { name: 'More ▾', exact: true }).click();
   await page.getByRole('button', { name: 'Check for updates', exact: true }).click();
   const update = page.getByTestId('update-banner');
   await expect(update).toContainText('Could not reach the update service');

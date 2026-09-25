@@ -209,7 +209,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // PRESETS itself, plus the pure lookup/matching logic, live in
   // lib/presets.ts. `columns` is the ordered visible-column list;
   // missing = all columns (Default).
-  let visibleColumns = $derived<string[] | null>(filters.activePreset ? PRESETS[filters.activePreset ?? '']?.columns ?? null : null);
+  let visibleColumns = $derived<string[] | null>(filters.columnChoice[filters.columnKey] ?? (filters.activePreset ? PRESETS[filters.activePreset]?.columns ?? null : null));
   // A preset's optional default sort, handed to ResultsTable. Stable object
   // identity per preset → switching presets re-applies it; header clicks don't.
   // Spread a fresh object so the derived's identity changes whenever it
@@ -662,6 +662,24 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   );
 
   // Scan is the only inventory source - the refresh pop is a single action.
+  // First-run header overflow: updates, feedback and project links.
+  let moreOpen = $state(false);
+  let moreTrigger = $state<HTMLButtonElement>();
+  let feedbackFromMore = false;
+  $effect(() => {
+    if (!moreOpen) return;
+    const click = (e: MouseEvent): void => {
+      if (!(e.target as HTMLElement | null)?.closest('.more-pop, .more-trigger')) moreOpen = false;
+    };
+    const key = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return;
+      moreOpen = false;
+      moreTrigger?.focus();
+    };
+    document.addEventListener('click', click, true);
+    document.addEventListener('keydown', key);
+    return () => { document.removeEventListener('click', click, true); document.removeEventListener('keydown', key); };
+  });
   let refreshOpen = $state(false);
   async function refreshFromGame() {
     refreshOpen = false;
@@ -806,7 +824,9 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
 
 </script>
 
-<dialog data-shell bind:this={feedbackDialog} class="cryptobox feedback-dialog" aria-labelledby="feedback-title" aria-describedby="feedback-description">
+<!-- Opened from the first-run More menu, the trigger is gone by the time the
+     dialog closes; focus returns to the menu button instead of the page. -->
+<dialog data-shell bind:this={feedbackDialog} class="cryptobox feedback-dialog" aria-labelledby="feedback-title" aria-describedby="feedback-description" onclose={() => { if (feedbackFromMore) moreTrigger?.focus(); feedbackFromMore = false; }}>
   <form data-shell method="dialog">
     <header data-shell>
       <h3 data-shell id="feedback-title">Send feedback</h3>
@@ -944,24 +964,20 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     {@render generalBanners()}
     {#if !showWorkspace}
   {#if !inventory.error && !inventory.pullError}
-  <header data-shell class="landing-head">
-    <p data-shell class="lede">Scan your account and TennoWorth ranks <em data-shell>your</em> inventory by what to sell - until then, look anything up below.</p>
-  </header>
-  <nav data-shell class="ui-toolbar" aria-label="Application">
-    <button data-shell type="button" class="btn" onclick={() => filters.setView('settings')}>Settings</button>
-    <button data-shell type="button" class="btn" onclick={() => updateBanner.checkForUpdates()}>Check for updates</button>
-    <button data-shell type="button" class="btn" onclick={openFeedback}>Send feedback</button>
-  </nav>
-    <section data-shell class="upsell-lead desktop-hero">
-      <h2 data-shell>Get your personal sell list</h2>
-      <p data-shell class="sub">With Warframe open and past the login screen, scan your account - TennoWorth ranks <em data-shell>your</em> inventory by what to sell right now.</p>
+    <!-- Scanning is the first thing to do here, so it leads; settings, updates
+         and feedback live in the header. -->
+    <section data-shell class="upsell-lead desktop-hero" aria-labelledby="desktop-hero-title">
+      <h2 data-shell id="desktop-hero-title">Get your personal sell list</h2>
+      <p data-shell class="sub">Scan once and TennoWorth ranks <em data-shell>your</em> inventory by what to sell right now.</p>
+      <p data-shell class="req">Warframe must be open and past the login screen.</p>
       <div data-shell class="desktop-scan-row">
         <button data-shell class="rp-primary" data-testid="desktop-scan" onclick={() => inventory.pullInventory()} disabled={inventory.pullingInventory}>{inventory.pullingInventory ? 'Scanning game…' : 'Scan inventory'}</button>
+        <span data-shell class="trust">Reads the running game's memory only - nothing leaves your machine.</span>
       </div>
-      <span data-shell class="trust">Reads the running game's memory only - nothing leaves your machine.</span>
     </section>
   {/if}
   {#if inventory.market}
+    <p data-shell class="lookup-label">Or look anything up</p>
     <MarketBrowser market={inventory.market} staleness={marketStaleness} freshness={marketFreshness} loadHistory={() => transport.loadHistory()} />
   {/if}
   <Faq desktop />
@@ -987,6 +1003,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         {marketFreshness} {marketStaleness} marketLoadError={inventory.marketLoadError}
         {listableRows} {availableTags} {availableTypes}
         {visibleColumns} {presetSort} {emptyReason}
+        columnsCustomized={filters.columnKey in filters.columnChoice} oncolumnschange={(columns) => filters.setColumns(columns)}
         activePreset={filters.activePreset} reserveCopies={filters.reserveCopies} filtersOpen={filters.filtersOpen} scoreExplainerDismissed={filters.scoreExplainerDismissed}
         sellOnboardingDismissed={filters.sellOnboardingDismissed} keepCopiesNudgeDismissed={filters.keepCopiesNudgeDismissed}
         applyPreset={(name) => filters.applyPreset(name)} setReserveCopies={(value) => filters.setReserveCopies(value)} toggleFiltersOpen={(event) => filters.toggleFiltersOpen(event)}
@@ -1348,7 +1365,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       {#if !inShell}<span data-shell class="sub">warframe.market prices, ranked by what actually sells</span>{/if}
     </div>
     
-      {#if !inShell}<button data-shell class="btn" onclick={() => filters.setView('notifications')}>Notifications{unreadNotifications ? ` (${unreadNotifications})` : ''}</button>{/if}
       <div data-shell class="cell inv" title={unresolvedCount > 0 ? `${unresolvedCount} items couldn't be price-matched (${unresolvedSummary}) - usually untradeable blueprints, quest items and very new content.` : undefined}>
         {#if inventory.inventoryName}
           <span data-shell class="dot {inventory.refreshFailed ? 'stale' : inventoryFreshness}" role="img" aria-label={inventory.refreshFailed ? 'Inventory refresh failed' : `Inventory recorded ${inventoryStaleness ?? 'at an unknown time'}`}></span>
@@ -1427,11 +1443,24 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     {/if}
     <span data-shell class="grow"></span>
     {#if !inShell}
-      <nav data-shell class="cell end site-links" aria-label="Site">
-        <a data-shell href="#faq">FAQ</a>
-        
-        {@render projectLinkAnchors()}
-      </nav>
+      <div data-shell class="cell">
+        <button data-shell type="button" class="cellbtn" onclick={() => filters.setView('notifications')}>Notifications{#if unreadNotifications}<span data-shell class="badge unread">{unreadNotifications}</span>{/if}</button>
+      </div>
+      <div data-shell class="cell">
+        <button data-shell type="button" class="cellbtn" onclick={() => filters.setView('settings')}><span data-shell aria-hidden="true">⚙</span>Settings</button>
+      </div>
+      <div data-shell class="cell end more">
+        <button data-shell type="button" class="cellbtn more-trigger" bind:this={moreTrigger} aria-expanded={moreOpen} aria-controls="more-pop" onclick={() => (moreOpen = !moreOpen)}>More ▾</button>
+        {#if moreOpen}
+          <div data-shell id="more-pop" class="more-pop">
+            <button data-shell type="button" onclick={() => { moreOpen = false; updateBanner.checkForUpdates(); }}>Check for updates</button>
+            <button data-shell type="button" onclick={() => { moreOpen = false; feedbackFromMore = true; openFeedback(); }}>Send feedback</button>
+            <hr data-shell />
+            <a data-shell href="#faq" onclick={() => (moreOpen = false)}>FAQ</a>
+            {@render projectLinkAnchors()}
+          </div>
+        {/if}
+      </div>
     {:else}
       <div data-shell class="cell end">
         <span data-shell>WFM</span>

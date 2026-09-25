@@ -24,6 +24,7 @@
     marketStaleness: string | null; marketLoadError: string | null;
     listableRows: SellRow[]; availableTags: Array<[string, number]>; availableTypes: string[];
     visibleColumns: string[] | null; presetSort: { key: string; dir: number } | null;
+    columnsCustomized?: boolean; oncolumnschange?: (columns: string[] | null) => void;
     emptyReason: EmptyReason | null; activePreset: string | null; reserveCopies: number;
     filtersOpen: boolean; scoreExplainerDismissed: boolean; sellOnboardingDismissed: boolean;
     keepCopiesNudgeDismissed: boolean;
@@ -57,7 +58,7 @@
     prevSummary = null, sinceScan = null, ordersSummary = null,
     marketFreshness, marketStaleness, marketLoadError,
     listableRows, availableTags, availableTypes,
-    visibleColumns, presetSort, emptyReason,
+    visibleColumns, presetSort, emptyReason, columnsCustomized = false, oncolumnschange,
     activePreset, reserveCopies, filtersOpen, scoreExplainerDismissed,
     sellOnboardingDismissed, keepCopiesNudgeDismissed,
 
@@ -579,7 +580,7 @@
      picks panel is rendered by the table so both share one colgroup. When the
      cascade leaves nothing, the empty-state card takes the table body's place
      and the presets stay reachable in row A. -->
-<ResultsTable {allocation} quantityStatus {estimatedGuidance} results={tableRows} {deltas} {visibleColumns} {presetSort}
+<ResultsTable {allocation} quantityStatus {estimatedGuidance} results={tableRows} {deltas} {visibleColumns} {presetSort} {columnsCustomized} {oncolumnschange}
   onfiltered={(rows, active) => (tableView = { rows, active: active || changesOnly })}
   scope={scopeRow} narrow={narrowChips} cta={listCta}
   picks={calculationReady && results.length > 0 && allPicks.length > 0 ? picks : null}
