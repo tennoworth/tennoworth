@@ -3,7 +3,7 @@
 // theme can be changed inside the shell now, so a regression here leaves a
 // user with no way to override the OS scheme in the app.
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { screen, fireEvent, cleanup } from '@testing-library/svelte';
+import { screen, fireEvent, cleanup, waitFor } from '@testing-library/svelte';
 import { renderDesktop as render } from '../../dev/render-desktop';
 import SettingsPanel from './SettingsPanel.svelte';
 import type { ModePref, ThemeController } from '../../ui/theme';
@@ -262,6 +262,22 @@ describe('SettingsPanel automatic scanning', () => {
 
     await fireEvent.click(screen.getByRole('checkbox', { name: /Update the open app automatically/ }));
     expect(port.updateAutoScanSettings).toHaveBeenCalledWith({ enabled: true, cadenceMinutes: 30, adoptAutomatically: false });
+  });
+
+  it('puts a control back when its save fails', async () => {
+    const { theme } = fakeTheme();
+    const { controller, port } = await autoScan({ enabled: true, cadenceMinutes: 30, adoptAutomatically: true });
+    port.updateAutoScanSettings.mockRejectedValue(new Error('database is locked'));
+    render(SettingsPanel, { props: { theme, autoScan: controller } });
+
+    const adopt = screen.getByRole('checkbox', { name: /Update the open app automatically/ }) as HTMLInputElement;
+    await fireEvent.click(adopt);
+    await screen.findByText(/database is locked/);
+    expect(adopt.checked).toBe(true);
+
+    const select = screen.getByRole('combobox', { name: /Scan every/ }) as HTMLSelectElement;
+    await fireEvent.change(select, { target: { value: '60' } });
+    await waitFor(() => expect(select.value).toBe('30'));
   });
 
   it('reports what the loop is doing, including a failure and a paused scan', async () => {

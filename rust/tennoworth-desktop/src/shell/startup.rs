@@ -333,7 +333,10 @@ pub(crate) fn run() {
                 // Automatic scanning is off by default; the loop only idles
                 // until the user turns it on (see auto_scan.rs). Not in probe
                 // runs - the probe must not scan on a timer.
-                crate::services::auto_scan::start(app.handle().clone());
+                crate::services::auto_scan::start(
+                    app.handle().clone(),
+                    crate::shell::tray::post_scan_surfaces,
+                );
             }
 
             // C5: launch update check, off the main thread so it can never

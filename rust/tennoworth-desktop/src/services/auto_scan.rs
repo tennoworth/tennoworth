@@ -260,9 +260,13 @@ pub fn decide(tick: &Tick) -> Decision {
     // attempt cap is what stops a game left sitting at the login screen from
     // being walked forever.
     if !run.succeeded && run.attempts < PROMPT_ATTEMPTS {
+        // The later of the run's settling delay and the retry spacing: the last
+        // attempt may belong to a previous run, and must not let a relaunched
+        // game be walked the moment it is seen.
+        let settled = run.detected_at + FIRST_SCAN_DELAY;
         let due = match tick.last_attempt_at {
-            Some(at) => at + PROMPT_RETRY,
-            None => run.detected_at + FIRST_SCAN_DELAY,
+            Some(at) => settled.max(at + PROMPT_RETRY),
+            None => settled,
         };
         return wait_or_scan(due, tick.now);
     }
@@ -302,10 +306,14 @@ pub fn save_settings(db: &Db, settings: AutoScanSettings) -> Result<AutoScanSett
 /// Start the background loop. Detached thread: sleep, evaluate, maybe scan.
 /// Nothing here can take the app down - every failure is logged and the loop
 /// simply re-evaluates on the next tick.
-pub fn start(app: AppHandle) {
+///
+/// `on_scanned` runs after each recorded scan, as it does after the manual and
+/// tray scans: the shell passes its tray and notification refresh, which this
+/// layer cannot import.
+pub fn start(app: AppHandle, on_scanned: fn(&AppHandle)) {
     std::thread::Builder::new()
         .name("auto-scan".into())
-        .spawn(move || run_loop(app))
+        .spawn(move || run_loop(app, on_scanned))
         .map(|_| ())
         .unwrap_or_else(|e| eprintln!("tennoworth: automatic scan thread failed to start: {e}"));
 }
@@ -331,7 +339,7 @@ fn tick_at(
     }
 }
 
-fn run_loop(app: AppHandle) {
+fn run_loop(app: AppHandle, on_scanned: fn(&AppHandle)) {
     let mut run: Option<Run> = None;
     let mut last_attempt_at: Option<Instant> = None;
     // The last failure already written to stderr. A scan that keeps failing the
@@ -369,12 +377,21 @@ fn run_loop(app: AppHandle) {
                 // spending an attempt, so a race does not consume the cadence.
                 due = Some(now + TICK);
             } else {
+                let previous_attempt_at = last_attempt_at;
                 if let Some(tracked) = run.as_mut() {
                     tracked.attempts += 1;
                 }
                 last_attempt_at = Some(now);
-                match crate::services::acquisition::scan_and_record(&app) {
-                    Ok(payload) => {
+                match crate::services::acquisition::scan_and_record_unless(&app, || state.held()) {
+                    Ok(None) => {
+                        // A listing flow opened during the walk. Not an attempt:
+                        // the next tick sees the hold and waits it out.
+                        if let Some(tracked) = run.as_mut() {
+                            tracked.attempts = tracked.attempts.saturating_sub(1);
+                        }
+                        last_attempt_at = previous_attempt_at;
+                    }
+                    Ok(Some(payload)) => {
                         if let Some(tracked) = run.as_mut() {
                             tracked.succeeded = true;
                         }
@@ -388,13 +405,18 @@ fn run_loop(app: AppHandle) {
                             status.last_error = None;
                         });
                         crate::services::acquisition::publish_scan(&app, &payload);
+                        on_scanned(&app);
                     }
                     Err(error) => {
                         if logged_error.as_deref() != Some(error.as_str()) {
                             eprintln!("tennoworth: automatic scan failed: {error}");
                             logged_error = Some(error.clone());
                         }
-                        state.update_status(|status| status.last_error = Some(error));
+                        // A settings change during the walk cleared the old
+                        // configuration's error; this one belongs to it too.
+                        if state.settings() == settings {
+                            state.update_status(|status| status.last_error = Some(error));
+                        }
                     }
                 }
                 due = match decide(&tick_at(
@@ -412,8 +434,11 @@ fn run_loop(app: AppHandle) {
         }
 
         let after = Instant::now();
+        // The current settings, not this tick's copy: a save during the scan
+        // must not be written back over.
+        let current = state.settings();
         state.update_status(|status| {
-            status.mirror_settings(settings);
+            status.mirror_settings(current);
             status.game_running = pid.is_some();
             status.next_check_at = due.map(|at| {
                 crate::services::allowance::unix_now()
@@ -541,6 +566,27 @@ mod tests {
         assert_eq!(
             decide(&tick(now, Some(9), Some(stale), Some(ago(now, Duration::from_secs(1))))),
             Decision::Wait(now + FIRST_SCAN_DELAY)
+        );
+    }
+
+    /// The path the loop actually takes: it starts tracking a new pid before
+    /// deciding, so the relaunched run is tracked and the last attempt belongs
+    /// to the previous game.
+    #[test]
+    fn a_relaunched_game_still_settles_before_its_first_scan() {
+        let now = Instant::now();
+        let relaunched = run(9, now, 0, false);
+        let previous_attempt = ago(now, HOUR);
+        assert_eq!(
+            decide(&tick(now, Some(9), Some(relaunched), Some(previous_attempt))),
+            Decision::Wait(now + FIRST_SCAN_DELAY)
+        );
+        // And a very recent attempt still spaces the retry.
+        let just_now = ago(now, Duration::from_secs(1));
+        let settled = run(9, ago(now, HOUR), 1, false);
+        assert_eq!(
+            decide(&tick(now, Some(9), Some(settled), Some(just_now))),
+            Decision::Wait(just_now + PROMPT_RETRY)
         );
     }
 

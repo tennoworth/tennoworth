@@ -120,6 +120,21 @@ fn record_game_scan(
 /// are written for the user ("Warframe doesn't appear to be running…") and the
 /// SPA shows them unchanged.
 pub(crate) fn scan_and_record(app: &AppHandle) -> Result<ScannedInventory, String> {
+    scan_and_record_unless(app, || false)?
+        .ok_or_else(|| "The scan was discarded before it was recorded.".to_string())
+}
+
+/// [`scan_and_record`], except that the finished walk is dropped unrecorded -
+/// `Ok(None)` - when `discard` says so at the moment it would be recorded.
+///
+/// The automatic scanner needs this: a listing flow opened during the walk
+/// submits against the latest snapshot, so recording one after it opened
+/// would reject that submit. Checking only before the walk left the seconds a
+/// walk takes uncovered.
+pub(crate) fn scan_and_record_unless(
+    app: &AppHandle,
+    discard: impl FnOnce() -> bool,
+) -> Result<Option<ScannedInventory>, String> {
     let _guard = wfm_core::trading::plan::PlanGuard::acquire(&SCAN_ACTIVE)
         .ok_or("An inventory scan is already running.")?;
     let started_at = crate::services::allowance::unix_now();
@@ -127,12 +142,15 @@ pub(crate) fn scan_and_record(app: &AppHandle) -> Result<ScannedInventory, Strin
     let (bytes, info) = crate::services::inventory::scanner()
         .scan(None, None)
         .map_err(|e| e.into_message())?;
+    if discard() {
+        return Ok(None);
+    }
     let snapshot_id = record_game_scan(app, &bytes, &info, before, started_at);
-    Ok(ScannedInventory {
+    Ok(Some(ScannedInventory {
         inventory: String::from_utf8(bytes)
             .map_err(|_| "Inventory response was not valid UTF-8.".to_string())?,
         snapshot_id,
-    })
+    }))
 }
 
 #[cfg(test)]

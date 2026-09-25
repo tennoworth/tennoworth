@@ -76,7 +76,10 @@ import { type UpdateStatus } from '../../contracts/update';
     return 'Watching for Warframe.';
   }
 
-  async function saveAutoScan(next: AutoScanSettings) {
+  // `revert` puts the control back to the stored value. A failed save leaves the
+  // settings unchanged, so nothing re-renders and the control would keep showing
+  // a value that was never stored - and the next click would send its opposite.
+  async function saveAutoScan(next: AutoScanSettings, revert: (stored: AutoScanSettings) => void) {
     if (!autoScan) return;
     savingAutoScan = true;
     try {
@@ -84,6 +87,7 @@ import { type UpdateStatus } from '../../contracts/update';
     } finally {
       savingAutoScan = false;
     }
+    if (autoScan.settingsError && autoScan.settings) revert(autoScan.settings);
   }
 
   async function saveOverlay(next: OverlaySettings) {
@@ -219,18 +223,18 @@ import { type UpdateStatus } from '../../contracts/update';
       {#if autoScan.settings}
         <div class="ui-setting-row">
           <div class="ui-setting-copy"><label for="auto-scan-enabled">Scan automatically while Warframe is running</label><p>Off: TennoWorth scans only when you ask. On: it looks for the game and rescans on the cadence below. Nothing is scanned while the game is closed, and a rescan never interrupts a listing review.</p></div>
-          <label class="ui-setting-check"><input id="auto-scan-enabled" type="checkbox" checked={autoScan.settings.enabled} disabled={savingAutoScan} onchange={(event) => saveAutoScan({ ...autoScan!.settings!, enabled: event.currentTarget.checked })}><span>Enabled</span></label>
+          <label class="ui-setting-check"><input id="auto-scan-enabled" type="checkbox" checked={autoScan.settings.enabled} disabled={savingAutoScan} onchange={(event) => { const input = event.currentTarget; void saveAutoScan({ ...autoScan!.settings!, enabled: input.checked }, (stored) => (input.checked = stored.enabled)); }}><span>Enabled</span></label>
         </div>
         <div class="ui-section-group">
           {#if autoScan.settings.enabled}
           <div class="ui-setting-row">
             <div class="ui-setting-copy"><label for="auto-scan-cadence">Scan every</label><p>Each rescan reads the game's memory and requests your account inventory from Digital Extremes. A closed or logged-out game is never scanned.</p></div>
-            <div class="ui-setting-control"><select id="auto-scan-cadence" class="ui-input" value={autoScan.settings.cadenceMinutes} disabled={savingAutoScan} onchange={(event) => saveAutoScan({ ...autoScan!.settings!, cadenceMinutes: Number(event.currentTarget.value) })}>{#each AUTO_SCAN_CADENCE_CHOICES as minutes}<option value={minutes}>{minutes} minutes</option>{/each}</select></div>
+            <div class="ui-setting-control"><select id="auto-scan-cadence" class="ui-input" value={autoScan.settings.cadenceMinutes} disabled={savingAutoScan} onchange={(event) => { const select = event.currentTarget; void saveAutoScan({ ...autoScan!.settings!, cadenceMinutes: Number(select.value) }, (stored) => (select.value = String(stored.cadenceMinutes))); }}>{#each AUTO_SCAN_CADENCE_CHOICES as minutes}<option value={minutes}>{minutes} minutes</option>{/each}</select></div>
           </div>
           {/if}
           <div class="ui-setting-row">
             <div class="ui-setting-copy"><label for="auto-scan-adopt">Update the open app automatically</label><p>When a scan finishes in the background - the cadence above, or Rescan from the tray - replace the inventory on screen. While a listing review or Trade Session is being prepared the scan waits for “Load new scan” instead.</p></div>
-            <label class="ui-setting-check"><input id="auto-scan-adopt" type="checkbox" checked={autoScan.settings.adoptAutomatically} disabled={savingAutoScan} onchange={(event) => saveAutoScan({ ...autoScan!.settings!, adoptAutomatically: event.currentTarget.checked })}><span>Automatic</span></label>
+            <label class="ui-setting-check"><input id="auto-scan-adopt" type="checkbox" checked={autoScan.settings.adoptAutomatically} disabled={savingAutoScan} onchange={(event) => { const input = event.currentTarget; void saveAutoScan({ ...autoScan!.settings!, adoptAutomatically: input.checked }, (stored) => (input.checked = stored.adoptAutomatically)); }}><span>Automatic</span></label>
           </div>
           <div class="ui-setting-row">
             <div class="ui-setting-copy"><strong>Status</strong><p>{autoScanStatusText(autoScan.status)}</p></div>
