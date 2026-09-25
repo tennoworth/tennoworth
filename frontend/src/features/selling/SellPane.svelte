@@ -27,7 +27,7 @@
     columnsCustomized?: boolean; oncolumnschange?: (columns: string[] | null) => void;
     emptyReason: EmptyReason | null; activePreset: string | null; reserveCopies: number;
     filtersOpen: boolean; scoreExplainerDismissed: boolean; sellOnboardingDismissed: boolean;
-    keepCopiesNudgeDismissed: boolean; isDesktop: boolean;
+    keepCopiesNudgeDismissed: boolean;
     applyPreset(name: string): void; setReserveCopies(value: number | Event): void;
     toggleFiltersOpen(event: Event): void;
     dismissSellOnboarding(): void; dismissKeepCopiesNudge(): void;
@@ -61,7 +61,6 @@
     visibleColumns, presetSort, emptyReason, columnsCustomized = false, oncolumnschange,
     activePreset, reserveCopies, filtersOpen, scoreExplainerDismissed,
     sellOnboardingDismissed, keepCopiesNudgeDismissed,
-    isDesktop,
 
     applyPreset, setReserveCopies, toggleFiltersOpen, 
     dismissSellOnboarding, dismissKeepCopiesNudge,
@@ -454,9 +453,9 @@
 {/snippet}
 
 {#snippet listCta()}
-  {#if isDesktop && !canList}
+  {#if !canList}
     <button class="list-cta" onclick={oncheckListings}>{listingActionLabel}</button>
-  {:else if isDesktop}
+  {:else}
     <button
       class="list-cta"
       data-testid="desktop-list"
@@ -581,7 +580,7 @@
      picks panel is rendered by the table so both share one colgroup. When the
      cascade leaves nothing, the empty-state card takes the table body's place
      and the presets stay reachable in row A. -->
-<ResultsTable {allocation} quantityStatus={isDesktop} {estimatedGuidance} results={tableRows} {deltas} {visibleColumns} {presetSort} {columnsCustomized} {oncolumnschange}
+<ResultsTable {allocation} quantityStatus {estimatedGuidance} results={tableRows} {deltas} {visibleColumns} {presetSort} {columnsCustomized} {oncolumnschange}
   onfiltered={(rows, active) => (tableView = { rows, active: active || changesOnly })}
   scope={scopeRow} narrow={narrowChips} cta={listCta}
   picks={calculationReady && results.length > 0 && allPicks.length > 0 ? picks : null}

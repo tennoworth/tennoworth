@@ -1,5 +1,6 @@
 // @ts-nocheck - vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import freshnessCases from '../../../tests/fixtures/surface-freshness/cases.json';
 
 // We import inside each test so we can reset module state (cached promise).
 async function freshMarket() {
@@ -61,6 +62,15 @@ describe('staleSurfaceTimestamp', () => {
   const NOW = Date.parse('2026-09-03T00:00:00Z');
   const OLD = '2026-08-23T00:00:00Z';
 
+  it.each(freshnessCases.cases)('$name', async ({ disposition, data_fetched_at, calendar_evidence, shell_warning }) => {
+    const { staleSurfaceTimestamp, surfaceHasEvidence } = await freshMarket();
+    const market = disposition === null
+      ? { relic_rewards: {}, surface_fetched_at: { relic_rewards: data_fetched_at } }
+      : { surface_provenance: { relic_rewards: { disposition, data_fetched_at, attempted_at: freshnessCases.now } } };
+    expect(surfaceHasEvidence(disposition ?? undefined)).toBe(calendar_evidence);
+    expect(staleSurfaceTimestamp(market, 'relic_rewards', NOW)).toBe(shell_warning);
+  });
+
   it('does not call hash-verified unchanged data stale', async () => {
     const { staleSurfaceTimestamp } = await freshMarket();
     const market = {
@@ -94,6 +104,39 @@ describe('staleSurfaceTimestamp', () => {
       expect(staleSurfaceTimestamp(market, 'relic_rewards', NOW)).toBe(OLD);
     },
   );
+
+  // A partial merge that carried rows writes the age of those rows, because
+  // nothing re-observed them. This is the consumer end of that contract: if the
+  // producer ever goes back to stamping the merge time, or this function starts
+  // exempting 'merged_partial', the warning below silently stops appearing.
+  it('warns about a partial merge that carried rows from an older fetch', async () => {
+    const { staleSurfaceTimestamp } = await freshMarket();
+    const market = {
+      surface_provenance: {
+        set_to_parts: {
+          disposition: 'merged_partial',
+          attempted_at: '2026-09-03T00:00:00Z',
+          data_fetched_at: OLD,
+        },
+      },
+    };
+
+    expect(staleSurfaceTimestamp(market, 'set_to_parts', NOW)).toBe(OLD);
+  });
+
+  it('does not replace an explicitly unknown source age with a later attempt stamp', async () => {
+    const { staleSurfaceTimestamp } = await freshMarket();
+    const market = {
+      surface_fetched_at: { relic_rewards: freshnessCases.now },
+      surface_provenance: { relic_rewards: {
+        disposition: 'merged_partial',
+        attempted_at: freshnessCases.now,
+        data_fetched_at: '',
+      } },
+    };
+
+    expect(staleSurfaceTimestamp(market, 'relic_rewards', NOW)).toBe('unknown');
+  });
 
   it('keeps the legacy timestamp fallback for snapshots without provenance', async () => {
     const { staleSurfaceTimestamp } = await freshMarket();

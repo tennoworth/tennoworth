@@ -4,7 +4,7 @@
   import { onMount } from 'svelte';
   import { DesktopCmdError } from '../../contracts/errors';
 
-import { TRADE_DETECTED_EVENT } from '../../contracts/events';
+import { RECORDING_CHANGED_EVENT, TRADE_DETECTED_EVENT } from '../../contracts/events';
 import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contracts/desktop';
   
   import { totals, since, soldByItem, describeItems } from '../../domain/ledger';
@@ -27,6 +27,20 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
   interface ToastMsg { id: number; kind: 'error' | 'success'; text: string }
   let toasts = $state<ToastMsg[]>([]);
   let toastSeq = 0;
+
+  /**
+   * Recording health, so a pause is visible to someone who opens this surface
+   * after it happened - the notification is sent once and cannot answer for the
+   * present. Never a toast: a pause lasts until it is fixed, and a toast would
+   * expire while the condition did not.
+   */
+  const paused = $derived(
+    status && typeof status.recording === 'object' ? status.recording.paused : null,
+  );
+  const ledgerPaused = $derived(paused !== null && 'ledger' in paused);
+  const pausedReason = $derived(
+    paused === null ? '' : 'ledger' in paused ? paused.ledger.error : paused.log.error,
+  );
   function pushToast(text: string, kind: 'error' | 'success' = 'success'): void {
     const id = ++toastSeq;
     toasts = [...toasts, { id, kind, text }];
@@ -47,13 +61,20 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
 
   onMount(() => {
     void load();
-    return listenForTauriEvent<TradeDetected>(TRADE_DETECTED_EVENT, (d) => {
+    const offTrade = listenForTauriEvent<TradeDetected>(TRADE_DETECTED_EVENT, (d) => {
       const kind = d.trade.kind;
       const head = kind === 'sale' ? `Sold for ${d.trade.plat}p` : kind === 'purchase' ? `Bought for ${d.trade.plat}p` : 'Trade completed';
       const adj = d.adjusted.length ? ` · ${d.adjusted.length} listing${d.adjusted.length === 1 ? '' : 's'} updated` : '';
       pushToast(`${head}: ${describeItems(d.trade)} - ${d.trade.partner}${adj}`);
       void load();
     });
+    // A pause emits no trade event, so without this the notice would only appear
+    // on the next mount - after the user had already completed trades it missed.
+    const offRecording = listenForTauriEvent(RECORDING_CHANGED_EVENT, () => void load());
+    return () => {
+      offTrade();
+      offRecording();
+    };
   });
 
   async function toggleAutoClose(): Promise<void> {
@@ -110,6 +131,15 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
     {#if !status.path}
       <p class="ui-notice" data-tone="warn">
         <strong>Game log not found</strong> - trade detection is off. TennoWorth looks in <code>%LOCALAPPDATA%\Warframe\EE.log</code> (Windows) and every Steam library's <code>compatdata/230410/…/Warframe/EE.log</code> (Linux). Run Warframe once, then restart TennoWorth; for an unusual install set <code>TENNOWORTH_EELOG=/path/to/EE.log</code> before launching.
+      </p>
+    {/if}
+    {#if paused}
+      <p class="ui-notice" data-tone="warn" role="status">
+        {#if ledgerPaused}
+          <strong>Trade recording paused</strong> - a completed trade could not be saved, so it is being retried and everything behind it waits. Trades completed now are not in the history below yet, and listings are not being adjusted. Remaining-trade counts may be behind. <span class="muted">({pausedReason})</span>
+        {:else}
+          <strong>Trade recording paused</strong> - {pausedReason}. Trades completed now may not be recorded, and listings are not being adjusted. <span class="muted">Restarting TennoWorth usually restores the log read.</span>
+        {/if}
       </p>
     {/if}
     <section class="wrap tw" aria-labelledby="ledger-automation-title">

@@ -60,7 +60,7 @@ test('changed existing orders require another confirmation without losing edits'
     runtime.core.invoke = async (cmd, args) => {
       if (cmd === 'submit_plan') (window as any).submittedSessionPlans.push(args);
       const response = await original(cmd, args);
-      if (cmd === 'fetch_orders') response.data.sell.find((o: any) => o.id === 'preview-flow').platinum = 27;
+      if (cmd === 'fetch_orders') response.find((o: any) => o.id === 'preview-flow').platinum = 27;
       return response;
     };
   });
