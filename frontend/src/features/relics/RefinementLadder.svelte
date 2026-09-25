@@ -34,8 +34,8 @@
           ? ` · ${rung.traces} traces · ${rung.platPerTrace?.toFixed(2)}p per trace`
           : ''}"
       >
-        <span class="bar" style="height:{Math.max(4, (rung.ev / max) * 100)}%"></span>
-        <span class="ev">{rung.ev.toFixed(0)}</span>
+        <span class="track"><span class="bar" style="height:{Math.max(4, (rung.ev / max) * 100)}%"></span></span>
+        <span class="ev">{rung.ev.toFixed(1)}</span>
         <span class="lbl">{SHORT[rung.refinement] ?? rung.refinement}</span>
       </div>
     {/each}
@@ -68,19 +68,24 @@
   }
   .rungs {
     display: flex;
-    align-items: flex-end;
     gap: 0.35rem;
-    height: 3.2rem;
   }
   .rung {
     flex: 1 1 0;
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: flex-end;
-    height: 100%;
     position: relative;
     cursor: help;
+  }
+  /* The bars get a track of their own: sharing a fixed-height column with the
+     labels let flex shrinking squeeze every bar to the same height. */
+  .track {
+    display: flex;
+    align-items: flex-end;
+    width: 100%;
+    height: 2.4rem;
+    border-bottom: 1px solid var(--border);
   }
   .bar {
     width: 100%;
@@ -92,6 +97,7 @@
     background: var(--good);
   }
   .ev {
+    font-family: var(--font-mono);
     font-size: var(--text-caption);
     font-variant-numeric: tabular-nums;
     color: var(--muted);

@@ -58,7 +58,8 @@ The active look is `yorha`; the resolved modes are `light` and `dark`.
 | Decoration | `--faint`, `--hairline`, `--grid`, `--hatch` | Nonessential ornament; not essential text |
 | Boundaries | `--border`, `--rule` | Solid outer outlines, dotted inner dividers |
 | Emphasis | `--accent`, `--on-accent`, `--ink-bar`, `--on-ink`, `--on-ink-muted` | Use matching foreground/background pairs |
-| Meaning | `--good`, `--warn`, `--bad`, `--ducat` | Success, caution, error, and ducat data; not decoration |
+| Title rails | `--rail-bg`, `--rail-fg`, `--rail-muted` | Panel title rails; separate from the selected-state inversion |
+| Meaning | `--good`, `--warn`, `--bad`, `--ducat`, `--vault` | Success, caution, error, ducat data, and vaulted status; not decoration |
 | Type | `--font-ui`, `--font-body`, `--font-mono` | Headings/labels, reading, numeric/technical data |
 | Type scale | `--text-caption`, `--text-control`, `--text-body`, `--text-section`, `--text-heading`, `--text-dialog-title`, `--text-metric`, `--text-metric-lg`, `--leading-body`, `--leading-control` | Shared text roles and line heights; extend centrally rather than per panel |
 | Rhythm | `--s1` through `--s6`, `--inset`, `--gutter`, `--stack`, `--cell` | Shared spacing and contextual insets |
@@ -78,7 +79,11 @@ The active look is `yorha`; the resolved modes are `light` and `dark`.
   padding for their labels; content may grow beyond the baseline density.
 - The light-mode supporting-text token is dark enough for all three standard
   surfaces. Keep that coverage when adjusting its value, not just contrast on
-  the lightest panel.
+  the lightest panel. The same applies to the status hues: tags and chips sit
+  on `--panel-2` header, hover, and filter rows, so they must clear 4.5:1
+  there too. Record measured ratios beside the token values in `app.css`.
+- `--vault` is a cool slate, deliberately outside the warm status hues:
+  vaulted is market fact, not success, caution, or error.
 - Reuse spacing roles rather than selecting arbitrary gaps. Data cells may be
   denser than panel content, but dense rows must still accommodate wrapped names.
 - Component styles must not introduce independent colors, fonts, or radii.
@@ -127,10 +132,10 @@ narrow and enlarged layouts. This is a measured layout value, not a fixed spacer
 
 | Pattern | Contract |
 |---|---|
-| Panels and title rails | Clear heading, restrained inversion, dotted internal separation; titles and adjacent status copy may wrap |
+| Panels and title rails | Clear heading, restrained inversion, dotted internal separation; titles and adjacent status copy may wrap. Anything placed on a rail uses the `--rail-*` pair, whatever its heading level |
 | Toolbars | Group related controls; allow wrapping without changing the logical or keyboard order |
 | Buttons and links | Clear action labels, consistent emphasis, visible focus; navigation uses links and actions use buttons |
-| Fields | Persistent accessible labels, units and constraints nearby, actionable validation; placeholders are not labels |
+| Fields | Persistent accessible labels, units and constraints nearby, actionable validation; placeholders are not labels. Checkboxes and radios use the shared square box in `app.css` (checked is the ink inversion); components may size it, not recolour it |
 | Mode selectors | Explicit selected state and accessible semantics; descriptions remain readable when the group wraps |
 | Status and notices | Explain what happened, its consequence, and any next action; never rely on color or a transient toast alone for critical information |
 | Tables | Preserve meaningful columns and item identity; align comparable numbers; contain horizontal scrolling within the table region |

@@ -22,6 +22,12 @@ pub struct CatalogItemMeta {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_rank: Option<i64>,
     pub subtypes: Vec<String>,
+    /// WFM's English display name and DE `gameRef` path. Pipeline inputs for
+    /// the resolver fallback, not snapshot output.
+    #[serde(skip)]
+    pub name: Option<String>,
+    #[serde(skip)]
+    pub game_ref: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -150,6 +156,10 @@ pub struct Snapshot {
     /// hash check is fresh evidence about old data, while an outage is not.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub surface_provenance: HashMap<String, SurfaceProvenance>,
+    /// Per-key evidence stamps for the surfaces a partial fetch can merge, read
+    /// back by the next build. See `reconcile::KeyStamps`.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub surface_key_fetched_at: HashMap<String, crate::reconcile::KeyStamps>,
     #[serde(default, skip_serializing_if = "EventRewardsSurface::is_empty")]
     pub event_rewards: EventRewardsSurface,
     /// Digital Extremes provenance + the worldState-only surfaces.
@@ -283,6 +293,7 @@ pub fn assemble_snapshot(
         usage_history,
         surface_fetched_at,
         surface_provenance: HashMap::new(),
+        surface_key_fetched_at: HashMap::new(),
         event_rewards: EventRewardsSurface::default(),
     }
 }
@@ -319,7 +330,7 @@ mod tests {
             tags: vec!["mod".to_string()],
             ducats: Some(0),
             max_rank: Some(10),
-            subtypes: vec![],
+            ..Default::default()
         }
     }
 
