@@ -114,35 +114,18 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      # Several hundred MB of browsers re-downloaded on every main push.
-      # Keyed on the lockfile, which pins the Playwright version. This workflow
-      # only runs on main and manual dispatch, so there is no pull request to
-      # keep restore-only.
-      - name: Cache responsive-test browsers
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('frontend/bun.lock') }}
-
-      # This publisher owns its test/build verdict: audit.yml does not run on
-      # main pushes, and a deployable artifact must be validated in the workflow
-      # that produces it.
+      # The browser suite is not repeated here. main advances only by
+      # fast-forwarding a promotion PR that must be up to date and pass
+      # audit-gate, whose frontend-check runs it against the same tree - and
+      # across 95 runs this copy never failed, while adding ~5 minutes and the
+      # suite's flake to every deploy. The unit tests stay: they take seconds,
+      # and they are the last check on a commit pushed through the admin bypass.
       - name: Install, test, build
         working-directory: frontend
         run: |
           bun install --frozen-lockfile
-          bunx playwright install --with-deps chromium webkit
           bun run test
-          bun run test:responsive:all
           bun run build
-
-      - name: Upload responsive failure evidence
-        if: failure()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: responsive-test-evidence
-          path: frontend/test-results/responsive
-          if-no-files-found: ignore
 
       - name: Package
         run: tar -C frontend/dist -czf dist.tgz .
