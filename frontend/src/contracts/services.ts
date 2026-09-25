@@ -45,7 +45,8 @@ export interface DesktopServices extends UpdateNotesServices {
   desktopNotificationPreferences(): Promise<NotificationPreferences>;
   desktopSaveNotificationPreferences(preferences: NotificationPreferences): Promise<NotificationPreferences>;
   desktopTestNotification(): Promise<string>;
-  desktopWfmLogin(email: string, password: string, passphrase: string, platform: string, remember: boolean): Promise<void>;
+  desktopWfmLogin(passphrase: string, platform: string, remember: boolean): Promise<void>;
+  desktopWfmLoginCancel(): Promise<void>;
   desktopWfmUnlock(passphrase: string, remember: boolean): Promise<void>;
   desktopTrySilentUnlock(): Promise<boolean>;
   desktopReadNotifications(id?: number | null): Promise<void>;

@@ -127,6 +127,7 @@ pub(crate) fn run() {
             crate::shell::update::restart_app,
             crate::services::wfm_session::wfm_auth_status,
             crate::services::wfm_session::wfm_login,
+            crate::services::wfm_session::wfm_login_cancel,
             crate::services::wfm_session::unlock_jwt,
             crate::services::wfm_session::try_silent_unlock,
             crate::services::wfm_session::wfm_logout,

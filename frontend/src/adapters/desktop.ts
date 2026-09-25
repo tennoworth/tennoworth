@@ -227,15 +227,22 @@ export async function desktopWfmLogout(): Promise<void> {
   }
 }
 
-export async function desktopWfmLogin(
-  email: string,
-  password: string,
-  passphrase: string,
-  platform: string,
-  remember: boolean,
-): Promise<void> {
+/**
+ * Opens warframe.market's own sign-in page in a native window and resolves
+ * once the user has signed in there; the WFM password never passes through
+ * the app. Rejects with code `cancelled` when that window is closed.
+ */
+export async function desktopWfmLogin(passphrase: string, platform: string, remember: boolean): Promise<void> {
   try {
-    await resolveInvoke()<null>('wfm_login', { email, password, passphrase, platform, remember });
+    await resolveInvoke()<null>('wfm_login', { passphrase, platform, remember });
+  } catch (e) {
+    rethrowInvoke(e);
+  }
+}
+
+export async function desktopWfmLoginCancel(): Promise<void> {
+  try {
+    await resolveInvoke()<null>('wfm_login_cancel');
   } catch (e) {
     rethrowInvoke(e);
   }
