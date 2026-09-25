@@ -74,5 +74,4 @@ import { type NotificationPreferences, type NotificationCategory } from '../../c
   .category strong { font-family: var(--font-body); font-weight: 500; }
   @media (max-width: 760px) { .category { grid-template-columns: repeat(2, minmax(0, 1fr)); } .category strong { grid-column: 1 / -1; } }
   .toggle { display: flex; align-items: center; gap: var(--s2); min-height: var(--ctl); cursor: pointer; }
-  input { width: var(--s4); height: var(--s4); accent-color: var(--accent); }
 </style>
