@@ -52,6 +52,7 @@ jobs:
             build:
               - 'frontend/**'
               - '!**/AGENTS.md'
+              - '.node-version'
               - '.github/workflows/build-web.yml'
               - '.github/actions/publish-rolling-release/**'
 
@@ -113,6 +114,11 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - uses: oven-sh/setup-bun@v2
+
+      # The same Node that audit.yml's frontend-check tests the bundle with.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
 
       # The browser suite is not repeated here. main advances only by
       # fast-forwarding a promotion PR that must be up to date and pass
