@@ -452,7 +452,7 @@
     </section>
   {/if}
 
-  <MetaDriftPanel {market} />
+  <MetaDriftPanel {market} limit={10} />
 
   <!-- 5. HAND-OFF: the same rows, completed by the desktop app (hosted only) -->
   {#if handoff}

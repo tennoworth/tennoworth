@@ -2,11 +2,17 @@
   import type { Market } from '../../contracts/data';
   import { buildMetaDrift, formatDeltaPp, type OnlyRow } from '../../domain/meta-drift';
 
-  let { market }: { market: Market | null | undefined } = $props();
+  // `limit` trims each list where Meta Drift is one section of a longer page
+  // (hosted, first run); the desktop Meta Drift view passes none.
+  let { market, limit = null }: { market: Market | null | undefined; limit?: number | null } = $props();
   let model = $derived(buildMetaDrift(market));
   let tab = $state<'gains' | 'losses' | 'only'>('gains');
   let category = $state('all');
   let query = $state('');
+  let showAll = $state(false);
+  // A search wants every match, so it lifts the limit.
+  let capped = $derived(limit != null && !showAll && !query.trim());
+  function trim<T>(rows: T[]): T[] { return capped ? rows.slice(0, limit!) : rows; }
 
   function matches(row: { name: string; category: string }): boolean {
     return (category === 'all' || row.category === category)
@@ -48,23 +54,37 @@
   {#if tab !== 'only'}
     <div class="scroll">
       <table class="tw fixed">
-        <colgroup><col /><col style="width:8rem" /><col style="width:5rem" /><col style="width:5rem" /><col style="width:6rem" /><col style="width:5rem" /><col style="width:5rem" /></colgroup>
-        <thead><tr><th class="l">Name</th><th class="l">Category</th><th>{model.priorYear}</th><th>{model.currentYear}</th><th>Δ share</th><th>Low sell</th><th>Vol 48h</th></tr></thead>
+        <!-- Δ share sits beside the name: it is the point of the table, and a
+             narrow window must reach it without scrolling. -->
+        <colgroup><col /><col style="width:6rem" /><col style="width:5rem" /><col style="width:5rem" /><col style="width:8rem" /><col style="width:5rem" /><col style="width:5rem" /></colgroup>
+        <thead><tr><th class="l">Name</th><th>Δ share</th><th>{model.priorYear}</th><th>{model.currentYear}</th><th class="l">Category</th><th>Low sell</th><th>Vol 48h</th></tr></thead>
         <tbody>
-          {#each driftRows as row (row.slug)}
-            <tr><td class="l">{row.name}</td><td class="l">{row.category}</td><td>{row.priorShare.toFixed(2)}%</td><td>{row.currentShare.toFixed(2)}%</td><td class:up={row.deltaPp >= 0} class:down={row.deltaPp < 0}><strong>{formatDeltaPp(row.deltaPp)}</strong></td><td>{metric(row.lowSell, 'p')}</td><td>{metric(row.volume48h)}</td></tr>
+          {#each trim(driftRows) as row (row.slug)}
+            <tr><td class="l">{row.name}</td><td class:up={row.deltaPp >= 0} class:down={row.deltaPp < 0}><strong>{formatDeltaPp(row.deltaPp)}</strong></td><td>{row.priorShare.toFixed(2)}%</td><td>{row.currentShare.toFixed(2)}%</td><td class="l">{row.category}</td><td>{metric(row.lowSell, 'p')}</td><td>{metric(row.volume48h)}</td></tr>
           {:else}<tr><td colspan="7" class="empty">No matching {tab}.</td></tr>{/each}
         </tbody>
       </table>
     </div>
+    {@render more(driftRows.length)}
   {:else}
     <div class="only-grid">
       {@render onlyTable(`Only in ${model.currentYear} data`, currentOnly)}
       {@render onlyTable(`Only in ${model.priorYear} data`, priorOnly)}
     </div>
+    {@render more(Math.max(currentOnly.length, priorOnly.length))}
   {/if}
 </section>
 {/if}
+
+{#snippet more(total: number)}
+  {#if limit != null && !query.trim() && total > limit}
+    <div class="foot">
+      <span class="exp">{showAll ? `All ${total}` : `Top ${limit} of ${total}`}</span>
+      <span class="grow"></span>
+      <button type="button" class="btn xs" aria-expanded={showAll} onclick={() => (showAll = !showAll)}>{showAll ? `Show top ${limit}` : `Show all ${total}`}</button>
+    </div>
+  {/if}
+{/snippet}
 
 {#snippet onlyTable(title: string, rows: OnlyRow[])}
   <div class="only-card">
@@ -72,7 +92,7 @@
     <div class="scroll"><table class="tw fixed">
       <colgroup><col /><col style="width:8rem" /><col style="width:5rem" /><col style="width:5rem" /><col style="width:5rem" /></colgroup>
       <thead><tr><th class="l">Name</th><th class="l">Category</th><th>Share</th><th>Low sell</th><th>Vol 48h</th></tr></thead>
-      <tbody>{#each rows as row (row.slug)}<tr><td class="l">{row.name}</td><td class="l">{row.category}</td><td>{row.share.toFixed(2)}%</td><td>{metric(row.lowSell, 'p')}</td><td>{metric(row.volume48h)}</td></tr>{:else}<tr><td colspan="5" class="empty">No matching items.</td></tr>{/each}</tbody>
+      <tbody>{#each trim(rows) as row (row.slug)}<tr><td class="l">{row.name}</td><td class="l">{row.category}</td><td>{row.share.toFixed(2)}%</td><td>{metric(row.lowSell, 'p')}</td><td>{metric(row.volume48h)}</td></tr>{:else}<tr><td colspan="5" class="empty">No matching items.</td></tr>{/each}</tbody>
     </table></div>
   </div>
 {/snippet}

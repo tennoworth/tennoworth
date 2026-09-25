@@ -42,6 +42,7 @@ describe('LocalStorageStateStore - key/shape parity with the pre-store code', ()
     ['keep-copies-nudge-dismissed', 'wfminv:keep-copies-nudge-dismissed-v1', '1'],
     ['tray-toast-seen', 'wfminv:tray-toast-seen-v1', '1'],
     ['sell-onboarding-dismissed', 'wfminv:sell-onboarding-dismissed-v1', '1'],
+    ['sell-columns', 'wfminv:sell-columns-v1', '{"default":["name","owned"]}'],
     ['auto-close-sold', 'wfminv:auto-close-sold-v1', 'off'],
     ['routine-checklist', 'wfminv:routine-checklist-v2', '{"version":2}'],
     ['theme.mode', 'wfminv:theme-mode-v1', 'dark'],

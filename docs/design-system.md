@@ -191,6 +191,13 @@ unavailable; scan-only quantities are estimates before existing listings.
 
 ## Preferences and page rhythm
 
+Before the first scan, the desktop page leads with the scan action beside its
+pitch, with the privacy line directly under the button; Settings, Notifications
+and a More menu (updates, feedback, project links) sit in the header rather than
+the page body. Sections that are one part of a longer page (Meta Drift on the
+hosted and first-run pages) show their top ten with an in-place Show all; a
+search lifts the limit, and the dedicated desktop view shows everything.
+
 Settings, Set picks, Relics, Routines, and FAQ use a bounded 64rem reading
 width. Analytical tables retain the workspace width and scroll locally when
 needed. Settings includes notification preferences within the same column.
@@ -247,7 +254,11 @@ row pattern and read-state toggle.
   Fixed single-line heights must not clip wrapped content.
 - Base layout changes on available space and actual content. Test immediately
   around breakpoints, not only a few named device sizes. Do not automatically
-  turn every table into cards or hide columns on small screens.
+  turn every table into cards or hide columns on small screens. Choose columns
+  by task instead: each Sell preset names its own column set, and the Columns
+  menu lets people add or remove columns per preset, with a reset. When a
+  column is the point of a table, place it next to the item name so narrow
+  windows reach it without scrolling (Meta Drift's Δ share).
 - Account for short windows as well as narrow ones. Flex/grid children must
   not collapse whole panels, and sticky controls must not obscure rows or focus.
 - Bound floating surfaces to the viewport and give their bodies usable scroll

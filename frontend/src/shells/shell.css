@@ -536,11 +536,54 @@
     flex-wrap: wrap;
     margin-top: 12px;
   }
-  .desktop-hero .trust[data-shell] {
-    color: var(--muted);
-    font-size: var(--text-caption);
-    margin-top: 10px;
+  /* First run: the pitch on the left, the scan action on the right with the
+     privacy line directly under it. Stacks when narrow. */
+  .upsell-lead.desktop-hero[data-shell] {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--s2) var(--s6);
+    align-items: center;
+    margin-top: var(--s4);
+    padding: var(--s5);
+    background: var(--panel);
+    border: 1px solid var(--border);
   }
+  .desktop-hero h2[data-shell] { grid-column: 1 / -1; color: var(--fg); font: 500 var(--text-heading)/1.1 var(--font-ui); letter-spacing: 0.16em; text-transform: uppercase; }
+  .desktop-hero .sub[data-shell] { margin: 0; color: var(--fg); font-size: var(--text-body); }
+  .desktop-hero .req[data-shell] { margin: 0; color: var(--muted); font-size: var(--text-control); }
+  .desktop-hero .desktop-scan-row[data-shell] {
+    grid-column: 2; grid-row: 2 / span 2;
+    flex-direction: column; align-items: stretch; gap: var(--s2); margin: 0;
+  }
+  .desktop-hero .desktop-scan-row .rp-primary[data-shell] { min-height: var(--row-cf); padding-inline: var(--s6); font-size: var(--text-section); }
+  .desktop-hero .trust[data-shell] { color: var(--muted); font-size: var(--text-caption); text-align: center; }
+  @media (max-width: 760px) {
+    .upsell-lead.desktop-hero[data-shell] { grid-template-columns: minmax(0, 1fr); }
+    .desktop-hero .desktop-scan-row[data-shell] { grid-column: 1; grid-row: auto; }
+  }
+  .lookup-label[data-shell] { margin: var(--s5) 0 var(--s2); font: 500 var(--text-caption)/1 var(--font-ui); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+  /* First-run header cells: plain label buttons, and a More popover for
+     updates, feedback and project links. */
+  .statusbar .cellbtn[data-shell] {
+    display: inline-flex; align-items: center; gap: var(--s2); min-height: var(--ctl);
+    padding: 0; font: inherit; text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--fg); background: transparent; border: 0; cursor: pointer;
+  }
+  .statusbar .cellbtn:hover[data-shell] { background: transparent; text-decoration: underline dotted; }
+  .statusbar .cellbtn .badge.unread[data-shell] { font: 600 var(--text-caption)/1 var(--font-mono); letter-spacing: 0; color: var(--on-ink); background: var(--ink-bar); padding: 2px var(--s1); }
+  .statusbar .cell.more[data-shell] { position: relative; }
+  .more-pop[data-shell] {
+    position: absolute; top: calc(100% + 1px); right: 0; z-index: var(--layer-menu);
+    display: flex; flex-direction: column; width: 14rem; padding: var(--s2) 0;
+    font: var(--text-control)/1.3 var(--font-body); text-transform: none; letter-spacing: normal;
+    background: var(--panel-2); border: 1px solid var(--fg); box-shadow: var(--shadow-pop);
+  }
+  .more-pop > :is(button, a)[data-shell] {
+    display: flex; align-items: center; gap: var(--s2); min-height: var(--ctl); padding: var(--s1) var(--s3);
+    text-align: left; font: inherit; color: var(--fg); background: transparent; border: 0; border-radius: 0; text-decoration: none; cursor: pointer;
+  }
+  .more-pop > :is(button, a):hover[data-shell] { background: var(--panel); }
+  .more-pop > hr[data-shell] { border: 0; border-top: 1px var(--rule) var(--hairline); margin: var(--s1) 0; width: 100%; }
 
   .dot[data-shell] {
 

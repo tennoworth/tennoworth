@@ -4,8 +4,11 @@ for (const theme of ['light', 'dark'] as const) {
   test(`${theme} feedback is available before a scan and preserves review while resizing`, async ({ page }, info) => {
     await page.emulateMedia({ colorScheme: theme });
     await page.goto('/?preview-desktop');
-    const trigger = page.getByRole('button', { name: 'Send feedback', exact: true });
+    // Before a scan, feedback sits in the header's More menu; closing the
+    // dialog returns focus to the menu button, since the menu item is gone.
+    const trigger = page.getByRole('button', { name: 'More ▾', exact: true });
     await trigger.click();
+    await page.getByRole('button', { name: 'Send feedback', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: 'Send feedback' });
     await expect(dialog.getByRole('status')).toHaveCount(0);
     await dialog.getByText('Review app-state snapshot', { exact: true }).click();
@@ -38,7 +41,7 @@ for (const theme of ['light', 'dark'] as const) {
 
 test('failed scans use the same feedback form and GitHub handoff; unavailable metadata does not block it', async ({ page }) => {
   await page.goto('/?preview-desktop');
-  await page.getByRole('button', { name: 'Send feedback', exact: true }).waitFor();
+  await page.getByTestId('desktop-scan').waitFor();
   await page.evaluate(() => {
     const w = window as any;
     const original = w.__TAURI__.core.invoke;
