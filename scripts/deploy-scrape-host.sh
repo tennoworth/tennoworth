@@ -22,10 +22,9 @@
 #      running exactly as it was,
 #   7. /srv/wfm/deployed.json records what ran and what it was checked against,
 #   8. the sweep schedule is restored, the declared preservation mode is written
-#      where the check reads it, and only then are the monitors armed. The mode
-#      is required: external-backup keeps the check but drops its receipt
-#      dependency, because the corpus is protected by a host-level backup this
-#      box cannot see; on-box-archive keeps the pair and requires the receipt.
+#      where the check reads it, and only then is the monitor armed. The mode is
+#      required: the corpus is protected by a host-level backup this box cannot
+#      see, and the check reports it as declared rather than verified.
 #
 # Environment:
 #   HOST          ssh target                (default wfm)
@@ -33,9 +32,9 @@
 #   HOST_ROOT     deployment root on the box (default /srv/wfm)
 #   SSH / SCP     ssh and scp commands  (default "ssh" and "scp")
 #   DRY_RUN       1 builds and checks, then prints what it would install
-#   PRESERVATION_MODE  required: external-backup or on-box-archive. There is no
-#                 default - a deploy that never says how the corpus is preserved
-#                 must not come out ready claiming that it is.
+#   PRESERVATION_MODE  required: external-backup. There is no default - a
+#                 deploy that never says how the corpus is preserved must not
+#                 come out ready claiming that it is.
 #   TENNOWORTH_WFM_POLICY_PUBLIC_KEY  required; the base64 Minisign public key
 set -euo pipefail
 
@@ -56,8 +55,7 @@ REMOTE="${REMOTE:-github}"
 # stayed silent about preservation would produce a green box on a claim nobody
 # made - exactly the evidence-free success the readiness check exists to refuse.
 # external-backup is a daily host-level Proxmox backup of the whole container,
-# verified by an operator-run job on another machine; on-box-archive is the
-# archive host path this box reads a receipt from, kept installed and selectable.
+# verified by an operator-run job on another machine.
 PRESERVATION_MODE="${PRESERVATION_MODE:-}"
 
 : "${TENNOWORTH_WFM_POLICY_PUBLIC_KEY:?set TENNOWORTH_WFM_POLICY_PUBLIC_KEY - without it the deployed scraper silently ignores the signed policy}"
@@ -67,10 +65,10 @@ die() { printf 'ABORT: %s\n' "$*" >&2; exit 1; }
 
 # An omitted and an empty value are the same refusal: neither declares anything.
 [ -n "$PRESERVATION_MODE" ] \
-  || die "PRESERVATION_MODE is not declared - set it explicitly to external-backup or on-box-archive"
+  || die "PRESERVATION_MODE is not declared - set it explicitly to external-backup"
 case "$PRESERVATION_MODE" in
-  external-backup|on-box-archive) ;;
-  *) die "PRESERVATION_MODE must be external-backup or on-box-archive (got '$PRESERVATION_MODE')";;
+  external-backup) ;;
+  *) die "PRESERVATION_MODE must be external-backup (got '$PRESERVATION_MODE')";;
 esac
 
 # ---- 1. reviewed, clean revision -------------------------------------------
@@ -80,7 +78,7 @@ git rev-parse --verify --quiet "$REMOTE/develop" >/dev/null || die "fetch $REMOT
 git merge-base --is-ancestor "$REVISION" "$REMOTE/develop" \
   || die "$REVISION is not on $REMOTE/develop - deploy a reviewed revision"
 ROOT="$(git rev-parse --show-toplevel)"
-say "deploying $(git rev-parse --short "$REVISION") from ${BASH_REMATCH[0]:-$(git branch --show-current 2>/dev/null || echo 'a detached HEAD')}"
+say "deploying $(git rev-parse --short "$REVISION") from $(git branch --show-current 2>/dev/null || echo 'a detached HEAD')"
 
 # ---- 2. the pipeline's own gates -------------------------------------------
 say "checks: cargo test + clippy -p wfm-scrape"
@@ -202,7 +200,6 @@ $SCP -q "$ARTIFACT" "$HOST:$STAGING/wfm-scrape"
 $SCP -q "$VERIFIER_ARTIFACT" "$HOST:$STAGING/wfm-policy"
 $SCP -q deploy/run-scrape.sh deploy/wfm-scrape.service deploy/wfm-scrape.timer "$HOST:$STAGING/"
 $SCP -q deploy/observations-check.sh deploy/wfm-observations-check.service deploy/wfm-observations-check.timer "$HOST:$STAGING/"
-$SCP -q deploy/pull-archive-receipt.sh deploy/wfm-archive-receipt-pull.service deploy/wfm-archive-receipt-pull.timer "$HOST:$STAGING/"
 
 # ---- 6. install and prove the release before the live paths move -----------
 # The live paths keep running the previous release until this one is proven on
@@ -219,9 +216,6 @@ install -m 0644 "$STAGING/wfm-scrape.timer" "$RELEASES/$REVISION/wfm-scrape.time
 install -m 0755 "$STAGING/observations-check.sh" "$RELEASES/$REVISION/observations-check.sh"
 install -m 0644 "$STAGING/wfm-observations-check.service" "$RELEASES/$REVISION/wfm-observations-check.service"
 install -m 0644 "$STAGING/wfm-observations-check.timer" "$RELEASES/$REVISION/wfm-observations-check.timer"
-install -m 0755 "$STAGING/pull-archive-receipt.sh" "$RELEASES/$REVISION/pull-archive-receipt.sh"
-install -m 0644 "$STAGING/wfm-archive-receipt-pull.service" "$RELEASES/$REVISION/wfm-archive-receipt-pull.service"
-install -m 0644 "$STAGING/wfm-archive-receipt-pull.timer" "$RELEASES/$REVISION/wfm-archive-receipt-pull.timer"
 REMOTE_RELEASE
 
 SCRAPER="$RELEASES/$REVISION/wfm-scrape"
@@ -254,9 +248,6 @@ install -m 0644 "$RELEASES/$REVISION/wfm-scrape.timer" /etc/systemd/system/wfm-s
 install -m 0755 "$RELEASES/$REVISION/observations-check.sh" "/srv/wfm/observations-check.sh"
 install -m 0644 "$RELEASES/$REVISION/wfm-observations-check.service" /etc/systemd/system/wfm-observations-check.service
 install -m 0644 "$RELEASES/$REVISION/wfm-observations-check.timer" /etc/systemd/system/wfm-observations-check.timer
-install -m 0755 "$RELEASES/$REVISION/pull-archive-receipt.sh" "/srv/wfm/pull-archive-receipt.sh"
-install -m 0644 "$RELEASES/$REVISION/wfm-archive-receipt-pull.service" /etc/systemd/system/wfm-archive-receipt-pull.service
-install -m 0644 "$RELEASES/$REVISION/wfm-archive-receipt-pull.timer" /etc/systemd/system/wfm-archive-receipt-pull.timer
 # ProtectSystem=strict in both new units grants write access to exactly this
 # path, and systemd refuses to start a unit whose ReadWritePaths does not exist.
 install -d -m 0750 -o root -g root "$HOST_ROOT/data/observations-check"
@@ -272,6 +263,17 @@ REMOTE_ACTIVATE
 [ "$($SSH "$HOST" "sha256sum /srv/wfm/bin/wfm-scrape | cut -d' ' -f1")" = "$CHECKSUM" ] \
   || die "the live binary is not the one that was built"
 
+# The on-box archive receipt path is retired. A box deployed before that still
+# has its pull units and the drop-in that was meant to detach the check from
+# them - which systemd ignored, because an empty Wants= in a drop-in does not
+# reset a dependency the base unit declares - so the pull kept running, failed
+# every hour and alerted each time. Removing the units is what ends that.
+$SSH "$HOST" "systemctl disable --now wfm-archive-receipt-pull.timer >/dev/null 2>&1 || true"
+$SSH "$HOST" "rm -f /etc/systemd/system/wfm-archive-receipt-pull.service /etc/systemd/system/wfm-archive-receipt-pull.timer /etc/systemd/system/wfm-observations-check.service.d/preservation.conf /srv/wfm/pull-archive-receipt.sh"
+$SSH "$HOST" "rmdir /etc/systemd/system/wfm-observations-check.service.d 2>/dev/null || true"
+$SSH "$HOST" "systemctl daemon-reload"
+$SSH "$HOST" "systemctl reset-failed wfm-archive-receipt-pull.service >/dev/null 2>&1 || true"
+
 # ---- 8. record it ---------------------------------------------------------
 $SSH "$HOST" "cat > '$HOST_ROOT/deployed.json'" <<RECORD
 {
@@ -284,9 +286,9 @@ $SSH "$HOST" "cat > '$HOST_ROOT/deployed.json'" <<RECORD
 RECORD
 
 # ---- 9. restore the schedule, declare the mode, then arm the monitor --------
-# Both monitors read the deployment record and the sweep schedule, so they are
-# armed only after those are settled: a persistent timer enabled earlier can
-# fire into the intermediate state and report on a box that is still deploying.
+# The monitor reads the deployment record and the sweep schedule, so it is armed
+# only after those are settled: a persistent timer enabled earlier can fire into
+# the intermediate state and report on a box that is still deploying.
 # restore_timer is the same call the failure path makes, made deliberately here
 # so the schedule is running before anything watches it - and disarms the trap
 # so success does not start it twice.
@@ -297,51 +299,14 @@ restore_timer
 $SSH "$HOST" "cat > /etc/wfm-observations-check.env" <<ENV
 # Set by scripts/deploy-scrape-host.sh. external-backup declares that the corpus
 # is protected by host-level Proxmox backups of this container, verified by an
-# operator-run job elsewhere; on-box-archive requires the archive host receipt.
+# operator-run job elsewhere.
 OBSERVATIONS_PRESERVATION=$PRESERVATION_MODE
 ENV
+$SSH "$HOST" "systemctl enable --now wfm-observations-check.timer"
 
-if [ "$PRESERVATION_MODE" = on-box-archive ]; then
-  # The check unit's own Wants/After pull the receipt in before it runs, which is
-  # exactly right here, so a drop-in left by an earlier external deployment is
-  # removed rather than shadowing them.
-  $SSH "$HOST" "rm -f /etc/systemd/system/wfm-observations-check.service.d/preservation.conf; rmdir /etc/systemd/system/wfm-observations-check.service.d 2>/dev/null || true"
-  $SSH "$HOST" "systemctl daemon-reload"
-  $SSH "$HOST" "systemctl enable --now wfm-archive-receipt-pull.timer wfm-observations-check.timer"
-else
-  # external-backup: this box cannot see the host-level backups, so the check
-  # must not wait on, or pull, a receipt nobody produces. The drop-in resets the
-  # base unit's dependency, which stays there for the archive mode.
-  $SSH "$HOST" "install -d -m 0755 -o root -g root /etc/systemd/system/wfm-observations-check.service.d"
-  $SSH "$HOST" "cat > /etc/systemd/system/wfm-observations-check.service.d/preservation.conf" <<'PRESERVATION_CONF'
-[Unit]
-# Preservation for this deployment is the host-level Proxmox backup of the whole
-# container, verified by an operator-run pull-and-verify job on another machine.
-# This check cannot see it, so it must not pull or wait on the archive host's
-# receipt, which would gate the corpus on evidence nobody produces.
-Wants=
-After=
-PRESERVATION_CONF
-  $SSH "$HOST" "systemctl daemon-reload"
-  # A box switched away from the archive must stop fetching receipts that no
-  # longer gate anything; a timer left enabled would keep the old path alive and
-  # make stale evidence look current.
-  $SSH "$HOST" "systemctl disable --now wfm-archive-receipt-pull.timer >/dev/null 2>&1 || true"
-  $SSH "$HOST" "systemctl enable --now wfm-observations-check.timer"
-fi
-
-# ---- 10. run the check once, in order ---------------------------------------
-# In on-box-archive mode two persistent timers can elapse in either order after
-# downtime, and a check that runs before the pull reads yesterday's receipt, so
-# the first run is explicit: pull, then check. The pull may fail because the
-# archive host is not configured yet - that is the units' own alert to raise, not
-# this script's. In external-backup mode there is nothing to pull. A check that
-# leaves no report at all means the installed units are broken, and a check that
-# is not ready means the box is not ready to be left unattended.
-if [ "$PRESERVATION_MODE" = on-box-archive ]; then
-  $SSH "$HOST" "systemctl start wfm-archive-receipt-pull.service" \
-    || say "WARNING: the first receipt pull failed; the readiness check will report the archive as unmonitored"
-fi
+# ---- 10. run the check once ------------------------------------------------
+# A check that leaves no report at all means the installed units are broken, and
+# a check that is not ready means the box is not ready to be left unattended.
 $SSH "$HOST" "systemctl start wfm-observations-check.service" || true
 $SSH "$HOST" "test -s '$HOST_ROOT/data/observations-check/report.json'" \
   || die "the readiness check produced no report - the installed units are not working"

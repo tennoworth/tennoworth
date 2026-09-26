@@ -109,14 +109,15 @@ so a stale one cannot green them.
 
 The corpus's operational owners are host-only, next to the pipeline:
 `deploy/observations-check.sh` (with `wfm-observations-check.service`/`.timer`,
-installed by `scripts/deploy-scrape-host.sh`) reports whether the corpus is sound,
-complete and preserved, and `scripts/archive-observations.sh` copies it off the
-box with a verified manifest and publishes a receipt the box pulls hourly with
-`deploy/pull-archive-receipt.sh` (`scripts/install-archive-host.sh` provisions
-the archive host). The check answers collection-readiness only; the schedule
-decision belongs to `replay`. Archive evidence is required: a missing, stale,
-future-dated or disagreeing receipt, or a completed log past its archival
-deadline, is a failure, so an unmonitored archive cannot read as ready. The check
-ties its journal evidence to one systemd invocation and one sweep, and a start
-that cannot be paired is an explicit failure rather than a skipped gate. It never
-ends without a report: an absent field is reported as absent and failed.
+installed by `scripts/deploy-scrape-host.sh`) reports whether the corpus is sound
+and complete, and states how it is preserved. Preservation is the host-level
+Proxmox backup of the whole container, proven off the box by
+`scripts/check-lxc-backup.sh`; the check cannot see that backup, so it reports
+the declared mode and never claims preservation is verified. The check answers
+collection-readiness only; the schedule decision belongs to `replay`. It ties its
+journal evidence to one systemd invocation and one sweep, and a start that cannot
+be paired is an explicit failure rather than a skipped gate. A partial log that a
+later completed sweep has superseded is a dead sweep kept for post-mortem - a
+warning, with the lost sweep already counted as missing - while one nothing has
+superseded is still a stuck sweep. It never ends without a report: an absent
+field is reported as absent and failed.
