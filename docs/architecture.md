@@ -41,6 +41,7 @@ rust/
   market-domain/             inventory, scoring, advisor and planning decisions
   market-math/               pure shared heuristics
   wfm-client/                shared request policy and transport primitives
+  tennoworth-usage/          opt-in installation-count service
 scripts/                     release, CSP, probe and deployment checks
 tests/fixtures/             shared parity and pipeline inputs/expectations
 deploy/                      live-data refresh and deployment operations
@@ -187,8 +188,7 @@ capture must not implicitly clear or replace that identity.
 acquisition and trading modules share narrowly named HTTP, identity, path, and
 time helpers. `wfm-client` shares transport primitives, not an abstraction that
 combines anonymous scraping with authenticated order mutation. `market-math`
-has no I/O or clock dependency. `market-domain` is the sixth workspace member:
-it isolates decision contracts and computations from both Tauri and the network
+has no I/O or clock dependency. `market-domain` isolates decision contracts and computations from both Tauri and the network
 core, so shared fixtures and contract generation can run without the GUI stack.
 
 That is why `wfm-core` depends on `market-domain` rather than the reverse, and

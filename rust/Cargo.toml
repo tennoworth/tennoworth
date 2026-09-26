@@ -10,14 +10,18 @@
 #                         + wfstat-catalog.json, `scrape` runs the WFM scrape.
 #                         The ONLY pipeline (Python retired 2026-08); fixture
 #                         gates in its tests/ dir shell the real binary.
-#   wfm-client          - shared WFM transport primitives (UA, Cloudflare
-#                         headers, envelope unwrap, retry backoff). Primitives
-#                         only: do not grow it into one abstraction spanning
-#                         anonymous scraping and authed order mutation.
+#   wfm-client          - shared WFM transport primitives (UA, request headers,
+#                         request budgets and signed policy, envelope unwrap,
+#                         retry backoff). Primitives only: do not grow it into
+#                         one abstraction spanning anonymous scraping and authed
+#                         order mutation.
+#   market-domain       - native decision contracts: inventory normalization,
+#                         scoring, planners, generated IPC types.
 #   tennoworth-desktop  - Tauri v2 shell, the app users actually install.
 #                         Drives wfm-core over IPC - the only adapter, since the
 #                         standalone CLI companion was removed (2026-08): the
 #                         product is the desktop app or the informational site.
+#   tennoworth-usage    - the opt-in installation-count service on the host.
 [workspace]
 members = ["wfm-core", "market-math", "market-domain", "wfm-scrape", "wfm-client", "tennoworth-desktop", "tennoworth-usage"]
 resolver = "2"

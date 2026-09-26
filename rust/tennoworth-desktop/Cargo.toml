@@ -1,5 +1,4 @@
-# TennoWorth desktop shell - Phase C (see the desktop spike notes). One
-# window loading the built SPA via Tauri's asset protocol; the SPA's Transport
+# TennoWorth desktop shell. One window loading the built SPA via Tauri's asset protocol; the SPA's Transport
 # drives wfm-core through thin commands: health / scan_inventory, the WFM
 # session (login / unlock - passphrase from the webview, see wfm_session.rs),
 # the listing/order surface.
@@ -40,7 +39,7 @@ tauri-plugin-notification = "2"
 # Rust through app-defined commands (check_update / install_update) - check on
 # launch, notify, download+install only on explicit confirmation, apply on
 # restart. The signature pubkey lives in tauri.conf.json; the private key is
-# generated offline and never enters the repo (the maintainer signing runbook §9).
+# generated offline and never enters the repo.
 tauri-plugin-updater = "2"
 # Closing the window only hides it to the tray, so without this a relaunch
 # started a SECOND process against the same SQLite DB instead of re-showing the
@@ -88,7 +87,7 @@ zeroize = "1"
 # per-platform store features or you silently get the mock store; this is the
 # crate README's cross-platform set. Linux talks Secret Service over DBus
 # (GNOME Keyring, KWallet via org.kde.secretservicecompat); crypto-rust avoids
-# an OpenSSL link. Desktop-only dependency - the CLI must not grow DBus deps.
+# an OpenSSL link. Desktop-only dependency.
 keyring = { version = "3", features = ["windows-native", "sync-secret-service", "crypto-rust"] }
 # Encoding for the keyring entry value.
 base64 = { workspace = true }

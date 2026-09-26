@@ -148,13 +148,6 @@ build caught that before 0.3.5 and 0.3.6 shipped with stale locks.
 `cargo fetch --locked` now gates it in `audit.yml` and again in
 `release-desktop.yml` - commit the lock in the same commit as the bump.
 
-### `StartupWMClass` is `tennoworth-desktop`, not the product name
-GTK derives WM_CLASS from `g_get_prgname()` (the binary basename) because
-Tauri's `enable_gtk_app_id` defaults to false. Verified by running the app:
-`WM_CLASS = "tennoworth-desktop", "Tennoworth-desktop"`. A wrong value breaks
-taskbar icon binding *silently*. Confirm with `xprop WM_CLASS`, never by
-reasoning from the app name.
-
 ### `regex` crate feature flags affect binary size *and* pattern syntax
 With `default-features = false`, `\d` and `\b` fail to compile (NFA
 error). We accept default features - adds ~150 KB but lets us write
