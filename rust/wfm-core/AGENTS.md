@@ -56,7 +56,7 @@ Patterns scanned (`regex::bytes::Regex`):
 The scanned values are session secrets: see "The app never prints secrets" in
 [`../AGENTS.md`](../AGENTS.md).
 
-## WFM API quirks (verified May 2026)
+## WFM API quirks
 
 Auth (changed 2026-09): every `warframe.market` page now sits behind a
 Cloudflare interactive challenge (`cf-mitigated: challenge`, for any user
