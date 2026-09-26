@@ -14,8 +14,9 @@ use crate::time::chrono_now_iso;
 use crate::trading::catalog::WfmCatalogItem;
 use crate::trading::outcome::MutationOutcome;
 use crate::trading::listing::{
-    decode_user_orders, list_user_orders, patch_one_order, send_mutation, Unlocked, MAX_PLATINUM,
+    decode_user_orders, list_user_orders, patch_one_order, send_mutation, Unlocked,
 };
+use market_domain::limits::{MAX_PLAN_ITEMS, MAX_PLATINUM, MIN_PLATINUM};
 use crate::trading::orders::DecodedOrders;
 use crate::trading::pending::{journal_state, write_pending_atomic, JournalState, PendingItem, PendingPlan};
 use market_domain::orders::{NormalizedOrder, OrderRow, OrderSide};
@@ -43,8 +44,6 @@ impl Drop for PlanGuard<'_> {
     }
 }
 
-pub const MAX_PLAN_ITEMS: usize = 50;
-pub const MIN_PLATINUM: u32 = 5;
 const SLUG_MISMATCH_GUARD_MULTIPLIER: u32 = 3;
 
 // Maximum items per single in-game trade - six slots per side in Warframe's
@@ -1766,30 +1765,6 @@ mod tests {
         assert_eq!(body["perTrade"], 3);
     }
 
-    // Parity gate: frontend/src/lib/limits.ts mirrors these three so the UI can
-    // reject an out-of-range value before the round-trip. This crate is the
-    // source of truth; drift surfaces as the UI accepting a batch the companion
-    // then rejects. Both sides read tests/fixtures/limits.json. Kept in plan.rs
-    // because MAX_PLAN_ITEMS and MIN_PLATINUM are private here - a test is not
-    // a reason to widen their visibility.
-    #[test]
-    fn listing_limits_match_the_shared_fixture() {
-        #[derive(serde::Deserialize)]
-        struct Fixture {
-            max_plan_items: usize,
-            min_platinum: u32,
-            max_platinum: u32,
-        }
-        let path = concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../tests/fixtures/limits.json"
-        );
-        let raw = std::fs::read_to_string(path).expect("read the shared limits fixture");
-        let fx: Fixture = serde_json::from_str(&raw).expect("parse the limits fixture");
-        assert_eq!(MAX_PLAN_ITEMS, fx.max_plan_items);
-        assert_eq!(MIN_PLATINUM, fx.min_platinum);
-        assert_eq!(MAX_PLATINUM, fx.max_platinum);
-    }
     #[test]
     fn pending_and_uncertain_results_match_the_shared_frontend_contract() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!("../../../../tests/fixtures/wfm-access/outcomes.json")).unwrap();

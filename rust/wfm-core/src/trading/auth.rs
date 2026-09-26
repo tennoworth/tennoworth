@@ -14,8 +14,8 @@
 //! users' files must keep decrypting.
 //!
 //! No terminal I/O lives here: the caller reads the passphrase (from a TTY, a
-//! pipe, or a desktop dialog) and hands the plaintext to `decrypt_jwt` /
-//! `encrypt_jwt`.
+//! pipe, or a desktop dialog) and hands the plaintext to `encrypt_jwt`, or to
+//! `derive_jwt_key` and then `decrypt_jwt_with_key`.
 
 use wfm_client::transport::GovernedRequest;
 use wfm_client::governor::Kind;
@@ -248,8 +248,8 @@ pub fn encrypt_jwt(jwt: &str, passphrase: &str, platform: &str) -> Result<Encryp
     })
 }
 
-/// Run the blob's KDF over `passphrase`, yielding the raw AES-256 key. Split
-/// from `decrypt_jwt` so the desktop can hold the derived key in the OS
+/// Run the blob's KDF over `passphrase`, yielding the raw AES-256 key. Kept
+/// separate from decryption so the desktop can hold the derived key in the OS
 /// keyring for silent unlock - the key is salt-bound (a re-login rotates the
 /// salt, so a stale key fails GCM auth) and useless without the .enc file,
 /// unlike the passphrase, which users may reuse elsewhere.
@@ -282,10 +282,8 @@ pub fn decrypt_jwt_with_key(blob: &EncryptedJwt, key_bytes: &[u8; 32]) -> Result
     String::from_utf8(plaintext).context("JWT plaintext was not valid UTF-8")
 }
 
+#[cfg(test)]
 pub fn decrypt_jwt(blob: &EncryptedJwt, passphrase: &str) -> Result<String> {
-    if blob.format != JWT_FORMAT {
-        bail!("Unknown JWT blob format: {}", blob.format);
-    }
     let key_bytes = derive_jwt_key(blob, passphrase)?;
     decrypt_jwt_with_key(blob, &key_bytes)
 }

@@ -1,8 +1,4 @@
 //! Consent and daily tokens stay in Rust; this client never shares WFM credentials.
-#![allow(
-    clippy::unreachable,
-    reason = "tauri command wrappers expand to unreachable"
-)]
 use crate::persistence::Db;
 use chrono::Utc;
 use rand::{rngs::OsRng, RngCore};

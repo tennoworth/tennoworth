@@ -19,10 +19,9 @@ Driven by the desktop's IPC commands (`submit_plan` / `get_pending_plan` /
   Slug-mismatch guard: refuse listings priced ≥ 3× below the
   reference `low_sell`.
 
-  The edit-order command in `tennoworth-desktop/src/commands/listing.rs`
-  enforces the same cap, so these constants have two enforcement points and one
-  home. Change them together and cover the pair with a test - see the cross-crate
-  invariant in [`../AGENTS.md`](../AGENTS.md).
+  The caps live in `market_domain::limits` and are imported here, by the
+  desktop's listing commands and by trade-session selection - see the
+  cross-crate invariant in [`../AGENTS.md`](../AGENTS.md).
 - Pending-plan recovery: every plan is persisted to
   `~/.config/wfminv/pending_plan.json` (atomic tmp+rename) before the
   first POST. Each item is marked uncertain on disk before its execution,
