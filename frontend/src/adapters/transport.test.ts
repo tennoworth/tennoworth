@@ -5,7 +5,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { installTauri, removeTauri } from '../dev/test-utils.js';
 import { isDesktopRuntime, installDesktopExternalLinkHandler } from './runtime';
 import { HostedTransport } from './hosted';
-import { TauriTransport, desktopWfmStatus, desktopWfmLogout, desktopWfmLogin, desktopWfmLoginCancel, desktopWfmUnlock, desktopTrySilentUnlock, parseScanPayload } from './desktop';
+import { TauriTransport, desktopWfmStatus, desktopWfmLogout, desktopWfmLogin, desktopWfmLoginCancel, desktopWfmLoginWithToken, desktopWfmUnlock, desktopTrySilentUnlock, parseScanPayload } from './desktop';
 import { DesktopCmdError } from '../contracts/errors';
 
 // The desktop sniff and TauriTransport read the Tauri globals; install/remove
@@ -305,6 +305,18 @@ describe('desktop WFM auth ops', () => {
     installTauri(invoke);
     await expect(desktopWfmLogout()).resolves.toBeUndefined();
     expect(invoke).toHaveBeenCalledWith('wfm_logout');
+  });
+
+  it('desktopWfmLoginWithToken() passes the pasted token and local settings through', async () => {
+    const invoke = vi.fn().mockResolvedValue(null);
+    installTauri(invoke);
+    await desktopWfmLoginWithToken('a.b.c', 'a-long-enough-passphrase', 'pc', false);
+    expect(invoke).toHaveBeenCalledWith('wfm_login_with_token', {
+      token: 'a.b.c',
+      passphrase: 'a-long-enough-passphrase',
+      platform: 'pc',
+      remember: false,
+    });
   });
 
   it('desktopWfmLoginCancel() invokes wfm_login_cancel', async () => {

@@ -30,6 +30,7 @@ const POLL: Duration = Duration::from_millis(750);
 const CHECK_RETRY: Duration = Duration::from_secs(5);
 const RECHECK: Duration = Duration::from_secs(20);
 const COOKIE_READ_LIMIT: Duration = Duration::from_secs(10);
+const PAGE_LOST_LIMIT: Duration = Duration::from_secs(3);
 const GIVE_UP: Duration = Duration::from_secs(15 * 60);
 
 /// Open the sign-in window and resolve with the JWT once the user has signed
@@ -75,6 +76,7 @@ async fn wait_for_sign_in(app: &AppHandle, platform: &str) -> Result<String, Cmd
     let mut anonymous: HashMap<String, Instant> = HashMap::new();
     let mut last_page: Option<String> = None;
     let mut retry_at: Option<Instant> = None;
+    let mut page_lost_since: Option<Instant> = None;
     let mut progress = Progress::default();
     loop {
         tokio::time::sleep(POLL).await;
@@ -91,8 +93,23 @@ async fn wait_for_sign_in(app: &AppHandle, platform: &str) -> Result<String, Cmd
             ));
         }
         let page = window.url().ok().map(|u| page_label(&u));
+        // A crashed page leaves the webview without a URL. WebKitGTK 2.52 aborts
+        // this way a few seconds into every warframe.market page (2026-09), so
+        // report it instead of leaving a blank window "waiting for sign-in".
+        // The cookies were still checked on the polls before this fires.
+        match (&page, page_lost_since) {
+            (None, None) => page_lost_since = Some(Instant::now()),
+            (None, Some(at)) if at.elapsed() > PAGE_LOST_LIMIT => {
+                return Err(CmdError::of(
+                    "signin_window_failed",
+                    "The warframe.market page crashed in the sign-in window. Paste your session token instead.",
+                ));
+            }
+            (Some(_), _) => page_lost_since = None,
+            _ => {}
+        }
         if page != last_page {
-            progress.note(&format!("page {}", page.as_deref().unwrap_or("unknown")));
+            progress.note(&format!("page {}", page.as_deref().unwrap_or("lost")));
             anonymous.clear();
             last_page = page;
         }
@@ -178,6 +195,31 @@ impl Progress {
     }
 }
 
+/// The fallback when the sign-in window cannot work: the user signs in with
+/// their own browser and pastes its `JWT` cookie. Accepts what copying from a
+/// browser's cookie viewer tends to produce - surrounding whitespace or quotes,
+/// or the whole `JWT=<value>` pair - and rejects anything that is not shaped
+/// like a JWT before any network call.
+pub fn normalize_pasted_jwt(pasted: &str) -> Result<String, CmdError> {
+    let value = pasted.trim();
+    let value = value.strip_prefix("JWT=").unwrap_or(value);
+    let value = value.split(';').next().unwrap_or("").trim().trim_matches('"');
+    let parts: Vec<&str> = value.split('.').collect();
+    let shaped = parts.len() == 3
+        && parts.iter().all(|p| {
+            !p.is_empty()
+                && p.bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_' || b == b'=')
+        });
+    if !shaped {
+        return Err(CmdError::of(
+            "bad_token",
+            "That doesn't look like a warframe.market session token. Copy the value of the JWT cookie.",
+        ));
+    }
+    Ok(value.to_string())
+}
+
 /// Every distinct non-empty `JWT` value: a host-only cookie and the
 /// `.warframe.market` one can coexist, and either may be the signed-in one.
 fn jwt_cookies(cookies: &[Cookie<'static>]) -> Vec<String> {
@@ -206,6 +248,17 @@ mod tests {
         ];
         assert_eq!(jwt_cookies(&cookies), ["anonymous", "signed-in"]);
         assert!(jwt_cookies(&[Cookie::new("cf_clearance", "x")]).is_empty());
+    }
+
+    #[test]
+    fn pasted_tokens_are_cleaned_up_or_refused() {
+        let jwt = "eyJhbGciOiJIUzI1NiJ9.eyJzaWQiOiJ4In0.c2lnbmF0dXJl";
+        assert_eq!(normalize_pasted_jwt(jwt).unwrap(), jwt);
+        assert_eq!(normalize_pasted_jwt(&format!("  \"{jwt}\"\n")).unwrap(), jwt);
+        assert_eq!(normalize_pasted_jwt(&format!("JWT={jwt}; Path=/; HttpOnly")).unwrap(), jwt);
+        for bad in ["", "JWT=", "not a token", "a.b", "a..c", "a.b.c d", "a.b.c.d"] {
+            assert_eq!(normalize_pasted_jwt(bad).unwrap_err().code, "bad_token", "{bad:?}");
+        }
     }
 
     #[test]

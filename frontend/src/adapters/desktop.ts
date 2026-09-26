@@ -240,6 +240,20 @@ export async function desktopWfmLogin(passphrase: string, platform: string, reme
   }
 }
 
+/** Fallback sign-in: the JWT cookie value copied from the user's own browser. */
+export async function desktopWfmLoginWithToken(
+  token: string,
+  passphrase: string,
+  platform: string,
+  remember: boolean,
+): Promise<void> {
+  try {
+    await resolveInvoke()<null>('wfm_login_with_token', { token, passphrase, platform, remember });
+  } catch (e) {
+    rethrowInvoke(e);
+  }
+}
+
 export async function desktopWfmLoginCancel(): Promise<void> {
   try {
     await resolveInvoke()<null>('wfm_login_cancel');

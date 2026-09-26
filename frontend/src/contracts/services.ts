@@ -47,6 +47,7 @@ export interface DesktopServices extends UpdateNotesServices {
   desktopTestNotification(): Promise<string>;
   desktopWfmLogin(passphrase: string, platform: string, remember: boolean): Promise<void>;
   desktopWfmLoginCancel(): Promise<void>;
+  desktopWfmLoginWithToken(token: string, passphrase: string, platform: string, remember: boolean): Promise<void>;
   desktopWfmUnlock(passphrase: string, remember: boolean): Promise<void>;
   desktopTrySilentUnlock(): Promise<boolean>;
   desktopReadNotifications(id?: number | null): Promise<void>;

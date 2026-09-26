@@ -707,6 +707,41 @@ pub async fn wfm_login(
     .map_err(|e| CmdError::internal(format!("login task failed to run: {e}")))?
 }
 
+/// The fallback sign-in: a `JWT` cookie value the user copied from their own
+/// browser after signing in on warframe.market. It is confirmed against
+/// `/v2/me` before anything is written, so an anonymous or expired cookie is
+/// refused instead of saved.
+#[tauri::command]
+pub async fn wfm_login_with_token(
+    session: State<'_, Arc<WfmSession>>,
+    token: String,
+    passphrase: String,
+    platform: String,
+    remember: bool,
+) -> Result<(), CmdError> {
+    let token = Zeroizing::new(token);
+    let passphrase = Zeroizing::new(passphrase);
+    WfmSession::validate_login(&passphrase, &platform)?;
+    let jwt = super::wfm_signin::normalize_pasted_jwt(&token)?;
+    let generation = session.session_generation();
+    let s = Arc::clone(&session);
+    tauri::async_runtime::spawn_blocking(move || {
+        match wfm_core::trading::auth::jwt_is_signed_in(&jwt, &platform) {
+            Ok(true) => {}
+            Ok(false) => {
+                return Err(CmdError::of(
+                    "bad_token",
+                    "warframe.market doesn't accept that token as signed in. Sign in on the site first, then copy the JWT cookie again.",
+                ))
+            }
+            Err(e) => return Err(CmdError::wfm(e)),
+        }
+        s.login(generation, jwt, &passphrase, &platform, remember)
+    })
+    .await
+    .map_err(|e| CmdError::internal(format!("login task failed to run: {e}")))?
+}
+
 /// Close the sign-in window from the app's login dialog; the pending
 /// `wfm_login` then fails with `cancelled`.
 #[tauri::command]

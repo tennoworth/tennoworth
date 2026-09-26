@@ -1,6 +1,6 @@
 <script lang="ts">
   import { useDesktopServices } from '../../ui/desktop-context';
-  const { desktopWfmLogin, desktopWfmLoginCancel, desktopWfmUnlock, desktopTrySilentUnlock } = useDesktopServices();
+  const { desktopWfmLogin, desktopWfmLoginCancel, desktopWfmLoginWithToken, desktopWfmUnlock, desktopTrySilentUnlock } = useDesktopServices();
   import { humanError } from '../../contracts/errors';
   
 import { DesktopCmdError } from '../../contracts/errors';
@@ -12,6 +12,11 @@ import { DesktopCmdError } from '../../contracts/errors';
   let wfmLoginPassphrase = $state('');
   let wfmLoginConfirm = $state('');
   let wfmLoginPlatform = $state('pc');
+  // 'token' is the fallback for when the sign-in window cannot work (it
+  // crashes under some Linux WebKitGTK builds): the user signs in with their
+  // own browser and pastes its JWT cookie.
+  let wfmLoginMode = $state<'window' | 'token'>('window');
+  let wfmLoginToken = $state('');
   let wfmUnlockPassphrase = $state('');
   // "Remember on this device" (OS keyring). One preference shared by the
   // login and unlock dialogs; default on - the browser-cookie parity call.
@@ -73,18 +78,27 @@ import { DesktopCmdError } from '../../contracts/errors';
     }
     wfmAuthBusy = true;
     try {
-      await desktopWfmLogin(wfmLoginPassphrase, wfmLoginPlatform, wfmRemember);
+      if (wfmLoginMode === 'token') {
+        await desktopWfmLoginWithToken(wfmLoginToken, wfmLoginPassphrase, wfmLoginPlatform, wfmRemember);
+      } else {
+        await desktopWfmLogin(wfmLoginPassphrase, wfmLoginPlatform, wfmRemember);
+      }
       wfmLoginDialog?.close();
       unlocked();
     } catch (err) {
-      // Closing the WFM window is a choice, not a failure; the Cancel path
-      // has already closed this dialog.
-      if (!(err instanceof DesktopCmdError && err.code === 'cancelled')) {
+      const code = err instanceof DesktopCmdError ? err.code : null;
+      if (code === 'signin_window_failed') {
+        wfmLoginMode = 'token';
+        wfmAuthError = humanError(err);
+      } else if (code !== 'cancelled') {
         wfmAuthError = humanError(err);
       } else if (wfmLoginDialog?.open) {
+        // Closing the WFM window is a choice, not a failure; the Cancel path
+        // has already closed this dialog.
         wfmAuthError = 'The warframe.market window was closed before you signed in.';
       }
     } finally {
+      wfmLoginToken = '';
       wfmLoginPassphrase = '';
       wfmLoginConfirm = '';
       wfmAuthBusy = false;
@@ -129,11 +143,39 @@ import { DesktopCmdError } from '../../contracts/errors';
     <header>
       <h3>Log in to warframe.market</h3>
       <p class="muted">
-        You sign in on warframe.market's own page, in a window this app opens -
-        your WFM password never passes through TennoWorth. The sign-in token it
-        returns is encrypted on this PC with a passphrase you choose.
+        You sign in on warframe.market's own page - your WFM password never
+        passes through TennoWorth. The sign-in token is encrypted on this PC
+        with a passphrase you choose.
       </p>
     </header>
+    {#if wfmLoginMode === 'token'}
+      <label>
+        Session token
+        <input
+          type="password"
+          autocomplete="off"
+          spellcheck="false"
+          data-testid="wfm-login-token"
+          bind:value={wfmLoginToken}
+          required
+        />
+        <span class="muted">
+          Sign in at warframe.market in your browser, open its developer tools
+          (F12) → Storage (Firefox) or Application (Chrome) → Cookies →
+          https://warframe.market, and copy the value of <code>JWT</code>. It
+          is checked with warframe.market before anything is saved.
+        </span>
+      </label>
+      <p class="forgot-row muted">
+        <button type="button" class="forgot" onclick={() => (wfmLoginMode = 'window')}>Use the sign-in window instead</button>
+      </p>
+    {:else}
+      <p class="forgot-row muted">
+        Window not working?
+        <button type="button" class="forgot" data-testid="wfm-login-use-token" onclick={() => (wfmLoginMode = 'token')}>Paste a session token</button>
+        from your browser instead.
+      </p>
+    {/if}
     <label>
       Platform
       <select bind:value={wfmLoginPlatform}>
@@ -170,7 +212,7 @@ import { DesktopCmdError } from '../../contracts/errors';
       (KWallet, GNOME Keyring, Windows Credential Manager) so you're not asked
       each launch. Never the passphrase itself.
     </label>
-    {#if wfmAuthBusy}
+    {#if wfmAuthBusy && wfmLoginMode === 'window'}
       <p class="muted" role="status" data-testid="wfm-login-waiting">
         Finish signing in in the warframe.market window. It closes by itself
         once you're in.
@@ -181,7 +223,13 @@ import { DesktopCmdError } from '../../contracts/errors';
     {/if}
     <footer>
       <button type="button" class="ghost" onclick={cancelWfmLogin}>Cancel</button>
-      <button type="submit" disabled={wfmAuthBusy}>{wfmAuthBusy ? 'Waiting for sign-in…' : 'Continue to warframe.market'}</button>
+      <button type="submit" disabled={wfmAuthBusy}>
+        {#if wfmLoginMode === 'token'}
+          {wfmAuthBusy ? 'Checking token…' : 'Save token'}
+        {:else}
+          {wfmAuthBusy ? 'Waiting for sign-in…' : 'Continue to warframe.market'}
+        {/if}
+      </button>
     </footer>
   </form>
 </dialog>
