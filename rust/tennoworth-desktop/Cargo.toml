@@ -49,12 +49,12 @@ tauri-plugin-updater = "2"
 # children at 1.3GB, with only one window, which is what "I click it and
 # nothing opens" actually was. Concurrent writers on one DB were the worse half.
 tauri-plugin-single-instance = "2"
-# Opens the prefilled "scan broke" GitHub issue in the user's real browser.
-# A bare <a target="_blank"> is NOT a substitute: this app registers no
-# window-open handler and its capability grants no opener ACL, so such a link
-# silently does nothing - the exact class of failure the repo has shipped
-# before. The URL is built and opened in Rust, where the version/platform it
-# reports already live.
+# Opens external links (item pages, the feedback issue form) in the user's real
+# browser through the open_external_url command. A bare <a target="_blank"> is
+# NOT a substitute: this app registers no window-open handler and its capability
+# grants no opener ACL, so such a link silently does nothing - the exact class
+# of failure the repo has shipped before. The URL is checked against an
+# allowlist and opened in Rust.
 tauri-plugin-opener = "2"
 # Rust owns the global fallback shortcut so the hidden overlay window needs no
 # global-shortcut capability.

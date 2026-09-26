@@ -143,7 +143,6 @@ export function createPreview(scenario: string) {
     if (command === 'test_notification') return 'Test sent (preview).';
     if (command === 'get_setting') return settings.get(String(args?.key)) ?? null;
     if (command === 'set_setting') { settings.set(String(args?.key), String(args?.value)); return null; }
-    if (command === 'delete_setting') { settings.delete(String(args?.key)); return null; }
     if (command in responses) {
       if (scenario === 'loading') await new Promise(resolve => setTimeout(resolve, 1500));
       if (scenario === 'error' && ['fetch_orders', 'list_watches', 'list_trades', 'riven_comps', 'trade_session_state'].includes(command)) {
