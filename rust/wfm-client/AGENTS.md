@@ -12,11 +12,10 @@ authed order mutation - the trading services stay in `wfm-core`.
 Every `api.warframe.market` call carries `Crossplay: true` + `Platform: pc` +
 `Language: en`, which is what `wfm_headers()` sends.
 
-**Signin is the documented exception and is NOT a bug.** It POSTs to
-`warframe.market/v1/auth/signin` with `Platform` + `Language` + `auth_type` +
-`X-CSRFToken` and no `Crossplay`, which is what works against the live
-endpoint. It is an auth-host request, not an API call, and it is verified
-working as written. Don't "fix" the omission by adding the header.
+Sign-in makes no request of its own: since 2026-09 every `warframe.market`
+page is behind a Cloudflare bot challenge, so the user signs in on WFM's page
+in a desktop webview and the app keeps the resulting `JWT` cookie. Do not
+reintroduce a scripted CSRF + password POST; it cannot pass the challenge.
 
 Authed calls additionally set `Cookie` + `Origin` + `Referer` through
 `wfm_authed_headers()`. Build headers through these helpers rather than

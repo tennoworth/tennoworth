@@ -5,7 +5,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import { installTauri, removeTauri } from '../dev/test-utils.js';
 import { isDesktopRuntime, installDesktopExternalLinkHandler } from './runtime';
 import { HostedTransport } from './hosted';
-import { TauriTransport, desktopWfmStatus, desktopWfmLogout, desktopWfmLogin, desktopWfmUnlock, desktopTrySilentUnlock, parseScanPayload } from './desktop';
+import { TauriTransport, desktopWfmStatus, desktopWfmLogout, desktopWfmLogin, desktopWfmLoginCancel, desktopWfmLoginWithToken, desktopWfmUnlock, desktopTrySilentUnlock, parseScanPayload } from './desktop';
 import { DesktopCmdError } from '../contracts/errors';
 
 // The desktop sniff and TauriTransport read the Tauri globals; install/remove
@@ -281,13 +281,30 @@ describe('desktop WFM auth ops', () => {
     expect(invoke).toHaveBeenCalledWith('wfm_logout');
   });
 
-  it('desktopWfmLogin() passes credentials through and resolves void', async () => {
+  it('desktopWfmLoginWithToken() passes the pasted token and local settings through', async () => {
     const invoke = vi.fn().mockResolvedValue(null);
     installTauri(invoke);
-    await desktopWfmLogin('me@example.com', 'pw', 'a-long-enough-passphrase', 'pc', true);
+    await desktopWfmLoginWithToken('a.b.c', 'a-long-enough-passphrase', 'pc', false);
+    expect(invoke).toHaveBeenCalledWith('wfm_login_with_token', {
+      token: 'a.b.c',
+      passphrase: 'a-long-enough-passphrase',
+      platform: 'pc',
+      remember: false,
+    });
+  });
+
+  it('desktopWfmLoginCancel() invokes wfm_login_cancel', async () => {
+    const invoke = vi.fn().mockResolvedValue(null);
+    installTauri(invoke);
+    await desktopWfmLoginCancel();
+    expect(invoke).toHaveBeenCalledWith('wfm_login_cancel');
+  });
+
+  it('desktopWfmLogin() sends no WFM credentials, only the local passphrase settings', async () => {
+    const invoke = vi.fn().mockResolvedValue(null);
+    installTauri(invoke);
+    await desktopWfmLogin('a-long-enough-passphrase', 'pc', true);
     expect(invoke).toHaveBeenCalledWith('wfm_login', {
-      email: 'me@example.com',
-      password: 'pw',
       passphrase: 'a-long-enough-passphrase',
       platform: 'pc',
       remember: true,

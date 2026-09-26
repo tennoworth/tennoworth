@@ -16,6 +16,7 @@ pub(crate) mod sellables;
 pub(crate) mod trades;
 pub(crate) mod watch;
 pub(crate) mod wfm_session;
+pub(crate) mod wfm_signin;
 pub(crate) mod ws_watch;
 
 pub(crate) mod usage;

@@ -2,6 +2,7 @@
   import UsageChart from '../features/community/UsageChart.svelte';
   import usageSample from '../../../tests/fixtures/usage/daily.json';
   import UpdateNotes from '../ui/UpdateNotes.svelte';
+  import WfmTokenGuide from '../features/settings/WfmTokenGuide.svelte';
   import notesSample from '../../../tests/fixtures/update-notes/status.json';
   import type { UpdateNotesStatus } from '../contracts/update';
   let notesRef = $state<UpdateNotes>();
@@ -19,6 +20,7 @@
   let quantity = $state<number | undefined>(2);
   let message = $state('');
   let dialog: HTMLDialogElement;
+  let tokenDialog: HTMLDialogElement;
   let swatches = $state<{ token: string; value: string }[]>([]);
   const tokens = ['--bg', '--panel', '--panel-2', '--fg', '--muted', '--border', '--accent', '--good', '--warn', '--bad', '--ducat', '--vault'];
   const rows = [
@@ -87,7 +89,7 @@
       <p class="muted">Selected: {selected}. These are presentation examples, not the Trade Session planner.</p>
       <div class="fields">
         <label class="ui-field">Filter sample items<input type="text" bind:value={filter} placeholder="Item name" /></label>
-        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option><option value="notifications">Alerts</option><option value="estimates">Estimates</option><option value="usage">Community usage</option><option value="updates">Update notes</option></select></label>
+        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option><option value="notifications">Alerts</option><option value="estimates">Estimates</option><option value="usage">Community usage</option><option value="updates">Update notes</option><option value="token">WFM token sign-in</option></select></label>
       </div>
       <p role="status" class="muted">{message || 'Controls are ready. No changes made.'}</p>
     </div>
@@ -147,7 +149,17 @@
   {#if dataState === 'usage'}<UsageChart sample={usageSample} />{/if}
   {#if dataState === 'updates'}<section class="ui-panel ui-stack"><h2>Changes across installed versions</h2><p>One plain-English summary combines skipped releases, with a version history beneath it.</p><button class="btn" onclick={() => notesRef?.open()}>Preview what’s new</button></section>{/if}
   {#if dataState === 'updates'}<UpdateNotes bind:this={notesRef} services={notesServices} />{/if}
+  {#if dataState === 'token'}<section class="ui-panel ui-stack"><h2>Fallback sign-in</h2><p>When the in-app window cannot load warframe.market, the login dialog asks for the browser's session cookie and shows these steps.</p><div><button class="btn" onclick={() => tokenDialog.showModal()}>Preview token sign-in</button></div></section>{/if}
 </main>
+
+<dialog class="cryptobox" bind:this={tokenDialog} aria-labelledby="token-title">
+  <form method="dialog">
+    <header><h3 id="token-title">Log in to warframe.market</h3><p class="muted">Sample only. Nothing is sent or stored.</p></header>
+    <label>Session token<input type="password" autocomplete="off" /></label>
+    <WfmTokenGuide />
+    <footer><button class="btn ghost" value="cancel" formnovalidate>Cancel</button><button class="btn primary" value="confirm">Save token</button></footer>
+  </form>
+</dialog>
 
 <dialog class="cryptobox" bind:this={dialog} aria-labelledby="review-title">
   <form method="dialog" onsubmit={() => message = 'Sample review closed. No listing was submitted.'}>

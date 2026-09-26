@@ -20,9 +20,13 @@ characteristics:
    binary can use a one-time `cap_sys_ptrace` grant instead, see
    README.md#linux; Windows: same-user process access). Scans are
    performed in-process over Tauri IPC - there is no loopback HTTP server,
-   no session token, and the browser webview never holds the WFM JWT, which
+   no session token, and the app's webview never receives the WFM JWT, which
    stays in the Rust process and is encrypted at rest (AES-256-GCM,
-   PBKDF2-600k passphrase). The core logic it drives lives in
+   PBKDF2-600k passphrase). Sign-in happens on warframe.market's own page in
+   a separate window with no IPC access, so the WFM password never reaches
+   the app. The one path that passes a JWT through the webview is the
+   paste-token fallback, which sends a token the user copied from their own
+   browser to Rust once and clears the field. The core logic it drives lives in
    `rust/wfm-core`.
 
    Scanning is manual by default. An opt-in **Automatic scan** setting

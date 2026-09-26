@@ -56,18 +56,21 @@ Patterns scanned (`regex::bytes::Regex`):
 The scanned values are session secrets: see "The app never prints secrets" in
 [`../AGENTS.md`](../AGENTS.md).
 
-## WFM API quirks (verified May 2026)
+## WFM API quirks
 
-Auth: `POST /v1/auth/signin` with `{email, password, auth_type:
-"cookie"}`. Grab JWT from `Set-Cookie`. v2 endpoints require this
-cookie-style JWT - header-style is rejected. CSRF token:
-`GET https://warframe.market/auth/signin`, parse
-`<meta name="csrf-token">`, send as `X-CSRFToken` on signin POST.
+Auth (changed 2026-09): every `warframe.market` page now sits behind a
+Cloudflare interactive challenge (`cf-mitigated: challenge`, for any user
+agent), so the old flow - GET `/auth/signin` for its `csrf-token` meta tag,
+then `POST /v1/auth/signin` - dies at the GET, and the POST refuses to run
+without that page-minted token. `api.warframe.market` is not challenged. The
+desktop opens WFM's sign-in page in an incognito webview window
+(`tennoworth-desktop/src/services/wfm_signin.rs`), reads the site's `JWT`
+cookie, and `jwt_is_signed_in` (`/v2/me`: 401 = still the anonymous cookie
+every visitor gets) decides when it is a real session. v2 endpoints require
+this cookie-style JWT - header-style is rejected.
 
 `api.warframe.market` calls carry `Crossplay` + `Platform` + `Language` through
-`wfm_client::wfm_headers()`. Signin is the documented exception and is NOT a
-bug - see [`../wfm-client/AGENTS.md`](../wfm-client/AGENTS.md) before "fixing"
-the missing header.
+`wfm_client::wfm_headers()`.
 
 User-Agent: always the descriptive project UA, built by
 `wfm_client::user_agent(component, version)`. WFM's rules (ToS §11) REQUIRE it
@@ -76,7 +79,7 @@ and treat browser spoofing as block-worthy; the old Firefox `BROWSER_UA` is gone
 
 | Action | Method + path | Body / notes |
 |---|---|---|
-| Sign in | `POST /v1/auth/signin` | `{email, password, auth_type: "cookie"}` |
+| Sign in | (webview) `https://warframe.market/auth/signin` | user-driven; keep the `JWT` cookie once `/v2/me` accepts it |
 | Item catalog | `GET /v2/items` | flat `data: [{id, slug, i18n.en.name, …}]` |
 | Current user | `GET /v2/me` | needs JWT cookie; `data.slug` = username |
 | Create listing | `POST /v2/order` | see body schema below |
