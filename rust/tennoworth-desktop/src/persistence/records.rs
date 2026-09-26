@@ -86,8 +86,8 @@ pub struct ListingLogRow {
     pub message: Option<String>,
 }
 
-/// A stored `listing_log` row, as handed to the SPA.
-#[derive(serde::Serialize)]
+/// A stored `listing_log` row, as the tests read it back.
+#[cfg(test)]
 pub struct ListingLogEntry {
     pub id: i64,
     pub plan_id: Option<String>,

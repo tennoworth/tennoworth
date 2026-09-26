@@ -9,7 +9,7 @@ import type { BuildPath, BuildPlan, RecipeEntry, SetPart } from '../domain/build
 import type { DucatPlan, ScrapCandidate } from '../domain/ducat-plan';
 import type { RelicPlanEntry } from '../domain/relic-planner';
 import type { SetReco } from '../domain/set-recos';
-import type { AdvisorRequest, HistoryRequest, HistoryAnalysis, SessionRequest, ScoredInventoryFact } from './generated/domain';
+import type { AdvisorRequest, SessionRequest, ScoredInventoryFact } from './generated/domain';
 export const DESKTOP_CONTEXT = 'tennoworth.desktop';
 export interface DesktopServices extends UpdateNotesServices {
   desktopAccessStatus(): Promise<import('./generated/desktop').AccessStatus>;
@@ -17,7 +17,6 @@ export interface DesktopServices extends UpdateNotesServices {
   scoreInventoryNative(owned: Map<string, OwnedRecord>, market: Market, reserveCopies: number, sparesOnly: boolean, availability?: ReadonlyMap<string, number>): Promise<Map<string, ScoredInventoryFact>>;
   evaluateAdvisor(request: AdvisorRequest): Promise<Record<string, Verdict>>;
   evaluateTradeSession(request: Omit<SessionRequest, 'candidates'> & { candidates: SessionCandidate[] }): Promise<ReturnType<typeof selectSession>>;
-  evaluateHistory(request: HistoryRequest): Promise<HistoryAnalysis>;
   relicPlan(owned: Map<string, OwnedRecord> | null, market: Market | null, limit?: number): Promise<RelicPlanEntry[]>;
   setRecos(owned: Map<string, OwnedRecord> | null, market: Market | null, limit?: number): Promise<SetReco[]>;
   ducatPlan(owned: Map<string, OwnedRecord> | null, market: Market | null, target: number, keepAbove?: number, availability?: ReadonlyMap<string, number>): Promise<{ candidates: ScrapCandidate[]; plan: DucatPlan }>;

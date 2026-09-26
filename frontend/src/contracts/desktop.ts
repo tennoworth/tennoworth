@@ -19,10 +19,6 @@ export interface MarketRefreshResult {
 /**
  * The operations the app performs against wfm-core. The desktop shell provides these capabilities through Tauri IPC.
  */
-/** Result of the scan-broke report: the URL, and whether a browser opened. */
-export type { ScanReport } from './generated/desktop';
-import type { ScanReport } from './generated/desktop';
-
 /**
  * Automatic-scan preferences and loop status. Generated from the Rust wire
  * contract, so the cadence list and the field names cannot drift from what the
@@ -41,7 +37,6 @@ export interface MarketCapability {
 export interface InventoryCapability {
   health(timeoutMs?: number): Promise<PingResponse>;
   fetchInventory(): Promise<{ data: import('./data').Inventory; snapshotId: number | null }>;
-  reportScanIssue(error: string | null): Promise<ScanReport>;
 }
 
 export interface OrderCapability {
