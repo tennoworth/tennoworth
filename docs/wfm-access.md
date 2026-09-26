@@ -159,15 +159,23 @@ a verified policy uses defaults. Invalid signatures and replays never replace a
 verified envelope. A corrupt local safeguard file pauses access; cached inventory
 and prices remain usable. Do not delete a cooldown file to work around a throttle.
 
-Key replacement requires a desktop and scraper update. Keep the old key available
-long enough to publish recovery instructions for old clients; new clients embed
-the replacement public key and need a policy signed with it. The rotation release
-must also migrate the previous signed cache: verify it using the previous public
-key for local migration only, preserve its revision/restrictions, and accept new
-network policies only with the replacement key. Merely changing the build variable
-will correctly pause clients whose existing cache cannot be verified. Test that
-migration before a key change. There is no remote
-key-replacement mechanism or expiry that silently removes restrictions.
+Key replacement requires a desktop and scraper update. New clients embed the
+replacement public key and need a policy signed with it. Retired public keys stay
+listed in `wfm_client::policy::PREVIOUS_PUBLIC_KEYS`: they verify a policy that is
+already cached on disk, so an updated client keeps that revision and its
+restrictions, but a policy fetched from the network must verify with the current
+key. The offline verifier applies the same rule to the previously published
+envelope it compares against. Merely changing the build variable without listing
+the retired key would correctly pause every client whose cache it cannot verify;
+`a_rotated_key_keeps_the_cached_policy_but_not_its_authority` covers the migration.
+
+A rotation runs in this order: generate and back up the new key; set
+`TENNOWORTH_WFM_POLICY_PUBLIC_KEY` to it; sign and publish a policy with a higher
+revision; redeploy the scraper with `scripts/deploy-scrape-host.sh`, which also
+installs the matching verifier the box's policy puller uses; then release the
+desktop. Clients built before the rotation reject the new policy and keep their
+last verified one. There is no remote key-replacement mechanism or expiry that
+silently removes restrictions.
 
 Counters for requests, cache hits/misses, throttles, queue rejections, queue depth
 and outstanding work are local.

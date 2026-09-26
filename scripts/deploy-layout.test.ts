@@ -614,6 +614,11 @@ describe.skipIf(process.platform === 'win32')('host-direct scrape deploy failure
     const result = f.run();
     expect(result.status, result.stderr).toBe(0);
     expect(liveBinary(f)).not.toBe('old-live-binary');
+    // The box's policy puller verifies downloads with /srv/wfm/bin/wfm-policy;
+    // it must be the verifier this release proved, or a key rotation leaves it
+    // refusing every new policy.
+    expect(readFileSync(join(f.live, 'srv/wfm/bin/wfm-policy'), 'utf8'))
+      .toBe(readFileSync(join(f.root, 'artifacts/wfm-policy'), 'utf8'));
     expect(readFileSync(join(f.wfm, 'deployed.json'), 'utf8')).toContain(f.revision);
   });
 

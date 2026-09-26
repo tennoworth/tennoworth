@@ -242,6 +242,10 @@ set -euo pipefail
 # The running paths stay where the units expect them; the release directory is
 # the rollback unit, not a new layout.
 install -m 0755 "$RELEASES/$REVISION/wfm-scrape" "/srv/wfm/bin/wfm-scrape"
+# The policy puller verifies each download with this binary, so it has to carry
+# the same public key as the scraper it serves. It was once installed by hand and
+# never updated; after a key rotation that copy would refuse every new policy.
+install -m 0755 "$RELEASES/$REVISION/wfm-policy" "/srv/wfm/bin/wfm-policy"
 install -m 0755 "$RELEASES/$REVISION/run-scrape.sh" "/srv/wfm/run-scrape.sh"
 install -m 0644 "$RELEASES/$REVISION/wfm-scrape.service" /etc/systemd/system/wfm-scrape.service
 install -m 0644 "$RELEASES/$REVISION/wfm-scrape.timer" /etc/systemd/system/wfm-scrape.timer

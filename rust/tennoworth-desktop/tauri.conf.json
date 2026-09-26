@@ -43,7 +43,7 @@
   },
   "plugins": {
     "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDI1MzkwQjZDRDM4RDBCRUIKUldUckM0M1RiQXM1SlN2NXVDditnNUFZekpOczRhN3NxMEI2NVVlcnRsNFd4cTNnQ0tXMVJ3ZDYK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEZCQjNDOTBCMTJBRTBDNkUKUldSdURLNFNDOG16KzdwQVhiMFE5a21mRGRUZCtNR2JvMzhtb1BUWGdMZExFNFJjR0hwYmNOWEUK",
       "endpoints": [
         "https://github.com/tennoworth/tennoworth/releases/download/desktop-latest/latest.json"
       ]

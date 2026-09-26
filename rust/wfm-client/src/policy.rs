@@ -10,6 +10,12 @@ use std::time::Duration;
 pub const POLICY_URL: &str = "https://tennoworth.app/wfm-policy.json";
 pub const MAX_POLICY_BYTES: u64 = 65_536;
 pub const PUBLIC_KEY: Option<&str> = option_env!("TENNOWORTH_WFM_POLICY_PUBLIC_KEY");
+/// Keys that signed policies before the current one, newest first. They are
+/// trusted only for a policy already cached on disk, so a client updated
+/// across a key rotation keeps the revision and restrictions it had instead of
+/// pausing; a policy fetched from the network must verify with `PUBLIC_KEY`.
+/// The 2026-09 rotation replaced this key, which signed revision 1.
+pub const PREVIOUS_PUBLIC_KEYS: &[&str] = &["RWTYBI2F2LbyCzpIssbB0mpu8Qbd34nbtvpG5m4Ar4aoVA3UNWH5VY7Q"];
 
 #[derive(Clone, Copy)]
 pub enum Component {
@@ -62,6 +68,21 @@ pub fn verify(raw: &[u8], key: &str) -> Result<(Envelope, Policy), AccessError> 
     policy.scraper.validate()?;
     Ok((envelope, policy))
 }
+/// Verify an envelope that is already on disk: with `key`, or failing that
+/// with one of `previous`. Never use this for a policy that has just arrived
+/// from the network - a retired key must not be able to issue new policies.
+pub fn verify_cached(
+    raw: &[u8],
+    key: &str,
+    previous: &[&str],
+) -> Result<(Envelope, Policy), AccessError> {
+    verify(raw, key).or_else(|error| {
+        previous
+            .iter()
+            .find_map(|old| verify(raw, old).ok())
+            .ok_or(error)
+    })
+}
 pub fn atomic_write(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     use std::io::Write;
     if let Some(parent) = path.parent() {
@@ -92,6 +113,7 @@ struct Verified {
 pub struct PolicyStore {
     path: std::path::PathBuf,
     key: String,
+    previous: Vec<String>,
     component: Component,
     current: Mutex<Option<Verified>>,
 }
@@ -99,17 +121,20 @@ impl PolicyStore {
     pub fn load(
         path: std::path::PathBuf,
         key: String,
+        previous: Vec<String>,
         component: Component,
     ) -> Result<Self, AccessError> {
         let store = Self {
             path,
             key,
+            previous,
             component,
             current: Mutex::new(None),
         };
         match std::fs::read(&store.path) {
             Ok(raw) => {
-                let (envelope, policy) = verify(&raw, &store.key)?;
+                let previous: Vec<&str> = store.previous.iter().map(String::as_str).collect();
+                let (envelope, policy) = verify_cached(&raw, &store.key, &previous)?;
                 store.activate(&policy)?;
                 *lock(&store.current) = Some(Verified { envelope, policy });
             }
@@ -192,7 +217,8 @@ pub fn start(directory: &Path, component: Component) -> Result<(), AccessError> 
     let Some(key) = PUBLIC_KEY else {
         return Ok(());
     };
-    let store = PolicyStore::load(directory.join("wfm-policy.json"), key.to_owned(), component)?;
+    let previous = PREVIOUS_PUBLIC_KEYS.iter().map(|k| (*k).to_owned()).collect();
+    let store = PolicyStore::load(directory.join("wfm-policy.json"), key.to_owned(), previous, component)?;
     let mut etag = None;
     if let Err(error) = store.fetch(&mut etag) {
         eprintln!("WFM policy refresh: {error}");
@@ -240,7 +266,7 @@ mod tests {
         let path = std::env::temp_dir().join(format!("wfm-policy-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let key = fixtures["public_key"].as_str().unwrap().to_string();
-        let store = PolicyStore::load(path.clone(), key.clone(), Component::Desktop).unwrap();
+        let store = PolicyStore::load(path.clone(), key.clone(), Vec::new(), Component::Desktop).unwrap();
         let initial = serde_json::to_vec(&fixtures["initial"]).unwrap();
         store.accept(&initial).unwrap();
         store.accept(&initial).unwrap();
@@ -251,12 +277,62 @@ mod tests {
             .accept(&serde_json::to_vec(&fixtures["recovery"]).unwrap())
             .unwrap();
         assert!(store.accept(&initial).is_err());
-        let restarted = PolicyStore::load(path.clone(), key, Component::Desktop).unwrap();
+        let restarted = PolicyStore::load(path.clone(), key, Vec::new(), Component::Desktop).unwrap();
         assert_eq!(
             lock(&restarted.current).as_ref().unwrap().policy.revision,
             2
         );
         assert!(restarted.accept(&initial).is_err());
         std::fs::remove_file(path).unwrap();
+    }
+    #[test]
+    fn a_rotated_key_keeps_the_cached_policy_but_not_its_authority() {
+        // A client updated across a key rotation still holds a policy signed
+        // with the retired key. It must keep that revision and its
+        // restrictions - rejecting it would pause every updated client - but
+        // the retired key must not be able to issue anything new.
+        let fixtures = fixture();
+        let path = std::env::temp_dir().join(format!("wfm-policy-rotated-{}.json", std::process::id()));
+        let key = fixtures["public_key"].as_str().unwrap().to_string();
+        let previous = fixtures["previous_public_key"].as_str().unwrap().to_string();
+        std::fs::write(&path, serde_json::to_vec(&fixtures["previous_initial"]).unwrap()).unwrap();
+
+        // Without the previous key the cache cannot be trusted: that is the
+        // pause the migration exists to prevent.
+        assert!(PolicyStore::load(path.clone(), key.clone(), Vec::new(), Component::Desktop).is_err());
+
+        let store = PolicyStore::load(path.clone(), key.clone(), vec![previous.clone()], Component::Desktop).unwrap();
+        assert_eq!(lock(&store.current).as_ref().unwrap().policy.revision, 1);
+        // The retired key cannot publish, even a newer revision.
+        assert!(store
+            .accept(&serde_json::to_vec(&fixtures["previous_recovery"]).unwrap())
+            .is_err());
+        // The replacement key can, and replay protection still counts from
+        // the migrated revision.
+        store
+            .accept(&serde_json::to_vec(&fixtures["recovery"]).unwrap())
+            .unwrap();
+        assert!(store.accept(&serde_json::to_vec(&fixtures["initial"]).unwrap()).is_err());
+        std::fs::remove_file(path).unwrap();
+    }
+    #[test]
+    fn every_previous_key_is_a_well_formed_public_key() {
+        // A mistyped key here would not fail loudly: the migration would just
+        // never match, and updated clients would pause.
+        for key in PREVIOUS_PUBLIC_KEYS {
+            assert!(minisign_verify::PublicKey::from_base64(key).is_ok(), "{key}");
+        }
+    }
+    #[test]
+    fn only_a_cached_envelope_may_fall_back_to_a_previous_key() {
+        let fixtures = fixture();
+        let key = fixtures["public_key"].as_str().unwrap();
+        let previous = fixtures["previous_public_key"].as_str().unwrap();
+        let old = serde_json::to_vec(&fixtures["previous_initial"]).unwrap();
+        assert!(verify(&old, key).is_err());
+        assert_eq!(verify_cached(&old, key, &[previous]).unwrap().1.revision, 1);
+        assert!(verify_cached(&old, key, &[]).is_err());
+        let current = serde_json::to_vec(&fixtures["initial"]).unwrap();
+        assert_eq!(verify_cached(&current, key, &[previous]).unwrap().1.revision, 1);
     }
 }
