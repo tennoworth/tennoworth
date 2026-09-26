@@ -90,10 +90,11 @@ hosted site is informational only - no accounts, no file access, no scan - and
 `.github/workflows/` holds the release and verification workflows:
 `release-desktop` (manual dispatch bound to an approved commit; creates the
 immutable `desktop-v*` tag during publication), `build-web`,
-`build-usage`, `audit`, `ui-smoke`, and the on-demand `ocr-windows-test` and
-`publish-wfm-policy`. Shared composite actions live in `.github/actions/`:
-`setup-rust`, `setup-windows-ocr` and `publish-rolling-release`, which the
-workflows above call into. The host-only scrape pipeline has no workflow: it is
+`build-usage`, `audit`, `ui-smoke`, the weekly `republish-rolling` (which
+re-dispatches `build-web` and `build-usage`), and the on-demand
+`ocr-windows-test` and `publish-wfm-policy`. Shared composite actions live in
+`.github/actions/`: `setup-rust`, `setup-windows-ocr`, `stage-tessdata` and
+`publish-rolling-release`, which the workflows above call into. The host-only scrape pipeline has no workflow: it is
 deployed directly by
 [`scripts/deploy-scrape-host.sh`](../scripts/deploy-scrape-host.sh), which is
 its only installer.
