@@ -2,6 +2,7 @@
   import { useDesktopServices } from '../../ui/desktop-context';
   const { desktopWfmLogin, desktopWfmLoginCancel, desktopWfmLoginWithToken, desktopWfmUnlock, desktopTrySilentUnlock } = useDesktopServices();
   import { humanError } from '../../contracts/errors';
+  import WfmTokenGuide from './WfmTokenGuide.svelte';
   
 import { DesktopCmdError } from '../../contracts/errors';
 
@@ -159,13 +160,8 @@ import { DesktopCmdError } from '../../contracts/errors';
           bind:value={wfmLoginToken}
           required
         />
-        <span class="muted">
-          Sign in at warframe.market in your browser, open its developer tools
-          (F12) → Storage (Firefox) or Application (Chrome) → Cookies →
-          https://warframe.market, and copy the value of <code>JWT</code>. It
-          is checked with warframe.market before anything is saved.
-        </span>
       </label>
+      <WfmTokenGuide />
       <p class="forgot-row muted">
         <button type="button" class="forgot" onclick={() => (wfmLoginMode = 'window')}>Use the sign-in window instead</button>
       </p>
