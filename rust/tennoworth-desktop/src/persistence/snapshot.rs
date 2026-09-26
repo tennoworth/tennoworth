@@ -86,7 +86,7 @@ mod tests {
         assert!(extract_items(b"not json").is_err());
     }
 
-    // Parity gate: frontend/src/lib/inventory.ts walks the same DE categories
+    // Parity gate: frontend/src/domain/inventory.ts walks the same DE categories
     // to build the sell table. Both sides read
     // tests/fixtures/tradeable-categories.json so a category added on one side
     // and forgotten on the other fails CI instead of silently under-counting.

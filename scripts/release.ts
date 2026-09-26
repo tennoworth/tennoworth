@@ -24,6 +24,7 @@
 //   bun scripts/release.ts prepare <major|minor|patch|X.Y.Z>
 //   bun scripts/release.ts check [--release X.Y.Z]
 //   bun scripts/release.ts notes [--release] [X.Y.Z]
+//   bun scripts/release.ts app-notes [--check]
 import { Buffer } from "node:buffer";
 import { execFileSync } from "node:child_process";
 import {
@@ -937,7 +938,8 @@ if (import.meta.main) {
           "  bun scripts/release.ts snapshot-check [--release] [--dir <path>]\n" +
           "  bun scripts/release.ts prepare <major|minor|patch|X.Y.Z>\n" +
           "  bun scripts/release.ts check [--release X.Y.Z]\n" +
-          "  bun scripts/release.ts notes [--release] [X.Y.Z]",
+          "  bun scripts/release.ts notes [--release] [X.Y.Z]\n" +
+          "  bun scripts/release.ts app-notes [--check]",
       );
       process.exit(1);
   }

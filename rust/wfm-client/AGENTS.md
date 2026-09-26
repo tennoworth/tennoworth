@@ -38,8 +38,9 @@ endpoint).
 - The current request-budget, classification and reconciliation policy is in
   [`../../docs/wfm-access.md`](../../docs/wfm-access.md). Read it before
   changing limits or backoff.
-- Network calls go through `wfm_client()` so the user-agent and timeout policy
-  applies uniformly.
+- Clients carry the descriptive `user_agent()`. In `wfm-core` they are built by
+  `wfm_core::http::wfm_client()`, so the user-agent and timeout policy applies
+  uniformly there.
 - The pacing constants are parity-gated by the shared
   `tests/fixtures/pacing.json` fixture. A constant that lives inside the part of
   a test that is stubbed out is unguarded no matter how thorough the suite

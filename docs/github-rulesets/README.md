@@ -24,7 +24,8 @@ Ids: `gh api repos/tennoworth/tennoworth/rulesets --jq '.[]|"\(.id) \(.name)"'`.
 
 ## Maintainer workflow
 
-Applied and read back from GitHub on 2026-09-05. Repository-level
+Last read back from GitHub on 2026-09-26, after the 2026-09-25 change below;
+the exports here match the live rulesets. Repository-level
 `allow_auto_merge` is enabled; it is a repository setting rather than part of
 these ruleset exports. Required gate names match the workflow jobs. Both
 workflows run on PRs, on their schedules, and on demand; they also run on

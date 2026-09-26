@@ -57,7 +57,7 @@ Patterns scanned (`regex::bytes::Regex`):
 The scanned values are session secrets: see "The app never prints secrets" in
 [`../AGENTS.md`](../AGENTS.md).
 
-## WFM API quirks (May 2026, v1 ↔ v2 migration in progress)
+## WFM API quirks (verified May 2026)
 
 Auth: `POST /v1/auth/signin` with `{email, password, auth_type:
 "cookie"}`. Grab JWT from `Set-Cookie`. v2 endpoints require this
@@ -86,7 +86,7 @@ and treat browser spoofing as block-worthy; the old Firefox `BROWSER_UA` is gone
 | List my orders | `GET /v2/orders/user/<username>` | response carries `itemId` only - we enrich with `item.name` via the catalog |
 
 If `/v2/orders/user/<username>` starts returning `item` metadata on
-its own, `attach_item_name()` already no-clobbers - but check for
+its own, `catalog::attach_item_meta()` already no-clobbers - but check for
 shape drift in the agent that watches WFM endpoints.
 
 ### `POST /v2/order` body schema (verified May 2026)
@@ -100,10 +100,10 @@ source of truth and these notes as the *why*.
 |---|---|---|
 | `itemId` | required | NOT `item`. From `/v2/items[].id`. |
 | `type` | required, `"sell"` / `"buy"` | NOT `order_type`. |
-| `platinum` | required, > 0 | We cap 5 ≤ p ≤ 3000 client-side. |
+| `platinum` | required, > 0 | The price of one lot: the per-unit price times `perTrade` (1 when the item is not bulk-tradable). We cap the per-unit price at 5 ≤ p ≤ 3000 and the lot total at 3000 client-side. |
 | `quantity` | required, > 0 | The stack size you're listing. |
 | `visible` | required, bool | We default to `false` and let the user toggle later. |
-| `perTrade` | required | Must divide `quantity` EVENLY and be ≤ 6 (in-game trade slots). Use `per_trade_for(quantity)` - largest divisor of quantity that's ≤ 6. qty=27 → 3, qty=10 → 5, qty=7 → 1. Rejected with `app.field.tooBig` if > 6; `app.field.orders.perTradeMustDivideQuantity` if not a divisor. |
+| `perTrade` | conditional | **Required for `bulkTradable` items, forbidden otherwise.** Must divide `quantity` EVENLY and be ≤ 6 (in-game trade slots). The reviewed lot is used; without one, `per_trade_for(quantity)` - the largest divisor of quantity that's ≤ 6. qty=27 → 3, qty=10 → 5, qty=7 → 1. Rejected with `app.field.tooBig` if > 6; `app.field.orders.perTradeMustDivideQuantity` if not a divisor. |
 | `rank` | conditional | **Required for items with `maxRank` in the catalog** (mods, arcanes); **`app.field.notAllowed` for items without it** (relics, sets, parts). Default 0. |
 | `subtype` | conditional | **Required for items with `subtypes[]` in the catalog** (relics: `intact/exceptional/flawless/radiant`; veiled rivens: `unrevealed/revealed`). `app.field.required` if missing. Default to the first entry - that's the lowest-value variant. |
 

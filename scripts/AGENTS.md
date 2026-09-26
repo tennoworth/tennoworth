@@ -11,8 +11,6 @@ for required checks and ../docs/releasing.md for release preparation.
 - `sync-csp.ts` - generates the Content-Security-Policy. The shipped copies,
   the allowed directives and the desktop build variant are documented once, in
   ../frontend/AGENTS.md; read that before changing anything here.
-- `check-panic-sites.ts` - RETIRED 2026-08, replaced by the workspace clippy
-  deny config. See rust/AGENTS.md for the rule.
 - `check-probe-report.ts` - the gate for the TENNOWORTH_PROBE UI smoke run
   (ui-smoke.yml): asserts the probe's evidence JSON shows the app booted
   into Tauri IPC mode, the sell view rendered its scan CTA, and no
@@ -59,4 +57,5 @@ for required checks and ../docs/releasing.md for release preparation.
   verification fails. It is read-only on the node and runs from the maintainer's
   machine, not the box.
 
-Tests live in `tests/` (Rust + TS suites; no pytest).
+Script tests are `scripts/*.test.ts`, run with `bun test`; `tests/` holds only
+the shared fixtures.

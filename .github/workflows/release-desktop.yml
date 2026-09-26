@@ -556,7 +556,7 @@ jobs:
         run: |
           set -euo pipefail
           if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
-            echo "::error title=No updater signing key::TAURI_SIGNING_PRIVATE_KEY is not set. Generate the keypair offline (the maintainer signing runbook §9) and add it as a repo secret. Publishing unsigned bundles would produce a latest.json no installed app can ever accept."
+            echo "::error title=No updater signing key::TAURI_SIGNING_PRIVATE_KEY is not set. Generate the keypair offline (tauri signer generate) and add it as a secret. Publishing unsigned bundles would produce a latest.json no installed app can ever accept."
             exit 1
           fi
           # Pinned deliberately. `bun x` with no version resolves whatever is

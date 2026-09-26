@@ -148,7 +148,7 @@ merge that created it rather than the following Monday. On one unchanged commit
 the Rust job time went from 12m10s cold to 4m32s warm once the seed existed.
 
 Sharing audit's Rust caches was deliberately not revisited; the September 9
-experiment below measured that separately, and this was a different fault.
+experiment above measured that separately, and this was a different fault.
 Publishing the vcpkg archive as a release asset was considered and dropped: the
 key already matched, so only the ref was wrong, and the scoping fix addresses
 that without new machinery.

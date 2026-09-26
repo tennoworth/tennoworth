@@ -375,7 +375,7 @@ mod tests {
         assert!(validate_platform("playstation").is_err());
     }
 
-    // Parity gate: frontend/src/lib/crypto.ts's KDF_ITERATIONS must match this
+    // Parity gate: frontend/src/adapters/encrypted-snapshot.ts's KDF_ITERATIONS must match this
     // crate's JWT_KDF_ITERATIONS exactly - a mismatch bricks JWT decryption
     // with a false "wrong passphrase" error. Both sides read
     // tests/fixtures/jwt-kdf.json.
