@@ -18,10 +18,6 @@ use crate::trading::outcome::MutationOutcome;
 use crate::trading::catalog::{fetch_wfm_catalog, index_item_meta, ItemMeta, WfmCatalogItem};
 use crate::trading::orders::{decode_orders, DecodedOrders};
 
-// Matches WFM's own UI cap (3000) and the browser ListingReviewModal's
-// MAX_PLATINUM. Previously 999, which silently blocked maxed-Arcane and
-// Galvanized-mod listings that genuinely sell for 1500–2500p.
-pub const MAX_PLATINUM: u32 = 3000;
 
 /// Mutations are never replayed after an ambiguous transport or server failure.
 pub(crate) fn send_mutation(builder: reqwest::blocking::RequestBuilder) -> Result<wfm_client::transport::GovernedResponse, wfm_client::governor::AccessError> {

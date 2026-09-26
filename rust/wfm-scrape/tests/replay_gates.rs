@@ -11,7 +11,6 @@
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,
-    clippy::panic,
     clippy::indexing_slicing,
     reason = "integration-test helpers may panic to fail the test and are never shipped"
 )]

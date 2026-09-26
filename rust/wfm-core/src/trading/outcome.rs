@@ -13,17 +13,9 @@
 
 use wfm_client::governor::AccessError;
 
-/// The wire spellings. Pinned by `wfm-access/outcomes.json` and read by the
-/// frontend, so these are a contract rather than a naming choice.
-///
-/// Defined here because this module owns the vocabulary. Two of them are also
-/// declared beside the journal field in `trading::pending` on an unmerged
-/// branch; when that lands, that declaration should point here instead of
-/// repeating the literals.
-const STATUS_OK: &str = "ok";
-const STATUS_ERROR: &str = "error";
-const STATUS_PENDING: &str = "pending";
-const STATUS_UNCERTAIN: &str = "uncertain_mutation";
+// The wire spellings live beside the journal field that stores them; this module
+// maps outcomes onto them rather than declaring a second copy.
+use crate::trading::pending::{STATUS_ERROR, STATUS_OK, STATUS_PENDING, STATUS_UNCERTAIN};
 
 /// The four things that can happen to a send, with no fourth way to say them.
 ///
@@ -57,16 +49,6 @@ impl MutationOutcome {
         }
     }
 
-    /// Whether the market may already hold this change - the question a resume
-    /// decision actually turns on.
-    pub fn may_have_landed(self) -> bool {
-        matches!(self, Self::Applied | Self::Uncertain)
-    }
-
-    /// Whether offering the same request again is meaningful.
-    pub fn is_retryable(self) -> bool {
-        matches!(self, Self::Deferred)
-    }
 }
 
 impl From<&AccessError> for MutationOutcome {
@@ -90,43 +72,6 @@ impl From<&AccessError> for MutationOutcome {
             AccessError::InvalidPolicy | AccessError::InvalidRequest => Self::Rejected,
             AccessError::Http(_) => Self::Rejected,
         }
-    }
-}
-
-/// A mutation's outcome plus the order it concerns.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MutationRecord {
-    pub order_id: Option<String>,
-    pub outcome: MutationOutcome,
-    /// Why, when there is something to say - the market's message or the
-    /// governor's.
-    pub reason: Option<String>,
-}
-
-impl MutationRecord {
-    pub fn new(outcome: MutationOutcome) -> Self {
-        Self {
-            order_id: None,
-            outcome,
-            reason: None,
-        }
-    }
-
-    pub fn for_order(order_id: impl Into<String>, outcome: MutationOutcome) -> Self {
-        Self {
-            order_id: Some(order_id.into()),
-            outcome,
-            reason: None,
-        }
-    }
-
-    pub fn with_reason(mut self, reason: impl Into<String>) -> Self {
-        self.reason = Some(reason.into());
-        self
-    }
-
-    pub fn status_str(&self) -> &'static str {
-        self.outcome.status_str()
     }
 }
 
@@ -157,21 +102,6 @@ mod tests {
         assert_eq!(MutationOutcome::Rejected.status_str(), "error");
     }
 
-    /// The whole point of the vocabulary: these two must never be conflated.
-    #[test]
-    fn a_deferred_request_and_an_uncertain_one_are_opposites() {
-        assert!(MutationOutcome::Deferred.is_retryable());
-        assert!(!MutationOutcome::Deferred.may_have_landed());
-
-        assert!(!MutationOutcome::Uncertain.is_retryable());
-        assert!(MutationOutcome::Uncertain.may_have_landed());
-
-        // And the two settled ones.
-        assert!(MutationOutcome::Applied.may_have_landed());
-        assert!(!MutationOutcome::Applied.is_retryable());
-        assert!(!MutationOutcome::Rejected.may_have_landed());
-        assert!(!MutationOutcome::Rejected.is_retryable());
-    }
 
     #[test]
     fn a_governor_refusal_is_classified_by_what_it_means_for_the_send() {
@@ -210,16 +140,4 @@ mod tests {
         }
     }
 
-    #[test]
-    fn a_record_carries_the_order_and_the_reason_when_there_is_one() {
-        let bare = MutationRecord::new(MutationOutcome::Applied);
-        assert_eq!(bare.order_id, None);
-        assert_eq!(bare.reason, None);
-
-        let detailed = MutationRecord::for_order("order-1", MutationOutcome::Rejected)
-            .with_reason("HTTP 403: app.order.error.exceededOrderLimitSamePrice");
-        assert_eq!(detailed.order_id.as_deref(), Some("order-1"));
-        assert_eq!(detailed.status_str(), "error");
-        assert!(detailed.reason.unwrap().contains("exceededOrderLimitSamePrice"));
-    }
 }

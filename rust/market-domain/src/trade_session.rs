@@ -1,4 +1,5 @@
 use market_math::sell_priority::{clearing_price, PricedEntry, LIQUID_VOL};
+use crate::limits::{MAX_PLAN_ITEMS, MAX_PLATINUM, MIN_PLATINUM};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -87,11 +88,9 @@ pub fn valid_session_lot(quantity: f64, lot: f64, bulk: bool) -> bool {
         && (bulk || lot == 1.0)
 }
 pub fn select_session(request: SessionRequest) -> SessionPlan {
-    let limits: Value = serde_json::from_str(include_str!("../../../tests/fixtures/limits.json"))
-        .unwrap_or(Value::Null);
-    let maximum = number(&limits, "max_platinum");
+    let maximum = f64::from(MAX_PLATINUM);
     let cap = if safe(request.budget) {
-        request.budget.clamp(0.0, number(&limits, "max_plan_items")) as u32
+        request.budget.clamp(0.0, MAX_PLAN_ITEMS as f64) as u32
     } else {
         0
     };
@@ -167,7 +166,7 @@ pub fn select_session(request: SessionRequest) -> SessionPlan {
         .iter()
         .any(|n| *n > 0.0)
             || !price.is_finite()
-            || price < number(&limits, "min_platinum")
+            || price < f64::from(MIN_PLATINUM)
             || price > maximum
         {
             Some("No credible price within the listing limits.")
