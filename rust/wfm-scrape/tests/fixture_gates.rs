@@ -1745,8 +1745,8 @@ fn a_failed_manifest_does_not_record_its_hash() {
 /// of the endpoints the community wiki documents are already dead, so this is
 /// the test that tells us when ours joins them.
 ///
-/// Ignored by default: it hits the network and must never gate CI or a
-/// release. Run it deliberately:
+/// Ignored by default: it hits the network and must never gate a pull request
+/// or a release. The weekly scheduled audit runs it; to run it by hand:
 ///   cargo test --package wfm-scrape -- --ignored de_endpoints_are_still_alive
 #[test]
 #[ignore = "hits Digital Extremes' live endpoints"]
