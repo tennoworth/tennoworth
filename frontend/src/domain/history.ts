@@ -26,12 +26,6 @@ export function isHistory(h: unknown): h is History {
   return !!o && typeof o === 'object' && typeof o.start === 'string' && typeof o.days === 'number' && !!o.items && typeof o.items === 'object';
 }
 
-/** ISO date for column `i`. */
-export function dateAt(h: Pick<History, 'start'>, i: number): string {
-  const t = Date.parse(`${h.start}T00:00:00Z`);
-  return new Date(t + i * 86400000).toISOString().slice(0, 10);
-}
-
 /** Non-null (index, median) points, in order. */
 export function points(series: HistorySeries): Array<[number, number]> {
   const out: Array<[number, number]> = [];

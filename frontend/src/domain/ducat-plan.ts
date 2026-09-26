@@ -35,21 +35,6 @@ export interface ScrapCandidate {
 export const KEEP_ABOVE_PLAT = 15;
 
 /**
- * How many spare copies of a slug you hold.
- *
- * "Spare" means beyond one kept copy. The owned map is keyed
- * `${slug}|${subtype}`, so this sums across subtypes rather than doing a bare
- * `get` that would silently match nothing.
- */
-export function spareCopies(owned: Map<string, OwnedRecord>, slug: string): number {
-  let total = 0;
-  for (const rec of owned.values()) {
-    if (rec.slug === slug) total += rec.count;
-  }
-  return Math.max(0, total - 1);
-}
-
-/**
  * Everything you could feed the ducat kiosk, best trade first.
  *
  * Only items the snapshot gives a ducat value - that is what makes something

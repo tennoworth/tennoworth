@@ -18,9 +18,7 @@
 //     record so a reader knows how fresh it is.
 
 import type { Market } from '../contracts/data';
-import { DEAD_SHARE, usageWeight } from './sell-priority';
-
-export { DEAD_SHARE, POPULAR_SHARE } from './sell-priority';
+import { DEAD_SHARE } from './sell-priority';
 
 export interface UsageEntry {
   name: string;
@@ -193,15 +191,3 @@ export function readDemand(
   return { usage, inherited: hit?.inherited ?? false, liquidity, band };
 }
 
-/**
- * A multiplier for the sell ranking, from usage.
- *
- * Deliberately gentle - 0.75× to 1.25×. Usage is a real signal but it is
- * annual, measured on the parent, and about equipping rather than buying;
- * letting it dominate a ranking built from live prices would be trading one
- * kind of overconfidence for another. Items with no usage data score 1.0 and
- * are neither rewarded nor punished.
- */
-export function liquidityWeight(usage: UsageEntry | null): number {
-  return usageWeight(usage?.share);
-}
