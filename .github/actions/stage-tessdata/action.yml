@@ -1,0 +1,17 @@
+name: Stage the pinned OCR model
+description: >
+  Download eng.traineddata at a pinned revision into the desktop crate's
+  resources and verify its SHA-256. The one place CI names the URL and hash;
+  CONTRIBUTING.md repeats them for local builds.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      working-directory: ${{ github.workspace }}
+      run: |
+        set -euo pipefail
+        mkdir -p rust/tennoworth-desktop/resources/tessdata
+        curl --fail --location --retry 3 \
+          https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/eng.traineddata \
+          --output rust/tennoworth-desktop/resources/tessdata/eng.traineddata
+        echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  rust/tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check

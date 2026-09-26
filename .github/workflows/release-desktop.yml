@@ -38,6 +38,7 @@ name: release-desktop
 #                    published history and Cargo.lock. Capture the main SHA.
 #   build-windows    ─┐ parallel; build and smoke the final packages
 #   build-linux      ─┘ every output uploaded as a workflow artifact
+#   sign             sign both packages with the updater key; builds nothing
 #   publish          verify inventory + signatures, tag, draft, upload, flip
 #   desktop-latest   refresh the legacy rolling updater endpoint
 #
@@ -232,14 +233,7 @@ jobs:
           shared-key: windows-desktop-release-${{ steps.windows-ocr.outputs.compatibility-key }}
 
       - name: Stage pinned OCR model
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p rust/tennoworth-desktop/resources/tessdata
-          curl --fail --location --retry 3 \
-            https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/eng.traineddata \
-            --output rust/tennoworth-desktop/resources/tessdata/eng.traineddata
-          echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  rust/tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
+        uses: ./.github/actions/stage-tessdata
 
       # tauri.conf.json's beforeBuildCommand runs `bun run build:desktop`, so
       # the SPA's deps must exist before tauri-action invokes the build.
@@ -282,8 +276,7 @@ jobs:
           # it even after converting to forward slashes, so every file looked
           # missing. A relative find from the workspace avoids the drive-letter
           # translation question altogether.
-          find rust/target/release/bundle -type f \
-            \( -name '*.exe' -o -name '*.sig' \) \
+          find rust/target/release/bundle -type f -name '*.exe' \
             -exec cp -v {} dist/ \;
           if [ -z "$(ls -A dist 2>/dev/null)" ]; then
             echo "::error title=Nothing built::No installers found under rust/target/release/bundle."
@@ -415,13 +408,7 @@ jobs:
           xvfb xauth dbus-x11
 
       - name: Stage OCR language model
-        run: |
-          set -euo pipefail
-          mkdir -p rust/tennoworth-desktop/resources/tessdata
-          curl --fail --location --retry 3 \
-            https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/eng.traineddata \
-            --output rust/tennoworth-desktop/resources/tessdata/eng.traineddata
-          echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  rust/tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
+        uses: ./.github/actions/stage-tessdata
 
       # Tauri's beforeBuildCommand produces dist-desktop once dependencies exist.
       - name: Install frontend dependencies
@@ -501,8 +488,8 @@ jobs:
           # the signed artifact the `sign` job produces.
           sha256sum TennoWorth-x86_64.AppImage | tee TennoWorth-x86_64.AppImage.sha256
 
-      # Run the repacked and re-signed AppImage. This happens after the
-      # libwayland surgery because those bytes, not Tauri's first bundle, are
+      # Run the repacked AppImage. This happens after the libwayland surgery
+      # because those bytes, not Tauri's first bundle, are
       # what the publish job exposes to users.
       - name: Probe the final AppImage
         env:
@@ -525,11 +512,10 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  # The signing key lives in this job and nowhere else. Signing needs the
-  # artifact bytes, not the toolchain, so it happens in a job that builds
-  # nothing. Both the key and its password are scoped to the single signing step
-  # rather than the job, so even this job's own download and setup steps cannot
-  # read them.
+  # Only this job references the signing key. Signing needs the artifact bytes,
+  # not the toolchain, so it happens in a job that builds nothing. Both the key
+  # and its password are scoped to the single signing step rather than the job,
+  # so even this job's own download and setup steps cannot read them.
   sign:
     needs: [preflight, build-windows, build-linux]
     runs-on: ubuntu-latest
@@ -802,9 +788,6 @@ jobs:
               --target "$SHA" \
               --notes-file "$notes_file"
           fi
-          # The updater manifest belongs to the stable discovery endpoint.
-          # A publish-job rerun may download it alongside the bundle artifacts.
-          rm -f dist/latest.json
           gh release upload "$TAG" dist/* --clobber
           echo "draft $TAG carries:"
           gh release view "$TAG" --json assets --jq '.assets[].name'
@@ -844,8 +827,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
+          name: updater-manifest
           path: dist
-          merge-multiple: true
 
       - name: Refresh the rolling updater release
         run: |
