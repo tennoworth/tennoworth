@@ -175,25 +175,6 @@ export function ducatBasket(rows: BaroRow[], scrapPotential: number): DucatBaske
   };
 }
 
-/** Where a visit sits relative to now. `unknown` only when no schedule
- *  exists at all - with worldState there always is one. */
-export type BaroPhase = 'here' | 'incoming' | 'gone' | 'unknown';
-
-export function baroPhase(
-  activation: string | undefined,
-  expiry: string | undefined,
-  now: number,
-): { phase: BaroPhase; windowMs: number | null } {
-  const start = activation ? Date.parse(activation) : NaN;
-  const end = expiry ? Date.parse(expiry) : NaN;
-  if (!Number.isFinite(start) || !Number.isFinite(end)) {
-    return { phase: 'unknown', windowMs: null };
-  }
-  if (now < start) return { phase: 'incoming', windowMs: start - now };
-  if (now < end) return { phase: 'here', windowMs: end - now };
-  return { phase: 'gone', windowMs: null };
-}
-
 /**
  * Whether the stock on screen belongs to the visit on screen.
  *

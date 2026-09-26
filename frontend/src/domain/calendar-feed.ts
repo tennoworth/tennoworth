@@ -290,9 +290,3 @@ export function buildCalendar(
     .sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }
 
-/** Only the rows that touch what the user holds - the notification-worthy
- *  subset. Rows whose reach is unknown are excluded rather than assumed
- *  harmless. */
-export function affecting(items: CalendarItem[]): CalendarItem[] {
-  return items.filter((i) => i.affects.length > 0 && (i.affectsKnown || i.reach === 'partial-hits'));
-}

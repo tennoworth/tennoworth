@@ -18,9 +18,3 @@ describe('notification contracts shared with Rust', () => {
   });
 });
 
-import eventCase from '../../../tests/fixtures/notifications/events.json';
-import { affecting, buildCalendar } from '../domain/calendar-feed';
-it('calendar relevance preserves partial hits and excludes unknowns', () => {
-  const held = new Map(eventCase.held.map(slug => [slug, { slug, count: 1 } as OwnedRecord]));
-  expect(affecting(buildCalendar(eventCase.market as unknown as Market, held, Date.parse(eventCase.now))).map(e => e.title)).toEqual(eventCase.expected);
-});

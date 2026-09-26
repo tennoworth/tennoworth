@@ -42,13 +42,6 @@ export function unknownSlugs(view: ProtectedView): Set<string> {
   return new Set(view.supportedSlugs.filter((slug) => !known.has(slug)));
 }
 
-export function protectedView(input: {
-  supportedSlugs: readonly string[];
-  known: readonly string[];
-}): ProtectedView {
-  return { supportedSlugs: input.supportedSlugs, known: input.known };
-}
-
 /**
  * Why a listing batch cannot be sent, or null when it can.
  *
@@ -87,22 +80,3 @@ export function listingActionLabel(inputs: EligibilityInputs): string {
     : 'Check WFM listings';
 }
 
-/**
- * Quantities a listing may use, per owned record key.
- *
- * `0` is a real answer here: an item with nothing spare is not listable, and the
- * shell's table hides those rather than offering them.
- */
-export function availableByKey(
-  owned: ReadonlyMap<string, { slug: string }>,
-  sellable: (row: { slug: string }) => number,
-  available: (slug: string) => number | null | undefined,
-  usable: (slug: string) => boolean,
-): Map<string, number> {
-  return new Map(
-    [...owned].map(([key, row]) => [
-      key,
-      usable(row.slug) ? Math.min(sellable(row), available(row.slug) ?? 0) : 0,
-    ]),
-  );
-}
