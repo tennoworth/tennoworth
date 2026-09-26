@@ -68,10 +68,6 @@
   --on-ink-muted: color-mix(in srgb, var(--on-ink) 72%, var(--ink-bar));
   /* Ground texture ink (grids, lattices). Transparent = no texture. */
   --grid: transparent;
-  /* Dimmed rows as a token, not opacity. */
-  --dim: var(--faint);
-  /* Freshness-dot halo; paper looks turn it off (no glow anywhere). */
-  --glow: 0 0 6px color-mix(in srgb, var(--good) 60%, transparent);
   /* Modal backdrop. */
   --scrim: rgba(0, 0, 0, 0.55);
 
@@ -145,7 +141,6 @@ html[data-look="yorha"] {
   --shadow-pop: none;
   --hover: var(--panel-2);
   --hover-tint: var(--panel-2);
-  --glow: none;
   color-scheme: light;
 }
 /* yorha dark - "Oil & Rag": the same object with the roles swapped, seen on a
@@ -162,7 +157,7 @@ html[data-look="yorha"][data-mode="dark"] {
   --hairline: #3D3527;  /* inner dividers - always dotted here */
   --fg: #D3C7A6;        /* rag ink - 9.3:1 on panel, 10.4:1 on bg */
   --muted: #A3977A;     /* 5.4:1 on panel */
-  --faint: #8A7F66;     /* decorative only - 3.9:1 on panel (also backs --dim) */
+  --faint: #8A7F66;     /* decorative only - 3.9:1 on panel */
   --accent: #D3C7A6;    /* = ink; active state is inversion, not a hue */
   --good: #84AE85;      /* 6.2:1 on panel */
   --warn: #CBA05A;      /* 6.5:1 on panel */

@@ -1509,19 +1509,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         <button data-shell class="btn ghost" onclick={() => { inventory.error = null; inventory.pullError = null; }}>Dismiss scan error</button>
       </div>
     </section>
-    {#if inventory.reportUrl}
-      <!-- Shown only when the browser did not open: the report must still be
-           filable by hand rather than dead-ending on a failed launch. -->
-      <div data-shell class="card ui-panel warn-banner general-banner" role="status">
-        <div data-shell class="gb-body">
-          Couldn't open a browser. Copy this link to file the report:
-          <div data-shell class="gb-pre report-url">{inventory.reportUrl}</div>
-        </div>
-        <div data-shell class="gb-actions">
-          <button data-shell class="gb-dismiss" aria-label="Dismiss" onclick={() => (inventory.reportUrl = null)}>×</button>
-        </div>
-      </div>
-    {/if}
   {/if}
   {#if trayHint}
     <div data-shell class="card ui-panel warn-banner general-banner" role="status">

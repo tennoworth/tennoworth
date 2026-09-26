@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { affecting, buildCalendar, vaultAffects } from './calendar-feed';
+import { buildCalendar, vaultAffects } from './calendar-feed';
 import type { Market, OwnedRecord, VaultRotation } from '../contracts/data';
 
 const NOW = Date.parse('2026-08-22T00:00:00Z');
@@ -256,7 +256,6 @@ describe('buildCalendar', () => {
       .find((item) => item.title === 'Milestone Goal')!;
     expect(hit.reach).toBe('partial-hits');
     expect(hit.affectsKnown).toBe(false);
-    expect(affecting([hit])).toEqual([hit]);
   });
 
   it('flags each source against its own freshness stamp', () => {
@@ -351,17 +350,5 @@ describe('buildCalendar', () => {
     const aged = buildCalendar(old, owned([]), NOW).find((i) => i.title === 'Event Reward');
     expect(aged?.stale).toBe(true);
     expect(aged?.dataAgeDays).toBe(21);
-  });
-});
-
-describe('affecting', () => {
-  it('keeps only rows that touch a holding, and drops unknown reach', () => {
-    const items = buildCalendar(MARKET, owned(['primed_fury', 'revenant_prime_set']), NOW);
-    const hot = affecting(items);
-    expect(hot.map((i) => i.kind).sort()).toEqual(['baro', 'vault']);
-  });
-
-  it('is empty when nothing the user holds is involved', () => {
-    expect(affecting(buildCalendar(MARKET, owned(['something_else']), NOW))).toEqual([]);
   });
 });

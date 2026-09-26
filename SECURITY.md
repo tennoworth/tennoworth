@@ -15,8 +15,10 @@ characteristics:
 
 2. **The desktop app** (`rust/tennoworth-desktop`, Rust + Tauri,
    distributed via GitHub releases). Runs on the
-   user's machine. Reads the game's process memory (Linux: needs
-   `CAP_SYS_PTRACE`; Windows: same-user process access). Scans are
+   user's machine. Reads the game's process memory (Linux: ptrace access to
+   the game - the AppImage relies on Yama's `ptrace_scope`, a locally built
+   binary can use a one-time `cap_sys_ptrace` grant instead, see
+   README.md#linux; Windows: same-user process access). Scans are
    performed in-process over Tauri IPC - there is no loopback HTTP server,
    no session token, and the browser webview never holds the WFM JWT, which
    stays in the Rust process and is encrypted at rest (AES-256-GCM,
@@ -36,7 +38,8 @@ characteristics:
    - `build-web.yml` - on a push touching `frontend/`, builds the
      static web bundle and publishes it as a rolling `web-latest`
      prerelease asset (the self-host box pulls it with a plain curl).
-   - `audit.yml` - on pull requests, weekly, and on demand, routes changes
+   - `audit.yml` - on pull requests, weekly, on demand, and on `develop`
+     pushes that rotate a CI cache key, routes changes
      through proportional dependency, frontend, Rust, generated-data, and
      deployment checks while keeping one stable required gate.
 
@@ -64,9 +67,9 @@ characteristics:
 
 ## What we commit to
 
-- **The web app does not exfiltrate your inventory.** All processing
-  is in your browser, and there are **zero third-party origins** in
-  the CSP. The data network calls include `GET /api/usage/daily`, `GET /market.json`, and
+- **Your inventory stays on your machine.** The hosted site has no
+  inventory input at all; the desktop app processes inventory locally.
+  The site's CSP has **zero third-party origins**. The data network calls include `GET /api/usage/daily`, `GET /market.json`, and
   `GET /wfstat-catalog.json` from our own origin (usage aggregates and static files; the
   item-name catalog used to come from warframestat.us directly, but
   it's baked at build time since 2026-06).
@@ -221,7 +224,7 @@ The encrypted export feature (`Export inventory`) uses:
   recommendation) for key derivation.
 - **AES-256-GCM** for encryption, with a fresh 12-byte IV and 16-byte
   salt per export.
-- All via the browser's native WebCrypto API. No third-party crypto
+- All via the desktop webview's native WebCrypto API. No third-party crypto
   libraries.
 
 The desktop app's on-disk JWT (`wfm-jwt.enc`) uses the same parameters
@@ -260,6 +263,7 @@ expires.
   modify the game, automate gameplay, or interact with anti-cheat
   systems. If that's what you're looking for, this is the wrong
   project.
-- **Account recovery if you lose your WFM passphrase.** The encrypted
-  export uses a passphrase you choose. If you forget it, the export
-  is unrecoverable. By design - we have no way to assist.
+- **Recovering a forgotten passphrase.** An encrypted export uses a
+  passphrase you choose; if you forget it, that export is unrecoverable,
+  by design - we have no way to assist. A forgotten WFM unlock passphrase
+  is reset by logging in to warframe.market again.

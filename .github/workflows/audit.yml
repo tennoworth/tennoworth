@@ -110,7 +110,6 @@ jobs:
               - 'frontend/public/market.json'
               - 'frontend/public/wfstat-catalog.json'
               - 'frontend/public/definitions.json'
-              - 'wfm_results.csv'
               - 'scripts/release.ts'
               - 'scripts/release.test.ts'
             deploy:
@@ -191,9 +190,7 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       # Vitest runs under Node, not Bun, and the runner image's Node floats.
       # Pinned so an image update cannot change it: Node 25+ put an empty
       # localStorage on globalThis that broke the jsdom suite under Vitest 4.
@@ -252,9 +249,7 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       - run: bun install --frozen-lockfile
       # Build and test tooling runs on contributor machines and CI; all frontend
       # packages are devDependencies, so --prod would audit an empty graph.
@@ -340,13 +335,7 @@ jobs:
           libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev
           librsvg2-dev libtesseract-dev libleptonica-dev libxcb1-dev patchelf
       - name: Stage pinned overlay OCR model
-        run: |
-          set -euo pipefail
-          mkdir -p tennoworth-desktop/resources/tessdata
-          curl --fail --location --retry 3 \
-            https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/eng.traineddata \
-            --output tennoworth-desktop/resources/tessdata/eng.traineddata
-          echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
+        uses: ./.github/actions/stage-tessdata
       # Covers the retired Python parity gates: wfm-scrape's fixture integration
       # tests (rust/wfm-scrape/tests/) shell the freshly-built binary against
       # the frozen fixtures. cargo rebuilds the binary before they run, so a
@@ -360,6 +349,13 @@ jobs:
         run: >-
           cargo test -p tennoworth-desktop
           real_three_reward_capture_survives_common_display_shapes -- --ignored --nocapture
+      # DE's endpoints are undocumented and move without notice, and this live
+      # test is what notices. It needs the network and must not gate a pull
+      # request or a release, so it runs only on the weekly schedule and on
+      # demand, where a failure is a notification rather than a blocker.
+      - name: DE endpoints still answer
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        run: cargo test -p wfm-scrape --test fixture_gates -- --ignored de_endpoints_are_still_alive
 
   # The desktop version is pinned in two places (Cargo.toml and Cargo.lock's
   # own entry). Until this job existed the only thing that checked
@@ -454,9 +450,6 @@ jobs:
           sudo install -d -m 0755 /srv/wfm/app
           sudo install -m 0755 deploy/*.sh /srv/wfm/
           sudo install -D -m 0755 /bin/true /srv/wfm/bin/tennoworth-usage
-          # The archive host's unit lives in deploy/ too, and its ExecStart is
-          # /usr/local/bin on THAT host; verify only needs the path to resolve.
-          sudo install -D -m 0755 /bin/true /usr/local/bin/archive-observations.sh
           systemd-analyze verify deploy/*.service deploy/*.timer
       - name: CSP copies agree
         run: bun scripts/sync-csp.ts --check
@@ -480,9 +473,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       # No install step: the checks read the git index and the filesystem only.
       - name: instruction files
         run: bun scripts/check-agent-instructions.ts

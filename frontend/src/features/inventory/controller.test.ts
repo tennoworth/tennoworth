@@ -26,7 +26,7 @@ describe('inventory lifecycle', () => {
     try {
       const c = new InventoryController(store(snapshot), {
         loadCachedMarket: async () => null, refreshMarket: async () => ({ updated: false, updatedAt: null, etag: null }),
-        fetchInventory: vi.fn(), reportScanIssue: vi.fn(),
+        fetchInventory: vi.fn(),
       }, sources);
       await c.restore();
       expect(c.phase).toBe('done');
@@ -38,7 +38,7 @@ describe('inventory lifecycle', () => {
   it('rejects overlapping scans and keeps an actionable failure for retry', async () => {
     let fail!: (error: Error) => void;
     const fetchInventory = vi.fn(() => new Promise<{ data: import('../../contracts/data').Inventory; snapshotId: number | null }>((_, reject) => { fail = reject; }));
-    const c = new InventoryController(store(), { fetchInventory, loadCachedMarket: vi.fn(), refreshMarket: vi.fn(), reportScanIssue: vi.fn() }, sources);
+    const c = new InventoryController(store(), { fetchInventory, loadCachedMarket: vi.fn(), refreshMarket: vi.fn() }, sources);
     const pending = c.pullInventory();
     await c.pullInventory();
     expect(fetchInventory).toHaveBeenCalledTimes(1);
@@ -48,35 +48,6 @@ describe('inventory lifecycle', () => {
     expect(c.pullError).toBe('Warframe is not running');
   });
 
-  it('reports a scan failure through the native command without building a URL from the text', async () => {
-    // The error text can carry session credentials inside a request URL. The SPA
-    // hands it to the native command, which classifies it and returns a URL built
-    // from its own allowlist - the SPA must never assemble one itself.
-    const sentinel = 'inventory request failed: url (https://api.warframe.com/api/inventory.php?accountId=0123456789abcdef01234567&nonce=918273645)';
-    const nativeUrl = 'https://github.com/tennoworth/tennoworth/issues/new?labels=scan-broke&body=Category';
-    const reportScanIssue = vi.fn(async () => ({ url: nativeUrl, opened: false }));
-    const c = new InventoryController(store(), {
-      loadCachedMarket: vi.fn(), refreshMarket: vi.fn(), fetchInventory: vi.fn(), reportScanIssue,
-    }, sources);
-    c.pullError = sentinel;
-    await c.reportScanBroke();
-    expect(reportScanIssue).toHaveBeenCalledWith(sentinel);
-    expect(c.reportUrl).toBe(nativeUrl);
-    expect(c.reportUrl).not.toContain('0123456789abcdef01234567');
-  });
-
-  it('offers no report URL at all when the native report command fails', async () => {
-    // The fallback must not be a client-built URL: the SPA has no classifier, so
-    // it has no way to build a safe one.
-    const reportScanIssue = vi.fn(async () => { throw new Error('no registered browser'); });
-    const c = new InventoryController(store(), {
-      loadCachedMarket: vi.fn(), refreshMarket: vi.fn(), fetchInventory: vi.fn(), reportScanIssue,
-    }, sources);
-    c.pullError = 'boom';
-    await c.reportScanBroke();
-    expect(c.reportUrl).toBeNull();
-    expect(c.pullError).toContain("Couldn't build a report");
-  });
 });
 
 describe('listing lifecycle', () => {
@@ -118,7 +89,7 @@ it('preserves the saved inventory when native normalization fails', async () => 
   try {
     const storage = store(snapshot);
     const c = new InventoryController(storage, {
-      fetchInventory: vi.fn(), loadCachedMarket: vi.fn(), refreshMarket: vi.fn(), reportScanIssue: vi.fn(),
+      fetchInventory: vi.fn(), loadCachedMarket: vi.fn(), refreshMarket: vi.fn(),
     }, { ...sources, normalizeInventory: async () => { throw new Error('Inventory count is invalid'); } });
     c.market = { items: {} } as import('../../contracts/data').Market;
     c.catalogs = { uniqueToInfo: new Map() };
@@ -138,7 +109,7 @@ function normalized(name: string) {
   return { owned: new Map([[name, { ...snapshot.owned.get('item')!, slug: name, name }]]), unresolved: {}, flatCount: 1 };
 }
 function normalizationController(normalizeInventory: typeof sources.normalizeInventory, storage = store()) {
-  const c = new InventoryController(storage, { fetchInventory: vi.fn(), loadCachedMarket: vi.fn(), refreshMarket: vi.fn(), reportScanIssue: vi.fn() }, { ...sources, normalizeInventory });
+  const c = new InventoryController(storage, { fetchInventory: vi.fn(), loadCachedMarket: vi.fn(), refreshMarket: vi.fn() }, { ...sources, normalizeInventory });
   c.catalogs = { uniqueToInfo: new Map() };
   c.market = { items: {} } as import('../../contracts/data').Market;
   return c;
@@ -217,7 +188,7 @@ describe('inventory replacement races', () => {
     const acquisition = deferred<{ data: import('../../contracts/data').Inventory; snapshotId: number | null }>();
     const normalize = vi.fn();
     const fetchInventory = vi.fn(() => acquisition.promise);
-    const c = new InventoryController(store(), { fetchInventory, loadCachedMarket: vi.fn(), refreshMarket: vi.fn(), reportScanIssue: vi.fn() }, { ...sources, normalizeInventory: normalize });
+    const c = new InventoryController(store(), { fetchInventory, loadCachedMarket: vi.fn(), refreshMarket: vi.fn() }, { ...sources, normalizeInventory: normalize });
     c.market = { items: {} } as import('../../contracts/data').Market;
     const scan = c.pullInventory();
     await c.handleImported({ invName: 'import', ts: 123, ownedMap: normalized('import').owned });
@@ -354,7 +325,7 @@ it('a successful import clears the failed-refresh marker and preserves its origi
 it('distinguishes a scan with no tradeables from a failed refresh and clears that outcome on success', async () => {
   const storage = store(snapshot);
   let empty = true;
-  const c = new InventoryController(storage, { fetchInventory: vi.fn(), loadCachedMarket: vi.fn(), refreshMarket: vi.fn(), reportScanIssue: vi.fn() }, {
+  const c = new InventoryController(storage, { fetchInventory: vi.fn(), loadCachedMarket: vi.fn(), refreshMarket: vi.fn() }, {
     ...sources, normalizeInventory: async () => ({ owned: empty ? new Map() : snapshot.owned, unresolved: {}, flatCount: 1 }),
   });
   c.market = { items: {} } as import('../../contracts/data').Market;

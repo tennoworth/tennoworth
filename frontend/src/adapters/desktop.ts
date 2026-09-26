@@ -1,7 +1,7 @@
 import { DesktopCmdError } from '../contracts/errors';
 import type { PingResponse, PlanItemInput, OrderPatch, PendingPlan, PlanResponse, ItemResult, Market, OverlaySettings, OverlayStatus } from '../contracts/data';
 import { isHistory, type History } from '../domain/history';
-import type { MarketRefreshResult, ScanReport, DesktopCapabilities, DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences, AutoScanSettings, AutoScanStatus } from '../contracts/desktop';
+import type { MarketRefreshResult, DesktopCapabilities, DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences, AutoScanSettings, AutoScanStatus } from '../contracts/desktop';
 import { resolveInvoke, rethrowInvoke } from './runtime';
 
 /**
@@ -80,9 +80,6 @@ export class TauriTransport implements DesktopCapabilities {
   }
   async clearOverlayDiagnostics(): Promise<void> {
     await resolveInvoke()<void>('clear_overlay_diagnostics');
-  }
-  async reportScanIssue(error: string | null): Promise<ScanReport> {
-    return await resolveInvoke()<ScanReport>('report_scan_issue', { error });
   }
 
   async health(): Promise<PingResponse> {

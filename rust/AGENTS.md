@@ -72,12 +72,14 @@ These bind every crate here, including callers:
 - **Mutation reconciliation stays in the trading services.** Never blindly
   retry an ambiguous create; preserve pending-plan recovery and classify
   outcomes using the policy in ../docs/wfm-access.md.
-- **The listing caps have one home and two enforcement points.**
-  `MAX_PLAN_ITEMS`, `MIN_PLATINUM` and `MAX_PLATINUM` are defined in `wfm-core`,
-  and the desktop edit-order command in
-  `tennoworth-desktop/src/commands/listing.rs` enforces the same cap. Change
-  them together and cover the pair with a test - a comment is not a gate.
-  Details in [wfm-core/AGENTS.md](wfm-core/AGENTS.md).
+- **The listing caps have one home.** `MAX_PLAN_ITEMS`, `MIN_PLATINUM` and
+  `MAX_PLATINUM` are defined once, in `market-domain/src/limits.rs`, and every
+  enforcement point imports them: the listing plan and order edits in
+  `wfm-core`, the desktop's own checks in
+  `tennoworth-desktop/src/commands/listing.rs`, and trade-session selection.
+  Never restate a value; the only other copy is the frontend's pre-flight one,
+  gated by `tests/fixtures/limits.json`. Details in
+  [wfm-core/AGENTS.md](wfm-core/AGENTS.md).
 - **Nullable auxiliary market maps are not a broken snapshot.** Desktop cache
   loading - `tennoworth-desktop/src/services/sellables.rs` - treats explicit
   `null` for optional `catalog`, `path_to_info`, `usage`, and `set_to_parts` as
@@ -145,13 +147,6 @@ the lock and the tag's source tarball names the previous version; a
 build caught that before 0.3.5 and 0.3.6 shipped with stale locks.
 `cargo fetch --locked` now gates it in `audit.yml` and again in
 `release-desktop.yml` - commit the lock in the same commit as the bump.
-
-### `StartupWMClass` is `tennoworth-desktop`, not the product name
-GTK derives WM_CLASS from `g_get_prgname()` (the binary basename) because
-Tauri's `enable_gtk_app_id` defaults to false. Verified by running the app:
-`WM_CLASS = "tennoworth-desktop", "Tennoworth-desktop"`. A wrong value breaks
-taskbar icon binding *silently*. Confirm with `xprop WM_CLASS`, never by
-reasoning from the app name.
 
 ### `regex` crate feature flags affect binary size *and* pattern syntax
 With `default-features = false`, `\d` and `\b` fail to compile (NFA
