@@ -54,6 +54,27 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.1 - 2026-09-27
+
+# 🐞 TennoWorth Desktop 0.8.1
+
+TennoWorth Desktop 0.8.1 makes bug reports say what actually went wrong.
+
+A report sent from the app now describes a failed scan accurately. The most common scan failure, a game session the app cannot find in memory, used to be reported as a connection problem. You can report a failed warframe.market sign-in straight from the sign-in window, and before a report opens on GitHub, the app shows you which problems it includes. Reports still carry only fixed categories, never your error text, account details or inventory.
+
+## Changelog (4)
+
+### Bug reports
+
+- **Scan problems are reported accurately** A report now names the real cause of a failed scan, such as Warframe not running, the game session not found in memory, or the inventory request being refused along with its HTTP status. It no longer reports a connection problem for all of them. <!-- app-note {"id":"scan-report-categories","kind":"fixed"} -->
+- **Report a sign-in problem from the sign-in window** When signing in to warframe.market or unlocking your login fails, the window offers Report a bug. The report records the kind of failure, not its message. A wrong passphrase is not treated as a bug. <!-- app-note {"id":"signin-bug-report","kind":"improved"} -->
+- **See what a report includes before sending it** The feedback window lists the problems a bug report will carry, such as a failed scan, automatic scan or update, in plain words. <!-- app-note {"id":"feedback-included-problems","kind":"improved"} -->
+- **The app version is easy to find** The bottom of the sidebar now shows the version next to the build, and bug reports fill it in even when the update check has not answered. <!-- app-note {"id":"sidebar-version","kind":"improved"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.8.0 - 2026-09-27
 
 # 🔑 TennoWorth Desktop 0.8.0

@@ -1,5 +1,5 @@
 {
-  "version": "0.8.0",
+  "version": "0.8.1",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -404,6 +404,56 @@
           "kind": "fixed",
           "title": "A listed set is no longer called unowned while prices load",
           "body": "Before the market data finished loading, a listed prime set could briefly read as not in your inventory and be offered for deletion. The app now waits for the market data before judging it.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.1",
+      "date": "2026-09-27",
+      "changes": [
+        {
+          "id": "scan-report-categories",
+          "kind": "fixed",
+          "title": "Scan problems are reported accurately",
+          "body": "A report now names the real cause of a failed scan, such as Warframe not running, the game session not found in memory, or the inventory request being refused along with its HTTP status. It no longer reports a connection problem for all of them.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "signin-bug-report",
+          "kind": "improved",
+          "title": "Report a sign-in problem from the sign-in window",
+          "body": "When signing in to warframe.market or unlocking your login fails, the window offers Report a bug. The report records the kind of failure, not its message. A wrong passphrase is not treated as a bug.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "feedback-included-problems",
+          "kind": "improved",
+          "title": "See what a report includes before sending it",
+          "body": "The feedback window lists the problems a bug report will carry, such as a failed scan, automatic scan or update, in plain words.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "sidebar-version",
+          "kind": "improved",
+          "title": "The app version is easy to find",
+          "body": "The bottom of the sidebar now shows the version next to the build, and bug reports fill it in even when the update check has not answered.",
           "platforms": [
             "windows",
             "linux"
