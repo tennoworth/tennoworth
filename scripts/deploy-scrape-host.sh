@@ -49,6 +49,7 @@ REVISION="${REVISION:-$(git rev-parse HEAD)}"
 DRY_RUN="${DRY_RUN:-0}"
 RELEASES="$HOST_ROOT/releases"
 STAGING="$HOST_ROOT/staging/$REVISION"
+PUBLISHED_POLICY_URL=https://github.com/tennoworth/tennoworth/releases/download/wfm-policy-latest/wfm-policy.json
 REMOTE="${REMOTE:-github}"
 # Where the corpus is preserved, declared explicitly by the operator. There is no
 # default: the check turns this declaration into a ready report, so a deploy that
@@ -233,8 +234,18 @@ $SSH "$HOST" "'$SCRAPER' 2>&1 | grep -q 'usage: wfm-scrape'" \
 # built without the key silently ignores the signed policy.
 $SSH "$HOST" "test -x '$VERIFIER'" || die "no verifier in $RELEASES/$REVISION"
 $SSH "$HOST" "test -f '$HOST_ROOT/policy/wfm-policy.json'" || die "no policy at $HOST_ROOT/policy/wfm-policy.json"
-$SSH "$HOST" "'$VERIFIER' '$HOST_ROOT/policy/wfm-policy.json'" || die "the revision's verifier rejects the live policy - key mismatch"
-say "policy: revision-bound verifier accepts the live policy"
+if $SSH "$HOST" "'$VERIFIER' '$HOST_ROOT/policy/wfm-policy.json'"; then
+  say "policy: revision-bound verifier accepts the live policy"
+else
+  # After a key rotation the live policy is still signed with the retired key,
+  # and the box cannot pull its successor until this deploy installs the new
+  # verifier. Accept that only when the published policy verifies with this
+  # build's key as a newer revision of the live one - the check the puller
+  # makes next. A build with the wrong key still fails here.
+  $SSH "$HOST" "curl --fail --silent --show-error --location --max-time 15 --max-filesize 65536 -o '$STAGING/published-policy.json' '$PUBLISHED_POLICY_URL' && '$VERIFIER' '$STAGING/published-policy.json' '$HOST_ROOT/policy/wfm-policy.json'" \
+    || die "the revision's verifier rejects the live policy - key mismatch"
+  say "policy: the live policy predates a key rotation; its published successor verifies with this key"
+fi
 
 # ---- 7. activate the proven release ---------------------------------------
 $SSH "$HOST" bash -s <<REMOTE_ACTIVATE
@@ -242,6 +253,10 @@ set -euo pipefail
 # The running paths stay where the units expect them; the release directory is
 # the rollback unit, not a new layout.
 install -m 0755 "$RELEASES/$REVISION/wfm-scrape" "/srv/wfm/bin/wfm-scrape"
+# The policy puller verifies each download with this binary, so it has to carry
+# the same public key as the scraper it serves. It was once installed by hand and
+# never updated; after a key rotation that copy would refuse every new policy.
+install -m 0755 "$RELEASES/$REVISION/wfm-policy" "/srv/wfm/bin/wfm-policy"
 install -m 0755 "$RELEASES/$REVISION/run-scrape.sh" "/srv/wfm/run-scrape.sh"
 install -m 0644 "$RELEASES/$REVISION/wfm-scrape.service" /etc/systemd/system/wfm-scrape.service
 install -m 0644 "$RELEASES/$REVISION/wfm-scrape.timer" /etc/systemd/system/wfm-scrape.timer

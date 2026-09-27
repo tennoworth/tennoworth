@@ -20,8 +20,15 @@ fn run() -> Result<(), String> {
     let (_, policy) =
         wfm_client::policy::verify(&read(Path::new(file))?, key).map_err(|e| e.to_string())?;
     if let Some(prior) = args.get(2) {
-        let (_, previous) =
-            wfm_client::policy::verify(&read(Path::new(prior))?, key).map_err(|e| e.to_string())?;
+        // The previously published envelope may predate a key rotation; it is
+        // only compared against, never accepted, so a retired key may vouch
+        // for it. The new envelope above must verify with the current key.
+        let (_, previous) = wfm_client::policy::verify_cached(
+            &read(Path::new(prior))?,
+            key,
+            wfm_client::policy::PREVIOUS_PUBLIC_KEYS,
+        )
+        .map_err(|e| e.to_string())?;
         if policy.revision <= previous.revision {
             return Err("Policy publication requires an increasing revision.".into());
         }

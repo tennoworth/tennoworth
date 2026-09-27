@@ -124,7 +124,12 @@ the desktop release contains the complete, tested `main` commit.
    authorization. The workflow's
    preflight rejects a repository snapshot older than 24 hours, so skipping the
    explicit refresh is visible before either platform starts compiling.
-6. Let the workflow build and sign both packages. Before publication, it silently
+6. Let the workflow build and sign both packages. The `sign` job verifies both
+   signatures against the updater public key in `tauri.conf.json` and stops if
+   they do not match, so a signing secret holding a different key than the one
+   installed apps trust cannot publish updates they would reject. The private
+   key and its password live only in the `desktop-release` environment and in
+   the maintainer's offline backups. Before publication, it silently
    installs and probes the final Windows NSIS package and runs the final repacked
    Linux AppImage under the same native probe contract. It then publishes the
    immutable `desktop-vX.Y.Z` release and refreshes the `desktop-latest` updater

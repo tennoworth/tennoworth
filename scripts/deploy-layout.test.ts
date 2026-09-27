@@ -272,7 +272,7 @@ describe('host-direct scrape deploy script', () => {
     // whose policy never arrived - ships with the key unproven.
     expect(deploy, 'a missing verifier must abort').toMatch(/test -x [^\n]*\|\| die/);
     expect(deploy, 'a missing policy must abort').toMatch(/test -f [^\n]*policy\/wfm-policy\.json[^\n]*\|\| die/);
-    expect(deploy, 'a rejected policy must abort').toMatch(/\$VERIFIER' '\$HOST_ROOT\/policy\/wfm-policy\.json'[\s\S]{0,80}\|\| die/);
+    expect(deploy, 'a rejected policy must abort').toMatch(/\$VERIFIER' '\$STAGING\/published-policy\.json' '\$HOST_ROOT\/policy\/wfm-policy\.json'"[^\n]*\n[^\n]*\|\| die/);
     expect(deploy, 'the fail-open branch must be gone').not.toContain('no verifier or policy on the box yet');
     // The proof runs against the release on the box, and the live paths move
     // only after it passes, so a rejection leaves the running release alone.
@@ -390,7 +390,10 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
   }
 
   write(join(root, 'artifacts/wfm-scrape'), '#!/bin/sh\nprintf "usage: wfm-scrape\\n"\n');
-  write(join(root, 'artifacts/wfm-policy'), '#!/bin/sh\nexit "${FIXTURE_POLICY_EXIT:-0}"\n');
+  // One argument checks the live policy; two check the published successor
+  // against it, which is how a deploy across a key rotation proves its key.
+  write(join(root, 'artifacts/wfm-policy'), '#!/bin/sh\n[ $# -ge 2 ] && exit "${FIXTURE_SUCCESSOR_EXIT:-1}"\nexit "${FIXTURE_POLICY_EXIT:-0}"\n');
+  write(join(bin, 'curl'), '#!/bin/sh\nwhile [ $# -gt 0 ]; do [ "$1" = -o ] && out="$2"; shift; done\nprintf "{}" > "$out"\nexit "${FIXTURE_CURL_EXIT:-0}"\n');
   chmodSync(join(root, 'artifacts/wfm-scrape'), 0o755);
   chmodSync(join(root, 'artifacts/wfm-policy'), 0o755);
 
@@ -538,7 +541,7 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
     '',
   );
   write(join(bin, 'systemctl'), systemctl.join('\n'));
-  for (const command of ['git', 'cargo', 'objdump', 'ldd', 'sleep', 'ssh', 'scp', 'install', 'systemctl', ...(options.runCheck ? ['journalctl'] : [])]) chmodSync(join(bin, command), 0o755);
+  for (const command of ['git', 'cargo', 'objdump', 'ldd', 'sleep', 'ssh', 'scp', 'install', 'systemctl', 'curl', ...(options.runCheck ? ['journalctl'] : [])]) chmodSync(join(bin, command), 0o755);
 
   const run = (env: Record<string, string | undefined> = {}) => spawnSync('bash', [fileURLToPath(new URL('./deploy-scrape-host.sh', import.meta.url))], {
     cwd: root,
@@ -609,11 +612,37 @@ describe.skipIf(process.platform === 'win32')('host-direct scrape deploy failure
     expect(existsSync(join(f.wfm, 'releases', f.revision, 'wfm-policy')), 'the release install must have run').toBe(true);
   });
 
+  test('deploys across a key rotation only when the published successor verifies', () => {
+    // The live policy was signed with the retired key, and the box cannot pull
+    // the new one until this deploy installs the new verifier. Refusing here
+    // would leave the rotation unable to finish.
+    const rotated = scrapeDeployFixture();
+    const result = rotated.run({ FIXTURE_POLICY_EXIT: '1', FIXTURE_SUCCESSOR_EXIT: '0' });
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stdout).toContain('predates a key rotation');
+    expect(readFileSync(join(rotated.live, 'srv/wfm/bin/wfm-policy'), 'utf8'))
+      .toBe(readFileSync(join(rotated.root, 'artifacts/wfm-policy'), 'utf8'));
+    // A published policy this build cannot verify, or none at all, is a key
+    // mismatch, not a rotation.
+    for (const env of [{ FIXTURE_SUCCESSOR_EXIT: '1' }, { FIXTURE_SUCCESSOR_EXIT: '0', FIXTURE_CURL_EXIT: '22' }]) {
+      const f = scrapeDeployFixture();
+      const refused = f.run({ FIXTURE_POLICY_EXIT: '1', ...env });
+      expect(refused.status, JSON.stringify(env)).not.toBe(0);
+      expect(refused.stderr).toContain('rejects the live policy');
+      expect(liveBinary(f)).toBe('old-live-binary');
+    }
+  });
+
   test('replaces the live paths once the release and its policy proof pass', () => {
     const f = scrapeDeployFixture();
     const result = f.run();
     expect(result.status, result.stderr).toBe(0);
     expect(liveBinary(f)).not.toBe('old-live-binary');
+    // The box's policy puller verifies downloads with /srv/wfm/bin/wfm-policy;
+    // it must be the verifier this release proved, or a key rotation leaves it
+    // refusing every new policy.
+    expect(readFileSync(join(f.live, 'srv/wfm/bin/wfm-policy'), 'utf8'))
+      .toBe(readFileSync(join(f.root, 'artifacts/wfm-policy'), 'utf8'));
     expect(readFileSync(join(f.wfm, 'deployed.json'), 'utf8')).toContain(f.revision);
   });
 

@@ -26,11 +26,14 @@ export async function installPreview() {
     version: null,
     notes: null,
   };
+  // An offered update; with `update-signature` its install fails the way a
+  // release signed by a key this install does not trust does.
+  const updateOffered = scenario === 'feedback-update-error' || scenario === 'update-signature';
   const empties: Record<string, unknown> = {
     wfm_access_status: { revision: 0, reason: '', cooldown_until_ms: 0, queue_count: 0, outstanding: 0, requests: 0, throttles: 0, cache_hits: 0, cache_misses: 0, queue_rejections: 0, restrictions: defaults },
     wfm_auth_status: { logged_in: false, unlocked: false },
-    update_status: scenario === 'feedback-update-error' ? { ...noUpdate, available: true, support: 'supported', version: 'next-preview' } : noUpdate,
-    check_update: noUpdate,
+    update_status: updateOffered ? { ...noUpdate, available: true, support: 'supported', version: 'next-preview' } : noUpdate,
+    check_update: updateOffered ? { ...noUpdate, available: true, support: 'supported', version: 'next-preview' } : noUpdate,
     refresh_history: { updated: false, body: null },
     refresh_market: { updated: false, status: 'offline' },
     list_watches: [], list_trades: [], list_notifications: [],
@@ -78,6 +81,9 @@ export async function installPreview() {
     if (cmd === 'auto_scan_status') return Promise.resolve({
       ...autoScanSettings, held: false, gameRunning: false, lastScanAt: null, lastError: null, nextCheckAt: null,
     });
+    if (cmd === 'install_update' && scenario === 'update-signature') {
+      return Promise.reject('Signature verification failed: the update was not signed by a trusted key.');
+    }
     if (cmd === 'test_notification') return Promise.resolve('Test sent (preview).');
     if (cmd === 'update_overlay_settings') return Promise.resolve(args?.settings ?? null);
     return Promise.resolve(cmd in empties ? empties[cmd] : null);
