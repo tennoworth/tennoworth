@@ -54,6 +54,32 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.0 - 2026-09-27
+
+# 🔑 TennoWorth Desktop 0.8.0
+
+TennoWorth Desktop 0.8.0 signs you in to warframe.market again.
+
+warframe.market now puts a browser check in front of its sign-in page, which stopped the app's login from working. The app now opens warframe.market's own sign-in page instead, so your password goes only to warframe.market. This release is also signed with a new update key, so existing installs cannot update to it automatically: download it once below and install it over your current version. Your data and settings are kept, and later releases update automatically again.
+
+## Changelog (3)
+
+### Account
+
+- **Sign in to warframe.market again** Signing in opens warframe.market's own page in a private window, and the app never sees your password. On Linux systems where that window cannot display the page, the app asks you to sign in with your browser and paste the session token instead. Saved logins keep working. <!-- app-note {"id":"wfm-page-signin","kind":"fixed"} -->
+
+### Updates
+
+- **A rejected update says what to do** If an update ever fails its signature check, the app now tells you to download the latest release once, instead of showing the updater's raw error. <!-- app-note {"id":"update-signature-guidance","kind":"improved"} -->
+
+### Selling
+
+- **A listed set is no longer called unowned while prices load** Before the market data finished loading, a listed prime set could briefly read as not in your inventory and be offered for deletion. The app now waits for the market data before judging it. <!-- app-note {"id":"set-ownership-while-loading","kind":"fixed"} -->
+
+## Updating
+
+Versions before 0.8.0 cannot update to this release automatically. Download it for Windows or Linux from the assets below and install it over your current version; your data and settings are kept. From 0.8.0 on, TennoWorth checks for updates automatically again.
+
 ## 0.7.107 - 2026-09-25
 
 # 🔄 TennoWorth Desktop 0.7.107
