@@ -1,8 +1,4 @@
 //! Pure planning commands never authorize or execute account mutations.
-#![allow(
-    clippy::unreachable,
-    reason = "tauri::command injects unreachable code into async wrappers"
-)]
 
 use market_domain::dispatch::{DomainRequest, DomainResponse};
 

@@ -1,19 +1,11 @@
 name: Setup Rust toolchain + cache
 description: >
-  dtolnay/rust-toolchain + Swatinem/rust-cache, the pair every companion CI
-  job needs. Centralized so a toolchain-action swap or a cache-key change
-  lands in one place instead of six.
+  dtolnay/rust-toolchain + Swatinem/rust-cache, the pair every Rust CI job
+  needs. Centralized so a toolchain-action swap or a cache-key change lands in
+  one place instead of in every job.
 inputs:
-  workspaces:
-    description: Passed through to Swatinem/rust-cache's `workspaces` input.
-    required: false
-    default: rust
   shared-key:
     description: Compatibility group shared across jobs; empty preserves the job-based key.
-    required: false
-    default: ''
-  key:
-    description: Additional job key, used only when shared-key is empty.
     required: false
     default: ''
 runs:
@@ -29,9 +21,8 @@ runs:
     - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c # stable branch @ 2026-08
     - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
       with:
-        workspaces: ${{ inputs.workspaces }}
+        workspaces: rust
         shared-key: ${{ inputs.shared-key }}
-        key: ${{ inputs.key }}
         cache-workspace-crates: false
         # Restore-only on pull requests. A cache a pull_request run writes is
         # scoped to that PR's merge ref, so no other pull request and no branch

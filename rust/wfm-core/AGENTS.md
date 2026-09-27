@@ -19,10 +19,9 @@ Driven by the desktop's IPC commands (`submit_plan` / `get_pending_plan` /
   Slug-mismatch guard: refuse listings priced ≥ 3× below the
   reference `low_sell`.
 
-  The edit-order command in `tennoworth-desktop/src/commands/listing.rs`
-  enforces the same cap, so these constants have two enforcement points and one
-  home. Change them together and cover the pair with a test - see the cross-crate
-  invariant in [`../AGENTS.md`](../AGENTS.md).
+  The caps live in `market_domain::limits` and are imported here, by the
+  desktop's listing commands and by trade-session selection - see the
+  cross-crate invariant in [`../AGENTS.md`](../AGENTS.md).
 - Pending-plan recovery: every plan is persisted to
   `~/.config/wfminv/pending_plan.json` (atomic tmp+rename) before the
   first POST. Each item is marked uncertain on disk before its execution,
@@ -57,18 +56,21 @@ Patterns scanned (`regex::bytes::Regex`):
 The scanned values are session secrets: see "The app never prints secrets" in
 [`../AGENTS.md`](../AGENTS.md).
 
-## WFM API quirks (May 2026, v1 ↔ v2 migration in progress)
+## WFM API quirks
 
-Auth: `POST /v1/auth/signin` with `{email, password, auth_type:
-"cookie"}`. Grab JWT from `Set-Cookie`. v2 endpoints require this
-cookie-style JWT - header-style is rejected. CSRF token:
-`GET https://warframe.market/auth/signin`, parse
-`<meta name="csrf-token">`, send as `X-CSRFToken` on signin POST.
+Auth (changed 2026-09): every `warframe.market` page now sits behind a
+Cloudflare interactive challenge (`cf-mitigated: challenge`, for any user
+agent), so the old flow - GET `/auth/signin` for its `csrf-token` meta tag,
+then `POST /v1/auth/signin` - dies at the GET, and the POST refuses to run
+without that page-minted token. `api.warframe.market` is not challenged. The
+desktop opens WFM's sign-in page in an incognito webview window
+(`tennoworth-desktop/src/services/wfm_signin.rs`), reads the site's `JWT`
+cookie, and `jwt_is_signed_in` (`/v2/me`: 401 = still the anonymous cookie
+every visitor gets) decides when it is a real session. v2 endpoints require
+this cookie-style JWT - header-style is rejected.
 
 `api.warframe.market` calls carry `Crossplay` + `Platform` + `Language` through
-`wfm_client::wfm_headers()`. Signin is the documented exception and is NOT a
-bug - see [`../wfm-client/AGENTS.md`](../wfm-client/AGENTS.md) before "fixing"
-the missing header.
+`wfm_client::wfm_headers()`.
 
 User-Agent: always the descriptive project UA, built by
 `wfm_client::user_agent(component, version)`. WFM's rules (ToS §11) REQUIRE it
@@ -77,7 +79,7 @@ and treat browser spoofing as block-worthy; the old Firefox `BROWSER_UA` is gone
 
 | Action | Method + path | Body / notes |
 |---|---|---|
-| Sign in | `POST /v1/auth/signin` | `{email, password, auth_type: "cookie"}` |
+| Sign in | (webview) `https://warframe.market/auth/signin` | user-driven; keep the `JWT` cookie once `/v2/me` accepts it |
 | Item catalog | `GET /v2/items` | flat `data: [{id, slug, i18n.en.name, …}]` |
 | Current user | `GET /v2/me` | needs JWT cookie; `data.slug` = username |
 | Create listing | `POST /v2/order` | see body schema below |
@@ -86,7 +88,7 @@ and treat browser spoofing as block-worthy; the old Firefox `BROWSER_UA` is gone
 | List my orders | `GET /v2/orders/user/<username>` | response carries `itemId` only - we enrich with `item.name` via the catalog |
 
 If `/v2/orders/user/<username>` starts returning `item` metadata on
-its own, `attach_item_name()` already no-clobbers - but check for
+its own, `catalog::attach_item_meta()` already no-clobbers - but check for
 shape drift in the agent that watches WFM endpoints.
 
 ### `POST /v2/order` body schema (verified May 2026)
@@ -100,10 +102,10 @@ source of truth and these notes as the *why*.
 |---|---|---|
 | `itemId` | required | NOT `item`. From `/v2/items[].id`. |
 | `type` | required, `"sell"` / `"buy"` | NOT `order_type`. |
-| `platinum` | required, > 0 | We cap 5 ≤ p ≤ 3000 client-side. |
+| `platinum` | required, > 0 | The price of one lot: the per-unit price times `perTrade` (1 when the item is not bulk-tradable). We cap the per-unit price at 5 ≤ p ≤ 3000 and the lot total at 3000 client-side. |
 | `quantity` | required, > 0 | The stack size you're listing. |
 | `visible` | required, bool | We default to `false` and let the user toggle later. |
-| `perTrade` | required | Must divide `quantity` EVENLY and be ≤ 6 (in-game trade slots). Use `per_trade_for(quantity)` - largest divisor of quantity that's ≤ 6. qty=27 → 3, qty=10 → 5, qty=7 → 1. Rejected with `app.field.tooBig` if > 6; `app.field.orders.perTradeMustDivideQuantity` if not a divisor. |
+| `perTrade` | conditional | **Required for `bulkTradable` items, forbidden otherwise.** Must divide `quantity` EVENLY and be ≤ 6 (in-game trade slots). The reviewed lot is used; without one, `per_trade_for(quantity)` - the largest divisor of quantity that's ≤ 6. qty=27 → 3, qty=10 → 5, qty=7 → 1. Rejected with `app.field.tooBig` if > 6; `app.field.orders.perTradeMustDivideQuantity` if not a divisor. |
 | `rank` | conditional | **Required for items with `maxRank` in the catalog** (mods, arcanes); **`app.field.notAllowed` for items without it** (relics, sets, parts). Default 0. |
 | `subtype` | conditional | **Required for items with `subtypes[]` in the catalog** (relics: `intact/exceptional/flawless/radiant`; veiled rivens: `unrevealed/revealed`). `app.field.required` if missing. Default to the first entry - that's the lowest-value variant. |
 

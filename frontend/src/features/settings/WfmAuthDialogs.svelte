@@ -1,7 +1,8 @@
 <script lang="ts">
   import { useDesktopServices } from '../../ui/desktop-context';
-  const { desktopWfmLogin, desktopWfmUnlock, desktopTrySilentUnlock } = useDesktopServices();
+  const { desktopWfmLogin, desktopWfmLoginCancel, desktopWfmLoginWithToken, desktopWfmUnlock, desktopTrySilentUnlock } = useDesktopServices();
   import { humanError } from '../../contracts/errors';
+  import WfmTokenGuide from './WfmTokenGuide.svelte';
   
 import { DesktopCmdError } from '../../contracts/errors';
 
@@ -9,11 +10,14 @@ import { DesktopCmdError } from '../../contracts/errors';
 
   let wfmLoginDialog = $state<HTMLDialogElement>();
   let wfmUnlockDialog = $state<HTMLDialogElement>();
-  let wfmLoginEmail = $state('');
-  let wfmLoginPassword = $state('');
   let wfmLoginPassphrase = $state('');
   let wfmLoginConfirm = $state('');
   let wfmLoginPlatform = $state('pc');
+  // 'token' is the fallback for when the sign-in window cannot work (it
+  // crashes under some Linux WebKitGTK builds): the user signs in with their
+  // own browser and pastes its JWT cookie.
+  let wfmLoginMode = $state<'window' | 'token'>('window');
+  let wfmLoginToken = $state('');
   let wfmUnlockPassphrase = $state('');
   // "Remember on this device" (OS keyring). One preference shared by the
   // login and unlock dialogs; default on - the browser-cookie parity call.
@@ -25,18 +29,17 @@ import { DesktopCmdError } from '../../contracts/errors';
   // Threaded through to `onunlocked` rather than acted on here - App.svelte
   // owns what 'list' means (opening its own listingOpen state).
   let authNext: string | null = null;
-  let wfmLoginEmailInput: HTMLInputElement | undefined;
+  let wfmLoginPassInput: HTMLInputElement | undefined;
   let wfmUnlockPassInput: HTMLInputElement | undefined;
 
   export async function open(code: string, next: string | null = null) {
     wfmAuthError = null;
     authNext = next;
     if (code === 'needs_login') {
-      wfmLoginPassword = '';
       wfmLoginPassphrase = '';
       wfmLoginConfirm = '';
       wfmLoginDialog?.showModal();
-      wfmLoginEmailInput?.focus();
+      wfmLoginPassInput?.focus();
     } else {
       // A remembered device key (OS keyring) unlocks without the modal. Any
       // miss - no entry, no keyring daemon, stale key - falls through to the
@@ -76,16 +79,37 @@ import { DesktopCmdError } from '../../contracts/errors';
     }
     wfmAuthBusy = true;
     try {
-      await desktopWfmLogin(wfmLoginEmail.trim(), wfmLoginPassword, wfmLoginPassphrase, wfmLoginPlatform, wfmRemember);
+      if (wfmLoginMode === 'token') {
+        await desktopWfmLoginWithToken(wfmLoginToken, wfmLoginPassphrase, wfmLoginPlatform, wfmRemember);
+      } else {
+        await desktopWfmLogin(wfmLoginPassphrase, wfmLoginPlatform, wfmRemember);
+      }
       wfmLoginDialog?.close();
       unlocked();
     } catch (err) {
-      wfmAuthError = humanError(err);
+      const code = err instanceof DesktopCmdError ? err.code : null;
+      if (code === 'signin_window_failed') {
+        wfmLoginMode = 'token';
+        wfmAuthError = humanError(err);
+      } else if (code !== 'cancelled') {
+        wfmAuthError = humanError(err);
+      } else if (wfmLoginDialog?.open) {
+        // Closing the WFM window is a choice, not a failure; the Cancel path
+        // has already closed this dialog.
+        wfmAuthError = 'The warframe.market window was closed before you signed in.';
+      }
     } finally {
-      wfmLoginPassword = '';
+      wfmLoginToken = '';
       wfmLoginPassphrase = '';
       wfmLoginConfirm = '';
       wfmAuthBusy = false;
+    }
+  }
+
+  function cancelWfmLogin() {
+    wfmLoginDialog?.close();
+    if (wfmAuthBusy) {
+      desktopWfmLoginCancel().catch((e) => console.error('closing the sign-in window failed', e));
     }
   }
 
@@ -115,23 +139,39 @@ import { DesktopCmdError } from '../../contracts/errors';
   }
 </script>
 
-<dialog bind:this={wfmLoginDialog} class="cryptobox" data-testid="wfm-login-dialog">
+<dialog bind:this={wfmLoginDialog} class="cryptobox" data-testid="wfm-login-dialog" oncancel={cancelWfmLogin}>
   <form onsubmit={performWfmLogin}>
     <header>
       <h3>Log in to warframe.market</h3>
       <p class="muted">
-        Your WFM sign-in token is encrypted on this PC with a passphrase you
-        choose. Your password is used for this sign-in and never stored.
+        You sign in on warframe.market's own page - your WFM password never
+        passes through TennoWorth. The sign-in token is encrypted on this PC
+        with a passphrase you choose.
       </p>
     </header>
-    <label>
-      Email
-      <input type="email" autocomplete="username" bind:value={wfmLoginEmail} required bind:this={wfmLoginEmailInput} />
-    </label>
-    <label>
-      Password
-      <input type="password" autocomplete="current-password" bind:value={wfmLoginPassword} required />
-    </label>
+    {#if wfmLoginMode === 'token'}
+      <label>
+        Session token
+        <input
+          type="password"
+          autocomplete="off"
+          spellcheck="false"
+          data-testid="wfm-login-token"
+          bind:value={wfmLoginToken}
+          required
+        />
+      </label>
+      <WfmTokenGuide />
+      <p class="forgot-row muted">
+        <button type="button" class="forgot" onclick={() => (wfmLoginMode = 'window')}>Use the sign-in window instead</button>
+      </p>
+    {:else}
+      <p class="forgot-row muted">
+        Window not working?
+        <button type="button" class="forgot" data-testid="wfm-login-use-token" onclick={() => (wfmLoginMode = 'token')}>Paste a session token</button>
+        from your browser instead.
+      </p>
+    {/if}
     <label>
       Platform
       <select bind:value={wfmLoginPlatform}>
@@ -147,6 +187,7 @@ import { DesktopCmdError } from '../../contracts/errors';
         type="password"
         autocomplete="new-password"
         bind:value={wfmLoginPassphrase}
+        bind:this={wfmLoginPassInput}
         placeholder="12+ characters - you may need it again after a restart"
         required
         minlength="12"
@@ -154,7 +195,7 @@ import { DesktopCmdError } from '../../contracts/errors';
     </label>
     <p class="muted">
       Locks your WFM sign-in token to this PC, so the app can list and manage
-      your orders all session without your WFM password again.
+      your orders all session without signing in to WFM again.
     </p>
     <label>
       Confirm passphrase
@@ -167,12 +208,24 @@ import { DesktopCmdError } from '../../contracts/errors';
       (KWallet, GNOME Keyring, Windows Credential Manager) so you're not asked
       each launch. Never the passphrase itself.
     </label>
+    {#if wfmAuthBusy && wfmLoginMode === 'window'}
+      <p class="muted" role="status" data-testid="wfm-login-waiting">
+        Finish signing in in the warframe.market window. It closes by itself
+        once you're in.
+      </p>
+    {/if}
     {#if wfmAuthError}
       <div class="err" data-testid="wfm-auth-error">{wfmAuthError}</div>
     {/if}
     <footer>
-      <button type="button" class="ghost" onclick={() => wfmLoginDialog?.close()}>Cancel</button>
-      <button type="submit" disabled={wfmAuthBusy}>{wfmAuthBusy ? 'Signing in…' : 'Log in'}</button>
+      <button type="button" class="ghost" onclick={cancelWfmLogin}>Cancel</button>
+      <button type="submit" disabled={wfmAuthBusy}>
+        {#if wfmLoginMode === 'token'}
+          {wfmAuthBusy ? 'Checking token…' : 'Save token'}
+        {:else}
+          {wfmAuthBusy ? 'Waiting for sign-in…' : 'Continue to warframe.market'}
+        {/if}
+      </button>
     </footer>
   </form>
 </dialog>

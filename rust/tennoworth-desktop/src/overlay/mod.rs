@@ -509,7 +509,6 @@ pub fn clear_overlay_diagnostics(state: State<'_, OverlayState>) -> Result<(), S
     Ok(())
 }
 
-#[tauri::command]
 pub fn ocr_boot_probe(state: State<'_, OverlayState>) -> Result<(), String> {
     let status = state.status.lock().unwrap_or_else(|e| e.into_inner());
     if status.ocr_ready {

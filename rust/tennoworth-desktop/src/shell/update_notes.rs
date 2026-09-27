@@ -1,8 +1,4 @@
 //! Installed-release notes are bundled; neither startup nor Settings fetches release text.
-#![allow(
-    clippy::unreachable,
-    reason = "Tauri command wrappers expand to unreachable"
-)]
 use crate::persistence::Db;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;

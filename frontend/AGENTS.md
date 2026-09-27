@@ -46,7 +46,10 @@ Desktop network access stays in Rust. Frontend features consume typed
 capabilities from `src/contracts/`; shells choose implementations from
 `src/adapters/`. Hosted capabilities provide public market/history access only,
 not fake interactive methods. Preserve cache-first startup and strictly newer
-snapshot replacement. The webview must never receive the WFM JWT.
+snapshot replacement. The webview must never receive the WFM JWT. The one
+exception runs the other way: the login dialog's paste-token fallback (for
+when the sign-in window cannot load warframe.market) sends a user-pasted
+token to Rust once and clears the field. Nothing sends a JWT back to the SPA.
 
 ### One source of truth for owned-item resolution
 `src/domain/resolver.ts` is the only place that maps a `/Lotus/...` path

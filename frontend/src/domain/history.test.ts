@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { describe, it, expect } from 'vitest';
-import { isHistory, dateAt, points, yearStats, weekly } from './history.js';
+import { isHistory, points, yearStats, weekly } from './history.js';
 
 const series = (median, volume) => ({ median, volume: volume ?? median.map((m) => (m == null ? 0 : 1)) });
 
@@ -12,10 +12,6 @@ describe('history helpers', () => {
     expect(isHistory('nope')).toBe(false);
   });
 
-  it('dateAt walks the window from start', () => {
-    expect(dateAt({ start: '2025-08-17' }, 0)).toBe('2025-08-17');
-    expect(dateAt({ start: '2025-08-17' }, 364)).toBe('2026-08-16');
-  });
 
   it('points skips nulls and keeps indexes', () => {
     expect(points(series([null, 10, null, 12]))).toEqual([[1, 10], [3, 12]]);

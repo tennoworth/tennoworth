@@ -155,7 +155,7 @@ pub fn score_row_weighted(
 mod tests {
     use super::*;
 
-    // Ported 1:1 from frontend/src/lib/sell-priority.test.ts so the two
+    // Ported 1:1 from frontend/src/domain/sell-priority.test.ts so the two
     // suites move together.
     fn m(vol: f64, low_sell: f64, avg: f64, median_now: f64, median_90d: f64) -> PricedEntry {
         PricedEntry { vol, low_sell, avg, median_now, median_90d }

@@ -32,6 +32,10 @@ impl Db {
         rows.collect()
     }
 
+    /// Nothing in the app writes reserves any more - the protection plan replaced
+    /// them - but installs may still hold rows, which `get_reserves` reads as
+    /// legacy keep-counts. Tests seed those rows with this.
+    #[cfg(test)]
     pub fn set_reserve(&self, slug: &str, keep: i64) -> rusqlite::Result<()> {
         let conn = guard(&self.conn);
         conn.execute(
@@ -42,6 +46,7 @@ impl Db {
         Ok(())
     }
 
+    #[cfg(test)]
     pub fn delete_reserve(&self, slug: &str) -> rusqlite::Result<()> {
         let conn = guard(&self.conn);
         conn.execute("DELETE FROM reserve WHERE slug = ?1", [slug])?;

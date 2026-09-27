@@ -101,4 +101,12 @@ describe('ownedEvidence', () => {
     expect(ownedEvidence('primed_flow', null, new Map(), composed)).toBe(0);
     expect(ownedEvidence('lith_c5_relic', 'radiant', new Map(), composed)).toBe(0);
   });
+
+  it('assesses no absence until the market says which items are composed', () => {
+    // Before the snapshot loads, a listed set looks like any other absent item.
+    expect(ownedEvidence('ash_prime_set', null, new Map(), null)).toBeNull();
+    expect(ownedEvidence('primed_flow', null, new Map(), null)).toBeNull();
+    // A count the scan carries does not depend on the market.
+    expect(ownedEvidence('primed_flow', null, owned, null)).toBe(3);
+  });
 });

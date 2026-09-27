@@ -376,6 +376,16 @@ value. Loading, unavailable, empty, and stale states never invent observations.
 Select Community usage in the living reference’s Data state control for the
 production chart with fictional daily counts.
 
+## Fallback WFM sign-in
+
+When the in-app sign-in window cannot load warframe.market, the login dialog
+asks for the browser's `JWT` cookie and shows `WfmTokenGuide.svelte`: a
+`.ui-segmented` browser choice (Firefox, Chrome / Edge) above numbered text
+steps, with keys in mono `kbd` caps. Steps name the devtools tab rather than
+picture it, because browser devtools are redesigned often and an outdated
+drawing misleads. Explanatory sentences stay outside the uppercase field label.
+Select WFM token sign-in in the living styleguide's Data state control.
+
 ## Installed update notes
 
 “What’s new” uses the native dialog pattern with a 47rem maximum width and a

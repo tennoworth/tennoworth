@@ -17,7 +17,13 @@ import { UPDATE_CHECK_INTERVAL_MS, type UpdateStatus } from '../contracts/update
   let updateInstalling = $state(false);
   let updateInstalled = $state(false);
   let updateError = $state<string | null>(null);
+  // The download's signature did not match the key this install trusts. Only
+  // a manual install can cross that, so the banner says so instead of showing
+  // the updater's raw error - which is all a user saw when the signing key was
+  // replaced in 2026-09.
+  let updateNeedsManualInstall = $state(false);
   let updateDismissed = $state(false);
+  const LATEST_RELEASE_URL = 'https://github.com/tennoworth/tennoworth/releases/latest';
 
   export async function checkForUpdates() {
     updateDismissed = false;
@@ -76,12 +82,15 @@ import { UPDATE_CHECK_INTERVAL_MS, type UpdateStatus } from '../contracts/update
   // running app stays intact (and the update stays retryable).
   async function installUpdateNow() {
     updateError = null;
+    updateNeedsManualInstall = false;
     updateInstalling = true;
     try {
       await installUpdate();
       updateInstalled = true;
     } catch (e) {
-      updateError = humanError(e);
+      const message = humanError(e);
+      if (/signature/i.test(message)) updateNeedsManualInstall = true;
+      else updateError = message;
     } finally {
       updateInstalling = false;
     }
@@ -119,6 +128,13 @@ import { UPDATE_CHECK_INTERVAL_MS, type UpdateStatus } from '../contracts/update
         {:else}
           Couldn’t check for updates. Check your connection and try again.
         {/if}
+      {/if}
+      {#if updateNeedsManualInstall}
+        <p data-testid="update-manual-install">
+          This update can't be installed from inside the app. Download it once from the
+          <a href={LATEST_RELEASE_URL} target="_blank" rel="noopener noreferrer">latest release</a>
+          and run it - your settings and data are kept, and updates install normally again after that.
+        </p>
       {/if}
       {#if updateError}<p>{updateError}</p>{/if}
     </div>

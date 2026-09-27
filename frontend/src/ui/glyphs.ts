@@ -123,24 +123,3 @@ export function glyphFor(category: string | null | undefined): GlyphName {
   }
 }
 
-/**
- * Pick a glyph from a WFM tag list.
- *
- * Tags are unordered and an item usually carries several ("prime", "set",
- * "warframe"), so the specific ones are tested before the generic - a prime
- * set should read as a set, not as a warframe.
- */
-export function glyphForTags(tags: string[] | undefined): GlyphName {
-  if (!tags?.length) return 'unknown';
-  const has = (t: string) => tags.some((x) => x.toLowerCase() === t);
-  if (has('riven')) return 'riven';
-  if (has('relic')) return 'relic';
-  if (has('arcane')) return 'arcane';
-  if (has('set')) return 'set';
-  if (has('mod')) return 'mod';
-  for (const tag of tags) {
-    const g = glyphFor(tag);
-    if (g !== 'unknown') return g;
-  }
-  return 'unknown';
-}

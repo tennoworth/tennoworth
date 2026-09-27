@@ -618,25 +618,6 @@
     line-height: 1.5;
   }
 
-  .general-banner .gb-report[data-shell] {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--muted);
-    font-size: var(--text-caption);
-    padding: 2px 8px;
-    border-radius: var(--radius-input);
-    cursor: pointer;
-    white-space: nowrap;
-  }
-  .general-banner .gb-report:hover:not(:disabled)[data-shell] { color: var(--fg); }
-  .general-banner .gb-report:disabled[data-shell] { opacity: .6; cursor: default; }
-  /* The fallback link is long; let it wrap and stay selectable rather than
-     overflow the banner. */
-  .general-banner .report-url[data-shell] {
-    margin-top: 6px;
-    word-break: break-all;
-    user-select: all;
-  }
   /* Action-verb prefix on rec cards. Casual users said the cards were
      too noun-heavy - leading with a verb gives them the instruction. */
   .reco-verb[data-shell] {

@@ -3,7 +3,6 @@ use market_domain::bindings::TypeScript;
 #[test]
 fn desktop_bindings_match_rust() {
     let mut types = TypeScript::default();
-    types.add::<super::report::ScanReport>();
     types.add::<wfm_client::governor::AccessStatus>();
     types.add::<crate::services::wfm_session::CmdError>();
     types.add::<crate::services::watch::WatchOutcome>();

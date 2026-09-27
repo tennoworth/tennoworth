@@ -36,14 +36,7 @@ jobs:
           shared-key: windows-ocr-test-release-${{ steps.windows-ocr.outputs.compatibility-key }}
 
       - name: Stage pinned OCR model
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p rust/tennoworth-desktop/resources/tessdata
-          curl --fail --location --retry 3 \
-            https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/eng.traineddata \
-            --output rust/tennoworth-desktop/resources/tessdata/eng.traineddata
-          echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  rust/tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
+        uses: ./.github/actions/stage-tessdata
 
       - name: Install frontend dependencies
         working-directory: frontend
@@ -115,13 +108,7 @@ jobs:
           xvfb xauth
 
       - name: Stage pinned English model
-        run: |
-          set -euo pipefail
-          mkdir -p rust/tennoworth-desktop/resources/tessdata
-          curl --fail --location --retry 3 \
-            https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/eng.traineddata \
-            --output rust/tennoworth-desktop/resources/tessdata/eng.traineddata
-          echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  rust/tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
+        uses: ./.github/actions/stage-tessdata
 
       - name: Install frontend dependencies
         working-directory: frontend

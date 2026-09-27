@@ -7,9 +7,10 @@ mod settings;
 pub(crate) mod snapshot;
 mod trades;
 mod watches;
+#[cfg(test)]
+pub(crate) use records::ListingLogEntry;
 pub(crate) use records::{
-    ListingLogEntry, ListingLogRow, NewWatch, Reserve, SnapshotItem, SnapshotSummary, TradeRow,
-    Watch,
+    ListingLogRow, NewWatch, Reserve, SnapshotItem, SnapshotSummary, TradeRow, Watch,
 };
 use schema::MIGRATIONS;
 

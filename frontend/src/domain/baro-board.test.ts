@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  baroPhase,
   byPlatPerDucat,
   currentPrice,
   ducatBasket,
@@ -144,31 +143,6 @@ describe('ducatBasket', () => {
       'needed',
       'resale',
     ]);
-  });
-});
-
-describe('baroPhase', () => {
-  const start = Date.parse('2026-08-21T13:00:00Z');
-  const end = Date.parse('2026-08-23T13:00:00Z');
-
-  it('counts down to an announced arrival', () => {
-    const p = baroPhase('2026-08-21T13:00:00Z', '2026-08-23T13:00:00Z', start - 3_600_000);
-    expect(p.phase).toBe('incoming');
-    expect(p.windowMs).toBe(3_600_000);
-  });
-
-  it('counts down to departure while he is here', () => {
-    const p = baroPhase('2026-08-21T13:00:00Z', '2026-08-23T13:00:00Z', end - 7_200_000);
-    expect(p.phase).toBe('here');
-    expect(p.windowMs).toBe(7_200_000);
-  });
-
-  it('knows when the window has closed', () => {
-    expect(baroPhase('2026-08-21T13:00:00Z', '2026-08-23T13:00:00Z', end + 1).phase).toBe('gone');
-  });
-
-  it('is unknown without a schedule', () => {
-    expect(baroPhase(undefined, undefined, Date.now()).phase).toBe('unknown');
   });
 });
 

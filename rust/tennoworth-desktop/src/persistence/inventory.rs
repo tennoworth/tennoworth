@@ -1,4 +1,6 @@
-use super::{guard, Db, ListingLogEntry, ListingLogRow, SnapshotItem, SnapshotSummary};
+#[cfg(test)]
+use super::ListingLogEntry;
+use super::{guard, Db, ListingLogRow, SnapshotItem, SnapshotSummary};
 
 impl Db {
     /// Insert a whole snapshot (header + all item rows) in ONE transaction:
@@ -79,7 +81,9 @@ impl Db {
         Ok(written)
     }
 
-    /// Most recent `listing_log` rows, newest first.
+    /// Most recent `listing_log` rows, newest first. Only the tests read the log
+    /// back; the app records it and has no view of it yet.
+    #[cfg(test)]
     pub fn list_listing_log(&self, limit: i64) -> rusqlite::Result<Vec<ListingLogEntry>> {
         let conn = guard(&self.conn);
         let mut stmt = conn.prepare(

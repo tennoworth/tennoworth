@@ -89,6 +89,7 @@ jobs:
               - 'scripts/sync-csp.ts'
               - '.github/actions/setup-rust/**'
               - '.github/actions/setup-windows-ocr/**'
+              - '.github/actions/stage-tessdata/**'
               - '.github/workflows/ui-smoke.yml'
             docs_only:
               - '**/*.md'
@@ -136,7 +137,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
       - name: Probe readiness regression
         run: bun test scripts/probe-readiness.test.ts
@@ -151,14 +152,7 @@ jobs:
           shared-key: windows-desktop-release-${{ steps.windows-ocr.outputs.compatibility-key }}
 
       - name: Stage pinned OCR model
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p rust/tennoworth-desktop/resources/tessdata
-          curl --fail --location --retry 3 \
-            https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/eng.traineddata \
-            --output rust/tennoworth-desktop/resources/tessdata/eng.traineddata
-          echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  rust/tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
+        uses: ./.github/actions/stage-tessdata
 
       # The desktop binary embeds the SPA at compile time (frontendDist) and
       # plain `cargo build` does not run tauri.conf.json's beforeBuildCommand
@@ -263,13 +257,7 @@ jobs:
           librsvg2-dev libtesseract-dev libleptonica-dev libxcb1-dev
           libwayland-dev libxkbcommon-dev xvfb xauth dbus-x11
       - name: Stage pinned OCR model
-        run: |
-          set -euo pipefail
-          mkdir -p rust/tennoworth-desktop/resources/tessdata
-          curl --fail --location --retry 3 \
-            https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/eng.traineddata \
-            --output rust/tennoworth-desktop/resources/tessdata/eng.traineddata
-          echo '7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2  rust/tennoworth-desktop/resources/tessdata/eng.traineddata' | sha256sum --check
+        uses: ./.github/actions/stage-tessdata
       - name: Install frontend dependencies
         working-directory: frontend
         run: bun install --frozen-lockfile

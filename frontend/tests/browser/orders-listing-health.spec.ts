@@ -62,6 +62,28 @@ for (const theme of ['light', 'dark'] as const) {
   }
 }
 
+// Which listings are composed sets comes from the market snapshot, so until it
+// arrives the set's absence from the scan is no evidence either way. Reading it
+// as zero owned briefly offered a delete for the live set listing.
+test('a set listing is not called unowned while the market is still loading', async ({ page }) => {
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/market.json', async route => { await held; await route.continue(); });
+  await page.goto('/?preview-desktop&sample=orders-unowned');
+  await expect(page.locator('.shell')).toBeVisible();
+  await page.locator('.sidebar').getByRole('button', { name: /^My orders/ }).click();
+
+  const health = page.getByRole('region', { name: 'Listing health' });
+  const setRow = health.locator('tr', { hasText: 'Akbolto Prime Set' });
+  await expect(health.getByText('not in your inventory')).toHaveCount(0);
+  await expect(setRow.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
+
+  release();
+  await expect(health.getByText('1 not owned')).toBeVisible();
+  await expect(health.locator('table').getByRole('button', { name: 'Delete', exact: true })).toHaveCount(1);
+  await expect(setRow.getByText('not in your inventory')).toHaveCount(0);
+});
+
 // The keyboard path: arming replaces the very button the user activated, so
 // focus has to follow it rather than dropping to the document body - and the
 // focused confirmation has to be visibly focused, not just technically so.

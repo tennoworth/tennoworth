@@ -342,7 +342,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
 
   // Composed items - prime sets are assembled from parts, so a scan of
   // individual items can never report the set itself. See `ownedEvidence`.
-  let composedSlugs = $derived(new Set(Object.keys(market?.set_to_parts ?? {})));
+  let composedSlugs = $derived(market?.set_to_parts ? new Set(Object.keys(market.set_to_parts)) : null);
 
   let health = $derived.by((): HealthIssue[] => {
     if (live.size === 0 && !ownedQty) return [];

@@ -8,13 +8,11 @@ frontend/test-results/
 *.tmp
 rust_out
 
-# Personal data - real companion output, never a fixture. Debug scripts
-# default to these filenames; never commit the real thing.
-# NOT anchored with a leading slash: the CLI writes inventory.json to its own
-# working directory, so a `rust/inventory.json` slipped past the old
-# /inventory.json rule and sat untracked-but-committable.
+# Personal data - a real inventory capture, never a fixture.
+# NOT anchored with a leading slash: a capture saved from any working directory
+# has to stay uncommittable - a `rust/inventory.json` once slipped past an
+# anchored /inventory.json rule and sat untracked-but-committable.
 inventory.json
-wfm_inventory_sellable.csv
 
 # Scratch space for third-party binaries pulled in for compat testing
 # (e.g. competitor export tools) - never redistribute someone else's binary.

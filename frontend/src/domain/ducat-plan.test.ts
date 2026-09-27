@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { KEEP_ABOVE_PLAT, planDucats, scrapCandidates, spareCopies } from './ducat-plan';
+import { KEEP_ABOVE_PLAT, planDucats, scrapCandidates } from './ducat-plan';
 import type { Market, MarketItemEntry, OwnedRecord } from '../contracts/data';
 
 function entry(over: Partial<MarketItemEntry>): MarketItemEntry {
@@ -31,21 +31,6 @@ const MARKET: Market = {
     primed_continuity: entry({ low_sell: 40, low5_avg: 40, median_90d: 40, ducats: 0 }),
   },
 } as unknown as Market;
-
-describe('spareCopies', () => {
-  it('counts everything past the copy you keep', () => {
-    expect(spareCopies(owned([['x', 'X', 4]]), 'x')).toBe(3);
-    expect(spareCopies(owned([['x', 'X', 1]]), 'x')).toBe(0);
-  });
-
-  it('sums across subtypes rather than missing on a bare-slug lookup', () => {
-    const m = new Map([
-      ['axi_a1_relic|intact', { slug: 'axi_a1_relic', name: 'r', count: 2, subtype: 'intact' }],
-      ['axi_a1_relic|radiant', { slug: 'axi_a1_relic', name: 'r', count: 3, subtype: 'radiant' }],
-    ] as unknown as Array<[string, OwnedRecord]>);
-    expect(spareCopies(m, 'axi_a1_relic')).toBe(4);
-  });
-});
 
 describe('scrapCandidates', () => {
   it('ranks by ducats given up per plat, not by ducats', () => {

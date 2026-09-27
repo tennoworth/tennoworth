@@ -280,8 +280,10 @@ These exist because each has already gone wrong once:
    on a named-only export compiles (the file is untyped) and binds
    `undefined`, silently no-op'ing the feature. 2026-08-03: a default
    `LIQUID_VOL` import shipped past `bun run check` and the pick-tag just
-   never rendered. Type-check can't see these - only a browser/runtime
-   check (or a named-import convention) can.
+   never rendered. Production files can no longer carry `@ts-nocheck`
+   (`frontend/src/dev/architecture.test.ts` refuses it), so this now bites in
+   the test files that still do. Type-check can't see these - only running
+   the test (or a named-import convention) can.
 7. **A test you have never watched fail is not a gate.** After adding one,
    remove the behaviour it claims to protect and confirm it fails. 2026-09-13:
    the probe watchdog test was checked this way - with the watchdog removed no

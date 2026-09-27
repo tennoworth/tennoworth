@@ -1,7 +1,7 @@
 import { DesktopCmdError } from '../contracts/errors';
 import type { PingResponse, PlanItemInput, OrderPatch, PendingPlan, PlanResponse, ItemResult, Market, OverlaySettings, OverlayStatus } from '../contracts/data';
 import { isHistory, type History } from '../domain/history';
-import type { MarketRefreshResult, ScanReport, DesktopCapabilities, DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences, AutoScanSettings, AutoScanStatus } from '../contracts/desktop';
+import type { MarketRefreshResult, DesktopCapabilities, DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences, AutoScanSettings, AutoScanStatus } from '../contracts/desktop';
 import { resolveInvoke, rethrowInvoke } from './runtime';
 
 /**
@@ -80,9 +80,6 @@ export class TauriTransport implements DesktopCapabilities {
   }
   async clearOverlayDiagnostics(): Promise<void> {
     await resolveInvoke()<void>('clear_overlay_diagnostics');
-  }
-  async reportScanIssue(error: string | null): Promise<ScanReport> {
-    return await resolveInvoke()<ScanReport>('report_scan_issue', { error });
   }
 
   async health(): Promise<PingResponse> {
@@ -227,15 +224,36 @@ export async function desktopWfmLogout(): Promise<void> {
   }
 }
 
-export async function desktopWfmLogin(
-  email: string,
-  password: string,
+/**
+ * Opens warframe.market's own sign-in page in a native window and resolves
+ * once the user has signed in there; the WFM password never passes through
+ * the app. Rejects with code `cancelled` when that window is closed.
+ */
+export async function desktopWfmLogin(passphrase: string, platform: string, remember: boolean): Promise<void> {
+  try {
+    await resolveInvoke()<null>('wfm_login', { passphrase, platform, remember });
+  } catch (e) {
+    rethrowInvoke(e);
+  }
+}
+
+/** Fallback sign-in: the JWT cookie value copied from the user's own browser. */
+export async function desktopWfmLoginWithToken(
+  token: string,
   passphrase: string,
   platform: string,
   remember: boolean,
 ): Promise<void> {
   try {
-    await resolveInvoke()<null>('wfm_login', { email, password, passphrase, platform, remember });
+    await resolveInvoke()<null>('wfm_login_with_token', { token, passphrase, platform, remember });
+  } catch (e) {
+    rethrowInvoke(e);
+  }
+}
+
+export async function desktopWfmLoginCancel(): Promise<void> {
+  try {
+    await resolveInvoke()<null>('wfm_login_cancel');
   } catch (e) {
     rethrowInvoke(e);
   }

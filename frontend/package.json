@@ -16,7 +16,7 @@
     "test:responsive": "playwright test --project=chromium",
     "test:responsive:all": "playwright test",
     "check": "svelte-check",
-    "knip": "knip",
+    "knip": "knip && knip --production",
     "csp": "bun ../scripts/sync-csp.ts"
   },
   "devDependencies": {

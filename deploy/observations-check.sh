@@ -11,15 +11,11 @@
 # The same rule applies to preservation. A corpus that is sound but not being
 # preserved is one disk failure away from being no corpus at all, so the check
 # has to be told where preservation lives and must never imply it can see what it
-# cannot. In `on-box-archive` mode the receipt the archive host publishes is
-# required evidence: absent, stale, disagreeing with the box, or missing a
-# completed file past its archival deadline are all failures, and an unmonitored
-# archive can never render as ready. In `external-backup` mode preservation is
-# the host-level Proxmox backup of this whole container, verified by an
-# operator-run pull-and-verify job on another machine; no receipt is required,
-# nothing here is read as proof, and the report says so in as many words. A mode
-# that is unset or unrecognised is not ready - an undeclared claim is not a
-# satisfied one.
+# cannot. The one supported mode, `external-backup`, is the host-level Proxmox
+# backup of this whole container, verified by an operator-run pull-and-verify job
+# on another machine; nothing here is read as proof, and the report says so in as
+# many words. A mode that is unset or unrecognised is not ready - an undeclared
+# claim is not a satisfied one.
 #
 # Scope: this answers "is the corpus sound and complete, and is its preservation
 # declared honestly". Whether a proposed refresh schedule meets its acceptance
@@ -44,17 +40,11 @@ usage: observations-check.sh [options]
   --snapshot <path>           published snapshot (default /srv/wfm/app/frontend/public/market.json)
   --deployed <path>           deployment record (default /srv/wfm/deployed.json)
   --binary <path>             installed scraper (default /srv/wfm/bin/wfm-scrape)
-  --archive-receipt <path>    receipt published by the archive host (default
-                              /srv/wfm/data/observations-check/archive-receipt.jsonl)
   --preservation <mode>       where the corpus is preserved: external-backup (a
                               host-level Proxmox backup of this container,
-                              verified by an operator-run job elsewhere) or
-                              on-box-archive (the archive host receipt above).
+                              verified by an operator-run job elsewhere).
                               Defaults to $OBSERVATIONS_PRESERVATION; an unset or
                               unrecognised mode is not ready.
-  --archive-deadline-seconds <n>  age at which an unarchived log or an unrefreshed
-                              receipt is late (default 129600 = a daily run plus
-                              half a day of grace)
   --pair-tolerance-seconds <n>    how far a sweep's journal start may sit from the
                               log header it ran (default 300)
   --interval-seconds <n>      scheduled sweep spacing (default 7200)
@@ -71,7 +61,6 @@ CSV="/srv/wfm/app/wfm_results.csv"
 SNAPSHOT="/srv/wfm/app/frontend/public/market.json"
 DEPLOYED="/srv/wfm/deployed.json"
 BINARY="/srv/wfm/bin/wfm-scrape"
-ARCHIVE_RECEIPT="/srv/wfm/data/observations-check/archive-receipt.jsonl"
 # Where preservation lives. Named explicitly by the deployment - there is no
 # permissive default, because a check that guesses would report a claim nobody
 # made. The expansion is `:-`, so an absent variable (the unit's EnvironmentFile
@@ -79,10 +68,6 @@ ARCHIVE_RECEIPT="/srv/wfm/data/observations-check/archive-receipt.jsonl"
 # empty assignment both arrive as the empty string and are refused identically:
 # neither is a declaration.
 PRESERVATION="${OBSERVATIONS_PRESERVATION:-}"
-ARCHIVE_DEADLINE_SECONDS=$((36 * 60 * 60))
-# Clocks are not perfectly synchronised, so a receipt may be a little ahead of
-# this host; anything further ahead is not freshness.
-ARCHIVE_FUTURE_SKEW_SECONDS=600
 PAIR_TOLERANCE_SECONDS=300
 INTERVAL_SECONDS=7200
 # Kept in step with rust/wfm-scrape/src/observations.rs through
@@ -107,9 +92,7 @@ while [ $# -gt 0 ]; do
     --snapshot) SNAPSHOT="$2"; shift 2;;
     --deployed) DEPLOYED="$2"; shift 2;;
     --binary) BINARY="$2"; shift 2;;
-    --archive-receipt) ARCHIVE_RECEIPT="$2"; shift 2;;
     --preservation) PRESERVATION="$2"; shift 2;;
-    --archive-deadline-seconds) ARCHIVE_DEADLINE_SECONDS="$2"; shift 2;;
     --pair-tolerance-seconds) PAIR_TOLERANCE_SECONDS="$2"; shift 2;;
     --interval-seconds) INTERVAL_SECONDS="$2"; shift 2;;
     --retention-bytes) RETENTION_BYTES="$2"; shift 2;;
@@ -131,9 +114,9 @@ warn() { WARNINGS+=("$1"); }
 # empty string is undeclared, not a mode: it is what an absent EnvironmentFile
 # and an empty assignment both produce.
 case "$PRESERVATION" in
-  external-backup|on-box-archive) ;;
+  external-backup) ;;
   '') error "preservation mode not declared - set --preservation or OBSERVATIONS_PRESERVATION";;
-  *) error "unrecognised preservation mode '$PRESERVATION' - expected external-backup or on-box-archive";;
+  *) error "unrecognised preservation mode '$PRESERVATION' - expected external-backup";;
 esac
 
 jstr() {
@@ -227,10 +210,11 @@ starts_file="$(mktemp)"
 # One row per log with a readable header: start|name|items|kept. The service
 # section pairs a journal invocation back to the sweep it ran by these stamps.
 log_rows="$(mktemp)"
-# Completed logs only: name|mtime, so the archive rules can ask which of them
-# have waited past the archival deadline.
-completed_rows="$(mktemp)"
-trap 'rm -f "$day_counts" "$starts_file" "$log_rows" "$completed_rows"' EXIT
+# One row per partial log: start|age|name. Whether a partial is a sweep still
+# running or one that died is only decidable once the newest completed sweep is
+# known, so the verdict waits until after the loop.
+partial_rows="$(mktemp)"
+trap 'rm -f "$day_counts" "$starts_file" "$log_rows" "$partial_rows"' EXIT
 
 if [ ! -d "$OBSERVATIONS" ]; then
   error "observations directory $OBSERVATIONS does not exist"
@@ -256,6 +240,8 @@ else
         if [ -z "$oldest_partial_age" ] || [ "$age" -gt "$oldest_partial_age" ]; then
           oldest_partial_age="$age"
         fi
+        partial_start="$(iso_to_epoch "$(name_stamp "$base")")" || true
+        printf '%s|%s|%s\n' "${partial_start:-}" "$age" "$base" >> "$partial_rows"
         continue
         ;;
     esac
@@ -331,7 +317,6 @@ else
     printf '%s\n' "$started" >> "$starts_file"
     printf '%s\n' "${started%%T*}" >> "$day_counts"
     printf '%s|%s|%s|%s\n' "$start_epoch" "$base" "${run_items:-}" "${sum_kept:-}" >> "$log_rows"
-    printf '%s|%s\n' "$base" "$(mtime_of "$path")" >> "$completed_rows"
 
     if [ -z "$oldest_start" ] || [ "$start_epoch" -lt "$(iso_to_epoch "$oldest_start")" ]; then
       oldest_start="$started"
@@ -351,8 +336,29 @@ else
   [ "$found" = 1 ] || error "no observation logs in $OBSERVATIONS"
 fi
 
-if [ "$partials" != 0 ] && [ -n "$oldest_partial_age" ] && [ "$oldest_partial_age" -gt "$PARTIAL_MAX_AGE_SECONDS" ]; then
-  error "a partial observation log is $((oldest_partial_age / 60)) minutes old - a sweep is stuck"
+# A sweep that dies keeps its partial log on purpose, for post-mortem, and only
+# retention removes it. Once a later sweep has completed, that partial belongs to
+# a sweep that is over: the evidence it lost is already counted as a missing
+# sweep below, so it is reported, not failed a second time. Only a partial that
+# nothing has superseded can be a sweep still stuck, and one whose start cannot
+# be read is judged by its age alone rather than excused.
+abandoned=()
+stuck_age=""
+newest_start_epoch=""
+[ -n "$newest_start" ] && newest_start_epoch="$(iso_to_epoch "$newest_start")"
+while IFS='|' read -r partial_start age name; do
+  [ -n "$name" ] || continue
+  if [ -n "$partial_start" ] && [ -n "$newest_start_epoch" ] && [ "$partial_start" -lt "$newest_start_epoch" ]; then
+    abandoned+=("$name")
+  elif [ "$age" -gt "$PARTIAL_MAX_AGE_SECONDS" ]; then
+    if [ -z "$stuck_age" ] || [ "$age" -gt "$stuck_age" ]; then stuck_age="$age"; fi
+  fi
+done < "$partial_rows"
+if [ -n "$stuck_age" ]; then
+  error "a partial observation log is $((stuck_age / 60)) minutes old - a sweep is stuck"
+fi
+if [ "${#abandoned[@]}" -gt 0 ]; then
+  warn "${#abandoned[@]} partial log(s) from sweeps that did not complete are kept for post-mortem: ${abandoned[*]}"
 fi
 
 # ---- the evaluation window --------------------------------------------------
@@ -454,105 +460,6 @@ if [ -z "${free_bytes:-}" ]; then
   error "cannot read free space on $disk_path"
 elif [ "$free_bytes" -lt "$DISK_FLOOR_BYTES" ]; then
   error "only $free_bytes bytes free on $disk_path, under the $DISK_FLOOR_BYTES floor"
-fi
-
-# ---- archive (on-box receipt) -----------------------------------------------
-# The receipt is the archive host's heartbeat, and only the on-box archive
-# deployment has one. A missing receipt there means archival is unmonitored,
-# which is a failure in its own right: the whole point of the archive is that
-# this corpus survives something happening to the box. In external-backup mode
-# this evidence does not exist on this host at all, so the block is skipped
-# rather than rendered as a missing file - the preservation report below carries
-# the honest statement instead.
-
-archive_status="not-applicable"
-archive_verified=""
-archive_age=""
-archive_covered=""
-archive_receipt_revision=""
-archive_producer_unknown=0
-overdue=()
-mismatched=()
-
-if [ "$PRESERVATION" = on-box-archive ]; then
-  archive_status="missing"
-
-  if [ ! -f "$ARCHIVE_RECEIPT" ]; then
-    error "no archive receipt at $ARCHIVE_RECEIPT - the corpus is not being preserved"
-  else
-    # An unreadable receipt is still a verdict: without the guard, an I/O or
-    # permission error here aborts the run before any report is written, which is
-    # the outcome this check exists to make impossible.
-    receipt_header=""
-    if ! receipt_header="$(head -1 "$ARCHIVE_RECEIPT" 2>/dev/null)"; then
-      receipt_header=""
-    fi
-    if [ -z "$receipt_header" ]; then
-      archive_status="unreadable"
-      error "cannot read the archive receipt at $ARCHIVE_RECEIPT"
-    elif ! printf '%s' "$receipt_header" | grep -q '"kind":"archive_receipt"'; then
-      archive_status="unreadable"
-      error "$ARCHIVE_RECEIPT is not an archive receipt"
-    else
-      archive_status="ok"
-      archive_verified="$(record_field "$receipt_header" verified_at)"
-      archive_receipt_revision="$(record_field "$receipt_header" deployed_revision_at_archive)"
-      archive_covered="$(grep -c '"name":' "$ARCHIVE_RECEIPT" || true)"
-      archive_producer_unknown="$(grep -c '"producer_revision":null' "$ARCHIVE_RECEIPT" || true)"
-
-      verified_epoch=""
-      if [ -n "$archive_verified" ]; then
-        verified_epoch="$(iso_to_epoch "$archive_verified")" || true
-      fi
-      if [ -z "${verified_epoch:-}" ]; then
-        archive_status="unreadable"
-        error "the archive receipt has no readable verified_at"
-      else
-        archive_age=$((NOW_EPOCH - verified_epoch))
-        if [ "$archive_age" -gt "$ARCHIVE_DEADLINE_SECONDS" ]; then
-          archive_status="stale"
-          error "the archive receipt is $((archive_age / 3600)) hours old - the archive job has not succeeded"
-        elif [ "$archive_age" -lt $((0 - ARCHIVE_FUTURE_SKEW_SECONDS)) ]; then
-          # A claim dated in the future is not freshness; it is a broken clock or a
-          # fabricated receipt, and either way it must not read as current.
-          archive_status="future"
-          error "the archive receipt is dated $((0 - archive_age)) seconds in the future"
-        fi
-      fi
-
-      # A receipt that names a file the box no longer has is not a failure (the
-      # box prunes), but one that disagrees about a file still here means the
-      # archived copy is not this file.
-      while read -r line; do
-        [ -n "$line" ] || continue
-        name=""
-        sha=""
-        if [[ "$line" =~ \"name\":\"([^\"]*)\" ]]; then name="${BASH_REMATCH[1]}"; fi
-        if [[ "$line" =~ \"sha256\":\"([0-9a-f]*)\" ]]; then sha="${BASH_REMATCH[1]}"; fi
-        [ -n "$name" ] || continue
-        [ -f "$OBSERVATIONS/$name" ] || continue
-        if [ -n "$sha" ]; then
-          got="$(sha256sum "$OBSERVATIONS/$name" 2>/dev/null | cut -d' ' -f1 || true)"
-          [ "$got" = "$sha" ] || mismatched+=("$name")
-        fi
-      done < <(grep '"name":' "$ARCHIVE_RECEIPT" || true)
-      if [ "${#mismatched[@]}" -gt 0 ]; then
-        error "the archived copy of ${#mismatched[@]} log(s) does not match the box: ${mismatched[*]}"
-      fi
-
-      # A daily archive plus half a day of grace: a log renamed moments before the
-      # run waits for the next one, and anything older than that has been missed.
-      while IFS='|' read -r name mtime; do
-        [ -n "$name" ] || continue
-        [ "$((NOW_EPOCH - mtime))" -gt "$ARCHIVE_DEADLINE_SECONDS" ] || continue
-        grep -qF "\"name\":\"$name\"" "$ARCHIVE_RECEIPT" || overdue+=("$name")
-      done < "$completed_rows"
-      if [ "${#overdue[@]}" -gt 0 ]; then
-        archive_status="lagging"
-        error "${#overdue[@]} completed log(s) are past their archival deadline: ${overdue[*]}"
-      fi
-    fi
-  fi
 fi
 
 # ---- service health ---------------------------------------------------------
@@ -819,12 +726,11 @@ fi
 
 # ---- preservation statement -------------------------------------------------
 # The honest headline, and the only claim this check is entitled to make about
-# preservation. In external-backup mode the protection is a host-level backup of
-# the whole container, verified by an operator-run pull-and-verify job on another
-# machine; nothing here can see it, so the report says declared-external and
-# records that it is not independently verified from this host - it must never
-# read as "preservation verified". In on-box-archive mode the receipt is the
-# evidence, and the archive block above reports what it supports.
+# preservation. The protection is a host-level backup of the whole container,
+# verified by an operator-run pull-and-verify job on another machine; nothing
+# here can see it, so the report says declared-external and records that it is
+# not independently verified from this host - it must never read as
+# "preservation verified".
 
 preservation_status="undeclared"
 preservation_evidence="none"
@@ -833,11 +739,6 @@ case "$PRESERVATION" in
   external-backup)
     preservation_status="declared-external"
     preservation_note="the corpus is protected by host-level Proxmox backups of this container, verified by an operator-run pull-and-verify job on another machine; this host cannot see them, and this check does not independently verify that protection"
-    ;;
-  on-box-archive)
-    preservation_status="on-box-archive"
-    preservation_evidence="archive-receipt"
-    preservation_note="preservation rests on the archive host's receipt read through this box; the archive block reports what that receipt supports"
     ;;
 esac
 
@@ -873,7 +774,8 @@ report="$(cat <<EOF
     "partial": $partials,
     "malformed": $malformed,
     "missing_summary": $missing_summary,
-    "unsupported_format": $unsupported
+    "unsupported_format": $unsupported,
+    "abandoned_partial": $(jarr "${abandoned[@]+"${abandoned[@]}"}")
   },
   "completeness": {
     "failed": $(jarr "${completeness_failures[@]+"${completeness_failures[@]}"}")
@@ -895,18 +797,6 @@ report="$(cat <<EOF
     "path": $(jstr "$disk_path"),
     "free_bytes": $(jnum "$free_bytes"),
     "floor_bytes": $DISK_FLOOR_BYTES
-  },
-  "archive": {
-    "status": $(jstr "$archive_status"),
-    "receipt": $(jstr "$ARCHIVE_RECEIPT"),
-    "verified_at": $(jstr_or_null "$archive_verified"),
-    "age_seconds": $(jnum "$archive_age"),
-    "deadline_seconds": $ARCHIVE_DEADLINE_SECONDS,
-    "covered": $(jnum "$archive_covered"),
-    "overdue": $(jarr "${overdue[@]+"${overdue[@]}"}"),
-    "hash_mismatch": $(jarr "${mismatched[@]+"${mismatched[@]}"}"),
-    "deployed_revision_at_archive": $(jstr_or_null "$archive_receipt_revision"),
-    "producer_revision_unknown": $archive_producer_unknown
   },
   "preservation": {
     "mode": $(jstr_or_null "$PRESERVATION"),

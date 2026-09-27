@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   listingBlockReason,
   listingActionLabel,
-  protectedView,
   unknownSlugs,
   type EligibilityInputs,
+  type ProtectedView,
 } from './eligibility';
 
 /** Inputs for an inventory that is ready to list. */
@@ -80,7 +80,7 @@ describe('listingBlockReason', () => {
   // An item the allocation cannot place is a blocker even when everything else
   // is healthy: listing it would guess at a protected quantity.
   it('blocks when any supported item has no usable quantity', () => {
-    const p = protectedView({ supportedSlugs: ['primed_flow', 'arcane'], known: ['primed_flow'] });
+    const p: ProtectedView = { supportedSlugs: ['primed_flow', 'arcane'], known: ['primed_flow'] };
     expect(unknownSlugs(p)).toEqual(new Set(['arcane']));
     expect(listingBlockReason(ready({ supportedSlugs: ['primed_flow', 'arcane'], known: ['primed_flow'] }))).toMatch(
       /unavailable for some items/,
@@ -88,7 +88,7 @@ describe('listingBlockReason', () => {
   });
 
   it('has nothing to say about an empty inventory', () => {
-    const p = protectedView({ supportedSlugs: [], known: [] });
+    const p: ProtectedView = { supportedSlugs: [], known: [] };
     expect(unknownSlugs(p)).toEqual(new Set());
     expect(listingBlockReason(ready({ supportedSlugs: [], known: [] }))).toBeNull();
   });

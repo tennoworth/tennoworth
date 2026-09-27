@@ -483,6 +483,7 @@ impl FixtureScrapeHttp {
     }
 
     /// Whether `url` has been requested at least once (fixture-present or not).
+    #[cfg(test)]
     pub fn was_fetched(&self, url: &str) -> bool {
         lock(&self.cursors).contains_key(url)
     }

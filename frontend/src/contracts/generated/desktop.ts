@@ -39,8 +39,6 @@ export type OwnOrder = { id: string, item_id: string, slug: string | null, name:
 
 export type Restrictions = { spacing_ms: number, concurrency: number, contract_spacing_ms: number, watch_interval_ms: number, pause_all: boolean, pause_background: boolean, pause_contracts: boolean, pause_mutations: boolean, pause_websockets: boolean, };
 
-export type ScanReport = { url: string, opened: boolean, };
-
 export type WatchOutcome = { id: number, slug: string, name: string, side: string, threshold: number,
 /**
  * The price the watch is judged against (lowest other ask for 'sell',

@@ -8,7 +8,7 @@ import type { StateStore, SettingKey } from '../contracts/state-store';
 //   - the scalar settings (reserve-copies, filters-open, view,
 //     score-explainer-dismissed, keep-copies-nudge-dismissed,
 //     tray-toast-seen, sell-onboarding-dismissed, auto-close-sold,
-//     routine-checklist,
+//     routine-checklist, sell-columns,
 //     theme.mode), each a short string;
 //   - the last-owned inventory snapshot (the reload-restore copy).
 //

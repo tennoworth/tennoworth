@@ -41,6 +41,7 @@ rust/
   market-domain/             inventory, scoring, advisor and planning decisions
   market-math/               pure shared heuristics
   wfm-client/                shared request policy and transport primitives
+  tennoworth-usage/          opt-in installation-count service
 scripts/                     release, CSP, probe and deployment checks
 tests/fixtures/             shared parity and pipeline inputs/expectations
 deploy/                      live-data refresh and deployment operations
@@ -90,10 +91,11 @@ hosted site is informational only - no accounts, no file access, no scan - and
 `.github/workflows/` holds the release and verification workflows:
 `release-desktop` (manual dispatch bound to an approved commit; creates the
 immutable `desktop-v*` tag during publication), `build-web`,
-`build-usage`, `audit`, `ui-smoke`, and the on-demand `ocr-windows-test` and
-`publish-wfm-policy`. Shared composite actions live in `.github/actions/`:
-`setup-rust`, `setup-windows-ocr` and `publish-rolling-release`, which the
-workflows above call into. The host-only scrape pipeline has no workflow: it is
+`build-usage`, `audit`, `ui-smoke`, the weekly `republish-rolling` (which
+re-dispatches `build-web` and `build-usage`), and the on-demand
+`ocr-windows-test` and `publish-wfm-policy`. Shared composite actions live in
+`.github/actions/`: `setup-rust`, `setup-windows-ocr`, `stage-tessdata` and
+`publish-rolling-release`, which the workflows above call into. The host-only scrape pipeline has no workflow: it is
 deployed directly by
 [`scripts/deploy-scrape-host.sh`](../scripts/deploy-scrape-host.sh), which is
 its only installer.
@@ -186,8 +188,7 @@ capture must not implicitly clear or replace that identity.
 acquisition and trading modules share narrowly named HTTP, identity, path, and
 time helpers. `wfm-client` shares transport primitives, not an abstraction that
 combines anonymous scraping with authenticated order mutation. `market-math`
-has no I/O or clock dependency. `market-domain` is the sixth workspace member:
-it isolates decision contracts and computations from both Tauri and the network
+has no I/O or clock dependency. `market-domain` isolates decision contracts and computations from both Tauri and the network
 core, so shared fixtures and contract generation can run without the GUI stack.
 
 That is why `wfm-core` depends on `market-domain` rather than the reverse, and
@@ -272,8 +273,8 @@ TENNOWORTH_UPDATE_BINDINGS=1 cargo test -p market-domain domain_bindings_match_r
 TENNOWORTH_UPDATE_BINDINGS=1 cargo test -p tennoworth-desktop desktop_bindings_match_rust
 ```
 
-The desktop binding pilot covers scan-report results, command errors and watch
-notification payloads/event names. Existing commands outside that pilot keep
+The desktop binding pilot covers command errors, WFM access status, watch
+notification payloads, automatic-scan settings, account orders and event names. Existing commands outside that pilot keep
 their current adapters; all newly migrated calculations use the generated
 request/response registry. Generation preserves serialized optionality and field
 names; it does not replace input validation. IPC uses JSON numbers, so large

@@ -39,12 +39,6 @@ pub const DE_INDEX_URL: &str = "https://content.warframe.com/PublicExport/index_
 /// Manifest base. The hash is **part of the path** - the bare filename 404s.
 pub const DE_MANIFEST_BASE: &str = "https://content.warframe.com/PublicExport/Manifest/";
 
-/// Failover origin for the same export tree. The bare
-/// `origin.warframe.com/PublicExport/Manifest/` path 403s; the `/origin/00000000/`
-/// prefix is required.
-pub const DE_ORIGIN_INDEX_URL: &str =
-    "https://origin.warframe.com/origin/00000000/PublicExport/index_en.txt.lzma";
-
 /// DE's annual usage telemetry: what players actually equip, by Mastery Rank.
 ///
 /// Six years of it, one static file per year, and nothing in the trading
@@ -316,8 +310,9 @@ pub fn manifest_rows_for<'a>(doc: &'a Value, basename: &str) -> &'a [Value] {
     manifest_rows_named(doc, key)
 }
 
-/// The largest top-level array, for callers that hold a manifest without
-/// knowing its filename (tests, mostly).
+/// The largest top-level array, for tests that hold a manifest without knowing
+/// its filename.
+#[cfg(test)]
 pub fn manifest_rows(doc: &Value) -> &[Value] {
     doc.as_object()
         .and_then(|m| {

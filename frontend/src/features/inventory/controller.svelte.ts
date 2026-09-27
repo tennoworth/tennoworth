@@ -9,7 +9,7 @@ import type { Market, OwnedRecord, Inventory } from '../../contracts/data';
 type Phase = 'idle' | 'loading' | 'done' | 'error';
 
 export class InventoryController {
-  constructor(private store: StateStore, private transport: Pick<DesktopCapabilities, 'loadCachedMarket' | 'refreshMarket' | 'fetchInventory' | 'reportScanIssue'>, private sources: { loadMarket(): Promise<Market>; loadCatalogs(): Promise<Catalogs>; normalizeInventory(data: Inventory, catalogs: Catalogs, market: Market): Promise<{ owned: Map<string, OwnedRecord>; unresolved: Record<string, number>; flatCount: number }> }) { }
+  constructor(private store: StateStore, private transport: Pick<DesktopCapabilities, 'loadCachedMarket' | 'refreshMarket' | 'fetchInventory'>, private sources: { loadMarket(): Promise<Market>; loadCatalogs(): Promise<Catalogs>; normalizeInventory(data: Inventory, catalogs: Catalogs, market: Market): Promise<{ owned: Map<string, OwnedRecord>; unresolved: Record<string, number>; flatCount: number }> }) { }
   phase = $state<Phase>('idle');
   refreshFailed = $state(false);
   noTradeables = $state(false);
@@ -30,8 +30,6 @@ export class InventoryController {
   previousOwned = $state<Map<string, OwnedRecord> | null>(null);
   pullingInventory = $state(false);
   pullError = $state<string | null>(null);
-  reportUrl = $state<string | null>(null);
-  reportingScan = $state(false);
 
   private generation = 0;
   private persistence = Promise.resolve();
@@ -175,22 +173,6 @@ export class InventoryController {
       this.refreshFailed = true; this.noTradeables = false;
       this.phase = 'error';
       throw error;
-    }
-  }
-
-  async reportScanBroke(): Promise<void> {
-    this.reportingScan = true;
-    this.reportUrl = null;
-    try {
-      // A failed open is not a rejection - the command reports it so we can
-      // fall back to a copyable link rather than a dead button.
-      const r = await this.transport.reportScanIssue(this.pullError);
-      if (!r.opened) this.reportUrl = r.url;
-    } catch (e) {
-      this.reportUrl = null;
-      this.pullError = `${this.pullError}\n\nCouldn't build a report: ${humanError(e)}`;
-    } finally {
-      this.reportingScan = false;
     }
   }
 

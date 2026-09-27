@@ -29,8 +29,8 @@ use wfm_core::poison::guard;
 use wfm_core::paths::{config_dir_for, default_jwt_path};
 use wfm_core::platform::{chown_to_real_user, restrict_dir_perms, write_restricted};
 use wfm_core::trading::auth::{
-    bootstrap_session, decrypt_jwt_with_key, derive_jwt_key, encrypt_jwt, signin,
-    validate_passphrase, validate_platform, EncryptedJwt,
+    decrypt_jwt_with_key, derive_jwt_key, encrypt_jwt, validate_passphrase, validate_platform,
+    EncryptedJwt,
 };
 use wfm_core::trading::listing::{warm_unlocked, Unlocked};
 use wfm_core::trading::plan::PlanGuard;
@@ -239,7 +239,7 @@ impl WfmSession {
 
     /// The generation any installer must capture before it starts reading
     /// credentials or authenticating, and present again to publish.
-    fn session_generation(&self) -> u64 {
+    pub(crate) fn session_generation(&self) -> u64 {
         guard(&self.inner).generation
     }
 
@@ -541,33 +541,28 @@ impl WfmSession {
         }
     }
 
-    /// Sign in to warframe.market, persist the encrypted JWT (unchanged on-disk
-    /// format), and populate the session with the fresh JWT - so the first
-    /// listing action doesn't re-prompt for the passphrase the user just set. The
-    /// raw password is used only for the signin POST; the passphrase only
-    /// encrypts. Neither is retained here.
+    /// The checks a sign-in must pass before the sign-in window opens, so a
+    /// short passphrase is refused before the user types their WFM password.
+    pub fn validate_login(passphrase: &str, platform: &str) -> Result<(), CmdError> {
+        validate_platform(platform).map_err(CmdError::internal)?;
+        // Shared with wfm-core so the floor cannot drift (it had: bytes in the
+        // old CLI, chars here).
+        validate_passphrase(passphrase).map_err(|e| CmdError::internal(e.to_string()))
+    }
+
+    /// Persist the JWT from a completed warframe.market sign-in (unchanged
+    /// on-disk format) and populate the session with it - so the first listing
+    /// action doesn't re-prompt for the passphrase the user just set. The
+    /// passphrase only encrypts and is not retained here.
     pub fn login(
         &self,
-        email: &str,
-        password: &str,
+        generation: u64,
+        jwt: String,
         passphrase: &str,
         platform: &str,
         remember: bool,
     ) -> Result<(), CmdError> {
-        validate_platform(platform).map_err(CmdError::internal)?;
-        if email.trim().is_empty() {
-            return Err(CmdError::internal("Email cannot be empty."));
-        }
-        if password.is_empty() {
-            return Err(CmdError::internal("Password cannot be empty."));
-        }
-        // Shared with the CLI `login` via wfm-core so the floor cannot drift
-        // (it had: bytes here, chars there). Checked before any network call.
-        validate_passphrase(passphrase).map_err(|e| CmdError::internal(e.to_string()))?;
-
-        let generation = self.session_generation();
-        let (client, csrf) = bootstrap_session().map_err(CmdError::wfm)?;
-        let jwt = signin(&client, email, password, platform, &csrf).map_err(CmdError::wfm)?;
+        Self::validate_login(passphrase, platform)?;
 
         let encrypted = encrypt_jwt(&jwt, passphrase, platform).map_err(CmdError::internal)?;
         // A logout that completed while this login was authenticating removed the
@@ -685,28 +680,73 @@ pub fn wfm_auth_status(session: State<'_, Arc<WfmSession>>) -> WfmAuthStatus {
     }
 }
 
-/// Sign in to warframe.market with credentials from the SPA's login dialog,
-/// persist the encrypted JWT (unchanged envelope format), and unlock the
-/// session. Network - spawn_blocking keeps the webview event loop free.
+/// Open the warframe.market sign-in window, wait for the user to sign in
+/// there, then persist the encrypted JWT (unchanged envelope format) and unlock
+/// the session. The WFM password is typed into warframe.market's own page and
+/// never reaches the app. Async by necessity: reading webview cookies from a
+/// synchronous command deadlocks on Windows.
 #[tauri::command]
 pub async fn wfm_login(
+    app: tauri::AppHandle,
     session: State<'_, Arc<WfmSession>>,
-    email: String,
-    password: String,
     passphrase: String,
     platform: String,
     remember: bool,
 ) -> Result<(), CmdError> {
+    // Zeroizing scrubs OUR copy of the passphrase when this ends - best-effort
+    // (the IPC deserializer made its own transient copies).
+    let passphrase = Zeroizing::new(passphrase);
+    WfmSession::validate_login(&passphrase, &platform)?;
+    let generation = session.session_generation();
+    let jwt = super::wfm_signin::capture_signed_in_jwt(&app, &platform).await?;
     let s = Arc::clone(&session);
     tauri::async_runtime::spawn_blocking(move || {
-        // Zeroizing scrubs OUR copies of the secrets when the closure ends -
-        // best-effort (the IPC deserializer made its own transient copies).
-        let password = Zeroizing::new(password);
-        let passphrase = Zeroizing::new(passphrase);
-        s.login(&email, &password, &passphrase, &platform, remember)
+        s.login(generation, jwt, &passphrase, &platform, remember)
     })
     .await
     .map_err(|e| CmdError::internal(format!("login task failed to run: {e}")))?
+}
+
+/// The fallback sign-in: a `JWT` cookie value the user copied from their own
+/// browser after signing in on warframe.market. It is confirmed against
+/// `/v2/me` before anything is written, so an anonymous or expired cookie is
+/// refused instead of saved.
+#[tauri::command]
+pub async fn wfm_login_with_token(
+    session: State<'_, Arc<WfmSession>>,
+    token: String,
+    passphrase: String,
+    platform: String,
+    remember: bool,
+) -> Result<(), CmdError> {
+    let token = Zeroizing::new(token);
+    let passphrase = Zeroizing::new(passphrase);
+    WfmSession::validate_login(&passphrase, &platform)?;
+    let jwt = super::wfm_signin::normalize_pasted_jwt(&token)?;
+    let generation = session.session_generation();
+    let s = Arc::clone(&session);
+    tauri::async_runtime::spawn_blocking(move || {
+        match wfm_core::trading::auth::jwt_is_signed_in(&jwt, &platform) {
+            Ok(true) => {}
+            Ok(false) => {
+                return Err(CmdError::of(
+                    "bad_token",
+                    "warframe.market doesn't accept that token as signed in. Sign in on the site first, then copy the JWT cookie again.",
+                ))
+            }
+            Err(e) => return Err(CmdError::wfm(e)),
+        }
+        s.login(generation, jwt, &passphrase, &platform, remember)
+    })
+    .await
+    .map_err(|e| CmdError::internal(format!("login task failed to run: {e}")))?
+}
+
+/// Close the sign-in window from the app's login dialog; the pending
+/// `wfm_login` then fails with `cancelled`.
+#[tauri::command]
+pub fn wfm_login_cancel(app: tauri::AppHandle) {
+    super::wfm_signin::cancel(&app);
 }
 
 /// Decrypt the stored JWT with the passphrase from the SPA's unlock dialog and
@@ -1115,25 +1155,32 @@ mod tests {
 
     #[test]
     fn login_rejects_short_passphrase_before_any_network() {
-        // The 12-char floor is checked before bootstrap_session, so this never
-        // touches WFM.
-        let path = tmp_path("login-short");
-        let s = session_with(path);
-        let err = s
-            .login("me@example.com", "hunter2hunter2", "short", "pc", false)
-            .unwrap_err();
+        // wfm_login runs validate_login before opening the sign-in window, so
+        // the user is not sent to WFM with a passphrase that will be refused.
+        let err = WfmSession::validate_login("short", "pc").unwrap_err();
         assert_eq!(err.code, "internal");
         assert!(err.message.contains("12 characters"));
+
+        let path = tmp_path("login-short");
+        let s = session_with(path.clone());
+        let generation = s.session_generation();
+        let err = s
+            .login(generation, "header.payload.sig".into(), "short", "pc", false)
+            .unwrap_err();
+        assert!(err.message.contains("12 characters"));
+        assert!(!path.exists());
     }
 
     #[test]
     fn login_rejects_unknown_platform_before_any_network() {
+        assert!(WfmSession::validate_login("a-long-enough-passphrase", "playstation").is_err());
         let path = tmp_path("login-plat");
         let s = session_with(path);
+        let generation = s.session_generation();
         let err = s
             .login(
-                "me@example.com",
-                "pw",
+                generation,
+                "header.payload.sig".into(),
                 "a-long-enough-passphrase",
                 "playstation",
                 false,

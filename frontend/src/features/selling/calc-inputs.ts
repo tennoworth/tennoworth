@@ -1,8 +1,4 @@
 import type { History } from '../../domain/history';
-import type { Verdict } from '../../domain/advisor';
-import type { RelicPlanEntry } from '../../domain/relic-planner';
-import type { SetReco } from '../../domain/set-recos';
-import type { ScoredInventoryFact } from '../../contracts/generated/domain';
 import type { Market, OwnedRecord } from '../../contracts/data';
 
 /**
@@ -140,9 +136,3 @@ export function relicInput(inputs: CalcInputs): RelicRun | null {
   if (!market?.relic_rewards) return null;
   return { owned: inputs.owned, market };
 }
-
-/** The shapes a caller hands back to the shell's `DomainResult`s. */
-export type ScoreFacts = Map<string, ScoredInventoryFact>;
-export type AdvisorMap = Map<string, Verdict>;
-export type SetRecos = SetReco[];
-export type RelicPlan = RelicPlanEntry[];

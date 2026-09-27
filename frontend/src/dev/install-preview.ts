@@ -26,16 +26,17 @@ export async function installPreview() {
     version: null,
     notes: null,
   };
+  // An offered update; with `update-signature` its install fails the way a
+  // release signed by a key this install does not trust does.
+  const updateOffered = scenario === 'feedback-update-error' || scenario === 'update-signature';
   const empties: Record<string, unknown> = {
     wfm_access_status: { revision: 0, reason: '', cooldown_until_ms: 0, queue_count: 0, outstanding: 0, requests: 0, throttles: 0, cache_hits: 0, cache_misses: 0, queue_rejections: 0, restrictions: defaults },
     wfm_auth_status: { logged_in: false, unlocked: false },
-    tray_state: { labels: [], last_notification: null },
-    update_status: scenario === 'feedback-update-error' ? { ...noUpdate, available: true, support: 'supported', version: 'next-preview' } : noUpdate,
-    check_update: noUpdate,
+    update_status: updateOffered ? { ...noUpdate, available: true, support: 'supported', version: 'next-preview' } : noUpdate,
+    check_update: updateOffered ? { ...noUpdate, available: true, support: 'supported', version: 'next-preview' } : noUpdate,
     refresh_history: { updated: false, body: null },
     refresh_market: { updated: false, status: 'offline' },
-    top_sellables: [], list_watches: [], list_listing_log: [], list_snapshots: [],
-    ledger_rows: [], list_trades: [], list_notifications: [],
+    list_watches: [], list_trades: [], list_notifications: [],
     get_notification_preferences: { popups: true, categories: Object.fromEntries(['trades', 'watches', 'baro', 'calendar', 'digest'].map(k => [k, { enabled: true, native: true }])) },
     try_silent_unlock: false,
     get_usage_preferences: { enabled: false, available: false },
@@ -59,9 +60,8 @@ export async function installPreview() {
     if (args?.key === 'routine-checklist') {
       if (cmd === 'get_setting') return Promise.resolve(localStorage.getItem('routine-checklist'));
       if (cmd === 'set_setting') { localStorage.setItem('routine-checklist', String(args.value)); return Promise.resolve(null); }
-      if (cmd === 'delete_setting') { localStorage.removeItem('routine-checklist'); return Promise.resolve(null); }
     }
-    if (preview && ['protection_state', 'save_protection_plan', 'get_setting', 'set_setting', 'delete_setting', 'fetch_orders', 'list_watches', 'list_trades', 'get_pending_plan', 'eelog_status', 'riven_comps', 'wfm_auth_status', 'wfm_logout', 'live_top_prices', 'trade_session_state', 'submit_plan', 'list_notifications', 'mark_notifications_read', 'clear_notifications', 'get_notification_preferences', 'set_notification_preferences', 'test_notification'].includes(cmd)) return preview(cmd, args);
+    if (preview && ['protection_state', 'save_protection_plan', 'get_setting', 'set_setting', 'fetch_orders', 'list_watches', 'list_trades', 'get_pending_plan', 'eelog_status', 'riven_comps', 'wfm_auth_status', 'wfm_logout', 'live_top_prices', 'trade_session_state', 'submit_plan', 'list_notifications', 'mark_notifications_read', 'clear_notifications', 'get_notification_preferences', 'set_notification_preferences', 'test_notification'].includes(cmd)) return preview(cmd, args);
     if (cmd === 'save_protection_plan') { protectionPlan = JSON.parse(JSON.stringify(args?.plan)) as ProtectionPlan; return Promise.resolve(null); }
     if (cmd === 'protection_state') {
       const snapshot = JSON.parse(localStorage.getItem('last-owned-v2') ?? '{"owned":[]}') as { owned: Array<[string, OwnedRecord]> };
@@ -72,7 +72,6 @@ export async function installPreview() {
     }
     if (cmd === 'get_setting') return Promise.resolve(localStorage.getItem(String(args?.key)));
     if (cmd === 'set_setting') { localStorage.setItem(String(args?.key), String(args?.value)); return Promise.resolve(null); }
-    if (cmd === 'delete_setting') { localStorage.removeItem(String(args?.key)); return Promise.resolve(null); }
     if (cmd === 'set_notification_preferences') return Promise.resolve(args?.preferences);
     if (cmd === 'get_auto_scan_settings') return Promise.resolve({ ...autoScanSettings });
     if (cmd === 'update_auto_scan_settings') {
@@ -82,6 +81,9 @@ export async function installPreview() {
     if (cmd === 'auto_scan_status') return Promise.resolve({
       ...autoScanSettings, held: false, gameRunning: false, lastScanAt: null, lastError: null, nextCheckAt: null,
     });
+    if (cmd === 'install_update' && scenario === 'update-signature') {
+      return Promise.reject('Signature verification failed: the update was not signed by a trusted key.');
+    }
     if (cmd === 'test_notification') return Promise.resolve('Test sent (preview).');
     if (cmd === 'update_overlay_settings') return Promise.resolve(args?.settings ?? null);
     return Promise.resolve(cmd in empties ? empties[cmd] : null);

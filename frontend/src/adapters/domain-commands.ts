@@ -1,5 +1,5 @@
 import { resolveInvoke, rethrowInvoke } from './runtime';
-import type { DomainRequest, DomainResponse, AdvisorRequest, HistoryRequest, SessionRequest } from '../contracts/generated/domain';
+import type { DomainRequest, DomainResponse, AdvisorRequest, SessionRequest } from '../contracts/generated/domain';
 import type { SessionCandidate, selectSession } from '../domain/trade-session';
 
 type Operation = DomainRequest['operation'];
@@ -47,4 +47,3 @@ export function evaluateAdvisor(request: AdvisorRequest) {
   } : request.history;
   return callDomain('advisor', { ...request, slugs, market, history });
 }
-export function evaluateHistory(request: HistoryRequest) { return callDomain('history', request); }

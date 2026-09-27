@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { GLYPH_PATHS, glyphFor, glyphForTags } from './glyphs';
+import { GLYPH_PATHS, glyphFor } from './glyphs';
 
 describe('glyph paths', () => {
   it('every named glyph has path data', () => {
@@ -37,23 +37,5 @@ describe('glyphFor', () => {
     expect(glyphFor('Somethingelse')).toBe('unknown');
     expect(glyphFor(undefined)).toBe('unknown');
     expect(glyphFor('')).toBe('unknown');
-  });
-});
-
-describe('glyphForTags', () => {
-  it('prefers the specific tag over the generic one', () => {
-    // A prime set carries both tags; it should read as a set.
-    expect(glyphForTags(['warframe', 'prime', 'set'])).toBe('set');
-    expect(glyphForTags(['mod', 'riven'])).toBe('riven');
-  });
-
-  it('falls through to a category tag when no specific one matches', () => {
-    expect(glyphForTags(['prime', 'melee'])).toBe('melee');
-  });
-
-  it('is unknown for an empty or unrecognised tag list', () => {
-    expect(glyphForTags([])).toBe('unknown');
-    expect(glyphForTags(['prime'])).toBe('unknown');
-    expect(glyphForTags(undefined)).toBe('unknown');
   });
 });

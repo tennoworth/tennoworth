@@ -46,20 +46,11 @@ const PATIENCE_VOL = 3;
 export const DEAD_SHARE = 0.15;
 export const POPULAR_SHARE = 1.0;
 
-export type UsageWeightTier = 'low' | 'typical' | 'popular' | 'neutral';
-
 export function usageWeight(share: unknown): number {
   if (typeof share !== 'number' || !Number.isFinite(share) || share < 0) return 1;
   if (share < DEAD_SHARE) return 0.75;
   if (share >= POPULAR_SHARE) return 1.25;
   return 0.75 + ((share - DEAD_SHARE) / (POPULAR_SHARE - DEAD_SHARE)) * 0.5;
-}
-
-export function usageWeightTier(share: unknown): UsageWeightTier {
-  if (typeof share !== 'number' || !Number.isFinite(share) || share < 0) return 'neutral';
-  if (share < DEAD_SHARE) return 'low';
-  if (share >= POPULAR_SHARE) return 'popular';
-  return 'typical';
 }
 
 // "Keep copies" reserve - N copies of every owned item held back from ever

@@ -14,8 +14,8 @@ use tauri::{AppHandle, Manager, State};
 use wfm_core::trading::listing::{
     bulk_set_visibility, delete_order as core_delete_order, list_user_orders,
     update_order as core_update_order, PerOrderResult, UpdateRequest, VisibilityRequest,
-    MAX_PLATINUM,
 };
+use market_domain::limits::{MAX_PLAN_ITEMS, MAX_PLATINUM, MIN_PLATINUM};
 use wfm_core::trading::pending::{
     clear_finished_pending, clear_pending, journal_state, load_pending, JournalState, PendingPlan,
 };
@@ -86,7 +86,7 @@ fn validate_protected_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), Pl
     // Invalid rows cannot reach a mutation. Let the executor report its
     // per-item errors without requiring a live order book for an empty run.
     if items.iter().all(|item| {
-        item.platinum < wfm_core::trading::plan::MIN_PLATINUM
+        item.platinum < MIN_PLATINUM
             || item.platinum > MAX_PLATINUM
             || item.quantity == 0
             || !unlocked.catalog.contains_key(&item.slug)
@@ -181,7 +181,7 @@ fn validate_session_contents(
     recipes: &std::collections::BTreeMap<String, std::collections::BTreeMap<String, u32>>,
 ) -> Result<(), String> {
     if context.budget == 0
-        || context.budget as usize > wfm_core::trading::plan::MAX_PLAN_ITEMS
+        || context.budget as usize > MAX_PLAN_ITEMS
         || items.iter().any(|i| i.session.as_ref() != Some(context))
     {
         return Err("Invalid or inconsistent Trade Session budget.".into());

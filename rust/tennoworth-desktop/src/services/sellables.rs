@@ -5,7 +5,7 @@
 //! Three moving parts:
 //!   1. RESOLUTION. The snapshot stores DE item paths (`/Lotus/...`); the market
 //!      is keyed by WFM slug. `resolve` mirrors the primary paths of
-//!      frontend/src/lib/resolver.ts: market.json's baked `path_to_info`
+//!      frontend/src/domain/resolver.ts: market.json's baked `path_to_info`
 //!      (direct path→slug for prime parts/warframes), then the wfstat catalog
 //!      (path→name, with Component/Blueprint trimming) → market's `catalog`
 //!      (name→slug), then a de-camelled name guess. Relic refinement subtypes
@@ -705,7 +705,7 @@ mod tests {
     }
 
     // ---- cross-language ranking parity (Rust consumer side) ---------------
-    // The TS canonical side lives in frontend/src/lib/sell-priority.parity.test.ts;
+    // The TS canonical side lives in frontend/src/domain/sell-priority.parity.test.ts;
     // both rank the SAME fixture into `expected_order`. If this fails but the TS
     // passes (or vice versa), the two scorings have diverged.
     #[derive(Deserialize)]
@@ -989,7 +989,7 @@ mod tests {
     }
 
     // ---- name-guess parity (Rust consumer side) ----------------------------
-    // The TS canonical side lives in frontend/src/lib/resolver.parity.test.ts;
+    // The TS canonical side lives in frontend/src/domain/resolver.parity.test.ts;
     // both check the SAME fixture (tests/fixtures/name-guess/cases.json). If
     // this fails but the TS passes (or vice versa), path_name_guess/slug_guess
     // have diverged from resolver.ts's pathNameGuess/slugGuess.

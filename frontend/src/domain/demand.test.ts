@@ -1,15 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  DEAD_SHARE,
-  liquidityWeight,
   masteryBand,
-  POPULAR_SHARE,
   readDemand,
   usageFor,
   type UsageEntry,
 } from './demand';
 import type { Market } from '../contracts/data';
+import { DEAD_SHARE } from './sell-priority';
 
 /** A usage curve peaking at `peak`, with a little mass either side. */
 function curve(peak: number, height = 9): number[] {
@@ -134,32 +132,5 @@ describe('readDemand', () => {
   it('carries the mastery band a seller can price against', () => {
     const r = readDemand('torid', MARKET, traded);
     expect(r.band!.from).toBeGreaterThan(14);
-  });
-});
-
-describe('liquidityWeight', () => {
-  it('is neutral for an item with no usage data', () => {
-    // Absent data must not be punished - that would rank every unmatched item
-    // below every matched one for a reason that has nothing to do with demand.
-    expect(liquidityWeight(null)).toBe(1);
-  });
-
-  it('rewards a popular parent and penalises a dead one, gently', () => {
-    expect(liquidityWeight(usage({ share: POPULAR_SHARE + 1 }))).toBe(1.25);
-    expect(liquidityWeight(usage({ share: 0.01 }))).toBe(0.75);
-  });
-
-  it('interpolates between the thresholds', () => {
-    const mid = liquidityWeight(usage({ share: (POPULAR_SHARE + DEAD_SHARE) / 2 }));
-    expect(mid).toBeGreaterThan(0.75);
-    expect(mid).toBeLessThan(1.25);
-  });
-
-  it('never swings hard enough to drown the live price signal', () => {
-    for (const share of [0, 0.1, 0.5, 1, 5, 50]) {
-      const w = liquidityWeight(usage({ share }));
-      expect(w).toBeGreaterThanOrEqual(0.75);
-      expect(w).toBeLessThanOrEqual(1.25);
-    }
   });
 });

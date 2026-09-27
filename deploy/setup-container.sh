@@ -149,15 +149,15 @@ cat <<'NEXT'
      cloudflared service install <YOUR_TUNNEL_TOKEN>
      systemctl status cloudflared
 
-2. Get the built site onto the box (do NOT build here - keep node/bun off the
-   exposed box). From CI or your dev machine, place the Vite build at
-   $REPO/frontend/dist  (see the deploy runbook "Build / deploy").
+2. The built site arrives without a build here (keep node/bun off the exposed
+   box): wfm-web-pull.timer, enabled above, fetches the web-latest release
+   asset into $REPO/frontend/dist. Start it once to populate it now:
+     systemctl start wfm-web-pull.service
 
 3. Deploy the scrape pipeline from the maintainer checkout
    (scripts/deploy-scrape-host.sh). It installs the binary, its driver script
-   and the wfm-scrape units, and refuses a revision that is not reviewed and
-   clean. Then enable and kick a first sweep here:
-     systemctl enable --now wfm-scrape.timer
+   and the wfm-scrape units, enables the sweep timer, and refuses a revision
+   that is not reviewed and clean. Kick a first sweep here:
      systemctl start wfm-scrape.service
      journalctl -u wfm-scrape.service -f
    Watch for repeated 429/403 (WFM 1015). The UA is a descriptive project
@@ -167,5 +167,5 @@ cat <<'NEXT'
 4. Verify the hosted page and data headers on the live HTTPS URL:
      curl -sI https://wfm.yourdomain.com | grep -iE 'strict-transport|frame-options|content-security'
    Then open the page in a browser, search for an item, and confirm in
-   DevTools that the fetch to http://127.0.0.1:* is NOT blocked as mixed content.
+   DevTools that the page loads with no CSP violations.
 NEXT
