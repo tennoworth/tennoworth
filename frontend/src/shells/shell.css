@@ -896,5 +896,8 @@
 .feedback-state[data-shell] { min-width: 0; }
 .feedback-state summary[data-shell] { cursor: pointer; padding-block: var(--s2); }
 .feedback-state pre[data-shell] { white-space: pre-wrap; overflow-wrap: anywhere; font: var(--text-caption)/var(--leading-body) var(--font-mono); }
+.feedback-problems[data-shell] { display: flex; flex-direction: column; gap: var(--s1); font-family: var(--font-body); line-height: var(--leading-body); }
+.feedback-problems ul[data-shell] { margin: 0; padding-left: var(--s4); }
+.feedback-problems > span[data-shell] { color: var(--muted); }
 html[data-look="yorha"] dialog.feedback-dialog header[data-shell] { margin: 0; padding: var(--s3); }
 dialog.feedback-dialog .feedback-check[data-shell] { flex-direction: row; font-family: var(--font-body); font-size: var(--text-control); letter-spacing: normal; text-transform: none; }

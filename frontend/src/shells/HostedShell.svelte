@@ -9,11 +9,13 @@ import UsageChart from '../features/community/UsageChart.svelte';
 import { loadMarket } from '../adapters/market';
 import { HostedTransport } from '../adapters/hosted';
 import { baroLocation, humanWindow } from '../ui/format';
+import { bugReportUrl, improvementUrl } from '../features/settings/feedback';
 import type { ThemeController } from '../ui/theme';
 import type { Market } from '../contracts/data';
 let { theme }: { theme: ThemeController } = $props();
 const APP_COMMIT = __APP_COMMIT__;
 const transport = new HostedTransport();
+const reportUrl = bugReportUrl({ surface: 'Website', version: `build ${APP_COMMIT}` });
 let market = $state<Market | null>(null);
 onMount(() => { let active = true; void loadMarket().then(value => { if(active) market = value; }).catch(console.error); return () => { active = false; }; });
 let snapshotStamp = $derived.by(() => {
@@ -113,6 +115,8 @@ function ago(ts: string | number | null | undefined) {
     <span data-shell class="grow">TennoWorth is a fan project, not affiliated with Digital Extremes or warframe.market. Open source · MIT · data from warframe.market and warframestat.us.</span>
     {#if market?.updated_at}<span data-shell title="When the market snapshot was taken">Snapshot {snapshotStamp}</span>{/if}
     <a data-shell href="#trust">Trust &amp; safety</a>
+    <a data-shell href={reportUrl} target="_blank" rel="noopener noreferrer">Report a problem</a>
+    <a data-shell href={improvementUrl} target="_blank" rel="noopener noreferrer">Suggest an improvement</a>
     <span data-shell class="ver" title="build {APP_COMMIT}">{APP_COMMIT}</span>
     <!-- The theme control's home is Settings → Appearance, inside the shell.
          A visitor who never searches never reaches the shell, so the mode

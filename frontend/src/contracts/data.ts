@@ -419,6 +419,7 @@ export interface OwnedRecord {
 export interface PingResponse {
   ok: boolean;
   platform?: string;
+  app_version?: string;
 }
 
 export interface OverlaySettings {

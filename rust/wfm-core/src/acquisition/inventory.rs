@@ -22,12 +22,7 @@ pub fn fetch_inventory_bytes(
 ) -> Result<(Vec<u8>, SessionInfo)> {
     let pid = match pid {
         Some(p) => p,
-        None => find_wf_pid().ok_or_else(|| {
-            anyhow!(
-                "Warframe doesn't appear to be running.\n\
-                 Start the game, log past the title screen, then retry."
-            )
-        })?,
+        None => find_wf_pid().ok_or_else(|| anyhow!(NOT_RUNNING))?,
     };
     let info = scan_session(pid).context("memory scan failed")?;
     let ct = platform_tag.unwrap_or_else(|| info.ct.clone());
@@ -87,11 +82,14 @@ fn without_url(e: reqwest::Error) -> anyhow::Error {
     anyhow::Error::from(e.without_url())
 }
 
+pub(super) const NOT_RUNNING: &str = "Warframe doesn't appear to be running.\n\
+     Start the game, log past the title screen, then retry.";
+
 /// Message for a response that is too small or not a success.
 ///
 /// It carries no excerpt of the body on purpose: an upstream error page can
 /// echo the request, credentials included.
-fn short_response_message(status: reqwest::StatusCode, len: usize) -> String {
+pub(super) fn short_response_message(status: reqwest::StatusCode, len: usize) -> String {
     format!(
         "Inventory endpoint returned HTTP {status} ({len} bytes).\n\n\
          If the response was small or 4xx, DE may have rotated something."

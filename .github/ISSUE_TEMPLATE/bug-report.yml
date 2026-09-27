@@ -7,6 +7,17 @@ body:
       value: |
         Reports are public. Review screenshots and diagnostics before attaching them, and remove account details, tokens, and other private information.
         For a security vulnerability, follow [SECURITY.md](https://github.com/tennoworth/tennoworth/blob/develop/SECURITY.md) instead of posting it here.
+  # Fields the app prefills stay text inputs: GitHub prefills inputs and
+  # textareas from the URL, not dropdowns. Keep these ids stable - installed
+  # apps link to them.
+  - type: input
+    id: surface
+    attributes:
+      label: Where did it happen?
+      description: The desktop app, the tennoworth.app website, or the in-game overlay. Prefilled when you report from the app or site.
+      placeholder: Desktop app, Website, or Overlay
+    validations:
+      required: true
   - type: textarea
     id: happened
     attributes:
@@ -28,17 +39,28 @@ body:
   - type: input
     id: version
     attributes:
-      label: App version or build
-      description: Prefilled when available from the app. Otherwise, copy the build identifier from the sidebar footer.
-      placeholder: Version or build identifier, if known
+      label: App version
+      description: Prefilled when you report from the app. Otherwise it is shown at the bottom of the app's sidebar, or at the foot of tennoworth.app.
+      placeholder: 0.8.0 (build 1a2b3c4)
   - type: input
     id: operating-system
     attributes:
       label: Operating system
       description: Windows or Linux. Include your Windows version or Linux distribution if known.
       placeholder: Windows 11, Fedora 43, Ubuntu 24.04, etc.
+  - type: dropdown
+    id: game-launch
+    attributes:
+      label: How do you run Warframe?
+      description: Scanning the game's memory depends on this. Skip it for website problems.
+      options:
+        - Steam on Windows
+        - Standalone launcher on Windows
+        - Steam with Proton
+        - Lutris, Heroic, or another Wine setup
+        - Not sure
   - type: textarea
     id: attachments
     attributes:
-      label: Screenshots or diagnostics
-      description: Optional. Attach only files you have reviewed for private information.
+      label: Diagnostics
+      description: Prefilled by the app with the snapshot you reviewed. Attach screenshots or files only after checking them for private information.

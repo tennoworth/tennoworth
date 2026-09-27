@@ -6,7 +6,12 @@
   
 import { DesktopCmdError } from '../../contracts/errors';
 
-  let { onunlocked }: { onunlocked: (next: string | null) => void } = $props();
+  let { onunlocked, onautherror, onreport }: {
+    onunlocked: (next: string | null) => void;
+    /** A sign-in or unlock failure worth a bug report, or null once one succeeds. */
+    onautherror?: (error: unknown) => void;
+    onreport?: () => void;
+  } = $props();
 
   let wfmLoginDialog = $state<HTMLDialogElement>();
   let wfmUnlockDialog = $state<HTMLDialogElement>();
@@ -24,6 +29,8 @@ import { DesktopCmdError } from '../../contracts/errors';
   let wfmRemember = $state(true);
   let wfmAuthBusy = $state(false);
   let wfmAuthError = $state<string | null>(null);
+  // Wrong or mismatched passphrases and a closed window are the user's to fix, not a bug.
+  let wfmAuthReportable = $state(false);
   // What to do once the session unlocks: 'list' re-opens the listing flow the
   // CTA started; null (the Resume path) leaves the caller where it was.
   // Threaded through to `onunlocked` rather than acted on here - App.svelte
@@ -32,8 +39,15 @@ import { DesktopCmdError } from '../../contracts/errors';
   let wfmLoginPassInput: HTMLInputElement | undefined;
   let wfmUnlockPassInput: HTMLInputElement | undefined;
 
+  function failed(err: unknown) {
+    wfmAuthError = humanError(err);
+    wfmAuthReportable = !(err instanceof DesktopCmdError && err.code === 'bad_passphrase');
+    if (wfmAuthReportable) onautherror?.(err);
+  }
+
   export async function open(code: string, next: string | null = null) {
     wfmAuthError = null;
+    wfmAuthReportable = false;
     authNext = next;
     if (code === 'needs_login') {
       wfmLoginPassphrase = '';
@@ -59,6 +73,7 @@ import { DesktopCmdError } from '../../contracts/errors';
   }
 
   function unlocked() {
+    onautherror?.(null);
     onunlocked(authNext);
     authNext = null;
   }
@@ -73,6 +88,7 @@ import { DesktopCmdError } from '../../contracts/errors';
   async function performWfmLogin(e: SubmitEvent) {
     e?.preventDefault();
     wfmAuthError = null;
+    wfmAuthReportable = false;
     if (wfmLoginPassphrase !== wfmLoginConfirm) {
       wfmAuthError = "Passphrases don't match.";
       return;
@@ -90,9 +106,9 @@ import { DesktopCmdError } from '../../contracts/errors';
       const code = err instanceof DesktopCmdError ? err.code : null;
       if (code === 'signin_window_failed') {
         wfmLoginMode = 'token';
-        wfmAuthError = humanError(err);
+        failed(err);
       } else if (code !== 'cancelled') {
-        wfmAuthError = humanError(err);
+        failed(err);
       } else if (wfmLoginDialog?.open) {
         // Closing the WFM window is a choice, not a failure; the Cancel path
         // has already closed this dialog.
@@ -116,6 +132,7 @@ import { DesktopCmdError } from '../../contracts/errors';
   async function performWfmUnlock(e: SubmitEvent) {
     e?.preventDefault();
     wfmAuthError = null;
+    wfmAuthReportable = false;
     wfmAuthBusy = true;
     try {
       await desktopWfmUnlock(wfmUnlockPassphrase, wfmRemember);
@@ -130,7 +147,7 @@ import { DesktopCmdError } from '../../contracts/errors';
       } else {
         // bad_passphrase and transient WFM failures stay in the dialog with
         // their message - retry is a re-type away.
-        wfmAuthError = humanError(err);
+        failed(err);
       }
     } finally {
       wfmUnlockPassphrase = '';
@@ -215,7 +232,12 @@ import { DesktopCmdError } from '../../contracts/errors';
       </p>
     {/if}
     {#if wfmAuthError}
-      <div class="err" data-testid="wfm-auth-error">{wfmAuthError}</div>
+      <div class="err" data-testid="wfm-auth-error">
+        {wfmAuthError}
+        {#if wfmAuthReportable && onreport}
+          <p class="forgot-row"><button type="button" class="forgot" onclick={onreport}>Report a bug</button> if this keeps happening.</p>
+        {/if}
+      </div>
     {/if}
     <footer>
       <button type="button" class="ghost" onclick={cancelWfmLogin}>Cancel</button>
@@ -257,7 +279,12 @@ import { DesktopCmdError } from '../../contracts/errors';
       you're not asked each launch. Never the passphrase itself.
     </label>
     {#if wfmAuthError}
-      <div class="err" data-testid="wfm-auth-error">{wfmAuthError}</div>
+      <div class="err" data-testid="wfm-auth-error">
+        {wfmAuthError}
+        {#if wfmAuthReportable && onreport}
+          <p class="forgot-row"><button type="button" class="forgot" onclick={onreport}>Report a bug</button> if this keeps happening.</p>
+        {/if}
+      </div>
     {/if}
     <p class="forgot-row muted">
       Forgot it? <button type="button" class="forgot" onclick={goToLogin}>Log in again</button> to set a new passphrase.

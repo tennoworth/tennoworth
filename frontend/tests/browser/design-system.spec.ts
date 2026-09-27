@@ -182,9 +182,12 @@ test('hosted Meta Drift shows a top ten, expands in place, and keeps Δ share in
   const drift = page.getByTestId('meta-drift');
   await drift.getByRole('button', { name: /^Show all \d+$/ }).click();
   expect(await drift.locator('tbody tr').count()).toBeGreaterThan(10);
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/');
-  expect(await page.evaluate(() => document.documentElement.scrollHeight), 'hosted page stays short with Meta Drift trimmed').toBeLessThan(3500);
+  // Expanding is in place, not a preference: a fresh visit is trimmed again.
+  // Asserted on the rows once the market loads, not on page height - a height
+  // budget read before load passed by racing, and one read after load goes
+  // stale whenever another hosted section is added.
+  await page.reload();
+  await expect(page.getByTestId('meta-drift').locator('tbody tr')).toHaveCount(10);
 });
 
 test('theme radio navigation and listing-review focus stay keyboard accessible', async ({ page }) => {

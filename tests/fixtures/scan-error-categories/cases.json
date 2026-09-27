@@ -1,0 +1,55 @@
+{
+  "description": "Scan failure text produced by rust/wfm-core/src/acquisition and the diagnostic category the SPA reports for it. Rust checks that each source still produces text starting with `message`; the frontend checks the category and HTTP status it derives from that text.",
+  "cases": [
+    {
+      "source": "game_not_running",
+      "message": "Warframe doesn't appear to be running.\nStart the game, log past the title screen, then retry.",
+      "category": "game_not_running",
+      "httpStatus": null
+    },
+    {
+      "source": "no_credentials",
+      "message": "No accountId/nonce pair found in WF memory.\nMake sure you're past the login screen and a recent network\ncall has fired (opening the trade or profile screen is reliable).",
+      "category": "credentials_not_found",
+      "httpStatus": null
+    },
+    {
+      "source": "no_credentials_unusable_pattern",
+      "message": "No accountId/nonce pair found in WF memory.\nMake sure you're past the login screen and a recent network\ncall has fired (opening the trade or profile screen is reliable).\n\nThe configured cred pattern matched 2 time(s), but capture groups 1 and 2 did not both participate, so no value can be read.",
+      "category": "credentials_not_found",
+      "httpStatus": null
+    },
+    {
+      "source": "endpoint_forbidden",
+      "message": "Inventory endpoint returned HTTP 403 Forbidden (12 bytes).\n\nIf the response was small or 4xx, DE may have rotated something.",
+      "category": "endpoint_rejected",
+      "httpStatus": 403
+    },
+    {
+      "source": "endpoint_not_found",
+      "message": "Inventory endpoint returned HTTP 404 Not Found (9 bytes).\n\nIf the response was small or 4xx, DE may have rotated something.",
+      "category": "endpoint_rejected",
+      "httpStatus": 404
+    },
+    {
+      "source": "scan_busy",
+      "message": "a memory scan is already in progress; retry in a moment",
+      "category": "scan_busy",
+      "httpStatus": null
+    },
+    {
+      "source": "ptrace_denied",
+      "platform": "linux",
+      "message": "Permission denied reading /proc/1/mem - reading the game's memory needs",
+      "category": "permission_denied",
+      "httpStatus": null
+    },
+    {
+      "source": "open_process_failed",
+      "platform": "windows",
+      "message": "OpenProcess failed - not running as same user, or pid is wrong",
+      "category": "permission_denied",
+      "httpStatus": null
+    }
+  ]
+}

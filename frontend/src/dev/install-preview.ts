@@ -31,6 +31,7 @@ export async function installPreview() {
   const updateOffered = scenario === 'feedback-update-error' || scenario === 'update-signature';
   const empties: Record<string, unknown> = {
     wfm_access_status: { revision: 0, reason: '', cooldown_until_ms: 0, queue_count: 0, outstanding: 0, requests: 0, throttles: 0, cache_hits: 0, cache_misses: 0, queue_rejections: 0, restrictions: defaults },
+    health: { ok: true, platform: 'linux', app_version: '0.0.0-preview' },
     wfm_auth_status: { logged_in: false, unlocked: false },
     update_status: updateOffered ? { ...noUpdate, available: true, support: 'supported', version: 'next-preview' } : noUpdate,
     check_update: updateOffered ? { ...noUpdate, available: true, support: 'supported', version: 'next-preview' } : noUpdate,
