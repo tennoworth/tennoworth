@@ -1,10 +1,10 @@
 //! Signed restrictions are verified before parsing and persisted before activation.
-use crate::governor::{lock, process, AccessError, Restrictions};
+use crate::governor::{lock, process, AccessError, Governor, Restrictions};
 use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::io::Read;
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 pub const POLICY_URL: &str = "https://tennoworth.app/wfm-policy.json";
@@ -115,6 +115,7 @@ pub struct PolicyStore {
     key: String,
     previous: Vec<String>,
     component: Component,
+    governor: Arc<Governor>,
     current: Mutex<Option<Verified>>,
 }
 impl PolicyStore {
@@ -123,12 +124,14 @@ impl PolicyStore {
         key: String,
         previous: Vec<String>,
         component: Component,
+        governor: Arc<Governor>,
     ) -> Result<Self, AccessError> {
         let store = Self {
             path,
             key,
             previous,
             component,
+            governor,
             current: Mutex::new(None),
         };
         match std::fs::read(&store.path) {
@@ -148,7 +151,7 @@ impl PolicyStore {
             Component::Desktop => &p.desktop,
             Component::Scraper => &p.scraper,
         };
-        process().apply_policy(p.revision, p.reason.clone(), restrictions.clone())
+        self.governor.apply_policy(p.revision, p.reason.clone(), restrictions.clone())
     }
     pub fn accept(&self, raw: &[u8]) -> Result<(), AccessError> {
         let (envelope, policy) = verify(raw, &self.key)?;
@@ -218,7 +221,13 @@ pub fn start(directory: &Path, component: Component) -> Result<(), AccessError> 
         return Ok(());
     };
     let previous = PREVIOUS_PUBLIC_KEYS.iter().map(|k| (*k).to_owned()).collect();
-    let store = PolicyStore::load(directory.join("wfm-policy.json"), key.to_owned(), previous, component)?;
+    let store = PolicyStore::load(
+        directory.join("wfm-policy.json"),
+        key.to_owned(),
+        previous,
+        component,
+        process().clone(),
+    )?;
     let mut etag = None;
     if let Err(error) = store.fetch(&mut etag) {
         eprintln!("WFM policy refresh: {error}");
@@ -238,6 +247,11 @@ pub fn start(directory: &Path, component: Component) -> Result<(), AccessError> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    // Each store gets its own governor: the process one only moves forward, so
+    // a newer revision activated by one test would refuse the next test's.
+    fn fresh() -> Arc<Governor> {
+        Arc::new(Governor::default())
+    }
     fn fixture() -> serde_json::Value {
         serde_json::from_str(include_str!(
             "../../../tests/fixtures/wfm-access/policies.json"
@@ -266,7 +280,7 @@ mod tests {
         let path = std::env::temp_dir().join(format!("wfm-policy-{}.json", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let key = fixtures["public_key"].as_str().unwrap().to_string();
-        let store = PolicyStore::load(path.clone(), key.clone(), Vec::new(), Component::Desktop).unwrap();
+        let store = PolicyStore::load(path.clone(), key.clone(), Vec::new(), Component::Desktop, fresh()).unwrap();
         let initial = serde_json::to_vec(&fixtures["initial"]).unwrap();
         store.accept(&initial).unwrap();
         store.accept(&initial).unwrap();
@@ -277,7 +291,7 @@ mod tests {
             .accept(&serde_json::to_vec(&fixtures["recovery"]).unwrap())
             .unwrap();
         assert!(store.accept(&initial).is_err());
-        let restarted = PolicyStore::load(path.clone(), key, Vec::new(), Component::Desktop).unwrap();
+        let restarted = PolicyStore::load(path.clone(), key, Vec::new(), Component::Desktop, fresh()).unwrap();
         assert_eq!(
             lock(&restarted.current).as_ref().unwrap().policy.revision,
             2
@@ -299,9 +313,9 @@ mod tests {
 
         // Without the previous key the cache cannot be trusted: that is the
         // pause the migration exists to prevent.
-        assert!(PolicyStore::load(path.clone(), key.clone(), Vec::new(), Component::Desktop).is_err());
+        assert!(PolicyStore::load(path.clone(), key.clone(), Vec::new(), Component::Desktop, fresh()).is_err());
 
-        let store = PolicyStore::load(path.clone(), key.clone(), vec![previous.clone()], Component::Desktop).unwrap();
+        let store = PolicyStore::load(path.clone(), key.clone(), vec![previous.clone()], Component::Desktop, fresh()).unwrap();
         assert_eq!(lock(&store.current).as_ref().unwrap().policy.revision, 1);
         // The retired key cannot publish, even a newer revision.
         assert!(store
