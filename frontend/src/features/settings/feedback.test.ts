@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { describe, expect, it } from 'vitest';
 import { bugReportUrl, feedbackLink, feedbackProblems, feedbackSnapshot, type FeedbackState } from './feedback';
 import { DesktopCmdError } from '../../contracts/errors';
