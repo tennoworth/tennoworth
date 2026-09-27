@@ -173,7 +173,9 @@ A rotation runs in this order: generate and back up the new key; set
 `TENNOWORTH_WFM_POLICY_PUBLIC_KEY` to it; sign and publish a policy with a higher
 revision; redeploy the scraper with `scripts/deploy-scrape-host.sh`, which also
 installs the matching verifier the box's policy puller uses; then release the
-desktop. Clients built before the rotation reject the new policy and keep their
+desktop. The redeploy runs while the box still serves the retired key's policy,
+so its gate accepts that only when the published successor verifies with the new
+key as a newer revision. Clients built before the rotation reject the new policy and keep their
 last verified one. There is no remote key-replacement mechanism or expiry that
 silently removes restrictions.
 
