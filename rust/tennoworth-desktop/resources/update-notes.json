@@ -1,5 +1,5 @@
 {
-  "version": "0.7.107",
+  "version": "0.8.0",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -365,6 +365,45 @@
           "kind": "fixed",
           "title": "Prices never step backwards to an older snapshot",
           "body": "The app refuses a downloaded market snapshot older than the one it already holds, so the tray and the dashboard stay on the same, newest prices.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.0",
+      "date": "2026-09-27",
+      "changes": [
+        {
+          "id": "wfm-page-signin",
+          "kind": "fixed",
+          "title": "Sign in to warframe.market again",
+          "body": "Signing in opens warframe.market's own page in a private window, and the app never sees your password. On Linux systems where that window cannot display the page, the app asks you to sign in with your browser and paste the session token instead. Saved logins keep working.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "update-signature-guidance",
+          "kind": "improved",
+          "title": "A rejected update says what to do",
+          "body": "If an update ever fails its signature check, the app now tells you to download the latest release once, instead of showing the updater's raw error.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "set-ownership-while-loading",
+          "kind": "fixed",
+          "title": "A listed set is no longer called unowned while prices load",
+          "body": "Before the market data finished loading, a listed prime set could briefly read as not in your inventory and be offered for deletion. The app now waits for the market data before judging it.",
           "platforms": [
             "windows",
             "linux"
