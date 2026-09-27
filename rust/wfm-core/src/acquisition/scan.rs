@@ -559,12 +559,16 @@ fn pick_dominant(counts: PatternCounts) -> Result<SessionInfo> {
     })
 }
 
+#[cfg(windows)]
+pub(super) const OPEN_PROCESS_FAILED: &str =
+    "OpenProcess failed - not running as same user, or pid is wrong";
+
 /// Why a scan produced no credentials.
 ///
 /// A pattern that matched but could not yield a value is a different problem
 /// from a pattern that never matched, and the user can only fix the first one
 /// by correcting the definitions file - so say which happened.
-fn no_creds_message(cred_matches_without_groups: usize) -> String {
+pub(super) fn no_creds_message(cred_matches_without_groups: usize) -> String {
     let mut msg = String::from(
         "No accountId/nonce pair found in WF memory.\n\
          Make sure you're past the login screen and a recent network\n\
@@ -683,7 +687,7 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
 //   A local or extracted binary - the per-binary capability is still the
 //     tightest grant available, so keep it.
 #[cfg(target_os = "linux")]
-fn ptrace_open_error(mem_path: &str, pid: u32, e: std::io::Error) -> anyhow::Error {
+pub(super) fn ptrace_open_error(mem_path: &str, pid: u32, e: std::io::Error) -> anyhow::Error {
     if e.kind() != std::io::ErrorKind::PermissionDenied {
         return anyhow!(
             "cannot open {mem_path}: {e}\n\
@@ -778,7 +782,7 @@ pub fn scan_session(pid: u32) -> Result<SessionInfo> {
 
     unsafe {
         let handle: HANDLE = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, BOOL(0), pid)
-            .context("OpenProcess failed - not running as same user, or pid is wrong")?;
+            .context(OPEN_PROCESS_FAILED)?;
 
         let mut counts = PatternCounts::default();
     let budget = ScanBudget::default();
