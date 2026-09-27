@@ -9,7 +9,7 @@
   const { desktopAccessStatus, desktopNotifications, desktopWfmStatus, desktopWfmLogout, listenForTauriEvent, updateStatus, updateDiagnostics, desktopOpenExternalUrl, desktopProtectionState, desktopSaveProtectionPlan, normalizeInventoryNative, scoreInventoryNative, relicPlan: loadRelicPlan, setRecos: loadSetRecos, evaluateAdvisor } = useDesktopServices();
   import { ProtectionController } from '../features/selling/protection.svelte';
   import ProtectedPlan from '../features/selling/ProtectedPlan.svelte';
-  import { feedbackSnapshot, feedbackLink } from '../features/settings/feedback';
+  import { feedbackSnapshot, feedbackLink, feedbackProblems, improvementUrl, type WfmSession } from '../features/settings/feedback';
   import { humanError } from '../contracts/errors';
   
   import { onMount, untrack } from 'svelte';
@@ -352,6 +352,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     try {
       const h = await transport.health();
       desktopPlatform = h?.platform ?? null;
+      desktopAppVersion = h?.app_version ?? null;
     } catch (e) {
       console.error('desktop health check failed', e);
     }
@@ -708,6 +709,9 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
             // {plan_id, started_at, items[]} | null
           // Platform the desktop session reports (from /health), for display.
   let desktopPlatform = $state<string | null>(null);
+  let desktopAppVersion = $state<string | null>(null);
+  // Bug reports ask for the version, so show it where people look for it.
+  let versionLabel = $derived(desktopAppVersion ? `v${desktopAppVersion} · ${APP_COMMIT}` : APP_COMMIT);
 
   // One classification for the interrupted batch: an item that was never sent
   // and an item whose send outcome is unknown are different work, and the
@@ -732,6 +736,8 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // and ListingReviewModal's onauthrequired) via this ref, and decides what
   // 'list' means on unlock (open the review modal).
   let wfmAuthDialogsRef = $state<{ open(code: string, next?: string | null): Promise<void> }>();
+  // The last sign-in or unlock failure, kept for a bug report after the dialog closes.
+  let wfmAuthFailure = $state<unknown>(null);
   async function checkListingRequirements() {
     if (inventory.pullingInventory || protection.loading) return;
     if (listingActionLabel === 'Scan game') {
@@ -755,8 +761,8 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   let feedbackDownloadError = $state(false);
   let feedbackGeneration = 0;
   let feedbackFallbackKind = $state<'bug' | 'improvement' | null>(null);
-  const improvementUrl = 'https://github.com/tennoworth/tennoworth/issues/new?template=improvement.yml';
   let bugReport = $derived(feedbackState ? feedbackLink(feedbackState, includeFeedbackState) : null);
+  let reportedProblems = $derived(feedbackState && includeFeedbackState ? feedbackProblems(feedbackState) : []);
 
   let feedbackFallbackUrl = $derived(feedbackFallbackKind === 'bug' ? bugReport?.url : feedbackFallbackKind === 'improvement' ? improvementUrl : null);
 
@@ -764,10 +770,12 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     const generation = ++feedbackGeneration;
     feedbackLoading = true;
     feedbackDownloadError = false;
+    const wfmSession: WfmSession = !listing.wfmStatus ? 'unknown' : listing.wfmStatus.unlocked ? 'unlocked' : listing.wfmStatus.logged_in ? 'locked' : 'logged_out';
     const state = {
-      capturedAt: new Date().toISOString(), build: APP_COMMIT, platform: desktopPlatform,
+      capturedAt: new Date().toISOString(), build: APP_COMMIT, appVersion: desktopAppVersion, platform: desktopPlatform,
       view: showWorkspace ? effectiveView : 'landing', phase: inventory.phase,
       scanning: inventory.pullingInventory, scanError: inventory.error ?? inventory.pullError,
+      autoScan: autoScan.status, wfmSession, wfmError: wfmAuthFailure,
       marketLoaded: !!inventory.market, marketError: inventory.marketLoadError,
       theme: document.documentElement.dataset.mode ?? 'unknown', width: window.innerWidth, height: window.innerHeight,
     };
@@ -844,7 +852,16 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       </a>
     </div>
     <label data-shell class="feedback-check"><input type="checkbox" bind:checked={includeFeedbackState} /> Include app-state snapshot with bug report</label>
-    <p data-shell class="feedback-note">Version, operating system, current screen, scan and update status, error categories, theme, and window size. No account identifiers, credentials, inventory contents, file paths, or game memory.</p>
+    <p data-shell class="feedback-note">Version, operating system, current screen, scan, sign-in and update status, error categories, theme, and window size. No account identifiers, credentials, inventory contents, file paths, or game memory.</p>
+    {#if reportedProblems.length}
+      <div data-shell class="ui-notice feedback-problems" data-tone="warn" data-testid="feedback-problems">
+        <strong data-shell>Included in this report</strong>
+        <ul data-shell>
+          {#each reportedProblems as problem (problem.area)}<li data-shell>{problem.area}: {problem.summary}.</li>{/each}
+        </ul>
+        <span data-shell>Only these categories are sent, not the error text.</span>
+      </div>
+    {/if}
     {#if includeFeedbackState && feedbackState}
       <details data-shell class="feedback-state">
         <summary data-shell>Review app-state snapshot</summary>
@@ -955,7 +972,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         <svg data-shell viewBox="0 0 24 24" aria-hidden="true"><path data-shell d="M4 4h16v12H9l-5 4V4Z" /><path data-shell d="M8 8h8M8 12h5" /></svg>
         Send feedback
       </button>
-      <div data-shell class="ver" title="build {APP_COMMIT}">Windows + Linux · {APP_COMMIT}</div>
+      <div data-shell class="ver" title="build {APP_COMMIT}" data-testid="app-version">{versionLabel}</div>
     </div>
   </aside>
 
@@ -986,7 +1003,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     <span data-shell class="grow">TennoWorth is a fan project, not affiliated with Digital Extremes or warframe.market. Open source · MIT · data from warframe.market and warframestat.us.</span>
     {#if inventory.market?.updated_at}<span data-shell title="When the market snapshot was taken">Snapshot {snapshotStamp}</span>{/if}
     <a data-shell href="#trust">Trust &amp; safety</a>
-    <span data-shell class="ver" title="build {APP_COMMIT}">{APP_COMMIT}</span>
+    <span data-shell class="ver" title="build {APP_COMMIT}">{versionLabel}</span>
     <div data-shell class="foot-theme"><ThemeSwitcher {theme} compact label="Colour mode" /></div>
   </footer>
     {:else}
@@ -1629,7 +1646,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
 />
 
 
-  <WfmAuthDialogs bind:this={wfmAuthDialogsRef} onunlocked={(next) => { listing.handleWfmUnlocked(next); void protection.refresh(); }} />
+  <WfmAuthDialogs bind:this={wfmAuthDialogsRef} onunlocked={(next) => { listing.handleWfmUnlocked(next); void protection.refresh(); }} onautherror={(error) => (wfmAuthFailure = error)} onreport={openFeedback} />
 
 
 <ExportImportDialogs
