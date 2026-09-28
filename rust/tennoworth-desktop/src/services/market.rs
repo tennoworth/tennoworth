@@ -40,6 +40,10 @@ pub struct ArtifactSpec {
     /// Env var that overrides the URL (probes point it at a local mock).
     pub url_env: &'static str,
     pub default_url: &'static str,
+    /// The most body a refresh will read. The body comes from the network and
+    /// decides what the app allocates, so a runaway or hostile response is
+    /// refused rather than buffered whole. Set well above the published size.
+    pub max_bytes: usize,
 }
 
 impl ArtifactSpec {
@@ -55,6 +59,8 @@ pub const MARKET: ArtifactSpec = ArtifactSpec {
     stamp_key: "updated_at",
     url_env: "TENNOWORTH_MARKET_URL",
     default_url: MARKET_URL,
+    // ~3 MB published.
+    max_bytes: 32 * 1024 * 1024,
 };
 
 /// The year-long daily price history (relics.run-derived, built on the box -
@@ -66,6 +72,8 @@ pub const HISTORY: ArtifactSpec = ArtifactSpec {
     stamp_key: "generated_at",
     url_env: "TENNOWORTH_HISTORY_URL",
     default_url: HISTORY_URL,
+    // ~10 MB published.
+    max_bytes: 64 * 1024 * 1024,
 };
 
 /// The result the SPA acts on. `updated` is true only when a validated 200
@@ -177,6 +185,20 @@ pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     std::fs::rename(&tmp, path)
 }
 
+/// Read at most `max` bytes of UTF-8 body; anything longer is an error, not a
+/// truncated body that could still happen to parse.
+fn read_bounded(resp: reqwest::blocking::Response, max: usize) -> Result<String, String> {
+    use std::io::Read;
+    let mut raw = Vec::new();
+    resp.take(max as u64 + 1)
+        .read_to_end(&mut raw)
+        .map_err(|e| e.to_string())?;
+    if raw.len() > max {
+        return Err(format!("body exceeds {max} bytes"));
+    }
+    String::from_utf8(raw).map_err(|e| e.to_string())
+}
+
 /// "Nothing changed" outcome: report the cache's `updated_at` (parsed lazily) and
 /// its ETag, no body. Covers 304, non-200, and every network/IO failure.
 fn keep_cache(dir: &Path, spec: &ArtifactSpec, etag: Option<String>) -> RefreshResult {
@@ -200,8 +222,12 @@ pub fn refresh(dir: &Path) -> RefreshResult {
     refresh_artifact(dir, &MARKET, &MARKET.url())
 }
 
-/// Same routine for history.json (see [`HISTORY`]).
+/// Same routine for history.json (see [`HISTORY`]), under its own lock: two
+/// overlapping refreshes share `history.tmp`, and one renaming it while the
+/// other is still writing would cache a truncated file.
 pub fn refresh_history(dir: &Path) -> RefreshResult {
+    static REFRESH_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _lock = wfm_core::poison::guard(&REFRESH_LOCK);
     refresh_artifact(dir, &HISTORY, &HISTORY.url())
 }
 
@@ -265,7 +291,7 @@ fn refresh_artifact(dir: &Path, spec: &ArtifactSpec, url: &str) -> RefreshResult
         .get(reqwest::header::ETAG)
         .and_then(|v| v.to_str().ok())
         .map(str::to_string);
-    let body = match resp.text() {
+    let body = match read_bounded(resp, spec.max_bytes) {
         Ok(b) => b,
         Err(e) => {
             eprintln!(
@@ -461,6 +487,24 @@ mod tests {
         assert_eq!(std::fs::read_to_string(&p).unwrap(), "second");
         assert!(!p.with_extension("tmp").exists());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_body_over_the_ceiling_is_refused_and_the_cache_kept() {
+        let dir = temp_dir();
+        let cached = r#"{"updated_at":"2026-07-01T00:00:00Z","items":{}}"#;
+        write_atomic(&cache_path(&dir, &MARKET), cached.as_bytes()).unwrap();
+        let (url, handle) = spawn_mock(2);
+        let tight = ArtifactSpec { max_bytes: BODY.len() - 1, ..MARKET };
+
+        let refused = refresh_artifact(&dir, &tight, &url);
+        assert!(!refused.updated, "an oversized body must not be accepted");
+        assert_eq!(read_cache(&dir, &MARKET).as_deref(), Some(cached));
+
+        // Positive control: exactly at the ceiling is still read whole.
+        let exact = ArtifactSpec { max_bytes: BODY.len(), ..MARKET };
+        assert!(refresh_artifact(&dir, &exact, &url).updated);
+        handle.join().unwrap();
     }
 
     #[test]

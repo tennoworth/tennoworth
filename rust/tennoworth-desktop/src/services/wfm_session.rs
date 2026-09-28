@@ -120,6 +120,11 @@ type KeyringHook = fn(KeyringIntent<'_>, bool);
 #[cfg(test)]
 type KeyReadHook = fn() -> Option<[u8; 32]>;
 
+/// Runs inside login's credential section, just before the login file is
+/// written, so a test can start a logout at exactly that boundary.
+#[cfg(test)]
+type PersistHook = fn(&WfmSession);
+
 /// The desktop WFM credential session. One instance is managed by Tauri; every
 /// listing command borrows it via `State`.
 pub struct WfmSession {
@@ -133,6 +138,13 @@ pub struct WfmSession {
     /// generation of the slot. The plaintext JWT lives ONLY inside this
     /// `Arc<Unlocked>` for the session's lifetime.
     inner: Mutex<SessionState>,
+    /// Held across login's generation check and its write of the login file,
+    /// and across logout's removal of that file and its generation advance.
+    /// Either section then wholly precedes the other: a login writes before the
+    /// logout removes, or sees the logout's generation and writes nothing.
+    /// Without it a logout landing between the check and the write had its
+    /// removal undone. Taken before `inner`, never while holding it.
+    credential_file: Mutex<()>,
     /// Serializes plan execution: a second concurrent `execute_plan` /
     /// `resume_pending_plan` gets `busy` instead of racing on the pending file.
     plan_running: AtomicBool,
@@ -152,6 +164,8 @@ pub struct WfmSession {
     keyring_hook: Option<KeyringHook>,
     #[cfg(test)]
     key_read_hook: Option<KeyReadHook>,
+    #[cfg(test)]
+    persist_hook: Option<PersistHook>,
 }
 
 #[derive(Default)]
@@ -196,6 +210,7 @@ impl WfmSession {
             jwt_path,
             pending_path,
             inner: Mutex::new(SessionState::default()),
+            credential_file: Mutex::new(()),
             plan_running: AtomicBool::new(false),
             plan_requests: Arc::new(Mutex::new(PlanRequests::default())),
             use_keyring,
@@ -205,6 +220,8 @@ impl WfmSession {
             keyring_hook: None,
             #[cfg(test)]
             key_read_hook: None,
+            #[cfg(test)]
+            persist_hook: None,
         }
     }
 
@@ -220,12 +237,14 @@ impl WfmSession {
             jwt_path,
             pending_path: key_dir.join("pending_plan.json"),
             inner: Mutex::new(SessionState::default()),
+            credential_file: Mutex::new(()),
             plan_running: AtomicBool::new(false),
             plan_requests: Arc::new(Mutex::new(PlanRequests::default())),
             use_keyring: false,
             warm_hook: None,
             keyring_hook: None,
             key_read_hook: None,
+            persist_hook: None,
         }
     }
 
@@ -343,6 +362,7 @@ impl WfmSession {
                 )))
             }
         }
+        let credential = guard(&self.credential_file);
         if let Err(error) = fs::remove_file(&self.jwt_path) {
             if error.kind() != std::io::ErrorKind::NotFound {
                 return Err(CmdError::internal(format!(
@@ -363,6 +383,7 @@ impl WfmSession {
             })?;
             (state.unlocked.take(), state.generation)
         };
+        drop(credential);
         if let Some(arc) = taken {
             if let Ok(mut unlocked) = Arc::try_unwrap(arc) {
                 unlocked.jwt.zeroize();
@@ -567,16 +588,22 @@ impl WfmSession {
         let encrypted = encrypt_jwt(&jwt, passphrase, platform).map_err(CmdError::internal)?;
         // A logout that completed while this login was authenticating removed the
         // saved credential; recreating it here would hand the next launch a login
-        // the user just discarded. Checked as late as possible, but this is still
-        // a check-then-write: a logout landing between the two re-adds the file,
-        // and the session stays locked out until the next explicit sign-in.
-        if self.session_generation() != generation {
-            return Err(CmdError::of(
-                "session_changed",
-                "The session changed while signing in. Sign in again.",
-            ));
+        // the user just discarded. The credential section makes the check and the
+        // write one step against logout's removal.
+        {
+            let _credential = guard(&self.credential_file);
+            if self.session_generation() != generation {
+                return Err(CmdError::of(
+                    "session_changed",
+                    "The session changed while signing in. Sign in again.",
+                ));
+            }
+            #[cfg(test)]
+            if let Some(hook) = self.persist_hook {
+                hook(self);
+            }
+            self.persist(&encrypted)?;
         }
-        self.persist(&encrypted)?;
 
         // Warm the session with the in-hand JWT (no redundant decrypt). If the
         // catalog warm fails the JWT is already saved, so a later listing action
@@ -811,6 +838,7 @@ mod tests {
             jwt_path,
             pending_path: pending,
             inner: Mutex::new(SessionState::default()),
+            credential_file: Mutex::new(()),
             plan_running: AtomicBool::new(false),
             plan_requests: Arc::new(Mutex::new(PlanRequests::default())),
             // Tests must never read or write the developer's real OS keyring.
@@ -818,6 +846,7 @@ mod tests {
             warm_hook: None,
             keyring_hook: None,
             key_read_hook: None,
+            persist_hook: None,
         }
     }
 
@@ -1334,6 +1363,43 @@ mod tests {
         assert_eq!(session.auth_status(), (true, true));
         assert!(session.require_unlocked().is_ok(), "the session is usable");
         let _ = fs::remove_file(&path);
+    }
+
+    /// A logout that starts after login's generation check but before its write
+    /// must not end with the login file back on disk. The hook starts the logout
+    /// on another thread at that boundary and gives it time to finish; without
+    /// the credential section it does, and the write then re-creates the file.
+    #[test]
+    fn logout_at_the_login_write_boundary_leaves_no_saved_login() {
+        use std::sync::OnceLock;
+        use std::thread::JoinHandle;
+        static SESSION: OnceLock<Arc<WfmSession>> = OnceLock::new();
+        static LOGOUT: Mutex<Option<JoinHandle<Result<(), CmdError>>>> = Mutex::new(None);
+        fn logout_at_write(_: &WfmSession) {
+            let session = Arc::clone(SESSION.get().expect("session is registered"));
+            *guard(&LOGOUT) = Some(std::thread::spawn(move || session.logout()));
+            std::thread::sleep(std::time::Duration::from_millis(300));
+        }
+        fn successful_warm(_: &WfmSession, jwt: String, platform: String) -> Result<Unlocked, CmdError> {
+            let mut prepared = dummy_unlocked();
+            prepared.jwt = jwt;
+            prepared.platform = platform;
+            Ok(prepared)
+        }
+
+        let path = tmp_path("logout-at-login-write");
+        let mut session = session_with(path.clone());
+        session.warm_hook = Some(successful_warm);
+        session.persist_hook = Some(logout_at_write);
+        let session = SESSION.get_or_init(|| Arc::new(session));
+        let generation = session.session_generation();
+
+        let _ = session.login(generation, "header.payload.sig".into(), "a-long-enough-passphrase", "pc", false);
+        let logout = guard(&LOGOUT).take().expect("the hook started a logout");
+        logout.join().expect("logout thread").expect("logout succeeds");
+
+        assert!(!path.exists(), "the logout's removal must not be undone by the login");
+        assert_eq!(session.auth_status(), (false, false));
     }
 }
 
