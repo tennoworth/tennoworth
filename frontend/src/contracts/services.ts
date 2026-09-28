@@ -3,12 +3,8 @@ import type { UpdateNotesServices, UpdateStatus } from './update';
 import type { EncryptedBlob } from './encrypted-snapshot';
 import type { Inventory, Market, OwnedRecord } from './data';
 import type { Catalogs } from '../domain/resolver';
-import type { Verdict } from '../domain/advisor';
-import type { SessionCandidate, selectSession } from '../domain/trade-session';
-import type { BuildPath, BuildPlan, RecipeEntry, SetPart } from '../domain/build-cost';
-import type { DucatPlan, ScrapCandidate } from '../domain/ducat-plan';
-import type { RelicPlanEntry } from '../domain/relic-planner';
-import type { SetReco } from '../domain/set-recos';
+import type { SessionCandidate, SessionPlan } from '../domain/trade-session';
+import type { BuildPath, BuildPlan, DucatPlan, RecipeEntry, RelicPlanEntry, ScrapCandidate, SetPart, SetReco, Verdict } from './generated/domain';
 import type { AdvisorRequest, SessionRequest, ScoredInventoryFact } from './generated/domain';
 export const DESKTOP_CONTEXT = 'tennoworth.desktop';
 export interface DesktopServices extends UpdateNotesServices {
@@ -16,7 +12,7 @@ export interface DesktopServices extends UpdateNotesServices {
   normalizeInventoryNative(data: Inventory, catalogs: Catalogs, market: Market): Promise<{ owned: Map<string, OwnedRecord>; unresolved: Record<string, number>; flatCount: number }>;
   scoreInventoryNative(owned: Map<string, OwnedRecord>, market: Market, reserveCopies: number, sparesOnly: boolean, availability?: ReadonlyMap<string, number>): Promise<Map<string, ScoredInventoryFact>>;
   evaluateAdvisor(request: AdvisorRequest): Promise<Record<string, Verdict>>;
-  evaluateTradeSession(request: Omit<SessionRequest, 'candidates'> & { candidates: SessionCandidate[] }): Promise<ReturnType<typeof selectSession>>;
+  evaluateTradeSession(request: Omit<SessionRequest, 'candidates'> & { candidates: SessionCandidate[] }): Promise<SessionPlan>;
   relicPlan(owned: Map<string, OwnedRecord> | null, market: Market | null, limit?: number): Promise<RelicPlanEntry[]>;
   setRecos(owned: Map<string, OwnedRecord> | null, market: Market | null, limit?: number): Promise<SetReco[]>;
   ducatPlan(owned: Map<string, OwnedRecord> | null, market: Market | null, target: number, keepAbove?: number, availability?: ReadonlyMap<string, number>): Promise<{ candidates: ScrapCandidate[]; plan: DucatPlan }>;

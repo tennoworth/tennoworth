@@ -1,6 +1,6 @@
 import notesSample from '../../../tests/fixtures/update-notes/status.json';
 import defaults from '../../../tests/fixtures/pacing.json';
-import { evaluateDomainPreview } from './domain-preview';
+import { loadDomainEvaluator } from './domain-wasm';
 import type { DomainRequest } from '../contracts/generated/domain';
 import type { UpdateStatus } from '../contracts/update';
 import { sampleAllocation, sampleGuidance } from './protection-preview';
@@ -8,6 +8,10 @@ import type { ProtectionInventory, ProtectionPlan } from '../contracts/protectio
 import type { OwnedRecord } from '../contracts/data';
 export async function installPreview() {
   const scenario = new URLSearchParams(location.search).get('sample');
+  // Loaded once; a missing build rejects each calculation with how to build
+  // it, while the rest of the preview keeps working.
+  const domain = loadDomainEvaluator();
+  domain.catch(error => console.error(error));
   const preview = scenario !== null
     ? (await import('./preview-data')).createPreview(scenario || 'populated')
     : null;
@@ -57,7 +61,7 @@ export async function installPreview() {
     if (cmd === 'update_notes') return Promise.resolve(structuredClone(notes));
     if (cmd === 'update_notes_can_present') return Promise.resolve(true);
     if (cmd === 'acknowledge_update_notes') { notes.auto_show = false; return Promise.resolve(null); }
-    if (cmd === 'evaluate_domain') return Promise.resolve().then(() => evaluateDomainPreview(args?.request as DomainRequest));
+    if (cmd === 'evaluate_domain') return domain.then(evaluate => evaluate(args?.request as DomainRequest));
     if (args?.key === 'routine-checklist') {
       if (cmd === 'get_setting') return Promise.resolve(localStorage.getItem('routine-checklist'));
       if (cmd === 'set_setting') { localStorage.setItem('routine-checklist', String(args.value)); return Promise.resolve(null); }

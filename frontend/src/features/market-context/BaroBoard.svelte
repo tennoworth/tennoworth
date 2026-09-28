@@ -10,7 +10,7 @@
   // is the question, and his shelf order answers a different one.
   import { byPlatPerDucat, ducatBasket, priceManifest, stockIsCurrent } from '../../domain/baro-board';
   import type { BaroVerdict } from '../../domain/baro-board';
-  import type { DucatPlan, ScrapCandidate } from '../../domain/ducat-plan';
+  import type { DucatPlan, ScrapCandidate } from '../../contracts/generated/domain';
   import { useDesktopServices } from '../../ui/desktop-context';
   const { ducatPlan } = useDesktopServices();
   import { glyphFor } from '../../ui/glyphs';

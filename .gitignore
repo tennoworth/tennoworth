@@ -4,6 +4,8 @@ target/
 **/target/
 dist/
 frontend/test-results/
+# The preview's wasm32 build of rust/market-domain-wasm (bun run build:domain-wasm).
+frontend/src/dev/generated/
 .playwright-mcp/
 *.tmp
 rust_out

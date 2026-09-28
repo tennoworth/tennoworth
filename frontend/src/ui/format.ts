@@ -73,3 +73,13 @@ export function keptNoteTitle(keptPart: number): string {
   return `${keptPart} cop${keptPart === 1 ? 'y' : 'ies'} held back by the Keep copies reserve - not counted as sellable.`;
 }
 
+
+/** "3d 12h" - foundry time in the units the game shows. */
+export function humanBuildTime(seconds: number): string {
+  if (seconds <= 0) return 'instant';
+  const hours = Math.round(seconds / 3600);
+  const days = Math.floor(hours / 24);
+  const rem = hours % 24;
+  if (days > 0) return rem > 0 ? `${days}d ${rem}h` : `${days}d`;
+  return `${hours}h`;
+}

@@ -38,7 +38,7 @@ import { NOTIFICATIONS_EVENT, MARKET_REFRESHED_EVENT, ALLOWANCE_CHANGED_EVENT } 
   import RoutinesPanel from '../features/routines/RoutinesPanel.svelte';
   import { RoutineController } from '../features/routines/controller.svelte';
   import { resolveRivens } from '../domain/rivens';
-  import type { Verdict } from '../domain/advisor';
+  import type { RelicPlanEntry, SetReco, Verdict } from '../contracts/generated/domain';
   import type { ScoredInventoryFact } from '../contracts/generated/domain';
   import { DomainResult } from '../features/selling/domain-result.svelte';
   import { buildMetaDrift } from '../domain/meta-drift';
@@ -50,8 +50,6 @@ import { startMarketRefreshLoop, type MarketRefreshLoop } from '../adapters/mark
   import { interruptedBatch } from '../domain/listing-plan';
 
   const APP_COMMIT = __APP_COMMIT__;
-  import type { SetReco } from '../domain/set-recos';
-  import type { RelicPlanEntry } from '../domain/relic-planner';
   import type { StateStore } from '../contracts/state-store';
   import type { ThemeController } from '../ui/theme';
 

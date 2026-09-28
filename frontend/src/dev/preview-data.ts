@@ -1,5 +1,3 @@
-import { evaluateDomainPreview } from './domain-preview';
-import type { DomainRequest } from '../contracts/generated/domain';
 import type { OwnedRiven } from '../domain/rivens';
 import { serializeSnapshot } from '../domain/snapshot';
 import { sampleAllocation, sampleGuidance } from './protection-preview';
@@ -113,7 +111,6 @@ export function createPreview(scenario: string) {
     wfm_auth_status: { logged_in: scenario !== 'logged-out', unlocked: scenario !== 'logged-out' },
   };
   return async (command: string, args?: Record<string, unknown>): Promise<unknown> => {
-    if (command === 'evaluate_domain') return evaluateDomainPreview(args?.request as DomainRequest);
     if (command === 'save_protection_plan') {
       if (scenario === 'protection-save-error') throw new Error('Sample protection save failed. Your edits are retained.');
       protectionPlan = JSON.parse(JSON.stringify(args?.plan)) as ProtectionPlan;

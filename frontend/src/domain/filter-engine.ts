@@ -11,7 +11,7 @@ import type { ScoredInventoryFact } from '../contracts/generated/domain';
 import { lookup } from './market';
 import { readDemand } from './demand';
 import { clearingPrice, scoreRow, bandSignal, sellableQty, spareQty, LIQUID_VOL } from './sell-priority';
-import type { Verdict } from './advisor';
+import type { Verdict } from '../contracts/generated/domain';
 import type { Market, MarketItemEntry, OwnedRecord } from '../contracts/data';
 
 export interface FilterState {

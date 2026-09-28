@@ -15,6 +15,7 @@
     "test:watch": "vitest",
     "test:responsive": "playwright test --project=chromium",
     "test:responsive:all": "playwright test",
+    "build:domain-wasm": "bun ../scripts/build-domain-wasm.ts",
     "check": "svelte-check",
     "knip": "knip && knip --production",
     "csp": "bun ../scripts/sync-csp.ts"

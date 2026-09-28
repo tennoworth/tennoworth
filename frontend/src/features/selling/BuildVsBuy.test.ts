@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/svelte';
 import { DESKTOP_CONTEXT } from '../../contracts/services';
-import type { BuildPlan } from '../../domain/build-cost';
+import type { BuildPlan } from '../../contracts/generated/domain';
 import BuildVsBuy from './BuildVsBuy.svelte';
 afterEach(cleanup);
 const props = { setSlug: 'a', setName: 'A', parts: [], market: null };

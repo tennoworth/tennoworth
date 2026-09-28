@@ -83,6 +83,13 @@ jobs:
               - 'frontend/public/wfstat-catalog.json'
               - 'frontend/public/definitions.json'
               - '.node-version'
+              # The desktop preview the browser suite drives runs these, built
+              # to wasm32 by scripts/build-domain-wasm.ts.
+              - 'rust/market-domain/**'
+              - 'rust/market-domain-wasm/**'
+              - 'rust/market-math/**'
+              - 'rust/Cargo.lock'
+              - 'scripts/build-domain-wasm.ts'
               - 'scripts/sync-csp.ts'
               - 'tests/fixtures/**'
             frontend_deps:
@@ -219,6 +226,14 @@ jobs:
           key: ${{ steps.playwright-cache.outputs.cache-primary-key }}
       - name: tests
         run: bun run test
+      # The browser suite drives ?preview-desktop, whose calculations are the
+      # native crate compiled to wasm32. Built here rather than committed, so the
+      # suite always runs the current market-domain.
+      - uses: ./.github/actions/setup-rust
+      - name: Build the preview's native calculations
+        run: |
+          rustup target add wasm32-unknown-unknown
+          bun run build:domain-wasm
       - name: responsive browser gate
         run: bun run test:responsive:all
       - name: Upload responsive failure evidence

@@ -10,13 +10,8 @@
   // inventory scan sees tradeable items, not Orokin Cells, so claiming a build
   // is cheaper while silently assuming a full foundry would be wrong for
   // exactly the players who most need the answer.
-  import {
-    humanBuildTime,
-    type BuildPath,
-    type BuildPlan,
-    type BuildPathKind,
-    type SetPart,
-  } from '../../domain/build-cost';
+  import type { BuildPath, BuildPlan, BuildPathKind, SetPart } from '../../contracts/generated/domain';
+  import { humanBuildTime } from '../../ui/format';
   import { useDesktopServices } from '../../ui/desktop-context';
   const { buildPlan } = useDesktopServices();
   import { glyphFor } from '../../ui/glyphs';

@@ -1,6 +1,6 @@
 import { resolveInvoke, rethrowInvoke } from './runtime';
 import type { DomainRequest, DomainResponse, AdvisorRequest, SessionRequest } from '../contracts/generated/domain';
-import type { SessionCandidate, selectSession } from '../domain/trade-session';
+import type { SessionCandidate, SessionPlan } from '../domain/trade-session';
 
 type Operation = DomainRequest['operation'];
 type Input<K extends Operation> = Extract<DomainRequest, { operation: K }>['input'];
@@ -14,7 +14,7 @@ export async function callDomain<K extends Operation>(operation: K, input: Input
   } catch (error) { rethrowInvoke(error); }
 }
 
-export async function evaluateTradeSession(request: Omit<SessionRequest, 'candidates'> & { candidates: SessionCandidate[] }): Promise<ReturnType<typeof selectSession>> {
+export async function evaluateTradeSession(request: Omit<SessionRequest, 'candidates'> & { candidates: SessionCandidate[] }): Promise<SessionPlan> {
   const result = await callDomain('trade_session', { ...request, candidates: request.candidates.map(row => ({ ...row, subtype: row.subtype ?? undefined })) });
   const candidates = new Map(request.candidates.map(row => [row.key, row]));
   const rows = result.rows.map(row => {

@@ -9,7 +9,8 @@
   //
   // Every figure is a SOLO crack. Said out loud, because a squad of four
   // changes the maths and a reader would otherwise assume whichever suits them.
-  import { REFINE_WORTH_IT, type RelicDecision } from '../../domain/relic-ev';
+  import { REFINE_WORTH_IT } from '../../domain/relic-ev';
+  import type { RelicDecision } from '../../contracts/generated/domain';
 
   let { decision }: { decision: RelicDecision } = $props();
 

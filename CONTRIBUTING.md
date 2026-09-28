@@ -6,9 +6,10 @@ more reliable, or easier to maintain.
 
 ## Start with the smallest working environment
 
-For documentation, frontend work, and browser previews, you need Git and Bun.
-Use the committed `frontend/bun.lock`; do not create another package lock.
-Rust is only needed when working on native code or the market pipeline.
+For documentation, frontend work, and the hosted-site preview, you need Git and
+Bun. Use the committed `frontend/bun.lock`; do not create another package lock.
+Rust is needed for native code, the market pipeline, and the desktop preview
+below.
 
 Fork the repository if you do not have write access, clone your fork, and add
 the project as an upstream remote. Branch from the latest upstream `develop`:
@@ -36,6 +37,15 @@ build host, or maintainer configuration is not required.
 | `/?preview-desktop&sample=loading` | Delayed responses |
 | `/?preview-desktop&sample=logged-out` | Authentication-required states |
 | `/?styleguide` | Living design reference, both themes, controls, and editable dialog |
+
+The `?preview-desktop` URLs compute with the native planners compiled to
+WebAssembly. Build them once, and again after changing `rust/market-domain`,
+with Rust and its `wasm32-unknown-unknown` target
+(`rustup target add wasm32-unknown-unknown`):
+
+```sh
+bun run build:domain-wasm
+```
 
 Sample account operations are simulated and reset on reload. These development
 surfaces are excluded from production. They do not prove native capture,
@@ -110,6 +120,7 @@ bun audit --audit-level=moderate
 bun run build
 bun run build:desktop
 bunx playwright install --with-deps chromium webkit
+bun run build:domain-wasm
 bun run test:responsive:all
 ```
 
