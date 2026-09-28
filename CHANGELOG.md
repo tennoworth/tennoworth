@@ -54,6 +54,35 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.3 - 2026-09-28
+
+# 🔧 TennoWorth Desktop 0.8.3
+
+TennoWorth Desktop 0.8.3 fixes a batch of small but misleading things.
+
+The Baro countdown now keeps counting while the app stays open, the vault advice and the "vaulting soon" tag finally agree, and automatic scans that find nothing new no longer pile up copies of your inventory or throw away a batch you are reviewing. Signing out now always sticks.
+
+## Changelog (6)
+
+### Baro and vaulting
+
+- **The Baro countdown keeps counting** The arrival and departure countdowns now update every minute and flip to "here" on time, instead of freezing until the next market refresh. <!-- app-note {"id":"baro-countdown-ticks","kind":"fixed"} -->
+- **Vault advice matches the "vaulting soon" tag** Hold advice before a vault now uses the same 60-day window as the "vaulting soon" tag and the Vaulted filter, so every held item shows up there. Items further out are no longer marked hold. <!-- app-note {"id":"vault-soon-60-days","kind":"improved"} -->
+
+### Inventory and scans
+
+- **Repeated scans no longer pile up** A scan that finds exactly the same inventory as the last one updates its time instead of saving another full copy, so a long session with automatic scans no longer grows the local database. <!-- app-note {"id":"identical-scans-reused","kind":"improved"} -->
+- **A quiet scan leaves your review alone** An automatic scan that finds nothing new no longer forces you to prepare a listing batch again. <!-- app-note {"id":"identical-scan-keeps-review","kind":"fixed"} -->
+- **Imports no longer show old Rivens** Importing an inventory file clears the Rivens from your previous scan instead of listing them beside the imported items. <!-- app-note {"id":"import-clears-rivens","kind":"fixed"} -->
+
+### Sign-in
+
+- **Signing out always sticks** Signing out while a sign-in was still finishing could bring the saved login back on the next launch. It now stays signed out, and a warframe.market outage during sign-in reports the outage rather than a confusing parse error. <!-- app-note {"id":"sign-out-sticks","kind":"fixed"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.8.2 - 2026-09-28
 
 # 🐧 TennoWorth Desktop 0.8.2

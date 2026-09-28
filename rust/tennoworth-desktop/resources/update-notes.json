@@ -1,5 +1,5 @@
 {
-  "version": "0.8.2",
+  "version": "0.8.3",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -481,6 +481,78 @@
           "kind": "improved",
           "title": "Settings shows the next scan too",
           "body": "After an automatic scan, the status line shows when the last scan ran and when the next one is due.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.3",
+      "date": "2026-09-28",
+      "changes": [
+        {
+          "id": "baro-countdown-ticks",
+          "kind": "fixed",
+          "title": "The Baro countdown keeps counting",
+          "body": "The arrival and departure countdowns now update every minute and flip to \"here\" on time, instead of freezing until the next market refresh.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "vault-soon-60-days",
+          "kind": "improved",
+          "title": "Vault advice matches the \"vaulting soon\" tag",
+          "body": "Hold advice before a vault now uses the same 60-day window as the \"vaulting soon\" tag and the Vaulted filter, so every held item shows up there. Items further out are no longer marked hold.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "identical-scans-reused",
+          "kind": "improved",
+          "title": "Repeated scans no longer pile up",
+          "body": "A scan that finds exactly the same inventory as the last one updates its time instead of saving another full copy, so a long session with automatic scans no longer grows the local database.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "identical-scan-keeps-review",
+          "kind": "fixed",
+          "title": "A quiet scan leaves your review alone",
+          "body": "An automatic scan that finds nothing new no longer forces you to prepare a listing batch again.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "import-clears-rivens",
+          "kind": "fixed",
+          "title": "Imports no longer show old Rivens",
+          "body": "Importing an inventory file clears the Rivens from your previous scan instead of listing them beside the imported items.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "sign-out-sticks",
+          "kind": "fixed",
+          "title": "Signing out always sticks",
+          "body": "Signing out while a sign-in was still finishing could bring the saved login back on the next launch. It now stays signed out, and a warframe.market outage during sign-in reports the outage rather than a confusing parse error.",
           "platforms": [
             "windows",
             "linux"
