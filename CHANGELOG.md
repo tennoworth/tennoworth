@@ -54,6 +54,25 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.2 - 2026-09-28
+
+# 🐧 TennoWorth Desktop 0.8.2
+
+TennoWorth Desktop 0.8.2 makes automatic scanning work on Linux.
+
+Automatic scanning, added in 0.7.107, never started while Warframe ran under Proton. Settings kept promising a scan a minute away, and the inventory stayed on your last manual scan. The app now finds the game reliably, so scans run on the cadence you chose and the inventory updates on its own.
+
+## Changelog (2)
+
+### Automatic scan
+
+- **Automatic scans run on Linux** With the game running under Proton, the app now recognises it as the same game from one check to the next, so the scheduled scan actually happens and the inventory header shows the new scan time. <!-- app-note {"id":"auto-scan-linux-detection","kind":"fixed","platforms":["linux"]} -->
+- **Settings shows the next scan too** After an automatic scan, the status line shows when the last scan ran and when the next one is due. <!-- app-note {"id":"auto-scan-status-next","kind":"improved"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.8.1 - 2026-09-27
 
 # 🐞 TennoWorth Desktop 0.8.1
