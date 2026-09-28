@@ -34,12 +34,28 @@ pub struct SessionInfo {
 pub fn find_wf_pid() -> Option<u32> {
     let mut sys = System::new();
     sys.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
-    for (pid, process) in sys.processes() {
-        if matches_warframe(process) {
-            return Some(pid.as_u32());
-        }
-    }
-    None
+    pick_game_pid(
+        sys.processes()
+            .values()
+            .filter(|process| matches_warframe(process))
+            .map(|process| (process.pid().as_u32(), process.thread_kind().is_some())),
+    )
+}
+
+/// Choose the game's pid from `(pid, is_thread)` matches.
+///
+/// On Linux sysinfo lists every thread as its own entry, and under Proton
+/// dozens of the game's threads share the `Warframe.x64.ex` comm. Returning the
+/// first hit of a randomly ordered map gave a different thread id on almost
+/// every call, so the automatic scanner saw a "new" game each tick and kept
+/// restarting its settling delay - it never scanned. Threads are skipped, and
+/// the lowest remaining pid makes the answer stable across calls.
+fn pick_game_pid(matches: impl IntoIterator<Item = (u32, bool)>) -> Option<u32> {
+    matches
+        .into_iter()
+        .filter(|&(_, is_thread)| !is_thread)
+        .map(|(pid, _)| pid)
+        .min()
 }
 
 pub fn matches_warframe(p: &sysinfo::Process) -> bool {
@@ -886,6 +902,22 @@ mod tests {
                 ))
             })
             .collect()
+    }
+
+    /// The automatic scanner treats a changed pid as a relaunched game, so every
+    /// ordering of the same process table must name the same pid.
+    #[test]
+    fn game_pid_ignores_threads_and_is_order_independent() {
+        let table = [(17100, true), (17046, false), (17052, true), (17488, true)];
+        let reversed: Vec<_> = table.iter().rev().copied().collect();
+        assert_eq!(pick_game_pid(table), Some(17046));
+        assert_eq!(pick_game_pid(reversed), Some(17046));
+    }
+
+    #[test]
+    fn game_pid_is_none_when_only_threads_match() {
+        assert_eq!(pick_game_pid([(17052, true)]), None);
+        assert_eq!(pick_game_pid([]), None);
     }
 
     const SAMPLE: &[u8] =
