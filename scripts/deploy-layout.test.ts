@@ -134,8 +134,11 @@ describe.skipIf(process.platform === 'win32')('signed policy bootstrap', () => {
   });
 });
 
-describe('usage collector rollback', () => {  for (const failure of ['restart', 'health']) {
-    test(`restores the preceding binary after ${failure} failure`, () => {
+describe('usage collector rollback', () => {
+  // `busy` is one 503 while the store lock is held by a check-in or the
+  // maintenance tick: a healthy upgrade, which must not be rolled back.
+  for (const failure of ['restart', 'health', 'busy'] as const) {
+    test(failure === 'busy' ? 'keeps the new binary when the first health probe finds the store busy' : `restores the preceding binary after ${failure} failure`, () => {
       const root = mkdtempSync(join(tmpdir(), 'usage-pull-'));
       directories.push(root);
       const deploy = join(root, 'deploy');
@@ -147,7 +150,7 @@ describe('usage collector rollback', () => {  for (const failure of ['restart', 
       writeFileSync(join(root, 'pull.sh'), source.replaceAll('/srv/wfm', deploy));
       writeFileSync(join(mocks, 'curl'), `#!/bin/sh
 case "$*" in
-  *'/health'*) exit ${failure === 'health' ? 1 : 0};;
+  *'/health'*) ${failure === 'busy' ? `[ -f '${root}/probed' ] && exit 0; touch '${root}/probed'; exit 22` : `exit ${failure === 'health' ? 1 : 0}`};;
 esac
 for arg do previous="$last"; last="$arg"; done
 case "$last" in
@@ -166,6 +169,11 @@ exit 0
 `);
       for (const command of ['curl', 'sha256sum', 'sleep', 'systemctl']) chmodSync(join(mocks, command), 0o755);
       const result = spawnSync('sh', [join(root, 'pull.sh')], { env: { ...process.env, PATH: `${mocks}:${process.env.PATH}` }, encoding: 'utf8' });
+      if (failure === 'busy') {
+        expect(result.status, result.stderr).toBe(0);
+        expect(readFileSync(join(deploy, 'bin/tennoworth-usage'), 'utf8')).toBe('new-binary');
+        return;
+      }
       expect(result.status).toBe(1);
       expect(result.stderr).toContain('Usage collector health check failed');
       expect(readFileSync(join(deploy, 'bin/tennoworth-usage'), 'utf8')).toBe('old-binary');
@@ -384,9 +392,10 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
   } else {
     write(join(wfm, 'policy/wfm-policy.json'), '{}');
     // The readiness check runs once as part of a deploy, and its verdict gates the
-    // deploy; this is the report a sound box would have produced. HOST_ROOT is the
-    // fixture's /srv/wfm, which the check's --out also points at in production.
-    write(join(wfm, 'data/observations-check/report.json'), '{"ready": true, "errors": []}');
+    // deploy; this is the report a sound box would produce. The systemctl stub
+    // writes it when the check is started, to HOST_ROOT - the fixture's /srv/wfm,
+    // which the check's --out also points at in production.
+    writeFileSync(join(root, 'check-report.json'), '{"ready": true, "errors": []}');
   }
 
   write(join(root, 'artifacts/wfm-scrape'), '#!/bin/sh\nprintf "usage: wfm-scrape\\n"\n');
@@ -535,6 +544,16 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
       'fi',
     );
   }
+  if (!options.runCheck) {
+    // Stands in for the check itself: it writes the report the test prepared,
+    // or none at all when the test removed it.
+    systemctl.push(
+      'if [ "$1" = "start" ] && [ "$2" = "wfm-observations-check.service" ] && [ -f "$FIXTURE_ROOT/check-report.json" ]; then',
+      '  mkdir -p "$FIXTURE_REPORT_DIR"',
+      '  cp "$FIXTURE_ROOT/check-report.json" "$FIXTURE_REPORT_DIR/report.json"',
+      'fi',
+    );
+  }
   systemctl.push(
     'if [ "$1" = "start" ] && [ "${FIXTURE_START_FAIL:-0}" = 1 ]; then exit 1; fi',
     'exit 0',
@@ -556,6 +575,7 @@ function scrapeDeployFixture(options: { states?: string[]; env?: Record<string, 
       FIXTURE_ROOT: root, FIXTURE_LIVE: live, FIXTURE_ORDER: order, FIXTURE_STATES: states,
       ...(options.runCheck ? { FIXTURE_JOURNAL: join(root, 'journal') } : {}),
       FIXTURE_SYSTEMCTL: join(root, 'systemctl.log'),
+      FIXTURE_REPORT_DIR: join(wfm, 'data/observations-check'),
       ...options.env, ...env,
     }),
   });
@@ -681,7 +701,7 @@ describe.skipIf(process.platform === 'win32')('host-direct scrape deploy failure
     // The installer is where the readiness gate is enforced, so it cannot be
     // passed by ignoring it.
     const f = scrapeDeployFixture();
-    writeFileSync(join(f.wfm, 'data/observations-check/report.json'), '{"ready": false, "errors": ["a partial observation log is 300 minutes old"]}');
+    writeFileSync(join(f.root, 'check-report.json'), '{"ready": false, "errors": ["a partial observation log is 300 minutes old"]}');
     const result = f.run();
     expect(result.status, result.stderr).not.toBe(0);
     expect(result.stderr).toContain('does not pass on the box');
@@ -689,7 +709,19 @@ describe.skipIf(process.platform === 'win32')('host-direct scrape deploy failure
 
   test('a first check that produced no report at all fails the install', () => {
     const f = scrapeDeployFixture();
-    rmSync(join(f.wfm, 'data/observations-check/report.json'));
+    rmSync(join(f.root, 'check-report.json'));
+    const result = f.run();
+    expect(result.status, result.stderr).not.toBe(0);
+    expect(result.stderr).toContain('produced no report');
+  });
+
+  test('a ready report left by an earlier deploy does not pass a check that wrote none', () => {
+    // The check exits non-zero when not ready, so its start failure is ignored
+    // and the report is the verdict. A report from before this deploy must not
+    // stand in for one this check never wrote.
+    const f = scrapeDeployFixture();
+    write(join(f.wfm, 'data/observations-check/report.json'), '{"ready": true, "errors": []}');
+    rmSync(join(f.root, 'check-report.json'));
     const result = f.run();
     expect(result.status, result.stderr).not.toBe(0);
     expect(result.stderr).toContain('produced no report');

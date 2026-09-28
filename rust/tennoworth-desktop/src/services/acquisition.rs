@@ -63,7 +63,7 @@ pub(crate) fn record_snapshot(
 ) -> Result<i64, String> {
     let items = crate::persistence::snapshot::extract_items(bytes)
         .map_err(|e| format!("parse inventory for snapshot: {e}"))?;
-    db.insert_snapshot(source, None, game_version, &items)
+    db.record_snapshot(source, game_version, &items)
         .map_err(|e| format!("insert snapshot: {e}"))
 }
 

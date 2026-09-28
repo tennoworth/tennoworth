@@ -176,6 +176,26 @@ export function ducatBasket(rows: BaroRow[], scrapPotential: number): DucatBaske
 }
 
 /**
+ * Where a visit sits relative to `now`, with the time left in that phase.
+ * `now` is a parameter so a view can pass its ticking clock: read inside a
+ * `$derived`, `Date.now()` is not tracked, and the countdown froze until the
+ * snapshot next changed.
+ */
+export function baroPhase(
+  activation: string | undefined,
+  expiry: string | undefined,
+  now: number,
+): { phase: 'here' | 'incoming' | 'unknown'; windowMs: number | null } {
+  const start = activation ? Date.parse(activation) : NaN;
+  const end = expiry ? Date.parse(expiry) : NaN;
+  if (Number.isFinite(end) && now < end && Number.isFinite(start) && now >= start) {
+    return { phase: 'here', windowMs: end - now };
+  }
+  if (Number.isFinite(start) && now < start) return { phase: 'incoming', windowMs: start - now };
+  return { phase: 'unknown', windowMs: null };
+}
+
+/**
  * Whether the stock on screen belongs to the visit on screen.
  *
  * The surface can legitimately carry a PAST visit's stock: the old upstream

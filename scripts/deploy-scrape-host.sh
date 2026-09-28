@@ -322,6 +322,11 @@ $SSH "$HOST" "systemctl enable --now wfm-observations-check.timer"
 # ---- 10. run the check once ------------------------------------------------
 # A check that leaves no report at all means the installed units are broken, and
 # a check that is not ready means the box is not ready to be left unattended.
+# The start's own status is ignored because a not-ready check exits non-zero, so
+# the report is the only verdict - and one left by an earlier run would stand in
+# for a check that never wrote one. Remove it first.
+$SSH "$HOST" "rm -f '$HOST_ROOT/data/observations-check/report.json'" \
+  || die "could not clear the previous readiness report"
 $SSH "$HOST" "systemctl start wfm-observations-check.service" || true
 $SSH "$HOST" "test -s '$HOST_ROOT/data/observations-check/report.json'" \
   || die "the readiness check produced no report - the installed units are not working"

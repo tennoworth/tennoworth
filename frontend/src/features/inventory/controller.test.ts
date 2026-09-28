@@ -115,6 +115,13 @@ function normalizationController(normalizeInventory: typeof sources.normalizeInv
   return c;
 }
 
+it('an import replaces the previous scan rivens instead of keeping them beside it', async () => {
+  const c = normalizationController(vi.fn());
+  c.ownedRivens = [{ weapon: 'Previous Scan Weapon' } as unknown as (typeof c.ownedRivens)[number]];
+  await c.handleImported({ invName: 'import', ts: 123, ownedMap: normalized('import').owned });
+  expect(c.ownedRivens).toEqual([]);
+});
+
 describe('inventory replacement races', () => {
   it('keeps the newer normalized inventory when responses arrive out of order', async () => {
     const first = deferred<ReturnType<typeof normalized>>();

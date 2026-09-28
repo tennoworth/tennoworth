@@ -15,7 +15,16 @@ if cmp -s "$stage/tennoworth-usage" "$bin"; then exit 0; fi
 if [ -f "$bin" ]; then cp "$bin" "$bin.previous"; fi
 install -m 0755 "$stage/tennoworth-usage" "$bin.new"
 mv "$bin.new" "$bin"
-if ! (systemctl restart tennoworth-usage.service && sleep 2 && curl --fail --silent --max-time 5 http://127.0.0.1:8082/health >/dev/null); then
+# /health answers 503 while a check-in or the maintenance tick holds the store
+# lock, so a single probe can roll back a healthy upgrade. Give it a few tries.
+healthy() {
+  for attempt in 1 2 3 4 5; do
+    sleep 2
+    curl --fail --silent --max-time 5 http://127.0.0.1:8082/health >/dev/null && return 0
+  done
+  return 1
+}
+if ! (systemctl restart tennoworth-usage.service && healthy); then
   if [ -f "$bin.previous" ]; then mv "$bin.previous" "$bin"; systemctl restart tennoworth-usage.service; fi
   echo 'Usage collector health check failed' >&2
   exit 1

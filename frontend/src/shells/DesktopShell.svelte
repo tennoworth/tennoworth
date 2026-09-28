@@ -38,6 +38,7 @@ import { NOTIFICATIONS_EVENT, MARKET_REFRESHED_EVENT, ALLOWANCE_CHANGED_EVENT } 
   import RoutinesPanel from '../features/routines/RoutinesPanel.svelte';
   import { RoutineController } from '../features/routines/controller.svelte';
   import { resolveRivens } from '../domain/rivens';
+  import { baroPhase } from '../domain/baro-board';
   import type { RelicPlanEntry, SetReco, Verdict } from '../contracts/generated/domain';
   import type { ScoredInventoryFact } from '../contracts/generated/domain';
   import { DomainResult } from '../features/selling/domain-result.svelte';
@@ -492,22 +493,10 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // 500 ducats ≈ 5 prime junk parts; below that the card is noise.
   let showBaroCard = $derived(voidTrader != null);
 
-  // Pre-format strings so the template stays clean.
-  let baroState = $derived.by(() => {
-    if (!voidTrader) return null;
-    const now = Date.now();
-    const arr = Date.parse(voidTrader.activation);
-    const exp = Date.parse(voidTrader.expiry);
-    if (Number.isFinite(exp) && now < exp && Number.isFinite(arr) && now >= arr) {
-      // Baro is currently visiting.
-      const leavesIn = exp - now;
-      return { phase: 'here', label: 'Baro is here', windowMs: leavesIn };
-    }
-    if (Number.isFinite(arr) && now < arr) {
-      return { phase: 'incoming', label: 'Baro arrives in', windowMs: arr - now };
-    }
-    return { phase: 'unknown', label: 'Next Baro visit', windowMs: null };
-  });
+  // Ticks each minute and on focus (see the onMount below). Anything that shows
+  // time left reads this: `Date.now()` inside a `$derived` is not tracked.
+  let displayNow = $state(Date.now());
+  let baroState = $derived(voidTrader ? baroPhase(voidTrader.activation, voidTrader.expiry, displayNow) : null);
 
   let relicPlan = $derived(relicResult.value);
   const RELIC_PREVIEW = 6;
@@ -553,7 +542,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       .join(', ')
   );
 
-  let displayNow = $state(Date.now());
   onMount(() => {
     const refreshClock = () => { displayNow = Date.now(); };
     const timer = window.setInterval(() => { if (!document.hidden) refreshClock(); }, 60_000);

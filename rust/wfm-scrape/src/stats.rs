@@ -74,7 +74,7 @@ fn parse_window(
 ///
 /// A present-but-non-numeric value (never seen from WFM) is treated as the
 /// rank-0 tier so the item is still marked tiered rather than silently untiered.
-fn parse_mod_rank(v: Option<&Value>) -> Option<Option<i64>> {
+pub(crate) fn parse_mod_rank(v: Option<&Value>) -> Option<Option<i64>> {
     match v {
         None => None,
         Some(Value::Null) => Some(None),

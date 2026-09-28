@@ -107,6 +107,12 @@ jobs:
               # documentation-only change does not do.
               - '!**/AGENTS.md'
               - 'tests/fixtures/**'
+              # Compiled into the desktop by include_str! (sellables.rs), so a
+              # snapshot shape change can break its load tests.
+              - 'frontend/public/market.json'
+              - 'frontend/public/wfstat-catalog.json'
+              # The bindings tests compare these against the current Rust types.
+              - 'frontend/src/contracts/generated/**'
             rust_deps:
               - 'rust/Cargo.lock'
               - 'rust/Cargo.toml'
@@ -126,6 +132,10 @@ jobs:
               - 'scripts/*.sh'
               - 'scripts/deploy-layout.test.ts'
               - 'scripts/sync-csp.ts'
+              # deploy-layout.test.ts pins the observation retention on both
+              # sides; without these only the weekly schedule would run it.
+              - 'tests/fixtures/observation-retention.json'
+              - 'rust/wfm-scrape/src/observations.rs'
             version:
               - 'rust/Cargo.lock'
               - 'rust/tennoworth-desktop/Cargo.toml'
@@ -456,9 +466,15 @@ jobs:
       - name: Deployment layout regression tests
         run: bun test scripts/deploy-layout.test.ts
       - name: Shell syntax
+        # Parse each script with the shell its shebang names: bash -n accepts
+        # bashisms that the box's /bin/sh (dash) rejects at run time.
         run: |
           for script in deploy/*.sh scripts/*.sh; do
-            bash -n "$script"
+            case "$(head -n1 "$script")" in
+              '#!/bin/sh') dash -n "$script" ;;
+              *bash*) bash -n "$script" ;;
+              *) echo "::error file=$script::unrecognised shebang"; exit 1 ;;
+            esac
           done
       - name: systemd unit syntax
         run: |

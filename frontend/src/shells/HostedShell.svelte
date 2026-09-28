@@ -9,6 +9,7 @@ import UsageChart from '../features/community/UsageChart.svelte';
 import { loadMarket } from '../adapters/market';
 import { HostedTransport } from '../adapters/hosted';
 import { baroLocation, humanWindow } from '../ui/format';
+import { baroPhase } from '../domain/baro-board';
 import { bugReportUrl, improvementUrl } from '../features/settings/feedback';
 import type { ThemeController } from '../ui/theme';
 import type { Market } from '../contracts/data';
@@ -28,25 +29,25 @@ let voidTrader = $derived.by(() => {
     if (!b) return null;
     return { ...b, location: baroLocation(b.location) };
   });
-let baroState = $derived.by(() => {
-    if (!voidTrader) return null;
-    const now = Date.now();
-    const arr = Date.parse(voidTrader.activation);
-    const exp = Date.parse(voidTrader.expiry);
-    if (Number.isFinite(exp) && now < exp && Number.isFinite(arr) && now >= arr) {
-      // Baro is currently visiting.
-      const leavesIn = exp - now;
-      return { phase: 'here', label: 'Baro is here', windowMs: leavesIn };
-    }
-    if (Number.isFinite(arr) && now < arr) {
-      return { phase: 'incoming', label: 'Baro arrives in', windowMs: arr - now };
-    }
-    return { phase: 'unknown', label: 'Next Baro visit', windowMs: null };
+// The clock the countdown and the snapshot's age read. `Date.now()` inside a
+// `$derived` is not tracked, so both froze at their first value.
+let displayNow = $state(Date.now());
+onMount(() => {
+    const refreshClock = () => { displayNow = Date.now(); };
+    const timer = window.setInterval(() => { if (!document.hidden) refreshClock(); }, 60_000);
+    document.addEventListener('visibilitychange', refreshClock);
+    window.addEventListener('focus', refreshClock);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', refreshClock);
+      window.removeEventListener('focus', refreshClock);
+    };
   });
+let baroState = $derived(voidTrader ? baroPhase(voidTrader.activation, voidTrader.expiry, displayNow) : null);
 let marketStaleness = $derived(ago(market?.updated_at));
 let marketFreshness = $derived.by<'unknown' | 'fresh' | 'aging' | 'stale'>(() => {
     if (!market?.updated_at) return 'unknown';
-    const h = (Date.now() - new Date(market.updated_at).getTime()) / 3.6e6;
+    const h = (displayNow - new Date(market.updated_at).getTime()) / 3.6e6;
     if (h <= 3) return 'fresh';
     if (h <= 24) return 'aging';
     return 'stale';
@@ -55,7 +56,7 @@ function ago(ts: string | number | null | undefined) {
     if (!ts) return null;
     // Clamp at 0 - a cron runner with skewed clock can produce
     // `updated_at` in the future, which used to render "-120 min ago".
-    const minutes = Math.max(0, Math.round((Date.now() - new Date(ts).getTime()) / 60000));
+    const minutes = Math.max(0, Math.round((displayNow - new Date(ts).getTime()) / 60000));
     if (minutes < 1) return 'just now';
     if (minutes < 60) return `${minutes} min ago`;
     if (minutes < 60 * 24) return `${Math.round(minutes / 60)} h ago`;

@@ -163,6 +163,9 @@ export class InventoryController {
       this.deltas = diffOwned(previous?.owned, ownedMap);
       this.previousOwned = previous?.owned ?? null;
       this.resolved = { owned: ownedMap, unresolved: {} };
+      // An import carries no rivens, and the snapshot it saves has none; the
+      // previous scan's must not stay on screen beside the imported inventory.
+      this.ownedRivens = [];
       this.market = market;
       this.error = null;
       this.pullError = null;

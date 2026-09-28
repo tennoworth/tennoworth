@@ -478,7 +478,12 @@ jobs:
             [ -f "squashfs-root/usr/lib/$f" ] && { rm "squashfs-root/usr/lib/$f"; removed=$((removed+1)); }
           done
           echo "stripped $removed bundled libwayland libs"
-          [ "$removed" -gt 0 ] || echo "::warning::no bundled libwayland found - linuxdeploy behavior changed, verify on a rolling host"
+          # Publishing either way would ship the withdrawn EGL_BAD_PARAMETER
+          # bundle: nothing removed means the libs moved (a linuxdeploy change),
+          # and any copy left anywhere in the tree is still loaded first.
+          [ "$removed" -gt 0 ] || { echo "::error title=libwayland not stripped::no bundled libwayland in usr/lib - linuxdeploy behavior changed"; exit 1; }
+          left=$(find squashfs-root -name 'libwayland-*.so*' -print)
+          [ -z "$left" ] || { echo "::error title=libwayland still bundled::$left"; exit 1; }
           curl -fsSL -o appimagetool https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
           chmod +x appimagetool
           APPIMAGE_EXTRACT_AND_RUN=1 ARCH=x86_64 ./appimagetool -n squashfs-root dist/TennoWorth-x86_64.AppImage
