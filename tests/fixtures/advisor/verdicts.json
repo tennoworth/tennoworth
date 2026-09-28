@@ -730,5 +730,43 @@
         ]
       }
     }
+  },
+  {
+    "name": "an estimated vault 60 days out is the last day of the pre-vault hold",
+    "request": {
+      "slugs": ["example_prime_set"],
+      "market": {
+        "items": { "example_prime_set": { "median_now": 100 } },
+        "set_to_parts": { "example_prime_set": { "parts": [] } },
+        "calendar": {
+          "primes": {
+            "example_prime_set": { "released": "2020-01-01", "vaulted": false, "est_vault_date": "2026-10-19" }
+          }
+        }
+      },
+      "now_ms": 1787184000000
+    },
+    "expected": {
+      "example_prime_set": { "advice": "hold", "reasons": ["vault expected ~2026-10-19 (60 d) - prices typically climb once relics stop dropping"] }
+    }
+  },
+  {
+    "name": "an estimated vault 61 days out is not yet a hold",
+    "request": {
+      "slugs": ["example_prime_set"],
+      "market": {
+        "items": { "example_prime_set": { "median_now": 100 } },
+        "set_to_parts": { "example_prime_set": { "parts": [] } },
+        "calendar": {
+          "primes": {
+            "example_prime_set": { "released": "2020-01-01", "vaulted": false, "est_vault_date": "2026-10-20" }
+          }
+        }
+      },
+      "now_ms": 1787184000000
+    },
+    "expected": {
+      "example_prime_set": { "advice": "neutral", "reasons": ["not vaulted"] }
+    }
   }
 ]

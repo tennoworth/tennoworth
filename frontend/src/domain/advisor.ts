@@ -84,8 +84,9 @@ export function preVaultMedian(
 export const FRESH_RELEASE_DAYS = 45;
 /** How long after the vault the ramp is still considered "ahead". */
 export const POST_VAULT_RAMP_DAYS = 270;
-/** est_vault within this many days → the pre-vault hold call. */
-export const VAULT_SOON_DAYS = 90;
+/** est_vault within this many days → the pre-vault hold call. The pipeline's
+ *  `vaulting-soon` horizon, pinned by tests/fixtures/vault-soon.json. */
+export const VAULT_SOON_DAYS = 60;
 /** median_now at ≥ this fraction of the 1-year high counts as "at the high". */
 export const NEAR_HIGH = 0.9;
 /** ...but only when the year actually moved: high ≥ this multiple of low. */

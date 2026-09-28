@@ -141,7 +141,7 @@
     if (r.vault_status === 'vaulted') {
       out.push({ cls: 'vaulted', label: 'vaulted', title: 'Prime is currently vaulted. Listings often command a premium.' });
     } else if (r.vault_status === 'vaulting-soon') {
-      out.push({ cls: 'vaulting-soon', label: 'vaulting soon', title: 'Estimated to vault within ~60 days. Selling now beats the post-vault floor for active traders.' });
+      out.push({ cls: 'vaulting-soon', label: 'vaulting soon', title: 'Estimated to vault within ~60 days. Prices usually climb once its relics stop dropping.' });
     }
     if (r.subtype === 'intact' || r.subtype === 'exceptional' || r.subtype === 'flawless' || r.subtype === 'radiant') {
       out.push({ cls: 'relic-tag', label: 'relic → planner', title: "This is a relic. Selling it intact usually clears less than cracking it - check the Relic planner tab, which ranks your relics by expected plat per crack. Relics are excluded from the bulk 'List on WFM' action." });
