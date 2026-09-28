@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  baroPhase,
   byPlatPerDucat,
   currentPrice,
   ducatBasket,
@@ -143,6 +144,28 @@ describe('ducatBasket', () => {
       'needed',
       'resale',
     ]);
+  });
+});
+
+describe('baroPhase', () => {
+  const activation = '2026-08-21T13:00:00Z';
+  const expiry = '2026-08-23T13:00:00Z';
+  const start = Date.parse(activation);
+  const end = Date.parse(expiry);
+
+  it('counts down to an announced arrival and follows the clock it is given', () => {
+    expect(baroPhase(activation, expiry, start - 3_600_000)).toEqual({ phase: 'incoming', windowMs: 3_600_000 });
+    expect(baroPhase(activation, expiry, start - 60_000)).toEqual({ phase: 'incoming', windowMs: 60_000 });
+  });
+
+  it('turns to here at arrival and counts down to departure', () => {
+    expect(baroPhase(activation, expiry, start)).toEqual({ phase: 'here', windowMs: end - start });
+    expect(baroPhase(activation, expiry, end - 7_200_000)).toEqual({ phase: 'here', windowMs: 7_200_000 });
+  });
+
+  it('has no countdown once he has left or without a schedule', () => {
+    expect(baroPhase(activation, expiry, end)).toEqual({ phase: 'unknown', windowMs: null });
+    expect(baroPhase(undefined, undefined, start)).toEqual({ phase: 'unknown', windowMs: null });
   });
 });
 
