@@ -225,7 +225,7 @@ fn run_replay_cmd(args: &[String]) -> Result<(), String> {
 /// state: only the days after the last stored one are fetched. See
 /// `history.rs` for the shape and the reasoning.
 fn run_history_cmd(args: &[String]) -> Result<(), String> {
-    use wfm_scrape::history::{update_history, History, DEFAULT_DAYS};
+    use wfm_scrape::history::{read_prior, update_history, DEFAULT_DAYS};
 
     let now = extract_flag(args, "--now")
         .map(|s| clock::parse_stamp(&s).ok_or_else(|| format!("invalid --now stamp: {s}")))
@@ -270,9 +270,7 @@ fn run_history_cmd(args: &[String]) -> Result<(), String> {
         ));
     }
 
-    let prior: Option<History> = std::fs::read_to_string(&out)
-        .ok()
-        .and_then(|s| serde_json::from_str(&s).ok());
+    let prior = read_prior(&out)?;
     match &prior {
         Some(p) => eprintln!("history: prior {} → {} ({} items)", p.start, p.through.as_deref().unwrap_or("-"), p.items.len()),
         None => eprintln!("history: no prior - bootstrapping up to {bootstrap_days} days (one relics.run file per day, ~4 MB each)"),
