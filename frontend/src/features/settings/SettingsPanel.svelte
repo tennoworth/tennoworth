@@ -71,9 +71,9 @@ import { type UpdateStatus } from '../../contracts/update';
     if (status.held) return 'Automatic scan paused while a listing review or Trade Session is open.';
     if (status.lastError) return `Last automatic scan failed: ${status.lastError}`;
     if (!status.gameRunning) return 'Waiting for Warframe. Nothing is scanned while the game is closed.';
-    if (status.lastScanAt) return `Last automatic scan ${new Date(status.lastScanAt * 1000).toLocaleTimeString()}.`;
-    if (status.nextCheckAt) return `Next scan around ${new Date(status.nextCheckAt * 1000).toLocaleTimeString()}.`;
-    return 'Watching for Warframe.';
+    const last = status.lastScanAt ? `Last automatic scan ${new Date(status.lastScanAt * 1000).toLocaleTimeString()}.` : '';
+    const next = status.nextCheckAt ? `Next scan around ${new Date(status.nextCheckAt * 1000).toLocaleTimeString()}.` : '';
+    return [last, next].filter(Boolean).join(' ') || 'Watching for Warframe.';
   }
 
   // `revert` puts the control back to the stored value. A failed save leaves the
