@@ -54,7 +54,8 @@ interface RelicReward {
   item_count?: number;
 }
 
-/** Prime-part vault state - `vaulted` and `vaulting-soon` are sell-signals. */
+/** Prime-part vault state. `vaulting-soon` is an estimated vault within 60 days
+ *  (tests/fixtures/vault-soon.json) - the window the advisor says to hold in. */
 export type VaultStatus = 'vaulted' | 'vaulting-soon' | 'available';
 
 /** Baro Ki'Teer schedule, baked from warframestat at build time so the

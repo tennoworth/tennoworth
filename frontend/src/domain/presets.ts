@@ -76,7 +76,7 @@ export const PRESETS: Record<string, Preset> = {
   },
   vault: {
     minPrice: 0, hideAtLvl: 11, typeFilter: 'all', activeTags: [],
-    label: 'Vaulted', hint: 'vaulted + vaulting-soon prime parts (sell before the cliff)',
+    label: 'Vaulted', hint: 'vaulted + vaulting-soon prime parts (prices usually climb once relics stop dropping)',
     columns: ['name', 'owned', 'sell_score', 'low_sell', 'top_buy', 'volume_48h', 'potential_plat'],
     vaultOnly: true,
     defaultSort: { key: 'sell_score', dir: -1 },

@@ -1,6 +1,11 @@
 // @ts-nocheck
 import { describe, it, expect } from 'vitest';
-import { advise, adviseOwned, buildPartToSet, slope30, preVaultMedian } from './advisor.js';
+import { advise, adviseOwned, buildPartToSet, slope30, preVaultMedian, VAULT_SOON_DAYS } from './advisor.js';
+import vaultSoon from '../../../tests/fixtures/vault-soon.json';
+
+it('holds before a vault on the same horizon the pipeline marks vaulting-soon', () => {
+  expect(VAULT_SOON_DAYS).toBe(vaultSoon.days);
+});
 
 const NOW = Date.parse('2026-08-20T00:00:00Z');
 const day = 86400000;
@@ -114,7 +119,7 @@ describe('advise', () => {
     expect(v.reasons.join(' ')).toContain('×1.3');
   });
 
-  it('vault expected within 90 days → hold for the post-vault ramp', () => {
+  it('vault expected within 60 days → hold for the post-vault ramp', () => {
     const primes = { wisp_prime_set: { name: 'Wisp Prime', released: '2023-07-27', vaulted: false, est_vault_date: '2026-10-01' } };
     const market = marketWith({ primes, set_to_parts: { wisp_prime_set: { name: 'Wisp Prime', parts: [] } } });
     const v = advise({ slug: 'wisp_prime_set', market, history: null, partToSet: buildPartToSet(market), nowMs: NOW });

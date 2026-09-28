@@ -4,6 +4,9 @@ use chrono::DateTime;
 use chrono::Utc;
 use std::collections::HashMap;
 
+/// An estimated vault within this many days marks a prime `vaulting-soon`. The
+/// advisor's pre-vault hold uses the same horizon; `tests/fixtures/vault-soon.json`
+/// holds both to it.
 const VAULT_SOON_DAYS: i64 = 60;
 
 /// Fetch prime vault status from WFCD warframe-items sources.
@@ -289,4 +292,14 @@ pub fn resurgence_rotations(
         _ => None,
     };
     (rotations, current)
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_vaulting_soon_horizon_matches_the_shared_fixture() {
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("../../../../tests/fixtures/vault-soon.json")).unwrap();
+        assert_eq!(Some(super::VAULT_SOON_DAYS), fixture["days"].as_i64());
+    }
 }

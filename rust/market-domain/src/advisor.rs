@@ -177,6 +177,11 @@ fn number(v: &Value, key: &str) -> Option<f64> {
         .and_then(Value::as_f64)
         .filter(|n| n.is_finite() && *n != 0.0)
 }
+/// An estimated vault within this many days turns the verdict to hold. It is
+/// the pipeline's `vaulting-soon` horizon, so a hold always carries the chip and
+/// the Vaulted filter finds it; `tests/fixtures/vault-soon.json` pins both.
+const VAULT_SOON_DAYS: f64 = 60.0;
+
 fn days_since(date: Option<&str>, now: f64) -> Option<f64> {
     Some(((now - date_ms(date?)?) / 86_400_000.0).floor())
 }
@@ -341,7 +346,7 @@ fn advise(slug: &str, set: &str, request: &AdvisorRequest) -> Option<Verdict> {
     } else {
         days_since(string(cal, "est_vault_date"), request.now_ms)
     };
-    if let Some(days) = to_vault.filter(|d| *d < 0.0 && -*d <= 90.0) {
+    if let Some(days) = to_vault.filter(|d| *d < 0.0 && -*d <= VAULT_SOON_DAYS) {
         return Some(Verdict {
             advice: Advice::Hold,
             reasons: vec![format!(
@@ -546,6 +551,12 @@ mod tests {
                 serde_json::from_value(case["expected"].clone()).unwrap();
             assert_eq!(actual, expected, "{}", case["name"]);
         }
+    }
+    #[test]
+    fn the_pre_vault_horizon_matches_the_shared_fixture() {
+        let fixture: Value =
+            serde_json::from_str(include_str!("../../../tests/fixtures/vault-soon.json")).unwrap();
+        assert_eq!(Some(VAULT_SOON_DAYS), fixture["days"].as_f64());
     }
     #[test]
     fn advice_shared_contract() {
