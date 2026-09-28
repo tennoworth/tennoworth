@@ -333,6 +333,33 @@ mod tests {
     }
 
     #[test]
+    fn a_repeated_inventory_reuses_its_snapshot_and_a_change_records_a_new_one() {
+        let item = |slug: &str, count| SnapshotItem { slug: slug.into(), count, leveled: 0 };
+        let db = Db::open_in_memory().unwrap();
+        let first = db.record_snapshot("memory", None, &[item("/Lotus/A", 2), item("/Lotus/B", 1)]).unwrap();
+        db.conn
+            .lock()
+            .unwrap()
+            .execute("UPDATE snapshot SET taken_at = '2020-01-01T00:00:00Z'", [])
+            .unwrap();
+
+        // Same items in another order: the same snapshot, confirmed now.
+        let repeat = db.record_snapshot("memory", Some("41.0"), &[item("/Lotus/B", 1), item("/Lotus/A", 2)]).unwrap();
+        assert_eq!(repeat, first);
+        let list = db.list_snapshots(10).unwrap();
+        assert_eq!(list.len(), 1);
+        assert_ne!(list[0].taken_at, "2020-01-01T00:00:00Z", "a repeat is a fresh confirmation");
+
+        // One count differs: a new snapshot, which becomes the latest.
+        let changed = db.record_snapshot("memory", None, &[item("/Lotus/A", 1), item("/Lotus/B", 1)]).unwrap();
+        assert!(changed > first);
+        // The same items from another source are not a repeat of it.
+        let imported = db.record_snapshot("import", None, &[item("/Lotus/A", 1), item("/Lotus/B", 1)]).unwrap();
+        assert!(imported > changed);
+        assert_eq!(db.list_snapshots(10).unwrap().len(), 3);
+    }
+
+    #[test]
     fn latest_snapshot_items_returns_only_the_newest_snapshots_rows() {
         let db = Db::open_in_memory().unwrap();
         // No snapshot yet → empty, not an error.
