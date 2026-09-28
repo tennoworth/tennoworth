@@ -106,11 +106,13 @@ Linux clears file capabilities whenever the binary is replaced. Every
 this in any "how to run the app" instructions you write.
 
 ### A background scan must not run during an interactive listing flow
-Every scan records a new snapshot, and two gates require the snapshot a listing
-submits to be the LATEST one: `services::protection::validate_snapshot` and
-`Db::session_allowance`. So a scan landing while a listing review or Trade
-Session batch is being prepared fails the submit with "prepare a new batch" and
-throws the user's review away. The automatic scanner
+A scan that changes the inventory records a new snapshot (`Db::record_snapshot`
+reuses the latest one for an identical inventory), and two gates require the
+snapshot a listing submits to be the LATEST one:
+`services::protection::validate_snapshot` and `Db::session_allowance`. So a
+scan that lands with any change while a listing review or Trade Session batch
+is being prepared fails the submit with "prepare a new batch" and throws the
+user's review away. The automatic scanner
 (`services/auto_scan.rs`) is therefore held by the webview for as long as
 `listing.listingOpen` or the Trade Session view is active, and the SPA defers
 adoption rather than swapping rows under an open review. Do not remove that
