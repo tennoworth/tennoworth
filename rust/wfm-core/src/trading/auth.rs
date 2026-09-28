@@ -213,20 +213,47 @@ pub fn fetch_wfm_me(client: &Client, jwt: &str, platform: &str) -> Result<String
     .send_governed(Kind::Read)
     .context("/v2/me request failed")?;
     let status = resp.status();
-    let body: serde_json::Value = resp.json().context("parsing /v2/me")?;
+    let body = resp.text().context("reading /v2/me")?;
+    username_from_me(status, &body)
+}
+
+/// The username from a `/v2/me` answer. The status decides first: an error
+/// page (Cloudflare serves HTML) is a failed request, not a JSON parse
+/// failure. The body is never echoed into the error - on success it is the
+/// user's profile, and errors reach logs.
+fn username_from_me(status: reqwest::StatusCode, body: &str) -> Result<String> {
     if !status.is_success() {
-        bail!("/v2/me returned {status}: {body}");
+        bail!("/v2/me returned {status}");
     }
+    let body: serde_json::Value = serde_json::from_str(body).context("parsing /v2/me")?;
     body.pointer("/data/slug")
         .or_else(|| body.pointer("/data/ingameName"))
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
-        .ok_or_else(|| anyhow!("/v2/me response shape unexpected: {body}"))
+        .ok_or_else(|| anyhow!("/v2/me response has no data.slug or data.ingameName"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_me_error_page_reports_its_status_not_a_parse_failure() {
+        let html = "<html><title>Just a moment...</title></html>";
+        let err = username_from_me(reqwest::StatusCode::SERVICE_UNAVAILABLE, html).unwrap_err();
+        assert_eq!(err.to_string(), "/v2/me returned 503 Service Unavailable");
+    }
+
+    #[test]
+    fn a_me_answer_yields_the_slug_and_never_echoes_the_profile() {
+        let ok = r#"{"data":{"slug":"tenno_one","ingameName":"Tenno One"}}"#;
+        assert_eq!(username_from_me(reqwest::StatusCode::OK, ok).unwrap(), "tenno_one");
+        let named = r#"{"data":{"ingameName":"Tenno One"}}"#;
+        assert_eq!(username_from_me(reqwest::StatusCode::OK, named).unwrap(), "Tenno One");
+        let odd = r#"{"data":{"email":"someone@example.invalid"}}"#;
+        let err = username_from_me(reqwest::StatusCode::OK, odd).unwrap_err();
+        assert!(!err.to_string().contains("example.invalid"), "{err}");
+    }
 
     #[test]
     fn encrypt_then_decrypt_roundtrips_the_jwt() {
