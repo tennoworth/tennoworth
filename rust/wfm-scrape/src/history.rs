@@ -25,6 +25,28 @@ use serde::{Deserialize, Serialize};
 
 use crate::ingest::Http;
 
+/// Read the prior artifact, which is the run's state. Only an absent file means
+/// "no prior"; a read error is returned. A file that no longer parses is
+/// re-bootstrapped, which heals a torn or incompatible artifact - but said out
+/// loud, since it costs a full `bootstrap_days` of relics.run downloads.
+pub fn read_prior(path: &std::path::Path) -> Result<Option<History>, String> {
+    let text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(format!("read {}: {e}", path.display())),
+    };
+    match serde_json::from_str(&text) {
+        Ok(history) => Ok(Some(history)),
+        Err(e) => {
+            eprintln!(
+                "history: WARNING {} does not parse ({e}) - re-bootstrapping it",
+                path.display()
+            );
+            Ok(None)
+        }
+    }
+}
+
 pub const HISTORY_URL_BASE: &str = "https://relics.run/history/price_history_";
 /// Series length kept.
 pub const DEFAULT_DAYS: usize = 365;
@@ -121,13 +143,10 @@ pub fn parse_day_file(
                 continue;
             }
             let num = |k: &str| r.get(k).and_then(|v| v.as_f64()).unwrap_or(0.0);
-            // relics.run mirrors WFM's tri-state: key absent = untiered,
-            // present-null = rank-0 tier, number = that rank.
-            let mod_rank = match r.get("mod_rank") {
-                None => None,
-                Some(serde_json::Value::Null) => Some(None),
-                Some(v) => Some(v.as_i64()),
-            };
+            // relics.run mirrors WFM's rows, so it takes the scraper's reading
+            // of the tri-state: a local copy turned a float rank into the
+            // rank-0 tier, mixing maxed-mod prices into the rank-0 series.
+            let mod_rank = crate::stats::parse_mod_rank(r.get("mod_rank"));
             day.rows.push(StatsDay {
                 median: num("median"),
                 max_price: num("max_price"),
@@ -441,6 +460,42 @@ mod tests {
             reduce_day(&rows["lith_c5_relic"].rows, Some("intact")),
             (Some(8.0), 30)
         );
+    }
+
+    #[test]
+    fn a_float_rank_stays_its_own_tier_not_rank_zero() {
+        // A maxed Primed mod at 80p beside a 20p rank-0 row: read as the rank-0
+        // tier, the float row's trades joined the rank-0 day.
+        let mut maxed = closed(80.0, 57.0, None, None);
+        maxed["mod_rank"] = serde_json::json!(10.0);
+        let body = serde_json::json!({"Primed Flow": [maxed, closed(20.0, 86.0, Some(Some(0)), None)]});
+        let (rows, _) = parse_day_file(&body, &catalog());
+        assert_eq!(reduce_day(&rows["primed_flow"].rows, None), (Some(20.0), 86));
+    }
+
+    #[test]
+    fn only_an_absent_prior_is_silently_no_prior() {
+        let dir = std::env::temp_dir().join(format!("wfm-history-prior-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("history.json");
+        assert_eq!(read_prior(&path).unwrap(), None, "absent");
+        std::fs::write(&path, "{\"generated_at\":").unwrap();
+        assert_eq!(read_prior(&path).unwrap(), None, "torn file re-bootstraps");
+        let history = History {
+            generated_at: "t".into(),
+            start: "2026-08-13".into(),
+            days: 3,
+            through: None,
+            items: HashMap::new(),
+            missing_days: vec![],
+        };
+        std::fs::write(&path, serde_json::to_string(&history).unwrap()).unwrap();
+        assert_eq!(read_prior(&path).unwrap(), Some(history));
+        // A path that cannot be read as a file must not read as "no prior",
+        // which would overwrite it with a year of fresh downloads.
+        assert!(read_prior(&dir).is_err());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
