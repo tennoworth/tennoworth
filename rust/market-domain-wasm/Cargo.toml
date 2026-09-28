@@ -1,0 +1,19 @@
+[package]
+name = "market-domain-wasm"
+version = "0.1.0"
+edition = "2021"
+description = "The native decision contracts compiled for the browser development preview."
+license = "MIT"
+publish = false
+
+[lib]
+# cdylib is the wasm32 module the preview loads; rlib lets the host test suite
+# exercise the same entry point.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+market-domain = { path = "../market-domain" }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

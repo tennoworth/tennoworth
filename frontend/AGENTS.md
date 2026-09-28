@@ -52,11 +52,17 @@ when the sign-in window cannot load warframe.market) sends a user-pasted
 token to Rust once and clears the field. Nothing sends a JWT back to the SPA.
 
 ### One source of truth for owned-item resolution
-`src/domain/resolver.ts` is the only place that maps a `/Lotus/...` path
-to a `{name, slug, category}`, reading the baked
-`/wfstat-catalog.json`. All UI code joins through
+Native inventory normalization (`market_domain::inventory` in Rust) is the only
+place that maps a `/Lotus/...` path to a `{name, slug, category}`, reading the
+baked `/wfstat-catalog.json` the webview hands it. All UI code joins through
 `market.items[slug]` (stats) and `market.catalog[name_lower]` (slug
 lookup).
+
+### The desktop preview runs native calculations
+`?preview-desktop` answers `evaluate_domain` from `rust/market-domain-wasm`
+compiled to wasm32 (`bun run build:domain-wasm`; loader in
+`src/dev/domain-wasm.ts`), so do not add TypeScript copies of native planners
+for the preview's sake. The browser suite builds it fresh in CI.
 
 ### Market intelligence must preserve unknowns
 

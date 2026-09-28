@@ -4,7 +4,7 @@
   import { onMount, type Snippet } from 'svelte';
   import BuyerAlternatives from './BuyerAlternatives.svelte';
   import { computeResults } from '../../domain/filter-engine';
-  import { SESSION_MODES, type selectSession, type SessionMode, type SessionRow, type SessionCandidate } from '../../domain/trade-session';
+  import { SESSION_MODES, type SessionPlan, type SessionMode, type SessionRow, type SessionCandidate } from '../../domain/trade-session';
   
 import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   
@@ -13,7 +13,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   import { cachedUnitMarket } from '../../domain/order-prices';
   import type { Market, MarketItemEntry, OwnedRecord, TradeSessionState } from '../../contracts/data';
   import type { ScoredInventoryFact } from '../../contracts/generated/domain';
-  import type { Verdict } from '../../domain/advisor';
+  import type { Verdict } from '../../contracts/generated/domain';
 
   let { owned, market, reserveCopies, advice, scanning, onscan, onreview, nativeFacts = new Map(), availability, listingBlockReason = null, onrecheck, listingActionLabel = 'Check WFM listings', keep }: {
     keep?: Snippet;
@@ -69,7 +69,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
     }
     return [...parts, ...sets];
   });
-  let plan = $state<ReturnType<typeof selectSession>>({ rows: [], trades: 0, total: 0, excluded: [], target: null, shortfall: null });
+  let plan = $state<SessionPlan>({ rows: [], trades: 0, total: 0, excluded: [], target: null, shortfall: null });
   let planning = $state(false);
   let planningError = $state<string | null>(null);
   $effect(() => {
@@ -87,7 +87,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
     return () => { cancelled = true; };
   });
   let cap = $derived(Math.min(MAX_PLAN_ITEMS, sessionData?.allowance.remaining ?? 0));
-  let retained = $state<ReturnType<typeof selectSession> | null>(null);
+  let retained = $state<SessionPlan | null>(null);
   $effect(() => { if (plan.rows.length > 0) retained = plan; });
   let display = $derived(cap === 0 && retained ? retained : plan);
   let allowance = $derived(sessionData?.allowance);

@@ -39,6 +39,7 @@ rust/
     ingest/                  upstream transport and source-specific adapters
     pipeline/                build orchestration, root discovery, publication
   market-domain/             inventory, scoring, advisor and planning decisions
+  market-domain-wasm/        market-domain for the browser desktop preview (wasm32)
   market-math/               pure shared heuristics
   wfm-client/                shared request policy and transport primitives
   tennoworth-usage/          opt-in installation-count service
@@ -260,9 +261,15 @@ the authority for mutations.
 Frontend adapters serialize Maps and optional fields explicitly. Feature
 controllers guard response generations, clear obsolete evidence, expose pending
 or failed calculations, and preserve local editing state. UI filtering stays
-synchronous over native facts. Market-only browsing and development previews
-retain fixture-gated TypeScript counterparts; these are not production desktop
-fallbacks when native computation fails.
+synchronous over native facts. Market-only browsing keeps fixture-gated
+TypeScript sell-priority scoring and history; these are not production desktop
+fallbacks when native computation fails. The `?preview-desktop` development host
+has no Tauri runtime, so its `evaluate_domain` runs `market-domain-wasm`: the same
+`DomainRequest::execute`, compiled to wasm32 by `scripts/build-domain-wasm.ts`
+and loaded by `frontend/src/dev/domain-wasm.ts`. The preview therefore shows
+native results and there is no TypeScript copy of the planners to keep in step.
+The dev server alone grants the page `'wasm-unsafe-eval'`; the shipped CSP
+copies do not.
 
 `frontend/src/contracts/generated/` contains Rust-derived declarations. The
 ordinary Rust tests compare them against current types. To update intentionally:

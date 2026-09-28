@@ -297,8 +297,8 @@ pub fn path_guess_candidates(path: &str) -> Vec<String> {
     names
 }
 
-/// Insert a space between a lowercase/digit and an uppercase letter, matching
-/// resolver.ts's `/([a-z0-9])([A-Z])/g` → `$1 $2`.
+/// Insert a space between a lowercase/digit and an uppercase letter
+/// (`/([a-z0-9])([A-Z])/g` → `$1 $2`).
 fn decamel(s: &str) -> String {
     let chars: Vec<char> = s.chars().collect();
     let mut out = String::with_capacity(s.len() + 4);
@@ -314,8 +314,8 @@ fn decamel(s: &str) -> String {
     out
 }
 
-/// `slugGuess` from resolver.ts: strip non-alphanumerics (keep spaces), trim,
-/// lowercase, collapse whitespace to underscores.
+/// Strip non-alphanumerics (keep spaces), trim, lowercase, collapse whitespace
+/// to underscores - WFM's own slug shape. Pinned by tests/fixtures/name-guess.
 pub fn slug_guess(name: &str) -> String {
     let cleaned: String = name
         .chars()

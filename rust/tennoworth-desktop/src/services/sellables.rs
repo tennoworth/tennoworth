@@ -5,7 +5,7 @@
 //! Three moving parts:
 //!   1. RESOLUTION. The snapshot stores DE item paths (`/Lotus/...`); the market
 //!      is keyed by WFM slug. `resolve` mirrors the primary paths of
-//!      frontend/src/domain/resolver.ts: market.json's baked `path_to_info`
+//!      market_domain::inventory's resolution: market.json's baked `path_to_info`
 //!      (direct path→slug for prime parts/warframes), then the wfstat catalog
 //!      (path→name, with Component/Blueprint trimming) → market's `catalog`
 //!      (name→slug), then a de-camelled name guess. Relic refinement subtypes
@@ -173,8 +173,8 @@ struct SlimInfo {
 fn wfstat_catalog() -> &'static HashMap<String, SlimInfo> {
     static CATALOG: OnceLock<HashMap<String, SlimInfo>> = OnceLock::new();
     CATALOG.get_or_init(|| {
-        // Slim `[uniqueName, {name, category}]` pairs - same shape resolver.ts
-        // reads. A parse failure yields an empty map (path_to_info still works).
+        // Slim `[uniqueName, {name, category}]` pairs - the shape native
+        // inventory normalization reads. A parse failure yields an empty map (path_to_info still works).
         let pairs: Vec<(String, SlimInfo)> =
             serde_json::from_str(BUNDLED_CATALOG).unwrap_or_default();
         pairs.into_iter().collect()
@@ -325,7 +325,8 @@ impl MarketData {
     }
 
     /// Resolve a DE item path to `(display name, WFM slug)`, or `None` when the
-    /// path maps to nothing tradeable. Mirrors resolver.ts's non-relic paths.
+    /// path maps to nothing tradeable. Mirrors market_domain::inventory's
+    /// non-relic paths.
     fn resolve(&self, path: &str) -> Option<(String, String)> {
         // 1. Pre-baked direct hit (prime parts / warframes / recipes).
         if let Some(d) = self.path_to_info.get(path) {
@@ -335,7 +336,7 @@ impl MarketData {
         }
 
         // 2. wfstat catalog: path → name, retrying with the Component/Blueprint
-        //    suffix trimmed (the same fallback resolver.ts uses).
+        //    suffix trimmed (the same fallback native normalization uses).
         let cat = wfstat_catalog();
         let mut info = cat.get(path);
         if info.is_none() {
@@ -988,11 +989,10 @@ mod tests {
         }
     }
 
-    // ---- name-guess parity (Rust consumer side) ----------------------------
-    // The TS canonical side lives in frontend/src/domain/resolver.parity.test.ts;
-    // both check the SAME fixture (tests/fixtures/name-guess/cases.json). If
-    // this fails but the TS passes (or vice versa), path_name_guess/slug_guess
-    // have diverged from resolver.ts's pathNameGuess/slugGuess.
+    // ---- name guesses ------------------------------------------------------
+    // tests/fixtures/name-guess/cases.json pins market_domain::inventory's
+    // guesses, the only implementation since the browser resolver was retired.
+    // A 2026-07 drift between two copies of these was a live, if narrow, bug.
     #[derive(Deserialize)]
     struct PathGuessCase {
         path: String,
@@ -1016,7 +1016,7 @@ mod tests {
     }
 
     #[test]
-    fn name_guess_matches_resolver_ts_on_shared_fixture() {
+    fn name_guesses_match_the_shared_fixture() {
         let path = concat!(
             env!("CARGO_MANIFEST_DIR"),
             "/../../tests/fixtures/name-guess/cases.json"
@@ -1029,7 +1029,7 @@ mod tests {
             assert_eq!(
                 path_name_guess(&c.path),
                 c.expected,
-                "path_name_guess({:?}) diverged from resolver.ts's pathNameGuess",
+                "path_name_guess({:?}) diverged from the name-guess fixture",
                 c.path
             );
         }
@@ -1037,7 +1037,7 @@ mod tests {
             assert_eq!(
                 slug_guess(&c.name),
                 c.expected,
-                "slug_guess({:?}) diverged from resolver.ts's slugGuess",
+                "slug_guess({:?}) diverged from the name-guess fixture",
                 c.name
             );
         }
@@ -1045,7 +1045,7 @@ mod tests {
             assert_eq!(
                 path_guess_candidates(&c.path),
                 c.expected,
-                "path_guess_candidates({:?}) diverged from resolver.ts's pathGuessCandidates",
+                "path_guess_candidates({:?}) diverged from the name-guess fixture",
                 c.path
             );
         }

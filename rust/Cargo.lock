@@ -2884,6 +2884,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "market-domain-wasm"
+version = "0.1.0"
+dependencies = [
+ "market-domain",
+ "serde_json",
+]
+
+[[package]]
 name = "market-math"
 version = "0.1.0"
 

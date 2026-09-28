@@ -202,12 +202,13 @@ These exist because each has already gone wrong once:
   category list). A `// keep these in sync` comment is not a gate;
   it silently rots. Instead: put the shared cases + expected output in
   `tests/fixtures/<name>/`, and add a test on **each** side that reads the
-  same fixture and asserts against it (`sell-priority/cases.json` and
-  `name-guess/cases.json` are the reference examples - grep their consuming
-  tests for the pattern). If the same value only needs to match, not compute
-  anything, the fixture can be a single JSON file both sides parse directly
-  (see `jwt-kdf.json`, `tradeable-categories.json`, `pacing.json`,
-  `limits.json`). A 2026-07 sweep found several places where the "just a
+  same fixture and asserts against it (`sell-priority/cases.json` is the
+  reference example - grep its consuming tests for the pattern). If the same
+  value only needs to match, not compute anything, the fixture can be a single
+  JSON file both sides parse directly (see `jwt-kdf.json`, `pacing.json`,
+  `limits.json`, `vault-soon.json`). Prefer one implementation over two: the
+  desktop preview runs the native planners compiled to WebAssembly rather than
+  keeping TypeScript copies of them. A 2026-07 sweep found several places where the "just a
   comment" version had already drifted silently - one of them (a slug-guessing
   fallback) was a live, if narrow, bug.
 - **A parity gate must test CURRENT code, or it is worse than no gate.** The

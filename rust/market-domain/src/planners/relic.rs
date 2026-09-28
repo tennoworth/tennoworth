@@ -1,4 +1,9 @@
 use super::*;
+
+/// Plat per trace a refinement must clear to be recommended. Traces are farmed
+/// one relic at a time, so it has to be a real bar, not merely positive. The
+/// refinement ladder quotes it; tests/fixtures/relic-refine.json pins both.
+const REFINE_WORTH_IT: f64 = 0.15;
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum Refinement {
@@ -139,7 +144,7 @@ pub fn decide_relic(rewards: &[Value], slug: &str, market: &Value) -> RelicDecis
         .cloned();
     let mut refined: Option<RelicEv> = None;
     for rung in &ladder {
-        if rung.plat_per_trace.is_some_and(|p| p >= 0.15)
+        if rung.plat_per_trace.is_some_and(|p| p >= REFINE_WORTH_IT)
             && refined.as_ref().is_none_or(|r| rung.ev > r.ev)
         {
             refined = Some(rung.clone());
@@ -274,4 +279,14 @@ pub fn validate_relic_request(r: &PlannerRequest) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_refinement_bar_matches_the_shared_fixture() {
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("../../../../tests/fixtures/relic-refine.json")).unwrap();
+        assert_eq!(Some(super::REFINE_WORTH_IT), fixture["plat_per_trace"].as_f64());
+    }
 }

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 import {
-  wfmItemUrl, baroLocation, humanWindow, plat,
+  wfmItemUrl, baroLocation, humanWindow, humanBuildTime, plat,
   ownedBreakdown, keptNoteTitle,
 } from './format.js';
 
@@ -99,5 +99,14 @@ describe('keptNoteTitle', () => {
   it('pluralises copy/copies', () => {
     expect(keptNoteTitle(1)).toContain('1 copy ');
     expect(keptNoteTitle(2)).toContain('2 copies ');
+  });
+});
+
+describe('humanBuildTime', () => {
+  it('reads foundry time the way the game shows it', () => {
+    expect(humanBuildTime(0)).toBe('instant');
+    expect(humanBuildTime(43200)).toBe('12h');
+    expect(humanBuildTime(259200)).toBe('3d');
+    expect(humanBuildTime(259200 + 43200)).toBe('3d 12h');
   });
 });

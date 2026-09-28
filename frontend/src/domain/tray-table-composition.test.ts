@@ -1,20 +1,20 @@
 import { expect, it } from 'vitest';
 import fixture from '../../../tests/fixtures/tray-table-composition/cases.json';
-import { normalizeInventoryPreview } from './normalize-inventory';
 import { computeResults, type FilterState } from './filter-engine';
-import type { Inventory, Market } from '../contracts/data';
+import type { Market, OwnedRecord } from '../contracts/data';
 
 it('composes the shared scan into the table with its documented local differences', () => {
-  const inventory: Record<string, Array<{ ItemType: string; ItemCount: number; XP: number }>> = {};
-  const path_to_info: Record<string, { name: string; slug: string; category: string }> = {};
+  // Native normalization turns the scan into these rows (its side of this
+  // fixture is sellables.rs); two DE paths resolve to one market row.
+  const owned = new Map<string, OwnedRecord>();
   for (const row of fixture.inventory) {
-    (inventory[row.category] ??= []).push({ ItemType: row.path, ItemCount: row.count, XP: row.xp });
-    path_to_info[row.path] = { name: row.name, slug: row.slug, category: row.category };
+    const rec = owned.get(`${row.slug}|`) ?? { slug: row.slug, name: row.name, type: row.category, subtype: null, count: 0, leveled: 0, kept_lvl: null };
+    rec.count += row.count;
+    if (row.xp > 0) rec.leveled += row.count;
+    owned.set(`${row.slug}|`, rec);
   }
-  const market = { ...fixture.market, path_to_info } as unknown as Market;
-  const { owned, unresolved } = normalizeInventoryPreview(inventory as Inventory, { uniqueToInfo: new Map() }, market);
-  expect(unresolved).toEqual({});
-  expect(owned.get('alpha|')?.count).toBe(3); // two DE paths resolve to one market row
+  expect(owned.get('alpha|')?.count).toBe(3);
+  const market = fixture.market as unknown as Market;
 
   const filters: FilterState = {
     minPrice: 0, minOwned: 1, typeFilter: 'all', hideAtLvl: 999,

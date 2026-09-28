@@ -1,9 +1,9 @@
 //! Sell-priority scoring - the "what to sell right now" ranking.
 //!
 //! Canonical arithmetic for desktop inventory, tray and planning consumers.
-//! The hosted browser and development previews retain a TypeScript counterpart
-//! in `frontend/src/domain/sell-priority.ts`; shared fixtures prevent drift
-//! across that remaining runtime boundary.
+//! The hosted browser keeps a TypeScript counterpart in
+//! `frontend/src/domain/sell-priority.ts`; shared fixtures prevent drift across
+//! that remaining runtime boundary.
 //!
 //! A shared-fixture parity test (`tests/fixtures/sell-priority/cases.json`,
 //! checked from BOTH the Rust consumer and Vitest) guards against silent

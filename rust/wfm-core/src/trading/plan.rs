@@ -1655,9 +1655,8 @@ mod tests {
         //
         // The four refinements below (here and at the other `cat(...,
         // &["intact", ...])` call sites in this module) are test data only -
-        // production reads subtypes[] from WFM's live catalog. They mirror
-        // frontend/src/domain/resolver.ts's REFINEMENTS set by hand; keep both
-        // in sync if WFM ever adds a refinement tier.
+        // production reads subtypes[] from WFM's live catalog. Update them if
+        // WFM ever adds a refinement tier.
         let cat = cat(
             "neo_b2_relic",
             None,

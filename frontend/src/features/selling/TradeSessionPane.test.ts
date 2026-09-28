@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import TradeSessionPane from './TradeSessionPane.svelte';
-import type { selectSession } from '../../domain/trade-session';
+import type { SessionPlan } from '../../domain/trade-session';
 
 const services = vi.hoisted(() => ({
   evaluateTradeSession: vi.fn(),
@@ -12,7 +12,7 @@ const services = vi.hoisted(() => ({
 vi.mock('../../ui/desktop-context', () => ({ useDesktopServices: () => services }));
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 
-type Plan = ReturnType<typeof selectSession>;
+type Plan = SessionPlan;
 function plan(name: string): Plan {
   return { rows: [{ key: name, slug: name, name, owned: 2, sellable: 2, leveled: 0, type: 'Mod', hold: false, bulk: false,
     market: { avg: 10, low_sell: 10, vol: 30, top_buy: 0, buys: 0, sells: 0, ratio: 0 },

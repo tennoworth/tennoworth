@@ -1325,8 +1325,8 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // market.json is written LAST - it's the generation anchor the browser app
     // joins everything through (items[slug], catalog, path_to_info, baro), while
     // wfstat-catalog.json (written above) is only a fallback resolver that
-    // resolvePath() consults AFTER market.path_to_info and that the browser
-    // caches in IndexedDB for 24h. A torn read of the non-atomic pair is then
+    // inventory normalization consults AFTER market.path_to_info and that the
+    // webview caches in IndexedDB for 24h. A torn read of the non-atomic pair is then
     // always new-catalog + old-market (benign: a superset resolver over a
     // self-consistent older snapshot) rather than new-market + old-catalog
     // (which could leave fresh snapshot rows unresolvable until the catalog

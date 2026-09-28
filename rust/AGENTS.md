@@ -14,7 +14,7 @@ missing it is expensive, and each copy is read where UI work starts.
 
 ## Workspace map
 
-Cargo WORKSPACE with seven members (`target/` shared). The standalone player CLI
+Cargo WORKSPACE with eight members (`target/` shared). The standalone player CLI
 (`wfm-fetch-inventory` with fetch/login/serve) was removed on 2026-08-02 - the
 desktop app is the only adapter.
 
@@ -56,6 +56,9 @@ The crates:
   of interactive terminal I/O.
 - `market-domain/` - native decision contracts, inventory normalization,
   scoring, and planners; shared fixtures and generated frontend declarations.
+- `market-domain-wasm/` - `market-domain`'s `DomainRequest::execute` behind a
+  plain wasm32 memory boundary, for the browser `?preview-desktop` host. Built
+  by `scripts/build-domain-wasm.ts`; never shipped.
 - `tennoworth-usage/` - opt-in installation-count service.
 
 Use ../CONTRIBUTING.md for builds and required checks, ../docs/architecture.md

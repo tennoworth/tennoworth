@@ -1,9 +1,6 @@
 import { callDomain } from './domain-commands';
 import type { Market, OwnedRecord } from '../contracts/data';
-import type { BuildPath, BuildPlan, RecipeEntry, SetPart } from '../domain/build-cost';
-import type { DucatPlan, ScrapCandidate } from '../domain/ducat-plan';
-import type { RelicPlanEntry } from '../domain/relic-planner';
-import type { SetReco } from '../domain/set-recos';
+import type { BuildPath, BuildPlan, DucatPlan, RecipeEntry, RelicPlanEntry, ScrapCandidate, SetPart, SetReco } from '../contracts/generated/domain';
 
 function records(owned: Map<string, OwnedRecord> | null | undefined) {
   return Array.from(owned?.values() ?? [], ({ slug, name, count, subtype }) => ({ slug, name, count, subtype: subtype ?? null }));

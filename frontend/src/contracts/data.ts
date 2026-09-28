@@ -388,14 +388,6 @@ export interface SlimItemInfo {
   category: string | null;
 }
 
-/** Resolver output for a single `/Lotus/...` path. */
-export interface ResolvedItem {
-  name: string | null;
-  slug: string | null;
-  category: string | null;
-  subtype: string | null;
-}
-
 // -------- App-internal --------
 
 /** A resolved owned record. Keyed by composite `${slug}|${subtype ?? ''}`

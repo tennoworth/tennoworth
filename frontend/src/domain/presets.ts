@@ -22,7 +22,7 @@ export interface Preset {
    *  overriding the player's keep-copy limit. */
   sparesOnly?: boolean;
   /** Hold/Sell mode: only rows the advisor has a verdict for (calendar-dated
-   *  primes) - see `lib/advisor.ts`. */
+   *  primes) - the native advisor, market_domain::advisor. */
   adviceOnly?: boolean;
   defaultSort?: { key: string; dir: number };
 }

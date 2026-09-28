@@ -86,10 +86,9 @@ mod tests {
         assert!(extract_items(b"not json").is_err());
     }
 
-    // Parity gate: frontend/src/domain/inventory.ts walks the same DE categories
-    // to build the sell table. Both sides read
-    // tests/fixtures/tradeable-categories.json so a category added on one side
-    // and forgotten on the other fails CI instead of silently under-counting.
+    // Snapshots record the categories native normalization walks
+    // (market_domain::inventory::TRADEABLE_CATEGORIES); the fixture pins the
+    // list so a category cannot be dropped without the change being seen.
     #[test]
     fn tradeable_categories_matches_the_shared_fixture() {
         #[derive(serde::Deserialize)]
