@@ -16,5 +16,11 @@ base64 = { workspace = true }
 # Pure Rust verification; no signing material or native crypto dependency.
 minisign-verify = "0.2.5"
 
+[dev-dependencies]
+# The send-site gate tokenizes sources so test-only items can be dropped one by
+# one; a text split at the first `#[cfg(test)]` hid most of some files. Already
+# in the lock through the build's proc macros; MIT OR Apache-2.0.
+proc-macro2 = "1"
+
 [lints]
 workspace = true

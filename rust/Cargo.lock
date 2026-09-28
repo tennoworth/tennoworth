@@ -6545,6 +6545,7 @@ dependencies = [
  "base64 0.22.1",
  "httpdate",
  "minisign-verify",
+ "proc-macro2",
  "reqwest 0.12.28",
  "serde",
  "serde_json",
