@@ -1,5 +1,5 @@
 {
-  "version": "0.8.1",
+  "version": "0.8.2",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -454,6 +454,33 @@
           "kind": "improved",
           "title": "The app version is easy to find",
           "body": "The bottom of the sidebar now shows the version next to the build, and bug reports fill it in even when the update check has not answered.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.2",
+      "date": "2026-09-28",
+      "changes": [
+        {
+          "id": "auto-scan-linux-detection",
+          "kind": "fixed",
+          "title": "Automatic scans run on Linux",
+          "body": "With the game running under Proton, the app now recognises it as the same game from one check to the next, so the scheduled scan actually happens and the inventory header shows the new scan time.",
+          "platforms": [
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "auto-scan-status-next",
+          "kind": "improved",
+          "title": "Settings shows the next scan too",
+          "body": "After an automatic scan, the status line shows when the last scan ran and when the next one is due.",
           "platforms": [
             "windows",
             "linux"
