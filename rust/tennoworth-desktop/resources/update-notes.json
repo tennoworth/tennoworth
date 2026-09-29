@@ -1,5 +1,5 @@
 {
-  "version": "0.8.3",
+  "version": "0.8.4",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -553,6 +553,45 @@
           "kind": "fixed",
           "title": "Signing out always sticks",
           "body": "Signing out while a sign-in was still finishing could bring the saved login back on the next launch. It now stays signed out, and a warframe.market outage during sign-in reports the outage rather than a confusing parse error.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.4",
+      "date": "2026-09-29",
+      "changes": [
+        {
+          "id": "settings-status-strip",
+          "kind": "improved",
+          "title": "See what is running at a glance",
+          "body": "A status strip at the top of Settings shows automatic scan, relic overlay and warframe.market sign-in state, and each part links to its section.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "settings-reordered",
+          "kind": "improved",
+          "title": "Everyday settings come first",
+          "body": "Automatic scan, the relic overlay and notifications lead the page. Colour mode, updates and usage sharing are grouped in one \"This app\" panel at the bottom. The overlay's Preview and Scan buttons sit in its title bar, and diagnostics are under Troubleshooting.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "notification-settings-link",
+          "kind": "improved",
+          "title": "Notification settings opens where you need it",
+          "body": "The Notification settings button in the inbox now opens Settings at Notifications, where each alert type is one row with Inbox and Popup switches and its timing underneath.",
           "platforms": [
             "windows",
             "linux"
