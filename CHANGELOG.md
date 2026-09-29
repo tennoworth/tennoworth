@@ -54,6 +54,26 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.4 - 2026-09-29
+
+# 🎨 TennoWorth Desktop 0.8.4
+
+TennoWorth Desktop 0.8.4 reorganises Settings around what you actually come back to.
+
+Automatic scanning, the relic overlay and notifications now lead the page, under a status strip that shows at a glance whether scanning and the overlay are running and whether you are signed in. Settings you change once, like colour mode, updates and usage sharing, sit together at the bottom.
+
+## Changelog (3)
+
+### Settings
+
+- **See what is running at a glance** A status strip at the top of Settings shows automatic scan, relic overlay and warframe.market sign-in state, and each part links to its section. <!-- app-note {"id":"settings-status-strip","kind":"improved"} -->
+- **Everyday settings come first** Automatic scan, the relic overlay and notifications lead the page. Colour mode, updates and usage sharing are grouped in one "This app" panel at the bottom. The overlay's Preview and Scan buttons sit in its title bar, and diagnostics are under Troubleshooting. <!-- app-note {"id":"settings-reordered","kind":"improved"} -->
+- **Notification settings opens where you need it** The Notification settings button in the inbox now opens Settings at Notifications, where each alert type is one row with Inbox and Popup switches and its timing underneath. <!-- app-note {"id":"notification-settings-link","kind":"improved"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.8.3 - 2026-09-28
 
 # 🔧 TennoWorth Desktop 0.8.3
