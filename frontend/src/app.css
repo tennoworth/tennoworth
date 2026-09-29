@@ -756,6 +756,11 @@ html[data-look="yorha"] .wrap.tw > .rail .exp, html[data-look="yorha"] .wrap.tw 
 html[data-look="yorha"] .wrap.tw > .rail .count b, html[data-look="yorha"] .wrap.tw > .rail .glyph, html[data-look="yorha"] .wrap.tw > .rail .lbl.good, html[data-look="yorha"] .wrap.tw > .rail .lbl.bad { color: var(--rail-fg); }
 html[data-look="yorha"] .wrap.tw > .rail .rail-toggle { color: var(--rail-muted); }
 html[data-look="yorha"] .wrap.tw > .rail .rail-toggle:hover { color: var(--rail-fg); }
+/* Rail actions (Settings' overlay preview, test notification): outlined in the
+   rail's pair, because a panel-2 button on the light ink bar reads as a hole. */
+html[data-look="yorha"] .wrap.tw > .rail .btn:not(.link) { color: var(--rail-fg); background: transparent; border-color: var(--rail-muted); }
+html[data-look="yorha"] .wrap.tw > .rail .btn:not(.link):hover:not(:disabled) { background: color-mix(in srgb, var(--rail-fg) 12%, transparent); color: var(--rail-fg); }
+html[data-look="yorha"] .wrap.tw > .rail .btn:not(.link):disabled { color: var(--rail-muted); background: transparent; border-color: var(--rail-muted); }
 html[data-look="yorha"] .wrap.tw > .bar { border-bottom-style: dotted; }
 html[data-look="yorha"] .wrap.tw .lbl { font-weight: 500; letter-spacing: 0.14em; }
 /* Card heads: the picks strip's head bar and any card whose first child is

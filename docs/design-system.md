@@ -140,7 +140,7 @@ narrow and enlarged layouts. This is a measured layout value, not a fixed spacer
 
 | Pattern | Contract |
 |---|---|
-| Panels and title rails | Clear heading, restrained inversion, dotted internal separation. Panel and dialog titles are always rails; controls may sit in a rail, status chips may not; titles and adjacent status copy may wrap. Anything placed on a rail uses the `--rail-*` pair, whatever its heading level |
+| Panels and title rails | Clear heading, restrained inversion, dotted internal separation. Panel and dialog titles are always rails; controls may sit in a rail, status chips may not; titles and adjacent status copy may wrap. Anything placed on a rail uses the `--rail-*` pair, whatever its heading level; rail buttons are outlined in that pair rather than filled |
 | Toolbars | Group related controls; allow wrapping without changing the logical or keyboard order |
 | Buttons and links | Clear action labels, consistent emphasis, visible focus; navigation uses links and actions use buttons. Links inside table cells show their dotted rule only on row hover or focus |
 | Fields | Persistent accessible labels, units and constraints nearby, actionable validation; placeholders are not labels. Checkboxes and radios use the shared square box in `app.css` (checked is the ink inversion); components may size it, not recolour it. Text-entry focus draws over the field's own border so it reads as one frame. Number fields hide spinner arrows; arrow keys still step. Option labels do not repeat the field label |
@@ -201,6 +201,16 @@ search lifts the limit, and the dedicated desktop view shows everything.
 Settings, Set picks, Relics, Routines, and FAQ use a bounded 64rem reading
 width. Analytical tables retain the workspace width and scroll locally when
 needed. Settings includes notification preferences within the same column.
+Settings is ordered by how often people return to it. A status strip leads,
+linking the automatic-scan, overlay and account state to their sections,
+followed by section links. Then come the everyday panels (Automatic scan,
+Relic reward overlay, Notifications) and the set-once panels (warframe.market
+account, then This app: appearance, updates and usage sharing). Status comes
+before the controls that change it. Troubleshooting detail and full privacy
+terms sit in disclosures, and diagnostics open with their warning in view when
+enabled. The inbox's settings link opens the page at Notifications. Category
+preferences are a table with Inbox and Popup columns, and each category's
+timing sits under its name.
 `.ui-setting-row`, `.ui-setting-copy`, `.ui-setting-control`, and
 `.ui-setting-check` align labels, help text, and controls; they stack below
 760px without remounting the controls. `.ui-section-group` separates related

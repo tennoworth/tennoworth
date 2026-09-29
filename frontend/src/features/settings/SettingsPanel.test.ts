@@ -3,7 +3,7 @@
 // theme can be changed inside the shell now, so a regression here leaves a
 // user with no way to override the OS scheme in the app.
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { screen, fireEvent, cleanup, waitFor } from '@testing-library/svelte';
+import { screen, fireEvent, cleanup, waitFor, within } from '@testing-library/svelte';
 import { renderDesktop as render } from '../../dev/render-desktop';
 import SettingsPanel from './SettingsPanel.svelte';
 import type { ModePref, ThemeController } from '../../ui/theme';
@@ -31,6 +31,11 @@ beforeEach(() => {
     removeEventListener: () => {},
   }));
 });
+
+// The status strip repeats each state above the page, so section assertions
+// read the section itself.
+const account = () => within(screen.getByRole('region', { name: 'warframe.market account' }));
+const scanning = () => within(screen.getByRole('region', { name: 'Automatic scan' }));
 
 function fakeTheme(pref: ModePref = 'system') {
   const setModePref = vi.fn();
@@ -165,7 +170,7 @@ describe('SettingsPanel', () => {
       },
     });
 
-    expect(screen.getByText('Signed in · session unlocked')).toBeTruthy();
+    expect(account().getByText('Signed in · session unlocked')).toBeTruthy();
     await fireEvent.click(screen.getByRole('button', { name: 'Log out' }));
     expect(onwfmlogout).not.toHaveBeenCalled();
     await fireEvent.click(screen.getByRole('button', { name: 'Confirm log out' }));
@@ -195,13 +200,13 @@ describe('SettingsPanel', () => {
     render(SettingsPanel, {
       props: { theme, wfmStatus: { logged_in: true, unlocked: false } },
     });
-    expect(screen.getByText('Signed in · session locked')).toBeTruthy();
+    expect(account().getByText('Signed in · session locked')).toBeTruthy();
 
     cleanup();
     render(SettingsPanel, {
       props: { theme, wfmStatus: { logged_in: false, unlocked: false } },
     });
-    expect(screen.getByText('Not signed in')).toBeTruthy();
+    expect(account().getByText('Not signed in')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Log out' })).toBeNull();
   });
 });
@@ -284,16 +289,29 @@ describe('SettingsPanel automatic scanning', () => {
     const { theme } = fakeTheme();
     const waiting = await autoScan({ enabled: true, cadenceMinutes: 30, adoptAutomatically: true }, { gameRunning: false });
     render(SettingsPanel, { props: { theme, autoScan: waiting.controller } });
-    expect(screen.getByText(/Waiting for Warframe/)).toBeTruthy();
+    expect(scanning().getByText(/Waiting for Warframe/)).toBeTruthy();
 
     cleanup();
     const failed = await autoScan({ enabled: true, cadenceMinutes: 30, adoptAutomatically: true }, { gameRunning: true, lastError: 'No accountId/nonce pair found in WF memory.' });
     render(SettingsPanel, { props: { theme, autoScan: failed.controller } });
-    expect(screen.getByText(/No accountId\/nonce pair found/)).toBeTruthy();
+    expect(scanning().getByText(/No accountId\/nonce pair found/)).toBeTruthy();
 
     cleanup();
     const held = await autoScan({ enabled: true, cadenceMinutes: 30, adoptAutomatically: true }, { held: true });
     render(SettingsPanel, { props: { theme, autoScan: held.controller } });
-    expect(screen.getByText(/paused while a listing review or Trade Session/)).toBeTruthy();
+    expect(scanning().getByText(/paused while a listing review or Trade Session/)).toBeTruthy();
+  });
+
+  it('leads with a status strip that links each state to its section', async () => {
+    const { theme } = fakeTheme();
+    const { controller } = await autoScan({ enabled: true, cadenceMinutes: 15, adoptAutomatically: true }, { gameRunning: false });
+    render(SettingsPanel, { props: { theme, autoScan: controller, wfmStatus: { logged_in: true, unlocked: false } } });
+    const strip = within(screen.getByLabelText('Current state'));
+    const scan = strip.getByRole('link', { name: /Automatic scan/ });
+    expect(scan.getAttribute('href')).toBe('#settings-scan');
+    expect(scan.textContent).toContain('On · every 15 min');
+    expect(scan.textContent).toContain('Waiting for Warframe');
+    expect(strip.getByRole('link', { name: /warframe.market/ }).textContent).toContain('Signed in · session locked');
+    expect(document.getElementById('settings-scan')).toBe(screen.getByRole('region', { name: 'Automatic scan' }));
   });
 });

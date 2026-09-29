@@ -68,6 +68,8 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   // no files. Everything interactive - scan, list, orders, login - lives in
   // the desktop app, driven by the wfm_session commands.
   let updateNotesRef: UpdateNotes;
+  // Set only by the inbox's settings link; every other way in opens the top.
+  let settingsSection = $state<'notifications' | null>(null);
   let notesReady = $state(false);
   const notesServices = useDesktopServices();
   const transport = new TauriTransport();
@@ -1311,7 +1313,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       <WatchlistPanel market={inventory.market} />
 
     {:else if effectiveView === 'notifications'}
-      <NotificationInbox onopen={(target) => filters.setView(target)} onsettings={() => filters.setView('settings')} />
+      <NotificationInbox onopen={(target) => filters.setView(target)} onsettings={() => { settingsSection = 'notifications'; filters.setView('settings'); }} />
 
     {:else if effectiveView === 'ledger'}
       <LedgerPanel onsetautoclose={(on) => store.setSetting('auto-close-sold', on ? 'on' : 'off')} />
@@ -1324,7 +1326,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       <Faq desktop />
 
     {:else if effectiveView === 'settings'}
-      <SettingsPanel onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} {autoScan} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} />
+      <SettingsPanel onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} {autoScan} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} section={settingsSection} onsectionshown={() => (settingsSection = null)} />
     {/if}
 
     {/if}
