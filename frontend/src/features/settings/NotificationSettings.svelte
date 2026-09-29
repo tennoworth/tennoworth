@@ -11,6 +11,7 @@ import { type NotificationPreferences, type NotificationCategory } from '../../c
   let message = $state('');
   let busy = $state(false);
   const labels = { trades: 'Completed trades and listing follow-up', watches: 'Price watches', baro: 'Baro arrival and departure', calendar: 'Events affecting your holdings', digest: 'Daily sell opportunities' };
+  const timing: Partial<Record<NotificationCategory, string>> = { baro: 'One hour before arrival, on arrival, and one hour before departure.', calendar: 'When active and one hour before ending.', digest: 'Once daily after 18:00 local time, with inventory and prices no older than 24 hours.' };
   async function load() {
     error = '';
     try {
@@ -42,36 +43,44 @@ import { type NotificationPreferences, type NotificationCategory } from '../../c
     finally { busy = false; }
   }
 </script>
-<section class="wrap tw notification-settings" aria-labelledby="notification-settings-title">
-  <div class="rail"><h3 id="notification-settings-title">Notifications</h3></div>
-  <div class="notification-body ui-stack">
-  <p>Alerts run while TennoWorth is open, including in the tray. Your inbox keeps the latest 1,000 entries for up to 30 days.</p>
-  {#if error}<div class="ui-notice" data-tone="bad" role="alert">{error} <button class="btn xs" onclick={load} disabled={busy}>Retry loading preferences</button></div>{/if}
+<section class="wrap tw notification-settings" id="settings-notifications" tabindex="-1" aria-labelledby="notification-settings-title">
+  <div class="rail"><h3 id="notification-settings-title">Notifications</h3><button class="btn xs" disabled={busy} onclick={test}>Send test notification</button></div>
+  {#if error}<div class="ui-notice notice" data-tone="bad" role="alert">{error} <button class="btn xs" onclick={load} disabled={busy}>Retry loading preferences</button></div>{/if}
   {#if preferences}
-    <label class="toggle"><input type="checkbox" checked={preferences.popups} disabled={busy} onchange={(e) => change(e)} /> Desktop popups</label>
-    <p class="muted">Pause popups to keep alerts in your inbox without interruptions. Operating-system settings may also suppress popups.</p>
-    <div class="categories">
-      {#each NOTIFICATION_CATEGORIES as category}
-        <div class="category">
-          <strong>{labels[category]}</strong>
-          <label class="toggle"><input type="checkbox" aria-label={`${labels[category]} enabled`} checked={preferences.categories[category].enabled} disabled={busy} onchange={(e) => change(e, category, 'enabled')} /> Enabled</label>
-          <label class="toggle"><input type="checkbox" aria-label={`${labels[category]} popups`} checked={preferences.categories[category].native} disabled={busy || !preferences.popups || !preferences.categories[category].enabled} onchange={(e) => change(e, category, 'native')} /> Popup</label>
-        </div>
-      {/each}
+    <div class="ui-setting-row">
+      <div class="ui-setting-copy"><label for="notification-popups">Desktop popups</label><p>Pause popups to keep alerts in your inbox without interruptions. Operating-system settings may also suppress popups.</p></div>
+      <label class="ui-setting-check"><input id="notification-popups" type="checkbox" checked={preferences.popups} disabled={busy} onchange={(e) => change(e)} /><span>Enabled</span></label>
     </div>
-    <p class="muted">Baro: one hour before arrival, on arrival, and one hour before departure. Relevant events: when active and one hour before ending. Sell digest: once daily after 18:00 local time, with inventory and prices no older than 24 hours.</p>
-  {:else if !error}<p role="status">Loading notification preferences…</p>{/if}
-  <div><button class="btn" disabled={busy} onclick={test}>Send test notification</button></div>
-  {#if message}<p class="ui-notice" data-tone="good" role="status">{message}</p>{/if}
-  </div>
+    <div class="scroll">
+      <table class="tw categories">
+        <thead><tr><th>Alert</th><th>Inbox</th><th>Popup</th></tr></thead>
+        <tbody>
+          {#each NOTIFICATION_CATEGORIES as category}
+            <tr>
+              <td><strong>{labels[category]}</strong>{#if timing[category]}<small>{timing[category]}</small>{/if}</td>
+              <td><input type="checkbox" aria-label={`${labels[category]} in inbox`} checked={preferences.categories[category].enabled} disabled={busy} onchange={(e) => change(e, category, 'enabled')} /></td>
+              <td><input type="checkbox" aria-label={`${labels[category]} popup`} checked={preferences.categories[category].native} disabled={busy || !preferences.popups || !preferences.categories[category].enabled} onchange={(e) => change(e, category, 'native')} /></td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+  {:else if !error}<p class="inset" role="status">Loading notification preferences…</p>{/if}
+  <p class="inset footnote">Alerts run while TennoWorth is open, including in the tray. Your inbox keeps the latest 1,000 entries for up to 30 days.</p>
+  {#if message}<p class="ui-notice notice" data-tone="good" role="status">{message}</p>{/if}
 </section>
 <style>
-  .notification-body { padding: var(--s4) var(--inset); }
-  h3, p { margin: 0; }
-  p { line-height: var(--leading-body); }
-  .muted { color: var(--muted); }
-  .category { display: grid; grid-template-columns: minmax(0, 1fr) 9rem 9rem; align-items: center; gap: var(--s3); padding: var(--s3) 0; border-bottom: 1px var(--rule) var(--hairline); }
-  .category strong { font-family: var(--font-body); font-weight: 500; }
-  @media (max-width: 760px) { .category { grid-template-columns: repeat(2, minmax(0, 1fr)); } .category strong { grid-column: 1 / -1; } }
-  .toggle { display: flex; align-items: center; gap: var(--s2); min-height: var(--ctl); cursor: pointer; }
+  p { margin: 0; }
+  .inset { padding: var(--s3) var(--inset); line-height: var(--leading-body); }
+  .footnote { color: var(--muted); font-size: var(--text-control); border-top: 1px var(--rule) var(--border); }
+  .notice { margin: 0 var(--inset) var(--s4); }
+  .rail + .notice { margin-top: var(--s4); }
+  .scroll { border-top: 1px var(--rule) var(--border); }
+  /* Category names are reading text that wraps, not truncated data. */
+  .categories td:first-child { height: auto; padding-block: var(--s2); text-align: left; white-space: normal; font-family: var(--font-body); color: var(--fg); }
+  .categories th:first-child { text-align: left; }
+  .categories :is(th, td):not(:first-child) { width: 6rem; text-align: center; }
+  .categories strong { display: block; font-weight: 500; }
+  .categories small { display: block; color: var(--muted); font-size: var(--text-caption); line-height: var(--leading-body); }
+  @media (max-width: 480px) { .categories :is(th, td):not(:first-child) { width: 3.5rem; } }
 </style>

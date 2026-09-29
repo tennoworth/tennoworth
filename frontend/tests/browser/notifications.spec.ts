@@ -18,12 +18,14 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.getByText('You’re all caught up.')).toBeVisible();
     await page.getByLabel('Unread only').uncheck();
     await page.getByRole('button', { name: 'Notification settings', exact: true }).click();
+    // The inbox's link opens Settings at its notification section, not the top.
+    await expect(page.locator('#settings-notifications')).toBeInViewport();
     await page.getByLabel('Desktop popups', { exact: true }).uncheck();
     await expect(page.getByText('Preferences saved.')).toBeVisible();
-    await expect(page.getByRole('checkbox', { name: /enabled$/ })).toHaveCount(5);
-    await expect(page.getByLabel('Inventory scan summary enabled', { exact: true })).toHaveCount(0);
-    await expect(page.getByLabel('Price watches popups', { exact: true })).toBeDisabled();
-    await page.getByLabel('Baro arrival and departure enabled', { exact: true }).uncheck();
+    await expect(page.getByRole('checkbox', { name: / in inbox$/ })).toHaveCount(5);
+    await expect(page.getByLabel('Inventory scan summary in inbox', { exact: true })).toHaveCount(0);
+    await expect(page.getByLabel('Price watches popup', { exact: true })).toBeDisabled();
+    await page.getByLabel('Baro arrival and departure in inbox', { exact: true }).uncheck();
     await page.getByRole('button', { name: 'Send test notification', exact: true }).click();
     await expect(page.getByText('Test sent (preview).')).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
@@ -58,7 +60,7 @@ test('notification errors, empty state and first-run entry are reachable', async
 test('failed preference save retains the persisted selection', async ({ page }) => {
   await page.goto('/?preview-desktop&sample=preferences-error');
   await page.locator('.sidebar').getByRole('button', { name: /^Settings/ }).click();
-  const toggle = page.getByLabel('Baro arrival and departure enabled', { exact: true });
+  const toggle = page.getByLabel('Baro arrival and departure in inbox', { exact: true });
   await expect(toggle).toBeChecked();
   await toggle.click();
   await expect(page.getByRole('alert')).toContainText('Could not save notification preferences.');

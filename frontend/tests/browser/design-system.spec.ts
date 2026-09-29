@@ -252,6 +252,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(page.locator('#overlay-shortcut')).toBeEnabled();
     await page.locator('#overlay-shortcut').fill('Ctrl+Shift+P');
     await page.locator('#overlay-shortcut').press('Tab');
+    await settings.getByText('Troubleshooting: diagnostics and display requirements').click();
     await settings.getByRole('checkbox', { name: /Save local recognition diagnostics/ }).check();
     await expect(settings.getByRole('button', { name: 'Open diagnostics', exact: true })).toBeVisible();
     for (const width of [1440, 761, 760, 320]) {
@@ -261,10 +262,11 @@ for (const theme of ['light', 'dark'] as const) {
         const box = section.getBoundingClientRect();
         return { left: box.left, right: box.right };
       }));
-      // Appearance, WFM account, Usage, Updates, Automatic scan, Relic reward
-      // overlay, Notifications. The count guards against a section silently
-      // disappearing; the shared bounds below are what this test is about.
-      expect(bounds).toHaveLength(7);
+      // Automatic scan, Relic reward overlay, Notifications, WFM account, and
+      // This app (appearance, updates, usage). The count guards against a
+      // section silently disappearing; the shared bounds below are what this
+      // test is about.
+      expect(bounds).toHaveLength(5);
       for (const box of bounds) {
         expect(box.left).toBeCloseTo(bounds[0].left, 0);
         expect(box.right).toBeCloseTo(bounds[0].right, 0);
