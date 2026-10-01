@@ -708,13 +708,21 @@ timer_active="$("$SYSTEMCTL" show wfm-scrape.timer -p ActiveState --value 2>/dev
 next_elapse_raw="$("$SYSTEMCTL" show wfm-scrape.timer -p NextElapseUSecRealtime --value 2>/dev/null || true)"
 [ "$timer_enabled" = enabled ] || error "wfm-scrape.timer is ${timer_enabled:-unknown}, not enabled"
 [ "$timer_active" = active ] || error "wfm-scrape.timer is ${timer_active:-unknown}, not active"
+# While its sweep runs, systemd reports no next elapse for the timer: the next
+# one is scheduled when the run ends. Reading that as a broken timer turned
+# every check that landed mid-sweep - every other hour - into a false alert.
+sweep_state="$("$SYSTEMCTL" show wfm-scrape.service -p ActiveState --value 2>/dev/null || true)"
+sweep_running=false
+case "${sweep_state:-}" in
+  activating|active|deactivating|reloading) sweep_running=true;;
+esac
 next_elapse_epoch=""
 case "${next_elapse_raw:-}" in
-  ''|n/a) error "wfm-scrape.timer has no next elapse";;
+  ''|n/a) [ "$sweep_running" = true ] || error "wfm-scrape.timer has no next elapse";;
   *) next_elapse_epoch="$(iso_to_epoch "$next_elapse_raw")" || true;;
 esac
 if [ -z "${next_elapse_epoch:-}" ]; then
-  error "cannot read wfm-scrape.timer's next elapse"
+  [ "$sweep_running" = true ] || error "cannot read wfm-scrape.timer's next elapse"
 elif [ $((next_elapse_epoch + BOUNDARY_GRACE_SECONDS)) -lt "$NOW_EPOCH" ]; then
   error "wfm-scrape.timer missed its ${next_elapse_raw} boundary by over 15 minutes"
 fi
@@ -757,8 +765,10 @@ fi
 # warning; past it, the box is not ready until the deploy happens. A revision
 # the checkout does not know was deployed from develop ahead of main, which is
 # not lag.
+# rust/Cargo.lock is judged separately below: every desktop release bumps the
+# desktop package's own entry there, which says nothing about the scraper.
 SCRAPER_SOURCES=(
-  rust/wfm-scrape rust/wfm-client rust/market-math rust/Cargo.toml rust/Cargo.lock
+  rust/wfm-scrape rust/wfm-client rust/market-math rust/Cargo.toml
   deploy/run-scrape.sh deploy/wfm-scrape.service deploy/wfm-scrape.timer
   deploy/observations-check.sh deploy/wfm-observations-check.service deploy/wfm-observations-check.timer
 )
@@ -781,6 +791,15 @@ elif ! app_git merge-base --is-ancestor "$revision" HEAD 2>/dev/null; then
   warn "the deployed scraper ${revision:0:7} is not an ancestor of the checkout's $checkout_head"
 else
   pending="$(app_git log --format='%ct' "$revision..HEAD" -- "${SCRAPER_SOURCES[@]}" 2>/dev/null || true)"
+  # Cargo.lock counts only when something other than the desktop package's own
+  # entry changed. Packages are blank-line separated, so drop that one record
+  # from both sides and compare the rest.
+  without_desktop() { awk 'BEGIN { RS = ""; ORS = "\n\n" } !/name = "tennoworth-desktop"/'; }
+  if ! cmp -s <(app_git show "$revision:rust/Cargo.lock" 2>/dev/null | without_desktop) \
+              <(app_git show "HEAD:rust/Cargo.lock" 2>/dev/null | without_desktop); then
+    lock_changes="$(app_git log --format='%ct' "$revision..HEAD" -- rust/Cargo.lock 2>/dev/null || true)"
+    pending="$(printf '%s\n%s\n' "$pending" "$lock_changes" | grep -v '^$' | sort -u || true)"
+  fi
   if [ -z "$pending" ]; then
     deploy_lag="current"
   else
