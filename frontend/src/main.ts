@@ -6,7 +6,7 @@ import './shells/shell.css';
 import './app.css';
 import { createStateStore } from './adapters/state-store';
 import { initTheme } from './ui/theme';
-import { installDesktopExternalLinkHandler, isDesktopRuntime } from './adapters/runtime';
+import { installDesktopExternalLinkHandler } from './adapters/runtime';
 
 // Dev-only design-review seam: `?preview-desktop` on a `vite dev` origin
 // installs a stub Tauri runtime BEFORE anything sniffs for it, so the
@@ -45,7 +45,9 @@ const app = styleguideSurface && !overlaySurface
     // settings in SQLite, which the boot script can't see) and starts following
     // the OS scheme. Before mount, so the theme never changes under the UI.
     const theme = initTheme(store);
-    return isDesktopRuntime()
+    // createStateStore picked the store by the same runtime sniff, so its mode
+    // decides the shell, and only the desktop store carries a snapshot.
+    return store.mode === 'tauri'
       ? Promise.all([import('./shells/DesktopShell.svelte'), import('./adapters/services')]).then(([{ default: DesktopShell }, { createDesktopServices }]) => mount(DesktopShell, { target, props: { store, theme }, context: new Map([[DESKTOP_CONTEXT, createDesktopServices()]]) }))
       : import('./shells/HostedShell.svelte').then(({ default: HostedShell }) => mount(HostedShell, { target, props: { theme } }));
   });

@@ -1,4 +1,4 @@
-import type { StateStore, SettingKey } from '../contracts/state-store';
+import type { SettingsStore, StateStore, SettingKey } from '../contracts/state-store';
 // State-store abstraction: the SPA's single seam between "persist to
 // localStorage" (hosted / `serve` browser build) and "persist to the canonical
 // SQLite store over Tauri IPC" (desktop build). Selected ONCE at boot by the
@@ -10,7 +10,8 @@ import type { StateStore, SettingKey } from '../contracts/state-store';
 //     tray-toast-seen, sell-onboarding-dismissed, auto-close-sold,
 //     routine-checklist, sell-columns,
 //     theme.mode), each a short string;
-//   - the last-owned inventory snapshot (the reload-restore copy).
+//   - on desktop, the last-owned inventory snapshot (the reload-restore copy).
+//     The hosted build holds no inventory, so its store persists settings only.
 //
 // The desktop `snapshot` / `snapshot_item` history tables are a separate
 // concern - appended by the `scan_inventory` command, not by this store's
@@ -18,13 +19,11 @@ import type { StateStore, SettingKey } from '../contracts/state-store';
 // `import_snapshot` history bridge went with the file-drop path.)
 //
 // LocalStorageStateStore is byte-for-byte the pre-store behaviour: the same
-// localStorage keys, the same value encodings, and the snapshot round-trip
-// delegated to the shared snapshot serializer. TauriStateStore persists the SAME serialized
-// snapshot bytes (serializeSnapshot) into the SQLite `setting` table - only the
-// backing store differs. Native scan identity is local cache metadata.
+// localStorage keys and the same value encodings. TauriStateStore persists the
+// snapshot through the shared serializer (serializeSnapshot) into the SQLite
+// `setting` table. Native scan identity is local cache metadata.
 
 import { serializeSnapshot, deserializeSnapshot, type Snapshot, type SaveSnapshotInput } from '../domain/snapshot';
-import { loadSnapshot as loadLocalSnapshot, saveSnapshot as saveLocalSnapshot, clearSnapshot as clearLocalSnapshot } from './browser-snapshot';
 import { isDesktopRuntime, resolveInvoke } from './runtime';
 
 export type { Snapshot, SaveSnapshotInput } from '../domain/snapshot';
@@ -59,7 +58,7 @@ const DESKTOP_SNAPSHOT_KEY = 'last-owned-v2';
  * round-tripped through storage.ts unchanged. localStorage reads are already
  * synchronous, so `hydrate` is a no-op and `getSetting` reads live.
  */
-export class LocalStorageStateStore implements StateStore {
+export class LocalStorageStateStore implements SettingsStore {
   readonly mode = 'local' as const;
 
   async hydrate(): Promise<void> {
@@ -82,17 +81,6 @@ export class LocalStorageStateStore implements StateStore {
     }
   }
 
-  async loadSnapshot(): Promise<Snapshot | null> {
-    return loadLocalSnapshot();
-  }
-
-  async saveSnapshot(input: SaveSnapshotInput, timestamp = Date.now()): Promise<void> {
-    saveLocalSnapshot(input, timestamp);
-  }
-
-  async clearSnapshot(): Promise<void> {
-    clearLocalSnapshot();
-  }
 }
 
 /**
@@ -137,7 +125,15 @@ export class TauriStateStore implements StateStore {
     const raw = await resolveInvoke()<string | null>('get_setting', {
       key: DESKTOP_SNAPSHOT_KEY,
     });
-    return deserializeSnapshot(raw ?? null);
+    // A corrupt copy is no copy. Rejecting here failed every later scan too:
+    // a scan reads the previous snapshot before writing the new one, so the
+    // unreadable value was never replaced.
+    try {
+      return deserializeSnapshot(raw ?? null);
+    } catch (e) {
+      console.warn('Could not load inventory snapshot:', e);
+      return null;
+    }
   }
 
   async saveSnapshot(input: SaveSnapshotInput, timestamp = Date.now()): Promise<void> {
@@ -163,6 +159,6 @@ export class TauriStateStore implements StateStore {
  * localStorage store everywhere else. Keyed off the same `__TAURI_INTERNALS__`
  * sniff as the transport so the two seams always agree on which build we're in.
  */
-export function createStateStore(): StateStore {
+export function createStateStore(): LocalStorageStateStore | TauriStateStore {
   return isDesktopRuntime() ? new TauriStateStore() : new LocalStorageStateStore();
 }
