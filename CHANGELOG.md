@@ -54,6 +54,28 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.5 - 2026-10-01
+
+# 🔧 TennoWorth Desktop 0.8.5
+
+TennoWorth Desktop 0.8.5 makes two things say what is actually true.
+
+If you share the daily usage count, the terms in Settings now describe exactly what the app sends and how often it tries. The trader calendar also flags old event data on the same day the rest of TennoWorth does, instead of a day later.
+
+## Changelog (2)
+
+### Settings
+
+- **Usage sharing terms match what the app does** "What is sent and what is not" said the app makes one check-in attempt a day with no retries. If a check-in does not get through, the app offers the same daily token again once a minute, at most 10 times that day, and never for a past day. The terms now say so. Nothing about what is sent has changed. <!-- app-note {"id":"usage-terms-retries","kind":"fixed"} -->
+
+### Calendar
+
+- **Old event data is flagged on time** The trader calendar now adds "reward data 7d old" to an event as soon as its reward data reaches seven days, the same age at which TennoWorth's market data warns. It used to stay silent until the eighth day. <!-- app-note {"id":"calendar-stale-seven-days","kind":"fixed"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.8.4 - 2026-09-29
 
 # 🎨 TennoWorth Desktop 0.8.4

@@ -1,5 +1,5 @@
 {
-  "version": "0.8.4",
+  "version": "0.8.5",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -592,6 +592,34 @@
           "kind": "improved",
           "title": "Notification settings opens where you need it",
           "body": "The Notification settings button in the inbox now opens Settings at Notifications, where each alert type is one row with Inbox and Popup switches and its timing underneath.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.5",
+      "date": "2026-10-01",
+      "changes": [
+        {
+          "id": "usage-terms-retries",
+          "kind": "fixed",
+          "title": "Usage sharing terms match what the app does",
+          "body": "\"What is sent and what is not\" said the app makes one check-in attempt a day with no retries. If a check-in does not get through, the app offers the same daily token again once a minute, at most 10 times that day, and never for a past day. The terms now say so. Nothing about what is sent has changed.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "calendar-stale-seven-days",
+          "kind": "fixed",
+          "title": "Old event data is flagged on time",
+          "body": "The trader calendar now adds \"reward data 7d old\" to an event as soon as its reward data reaches seven days, the same age at which TennoWorth's market data warns. It used to stay silent until the eighth day.",
           "platforms": [
             "windows",
             "linux"
