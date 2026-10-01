@@ -35,6 +35,12 @@ be read is never retried on a guess. Each throttle is recorded once - the wait
 comes from the deadline the transport stored, so one response never grows the
 backoff twice.
 
+A read that still fails in transit or with a server error after the transport's
+own attempts gets the same bounded treatment: the bulk reader retries it after
+30 and then 90 seconds, through the transport, at most six waits and five
+minutes per process. A client error is not retried. Without this, one dropped
+connection among a sweep's thousands of reads abandoned the whole cycle.
+
 ## Host pipeline footprint
 
 The scraper is the only client that reads WFM in bulk. These are the production
@@ -61,7 +67,7 @@ why the floor, not half the latency, is the bound. That counter is fetch time,
 not upstream response time; the queue wait is inside it.
 
 Each `scrape` and `build` run prints a `sweep metrics:` line with its attempt,
-retry, throttle and byte counters, plus the cooldown waits it spent, including on
+retry, throttle and byte counters, plus the cooldown and recovery waits it spent, including on
 runs that fail - refresh this table from that line rather than from the
 arithmetic. Its `elapsed_ms` is fetch time including the governor's pacing wait,
 so it tracks wall time for a serial loop and exceeds it when workers overlap. The measured cost of the endpoints the
