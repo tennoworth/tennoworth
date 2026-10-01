@@ -1,6 +1,4 @@
-#[cfg(test)]
-use super::ListingLogEntry;
-use super::{guard, Db, ListingLogRow, SnapshotItem, SnapshotSummary};
+use super::{guard, Db, SnapshotItem, SnapshotSummary};
 
 impl Db {
     /// Insert a whole snapshot (header + all item rows) in ONE transaction:
@@ -23,81 +21,6 @@ impl Db {
         let snapshot_id = insert_snapshot_rows(&tx, source, taken_at, game_version, items)?;
         tx.commit()?;
         Ok(snapshot_id)
-    }
-
-    /// Append one plan run's items to `listing_log`. One transaction per run,
-    /// so a partial write can't leave half a batch recorded.
-    ///
-    /// `listed_at` is the DB's clock rather than the caller's: these rows are
-    /// compared against each other over time, and one consistent clock is worth
-    /// more here than matching whatever the plan started at.
-    pub fn insert_listing_log(
-        &self,
-        plan_id: &str,
-        rows: &[ListingLogRow],
-    ) -> rusqlite::Result<usize> {
-        if rows.is_empty() {
-            return Ok(0);
-        }
-        let mut conn = guard(&self.conn);
-        let tx = conn.transaction()?;
-        let mut written = 0;
-        {
-            let mut stmt = tx.prepare(
-                "INSERT INTO listing_log
-                   (plan_id, slug, listed_at, price, qty, status, action, order_id, message, plan_index)
-                 VALUES (?1, ?2, strftime('%Y-%m-%dT%H:%M:%SZ','now'), ?3, ?4, ?5, ?6, ?7, ?8, ?9)
-                 ON CONFLICT(plan_id, plan_index) DO UPDATE SET
-                   price=excluded.price, qty=excluded.qty, status=excluded.status,
-                   action=excluded.action, order_id=excluded.order_id, message=excluded.message",
-            )?;
-            for (index, r) in rows.iter().enumerate() {
-                if matches!(r.status.as_str(), "pending" | "uncertain_mutation") { continue; }
-                written += stmt.execute((
-                    plan_id,
-                    &r.slug,
-                    r.price,
-                    r.qty,
-                    &r.status,
-                    &r.action,
-                    &r.order_id,
-                    &r.message,
-                    i64::try_from(index).unwrap_or(i64::MAX),
-                ))?;
-            }
-        }
-        tx.commit()?;
-        Ok(written)
-    }
-
-    /// Most recent `listing_log` rows, newest first. Only the tests read the log
-    /// back; the app records it and has no view of it yet.
-    #[cfg(test)]
-    pub fn list_listing_log(&self, limit: i64) -> rusqlite::Result<Vec<ListingLogEntry>> {
-        let conn = guard(&self.conn);
-        let mut stmt = conn.prepare(
-            "SELECT id, plan_id, slug, listed_at, price, qty, status, action, order_id,
-                    message, outcome
-               FROM listing_log
-              ORDER BY id DESC
-              LIMIT ?1",
-        )?;
-        let rows = stmt.query_map([limit], |r| {
-            Ok(ListingLogEntry {
-                id: r.get(0)?,
-                plan_id: r.get(1)?,
-                slug: r.get(2)?,
-                listed_at: r.get(3)?,
-                price: r.get(4)?,
-                qty: r.get(5)?,
-                status: r.get(6)?,
-                action: r.get(7)?,
-                order_id: r.get(8)?,
-                message: r.get(9)?,
-                outcome: r.get(10)?,
-            })
-        })?;
-        rows.collect()
     }
 
     /// Record a scan or import, reusing the latest snapshot when this one holds

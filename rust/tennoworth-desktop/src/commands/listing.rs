@@ -24,7 +24,7 @@ use wfm_core::trading::plan::{
     PlanValidationError,
 };
 
-use crate::persistence::{Db, ListingLogRow};
+use crate::persistence::Db;
 use crate::services::wfm_session::{CmdError, WfmSession};
 
 const PLAN_BUSY_MSG: &str = "A listing plan is already running - wait for it to finish.";
@@ -236,58 +236,9 @@ fn validate_session_contents(
     Ok(())
 }
 
-/// Append confirmed plan outcomes to `listing_log` before the journal is cleared.
-///
-/// `price_qty` is the plan's own items, positionally aligned with
-/// `response.results` - `run_pending` emits exactly one result per item, in
-/// order. When the lengths disagree the executor took an early-exit path
-/// (empty batch, over the item cap, HTTP client build failure) and returned a
-/// single synthetic `<batch>` result that maps to no item, including when the
-/// original plan contained only one item. Neither case belongs in item history.
-fn record_plan(db: &Db, response: &PlanResponse, price_qty: &[(i64, i64)]) -> rusqlite::Result<()> {
-    if response.results.is_empty()
-        || response.results.len() != price_qty.len()
-        || response.results.iter().any(|r| r.slug == "<batch>")
-    {
-        return Ok(());
-    }
-    let rows: Vec<ListingLogRow> = response
-        .results
-        .iter()
-        .zip(price_qty)
-        .map(|(r, &(price, qty))| ListingLogRow {
-            slug: r.slug.clone(),
-            price,
-            qty,
-            status: r.status.clone(),
-            action: r.action.clone(),
-            order_id: r.order_id.clone(),
-            message: r.message.clone(),
-        })
-        .collect();
-    db.insert_listing_log(&response.plan_id, &rows)?;
-    Ok(())
-}
-
-fn finish_recorded_plan(path: &std::path::Path, db: &Db, response: &mut PlanResponse, price_qty: &[(i64, i64)]) {
-    finish_recorded_plan_with(path, db, response, price_qty, record_plan)
-}
-
-fn finish_recorded_plan_with(
-    path: &std::path::Path,
-    db: &Db,
-    response: &mut PlanResponse,
-    price_qty: &[(i64, i64)],
-    record: impl FnOnce(&Db, &PlanResponse, &[(i64, i64)]) -> rusqlite::Result<()>,
-) {
-    if let Err(error) = record(db, response, price_qty) {
-        let message = format!("Could not save listing history: {error}. The batch remains saved; retry saving after checking My Orders.");
-        response.durability_error = Some(match response.durability_error.take() {
-            Some(previous) => format!("{previous} {message}"),
-            None => message,
-        });
-        return;
-    }
+/// Clear a finished plan's journal. A response whose result could not be saved
+/// leaves the journal in place: it is the only record left for recovery.
+fn finish_plan(path: &std::path::Path, response: &mut PlanResponse) {
     if response.durability_error.is_some() {
         return;
     }
@@ -327,13 +278,6 @@ pub async fn submit_plan(
     items: Vec<PlanItem>,
     request_id: String,
 ) -> Result<PlanResponse, CmdError> {
-    // Captured before the call: execute_plan consumes `items` to seed the
-    // pending file, and the price/qty the user actually asked for is not
-    // recoverable from the response.
-    let price_qty: Vec<(i64, i64)> = items
-        .iter()
-        .map(|i| (i.platinum as i64, i.quantity as i64))
-        .collect();
     let s = Arc::clone(&session);
     let reviewed = items.clone();
     let response = tauri::async_runtime::spawn_blocking(move || {
@@ -362,7 +306,7 @@ pub async fn submit_plan(
             PlanRequest { items },
             || validate_session_plan(&app, &reviewed),
         ));
-        finish_recorded_plan(s.pending_path(), &app.state::<Db>(), &mut response, &price_qty);
+        finish_plan(s.pending_path(), &mut response);
         Ok::<_, CmdError>(response)
     })
     .await
@@ -416,24 +360,18 @@ pub async fn resume_pending_plan(
         };
         let request = s.claim_plan_request(request_id)?;
         let mutations = crate::services::order_mutations::OrderMutations::new(Arc::clone(&s));
-        let price_qty: Vec<(i64, i64)> = pending
-            .items
-            .iter()
-            .map(|i| (i.platinum as i64, i.quantity as i64))
-            .collect();
         if pending.is_finished() {
             let _guard = mutations.begin_only()?;
             let mut response = finished_plan_response(&pending);
-            finish_recorded_plan(s.pending_path(), &app.state::<Db>(), &mut response, &price_qty);
+            finish_plan(s.pending_path(), &mut response);
             return Ok::<_, CmdError>(response);
         }
         let (_guard, unlocked) = mutations.begin()?;
-        // Stable plan positions let history upsert prior successes during resume.
         let reviewed: Vec<PlanItem> = pending.items.iter().map(PlanItem::from).collect();
         let mut response = wfm_client::governor::with_context(request.context(), || run_pending(s.pending_path(), &unlocked, &mut pending, || {
             validate_session_plan(&app, &reviewed)
         }));
-        finish_recorded_plan(s.pending_path(), &app.state::<Db>(), &mut response, &price_qty);
+        finish_plan(s.pending_path(), &mut response);
         Ok::<_, CmdError>(response)
     })
     .await
@@ -591,7 +529,7 @@ mod tests {
     use wfm_core::trading::plan::SessionConstraint;
 
     #[test]
-    fn failed_history_write_keeps_finished_journal_for_idempotent_retry() {
+    fn finished_plan_clears_its_journal() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("pending_plan.json");
         let pending: PendingPlan = serde_json::from_value(serde_json::json!({
@@ -604,31 +542,14 @@ mod tests {
             }]
         })).unwrap();
         write_pending_atomic(&path, &pending).unwrap();
-        let db = Db::open_in_memory().unwrap();
         let mut response = finished_plan_response(&pending);
-        finish_recorded_plan_with(&path, &db, &mut response, &[(40, 2)], |_, _, _| {
-            Err(rusqlite::Error::InvalidQuery)
-        });
-        assert!(response.durability_error.as_deref().unwrap().contains("Could not save listing history"));
-        assert!(path.exists());
-        assert!(db.list_listing_log(10).unwrap().is_empty());
-
-        let saved = load_pending(&path).unwrap().unwrap();
-        let mut retried = finished_plan_response(&saved);
-        finish_recorded_plan(&path, &db, &mut retried, &[(40, 2)]);
-        assert!(retried.durability_error.is_none());
+        finish_plan(&path, &mut response);
+        assert!(response.durability_error.is_none());
         assert!(!path.exists());
-        let rows = db.list_listing_log(10).unwrap();
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].order_id.as_deref(), Some("remote-order"));
-        assert_eq!(rows[0].price, 40);
-        assert_eq!(rows[0].qty, 2);
-        record_plan(&db, &retried, &[(40, 2)]).unwrap();
-        assert_eq!(db.list_listing_log(10).unwrap().len(), 1);
     }
 
     #[test]
-    fn known_remote_result_reaches_history_when_journal_rewrite_failed() {
+    fn unsaved_result_keeps_the_journal_for_recovery() {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("pending_plan.json");
         let pending: PendingPlan = serde_json::from_value(serde_json::json!({
@@ -641,7 +562,6 @@ mod tests {
             }]
         })).unwrap();
         write_pending_atomic(&path, &pending).unwrap();
-        let db = Db::open_in_memory().unwrap();
         let mut response = PlanResponse {
             plan_id: pending.plan_id.clone(),
             results: vec![ItemResult {
@@ -650,12 +570,9 @@ mod tests {
             }],
             durability_error: Some("Could not save the confirmed listing result".into()),
         };
-        finish_recorded_plan(&path, &db, &mut response, &[(25, 1)]);
+        finish_plan(&path, &mut response);
         assert!(response.durability_error.is_some());
         assert_eq!(load_pending(&path).unwrap().unwrap().items[0].status, "uncertain_mutation");
-        let rows = db.list_listing_log(10).unwrap();
-        assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].order_id.as_deref(), Some("known-remote-order"));
     }
 
     #[test]

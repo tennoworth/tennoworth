@@ -220,12 +220,10 @@ Shared cross-language behavior uses fixtures under `tests/fixtures/`.
 
 Reviewed listing batches write an uncertain marker to the pending-plan file
 before each market mutation, then write the observed result. The desktop holds
-the account mutation guard through SQLite history recording and journal cleanup.
-A failed result write or history transaction leaves the journal for recovery;
-finished records can retry history and cleanup without contacting the market.
-Only an absent journal permits a new batch, and an explicit discard removes a
-saved record. The existing JSON journal and SQLite listing log keep their
-formats; this ordering requires no schema migration.
+the account mutation guard through journal cleanup. A failed result write
+leaves the journal for recovery; finished records can retry cleanup without
+contacting the market. Only an absent journal permits a new batch, and an
+explicit discard removes a saved record.
 
 ## Structural choices and remaining limits
 
