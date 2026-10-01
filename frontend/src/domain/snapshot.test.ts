@@ -1,21 +1,19 @@
 // @ts-nocheck - vitest runs these as JS-style fixtures; full TS shapes here would be busy-work without catching real bugs.
 import { describe, it, expect, beforeEach } from 'vitest';
-import { saveSnapshot, loadSnapshot, clearSnapshot } from '../adapters/browser-snapshot';
 import { diffOwned, buildSnapshotPayload, serializeSnapshot, deserializeSnapshot } from './snapshot';
 
-beforeEach(() => {
-  localStorage.clear();
-});
+// The round-trip both persistence paths share: the desktop store writes these
+// exact bytes into SQLite, and the encrypted export builds the same payload.
+const roundTrip = (input) => deserializeSnapshot(serializeSnapshot(input, Date.now()));
 
-describe('saveSnapshot / loadSnapshot', () => {
-  it('round-trips an owned Map through localStorage', () => {
+describe('serializeSnapshot / deserializeSnapshot', () => {
+  it('round-trips an owned Map', () => {
     const owned = new Map([
       ['axi_k2_relic|radiant', { count: 7, name: 'Axi K2 Relic (Radiant)', type: 'Relics', slug: 'axi_k2_relic', subtype: 'radiant' }],
       ['vitality|',            { count: 51, name: 'Vitality', type: 'Mods', slug: 'vitality', subtype: null }],
       ['steel_charge|',        { count: 1, name: 'Steel Charge', type: 'Mods', slug: 'steel_charge', subtype: null, kept_lvl: 5 }],
     ]);
-    saveSnapshot({ invName: 'inventory.json', owned });
-    const got = loadSnapshot();
+    const got = roundTrip({ invName: 'inventory.json', owned });
     expect(got.invName).toBe('inventory.json');
     expect(got.owned).toBeInstanceOf(Map);
     expect(got.owned.size).toBe(3);
@@ -33,9 +31,7 @@ describe('saveSnapshot / loadSnapshot', () => {
     const owned = new Map([
       ['broken_war|', { count: 3, name: 'Broken War', type: 'Melee', slug: 'broken_war', subtype: null, kept_lvl: null, leveled: 2 }],
     ]);
-    saveSnapshot({ invName: 'inventory.json', owned });
-    const got = loadSnapshot();
-    expect(got.owned.get('broken_war|').leveled).toBe(2);
+    expect(roundTrip({ invName: 'inventory.json', owned }).owned.get('broken_war|').leveled).toBe(2);
   });
 
   it('round-trips the parsed rivens list', () => {
@@ -50,46 +46,24 @@ describe('saveSnapshot / loadSnapshot', () => {
         curses: [], veiled: false,
       },
     ];
-    saveSnapshot({ invName: 'inventory.json', owned, rivens });
-    const got = loadSnapshot();
+    const got = roundTrip({ invName: 'inventory.json', owned, rivens });
     expect(got.rivens).toHaveLength(1);
     expect(got.rivens[0].compat).toBe('/Lotus/Weapons/Infested/LongGuns/InfArmCannon/InfArmCannon');
     expect(got.rivens[0].buffs[0].tag).toBe('WeaponDamageAmountMod');
   });
 
   it('older snapshots without rivens load as an empty list', () => {
-    localStorage.setItem('wfminv:last-owned-v7', JSON.stringify({
-      ts: 1, invName: 'old', owned: [['x', { count: 1 }]],
-    }));
-    const got = loadSnapshot();
+    const got = deserializeSnapshot(JSON.stringify({ ts: 1, invName: 'old', owned: [['x', { count: 1 }]] }));
     expect(got.rivens).toEqual([]);
   });
 
-  it('returns null when nothing was saved', () => {
-    expect(loadSnapshot()).toBeNull();
+  it('reads nothing saved, and an empty value, as no snapshot', () => {
+    expect(deserializeSnapshot(null)).toBeNull();
+    expect(deserializeSnapshot('')).toBeNull();
   });
 
-  it('returns null on corrupted storage rather than throwing', () => {
-    localStorage.setItem('wfminv:last-owned-v7', '{garbage');
-    expect(loadSnapshot()).toBeNull();
-  });
-
-  it('clearSnapshot wipes the key', () => {
-    saveSnapshot({ invName: 'a', owned: new Map([['x', { count: 1, name: 'X', type: 'Misc' }]]) });
-    clearSnapshot();
-    expect(loadSnapshot()).toBeNull();
-  });
-
-  it('does not throw when localStorage write fails (quota etc.)', () => {
-    const orig = Storage.prototype.setItem;
-    Storage.prototype.setItem = () => { throw new DOMException('QuotaExceededError'); };
-    try {
-      expect(() =>
-        saveSnapshot({ invName: 'a', owned: new Map([['x', { count: 1, name: 'X', type: 'Misc' }]]) })
-      ).not.toThrow();
-    } finally {
-      Storage.prototype.setItem = orig;
-    }
+  it('throws on corrupted data, for the store to treat as no snapshot', () => {
+    expect(() => deserializeSnapshot('{garbage')).toThrow();
   });
 });
 

@@ -17,30 +17,17 @@ use market_domain::orders::{ItemConstraints, NormalizedOrder, OrderRow, OrderSid
 /// merely enormous row cannot be carried around the app.
 const MAX_EVIDENCE: usize = 512;
 
-/// The decoded orders response: its rows, plus what the decoder could not
-/// account for.
+/// The decoded orders response. Decoding refuses the whole body when any row is
+/// unsupported or ambiguous, so every row here was understood.
 #[derive(Debug)]
 pub struct DecodedOrders {
     pub orders: Vec<OrderRow>,
-    /// Live orders this build cannot interpret. They are still the account's
-    /// orders - a surface can list them from their evidence - but while any
-    /// exist, the decoded rows are not a complete picture of the account.
-    pub unsupported: usize,
-    /// Rows whose own contents disagree with the response that carried them, or
-    /// which are missing the fields an order cannot do without. These are the
-    /// response contradicting itself rather than merely describing something
-    /// new.
-    pub ambiguous: usize,
 }
 
 impl DecodedOrders {
     /// An account with no orders on either side.
     pub fn empty() -> Self {
-        Self {
-            orders: Vec::new(),
-            unsupported: 0,
-            ambiguous: 0,
-        }
+        Self { orders: Vec::new() }
     }
 }
 
@@ -49,9 +36,8 @@ impl DecodedOrders {
 /// Fails when the response cannot be read as a complete account: no `data`,
 /// neither of the two known shapes, or any row this build cannot interpret.
 /// The failure is the whole-body rejection - a partial reading must never be
-/// reconciled as the whole account - and the two counters say which kind of
-/// incompleteness caused it, so a future increment can relax exactly the one
-/// that turns out to be safe.
+/// reconciled as the whole account - and its message names the refused row's
+/// reason.
 pub fn decode_orders(
     body: &serde_json::Value,
     constraints: &dyn ItemConstraints,
@@ -79,26 +65,13 @@ pub fn decode_orders(
         bail!("Orders response is neither a row list nor a pair of sell/buy buckets; reconcile current orders before changing listings.");
     }
 
-    let ambiguous = orders
-        .iter()
-        .filter(|row| matches!(row, OrderRow::Ambiguous(_)))
-        .count();
-    let unsupported = orders
-        .iter()
-        .filter(|row| matches!(row, OrderRow::Unsupported(_)))
-        .count();
-
     if let Some(reason) = orders.iter().find_map(|row| match row {
         OrderRow::Supported(_) => None,
         OrderRow::Unsupported(refused) | OrderRow::Ambiguous(refused) => Some(refused.reason.as_str()),
     }) {
         bail!("Orders response has a row this build cannot interpret ({reason}); reconcile current orders before changing listings.");
     }
-    Ok(DecodedOrders {
-        orders,
-        unsupported,
-        ambiguous,
-    })
+    Ok(DecodedOrders { orders })
 }
 
 /// Whether `data` is the bucketed shape. Both buckets have to be present and
@@ -380,7 +353,6 @@ mod tests {
         )
         .unwrap();
         assert!(empty.orders.is_empty());
-        assert_eq!(empty.unsupported, 0);
     }
 
     /// The catalogue's rank and variant rules reach the decode through the

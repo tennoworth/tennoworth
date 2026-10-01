@@ -28,7 +28,8 @@ export type SettingKey =
   | 'theme.mode';
 
 
-export interface StateStore {
+/** The scalar settings every build persists. */
+export interface SettingsStore {
   readonly mode: 'local' | 'tauri';
 
   /**
@@ -43,7 +44,11 @@ export interface StateStore {
   /** Synchronous after `hydrate()`. `null` = unset (the caller applies its default). */
   getSetting(key: SettingKey): string | null;
   setSetting(key: SettingKey, value: string): Promise<void>;
+}
 
+/** The desktop store: settings plus the reload-restore inventory snapshot. Only
+ *  the desktop shell holds an inventory, so only it persists one. */
+export interface StateStore extends SettingsStore {
   loadSnapshot(): Promise<Snapshot | null>;
   saveSnapshot(input: SaveSnapshotInput, timestamp?: number): Promise<void>;
   clearSnapshot(): Promise<void>;

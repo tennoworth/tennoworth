@@ -1,6 +1,6 @@
 <script lang="ts">
   import { useDesktopServices } from '../../ui/desktop-context';
-  const { desktopAccessStatus, desktopLiveTopPrices, desktopTradeSessionState, isDesktopRuntime, listenForTauriEvent } = useDesktopServices();
+  const { desktopAccessStatus, desktopLiveTopPrices, desktopTradeSessionState, listenForTauriEvent } = useDesktopServices();
   import { onMount, onDestroy, untrack, tick } from 'svelte';
   import { WfmAccessController } from './controller.svelte';
   const marketAccess = new WfmAccessController({ desktopAccessStatus, listenForTauriEvent });
@@ -235,7 +235,6 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   // ≤5 best ONLINE asks/bids for each selected row's exact tier (rank /
   // relic refinement) - the price you'd actually be competing with right
   // now. A shared request budget makes batch progress useful.
-  const canLive = isDesktopRuntime();
   type LiveState = 'idle' | 'running' | 'done' | 'error';
   let liveState = $state<LiveState>('idle');
   let liveProgress = $state({ done: 0, total: 0 });
@@ -506,28 +505,26 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
         <div class="bulkrow">
           <button class="btn ghost" onclick={() => setAll(true)}>Select all</button>
           <button class="btn ghost" onclick={() => setAll(false)}>Deselect all</button>
-          {#if canLive}
-            <span class="spacer"></span>
-            <button
-              class="btn ghost live-btn"
-              onclick={checkLivePrices}
-              disabled={liveState === 'running' || selectedCount === 0}
-              title="Ask warframe.market for the ≤5 best online asks and bids for each selected row's exact rank / refinement, right now. Shares market access with other activity; large batches can take time."
-            >
-              {#if liveState === 'running'}
-                Checking live prices… {liveProgress.done}/{liveProgress.total}
-              {:else if liveState === 'done'}
-                Re-check live prices
-              {:else}
-                Check live prices
-              {/if}
-            </button>
-            {#if liveState === 'done' && live.size > 0}
-              <button class="btn ghost" onclick={useLiveAll} title="Set every selected row's price to its live lowest online ask (match it - no undercutting).">Match lowest asks</button>
+          <span class="spacer"></span>
+          <button
+            class="btn ghost live-btn"
+            onclick={checkLivePrices}
+            disabled={liveState === 'running' || selectedCount === 0}
+            title="Ask warframe.market for the ≤5 best online asks and bids for each selected row's exact rank / refinement, right now. Shares market access with other activity; large batches can take time."
+          >
+            {#if liveState === 'running'}
+              Checking live prices… {liveProgress.done}/{liveProgress.total}
+            {:else if liveState === 'done'}
+              Re-check live prices
+            {:else}
+              Check live prices
             {/if}
-            {#if liveState === 'error' && liveError}
-              <span class="live-err">{liveError}</span>
-            {/if}
+          </button>
+          {#if liveState === 'done' && live.size > 0}
+            <button class="btn ghost" onclick={useLiveAll} title="Set every selected row's price to its live lowest online ask (match it - no undercutting).">Match lowest asks</button>
+          {/if}
+          {#if liveState === 'error' && liveError}
+            <span class="live-err">{liveError}</span>
           {/if}
         </div>
 
@@ -542,13 +539,15 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
                 <th>Owned</th>
                 <th>Price (p)</th>
                 <th>Avg</th>
-                {#if canLive}<th title="Live lowest online ask / highest online bid for this exact rank or refinement (after “Check live prices”). Click a value to use it.">Live ask / bid</th>{/if}
+                <th title="Live lowest online ask / highest online bid for this exact rank or refinement (after “Check live prices”). Click a value to use it.">Live ask / bid</th>
                 <th title="Mod/arcane rank of the copies you're listing. 0 = unranked (dupe stacks). Ignored for items WFM doesn't rank.">Rank</th>
                 <th>Subtotal</th>
               </tr>
             </thead>
             <tbody>
               {#each plan as row, i (row.key)}
+                {@const t = liveFor(row)}
+                {@const v = liveVerdict(row)}
                 <tr class:dim={!row.include}>
                   <td><input type="checkbox" bind:checked={plan[i].include} /></td>
                   <td>{row.name}</td>
@@ -596,28 +595,24 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
                     />
                   </td>
                   <td class="muted">{plat(row.avg)}</td>
-                  {#if canLive}
-                    {@const t = liveFor(row)}
-                    {@const v = liveVerdict(row)}
-                    <td class="live-cell" class:above={v === 'above'} class:belowbid={v === 'below-bid'}>
-                      {#if !t}
-                        <span class="muted">·</span>
-                      {:else if t.error}
-                        <span class="muted" title={t.error}>n/a</span>
-                      {:else}
-                        {#if t.low_sell != null}
-                          <button class="linkish" onclick={() => useLive(i)} disabled={!row.include}
-                            title={`Online asks: ${t.sells.join(', ')}p - click to price at ${t.low_sell}p`}>{t.low_sell}p</button>
-                        {:else}<span class="muted" title="No online sellers right now">no ask</span>{/if}
-                        <span class="muted"> / </span>
-                        {#if t.top_buy != null}
-                          <span title={`Online bids: ${t.buys.join(', ')}p`}>{t.top_buy}p</span>
-                        {:else}<span class="muted" title="No online buyers right now">no bid</span>{/if}
-                        {#if v === 'above'}<span class="verdict" title="Your price is above the lowest online ask - it won't be the first to sell.">▲</span>{/if}
-                        {#if v === 'below-bid'}<span class="verdict" title="A live buyer is bidding more than your price - you'd be leaving plat on the table.">▼</span>{/if}
-                      {/if}
-                    </td>
-                  {/if}
+                  <td class="live-cell" class:above={v === 'above'} class:belowbid={v === 'below-bid'}>
+                    {#if !t}
+                      <span class="muted">·</span>
+                    {:else if t.error}
+                      <span class="muted" title={t.error}>n/a</span>
+                    {:else}
+                      {#if t.low_sell != null}
+                        <button class="linkish" onclick={() => useLive(i)} disabled={!row.include}
+                          title={`Online asks: ${t.sells.join(', ')}p - click to price at ${t.low_sell}p`}>{t.low_sell}p</button>
+                      {:else}<span class="muted" title="No online sellers right now">no ask</span>{/if}
+                      <span class="muted"> / </span>
+                      {#if t.top_buy != null}
+                        <span title={`Online bids: ${t.buys.join(', ')}p`}>{t.top_buy}p</span>
+                      {:else}<span class="muted" title="No online buyers right now">no bid</span>{/if}
+                      {#if v === 'above'}<span class="verdict" title="Your price is above the lowest online ask - it won't be the first to sell.">▲</span>{/if}
+                      {#if v === 'below-bid'}<span class="verdict" title="A live buyer is bidding more than your price - you'd be leaving plat on the table.">▼</span>{/if}
+                    {/if}
+                  </td>
                   <td>
                     <input
                       type="number"

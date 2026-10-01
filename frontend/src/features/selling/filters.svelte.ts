@@ -1,4 +1,4 @@
-import type { StateStore } from '../../contracts/state-store';
+import type { SettingsStore } from '../../contracts/state-store';
 import { presetFilterValues } from '../../domain/presets';
 const VALID_VIEWS: ReadonlySet<View> = new Set(['sell', 'session', 'sets', 'relics', 'rivens', 'baro', 'routines', 'meta', 'orders', 'watches', 'ledger', 'notifications', 'install', 'settings']);
 export type View = 'sell' | 'session' | 'sets' | 'relics' | 'rivens' | 'baro' | 'routines' | 'meta' | 'orders' | 'watches' | 'ledger' | 'notifications' | 'install' | 'settings';
@@ -15,7 +15,7 @@ export function parseColumnChoice(raw: string | null): Record<string, string[]> 
   }
 }
 export class FilterController {
-  constructor(private store: StateStore) {
+  constructor(private store: SettingsStore) {
     this.reserveCopies = (() => {
       const n = parseInt(this.store.getSetting('reserve-copies') ?? '', 10);
       return Number.isFinite(n) && n >= 0 ? n : 0;

@@ -1,4 +1,4 @@
-import type { StateStore } from '../../contracts/state-store';
+import type { SettingsStore } from '../../contracts/state-store';
 
 export type RoutineCadence = 'daily' | 'weekly' | 'monthly';
 
@@ -139,12 +139,12 @@ export class RoutineController {
   monthlyGoalDraft = $state('');
   saving = $state(false);
   saveError = $state('');
-  #store: StateStore;
+  #store: SettingsStore;
   #pending: string | null = null;
   #drain: Promise<void> | null = null;
   #repairOnStart = false;
 
-  constructor(store: StateStore, now = Date.now()) {
+  constructor(store: SettingsStore, now = Date.now()) {
     this.#store = store;
     this.now = now;
     const parsed = parseRoutineState(store.getSetting('routine-checklist'), now);

@@ -12,7 +12,7 @@
 // public/theme-boot.js re-implements the same resolution inline for first
 // paint; if the rules here change, change them there too.
 
-import type { StateStore } from '../contracts/state-store';
+import type { SettingsStore } from '../contracts/state-store';
 
 /** The one look. Stamped on <html> for the structural CSS to hang off. */
 export const LOOK = 'yorha';
@@ -44,7 +44,7 @@ export function applyTheme(mode: Mode): void {
 }
 
 /** The persisted mode preference, validated - unknown/absent → the default. */
-export function readThemePref(store: StateStore): ModePref {
+export function readThemePref(store: SettingsStore): ModePref {
   const mode = store.getSetting('theme.mode');
   return isModePref(mode) ? mode : DEFAULT_MODE_PREF;
 }
@@ -56,7 +56,7 @@ export function readThemePref(store: StateStore): ModePref {
  * it with SQLite). One instance per app; call once at boot after
  * `store.hydrate()`.
  */
-export function initTheme(store: StateStore) {
+export function initTheme(store: SettingsStore) {
   let pref = readThemePref(store);
   const mq = typeof matchMedia === 'function' ? matchMedia(DARK_MQ) : null;
 

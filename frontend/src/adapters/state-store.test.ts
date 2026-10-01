@@ -86,20 +86,8 @@ describe('LocalStorageStateStore - key/shape parity with the pre-store code', ()
     }
   });
 
-  it('snapshot round-trips through the historical wfminv:last-owned-v7 key', async () => {
-    const s = new LocalStorageStateStore();
-    const owned = new Map([
-      ['vitality|', { count: 51, name: 'Vitality', type: 'Mods', slug: 'vitality', subtype: null, kept_lvl: null, leveled: 0 }],
-    ]);
-    await s.saveSnapshot({ invName: 'inventory.json', owned });
-    // Written under the exact key storage.ts uses.
-    expect(localStorage.getItem('wfminv:last-owned-v7')).not.toBeNull();
-    const got = await s.loadSnapshot();
-    expect(got.invName).toBe('inventory.json');
-    expect(got.owned).toBeInstanceOf(Map);
-    expect(got.owned.get('vitality|').count).toBe(51);
-    await s.clearSnapshot();
-    expect(await s.loadSnapshot()).toBeNull();
+  it('holds no inventory snapshot: the hosted build has no inventory', () => {
+    expect('loadSnapshot' in new LocalStorageStateStore()).toBe(false);
   });
 });
 
@@ -175,6 +163,13 @@ describe('TauriStateStore - command mapping', () => {
     expect(await s.loadSnapshot()).toBeNull();
   });
 
+  it('reads a corrupt saved snapshot as none, so the next scan can replace it', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    installTauri(vi.fn(async (cmd, args) => (cmd === 'get_setting' && args.key === 'last-owned-v2' ? '{garbage' : null)));
+    await expect(new TauriStateStore().loadSnapshot()).resolves.toBeNull();
+    warn.mockRestore();
+  });
+
   it('clearSnapshot writes an empty last-owned value (which deserializes to null)', async () => {
     let stored = 'something';
     const invoke = vi.fn(async (cmd, args) => {
@@ -190,7 +185,8 @@ describe('TauriStateStore - command mapping', () => {
   });
 });
 
-for (const Store of [LocalStorageStateStore, TauriStateStore]) {
+{
+  const Store = TauriStateStore;
   it(`${Store.name} preserves a supplied snapshot timestamp across reload`, async () => {
     const data = new Map();
     installTauri(async (command, args) => {
