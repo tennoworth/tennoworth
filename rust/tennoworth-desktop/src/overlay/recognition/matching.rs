@@ -60,10 +60,16 @@ pub(in crate::overlay) fn match_ocr_lines(
         if line.is_empty() {
             continue;
         }
-        let mut scores: Vec<(f64, &OverlayCatalogItem)> = normalized_catalog
+        let padded_line = format!(" {line} ");
+        let mut scores: Vec<(f64, &str, &OverlayCatalogItem)> = normalized_catalog
             .iter()
             .map(|(candidate, item)| {
-                let whole_score = if &line == candidate || line.contains(candidate) {
+                // Contained as whole words only: "limbo prime blueprint" holds
+                // the letters of "bo prime blueprint", and plain substring
+                // containment scored that a perfect read of Bo.
+                let whole_score = if &line == candidate
+                    || padded_line.contains(&format!(" {candidate} "))
+                {
                     1.0
                 } else {
                     strsim::normalized_levenshtein(&line, candidate)
@@ -81,11 +87,14 @@ pub(in crate::overlay) fn match_ocr_lines(
                     0.0
                 };
                 let score = whole_score.max(positional_score);
-                (score, *item)
+                (score, candidate.as_str(), *item)
             })
             .collect();
-        scores.sort_by(|a, b| b.0.total_cmp(&a.0));
-        let Some((best, item)) = scores.first().copied() else {
+        // Equal scores go to the longer name: when a read holds two catalog
+        // names whole, the longer is the more specific reading, and the
+        // catalog's alphabetical order must not decide which item is shown.
+        scores.sort_by(|a, b| b.0.total_cmp(&a.0).then(b.1.len().cmp(&a.1.len())));
+        let Some((best, _, item)) = scores.first().copied() else {
             continue;
         };
         let runner_up = scores.get(1).map(|row| row.0).unwrap_or(0.0);

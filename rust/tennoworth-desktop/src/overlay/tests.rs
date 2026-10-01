@@ -53,6 +53,29 @@ fn exact_and_guarded_fuzzy_matches_resolve_but_noise_does_not() {
     assert!(got[1].confidence >= 0.82 && got[1].confidence < 1.0);
 }
 
+/// Reward names that contain another reward's letters. Every pair here was
+/// read as the shorter item, or chosen only by alphabetical luck, while
+/// containment ignored word boundaries.
+#[test]
+fn a_reward_is_not_read_as_a_shorter_name_hidden_inside_it() {
+    let names = [
+        "Bo Prime Blueprint", "Limbo Prime Blueprint",
+        "Fang Prime Blade", "Sarofang Prime Blade",
+        "Lex Prime Blueprint", "Aklex Prime Blueprint",
+        "Bronco Prime Blueprint", "Akbronco Prime Blueprint",
+    ];
+    let catalog: Vec<OverlayCatalogItem> = names
+        .iter()
+        .map(|name| OverlayCatalogItem { name: (*name).into(), slug: None })
+        .collect();
+    for name in names {
+        // As the reward screen wraps it: the last word on its own line.
+        let (head, tail) = name.rsplit_once(' ').unwrap();
+        let got = match_ocr_lines(&format!("{head}\n{tail}"), &catalog);
+        assert_eq!(got.first().map(|m| m.item.name.as_str()), Some(name), "{got:?}");
+    }
+}
+
 #[test]
 fn relic_inventory_labels_are_not_reward_candidates() {
     let mut candidates = catalog();
