@@ -37,3 +37,7 @@ export {
 
 /** The relic overlay window's result and hide pushes. */
 export { RELIC_OVERLAY_UPDATE_EVENT, RELIC_OVERLAY_HIDE_EVENT } from './generated/desktop';
+
+/** Confidence below which a reading is shown as "check name"; the Wayland
+ *  overlay draws from the same Rust const. */
+export { RELIC_RECOMMENDATION_CONFIDENCE } from './generated/desktop';

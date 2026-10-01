@@ -81,4 +81,6 @@ export const RELIC_OVERLAY_UPDATE_EVENT = "relic-overlay:update" as const;
 
 export const RELIC_OVERLAY_HIDE_EVENT = "relic-overlay:hide" as const;
 
+export const RELIC_RECOMMENDATION_CONFIDENCE = 0.9 as const;
+
 export const AUTO_SCAN_CADENCE_CHOICES = [15, 30, 60] as const;

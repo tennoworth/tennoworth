@@ -5,7 +5,7 @@
   
   
   import type { RelicOverlayResult } from '../../contracts/data';
-  import { RELIC_OVERLAY_HIDE_EVENT, RELIC_OVERLAY_UPDATE_EVENT } from '../../contracts/events';
+  import { RELIC_OVERLAY_HIDE_EVENT, RELIC_OVERLAY_UPDATE_EVENT, RELIC_RECOMMENDATION_CONFIDENCE } from '../../contracts/events';
 
   let result = $state<RelicOverlayResult | null>(null);
 
@@ -41,7 +41,7 @@
       <article
         class="reward"
         class:best={slot.bestPlatinum}
-        class:uncertain={slot.confidence < 0.9}
+        class:uncertain={slot.confidence < RELIC_RECOMMENDATION_CONFIDENCE}
         style:left={`${slot.box.x * 100}%`}
         style:top={`${slot.box.y * 100}%`}
         style:width={`${slot.box.width * 100}%`}
@@ -57,7 +57,7 @@
             <span>{slot.owned == null ? 'own -' : `own ${slot.owned}`}</span>
             <span class="source">{slot.livePlatinum == null ? 'cached' : 'live'}</span>
           </div>
-          {#if slot.confidence < 0.9}
+          {#if slot.confidence < RELIC_RECOMMENDATION_CONFIDENCE}
             <span class="confidence">check name · {Math.round(slot.confidence * 100)}%</span>
           {/if}
         </div>

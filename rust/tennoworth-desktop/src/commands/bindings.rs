@@ -35,6 +35,10 @@ fn desktop_bindings_match_rust() {
     ] {
         expected.push_str(&format!("\nexport const {name} = {value:?} as const;\n"));
     }
+    expected.push_str(&format!(
+        "\nexport const RELIC_RECOMMENDATION_CONFIDENCE = {:?} as const;\n",
+        crate::overlay::RECOMMENDATION_CONFIDENCE
+    ));
     // The cadences the setting offers live in Rust; the selector reads them from
     // here rather than repeating the list, so the two cannot drift.
     expected.push_str(&format!(
