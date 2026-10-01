@@ -107,6 +107,49 @@ pub fn fetch_vault_status(
     (out, complete)
 }
 
+/// Bring the calendar's `vaulted` flag in line with this cycle's vault status.
+///
+/// The two come from the same WFCD item data by different routes: the status
+/// from the GitHub source, the calendar from warframestat's API, which serves an
+/// older copy. On 2026-10-01 Xaku, Quassus and Trumna Prime were vaulted in the
+/// former and not in the latter, so the advisor skipped its post-vault hold for
+/// them and could say "sell now" during the ramp it exists to protect. A prime
+/// the status calls vaulted is marked vaulted here; one with no vault date takes
+/// its estimated date once that date has passed. Nothing is ever unvaulted on
+/// the status's word: a Resurgence reprint is not an unvault.
+pub fn align_calendar_with_vault_status(
+    calendar: &mut HashMap<String, serde_json::Value>,
+    vault_status: &HashMap<String, String>,
+    now: DateTime<Utc>,
+) -> usize {
+    let Some(primes) = calendar.get_mut("primes").and_then(|p| p.as_object_mut()) else {
+        return 0;
+    };
+    let mut aligned = 0;
+    for (slug, row) in primes.iter_mut() {
+        if vault_status.get(slug).map(String::as_str) != Some("vaulted") {
+            continue;
+        }
+        let Some(row) = row.as_object_mut() else { continue };
+        if row.get("vaulted").and_then(|v| v.as_bool()) == Some(true) {
+            continue;
+        }
+        row.insert("vaulted".into(), serde_json::Value::Bool(true));
+        if !row.contains_key("vault_date") {
+            let passed = row
+                .get("est_vault_date")
+                .and_then(|d| d.as_str())
+                .filter(|d| clock::parse_isoformat_utc(&d.replace('Z', "+00:00")).is_some_and(|at| at <= now))
+                .map(str::to_string);
+            if let Some(date) = passed {
+                row.insert("vault_date".into(), serde_json::Value::String(date));
+            }
+        }
+        aligned += 1;
+    }
+    aligned
+}
+
 pub const WFSTAT_VAULT_TRADER_URL: &str = "https://api.warframestat.us/pc/vaultTrader/";
 
 /// The price-shock calendar the hold/sell advisor reasons over, as one

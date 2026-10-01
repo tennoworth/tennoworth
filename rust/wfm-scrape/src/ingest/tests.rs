@@ -725,3 +725,35 @@ fn a_failed_live_endpoint_still_marks_the_surface_incomplete() {
         fetch_parent_data(&empty, &sentinel_catalog(), Some(&serde_json::json!([])));
     assert!(!complete);
 }
+
+#[test]
+fn the_calendar_takes_vaulted_from_the_fresher_vault_status() {
+    let now = chrono::DateTime::parse_from_rfc3339("2026-10-01T00:00:00Z").unwrap().with_timezone(&chrono::Utc);
+    let mut calendar: HashMap<String, serde_json::Value> = serde_json::from_value(serde_json::json!({
+        "primes": {
+            "xaku_prime_set": {"name": "Xaku Prime", "released": "2024-11-13", "vaulted": false, "est_vault_date": "2026-08-13"},
+            "dated_prime_set": {"name": "Dated Prime", "vaulted": false, "vault_date": "2026-07-01", "est_vault_date": "2026-08-13"},
+            "upcoming_prime_set": {"name": "Upcoming Prime", "vaulted": false, "est_vault_date": "2027-01-01"},
+            "reprinted_prime_set": {"name": "Reprinted Prime", "vaulted": true, "vault_date": "2020-01-01"}
+        }
+    }))
+    .unwrap();
+    let status: HashMap<String, String> = [
+        ("xaku_prime_set", "vaulted"),
+        ("dated_prime_set", "vaulted"),
+        ("upcoming_prime_set", "vaulted"),
+        ("reprinted_prime_set", "available"),
+    ]
+    .into_iter()
+    .map(|(k, v)| (k.to_string(), v.to_string()))
+    .collect();
+
+    assert_eq!(align_calendar_with_vault_status(&mut calendar, &status, now), 3);
+    let primes = &calendar["primes"];
+    assert_eq!(primes["xaku_prime_set"]["vaulted"], true);
+    assert_eq!(primes["xaku_prime_set"]["vault_date"], "2026-08-13", "a passed estimate dates the vault");
+    assert_eq!(primes["dated_prime_set"]["vault_date"], "2026-07-01", "a known date is kept");
+    assert_eq!(primes["upcoming_prime_set"]["vaulted"], true);
+    assert!(primes["upcoming_prime_set"].get("vault_date").is_none(), "a future estimate is not a vault date");
+    assert_eq!(primes["reprinted_prime_set"]["vaulted"], true, "never unvaulted on the status's word");
+}
