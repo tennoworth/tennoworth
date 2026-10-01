@@ -230,9 +230,10 @@ omits `frame-ancestors` - browsers ignore it in meta tags.)
 `bun run build:desktop` builds to `dist-desktop/` (gitignored) and runs
 `sync-csp.ts --desktop dist-desktop/index.html`, which rewrites only that
 built file's meta CSP to
-`connect-src 'self' ipc://localhost http://ipc.localhost https://tennoworth.app`
+`connect-src 'self' ipc://localhost http://ipc.localhost`
 (the Tauri IPC scheme added so `invoke` uses the fast path with no CSP
-violations; plus the one C4 refresh origin). It NEVER touches the three hosted
+violations). Remote data, including everything from tennoworth.app, is
+fetched in Rust, so the desktop policy names no remote origin. It NEVER touches the three hosted
 copies, so the hosted CSP stays byte-identical.
 `rust/tennoworth-desktop`'s `frontendDist` points at `dist-desktop`.
 
