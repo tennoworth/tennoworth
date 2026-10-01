@@ -24,7 +24,10 @@ export interface UpdateStatus {
 
 
 /** Event name the Rust close-with-tray path emits so the SPA shows its once-ever tray banner. */
-export const TRAY_HINT_EVENT = 'tray-hint';
+export { TRAY_HINT_EVENT } from './generated/desktop';
+
+/** Event name the Rust launch check emits when it finds an update. */
+export { UPDATE_AVAILABLE_EVENT } from './generated/desktop';
 
 export interface UpdateChange {
   id: string;

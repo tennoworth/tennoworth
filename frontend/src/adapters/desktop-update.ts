@@ -1,5 +1,5 @@
 import { diagnosticError } from '../contracts/errors';
-import type { UpdateStatus } from '../contracts/update';
+import { UPDATE_AVAILABLE_EVENT, type UpdateStatus } from '../contracts/update';
 // C5 desktop auto-update surface. Desktop-only by construction - every entry
 // point invokes a Tauri command, so nothing here is reachable in the hosted
 // build (the update banner renders only in desktop mode; the hosted SPA
@@ -55,7 +55,7 @@ export async function restartApp(): Promise<void> {
  * lost, and a check that finishes after mount still lands here.
  */
 export function onUpdateAvailable(cb: (s: UpdateStatus) => void): () => void {
-  return listenForTauriEvent('update-available', cb);
+  return listenForTauriEvent(UPDATE_AVAILABLE_EVENT, cb);
 }
 
 /**

@@ -9,9 +9,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// Pin the literal both sides of the channel use - if App.svelte ever drifts to
-// a different event name, the Rust emit is silently lost. (The Rust-side
-// EVENT_TRAY_HINT const is not reachable from TS, so this pins the TS half.)
+// The name is generated from the Rust EVENT_TRAY_HINT const, which
+// desktop_bindings_match_rust pins; this guards the re-export the shell uses.
 describe('TRAY_HINT_EVENT', () => {
   it('is the exact event name the Rust close-with-tray path emits', () => {
     expect(TRAY_HINT_EVENT).toBe('tray-hint');

@@ -188,8 +188,10 @@ unlock that should "just work" becomes an error banner.
 
 Rust→SPA push events (the tray hint, the update check) go through the
 shared no-op-safe `listenForTauriEvent` in `desktop-update.ts` - not a
-per-event file - and the event name is pinned by a test (`tray.test.ts`)
-so the Rust↔TS literal can't drift silently.
+per-event file. Every event name the webview listens for is generated from
+its Rust const into `src/contracts/generated/desktop.ts` and re-exported from
+`src/contracts/`; `desktop_bindings_match_rust` fails when the two differ, so
+never type an event name as a string literal.
 
 ---
 

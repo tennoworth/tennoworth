@@ -441,6 +441,21 @@ mod tests {
     }
     fn no_sleep(_: u64) {}
 
+    // The spacing is the only thing keeping a 365-day bootstrap polite to
+    // relics.run, and every other test stubs the sleeper out, so this records it.
+    #[test]
+    fn day_files_are_fetched_a_second_apart() {
+        let h = http(&[
+            ("2026-08-13", day_body(18.0, 80.0, &[("intact", 7.0, 10.0)])),
+            ("2026-08-14", day_body(19.0, 80.0, &[("intact", 8.0, 10.0)])),
+            ("2026-08-15", day_body(20.0, 80.0, &[("intact", 9.0, 10.0)])),
+        ]);
+        let slept = std::cell::RefCell::new(Vec::new());
+        let record = |ms: u64| slept.borrow_mut().push(ms);
+        update_history(&h, None, &catalog(), d("2026-08-15"), "t0", 3, 3, &record);
+        assert_eq!(*slept.borrow(), vec![1000, 1000], "between fetches, not before the first");
+    }
+
     #[test]
     fn a_day_file_reduces_to_rank0_and_the_volume_dominant_subtype() {
         let (rows, unmatched) = parse_day_file(

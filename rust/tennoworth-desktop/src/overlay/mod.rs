@@ -45,7 +45,10 @@ const DEFAULT_SHORTCUT: &str = "Ctrl+Shift+O";
 const DEFAULT_REWARD_MARKER: &str = "Got rewards";
 const REWARD_CLOSE_MARKER: &str = "Relic reward screen shut down";
 const REWARD_SLOT_MARKER: &str = "ProjectionRewardChoice.lua: Missing icon data!";
-const RECOMMENDATION_CONFIDENCE: f64 = 0.9;
+/// Below this a reading is shown as "check name" rather than recommended. The
+/// webview's card and the Wayland-drawn card both read it: the webview through
+/// the generated bindings, so the two overlays cannot disagree on a slot.
+pub(crate) const RECOMMENDATION_CONFIDENCE: f64 = 0.9;
 // Warframe sizes this part of the reward UI from the viewport height. Keeping
 // these dimensions height-relative makes the same layout work on 16:10 and
 // ultrawide displays instead of stretching the card grid with the viewport.

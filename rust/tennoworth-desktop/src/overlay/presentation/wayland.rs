@@ -728,12 +728,12 @@ fn draw_overlay(
         let box_y = slot.box_.y * logical_height as f64 + 8.0;
         let box_width = slot.box_.width * logical_width as f64;
         let card_width = (250.0 * result.scale).min((box_width - 16.0).max(80.0));
-        let card_height = (if slot.confidence < 0.9 { 78.0 } else { 66.0 }) * result.scale;
+        let card_height = (if slot.confidence < crate::overlay::RECOMMENDATION_CONFIDENCE { 78.0 } else { 66.0 }) * result.scale;
         let x = box_x + (box_width - card_width) / 2.0;
         let y = box_y;
         let best_color = if slot.best_platinum {
             (0.902, 0.722, 0.361)
-        } else if slot.confidence < 0.9 {
+        } else if slot.confidence < crate::overlay::RECOMMENDATION_CONFIDENCE {
             (0.933, 0.561, 0.439)
         } else {
             (0.4, 0.502, 0.561)
@@ -819,7 +819,7 @@ fn draw_overlay(
             (0.714, 0.757, 0.784),
             true,
         )?;
-        if slot.confidence < 0.9 {
+        if slot.confidence < crate::overlay::RECOMMENDATION_CONFIDENCE {
             draw_text(
                 &context,
                 &format!("check name · {:.0}%", slot.confidence * 100.0),

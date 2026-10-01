@@ -19,6 +19,26 @@ fn desktop_bindings_match_rust() {
         "\nexport const INVENTORY_SCANNED_EVENT = {:?} as const;\n",
         crate::services::acquisition::EVENT_INVENTORY_SCANNED
     ));
+    // Every other Rust-emitted event name the webview listens for. A name typed
+    // on each side compiled and type-checked while the listener never fired.
+    for (name, value) in [
+        ("TRADE_DETECTED_EVENT", crate::services::trades::EVENT_TRADE_DETECTED),
+        ("RECORDING_CHANGED_EVENT", crate::services::trades::EVENT_RECORDING_CHANGED),
+        ("ALLOWANCE_CHANGED_EVENT", crate::services::allowance::EVENT_ALLOWANCE_CHANGED),
+        ("NOTIFICATIONS_EVENT", crate::services::notifications::EVENT),
+        ("MARKET_REFRESHED_EVENT", crate::services::reminders::MARKET_EVENT),
+        ("LIVE_TOP_PROGRESS_EVENT", super::market::EVENT_LIVE_TOP_PROGRESS),
+        ("TRAY_HINT_EVENT", crate::shell::tray::EVENT_TRAY_HINT),
+        ("UPDATE_AVAILABLE_EVENT", crate::shell::update::EVENT_UPDATE_AVAILABLE),
+        ("RELIC_OVERLAY_UPDATE_EVENT", crate::overlay::EVENT_UPDATE),
+        ("RELIC_OVERLAY_HIDE_EVENT", crate::overlay::EVENT_HIDE),
+    ] {
+        expected.push_str(&format!("\nexport const {name} = {value:?} as const;\n"));
+    }
+    expected.push_str(&format!(
+        "\nexport const RELIC_RECOMMENDATION_CONFIDENCE = {:?} as const;\n",
+        crate::overlay::RECOMMENDATION_CONFIDENCE
+    ));
     // The cadences the setting offers live in Rust; the selector reads them from
     // here rather than repeating the list, so the two cannot drift.
     expected.push_str(&format!(
