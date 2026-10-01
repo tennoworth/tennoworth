@@ -1,0 +1,4 @@
+{
+  "_comment": "Whole days after which carried surface data counts as stale: the pipeline warns at this age (reconcile, age >= stale_days) and the calendar marks the event stale at the same age. Read by rust/wfm-scrape/src/pipeline/mod.rs and frontend/src/domain/calendar-feed.test.ts.",
+  "stale_days": 7
+}

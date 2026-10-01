@@ -18,7 +18,7 @@
 //     record so a reader knows how fresh it is.
 
 import type { Market } from '../contracts/data';
-import { DEAD_SHARE } from './sell-priority';
+import { DEAD_SHARE, LIQUID_VOL } from './sell-priority';
 
 export interface UsageEntry {
   name: string;
@@ -101,9 +101,6 @@ export function usageFor(
 /** Share at or above which an item counts as genuinely popular within its
  *  category. Categories hold 113–233 items, so an even split would be well
  *  under 1% - a whole percent is a real signal. */
-/** 48h trades below which the market side of the signal is too thin to lean
- *  on. Matches the threshold the relic planner uses. */
-export const THIN_VOLUME = 5;
 
 export type Liquidity =
   | 'sells-today' //   played and trading - list at market and it moves
@@ -171,7 +168,7 @@ export function readDemand(
   const band = usage ? masteryBand(usage.by_mr) : null;
 
   let liquidity: Liquidity;
-  if (opts.vol < THIN_VOLUME) {
+  if (opts.vol < LIQUID_VOL) {
     liquidity = 'thin';
   } else if (!usage) {
     liquidity = 'unknown';

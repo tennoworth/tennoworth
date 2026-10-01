@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildCalendar, vaultAffects } from './calendar-feed';
+import { buildCalendar, STALE_DAYS, vaultAffects } from './calendar-feed';
+import staleDays from '../../../tests/fixtures/stale-days.json';
 import type { Market, OwnedRecord, VaultRotation } from '../contracts/data';
 
 const NOW = Date.parse('2026-08-22T00:00:00Z');
@@ -329,6 +330,26 @@ describe('buildCalendar', () => {
       expect(event?.stale, disposition).toBe(true);
       expect(event?.dataAgeDays, disposition).toBeUndefined();
     }
+  });
+
+  // At the pipeline's own stale age the calendar says stale too; it used to
+  // wait one more day, so a surface the build warned about read as current.
+  it('turns stale at the age the pipeline warns at', () => {
+    expect(STALE_DAYS).toBe(staleDays.stale_days);
+    const at = (daysAgo: number) => {
+      const market = structuredClone(EVENT_MARKET) as Market;
+      market.event_rewards!.events = {
+        event: { ...market.event_rewards!.goals!.complete, id: 'event', source: 'event', title: 'Event Reward' },
+      };
+      market.surface_provenance!['world.events'] = {
+        disposition: 'merged_partial',
+        attempted_at: '2026-08-22T00:00:00Z',
+        data_fetched_at: new Date(NOW - daysAgo * 86_400_000).toISOString(),
+      };
+      return buildCalendar(market, owned([]), NOW).find((i) => i.title === 'Event Reward')?.stale;
+    };
+    expect(at(staleDays.stale_days - 1)).toBe(false);
+    expect(at(staleDays.stale_days)).toBe(true);
   });
 
   // The control: an observed surface keeps being measured by its stamp, so a

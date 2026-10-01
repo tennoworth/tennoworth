@@ -1336,3 +1336,13 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_stale_age_is_the_one_the_calendar_shows() {
+        let fixture: serde_json::Value =
+            serde_json::from_str(include_str!("../../../../tests/fixtures/stale-days.json")).unwrap();
+        assert_eq!(fixture["stale_days"].as_i64(), Some(super::STALE_DAYS));
+    }
+}

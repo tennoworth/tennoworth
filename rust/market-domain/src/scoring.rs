@@ -262,7 +262,7 @@ pub fn score_inventory(request: ScoreInventoryRequest) -> Result<Vec<ScoredInven
             let inherited = usage.is_some();
             (usage, inherited)
         };
-        let liquidity = if priced.vol < 5.0 {
+        let liquidity = if priced.vol < sell_priority::LIQUID_VOL {
             Liquidity::Thin
         } else if let Some(usage) = &usage {
             if usage.share < sell_priority::DEAD_SHARE {
@@ -333,6 +333,26 @@ pub fn score_inventory(request: ScoreInventoryRequest) -> Result<Vec<ScoredInven
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_thin_book_line_matches_the_typescript_side() {
+        let boundary: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../tests/fixtures/sell-priority/liquidity-boundary.json"
+        ))
+        .unwrap();
+        assert_eq!(boundary["liquid_vol"].as_f64(), Some(sell_priority::LIQUID_VOL));
+        for c in boundary["cases"].as_array().unwrap() {
+            let f = |k: &str| c[k].as_f64().unwrap();
+            let priced = PricedEntry {
+                vol: f("vol"),
+                low_sell: f("low_sell"),
+                avg: 0.0,
+                median_now: 0.0,
+                median_90d: f("median_90d"),
+            };
+            assert_eq!(sell_priority::clearing_price(&priced), f("clearing"), "vol {}", f("vol"));
+        }
+    }
     #[derive(Deserialize)]
     struct Case {
         name: String,

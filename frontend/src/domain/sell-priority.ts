@@ -39,8 +39,10 @@ export interface SellScoreOutput {
 }
 
 // Below this many closed trades / 48 h the book is too thin to trust its ask
-// as a forecast, and too thin to certify a trend. Shared by the ask clamp,
-// the patience tag, and the UI's trend badges (via LIQUID_VOL export).
+// as a forecast, and too thin to certify a trend. The one TypeScript home for
+// the threshold: the ask clamp, the trend badges, the demand signal and the
+// Baro board all read it, and tests/fixtures/sell-priority/liquidity-boundary.json
+// pins it against the native copy.
 export const LIQUID_VOL = 5;
 const PATIENCE_VOL = 3;
 export const DEAD_SHARE = 0.15;
