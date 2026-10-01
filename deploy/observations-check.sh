@@ -40,6 +40,10 @@ usage: observations-check.sh [options]
   --snapshot <path>           published snapshot (default /srv/wfm/app/frontend/public/market.json)
   --deployed <path>           deployment record (default /srv/wfm/deployed.json)
   --binary <path>             installed scraper (default /srv/wfm/bin/wfm-scrape)
+  --app <dir>                 the box's checkout of main, which the deployed
+                              scraper is compared against (default /srv/wfm/app)
+  --deploy-grace-hours <n>    how long scraper changes in the checkout may wait
+                              for a deploy before the box is not ready (default 24)
   --preservation <mode>       where the corpus is preserved: external-backup (a
                               host-level Proxmox backup of this container,
                               verified by an operator-run job elsewhere).
@@ -61,6 +65,8 @@ CSV="/srv/wfm/app/wfm_results.csv"
 SNAPSHOT="/srv/wfm/app/frontend/public/market.json"
 DEPLOYED="/srv/wfm/deployed.json"
 BINARY="/srv/wfm/bin/wfm-scrape"
+APP="/srv/wfm/app"
+DEPLOY_GRACE_HOURS=24
 # Where preservation lives. Named explicitly by the deployment - there is no
 # permissive default, because a check that guesses would report a claim nobody
 # made. The expansion is `:-`, so an absent variable (the unit's EnvironmentFile
@@ -92,6 +98,8 @@ while [ $# -gt 0 ]; do
     --snapshot) SNAPSHOT="$2"; shift 2;;
     --deployed) DEPLOYED="$2"; shift 2;;
     --binary) BINARY="$2"; shift 2;;
+    --app) APP="$2"; shift 2;;
+    --deploy-grace-hours) DEPLOY_GRACE_HOURS="$2"; shift 2;;
     --preservation) PRESERVATION="$2"; shift 2;;
     --pair-tolerance-seconds) PAIR_TOLERANCE_SECONDS="$2"; shift 2;;
     --interval-seconds) INTERVAL_SECONDS="$2"; shift 2;;
@@ -214,7 +222,9 @@ log_rows="$(mktemp)"
 # running or one that died is only decidable once the newest completed sweep is
 # known, so the verdict waits until after the loop.
 partial_rows="$(mktemp)"
-trap 'rm -f "$day_counts" "$starts_file" "$log_rows" "$partial_rows"' EXIT
+# Starts of partial logs a later completed sweep superseded, for the gap count.
+abandoned_starts="$(mktemp)"
+trap 'rm -f "$day_counts" "$starts_file" "$log_rows" "$partial_rows" "$abandoned_starts"' EXIT
 
 if [ ! -d "$OBSERVATIONS" ]; then
   error "observations directory $OBSERVATIONS does not exist"
@@ -350,6 +360,7 @@ while IFS='|' read -r partial_start age name; do
   [ -n "$name" ] || continue
   if [ -n "$partial_start" ] && [ -n "$newest_start_epoch" ] && [ "$partial_start" -lt "$newest_start_epoch" ]; then
     abandoned+=("$name")
+    printf '%s\n' "$partial_start" >> "$abandoned_starts"
   elif [ "$age" -gt "$PARTIAL_MAX_AGE_SECONDS" ]; then
     if [ -z "$stuck_age" ] || [ "$age" -gt "$stuck_age" ]; then stuck_age="$age"; fi
   fi
@@ -375,7 +386,15 @@ fi
 # would drift: the timer's jitter and the sweep's own runtime make consecutive
 # starts more than the nominal interval apart, and rounding that up would invent
 # a missing sweep on a perfectly healthy corpus.
+#
+# A slot inside a gap that holds an abandoned partial is a sweep that ran and
+# failed, not one that never ran. The failure already paged once, through
+# wfm-scrape.service's own OnFailure, and its partial stays for 56 days; counting
+# it as missing turned every aborted sweep into an hourly not-ready alert for the
+# whole retention window. It is reported as aborted, with a warning. A slot with
+# no log and no partial still means the schedule itself broke, and fails.
 missing=0
+aborted=0
 longest_gap=0
 if [ -s "$starts_file" ]; then
   previous=""
@@ -387,14 +406,21 @@ if [ -s "$starts_file" ]; then
       [ "$gap" -gt "$longest_gap" ] && longest_gap="$gap"
       slots=$(( (gap + INTERVAL_SECONDS / 2) / INTERVAL_SECONDS ))
       [ "$slots" -lt 1 ] && slots=1
-      missing=$((missing + slots - 1))
+      lost=$((slots - 1))
+      ran="$(awk -v lo="$previous" -v hi="$current" '$1 > lo && $1 < hi' "$abandoned_starts" | wc -l)"
+      [ "$ran" -gt "$lost" ] && ran="$lost"
+      aborted=$((aborted + ran))
+      missing=$((missing + lost - ran))
     fi
     previous="$current"
   done < <(sort "$starts_file")
 fi
-expected=$((valid + missing))
+expected=$((valid + aborted + missing))
 if [ "$missing" -gt 0 ]; then
   error "$missing scheduled sweep(s) have no log (expected $expected, found $valid)"
+fi
+if [ "$aborted" -gt 0 ]; then
+  warn "$aborted scheduled sweep(s) started but did not complete; each failed its own unit when it happened"
 fi
 
 per_day="$(sort "$day_counts" | uniq -c | awk '{printf "%s\"%s\":%s", (NR>1?",":""), $2, $1}')"
@@ -724,6 +750,52 @@ else
   error "$BINARY is missing"
 fi
 
+# The scraper is installed only by scripts/deploy-scrape-host.sh, by hand, while
+# the checkout follows main on its own. Nothing else notices when a promoted
+# scraper change is never deployed: on 2026-10-01 the box ran 03ff5b0 three
+# scraper merges behind main. A change still inside the grace window is a
+# warning; past it, the box is not ready until the deploy happens. A revision
+# the checkout does not know was deployed from develop ahead of main, which is
+# not lag.
+SCRAPER_SOURCES=(
+  rust/wfm-scrape rust/wfm-client rust/market-math rust/Cargo.toml rust/Cargo.lock
+  deploy/run-scrape.sh deploy/wfm-scrape.service deploy/wfm-scrape.timer
+  deploy/observations-check.sh deploy/wfm-observations-check.service deploy/wfm-observations-check.timer
+)
+# Root reads a checkout owned by wfm, which git refuses without this.
+app_git() { git -c safe.directory="$APP" -C "$APP" "$@"; }
+deploy_lag="unknown"
+pending_commits=0
+checkout_head=""
+if [ -z "$revision" ]; then
+  :
+elif ! command -v git >/dev/null 2>&1 || [ ! -e "$APP/.git" ]; then
+  warn "cannot compare the deployed scraper with $APP: no git checkout there"
+elif ! checkout_head="$(app_git rev-parse --short HEAD 2>/dev/null)"; then
+  checkout_head=""
+  warn "cannot read the checkout at $APP"
+elif ! app_git cat-file -e "$revision^{commit}" 2>/dev/null; then
+  deploy_lag="ahead"
+elif ! app_git merge-base --is-ancestor "$revision" HEAD 2>/dev/null; then
+  deploy_lag="diverged"
+  warn "the deployed scraper ${revision:0:7} is not an ancestor of the checkout's $checkout_head"
+else
+  pending="$(app_git log --format='%ct' "$revision..HEAD" -- "${SCRAPER_SOURCES[@]}" 2>/dev/null || true)"
+  if [ -z "$pending" ]; then
+    deploy_lag="current"
+  else
+    deploy_lag="behind"
+    pending_commits="$(printf '%s\n' "$pending" | wc -l)"
+    oldest_pending="$(printf '%s\n' "$pending" | sort -n | head -1)"
+    lag_message="the deployed scraper ${revision:0:7} is $pending_commits scraper commit(s) behind the checkout's $checkout_head"
+    if [ $((NOW_EPOCH - oldest_pending)) -gt $((DEPLOY_GRACE_HOURS * 3600)) ]; then
+      error "$lag_message; deploy it with scripts/deploy-scrape-host.sh"
+    else
+      warn "$lag_message"
+    fi
+  fi
+fi
+
 # ---- preservation statement -------------------------------------------------
 # The honest headline, and the only claim this check is entitled to make about
 # preservation. The protection is a host-level backup of the whole container,
@@ -764,6 +836,7 @@ report="$(cat <<EOF
     "expected": $expected,
     "valid": $valid,
     "missing": $missing,
+    "aborted": $aborted,
     "newest_age_seconds": $(jnum "$newest_age"),
     "snapshot_age_seconds": $(jnum "$snapshot_age"),
     "snapshot": $(jstr "$snapshot_state"),
@@ -830,7 +903,10 @@ report="$(cat <<EOF
   "deployment": {
     "revision": $(jstr "$revision"),
     "recorded_sha256": $(jstr "$recorded_sha"),
-    "installed_sha256": $(jstr "$installed_sha")
+    "installed_sha256": $(jstr "$installed_sha"),
+    "checkout_head": $(jstr_or_null "$checkout_head"),
+    "lag": $(jstr "$deploy_lag"),
+    "pending_scraper_commits": $pending_commits
   }
 }
 EOF

@@ -118,6 +118,10 @@ collection-readiness only; the schedule decision belongs to `replay`. It ties it
 journal evidence to one systemd invocation and one sweep, and a start that cannot
 be paired is an explicit failure rather than a skipped gate. A partial log that a
 later completed sweep has superseded is a dead sweep kept for post-mortem - a
-warning, with the lost sweep already counted as missing - while one nothing has
-superseded is still a stuck sweep. It never ends without a report: an absent
+warning, and its slot counts as aborted rather than missing, because the sweep's
+own unit already failed when it happened; only a slot with neither a log nor a
+partial is missing and fails - while one nothing has superseded is still a stuck
+sweep. The check also compares the deployed revision with the box's checkout of
+`main`: scraper changes left undeployed past a 24-hour grace fail it, since the
+scraper is installed only by hand. It never ends without a report: an absent
 field is reported as absent and failed.
