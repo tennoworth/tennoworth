@@ -210,31 +210,29 @@ Follow ../SECURITY.md for trust boundaries.
 
 Production serves through **Caddy on the self-host box**, which applies
 the full header set (HSTS, `frame-ancestors` / X-Frame-Options, the
-CSP) from `deploy/Caddyfile` - kept in sync with the other CSP copies
-by `scripts/sync-csp.ts`. The `<meta http-equiv="Content-Security-Policy">`
+CSP) from `deploy/Caddyfile` - kept in sync with the meta copy by
+`scripts/sync-csp.ts`. The `<meta http-equiv="Content-Security-Policy">`
 in `index.html` still ships script/connect/style protection as a
-belt-and-suspenders fallback. The `public/_headers` file only matters
-for preview deployments on Cloudflare Pages / Netlify / Vercel (GitHub
-Pages silently drops it), where the header host isn't ours.
+belt-and-suspenders fallback.
 
 Allowed `connect-src` (hosted): `self`. The hosted site makes no
 loopback or third-party calls - the loopback entries were for the removed
-companion CLI. The CSP ships in three places
-(`index.html` meta, `public/_headers`, `deploy/Caddyfile`) but is
+companion CLI. The CSP ships in two places
+(`index.html` meta, `deploy/Caddyfile`) but is
 **edited in ONE**: `scripts/sync-csp.ts`. Change the directives there,
-run `bun run csp` to rewrite all three; `bun run build` fails via its
-prebuild `--check` if any copy drifted. (The meta copy deliberately
+run `bun run csp` to rewrite both; `bun run build` fails via its
+prebuild `--check` if either copy drifted. (The meta copy deliberately
 omits `frame-ancestors` - browsers ignore it in meta tags.)
 
-**Desktop (Tauri) is a build-variant, not a fourth committed copy.**
+**Desktop (Tauri) is a build-variant, not a third committed copy.**
 `bun run build:desktop` builds to `dist-desktop/` (gitignored) and runs
 `sync-csp.ts --desktop dist-desktop/index.html`, which rewrites only that
 built file's meta CSP to
 `connect-src 'self' ipc://localhost http://ipc.localhost`
 (the Tauri IPC scheme added so `invoke` uses the fast path with no CSP
 violations). Remote data, including everything from tennoworth.app, is
-fetched in Rust, so the desktop policy names no remote origin. It NEVER touches the three hosted
-copies, so the hosted CSP stays byte-identical.
+fetched in Rust, so the desktop policy names no remote origin. It NEVER
+touches the hosted copies, so the hosted CSP stays byte-identical.
 `rust/tennoworth-desktop`'s `frontendDist` points at `dist-desktop`.
 
 ---

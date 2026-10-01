@@ -128,7 +128,6 @@ jobs:
             deploy:
               - 'deploy/**'
               - 'frontend/index.html'
-              - 'frontend/public/_headers'
               - 'scripts/*.sh'
               - 'scripts/deploy-layout.test.ts'
               - 'scripts/sync-csp.ts'
