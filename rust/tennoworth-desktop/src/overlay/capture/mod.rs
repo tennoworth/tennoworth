@@ -42,17 +42,21 @@ fn pick_game_window(
     candidates: &[(Option<u32>, String)],
     game_pid: Option<u32>,
 ) -> Option<(usize, WindowRule)> {
+    // The game can own more than one window (a launcher, a splash, hidden
+    // helpers); among its own, the one titled "Warframe" is the one to read.
+    let exact = |title: &str| title.trim().eq_ignore_ascii_case("warframe");
     let by_pid = game_pid.and_then(|game| {
         candidates
             .iter()
-            .position(|(pid, _)| *pid == Some(game))
+            .position(|(pid, title)| *pid == Some(game) && exact(title))
+            .or_else(|| candidates.iter().position(|(pid, _)| *pid == Some(game)))
     });
     if let Some(index) = by_pid {
         return Some((index, WindowRule::GamePid));
     }
     if let Some(index) = candidates
         .iter()
-        .position(|(_, title)| title.trim().eq_ignore_ascii_case("warframe"))
+        .position(|(_, title)| exact(title))
     {
         return Some((index, WindowRule::ExactTitle));
     }
@@ -70,6 +74,15 @@ mod tests {
         list.iter()
             .map(|(pid, title)| (*pid, (*title).to_string()))
             .collect()
+    }
+
+    #[test]
+    fn the_game_s_own_titled_window_beats_its_other_windows() {
+        let list = windows(&[
+            (Some(42), "Warframe Launcher"),
+            (Some(42), "Warframe"),
+        ]);
+        assert_eq!(pick_game_window(&list, Some(42)), Some((1, WindowRule::GamePid)));
     }
 
     #[test]
