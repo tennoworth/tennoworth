@@ -1451,12 +1451,15 @@ describe.skipIf(process.platform === 'win32')('observation corpus readiness', ()
       const f = corpusFixture();
       const app = join(f.box, 'app');
       // A desktop that may gain a dependency of its own, and a scraper with one.
+      // desktopOnly adds xcap and a second csv the scraper does not use. With two
+      // csv versions in the lock, Cargo spells the scraper's dependency with its
+      // version, which changes the scraper's record text but not what it uses.
       const lock = (desktop: string, scraperDep: string, desktopOnly = false) => [
-        `[[package]]\nname = "tennoworth-desktop"\nversion = "${desktop}"\ndependencies = [\n "wfm-client",${desktopOnly ? '\n "xcap",' : ''}\n]\n`,
+        `[[package]]\nname = "tennoworth-desktop"\nversion = "${desktop}"\ndependencies = [\n "wfm-client",${desktopOnly ? '\n "xcap",\n "csv 2.0.0",' : ''}\n]\n`,
         `[[package]]\nname = "wfm-client"\nversion = "0.1.0"\n`,
-        `[[package]]\nname = "wfm-scrape"\nversion = "0.1.0"\ndependencies = [\n "csv",\n "wfm-client",\n]\n`,
+        `[[package]]\nname = "wfm-scrape"\nversion = "0.1.0"\ndependencies = [\n "${desktopOnly ? `csv ${scraperDep}` : 'csv'}",\n "wfm-client",\n]\n`,
         `[[package]]\nname = "csv"\nversion = "${scraperDep}"\n`,
-        ...(desktopOnly ? [`[[package]]\nname = "xcap"\nversion = "0.8.3"\n`] : []),
+        ...(desktopOnly ? [`[[package]]\nname = "csv"\nversion = "2.0.0"\n`, `[[package]]\nname = "xcap"\nversion = "0.8.3"\n`] : []),
       ].join('\n');
       const commit = (content: string, hoursAgo: number) => {
         write(join(app, 'rust/Cargo.lock'), content);
@@ -1469,7 +1472,8 @@ describe.skipIf(process.platform === 'win32')('observation corpus readiness', ()
       const record = JSON.parse(readFileSync(join(f.box, 'deployed.json'), 'utf8'));
       writeFileSync(join(f.box, 'deployed.json'), JSON.stringify({ ...record, revision: git(app, 'rev-parse', 'HEAD') }));
 
-      // A desktop version bump, then a dependency only the desktop uses.
+      // A desktop version bump, then dependencies only the desktop uses -
+      // including another version of a crate the scraper also uses.
       commit(lock('0.8.5', '1.3.0'), 40);
       commit(lock('0.8.5', '1.3.0', true), 35);
       expect(f.run().status).toBe(0);

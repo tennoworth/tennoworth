@@ -796,31 +796,47 @@ else
   # alone, and so does every other lock commit in the range: judging per commit
   # keeps an old desktop bump from starting the grace clock for a newer change.
   scraper_closure() {
+    # Keyed by name and version: the lock writes a dependency as "name" when it
+    # holds one version of that crate and as "name version" when it holds
+    # several, so following a bare name could pull a version only the desktop
+    # uses into the scraper's closure.
     awk 'BEGIN { RS = ""; ORS = "\n\n" }
       {
-        n = ""
+        n = ""; v = ""
         if (match($0, /\nname = "[^"]+"/)) n = substr($0, RSTART + 9, RLENGTH - 10)
-        rec[NR] = $0; name[NR] = n
-        in_deps = 0
+        if (match($0, /\nversion = "[^"]+"/)) v = substr($0, RSTART + 12, RLENGTH - 13)
+        key = n " " v
+        # A package identity, not its text: how the lock spells a dependency
+        # changes when a second version of that crate appears elsewhere.
+        ident = ""
         nl = split($0, lines, "\n")
+        for (i = 1; i <= nl; i++) if (lines[i] ~ /^(name|version|source|checksum) = /) ident = ident lines[i] "\n"
+        rec[NR] = ident; keyof[NR] = key
+        versions[n]++; only[n] = key
+        in_deps = 0
         for (i = 1; i <= nl; i++) {
           line = lines[i]
           if (line ~ /^dependencies = \[/) { in_deps = 1; continue }
           if (in_deps && line ~ /^\]/) { in_deps = 0; continue }
           if (in_deps) {
-            gsub(/^ *"|",? *$/, "", line); split(line, parts, " ")
-            deps[n] = deps[n] " " parts[1]
+            gsub(/^ *"|",? *$/, "", line); k = split(line, parts, " ")
+            deps[key] = deps[key] "\t" (k >= 2 ? parts[1] " " parts[2] : parts[1])
           }
         }
       }
+      function resolve(d) { return (index(d, " ") ? d : (versions[d] == 1 ? only[d] : "")) }
       END {
         split("wfm-scrape wfm-client market-math", roots, " ")
-        for (r in roots) { want[roots[r]] = 1; queue[++q] = roots[r] }
+        for (r in roots) { k = resolve(roots[r]); if (k != "" && !(k in want)) { want[k] = 1; queue[++q] = k } }
         for (h = 1; h <= q; h++) {
-          k = split(deps[queue[h]], ds, " ")
-          for (j = 1; j <= k; j++) if (!(ds[j] in want)) { want[ds[j]] = 1; queue[++q] = ds[j] }
+          m = split(deps[queue[h]], ds, "\t")
+          for (j = 1; j <= m; j++) {
+            if (ds[j] == "") continue
+            k = resolve(ds[j])
+            if (k != "" && !(k in want)) { want[k] = 1; queue[++q] = k }
+          }
         }
-        for (i = 1; i <= NR; i++) if (name[i] in want) print rec[i]
+        for (i = 1; i <= NR; i++) if (keyof[i] in want) print rec[i]
       }'
   }
   lock_changes=""
