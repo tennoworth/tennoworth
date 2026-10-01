@@ -1813,7 +1813,24 @@ fn de_endpoints_are_still_alive() {
         .expect("build client");
     let http = LiveHttp { client };
 
-    let raw = http.get_bytes(de::DE_INDEX_URL).expect("index fetch");
+    // A moved endpoint fails every attempt; a momentary outage does not. One
+    // unavailable worldState read turned the 2026-09-28 weekly audit red while
+    // the box fetched it fine on every sweep either side.
+    fn patiently<T, E: std::fmt::Debug>(what: &str, mut attempt: impl FnMut() -> Result<T, E>) -> T {
+        let mut last = None;
+        for n in 0..3 {
+            if n > 0 {
+                std::thread::sleep(std::time::Duration::from_secs(20));
+            }
+            match attempt() {
+                Ok(value) => return value,
+                Err(e) => last = Some(e),
+            }
+        }
+        panic!("{what} failed three times, 20 s apart: {last:?}");
+    }
+
+    let raw = patiently("index fetch", || http.get_bytes(de::DE_INDEX_URL));
     let text = de::decode_lzma_alone(&raw).expect("index is still LZMA-alone");
     let index = de::parse_index(&text);
     assert!(
@@ -1829,7 +1846,7 @@ fn de_endpoints_are_still_alive() {
     // One manifest, hash and all - the bare filename 404s, so this also proves
     // the hashed path still works.
     let entry = &index["ExportWeapons_en.json"];
-    let body = http.get_text(&entry.url()).expect("manifest fetch");
+    let body = patiently("manifest fetch", || http.get_text(&entry.url()));
     let doc = de::parse_manifest(&body).expect("manifest parse");
     let rows = de::manifest_rows_for(&doc, "ExportWeapons_en.json");
     // Guards the two-array trap: ExportWeapons_en.json also carries
@@ -1847,10 +1864,10 @@ fn de_endpoints_are_still_alive() {
         "no dispositions in ExportWeapons - the field was renamed"
     );
 
-    let world = match de::fetch_world_state(&http) {
-        wfm_scrape::reconcile::Observation::Usable { data, .. } => data,
-        other => panic!("worldState was not usable: {other:?}"),
-    };
+    let world = patiently("worldState", || match de::fetch_world_state(&http) {
+        wfm_scrape::reconcile::Observation::Usable { data, .. } => Ok(data),
+        other => Err(other),
+    });
     assert!(
         world.get("VoidTraders").is_some(),
         "worldState lost VoidTraders"
