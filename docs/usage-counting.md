@@ -12,12 +12,16 @@ introducing identities; these are reported counts, not audited population data.
 
 Rust generates 32 bytes with the operating-system random generator. The only
 POST field is `token`, formatted as `YYYY-MM-DD.<64 lowercase hex characters>`.
-The date is part of the daily token, not an event timestamp. The client records
-its attempt before sending: at most one attempt per UTC day, at startup,
-explicit opt-in, or day rollover while running. There are no heartbeat requests,
-retries, or queued old days. Local timer checks make no network requests.
-Offline time and failed attempts are absent from the count. A clock mismatch
-causes rejection, not a contribution to another day.
+The date is part of the daily token, not an event timestamp. The client sends
+the day's token at startup, on explicit opt-in, or at day rollover while running.
+Until the service accepts it, the client offers the same token again once a
+minute, at most ten times that UTC day, recording each attempt before it sends;
+it stops at the first acceptance. Repeats carry the same token, so the service
+counts the day once. There are no heartbeat requests and no queued old days: an
+unaccepted day is abandoned at rollover. Once the day is accepted, the
+once-a-minute local checks make no network requests. A day spent offline, or
+whose ten attempts all fail, is absent from the count. A clock mismatch causes
+rejection, not a contribution to another day.
 
 The dedicated client sends no cookie, credentials, version, platform or WFM
 headers and refuses redirects. Consent is enforced in Rust; private usage

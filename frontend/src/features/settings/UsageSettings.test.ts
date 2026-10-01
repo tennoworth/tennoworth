@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import UsageSettings from './UsageSettings.svelte';
 import type { DesktopCapabilities } from '../../contracts/desktop';
+import checkIn from '../../../../tests/fixtures/usage/check-in.json';
 afterEach(cleanup);
 describe('usage consent', () => {
   it('sends no preference writes until an explicit choice and supports withdrawal', async () => {
@@ -13,6 +14,14 @@ describe('usage consent', () => {
     await fireEvent.click(input); await waitFor(() => expect(save).toHaveBeenCalledWith(true));
     await waitFor(() => expect(input.disabled).toBe(false));
     await fireEvent.click(input); await waitFor(() => expect(save).toHaveBeenLastCalledWith(false));
+  });
+  it('states the retry terms the native client uses', () => {
+    render(UsageSettings,{ transport:{ getUsagePreferences:async () => ({enabled:false,available:true}) } as unknown as DesktopCapabilities });
+    const terms = screen.getByText(/check-in per UTC day/).textContent ?? '';
+    expect(checkIn.retry_interval_seconds).toBe(60);
+    expect(terms).toContain('once a minute');
+    expect(terms).toContain(`at most ${checkIn.max_attempts_per_day} times that day`);
+    expect(terms).not.toMatch(/no retries/i);
   });
   it('keeps test launches disabled', async () => {
     render(UsageSettings,{ transport:{ getUsagePreferences:async () => ({enabled:false,available:false}) } as unknown as DesktopCapabilities });

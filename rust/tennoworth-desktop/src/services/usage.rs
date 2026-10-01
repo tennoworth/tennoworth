@@ -39,6 +39,10 @@ struct DailyState {
 /// install instead of 1440, while still covering the case that loses counts today:
 /// the app started before the network was up.
 const MAX_ATTEMPTS_PER_DAY: u32 = 10;
+/// How often the loop wakes to check for consent changes, rollover and an
+/// unconfirmed day. Settings and docs/usage-counting.md state both of these to
+/// users, so tests/fixtures/usage/check-in.json pins them on each side.
+const RETRY_INTERVAL_SECS: u64 = 60;
 
 fn allowed() -> bool {
     !cfg!(any(debug_assertions, test))
@@ -196,7 +200,7 @@ pub fn start(app: tauri::AppHandle) {
             }
             tokio::select! {
                 _ = receiver.changed() => {},
-                _ = tokio::time::sleep(Duration::from_secs(60)) => {},
+                _ = tokio::time::sleep(Duration::from_secs(RETRY_INTERVAL_SECS)) => {},
             }
         }
     });
@@ -365,6 +369,14 @@ mod tests {
         let db = Db::open_in_memory().unwrap();
         db.set_setting(DAILY, "broken").unwrap();
         assert!(prepare(&db, "2026-09-11").is_err());
+    }
+
+    #[test]
+    fn the_stated_retry_terms_are_the_ones_the_client_uses() {
+        let terms: serde_json::Value =
+            serde_json::from_str(include_str!("../../../../tests/fixtures/usage/check-in.json")).unwrap();
+        assert_eq!(terms["max_attempts_per_day"], MAX_ATTEMPTS_PER_DAY);
+        assert_eq!(terms["retry_interval_seconds"], RETRY_INTERVAL_SECS);
     }
 
     /// An outage must not become a request every minute for a whole day.

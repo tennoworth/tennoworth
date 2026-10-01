@@ -1,0 +1,4 @@
+{
+  "max_attempts_per_day": 10,
+  "retry_interval_seconds": 60
+}
