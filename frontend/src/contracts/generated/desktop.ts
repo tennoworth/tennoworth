@@ -61,4 +61,24 @@ export const WFM_ACCESS_EVENT = "wfm-access-changed" as const;
 
 export const INVENTORY_SCANNED_EVENT = "inventory-scanned" as const;
 
+export const TRADE_DETECTED_EVENT = "trade-detected" as const;
+
+export const RECORDING_CHANGED_EVENT = "recording-changed" as const;
+
+export const ALLOWANCE_CHANGED_EVENT = "trade-allowance-changed" as const;
+
+export const NOTIFICATIONS_EVENT = "notifications-changed" as const;
+
+export const MARKET_REFRESHED_EVENT = "market-refreshed" as const;
+
+export const LIVE_TOP_PROGRESS_EVENT = "live-top-progress" as const;
+
+export const TRAY_HINT_EVENT = "tray-hint" as const;
+
+export const UPDATE_AVAILABLE_EVENT = "update-available" as const;
+
+export const RELIC_OVERLAY_UPDATE_EVENT = "relic-overlay:update" as const;
+
+export const RELIC_OVERLAY_HIDE_EVENT = "relic-overlay:hide" as const;
+
 export const AUTO_SCAN_CADENCE_CHOICES = [15, 30, 60] as const;

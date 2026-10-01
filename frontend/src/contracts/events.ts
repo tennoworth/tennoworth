@@ -2,7 +2,7 @@
 
 
 /** Progress event the desktop emits per item during `desktopLiveTopPrices`. */
-export const LIVE_TOP_PROGRESS_EVENT = 'live-top-progress';
+export { LIVE_TOP_PROGRESS_EVENT } from './generated/desktop';
 
 
 
@@ -21,19 +21,19 @@ export { INVENTORY_SCANNED_EVENT } from './generated/desktop';
 
 
 
-/** Rust emits this when EE.log confirms a trade. */
-export const TRADE_DETECTED_EVENT = 'trade-detected';
+/**
+ * The remaining Rust-emitted channels, each generated from its Rust const so a
+ * rename on either side fails the binding export test: a trade EE.log
+ * confirmed, trade recording starting or stopping, the trade allowance, the
+ * notification inbox, and a market refresh.
+ */
+export {
+  TRADE_DETECTED_EVENT,
+  RECORDING_CHANGED_EVENT,
+  ALLOWANCE_CHANGED_EVENT,
+  NOTIFICATIONS_EVENT,
+  MARKET_REFRESHED_EVENT,
+} from './generated/desktop';
 
-/** Rust emits this when trade recording starts or stops keeping up. */
-export const RECORDING_CHANGED_EVENT = 'recording-changed';
-
-
-
-export const ALLOWANCE_CHANGED_EVENT = 'trade-allowance-changed';
-
-
-
-export const NOTIFICATIONS_EVENT = 'notifications-changed';
-
-
-export const MARKET_REFRESHED_EVENT = 'market-refreshed';
+/** The relic overlay window's result and hide pushes. */
+export { RELIC_OVERLAY_UPDATE_EVENT, RELIC_OVERLAY_HIDE_EVENT } from './generated/desktop';

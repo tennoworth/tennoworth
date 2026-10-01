@@ -5,6 +5,7 @@
   
   
   import type { RelicOverlayResult } from '../../contracts/data';
+  import { RELIC_OVERLAY_HIDE_EVENT, RELIC_OVERLAY_UPDATE_EVENT } from '../../contracts/events';
 
   let result = $state<RelicOverlayResult | null>(null);
 
@@ -14,10 +15,10 @@
     currentOverlayResult()
       .then((current) => { if (current) result = current; })
       .catch(() => {});
-    const unlistenUpdate = listenForTauriEvent<RelicOverlayResult>('relic-overlay:update', (payload) => {
+    const unlistenUpdate = listenForTauriEvent<RelicOverlayResult>(RELIC_OVERLAY_UPDATE_EVENT, (payload) => {
       result = payload;
     });
-    const unlistenHide = listenForTauriEvent('relic-overlay:hide', () => {
+    const unlistenHide = listenForTauriEvent(RELIC_OVERLAY_HIDE_EVENT, () => {
       result = null;
     });
     return () => {
