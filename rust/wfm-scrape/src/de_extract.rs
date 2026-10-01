@@ -906,6 +906,41 @@ pub fn baro_from_world(
     out
 }
 
+/// Re-resolve carried Baro rows against this cycle's `path_to_info`.
+///
+/// His stock is captured only while he is at a relay and then carried for two
+/// weeks, so a row that failed to resolve at capture - before an item reached
+/// the map, or under a resolver bug since fixed - would otherwise keep its
+/// path-derived name and no price until his next visit. That happened to the
+/// 2026-09-18 stock. A row that still does not resolve is left exactly as
+/// captured: it is never downgraded.
+pub fn refresh_baro_rows(
+    baro: &mut HashMap<String, Value>,
+    path_to_info: &HashMap<String, Value>,
+    alias: &HashMap<String, String>,
+) {
+    let Some(rows) = baro.get_mut("inventory").and_then(|v| v.as_array_mut()) else {
+        return;
+    };
+    for row in rows.iter_mut().filter_map(|r| r.as_object_mut()) {
+        let Some(info) = row
+            .get("unique")
+            .and_then(|v| v.as_str())
+            .and_then(|path| resolve_path(path, path_to_info, alias))
+        else {
+            continue;
+        };
+        let (Some(name), Some(slug)) = (
+            info.get("name").and_then(|v| v.as_str()),
+            info.get("slug").and_then(|v| v.as_str()),
+        ) else {
+            continue;
+        };
+        row.insert("item".into(), Value::String(name.to_string()));
+        row.insert("slug".into(), Value::String(slug.to_string()));
+    }
+}
+
 /// Last-resort display name: split the final path segment on camel case.
 ///
 /// Only used for items with no catalogue entry (cosmetics, bundles). Better
@@ -1382,6 +1417,44 @@ mod tests {
         // Readable, but explicitly no slug - so nothing downstream can price it.
         assert_eq!(inv[1]["item"], "Kiteer Sekhara");
         assert!(inv[1].get("slug").is_none());
+    }
+
+    #[test]
+    fn carried_baro_rows_pick_up_a_name_and_price_the_map_now_has() {
+        let alias = recipe_alias(&recipes());
+        // As captured on a cycle whose map lacked the mod: path-derived name, no slug.
+        let mut baro: HashMap<String, Value> = serde_json::from_value(serde_json::json!({
+            "inventory": [
+                {"item": "Weapon Reload Speed Mod Expert", "ducats": 375,
+                 "unique": "/Lotus/StoreItems/Upgrades/Mods/Pistol/Expert/WeaponReloadSpeedModExpert"},
+                {"item": "Kiteer Sekhara", "ducats": 200,
+                 "unique": "/Lotus/StoreItems/Types/StoreItems/CreditBundles/KiteerSekhara"},
+                {"item": "No Path"}
+            ],
+            "inventory_for": "2026-09-18T13:00:00Z"
+        }))
+        .unwrap();
+        refresh_baro_rows(&mut baro, &p2i(), &alias);
+        let inv = baro["inventory"].as_array().unwrap();
+        assert_eq!(inv[0]["item"], "Primed Quickdraw");
+        assert_eq!(inv[0]["slug"], "primed_quickdraw");
+        assert_eq!(inv[0]["ducats"], 375);
+        // Unresolvable rows are left as captured.
+        assert_eq!(inv[1]["item"], "Kiteer Sekhara");
+        assert!(inv[1].get("slug").is_none());
+        assert_eq!(inv[2]["item"], "No Path");
+        assert_eq!(baro["inventory_for"], "2026-09-18T13:00:00Z");
+    }
+
+    #[test]
+    fn a_carried_slug_is_not_dropped_when_the_map_misses_it() {
+        let mut baro: HashMap<String, Value> = serde_json::from_value(serde_json::json!({
+            "inventory": [{"item": "Primed Quickdraw", "slug": "primed_quickdraw",
+                           "unique": "/Lotus/StoreItems/Upgrades/Mods/Pistol/Expert/WeaponReloadSpeedModExpert"}]
+        }))
+        .unwrap();
+        refresh_baro_rows(&mut baro, &HashMap::new(), &HashMap::new());
+        assert_eq!(baro["inventory"][0]["slug"], "primed_quickdraw");
     }
 
     #[test]

@@ -992,6 +992,7 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
     // he is present, so it has to be carried across explicitly.
     let mut baro = baro;
     ingest::carry_baro_inventory(&mut baro, baro_old.as_ref());
+    de_extract::refresh_baro_rows(&mut baro, &path_to_info_for_de, &de_alias);
     let baro_observation = if baro.is_empty() {
         Observation::Unavailable
     } else {

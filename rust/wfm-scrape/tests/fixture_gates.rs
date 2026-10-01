@@ -583,6 +583,55 @@ fn build_uses_de_export_and_world_state() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Between visits worldState announces Baro with no manifest, so the build
+/// carries his last stock. A row that failed to resolve when it was captured
+/// must pick up its name and slug once the map has them, rather than showing a
+/// path-derived name and no price until he returns.
+#[test]
+fn carried_baro_stock_is_resolved_against_the_current_map() {
+    let dir = stage_fixtures("convert");
+    let args = |now: &'static str| {
+        vec!["build".to_string(), "--fixtures-dir".into(), dir.to_str().unwrap().into(), "--now".into(), now.into()]
+    };
+    let first = run(&args("2026-07-01T12:00:00Z").iter().map(String::as_str).collect::<Vec<_>>(), &dir);
+    assert!(first.status.success(), "{}", String::from_utf8_lossy(&first.stderr));
+
+    // The prior snapshot as a cycle whose map lacked the item would have left it.
+    let mut prior: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    let captured_for = prior["baro"]["inventory_for"].clone();
+    for row in prior["baro"]["inventory"].as_array_mut().unwrap() {
+        let row = row.as_object_mut().unwrap();
+        row.remove("slug");
+        row.insert("item".into(), serde_json::json!("Path Derived Name"));
+    }
+    std::fs::write(dir.join("prior-market.json"), serde_json::to_vec(&prior).unwrap()).unwrap();
+
+    let path = dir.join("fixture_responses.json");
+    let mut responses: serde_json::Map<String, serde_json::Value> =
+        serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    let trader = responses
+        .get_mut("https://api.warframe.com/cdn/worldState.php")
+        .unwrap()["VoidTraders"][0]
+        .as_object_mut()
+        .unwrap();
+    trader.remove("Manifest");
+    std::fs::write(&path, serde_json::to_vec(&responses).unwrap()).unwrap();
+
+    let second = run(&args("2026-07-02T12:00:00Z").iter().map(String::as_str).collect::<Vec<_>>(), &dir);
+    assert!(second.status.success(), "{}", String::from_utf8_lossy(&second.stderr));
+    let snap: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(dir.join("market.json")).unwrap()).unwrap();
+    let baro = &snap["baro"];
+    assert_eq!(baro["inventory_for"], captured_for, "the stock is the carried visit's");
+    let inv = baro["inventory"].as_array().unwrap();
+    assert_eq!(inv[0]["slug"], "volt_prime_chassis_blueprint");
+    assert_ne!(inv[0]["item"], "Path Derived Name");
+    assert!(inv[1].get("slug").is_none(), "a cosmetic stays unpriced");
+    assert_eq!(inv[1]["item"], "Path Derived Name", "an unresolvable row is left as captured");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn world_children_reconcile_independently_and_only_literal_empty_clears() {
     let dir = stage_fixtures("convert");
