@@ -31,7 +31,7 @@
   </div>
   <details class="terms">
     <summary>What is sent and what is not</summary>
-    <p>At most one check-in attempt per UTC day, at startup or day rollover; no retries. Only a token that changes daily is sent. No account details, inventory, screenshots, hardware identifiers, or activity events. Turning this off stops future check-ins; previous aggregate counts remain.</p>
+    <p>One check-in per UTC day, sent at startup or day rollover. If it does not get through, the same token is offered again once a minute, at most 10 times that day, and never for a past day. Only a token that changes daily is sent. No account details, inventory, screenshots, hardware identifiers, or activity events. Turning this off stops future check-ins; previous aggregate counts remain.</p>
     <p>Delivery exposes your IP address to the hosting infrastructure. See the <a href="https://github.com/tennoworth/tennoworth/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer">security policy</a> for retention details.</p>
   </details>
   {#if !preference && !error}<p class="note" role="status">Loading preference…</p>{/if}
