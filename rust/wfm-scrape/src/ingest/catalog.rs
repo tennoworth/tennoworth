@@ -392,7 +392,7 @@ pub fn slim_wfstat_items(
         .collect())
 }
 
-/// Fetch the warframestat bulk item catalog (resolver data).
+/// The bulk warframestat item payload, unreduced.
 ///
 /// Builds its own client rather than going through [`Http`], because English
 /// must be forced per-call: the endpoint varies on `Accept-Language` and a
@@ -400,13 +400,8 @@ pub fn slim_wfstat_items(
 /// `get_json(url)` has nowhere to put a header, and pushing `Accept-Language`
 /// onto the shared client would send it on every other endpoint too. Longer
 /// timeout for the same reason: the body is multi-MB.
-pub fn fetch_wfstat_slim() -> Result<Vec<serde_json::Value>, String> {
-    slim_wfstat_items(&fetch_wfstat_raw()?, WFSTAT_ITEMS_URL)
-}
-
-/// The bulk warframestat item payload, unreduced.
 ///
-/// Split out from `fetch_wfstat_slim` because this ~44 MB response now feeds
+/// Fetched raw because this ~44 MB response feeds
 /// two consumers - the resolver catalog AND the sentinel parents, whose own
 /// endpoint 404s - and downloading it twice would add minutes to a scrape that
 /// already runs close to its systemd timeout.

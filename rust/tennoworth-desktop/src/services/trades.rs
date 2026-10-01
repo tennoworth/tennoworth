@@ -246,7 +246,7 @@ pub fn handle_trade(
         // Bound before the branch: an `if let` scrutinee's temporary outlives
         // the binding, so the guard would be dropped after the coordinator it
         // borrows from.
-        let claim = mutations.begin(crate::services::order_mutations::MutationOrigin::AutoAdjustment);
+        let claim = mutations.begin();
         if let Ok((_guard, unlocked)) = claim {
             match list_user_orders(&unlocked) {
                 Ok(body) => {
@@ -525,7 +525,7 @@ pub fn start_tailer(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::services::order_mutations::{MutationOrigin, OrderMutations};
+    use crate::services::order_mutations::OrderMutations;
     use std::sync::atomic::{AtomicU32, Ordering};
     use wfm_core::trading::catalog::WfmCatalogItem;
 
@@ -575,9 +575,9 @@ mod tests {
         let session = Arc::new(WfmSession::for_test(path));
         let listing = OrderMutations::new(Arc::clone(&session));
         let automatic = OrderMutations::new(Arc::clone(&session));
-        let _batch = listing.begin_only(MutationOrigin::ReviewedPlan).unwrap();
+        let _batch = listing.begin_only().unwrap();
 
-        let error = automatic.begin(MutationOrigin::AutoAdjustment).err().unwrap();
+        let error = automatic.begin().err().unwrap();
         let follow_up = unavailable_adjustment_follow_up(&error);
         assert_eq!(error.code, "busy");
         assert!(follow_up.contains("Review My Orders"), "{follow_up}");

@@ -595,7 +595,9 @@ pub fn fresh_totals(sweeps: &[Sweep]) -> Totals {
     }
 }
 
-/// Simulate every requested interval against the same logs.
+/// Simulate every requested interval against the same logs. [`run`] does the
+/// same inline because it keeps the fresh totals for its report.
+#[cfg(test)]
 pub fn simulate(sweeps: &[Sweep], schedule: &[Duration], min_volume: i64) -> Vec<IntervalReport> {
     let fresh = fresh_totals(sweeps);
     schedule

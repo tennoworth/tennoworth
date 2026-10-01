@@ -223,7 +223,9 @@ pub fn analyze_orders(
 /// Analyze one item into a row, or `Ok(None)` to skip it (missing orders or an
 /// empty stats payload - Python's `if orders is None or not stats_payload`).
 /// A hard coercion error (object/bool/non-finite field) propagates as `Err`.
-/// Both stages in one call, for callers that already hold both payloads.
+/// Both stages in one call, for tests that hold both payloads; the sweep runs
+/// the stages separately so it can skip the book fetch.
+#[cfg(test)]
 pub fn analyze_item(
     item: &CatalogItem,
     orders: Option<Value>,

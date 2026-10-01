@@ -552,12 +552,12 @@ pub fn debug_seed_unlocked(app: AppHandle, session: State<'_, Arc<WfmSession>>) 
 }
 
 fn check_trade_contention(app: &AppHandle, session: &Arc<WfmSession>) -> Result<(), CmdError> {
-    use crate::services::order_mutations::{MutationOrigin, OrderMutations};
+    use crate::services::order_mutations::OrderMutations;
     use crate::services::trades::{handle_trade, LedgerOutcome};
     use crate::trading_contract::{LogPosition, TradeEvent, TradeItem};
 
     let mutations = OrderMutations::new(Arc::clone(session));
-    let _reviewed = mutations.begin_only(MutationOrigin::ReviewedPlan)?;
+    let _reviewed = mutations.begin_only()?;
     let trade = TradeEvent {
         partner: "Contention fixture".into(),
         kind: "sale".into(),

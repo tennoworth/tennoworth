@@ -10,9 +10,6 @@ impl GovernedResponse {
     pub fn status(&self) -> reqwest::StatusCode {
         self.response.status()
     }
-    pub fn headers(&self) -> &reqwest::header::HeaderMap {
-        self.response.headers()
-    }
     pub fn json<T: serde::de::DeserializeOwned>(self) -> reqwest::Result<T> {
         self.response.json()
     }
