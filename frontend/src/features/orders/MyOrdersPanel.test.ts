@@ -131,12 +131,6 @@ describe('MyOrdersPanel listing health', () => {
     await waitFor(() => expect(transport.updateOrder).toHaveBeenCalledWith('o1', { platinum: 15 }));
   });
 
-  it('hosted: no Check live button', async () => {
-    render(MyOrdersPanel, { props: { transport: makeTransport() } });
-    await screen.findByText('Primed Flow');
-    expect(screen.queryByRole('button', { name: /Check live/ })).toBeNull();
-  });
-
   it('reprices a bulk order with a lot total while comparing fractional unit prices', async () => {
     installTauri(vi.fn().mockResolvedValue([{
       slug: 'arcane_energize', rank: 0, subtype: null, sells: [7.2], buys: [],

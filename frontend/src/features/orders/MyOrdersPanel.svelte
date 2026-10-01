@@ -1,6 +1,6 @@
 <script lang="ts">
   import { useDesktopServices } from '../../ui/desktop-context';
-  const { desktopLiveTopPrices, isDesktopRuntime, listenForTauriEvent } = useDesktopServices();
+  const { desktopLiveTopPrices, listenForTauriEvent } = useDesktopServices();
   import { onDestroy } from 'svelte';
   import { DesktopCmdError } from '../../contracts/errors';
 
@@ -297,8 +297,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   // "Check live" asks WFM for the exact-tier top-of-book of every SELL listing
   // with the user's own order already excluded (wfm-core does that by
   // username), then `assessListings` turns it plus the last scan's owned
-  // counts into concrete fixes. Desktop only: the hosted site has no IPC.
-  const canLive = isDesktopRuntime();
+  // counts into concrete fixes.
   type LiveState = 'idle' | 'running' | 'done' | 'error';
   let liveState = $state<LiveState>('idle');
   let liveProgress = $state({ done: 0, total: 0 });
@@ -511,22 +510,20 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
       {:else if queue.length > 0}{queue.length} of {orders.length} {orders.length === 1 ? 'listing needs' : 'listings need'} attention · fixes apply immediately
       {:else if live.size > 0}no issues in {orders.length} {orders.length === 1 ? 'listing' : 'listings'} · checked against the live top-of-book
       {:else if ownedQty}no issues in {orders.length} {orders.length === 1 ? 'listing' : 'listings'} · quantities checked against your last scan
-      {:else}nothing flagged yet{#if canLive} - check live to compare your asks with the online top-of-book{/if}
+      {:else}nothing flagged yet - check live to compare your asks with the online top-of-book
       {/if}
     </span>
-    {#if canLive}
-      <span class="grow"></span>
-      <button
-        class="btn"
-        onclick={checkLive}
-        disabled={liveState === 'running' || phase !== 'done' || orders.length === 0}
-        title="Ask warframe.market for the best online asks and bids on each of your sell listings' exact rank / refinement - your own order excluded - and flag what's worth fixing."
-      >
-        {#if liveState === 'running'}Checking… {liveProgress.done}/{liveProgress.total}
-        {:else if liveState === 'done'}Re-check live
-        {:else}Check live{/if}
-      </button>
-    {/if}
+    <span class="grow"></span>
+    <button
+      class="btn"
+      onclick={checkLive}
+      disabled={liveState === 'running' || phase !== 'done' || orders.length === 0}
+      title="Ask warframe.market for the best online asks and bids on each of your sell listings' exact rank / refinement - your own order excluded - and flag what's worth fixing."
+    >
+      {#if liveState === 'running'}Checking… {liveProgress.done}/{liveProgress.total}
+      {:else if liveState === 'done'}Re-check live
+      {:else}Check live{/if}
+    </button>
   </div>
   {#if health.length > 0 || healthSummary.overpriced + healthSummary.underbid > 1}
   <div class="bar">
@@ -619,7 +616,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     </div>
     {#if live.size === 0 && drifted.length > 0}
       <div class="line">
-        <span class="exp">Snapshot rows compare against the last market snapshot (up to 2 h old) and can't tell whose order is whose{#if canLive}&nbsp;- <button class="linkish" onclick={checkLive} disabled={liveState === 'running'}>check live</button> for exact figures{/if}.</span>
+        <span class="exp">Snapshot rows compare against the last market snapshot (up to 2 h old) and can't tell whose order is whose&nbsp;- <button class="linkish" onclick={checkLive} disabled={liveState === 'running'}>check live</button> for exact figures.</span>
       </div>
     {/if}
   {/if}

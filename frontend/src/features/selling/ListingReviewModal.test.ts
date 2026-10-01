@@ -191,11 +191,6 @@ describe('ListingReviewModal', () => {
       await waitFor(() => expect(unlisten).toHaveBeenCalledTimes(listen.mock.calls.length));
     });
 
-    it('is absent in the hosted build', () => {
-      openModal();
-      expect(screen.queryByRole('button', { name: /Check live prices/ })).toBeNull();
-    });
-
     it('asks the desktop for each selected row\'s exact tier, renders ask/bid, and one click matches the ask', async () => {
       const invoke = vi.fn(async (cmd: string, args: { queries: Array<{ slug: string; rank: number; subtype: string | null }> }) => {
         if (cmd === 'wfm_access_status') return null;
