@@ -1,11 +1,12 @@
 # AGENTS.md - project overview
 
-Cross-platform **Windows + Linux** Warframe inventory + market dashboard
-- the no-Overwolf alternative to AlecaFrame. Windows and Linux are equal,
-first-class targets (not Linux-first). Inventory is acquired by a local
-memory-scan companion - PC-only by nature. Overlaps with browse.wf and
-warframe.me on inventory display - must be **measurably better at
-"what to sell right now"** to justify existing.
+Warframe market tool for **Windows + Linux**, equal first-class targets. It
+exists to be **measurably the best answer to "what to sell right now"**; a
+feature that does not sharpen that answer needs a strong reason. The hosted
+site is informational and takes no inventory. The desktop app reads the
+inventory locally (PC-only by nature), and its longer-term direction is a
+quiet, read-only in-game helper: it observes game events and suggests, and
+never injects input.
 
 Detailed rules live in per-domain files. Read the one for the area you are about
 to edit **before** you edit it:
