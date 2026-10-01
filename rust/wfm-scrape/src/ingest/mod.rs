@@ -8,7 +8,7 @@ mod rivens;
 pub(crate) mod transport;
 pub use baro::{carry_baro_inventory, fetch_baro};
 pub use calendar::{
-    fetch_calendar, fetch_vault_status, frames_in_pack_name, resurgence_rotations,
+    align_calendar_with_vault_status, fetch_calendar, fetch_vault_status, frames_in_pack_name, resurgence_rotations,
     WFSTAT_VAULT_TRADER_URL,
 };
 pub use catalog::{

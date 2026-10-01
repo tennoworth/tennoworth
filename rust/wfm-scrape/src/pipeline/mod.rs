@@ -748,7 +748,11 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         .unwrap_or_default();
 
     eprintln!("Fetching prime release/vault dates + Resurgence rotations...");
-    let calendar = ingest::fetch_calendar(http.as_ref(), wfstat_raw.as_ref(), &catalog);
+    let mut calendar = ingest::fetch_calendar(http.as_ref(), wfstat_raw.as_ref(), &catalog);
+    let aligned = ingest::align_calendar_with_vault_status(&mut calendar, &vault_status, now);
+    if aligned > 0 {
+        eprintln!("  {aligned} primes marked vaulted from the fresher vault status");
+    }
     eprintln!(
         "  {} primes dated · {} resurgence rotations",
         calendar
