@@ -24,6 +24,16 @@ const MAX_COOLDOWN_WAIT_MS: u64 = 5_000;
 const MAX_COOLDOWN_WAIT_TOTAL_MS: u64 = 20_000;
 const MAX_COOLDOWN_WAITS: u64 = 4;
 
+/// Patience for a request that failed in transit or with a server error after
+/// the transport's own quick attempts. Those span about six seconds, and a
+/// short WFM blip outlasts them: before this, one such statistics read among
+/// ~3,900 aborted the whole two-hour sweep. The budget is per sweep so a real
+/// outage still stops the run within a few minutes instead of waiting on every
+/// remaining item.
+const RECOVERY_BACKOFF_MS: [u64; 2] = [30_000, 90_000];
+const MAX_RECOVERY_WAIT_TOTAL_MS: u64 = 300_000;
+const MAX_RECOVERY_WAITS: u64 = 6;
+
 /// Outcome of a single GET, preserving enough status to drive Python's retry.
 pub enum HttpOutcome {
     /// 2xx with a successfully-parsed JSON body.
@@ -101,9 +111,10 @@ impl Sleeper for RecordingSleeper {
     }
 }
 
-/// Exponential backoff, Python's `2 ** attempt`: 1s, 2s, 4s.
-fn backoff(attempt: u32) -> Duration {
-    Duration::from_secs(1u64 << attempt)
+/// The wait before retrying a transient failure on `attempt`, or None once the
+/// request has had its retries.
+fn recovery_backoff_ms(attempt: u32) -> Option<u64> {
+    RECOVERY_BACKOFF_MS.get(attempt as usize).copied()
 }
 
 /// WFM's envelope, unwrapped Python-order: `payload` first, then `data`, else
@@ -189,13 +200,24 @@ struct ClassCounters {
     decoded_bytes: AtomicU64,
 }
 
-/// The sweep's throttle patience. Both figures move together, so they are
-/// reserved under one lock: separate counters let two workers each pass the last
-/// check and overspend a limit that is documented as a limit.
+/// One kind of sweep patience: throttle cooldowns or transient-failure
+/// recovery. Both figures move together, so they are reserved under one lock:
+/// separate counters let two workers each pass the last check and overspend a
+/// limit that is documented as a limit.
 #[derive(Default)]
-struct CooldownBudget {
+struct WaitBudget {
     waits: u64,
     wait_ms: u64,
+}
+impl WaitBudget {
+    fn admit(&mut self, wait_ms: u64, max_waits: u64, max_total_ms: u64) -> bool {
+        if self.waits >= max_waits || self.wait_ms.saturating_add(wait_ms) > max_total_ms {
+            return false;
+        }
+        self.waits += 1;
+        self.wait_ms += wait_ms;
+        true
+    }
 }
 
 /// What one sweep spent, by class. Named fields rather than an array: the
@@ -207,7 +229,8 @@ pub struct SweepMetrics {
     orders: ClassCounters,
     riven: ClassCounters,
     other: ClassCounters,
-    cooldown: Mutex<CooldownBudget>,
+    cooldown: Mutex<WaitBudget>,
+    recovery: Mutex<WaitBudget>,
 }
 
 impl SweepMetrics {
@@ -252,15 +275,20 @@ impl SweepMetrics {
     /// The reservation is atomic, so workers sharing the sweep cannot both spend
     /// the last of it.
     fn admit_cooldown_wait(&self, wait_ms: u64) -> bool {
-        let mut budget = lock(&self.cooldown);
-        if budget.waits >= MAX_COOLDOWN_WAITS
-            || budget.wait_ms.saturating_add(wait_ms) > MAX_COOLDOWN_WAIT_TOTAL_MS
-        {
-            return false;
-        }
-        budget.waits += 1;
-        budget.wait_ms += wait_ms;
-        true
+        lock(&self.cooldown).admit(wait_ms, MAX_COOLDOWN_WAITS, MAX_COOLDOWN_WAIT_TOTAL_MS)
+    }
+
+    /// The same reservation against the sweep's transient-failure patience.
+    fn admit_recovery_wait(&self, wait_ms: u64) -> bool {
+        lock(&self.recovery).admit(wait_ms, MAX_RECOVERY_WAITS, MAX_RECOVERY_WAIT_TOTAL_MS)
+    }
+
+    fn recovery_waits(&self) -> u64 {
+        lock(&self.recovery).waits
+    }
+
+    fn recovery_wait_ms(&self) -> u64 {
+        lock(&self.recovery).wait_ms
     }
 
     fn cooldown_waits(&self) -> u64 {
@@ -307,12 +335,14 @@ impl SweepMetrics {
         let governor = wfm_client::governor::process().status();
         format!(
             "sweep metrics: attempts[{attempts}] ok[{ok}] failed[{failed}] retries={retries} \
-             wire_requests={} throttles={} cooldown_waits={} cooldown_wait_ms={} decoded_bytes={decoded} \
-             elapsed_ms={elapsed} snapshot_age_s={}",
+             wire_requests={} throttles={} cooldown_waits={} cooldown_wait_ms={} recovery_waits={} \
+             recovery_wait_ms={} decoded_bytes={decoded} elapsed_ms={elapsed} snapshot_age_s={}",
             governor.requests,
             governor.throttles,
             self.cooldown_waits(),
             self.cooldown_wait_ms(),
+            self.recovery_waits(),
+            self.recovery_wait_ms(),
             snapshot_age_s.map_or_else(|| "none".to_string(), |s| s.to_string())
         )
     }
@@ -345,21 +375,32 @@ fn admitted_cooldown_wait(sweep: &SweepMetrics, cooldown_until_ms: u64, now_ms: 
 
 /// A throttle is not a generic access failure: the governor has stored the
 /// deadline the response asked for, and the sweep can sometimes wait it out.
-/// Everything else - a pause, a cancellation, a transport error - stops the run
-/// as before.
+/// A transport failure is the momentary kind [`fetch_json`] retries. Everything
+/// else - a pause, a cancellation, a policy refusal - stops the run.
 fn transport_error_outcome(error: &wfm_client::governor::AccessError) -> HttpOutcome {
+    use wfm_client::governor::AccessError;
     match error {
-        wfm_client::governor::AccessError::Cooldown(deadline) => HttpOutcome::RateLimited {
+        AccessError::Cooldown(deadline) => HttpOutcome::RateLimited {
             cooldown_until_ms: *deadline,
         },
+        AccessError::Transport => HttpOutcome::Transport(error.to_string()),
         other => HttpOutcome::Access(other.to_string()),
     }
 }
 
 /// Retry transient reads; policy blocks and ordinary client errors abort.
 pub fn fetch_json(http: &dyn ScrapeHttp, sleeper: &dyn Sleeper, url: &str) -> Option<Value> {
+    fetch_json_in(metrics(), http, sleeper, url)
+}
+
+/// [`fetch_json`] against an explicit sweep, so a test's patience is its own.
+fn fetch_json_in(
+    sweep: &SweepMetrics,
+    http: &dyn ScrapeHttp,
+    sleeper: &dyn Sleeper,
+    url: &str,
+) -> Option<Value> {
     let class = classify_url(url);
-    let sweep = metrics();
     for attempt in 0..RETRIES {
         if attempt > 0 {
             sweep.record_retry(class);
@@ -394,18 +435,44 @@ pub fn fetch_json(http: &dyn ScrapeHttp, sleeper: &dyn Sleeper, url: &str) -> Op
             }
             HttpOutcome::HttpError(status) if status < 500 || status == 509 => {
                 sweep.record_failed(class);
+                eprintln!("WFM request stopped: WFM HTTP {status}");
                 return None;
             }
-            HttpOutcome::HttpError(_) | HttpOutcome::Transport(_) => {
-                if attempt + 1 == RETRIES {
-                    sweep.record_failed(class);
+            HttpOutcome::HttpError(status) => {
+                if !wait_to_retry(sweep, sleeper, class, attempt, &format!("WFM HTTP {status}")) {
                     return None;
                 }
-                sleeper.sleep(backoff(attempt));
+            }
+            HttpOutcome::Transport(reason) => {
+                if !wait_to_retry(sweep, sleeper, class, attempt, &reason) {
+                    return None;
+                }
             }
         }
     }
     None
+}
+
+/// Wait before retrying a transient failure, or record the request as failed
+/// when it has had its retries or the sweep's recovery patience is spent.
+fn wait_to_retry(
+    sweep: &SweepMetrics,
+    sleeper: &dyn Sleeper,
+    class: RequestClass,
+    attempt: u32,
+    reason: &str,
+) -> bool {
+    let wait = recovery_backoff_ms(attempt)
+        .filter(|_| attempt + 1 < RETRIES)
+        .filter(|wait| sweep.admit_recovery_wait(*wait));
+    let Some(wait) = wait else {
+        sweep.record_failed(class);
+        eprintln!("WFM request stopped: {reason}; retries exhausted");
+        return false;
+    };
+    eprintln!("WFM request failed: {reason}; retrying in {} s.", wait / 1000);
+    sleeper.sleep(Duration::from_millis(wait));
+    true
 }
 
 /// Live transport through the shared request governor. Sends the EXACT header
@@ -438,7 +505,7 @@ impl ScrapeHttp for LiveScrapeHttp {
                     };
                 }
                 if !status.is_success() {
-                    return HttpOutcome::Access(format!("WFM HTTP {status}; request retries exhausted"));
+                    return HttpOutcome::HttpError(status.as_u16());
                 }
                 match r.text() {
                     Ok(body) => {
@@ -448,7 +515,9 @@ impl ScrapeHttp for LiveScrapeHttp {
                             Err(e) => HttpOutcome::Access(format!("{url}: JSON parse: {e}")),
                         }
                     }
-                    Err(e) => HttpOutcome::Access(format!("{url}: read body: {e}")),
+                    // A body cut off mid-read is a dropped connection, not a
+                    // verdict on the request.
+                    Err(e) => HttpOutcome::Transport(format!("{url}: read body: {e}")),
                 }
             }
             Err(error) => transport_error_outcome(&error),
@@ -708,7 +777,7 @@ mod tests {
         ));
         assert!(matches!(
             transport_error_outcome(&AccessError::Transport),
-            HttpOutcome::Access(_)
+            HttpOutcome::Transport(_)
         ));
     }
 
@@ -722,8 +791,8 @@ mod tests {
             ],
         );
         let sl = RecordingSleeper::new();
-        assert_eq!(fetch_json(&http, &sl, URL), Some(json!(9)));
-        assert_eq!(sl.recorded(), vec![Duration::from_secs(1)]);
+        assert_eq!(fetch_json_in(&SweepMetrics::default(), &http, &sl, URL), Some(json!(9)));
+        assert_eq!(sl.recorded(), vec![Duration::from_secs(30)]);
     }
 
     #[test]
@@ -737,11 +806,11 @@ mod tests {
             ],
         );
         let sl = RecordingSleeper::new();
-        assert_eq!(fetch_json(&http, &sl, URL), None);
-        // Non-429 errors do NOT sleep on the final attempt: 1s, 2s only.
+        assert_eq!(fetch_json_in(&SweepMetrics::default(), &http, &sl, URL), None);
+        // No sleep after the final attempt: 30 s, 90 s only.
         assert_eq!(
             sl.recorded(),
-            vec![Duration::from_secs(1), Duration::from_secs(2)]
+            vec![Duration::from_secs(30), Duration::from_secs(90)]
         );
     }
 
@@ -755,8 +824,8 @@ mod tests {
             ],
         );
         let sl = RecordingSleeper::new();
-        assert_eq!(fetch_json(&http, &sl, URL), Some(json!(7)));
-        assert_eq!(sl.recorded(), vec![Duration::from_secs(1)]);
+        assert_eq!(fetch_json_in(&SweepMetrics::default(), &http, &sl, URL), Some(json!(7)));
+        assert_eq!(sl.recorded(), vec![Duration::from_secs(30)]);
     }
 
     #[test]
@@ -812,12 +881,103 @@ mod tests {
                 let _ = socket.read(&mut input).unwrap();
                 write!(socket, "HTTP/1.1 {status} Test\r\nContent-Length: 1\r\nConnection: close\r\n\r\nx").unwrap();
             }
+            listener
         });
-        let before = wfm_client::governor::process().status().requests;
         let http = LiveScrapeHttp { client: wfm_client::build_client(2).unwrap(), platform: "pc".into() };
-        assert!(fetch_json(&http, &NoopSleeper, &url).is_none());
-        server.join().unwrap();
-        assert_eq!(wfm_client::governor::process().status().requests - before, 3);
+        assert!(fetch_json_in(&SweepMetrics::default(), &http, &NoopSleeper, &url).is_none());
+        // Counted at the server: the governor's request count is process-wide,
+        // and other tests send through it concurrently.
+        let listener = server.join().unwrap();
+        listener.set_nonblocking(true).unwrap();
+        assert!(listener.accept().is_err(), "a fourth request was sent");
     }
 
+    /// Serve `script` in order on a loopback port: `Some(status)` answers with
+    /// that status and a JSON body, `None` closes the connection unanswered.
+    fn serve(script: Vec<Option<u16>>) -> (String, std::thread::JoinHandle<()>) {
+        use std::io::{Read, Write};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/", listener.local_addr().unwrap());
+        let server = std::thread::spawn(move || {
+            for step in script {
+                let (mut socket, _) = listener.accept().unwrap();
+                let mut input = [0; 4096];
+                let _ = socket.read(&mut input).unwrap();
+                if let Some(status) = step {
+                    let body = r#"{"data":5}"#;
+                    write!(socket, "HTTP/1.1 {status} Test\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+                }
+            }
+        });
+        (url, server)
+    }
+
+    // The production chain: the transport spends its own quick attempts, and
+    // what it gives up on must reach the sweep as retryable rather than as a
+    // reason to abort publication. Both failures below used to stop the sweep.
+    #[test]
+    fn a_server_error_outlasting_the_transport_is_retried_by_the_sweep() {
+        let (url, server) = serve(vec![Some(503), Some(503), Some(503), Some(200)]);
+        let http = LiveScrapeHttp { client: wfm_client::build_client(2).unwrap(), platform: "pc".into() };
+        let sleeper = RecordingSleeper::new();
+        let sweep = SweepMetrics::default();
+        assert_eq!(fetch_json_in(&sweep, &http, &sleeper, &url), Some(json!(5)));
+        server.join().unwrap();
+        assert_eq!(sleeper.recorded(), vec![Duration::from_secs(30)]);
+        assert_eq!(sweep.recovery_waits(), 1);
+    }
+
+    #[test]
+    fn a_dropped_connection_outlasting_the_transport_is_retried_by_the_sweep() {
+        let (url, server) = serve(vec![None, None, None, Some(200)]);
+        let http = LiveScrapeHttp { client: wfm_client::build_client(2).unwrap(), platform: "pc".into() };
+        let sleeper = RecordingSleeper::new();
+        assert_eq!(fetch_json_in(&SweepMetrics::default(), &http, &sleeper, &url), Some(json!(5)));
+        server.join().unwrap();
+        assert_eq!(sleeper.recorded(), vec![Duration::from_secs(30)]);
+    }
+
+    #[test]
+    fn a_client_error_is_not_retried() {
+        let http = ScriptedHttp::new(URL, vec![HttpOutcome::HttpError(404), HttpOutcome::Ok(json!({"data": 1}))]);
+        let sleeper = RecordingSleeper::new();
+        assert_eq!(fetch_json_in(&SweepMetrics::default(), &http, &sleeper, URL), None);
+        assert!(sleeper.recorded().is_empty());
+    }
+
+    /// An outage must still stop the sweep: once the patience is spent, a
+    /// failing request gives up at once instead of waiting again.
+    #[test]
+    fn recovery_patience_is_per_sweep_and_bounded() {
+        let sweep = SweepMetrics::default();
+        let sleeper = RecordingSleeper::new();
+        for _ in 0..10 {
+            let http = ScriptedHttp::new(URL, (0..3).map(|_| HttpOutcome::Transport("down".into())).collect());
+            assert_eq!(fetch_json_in(&sweep, &http, &sleeper, URL), None);
+        }
+        let waited: u64 = sleeper.recorded().iter().map(|d| d.as_millis() as u64).sum();
+        assert!(sweep.recovery_waits() <= MAX_RECOVERY_WAITS);
+        assert!(waited <= MAX_RECOVERY_WAIT_TOTAL_MS, "{waited} ms");
+        assert_eq!(waited, sweep.recovery_wait_ms());
+        let http = ScriptedHttp::new(URL, vec![HttpOutcome::Transport("down".into()), HttpOutcome::Ok(json!({"data": 1}))]);
+        let before = sleeper.recorded().len();
+        assert_eq!(fetch_json_in(&sweep, &http, &sleeper, URL), None);
+        assert_eq!(sleeper.recorded().len(), before, "a spent sweep does not wait again");
+    }
+
+    #[test]
+    fn workers_racing_for_the_last_recovery_wait_only_one_get_it() {
+        let sweep = SweepMetrics::default();
+        for _ in 0..MAX_RECOVERY_WAITS - 1 {
+            assert!(sweep.admit_recovery_wait(1));
+        }
+        let start = std::sync::Barrier::new(16);
+        let admitted: usize = std::thread::scope(|scope| {
+            let tasks: Vec<_> = (0..16)
+                .map(|_| scope.spawn(|| { start.wait(); sweep.admit_recovery_wait(1) }))
+                .collect();
+            tasks.into_iter().map(|t| usize::from(t.join().unwrap_or(false))).sum()
+        });
+        assert_eq!(admitted, 1);
+    }
 }
