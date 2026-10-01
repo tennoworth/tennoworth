@@ -9,6 +9,7 @@
 // feature, so it is testable without a DOM.
 
 import type { BaroStock, Market, MarketItemEntry } from '../contracts/data';
+import { LIQUID_VOL } from './sell-priority';
 
 /** What the board says to do about one line of stock. */
 export type BaroVerdict =
@@ -36,11 +37,6 @@ export interface BaroRow {
   platPerDucat: number | null;
   verdict: BaroVerdict;
 }
-
-/** Below this many trades in the 48h window, one optimistic listing sets the
- *  "price". Anything thinner is reported as thin rather than ranked on a
- *  number that does not mean anything. */
-export const THIN_VOLUME = 5;
 
 /** Plat-per-ducat below which a line is not worth the ducats, given ducats
  *  themselves cost time to farm. Deliberately conservative: the board should
@@ -76,7 +72,7 @@ function baselineOf(entry: MarketItemEntry | undefined): number | null {
  */
 export function verdictFor(row: Omit<BaroRow, 'verdict'>): BaroVerdict {
   if (!row.slug || row.price == null) return 'unpriced';
-  if (row.vol != null && row.vol < THIN_VOLUME) return 'thin';
+  if (row.vol != null && row.vol < LIQUID_VOL) return 'thin';
   if (row.platPerDucat != null && row.platPerDucat < SKIP_PLAT_PER_DUCAT) return 'skip';
   if (row.baseline != null && row.price >= row.baseline * FLIP_PREMIUM) return 'flip';
   // Priced at or below baseline while he is selling it: his arrival is the

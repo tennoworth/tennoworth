@@ -13,6 +13,10 @@
 import type { DailyDeal, EventRewardEntry, Market, OwnedRecord, VaultRotation } from '../contracts/data';
 import { surfaceHasEvidence } from './market';
 
+/** Whole days after which carried event data is shown as stale - the age at
+ *  which the pipeline itself warns, pinned by tests/fixtures/stale-days.json. */
+export const STALE_DAYS = 7;
+
 export type CalendarKind = 'baro' | 'vault' | 'deal' | 'event';
 export type CalendarReach = 'scan' | 'none' | 'hits' | 'partial-hits' | 'unknown';
 
@@ -221,7 +225,7 @@ function eventItems(
     const dataAgeDays = Number.isFinite(stampMs)
       ? Math.max(0, Math.floor((now - stampMs) / 86_400_000))
       : undefined;
-    const stale = dataAgeDays === undefined || dataAgeDays > 7;
+    const stale = dataAgeDays === undefined || dataAgeDays >= STALE_DAYS;
     const slugs = new Set<string>();
     let rewardCount = 0;
     let credits = 0;

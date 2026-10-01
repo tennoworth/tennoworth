@@ -16,8 +16,10 @@
 //! fall through to the next fallback. [`truthy`] mirrors that exactly.
 
 /// Below this many closed trades / 48 h the book is too thin to trust its ask
-/// as a forecast - the ask clamp and the trend badges share it. Mirrors
-/// `LIQUID_VOL` in sell-priority.ts.
+/// as a forecast - the ask clamp, the trend badges and the thin liquidity
+/// class share it. Pinned against `LIQUID_VOL` in sell-priority.ts by
+/// `tests/fixtures/sell-priority/liquidity-boundary.json`, checked from
+/// market-domain so this crate stays dependency-free.
 pub const LIQUID_VOL: f64 = 5.0;
 /// At/under this 48 h volume a listing barely moves - flagged `patience`.
 /// Mirrors `PATIENCE_VOL` in sell-priority.ts.

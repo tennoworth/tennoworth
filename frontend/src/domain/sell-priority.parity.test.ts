@@ -4,8 +4,9 @@
 // need this counterpart. Both implementations consume the same expected order
 // so a one-sided formula change cannot silently alter their recommendations.
 import { describe, it, expect } from 'vitest';
-import { scoreRow, sellableQty } from './sell-priority.js';
+import { clearingPrice, LIQUID_VOL, scoreRow, sellableQty } from './sell-priority.js';
 import fixture from '../../../tests/fixtures/sell-priority/cases.json';
+import boundary from '../../../tests/fixtures/sell-priority/liquidity-boundary.json';
 
 describe('sell-priority ranking parity (hosted and preview side)', () => {
   it('ranks the shared fixture into the golden order', () => {
@@ -20,6 +21,13 @@ describe('sell-priority ranking parity (hosted and preview side)', () => {
       .map((r) => r.slug);
 
     expect(ranked).toEqual(fixture.expected_order);
+  });
+
+  it('draws the thin-book line where the native side does', () => {
+    expect(LIQUID_VOL).toBe(boundary.liquid_vol);
+    for (const c of boundary.cases) {
+      expect(clearingPrice({ vol: c.vol, low_sell: c.low_sell, median_90d: c.median_90d }), `vol ${c.vol}`).toBe(c.clearing);
+    }
   });
 
   it('excludes rows the reserve zeroes out (sellable_qty 0)', () => {

@@ -1,0 +1,9 @@
+{
+  "_comment": "The 48h trade volume below which a book is too thin to trust: its ask is clamped to 1.5x the median, the item reads as thin, and trends are not certified. Read by frontend/src/domain/sell-priority.parity.test.ts and rust/market-math/src/sell_priority.rs. The cases sit on either side of the boundary so a one-sided change of value or of < to <= fails.",
+  "liquid_vol": 5,
+  "cases": [
+    { "vol": 4, "low_sell": 300, "median_90d": 100, "clearing": 150 },
+    { "vol": 5, "low_sell": 300, "median_90d": 100, "clearing": 300 },
+    { "vol": 6, "low_sell": 300, "median_90d": 100, "clearing": 300 }
+  ]
+}
