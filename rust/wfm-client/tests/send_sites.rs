@@ -62,6 +62,48 @@ fn render(tokens: TokenStream, out: &mut String) {
     }
 }
 
+/// Requests sent by reqwest's free functions. `reqwest::get(url)` builds its own
+/// default client and sends in one call, with no `.send()` for the gate to see,
+/// so it would skip the shared governor and the descriptive user agent
+/// unnoticed. An imported `get` is counted at the import, because its call site
+/// reads like any `client.get(url)`.
+fn free_function_sends(compact: &str) -> usize {
+    let calls = compact.matches("reqwest::get(").count() + compact.matches("blocking::get(").count();
+    let imports = compact
+        .split("usereqwest::")
+        .skip(1)
+        .filter(|rest| {
+            let statement = rest.split(';').next().unwrap_or_default();
+            // Identifiers render without spaces, so `get as fetch` reads
+            // `getasfetch`; a glob import may bring `get` in as well.
+            statement
+                .split(|c: char| !(c.is_alphanumeric() || c == '_' || c == '*'))
+                .any(|name| name == "get" || name.starts_with("getas") || name == "*")
+        })
+        .count();
+    calls + imports
+}
+
+#[test]
+fn free_function_requests_count_as_send_sites() {
+    let source = r##"
+        use reqwest::blocking::{Client, Response};
+        fn plain() { client.get(url).send(); }
+        fn direct() { let _ = reqwest::get(url); let _ = reqwest::blocking::get(url); }
+        use reqwest::blocking::get;
+        use reqwest::{blocking::get as fetch, Client};
+        use reqwest::blocking::*;
+        #[cfg(test)]
+        fn fake() { reqwest::blocking::get(url); }
+    "##;
+    let compact = production(source);
+    assert_eq!(free_function_sends(&compact), 5, "{compact}");
+    assert_eq!(
+        free_function_sends(&production("use reqwest::blocking::{RequestBuilder, Response};")),
+        0
+    );
+}
+
 #[test]
 fn test_only_items_do_not_hide_later_production_code() {
     let source = r##"
@@ -106,11 +148,13 @@ fn raw_http_send_sites_are_classified() {
                     .unwrap()
                     .to_string_lossy()
                     .replace('\\', "/");
+                let free = free_function_sends(&compact);
                 if compact.contains(".send()")
+                    || free > 0
                     || (compact.contains("reqwest") && compact.contains(".execute("))
                 {
                     assert_eq!(
-                        compact.matches(".send()").count(),
+                        compact.matches(".send()").count() + free,
                         1,
                         "Raw HTTP send count changed in {relative}; classify the new endpoint"
                     );
