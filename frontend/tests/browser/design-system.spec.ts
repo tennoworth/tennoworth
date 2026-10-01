@@ -31,6 +31,21 @@ async function unreadableRailText(page: Page) {
   });
 }
 
+// The desktop preview keeps booting after the load event that goto and reload
+// resolve on: main.ts awaits the stub runtime and then lazy-imports the shell,
+// so on CI's cold dev server module requests are still in flight. Every WebKit
+// failure of these routine tests in CI since 2026-09-14 (six of them) was a
+// reload here: page.reload stuck or raising "internal error", or a shell that
+// never mounted after it. A reload therefore starts and ends on a mounted shell.
+async function previewShell(page: Page) {
+  await expect(page.locator('.sidebar').getByRole('button', { name: /^Routines/ })).toBeVisible({ timeout: 30_000 });
+}
+async function reloadPreview(page: Page) {
+  await previewShell(page);
+  await page.reload();
+  await previewShell(page);
+}
+
 // Red is for invalid data and blocked calculations; no status tag is either.
 async function redTags(page: Page) {
   return page.locator('.tag:visible').evaluateAll(tags => {
@@ -359,10 +374,11 @@ test('narrow order filters stay reachable and routines remain an actionable chec
 
 test('monthly goals add, rename and remove individually', async ({ page }) => {
   await page.goto('/?preview-desktop&sample');
+  await previewShell(page);
   for (const theme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: theme });
     await page.evaluate(() => localStorage.removeItem('routine-checklist'));
-    await page.reload();
+    await reloadPreview(page);
     await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
     await page.getByRole('button', { name: 'Monthly' }).click();
     await expect(page.getByText(/Add a monthly goal to build/)).toBeVisible();
@@ -393,7 +409,7 @@ test('monthly goals add, rename and remove individually', async ({ page }) => {
     await expect(page.getByRole('checkbox', { name: /List four ranked mods/ })).toBeVisible();
   }
 
-  await page.reload();
+  await reloadPreview(page);
   await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
   await page.getByRole('button', { name: 'Monthly' }).click();
   await expect(page.getByRole('checkbox', { name: /List four ranked mods/ })).toBeVisible();
@@ -402,10 +418,11 @@ test('monthly goals add, rename and remove individually', async ({ page }) => {
 
 test('monthly goals reorder and keep keyboard focus in the list', async ({ page }) => {
   await page.goto('/?preview-desktop&sample');
+  await previewShell(page);
   for (const theme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: theme });
     await page.evaluate(() => localStorage.removeItem('routine-checklist'));
-    await page.reload();
+    await reloadPreview(page);
     await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
     await page.getByRole('button', { name: 'Monthly' }).click();
     const add = page.getByLabel('Add a monthly goal');
@@ -429,7 +446,7 @@ test('monthly goals reorder and keep keyboard focus in the list', async ({ page 
     await expect(page.getByRole('button', { name: 'Remove Second goal' })).toBeFocused();
   }
 
-  await page.reload();
+  await reloadPreview(page);
   await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
   await page.getByRole('button', { name: 'Monthly' }).click();
   await expect(page.locator('.checklist-items .task-copy strong')).toHaveText(['Third goal', 'Second goal']);
@@ -437,8 +454,9 @@ test('monthly goals reorder and keep keyboard focus in the list', async ({ page 
 
 async function openMonthlyGoals(page: Page, goals: string[]) {
   await page.goto('/?preview-desktop&sample');
+  await previewShell(page);
   await page.evaluate(() => localStorage.removeItem('routine-checklist'));
-  await page.reload();
+  await reloadPreview(page);
   await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
   await page.getByRole('button', { name: 'Monthly' }).click();
   const add = page.getByLabel('Add a monthly goal');
@@ -485,7 +503,7 @@ test('monthly goals can be dragged by their handle to a new position', async ({ 
   await handles.nth(0).dragTo(rows.nth(2), { targetPosition: { x: 40, y: 60 } });
   await expect(titles).toHaveText(['First goal', 'Second goal', 'Third goal']);
 
-  await page.reload();
+  await reloadPreview(page);
   await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
   await page.getByRole('button', { name: 'Monthly' }).click();
   await expect(titles).toHaveText(['First goal', 'Second goal', 'Third goal']);
@@ -505,13 +523,14 @@ test('the monthly goal field keeps a control height at narrow widths', async ({ 
 
 test('routine progress survives reload and failed persistence stays retryable', async ({ page }) => {
   await page.goto('/?preview-desktop&sample');
+  await previewShell(page);
   await page.evaluate(() => localStorage.clear());
-  await page.reload();
+  await reloadPreview(page);
   await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
   const tribute = page.getByRole('checkbox', { name: /Claim the Daily Tribute/ });
   await tribute.check();
   await expect.poll(() => page.evaluate(() => localStorage.getItem('routine-checklist'))).toContain('login-tribute');
-  await page.reload();
+  await reloadPreview(page);
   await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
   await expect(tribute).toBeChecked();
 
@@ -526,7 +545,7 @@ test('routine progress survives reload and failed persistence stays retryable', 
   });
   await page.getByRole('button', { name: 'Retry saving' }).click();
   await expect(page.getByRole('alert')).toHaveCount(0);
-  await page.reload();
+  await reloadPreview(page);
   await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
   await expect(tribute).not.toBeChecked();
 });
