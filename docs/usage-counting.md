@@ -44,47 +44,6 @@ coverage and update timestamp. Launch, restarts and detected maintenance gaps
 observed service coverage; it does not mean nobody used the app. A daily chart
 cannot detect every network or upstream outage. Aggregates are retained indefinitely.
 
-## Server installation
-
-Production deployment requires the normal explicit production authorization.
-Artifacts come from `build-usage.yml` on `main`, with a checksum. The collector
-runs on `127.0.0.1:8082`; confirm that port is free. The route uses `skip_log`, supported by the distribution Caddy and newer releases. On the existing box, as root:
-
-```sh
-useradd --system --no-create-home --shell /usr/sbin/nologin tennoworth-usage
-install -m 0755 /srv/wfm/app/deploy/pull-usage.sh /srv/wfm/pull-usage.sh
-install -m 0755 /srv/wfm/app/deploy/monitor-usage.sh /srv/wfm/monitor-usage.sh
-install -m 0644 /srv/wfm/app/deploy/tennoworth-usage*.service /etc/systemd/system/
-install -m 0644 /srv/wfm/app/deploy/tennoworth-usage*.timer /etc/systemd/system/
-systemctl daemon-reload
-/srv/wfm/pull-usage.sh
-systemctl enable tennoworth-usage.service
-systemctl enable --now tennoworth-usage-pull.timer tennoworth-usage-monitor.timer
-```
-
-Skip user creation if the dedicated account exists. Merge the usage route from
-the repository Caddyfile into the live site block, validate, then reload.
-Preserve unrelated sites. Install changed service files and reload systemd when
-updating configuration; binary pulls alone do not install configuration.
-
-Before opening the public POST, review Cloudflare Logpush/Logpull, security-event
-retention, cloudflared logging, Caddy access/error logging, and host snapshots.
-Exclude these routes from controllable request logs. Include the repository’s
-usage error handler: access-log exclusion alone does not suppress Caddy’s
-default proxy-failure logs, which contain request metadata. Keep runtime debug
-logging disabled and verify the stopped-collector case as well as successful
-requests. Never enable request-body
-or debug tracing. Caddy strips identifying headers before forwarding, but
-Cloudflare terminates TLS and can retain its own operational/security metadata.
-Do not advertise zero provider retention. Record actual reviewed settings with
-deployment evidence.
-
-Verify loopback `/health` returns 204 and public `/api/usage/daily` returns JSON.
-Exercise synthetic requests against a separate test database, never the
-production counter. Confirm retained logs contain no bodies, tokens or IPs and
-website GETs do not count. Release desktop opt-in after this verification.
-Existing users remain opted out through upgrades.
-
 ## Request quota
 
 Two public routes exist - `POST /api/usage/check-in` and `GET /api/usage/daily` -
@@ -111,30 +70,17 @@ the monitor and the puller's post-restart check read; if it shared the public
 window, someone else's flood would be reported as an outage and could roll back a
 working binary.
 
-## Backup, recovery, rollback and monitoring
+## Recovery behaviour
 
-Export aggregates only, as the service account. Stage output and rename only on
-success. The export includes today's partial aggregate, never token hashes:
+The collector's `export` writes aggregates only, including today's partial
+aggregate, and never token hashes; `usage.db`, its journals and state directory
+are not backup material. `restore` preserves count maxima and marks the export
+day through the recovery day incomplete, including days absent from the backup.
+Lost deduplication state can produce repeated counts on that incomplete day.
 
-```sh
-sudo -u tennoworth-usage /srv/wfm/bin/tennoworth-usage export > usage-counts.json.new && mv usage-counts.json.new usage-counts.json
-```
-
-Schedule this in the existing backup system; never back up `usage.db`, journals,
-or its state directory. For recovery, stop the collector and feed the aggregate
-export to `tennoworth-usage restore` as the service account, then restart.
-Restore preserves count maxima and marks the export day through recovery day
-incomplete, including days absent from the backup. Loss of
-deduplication state can produce repeated counts on that incomplete day.
-
-The puller keeps the preceding binary and restores it on failed health checks.
-To stop collection immediately, stop the collector; check-ins fail quietly.
-A failed endpoint must not affect scans, trades, or app startup.
-
-The systemd service alerts through the existing failure unit. The usage monitor
-timer checks loopback health and aggregate freshness every five minutes and
-alerts through the same unit if maintenance is over two hours old. Monitoring
-GETs never contribute counts or record client identifiers.
+A failed or stopped collector must not affect scans, trades, or app startup:
+check-ins fail quietly. Monitoring GETs never contribute counts or record client
+identifiers.
 
 ## Testing exclusions
 

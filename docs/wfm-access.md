@@ -75,33 +75,15 @@ sweep chooses between is not uniform: one item's full order book was 96 KB,
 while `/v2/orders/item/{slug}/top` answered the same item in 3.8 KB and the
 `/v2/orders/recent` delta window in 216 KB.
 
-## Dedicated signing key
+## Policy signing key
 
-Generate a dedicated, passphrase-encrypted Minisign key on the maintainer's local
-workstation. Keep it outside the checkout and the web server, in a private
-directory. Do not reuse the updater key or use Minisign's `-W` option, which
-disables encryption. Enter the passphrase in the terminal prompt, never as a
-command argument, environment variable, or workflow secret.
-
-```sh
-umask 077
-mkdir -p "$HOME/.local/share/tennoworth-signing"
-chmod 700 "$HOME/.local/share/tennoworth-signing"
-minisign -G -s "$HOME/.local/share/tennoworth-signing/wfm-policy.key" \
-  -p "$HOME/.local/share/tennoworth-signing/wfm-policy.pub"
-```
-
-Back up the encrypted key and public key to offline storage, and retain the
-passphrase separately in a password manager. Test backup recovery by signing a
-disposable local file and verifying it with the public key. Losing the key or
-passphrase prevents policy updates for existing clients. Encryption protects the
-stored key; it does not protect signing on a compromised workstation.
-
-Set the repository variable `TENNOWORTH_WFM_POLICY_PUBLIC_KEY` to the base64 public
-key line from that public file. The desktop, scraper and policy verifier embed it
-at build time. Local development without the variable uses compiled defaults and
-does not fetch remote policies. Production release workflows require the variable
-and verify the deployed policy before building clients.
+Policies are signed with a dedicated Minisign key that the maintainer holds
+offline, separate from the updater key; no private key enters GitHub. The public
+key comes from the repository variable `TENNOWORTH_WFM_POLICY_PUBLIC_KEY`, which
+the desktop, scraper and policy verifier embed at build time. Local development
+without the variable uses compiled defaults and does not fetch remote policies.
+Production release workflows require the variable and verify the deployed
+policy before building clients.
 
 ## Create and publish a policy
 
@@ -114,39 +96,15 @@ only decrease to one; the watch interval may increase up to seven days. The
 pause flags independently restrict all access, background work, contracts,
 mutations and WebSockets. Unknown fields and more permissive values are rejected.
 
-Sign the exact UTF-8 payload bytes using modern Minisign's prehashed mode. Build
-one envelope containing the base64 payload and the complete detached signature
-text. For example, with jq installed on the administrative machine:
-
-```sh
-minisign -Sm payload.json -s "$HOME/.local/share/tennoworth-signing/wfm-policy.key"
-jq -n --arg payload "$(base64 -w0 payload.json)" \
-  --rawfile signature payload.json.minisig \
-  '{payload: $payload, signature: $signature}' > wfm-policy.json
-base64 -w0 wfm-policy.json
-```
-
-Run **publish-wfm-policy** on `main`, providing that final base64 string. The workflow verifies the signature,
-schema, bounds and increasing revision against the previous published envelope
-before updating the `wfm-policy-latest` rolling artifact. No private key enters
-GitHub. Concurrent publications are serialized.
-
-For initial setup only, run the workflow on the tested `develop` revision with
-`first_publication: true`. This builds the verifier on Ubuntu 22.04 before the
-first policy-dependent production promotion. The bootstrap rejects an existing
-policy release, any other branch, or an unknown release-lookup response; all
-later revisions must be published from `main`. Configure the public-key variable
-before running it and use revision 1 with the compiled defaults and no pauses.
-
-For the first deployment, install the `wfm-policy` verifier artifact from that
-release at `/srv/wfm/bin/wfm-policy`, owned and installed like the existing scraper
-binary. Install `pull-policy.sh`, its service/timer, and the Caddy policy route.
-The puller verifies a newer envelope before atomically replacing the served file.
-Enable `wfm-policy-pull.timer` after installing the verifier. Publish and verify a
-policy matching compiled defaults before releasing desktop or scraper clients.
-Fetch the public policy URL and verify it with the built verifier before
-promotion: an HTTP 200 can still be the site's HTML fallback. Preserve the live
-market files while installing the route and policy services.
+The envelope is JSON holding the base64 payload and the complete Minisign
+detached signature text, made in prehashed mode over the exact UTF-8 payload
+bytes. The **publish-wfm-policy** workflow runs on `main` and verifies the
+signature, schema, bounds and increasing revision against the previous
+published envelope before updating the `wfm-policy-latest` rolling artifact.
+Concurrent publications are serialized. On the host, a puller verifies a newer
+envelope before atomically replacing the served file, and a policy URL that
+answers 200 can still be the site's HTML fallback, so only a verified envelope
+counts as published.
 
 ## Tightening and recovery
 

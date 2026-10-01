@@ -124,8 +124,8 @@ characteristics:
   zero provider retention. Deployment must review the actual Cloudflare and
   tunnel logging settings before enabling collection.
 
-See [the usage service runbook](docs/usage-counting.md) for deployment, aggregate
-backup/restore, testing exclusions, and known counting limitations.
+See [daily installation counts](docs/usage-counting.md) for the data flow,
+recovery behaviour, testing exclusions, and known counting limitations.
 
 ## What we cannot promise
 

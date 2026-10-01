@@ -128,8 +128,8 @@ open the PR against `develop`, and fetch before branching or pushing. Fork
 contributors work from their own remote and upstream as described in
 CONTRIBUTING.md. `main` is production and auto-deploys: promotion requires
 explicit authorization and the checked, approved path in
-[docs/releasing.md](docs/releasing.md). Live ruleset IDs, bypass scope, and
-rollback are in [docs/github-rulesets/](docs/github-rulesets/) - check live
+[docs/releasing.md](docs/releasing.md). Live ruleset IDs and bypass scope are
+in [docs/github-rulesets/](docs/github-rulesets/) - check live
 settings when a task depends on them rather than trusting a dated snapshot.
 
 Hotfixes are the one exception to branching off `develop`: branch them from
