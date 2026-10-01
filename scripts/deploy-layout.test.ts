@@ -1221,6 +1221,7 @@ function corpusFixture() {
     '--snapshot', snapshot,
     '--deployed', join(box, 'deployed.json'),
     '--binary', binary,
+    '--app', join(box, 'app'),
     '--now', '2026-09-16T17:34:38Z',
     ...extraArgs,
   ], {
@@ -1349,6 +1350,105 @@ describe.skipIf(process.platform === 'win32')('observation corpus readiness', ()
     expect(result.status).not.toBe(0);
     expect(f.report().anomalies.abandoned_partial).toEqual([]);
     expect(f.report().errors.join('\n')).toContain('stuck');
+  });
+
+  test('a sweep that started and failed is reported as aborted, not as a missing sweep', () => {
+    // Its unit already paged when it failed, and its partial stays for the whole
+    // retention window: counting it as missing kept the box not ready, alerting
+    // hourly, for 56 days after every aborted sweep.
+    const f = corpusFixture();
+    rmSync(f.observationPath(f.names[1]!));
+    const start = f.newestStart - 7200;
+    const name = `sweep-${new Date(start * 1000).toISOString().replace('.000Z', 'Z').replaceAll(':', '-')}.jsonl.partial`;
+    writeFileSync(f.observationPath(name), '');
+    utimesSync(f.observationPath(name), start + 1800, start + 1800);
+    const result = f.run();
+    expect(result.status, result.stderr).toBe(0);
+    const report = f.report();
+    expect(report.ready).toBe(true);
+    expect(report.sweeps).toMatchObject({ expected: 3, valid: 2, missing: 0, aborted: 1 });
+    expect(report.anomalies.abandoned_partial).toEqual([name]);
+    expect(report.warnings.join('\n')).toContain('started but did not complete');
+  });
+
+  test('an aborted sweep does not excuse a second slot in the same gap that never ran', () => {
+    const f = corpusFixture();
+    rmSync(f.observationPath(f.names[1]!));
+    rmSync(f.observationPath(f.names[0]!));
+    const start = f.newestStart - 7200;
+    const name = `sweep-${new Date(start * 1000).toISOString().replace('.000Z', 'Z').replaceAll(':', '-')}.jsonl.partial`;
+    writeFileSync(f.observationPath(name), '');
+    utimesSync(f.observationPath(name), start + 1800, start + 1800);
+    // A valid log three slots before the newest, so the gap spans two lost slots.
+    const early = f.newestStart - 3 * 7200;
+    const earlyName = `sweep-${new Date(early * 1000).toISOString().replace('.000Z', 'Z').replaceAll(':', '-')}.jsonl`;
+    writeFileSync(f.observationPath(earlyName), sweepLog(early, 4, 2));
+    utimesSync(f.observationPath(earlyName), early + 4200, early + 4200);
+    const result = f.run();
+    expect(result.status).not.toBe(0);
+    expect(f.report().sweeps).toMatchObject({ missing: 1, aborted: 1 });
+    expect(f.report().errors.join('\n')).toContain('1 scheduled sweep(s) have no log');
+  });
+
+  describe('deployed scraper against the checkout', () => {
+    // The box's checkout as pull-app.sh leaves it, with the deployed revision in
+    // its history and the given commits on top, each `hoursAgo` before the
+    // evaluation instant.
+    function withCheckout(f: ReturnType<typeof corpusFixture>, after: Array<{ path: string; hoursAgo: number }>, deployed?: string) {
+      const app = join(f.box, 'app');
+      git(app, 'init', '-q', '-b', 'main');
+      git(app, 'config', 'user.email', 'test@example.invalid'); git(app, 'config', 'user.name', 'Fixture');
+      const commit = (path: string, hoursAgo: number) => {
+        write(join(app, path), `${path} ${hoursAgo}\n`);
+        git(app, 'add', path);
+        const date = `@${FIXTURE_NOW - hoursAgo * 3600} +0000`;
+        execFileSync('git', ['commit', '-q', '-m', path], { cwd: app, env: { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } });
+      };
+      commit('rust/wfm-scrape/src/lib.rs', 200);
+      const revision = deployed ?? git(app, 'rev-parse', 'HEAD');
+      for (const c of after) commit(c.path, c.hoursAgo);
+      const record = JSON.parse(readFileSync(join(f.box, 'deployed.json'), 'utf8'));
+      writeFileSync(join(f.box, 'deployed.json'), JSON.stringify({ ...record, revision }, null, 2));
+    }
+
+    test('a deploy that matches the checkout is current', () => {
+      const f = corpusFixture();
+      withCheckout(f, [{ path: 'frontend/src/app.ts', hoursAgo: 100 }]);
+      expect(f.run().status).toBe(0);
+      expect(f.report().deployment).toMatchObject({ lag: 'current', pending_scraper_commits: 0 });
+    });
+
+    test('scraper changes the deploy has waited on past the grace are not ready', () => {
+      const f = corpusFixture();
+      withCheckout(f, [{ path: 'rust/wfm-client/src/lib.rs', hoursAgo: 30 }, { path: 'rust/wfm-scrape/src/http.rs', hoursAgo: 2 }]);
+      const result = f.run();
+      expect(result.status).not.toBe(0);
+      expect(f.report().deployment).toMatchObject({ lag: 'behind', pending_scraper_commits: 2 });
+      expect(f.report().errors.join('\n')).toContain('2 scraper commit(s) behind');
+    });
+
+    test('a scraper change inside the grace is a warning', () => {
+      const f = corpusFixture();
+      withCheckout(f, [{ path: 'deploy/run-scrape.sh', hoursAgo: 3 }]);
+      const result = f.run();
+      expect(result.status, result.stderr).toBe(0);
+      expect(f.report().deployment.lag).toBe('behind');
+      expect(f.report().warnings.join('\n')).toContain('1 scraper commit(s) behind');
+    });
+
+    test('a revision deployed ahead of the checkout is not lag', () => {
+      const f = corpusFixture();
+      withCheckout(f, [], '0123456789abcdef0123456789abcdef01234567');
+      expect(f.run().status).toBe(0);
+      expect(f.report().deployment.lag).toBe('ahead');
+    });
+
+    test('no checkout to compare against is a warning, never a pass', () => {
+      const f = corpusFixture();
+      expect(f.run().status).toBe(0);
+      expect(f.report().deployment.lag).toBe('unknown');
+      expect(f.report().warnings.join('\n')).toContain('no git checkout');
+    });
   });
 
   test('a sweep that missed its own CSV row count is not ready', () => {
