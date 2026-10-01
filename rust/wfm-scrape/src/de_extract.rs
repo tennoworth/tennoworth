@@ -196,6 +196,21 @@ pub fn relic_rewards_from_de(
             continue;
         };
 
+        // REFINEMENT_CHANCE describes the standard 3/2/1 layout. A relic whose
+        // rewards all share one rarity (Requiem Eterna: eight commons) has no
+        // tier for refinement to shift odds between, so every reward is equally
+        // likely at every refinement. Reading it through the table gave each of
+        // the eight 25.33% - 202% in total, doubling the relic's value.
+        let uniform = {
+            let mut rarities = rewards
+                .iter()
+                .filter_map(|rw| rw.get("rarity").and_then(|v| v.as_str()))
+                .map(str::to_ascii_uppercase);
+            let first = rarities.next();
+            (first.is_some() && rarities.all(|r| Some(r) == first))
+                .then(|| ((100.0 / rewards.len() as f64) * 100.0).round() / 100.0)
+        };
+
         let mut out = Vec::new();
         for rw in rewards {
             let Some(path) = rw.get("rewardName").and_then(|v| v.as_str()) else {
@@ -203,6 +218,7 @@ pub fn relic_rewards_from_de(
             };
             let rarity = rw.get("rarity").and_then(|v| v.as_str()).unwrap_or("");
             let Some(chances) = chances_for(rarity) else { continue };
+            let chances = uniform.map_or(chances, |each| [each; 4]);
 
             let Some(info) = resolve_path(path, path_to_info, &alias) else {
                 build.unresolved += 1;
@@ -1126,6 +1142,29 @@ mod tests {
     }
 
     #[test]
+    fn a_relic_of_one_rarity_splits_its_odds_evenly() {
+        let paths: Vec<String> = (0..8).map(|i| format!("/Lotus/Upgrades/Mods/Requiem/Mod{i}")).collect();
+        let info: HashMap<String, Value> = paths
+            .iter()
+            .enumerate()
+            .map(|(i, p)| (p.clone(), serde_json::json!({"name": format!("Mod {i}"), "slug": format!("mod_{i}")})))
+            .collect();
+        let relics = serde_json::json!({"ExportRelicArcane": [{
+            "name": "Requiem Eterna Relic",
+            "uniqueName": "/Lotus/Types/Game/Projections/RequiemEterna",
+            "relicRewards": paths.iter().map(|p| serde_json::json!({"rewardName": p, "rarity": "COMMON", "tier": 0, "itemCount": 1})).collect::<Vec<_>>()
+        }]});
+        let build = relic_rewards_from_de(&relics, &recipes(), &info);
+        let rewards = build.rewards["requiem_eterna_relic"].as_array().unwrap();
+        assert_eq!(rewards.len(), 8);
+        for refinement in REFINEMENTS {
+            let total: f64 = rewards.iter().map(|r| r["chances"][refinement].as_f64().unwrap()).sum();
+            assert!((total - 100.0).abs() < 0.05, "{refinement}: {total}");
+        }
+        assert_eq!(rewards[0]["chance"], 12.5);
+    }
+
+    #[test]
     fn relic_slug_matches_the_existing_key_shape() {
         assert_eq!(relic_slug("Lith H2 Relic").as_deref(), Some("lith_h2_relic"));
         assert_eq!(relic_slug("Axi A1 Relic").as_deref(), Some("axi_a1_relic"));
@@ -1141,7 +1180,10 @@ mod tests {
                {"rewardName": "/Lotus/StoreItems/Types/Recipes/WarframeRecipes/OberonPrimeSystemsBlueprint",
                 "rarity": "COMMON", "tier": 0, "itemCount": 1},
                {"rewardName": "/Lotus/Types/Recipes/Components/FormaBlueprint",
-                "rarity": "COMMON", "tier": 0, "itemCount": 1}
+                "rarity": "COMMON", "tier": 0, "itemCount": 1},
+               // Real relics span the tiers; a one-tier list reads as uniform.
+               {"rewardName": "/Lotus/Types/Items/MiscItems/Kuva",
+                "rarity": "RARE", "tier": 0, "itemCount": 1}
              ]},
             // The Gold variant is the same relic at a different refinement and
             // must not double the reward list.
@@ -1161,7 +1203,7 @@ mod tests {
         assert_eq!(rows[0]["chance"], 25.33, "bare `chance` stays intact for old consumers");
         assert_eq!(rows[0]["chances"]["radiant"], 16.67);
         assert_eq!(rows[0]["chances"]["intact"], 25.33);
-        assert_eq!(build.unresolved, 1);
+        assert_eq!(build.unresolved, 2);
     }
 
     #[test]

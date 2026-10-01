@@ -26,7 +26,9 @@ cycle, with the descriptive UA, and never from a visitor's browser.
 - **Relic refinement odds are ours, not DE's.** The export ships four variants
   per relic (Bronze/Silver/Gold/Platinum) whose reward lists are identical;
   refinement changes the odds and DE does not publish them. The table lives in
-  `de_extract::REFINEMENT_CHANCE` - re-check it on major updates.
+  `de_extract::REFINEMENT_CHANCE` - re-check it on major updates. It describes
+  the standard 3/2/1 layout; a relic whose rewards all share one rarity
+  (Requiem Eterna) splits its odds evenly at every refinement instead.
 - **Never resolve a `/Lotus/...` path by guessing.** `resolve_path` walks the
   `/Lotus/StoreItems` alias and then `ExportRecipes.resultType`, and returns
   `None` otherwise. ~87% of relic reward refs resolve; the rest (Forma, Kuva,
