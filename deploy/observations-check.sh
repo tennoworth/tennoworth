@@ -791,14 +791,48 @@ elif ! app_git merge-base --is-ancestor "$revision" HEAD 2>/dev/null; then
   warn "the deployed scraper ${revision:0:7} is not an ancestor of the checkout's $checkout_head"
 else
   pending="$(app_git log --format='%ct' "$revision..HEAD" -- "${SCRAPER_SOURCES[@]}" 2>/dev/null || true)"
-  # Cargo.lock counts only when something other than the desktop package's own
-  # entry changed. Packages are blank-line separated, so drop that one record
-  # from both sides and compare the rest.
-  without_desktop() { awk 'BEGIN { RS = ""; ORS = "\n\n" } !/name = "tennoworth-desktop"/'; }
-  if ! cmp -s <(app_git show "$revision:rust/Cargo.lock" 2>/dev/null | without_desktop) \
-              <(app_git show "HEAD:rust/Cargo.lock" 2>/dev/null | without_desktop); then
-    lock_changes="$(app_git log --format='%ct' "$revision..HEAD" -- rust/Cargo.lock 2>/dev/null || true)"
-    pending="$(printf '%s\n%s\n' "$pending" "$lock_changes" | grep -v '^$' | sort -u || true)"
+  # Cargo.lock counts only where the scraper's own dependency closure changed.
+  # A desktop version bump, or a dependency only the desktop pulls in, leaves it
+  # alone, and so does every other lock commit in the range: judging per commit
+  # keeps an old desktop bump from starting the grace clock for a newer change.
+  scraper_closure() {
+    awk 'BEGIN { RS = ""; ORS = "\n\n" }
+      {
+        n = ""
+        if (match($0, /\nname = "[^"]+"/)) n = substr($0, RSTART + 9, RLENGTH - 10)
+        rec[NR] = $0; name[NR] = n
+        in_deps = 0
+        nl = split($0, lines, "\n")
+        for (i = 1; i <= nl; i++) {
+          line = lines[i]
+          if (line ~ /^dependencies = \[/) { in_deps = 1; continue }
+          if (in_deps && line ~ /^\]/) { in_deps = 0; continue }
+          if (in_deps) {
+            gsub(/^ *"|",? *$/, "", line); split(line, parts, " ")
+            deps[n] = deps[n] " " parts[1]
+          }
+        }
+      }
+      END {
+        split("wfm-scrape wfm-client market-math", roots, " ")
+        for (r in roots) { want[roots[r]] = 1; queue[++q] = roots[r] }
+        for (h = 1; h <= q; h++) {
+          k = split(deps[queue[h]], ds, " ")
+          for (j = 1; j <= k; j++) if (!(ds[j] in want)) { want[ds[j]] = 1; queue[++q] = ds[j] }
+        }
+        for (i = 1; i <= NR; i++) if (name[i] in want) print rec[i]
+      }'
+  }
+  lock_changes=""
+  while read -r commit committed; do
+    [ -n "$commit" ] || continue
+    if ! cmp -s <(app_git show "$commit^:rust/Cargo.lock" 2>/dev/null | scraper_closure) \
+                <(app_git show "$commit:rust/Cargo.lock" 2>/dev/null | scraper_closure); then
+      lock_changes="$lock_changes$committed"$'\n'
+    fi
+  done < <(app_git log --format='%H %ct' "$revision..HEAD" -- rust/Cargo.lock 2>/dev/null || true)
+  if [ -n "$lock_changes" ]; then
+    pending="$(printf '%s\n%s' "$pending" "$lock_changes" | grep -v '^$' | sort -u || true)"
   fi
   if [ -z "$pending" ]; then
     deploy_lag="current"

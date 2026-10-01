@@ -1447,28 +1447,39 @@ describe.skipIf(process.platform === 'win32')('observation corpus readiness', ()
       expect(f.report().warnings.join('\n')).toContain('1 scraper commit(s) behind');
     });
 
-    test('a lock change confined to the desktop package is not scraper lag', () => {
+    test('the lock counts only where the scraper\'s own dependencies changed', () => {
       const f = corpusFixture();
-      const lock = (desktop: string, other: string) =>
-        `[[package]]\nname = "tennoworth-desktop"\nversion = "${desktop}"\n\n[[package]]\nname = "wfm-scrape"\nversion = "${other}"\n`;
       const app = join(f.box, 'app');
+      // A desktop that may gain a dependency of its own, and a scraper with one.
+      const lock = (desktop: string, scraperDep: string, desktopOnly = false) => [
+        `[[package]]\nname = "tennoworth-desktop"\nversion = "${desktop}"\ndependencies = [\n "wfm-client",${desktopOnly ? '\n "xcap",' : ''}\n]\n`,
+        `[[package]]\nname = "wfm-client"\nversion = "0.1.0"\n`,
+        `[[package]]\nname = "wfm-scrape"\nversion = "0.1.0"\ndependencies = [\n "csv",\n "wfm-client",\n]\n`,
+        `[[package]]\nname = "csv"\nversion = "${scraperDep}"\n`,
+        ...(desktopOnly ? [`[[package]]\nname = "xcap"\nversion = "0.8.3"\n`] : []),
+      ].join('\n');
+      const commit = (content: string, hoursAgo: number) => {
+        write(join(app, 'rust/Cargo.lock'), content);
+        git(app, 'add', 'rust/Cargo.lock');
+        const date = `@${FIXTURE_NOW - hoursAgo * 3600} +0000`;
+        execFileSync('git', ['commit', '-q', '-m', `lock ${hoursAgo}`], { cwd: app, env: { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } });
+      };
       withCheckout(f, []);
-      write(join(app, 'rust/Cargo.lock'), lock('0.8.4', '0.1.0'));
-      git(app, 'add', 'rust/Cargo.lock');
-      execFileSync('git', ['commit', '-q', '-m', 'lock'], { cwd: app, env: { ...process.env, GIT_AUTHOR_DATE: `@${FIXTURE_NOW - 150 * 3600} +0000`, GIT_COMMITTER_DATE: `@${FIXTURE_NOW - 150 * 3600} +0000` } });
+      commit(lock('0.8.4', '1.3.0'), 150);
       const record = JSON.parse(readFileSync(join(f.box, 'deployed.json'), 'utf8'));
       writeFileSync(join(f.box, 'deployed.json'), JSON.stringify({ ...record, revision: git(app, 'rev-parse', 'HEAD') }));
-      const bump = (desktop: string, other: string, hoursAgo: number) => {
-        write(join(app, 'rust/Cargo.lock'), lock(desktop, other));
-        git(app, 'add', 'rust/Cargo.lock');
-        execFileSync('git', ['commit', '-q', '-m', `lock ${desktop} ${other}`], { cwd: app, env: { ...process.env, GIT_AUTHOR_DATE: `@${FIXTURE_NOW - hoursAgo * 3600} +0000`, GIT_COMMITTER_DATE: `@${FIXTURE_NOW - hoursAgo * 3600} +0000` } });
-      };
-      bump('0.8.5', '0.1.0', 40);
+
+      // A desktop version bump, then a dependency only the desktop uses.
+      commit(lock('0.8.5', '1.3.0'), 40);
+      commit(lock('0.8.5', '1.3.0', true), 35);
       expect(f.run().status).toBe(0);
       expect(f.report().deployment).toMatchObject({ lag: 'current', pending_scraper_commits: 0 });
-      bump('0.8.5', '0.1.1', 30);
-      expect(f.run().status).not.toBe(0);
-      expect(f.report().deployment).toMatchObject({ lag: 'behind' });
+
+      // A scraper dependency moves 2 h ago: lag, but still inside the grace -
+      // the older desktop-only commits must not start the clock.
+      commit(lock('0.8.5', '1.3.1', true), 2);
+      expect(f.run().status, f.report().errors.join('\n')).toBe(0);
+      expect(f.report().deployment).toMatchObject({ lag: 'behind', pending_scraper_commits: 1 });
     });
 
     test('a revision deployed ahead of the checkout is not lag', () => {
