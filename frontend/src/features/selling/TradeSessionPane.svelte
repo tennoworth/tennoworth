@@ -1,8 +1,11 @@
 <script lang="ts">
   import { useDesktopServices } from '../../ui/desktop-context';
   const { desktopTradeSessionState, desktopLiveTopPrices, listenForTauriEvent, evaluateTradeSession } = useDesktopServices();
-  import { onMount, type Snippet } from 'svelte';
+  import { onMount, onDestroy, type Snippet } from 'svelte';
   import BuyerAlternatives from './BuyerAlternatives.svelte';
+  import { LiveTopController } from './live-top.svelte';
+  const liveTop = new LiveTopController({ desktopLiveTopPrices, listenForTauriEvent });
+  onDestroy(() => liveTop.dispose());
   import { computeResults } from '../../domain/filter-engine';
   import { SESSION_MODES, type SessionPlan, type SessionMode, type SessionRow, type SessionCandidate } from '../../domain/trade-session';
   
@@ -32,7 +35,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   let sessionData = $state<TradeSessionState | null>(null);
   let error = $state<string | null>(null);
   let loading = $state(true);
-  let liveBusy = $state(false);
+  let liveBusy = $derived(liveTop.phase === 'running');
   let priceNote = $state<string | null>(null);
   let livePrices = $state<Record<string, Partial<MarketItemEntry>>>({});
   let priceSources = $state<Record<string, string>>({});
@@ -127,25 +130,23 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   async function scan() { await onscan(); await refresh(); }
 
   async function refreshPrices() {
-    liveBusy = true;
     priceNote = null;
     const rows = plan.rows;
-    try {
-      const quotes = await desktopLiveTopPrices(rows.map(r => ({ slug: r.slug, rank: 0, subtype: null })));
-      let failed = 0;
-      const next = { ...livePrices };
-      const sources = { ...priceSources };
-      for (const row of rows) {
-        const q = quotes.find(q => q.slug === row.slug && (q.rank ?? 0) === 0 && q.subtype == null);
-        if (!q || q.error) { failed++; continue; }
-        next[q.slug] = { low_sell: q.low_sell ?? 0, top_buy: q.top_buy ?? 0, price_basis: 'unit' };
-        sources[q.slug] = `${q.low_sell == null ? 'No live ask; cached reference' : 'Live checked'} · ${new Date().toLocaleTimeString()}`;
-      }
-      livePrices = next;
-      priceSources = sources;
-      priceNote = failed ? `${failed} price checks failed; those items retain their previous prices.` : 'Online competitors checked; your own orders are excluded.';
-    } catch (e) { priceNote = humanError(e); }
-    finally { liveBusy = false; }
+    const quotes = await liveTop.check(rows.map(r => ({ slug: r.slug, rank: 0, subtype: null })));
+    if (disposed) return;
+    if (!quotes) { priceNote = liveTop.error; return; }
+    let failed = 0;
+    const next = { ...livePrices };
+    const sources = { ...priceSources };
+    for (const row of rows) {
+      const q = quotes.find(q => q.slug === row.slug && (q.rank ?? 0) === 0 && q.subtype == null);
+      if (!q || q.error) { failed++; continue; }
+      next[q.slug] = { low_sell: q.low_sell ?? 0, top_buy: q.top_buy ?? 0, price_basis: 'unit' };
+      sources[q.slug] = `${q.low_sell == null ? 'No live ask; cached reference' : 'Live checked'} · ${new Date().toLocaleTimeString()}`;
+    }
+    livePrices = next;
+    priceSources = sources;
+    priceNote = failed ? `${failed} price checks failed; those items retain their previous prices.` : 'Online competitors checked; your own orders are excluded.';
   }
 
   onMount(() => {

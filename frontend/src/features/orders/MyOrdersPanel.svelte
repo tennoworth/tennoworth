@@ -4,7 +4,8 @@
   import { onDestroy } from 'svelte';
   import { DesktopCmdError } from '../../contracts/errors';
 
-import { LIVE_TOP_PROGRESS_EVENT } from '../../contracts/events';
+  import { LiveTopController } from '../selling/live-top.svelte';
+  const liveTop = new LiveTopController({ desktopLiveTopPrices, listenForTauriEvent });
 
 import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop';
   
@@ -72,7 +73,6 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   let toasts = $state<ToastMsg[]>([]);
   let toastSeq = 0;
   const toastTimers = new Map<number, number>();
-  let unlistenLiveProgress = () => {};
 
   function pushToast(text: string, kind: 'error' | 'success' = 'success'): void {
     const id = ++toastSeq;
@@ -90,7 +90,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   }
 
   onDestroy(() => {
-    unlistenLiveProgress();
+    liveTop.dispose();
     for (const timer of toastTimers.values()) window.clearTimeout(timer);
     toastTimers.clear();
   });
@@ -298,45 +298,15 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   // with the user's own order already excluded (wfm-core does that by
   // username), then `assessListings` turns it plus the last scan's owned
   // counts into concrete fixes.
-  type LiveState = 'idle' | 'running' | 'done' | 'error';
-  let liveState = $state<LiveState>('idle');
-  let liveProgress = $state({ done: 0, total: 0 });
-  let liveError = $state<string | null>(null);
-  let live = $state<Map<string, LiveTop>>(new Map());
-  let liveListenerArmed = false;
   let fixAllBusy = $state(false);
 
-  function liveKey(slug: string, rank: number, subtype: string | null): string {
-    return `${slug}|${rank}|${subtype ?? ''}`;
-  }
   function liveForOrder(o: OwnOrder): LiveTop | null {
-    return live.get(liveKey(itemSlug(o), o.rank ?? 0, o.subtype ?? null)) ?? null;
+    return liveTop.get({ slug: itemSlug(o), rank: o.rank, subtype: o.subtype }) ?? null;
   }
 
   async function checkLive(): Promise<void> {
     const targets = orders.filter((o) => o.side !== 'buy' && itemSlug(o) !== '');
-    if (targets.length === 0) return;
-    if (!liveListenerArmed) {
-      liveListenerArmed = true;
-      unlistenLiveProgress = listenForTauriEvent<{ done: number; total: number }>(LIVE_TOP_PROGRESS_EVENT, (p) => {
-        liveProgress = p;
-      });
-    }
-    liveState = 'running';
-    liveError = null;
-    liveProgress = { done: 0, total: targets.length };
-    try {
-      const res = await desktopLiveTopPrices(
-        targets.map((o) => ({ slug: itemSlug(o), rank: o.rank ?? 0, subtype: o.subtype ?? null })),
-      );
-      const next = new Map(live);
-      for (const t of res) next.set(liveKey(t.slug, t.rank ?? 0, t.subtype ?? null), t);
-      live = next;
-      liveState = 'done';
-    } catch (e) {
-      liveState = 'error';
-      liveError = e instanceof DesktopCmdError ? e.message : humanError(e);
-    }
+    await liveTop.check(targets.map((o) => ({ slug: itemSlug(o), rank: o.rank ?? 0, subtype: o.subtype ?? null })));
   }
 
   // Composed items - prime sets are assembled from parts, so a scan of
@@ -344,7 +314,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   let composedSlugs = $derived(market?.set_to_parts ? new Set(Object.keys(market.set_to_parts)) : null);
 
   let health = $derived.by((): HealthIssue[] => {
-    if (live.size === 0 && !ownedQty) return [];
+    if (liveTop.quotes.size === 0 && !ownedQty) return [];
     return assessListings(
       orders
         .filter((o) => o.side !== 'buy')
@@ -428,7 +398,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   let issueIds = $derived.by(() => {
     const ids = new Set<string>();
     for (const h of health) ids.add(h.id);
-    if (live.size === 0) for (const d of drifted) ids.add(d.id);
+    if (liveTop.quotes.size === 0) for (const d of drifted) ids.add(d.id);
     return ids;
   });
   let counts = $derived({
@@ -459,7 +429,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     | { key: string; id: string; name: string; slug: string; kind: 'drift'; d: DriftRow };
   let queue = $derived.by((): QueueRow[] => {
     const rows: QueueRow[] = health.map((h) => ({ key: `h:${h.id}:${h.kind}`, id: h.id, name: h.name, slug: h.slug, kind: 'health', h }));
-    if (live.size === 0) {
+    if (liveTop.quotes.size === 0) {
       for (const d of drifted) rows.push({ key: `d:${d.id}`, id: d.id, name: d.name, slug: d.slug, kind: 'drift', d });
     }
     return rows;
@@ -508,7 +478,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
       {:else if phase === 'locked'}unlock required
       {:else if phase === 'error'}couldn't load orders
       {:else if queue.length > 0}{queue.length} of {orders.length} {orders.length === 1 ? 'listing needs' : 'listings need'} attention · fixes apply immediately
-      {:else if live.size > 0}no issues in {orders.length} {orders.length === 1 ? 'listing' : 'listings'} · checked against the live top-of-book
+      {:else if liveTop.quotes.size > 0}no issues in {orders.length} {orders.length === 1 ? 'listing' : 'listings'} · checked against the live top-of-book
       {:else if ownedQty}no issues in {orders.length} {orders.length === 1 ? 'listing' : 'listings'} · quantities checked against your last scan
       {:else}nothing flagged yet - check live to compare your asks with the online top-of-book
       {/if}
@@ -517,11 +487,11 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     <button
       class="btn"
       onclick={checkLive}
-      disabled={liveState === 'running' || phase !== 'done' || orders.length === 0}
+      disabled={liveTop.phase === 'running' || phase !== 'done' || orders.length === 0}
       title="Ask warframe.market for the best online asks and bids on each of your sell listings' exact rank / refinement - your own order excluded - and flag what's worth fixing."
     >
-      {#if liveState === 'running'}Checking… {liveProgress.done}/{liveProgress.total}
-      {:else if liveState === 'done'}Re-check live
+      {#if liveTop.phase === 'running'}Checking… {liveTop.progress.done}/{liveTop.progress.total}
+      {:else if liveTop.phase === 'done'}Re-check live
       {:else}Check live{/if}
     </button>
   </div>
@@ -542,8 +512,8 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   </div>
   {/if}
 
-  {#if liveState === 'error' && liveError}
-    <div class="line bad">Live check failed: {liveError}</div>
+  {#if liveTop.phase === 'error' && liveTop.error}
+    <div class="line bad">Live check failed: {liveTop.error}</div>
   {/if}
 
   {#if queue.length > 0}
@@ -614,9 +584,9 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
       </tbody>
     </table>
     </div>
-    {#if live.size === 0 && drifted.length > 0}
+    {#if liveTop.quotes.size === 0 && drifted.length > 0}
       <div class="line">
-        <span class="exp">Snapshot rows compare against the last market snapshot (up to 2 h old) and can't tell whose order is whose&nbsp;- <button class="linkish" onclick={checkLive} disabled={liveState === 'running'}>check live</button> for exact figures.</span>
+        <span class="exp">Snapshot rows compare against the last market snapshot (up to 2 h old) and can't tell whose order is whose&nbsp;- <button class="linkish" onclick={checkLive} disabled={liveTop.phase === 'running'}>check live</button> for exact figures.</span>
       </div>
     {/if}
   {/if}
@@ -672,7 +642,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
           <col style="width:4rem" />
           <col style="width:3rem" />
           <col style="width:10rem" />
-          {#if live.size > 0}<col style="width:4.5rem" /><col style="width:4.5rem" />{/if}
+          {#if liveTop.quotes.size > 0}<col style="width:4.5rem" /><col style="width:4.5rem" />{/if}
           <col style="width:7rem" />
           <col style="width:8rem" />
         </colgroup>
@@ -682,7 +652,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
             <th>Type</th>
             <th>Qty</th>
             <th>Lot price</th>
-            {#if live.size > 0}
+            {#if liveTop.quotes.size > 0}
               <th title="Lowest other online ask for this exact tier">Live ask</th>
               <th title="Highest online bid for this exact tier">Live bid</th>
             {/if}
@@ -693,7 +663,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
         <tbody>
           {#each shown as o (o.id)}
             {@const busy = busyIds.has(o.id)}
-            {@const t = live.size > 0 ? liveForOrder(o) : null}
+            {@const t = liveTop.quotes.size > 0 ? liveForOrder(o) : null}
             <tr class:busy class:confirming={confirmId === o.id}>
               <td class="l">{itemName(o)}</td>
               <td><span class="type" class:buy={o.side === 'buy'}>{o.side ?? '?'}</span></td>
@@ -709,7 +679,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
                   <button class="btn xs ghost edit" onclick={() => startEdit(o)} disabled={busy} title="Edit price">✎</button>
                 {/if}
               </td>
-              {#if live.size > 0}
+              {#if liveTop.quotes.size > 0}
                 <td>{#if t && !t.error && t.low_sell != null}{Number(t.low_sell.toFixed(2))}<span class="unit">p / unit</span>{:else}<span class="faint">-</span>{/if}</td>
                 <td>{#if t && !t.error && t.top_buy != null}{Number(t.top_buy.toFixed(2))}<span class="unit">p / unit</span>{:else}<span class="faint">-</span>{/if}</td>
               {/if}

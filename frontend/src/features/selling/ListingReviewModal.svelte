@@ -3,11 +3,13 @@
   const { desktopAccessStatus, desktopLiveTopPrices, desktopTradeSessionState, listenForTauriEvent } = useDesktopServices();
   import { onMount, onDestroy, untrack, tick } from 'svelte';
   import { WfmAccessController } from './controller.svelte';
+  import { LiveTopController } from './live-top.svelte';
+  const liveTop = new LiveTopController({ desktopLiveTopPrices, listenForTauriEvent });
   const marketAccess = new WfmAccessController({ desktopAccessStatus, listenForTauriEvent });
   onMount(() => marketAccess.start());
   import { DesktopCmdError } from '../../contracts/errors';
 
-import { LIVE_TOP_PROGRESS_EVENT, ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
+import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
 
 import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop';
   
@@ -235,47 +237,14 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   // ≤5 best ONLINE asks/bids for each selected row's exact tier (rank /
   // relic refinement) - the price you'd actually be competing with right
   // now. A shared request budget makes batch progress useful.
-  type LiveState = 'idle' | 'running' | 'done' | 'error';
-  let liveState = $state<LiveState>('idle');
-  let liveProgress = $state({ done: 0, total: 0 });
-  let liveError = $state<string | null>(null);
-  let live = $state<Map<string, LiveTop>>(new Map());
-  let liveListenerArmed = false;
-  let unlistenLiveProgress = () => {};
+  onDestroy(() => liveTop.dispose());
 
-  onDestroy(() => unlistenLiveProgress());
-
-  function liveKey(slug: string, rank: number, subtype: string | null): string {
-    return `${slug}|${rank}|${subtype ?? ''}`;
-  }
   function liveFor(row: PlanRow): LiveTop | undefined {
-    return live.get(liveKey(row.slug, row.rank, row.subtype));
+    return liveTop.get(row);
   }
 
   async function checkLivePrices(): Promise<void> {
-    const targets = plan.filter((r) => r.include);
-    if (targets.length === 0) return;
-    if (!liveListenerArmed) {
-      liveListenerArmed = true;
-      unlistenLiveProgress = listenForTauriEvent<{ done: number; total: number }>(LIVE_TOP_PROGRESS_EVENT, (p) => {
-        liveProgress = p;
-      });
-    }
-    liveState = 'running';
-    liveError = null;
-    liveProgress = { done: 0, total: targets.length };
-    try {
-      const res = await desktopLiveTopPrices(
-        targets.map((r) => ({ slug: r.slug, rank: r.rank, subtype: r.subtype })),
-      );
-      const next = new Map(live);
-      for (const t of res) next.set(liveKey(t.slug, t.rank ?? 0, t.subtype ?? null), t);
-      live = next;
-      liveState = 'done';
-    } catch (e) {
-      liveState = 'error';
-      liveError = e instanceof DesktopCmdError ? e.message : humanError(e);
-    }
+    await liveTop.check(plan.filter((r) => r.include).map((r) => ({ slug: r.slug, rank: r.rank, subtype: r.subtype })));
   }
 
   /** Set the row's price to the live lowest online ask (match, don't undercut). */
@@ -509,22 +478,22 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
           <button
             class="btn ghost live-btn"
             onclick={checkLivePrices}
-            disabled={liveState === 'running' || selectedCount === 0}
+            disabled={liveTop.phase === 'running' || selectedCount === 0}
             title="Ask warframe.market for the ≤5 best online asks and bids for each selected row's exact rank / refinement, right now. Shares market access with other activity; large batches can take time."
           >
-            {#if liveState === 'running'}
-              Checking live prices… {liveProgress.done}/{liveProgress.total}
-            {:else if liveState === 'done'}
+            {#if liveTop.phase === 'running'}
+              Checking live prices… {liveTop.progress.done}/{liveTop.progress.total}
+            {:else if liveTop.phase === 'done'}
               Re-check live prices
             {:else}
               Check live prices
             {/if}
           </button>
-          {#if liveState === 'done' && live.size > 0}
+          {#if liveTop.phase === 'done' && liveTop.quotes.size > 0}
             <button class="btn ghost" onclick={useLiveAll} title="Set every selected row's price to its live lowest online ask (match it - no undercutting).">Match lowest asks</button>
           {/if}
-          {#if liveState === 'error' && liveError}
-            <span class="live-err">{liveError}</span>
+          {#if liveTop.phase === 'error' && liveTop.error}
+            <span class="live-err">{liveTop.error}</span>
           {/if}
         </div>
 
