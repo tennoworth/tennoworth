@@ -1,0 +1,10 @@
+{
+  "surface": "#1e1913f2",
+  "fg": "#d3c7a6",
+  "muted": "#a3977a",
+  "border": "#87775b",
+  "value": "#cba05a",
+  "good": "#84ae85",
+  "warning": "#cf8360",
+  "on-value": "#1e1913"
+}

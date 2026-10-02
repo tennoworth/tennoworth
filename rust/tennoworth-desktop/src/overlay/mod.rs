@@ -29,7 +29,7 @@ use std::sync::{LazyLock, Mutex, RwLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Manager, State};
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 use tauri_plugin_opener::OpenerExt;
 
@@ -39,7 +39,6 @@ use crate::services::sellables::MarketData;
 
 pub const EVENT_UPDATE: &str = "relic-overlay:update";
 pub const EVENT_HIDE: &str = "relic-overlay:hide";
-pub const EVENT_STATUS: &str = "relic-overlay:status";
 const SETTINGS_KEY: &str = "relic-overlay-v1";
 const DEFAULT_SHORTCUT: &str = "Ctrl+Shift+O";
 const DEFAULT_REWARD_MARKER: &str = "Got rewards";
@@ -232,26 +231,23 @@ impl OverlayState {
         }
     }
 
-    fn set_status(&self, app: &AppHandle, state: &str, message: Option<String>) {
+    fn set_status(&self, state: &str, message: Option<String>) {
         let mut status = self.status.lock().unwrap_or_else(|e| e.into_inner());
         status.state = state.into();
         status.message = message;
-        let _ = app.emit(EVENT_STATUS, status.clone());
     }
 
-    fn finish_run(&self, app: &AppHandle, run: OverlayLastRun) {
+    fn finish_run(&self, run: OverlayLastRun) {
         let mut status = self.status.lock().unwrap_or_else(|e| e.into_inner());
         status.last_run = Some(run);
-        let _ = app.emit(EVENT_STATUS, status.clone());
     }
 
     // Seeded from `preferred_presentation_backend()` at construction; only the
     // Linux presentation path ever changes it at runtime.
     #[cfg(target_os = "linux")]
-    fn set_presentation_backend(&self, app: &AppHandle, backend: &str) {
+    fn set_presentation_backend(&self, backend: &str) {
         let mut status = self.status.lock().unwrap_or_else(|e| e.into_inner());
         status.presentation_backend = backend.into();
-        let _ = app.emit(EVENT_STATUS, status.clone());
     }
 }
 
@@ -322,7 +318,6 @@ pub fn update_overlay_settings(
         .unwrap_or_else(|e| e.into_inner())
         .ocr_ready;
     state.set_status(
-        &app,
         if settings.enabled && ocr_ready {
             "watching"
         } else if settings.enabled {
@@ -429,24 +424,21 @@ pub fn preview_relic_overlay(app: AppHandle, state: State<'_, OverlayState>) -> 
         .unwrap_or_else(|e| e.into_inner()) = Some(result.clone());
     state.lifecycle.present(capture_id.clone());
     present_overlay(&app, x, y, width, height, &result)?;
-    state.set_status(&app, "showing", Some("overlay preview".into()));
+    state.set_status("showing", Some("overlay preview".into()));
     let app_for_hide = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_secs(8));
         let state = app_for_hide.state::<OverlayState>();
         if state.lifecycle.is_current(&capture_id) {
             hide_overlay(&app_for_hide);
-            state.set_status(&app_for_hide, "watching", None);
+            state.set_status("watching", None);
         }
     });
     Ok(())
 }
 
 #[tauri::command]
-pub fn setup_overlay_capture(
-    app: AppHandle,
-    state: State<'_, OverlayState>,
-) -> Result<OverlayStatus, String> {
+pub fn setup_overlay_capture(state: State<'_, OverlayState>) -> Result<OverlayStatus, String> {
     let enabled = state
         .settings
         .lock()
@@ -464,15 +456,14 @@ pub fn setup_overlay_capture(
         return Err("ocr_unavailable: bundled English OCR model did not initialize".into());
     }
     state.set_status(
-        &app,
         "recognizing",
         Some("checking screen-capture access".into()),
     );
     if let Err(error) = capture_warframe() {
-        state.set_status(&app, "error", Some(error.clone()));
+        state.set_status("error", Some(error.clone()));
         return Err(error);
     }
-    state.set_status(&app, "watching", None);
+    state.set_status("watching", None);
     Ok(state
         .status
         .lock()
@@ -550,7 +541,6 @@ pub fn register_configured_shortcut(app: &AppHandle) {
     if settings.enabled {
         if let Err(error) = app.global_shortcut().register(settings.shortcut.as_str()) {
             state.set_status(
-                app,
                 "error",
                 Some(format!(
                     "shortcut {} is unavailable: {error}",
@@ -573,7 +563,7 @@ pub fn handle_log_line(app: &AppHandle, line: &str) {
     if settings.enabled && line.contains(REWARD_CLOSE_MARKER) {
         state.expected_slots.store(0, Ordering::Release);
         hide_overlay(app);
-        state.set_status(app, "watching", None);
+        state.set_status("watching", None);
         return;
     }
     let reward_line = REWARD_MARKERS
@@ -689,7 +679,7 @@ pub fn trigger_capture(app: &AppHandle, source: &str) -> Result<(), String> {
     if !state.lifecycle.try_begin() {
         return Err("a relic recognition pass is already running".into());
     }
-    state.set_status(app, "recognizing", Some(format!("triggered by {source}")));
+    state.set_status("recognizing", Some(format!("triggered by {source}")));
     let triggered_at = Instant::now();
     let source = source.to_string();
     let app = app.clone();
@@ -699,7 +689,7 @@ pub fn trigger_capture(app: &AppHandle, source: &str) -> Result<(), String> {
             if let Err(error) = capture_and_recognize(&app, &source, triggered_at) {
                 eprintln!("tennoworth: relic scan ({source}) failed: {error}");
                 app.state::<OverlayState>()
-                    .set_status(&app, "error", Some(error));
+                    .set_status("error", Some(error));
             }
             app.state::<OverlayState>().lifecycle.finish();
         })
@@ -956,9 +946,8 @@ fn capture_and_recognize(
                     timings.cached_display_ms = elapsed_ms(run_started);
                     timings.total_ms = elapsed_ms(run_started);
                     write_run_diagnostics(run_dir.as_deref(), &timings, Some(&result));
-                    state.set_status(app, "showing", Some(error.clone()));
+                    state.set_status("showing", Some(error.clone()));
                     state.finish_run(
-                        app,
                         OverlayLastRun {
                             outcome: error,
                             trigger_source: source.into(),
@@ -982,7 +971,6 @@ fn capture_and_recognize(
         timings.total_ms = elapsed_ms(run_started);
         write_run_diagnostics(run_dir.as_deref(), &timings, None);
         state.finish_run(
-            app,
             OverlayLastRun {
                 outcome: error.clone(),
                 trigger_source: source.into(),
@@ -1025,7 +1013,6 @@ fn capture_and_recognize(
         timings.total_ms = elapsed_ms(run_started);
         write_run_diagnostics(run_dir.as_deref(), &timings, Some(&result));
         state.finish_run(
-            app,
             OverlayLastRun {
                 outcome: error.clone(),
                 trigger_source: source.into(),
@@ -1038,7 +1025,7 @@ fn capture_and_recognize(
         return Err(error);
     }
     timings.cached_display_ms = elapsed_ms(run_started);
-    state.set_status(app, "showing", None);
+    state.set_status("showing", None);
     eprintln!(
         "tennoworth: relic scan {capture_id} showing {} recognized slots",
         result.slots.len()
@@ -1091,7 +1078,6 @@ fn capture_and_recognize(
     timings.total_ms = elapsed_ms(run_started);
     write_run_diagnostics(run_dir.as_deref(), &timings, Some(&result));
     state.finish_run(
-        app,
         OverlayLastRun {
             outcome: "success".into(),
             trigger_source: source.into(),
@@ -1113,7 +1099,7 @@ fn schedule_overlay_hide(app: &AppHandle, capture_id: String) {
         let state = app_for_hide.state::<OverlayState>();
         if state.lifecycle.is_current(&capture_id) {
             hide_overlay(&app_for_hide);
-            state.set_status(&app_for_hide, "watching", None);
+            state.set_status("watching", None);
         }
     });
 }
