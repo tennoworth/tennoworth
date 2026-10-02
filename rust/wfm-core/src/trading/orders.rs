@@ -43,6 +43,23 @@ pub fn decode_orders(
     body: &serde_json::Value,
     constraints: &dyn ItemConstraints,
 ) -> Result<DecodedOrders> {
+    let orders = decode_order_rows(body, constraints)?;
+
+    if let Some(reason) = orders.iter().find_map(|row| match row {
+        OrderRow::Supported(_) => None,
+        OrderRow::Unsupported(refused) | OrderRow::Ambiguous(refused) => Some(refused.reason.as_str()),
+    }) {
+        bail!("Orders response has a row this build cannot interpret ({reason}); reconcile current orders before changing listings.");
+    }
+    Ok(DecodedOrders { orders })
+}
+
+/// Decode each row independently for consumers that can leave refused rows untouched.
+/// A missing bucket still refuses the response: it is not an empty account.
+pub fn decode_order_rows(
+    body: &serde_json::Value,
+    constraints: &dyn ItemConstraints,
+) -> Result<Vec<OrderRow>> {
     let data = body
         .get("data")
         .context("Orders response has no data; refusing to assume an empty account.")?;
@@ -66,13 +83,7 @@ pub fn decode_orders(
         bail!("Orders response is neither a row list nor a pair of sell/buy buckets; reconcile current orders before changing listings.");
     }
 
-    if let Some(reason) = orders.iter().find_map(|row| match row {
-        OrderRow::Supported(_) => None,
-        OrderRow::Unsupported(refused) | OrderRow::Ambiguous(refused) => Some(refused.reason.as_str()),
-    }) {
-        bail!("Orders response has a row this build cannot interpret ({reason}); reconcile current orders before changing listings.");
-    }
-    Ok(DecodedOrders { orders })
+    Ok(orders)
 }
 
 /// Whether `data` is the bucketed shape. Both buckets have to be present and

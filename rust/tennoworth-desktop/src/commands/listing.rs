@@ -143,10 +143,10 @@ fn validate_protected_contents(
         .collect();
     for item in &sells {
         projected.push(
-            serde_json::json!({"type":"sell", "item":{"slug":item.slug}, "quantity":item.quantity}),
+            serde_json::json!({"id":format!("projected-{}", item.slug), "itemId":item.slug, "platinum":item.platinum, "type":"sell", "item":{"slug":item.slug}, "quantity":item.quantity}),
         );
     }
-    let projected_body = serde_json::json!({"data":{"sell":projected}});
+    let projected_body = serde_json::json!({"data":{"sell":projected,"buy":[]}});
     let state = crate::services::protection::state(db, market, Ok(projected_body))?;
     if state.snapshot_id.is_none() {
         return Err("Scan inventory before listing from a protected plan.".into());
@@ -600,7 +600,7 @@ mod tests {
             goal: Some("test_set".into()),
         };
         plan.save(&db, &market).unwrap();
-        let orders = serde_json::json!({"data":{"sell":[{"id":"set-order","item":{"slug":"test_set"},"quantity":1}]}});
+        let orders = serde_json::json!({"data":{"sell":[{"id":"set-order","itemId":"set","platinum":10,"item":{"slug":"test_set"},"quantity":1}],"buy":[]}});
         let item: PlanItem = serde_json::from_value(serde_json::json!({"slug":"barrel","quantity":1,"platinum":10,"order_type":"sell","visible":false})).unwrap();
         assert!(
             validate_protected_contents(&db, &market, &orders, std::slice::from_ref(&item)).is_ok()
@@ -608,7 +608,7 @@ mod tests {
         let mut too_many = item.clone();
         too_many.quantity = 2;
         assert!(validate_protected_contents(&db, &market, &orders, &[too_many]).is_err());
-        let same_order = serde_json::json!({"data":{"sell":[{"id":"part-order","item":{"slug":"barrel"},"quantity":3}]}});
+        let same_order = serde_json::json!({"data":{"sell":[{"id":"part-order","itemId":"part","platinum":10,"item":{"slug":"barrel"},"quantity":3}],"buy":[]}});
         assert!(
             validate_protected_contents(&db, &market, &same_order, std::slice::from_ref(&item))
                 .is_ok(),

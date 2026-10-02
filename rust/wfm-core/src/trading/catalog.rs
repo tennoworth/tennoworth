@@ -144,38 +144,7 @@ pub fn index_item_meta(catalog: &BTreeMap<String, WfmCatalogItem>) -> BTreeMap<S
         .collect()
 }
 
-// WFM /v2/orders/user/<username> returns orders that carry `itemId` but no
-// display name or slug. The MyOrdersPanel falls all the way through to the
-// raw id without this - and, until 2026-08-16, got the NAME but not the SLUG,
-// so every slug-keyed feature downstream (the drift check against the market
-// snapshot) silently matched nothing. We mutate the response in place to
-// attach `item: { name, slug }` per order, looked up against the catalog we
-// already loaded at startup. Tolerates both shapes WFM has shipped:
-//   { data: { sell: [...], buy: [...] } }   ← current v2
-//   { data: [...] }                          ← flat list, occasional v1-ish
-pub fn enrich_orders_with_names(
-    body: &mut serde_json::Value,
-    id_to_item: &BTreeMap<String, ItemMeta>,
-) {
-    let Some(data) = body.get_mut("data") else {
-        return;
-    };
-    if let Some(arr) = data.as_array_mut() {
-        for o in arr {
-            attach_item_meta(o, id_to_item);
-        }
-        return;
-    }
-    for bucket in ["sell", "buy"] {
-        if let Some(arr) = data.get_mut(bucket).and_then(|v| v.as_array_mut()) {
-            for o in arr {
-                attach_item_meta(o, id_to_item);
-            }
-        }
-    }
-}
-
-fn attach_item_meta(order: &mut serde_json::Value, id_to_item: &BTreeMap<String, ItemMeta>) {
+pub(crate) fn attach_item_meta(order: &mut serde_json::Value, id_to_item: &BTreeMap<String, ItemMeta>) {
     let id = order
         .get("itemId")
         .and_then(|v| v.as_str())
@@ -252,82 +221,6 @@ mod tests {
         for slug in ["single", "unknown", "malformed"] {
             assert!(!catalog[slug].bulk_tradable, "{slug}");
         }
-    }
-
-    fn sample_id_map() -> BTreeMap<String, ItemMeta> {
-        let mut m = BTreeMap::new();
-        m.insert(
-            "54aae292e7798909064f1575".into(),
-            ItemMeta {
-                name: "Secura Dual Cestra".into(),
-                slug: "secura_dual_cestra".into(),
-            },
-        );
-        m.insert(
-            "aaaaaaaaaaaaaaaaaaaaaaaa".into(),
-            ItemMeta {
-                name: "Loki Prime Set".into(),
-                slug: "loki_prime_set".into(),
-            },
-        );
-        m
-    }
-
-    #[test]
-    fn enrich_orders_handles_split_sell_buy_shape() {
-        let mut body = serde_json::json!({
-            "data": {
-                "sell": [
-                    {"id": "o1", "itemId": "aaaaaaaaaaaaaaaaaaaaaaaa", "platinum": 120},
-                ],
-                "buy": [
-                    {"id": "o2", "itemId": "54aae292e7798909064f1575", "platinum": 5},
-                ]
-            }
-        });
-        enrich_orders_with_names(&mut body, &sample_id_map());
-        assert_eq!(body["data"]["sell"][0]["item"]["name"], "Loki Prime Set");
-        assert_eq!(body["data"]["sell"][0]["item"]["slug"], "loki_prime_set");
-        assert_eq!(body["data"]["buy"][0]["item"]["name"], "Secura Dual Cestra");
-        assert_eq!(body["data"]["buy"][0]["item"]["slug"], "secura_dual_cestra");
-    }
-
-    #[test]
-    fn enrich_orders_handles_flat_array_shape() {
-        let mut body = serde_json::json!({
-            "data": [
-                {"id": "o1", "itemId": "aaaaaaaaaaaaaaaaaaaaaaaa", "platinum": 120},
-            ]
-        });
-        enrich_orders_with_names(&mut body, &sample_id_map());
-        assert_eq!(body["data"][0]["item"]["name"], "Loki Prime Set");
-    }
-
-    #[test]
-    fn enrich_orders_leaves_unknown_ids_alone() {
-        let mut body = serde_json::json!({
-            "data": { "sell": [{ "id": "o1", "itemId": "deadbeef", "platinum": 9 }] }
-        });
-        enrich_orders_with_names(&mut body, &sample_id_map());
-        // No `item` key injected because the id wasn't in the catalog.
-        assert!(body["data"]["sell"][0].get("item").is_none());
-    }
-
-    #[test]
-    fn enrich_orders_preserves_existing_item_metadata() {
-        // If WFM ever starts returning `item` itself, don't clobber.
-        let mut body = serde_json::json!({
-            "data": { "sell": [{
-                "id": "o1",
-                "itemId": "aaaaaaaaaaaaaaaaaaaaaaaa",
-                "item": { "name": "Custom Name", "icon": "x.png" },
-            }]}
-        });
-        enrich_orders_with_names(&mut body, &sample_id_map());
-        assert_eq!(body["data"]["sell"][0]["item"]["name"], "Custom Name");
-        assert_eq!(body["data"]["sell"][0]["item"]["icon"], "x.png");
-        // …but a missing slug is still filled in beside the existing keys.
-        assert_eq!(body["data"]["sell"][0]["item"]["slug"], "loki_prime_set");
     }
 
     #[test]

@@ -119,35 +119,43 @@ pub fn listed_components(
     body: &serde_json::Value,
     market: &MarketData,
 ) -> Result<BTreeMap<String, u32>, String> {
-    let data = body.get("data").unwrap_or(body);
-    let (rows, mixed) = match data.as_array() {
-        Some(rows) => (rows, true),
-        None => (
-            data.get("sell")
-                .and_then(|v| v.as_array())
-                .ok_or("Current sell orders are unavailable.")?,
-            false,
-        ),
-    };
+    struct Unconstrained;
+    impl market_domain::orders::ItemConstraints for Unconstrained {
+        fn accepts(&self, _: &str, _: Option<u64>, _: Option<&str>) -> bool {
+            true
+        }
+    }
+    let decoded = wfm_core::trading::orders::decode_orders(body, &Unconstrained)
+        .map_err(|error| error.to_string())?;
+    // The decoder proves each row's shape; the slug the catalogue attached is
+    // read from the same rows by order id.
+    let slugs: BTreeMap<&str, &str> = body
+        .get("data")
+        .and_then(|data| {
+            data.as_array()
+                .or_else(|| data.get("sell").and_then(|rows| rows.as_array()))
+        })
+        .ok_or("Current sell orders are unavailable.")?
+        .iter()
+        .filter_map(|row| {
+            let id = row.get("id")?.as_str()?;
+            let slug = row.get("item")?.get("slug")?.as_str()?;
+            (!slug.is_empty()).then_some((id, slug))
+        })
+        .collect();
     let mut listed = BTreeMap::<String, u32>::new();
-    for row in rows {
-        if mixed && row.get("type").and_then(|v| v.as_str()) == Some("buy") {
+    for row in decoded.orders {
+        let market_domain::orders::OrderRow::Supported(order) = row else {
+            return Err("An existing order could not be decoded.".into());
+        };
+        if order.side != market_domain::orders::OrderSide::Sell {
             continue;
         }
-        if mixed && row.get("type").and_then(|v| v.as_str()) != Some("sell") {
-            return Err("An order has an unknown side.".into());
-        }
-        let slug = row
-            .get("item")
-            .and_then(|i| i.get("slug"))
-            .and_then(|v| v.as_str())
+        let slug = *slugs
+            .get(order.id.as_str())
             .ok_or("An existing order has no resolved item identity.")?;
-        let quantity = row
-            .get("quantity")
-            .and_then(|v| v.as_u64())
-            .and_then(|n| u32::try_from(n).ok())
-            .filter(|n| *n > 0)
-            .ok_or("An existing order has an invalid quantity.")?;
+        let quantity = u32::try_from(order.quantity)
+            .map_err(|_| "An existing order has an invalid quantity.")?;
         let parts = if slug.ends_with("_set") {
             market.set_recipe(slug)?
         } else {
@@ -315,6 +323,20 @@ pub fn validate_snapshot(db: &Db, snapshot_id: Option<i64>) -> Result<(), String
 mod tests {
     use super::*;
     #[test]
+    fn listed_components_refuses_an_odd_row_instead_of_partial_protection() {
+        let market: MarketData = serde_json::from_value(serde_json::json!({"items":{"part":{}}})).unwrap();
+        let row = serde_json::json!({"id":"a","itemId":"item","type":"sell","platinum":10,"quantity":2,"item":{"slug":"part"}});
+        assert_eq!(listed_components(&serde_json::json!({"data":[row.clone()]}), &market).unwrap()["part"], 2);
+        for odd in [
+            serde_json::json!({"id":"odd","itemId":"item","type":"sell","platinum":10}),
+            serde_json::json!({"id":"odd","itemId":"item","type":"auction","platinum":10,"quantity":1}),
+        ] {
+            assert!(listed_components(&serde_json::json!({"data":[row.clone(),odd]}), &market).is_err());
+        }
+        assert!(listed_components(&serde_json::json!({"data":{"sell":[]}}), &market).is_err());
+    }
+
+    #[test]
     fn set_listings_consume_the_same_component_quantities_as_the_selector() {
         let fixture: serde_json::Value = serde_json::from_str(include_str!("../../../../tests/fixtures/trade-session/sets.json")).unwrap();
         let parts: BTreeMap<String, u32> = serde_json::from_value(fixture["parts"].clone()).unwrap();
@@ -322,7 +344,7 @@ mod tests {
         let market = serde_json::from_value(serde_json::json!({"items":{"barrel":{},"receiver":{},"blueprint":{}},
             "set_to_parts":{"example_set":{"parts":parts.iter().map(|(slug,count)| serde_json::json!({"slug":slug,"quantity":count})).collect::<Vec<_>>()}}
         })).unwrap();
-        let listed = listed_components(&serde_json::json!({"data":{"sell":[{"item":{"slug":"example_set"},"quantity":fixture["expected_sets"]}]}}), &market).unwrap();
+        let listed = listed_components(&serde_json::json!({"data":{"sell":[{"id":"set", "itemId":"set", "platinum":10, "item":{"slug":"example_set"},"quantity":fixture["expected_sets"]}],"buy":[]}}), &market).unwrap();
         let left: BTreeMap<String, u32> = owned.into_iter().map(|(slug,count)| { let remain = count - listed[&slug]; (slug,remain) }).collect();
         assert_eq!(serde_json::to_value(left).unwrap(), fixture["expected_left"]);
         assert_eq!(parts.values().sum::<u32>(), fixture["trade_slots"].as_u64().unwrap() as u32);
@@ -349,7 +371,7 @@ mod tests {
             db.set_setting("reserve-copies", &case.keep.to_string()).unwrap();
             ProtectionPlan { reserves: BTreeMap::from([("part".into(), case.reserved)]), goal: case.goal.then(|| "test_set".into()) }.save(&db, &market).unwrap();
             let input = GuidanceInventory { snapshot_id: case.request_id, items: BTreeMap::from([("part".into(), GuidanceOwned { count: case.input_count, leveled: case.leveled })]) };
-            let orders = if case.orders { Ok(serde_json::json!({"data":{"sell":[]}})) } else { Err("Disconnected".into()) };
+            let orders = if case.orders { Ok(serde_json::json!({"data":{"sell":[],"buy":[]}})) } else { Err("Disconnected".into()) };
             let result = guidance_state(&db, &market, orders, input).unwrap();
             assert_eq!(result.snapshot_id, case.expected_snapshot_id, "{}", case.name);
             assert_eq!(result.items["part"], case.expected, "{}", case.name);
@@ -390,11 +412,11 @@ mod tests {
             ("part".into(), GuidanceOwned { count: 4, leveled: 0 }),
             ("non_market_item".into(), GuidanceOwned { count: 50, leveled: 0 })
         ]) };
-        let result = guidance_state(&db, &market, Ok(serde_json::json!({"data":{"sell":[]}})), input.clone()).unwrap();
+        let result = guidance_state(&db, &market, Ok(serde_json::json!({"data":{"sell":[],"buy":[]}})), input.clone()).unwrap();
         assert_eq!(result.snapshot_id, Some(id));
         assert_eq!(result.items["part"].available, Some(4));
         input.items.get_mut("part").unwrap().count = 5;
-        let changed = guidance_state(&db, &market, Ok(serde_json::json!({"data":{"sell":[]}})), input).unwrap();
+        let changed = guidance_state(&db, &market, Ok(serde_json::json!({"data":{"sell":[],"buy":[]}})), input).unwrap();
         assert_eq!(changed.snapshot_id, None);
         assert_eq!(changed.items["part"].available, None);
     }
