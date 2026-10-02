@@ -3,7 +3,7 @@
   const { encryptPayload, decryptPayload } = useDesktopServices();
   import { humanError } from '../../contracts/errors';
   import type { OwnedRecord } from '../../contracts/data';
-  import type { EncryptedBlob } from '../../contracts/encrypted-snapshot';
+  import { hasMinimumPassphraseLength, type EncryptedBlob } from '../../contracts/encrypted-snapshot';
   import { tick } from 'svelte';
   
   import { buildSnapshotPayload } from '../../domain/snapshot';
@@ -87,7 +87,7 @@
       cryptoError = "Passphrases don't match.";
       return;
     }
-    if (exportPass.length < 12) {
+    if (!hasMinimumPassphraseLength(exportPass)) {
       cryptoError = 'Passphrase must be at least 12 characters - same floor as your login passphrase.';
       return;
     }

@@ -7,3 +7,8 @@ export interface EncryptedBlob {
   cipher: { name: string; iv: string };
   ciphertext: string;
 }
+
+// Native login counts Unicode scalar values, so astral characters count once.
+export function hasMinimumPassphraseLength(passphrase: string): boolean {
+  return [...passphrase].length >= 12;
+}
