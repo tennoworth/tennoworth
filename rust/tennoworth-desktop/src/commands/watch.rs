@@ -4,7 +4,7 @@ use tauri::{AppHandle, State};
 
 use crate::persistence::{Db, NewWatch, Watch};
 use crate::services::watch::{run_pass, WatchOutcome, MAX_WATCHES};
-use crate::services::wfm_session::CmdError;
+use crate::command_error::CmdError;
 
 #[tauri::command]
 pub fn list_watches(db: State<'_, Db>) -> Result<Vec<Watch>, CmdError> {

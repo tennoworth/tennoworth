@@ -14,16 +14,10 @@
 //! `needs_login` (no login file on this machine) or `needs_unlock` (login file
 //! present, session locked) so the SPA can raise the login or passphrase modal -
 //! the desktop analogue of serve's 401 `needs_login:true` vs 503 split.
-#![allow(
-    clippy::unreachable,
-    reason = "tauri::command injects unreachable code into async wrappers"
-)]
-
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex};
-use tauri::State;
 use wfm_core::poison::guard;
 
 use wfm_core::paths::{config_dir_for, default_jwt_path};
@@ -34,56 +28,9 @@ use wfm_core::trading::auth::{
 };
 use wfm_core::trading::listing::{warm_unlocked, Unlocked};
 use wfm_core::trading::plan::PlanGuard;
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroize;
 
-/// Typed command error serialized to the webview as `{ code, message }`. The SPA
-/// maps `code` to its own error classes:
-///   - `needs_login`   - no login on this machine → open the login modal.
-///   - `needs_unlock`  - login present, session locked → open the passphrase modal.
-///   - `bad_passphrase`- wrong passphrase in the unlock/login modal.
-///   - `no_pending` / `busy` - pending-plan resume edge cases.
-///   - `wfm` / `internal` - everything else, message shown verbatim.
-///
-/// Never carries the JWT, the passphrase, or the WFM password.
-#[derive(Debug, serde::Serialize, ts_rs::TS)]
-pub struct CmdError {
-    pub code: &'static str,
-    pub message: String,
-}
-
-impl CmdError {
-    pub fn of(code: &'static str, message: impl Into<String>) -> Self {
-        Self {
-            code,
-            message: message.into(),
-        }
-    }
-    pub fn needs_login() -> Self {
-        Self::of(
-            "needs_login",
-            "Log in to warframe.market to create or edit listings.",
-        )
-    }
-    pub fn needs_unlock() -> Self {
-        Self::of(
-            "needs_unlock",
-            "Enter your passphrase to unlock warframe.market listing.",
-        )
-    }
-    pub fn bad_passphrase() -> Self {
-        Self::of(
-            "bad_passphrase",
-            "Wrong passphrase, or the login file was modified.",
-        )
-    }
-    pub fn wfm(e: anyhow::Error) -> Self {
-        if let Some(access) = e.downcast_ref::<wfm_client::governor::AccessError>() { return Self::of(access.code(), access.to_string()); }
-        Self::of("wfm", e.to_string())
-    }
-    pub fn internal(e: impl std::fmt::Display) -> Self {
-        Self::of("internal", e.to_string())
-    }
-}
+pub use crate::command_error::CmdError;
 
 /// The session slot: the unlocked credentials plus the generation of the slot
 /// they belong to. `generation` advances on every logout, so an installer that
@@ -688,137 +635,6 @@ impl Default for WfmSession {
 /// failures a user sees here are WFM's.
 fn warm(jwt: String, platform: String) -> Result<Unlocked, CmdError> {
     warm_unlocked(jwt, platform).map_err(CmdError::wfm)
-}
-
-// ---- Tauri commands ---------------------------------------------------
-//
-// The desktop mirror of serve's auth routes: same lock-state machine, with
-// the passphrase arriving from the webview (`wfm_login` / `unlock_jwt`)
-// instead of a TTY prompt. `needs_login` / `needs_unlock` drive the SPA's
-// login and passphrase dialogs - the desktop analogue of serve's 401
-// needs_login:true vs 503 split.
-
-#[derive(serde::Serialize)]
-pub struct WfmAuthStatus {
-    /// A login envelope exists on disk (encrypted; says nothing about the
-    /// passphrase being known).
-    logged_in: bool,
-    /// This process holds the decrypted JWT in memory.
-    unlocked: bool,
-}
-
-#[tauri::command]
-pub fn wfm_auth_status(session: State<'_, Arc<WfmSession>>) -> WfmAuthStatus {
-    let (logged_in, unlocked) = session.auth_status();
-    WfmAuthStatus {
-        logged_in,
-        unlocked,
-    }
-}
-
-/// Open the warframe.market sign-in window, wait for the user to sign in
-/// there, then persist the encrypted JWT (unchanged envelope format) and unlock
-/// the session. The WFM password is typed into warframe.market's own page and
-/// never reaches the app. Async by necessity: reading webview cookies from a
-/// synchronous command deadlocks on Windows.
-#[tauri::command]
-pub async fn wfm_login(
-    app: tauri::AppHandle,
-    session: State<'_, Arc<WfmSession>>,
-    passphrase: String,
-    platform: String,
-    remember: bool,
-) -> Result<(), CmdError> {
-    // Zeroizing scrubs OUR copy of the passphrase when this ends - best-effort
-    // (the IPC deserializer made its own transient copies).
-    let passphrase = Zeroizing::new(passphrase);
-    WfmSession::validate_login(&passphrase, &platform)?;
-    let generation = session.session_generation();
-    let jwt = super::wfm_signin::capture_signed_in_jwt(&app, &platform).await?;
-    let s = Arc::clone(&session);
-    tauri::async_runtime::spawn_blocking(move || {
-        s.login(generation, jwt, &passphrase, &platform, remember)
-    })
-    .await
-    .map_err(|e| CmdError::internal(format!("login task failed to run: {e}")))?
-}
-
-/// The fallback sign-in: a `JWT` cookie value the user copied from their own
-/// browser after signing in on warframe.market. It is confirmed against
-/// `/v2/me` before anything is written, so an anonymous or expired cookie is
-/// refused instead of saved.
-#[tauri::command]
-pub async fn wfm_login_with_token(
-    session: State<'_, Arc<WfmSession>>,
-    token: String,
-    passphrase: String,
-    platform: String,
-    remember: bool,
-) -> Result<(), CmdError> {
-    let token = Zeroizing::new(token);
-    let passphrase = Zeroizing::new(passphrase);
-    WfmSession::validate_login(&passphrase, &platform)?;
-    let jwt = super::wfm_signin::normalize_pasted_jwt(&token)?;
-    let generation = session.session_generation();
-    let s = Arc::clone(&session);
-    tauri::async_runtime::spawn_blocking(move || {
-        match wfm_core::trading::auth::jwt_is_signed_in(&jwt, &platform) {
-            Ok(true) => {}
-            Ok(false) => {
-                return Err(CmdError::of(
-                    "bad_token",
-                    "warframe.market doesn't accept that token as signed in. Sign in on the site first, then copy the JWT cookie again.",
-                ))
-            }
-            Err(e) => return Err(CmdError::wfm(e)),
-        }
-        s.login(generation, jwt, &passphrase, &platform, remember)
-    })
-    .await
-    .map_err(|e| CmdError::internal(format!("login task failed to run: {e}")))?
-}
-
-/// Close the sign-in window from the app's login dialog; the pending
-/// `wfm_login` then fails with `cancelled`.
-#[tauri::command]
-pub fn wfm_login_cancel(app: tauri::AppHandle) {
-    super::wfm_signin::cancel(&app);
-}
-
-/// Decrypt the stored JWT with the passphrase from the SPA's unlock dialog and
-/// warm the WFM catalog. Missing file → `needs_login`; wrong passphrase →
-/// `bad_passphrase`; catalog/me failure → `wfm` (transient, retryable).
-#[tauri::command]
-pub async fn unlock_jwt(
-    session: State<'_, Arc<WfmSession>>,
-    passphrase: String,
-    remember: bool,
-) -> Result<(), CmdError> {
-    let s = Arc::clone(&session);
-    tauri::async_runtime::spawn_blocking(move || {
-        let passphrase = Zeroizing::new(passphrase);
-        s.unlock(&passphrase, remember)
-    })
-    .await
-    .map_err(|e| CmdError::internal(format!("unlock task failed to run: {e}")))?
-}
-
-/// Try the OS-keyring "remember on this device" key before the SPA raises the
-/// passphrase modal. Infallible by contract: any miss (no entry, no keyring
-/// daemon, stale key, network warm failure) returns false and the modal opens
-/// exactly as before. Network on success (catalog warm) - spawn_blocking.
-#[tauri::command]
-pub async fn try_silent_unlock(session: State<'_, Arc<WfmSession>>) -> Result<bool, CmdError> {
-    let s = Arc::clone(&session);
-    tauri::async_runtime::spawn_blocking(move || s.try_silent_unlock())
-        .await
-        .map_err(|e| CmdError::internal(format!("silent-unlock task failed to run: {e}")))
-}
-
-/// Log out and remove both the live session and its encrypted on-disk login.
-#[tauri::command]
-pub fn wfm_logout(session: State<'_, Arc<WfmSession>>) -> Result<(), CmdError> {
-    session.logout()
 }
 
 #[cfg(test)]
@@ -1430,24 +1246,4 @@ mod tests {
         assert!(!path.exists(), "the logout's removal must not be undone by the login");
         assert_eq!(session.auth_status(), (false, false));
     }
-}
-
-pub const WFM_ACCESS_EVENT: &str = "wfm-access-changed";
-#[tauri::command]
-pub fn wfm_access_status() -> wfm_client::governor::AccessStatus {
-    wfm_client::governor::process().status()
-}
-pub fn publish_access_changes(app: tauri::AppHandle) {
-    use tauri::Emitter;
-    let _ = std::thread::Builder::new().name("wfm-access-status".into()).spawn(move || {
-        let mut previous = None;
-        loop {
-            let current = wfm_access_status();
-            if previous.as_ref() != Some(&current) {
-                let _ = app.emit(WFM_ACCESS_EVENT, &current);
-                previous = Some(current);
-            }
-            std::thread::sleep(std::time::Duration::from_millis(100));
-        }
-    });
 }

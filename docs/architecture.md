@@ -180,7 +180,10 @@ to feature internals to work around styling boundaries. The
 ## Native responsibilities
 
 The executable entry delegates to `shell/`. Commands remain the IPC boundary;
-services coordinate background work and shared state. Persistence owns the
+services coordinate background work and shared state. Sign-in handlers and the
+access-status publisher live in `commands/auth.rs`; `main.rs` supplies that
+publisher to startup. The shared `command_error` contract is independent of
+both adapters and services. Persistence owns the
 SQLite connection, migration SQL, record formats, and operations grouped by
 table family. Moving an operation does not change its transaction semantics.
 

@@ -16,7 +16,8 @@ use wfm_core::trading::rivens::{fetch_riven_comps, RivenAuction};
 use crate::persistence::Db;
 use crate::services::market::{self, MarketCache, RefreshResult};
 use crate::services::sellables::{self, SellableRow};
-use crate::services::wfm_session::{CmdError, WfmSession};
+use crate::command_error::CmdError;
+use crate::services::wfm_session::WfmSession;
 use crate::shell::tray::{rebuild_tray, TrayState};
 
 /// The tray labels the last rebuild pushed + the last post-scan summary -

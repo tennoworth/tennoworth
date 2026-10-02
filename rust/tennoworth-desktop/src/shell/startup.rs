@@ -43,7 +43,7 @@ fn install_definitions(dir: &std::path::Path) -> crate::services::definitions::D
     out
 }
 
-pub(crate) fn run() {
+pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
     // Before any network call: every WFM request identifies as this app +
     // version (WFM's rules require a descriptive User-Agent).
     wfm_core::set_app_identity("tennoworth-desktop", env!("CARGO_PKG_VERSION"));
@@ -96,7 +96,7 @@ pub(crate) fn run() {
             health,
             crate::services::usage::get_usage_preferences,
             crate::services::usage::set_usage_preferences,
-            crate::services::wfm_session::wfm_access_status,
+            crate::commands::auth::wfm_access_status,
             crate::commands::domain::evaluate_domain,
             crate::commands::inventory::scan_inventory,
             crate::commands::inventory::import_snapshot,
@@ -134,13 +134,13 @@ pub(crate) fn run() {
             crate::shell::update::update_status,
             crate::shell::update::install_update,
             crate::shell::update::restart_app,
-            crate::services::wfm_session::wfm_auth_status,
-            crate::services::wfm_session::wfm_login,
-            crate::services::wfm_session::wfm_login_cancel,
-            crate::services::wfm_session::wfm_login_with_token,
-            crate::services::wfm_session::unlock_jwt,
-            crate::services::wfm_session::try_silent_unlock,
-            crate::services::wfm_session::wfm_logout,
+            crate::commands::auth::wfm_auth_status,
+            crate::commands::auth::wfm_login,
+            crate::commands::auth::wfm_login_cancel,
+            crate::commands::auth::wfm_login_with_token,
+            crate::commands::auth::unlock_jwt,
+            crate::commands::auth::try_silent_unlock,
+            crate::commands::auth::wfm_logout,
             crate::commands::listing::submit_plan,
             crate::commands::listing::cancel_plan,
             crate::commands::listing::get_pending_plan,
@@ -191,7 +191,7 @@ pub(crate) fn run() {
             app.manage(store);
             crate::services::usage::start(app.handle().clone());
             crate::shell::update_notes::initialize(app.handle(), profile_existed);
-            crate::services::wfm_session::publish_access_changes(app.handle().clone());
+            publish_access_changes(app.handle().clone());
 
             let overlay_state =
                 overlay::OverlayState::new(&app.handle().clone(), &app.state::<Db>());

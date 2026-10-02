@@ -15,7 +15,8 @@ use wfm_core::poison::guard;
 use wfm_core::trading::listing::Unlocked;
 
 use crate::services::sellables::ScanNotification;
-use crate::services::wfm_session::{CmdError, WfmSession};
+use crate::command_error::CmdError;
+use crate::services::wfm_session::WfmSession;
 use crate::shell::tray::{post_scan_surfaces, TrayState};
 
 // A minimal DE inventory: four distinct tradeable-category paths (so

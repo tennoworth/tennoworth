@@ -8,7 +8,8 @@ use tauri::{AppHandle, Manager, State};
 
 use crate::persistence::{Db, SnapshotSummary};
 use crate::services::protection::{GuidanceInventory, ProtectionPlan, ProtectionState};
-use crate::services::wfm_session::{CmdError, WfmSession};
+use crate::command_error::CmdError;
+use crate::services::wfm_session::WfmSession;
 use std::sync::Arc;
 
 #[tauri::command]
