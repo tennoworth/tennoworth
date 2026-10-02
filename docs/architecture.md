@@ -28,9 +28,11 @@ rust/
     services/                inventory state, automatic scan, watches, trades, notifications
     persistence/             schema, record types, table operations, key storage
     game_events.rs           EE.log lines published to whoever subscribes
-    overlay/                 in-game reward feature
+    vision/
       capture/               platform frame acquisition
-      recognition/           OCR, parsing, matching, result assembly
+      frame.rs, ocr.rs       crop and encode, Tesseract worker, TSV lines
+    overlay/                 in-game reward feature
+      recognition/           reward layout, matching, result assembly
       presentation/          native windows and Wayland presentation
       lifecycle.rs           capture exclusion and current-result identity
   wfm-core/src/
@@ -154,8 +156,9 @@ on an in-game feature, persistence cannot depend on those adapters or services,
 and shell code calls services directly. In-game features such as `overlay/` sit
 beside the adapters: they may use services, persistence and `game_events`, but
 not commands or shell. They hear the game through `game_events`, which the
-EE.log tailer publishes to and startup subscribes them on, and which imports
-none of them. Test-only modules are excluded without hiding production
+EE.log tailer publishes to and startup subscribes them on, and see it through
+`vision/`, which captures the window and recognizes text. Neither imports a
+feature. Test-only modules are excluded without hiding production
 items later in the file. Relative `super::` paths and macro-generated paths
 remain outside this source gate; it is not a compiler dependency graph. Startup
 registers command paths inside `tauri::generate_handler!`; that composition is

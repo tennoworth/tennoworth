@@ -1,4 +1,6 @@
-use super::capture::CapturedFrame;
+use crate::vision::capture::CapturedFrame;
+use crate::vision::frame::{encode_crop, encode_frame, NormalizedRect};
+use crate::vision::ocr::{parse_tsv_lines, OcrMode, OcrWorker, TsvLine};
 use super::{diagnostics_attempt_dir, elapsed_ms, unix_millis, OverlayStageTimings};
 use super::{
     OverlayBox, OverlaySettings, RelicOverlayResult, RelicOverlaySlot,
@@ -6,25 +8,13 @@ use super::{
     WARFRAME_DESIGN_ASPECT,
 };
 use crate::services::sellables::{OverlayCatalogItem, OverlayMarketFacts};
-use image::{imageops::FilterType, DynamicImage, ImageFormat, RgbaImage};
 use serde::Serialize;
 use std::collections::{BTreeMap, HashMap};
-use std::io::Cursor;
 use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Instant;
 mod matching;
-mod worker;
 pub(super) use matching::{mark_bests, match_ocr_lines, normalize, FoundMatch};
-pub(super) use worker::{OcrMode, OcrWorker};
-
-#[derive(Debug, Clone, Copy, Serialize)]
-pub(super) struct NormalizedRect {
-    pub(super) x: f64,
-    pub(super) y: f64,
-    pub(super) width: f64,
-    pub(super) height: f64,
-}
 
 #[derive(Debug, Clone, Serialize)]
 pub(super) struct RewardSlotRect {
@@ -129,139 +119,6 @@ impl RecognitionConsensus {
     }
 }
 
-#[derive(Debug, Clone)]
-pub(super) struct TsvLine {
-    pub(super) x: u32,
-    pub(super) y: u32,
-    pub(super) width: u32,
-    pub(super) height: u32,
-    pub(super) text: String,
-}
-
-pub(super) fn pixel_rect(image: &RgbaImage, rect: NormalizedRect) -> (u32, u32, u32, u32) {
-    let x = (rect.x * image.width() as f64)
-        .round()
-        .clamp(0.0, image.width().saturating_sub(1) as f64) as u32;
-    let y = (rect.y * image.height() as f64)
-        .round()
-        .clamp(0.0, image.height().saturating_sub(1) as f64) as u32;
-    let width = (rect.width * image.width() as f64)
-        .round()
-        .clamp(1.0, image.width().saturating_sub(x) as f64) as u32;
-    let height = (rect.height * image.height() as f64)
-        .round()
-        .clamp(1.0, image.height().saturating_sub(y) as f64) as u32;
-    (x, y, width, height)
-}
-
-pub(super) fn encode_crop(image: &RgbaImage, rect: NormalizedRect) -> Result<Vec<u8>, String> {
-    let (x, y, width, height) = pixel_rect(image, rect);
-    let mut crop = image::imageops::crop_imm(image, x, y, width, height).to_image();
-    // Give Tesseract roughly the same glyph size at 720p, 1080p, 1440p and 4K.
-    // This also bounds the amount of pixel data sent through Leptonica at 4K.
-    let target_height =
-        ((height as f64 * REWARD_TITLE_TARGET_WIDTH as f64 / width as f64).round() as u32).max(1);
-    if crop.width() != REWARD_TITLE_TARGET_WIDTH {
-        crop = image::imageops::resize(
-            &crop,
-            REWARD_TITLE_TARGET_WIDTH,
-            target_height,
-            FilterType::Triangle,
-        );
-    }
-    // Per-channel thresholding fragments antialiased white glyphs into colored
-    // edges on the teal reward cards. Preserve their luminance for Tesseract.
-    for pixel in crop.pixels_mut() {
-        let luminance = ((u32::from(pixel.0[0]) * 77
-            + u32::from(pixel.0[1]) * 150
-            + u32::from(pixel.0[2]) * 29
-            + 128)
-            >> 8) as u8;
-        pixel.0[..3].fill(luminance);
-        pixel.0[3] = 255;
-    }
-    let header = format!("P5\n{} {}\n255\n", crop.width(), crop.height());
-    let mut pgm = Vec::with_capacity(header.len() + crop.width() as usize * crop.height() as usize);
-    pgm.extend_from_slice(header.as_bytes());
-    pgm.extend(crop.pixels().map(|pixel| pixel.0[0]));
-    Ok(pgm)
-}
-
-pub(super) fn encode_frame(image: &RgbaImage) -> Result<Vec<u8>, String> {
-    let mut cursor = Cursor::new(Vec::new());
-    DynamicImage::ImageRgba8(image.clone())
-        .write_to(&mut cursor, ImageFormat::Png)
-        .map_err(|e| format!("encoding Warframe capture: {e}"))?;
-    Ok(cursor.into_inner())
-}
-
-#[allow(
-    clippy::indexing_slicing,
-    reason = "fields.len() == 12 is checked before every index, and the fields[0] guard filters the rest"
-)]
-pub(super) fn parse_tsv_lines(tsv: &str) -> Vec<TsvLine> {
-    #[derive(Default)]
-    struct LineBuilder {
-        left: u32,
-        top: u32,
-        right: u32,
-        bottom: u32,
-        words: Vec<String>,
-    }
-
-    let mut groups: BTreeMap<(u32, u32, u32, u32), LineBuilder> = BTreeMap::new();
-    for row in tsv.lines().skip(1) {
-        let fields: Vec<&str> = row.splitn(12, '\t').collect();
-        if fields.len() != 12 || fields[0] != "5" {
-            continue;
-        }
-        let parsed = (|| {
-            Some((
-                fields[1].parse::<u32>().ok()?,
-                fields[2].parse::<u32>().ok()?,
-                fields[3].parse::<u32>().ok()?,
-                fields[4].parse::<u32>().ok()?,
-                fields[6].parse::<u32>().ok()?,
-                fields[7].parse::<u32>().ok()?,
-                fields[8].parse::<u32>().ok()?,
-                fields[9].parse::<u32>().ok()?,
-            ))
-        })();
-        let Some((page, block, paragraph, line, x, y, width, height)) = parsed else {
-            continue;
-        };
-        let text = fields[11].trim();
-        if text.is_empty() {
-            continue;
-        }
-        let entry = groups.entry((page, block, paragraph, line)).or_default();
-        if entry.words.is_empty() {
-            entry.left = x;
-            entry.top = y;
-            entry.right = x.saturating_add(width);
-            entry.bottom = y.saturating_add(height);
-        } else {
-            entry.left = entry.left.min(x);
-            entry.top = entry.top.min(y);
-            entry.right = entry.right.max(x.saturating_add(width));
-            entry.bottom = entry.bottom.max(y.saturating_add(height));
-        }
-        entry.words.push(text.to_string());
-    }
-    groups
-        .into_values()
-        .filter_map(|line| {
-            Some(TsvLine {
-                x: line.left,
-                y: line.top,
-                width: line.right.checked_sub(line.left)?,
-                height: line.bottom.checked_sub(line.top)?,
-                text: line.words.join(" "),
-            })
-        })
-        .collect()
-}
-
 pub(super) fn centered_slot_centers(
     image_width: u32,
     count: usize,
@@ -354,7 +211,7 @@ pub(super) fn read_dynamic_layout(
         debug_dir.as_deref(),
         |slot| {
             let started = Instant::now();
-            let text = encode_crop(&frame.image, slot.title)
+            let text = encode_crop(&frame.image, slot.title, REWARD_TITLE_TARGET_WIDTH)
                 .and_then(|crop| ocr.recognize(crop, OcrMode::SingleLine))
                 .unwrap_or_default();
             timings.slot_ocr_ms += elapsed_ms(started);
@@ -379,7 +236,7 @@ pub(super) fn read_expected_layout(
     let mut matches = Vec::new();
     let mut text_log = Vec::new();
     for slot in slots {
-        let crop = encode_crop(&frame.image, slot.title)?;
+        let crop = encode_crop(&frame.image, slot.title, REWARD_TITLE_TARGET_WIDTH)?;
         if let Some(dir) = debug_dir {
             let _ = std::fs::write(dir.join(format!("slot-{}.pgm", slot.index)), &crop);
         }
@@ -454,7 +311,7 @@ pub(super) fn read_centered_reward_layout(
     let result = layout_from_reward_header(frame, catalog, &mut diagnostic, &mut |slot| {
         let current_crop = crop_number;
         crop_number += 1;
-        let crop = match encode_crop(&frame.image, slot.title) {
+        let crop = match encode_crop(&frame.image, slot.title, REWARD_TITLE_TARGET_WIDTH) {
             Ok(crop) => crop,
             Err(_) => return String::new(),
         };
@@ -836,7 +693,7 @@ pub(super) fn layout_from_lines(
         .collect();
     let mut matches = Vec::new();
     for slot in &slots {
-        let crop = encode_crop(&frame.image, slot.title).ok()?;
+        let crop = encode_crop(&frame.image, slot.title, REWARD_TITLE_TARGET_WIDTH).ok()?;
         if let Some(dir) = &debug_dir {
             let _ = std::fs::write(dir.join(format!("slot-{}.pgm", slot.index)), &crop);
         }

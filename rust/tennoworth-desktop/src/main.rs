@@ -7,6 +7,7 @@ mod overlay;
 mod persistence;
 mod services;
 mod trading_contract;
+mod vision;
 mod shell;
 
 fn main() {

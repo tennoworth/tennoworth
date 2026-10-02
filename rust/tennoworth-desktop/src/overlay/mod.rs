@@ -6,13 +6,13 @@
 //! remain in memory and only normalized recognition results cross into the
 //! overlay webview.
 
-mod capture;
 mod lifecycle;
 mod presentation;
 mod recognition;
 #[cfg(test)]
 mod tests;
-use capture::{capture_warframe, CapturedFrame};
+use crate::vision::capture::{capture_backend_name, capture_warframe, CapturedFrame};
+use crate::vision::ocr::OcrWorker;
 use lifecycle::CaptureLifecycle;
 pub(crate) use presentation::prewarm_overlay_window;
 use presentation::{
@@ -20,7 +20,7 @@ use presentation::{
 };
 use recognition::{
     assemble_result, mark_bests, read_centered_reward_layout, read_dynamic_layout,
-    read_expected_layout, LayoutRead, OcrWorker, RecognitionConsensus,
+    read_expected_layout, LayoutRead, RecognitionConsensus,
 };
 
 use std::path::{Path, PathBuf};
@@ -1129,24 +1129,3 @@ fn elapsed_ms(started: Instant) -> u64 {
     started.elapsed().as_millis().min(u64::MAX as u128) as u64
 }
 
-pub fn capture_backend_name() -> &'static str {
-    #[cfg(target_os = "windows")]
-    {
-        "windows-window"
-    }
-    #[cfg(target_os = "linux")]
-    {
-        // Capture talks X11 directly - under Wayland that means XWayland, not
-        // the portal. Report the truth so the settings UI cannot claim a
-        // portal/PipeWire backend that does not exist.
-        if std::env::var_os("WAYLAND_DISPLAY").is_some() {
-            "wayland-xwayland"
-        } else {
-            "x11-window"
-        }
-    }
-    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
-    {
-        "unsupported"
-    }
-}

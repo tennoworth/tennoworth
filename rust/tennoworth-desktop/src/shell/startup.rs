@@ -209,7 +209,7 @@ pub(crate) fn run() {
                     Ok(()) => {
                         let evidence = format!(
                             "OCR_BOOT_PROBE_OK backend={}\n",
-                            overlay::capture_backend_name()
+                            crate::vision::capture::capture_backend_name()
                         );
                         if let Some(path) =
                             std::env::var_os("TENNOWORTH_OCR_BOOT_PROBE_OUT")
