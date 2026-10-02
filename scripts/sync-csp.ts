@@ -13,8 +13,7 @@
 //
 // The DESKTOP (Tauri) build is a build-variant, not a fourth committed copy:
 // `--desktop <built-index.html>` rewrites a built dist's meta CSP in place with
-// the desktop connect-src (loopback dropped; the Tauri IPC scheme + the one C4
-// refresh origin added). It NEVER touches the three hosted copies, so the
+// the desktop connect-src (the Tauri IPC scheme added). It NEVER touches the three hosted copies, so the
 // hosted CSP stays byte-identical.
 
 import { readFileSync, writeFileSync } from 'fs';
@@ -28,12 +27,11 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // so there are no loopback or third-party connect origins. (The loopback
 // entries were for the removed companion CLI.)
 const HOSTED_CONNECT_SRC = "connect-src 'self'";
-// Desktop: no loopback (there is no HTTP server) - instead the Tauri
-// IPC transport (`ipc://localhost` + the `http://ipc.localhost` fast path) and
-// the single C4 remote-refresh origin. Verified against the desktop spike's
-// captured `connect-src` violations.
-const DESKTOP_CONNECT_SRC =
-  "connect-src 'self' ipc://localhost http://ipc.localhost https://tennoworth.app";
+// Desktop: the Tauri IPC transport (`ipc://localhost` + the
+// `http://ipc.localhost` fast path). No remote origin: the market, history,
+// definitions and usage requests to tennoworth.app are made in Rust, and the
+// webview only fetches its own bundled files.
+const DESKTOP_CONNECT_SRC = "connect-src 'self' ipc://localhost http://ipc.localhost";
 
 const DIRECTIVES = [
   "default-src 'self'",
