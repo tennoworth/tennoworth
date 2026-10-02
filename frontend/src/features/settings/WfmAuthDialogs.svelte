@@ -1,6 +1,6 @@
 <script lang="ts">
   import { useDesktopServices } from '../../ui/desktop-context';
-  const { desktopWfmLogin, desktopWfmLoginCancel, desktopWfmLoginWithToken, desktopWfmUnlock, desktopTrySilentUnlock } = useDesktopServices();
+  const { desktopWfmLogin, desktopWfmLoginCancel, desktopWfmLoginWithToken, desktopWfmUnlock, desktopTrySilentUnlock, desktopRememberAvailable } = useDesktopServices();
   import { humanError } from '../../contracts/errors';
   import WfmTokenGuide from './WfmTokenGuide.svelte';
   
@@ -27,6 +27,18 @@ import { DesktopCmdError } from '../../contracts/errors';
   // "Remember on this device" (OS keyring). One preference shared by the
   // login and unlock dialogs; default on - the browser-cookie parity call.
   let wfmRemember = $state(true);
+  // null until asked. A desktop without a keyring service (KDE Wallet switched
+  // off, no Secret Service) used to accept the tick and silently ask for the
+  // passphrase again next launch.
+  let rememberAvailable = $state<boolean | null>(null);
+
+  async function checkRemember() {
+    try {
+      rememberAvailable = await desktopRememberAvailable();
+    } catch {
+      rememberAvailable = false;
+    }
+  }
   let wfmAuthBusy = $state(false);
   let wfmAuthError = $state<string | null>(null);
   // Wrong or mismatched passphrases and a closed window are the user's to fix, not a bug.
@@ -49,6 +61,7 @@ import { DesktopCmdError } from '../../contracts/errors';
     wfmAuthError = null;
     wfmAuthReportable = false;
     authNext = next;
+    void checkRemember();
     if (code === 'needs_login') {
       wfmLoginPassphrase = '';
       wfmLoginConfirm = '';
@@ -225,6 +238,13 @@ import { DesktopCmdError } from '../../contracts/errors';
       (KWallet, GNOME Keyring, Windows Credential Manager) so you're not asked
       each launch. Never the passphrase itself.
     </label>
+    {#if rememberAvailable === false}
+      <p class="muted" data-testid="wfm-remember-unavailable">
+        Your system's keyring isn't available, so TennoWorth can't remember
+        this device and will ask for your passphrase each launch. On KDE, turn
+        on KDE Wallet in System Settings.
+      </p>
+    {/if}
     {#if wfmAuthBusy && wfmLoginMode === 'window'}
       <p class="muted" role="status" data-testid="wfm-login-waiting">
         Finish signing in in the warframe.market window. It closes by itself
@@ -278,6 +298,13 @@ import { DesktopCmdError } from '../../contracts/errors';
       Remember on this device - stores the unlock key in your OS keyring so
       you're not asked each launch. Never the passphrase itself.
     </label>
+    {#if rememberAvailable === false}
+      <p class="muted" data-testid="wfm-remember-unavailable">
+        Your system's keyring isn't available, so TennoWorth can't remember
+        this device and will ask for your passphrase each launch. On KDE, turn
+        on KDE Wallet in System Settings.
+      </p>
+    {/if}
     {#if wfmAuthError}
       <div class="err" data-testid="wfm-auth-error">
         {wfmAuthError}

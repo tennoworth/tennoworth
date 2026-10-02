@@ -282,6 +282,19 @@ export async function desktopTrySilentUnlock(): Promise<boolean> {
 }
 
 /**
+ * Whether the OS keyring answers, so "remember on this device" can work. A
+ * failed check reads as unavailable: the dialog then explains why the
+ * passphrase will be asked again rather than promising otherwise.
+ */
+export async function desktopRememberAvailable(): Promise<boolean> {
+  try {
+    return await resolveInvoke()<boolean>('wfm_remember_available');
+  } catch (e) {
+    rethrowInvoke(e);
+  }
+}
+
+/**
  * Exact-tier live asks/bids for up to 100 items, paced at WFM's 3 req/s
  * (≈17 s per 50) - listen on `LIVE_TOP_PROGRESS_EVENT` for `{done,total}`.
  */

@@ -140,6 +140,7 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
             crate::commands::auth::wfm_login_with_token,
             crate::commands::auth::unlock_jwt,
             crate::commands::auth::try_silent_unlock,
+            crate::commands::auth::wfm_remember_available,
             crate::commands::auth::wfm_logout,
             crate::commands::listing::submit_plan,
             crate::commands::listing::cancel_plan,
