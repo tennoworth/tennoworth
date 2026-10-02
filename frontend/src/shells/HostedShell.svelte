@@ -56,7 +56,9 @@ function ago(ts: string | number | null | undefined) {
     if (!ts) return null;
     // Clamp at 0 - a cron runner with skewed clock can produce
     // `updated_at` in the future, which used to render "-120 min ago".
-    const minutes = Math.max(0, Math.round((displayNow - new Date(ts).getTime()) / 60000));
+    const timestamp = new Date(ts).getTime();
+    if (!Number.isFinite(timestamp)) return null;
+    const minutes = Math.max(0, Math.round((displayNow - timestamp) / 60000));
     if (minutes < 1) return 'just now';
     if (minutes < 60) return `${minutes} min ago`;
     if (minutes < 60 * 24) return `${Math.round(minutes / 60)} h ago`;
