@@ -50,10 +50,18 @@ pub const HEADER_LANGUAGE: &str = "Language";
 
 /// Build a blocking reqwest client with the project UA and a shared timeout.
 pub fn build_client(timeout_secs: u64) -> Result<reqwest::blocking::Client, reqwest::Error> {
+    build_client_with_user_agent(timeout_secs, default_user_agent())
+}
+
+/// Keep transport policy uniform while callers retain their component identity.
+pub fn build_client_with_user_agent(
+    timeout_secs: u64,
+    user_agent: impl Into<String>,
+) -> Result<reqwest::blocking::Client, reqwest::Error> {
     reqwest::blocking::Client::builder()
         .retry(reqwest::retry::never())
         .redirect(redirect_policy())
-        .user_agent(default_user_agent())
+        .user_agent(user_agent.into())
         .timeout(Duration::from_secs(timeout_secs))
         .build()
 }
@@ -142,6 +150,13 @@ pub fn redirect_policy() -> reqwest::redirect::Policy {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn caller_identity_is_validated_when_building_the_client() {
+        assert!(build_client_with_user_agent(20, user_agent("test-component", "1.2.3")).is_ok());
+        assert!(build_client_with_user_agent(60, "invalid\nidentity").is_err());
+        assert!(build_client(30).is_ok());
+    }
 
     #[test]
     fn bulk_unit_prices_match_shared_fixture() {

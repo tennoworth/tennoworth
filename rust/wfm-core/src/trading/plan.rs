@@ -7,7 +7,6 @@ use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::Duration;
 
 use crate::identity::random_token;
 use crate::time::chrono_now_iso;
@@ -298,13 +297,7 @@ pub fn run_pending(
     pending: &mut PendingPlan,
     validate: impl FnMut() -> Result<(), PlanValidationError>,
 ) -> PlanResponse {
-    let http = match Client::builder()
-        .retry(reqwest::retry::never())
-        .redirect(wfm_client::redirect_policy())
-        .user_agent(crate::user_agent())
-        .timeout(Duration::from_secs(30))
-        .build()
-    {
+    let http = match wfm_client::build_client_with_user_agent(30, crate::user_agent()) {
         Ok(c) => c,
         Err(e) => {
             return PlanResponse {
@@ -877,6 +870,7 @@ fn review_matches(reviewed: &ReviewedOrder, prior: Option<&ExistingOrder>) -> bo
 
 #[cfg(test)]
 mod tests {
+    use std::time::Duration;
     use super::*;
     use crate::trading::pending::clear_finished_pending;
 
