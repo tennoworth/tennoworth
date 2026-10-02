@@ -13,12 +13,13 @@
 //! because the poll pass will catch it within 10 minutes anyway.
 
 use crate::services::unix_now;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use tauri::{AppHandle, Emitter, Manager};
 use wfm_core::http::browser_client;
-use wfm_core::trading::catalog::{fetch_wfm_catalog, index_item_meta, ItemMeta};
+use wfm_core::trading::catalog::{fetch_wfm_catalog, index_item_meta, ItemMeta, WfmCatalogItem};
 use wfm_core::trading::ws::{order_matches_watch, run_new_orders_stream, NewOrder};
 
 use crate::persistence::{Db, Watch};
@@ -84,6 +85,19 @@ pub fn match_order(
     })
 }
 
+// The unlocked session already owns the index; cloning its Arc avoids both
+// the multi-MB request and reindexing on reconnect. Logged-out watches still
+// need an anonymous catalog fetch.
+fn stream_catalog(
+    cached: Option<Arc<BTreeMap<String, ItemMeta>>>,
+    fetch: impl FnOnce() -> anyhow::Result<BTreeMap<String, WfmCatalogItem>>,
+) -> anyhow::Result<Arc<BTreeMap<String, ItemMeta>>> {
+    if let Some(catalog) = cached {
+        return Ok(catalog);
+    }
+    fetch().map(|catalog| Arc::new(index_item_meta(&catalog)))
+}
+
 /// Start the stream thread. Never takes the app down; every failure logs and
 /// backs off.
 pub fn start_stream(app: AppHandle) {
@@ -112,16 +126,22 @@ fn run(app: AppHandle) {
             continue;
         }
 
-        let (platform, me) = app
+        let (platform, me, cached_catalog) = app
             .state::<Arc<WfmSession>>()
             .require_unlocked()
-            .map(|u| (u.platform.clone(), Some(u.username.clone())))
-            .unwrap_or_else(|_| ("pc".to_string(), None));
+            .map(|u| {
+                (
+                    u.platform.clone(),
+                    Some(u.username.clone()),
+                    Some(u.id_to_item.clone()),
+                )
+            })
+            .unwrap_or_else(|_| ("pc".to_string(), None, None));
 
-        // itemId → {name, slug}, once per connection. Multi-MB, so a failure
-        // here backs off like a connection failure rather than retrying hot.
-        let id_to_item = match browser_client(60).and_then(|c| fetch_wfm_catalog(&c, &platform)) {
-            Ok(cat) => index_item_meta(&cat),
+        let id_to_item = match stream_catalog(cached_catalog, || {
+            browser_client(60).and_then(|c| fetch_wfm_catalog(&c, &platform))
+        }) {
+            Ok(catalog) => catalog,
             Err(e) => {
                 eprintln!(
                     "tennoworth: watch stream: catalog load failed: {e}; retrying in {backoff:?}"
@@ -137,7 +157,7 @@ fn run(app: AppHandle) {
         let mut cache = WatchCache::fresh(&app.state::<Db>());
         let mut on_order = move |o: NewOrder| {
             let Some(ItemMeta { name: _, slug }) = id_to_item.get(&o.item_id) else {
-                return; // item newer than this connection's catalog - poll path covers it
+                return; // item newer than the cached catalog - poll path covers it
             };
             let db = app2.state::<Db>();
             cache.refresh_if_stale(&db);
@@ -196,6 +216,50 @@ fn run(app: AppHandle) {
 mod tests {
     use super::*;
     use crate::services::watch::REARM_AFTER_SECS;
+
+    #[test]
+    fn reconnect_with_cached_catalog_makes_no_catalog_request() {
+        let cached = Arc::new(BTreeMap::from([(
+            "item-id".into(),
+            ItemMeta {
+                name: "Primed Flow".into(),
+                slug: "primed_flow".into(),
+            },
+        )]));
+        let requests = std::cell::Cell::new(0);
+        for _ in 0..3 {
+            let result = stream_catalog(Some(cached.clone()), || {
+                requests.set(requests.get() + 1);
+                Err(anyhow::anyhow!("catalog endpoint unavailable"))
+            });
+            assert_eq!(requests.get(), 0);
+            assert!(Arc::ptr_eq(&cached, &result.unwrap()));
+        }
+    }
+
+    #[test]
+    fn logged_out_stream_fetches_and_indexes_the_catalog() {
+        let requests = std::cell::Cell::new(0);
+        let catalog = stream_catalog(None, || {
+            requests.set(requests.get() + 1);
+            Ok(BTreeMap::from([(
+                "primed_flow".into(),
+                WfmCatalogItem {
+                    item_id: "item-id".into(),
+                    bulk_tradable: false,
+                    session_supported: true,
+                    display_name: "Primed Flow".into(),
+                    max_rank: Some(10),
+                    subtypes: vec![],
+                },
+            )]))
+        })
+        .unwrap();
+        assert_eq!(requests.get(), 1);
+        assert_eq!(catalog["item-id"].slug, "primed_flow");
+        assert_eq!(catalog["item-id"].name, "Primed Flow");
+        assert!(stream_catalog(None, || Err(anyhow::anyhow!("offline"))).is_err());
+    }
 
     fn watch(id: i64, slug: &str, side: &str, threshold: i64, last_fired_at: Option<i64>) -> Watch {
         Watch {
