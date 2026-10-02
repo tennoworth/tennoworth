@@ -18,12 +18,13 @@
 	root * /srv/wfm/app/frontend/dist
 	encode gzip zstd
 
-	# Security headers - from frontend/public/_headers, with ONE deliberate change:
-	# HSTS here is `max-age` only. The canonical set adds `includeSubDomains; preload`,
-	# which is an APEX-WIDE, hard-to-undo commitment (it forces HTTPS on every sibling
-	# subdomain for a year, and `preload` gets baked into browsers). That's wrong for a
-	# single subdomain sharing a domain with your other services. Re-add those two only
-	# if you own the apex and intend HTTPS across ALL of it. Verify the headers land:
+	# Security headers. This is the only place the site's real HTTP headers are set;
+	# the CSP line is kept in sync by scripts/sync-csp.ts. HSTS is `max-age` only on
+	# purpose: adding `includeSubDomains; preload` is an APEX-WIDE, hard-to-undo
+	# commitment (it forces HTTPS on every sibling subdomain for a year, and `preload`
+	# gets baked into browsers). That's wrong for a single subdomain sharing a domain
+	# with your other services. Re-add those two only if you own the apex and intend
+	# HTTPS across ALL of it. Verify the headers land:
 	#   curl -sI https://wfm.yourdomain.com | grep -iE 'strict-transport|frame|content-security'
 	header {
 		Strict-Transport-Security "max-age=31536000"
