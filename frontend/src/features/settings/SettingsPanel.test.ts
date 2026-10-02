@@ -3,7 +3,7 @@
 // theme can be changed inside the shell now, so a regression here leaves a
 // user with no way to override the OS scheme in the app.
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
-import { screen, fireEvent, cleanup, waitFor, within } from '@testing-library/svelte';
+import { screen, fireEvent, cleanup, waitFor, within, act } from '@testing-library/svelte';
 import { renderDesktop as render } from '../../dev/render-desktop';
 import SettingsPanel from './SettingsPanel.svelte';
 import type { ModePref, ThemeController } from '../../ui/theme';
@@ -46,6 +46,51 @@ function fakeTheme(pref: ModePref = 'system') {
 }
 
 describe('SettingsPanel', () => {
+  function pollingTransport() {
+    const settings: OverlaySettings = { enabled: false, autoDetect: true, shortcut: 'Ctrl+Shift+O', scale: 1,
+      livePrices: true, showOwned: true, diagnostics: false };
+    const status = { state: 'disabled', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true };
+    let resolve!: (value: typeof status) => void;
+    let reject!: (error: Error) => void;
+    const pending = new Promise<typeof status>((yes, no) => { resolve = yes; reject = no; });
+    const overlayStatus = vi.fn().mockResolvedValueOnce(status).mockReturnValueOnce(pending).mockResolvedValue(status);
+    const transport = { getOverlaySettings: async () => settings, overlayStatus,
+      updateOverlaySettings: async (next: OverlaySettings) => next,
+      setupOverlayCapture: async () => ({ ...status, state: 'watching' }),
+      getUsagePreferences: async () => ({ enabled: false, available: false }),
+    } as unknown as DesktopCapabilities;
+    return { transport, overlayStatus, resolve, reject, status };
+  }
+
+  it('keeps one polling read in flight and retries after a failed status read', async () => {
+    vi.useFakeTimers();
+    try {
+      const { transport, overlayStatus, reject } = pollingTransport();
+      render(SettingsPanel, { props: { theme: fakeTheme().theme, transport } });
+      await act(async () => {});
+      await act(() => vi.advanceTimersByTimeAsync(3000));
+      expect(overlayStatus).toHaveBeenCalledTimes(2);
+      await act(async () => { reject(new Error('Status unavailable')); });
+      await act(() => vi.advanceTimersByTimeAsync(1000));
+      expect(overlayStatus).toHaveBeenCalledTimes(3);
+    } finally { cleanup(); vi.useRealTimers(); }
+  });
+
+  it('does not overwrite the enabled overlay status with an earlier poll', async () => {
+    vi.useFakeTimers();
+    try {
+      const { transport, resolve, status } = pollingTransport();
+      render(SettingsPanel, { props: { theme: fakeTheme().theme, transport } });
+      await act(async () => {});
+      await act(() => vi.advanceTimersByTimeAsync(1000));
+      await fireEvent.click(screen.getByRole('checkbox', { name: /Enable local screen recognition/ }));
+      await act(async () => {});
+      expect(screen.getByText('watching · OCR ready', { selector: 'strong' })).toBeTruthy();
+      await act(async () => { resolve(status); });
+      expect(screen.getByText('watching · OCR ready', { selector: 'strong' })).toBeTruthy();
+    } finally { cleanup(); vi.useRealTimers(); }
+  });
+
   it('renders the Appearance section with the three modes and the System note', () => {
     const { theme } = fakeTheme();
     render(SettingsPanel, { props: { theme } });
