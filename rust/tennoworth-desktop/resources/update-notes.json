@@ -1,5 +1,5 @@
 {
-  "version": "0.8.5",
+  "version": "0.8.6",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -620,6 +620,120 @@
           "kind": "fixed",
           "title": "Old event data is flagged on time",
           "body": "The trader calendar now adds \"reward data 7d old\" to an event as soon as its reward data reaches seven days, the same age at which TennoWorth's market data warns. It used to stay silent until the eighth day.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.6",
+      "date": "2026-10-02",
+      "changes": [
+        {
+          "id": "overlay-captures-game-window",
+          "kind": "fixed",
+          "title": "The overlay reads the game, not your browser",
+          "body": "The overlay used to capture the first window with \"warframe\" in its title, which could be warframe.market in a browser or a Discord channel. It now picks the game's own window.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "overlay-whole-word-match",
+          "kind": "fixed",
+          "title": "Reward names match by whole words",
+          "body": "A reward was sometimes matched to a shorter item name hidden inside it, so Limbo could be read as Bo. Names now match by whole words.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "wayland-overlay-palette",
+          "kind": "fixed",
+          "title": "The Wayland overlay matches the app's colours",
+          "body": "On Linux Wayland, the reward cards used an old colour scheme. They now use the same colours as the overlay everywhere else.",
+          "platforms": [
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "wayland-overlay-preview",
+          "kind": "fixed",
+          "title": "Preview overlay works on Wayland",
+          "body": "The Preview overlay button in Settings failed on Wayland with \"no primary monitor is available\". It now shows the preview on the monitor TennoWorth is on.",
+          "platforms": [
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "trade-close-never-guesses",
+          "kind": "fixed",
+          "title": "After a trade, listings are only changed when TennoWorth is sure",
+          "body": "When a trade completes, TennoWorth lowers or removes the matching listing. It now skips any listing it cannot fully read, logs why, and never assumes a quantity of one. Listing protection refuses to go ahead when your current orders cannot be read in full.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "remember-newest-wins",
+          "kind": "fixed",
+          "title": "\"Remember on this device\" sticks",
+          "body": "Unlocking while a sign-in finished elsewhere in the app could store an out-of-date key or delete the new one, so the next launch asked for your passphrase again. The newest choice now always wins.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "keyring-unavailable-note",
+          "kind": "improved",
+          "title": "TennoWorth says when it cannot remember you",
+          "body": "If your system has no keyring available, for example with KDE Wallet switched off, the sign-in and unlock dialogs now explain that you will be asked for your passphrase each launch and how to turn the keyring on.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "passphrase-counts-characters",
+          "kind": "fixed",
+          "title": "Backup passphrases count every character once",
+          "body": "The 12-character minimum for export passphrases counted some symbols, such as pictographs, as two characters. It now counts characters the same way sign-in does.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "corrupt-inventory-survives",
+          "kind": "fixed",
+          "title": "A damaged saved inventory no longer blocks scanning",
+          "body": "If the saved inventory on disk was corrupt, every later scan failed and the bad copy was never replaced. TennoWorth now treats it as no saved inventory, so the next scan replaces it.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "stale-panel-results",
+          "kind": "fixed",
+          "title": "Ledger and price watches show the latest data",
+          "body": "A slow reload could replace newer results in the Ledger and Price watches; it no longer does.",
           "platforms": [
             "windows",
             "linux"

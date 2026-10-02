@@ -54,6 +54,42 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.6 - 2026-10-02
+
+# 🧩 TennoWorth Desktop 0.8.6
+
+TennoWorth Desktop 0.8.6 makes the relic overlay read the right thing and keeps your listings and scans safer.
+
+The overlay now reads the game's own window even with warframe.market open in a browser, matches reward names by whole words, and looks the same on Wayland as everywhere else. Automatic listing updates after a trade never guess at a quantity, and "remember on this device" now holds even when a sign-in and an unlock overlap.
+
+## Changelog (10)
+
+### Relic overlay
+
+- **The overlay reads the game, not your browser** The overlay used to capture the first window with "warframe" in its title, which could be warframe.market in a browser or a Discord channel. It now picks the game's own window. <!-- app-note {"id":"overlay-captures-game-window","kind":"fixed"} -->
+- **Reward names match by whole words** A reward was sometimes matched to a shorter item name hidden inside it, so Limbo could be read as Bo. Names now match by whole words. <!-- app-note {"id":"overlay-whole-word-match","kind":"fixed"} -->
+- **The Wayland overlay matches the app's colours** On Linux Wayland, the reward cards used an old colour scheme. They now use the same colours as the overlay everywhere else. <!-- app-note {"id":"wayland-overlay-palette","kind":"fixed","platforms":["linux"]} -->
+- **Preview overlay works on Wayland** The Preview overlay button in Settings failed on Wayland with "no primary monitor is available". It now shows the preview on the monitor TennoWorth is on. <!-- app-note {"id":"wayland-overlay-preview","kind":"fixed","platforms":["linux"]} -->
+
+### Selling
+
+- **After a trade, listings are only changed when TennoWorth is sure** When a trade completes, TennoWorth lowers or removes the matching listing. It now skips any listing it cannot fully read, logs why, and never assumes a quantity of one. Listing protection refuses to go ahead when your current orders cannot be read in full. <!-- app-note {"id":"trade-close-never-guesses","kind":"fixed"} -->
+
+### Sign-in and backups
+
+- **"Remember on this device" sticks** Unlocking while a sign-in finished elsewhere in the app could store an out-of-date key or delete the new one, so the next launch asked for your passphrase again. The newest choice now always wins. <!-- app-note {"id":"remember-newest-wins","kind":"fixed"} -->
+- **TennoWorth says when it cannot remember you** If your system has no keyring available, for example with KDE Wallet switched off, the sign-in and unlock dialogs now explain that you will be asked for your passphrase each launch and how to turn the keyring on. <!-- app-note {"id":"keyring-unavailable-note","kind":"improved"} -->
+- **Backup passphrases count every character once** The 12-character minimum for export passphrases counted some symbols, such as pictographs, as two characters. It now counts characters the same way sign-in does. <!-- app-note {"id":"passphrase-counts-characters","kind":"fixed"} -->
+
+### Reliability
+
+- **A damaged saved inventory no longer blocks scanning** If the saved inventory on disk was corrupt, every later scan failed and the bad copy was never replaced. TennoWorth now treats it as no saved inventory, so the next scan replaces it. <!-- app-note {"id":"corrupt-inventory-survives","kind":"fixed"} -->
+- **Ledger and price watches show the latest data** A slow reload could replace newer results in the Ledger and Price watches; it no longer does. <!-- app-note {"id":"stale-panel-results","kind":"fixed"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.8.5 - 2026-10-01
 
 # 🔧 TennoWorth Desktop 0.8.5
