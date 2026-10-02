@@ -196,9 +196,10 @@ That is why `wfm-core` depends on `market-domain` rather than the reverse, and
 only where a transport response has to become a typed contract. The
 market's own-orders response is decoded once, in `wfm-core::trading::orders`,
 into the vendor-neutral `market-domain::orders` types; a response it cannot read
-whole is refused as a whole rather than partly reconciled. Consumers read the
-decoded order and never the response body, so two surfaces cannot resolve the
-same row to different orders.
+whole is refused as a whole rather than partly reconciled. Listing reconciliation refuses any undecodable row. Trade auto-close uses the
+same decoder per row, logs refused rows, and leaves them untouched while
+adjusting independently decoded sell orders. Both paths use the catalogue
+identity and never invent a quantity.
 
 ## Data and failure boundaries
 

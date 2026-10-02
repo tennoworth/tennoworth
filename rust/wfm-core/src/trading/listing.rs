@@ -94,18 +94,24 @@ pub fn cached_user_orders(unlocked: &Unlocked) -> Result<serde_json::Value> {
     read_user_orders(unlocked, false)
 }
 fn read_user_orders(unlocked: &Unlocked, fresh: bool) -> Result<serde_json::Value> {
+    let body = read_user_order_rows(unlocked, fresh)?;
+    let decoded = decode_user_orders(unlocked, &body)?;
+    Ok(orders_body(decoded, unlocked))
+}
+
+/// Fetch without whole-account reconciliation so auto-close can refuse individual rows.
+pub fn list_user_order_rows(unlocked: &Unlocked) -> Result<serde_json::Value> {
+    read_user_order_rows(unlocked, true)
+}
+
+fn read_user_order_rows(unlocked: &Unlocked, fresh: bool) -> Result<serde_json::Value> {
     let client = wfm_client()?;
-    let url = format!(
-        "https://api.warframe.market/v2/orders/user/{}",
-        unlocked.username
-    );
-    let mut body = wfm_client::transport::read_json(
+    let url = format!("https://api.warframe.market/v2/orders/user/{}", unlocked.username);
+    let body = wfm_client::transport::read_json(
         wfm_client::wfm_authed_headers(client.get(&url), &unlocked.platform, &unlocked.jwt), Kind::Read,
         wfm_client::transport::ReadKey { url, platform: unlocked.platform.clone(), account: Some(unlocked.username.clone()) },
         std::time::Duration::from_secs(5), fresh,
     )?;
-    validate_orders_body(&body, unlocked)?;
-    crate::trading::catalog::enrich_orders_with_names(&mut body, &unlocked.id_to_item);
     Ok(body)
 }
 
@@ -252,6 +258,35 @@ pub fn decode_user_orders(unlocked: &Unlocked, body: &serde_json::Value) -> Resu
     decode_orders(body, &CatalogConstraints(unlocked))
 }
 
+fn orders_body(decoded: DecodedOrders, unlocked: &Unlocked) -> serde_json::Value {
+    let rows: Vec<_> = decoded
+        .orders
+        .into_iter()
+        .filter_map(|row| {
+            let market_domain::orders::OrderRow::Supported(order) = row else {
+                return None;
+            };
+            let mut row = serde_json::json!({
+                "id": order.id, "itemId": order.item_id, "type": order.side.as_str(),
+                "platinum": order.platinum, "quantity": order.quantity,
+                "rank": order.rank, "subtype": order.subtype, "perTrade": order.per_trade,
+                "visible": order.visible,
+            });
+            crate::trading::catalog::attach_item_meta(&mut row, &unlocked.id_to_item);
+            Some(row)
+        })
+        .collect();
+    serde_json::json!({"data": rows})
+}
+
+pub fn decode_user_order_rows(
+    unlocked: &Unlocked,
+    body: &serde_json::Value,
+) -> Result<Vec<market_domain::orders::OrderRow>> {
+    crate::trading::orders::decode_order_rows(body, &CatalogConstraints(unlocked))
+}
+
+#[cfg(test)]
 fn validate_orders_body(body: &serde_json::Value, unlocked: &Unlocked) -> Result<()> {
     decode_user_orders(unlocked, body).map(|_| ())
 }
@@ -262,6 +297,17 @@ mod response_tests {
     fn unlocked() -> Unlocked {
         Unlocked { jwt: String::new(), username: "fixture".into(), platform: "pc".into(), catalog: Arc::new(BTreeMap::new()), id_to_item: Arc::new(BTreeMap::new()) }
     }
+    #[test]
+    fn decoded_orders_resolve_metadata_by_catalogue_identity() {
+        let mut session = unlocked();
+        session.id_to_item = Arc::new(BTreeMap::from([("item".into(), ItemMeta { name: "Part".into(), slug: "part".into() })]));
+        let body = serde_json::json!({"data":{"sell":[{"id":"a","itemId":"item","platinum":10,"quantity":2}],"buy":[]}});
+        let result = orders_body(decode_user_orders(&session, &body).unwrap(), &session);
+        assert_eq!(result["data"][0]["item"], serde_json::json!({"name":"Part","slug":"part"}));
+        assert_eq!(result["data"][0]["type"], "sell");
+        assert_eq!(result["data"][0]["quantity"], 2);
+    }
+
     #[test]
     fn malformed_orders_cannot_be_interpreted_as_an_empty_account() {
         for body in [serde_json::json!({}), serde_json::json!({"data": null}), serde_json::json!({"data": {"sell": []}}), serde_json::json!({"data": [{"id": "a"}]})] {

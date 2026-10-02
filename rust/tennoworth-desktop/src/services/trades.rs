@@ -16,7 +16,7 @@ use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter, Manager};
 use wfm_core::trading::listing::{
-    delete_order, list_user_orders, update_order, Unlocked, UpdateRequest,
+    delete_order, list_user_order_rows, update_order, Unlocked, UpdateRequest,
 };
 
 use crate::persistence::Db;
@@ -75,31 +75,51 @@ pub struct OwnSellOrder {
     pub quantity: i64,
 }
 
-/// Pull `sell` orders (with slug, thanks to catalog enrichment) out of the
-/// `/orders/user` body.
-pub fn own_sell_orders(body: &serde_json::Value) -> Vec<OwnSellOrder> {
-    let data = body.get("data").unwrap_or(body);
-    let arr: Vec<&serde_json::Value> = match data.get("sell").and_then(|v| v.as_array()) {
-        Some(a) => a.iter().collect(),
-        None => data
-            .as_array()
-            .map(|a| {
-                a.iter()
-                    .filter(|o| o.get("type").and_then(|t| t.as_str()) == Some("sell"))
-                    .collect()
-            })
-            .unwrap_or_default(),
+/// Refused rows stay untouched while independently decoded orders can be adjusted.
+pub fn own_sell_orders(body: &serde_json::Value, unlocked: &Unlocked) -> Vec<OwnSellOrder> {
+    own_sell_orders_with_log(body, unlocked, |reason| {
+        eprintln!("auto-close: skipping {reason}")
+    })
+}
+
+fn own_sell_orders_with_log(
+    body: &serde_json::Value,
+    unlocked: &Unlocked,
+    mut refused: impl FnMut(&str),
+) -> Vec<OwnSellOrder> {
+    use market_domain::orders::{OrderRow, OrderSide};
+    let rows = match wfm_core::trading::listing::decode_user_order_rows(unlocked, body) {
+        Ok(rows) => rows,
+        Err(error) => {
+            refused(&error.to_string());
+            return Vec::new();
+        }
     };
-    arr.into_iter()
-        .filter_map(|o| {
-            let id = o.get("id")?.as_str()?.to_string();
-            let slug = o
-                .get("item")
-                .and_then(|i| i.get("slug"))
-                .and_then(|s| s.as_str())?
-                .to_string();
-            let quantity = o.get("quantity").and_then(|q| q.as_i64()).unwrap_or(1);
-            Some(OwnSellOrder { id, slug, quantity })
+    rows.into_iter()
+        .filter_map(|row| {
+            let order = match row {
+                OrderRow::Supported(order) => order,
+                OrderRow::Unsupported(row) | OrderRow::Ambiguous(row) => {
+                    refused(&row.reason);
+                    return None;
+                }
+            };
+            if order.side != OrderSide::Sell {
+                return None;
+            }
+            let Some(meta) = unlocked.id_to_item.get(&order.item_id) else {
+                refused("sell order with unresolved item identity");
+                return None;
+            };
+            let Ok(quantity) = i64::try_from(order.quantity) else {
+                refused("sell order with quantity outside supported limits");
+                return None;
+            };
+            Some(OwnSellOrder {
+                id: order.id,
+                slug: meta.slug.clone(),
+                quantity,
+            })
         })
         .collect()
 }
@@ -248,9 +268,9 @@ pub fn handle_trade(
         // borrows from.
         let claim = mutations.begin();
         if let Ok((_guard, unlocked)) = claim {
-            match list_user_orders(&unlocked) {
+            match list_user_order_rows(&unlocked) {
                 Ok(body) => {
-                    let orders = own_sell_orders(&body);
+                    let orders = own_sell_orders(&body, &unlocked);
                     let names = name_to_slug(&unlocked);
                     let tiered = tiered_slugs(&unlocked);
                     follow_up.extend(adjustment_follow_up(&trade, &names, &orders, &tiered));
@@ -842,17 +862,31 @@ mod tests {
     }
 
     #[test]
-    fn own_sell_orders_reads_the_v2_split_shape_and_the_flat_shape() {
-        let body = serde_json::json!({"data": {"sell": [
-            {"id": "a", "quantity": 2, "item": {"slug": "primed_flow"}},
-            {"id": "b", "item": {"name": "no slug → skipped"}}
-        ], "buy": [{"id": "c", "quantity": 1, "item": {"slug": "x"}}]}});
-        assert_eq!(own_sell_orders(&body), vec![order("a", "primed_flow", 2)]);
-        let flat = serde_json::json!({"data": [
-            {"id": "a", "type": "sell", "quantity": 1, "item": {"slug": "primed_flow"}},
-            {"id": "c", "type": "buy", "quantity": 1, "item": {"slug": "x"}}
-        ]});
-        assert_eq!(own_sell_orders(&flat), vec![order("a", "primed_flow", 1)]);
+    fn own_sell_orders_reads_valid_siblings_and_logs_refused_rows() {
+        use wfm_core::trading::catalog::ItemMeta;
+        let unlocked = Unlocked {
+            jwt: String::new(), username: "fixture".into(), platform: "pc".into(),
+            catalog: Arc::new(BTreeMap::new()),
+            id_to_item: Arc::new(BTreeMap::from([("item".into(), ItemMeta { name: "Part".into(), slug: "part".into() })])),
+        };
+        for body in [
+            serde_json::json!({"data":{"sell":[
+                {"id":"a","itemId":"item","platinum":10,"quantity":2},
+                {"id":"odd","itemId":"item","platinum":10},
+                {"id":"conflict","itemId":"item","type":"buy","platinum":10,"quantity":1}
+            ],"buy":[]}}),
+            serde_json::json!({"data":[
+                {"id":"a","itemId":"item","type":"sell","platinum":10,"quantity":2},
+                {"id":"odd","itemId":"item","type":"sell","platinum":10},
+                {"id":"conflict","itemId":"item","type":"auction","platinum":10,"quantity":1}
+            ]}),
+        ] {
+            let mut logs = Vec::new();
+            let orders = own_sell_orders_with_log(&body, &unlocked, |reason| logs.push(reason.to_owned()));
+            assert_eq!(orders, vec![order("a", "part", 2)]);
+            assert_eq!(logs.len(), 2);
+            assert!(logs.iter().any(|line| line.contains("quantity")), "{logs:?}");
+        }
     }
 
     /// A trade is only "adjusted" when WFM said so. The transport answers `Ok` for a
