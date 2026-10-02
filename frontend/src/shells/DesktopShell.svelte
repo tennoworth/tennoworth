@@ -113,21 +113,14 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     protectionSnapshotId: protection.state?.snapshot_id ?? null,
     nativeSnapshotId: inventory.nativeSnapshotId,
     protectionError: protection.error,
+    wfmUnlocked: listing.wfmStatus?.unlocked ?? false,
+    availableQuantities: Object.fromEntries(Object.entries(protection.state?.items ?? {}).map(([slug, item]) => [slug, item.available])),
     supportedSlugs: [...supportedOwned.values()].map(row => row.slug),
     // An allocation computed against a different inventory places nothing, so
     // every item reads as unknown.
     known: allocationMatches ? [...protection.state?.items ? Object.keys(protection.state.items).filter(slug => protection.state?.items[slug]?.estimated != null) : []] : [],
   });
-  let listingBlockReason = $derived.by(() => {
-    const gate = listingEligibilityBlockReason(eligibilityInputs);
-    if (gate) return gate;
-    // The two checks the eligibility rules do not cover: minting a listing needs
-    // a live WFM session, and a listing whose price could not be read cannot be
-    // safely posted over.
-    if (!listing.wfmStatus?.unlocked) return 'Connect WFM to check current listings before posting.';
-    if ([...supportedOwned.values()].some(row => protection.state?.items[row.slug]?.available == null)) return 'Current WFM listings could not be checked. Recheck before posting.';
-    return null;
-  });
+  let listingBlockReason = $derived(listingEligibilityBlockReason(eligibilityInputs));
   let listingQuantitiesKnown = $derived(!listingBlockReason);
   let estimatedGuidance = $derived(!listingQuantitiesKnown);
   let listingActionLabel = $derived(listingEligibilityActionLabel(eligibilityInputs));
