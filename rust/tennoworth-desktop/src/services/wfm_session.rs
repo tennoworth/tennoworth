@@ -30,7 +30,7 @@ use wfm_core::trading::listing::{warm_unlocked, Unlocked};
 use wfm_core::trading::plan::PlanGuard;
 use zeroize::Zeroize;
 
-pub use crate::command_error::CmdError;
+use crate::command_error::CmdError;
 
 /// The session slot: the unlocked credentials plus the generation of the slot
 /// they belong to. `generation` advances on every logout, so an installer that
