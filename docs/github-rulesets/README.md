@@ -67,24 +67,3 @@ the new history rule also allows a fast-forward push. Do not use GitHub's merge
 button to create a divergent production merge commit. Repository policy still
 requires explicit authorization to promote production. Checks must be verified
 on the production PR; pushing directly to `main` does not rerun these workflows.
-
-## Rollback
-
-The original snapshots are preserved at commit
-`088b27ac5e91c7553d2efc91003f0c0a2cccfbe4`. The change-time live backup is also
-saved locally; use the git
-snapshots if that temporary file is no longer available.
-
-1. Restore `develop-integration.json` from that commit and PUT it to ruleset
-   `21067958`. Verify its deletion/non-fast-forward rules and empty bypass list
-   before proceeding.
-2. Delete only the new history ruleset `22310181` to return to the exact prior
-   protection layout. The unchanged production ruleset retains its original
-   history rules and administrator bypass.
-3. PATCH the repository setting `allow_auto_merge` back to `false`.
-4. Read back the three original rulesets and compare with their original
-   snapshots; verify the repository setting and effective branch rules too.
-
-The original production and tag rulesets require no restoration. Retaining the
-new history ruleset is also possible if reverting only the relaxed integration
-workflow rather than reproducing the entire previous configuration.
