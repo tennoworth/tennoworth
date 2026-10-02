@@ -14,12 +14,12 @@ production authorization. It is the right home for:
 - environment quirks specific to this box;
 - anything else that identifies this checkout or its operator.
 
-Keep dated investigations and execution evidence in `.planning/`, and reusable
-procedures in `.agents/skills/`. A fresh clone contains neither the local
-overlay nor local skills. Copy only the required skills from a trusted checkout,
-then run `bun scripts/check-agent-instructions.ts --local`. If a worktree uses
-skills from another checkout, record that absolute location here; validate policy
-against the worktree's candidate, not the location containing the skill.
+Keep dated investigations, execution evidence, knowledge and reusable
+procedures in the maintainer home (`.planning/`, see `AGENTS.md`). A fresh clone
+contains neither the local overlay nor the maintainer home; worktrees use the
+main checkout's. After changing skills, run
+`bun scripts/check-agent-instructions.ts --local`. Validate policy against the
+worktree's candidate, not the checkout holding the skill.
 
 ## Windows build host (example)
 

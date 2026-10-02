@@ -29,6 +29,14 @@ after the applicable instruction files if it exists; do not assume a tool
 loaded it automatically. It carries host, path and
 environment details that do not belong in the repository.
 
+Maintainer material - knowledge, procedures, plans - lives in the **maintainer
+home**: the `.planning/` directory of the main checkout, a local Git repository
+of its own that this repository ignores. Every worktree of a checkout shares it;
+locate it with
+`"$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")/.planning"`.
+When it exists, read `knowledge/INDEX.md` there before maintainer work. A fresh
+clone or a contributor checkout has none, and nothing here depends on it.
+
 ## Required design reference for UI work
 
 Before changing UI markup, styles, layout, or interaction states, read
@@ -57,25 +65,26 @@ in the gitignored `AGENTS.local.md` overlay, never in a tracked file. Copy
 [`AGENTS.local.md.example`](AGENTS.local.md.example) and fill in what applies to
 that checkout; each clone, including the Windows build host, keeps its own.
 
-A fresh worktree or clone does not receive `AGENTS.local.md`: it is ignored, so
-Git does not copy it. Create it from the example when the work needs
-host-specific detail. Each tool must follow this explicit read contract,
-whether or not its own loader supports local overlays.
+A fresh clone does not receive `AGENTS.local.md`: it is ignored, so Git does
+not copy it. A worktree reads the main checkout's copy, beside the maintainer
+home. Create it from the example when the work needs host-specific detail. Each
+tool must follow this explicit read contract, whether or not its own loader
+supports local overlays.
 
-Reusable local procedures live in `.agents/skills/<task>/SKILL.md`. Inspect
-their names and descriptions when selecting a procedure, then read the matching
-skill and its required references. If a requested skill is missing, report it;
-do not silently substitute a provider's unrelated skill. These files are
-gitignored and must be copied deliberately from a trusted checkout, or read
-there by absolute path. Never copy credentials as part of skill setup.
+Reusable maintainer procedures live in the maintainer home under
+`skills/<task>/SKILL.md`. Inspect their names and descriptions when selecting a
+procedure, then read the matching skill and its required references. If a
+requested skill is missing, report it; do not silently substitute a provider's
+unrelated skill. Never copy credentials as part of skill setup.
 
 Keep provider configuration as a thin adapter to these instructions. Plugin,
 permission and runtime settings stay in the tool's required configuration file;
-project rules and procedures have one owner here and under `.agents/skills/`.
-Do not add unused provider directories or depend on automatic discovery for
-correctness. Run `bun scripts/check-agent-instructions.ts --local` after local
-skill or adapter changes. It checks the files on disk; the default command
-continues to check only tracked instructions from the index.
+project rules have one owner here, and maintainer knowledge and procedures one
+owner in the maintainer home. Do not keep project knowledge in a tool's private
+memory, add unused provider directories, or depend on automatic discovery for
+correctness. Run `bun scripts/check-agent-instructions.ts --local` after skill
+or adapter changes. It checks the files on disk; the default command continues
+to check only tracked instructions from the index.
 
 `docs/design-system.md` is public source documentation and must exist in the
 revision you are working in. If it, or an applicable instruction file, is
@@ -88,16 +97,12 @@ missing, resolve that before UI edits rather than inventing replacement rules.
 The GitHub repo carries source, user documentation, packaging recipes and CI -
 nothing else. Research notes, findings, investigations, audits, spike
 write-ups, plans, and maintainer or host operations runbooks are
-**maintainer-local**: their single home is `.planning/`, which `.gitignore`
-keeps out of git. Reusable maintainer skills are the exception: their single
-home is `.agents/skills/`, also gitignored. Inspect matching
-`.agents/skills/*/SKILL.md` files when a task invokes a local procedure; these
-use portable Markdown and scripts, with no provider-specific metadata. They
-must be copied explicitly to fresh clones or accessed from their original
-checkout. Write other maintainer material into `.planning/`, never into
-`docs/` or any other tracked path. A procedure CONTRIBUTING tells a contributor
-to follow is contributor documentation and belongs here; a note only the
-maintainer needs does not.
+**maintainer-local**: their single home is the maintainer home, `.planning/`,
+which `.gitignore` keeps out of this repository. Its skills use portable
+Markdown and scripts, with no provider-specific metadata. Write maintainer
+material there, never into `docs/` or any other tracked path. A procedure
+CONTRIBUTING tells a contributor to follow is contributor documentation and
+belongs here; a note only the maintainer needs does not.
 
 `bun scripts/check-public-surface.ts` is the gate. It fails when anything under
 an ignored internal home is tracked, and when a tracked document under `docs/`
