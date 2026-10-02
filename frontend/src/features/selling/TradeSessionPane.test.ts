@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import TradeSessionPane from './TradeSessionPane.svelte';
 import type { SessionPlan } from '../../domain/trade-session';
+import type { Market, OwnedRecord } from '../../contracts/data';
+import type { ScoredInventoryFact } from '../../contracts/generated/domain';
 
 const services = vi.hoisted(() => ({
   evaluateTradeSession: vi.fn(),
@@ -98,4 +100,31 @@ it('explains blocked review and restores the action without discarding the draft
   await view.rerender({ listingBlockReason: null });
   await fireEvent.click(screen.getByRole('button', { name: 'Review batch' }));
   expect(view.onreview).toHaveBeenCalledOnce();
+});
+
+it.each([
+  { error: null, low_sell: 0, top_buy: 0, note: 'Online competitors checked' },
+  { error: 'Unavailable', low_sell: 10, top_buy: 8, note: '1 price checks failed' },
+])('preserves Trade Session live-book semantics ($error)', async expected => {
+  services.desktopTradeSessionState.mockResolvedValue({ allowance: { remaining: 8, snapshot_id: 'one' }, quantities: { Initial: 2 }, bulk_slugs: [] });
+  services.evaluateTradeSession.mockImplementation(async () => plan('Initial'));
+  services.desktopLiveTopPrices.mockResolvedValue([{ slug: 'Initial', low_sell: null, top_buy: null, sells: [], buys: [], error: expected.error }]);
+  const market: Market = { updated_at: '2026-10-02T00:00:00Z', platform: 'pc', item_count: 1, catalog_count: 1, catalog: { initial: 'Initial' }, items: { Initial: { avg: 10, low_sell: 10, top_buy: 8, vol: 30, buys: 1, sells: 1, ratio: 1 } } };
+  const owned = new Map<string, OwnedRecord>([['Initial', { slug: 'Initial', name: 'Initial', type: 'Mod', count: 2, kept_lvl: null, leveled: 0, subtype: null }]]);
+  const nativeFacts = new Map<string, ScoredInventoryFact>([['Initial', {
+    key: 'Initial', sellable: 2, clearing_price: 10, sell_score: 20, patience: false,
+    ducats: null, plat_per_100d: null, potential_plat: 20, raw_value: 20,
+    medians_7d: [], median_90d: null, delta_90d_pct: null, timing: 'neutral',
+    demand: { usage: null, inherited: false, liquidity: 'sells-today', band: null },
+  }]]);
+  render(TradeSessionPane, { props: { owned, market, nativeFacts, reserveCopies: 0, advice: new Map(), scanning: false, onscan: async () => {}, onreview: vi.fn() } });
+  const check = screen.getByRole('button', { name: 'Check live prices' });
+  await waitFor(() => expect((check as HTMLButtonElement).disabled).toBe(false));
+  const previousCalls = services.evaluateTradeSession.mock.calls.length;
+  await fireEvent.click(check);
+  await screen.findByText(new RegExp(expected.note));
+  if (!expected.error) await waitFor(() => expect(services.evaluateTradeSession.mock.calls.length).toBeGreaterThan(previousCalls));
+  await waitFor(() => expect((screen.getByRole('button', { name: 'Review batch' }) as HTMLButtonElement).disabled).toBe(false));
+  expect(services.evaluateTradeSession.mock.calls.at(-1)?.[0].candidates[0].market).toMatchObject({ low_sell: expected.low_sell, top_buy: expected.top_buy });
+  expect(services.desktopLiveTopPrices).toHaveBeenCalledWith([{ slug: 'Initial', rank: 0, subtype: null }]);
 });
