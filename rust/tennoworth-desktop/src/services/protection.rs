@@ -127,6 +127,22 @@ pub fn listed_components(
     }
     let decoded = wfm_core::trading::orders::decode_orders(body, &Unconstrained)
         .map_err(|error| error.to_string())?;
+    // The decoder proves each row's shape; the slug the catalogue attached is
+    // read from the same rows by order id.
+    let slugs: BTreeMap<&str, &str> = body
+        .get("data")
+        .and_then(|data| {
+            data.as_array()
+                .or_else(|| data.get("sell").and_then(|rows| rows.as_array()))
+        })
+        .ok_or("Current sell orders are unavailable.")?
+        .iter()
+        .filter_map(|row| {
+            let id = row.get("id")?.as_str()?;
+            let slug = row.get("item")?.get("slug")?.as_str()?;
+            (!slug.is_empty()).then_some((id, slug))
+        })
+        .collect();
     let mut listed = BTreeMap::<String, u32>::new();
     for row in decoded.orders {
         let market_domain::orders::OrderRow::Supported(order) = row else {
@@ -135,20 +151,8 @@ pub fn listed_components(
         if order.side != market_domain::orders::OrderSide::Sell {
             continue;
         }
-        let rows = body
-            .get("data")
-            .and_then(|data| {
-                data.as_array()
-                    .or_else(|| data.get("sell").and_then(|rows| rows.as_array()))
-            })
-            .ok_or("Current sell orders are unavailable.")?;
-        let slug = rows
-            .iter()
-            .find(|row| row.get("id").and_then(|id| id.as_str()) == Some(order.id.as_str()))
-            .and_then(|row| row.get("item"))
-            .and_then(|item| item.get("slug"))
-            .and_then(|slug| slug.as_str())
-            .filter(|slug| !slug.is_empty())
+        let slug = *slugs
+            .get(order.id.as_str())
             .ok_or("An existing order has no resolved item identity.")?;
         let quantity = u32::try_from(order.quantity)
             .map_err(|_| "An existing order has an invalid quantity.")?;
