@@ -31,8 +31,7 @@ box's locked pair.
 
 `warframestat.us` used to be the one allowed direct call (it sent
 CORS headers; the resolver hit `/items/` for `/Lotus/...` paths) --
-**upstream dropped its CORS headers on 2026-06-09** and broke every
-inventory upload. The resolver catalog is now baked too:
+**upstream dropped its CORS headers** and broke every inventory upload. The resolver catalog is now baked too:
 `wfm-scrape build` writes `public/wfstat-catalog.json` (slim
 `[uniqueName, {name, category}]` pairs, forced `Accept-Language: en` --
 localized names silently fail the WFM name join). All vendor data
@@ -246,8 +245,7 @@ are in the root instruction file. These are frontend-specific:
 - **No native `alert()` / `confirm()` in the SPA** - use the
   `Toast.svelte` corner stack and inline row-confirms. Browser-native
   dialogs read as "the app broke".
-- **Listing-visibility copy says "hidden", never "invisible"** (2026-08-03
-  rename). The WFM field/API name stays `visible`; only user-facing copy
+- **Listing-visibility copy says "hidden", never "invisible"**. The WFM field/API name stays `visible`; only user-facing copy
   uses "hidden".
 - **The unlock dialog always offers "Forgot it? Log in again"** - a
   forgotten passphrase is unrecoverable by design; re-login is the only

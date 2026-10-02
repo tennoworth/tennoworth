@@ -14,9 +14,8 @@ missing it is expensive, and each copy is read where UI work starts.
 
 ## Workspace map
 
-Cargo WORKSPACE with eight members (`target/` shared). The standalone player CLI
-(`wfm-fetch-inventory` with fetch/login/serve) was removed on 2026-08-02 - the
-desktop app is the only adapter.
+Cargo WORKSPACE with eight members (`target/` shared). The desktop app is the
+only adapter; there is no standalone player CLI.
 
 Read the file for the crate you are about to edit:
 
@@ -35,12 +34,10 @@ The crates:
   **No interactive terminal I/O** - the desktop shell hands the passphrase in
   as a parameter over IPC.
 - `market-math/` - pure market-data heuristics. No I/O, no deps, no clocks -
-  keep it that way. (Ported from the retired wfm_demand.py; its tests were
-  1:1 ports of tests/test_wfm_demand.py, which died with Python in 2026-08.)
-  The sell-priority scoring mirrors the SPA's canonical `sell-priority.ts`
+  keep it that way. The sell-priority scoring mirrors the SPA's canonical `sell-priority.ts`
   and is parity-gated against it on a shared fixture.
-- `wfm-scrape/` - host-only pipeline binary; the ONLY market pipeline (Python
-  retired 2026-08). `scrape` runs the full WFM scrape to CSV; `build` renders
+- `wfm-scrape/` - host-only pipeline binary; the ONLY market pipeline.
+  `scrape` runs the full WFM scrape to CSV; `build` renders
   `market.json` + `wfstat-catalog.json`. Fixture regression gates in its
   `tests/` dir shell the freshly-built binary (`env!("CARGO_BIN_EXE_wfm-scrape")`)
   against the frozen fixtures in tests/fixtures/{scrape,convert} - cargo
@@ -125,7 +122,7 @@ hold, and do not let a new background scan path skip it.
 `cargo build` bakes `frontend/dist-desktop` (via `frontendDist`) into the
 binary. Rebuild the frontend (`bun run build:desktop`) FIRST and let cargo
 run after - running the two in parallel can embed a stale SPA, so the app
-looks unchanged after a "rebuild" (2026-08-03 near-miss).
+looks unchanged after a "rebuild".
 
 ### Keyring-less Linux silently degrades remember-on-device
 On a box with no Secret Service daemon (or a locked wallet), the OS-keyring
@@ -183,11 +180,8 @@ without checking every regex still compiles.
   to be declared at the definition, which is how `set_presentation_backend`,
   `proton_log_path` and `tmp_path` acquired the cfg their call sites already
   had. Release compiles differently here (`[profile.release]` sets
-  `panic = "abort"`, `lto = "fat"`, `codegen-units = 1`), so on 2026-09-13 it
-  was also checked in that profile - `cargo check --workspace --all-targets
-  --release` - rather than only by the debug `cargo clippy --workspace
-  --all-targets` in the required set. There is no standing release-profile
-  gate: the verdict can only diverge through a profile-derived cfg gating an
+  `panic = "abort"`, `lto = "fat"`, `codegen-units = 1`), yet there is no
+  standing release-profile gate: the verdict can only diverge through a profile-derived cfg gating an
   item, and the tree has none.
 - **New dependencies get `cargo info <crate>` before `cargo add`**:
   license, `rust-version` vs the toolchain floor, and the feature list.
