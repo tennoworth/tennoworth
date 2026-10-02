@@ -120,4 +120,10 @@ CREATE TABLE trade_allowance (
 ALTER TABLE listing_log ADD COLUMN plan_index INTEGER;
 CREATE UNIQUE INDEX listing_log_plan_item ON listing_log(plan_id, plan_index);
 "#,
+    // listing_log was written by every plan and read by nothing, so it only
+    // grew. The earlier migrations stay as shipped: an older database still
+    // has to step through them to reach this one. Its indexes go with it.
+    r#"
+DROP TABLE IF EXISTS listing_log;
+"#,
 ];

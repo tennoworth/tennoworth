@@ -7,11 +7,7 @@ mod settings;
 pub(crate) mod snapshot;
 mod trades;
 mod watches;
-#[cfg(test)]
-pub(crate) use records::ListingLogEntry;
-pub(crate) use records::{
-    ListingLogRow, NewWatch, Reserve, SnapshotItem, SnapshotSummary, TradeRow, Watch,
-};
+pub(crate) use records::{NewWatch, Reserve, SnapshotItem, SnapshotSummary, TradeRow, Watch};
 use schema::MIGRATIONS;
 
 // Canonical desktop state store (SQLite via rusqlite `bundled`). This is the
@@ -21,7 +17,7 @@ use schema::MIGRATIONS;
 // v1 migration.
 //
 // Two distinct concerns share this file:
-//   - inventory HISTORY (`snapshot` / `snapshot_item`, plus `listing_log`) -
+//   - inventory HISTORY (`snapshot` / `snapshot_item`) -
 //     the profit-tracking substrate, appended from day one.
 //   - app STATE (`setting` kv, `reserve` per-slug) - the desktop backing for
 //     the persistence the browser keeps in localStorage.
@@ -168,7 +164,6 @@ mod tests {
         assert_eq!(
             names,
             vec![
-                "listing_log".to_string(),
                 "notification".to_string(),
                 "notification_checkpoint".to_string(),
                 "reserve".to_string(),
@@ -446,138 +441,43 @@ mod tests {
         assert_eq!(db.snapshot_count().unwrap(), 1);
     }
 
-    fn row(slug: &str, status: &str) -> ListingLogRow {
-        ListingLogRow {
-            slug: slug.into(),
-            price: 42,
-            qty: 2,
-            status: status.into(),
-            action: Some("created".into()),
-            order_id: Some(format!("{slug}-oid")),
-            message: None,
-        }
-    }
-
     #[test]
-    fn listing_log_records_a_plan_and_reads_it_back_newest_first() {
-        let db = Db::open_in_memory().unwrap();
-        assert_eq!(db.list_listing_log(10).unwrap().len(), 0);
-
-        assert_eq!(
-            db.insert_listing_log("plan-a", &[row("mag_prime_set", "ok")])
-                .unwrap(),
-            1
-        );
-        assert_eq!(
-            db.insert_listing_log("plan-b", &[row("rhino_prime_set", "ok")])
-                .unwrap(),
-            1
-        );
-
-        let all = db.list_listing_log(10).unwrap();
-        assert_eq!(all.len(), 2);
-        // Newest first.
-        assert_eq!(all[0].slug, "rhino_prime_set");
-        assert_eq!(all[0].plan_id.as_deref(), Some("plan-b"));
-        assert_eq!(all[1].slug, "mag_prime_set");
-        assert_eq!(all[0].price, 42);
-        assert_eq!(all[0].qty, 2);
-        assert_eq!(all[0].order_id.as_deref(), Some("rhino_prime_set-oid"));
-        // Not yet observed as sold/cancelled.
-        assert!(all[0].outcome.is_none());
-        // The DB stamps the time; nothing is allowed to leave it empty.
-        assert!(!all[0].listed_at.is_empty());
-
-        assert_eq!(db.list_listing_log(1).unwrap().len(), 1);
-    }
-
-    #[test]
-    fn resumed_plan_keeps_stable_history_without_duplicate_successes() {
-        let db = Db::open_in_memory().unwrap();
-        db.insert_listing_log("paused", &[row("first", "ok"), row("second", "pending")])
-            .unwrap();
-        let initial = db.list_listing_log(10).unwrap();
-        assert_eq!(initial.len(), 1);
-        let id = initial[0].id;
-        db.insert_listing_log("paused", &[row("first", "ok"), row("second", "ok")])
-            .unwrap();
-        db.insert_listing_log("paused", &[row("first", "ok"), row("second", "ok")])
-            .unwrap();
-        let resumed = db.list_listing_log(10).unwrap();
-        assert_eq!(resumed.len(), 2);
-        assert_eq!(resumed.iter().find(|r| r.slug == "first").unwrap().id, id);
-    }
-
-    #[test]
-    fn listing_log_preserves_failure_evidence() {
-        // The whole point of the table: an error row must survive the modal
-        // that displayed it, carrying WFM's own message.
-        let db = Db::open_in_memory().unwrap();
-        let failed = ListingLogRow {
-            slug: "loki_prime_set".into(),
-            price: 90,
-            qty: 1,
-            status: "error".into(),
-            action: None,
-            order_id: None,
-            message: Some("app.field.orders.perTradeMustDivideQuantity".into()),
-        };
-        db.insert_listing_log("plan-c", &[failed]).unwrap();
-
-        let got = db.list_listing_log(10).unwrap();
-        assert_eq!(got[0].status, "error");
-        assert_eq!(
-            got[0].message.as_deref(),
-            Some("app.field.orders.perTradeMustDivideQuantity")
-        );
-        assert!(got[0].action.is_none());
-        assert!(got[0].order_id.is_none());
-    }
-
-    #[test]
-    fn empty_plan_writes_nothing() {
-        let db = Db::open_in_memory().unwrap();
-        assert_eq!(db.insert_listing_log("plan-empty", &[]).unwrap(), 0);
-        assert_eq!(db.list_listing_log(10).unwrap().len(), 0);
-    }
-
-    #[test]
-    fn v1_databases_upgrade_without_losing_rows() {
-        // Shipped users are on v1. Build a v1 DB the way they have one - run
-        // ONLY the first migration - put a row in it, then open it normally and
-        // check v2's ALTERs landed on top of the existing data rather than
-        // recreating the table.
+    fn upgrade_drops_listing_log_and_keeps_the_rest() {
+        // The version before the drop, built the way a user's database has it:
+        // every earlier migration applied in turn, with history recorded.
+        let previous = MIGRATIONS.len() - 1;
         let path = temp_db_path();
         {
             let conn = Connection::open(&path).unwrap();
-            conn.execute_batch(MIGRATIONS[0]).unwrap();
-            conn.pragma_update(None, "user_version", 1i64).unwrap();
+            for sql in MIGRATIONS.iter().take(previous) {
+                conn.execute_batch(sql).unwrap();
+            }
+            conn.pragma_update(None, "user_version", previous as i64).unwrap();
             conn.execute(
-                "INSERT INTO listing_log (slug, listed_at, price, qty)
-                 VALUES ('legacy_item', '2026-01-01T00:00:00Z', 7, 1)",
+                "INSERT INTO listing_log (plan_id, plan_index, slug, listed_at, price, qty, status)
+                 VALUES ('plan-a', 0, 'mag_prime_set', '2026-09-01T00:00:00Z', 40, 1, 'ok')",
                 [],
             )
             .unwrap();
+            conn.execute("INSERT INTO setting(key,value) VALUES ('view','sell')", [])
+                .unwrap();
         }
 
         let db = Db::open(&path).unwrap();
         assert_eq!(db.user_version().unwrap(), MIGRATIONS.len() as i64);
-
-        let rows = db.list_listing_log(10).unwrap();
-        assert_eq!(rows.len(), 1, "the pre-existing v1 row must survive");
-        assert_eq!(rows[0].slug, "legacy_item");
-        assert_eq!(rows[0].price, 7);
-        // Columns v1 never had: NULL for the legacy row, except `status`, whose
-        // DEFAULT backfills it.
-        assert_eq!(rows[0].status, "ok");
-        assert!(rows[0].plan_id.is_none());
-        assert!(rows[0].order_id.is_none());
-
-        // And the upgraded table still accepts new writes.
-        db.insert_listing_log("plan-after", &[row("new_item", "ok")])
+        assert_eq!(db.get_setting("view").unwrap().as_deref(), Some("sell"));
+        let leftovers: i64 = db
+            .conn
+            .lock()
+            .unwrap()
+            .query_row(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'listing_log%'",
+                [],
+                |r| r.get(0),
+            )
             .unwrap();
-        assert_eq!(db.list_listing_log(10).unwrap().len(), 2);
-
+        assert_eq!(leftovers, 0, "the table and its indexes are gone");
+        drop(db);
         let _ = std::fs::remove_file(&path);
     }
 

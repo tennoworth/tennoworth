@@ -69,36 +69,3 @@ pub struct SnapshotSummary {
     pub source: String,
     pub item_count: i64,
 }
-
-/// What to record for one item of a plan run. Built by the listing command
-/// layer from the plan's own items joined to their results - wfm-core stays
-/// storage-free, so the DB write happens here rather than inside the executor.
-pub struct ListingLogRow {
-    pub slug: String,
-    pub price: i64,
-    pub qty: i64,
-    /// "ok" | "skipped" | "error", verbatim from the plan result.
-    pub status: String,
-    /// "created" | "updated" on success, None otherwise.
-    pub action: Option<String>,
-    pub order_id: Option<String>,
-    /// WFM's own error text on failure - the evidence that used to be lost.
-    pub message: Option<String>,
-}
-
-/// A stored `listing_log` row, as the tests read it back.
-#[cfg(test)]
-pub struct ListingLogEntry {
-    pub id: i64,
-    pub plan_id: Option<String>,
-    pub slug: String,
-    pub listed_at: String,
-    pub price: i64,
-    pub qty: i64,
-    pub status: String,
-    pub action: Option<String>,
-    pub order_id: Option<String>,
-    pub message: Option<String>,
-    /// NULL until a later orders-diff observes the listing sold or cancelled.
-    pub outcome: Option<String>,
-}
