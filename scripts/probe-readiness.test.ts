@@ -121,7 +121,7 @@ test.skipIf(process.platform === 'win32')('packaged probe runs the supplied AppI
     },
     usageExcluded: true,
     domainRejectedInvalid: true,
-    domainOperations: ['normalize_inventory', 'score_inventory', 'trade_session', 'advisor', 'history', 'relic_plan', 'set_recos', 'ducat_plan', 'build_plan'],
+    domainOperations: ['normalize_inventory', 'score_inventory', 'trade_session', 'advisor', 'history', 'relic_plan', 'set_recos', 'ducat_plan', 'build_plan', 'baro_value'],
     done: true,
     consoleErrors: [],
     cspViolations: [],

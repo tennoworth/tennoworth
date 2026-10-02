@@ -1,7 +1,7 @@
 import type { DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences } from './desktop';
 import type { UpdateNotesServices, UpdateStatus } from './update';
 import type { EncryptedBlob } from './encrypted-snapshot';
-import type { Inventory, Market, OwnedRecord } from './data';
+import type { BaroStock, Inventory, Market, OwnedRecord } from './data';
 import type { Catalogs } from '../domain/resolver';
 import type { SessionCandidate, SessionPlan } from '../domain/trade-session';
 import type { BuildPath, BuildPlan, DucatPlan, RecipeEntry, RelicPlanEntry, ScrapCandidate, SetPart, SetReco, Verdict } from './generated/domain';
@@ -15,6 +15,7 @@ export interface DesktopServices extends UpdateNotesServices {
   evaluateTradeSession(request: Omit<SessionRequest, 'candidates'> & { candidates: SessionCandidate[] }): Promise<SessionPlan>;
   relicPlan(owned: Map<string, OwnedRecord> | null, market: Market | null, limit?: number): Promise<RelicPlanEntry[]>;
   setRecos(owned: Map<string, OwnedRecord> | null, market: Market | null, limit?: number): Promise<SetReco[]>;
+  baroValue(stock: BaroStock[], market: Market | null, owned: Map<string, OwnedRecord> | null): Promise<import('./generated/domain').BaroValue>;
   ducatPlan(owned: Map<string, OwnedRecord> | null, market: Market | null, target: number, keepAbove?: number, availability?: ReadonlyMap<string, number>): Promise<{ candidates: ScrapCandidate[]; plan: DucatPlan }>;
   buildPlan(setSlug: string, setName: string, parts: SetPart[], market: Market | null, owned: Map<string, OwnedRecord> | null, recipes: Record<string, RecipeEntry> | null | undefined): Promise<{ plan: BuildPlan; cheapest: BuildPath | null }>;
   desktopProtectionState(inventory: import('./protection').ProtectionInventory): Promise<import('./protection').ProtectionState>;

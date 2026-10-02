@@ -1,123 +1,5 @@
-// Pricing Baro's manifest.
-//
-// worldState publishes his stock from the moment the visit is announced -
-// days before he lands - with a ducat AND a credit price per line. That turns
-// the Baro view from "here is a list" into "here is what your ducats are worth
-// this rotation", which is the only question a trader has.
-//
-// Pure functions on purpose: the ranking is the opinionated part of the
-// feature, so it is testable without a DOM.
+import type { BaroRow } from '../contracts/generated/domain';
 
-import type { BaroStock, Market, MarketItemEntry } from '../contracts/data';
-import { LIQUID_VOL } from './sell-priority';
-
-/** What the board says to do about one line of stock. */
-export type BaroVerdict =
-  | 'flip' //      priced above its own baseline and traded enough to sell into
-  | 'hold' //      worth buying, but his arrival depresses it - wait for recovery
-  | 'thin' //      a "price" set by one or two optimistic listings
-  | 'skip' //      the plat does not justify the ducats
-  | 'unpriced'; //  cosmetic or bundle - no market listing exists at all
-
-export interface BaroRow {
-  item: string;
-  slug?: string;
-  /** DE's `/Lotus/...` path. The stable row identity - two lines can share a
-   *  display name, and it is also how the row finds its category glyph. */
-  unique?: string;
-  ducats?: number;
-  credits?: number;
-  /** Current market price - the depth-aware ask where we have one. */
-  price: number | null;
-  /** 90-day baseline, for "is today's price actually good". */
-  baseline: number | null;
-  /** 48h trade volume. */
-  vol: number | null;
-  /** Plat returned per ducat spent. The board's default sort. */
-  platPerDucat: number | null;
-  verdict: BaroVerdict;
-}
-
-/** Plat-per-ducat below which a line is not worth the ducats, given ducats
- *  themselves cost time to farm. Deliberately conservative: the board should
- *  under-promise, and a user who wants the item anyway can still see the row. */
-export const SKIP_PLAT_PER_DUCAT = 0.16;
-
-/** How far above its 90-day baseline a price has to sit before "sell into it"
- *  is honest rather than noise. */
-const FLIP_PREMIUM = 1.05;
-
-/** Depth-aware current price where the snapshot has one, else the lowest ask.
- *  `low5_avg` averages the ~5 cheapest live asks, so a single troll listing
- *  cannot define the price. */
-export function currentPrice(entry: MarketItemEntry | undefined): number | null {
-  if (!entry) return null;
-  const depth = entry.low5_avg ?? 0;
-  if (depth > 0) return depth;
-  return entry.low_sell > 0 ? entry.low_sell : null;
-}
-
-function baselineOf(entry: MarketItemEntry | undefined): number | null {
-  if (!entry) return null;
-  const m = entry.median_90d ?? 0;
-  return m > 0 ? m : null;
-}
-
-/**
- * Decide what to do with one line.
- *
- * The ordering matters: unpriceable beats everything (a cosmetic must never be
- * ranked as if it were free plat), thin beats value judgements (we will not
- * call a flip off two trades), and only then does the plat-per-ducat test run.
- */
-export function verdictFor(row: Omit<BaroRow, 'verdict'>): BaroVerdict {
-  if (!row.slug || row.price == null) return 'unpriced';
-  if (row.vol != null && row.vol < LIQUID_VOL) return 'thin';
-  if (row.platPerDucat != null && row.platPerDucat < SKIP_PLAT_PER_DUCAT) return 'skip';
-  if (row.baseline != null && row.price >= row.baseline * FLIP_PREMIUM) return 'flip';
-  // Priced at or below baseline while he is selling it: his arrival is the
-  // reason. The profit is in holding for the recovery, not in reselling today.
-  return 'hold';
-}
-
-/**
- * Price Baro's manifest against the snapshot.
- *
- * Rows keep their manifest order until sorted, and every unpriceable row is
- * kept - dropping a cosmetic would read as "he isn't selling it".
- */
-export function priceManifest(stock: BaroStock[], market: Market | null): BaroRow[] {
-  return stock.map((s) => {
-    const entry = s.slug ? market?.items?.[s.slug] : undefined;
-    const price = currentPrice(entry);
-    const baseline = baselineOf(entry);
-    const vol = entry ? entry.vol : null;
-    const platPerDucat = price != null && s.ducats ? price / s.ducats : null;
-    const partial = {
-      item: s.item,
-      slug: s.slug,
-      unique: s.unique,
-      ducats: s.ducats,
-      credits: s.credits,
-      price,
-      baseline,
-      vol,
-      platPerDucat,
-    };
-    return { ...partial, verdict: verdictFor(partial) };
-  });
-}
-
-/** Sort by plat-per-ducat, best first. Unpriceable rows sink to the bottom
- *  rather than sorting as zero, so they never displace a real offer. */
-export function byPlatPerDucat(rows: BaroRow[]): BaroRow[] {
-  return [...rows].sort((a, b) => {
-    const av = a.platPerDucat ?? -1;
-    const bv = b.platPerDucat ?? -1;
-    if (av !== bv) return bv - av;
-    return a.item.localeCompare(b.item);
-  });
-}
 export interface DucatBasket {
   /** Ducats the worthwhile items cost, all together. */
   needed: number;
@@ -141,6 +23,8 @@ export interface DucatBasket {
  * scrapping those very same parts to cover the remainder: the same ducats
  * counted twice, and a plan wrong in the user's favour.
  *
+ * Rows arrive in rank order from the native Baro calculation.
+ *
  * So this takes the potential explicitly and reports COVERAGE, never
  * affordability.
  *
@@ -149,7 +33,7 @@ export interface DucatBasket {
  * inflate it.
  */
 export function ducatBasket(rows: BaroRow[], scrapPotential: number): DucatBasket {
-  const basket = byPlatPerDucat(rows).filter(
+  const basket = rows.filter(
     (r) => (r.verdict === 'flip' || r.verdict === 'hold') && (r.ducats ?? 0) > 0,
   );
   const needed = basket.reduce((sum, r) => sum + (r.ducats ?? 0), 0);

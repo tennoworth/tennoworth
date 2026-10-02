@@ -262,7 +262,7 @@ setup/check commands.
 ## Native decision boundary
 
 Desktop inventory normalization, sell-row facts, Trade Session selection,
-calendar advice and relic/set/ducat/build plans run through `evaluate_domain`.
+calendar advice, Baro stock value and relic/set/ducat/build plans run through `evaluate_domain`.
 The registry in `rust/market-domain/src/dispatch.rs` defines a tagged request and
 matching response together. The command computes on a blocking worker and never
 executes orders; existing listing validation, account state and recovery remain
@@ -297,7 +297,7 @@ request/response registry. Generation preserves serialized optionality and field
 names; it does not replace input validation. IPC uses JSON numbers, so large
 integer inputs are bounded rather than represented as JavaScript bigint.
 
-The real desktop smoke probe exercises all nine domain operations against shared
+The real desktop smoke probe exercises all domain operations against shared
 fixtures before completing its existing persistence/authentication checks. A
 successful browser preview proves rendering and interaction behavior; it does
 not establish that native IPC registration or serialization works.

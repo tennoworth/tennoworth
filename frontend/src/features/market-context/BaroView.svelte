@@ -12,7 +12,7 @@ import TraderCalendar from './TraderCalendar.svelte';
     keepSection: Snippet;
     guidanceUnavailable: boolean;
     voidTrader: (NonNullable<Market['baro']>) | null;
-    ducatStats: {count: number; total: number};
+    ducatStats: {count: number; total: number} | null;
     baroState: ReturnType<typeof baroPhase> | null;
     guidanceOwned: Map<string, OwnedRecord>;
     guidanceAvailability: Map<string, number>;
@@ -44,6 +44,7 @@ import TraderCalendar from './TraderCalendar.svelte';
             <span data-shell class="baro-icon" aria-hidden="true">⌬</span>
             <div data-shell class="baro-body">
               <p data-shell class="baro-detail">
+                {#if ducatStats}
                 You hold <strong data-shell>{ducatStats.total.toLocaleString()}<span data-shell class="unit">d</span></strong>
                 across <strong data-shell>{ducatStats.count.toLocaleString()}</strong>
                 ducat-earning {ducatStats.count === 1 ? 'item' : 'items'}.
@@ -52,6 +53,9 @@ import TraderCalendar from './TraderCalendar.svelte';
                   preset to see what's worth dumping.
                 {:else}
                   Earmark these for Baro using the <strong data-shell>Ducats</strong> preset.
+                {/if}
+                {:else}
+                  Ducat yield is unavailable while inventory valuation is pending or failed. Reopen Baro to retry.
                 {/if}
               </p>
             </div>

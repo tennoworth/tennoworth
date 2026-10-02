@@ -18,7 +18,7 @@ import { baroPhase } from '../../domain/baro-board';
 import { baroLocation } from '../../ui/format';
 import { lookup } from '../../domain/market';
 
-export function createSellWorkspace({ inventory, filters, protection, listing, transport, services, getView, getNow }: { inventory: InventoryController; filters: FilterController; protection: ProtectionController; listing: ListingController; transport: DesktopCapabilities; services: Pick<DesktopServices, 'scoreInventoryNative' | 'evaluateAdvisor' | 'setRecos' | 'relicPlan'>; getView: () => View; getNow: () => number }) {
+export function createSellWorkspace({ inventory, filters, protection, listing, transport, services, getView, getNow }: { inventory: InventoryController; filters: FilterController; protection: ProtectionController; listing: ListingController; transport: DesktopCapabilities; services: Pick<DesktopServices, 'scoreInventoryNative' | 'evaluateAdvisor' | 'setRecos' | 'relicPlan' | 'baroValue'>; getView: () => View; getNow: () => number }) {
   const { scoreInventoryNative, evaluateAdvisor, setRecos: loadSetRecos, relicPlan: loadRelicPlan } = services;
   let supportedOwned = $derived(new Map([...inventory.resolved.owned].filter(([, row]) => !row.subtype && !row.slug.endsWith('_set') && !row.slug.endsWith('_relic') && inventory.market?.items[row.slug])));
   let allocationMatches = $derived(protection.matchesInventory(inventory.resolved.owned, inventory.nativeSnapshotId));
@@ -294,28 +294,15 @@ export function createSellWorkspace({ inventory, filters, protection, listing, t
     return { ...b, location: baroLocation(b.location) };
   });
 
-  // Total ducats across the user's currently-sellable inventory.
-  // Only count rows that resolved to a market entry with ducats > 0;
-  // skip relic refinements (subtype set) since those aren't a ducat
-  // trade. Cap presented as `count_owned × ducats`.
-  let ducatStats = $derived.by(() => {
-    if (!inventory.resolved.owned.size || !inventory.market) return { count: 0, total: 0 };
-    let count = 0, total = 0;
-    for (const rec of inventory.resolved.owned.values()) {
-      if (rec.subtype) continue;
-      const m = inventory.market.items?.[rec.slug];
-      const d = m?.ducats;
-      if (typeof d === 'number' && d > 0) {
-        count += rec.count;
-        total += rec.count * d;
-      }
-    }
-    return { count, total };
+  const ducatResult = new DomainResult<import('../../contracts/generated/domain').BaroValue | null>(() => null);
+  $effect(() => {
+    if (getView() !== 'baro') { ducatResult.clear(); return; }
+    const owned = inventory.resolved.owned;
+    const market = inventory.market;
+    return ducatResult.start(() => services.baroValue([], market, owned));
   });
+  let ducatStats = $derived(ducatResult.value ? { count: ducatResult.value.fodderItems ?? 0, total: ducatResult.value.fodderDucats ?? 0 } : null);
 
-  // Render the Baro card when (a) we got a voidTrader response and
-  // (b) the user has a meaningful pile of ducat-earning inventory.
-  // 500 ducats ≈ 5 prime junk parts; below that the card is noise.
   let showBaroCard = $derived(voidTrader != null);
 
   let baroState = $derived(voidTrader ? baroPhase(voidTrader.activation, voidTrader.expiry, getNow()) : null);
