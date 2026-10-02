@@ -12,6 +12,7 @@
 //! can't be resolved (unknown itemId, stale cache, no watches) does nothing,
 //! because the poll pass will catch it within 10 minutes anyway.
 
+use crate::services::unix_now;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -53,13 +54,6 @@ impl WatchCache {
             *self = WatchCache::fresh(db);
         }
     }
-}
-
-fn unix_now() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
 }
 
 /// The pure decision: which watch (if any) does this streamed order fire?

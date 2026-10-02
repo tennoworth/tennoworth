@@ -13,6 +13,7 @@
 //! username when logged in), so a 'sell' watch can't be satisfied by your own
 //! listing.
 
+use crate::services::unix_now;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -95,13 +96,6 @@ pub fn evaluate(w: &Watch, top: Option<&LiveTop>, now: i64) -> WatchOutcome {
         satisfied,
         fire: satisfied && armed,
     }
-}
-
-fn unix_now() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
 }
 
 /// Human line for the notification / event.

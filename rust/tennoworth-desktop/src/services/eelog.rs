@@ -39,7 +39,7 @@ fn file_position(file: &mut std::fs::File) -> Option<LogPosition> {
         session: wfm_core::identity::local_fingerprint("tennoworth-eelog-v1", &prefix),
         start: meta.len(),
         end: meta.len(),
-        observed_after: crate::services::allowance::unix_now(),
+        observed_after: crate::services::unix_now(),
     })
 }
 
@@ -384,7 +384,7 @@ pub fn tail_forever_with_lines(
             std::thread::sleep(poll);
             Some((
                 start.elapsed().as_millis() as u64,
-                crate::services::allowance::unix_now(),
+                crate::services::unix_now(),
             ))
         },
         on_line,
@@ -417,7 +417,7 @@ fn tail_with_ticks(
     let mut remainder = Vec::new();
     let mut line_offset = offset;
     let mut dialog_start = offset;
-    let mut observed_after = crate::services::allowance::unix_now();
+    let mut observed_after = crate::services::unix_now();
     let mut dialog_observed_after = observed_after;
     // Trades the ledger has not yet accepted, oldest first. A refused trade is
     // held here and re-offered each poll, and every later trade queues behind
@@ -868,7 +868,7 @@ mod tests {
         let mut attempts: Vec<(usize, String, LogPosition)> = Vec::new();
         let mut lines: Vec<String> = Vec::new();
         let mut gaps: Vec<GapKind> = Vec::new();
-        let now = crate::services::allowance::unix_now();
+        let now = crate::services::unix_now();
 
         tail_with_ticks(
             &path,
@@ -972,7 +972,7 @@ mod tests {
         let tick = Cell::new(0usize);
         let mut offered: Vec<String> = Vec::new();
         let mut lines: Vec<String> = Vec::new();
-        let now = crate::services::allowance::unix_now();
+        let now = crate::services::unix_now();
 
         tail_with_ticks(
             &path,
@@ -1037,7 +1037,7 @@ mod tests {
         let tick = Cell::new(0usize);
         let mut gaps: Vec<GapKind> = Vec::new();
         let readable = Cell::new(0usize);
-        let now = crate::services::allowance::unix_now();
+        let now = crate::services::unix_now();
 
         tail_with_ticks(
             &path,
@@ -1080,7 +1080,7 @@ mod tests {
         let tick = Cell::new(0usize);
         let mut gaps = 0usize;
         let readable = Cell::new(0usize);
-        let now = crate::services::allowance::unix_now();
+        let now = crate::services::unix_now();
 
         tail_with_ticks(
             &path,

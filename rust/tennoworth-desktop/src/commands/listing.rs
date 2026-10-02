@@ -46,7 +46,7 @@ fn validate_session_plan(app: &AppHandle, items: &[PlanItem]) -> Result<(), Plan
     let allowance = db.session_allowance(
         context.snapshot_id,
         context.utc_day,
-        crate::services::allowance::unix_now(),
+        crate::services::unix_now(),
     )?;
     let market = crate::services::sellables::MarketData::load(
         &app.state::<crate::services::market::MarketCache>(),
