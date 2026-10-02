@@ -24,7 +24,7 @@
 // `[label]: path`, with an optional title, outside fenced code blocks.
 //
 // Usage: bun scripts/check-agent-instructions.ts   (from the repository root)
-import { posix, resolve } from "node:path";
+import { dirname, posix, resolve } from "node:path";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 
 const ROOT = resolve(import.meta.dir, "..");
@@ -49,17 +49,19 @@ function checkLocal() {
   }
   const errors: string[] = [];
   let count = 0;
-  const checkLinks = (file: string, text: string) => {
+  // Takes the file's directory with the platform's path rules: skill files live
+  // outside the repository and arrive as absolute, possibly backslashed, paths.
+  const checkLinks = (file: string, dir: string, text: string) => {
     for (const target of linksIn(text)) {
       if (/^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith("#")) continue;
-      const path = resolve(ROOT, posix.dirname(file), target.split("#")[0]);
+      const path = resolve(dir, target.split("#")[0]);
       if (!existsSync(path)) errors.push(`${file}: missing reference ${target}`);
     }
   };
   if (!existsSync(resolve(ROOT, ROOT_FILE))) {
     errors.push("AGENTS.md is missing");
   } else {
-    checkLinks(ROOT_FILE, readFileSync(resolve(ROOT, ROOT_FILE), "utf8"));
+    checkLinks(ROOT_FILE, ROOT, readFileSync(resolve(ROOT, ROOT_FILE), "utf8"));
   }
   // The maintainer home sits beside the main checkout's .git, so every worktree
   // resolves the same one; a fresh clone simply has none.
@@ -88,7 +90,7 @@ function checkLocal() {
       } catch {
         errors.push(`${file}: malformed YAML frontmatter`);
       }
-      checkLinks(file, text);
+      checkLinks(file, dirname(file), text);
     }
   }
   const adapter = resolve(ROOT, "opencode.json");
