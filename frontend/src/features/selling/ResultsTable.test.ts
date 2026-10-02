@@ -1,4 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { cleanup, render } from '@testing-library/svelte';
+import ResultsTable from './ResultsTable.svelte';
+import type { SellRow } from '../../contracts/selling';
+
+afterEach(cleanup);
 
 import SOURCE from './ResultsTable.svelte?raw';
 import { PRESETS } from '../../domain/presets';
@@ -18,9 +23,8 @@ import { PRESETS } from '../../domain/presets';
  * six-column preset carried the sixteen-column view's floor and scrolled
  * sideways for columns it never renders.
  *
- * Read as source rather than rendered: these are CSS and literal-table facts
- * the component never exposes at runtime. `?raw` is how theme.test.ts already
- * asserts against a file it cannot import for its values.
+ * Width declarations are checked in source; the floor checks mount the real
+ * component so a broken production calculation fails the gate.
  */
 const ITEM_FLOOR_REM = 20;
 
@@ -36,11 +40,27 @@ function columnWidths(): { key: string; width: number }[] {
   }));
 }
 
-/** The floor the component derives for a given set of visible column keys -
- *  the same arithmetic `floorRem` performs, against the same widths. */
-function floorFor(keys: string[]): number {
-  const byKey = new Map(columnWidths().map((c) => [c.key, c.width]));
-  return keys.reduce((sum, k) => sum + (byKey.get(k) ?? 0), 0) + ITEM_FLOOR_REM;
+const ROW: SellRow = {
+  slug: 'part', subtype: null, name: 'Part', owned: 2, sellable: 2, leveled: 0,
+  type: 'Weapon', kept_lvl: null, ducats: 15, plat_per_100d: 10,
+  avg_price: 10, low_sell: 10, low5_avg: 10, top_buy: 8, volume_48h: 20,
+  ratio: 1, potential_plat: 20, raw_value: 20, sell_score: 20,
+  advice: 'hold', patience: false, timing: 'neutral', medians_7d: [],
+  median_90d: null, delta_90d_pct: null, tags: [], is_augment: false, vault_status: null,
+};
+
+function renderedFloor(columns: string[], withFacts = true): number {
+  const { container, unmount } = render(ResultsTable, {
+    results: [{ ...ROW, advice: withFacts ? 'hold' : null }],
+    deltas: withFacts ? new Map([['part', 1]]) : new Map(),
+    visibleColumns: columns,
+  });
+  const table = container.querySelector('table');
+  expect(table).not.toBeNull();
+  const floor = table!.style.minWidth;
+  expect(floor).toMatch(/^\d+(?:\.\d+)?rem$/);
+  unmount();
+  return Number.parseFloat(floor);
 }
 
 describe('column width budget', () => {
@@ -73,7 +93,7 @@ describe('the table floor', () => {
 
   it('leaves Item its floor on the full sixteen-column view', () => {
     const all = columnWidths().map((c) => c.key);
-    expect(floorFor(all)).toBeCloseTo(
+    expect(renderedFloor(all)).toBeCloseTo(
       columnWidths().reduce((a, c) => a + c.width, 0) + ITEM_FLOOR_REM,
       2,
     );
@@ -81,14 +101,20 @@ describe('the table floor', () => {
 
   it('shrinks for a preset instead of charging it for columns it never shows', () => {
     // The six-column Ducats preset must not carry the everything-view's floor.
-    const all = floorFor(columnWidths().map((c) => c.key));
+    const all = renderedFloor(columnWidths().map((c) => c.key));
     for (const [name, preset] of Object.entries(PRESETS)) {
       if (!preset.columns) continue;
-      const floor = floorFor(preset.columns);
+      const floor = renderedFloor(preset.columns);
       expect(floor, `${name} should not pay the full-view floor`).toBeLessThan(all);
       // And it still has to cover what it does render.
-      expect(floor).toBeCloseTo(floorFor(preset.columns), 5);
+      const widths = columnWidths().filter(column => preset.columns!.includes(column.key));
+      expect(floor).toBeCloseTo(widths.reduce((sum, column) => sum + column.width, ITEM_FLOOR_REM), 5);
     }
+  });
+
+  it('charges only rendered facts when delta and advice are unavailable', () => {
+    expect(renderedFloor(['name', 'owned', 'delta', 'advice'], false)).toBe(26);
+    expect(renderedFloor(['name', 'owned', 'delta', 'advice'])).toBe(33.75);
   });
 
   it('never charges a preset for the Played column, which no preset shows', () => {
