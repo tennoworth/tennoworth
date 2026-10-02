@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, screen, waitFor, within } from '@testing-library/svelte';
 import { renderDesktop as render } from '../../dev/render-desktop';
+import passphraseCases from '../../../../tests/fixtures/passphrase-floor/cases.json';
 import ExportImportDialogs from './ExportImportDialogs.svelte';
-import { decryptPayload } from '../../adapters/encrypted-snapshot';
+import { encryptPayload, decryptPayload } from '../../adapters/encrypted-snapshot';
 
 vi.mock('../../adapters/encrypted-snapshot', () => ({
   encryptPayload: vi.fn(),
@@ -149,4 +150,15 @@ describe('encrypted inventory restore confirmation', () => {
     expect(screen.getByRole('button', { name: 'Review restore' })).toBeTruthy();
     expect(onimport).not.toHaveBeenCalled();
   });
+});
+
+it.each(passphraseCases.filter(test => !test.accepted))('blocks export before encryption: $name', async ({ passphrase }) => {
+  vi.mocked(encryptPayload).mockClear();
+  const { component, container } = mount();
+  component.openExport();
+  const inputs = container.querySelectorAll('input[autocomplete="new-password"]');
+  for (const input of inputs) await fireEvent.input(input, { target: { value: passphrase } });
+  await fireEvent.submit(container.querySelector('form')!);
+  expect(screen.getByRole('alert').textContent).toContain('at least 12 characters');
+  expect(encryptPayload).not.toHaveBeenCalled();
 });

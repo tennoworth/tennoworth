@@ -1,3 +1,4 @@
+import { hasMinimumPassphraseLength } from '../contracts/encrypted-snapshot';
 import type { EncryptedBlob } from '../contracts/encrypted-snapshot';
 // Passphrase-derived AES-GCM, via WebCrypto. Used for the "export / re-import
 // on another device" flow that replaces the auth feature we deliberately
@@ -55,9 +56,8 @@ async function deriveKey(passphrase: string, salt: Uint8Array): Promise<CryptoKe
 }
 
 export async function encryptPayload(payload: unknown, passphrase: string): Promise<EncryptedBlob> {
-  // Third independent gate behind the dialog's minlength + JS validation. The
-  // backstop must match the UI floor (12), not drift back to the old 4.
-  if (!passphrase || passphrase.length < 12) {
+  // Callers can bypass the dialog, so encryption enforces its scalar-value floor.
+  if (!passphrase || !hasMinimumPassphraseLength(passphrase)) {
     throw new Error('Passphrase must be at least 12 characters.');
   }
   const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));

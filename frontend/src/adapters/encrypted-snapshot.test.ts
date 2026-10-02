@@ -11,6 +11,7 @@ beforeAll(() => {
 });
 
 import { encryptPayload, decryptPayload, isEncrypted } from './encrypted-snapshot';
+import passphraseCases from '../../../tests/fixtures/passphrase-floor/cases.json';
 import kdfFixture from '../../../tests/fixtures/jwt-kdf.json';
 
 const SAMPLE = {
@@ -50,6 +51,11 @@ describe('encryptPayload / decryptPayload (round-trip)', () => {
 }, 60_000);
 
 describe('encryptPayload - guardrails', () => {
+  it.each(passphraseCases)('matches the native scalar-value floor: $name', async ({ passphrase, accepted }) => {
+    if (accepted) expect(isEncrypted(await encryptPayload(SAMPLE, passphrase))).toBe(true);
+    else await expect(encryptPayload(SAMPLE, passphrase)).rejects.toThrow(/at least 12 characters/i);
+  });
+
   it('rejects too-short passphrases', async () => {
     await expect(encryptPayload(SAMPLE, '')).rejects.toThrow(/passphrase/i);
     await expect(encryptPayload(SAMPLE, 'ab')).rejects.toThrow(/passphrase/i);

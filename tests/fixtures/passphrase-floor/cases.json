@@ -1,0 +1,47 @@
+[
+  {
+    "name": "empty",
+    "passphrase": "",
+    "accepted": false
+  },
+  {
+    "name": "ascii eleven",
+    "passphrase": "aaaaaaaaaaa",
+    "accepted": false
+  },
+  {
+    "name": "ascii twelve",
+    "passphrase": "aaaaaaaaaaaa",
+    "accepted": true
+  },
+  {
+    "name": "CJK four",
+    "passphrase": "密码密码",
+    "accepted": false
+  },
+  {
+    "name": "astral six",
+    "passphrase": "🔑🔑🔑🔑🔑🔑",
+    "accepted": false
+  },
+  {
+    "name": "astral eleven",
+    "passphrase": "🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑",
+    "accepted": false
+  },
+  {
+    "name": "astral twelve",
+    "passphrase": "🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑🔑",
+    "accepted": true
+  },
+  {
+    "name": "mixed twelve",
+    "passphrase": "aaaaaaaaaaa🔑",
+    "accepted": true
+  },
+  {
+    "name": "combining scalars",
+    "passphrase": "éééééé",
+    "accepted": true
+  }
+]
