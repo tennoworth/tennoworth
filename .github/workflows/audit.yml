@@ -148,6 +148,8 @@ jobs:
               - '.github/workflows/**'
               - '.github/actions/**'
             instructions:
+              - 'README.md'
+              - 'scripts/ci-filters.test.ts'
               - '**/AGENTS.md'
               - 'AGENTS.local.md.example'
               - 'scripts/check-agent-instructions.ts'
@@ -507,6 +509,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
       # No install step: the checks read the git index and the filesystem only.
+      - name: Documentation path filter regression
+        run: bun test scripts/ci-filters.test.ts
       - name: instruction files
         run: bun scripts/check-agent-instructions.ts
       - name: public surface

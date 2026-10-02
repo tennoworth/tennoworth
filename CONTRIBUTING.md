@@ -248,7 +248,7 @@ For maintenance/deployment changes, from the root:
 
 ```sh
 bun scripts/sync-csp.ts --check
-bun test scripts/release.test.ts scripts/deploy-layout.test.ts scripts/probe-readiness.test.ts
+bun test scripts/release.test.ts scripts/deploy-layout.test.ts scripts/probe-readiness.test.ts scripts/ci-filters.test.ts
 bun scripts/check-public-surface.ts
 ```
 
