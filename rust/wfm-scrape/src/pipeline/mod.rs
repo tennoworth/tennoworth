@@ -1,11 +1,16 @@
 //! Snapshot construction coordinates independently observed upstream data.
 
+mod catalog;
+mod inputs;
 mod paths;
 mod publish;
+mod rivens;
+mod usage;
+mod world;
 pub use paths::find_root;
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use chrono::Utc;
 
@@ -15,164 +20,17 @@ use crate::clock;
 /// is stale" warning.
 const STALE_DAYS: i64 = 7;
 use crate::csvin;
-use crate::ingest::{self, FixtureHttp, Http, LiveHttp};
+use crate::ingest;
 use crate::reconcile::{reconcile, reconcile_keyed, KeyStamps, Observation};
-use crate::render::{self, assemble_snapshot, CatalogItemMeta};
+use crate::render::{self, assemble_snapshot};
 use crate::{de, de_extract};
-
-fn valid_compact_usage(rows: &HashMap<String, serde_json::Value>) -> bool {
-    !rows.is_empty()
-        && rows.values().all(|row| {
-            row.get("name")
-                .and_then(|v| v.as_str())
-                .is_some_and(|v| !v.is_empty())
-                && row
-                    .get("category")
-                    .and_then(|v| v.as_str())
-                    .is_some_and(|v| !v.is_empty())
-                && row
-                    .get("share")
-                    .and_then(|v| v.as_f64())
-                    .is_some_and(|v| v.is_finite() && v >= 0.0)
-                && row.get("by_mr").is_none()
-        })
-}
-
-fn compact_prior_usage(
-    rows: &HashMap<String, serde_json::Value>,
-) -> Option<(u16, HashMap<String, serde_json::Value>)> {
-    let year = rows.values().next()?.get("year")?.as_u64()? as u16;
-    if !de::DE_USAGE_YEARS.contains(&year) {
-        return None;
-    }
-    let mut compact = HashMap::new();
-    for (slug, row) in rows {
-        if row.get("year").and_then(|v| v.as_u64()) != Some(year as u64) {
-            return None;
-        }
-        let name = row.get("name").and_then(|v| v.as_str())?;
-        let category = row.get("category").and_then(|v| v.as_str())?;
-        let share = row.get("share").and_then(|v| v.as_f64())?;
-        if name.is_empty() || category.is_empty() || !share.is_finite() || share < 0.0 {
-            return None;
-        }
-        compact.insert(
-            slug.clone(),
-            serde_json::json!({
-                "name": name,
-                "category": category,
-                "share": share,
-            }),
-        );
-    }
-    valid_compact_usage(&compact).then_some((year, compact))
-}
-
-fn rich_prior_usage_year(rows: &HashMap<String, serde_json::Value>) -> Option<u16> {
-    let mut common_year = None;
-    if rows.is_empty() {
-        return None;
-    }
-    for row in rows.values() {
-        let name = row.get("name").and_then(|value| value.as_str())?;
-        let category = row.get("category").and_then(|value| value.as_str())?;
-        let year = u16::try_from(row.get("year").and_then(|value| value.as_u64())?).ok()?;
-        let share = row.get("share").and_then(|value| value.as_f64())?;
-        let peak_mr = row.get("peak_mr").and_then(|value| value.as_f64())?;
-        let by_mr = row.get("by_mr").and_then(|value| value.as_array())?;
-        if name.is_empty()
-            || category.is_empty()
-            || !de::DE_USAGE_YEARS.contains(&year)
-            || !share.is_finite()
-            || share < 0.0
-            || !peak_mr.is_finite()
-            || peak_mr < 0.0
-            || by_mr.is_empty()
-            || !by_mr.iter().all(|value| {
-                value
-                    .as_f64()
-                    .is_some_and(|value| value.is_finite() && value >= 0.0)
-            })
-        {
-            return None;
-        }
-        if common_year.replace(year).is_some_and(|prior| prior != year) {
-            return None;
-        }
-    }
-    common_year
-}
 
 pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), String> {
     let now = now_arg
         .map(|s| clock::parse_stamp(s).ok_or_else(|| format!("invalid --now stamp: {s}")))
         .unwrap_or_else(|| Ok(Utc::now()))?;
 
-    let (http, csv_path, json_out, catalog_out, prior): (
-        Box<dyn Http>,
-        PathBuf,
-        PathBuf,
-        PathBuf,
-        serde_json::Value,
-    ) = if let Some(fd) = fixtures_dir {
-        let resp_path = fd.join("fixture_responses.json");
-        let raw =
-            std::fs::read_to_string(&resp_path).map_err(|e| format!("read {resp_path:?}: {e}"))?;
-        let responses: HashMap<String, serde_json::Value> =
-            serde_json::from_str(&raw).map_err(|e| format!("parse {resp_path:?}: {e}"))?;
-        let http = FixtureHttp { responses };
-        let csv = fd.join("wfm_results.csv");
-        let out = fd.join("market.json");
-        let cat = fd.join("wfstat-catalog.json");
-        let prior_path = fd.join("prior-market.json");
-        let prior = if prior_path.exists() {
-            let s = std::fs::read_to_string(&prior_path).map_err(|e| format!("read prior: {e}"))?;
-            serde_json::from_str(&s).unwrap_or(serde_json::Value::Object(serde_json::Map::new()))
-        } else {
-            serde_json::Value::Object(serde_json::Map::new())
-        };
-        let prior_catalog = fd.join("prior-catalog.json");
-        if prior_catalog.exists() && !cat.exists() {
-            eprintln!("  preserving prior wfstat-catalog");
-        }
-        (Box::new(http), csv, out, cat, prior)
-    } else {
-        let root = find_root()?;
-        let csv = root.join("wfm_results.csv");
-        let out = root.join("frontend").join("public").join("market.json");
-        let cat = root
-            .join("frontend")
-            .join("public")
-            .join("wfstat-catalog.json");
-
-        let client = reqwest::blocking::Client::builder()
-        .retry(reqwest::retry::never())
-        .redirect(wfm_client::redirect_policy())
-            .user_agent(wfm_client::user_agent(
-                "wfm-scrape",
-                env!("CARGO_PKG_VERSION"),
-            ))
-            .timeout(std::time::Duration::from_secs(30))
-            .build()
-            .map_err(|e| format!("build HTTP client: {e}"))?;
-        let http = LiveHttp { client };
-
-        let prior = if out.exists() {
-            let s = std::fs::read_to_string(&out).map_err(|e| format!("read prior: {e}"))?;
-            serde_json::from_str(&s).unwrap_or(serde_json::Value::Object(serde_json::Map::new()))
-        } else {
-            serde_json::Value::Object(serde_json::Map::new())
-        };
-
-        (Box::new(http), csv, out, cat, prior)
-    };
-
-    if !csv_path.exists() {
-        return Err(format!(
-            "{} not found - run `wfm-scrape scrape` first.",
-            csv_path.display()
-        ));
-    }
+    let inputs::BuildInputs { http, csv_path, json_out, catalog_out, prior } = inputs::prepare(fixtures_dir)?;
 
     let prior_stamps: HashMap<String, String> = prior
         .get("surface_fetched_at")
@@ -188,95 +46,10 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         .and_then(|v| serde_json::from_value(v.clone()).ok())
         .unwrap_or_default();
 
-    eprintln!("Fetching warframe.market master catalog...");
-    // `catalog_fresh` is false on the prior-snapshot fallback: that copy has
-    // no gameRefs, so the resolver surfaces built from it are partial.
-    let (catalog, mut meta_by_slug, catalog_fresh) =
-        match ingest::fetch_catalog_wfm(http.as_ref(), "https://api.warframe.market/v2/items") {
-            Ok((catalog, meta)) => (catalog, meta, true),
-            Err(e) => {
-                let Some(prior_catalog) = prior.get("catalog").and_then(|c| c.as_object()) else {
-                    return Err(format!("{e} - and no prior snapshot to fall back on."));
-                };
-                eprintln!("  {e} - reusing the prior snapshot's catalog");
-                let cat: HashMap<String, String> = prior_catalog
-                    .iter()
-                    .map(|(k, v)| (k.clone(), v.as_str().unwrap_or("").to_string()))
-                    .collect();
-                let items_meta: HashMap<String, CatalogItemMeta> = prior
-                    .get("items")
-                    .and_then(|i| i.as_object())
-                    .map(|items| {
-                        items
-                            .iter()
-                            .map(|(slug, it)| {
-                                (
-                                    slug.clone(),
-                                    CatalogItemMeta {
-                                        tags: it
-                                            .get("tags")
-                                            .and_then(|t| t.as_array())
-                                            .map(|a| {
-                                                a.iter()
-                                                    .filter_map(|v| {
-                                                        v.as_str().map(|s| s.to_string())
-                                                    })
-                                                    .collect()
-                                            })
-                                            .unwrap_or_default(),
-                                        ducats: it.get("ducats").and_then(|d| d.as_i64()),
-                                        ..Default::default()
-                                    },
-                                )
-                            })
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                (cat, items_meta, false)
-            }
-        };
-    eprintln!("  {} items", catalog.len());
-
-    // Fetched BEFORE the parent walk, and only once: sentinel parents now come
-    // out of this payload (their own endpoint 404s since ~2026-07-31) and the
-    // resolver catalog is reduced from the same copy further down. Two
-    // consumers, one ~44 MB download - a second one would add minutes to a
-    // scrape that already runs close to its systemd timeout.
-    eprintln!("Fetching warframestat bulk item catalog...");
-    let wfstat_raw: Option<serde_json::Value> = if fixtures_dir.is_none() {
-        ingest::fetch_wfstat_raw()
-            .map_err(|e| eprintln!("  warning: {e}"))
-            .ok()
-    } else {
-        http.get_json(ingest::WFSTAT_ITEMS_URL)
-            .map_err(|e| eprintln!("  warning: {e}"))
-            .ok()
-    };
-
-    eprintln!("Fetching warframestat component path map + sets...");
-    let (mut path_to_info, mut set_to_parts, parents_complete) =
-        ingest::fetch_parent_data(http.as_ref(), &catalog, wfstat_raw.as_ref());
-    eprintln!(
-        "  {} component paths · {} prime sets",
-        path_to_info.len(),
-        set_to_parts.len()
-    );
-    // The catalogue the resolvers will read beside path_to_info: this cycle's,
-    // or the preserved file when the bulk fetch failed.
-    let wfstat_slim_for_paths: Vec<serde_json::Value> = match wfstat_raw.as_ref() {
-        Some(raw) => ingest::slim_wfstat_items(raw, ingest::WFSTAT_ITEMS_URL).unwrap_or_default(),
-        None => std::fs::read(&catalog_out)
-            .ok()
-            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-            .unwrap_or_default(),
-    };
-    let game_ref_paths = ingest::add_game_ref_paths(
-        &meta_by_slug,
-        &mut path_to_info,
-        &ingest::wfstat_categories(&wfstat_slim_for_paths),
-    );
-    eprintln!("  {game_ref_paths} paths from warframe.market gameRefs that warframestat lacks");
-    let path_to_info_complete = parents_complete && catalog_fresh;
+    let catalog::CatalogSources {
+        catalog, mut meta_by_slug, wfstat_raw, path_to_info,
+        mut set_to_parts, parents_complete, catalog_fresh, path_to_info_complete,
+    } = catalog::fetch(http.as_ref(), fixtures_dir, &catalog_out, &prior)?;
 
     // ---- Digital Extremes first-party ingest -------------------------------
     // Runs after path_to_info because every DE join resolves `/Lotus/...`
@@ -448,73 +221,7 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         }
     }
 
-    // Annual usage history is immutable. Keep every valid prior year, request
-    // only missing published candidates, and leave failed years absent so the
-    // next cycle retries them. DE publishes these files in arrears; never
-    // manufacture a current-year candidate.
-    let usage_old: Option<HashMap<String, serde_json::Value>> = prior
-        .get("usage")
-        .and_then(|s| serde_json::from_value(s.clone()).ok());
-    let mut usage_history: render::UsageHistorySurface = prior
-        .get("usage_history")
-        .and_then(|value| serde_json::from_value(value.clone()).ok())
-        .unwrap_or_default();
-    usage_history
-        .by_year
-        .retain(|year, rows| de::DE_USAGE_YEARS.contains(year) && valid_compact_usage(rows));
-    if let Some((year, compact)) = usage_old.as_ref().and_then(compact_prior_usage) {
-        usage_history.by_year.entry(year).or_insert(compact);
-    }
-
-    let prior_usage_year = usage_old.as_ref().and_then(rich_prior_usage_year);
-    let rich_repair_year = usage_history
-        .by_year
-        .keys()
-        .next_back()
-        .copied()
-        .filter(|year| prior_usage_year != Some(*year));
-    let mut fresh_rich_usage = std::collections::BTreeMap::new();
-    for year in de::DE_USAGE_YEARS {
-        let has_compact = usage_history.by_year.contains_key(year);
-        if has_compact && rich_repair_year != Some(*year) {
-            eprintln!("Usage telemetry: {year} already in the snapshot - not refetched");
-            continue;
-        }
-        if has_compact {
-            eprintln!("Fetching DE usage telemetry ({year}) to repair rich usage...");
-        } else {
-            eprintln!("Fetching DE usage telemetry ({year})...");
-        }
-        match http.get_json(&de::usage_url(*year)) {
-            Ok(doc) => {
-                let (compact, accepted, unmatched) =
-                    de_extract::usage_history_from_export(&doc, &catalog);
-                eprintln!(
-                    "  {year}: {} joined · {unmatched} unmatched · {accepted} valid rows",
-                    compact.len()
-                );
-                if valid_compact_usage(&compact) {
-                    let (rich, _) = de_extract::usage_from_export(&doc, *year, &catalog);
-                    if !has_compact {
-                        usage_history.by_year.insert(*year, compact);
-                    }
-                    fresh_rich_usage.insert(*year, rich);
-                } else {
-                    eprintln!("  warning: {year} usage shape had no joinable valid rows");
-                }
-            }
-            Err(e) => eprintln!("  warning: {year}: {e}"),
-        }
-    }
-    usage_history.years = usage_history.by_year.keys().copied().collect();
-    let newest_usage_year = usage_history.years.last().copied().unwrap_or(0);
-    let usage_observation = if let Some(rich) = fresh_rich_usage.remove(&newest_usage_year) {
-        Observation::usable(rich)
-    } else if prior_usage_year == Some(newest_usage_year) {
-        Observation::Unchanged
-    } else {
-        Observation::Unavailable
-    };
+    let usage::UsageSources { usage_old, usage_history, usage_observation } = usage::fetch(http.as_ref(), &prior, &catalog);
 
     // Relic rewards. DE's table beats the drop-table scrape on two counts: all
     // four refinements instead of intact only, and correct rarity labels (the
@@ -728,20 +435,6 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         .get("recipes")
         .and_then(|s| serde_json::from_value(s.clone()).ok());
     let prior_de = prior.get("de");
-    let vault_rotation_old: Option<Vec<serde_json::Value>> = prior_de
-        .and_then(|d| d.get("vault_rotation"))
-        .and_then(|v| serde_json::from_value(v.clone()).ok());
-    let deals_old: Option<Vec<serde_json::Value>> = prior_de
-        .and_then(|d| d.get("deals"))
-        .and_then(|v| serde_json::from_value(v.clone()).ok());
-    let goals_old: Option<std::collections::BTreeMap<String, serde_json::Value>> = prior
-        .get("event_rewards")
-        .and_then(|v| v.get("goals"))
-        .and_then(|v| serde_json::from_value(v.clone()).ok());
-    let events_old: Option<std::collections::BTreeMap<String, serde_json::Value>> = prior
-        .get("event_rewards")
-        .and_then(|v| v.get("events"))
-        .and_then(|v| serde_json::from_value(v.clone()).ok());
     let prior_child_stamps: std::collections::BTreeMap<String, String> = prior_de
         .and_then(|d| d.get("child_fetched_at"))
         .and_then(|v| serde_json::from_value(v.clone()).ok())
@@ -767,172 +460,8 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
             .unwrap_or(0)
     );
 
-    eprintln!("Fetching riven dispositions...");
-    let mut rivens = ingest::fetch_rivens(http.as_ref());
-    // DE is the authority on dispositions; warframe.market mirrors them and
-    // lags. Overriding here (rather than replacing the fetch) keeps WFM's
-    // group/riven_type/req_mr metadata, which DE does not publish, and lets
-    // the existing 90-day change log diff against the authoritative value.
-    // Applied only when the weapons manifest actually came through this cycle.
-    // Same rule again: a weapons manifest that parses but yields no
-    // dispositions must not silently leave every value at warframe.market's
-    // lagging mirror. When there is nothing fresh, re-apply the prior
-    // snapshot's - which were DE's - so the override survives.
-    let de_dispos = de_snap
-        .manifests
-        .get("ExportWeapons_en.json")
-        .map(de_extract::dispositions_from_weapons)
-        .unwrap_or_default();
-    let prior_de_dispositions: std::collections::BTreeMap<String, f64> = prior
-        .get("de")
-        .and_then(|d| d.get("dispositions"))
-        .and_then(|m| m.as_object())
-        .map(|m| {
-            m.iter()
-                .filter_map(|(k, v)| v.as_f64().map(|n| (k.clone(), n)))
-                .collect()
-        })
-        .unwrap_or_default();
-    let mut joined_dispositions = std::collections::BTreeMap::new();
-    if let Some(map) = rivens.get("weapons").and_then(|w| w.as_object()) {
-        for (slug, row) in map {
-            let Some(name) = row
-                .get("name")
-                .and_then(|n| n.as_str())
-                .map(|n| n.to_lowercase())
-            else {
-                continue;
-            };
-            if let Some(value) = de_dispos.get(&name) {
-                joined_dispositions.insert(slug.clone(), *value);
-            }
-        }
-    }
-    let prior_coverage_ok = prior_de_dispositions.is_empty()
-        || joined_dispositions.len() * 100 >= prior_de_dispositions.len() * 80;
-    let joined_usable = !de_dispos.is_empty()
-        && !joined_dispositions.is_empty()
-        && joined_dispositions.len() * 100 >= de_dispos.len() * 80
-        && prior_coverage_ok;
-    let disposition_state = match de_snap.outcome("ExportWeapons_en.json") {
-        de::ManifestOutcome::Usable if joined_usable => {
-            crate::reconcile::Disposition::PublishedFresh
-        }
-        de::ManifestOutcome::Usable | de::ManifestOutcome::Invalid => {
-            crate::reconcile::Disposition::PreservedInvalid
-        }
-        de::ManifestOutcome::Unchanged => crate::reconcile::Disposition::PreservedUnchanged,
-        de::ManifestOutcome::Unavailable => crate::reconcile::Disposition::PreservedUnavailable,
-    };
-    if !joined_usable && !de_dispos.is_empty() {
-        eprintln!("  warning: {}/{} DE dispositions joined (prior exact set {}) - preserving prior exact provenance", joined_dispositions.len(), de_dispos.len(), prior_de_dispositions.len());
-    }
-    let mut de_dispositions = if joined_usable {
-        joined_dispositions
-    } else {
-        std::collections::BTreeMap::new()
-    };
-    if !joined_usable {
-        let mut carried = 0usize;
-        if let Some(map) = rivens.get_mut("weapons").and_then(|w| w.as_object_mut()) {
-            for (slug, prior_dispo) in &prior_de_dispositions {
-                if let Some(row) = map.get_mut(slug) {
-                    if let Some(obj) = row.as_object_mut() {
-                        obj.insert("disposition".into(), serde_json::json!(*prior_dispo));
-                        de_dispositions.insert(slug.clone(), *prior_dispo);
-                        carried += 1;
-                    }
-                }
-            }
-        }
-        eprintln!(
-            "  dispositions: none from DE this cycle - carried {carried} from the prior snapshot"
-        );
-    } else {
-        let mut moved = 0usize;
-        if let Some(map) = rivens.get_mut("weapons").and_then(|w| w.as_object_mut()) {
-            for (slug, de_dispo) in &de_dispositions {
-                let Some(row) = map.get_mut(slug) else {
-                    continue;
-                };
-                let was = row.get("disposition").and_then(|d| d.as_f64());
-                if was != Some(*de_dispo) {
-                    moved += 1;
-                }
-                if let Some(obj) = row.as_object_mut() {
-                    obj.insert("disposition".into(), serde_json::json!(de_dispo));
-                }
-            }
-        }
-        eprintln!(
-            "  dispositions: {} matched to DE ({moved} differed from WFM's mirror)",
-            de_dispositions.len()
-        );
-    }
-    // The change log LAST, diffing what we are about to publish against what we
-    // published before. Computing it inside the fetch made it diff WFM's
-    // mirror against DE's stored values, which logged a phantom change every
-    // time the mirror lagged and missed every real one, because the override
-    // lands after the fetch.
-    if let Some(weapons) = rivens.get("weapons").and_then(|w| w.as_object()).cloned() {
-        let changes = ingest::riven_change_log(&weapons, rivens_old.as_ref(), now);
-        if !changes.is_empty() {
-            rivens.insert("changes".into(), serde_json::Value::Array(changes));
-        }
-    }
-    let rivens = rivens;
-    if let Some(ch) = rivens.get("changes").and_then(|c| c.as_array()) {
-        let today = ch
-            .iter()
-            .filter(|c| {
-                c.get("seen_at").and_then(|s| s.as_str()) == Some(clock::iso_z(now).as_str())
-            })
-            .count();
-        eprintln!(
-            "  {} weapons · {} changes in log ({} new this run)",
-            rivens
-                .get("weapons")
-                .and_then(|w| w.as_object())
-                .map(|w| w.len())
-                .unwrap_or(0),
-            ch.len(),
-            today
-        );
-    }
-
-    eprintln!("Fetching DE weekly riven stats...");
-    // DE names the weapons by display name; the riven-weapons manifest already
-    // fetched above maps those to slugs - no second request.
-    let weapons_by_name: HashMap<String, String> = rivens
-        .get("weapons")
-        .and_then(|w| w.as_object())
-        .map(|w| {
-            w.iter()
-                .filter_map(|(slug, row)| {
-                    row.get("name")
-                        .and_then(|n| n.as_str())
-                        .map(|n| (n.to_lowercase(), slug.clone()))
-                })
-                .collect()
-        })
-        .unwrap_or_default();
-    let (mut riven_stats, unmatched_stats, riven_stats_children) =
-        ingest::fetch_riven_stats(http.as_ref(), &weapons_by_name);
-    let pc_riven_stats_state = riven_stats_children
-        .get("pc")
-        .copied()
-        .unwrap_or(ingest::RivenChildOutcome::Unavailable);
-    if pc_riven_stats_state == ingest::RivenChildOutcome::Usable {
-        ingest::carry_failed_riven_platforms(
-            &mut riven_stats,
-            riven_stats_old.as_ref(),
-            &riven_stats_children,
-        );
-    }
-    eprintln!(
-        "  {} weapons · {unmatched_stats} DE rows without a WFM slug",
-        riven_stats.len()
-    );
+    let rivens::RivenSources { rivens, de_dispositions, disposition_state, riven_stats, riven_stats_children, pc_riven_stats_state } =
+        rivens::fetch(http.as_ref(), &de_snap, &prior, &rivens_old, &riven_stats_old, now);
 
     let path_to_info_for_de = path_to_info.clone();
     let observation = |data: HashMap<String, serde_json::Value>, complete| {
@@ -1056,111 +585,8 @@ pub fn build(fixtures_dir: Option<&Path>, now_arg: Option<&str>) -> Result<(), S
         now,
         STALE_DAYS,
     );
-    let fresh_vault_rotation = de_world
-        .as_ref()
-        .map(|w| {
-            de_extract::vault_rotation_from_world(w, |ms| clock::iso_z(clock::from_millis(ms)))
-        })
-        .unwrap_or_default();
-    let fresh_deals = de_world
-        .as_ref()
-        .map(|w| {
-            de_extract::deals_from_world(w, &path_to_info_for_de, &de_alias, |ms| {
-                clock::iso_z(clock::from_millis(ms))
-            })
-        })
-        .unwrap_or_default();
-    let world_vault_observation = match &de_world_observation {
-        Observation::Unavailable => Observation::Unavailable,
-        Observation::Invalid => Observation::Invalid,
-        Observation::Usable { .. } => {
-            de::world_array_observation(de_world, "PrimeVaultTraders", fresh_vault_rotation)
-        }
-        Observation::Unchanged | Observation::AuthoritativeEmpty => Observation::Invalid,
-    };
-    let world_deals_observation = match &de_world_observation {
-        Observation::Unavailable => Observation::Unavailable,
-        Observation::Invalid => Observation::Invalid,
-        Observation::Usable { .. } => {
-            de::world_array_observation(de_world, "DailyDeals", fresh_deals)
-        }
-        Observation::Unchanged | Observation::AuthoritativeEmpty => Observation::Invalid,
-    };
-    let r_world_vault = reconcile(
-        "world.vault_rotation",
-        world_vault_observation,
-        vault_rotation_old.as_ref(),
-        prior_child_stamps
-            .get("world.vault_rotation")
-            .map(|s| s.as_str()),
-        now,
-        STALE_DAYS,
-    );
-    let r_world_deals = reconcile(
-        "world.deals",
-        world_deals_observation,
-        deals_old.as_ref(),
-        prior_child_stamps.get("world.deals").map(|s| s.as_str()),
-        now,
-        STALE_DAYS,
-    );
-    let goal_build = de_world
-        .map(|world| {
-            de_extract::event_rewards_from_world_child(
-                world,
-                "Goals",
-                &path_to_info_for_de,
-                &de_alias,
-                |ms| clock::iso_z(clock::from_millis(ms)),
-            )
-        })
-        .unwrap_or_default();
-    let event_build = de_world
-        .map(|world| {
-            de_extract::event_rewards_from_world_child(
-                world,
-                "Events",
-                &path_to_info_for_de,
-                &de_alias,
-                |ms| clock::iso_z(clock::from_millis(ms)),
-            )
-        })
-        .unwrap_or_default();
-    let child_observation = |key: &str, build: de_extract::EventRewardBuild| {
-        match &de_world_observation {
-            Observation::Unavailable => Observation::Unavailable,
-            Observation::Invalid => Observation::Invalid,
-            Observation::Usable { data: world, .. } => {
-                match world.get(key).and_then(|v| v.as_array()) {
-                    None => Observation::Invalid,
-                    Some(rows) if rows.is_empty() => Observation::AuthoritativeEmpty,
-                    Some(_) if build.rows.is_empty() => Observation::Invalid,
-                    // A child is the freshness unit. Stamping retained rows fresh
-                    // after any malformed sibling would overstate what this poll
-                    // established, so mixed payloads preserve the whole prior.
-                    Some(_) if build.invalid_rows > 0 => Observation::Invalid,
-                    Some(_) => Observation::usable(build.rows),
-                }
-            }
-            Observation::Unchanged | Observation::AuthoritativeEmpty => Observation::Invalid,
-        }
-    };
-    let r_world_goals = reconcile(
-        "world.goals",
-        child_observation("Goals", goal_build),
-        goals_old.as_ref(),
-        prior_child_stamps.get("world.goals").map(|s| s.as_str()),
-        now,
-        STALE_DAYS,
-    );
-    let r_world_events = reconcile(
-        "world.events",
-        child_observation("Events", event_build),
-        events_old.as_ref(),
-        prior_child_stamps.get("world.events").map(|s| s.as_str()),
-        now,
-        STALE_DAYS,
-    );
+    let world::WorldSurfaces { vault: r_world_vault, deals: r_world_deals, goals: r_world_goals, events: r_world_events } =
+        world::reconcile_children(&de_world_observation, &path_to_info_for_de, &de_alias, &prior, &prior_child_stamps, now);
 
     for r in [&r_p2i, &r_s2p, &r_rr] {
         if let Some(w) = &r.stale_warning {
