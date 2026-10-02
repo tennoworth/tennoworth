@@ -13,11 +13,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
 
   import type { OwnOrder } from '../../contracts/generated/desktop';
 
-  interface ToastMsg {
-    id: number;
-    kind: 'error' | 'success';
-    text: string;
-  }
+import { createToastQueue } from '../../ui/toast-queue.svelte';
 
 import type { DesktopServices } from '../../contracts/services';
   export interface OrdersInput {
@@ -61,33 +57,13 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
   let restoreFocusTo = $state<string | null>(null);
   let bulkBusy = $state(false);
 
-  // Each toast owns its auto-dismiss timer so
-  // a manual dismiss can cancel it, and disposal clears everything pending -
-  // this panel is conditionally rendered, so a stray timer would otherwise
-  // fire after unmount.
-  let toasts = $state<ToastMsg[]>([]);
-  let toastSeq = 0;
-  const toastTimers = new Map<number, number>();
-
-  function pushToast(text: string, kind: 'error' | 'success' = 'success'): void {
-    const id = ++toastSeq;
-    toasts = [...toasts, { id, kind, text }];
-    toastTimers.set(id, window.setTimeout(() => dismissToast(id), 4500));
-  }
-
-  function dismissToast(id: number): void {
-    const timer = toastTimers.get(id);
-    if (timer !== undefined) {
-      window.clearTimeout(timer);
-      toastTimers.delete(id);
-    }
-    toasts = toasts.filter((t) => t.id !== id);
-  }
+  const toastQueue = createToastQueue(4500);
+  const pushToast = toastQueue.push;
+  const dismissToast = toastQueue.dismiss;
 
   function dispose() {
     liveTop.dispose();
-    for (const timer of toastTimers.values()) window.clearTimeout(timer);
-    toastTimers.clear();
+    toastQueue.dispose();
   }
 
   // Stale-async guard, same shape as App.svelte's verifyGen: only the newest
@@ -495,7 +471,7 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
     get restoreFocusTo() { return restoreFocusTo; },
     set restoreFocusTo(value: typeof restoreFocusTo) { restoreFocusTo = value; },
     get bulkBusy() { return bulkBusy; },
-    get toasts() { return toasts; },
+    get toasts() { return toastQueue.toasts; },
     get drifted() { return drifted; },
     get fixAllBusy() { return fixAllBusy; },
     get health() { return health; },

@@ -9,6 +9,7 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
   import { totals, since, soldByItem, describeItems } from '../../domain/ledger';
   import { humanError } from '../../contracts/errors';
   import Toast from '../../ui/Toast.svelte';
+  import { createToastQueue } from '../../ui/toast-queue.svelte';
 
   interface Props {
     /** Persist the auto-close preference (App writes the `auto-close-sold`
@@ -25,10 +26,8 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
   let loadGeneration = 0;
   let disposed = false;
 
-  interface ToastMsg { id: number; kind: 'error' | 'success'; text: string }
-  let toasts = $state<ToastMsg[]>([]);
-  let toastSeq = 0;
-  const toastTimers = new Map<number, number>();
+  const toastQueue = createToastQueue(5000);
+  const pushToast = toastQueue.push;
 
   /**
    * Recording health, so a pause is visible to someone who opens this surface
@@ -43,26 +42,9 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
   const pausedReason = $derived(
     paused === null ? '' : 'ledger' in paused ? paused.ledger.error : paused.log.error,
   );
-  function pushToast(text: string, kind: 'error' | 'success' = 'success'): void {
-    if (disposed) return;
-    const id = ++toastSeq;
-    toasts = [...toasts, { id, kind, text }];
-    toastTimers.set(id, window.setTimeout(() => dismissToast(id), 5000));
-  }
-
-  function dismissToast(id: number): void {
-    const timer = toastTimers.get(id);
-    if (timer !== undefined) {
-      window.clearTimeout(timer);
-      toastTimers.delete(id);
-    }
-    toasts = toasts.filter((toast) => toast.id !== id);
-  }
-
   onDestroy(() => {
     disposed = true;
-    for (const timer of toastTimers.values()) window.clearTimeout(timer);
-    toastTimers.clear();
+    toastQueue.dispose();
   });
 
   async function load(): Promise<void> {
@@ -214,7 +196,7 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
   {/if}
 
   </section>
-  <Toast {toasts} ondismiss={dismissToast} />
+  <Toast toasts={toastQueue.toasts} ondismiss={toastQueue.dismiss} />
 </section>
 
 <style>

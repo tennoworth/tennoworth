@@ -11,6 +11,7 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
   import { plat } from '../../ui/format';
   import type { Market } from '../../contracts/data';
   import Toast from '../../ui/Toast.svelte';
+  import { createToastQueue } from '../../ui/toast-queue.svelte';
 
   interface Props {
     /** Price snapshot - powers the item search and the "now ~Xp" hint. */
@@ -37,31 +38,11 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
   let index = $derived(buildBrowseIndex(market));
   let results = $derived(picked ? [] : searchItems(market, index, query, 8));
 
-  // Toasts, component-local (same shape as MyOrdersPanel).
-  interface ToastMsg { id: number; kind: 'error' | 'success'; text: string }
-  let toasts = $state<ToastMsg[]>([]);
-  let toastSeq = 0;
-  const toastTimers = new Map<number, number>();
-  function pushToast(text: string, kind: 'error' | 'success' = 'success'): void {
-    if (disposed) return;
-    const id = ++toastSeq;
-    toasts = [...toasts, { id, kind, text }];
-    toastTimers.set(id, window.setTimeout(() => dismissToast(id), 4500));
-  }
-
-  function dismissToast(id: number): void {
-    const timer = toastTimers.get(id);
-    if (timer !== undefined) {
-      window.clearTimeout(timer);
-      toastTimers.delete(id);
-    }
-    toasts = toasts.filter((toast) => toast.id !== id);
-  }
-
+  const toastQueue = createToastQueue(4500);
+  const pushToast = toastQueue.push;
   onDestroy(() => {
     disposed = true;
-    for (const timer of toastTimers.values()) window.clearTimeout(timer);
-    toastTimers.clear();
+    toastQueue.dispose();
   });
 
   async function load(): Promise<void> {
@@ -269,7 +250,7 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
   {/if}
 
   </section>
-  <Toast {toasts} ondismiss={dismissToast} />
+  <Toast toasts={toastQueue.toasts} ondismiss={toastQueue.dismiss} />
 </section>
 
 <style>
