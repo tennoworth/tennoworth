@@ -19,6 +19,7 @@ use wfm_core::trading::listing::{
     delete_order, list_user_orders, update_order, Unlocked, UpdateRequest,
 };
 
+use crate::game_events::{GameEvent, GameEvents};
 use crate::persistence::Db;
 use crate::services::eelog::{TradeEvent, TradeItem};
 use crate::services::wfm_session::WfmSession;
@@ -436,20 +437,20 @@ fn announce_recording(
 pub const EVENT_RECORDING_CHANGED: &str = "recording-changed";
 
 /// Start tailing EE.log if it can be found, publishing recording health to
-/// `recorder`. Silent no-op otherwise (the SPA shows the "not found" state via
-/// `eelog_status`).
+/// `recorder` and every line to `game_events`. Silent no-op otherwise (the SPA
+/// shows the "not found" state via `eelog_status`).
 pub fn start_tailer(
     app: AppHandle,
-    recorder: std::sync::Arc<crate::services::recording::Recorder>,
+    recorder: Arc<crate::services::recording::Recorder>,
+    game_events: Arc<GameEvents>,
 ) -> Option<std::path::PathBuf> {
     let path = crate::services::eelog::locate_log()?;
     let p = path.clone();
     let reward_path = path.clone();
-    let reward_app = app.clone();
+    let line_events = game_events.clone();
     let spawned = std::thread::Builder::new()
         .name("eelog-tailer".into())
         .spawn(move || {
-            let overlay_app = app.clone();
             let mut blocked: Option<(String, u64)> = None;
             // Both callbacks describe the same poll, so the outcome is shared
             // rather than owned by either closure.
@@ -462,7 +463,7 @@ pub fn start_tailer(
                 // let the retry hotkey beat the automatic trigger and start a
                 // scan before the four slot markers had arrived.
                 std::time::Duration::from_millis(250),
-                move |line| crate::overlay::handle_log_line(&overlay_app, line),
+                move |line| line_events.publish(GameEvent::LogLine(line)),
                 |trade, position| match handle_trade(&app, trade, position.clone()) {
                     LedgerOutcome::Failed(error) => {
                         let id = (position.session.clone(), position.end);
@@ -507,7 +508,7 @@ pub fn start_tailer(
                     crate::services::eelog::watch_recent_text(
                         &reward_path,
                         std::time::Duration::from_millis(250),
-                        move |text| crate::overlay::handle_log_snapshot(&reward_app, text),
+                        move |text| game_events.publish(GameEvent::RecentLog(text)),
                     );
                 })
             {

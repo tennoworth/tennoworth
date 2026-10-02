@@ -5,6 +5,7 @@ use std::sync::Arc;
 use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_global_shortcut::ShortcutState;
 
+use crate::game_events::{GameEvent, GameEvents};
 use crate::persistence::Db;
 use crate::services::market::MarketCache;
 use crate::services::wfm_session::WfmSession;
@@ -28,6 +29,18 @@ fn health() -> Health {
         app_version: env!("CARGO_PKG_VERSION").to_string(),
         core_version: wfm_core::version().to_string(),
     }
+}
+
+/// Scan definitions also carry the overlay's reward-screen markers. Definitions
+/// only fetches and parses them; the overlay owns their rules, so a refusal is
+/// its verdict, reported with the scan's own.
+fn install_definitions(dir: &std::path::Path) -> crate::services::definitions::DefinitionsOutcome {
+    let mut out = crate::services::definitions::refresh_and_install(dir);
+    if let Err(reason) = overlay::install_reward_markers(&out.reward_log_markers) {
+        eprintln!("tennoworth: definitions rejected reward_log_markers: {reason}");
+        out.rejected.push(format!("reward_log_markers: {reason}"));
+    }
+    out
 }
 
 pub(crate) fn run() {
@@ -184,6 +197,12 @@ pub(crate) fn run() {
                 overlay::OverlayState::new(&app.handle().clone(), &app.state::<Db>());
             app.manage(overlay_state);
             overlay::register_configured_shortcut(&app.handle().clone());
+            let game_events = Arc::new(GameEvents::default());
+            let overlay_app = app.handle().clone();
+            game_events.subscribe(move |event| match event {
+                GameEvent::LogLine(line) => overlay::handle_log_line(&overlay_app, line),
+                GameEvent::RecentLog(text) => overlay::handle_log_snapshot(&overlay_app, text),
+            });
 
             if ocr_boot_probe {
                 match overlay::ocr_boot_probe(app.state::<overlay::OverlayState>()) {
@@ -226,7 +245,7 @@ pub(crate) fn run() {
             if !boot_probe {
                 let defs_dir = data_dir.clone();
                 tauri::async_runtime::spawn_blocking(move || {
-                    let out = crate::services::definitions::refresh_and_install(&defs_dir);
+                    let out = install_definitions(&defs_dir);
                     if out.installed {
                         eprintln!(
                             "tennoworth: scan definitions installed (fetched={}, rejected={})",
@@ -238,7 +257,7 @@ pub(crate) fn run() {
             }
 
             if boot_probe {
-                let out = crate::services::definitions::refresh_and_install(&data_dir);
+                let out = install_definitions(&data_dir);
                 println!(
                     "PROBE_BOOT_OK defs_installed={} defs_fetched={} defs_rejected={}",
                     out.installed, out.fetched, out.rejected.len()
@@ -307,7 +326,11 @@ pub(crate) fn run() {
             let ee_path = if probe {
                 None
             } else {
-                crate::services::trades::start_tailer(app.handle().clone(), recording.clone())
+                crate::services::trades::start_tailer(
+                    app.handle().clone(),
+                    recording.clone(),
+                    game_events,
+                )
             };
             match &ee_path {
                 Some(p) => eprintln!("tennoworth: tailing EE.log at {}", p.display()),
