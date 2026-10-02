@@ -1,3 +1,4 @@
+use market_math::stat_median as median;
 use chrono::{DateTime, NaiveDate};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -35,17 +36,7 @@ pub struct HistoryAnalysis {
     pub weekly: Vec<f64>,
     pub slope30: Option<f64>,
 }
-fn median(values: &[f64]) -> f64 {
-    let mut sorted = values.to_vec();
-    sorted.sort_by(f64::total_cmp);
-    let mid = sorted.len() / 2;
-    let upper = sorted.get(mid).copied().unwrap_or(0.0);
-    if sorted.len() % 2 == 1 {
-        upper
-    } else {
-        (sorted.get(mid.saturating_sub(1)).copied().unwrap_or(0.0) + upper) / 2.0
-    }
-}
+
 pub fn points(series: &HistorySeries) -> Vec<(usize, f64)> {
     series
         .median

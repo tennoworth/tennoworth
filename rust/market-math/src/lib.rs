@@ -169,7 +169,7 @@ pub fn avg_lowest_asks(orders: &[LiveOrder], n: usize) -> f64 {
 
 /// Python's `statistics.median`: sort, odd length → middle, even length →
 /// mean of the two middles.
-fn stat_median(values: &[f64]) -> f64 {
+pub fn stat_median(values: &[f64]) -> f64 {
     let mut v = values.to_vec();
     v.sort_by(f64::total_cmp);
     let n = v.len();
@@ -344,6 +344,15 @@ mod tests {
     use super::*;
 
     // Fixture helpers: minimal StatsDay rows for the heuristic tests below.
+    #[test]
+    fn statistical_median_handles_empty_odd_even_and_unsorted_input() {
+        assert_eq!(stat_median(&[]), 0.0);
+        assert_eq!(stat_median(&[9.0]), 9.0);
+        assert_eq!(stat_median(&[9.0, -4.0, 3.0]), 3.0);
+        assert_eq!(stat_median(&[8.0, -4.0, 2.0, 2.0]), 2.0);
+        assert_eq!(stat_median(&[2.0, 8.0]), 5.0);
+    }
+
     fn day(median: f64) -> StatsDay {
         StatsDay { median, ..Default::default() }
     }
