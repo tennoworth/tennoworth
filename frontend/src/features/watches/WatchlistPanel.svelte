@@ -25,6 +25,8 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
   let checking = $state(false);
   let lastOutcomes = $state<Map<number, WatchOutcome>>(new Map());
   let busyIds = $state<Set<number>>(new Set());
+  let loadGeneration = 0;
+  let disposed = false;
 
   // ---- add form ----
   let query = $state('');
@@ -47,23 +49,28 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
   }
 
   async function load(): Promise<void> {
+    const generation = ++loadGeneration;
     try {
-      watches = await desktopListWatches();
+      const next = await desktopListWatches();
+      if (disposed || generation !== loadGeneration) return;
+      watches = next;
       loadError = null;
     } catch (e) {
+      if (disposed || generation !== loadGeneration) return;
       loadError = e instanceof DesktopCmdError ? e.message : humanError(e);
     }
   }
 
   onMount(() => {
     void load();
-    return listenForTauriEvent<WatchOutcome>(WATCH_FIRED_EVENT, (o) => {
+    const stop = listenForTauriEvent<WatchOutcome>(WATCH_FIRED_EVENT, (o) => {
       const next = new Map(lastOutcomes);
       next.set(o.id, o);
       lastOutcomes = next;
       pushToast(describe(o));
       void load();
     });
+    return () => { disposed = true; stop(); };
   });
 
   function pick(r: BrowseRow): void {
@@ -85,9 +92,13 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
   async function add(): Promise<void> {
     if (!picked || threshold < 1) return;
     adding = true;
+    loadGeneration++;
     try {
       const w: NewWatch = { slug: picked.slug, name: picked.name, side, threshold, rank: 0, subtype: null };
-      watches = await desktopAddWatch(w);
+      const next = await desktopAddWatch(w);
+      if (disposed) return;
+      loadGeneration++;
+      watches = next;
       pushToast(`Watching ${picked.name}: ${side === 'sell' ? '≤' : '≥'} ${threshold}p.`);
       clearPick();
     } catch (e) {
@@ -99,8 +110,12 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
 
   async function remove(w: Watch): Promise<void> {
     busyIds = new Set([...busyIds, w.id]);
+    loadGeneration++;
     try {
-      watches = await desktopDeleteWatch(w.id);
+      const next = await desktopDeleteWatch(w.id);
+      if (disposed) return;
+      loadGeneration++;
+      watches = next;
     } catch (e) {
       pushToast(e instanceof DesktopCmdError ? e.message : humanError(e), 'error');
     } finally {

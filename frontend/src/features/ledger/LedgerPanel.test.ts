@@ -5,6 +5,7 @@ import { screen, fireEvent, waitFor, cleanup } from '@testing-library/svelte';
 import { renderDesktop as render } from '../../dev/render-desktop';
 import LedgerPanel from './LedgerPanel.svelte';
 import { installTauri, removeTauri } from '../../dev/test-utils';
+import { RECORDING_CHANGED_EVENT } from '../../contracts/events';
 
 afterEach(() => { cleanup(); removeTauri(); });
 
@@ -31,6 +32,29 @@ function install(
 }
 
 describe('LedgerPanel', () => {
+  it.each(['success', 'failure'])('ignores an older load %s after a recording update', async outcome => {
+    let resolve!: (value: typeof trades) => void;
+    let reject!: (error: Error) => void;
+    const old = new Promise<typeof trades>((yes, no) => { resolve = yes; reject = no; });
+    const handlers: Record<string, (event: { payload: unknown }) => void> = {};
+    let loads = 0;
+    installTauri(vi.fn(async (cmd: string) => {
+      if (cmd === 'list_trades') return ++loads === 1 ? old : trades;
+      if (cmd === 'eelog_status') return { path: '/x/EE.log', auto_close: loads > 1, recording: 'recording' };
+      throw new Error(`unexpected ${cmd}`);
+    }), vi.fn((name, handler) => { handlers[name] = handler; return Promise.resolve(() => {}); }));
+    render(LedgerPanel, { props: {} });
+    await waitFor(() => expect(loads).toBe(1));
+    handlers[RECORDING_CHANGED_EVENT]({ payload: null });
+    await screen.findByText('Primed Flow', { selector: 'td' });
+    if (outcome === 'success') resolve([]);
+    else reject(new Error('Stale ledger failure'));
+    await new Promise(done => setTimeout(done, 0));
+    expect(screen.getByText('Primed Flow', { selector: 'td' })).toBeTruthy();
+    expect((screen.getByRole('checkbox') as HTMLInputElement).checked).toBe(true);
+    expect(screen.queryByText(/Stale ledger failure/)).toBeNull();
+  });
+
   it('shows totals, rows and the listing-updated marker', async () => {
     install({ path: '/x/EE.log', auto_close: true });
     render(LedgerPanel, { props: {} });

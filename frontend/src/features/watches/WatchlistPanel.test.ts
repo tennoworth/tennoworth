@@ -6,6 +6,7 @@ import { renderDesktop as render } from '../../dev/render-desktop';
 import WatchlistPanel from './WatchlistPanel.svelte';
 import { installTauri, removeTauri } from '../../dev/test-utils';
 import type { Market } from '../../contracts/data';
+import { WATCH_FIRED_EVENT } from '../../contracts/events';
 
 afterEach(() => { cleanup(); removeTauri(); });
 
@@ -30,6 +31,29 @@ function makeInvoke(store: { watches: unknown[] }) {
 }
 
 describe('WatchlistPanel', () => {
+  it.each(['success', 'failure'])('ignores an older load %s after a watch event', async outcome => {
+    let resolve!: (value: unknown[]) => void;
+    let reject!: (error: Error) => void;
+    const old = new Promise<unknown[]>((yes, no) => { resolve = yes; reject = no; });
+    const handlers: Record<string, (event: { payload: unknown }) => void> = {};
+    const watch = { id: 1, slug: 'primed_flow', name: 'Primed Flow', side: 'sell', threshold: 15, rank: 0, subtype: null,
+      created_at: 'now', last_price: null, last_checked_at: null, last_fired_at: null };
+    let loads = 0;
+    installTauri(vi.fn(async (cmd: string) => {
+      if (cmd === 'list_watches') return ++loads === 1 ? old : [watch];
+      throw new Error(`unexpected ${cmd}`);
+    }), vi.fn((name, handler) => { handlers[name] = handler; return Promise.resolve(() => {}); }));
+    render(WatchlistPanel, { props: { market } });
+    await waitFor(() => expect(loads).toBe(1));
+    handlers[WATCH_FIRED_EVENT]({ payload: { id: 1, slug: 'primed_flow', name: 'Primed Flow', side: 'sell', threshold: 15, price: 20, satisfied: true, fire: true } });
+    await screen.findByRole('button', { name: 'Remove' });
+    if (outcome === 'success') resolve([]);
+    else reject(new Error('Stale watch failure'));
+    await new Promise(done => setTimeout(done, 0));
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeTruthy();
+    expect(screen.queryByText(/Stale watch failure/)).toBeNull();
+  });
+
   it('unregisters its event listener across unmount and remount', async () => {
     const store = { watches: [] as unknown[] };
     const unlistenFirst = vi.fn();

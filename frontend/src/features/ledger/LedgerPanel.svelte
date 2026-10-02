@@ -23,6 +23,8 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
   let loadError = $state<string | null>(null);
   let autoClose = $state(true);
   let savingAutoClose = $state(false);
+  let loadGeneration = 0;
+  let disposed = false;
 
   interface ToastMsg { id: number; kind: 'error' | 'success'; text: string }
   let toasts = $state<ToastMsg[]>([]);
@@ -48,13 +50,16 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
   }
 
   async function load(): Promise<void> {
+    const generation = ++loadGeneration;
     try {
       const [rows, st] = await Promise.all([desktopListTrades(500), desktopEelogStatus()]);
+      if (disposed || generation !== loadGeneration) return;
       trades = rows;
       status = st;
       autoClose = st.auto_close;
       loadError = null;
     } catch (e) {
+      if (disposed || generation !== loadGeneration) return;
       loadError = e instanceof DesktopCmdError ? e.message : humanError(e);
     }
   }
@@ -72,6 +77,7 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
     // on the next mount - after the user had already completed trades it missed.
     const offRecording = listenForTauriEvent(RECORDING_CHANGED_EVENT, () => void load());
     return () => {
+      disposed = true;
       offTrade();
       offRecording();
     };
