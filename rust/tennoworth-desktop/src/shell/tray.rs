@@ -18,6 +18,7 @@ use crate::services::sellables::{self, MarketData, ScanNotification, SellableRow
 
 /// How many sellables the tray menu shows.
 const TRAY_LIMIT: usize = 5;
+const EMPTY_SELLABLES: &str = "No sellables yet - scan your inventory";
 
 /// Emitted to the webview when the user closes the window while the tray still
 /// exists, so the SPA can show its once-ever "still running in the tray" toast.
@@ -49,21 +50,24 @@ fn rank_all(app: &AppHandle) -> Vec<SellableRow> {
 /// Build the tray menu from the top sellables: one enabled item per sellable
 /// ("Name - Np", id `sell:<slug>`), a separator, then Open / Rescan / Quit.
 /// An empty list shows a single disabled hint instead.
-fn build_tray_menu(app: &AppHandle, top: &[SellableRow]) -> tauri::Result<Menu<Wry>> {
+fn build_tray_menu(
+    app: &AppHandle,
+    top: &[SellableRow],
+    labels: &[String],
+) -> tauri::Result<Menu<Wry>> {
     let mut mb = MenuBuilder::new(app);
     let mut sellable_items: Vec<MenuItem<Wry>> = Vec::new();
     if top.is_empty() {
         let hint = MenuItem::with_id(
             app,
             "noop",
-            "No sellables yet - scan your inventory",
+            EMPTY_SELLABLES,
             false,
             None::<&str>,
         )?;
         sellable_items.push(hint);
     } else {
-        for r in top {
-            let label = format!("{} - {}p", r.name, r.price.round() as i64);
+        for (r, label) in top.iter().zip(labels) {
             let item =
                 MenuItem::with_id(app, format!("sell:{}", r.slug), label, true, None::<&str>)?;
             sellable_items.push(item);
@@ -81,7 +85,7 @@ fn build_tray_menu(app: &AppHandle, top: &[SellableRow]) -> tauri::Result<Menu<W
 /// The human labels a menu built from `top` shows (for evidence / the probe).
 fn sellable_labels(top: &[SellableRow]) -> Vec<String> {
     if top.is_empty() {
-        return vec!["No sellables yet - scan your inventory".to_string()];
+        return vec![EMPTY_SELLABLES.to_string()];
     }
     top.iter()
         .map(|r| format!("{} - {}p", r.name, r.price.round() as i64))
@@ -96,8 +100,9 @@ fn sellable_labels(top: &[SellableRow]) -> Vec<String> {
 pub fn rebuild_tray(app: &AppHandle) -> Vec<SellableRow> {
     let rows = rank_all(app);
     let top: Vec<SellableRow> = rows.iter().take(TRAY_LIMIT).cloned().collect();
-    *guard(&app.state::<TrayState>().labels) = sellable_labels(&top);
-    match build_tray_menu(app, &top) {
+    let labels = sellable_labels(&top);
+    *guard(&app.state::<TrayState>().labels) = labels.clone();
+    match build_tray_menu(app, &top, &labels) {
         Ok(menu) => match app.tray_by_id("main") {
             Some(tray) => {
                 if let Err(e) = tray.set_menu(Some(menu)) {
@@ -161,8 +166,9 @@ pub fn init_tray(app: &AppHandle) -> tauri::Result<()> {
     }
     let rows = rank_all(app);
     let top: Vec<SellableRow> = rows.iter().take(TRAY_LIMIT).cloned().collect();
-    *guard(&app.state::<TrayState>().labels) = sellable_labels(&top);
-    let menu = build_tray_menu(app, &top)?;
+    let labels = sellable_labels(&top);
+    *guard(&app.state::<TrayState>().labels) = labels.clone();
+    let menu = build_tray_menu(app, &top, &labels)?;
     let icon = app
         .default_window_icon()
         .cloned()
