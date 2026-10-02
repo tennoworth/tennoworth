@@ -352,12 +352,32 @@ pub fn current_overlay_result(state: State<'_, OverlayState>) -> Option<RelicOve
         .clone()
 }
 
-#[tauri::command]
-pub fn preview_relic_overlay(app: AppHandle, state: State<'_, OverlayState>) -> Result<(), String> {
-    let monitor = app
+/// Where to place the preview. Wayland has no primary monitor, so Tauri reports
+/// none there and the preview used to fail with "no primary monitor is
+/// available"; the app window's monitor, then any monitor, is a good stand-in.
+fn preview_monitor(app: &AppHandle) -> Result<tauri::Monitor, String> {
+    if let Some(monitor) = app
         .primary_monitor()
         .map_err(|e| format!("reading primary monitor: {e}"))?
-        .ok_or_else(|| "no primary monitor is available".to_string())?;
+    {
+        return Ok(monitor);
+    }
+    if let Some(monitor) = app
+        .get_webview_window("main")
+        .and_then(|window| window.current_monitor().ok().flatten())
+    {
+        return Ok(monitor);
+    }
+    app.available_monitors()
+        .map_err(|e| format!("listing monitors: {e}"))?
+        .into_iter()
+        .next()
+        .ok_or_else(|| "no monitor is available".to_string())
+}
+
+#[tauri::command]
+pub fn preview_relic_overlay(app: AppHandle, state: State<'_, OverlayState>) -> Result<(), String> {
+    let monitor = preview_monitor(&app)?;
     let monitor_size = monitor.size();
     let monitor_position = monitor.position();
     let width = (monitor_size.width as f64 * 0.52).round().max(720.0) as u32;
