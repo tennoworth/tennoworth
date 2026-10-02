@@ -501,21 +501,18 @@ impl WfmSession {
         let unlocked = self.warm_session(jwt, platform)?;
         wfm_client::transport::invalidate_reads();
         self.install_unlocked(generation, unlocked)?;
-        // A silent re-unlock must not outlive the logout that ended the session
-        // it belongs to, so the keyring change is tied to `generation` too.
-        if remember {
-            // A sign-in that finished during the warm wrote a login file with a
-            // new salt and stored its own key. This key opens only the file it
-            // replaced, so storing it would make the next silent unlock fail.
-            // Sign-in leaves the generation alone, so only the file shows it.
-            // The re-read stays outside the session lock, as the keyring call
-            // does.
-            if self.read_blob().is_ok_and(|current| current.kdf.salt == salt) {
-                self.apply_keyring(generation, KeyringIntent::Remember(&key));
-            }
-        } else {
-            // Unticking the box is an explicit "stop remembering".
-            self.apply_keyring(generation, KeyringIntent::Forget);
+        // A sign-in that finished during the warm rotated the salt and made
+        // its own remember choice. This unlock's key and choice belong to the
+        // replaced file; neither may overwrite the newer sign-in's keyring entry.
+        // Sign-in leaves the generation alone, so only the file shows it.
+        // The re-read stays outside the session lock, as the keyring call does.
+        if self.read_blob().is_ok_and(|current| current.kdf.salt == salt) {
+            let intent = if remember {
+                KeyringIntent::Remember(&key)
+            } else {
+                KeyringIntent::Forget
+            };
+            self.apply_keyring(generation, intent);
         }
         Ok(())
     }
@@ -976,6 +973,38 @@ mod tests {
         s.unlock(PASSPHRASE, true).expect("unlock publishes");
 
         assert_eq!(keyring_log(), vec![]);
+    }
+
+    #[test]
+    fn an_unlock_does_not_forget_a_key_a_sign_in_replaced() {
+        let _serial = KEYRING_TESTS.lock().expect("keyring tests");
+        reset_keyring_log();
+        let mut s = keyring_session("keyring-forget-vs-sign-in");
+        s.warm_hook = Some(|session, _jwt, _platform| {
+            let signed_in = encrypt_jwt("jwt.newer.sig", PASSPHRASE, "pc").expect("encrypt");
+            session.persist(&signed_in).expect("sign-in writes its login file");
+            let key = derive_jwt_key(&signed_in, PASSPHRASE).expect("sign-in key");
+            session.apply_keyring(session.session_generation(), KeyringIntent::Remember(&key));
+            Ok(dummy_unlocked())
+        });
+
+        s.unlock(PASSPHRASE, false).expect("unlock publishes");
+
+        assert_eq!(keyring_log(), vec![(true, true)], "the newer sign-in's key must survive");
+        fs::remove_file(&s.jwt_path).expect("remove login fixture");
+    }
+
+    #[test]
+    fn an_uninterrupted_unlock_still_forgets_the_keyring_entry() {
+        let _serial = KEYRING_TESTS.lock().expect("keyring tests");
+        reset_keyring_log();
+        let mut s = keyring_session("keyring-unlock-forget");
+        s.warm_hook = Some(|_session, _jwt, _platform| Ok(dummy_unlocked()));
+
+        s.unlock(PASSPHRASE, false).expect("unlock publishes");
+
+        assert_eq!(keyring_log(), vec![(false, true)]);
+        fs::remove_file(&s.jwt_path).expect("remove login fixture");
     }
 
     /// A forget decided before a logout belongs to the session the logout
