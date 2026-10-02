@@ -58,7 +58,7 @@ The scanned values are session secrets: see "The app never prints secrets" in
 
 ## WFM API quirks
 
-Auth (changed 2026-09): every `warframe.market` page now sits behind a
+Auth: every `warframe.market` page sits behind a
 Cloudflare interactive challenge (`cf-mitigated: challenge`, for any user
 agent), so the old flow - GET `/auth/signin` for its `csrf-token` meta tag,
 then `POST /v1/auth/signin` - dies at the GET, and the POST refuses to run
@@ -74,8 +74,8 @@ this cookie-style JWT - header-style is rejected.
 
 User-Agent: always the descriptive project UA, built by
 `wfm_client::user_agent(component, version)`. WFM's rules (ToS §11) REQUIRE it
-and treat browser spoofing as block-worthy; the old Firefox `BROWSER_UA` is gone
-(2026-08-16 - probed: descriptive UA is accepted on every v1/v2 endpoint).
+and treat browser spoofing as block-worthy; the descriptive UA is accepted on
+every v1/v2 endpoint.
 
 | Action | Method + path | Body / notes |
 |---|---|---|

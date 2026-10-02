@@ -12,7 +12,7 @@ authed order mutation - the trading services stay in `wfm-core`.
 Every `api.warframe.market` call carries `Crossplay: true` + `Platform: pc` +
 `Language: en`, which is what `wfm_headers()` sends.
 
-Sign-in makes no request of its own: since 2026-09 every `warframe.market`
+Sign-in makes no request of its own: every `warframe.market`
 page is behind a Cloudflare bot challenge, so the user signs in on WFM's page
 in a desktop webview and the app keeps the resulting `JWT` cookie. Do not
 reintroduce a scripted CSRF + password POST; it cannot pass the challenge.
@@ -26,9 +26,8 @@ as endpoints are added.
 
 Always the descriptive project UA, built by
 `wfm_client::user_agent(component, version)`. WFM's rules (ToS §11) REQUIRE it
-and treat browser spoofing as block-worthy. The old Firefox `BROWSER_UA` is
-gone (2026-08-16 - probed: a descriptive UA is accepted on every v1/v2
-endpoint).
+and treat browser spoofing as block-worthy. A descriptive UA is accepted on
+every v1/v2 endpoint.
 
 ## Budgets, pacing and retry
 

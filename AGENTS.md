@@ -214,15 +214,10 @@ These exist because each has already gone wrong once:
   JSON file both sides parse directly (see `jwt-kdf.json`, `pacing.json`,
   `limits.json`, `vault-soon.json`). Prefer one implementation over two: the
   desktop preview runs the native planners compiled to WebAssembly rather than
-  keeping TypeScript copies of them. A 2026-07 sweep found several places where the "just a
-  comment" version had already drifted silently - one of them (a slug-guessing
-  fallback) was a live, if narrow, bug.
-- **A parity gate must test CURRENT code, or it is worse than no gate.** The
-  two Rust-parity runners checked `RUST_BINARY.exists()` and then ran whatever
-  was there. On 2026-08-01 that meant five green parity tests in 0.08 s against
-  a binary eight days old and 17 KB different from what the source produced -
-  the exact stale-green shape as the 2026-07-20 incident, wearing a passing
-  test as a disguise. When you add a gate that shells a built artifact, the
+  keeping TypeScript copies of them.
+- **A parity gate must test CURRENT code, or it is worse than no gate.** A
+  runner that only checks that a built artifact exists will report green
+  against a stale one. When you add a gate that shells a built artifact, the
   build is part of the gate. Ask what the gate does when the artifact is stale,
   not just when it's missing. (The Rust fixture gates in
   `rust/wfm-scrape/tests/` shell `env!("CARGO_BIN_EXE_wfm-scrape")`, which cargo
@@ -237,9 +232,7 @@ These exist because each has already gone wrong once:
   Do not introduce `@ts-nocheck` to suppress production component diagnostics.
 - **Confirm a pinned action SHA declares every input you pass.** An undeclared
   input is not an error: the runner warns and ignores it, so the step silently
-  does not do what it says. 2026-09-13: `save-if` was confirmed present in the
-  pinned rust-cache v2.9.2, and `cache-hit`/`cache-primary-key` in the pinned
-  cache action, before either was relied on. Read the action's own `action.yml`
+  does not do what it says. Read the action's own `action.yml`
   at the pinned commit, not from its default branch.
 - **When measuring CI, drop skipped jobs.** A job that was never applicable
   reports a near-zero duration, and including those pulls the median toward
@@ -285,23 +278,18 @@ These exist because each has already gone wrong once:
    browser and look at the result. "Build succeeded" ≠ "feature works."
 6. **Named-vs-default imports in `@ts-nocheck` files.** A `import X from`
    on a named-only export compiles (the file is untyped) and binds
-   `undefined`, silently no-op'ing the feature. 2026-08-03: a default
-   `LIQUID_VOL` import shipped past `bun run check` and the pick-tag just
-   never rendered. Production files can no longer carry `@ts-nocheck`
-   (`frontend/src/dev/architecture.test.ts` refuses it), so this now bites in
-   the test files that still do. Type-check can't see these - only running
-   the test (or a named-import convention) can.
+   `undefined`, silently no-op'ing the feature. Production files can no
+   longer carry `@ts-nocheck` (`frontend/src/dev/architecture.test.ts`
+   refuses it), so this now bites in the test files that still do.
+   Type-check can't see these - only running the test (or a named-import
+   convention) can.
 7. **A test you have never watched fail is not a gate.** After adding one,
-   remove the behaviour it claims to protect and confirm it fails. 2026-09-13:
-   the probe watchdog test was checked this way - with the watchdog removed no
-   report is written at all and the test fails loudly. A test that passes both
-   with and without the fix restates the code instead of guarding it.
+   remove the behaviour it claims to protect and confirm it fails. A test that
+   passes both with and without the fix restates the code instead of guarding
+   it.
 8. **Check the current tree before ranking the work.** A run-history audit shows
-   symptoms; it does not show whether the cause is still present. 2026-09-13:
-   the "flaky five-minute probe hang" was ranked the highest-value fix, and
-   `3a8f759` had already fixed both the product fault and the harness fault
-   behind the timeout. Read the source of the thing being prioritised, not only
-   its logs.
+   symptoms; it does not show whether the cause is still present. Read the
+   source of the thing being prioritised, not only its logs.
 
 ---
 
