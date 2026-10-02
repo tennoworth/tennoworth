@@ -91,6 +91,9 @@ jobs:
               - '.github/actions/setup-windows-ocr/**'
               - '.github/actions/stage-tessdata/**'
               - '.github/workflows/ui-smoke.yml'
+              # Instruction files under rust/wfm-core and rust/wfm-client are
+              # documentation; without this a prose edit runs both probes.
+              - '!**/AGENTS.md'
             docs_only:
               - '**/*.md'
               - 'docs/**'
