@@ -1,11 +1,15 @@
 //! Module-dependency gates for the desktop crate.
 //!
-//! The desktop crate has four layers, and the rule that matters is which way
-//! they may point:
+//! The desktop crate has four layers plus in-game features, and the rule that
+//! matters is which way they may point:
 //!
-//! - `services/` - capability owners. They may use `persistence/` and each
-//!   other; they must not know about `commands/` (IPC) or `shell/` (windows,
-//!   tray, startup).
+//! - `game_events` - what the game said (EE.log lines). It knows no publisher
+//!   and no listener; the tailer publishes into it and startup subscribes.
+//! - `services/` - capability owners. They may use `persistence/`,
+//!   `game_events` and each other; they must not know about `commands/` (IPC),
+//!   `shell/` (windows, tray, startup) or a feature.
+//! - `overlay/` - an in-game feature. It may use services, persistence and
+//!   `game_events`, but not the adapters; startup wires it to the events.
 //! - `persistence/` - storage. It must not reach upward at all.
 //! - `commands/` and `shell/` - the two adapters that drive services. They may
 //!   use everything below them. `shell/` must not use `commands/`: that edge is
@@ -116,10 +120,25 @@ fn imported_modules(source: &str) -> Vec<String> {
     dependencies.0.into_iter().collect()
 }
 
+/// A layer is a directory or a single `<layer>.rs` file. A name that is neither
+/// fails loudly: a renamed module must not leave its gate passing on nothing.
+fn layer_files(layer: &str) -> Vec<PathBuf> {
+    let dir = crate_src().join(layer);
+    let file = crate_src().join(format!("{layer}.rs"));
+    if dir.is_dir() {
+        rust_files(&dir)
+    } else {
+        assert!(
+            file.is_file(),
+            "layer {layer} is neither src/{layer}/ nor src/{layer}.rs"
+        );
+        vec![file]
+    }
+}
+
 fn violations(layer: &str, forbidden: &[&str]) -> Vec<String> {
-    let root = crate_src().join(layer);
     let mut found = Vec::new();
-    for file in rust_files(&root) {
+    for file in layer_files(layer) {
         let source =
             std::fs::read_to_string(&file).expect("dependency gate must read every source file");
         for module in imported_modules(&source) {
@@ -154,10 +173,43 @@ fn services_do_not_depend_on_adapters() {
     );
 }
 
+/// The tailer used to call the overlay directly and definitions installed the
+/// overlay's markers, so the capability layer knew which features existed. A
+/// service publishes into `game_events` instead and startup decides who hears.
+#[test]
+fn services_do_not_depend_on_features() {
+    assert_eq!(
+        violations("services", &["overlay"]),
+        Vec::<String>::new(),
+        "a service must publish what it observed, not call the feature that reacts to it"
+    );
+}
+
+#[test]
+fn features_do_not_depend_on_adapters() {
+    assert_eq!(
+        violations("overlay", &["commands", "shell"]),
+        Vec::<String>::new(),
+        "an in-game feature is driven by events and startup, not by IPC or window code"
+    );
+}
+
+#[test]
+fn game_events_know_no_listener() {
+    assert_eq!(
+        violations(
+            "game_events",
+            &["overlay", "services", "commands", "shell", "persistence"]
+        ),
+        Vec::<String>::new(),
+        "the event bus sits below every publisher and subscriber"
+    );
+}
+
 #[test]
 fn persistence_does_not_reach_upward() {
     assert_eq!(
-        violations("persistence", &["commands", "shell", "services"]),
+        violations("persistence", &["commands", "shell", "services", "overlay"]),
         Vec::<String>::new(),
         "storage is the bottom layer; upward edges make it untestable without the app"
     );

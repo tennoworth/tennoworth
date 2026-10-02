@@ -27,7 +27,8 @@ rust/
     commands/                IPC entry points and input validation
     services/                inventory state, automatic scan, watches, trades, notifications
     persistence/             schema, record types, table operations, key storage
-    overlay/
+    game_events.rs           EE.log lines published to whoever subscribes
+    overlay/                 in-game reward feature
       capture/               platform frame acquisition
       recognition/           OCR, parsing, matching, result assembly
       presentation/          native windows and Wayland presentation
@@ -148,9 +149,13 @@ runtime lifecycle correctness or inspect arbitrary dynamic imports; behavior
 and browser tests cover those concerns.
 
 The native module gate parses absolute `crate::` imports, grouped re-exports,
-calls and type paths. Services cannot depend on shell or command adapters,
-persistence cannot depend on those adapters or services, and shell code calls
-services directly. Test-only modules are excluded without hiding production
+calls and type paths. Services cannot depend on shell or command adapters or
+on an in-game feature, persistence cannot depend on those adapters or services,
+and shell code calls services directly. In-game features such as `overlay/` sit
+beside the adapters: they may use services, persistence and `game_events`, but
+not commands or shell. They hear the game through `game_events`, which the
+EE.log tailer publishes to and startup subscribes them on, and which imports
+none of them. Test-only modules are excluded without hiding production
 items later in the file. Relative `super::` paths and macro-generated paths
 remain outside this source gate; it is not a compiler dependency graph. Startup
 registers command paths inside `tauri::generate_handler!`; that composition is

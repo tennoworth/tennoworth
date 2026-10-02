@@ -34,7 +34,6 @@ use std::path::{Path, PathBuf};
 
 use wfm_core::acquisition::scan::{install_patterns, patterns_from_definitions, ScanDefinitions};
 
-use crate::overlay::install_reward_markers;
 use crate::services::market::{write_atomic, TIMEOUT};
 
 #[derive(serde::Deserialize)]
@@ -73,6 +72,10 @@ pub struct DefinitionsOutcome {
     pub fetched: bool,
     /// Patterns the file supplied that were refused, with reasons.
     pub rejected: Vec<String>,
+    /// The reward-screen log markers the file supplied, not yet validated.
+    /// Their owner is the overlay, which installs them and reports a refusal
+    /// into `rejected`; definitions only carries them.
+    pub reward_log_markers: Vec<String>,
 }
 
 /// Install whatever definitions we can find, preferring a fresh fetch and
@@ -105,12 +108,13 @@ fn refresh_and_install_with(dir: &Path, url: &str) -> DefinitionsOutcome {
                 installed: false,
                 fetched,
                 rejected: vec![],
+                reward_log_markers: vec![],
             };
         }
     };
 
     let (patterns, rejections) = patterns_from_definitions(&defs.scan);
-    let mut rejected: Vec<String> = rejections
+    let rejected: Vec<String> = rejections
         .iter()
         .map(|r| format!("{}: {}", r.field, r.reason))
         .collect();
@@ -130,14 +134,11 @@ fn refresh_and_install_with(dir: &Path, url: &str) -> DefinitionsOutcome {
         reset_cache(dir);
     }
     install_patterns(patterns);
-    if let Err(reason) = install_reward_markers(&defs.reward_log_markers) {
-        eprintln!("tennoworth: definitions rejected reward_log_markers: {reason}");
-        rejected.push(format!("reward_log_markers: {reason}"));
-    }
     DefinitionsOutcome {
         installed: true,
         fetched,
         rejected,
+        reward_log_markers: defs.reward_log_markers,
     }
 }
 
