@@ -22,7 +22,7 @@ use wfm_core::trading::ws::{order_matches_watch, run_new_orders_stream, NewOrder
 
 use crate::persistence::{Db, Watch};
 use crate::services::watch::{
-    describe, price_for_watch, WatchOutcome, EVENT_WATCH_FIRED, REARM_AFTER_SECS,
+    describe, is_rearmed, price_for_watch, WatchOutcome, EVENT_WATCH_FIRED,
 };
 use crate::services::wfm_session::WfmSession;
 
@@ -86,10 +86,7 @@ pub fn match_order(
                 w.rank.map(|r| r.max(0) as u32),
                 w.subtype.as_deref(),
             )
-            && match w.last_fired_at {
-                Some(t) => now - t >= REARM_AFTER_SECS,
-                None => true,
-            }
+            && is_rearmed(w.last_fired_at, now)
     })
 }
 
@@ -204,6 +201,7 @@ fn run(app: AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::services::watch::REARM_AFTER_SECS;
 
     fn watch(id: i64, slug: &str, side: &str, threshold: i64, last_fired_at: Option<i64>) -> Watch {
         Watch {
