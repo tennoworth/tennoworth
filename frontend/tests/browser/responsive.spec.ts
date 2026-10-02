@@ -249,6 +249,17 @@ test.describe('desktop responsive layout', () => {
     }
   });
 
+  // The More menu beside it always closed on Escape; Refresh only on an
+  // outside click, so a keyboard user had no way out of it.
+  test('the Refresh menu closes on Escape and returns focus to its trigger', async ({ page }) => {
+    const trigger = page.getByRole('button', { name: /^Refresh/ });
+    await trigger.click();
+    await expect(page.locator('.refresh-pop')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.refresh-pop')).toHaveCount(0);
+    await expect(trigger).toBeFocused();
+  });
+
   test('menus and dialogs stay inside a narrow viewport', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 480 });
 

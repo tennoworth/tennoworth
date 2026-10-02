@@ -63,6 +63,7 @@ import { humanWindow } from '../ui/format';
     return () => { document.removeEventListener('click', click, true); document.removeEventListener('keydown', key); };
   });
   let refreshOpen = $state(false);
+  let refreshTrigger = $state<HTMLButtonElement>();
   async function refreshFromGame() {
     refreshOpen = false;
     await inventory.pullInventory();
@@ -73,8 +74,15 @@ import { humanWindow } from '../ui/format';
       const t = e.target instanceof Element ? e.target : null;
       if (!t?.closest('.refresh-pop, .refresh-trigger')) refreshOpen = false;
     };
+    // Same as the More menu beside it: Escape closes and returns focus.
+    const key = (e: KeyboardEvent): void => {
+      if (e.key !== 'Escape') return;
+      refreshOpen = false;
+      refreshTrigger?.focus();
+    };
     document.addEventListener('click', handler, true);
-    return () => document.removeEventListener('click', handler, true);
+    document.addEventListener('keydown', key);
+    return () => { document.removeEventListener('click', handler, true); document.removeEventListener('keydown', key); };
   });
 
 
@@ -112,6 +120,7 @@ import { humanWindow } from '../ui/format';
                looked like a dead click. This trigger stays on screen. -->
           <button data-shell
             class="refresh-trigger"
+            bind:this={refreshTrigger}
             class:busy={inventory.pullingInventory}
             onclick={() => (refreshOpen = !refreshOpen)}
             aria-expanded={refreshOpen}

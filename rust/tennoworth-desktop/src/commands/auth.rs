@@ -128,6 +128,16 @@ pub async fn try_silent_unlock(session: State<'_, Arc<WfmSession>>) -> Result<bo
         .map_err(|e| CmdError::internal(format!("silent-unlock task failed to run: {e}")))
 }
 
+/// Whether "remember on this device" can work here: a keyring service has to
+/// answer. Asked when a sign-in or unlock dialog opens. Blocking DBus I/O, so
+/// spawn_blocking.
+#[tauri::command]
+pub async fn wfm_remember_available() -> bool {
+    tauri::async_runtime::spawn_blocking(crate::persistence::keyring_store::available)
+        .await
+        .unwrap_or(false)
+}
+
 /// Log out and remove both the live session and its encrypted on-disk login.
 #[tauri::command]
 pub fn wfm_logout(session: State<'_, Arc<WfmSession>>) -> Result<(), CmdError> {

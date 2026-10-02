@@ -82,3 +82,17 @@ pub fn forget_key() {
         Err(e) => eprintln!("tennoworth: keyring delete failed: {e}"),
     }
 }
+
+/// Whether a keyring answers at all. A missing entry is fine; anything else
+/// (no Secret Service on the bus, KDE Wallet switched off, a refused DBus call)
+/// means "remember on this device" cannot work, and the sign-in dialogs say so
+/// instead of offering a checkbox that silently does nothing.
+pub fn available() -> bool {
+    match entry().and_then(|e| e.get_password()) {
+        Ok(_) | Err(keyring::Error::NoEntry) => true,
+        Err(e) => {
+            eprintln!("tennoworth: keyring unavailable (remember-on-device off): {e}");
+            false
+        }
+    }
+}
