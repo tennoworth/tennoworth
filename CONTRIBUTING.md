@@ -296,8 +296,8 @@ and reports into `audit-gate`, so an instruction-only change is gated without
 starting any native or UI work.
 
 Optional local automation uses the shared `AGENTS.md` instructions. Maintainer
-skills under `.agents/skills/` and host settings in `AGENTS.local.md` are not
-part of a fresh clone. When those local files are installed or changed, run
+skills in the maintainer home (`.planning/skills/`) and host settings in
+`AGENTS.local.md` are not part of a fresh clone. When those local files are installed or changed, run
 `bun scripts/check-agent-instructions.ts --local` to check skill references and
 adapter instruction paths. This does not establish that a particular tool
 automatically loads them; follow the explicit read contract in `AGENTS.md`.

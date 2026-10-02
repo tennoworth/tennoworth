@@ -22,14 +22,13 @@ inventory.json
 
 # Internal working artifacts - design exploration and research notes for
 # the maintainer, not documentation for people checking the project.
-# /.planning/ is the single home for ephemeral deliverables, plans, and
-# notes that must never enter git - everything in it stays ignored by this
-# rule, no per-file entries needed.
+# /.planning/ is the maintainer home: plans, knowledge and skills in a
+# separate local repository that must never enter this one - everything in it
+# stays ignored by this rule, no per-file entries needed.
 /.mockups/
 /docs/mockups/
 /.research/
 /.planning/
-/.agents/skills/
 /rust/tennoworth-desktop/resources/tessdata/eng.traineddata
 /.loop-journal.md
 /docs/onboarding-friction.md

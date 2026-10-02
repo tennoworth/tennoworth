@@ -61,18 +61,23 @@ function checkLocal() {
   } else {
     checkLinks(ROOT_FILE, readFileSync(resolve(ROOT, ROOT_FILE), "utf8"));
   }
-  const skills = resolve(ROOT, ".agents/skills");
+  // The maintainer home sits beside the main checkout's .git, so every worktree
+  // resolves the same one; a fresh clone simply has none.
+  const commonDir = Bun.spawnSync(
+    ["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+    { cwd: ROOT },
+  ).stdout.toString().trim();
+  const skills = resolve(commonDir || resolve(ROOT, ".git"), "..", ".planning", "skills");
   if (existsSync(skills)) {
     for (const entry of readdirSync(skills, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
-      const file = `.agents/skills/${entry.name}/SKILL.md`;
-      const path = resolve(ROOT, file);
-      if (!existsSync(path)) {
+      const file = resolve(skills, entry.name, "SKILL.md");
+      if (!existsSync(file)) {
         errors.push(`${file}: missing entrypoint`);
         continue;
       }
       count++;
-      const text = readFileSync(path, "utf8");
+      const text = readFileSync(file, "utf8");
       const frontmatter = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(text);
       try {
         const data = frontmatter ? Bun.YAML.parse(frontmatter[1]) as Record<string, unknown> : null;
@@ -110,7 +115,7 @@ function checkLocal() {
     process.exit(1);
   }
   console.log(`check-agent-instructions --local: ok (${count} installed skills; ${existsSync(adapter) ? "OpenCode adapter checked" : "no local adapter"}).`);
-  if (!count) console.log("No local skills installed; a clean clone does not include maintainer procedures.");
+  if (!count) console.log(`No skills in ${skills}; a clean clone has no maintainer home.`);
   console.log("This validates files and references, not automatic discovery by a tool.");
 }
 
