@@ -1,4 +1,5 @@
 <script lang="ts">
+import { marketFreshness as marketFreshnessBucket } from '../ui/format';
 import { onMount } from 'svelte';
 import MarketBrowser from '../features/market-context/MarketBrowser.svelte';
 import DesktopShowcase from '../features/market-context/DesktopShowcase.svelte';
@@ -45,13 +46,7 @@ onMount(() => {
   });
 let baroState = $derived(voidTrader ? baroPhase(voidTrader.activation, voidTrader.expiry, displayNow) : null);
 let marketStaleness = $derived(ago(market?.updated_at));
-let marketFreshness = $derived.by<'unknown' | 'fresh' | 'aging' | 'stale'>(() => {
-    if (!market?.updated_at) return 'unknown';
-    const h = (displayNow - new Date(market.updated_at).getTime()) / 3.6e6;
-    if (h <= 3) return 'fresh';
-    if (h <= 24) return 'aging';
-    return 'stale';
-  });
+let marketFreshness = $derived(marketFreshnessBucket(market?.updated_at, displayNow));
 function ago(ts: string | number | null | undefined) {
     if (!ts) return null;
     // Clamp at 0 - a cron runner with skewed clock can produce

@@ -1,3 +1,4 @@
+import { marketFreshness as marketFreshnessBucket } from '../ui/format';
 import { staleSurfaceTimestamp } from '../domain/market';
 import { onMount } from 'svelte';
 import type { InventoryController } from '../features/inventory/controller.svelte';
@@ -156,17 +157,7 @@ export function createDesktopSession({ inventory, listing, transport, store, ser
   let relicSurfaceAge = $derived(surfaceAge('relic_rewards'));
   let setSurfaceAge = $derived(surfaceAge('set_to_parts'));
 
-  // Coarse freshness bucket for the small status dot next to "market Xh ago".
-  // The scrape cron runs every 2h, so a healthy snapshot is under 3h old -
-  // "fresh" means exactly that. Calling a 5h-old book "fresh" during an
-  // event-week price spike would be generous to the point of misleading.
-  let marketFreshness = $derived.by<'unknown' | 'fresh' | 'aging' | 'stale'>(() => {
-    if (!inventory.market?.updated_at) return 'unknown';
-    const h = (displayNow - new Date(inventory.market.updated_at).getTime()) / 3.6e6;
-    if (h <= 3) return 'fresh';
-    if (h <= 24) return 'aging';
-    return 'stale';
-  });
+  let marketFreshness = $derived(marketFreshnessBucket(inventory.market?.updated_at, displayNow));
 
   let wfmLabel = $derived(
     !listing.wfmStatus ? '-' : listing.wfmStatus.unlocked ? 'session live' : listing.wfmStatus?.logged_in ? 'locked' : 'logged out',

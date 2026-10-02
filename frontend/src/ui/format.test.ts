@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 
 import {
   wfmItemUrl, baroLocation, humanWindow, humanBuildTime, plat,
-  ownedBreakdown, keptNoteTitle,
+  ownedBreakdown, keptNoteTitle, marketFreshness,
 } from './format.js';
 
 describe('wfmItemUrl', () => {
@@ -108,5 +108,22 @@ describe('humanBuildTime', () => {
     expect(humanBuildTime(43200)).toBe('12h');
     expect(humanBuildTime(259200)).toBe('3d');
     expect(humanBuildTime(259200 + 43200)).toBe('3d 12h');
+  });
+});
+
+
+describe('marketFreshness', () => {
+  const now = Date.parse('2026-10-02T12:00:00Z');
+  it.each([
+    [0, 'fresh'], [3, 'fresh'], [3 + 1 / 3.6e6, 'aging'],
+    [24, 'aging'], [24 + 1 / 3.6e6, 'stale'], [-1, 'fresh'],
+  ] as const)('classifies a snapshot aged %s hours as %s', (hours, expected) => {
+    expect(marketFreshness(new Date(now - hours * 3.6e6).toISOString(), now)).toBe(expected);
+  });
+  it('keeps absent and malformed stamps on their existing paths', () => {
+    expect(marketFreshness(null, now)).toBe('unknown');
+    expect(marketFreshness(undefined, now)).toBe('unknown');
+    expect(marketFreshness('', now)).toBe('unknown');
+    expect(marketFreshness('invalid', now)).toBe('stale');
   });
 });
