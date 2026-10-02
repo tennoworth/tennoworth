@@ -1,4 +1,5 @@
 import type { BuyerOrder, LiveTop } from '../contracts/desktop';
+import { MAX_PER_TRADE } from './limits';
 
 export function compareBuyers(quote: LiveTop | null, quantity: number, ask: number, now: number) {
   const book = quote?.buyer_book;
@@ -17,7 +18,7 @@ export function compareBuyers(quote: LiveTop | null, quantity: number, ask: numb
   const eligible = book.orders.filter(order => {
     if (!order.id || !order.user_id || seen.has(order.user_id) || !['online', 'ingame'].includes(order.status)
       || !Number.isSafeInteger(order.quantity) || order.quantity <= 0
-      || !Number.isSafeInteger(order.per_trade) || order.per_trade < 1 || order.per_trade > 6
+      || !Number.isSafeInteger(order.per_trade) || order.per_trade < 1 || order.per_trade > MAX_PER_TRADE
       || order.quantity % order.per_trade !== 0 || !Number.isSafeInteger(order.platinum) || order.platinum <= 0) return false;
     seen.add(order.user_id);
     return true;

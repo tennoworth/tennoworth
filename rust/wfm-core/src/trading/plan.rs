@@ -16,7 +16,7 @@ use crate::trading::outcome::MutationOutcome;
 use crate::trading::listing::{
     decode_user_orders, list_user_orders, patch_one_order, send_mutation, Unlocked,
 };
-use market_domain::limits::{MAX_PLAN_ITEMS, MAX_PLATINUM, MIN_PLATINUM};
+use market_domain::limits::{MAX_PLAN_ITEMS, MAX_PLATINUM, MIN_PLATINUM, MAX_PER_TRADE};
 use crate::trading::orders::DecodedOrders;
 use crate::trading::pending::{journal_state, write_pending_atomic, JournalState, PendingItem, PendingPlan};
 use market_domain::orders::{NormalizedOrder, OrderRow, OrderSide};
@@ -45,11 +45,6 @@ impl Drop for PlanGuard<'_> {
 }
 
 const SLUG_MISMATCH_GUARD_MULTIPLIER: u32 = 3;
-
-// Maximum items per single in-game trade - six slots per side in Warframe's
-// trade window. WFM rejects `perTrade` values above this with
-// `app.field.tooBig` (verified on a real relic listing, May 2026).
-const MAX_PER_TRADE: u32 = 6;
 
 #[derive(Deserialize)]
 pub struct PlanRequest {

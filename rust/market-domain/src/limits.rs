@@ -7,6 +7,11 @@
 /// Items in one listing batch.
 pub const MAX_PLAN_ITEMS: usize = 50;
 
+/// Items per single in-game trade: six slots per side in Warframe's trade
+/// window. WFM rejects a larger `perTrade` with `app.field.tooBig` (verified on
+/// a real relic listing, May 2026).
+pub const MAX_PER_TRADE: u32 = 6;
+
 /// Lowest price a listing may ask, per unit.
 pub const MIN_PLATINUM: u32 = 5;
 
@@ -25,6 +30,7 @@ mod tests {
             serde_json::from_str(include_str!("../../../tests/fixtures/limits.json"))
                 .expect("parse the limits fixture");
         assert_eq!(fixture["max_plan_items"], MAX_PLAN_ITEMS);
+        assert_eq!(fixture["max_per_trade"], MAX_PER_TRADE);
         assert_eq!(fixture["min_platinum"], MIN_PLATINUM);
         assert_eq!(fixture["max_platinum"], MAX_PLATINUM);
     }

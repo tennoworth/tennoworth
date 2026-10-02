@@ -1,4 +1,5 @@
 import type { MarketItemEntry } from '../contracts/data';
+import { MAX_PER_TRADE } from './limits';
 
 export type SessionMode = 'fast' | 'per-trade' | 'clear' | 'max';
 export const SESSION_MODES: Array<{ id: SessionMode; name: string; description: string }> = [
@@ -36,7 +37,7 @@ export interface SessionRow extends SessionCandidate {
 
 export function validSessionLot(quantity: number, lot: number, bulk: boolean): boolean {
   return Number.isSafeInteger(quantity) && quantity > 0 && Number.isSafeInteger(lot)
-    && lot >= 1 && lot <= 6 && quantity % lot === 0 && (bulk || lot === 1);
+    && lot >= 1 && lot <= MAX_PER_TRADE && quantity % lot === 0 && (bulk || lot === 1);
 }
 
 /** What the native Trade Session selection returns (market_domain::trade_session), with each row's market restored from its candidate. */

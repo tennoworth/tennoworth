@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 
-import { MAX_PLATINUM, MIN_PLATINUM, MAX_PLAN_ITEMS } from './limits.js';
+import { MAX_PLATINUM, MIN_PLATINUM, MAX_PLAN_ITEMS, MAX_PER_TRADE } from './limits.js';
 import limitsFixture from '../../../tests/fixtures/limits.json';
 
 // Parity gate: wfm-core enforces these server-side (MAX_PLAN_ITEMS and
@@ -10,6 +10,7 @@ import limitsFixture from '../../../tests/fixtures/limits.json';
 describe('listing limits', () => {
   it('match the caps pinned in the shared fixture', () => {
     expect(MAX_PLAN_ITEMS).toBe(limitsFixture.max_plan_items);
+    expect(MAX_PER_TRADE).toBe(limitsFixture.max_per_trade);
     expect(MIN_PLATINUM).toBe(limitsFixture.min_platinum);
     expect(MAX_PLATINUM).toBe(limitsFixture.max_platinum);
   });

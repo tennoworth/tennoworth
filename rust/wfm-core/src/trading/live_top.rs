@@ -12,6 +12,7 @@
 //! The caller reports progress because validation and queued work add latency.
 
 use wfm_client::governor::Kind;
+use market_domain::limits::MAX_PER_TRADE;
 
 use anyhow::{bail, Result};
 use reqwest::blocking::Client;
@@ -147,7 +148,7 @@ fn buyer_orders(q: &LiveTopQuery, data: &serde_json::Value, me: Option<&str>) ->
                 Some(_) => positive("perTrade")?,
                 None => 1,
             };
-            if per_trade > 6 || quantity % per_trade != 0 {
+            if per_trade > MAX_PER_TRADE || quantity % per_trade != 0 {
                 return None;
             }
             Some(BuyerOrder {

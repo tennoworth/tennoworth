@@ -1,5 +1,6 @@
 {
   "max_plan_items": 50,
+  "max_per_trade": 6,
   "min_platinum": 5,
   "max_platinum": 3000,
   "note": "Listing caps. Rust: rust/market-domain/src/limits.rs, the one definition every enforcement point imports. Browser: frontend/src/domain/limits.ts, which exists only so the UI can reject an out-of-range value before the round trip. Rust is the source of truth, so drift shows up as the UI accepting a batch the app then rejects - max_platinum was already raised from 999 once, after it silently blocked maxed Arcanes and Galvanized mods that really sell for 1500-2500p."
