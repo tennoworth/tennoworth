@@ -9,7 +9,8 @@ pub(in crate::overlay) fn capture_warframe() -> Result<CapturedFrame, String> {
     use xcb::{
         x::{
             Atom, Drawable, GetGeometry, GetImage, GetProperty, ImageFormat, ImageOrder,
-            InternAtom, TranslateCoordinates, Window, ATOM_NONE, ATOM_STRING, ATOM_WM_NAME,
+            InternAtom, TranslateCoordinates, Window, ATOM_CARDINAL, ATOM_NONE, ATOM_STRING,
+            ATOM_WM_NAME,
         },
         Connection,
     };
@@ -49,14 +50,22 @@ pub(in crate::overlay) fn capture_warframe() -> Result<CapturedFrame, String> {
     let client_list = atom(&connection, b"_NET_CLIENT_LIST_STACKING")?;
     let net_wm_name = atom(&connection, b"_NET_WM_NAME")?;
     let utf8_string = atom(&connection, b"UTF8_STRING")?;
+    let net_wm_pid = atom(&connection, b"_NET_WM_PID")?;
 
-    let mut warframe = None;
+    let mut windows = Vec::new();
+    let mut candidates = Vec::new();
     for screen in connection.get_setup().roots() {
         let reply = match property(&connection, screen.root(), client_list, ATOM_NONE) {
             Ok(reply) => reply,
             Err(_) => continue,
         };
         for &window in reply.value::<Window>().iter().rev() {
+            // `value` asserts the reply's format, and a client may set this
+            // property with any format it likes.
+            let pid = property(&connection, window, net_wm_pid, ATOM_CARDINAL)
+                .ok()
+                .filter(|reply| reply.format() == 32)
+                .and_then(|reply| reply.value::<u32>().first().copied());
             let mut title = property(&connection, window, net_wm_name, utf8_string)
                 .ok()
                 .map(|reply| String::from_utf8_lossy(reply.value()).into_owned())
@@ -67,17 +76,21 @@ pub(in crate::overlay) fn capture_warframe() -> Result<CapturedFrame, String> {
                     .map(|reply| String::from_utf8_lossy(reply.value()).into_owned())
                     .unwrap_or_default();
             }
-            if title.to_ascii_lowercase().contains("warframe") {
-                warframe = Some(window);
-                break;
-            }
-        }
-        if warframe.is_some() {
-            break;
+            windows.push(window);
+            candidates.push((pid, title));
         }
     }
 
-    let window = warframe.ok_or_else(|| {
+    let chosen =
+        super::pick_game_window(&candidates, wfm_core::acquisition::scan::find_wf_pid());
+    if let Some((index, rule)) = chosen {
+        let title = candidates.get(index).map_or("", |(_, title)| title.as_str());
+        eprintln!(
+            "tennoworth: capturing window {title:?} (matched by {})",
+            rule.describe()
+        );
+    }
+    let window = chosen.and_then(|(index, _)| windows.get(index).copied()).ok_or_else(|| {
         if std::env::var_os("WAYLAND_DISPLAY").is_some() {
             "window_not_found: Warframe window not found - capture runs through XWayland for now; run Warframe borderless/windowed with XWayland enabled"
                 .to_string()

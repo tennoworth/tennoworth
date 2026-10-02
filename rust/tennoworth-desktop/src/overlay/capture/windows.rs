@@ -3,14 +3,21 @@ use super::CapturedFrame;
 pub(in crate::overlay) fn capture_warframe() -> Result<CapturedFrame, String> {
     let windows =
         xcap::Window::all().map_err(|e| format!("capture_failed: listing windows: {e}"))?;
-    let window = windows
-        .into_iter()
-        .find(|window| {
-            window
-                .title()
-                .ok()
-                .is_some_and(|title| title.to_ascii_lowercase().contains("warframe"))
-        })
+    let candidates: Vec<(Option<u32>, String)> = windows
+        .iter()
+        .map(|window| (window.pid().ok(), window.title().unwrap_or_default()))
+        .collect();
+    let chosen =
+        super::pick_game_window(&candidates, wfm_core::acquisition::scan::find_wf_pid());
+    if let Some((index, rule)) = chosen {
+        let title = candidates.get(index).map_or("", |(_, title)| title.as_str());
+        eprintln!(
+            "tennoworth: capturing window {title:?} (matched by {})",
+            rule.describe()
+        );
+    }
+    let window = chosen
+        .and_then(|(index, _)| windows.into_iter().nth(index))
         .ok_or_else(|| {
             if std::env::var_os("WAYLAND_DISPLAY").is_some() {
                 "window_not_found: Warframe window not found - capture runs through XWayland for now; run Warframe borderless/windowed with XWayland enabled"
