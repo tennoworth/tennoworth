@@ -1,20 +1,18 @@
 // Single source of truth for the Content-Security-Policy.
 //
-// The HOSTED CSP ships in THREE places that must agree - frontend/index.html
-// (meta tag, works even on hosts that drop header files),
-// frontend/public/_headers (Cloudflare Pages / Netlify), and deploy/Caddyfile
-// (self-host) - and they were hand-synced, with a standing doc warning instead
-// of tooling. Edit the DIRECTIVES below, run `bun run csp` (from frontend/) to
-// rewrite all three; CI runs `--check` before every build and fails if any copy
-// drifted.
+// The HOSTED CSP ships in TWO places that must agree - frontend/index.html
+// (meta tag) and deploy/Caddyfile (the production header) - and they were
+// hand-synced, with a standing doc warning instead of tooling. Edit the
+// DIRECTIVES below, run `bun run csp` (from frontend/) to rewrite both; CI runs
+// `--check` before every build and fails if either copy drifted.
 //
 // One deliberate asymmetry: `frame-ancestors` is invalid in a <meta> CSP
 // (browsers ignore it there), so the meta tag gets the policy WITHOUT it.
 //
-// The DESKTOP (Tauri) build is a build-variant, not a fourth committed copy:
+// The DESKTOP (Tauri) build is a build-variant, not a third committed copy:
 // `--desktop <built-index.html>` rewrites a built dist's meta CSP in place with
-// the desktop connect-src (the Tauri IPC scheme added). It NEVER touches the three hosted copies, so the
-// hosted CSP stays byte-identical.
+// the desktop connect-src (the Tauri IPC scheme added). It NEVER touches the
+// hosted copies, so the hosted CSP stays byte-identical.
 
 import { readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
@@ -86,11 +84,6 @@ if (desktopIdx !== -1) {
 
 const TARGETS = [
   {
-    path: 'frontend/public/_headers',
-    re: /^(\s*Content-Security-Policy: ).*$/m,
-    replacement: `$1${full}`,
-  },
-  {
     path: 'deploy/Caddyfile',
     re: /^(\s*Content-Security-Policy ").*(")$/m,
     replacement: `$1${full}$2`,
@@ -128,4 +121,4 @@ if (check && drifted > 0) {
   console.error('sync-csp: run `bun run csp` (in frontend/) and commit the result.');
   process.exit(1);
 }
-if (drifted === 0) console.log('sync-csp: all three copies in sync');
+if (drifted === 0) console.log('sync-csp: both copies in sync');

@@ -20,11 +20,9 @@
         img-src:     self + data: (Vite injects small assets as data: URIs)
 
       `frame-ancestors`, `Strict-Transport-Security`, and `X-Frame-Options`
-      can only be set as real HTTP headers, not via <meta>. They live in
-      public/_headers for Cloudflare Pages / Netlify / Vercel deployments.
-      GitHub Pages silently drops that file, which is one reason we'll move
-      off it for production. The CSP below still gives us script/connect/
-      style protection on GH Pages.
+      can only be set as real HTTP headers, not via <meta>. Production sets
+      them in deploy/Caddyfile; the CSP below still gives script/connect/
+      style protection wherever the page is served without those headers.
     -->
     <meta
       http-equiv="Content-Security-Policy"
