@@ -11,3 +11,4 @@
 export const MAX_PLATINUM = 3000;
 export const MIN_PLATINUM = 5;
 export const MAX_PLAN_ITEMS = 50;
+export const MAX_PER_TRADE = 6;

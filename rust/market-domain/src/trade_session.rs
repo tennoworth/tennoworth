@@ -1,5 +1,5 @@
 use market_math::sell_priority::{clearing_price, PricedEntry, LIQUID_VOL};
-use crate::limits::{MAX_PLAN_ITEMS, MAX_PLATINUM, MIN_PLATINUM};
+use crate::limits::{MAX_PLAN_ITEMS, MAX_PLATINUM, MIN_PLATINUM, MAX_PER_TRADE};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -83,7 +83,7 @@ pub fn valid_session_lot(quantity: f64, lot: f64, bulk: bool) -> bool {
     safe(quantity)
         && quantity > 0.0
         && safe(lot)
-        && (1.0..=6.0).contains(&lot)
+        && (1.0..=f64::from(MAX_PER_TRADE)).contains(&lot)
         && quantity % lot == 0.0
         && (bulk || lot == 1.0)
 }
@@ -142,7 +142,7 @@ pub fn select_session(request: SessionRequest) -> SessionPlan {
                     && parts.iter().all(|(slug, count)| {
                         slug != &candidate.slug && safe(*count) && *count > 0.0
                     })
-                    && parts.values().sum::<f64>() <= 6.0
+                    && parts.values().sum::<f64>() <= f64::from(MAX_PER_TRADE)
             });
         let reason = if candidate.supported == Some(false)
             || candidate.subtype.as_ref().is_some_and(|s| !s.is_empty())
@@ -187,7 +187,7 @@ pub fn select_session(request: SessionRequest) -> SessionPlan {
         let mut lot = if valid_set || request.mode == SessionMode::Fast || !candidate.bulk {
             1.0
         } else {
-            6.0_f64
+            f64::from(MAX_PER_TRADE)
                 .min(candidate.sellable)
                 .min((maximum / price).floor())
         };

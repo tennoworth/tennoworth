@@ -17,7 +17,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   import { validSessionLot } from '../../domain/trade-session';
   import { clearingPrice } from '../../domain/sell-priority';
   import { orderUnitPrice } from '../../domain/order-prices';
-  import { MAX_PLATINUM, MIN_PLATINUM, MAX_PLAN_ITEMS } from '../../domain/limits';
+  import { MAX_PLATINUM, MIN_PLATINUM, MAX_PLAN_ITEMS, MAX_PER_TRADE } from '../../domain/limits';
   import { humanError } from '../../contracts/errors';
   import { plat, ownedBreakdown, LEVELED_NOTE_TITLE, keptNoteTitle } from '../../ui/format';
   import DialogHeader from '../../ui/DialogHeader.svelte';
@@ -203,7 +203,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
         if (matches.length > 1) throw new Error(`${row.name} has ambiguous existing orders. Resolve them in My orders first.`);
         const prior = matches[0];
         if (prior && (typeof prior.id !== 'string' || typeof prior.visible !== 'boolean' || !Number.isSafeInteger(prior.platinum) || !Number.isSafeInteger(prior.quantity)
-          || (prior.per_trade != null && (!Number.isSafeInteger(prior.per_trade) || prior.per_trade < 1 || prior.per_trade > 6)))) {
+          || (prior.per_trade != null && (!Number.isSafeInteger(prior.per_trade) || prior.per_trade < 1 || prior.per_trade > MAX_PER_TRADE)))) {
           throw new Error(`Existing order details are incomplete for ${row.name}.`);
         }
         const next: ReviewedOrder = prior ? { state: 'existing', id: prior.id, platinum: prior.platinum,
