@@ -1,15 +1,21 @@
 <script lang="ts">
-  import { sellableQty } from '../domain/sell-priority';
-  import { listingBlockReason as listingEligibilityBlockReason, listingActionLabel as listingEligibilityActionLabel } from '../features/selling/eligibility';
-  import { advisorInput, relicInput, scoreInput, setInput, type CalcInputs } from '../features/selling/calc-inputs';
+import { createDesktopSession } from './desktop-session.svelte';
+import { createSellWorkspace } from '../features/selling/sell-workspace.svelte';
+import StatusStrip from './StatusStrip.svelte';
+import FeedbackDialog from '../features/settings/FeedbackDialog.svelte';
+import PendingBatchBanner from '../features/selling/PendingBatchBanner.svelte';
+import BaroView from '../features/market-context/BaroView.svelte';
+import RelicPlannerView from '../features/relics/RelicPlannerView.svelte';
+import SetPicksView from '../features/selling/SetPicksView.svelte';
+
   import { loadMarket } from '../adapters/market';
   import { loadCatalogs } from '../adapters/catalogs';
   import { TauriTransport, parseScanPayload } from '../adapters/desktop';
   import { useDesktopServices } from '../ui/desktop-context';
-  const { desktopAccessStatus, desktopNotifications, desktopWfmStatus, desktopWfmLogout, listenForTauriEvent, updateStatus, updateDiagnostics, desktopOpenExternalUrl, desktopProtectionState, desktopSaveProtectionPlan, normalizeInventoryNative, scoreInventoryNative, relicPlan: loadRelicPlan, setRecos: loadSetRecos, evaluateAdvisor } = useDesktopServices();
+  const { desktopAccessStatus, desktopWfmStatus, desktopWfmLogout, listenForTauriEvent, desktopProtectionState, desktopSaveProtectionPlan, normalizeInventoryNative } = useDesktopServices();
   import { ProtectionController } from '../features/selling/protection.svelte';
   import ProtectedPlan from '../features/selling/ProtectedPlan.svelte';
-  import { feedbackSnapshot, feedbackLink, feedbackProblems, improvementUrl, type WfmSession } from '../features/settings/feedback';
+  import { type WfmSession } from '../features/settings/feedback';
   import { humanError } from '../contracts/errors';
   
   import { onMount, untrack } from 'svelte';
@@ -23,7 +29,7 @@
   import WatchlistPanel from '../features/watches/WatchlistPanel.svelte';
   import NotificationInbox from '../features/settings/NotificationInbox.svelte';
   
-import { NOTIFICATIONS_EVENT, MARKET_REFRESHED_EVENT, ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
+import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   import LedgerPanel from '../features/ledger/LedgerPanel.svelte';
   import MarketBrowser from '../features/market-context/MarketBrowser.svelte';
   import DesktopUpdateBanner from '../ui/DesktopUpdateBanner.svelte';
@@ -38,30 +44,16 @@ import { NOTIFICATIONS_EVENT, MARKET_REFRESHED_EVENT, ALLOWANCE_CHANGED_EVENT } 
   import RoutinesPanel from '../features/routines/RoutinesPanel.svelte';
   import { RoutineController } from '../features/routines/controller.svelte';
   import { resolveRivens } from '../domain/rivens';
-  import { baroPhase } from '../domain/baro-board';
-  import type { RelicPlanEntry, SetReco, Verdict } from '../contracts/generated/domain';
-  import type { ScoredInventoryFact } from '../contracts/generated/domain';
-  import { DomainResult } from '../features/selling/domain-result.svelte';
+
   import { buildMetaDrift } from '../domain/meta-drift';
-  import type { History } from '../domain/history';
-  import { lookup, staleSurfaceTimestamp } from '../domain/market';
-import { startMarketRefreshLoop, type MarketRefreshLoop } from '../adapters/market';
-  import { computeResults as computeFilteredResults, computeAvailableTags, computeEmptyReason, type FilterState } from '../domain/filter-engine';
-  import { PRESETS, presetStillMatches } from '../domain/presets';
+
   import { interruptedBatch } from '../domain/listing-plan';
 
   const APP_COMMIT = __APP_COMMIT__;
   import type { StateStore } from '../contracts/state-store';
   import type { ThemeController } from '../ui/theme';
 
-  import { wfmItemUrl, baroLocation, humanWindow } from '../ui/format';
-  import BaroBoard from '../features/market-context/BaroBoard.svelte';
-  import BuildVsBuy from '../features/selling/BuildVsBuy.svelte';
-  import TraderCalendar from '../features/market-context/TraderCalendar.svelte';
   import MetaDriftPanel from '../features/market-context/MetaDriftPanel.svelte';
-  import RefinementLadder from '../features/relics/RefinementLadder.svelte';
-  
-import { TRAY_HINT_EVENT } from '../contracts/update';
 
   // Desktop (Tauri) vs hosted informational (browser) is decided ONCE at boot.
   // The hosted site is informational only: market data + the desktop showcase,
@@ -70,7 +62,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   let updateNotesRef: UpdateNotes;
   // Set only by the inbox's settings link; every other way in opens the top.
   let settingsSection = $state<'notifications' | null>(null);
-  let notesReady = $state(false);
+
   const notesServices = useDesktopServices();
   const transport = new TauriTransport();
   const marketAccess = new WfmAccessController({ desktopAccessStatus, listenForTauriEvent });
@@ -88,6 +80,42 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   const inventory = untrack(() => new InventoryController(store, transport, { loadMarket, loadCatalogs, normalizeInventory: normalizeInventoryNative }));
   const protection = new ProtectionController({ desktopProtectionState, desktopSaveProtectionPlan });
   const listing = new ListingController({ getPendingPlan: () => transport.getPendingPlan(), resumePendingPlan: () => transport.resumePendingPlan(), discardPendingPlan: () => transport.discardPendingPlan(), status: desktopWfmStatus, logout: desktopWfmLogout }, (code, next) => wfmAuthDialogsRef?.open(code, next));
+  const workspace = createSellWorkspace({ inventory, filters, protection, listing, transport, services: notesServices, getView: () => effectiveView, getNow: () => session.displayNow });
+  let allocationMatches = $derived(workspace.allocationMatches);
+  let unknownSlugs = $derived(workspace.unknownSlugs);
+  let guidanceUnavailable = $derived(workspace.guidanceUnavailable);
+  let listingBlockReason = $derived(workspace.listingBlockReason);
+  let listingQuantitiesKnown = $derived(workspace.listingQuantitiesKnown);
+  let estimatedGuidance = $derived(workspace.estimatedGuidance);
+  let listingActionLabel = $derived(workspace.listingActionLabel);
+  let availability = $derived(workspace.availability);
+  let guidanceAvailability = $derived(workspace.guidanceAvailability);
+  let guidanceOwned = $derived(workspace.guidanceOwned);
+  let results = $derived(workspace.results);
+  let visibleColumns = $derived(workspace.visibleColumns);
+  let presetSort = $derived(workspace.presetSort);
+  let ownedQtyForOrders = $derived(workspace.ownedQtyForOrders);
+  let filterState = $derived(workspace.filterState);
+  let adviceMap = $derived(workspace.adviceMap);
+  let calculationError = $derived(workspace.calculationError);
+  let calculationPending = $derived(workspace.calculationPending);
+  let calculationsReady = $derived(workspace.calculationsReady);
+  let listableRows = $derived(workspace.listableRows);
+  let setRecos = $derived(workspace.setRecos);
+  let availableTags = $derived(workspace.availableTags);
+  let availableTypes = $derived(workspace.availableTypes);
+  let totalPotential = $derived(workspace.totalPotential);
+  let prevSummary = $derived(workspace.prevSummary);
+  let sinceScan = $derived(workspace.sinceScan);
+  let emptyReason = $derived(workspace.emptyReason);
+  let advisorResult = $derived(workspace.advisorResult);
+  let defaultFacts = $derived(workspace.defaultFacts);
+  let setResult = $derived(workspace.setResult);
+  let relicResult = $derived(workspace.relicResult);
+  let voidTrader = $derived(workspace.voidTrader);
+  let ducatStats = $derived(workspace.ducatStats);
+  let showBaroCard = $derived(workspace.showBaroCard);
+  let baroState = $derived(workspace.baroState);
   // Automatic scanning. The hold is driven by the two places a new snapshot
   // would invalidate work in progress: an open review (it carries price and
   // quantity edits) and the Trade Session view (a batch is tied to the snapshot
@@ -99,40 +127,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     adopt: (data, snapshotId) => inventory.adoptScan(data, snapshotId),
     isInteractive: () => listing.listingOpen || effectiveView === 'session',
   });
-  let supportedOwned = $derived(new Map([...inventory.resolved.owned].filter(([, row]) => !row.subtype && !row.slug.endsWith('_set') && !row.slug.endsWith('_relic') && inventory.market?.items[row.slug])));
-  let allocationMatches = $derived(protection.matchesInventory(inventory.resolved.owned, inventory.nativeSnapshotId));
-  let unknownSlugs = $derived(new Set([...supportedOwned.values()].filter(row => !allocationMatches || protection.state?.items[row.slug]?.estimated == null).map(row => row.slug)));
-  let guidanceUnavailable = $derived(supportedOwned.size > 0 && unknownSlugs.size === supportedOwned.size);
-  // The gate's rules live in features/selling/eligibility so they can be tested
-  // without mounting this component; the shell only supplies their inputs.
-  let eligibilityInputs = $derived({
-    hasSnapshot: !!inventory.nativeSnapshotId,
-    pullingInventory: inventory.pullingInventory,
-    allocationMatches,
-    hasProtection: !!protection.state,
-    protectionSnapshotId: protection.state?.snapshot_id ?? null,
-    nativeSnapshotId: inventory.nativeSnapshotId,
-    protectionError: protection.error,
-    wfmUnlocked: listing.wfmStatus?.unlocked ?? false,
-    availableQuantities: Object.fromEntries(Object.entries(protection.state?.items ?? {}).map(([slug, item]) => [slug, item.available])),
-    supportedSlugs: [...supportedOwned.values()].map(row => row.slug),
-    // An allocation computed against a different inventory places nothing, so
-    // every item reads as unknown.
-    known: allocationMatches ? [...protection.state?.items ? Object.keys(protection.state.items).filter(slug => protection.state?.items[slug]?.estimated != null) : []] : [],
-  });
-  let listingBlockReason = $derived(listingEligibilityBlockReason(eligibilityInputs));
-  let listingQuantitiesKnown = $derived(!listingBlockReason);
-  let estimatedGuidance = $derived(!listingQuantitiesKnown);
-  let listingActionLabel = $derived(listingEligibilityActionLabel(eligibilityInputs));
-  let availability = $derived(new Map([...inventory.resolved.owned].map(([key, row]) => [key,
-    listingQuantitiesKnown && supportedOwned.has(key) ? Math.min(sellableQty(row.count, filters.reserveCopies, row.leveled ?? 0), protection.state?.items[row.slug]?.available ?? 0) : 0,
-  ])));
-  let guidanceAvailability = $derived(new Map([...inventory.resolved.owned].map(([key, row]) => [key,
-    supportedOwned.has(key) && !unknownSlugs.has(row.slug) ? Math.min(sellableQty(row.count, filters.reserveCopies, row.leveled ?? 0),
-      (estimatedGuidance ? protection.state?.items[row.slug]?.estimated : protection.state?.items[row.slug]?.available) ?? 0) : 0,
-  ])));
-  let guidanceOwned = $derived(new Map([...inventory.resolved.owned].filter(([, row]) => !unknownSlugs.has(row.slug))));
-  let availableOwned = $derived(new Map([...guidanceOwned].map(([key, row]) => [key, { ...row, count: guidanceAvailability.get(key) ?? 0, leveled: 0 }])));
   onMount(() => {
     const timer = setInterval(() => { if (!protection.loading && !protection.saving) void protection.refresh(); }, 30_000);
     const stop = listenForTauriEvent(ALLOWANCE_CHANGED_EVENT, () => void protection.refresh());
@@ -163,28 +157,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
 
   let resolvedRivens = $derived(resolveRivens(inventory.ownedRivens, inventory.market));
   
-  import type { SellRow } from '../contracts/selling';
-  let results = $state<SellRow[]>([]);
-  // The Sell table pushes its filtered+sorted rows up here so the "List on WFM"
-  // CTA stages exactly what the user sees (name filter + badge chips), not the
-  // unfiltered preset results.
-  let tableView = $state<{ rows: SellRow[]; active: boolean }>({ rows: [], active: false });
-  function headerClearance(node: HTMLElement, inShell: boolean) {
-    const root = document.documentElement;
-    let enabled = inShell;
-    const update = () => {
-      if (enabled && getComputedStyle(node).position === 'sticky') root.style.setProperty('--sticky-header-clearance', `${node.offsetHeight}px`);
-      else root.style.removeProperty('--sticky-header-clearance');
-    };
-    const observer = new ResizeObserver(update);
-    observer.observe(node);
-    update();
-    return {
-      update(value: boolean) { enabled = value; update(); },
-      destroy() { observer.disconnect(); root.style.removeProperty('--sticky-header-clearance'); },
-    };
-  }
-
   // Sidebar nav: if the user's persisted view is unavailable (Baro not
   // visiting, orders on the informational site), fall back to Sell rather than
   // rendering an empty pane. The nav itself hides those entries; this protects
@@ -195,331 +167,10 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
     return filters.view;
   });
 
-  // Tray hint banner - set by the Rust tray-hint event when the user closes the
-  // window while the tray still exists. Once-ever, persisted when SHOWN (not on
-  // dismiss); the Rust side caps within-session duplicates with an AtomicBool.
-  let trayHint = $state(false);
+  const session = createDesktopSession({ inventory, listing, transport, store: untrack(() => store), services: notesServices });
 
-  // PRESETS itself, plus the pure lookup/matching logic, live in
-  // lib/presets.ts. `columns` is the ordered visible-column list;
-  // missing = all columns (Default).
-  let visibleColumns = $derived<string[] | null>(filters.columnChoice[filters.columnKey] ?? (filters.activePreset ? PRESETS[filters.activePreset]?.columns ?? null : null));
-  // A preset's optional default sort, handed to ResultsTable. Stable object
-  // identity per preset → switching presets re-applies it; header clicks don't.
-  // Spread a fresh object so the derived's identity changes whenever it
-  // recomputes - re-selecting a preset then re-applies its sort.
-  let presetSort = $derived.by(() => {
-    const sort = filters.activePreset ? PRESETS[filters.activePreset]?.defaultSort : null;
-    return sort ? { ...sort } : null;
-  });
-  // The filter cascade's inputs, bundled for lib/filter-engine.ts - the
-  // hand-set sliders/chips plus whatever the active preset restricts
-  // (vault-only, ducats-only, min-volume, min-median).
-  // Tradeable copies per slug|refinement from the latest scan - the My orders
-  // panel's "you list ×5 but own 2" / "not owned" checks. Null without a scan
-  // so those checks stay silent rather than calling every listing a ghost.
-  let ownedQtyForOrders = $derived.by((): Map<string, number> | null => {
-    if (!inventory.resolved.owned.size) return null;
-    const m = new Map<string, number>();
-    for (const rec of inventory.resolved.owned.values()) {
-      m.set(`${rec.slug}|${rec.subtype ?? ''}`, Math.max(0, rec.count - (rec.leveled ?? 0)));
-    }
-    return m;
-  });
-
-  let sparesOnly = $derived(!!PRESETS[filters.activePreset ?? '']?.sparesOnly);
-  let filterState = $derived<FilterState>({
-    minPrice: filters.minPrice, minOwned: filters.minOwned, typeFilter: filters.typeFilter, hideAtLvl: filters.hideAtLvl, activeTags: filters.activeTags,
-    vaultOnly: !!PRESETS[filters.activePreset ?? '']?.vaultOnly,
-    ducatsOnly: !!PRESETS[filters.activePreset ?? '']?.ducatsOnly,
-    minVol: PRESETS[filters.activePreset ?? '']?.minVol ?? 0,
-    minMedian: PRESETS[filters.activePreset ?? '']?.minMedian ?? 0,
-    typesAny: PRESETS[filters.activePreset ?? '']?.typesAny ?? [],
-    sparesOnly,
-    adviceOnly: !!PRESETS[filters.activePreset ?? '']?.adviceOnly,
-  });
-
-  // ---- Hold-or-sell advisor inputs ----
-  // The year-long history loads once, on demand, the first time a surface
-  // that uses advice opens (the Hold/Sell preset or the Set picks view) -
-  // same lazy pattern as the market browser's 1-year toggle. Verdicts
-  // degrade gracefully to the calendar-only rules until it lands.
-  const historyResult = new DomainResult<History | null>(() => null);
-  let advisorHistory = $derived(historyResult.value);
-  // The per-calculation gates live in features/selling/calc-inputs so they can be
-  // tested without mounting this component. The effects below supply the inputs
-  // and the recompute epoch; the policies decide whether there is anything to run.
-  // Getters, not a $derived object: each effect then depends only on the fields
-  // its policy reads. One derived object made every calculation restart when any
-  // input changed, so toggling "spares only" blanked the default scoring.
-  const calcInputs: CalcInputs = {
-    get owned() { return inventory.resolved.owned; },
-    get previousOwned() { return inventory.previousOwned; },
-    get availableOwned() { return availableOwned; },
-    get market() { return inventory.market; },
-    get reserve() { return filters.reserveCopies; },
-    get available() { return guidanceAvailability; },
-    get sparesOnly() { return sparesOnly; },
-    get advisorHistory() { return advisorHistory; },
-  };
-
-  $effect(() => {
-    const wanted = filters.activePreset === 'holdsell' || effectiveView === 'sets';
-    if (!wanted || untrack(() => historyResult.phase === 'done')) return;
-    return untrack(() => historyResult.start(() => transport.loadHistory()));
-  });
-  let calculationEpoch = $state(0);
-  const advisorResult = new DomainResult<Map<string, Verdict>>(() => new Map());
-  $effect(() => {
-    void calculationEpoch;
-    const run = advisorInput(calcInputs);
-    if (!run) {
-      untrack(() => advisorResult.clear());
-      return;
-    }
-    return untrack(() => advisorResult.start(async () => new Map(Object.entries(await evaluateAdvisor({ slugs: run.slugs, market: run.market, history: run.history, now_ms: Date.now() })))));
-  });
-  let adviceMap = $derived(advisorResult.value);
-
-  $effect(() => {
-    // Depend ONLY on the filter primitives that define a preset (the void reads
-    // below). Read/write activePreset inside untrack() so nulling the selection
-    // when the user hand-edits a filter can't re-trigger this effect - the old
-    // version read AND wrote activePreset in the same body, which re-fired it
-    // (flagged in the audit).
-    void filters.minPrice; void filters.minOwned; void filters.hideAtLvl; void filters.typeFilter; void filters.activeTags.size;
-    untrack(() => {
-      if (filters.activePreset === null) return;
-      if (!presetStillMatches(filters.activePreset, { minPrice: filters.minPrice, hideAtLvl: filters.hideAtLvl, typeFilter: filters.typeFilter, activeTags: filters.activeTags })) {
-        filters.activePreset = null;
-      }
-    });
-  });
-
-  let unreadNotifications = $state(0);
-  onMount(() => {
-    let active = true;
-    let request = 0;
-    const reload = async () => {
-      const current = ++request;
-      try { const rows = await desktopNotifications(); if (active && current === request) unreadNotifications = rows.filter(n => !n.read).length; } catch { /* Inbox exposes retryable errors. */ }
-    };
-    const stop = listenForTauriEvent(NOTIFICATIONS_EVENT, () => { void reload(); });
-    const stopMarket = listenForTauriEvent(MARKET_REFRESHED_EVENT, async () => {
-      const cached = await transport.loadCachedMarket().catch(() => null);
-      if (active && cached && (!inventory.market || Date.parse(cached.updated_at) > Date.parse(inventory.market.updated_at))) inventory.market = cached;
-    });
-    void reload();
-    return () => { active = false; stop(); stopMarket(); };
-  });
-
-  let marketRefreshLoop: MarketRefreshLoop | null = null;
-  onMount(() => {
-    const loop = startMarketRefreshLoop(() => inventory.refreshMarketInBackground());
-    marketRefreshLoop = loop;
-    return () => {
-      if (marketRefreshLoop === loop) marketRefreshLoop = null;
-      loop.stop();
-    };
-  });
-
-  onMount(() => {
-    return listenForTauriEvent(TRAY_HINT_EVENT, () => {
-      if (store.getSetting('tray-toast-seen') !== '1') {
-        trayHint = true;
-        void store.setSetting('tray-toast-seen', '1');
-      }
-    });
-  });
-
-  // Restore the last snapshot exactly once after mount. Using onMount (not
-  // $effect) is critical: $effect tracks any state read inside its body as
-  // a dependency, so writing `resolved` here and then reading it via
-  // recomputeResults caused an infinite re-run loop.
-  // Interrupted-batch recovery, in one place so both callers agree on what a
-  // failure means. A journal that is there but unreadable rejects: that is not
-  // "no interrupted batch", and hiding it leaves a damaged saved batch with no
-  // way for the user to learn about it or clear it.
-  onMount(async () => {
-    // A best-effort `health` invoke confirms wfm-core is linked and records the
-    // platform for display; failure is non-fatal.
-    try {
-      const h = await transport.health();
-      desktopPlatform = h?.platform ?? null;
-      desktopAppVersion = h?.app_version ?? null;
-    } catch (e) {
-      console.error('desktop health check failed', e);
-    }
-    // C5 update-available handshake now lives entirely in
-    // DesktopUpdateBanner.svelte's own onMount.
-    // Interrupted-batch recovery: get_pending_plan is JWT-free, so this needs no
-    // unlock. Read failures remain visible in the recovery state.
-    await listing.refreshPendingPlan();
-
-    await inventory.restore();
-
-    // Cold landing (no saved inventory): preload the snapshot so the no-install
-    // MarketBrowser has data to show. Best-effort - a failure just hides the
-    // browser; the install steps below it still work.
-    if (!inventory.market) {
-      try {
-        inventory.market = await inventory.loadBestMarket();
-      } catch (e) {
-        console.error(e);
-      }
-    }
-
-    // Desktop only: start after the bundled/cached copy is on screen. The loop
-    // retries on reconnect and every 30 minutes, so an offline launch recovers
-    // without restarting; hosted builds already fetch same-origin from the box.
-    marketRefreshLoop?.trigger();
-    notesReady = true;
-  });
-
-  function handleClear() {
-    void inventory.clear();
-    results = [];
-    tableView = { rows: [], active: false };
-    for (const result of [defaultFacts, spareFacts, previousFacts, advisorResult, setResult, relicResult]) result.clear();
-  }
-
-  const defaultFacts = new DomainResult<Map<string, ScoredInventoryFact>>(() => new Map());
-  const spareFacts = new DomainResult<Map<string, ScoredInventoryFact>>(() => new Map());
-  const previousFacts = new DomainResult<Map<string, ScoredInventoryFact>>(() => new Map());
-  const setResult = new DomainResult<SetReco[]>(() => []);
-  const relicResult = new DomainResult<RelicPlanEntry[]>(() => []);
-
-  $effect(() => {
-    void calculationEpoch;
-    const run = scoreInput(calcInputs, 'default');
-    if (!run) { untrack(() => defaultFacts.clear()); return; }
-    return untrack(() => defaultFacts.start(() => scoreInventoryNative(run.owned, run.market, run.reserve, run.sparesOnly, run.available)));
-  });
-  $effect(() => {
-    void calculationEpoch;
-    const run = scoreInput(calcInputs, 'spare');
-    if (!run) { untrack(() => spareFacts.clear()); return; }
-    return untrack(() => spareFacts.start(() => scoreInventoryNative(run.owned, run.market, run.reserve, run.sparesOnly, run.available)));
-  });
-  $effect(() => {
-    void calculationEpoch;
-    const run = scoreInput(calcInputs, 'previous');
-    if (!run) { untrack(() => previousFacts.clear()); return; }
-    return untrack(() => previousFacts.start(() => scoreInventoryNative(run.owned, run.market, run.reserve, run.sparesOnly)));
-  });
-  let currentFacts = $derived(sparesOnly ? spareFacts : defaultFacts);
-  let hasInventory = $derived(inventory.resolved.owned.size > 0);
-  let showWorkspace = $derived(hasInventory || inventory.phase === 'done' || effectiveView !== 'sell');
-  let updateBanner: DesktopUpdateBanner;
-
-  let calculationError = $derived((guidanceUnavailable ? 'Protection rules are unavailable. Refresh allocation before using quantity estimates.' : null) ?? currentFacts.error ?? (filterState.adviceOnly ? advisorResult.error : null));
-  let calculationPending = $derived(inventory.resolved.owned.size > 0 && !!inventory.market &&
-    ((!protection.state && protection.loading) || currentFacts.phase === 'idle' || currentFacts.phase === 'loading' || (filterState.adviceOnly && advisorResult.phase === 'loading')));
-  let calculationsReady = $derived(!calculationPending && !calculationError && currentFacts.phase === 'done');
-  // Rows eligible for the bulk "List on WFM" action: the table-filtered set when
-  // a table filter is active, else all results - minus relics (subtyped rows),
-  // since selling an intact relic at a few plat usually loses to cracking it
-  // (the Relic planner ranks those), so they shouldn't be staged by default.
-  let listableRows = $derived.by(() => {
-    if (!calculationsReady || estimatedGuidance) return [];
-    const current = new Map(results.map(row => [row.key ?? row.slug, row]));
-    const visible = tableView.active ? tableView.rows.flatMap(row => {
-      const match = current.get(row.key ?? row.slug);
-      return match ? [match] : [];
-    }) : results;
-    return visible.filter(row => !row.subtype && row.sellable > 0);
-  });
-  $effect(() => {
-    results = computeFilteredResults(guidanceOwned, inventory.market, filterState, filters.reserveCopies, adviceMap, guidanceAvailability, currentFacts.value);
-  });
-  $effect(() => {
-    void calculationEpoch;
-    const run = setInput(calcInputs);
-    if (!run || guidanceUnavailable) { untrack(() => setResult.clear()); return; }
-    return untrack(() => setResult.start(() => loadSetRecos(run.owned, run.market)));
-  });
-  $effect(() => {
-    void calculationEpoch;
-    const run = relicInput(calcInputs);
-    if (!run) { untrack(() => relicResult.clear()); return; }
-    return untrack(() => relicResult.start(() => loadRelicPlan(run.owned, run.market, Number.MAX_SAFE_INTEGER)));
-  });
-  let setRecos = $derived(setResult.value.filter(reco => !(inventory.market?.set_to_parts?.[reco.set_slug]?.parts ?? []).some(part => unknownSlugs.has(part.slug))));
-
-  // Baro Ki'Teer schedule, baked into market.json at build time (mirrors
-  // relic_rewards / vault_status). No runtime warframestat fetch - that
-  // broke the resolver-only rule and vanished during warframestat
-  // outages. Null until market loads, or when the bake came back empty.
-  // Footer stamp: the snapshot's own timestamp, in UTC so it matches the
-  // scraper's log lines.
-  let snapshotStamp = $derived.by(() => {
-    const t = Date.parse(inventory.market?.updated_at ?? '');
-    if (!Number.isFinite(t)) return '';
-    return new Date(t).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
-  });
-
-  let voidTrader = $derived.by(() => {
-    const b = inventory.market?.baro;
-    if (!b) return null;
-    return { ...b, location: baroLocation(b.location) };
-  });
-
-  // Total ducats across the user's currently-sellable inventory.
-  // Only count rows that resolved to a market entry with ducats > 0;
-  // skip relic refinements (subtype set) since those aren't a ducat
-  // trade. Cap presented as `count_owned × ducats`.
-  let ducatStats = $derived.by(() => {
-    if (!inventory.resolved.owned.size || !inventory.market) return { count: 0, total: 0 };
-    let count = 0, total = 0;
-    for (const rec of inventory.resolved.owned.values()) {
-      if (rec.subtype) continue;
-      const m = inventory.market.items?.[rec.slug];
-      const d = m?.ducats;
-      if (typeof d === 'number' && d > 0) {
-        count += rec.count;
-        total += rec.count * d;
-      }
-    }
-    return { count, total };
-  });
-
-  // Render the Baro card when (a) we got a voidTrader response and
-  // (b) the user has a meaningful pile of ducat-earning inventory.
-  // 500 ducats ≈ 5 prime junk parts; below that the card is noise.
-  let showBaroCard = $derived(voidTrader != null);
-
-  // Ticks each minute and on focus (see the onMount below). Anything that shows
-  // time left reads this: `Date.now()` inside a `$derived` is not tracked.
-  let displayNow = $state(Date.now());
-  let baroState = $derived(voidTrader ? baroPhase(voidTrader.activation, voidTrader.expiry, displayNow) : null);
-
-  let relicPlan = $derived(relicResult.value);
-  const RELIC_PREVIEW = 6;
   let relicShowAll = $state(false);
-  let relicVisible = $derived(relicShowAll ? relicPlan : relicPlan.slice(0, RELIC_PREVIEW));
-
-  // Available tags = every tag that appears on a row surviving the OTHER
-  // filters (price/owned/type/kept), with its live count. Empty chips
-  // (count 0) are still rendered (strikethrough) so the user can see what
-  // categories exist in their inventory rather than wondering where they
-  // went. Sorted by count desc, then alphabetical.
-  let availableTags = $derived.by(() => {
-    if (!inventory.resolved.owned.size || !inventory.market) return [];
-    return computeAvailableTags(inventory.resolved.owned, inventory.market, filterState, adviceMap);
-  });
-
-  // Auto-derived options for the type dropdown: every category that has at
-  // least one sellable item. Built off owned + market (not `results`), so it
-  // doesn't shrink when the user narrows by min-price / min-owned.
-  let availableTypes = $derived.by(() => {
-    if (!inventory.resolved.owned.size || !inventory.market) return [];
-    const set = new Set<string>();
-    for (const rec of inventory.resolved.owned.values()) {
-      if (lookup(inventory.market, rec.slug)) set.add(rec.type || 'Unknown');
-    }
-    return [...set].sort();
-  });
-
+  let relicPlan = $derived(relicResult.value);
   // Total + per-category breakdown of paths no catalog could price-match.
   // The number itself is reassurance ("the app saw these and skipped them,
   // your prime junk isn't missing"), the breakdown is hover detail.
@@ -537,160 +188,24 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       .join(', ')
   );
 
-  onMount(() => {
-    const refreshClock = () => { displayNow = Date.now(); };
-    const timer = window.setInterval(() => { if (!document.hidden) refreshClock(); }, 60_000);
-    document.addEventListener('visibilitychange', refreshClock);
-    window.addEventListener('focus', refreshClock);
-    return () => {
-      window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', refreshClock);
-      window.removeEventListener('focus', refreshClock);
-    };
-  });
-
-  function ago(ts: string | number | null | undefined) {
-    if (!ts || !Number.isFinite(new Date(ts).getTime())) return null;
-    // Clamp at 0 - a cron runner with skewed clock can produce
-    // `updated_at` in the future, which used to render "-120 min ago".
-    const minutes = Math.max(0, Math.round((displayNow - new Date(ts).getTime()) / 60000));
-    if (minutes < 1) return 'just now';
-    if (minutes < 60) return `${minutes} min ago`;
-    if (minutes < 60 * 24) return `${Math.round(minutes / 60)} h ago`;
-    return `${Math.round(minutes / 1440)} d ago`;
-  }
-
-  let marketStaleness = $derived(ago(inventory.market?.updated_at));
-  let inventoryStaleness = $derived(ago(inventory.lastUpdated));
-  let inventoryTimestamp = $derived(inventory.lastUpdated && Number.isFinite(new Date(inventory.lastUpdated).getTime()) ? new Date(inventory.lastUpdated).toISOString() : null);
-  // Same buckets as the market dot, on the inventory's own clock: a scan is
-  // "fresh" for a day (inventories move slower than the order book).
-  let inventoryFreshness = $derived.by(() => {
-    if (!inventory.lastUpdated) return 'unknown';
-    const h = (displayNow - inventory.lastUpdated) / 3.6e6;
-    if (h <= 24) return 'fresh';
-    if (h <= 24 * 7) return 'aging';
-    return 'stale';
-  });
-
-  // Vendor surfaces can lag the price snapshot when their upstream fails.
-  // A matching content hash is a successful freshness check even though the
-  // retained payload keeps its original download timestamp.
-  function surfaceAge(key: string) {
-    const stamp = staleSurfaceTimestamp(inventory.market, key, displayNow);
-    return stamp === 'unknown' ? 'age unknown' : stamp ? ago(stamp) : null;
-  }
-  let baroSurfaceAge = $derived(surfaceAge('baro'));
-  let relicSurfaceAge = $derived(surfaceAge('relic_rewards'));
-  let setSurfaceAge = $derived(surfaceAge('set_to_parts'));
-
-  // Coarse freshness bucket for the small status dot next to "market Xh ago".
-  // The scrape cron runs every 2h, so a healthy snapshot is under 3h old -
-  // "fresh" means exactly that. Calling a 5h-old book "fresh" during an
-  // event-week price spike would be generous to the point of misleading.
-  let marketFreshness = $derived.by<'unknown' | 'fresh' | 'aging' | 'stale'>(() => {
-    if (!inventory.market?.updated_at) return 'unknown';
-    const h = (displayNow - new Date(inventory.market.updated_at).getTime()) / 3.6e6;
-    if (h <= 3) return 'fresh';
-    if (h <= 24) return 'aging';
-    return 'stale';
-  });
-
-  // Total theoretical plat across visible results - for the stats strip.
-  let totalPotential = $derived(
-    results.reduce((s, r) => s + r.potential_plat, 0)
-  );
-
-  // Since-last-scan deltas for the Sell summary cells. The previous snapshot is
-  // pushed through the SAME filter cascade as the live one, so "Sellable ▲12"
-  // means twelve more rows under the current preset/filters - not a different
-  // definition of sellable. One extra computeResults per filter change; the
-  // cascade costs ~0.1 ms on a 2k-item inventory (measured 2026-08-01).
-  let prevSummary = $derived.by(() => {
-    if (!inventory.previousOwned || !inventory.market || previousFacts.phase !== 'done' || currentFacts.phase !== 'done') return null;
-    const rows = computeFilteredResults(inventory.previousOwned, inventory.market, filterState, filters.reserveCopies, undefined, undefined, previousFacts.value);
-    return {
-      owned: inventory.previousOwned.size,
-      sellable: rows.filter((r) => r.sellable > 0).length,
-      potential: rows.reduce((s, r) => s + r.potential_plat, 0),
-    };
-  });
-  // Row-level "what changed": keys new since the last scan, keys gone, keys
-  // whose count moved. `deltas` only covers keys present now (diffOwned walks
-  // the current map), so removals come from the previous map directly.
-  let sinceScan = $derived.by(() => {
-    if (!inventory.previousOwned) return null;
-    let added = 0, removed = 0, changed = 0;
-    for (const [key, d] of inventory.deltas) {
-      if (!inventory.previousOwned.has(key)) added += 1;
-      else if (d !== 0) changed += 1;
-    }
-    for (const key of inventory.previousOwned.keys()) if (!inventory.resolved.owned.has(key)) removed += 1;
-    return { added, removed, changed };
-  });
-
-
-  $effect(() => {
-    void listing.sessionEpoch;
-    desktopWfmStatus().then((s) => { listing.wfmStatus = s; }).catch(() => { listing.wfmStatus = null; });
-  });
-  let wfmLabel = $derived(
-    !listing.wfmStatus ? '-' : listing.wfmStatus.unlocked ? 'session live' : listing.wfmStatus?.logged_in ? 'locked' : 'logged out',
-  );
-
-  // Friendly diagnosis of WHY the table is empty so we don't just shrug.
-  let emptyReason = $derived.by(() =>
-    currentFacts.phase !== 'done' || (filterState.adviceOnly && advisorResult.phase !== 'done') ? null : computeEmptyReason(inventory.resolved.owned, inventory.market, filterState, results.length, filters.activePreset, adviceMap)
-  );
-
-  // Scan is the only inventory source - the refresh pop is a single action.
-  // First-run header overflow: updates, feedback and project links.
-  let moreOpen = $state(false);
-  let moreTrigger = $state<HTMLButtonElement>();
-  let feedbackFromMore = false;
-  $effect(() => {
-    if (!moreOpen) return;
-    const click = (e: MouseEvent): void => {
-      if (!(e.target as HTMLElement | null)?.closest('.more-pop, .more-trigger')) moreOpen = false;
-    };
-    const key = (e: KeyboardEvent): void => {
-      if (e.key !== 'Escape') return;
-      moreOpen = false;
-      moreTrigger?.focus();
-    };
-    document.addEventListener('click', click, true);
-    document.addEventListener('keydown', key);
-    return () => { document.removeEventListener('click', click, true); document.removeEventListener('keydown', key); };
-  });
-  let refreshOpen = $state(false);
-  async function refreshFromGame() {
-    refreshOpen = false;
-    await inventory.pullInventory();
-  }
-  $effect(() => {
-    if (!refreshOpen) return;
-    const handler = (e: MouseEvent) => {
-      const t = e.target instanceof Element ? e.target : null;
-      if (!t?.closest('.refresh-pop, .refresh-trigger')) refreshOpen = false;
-    };
-    document.addEventListener('click', handler, true);
-    return () => document.removeEventListener('click', handler, true);
-  });
-
-  // ---- Encrypted export / import ---------------------------------------
-  // Path-of-Building style: passphrase-derived AES-GCM, no accounts. The
-  // exported file decrypts back into the same {invName, owned} the UI
-  // restores from localStorage on page load. The dialogs, their state, and
-  // the encrypt/decrypt calls live in ExportImportDialogs.svelte; App.svelte
-  // triggers them imperatively (the Export / Restore toolbar buttons) and
-  // owns what a successful import means for its own state.
   let exportImportRef = $state<{ openExport(): void; pickImport(): void }>();
 
-  // ---- Pending-plan recovery ----
-            // {plan_id, started_at, items[]} | null
-          // Platform the desktop session reports (from /health), for display.
-  let desktopPlatform = $state<string | null>(null);
-  let desktopAppVersion = $state<string | null>(null);
+  let snapshotStamp = $derived(session.snapshotStamp);
+  let marketStaleness = $derived(session.marketStaleness);
+  let inventoryStaleness = $derived(session.inventoryStaleness);
+  let inventoryTimestamp = $derived(session.inventoryTimestamp);
+  let inventoryFreshness = $derived(session.inventoryFreshness);
+  let baroSurfaceAge = $derived(session.baroSurfaceAge);
+  let relicSurfaceAge = $derived(session.relicSurfaceAge);
+  let setSurfaceAge = $derived(session.setSurfaceAge);
+  let marketFreshness = $derived(session.marketFreshness);
+  let wfmLabel = $derived(session.wfmLabel);
+  let notesReady = $derived(session.notesReady);
+  let desktopPlatform = $derived(session.desktopPlatform);
+  let desktopAppVersion = $derived(session.desktopAppVersion);
+  let trayHint = $derived(session.trayHint);
+  let unreadNotifications = $derived(session.unreadNotifications);
+  let displayNow = $derived(session.displayNow);
   // Bug reports ask for the version, so show it where people look for it.
   let versionLabel = $derived(desktopAppVersion ? `v${desktopAppVersion} · ${APP_COMMIT}` : APP_COMMIT);
 
@@ -703,19 +218,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   let outstanding = $derived(pendingRemaining + uncertainRemaining);
   let ordersToFix = $derived((listing.ordersSummary?.issues ?? 0) + (listing.pendingPlan ? outstanding : 0));
 
-  let resumeOk = $derived(listing.resumeResults.filter((r) => r.status === 'ok').length);
-  let resumeErr = $derived(listing.resumeResults.filter((r) => r.status !== 'ok').length);
-
-  // Scan inventory straight from the running game and run it through the same
-  // resolution pipeline - no file, no drag-in. Desktop only (the hosted site
-  // is informational); the `scan_inventory` IPC command's rejection carries
-  // the scanner's exact actionable message.
-     // ---- Desktop WFM auth (login / unlock dialogs) -----------------------
-  // The dialogs themselves, their state, and the login/unlock calls live in
-  // WfmAuthDialogs.svelte; App.svelte triggers them imperatively (three call
-  // sites: the Sell CTA below, doResume's needs_login/needs_unlock rejection,
-  // and ListingReviewModal's onauthrequired) via this ref, and decides what
-  // 'list' means on unlock (open the review modal).
   let wfmAuthDialogsRef = $state<{ open(code: string, next?: string | null): Promise<void> }>();
   // The last sign-in or unlock failure, kept for a bug report after the dialog closes.
   let wfmAuthFailure = $state<unknown>(null);
@@ -735,22 +237,12 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       else await wfmAuthDialogsRef?.open(status.logged_in ? 'needs_unlock' : 'needs_login');
     } catch (error) { protection.error = humanError(error); }
   }
-  let feedbackDialog: HTMLDialogElement;
-  let feedbackState = $state<ReturnType<typeof feedbackSnapshot> | null>(null);
-  let includeFeedbackState = $state(true);
-  let feedbackLoading = $state(false);
-  let feedbackDownloadError = $state(false);
-  let feedbackGeneration = 0;
-  let feedbackFallbackKind = $state<'bug' | 'improvement' | null>(null);
-  let bugReport = $derived(feedbackState ? feedbackLink(feedbackState, includeFeedbackState) : null);
-  let reportedProblems = $derived(feedbackState && includeFeedbackState ? feedbackProblems(feedbackState) : []);
 
-  let feedbackFallbackUrl = $derived(feedbackFallbackKind === 'bug' ? bugReport?.url : feedbackFallbackKind === 'improvement' ? improvementUrl : null);
-
-  async function captureFeedback() {
-    const generation = ++feedbackGeneration;
-    feedbackLoading = true;
-    feedbackDownloadError = false;
+  let feedbackRef: FeedbackDialog;
+  let statusStripRef: StatusStrip;
+  let feedbackFromMore = false;
+  function openFeedback() { feedbackRef.openFeedback(); }
+  function captureFeedbackState() {
     const wfmSession: WfmSession = !listing.wfmStatus ? 'unknown' : listing.wfmStatus.unlocked ? 'unlocked' : listing.wfmStatus.logged_in ? 'locked' : 'logged_out';
     const state = {
       capturedAt: new Date().toISOString(), build: APP_COMMIT, appVersion: desktopAppVersion, platform: desktopPlatform,
@@ -760,114 +252,19 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
       marketLoaded: !!inventory.market, marketError: inventory.marketLoadError,
       theme: document.documentElement.dataset.mode ?? 'unknown', width: window.innerWidth, height: window.innerHeight,
     };
-    const operation = updateDiagnostics();
-    feedbackState = feedbackSnapshot(state, null, operation);
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    try {
-      const status = await Promise.race([
-        updateStatus(),
-        new Promise<null>(resolve => { timer = setTimeout(() => resolve(null), 1500); }),
-      ]);
-      if (generation === feedbackGeneration) feedbackState = feedbackSnapshot(state, status, operation);
-    } catch {
-      // Feedback still works if the IPC bridge is unavailable.
-    } finally {
-      clearTimeout(timer);
-      if (generation === feedbackGeneration) feedbackLoading = false;
-    }
+    return state;
   }
 
-  function openFeedback() {
-    feedbackFallbackKind = null;
-    feedbackDialog.showModal();
-    void captureFeedback();
-  }
-
-  async function openFeedbackLink(event: MouseEvent, url: string | undefined, loading = false, kind: 'bug' | 'improvement' = 'bug') {
-    event.preventDefault();
-    if (loading || !url) return;
-    feedbackFallbackKind = null;
-    try {
-      if (!(await desktopOpenExternalUrl(url))) feedbackFallbackKind = kind;
-    } catch {
-      feedbackFallbackKind = kind;
-    }
-  }
-
-  function downloadFeedback() {
-    if (!feedbackState || !includeFeedbackState) return;
-    feedbackDownloadError = false;
-    try {
-      const url = URL.createObjectURL(new Blob([JSON.stringify(feedbackState, null, 2)], { type: 'application/json' }));
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'tennoworth-diagnostics.json';
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch {
-      feedbackDownloadError = true;
-    }
-  }
-
+  let hasInventory = $derived(inventory.resolved.owned.size > 0);
+  let showWorkspace = $derived(hasInventory || inventory.phase === 'done' || effectiveView !== 'sell');
+  let updateBanner: DesktopUpdateBanner;
 </script>
 
-<!-- Opened from the first-run More menu, the trigger is gone by the time the
-     dialog closes; focus returns to the menu button instead of the page. -->
-<dialog data-shell bind:this={feedbackDialog} class="cryptobox feedback-dialog" aria-labelledby="feedback-title" aria-describedby="feedback-description" onclose={() => { if (feedbackFromMore) moreTrigger?.focus(); feedbackFromMore = false; }}>
-  <form data-shell method="dialog">
-    <header data-shell>
-      <h3 data-shell id="feedback-title">Send feedback</h3>
-      <p data-shell id="feedback-description">Help make TennoWorth more useful.</p>
-    </header>
-    <p data-shell class="feedback-note">What would you like to share?</p>
-    <div data-shell class="feedback-options">
-      <a data-shell href={bugReport?.url} aria-disabled={feedbackLoading} onclick={(event) => openFeedbackLink(event, bugReport?.url, feedbackLoading)} target="_blank" rel="noopener noreferrer">
-        <strong data-shell>Report a bug <span data-shell aria-hidden="true">↗</span></strong>
-        <span data-shell>Something broke or didn’t work as expected.</span>
-      </a>
-      <a data-shell href={improvementUrl} onclick={(event) => openFeedbackLink(event, improvementUrl, false, 'improvement')} target="_blank" rel="noopener noreferrer">
-        <strong data-shell>Suggest an improvement <span data-shell aria-hidden="true">↗</span></strong>
-        <span data-shell>Tell us what would make your next trade easier.</span>
-      </a>
-    </div>
-    <label data-shell class="feedback-check"><input type="checkbox" bind:checked={includeFeedbackState} /> Include app-state snapshot with bug report</label>
-    <p data-shell class="feedback-note">Version, operating system, current screen, scan, sign-in and update status, error categories, theme, and window size. No account identifiers, credentials, inventory contents, file paths, or game memory.</p>
-    {#if reportedProblems.length}
-      <div data-shell class="ui-notice feedback-problems" data-tone="warn" data-testid="feedback-problems">
-        <strong data-shell>Included in this report</strong>
-        <ul data-shell>
-          {#each reportedProblems as problem (problem.area)}<li data-shell>{problem.area}: {problem.summary}.</li>{/each}
-        </ul>
-        <span data-shell>Only these categories are sent, not the error text.</span>
-      </div>
-    {/if}
-    {#if includeFeedbackState && feedbackState}
-      <details data-shell class="feedback-state">
-        <summary data-shell>Review app-state snapshot</summary>
-        <pre data-shell>{JSON.stringify(feedbackState, null, 2)}</pre>
-      </details>
-      <div data-shell class="ui-toolbar">
-        <button data-shell type="button" class="btn" onclick={() => captureFeedback()} disabled={feedbackLoading}>Refresh snapshot</button>
-        <button data-shell type="button" class="btn" onclick={downloadFeedback} disabled={feedbackLoading}>Download diagnostics</button>
-      </div>
-    {/if}
-    {#if feedbackLoading}<p data-shell class="feedback-note" role="status">Reading app version…</p>{/if}
-    {#if bugReport?.needsAttachment}<p data-shell class="feedback-note" role="status">This snapshot is too large to prefill. Download diagnostics, then attach the file to your GitHub report.</p>{/if}
-    {#if feedbackDownloadError}<p data-shell role="alert">The download could not start. Copy the reviewed snapshot into the diagnostics field on GitHub.</p>{/if}
-    <p data-shell class="feedback-note">Opens GitHub · Account required · Reports are public.</p>
-    {#if feedbackFallbackUrl}
-      <p data-shell role="alert">Couldn’t open your browser. Copy this link into your browser to continue.</p>
-      <label data-shell>GitHub issue link<textarea data-shell class="ui-input" readonly value={feedbackFallbackUrl}></textarea></label>
-    {/if}
-    <footer data-shell><button data-shell type="submit" class="btn">Close</button></footer>
-  </form>
-</dialog>
+<FeedbackDialog bind:this={feedbackRef} captureState={captureFeedbackState} services={notesServices} onclosed={() => { if (feedbackFromMore) statusStripRef?.focusMore(); feedbackFromMore = false; }} />
 
 <!-- Keep the banner region mounted while navigation or a scan changes the content. -->
 <div data-shell class={showWorkspace ? 'shell' : 'desktop-landing'}>
-  {@render statusStrip(showWorkspace)}
+  <StatusStrip bind:this={statusStripRef} inShell={showWorkspace} {inventory} {listing} {filters} {unresolvedCount} {unresolvedSummary} {inventoryFreshness} {inventoryStaleness} {inventoryTimestamp} {marketFreshness} {marketStaleness} {ordersToFix} {baroState} {unreadNotifications} {wfmLabel} {projectLinkAnchors} onexport={() => exportImportRef?.openExport()} onimport={() => exportImportRef?.pickImport()} onclear={() => workspace.clear()} onupdates={() => updateBanner.checkForUpdates()} onfeedback={() => { feedbackFromMore = true; openFeedback(); }} onauth={(code) => wfmAuthDialogsRef?.open(code)} />
   {#if showWorkspace}
   <aside data-shell class="sidebar">
     <nav data-shell>
@@ -915,7 +312,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         {/if}
       </div>
 
-      
       <div data-shell class="nav-group">
         <div data-shell class="nav-label">Manage</div>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'orders'} onclick={() => filters.setView('orders')}>
@@ -932,7 +328,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
           <span data-shell>Ledger</span>
         </button>
       </div>
-      
 
       <div data-shell class="nav-group">
         <div data-shell class="nav-label">Library</div>
@@ -989,13 +384,13 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   </footer>
     {:else}
     {#if advisorResult.error && !filterState.adviceOnly && ['sell', 'sets', 'session'].includes(effectiveView)}
-      <div class="ui-notice" data-tone="warn" role="status">Hold/sell advice unavailable: {advisorResult.error} <button class="btn" onclick={() => calculationEpoch += 1}>Retry calculations</button></div>
+      <div class="ui-notice" data-tone="warn" role="status">Hold/sell advice unavailable: {advisorResult.error} <button class="btn" onclick={() => workspace.calculationEpoch += 1}>Retry calculations</button></div>
     {/if}
 
     {#if effectiveView === 'sell'}
       <SellPane keep={keepSection}
         bind:minPrice={filters.minPrice} bind:minOwned={filters.minOwned} bind:typeFilter={filters.typeFilter} bind:hideAtLvl={filters.hideAtLvl} bind:activeTags={filters.activeTags}
-        bind:tableView
+        bind:tableView={workspace.tableView}
         resolved={inventory.resolved} allocation={allocationMatches ? protection.state : null} {results} deltas={inventory.deltas} {totalPotential}
         prevSummary={estimatedGuidance ? null : prevSummary} {sinceScan} ordersSummary={estimatedGuidance ? null : listing.ordersSummary}
         {marketFreshness} {marketStaleness} marketLoadError={inventory.marketLoadError}
@@ -1009,13 +404,13 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         openListingFlow={(rows) => { if (calculationsReady && !estimatedGuidance) listing.openListingFlow((Array.isArray(rows) ? rows : rows ? [rows] : listableRows).map(row => ({ ...row, inventory_snapshot_id: inventory.nativeSnapshotId ?? undefined }))); }}
         {estimatedGuidance} oncheckListings={checkListingRequirements} canList={listingQuantitiesKnown} {listingActionLabel} unavailableCount={unknownSlugs.size}
         {pendingBanner}
-        {calculationPending} {calculationError} calculationErrorShown={guidanceUnavailable} onretryCalculation={() => calculationEpoch += 1}
+        {calculationPending} {calculationError} calculationErrorShown={guidanceUnavailable} onretryCalculation={() => workspace.calculationEpoch += 1}
       />
     {:else if effectiveView === 'session'}
       {#if defaultFacts.phase === 'loading'}
         <div class="ui-notice" role="status">Calculating safe quantities and sale values…</div>
       {:else if defaultFacts.error}
-        <div class="ui-notice" data-tone="bad" role="alert">Sale calculations unavailable: {defaultFacts.error} <button class="btn" onclick={() => calculationEpoch += 1}>Retry calculations</button></div>
+        <div class="ui-notice" data-tone="bad" role="alert">Sale calculations unavailable: {defaultFacts.error} <button class="btn" onclick={() => workspace.calculationEpoch += 1}>Retry calculations</button></div>
       {/if}
       <TradeSessionPane keep={keepSection} {listingBlockReason} onrecheck={checkListingRequirements} {listingActionLabel} owned={inventory.resolved.owned} market={inventory.market} reserveCopies={filters.reserveCopies} advice={adviceMap} nativeFacts={defaultFacts.value} {availability}
         scanning={inventory.pullingInventory} onscan={async () => { await inventory.pullInventory(); await protection.refresh(); }} onreview={(rows, budget, state) => { if (!listingQuantitiesKnown) return; listing.openListingFlow(rows.map(r => ({
@@ -1023,265 +418,13 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
           avg_price: r.market.avg, session: { snapshot_id: state.allowance.snapshot_id!, utc_day: state.allowance.utc_day, budget },
         }))); }} />
     {:else if effectiveView === 'sets'}
-      <section data-shell class="view-header">
-        <h2 data-shell>Set picks</h2>
-        <p data-shell class="lede">
-          Inventory cross-referenced against {Object.keys(inventory.market?.set_to_parts ?? {}).length}
-          prime sets. Ranked by net plat.
-          {#if setSurfaceAge}
-            <span data-shell class="warn">· ⚠ set/vault data {setSurfaceAge}</span>
-          {/if}
-        </p>
-      </section>
-      {@render keepSection()}
-      {#if guidanceUnavailable}<p class="muted">Set recommendations will appear once quantities are available.</p>
-      {:else if setResult.phase === 'loading'}
-        <div class="ui-notice" role="status">Calculating set opportunities…</div>
-      {:else if setResult.error}
-        <div class="ui-notice" data-tone="bad" role="alert">Set recommendations unavailable: {setResult.error} <button class="btn" onclick={() => calculationEpoch += 1}>Retry calculations</button></div>
-      {:else if setRecos.length > 0}
-        <section data-shell class="wrap tw set-recos">
-          <div data-shell class="rail"><h3 data-shell>Set opportunities</h3></div>
-          {#each setRecos as r (r.set_slug)}
-            {@const av = adviceMap.get(r.set_slug)}
-            <div data-shell class="reco row">
-              <div data-shell class="reco-body">
-                <div data-shell class="reco-title">
-                  <strong data-shell class="reco-verb">
-                    {#if r.kind === 'near-complete'}Complete{:else if r.kind === 'complete-with-extras'}List{:else}List{/if}
-                  </strong>
-                  <a data-shell
-                    href={wfmItemUrl(r.set_slug)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >{r.set_name}</a>
-                  <span data-shell class="reco-net-inline">+{r.net_plat}p</span>
-                  {#if av}
-                    <span data-shell class="tag advice advice-{av.advice}" title={av.reasons.join(' · ')}>
-                      {av.advice === 'sell_now' ? 'sell now' : av.advice}
-                    </span>
-                  {/if}
-                  <span data-shell class="kind kind-{r.kind}">
-                    {#if r.kind === 'near-complete'}
-                      own {r.parts.reduce((n, p) => n + Math.min(p.count, p.required), 0)}/{r.parts.reduce((n, p) => n + p.required, 0)}
-                    {:else if r.kind === 'complete-with-extras'}
-                      {r.extras} spare{r.extras === 1 ? '' : 's'} + full set
-                    {:else}
-                      {r.extras} duplicate{r.extras === 1 ? '' : 's'}
-                    {/if}
-                  </span>
-                  {#if r.set_vol !== undefined && (r.kind === 'near-complete' || r.kind === 'complete-with-extras')}
-                    {#if r.set_vol < 1}
-                      <span data-shell class="set-liq cold" title="The assembled set has traded under 1×/48h - a flip may sit unsold for a while.">set rarely trades</span>
-                    {:else if r.set_vol < 5}
-                      <span data-shell class="set-liq thin" title="Thin set volume - expect to wait for a buyer before you recoup the plat.">thin · {r.set_vol}/48h</span>
-                    {:else}
-                      <span data-shell class="set-liq moving" title="Healthy set volume.">{r.set_vol}/48h</span>
-                    {/if}
-                  {/if}
-                </div>
-                <p data-shell class="reco-detail muted">
-                  {#if r.kind === 'near-complete'}
-                    {@const ownedCount = r.parts.reduce((n, p) => n + Math.min(p.count, p.required), 0)}
-                    Buy {(r.missing ?? []).map((m) => `${m.quantity > 1 ? `${m.quantity}× ` : ''}${m.name}`).join(' + ')} at current asks for
-                    <strong data-shell class="bad-text">{r.missing_cost}p</strong>, then list the set at the current lowest ask,
-                    <strong data-shell class="good-text">{r.set_low_sell}p</strong>.
-                    That is <strong data-shell class="good-text">+{r.net_plat}p potential uplift</strong> versus listing your
-                    {ownedCount} owned part{ownedCount === 1 ? '' : 's'} for {r.parts_low_sell}p.
-                    {#if r.set_top_buy !== undefined && r.instant_uplift !== undefined}
-                      Selling instantly to the {r.set_top_buy}p top bid would be
-                      <strong data-shell class:good-text={r.instant_uplift >= 0} class:bad-text={r.instant_uplift < 0}>{r.instant_uplift >= 0 ? '+' : '−'}{Math.abs(r.instant_uplift)}p</strong>
-                      versus those parts.
-                    {/if}
-                  {:else if r.kind === 'complete-with-extras'}
-                    You hold a full set plus {r.extras} spare blueprint{r.extras === 1 ? '' : 's'}.
-                    List the extras at <strong data-shell>{r.extras_plat}p</strong>.
-                  {:else}
-                    Duplicates of partial-set parts. List the {r.extras} spare {r.extras === 1 ? 'copy' : 'copies'}:
-                    <strong data-shell>{r.extras_plat}p</strong>.
-                  {/if}
-                </p>
-                <!-- The third option the spread above cannot express: buy only
-                     what you lack and foundry the rest. Only for sets you are
-                     actually assembling - on a spares play there is nothing to
-                     build. -->
-                {#if r.kind === 'near-complete' && inventory.market?.set_to_parts?.[r.set_slug]}
-                  <details data-shell class="build-vs-buy">
-                    <summary data-shell>build it or buy it</summary>
-                    <BuildVsBuy
-                      setSlug={r.set_slug}
-                      setName={r.set_name}
-                      parts={inventory.market.set_to_parts[r.set_slug].parts}
-                      market={inventory.market}
-                      owned={inventory.resolved.owned}
-                    />
-                  </details>
-                {/if}
-              </div>
-            </div>
-          {/each}
-        </section>
-      {:else}
-        <div data-shell class="card ui-panel empty">
-          <div data-shell>
-            <strong data-shell>No set recommendations.</strong>
-            <p data-shell class="muted">You don't currently own enough prime parts to surface near-complete sets or spare-blueprint plays.</p>
-          </div>
-        </div>
-      {/if}
-
+      <SetPicksView {inventory} {setSurfaceAge} {keepSection} {guidanceUnavailable} {setResult} {setRecos} {adviceMap} onretry={() => workspace.calculationEpoch += 1} />
     {:else if effectiveView === 'relics'}
-      <section data-shell class="view-header">
-        <h2 data-shell>Relic planner</h2>
-        <p data-shell class="lede">
-          {#if relicResult.phase === 'loading'}
-            Expected values are being calculated from your inventory and the current snapshot.
-          {:else if relicResult.error}
-            Expected values are unavailable until the calculation succeeds.
-          {:else if relicPlan.length > relicVisible.length}
-            Top {relicVisible.length} of {relicPlan.length} relics you own, ranked by expected plat per solo crack (Intact); the ladder shows what refining would add.
-          {:else}
-            Your {relicPlan.length} relic{relicPlan.length === 1 ? '' : 's'} ranked by expected plat per solo crack (Intact); the ladder shows what refining would add.
-          {/if}
-          {#if relicSurfaceAge}
-            <span data-shell class="muted">· ⚠ drop-table data {relicSurfaceAge}</span>
-          {/if}
-        </p>
-      </section>
-      {#if relicResult.phase === 'loading'}
-        <div class="ui-notice" role="status">Calculating relic values…</div>
-      {:else if relicResult.error}
-        <div class="ui-notice" data-tone="bad" role="alert">Relic recommendations unavailable: {relicResult.error} <button class="btn" onclick={() => calculationEpoch += 1}>Retry calculations</button></div>
-      {:else if relicPlan.length > 0}
-        <section data-shell class="wrap tw relic-planner">
-          <div data-shell class="rail"><h3 data-shell>Relic decisions</h3></div>
-          <div data-shell class="relic-grid">
-            {#each relicVisible as p (p.relic_slug)}
-              <div data-shell class="relic-card">
-                <div data-shell class="relic-title">
-                  <strong data-shell class="reco-verb">{p.decision?.verdict === 'sell-intact' ? 'Sell intact' : p.decision?.verdict === 'refine' ? 'Refine' : p.decision?.verdict === 'crack' ? 'Crack intact' : 'Review'}</strong>
-                  <a data-shell
-                    href={wfmItemUrl(p.relic_slug)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >{p.relic_name}</a>
-                  <span data-shell class="muted small">×{p.owned}</span>
-                </div>
-                <div data-shell class="relic-epp">
-                  {p.epp.toFixed(1)}<span data-shell class="unit">p / crack</span>
-                </div>
-                <div data-shell class="relic-meta">
-                  <span data-shell class:bad-text={p.moving_count < p.total_rewards / 2}>
-                    {p.moving_count}/{p.total_rewards} rewards moving
-                  </span>
-                  <span data-shell class="muted">·</span>
-                  <span data-shell title="If you cracked every one you own.">
-                    {p.epp_owned.toFixed(0)}p total
-                  </span>
-                  {#if p.sell_now > 0}
-                    <span data-shell class="muted">·</span>
-                    <span data-shell
-                      class:bad-text={p.sell_now > p.epp}
-                      title="What this relic clears at sold intact on WFM, no cracking. When this beats the crack EV, selling wins."
-                    >or sell: {p.sell_now.toFixed(0)}p ea</span>
-                  {/if}
-                </div>
-                {#if p.decision}
-                  <RefinementLadder decision={p.decision} />
-                {/if}
-                <details data-shell class="relic-rewards">
-                  <summary data-shell>top drops</summary>
-                  <ul data-shell>
-                    {#each p.rewards.slice(0, 4) as r (r.slug)}
-                      <li data-shell>
-                        <span data-shell class="rarity rarity-{r.rarity.toLowerCase()}">{r.rarity[0]}</span>
-                        <span data-shell class="reward-name">{r.name}</span>
-                        <span data-shell class="muted small">{r.chance.toFixed(0)}%</span>
-                        <span data-shell class={r.low_sell > 0 ? '' : 'muted'}>{r.low_sell || '-'}p</span>
-                      </li>
-                    {/each}
-                  </ul>
-                </details>
-              </div>
-            {/each}
-          </div>
-          {#if relicPlan.length > RELIC_PREVIEW}
-            <div data-shell class="relic-more">
-              <button data-shell class="ghost" onclick={() => (relicShowAll = !relicShowAll)}>
-                {relicShowAll ? 'Show fewer' : `Show ${relicPlan.length - RELIC_PREVIEW} more`}
-              </button>
-            </div>
-          {/if}
-        </section>
-      {:else}
-        <div data-shell class="card ui-panel empty">
-          <div data-shell>
-            <strong data-shell>No relics in your inventory.</strong>
-            <p data-shell class="muted">Once you pick up relics, this planner ranks them by expected plat per crack.</p>
-          </div>
-        </div>
-      {/if}
-
+      <RelicPlannerView bind:relicShowAll {relicResult} {relicSurfaceAge} {relicPlan} onretry={() => workspace.calculationEpoch += 1} />
     {:else if effectiveView === 'rivens'}
       <RivensPanel market={inventory.market} rivens={resolvedRivens} />
     {:else if effectiveView === 'baro'}
-      <section data-shell class="view-header">
-        <h2 data-shell>Baro Ki'Teer</h2>
-        <p data-shell class="lede">
-          {#if baroState?.phase === 'here'}
-            Here at {voidTrader?.location} - leaves in {humanWindow(baroState.windowMs)}.
-          {:else if baroState?.phase === 'incoming'}
-            Arrives in {humanWindow(baroState.windowMs)} at {voidTrader?.location}.
-          {:else}
-            Next visit at {voidTrader?.location}.
-          {/if}
-          {#if baroSurfaceAge}
-            <span data-shell class="warn">· ⚠ schedule data {baroSurfaceAge} - may be a rotation behind</span>
-          {/if}
-        </p>
-      </section>
-      {@render keepSection()}
-      <section data-shell class="card ui-panel baro-card" class:here={baroState?.phase === 'here'}>
-        <div data-shell class="row">
-          <div data-shell class="src">
-            <span data-shell class="baro-icon" aria-hidden="true">⌬</span>
-            <div data-shell class="baro-body">
-              <p data-shell class="baro-detail">
-                You hold <strong data-shell>{ducatStats.total.toLocaleString()}<span data-shell class="unit">d</span></strong>
-                across <strong data-shell>{ducatStats.count.toLocaleString()}</strong>
-                ducat-earning {ducatStats.count === 1 ? 'item' : 'items'}.
-                {#if baroState?.phase === 'here'}
-                  Spend them on Baro's offerings - open the <strong data-shell>Ducats</strong>
-                  preset to see what's worth dumping.
-                {:else}
-                  Earmark these for Baro using the <strong data-shell>Ducats</strong> preset.
-                {/if}
-              </p>
-            </div>
-          </div>
-          <div data-shell class="row gap-sm">
-            <button data-shell onclick={() => { filters.setView('sell'); filters.applyPreset('ducats'); }}>Open Ducats preset →</button>
-          </div>
-        </div>
-      </section>
-
-      <!-- His actual stock, priced. Only rendered when the snapshot carries a
-           manifest: worldState publishes one from announcement, but a snapshot
-           built before that switch (or carried through a DE outage) may not
-           have it, and an empty table would read as "he is selling nothing". -->
-      {#if voidTrader?.inventory?.length}
-        <section data-shell class="baro-stock">
-          <BaroBoard market={inventory.market} baro={voidTrader} owned={guidanceOwned} availability={guidanceAvailability} unavailableItems={unknownSlugs.size} quantitiesUnavailable={guidanceUnavailable} />
-        </section>
-      {/if}
-
-      <!-- Vault rotations and Darvo, from the same worldState poll. An
-           unvaulting is the most expensive surprise in prime trading and it is
-           announced days ahead. -->
-      <section data-shell class="baro-calendar">
-        <TraderCalendar market={inventory.market} owned={inventory.resolved.owned} />
-      </section>
-
+      <BaroView {inventory} {baroSurfaceAge} {keepSection} {guidanceUnavailable} {voidTrader} {ducatStats} {baroState} {guidanceOwned} {guidanceAvailability} {unknownSlugs} onducats={() => { filters.setView('sell'); filters.applyPreset('ducats'); }} />
     {:else if effectiveView === 'routines'}
       <RoutinesPanel routine={routines} market={inventory.market} owned={inventory.resolved.owned} now={displayNow} />
 
@@ -1350,133 +493,6 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   </a>
 {/snippet}
 
-{#snippet statusStrip(inShell: boolean)}
-  <!-- Shell-level status strip: one 40px spine on the landing AND the
-       workspace. In the shell its brand cell sits exactly over the sidebar
-       column; the rest answers "is what I'm looking at still true?" -
-       inventory age, market age, orders to fix, Baro, WFM session. Rare
-       inventory actions (Export / Restore / Clear) live one click deeper in
-       the Refresh menu. -->
-  <header data-shell class="statusbar" class:shell-strip={inShell} use:headerClearance={inShell}>
-    <div data-shell class="brand">
-      <h1 data-shell>TennoWorth</h1>
-      {#if !inShell}<span data-shell class="sub">warframe.market prices, ranked by what actually sells</span>{/if}
-    </div>
-    
-      <div data-shell class="cell inv" title={unresolvedCount > 0 ? `${unresolvedCount} items couldn't be price-matched (${unresolvedSummary}) - usually untradeable blueprints, quest items and very new content.` : undefined}>
-        {#if inventory.inventoryName}
-          <span data-shell class="dot {inventory.refreshFailed ? 'stale' : inventoryFreshness}" role="img" aria-label={inventory.refreshFailed ? 'Inventory refresh failed' : `Inventory recorded ${inventoryStaleness ?? 'at an unknown time'}`}></span>
-          <span data-shell>{inventory.source === 'import' ? 'Imported inventory' : inventory.source === 'saved' || inventory.refreshFailed || inventory.noTradeables ? 'Using saved scan' : 'Inventory'}</span>
-          <b data-shell class="file" title={inventory.inventoryName}>{inventory.inventoryName}</b>
-          {#if inventoryTimestamp}
-            <time data-shell datetime={inventoryTimestamp}>As of {new Date(inventoryTimestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })} · {inventoryStaleness}</time>
-          {:else}<span data-shell>Timestamp unavailable</span>{/if}
-          {#if inventory.refreshFailed}<span data-shell class="bad">Last refresh failed</span>{:else if inventory.noTradeables}<span data-shell>No tradeable items found; showing saved inventory</span>{/if}
-        {:else}
-          <span data-shell class="dot" aria-hidden="true"></span>
-          <span data-shell>No inventory yet</span>
-        {/if}
-        <div data-shell class="refresh-wrap">
-          <!-- Reflects the scan itself, not just the menu: refreshFromGame
-               closes the popover before awaiting, so the "Scanning game…"
-               label inside it vanished the moment it mattered and a ~10s scan
-               looked like a dead click. This trigger stays on screen. -->
-          <button data-shell
-            class="refresh-trigger"
-            class:busy={inventory.pullingInventory}
-            onclick={() => (refreshOpen = !refreshOpen)}
-            aria-expanded={refreshOpen}
-            aria-busy={inventory.pullingInventory}
-            disabled={inventory.pullingInventory}
-            title={inventory.pullingInventory
-              ? 'Reading the running game’s memory - this can take a few seconds.'
-              : 'Load fresh inventory - re-fetch from the game. Export / Restore / Clear live in this menu too.'}
-          >{inventory.pullingInventory ? 'Scanning…' : 'Refresh ▾'}</button>
-          {#if refreshOpen}
-            <div data-shell class="refresh-pop">
-              <p data-shell class="rp-lede">Scan the running game - no file needed.</p>
-              <button data-shell class="rp-primary" data-testid="desktop-scan" onclick={refreshFromGame} disabled={inventory.pullingInventory}>
-                {inventory.pullingInventory ? 'Scanning game…' : 'Scan game'}
-              </button>
-              <div data-shell class="rp-sep" aria-hidden="true"></div>
-              {#if inventory.inventoryName}
-                <button data-shell class="rp-item" onclick={() => { refreshOpen = false; exportImportRef?.openExport(); }} title="Download an encrypted snapshot for another device or backup.">Export…</button>
-              {/if}
-              <button data-shell class="rp-item" onclick={() => { refreshOpen = false; exportImportRef?.pickImport(); }} title="Restore an encrypted snapshot exported from another device.">Restore…</button>
-              {#if inventory.inventoryName}
-                <button data-shell class="rp-item danger" onclick={() => { refreshOpen = false; handleClear(); }} title="Forget the saved inventory entirely.">Clear</button>
-              {/if}
-              {#if unresolvedCount > 0}
-                <p data-shell class="rp-note" title="Breakdown: {unresolvedSummary}.">{unresolvedCount} items couldn't be price-matched (not shown) - usually untradeable blueprints, quest items and very new content; your sellable items aren't affected.</p>
-              {/if}
-            </div>
-          {/if}
-        </div>
-      </div>
-    
-    <div data-shell class="cell">
-      {#if marketFreshness === 'stale'}
-        <span data-shell>Market</span>
-        <span data-shell class="tag stale">Stale · {marketStaleness}</span>
-      {:else}
-        <span data-shell class="dot {marketFreshness}" role="img" aria-label="Market data {marketFreshness}"></span>
-        <span data-shell>Market</span>
-        <b data-shell>{marketStaleness ?? '-'}</b>
-        {#if marketFreshness !== 'unknown'}<span data-shell>· {marketFreshness}</span>{/if}
-      {/if}
-    </div>
-    {#if inShell && ordersToFix > 0}
-      <div data-shell class="cell attn">
-        <b data-shell>{ordersToFix}</b>
-        <span data-shell>{ordersToFix === 1 ? 'order' : 'orders'} to fix</span>
-        <button data-shell type="button" class="link" onclick={() => filters.setView('orders')} aria-label="Open My orders">→</button>
-      </div>
-    {/if}
-    {#if baroState && baroState.phase !== 'unknown'}
-      <div data-shell class="cell baro">
-        <span data-shell class="ducat" aria-hidden="true">⌬</span>
-        <span data-shell>{baroState.phase === 'here' ? 'Baro leaves in' : 'Baro arrives in'}</span>
-        <b data-shell>{humanWindow(baroState.windowMs)}</b>
-      </div>
-    {/if}
-    <span data-shell class="grow"></span>
-    {#if !inShell}
-      <div data-shell class="cell">
-        <button data-shell type="button" class="cellbtn" onclick={() => filters.setView('notifications')}>Notifications{#if unreadNotifications}<span data-shell class="badge unread">{unreadNotifications}</span>{/if}</button>
-      </div>
-      <div data-shell class="cell">
-        <button data-shell type="button" class="cellbtn" onclick={() => filters.setView('settings')}><span data-shell aria-hidden="true">⚙</span>Settings</button>
-      </div>
-      <div data-shell class="cell end more">
-        <button data-shell type="button" class="cellbtn more-trigger" bind:this={moreTrigger} aria-expanded={moreOpen} aria-controls="more-pop" onclick={() => (moreOpen = !moreOpen)}>More ▾</button>
-        {#if moreOpen}
-          <div data-shell id="more-pop" class="more-pop">
-            <button data-shell type="button" onclick={() => { moreOpen = false; updateBanner.checkForUpdates(); }}>Check for updates</button>
-            <button data-shell type="button" onclick={() => { moreOpen = false; feedbackFromMore = true; openFeedback(); }}>Send feedback</button>
-            <hr data-shell />
-            <a data-shell href="#faq" onclick={() => (moreOpen = false)}>FAQ</a>
-            {@render projectLinkAnchors()}
-          </div>
-        {/if}
-      </div>
-    {:else}
-      <div data-shell class="cell end">
-        <span data-shell>WFM</span>
-        {#if listing.wfmStatus && !listing.wfmStatus.unlocked}
-          <button data-shell type="button" class="link" onclick={() => wfmAuthDialogsRef?.open(listing.wfmStatus?.logged_in ? 'needs_unlock' : 'needs_login')}>{wfmLabel}</button>
-        {:else}
-          <b data-shell>{wfmLabel}</b>
-        {/if}
-        {#if listing.ordersSummary}<span data-shell>· {listing.ordersSummary.live} live</span>{/if}
-      </div>
-    {/if}
-  </header>
-{/snippet}
-
-
-
-
-
 {#snippet generalBanners()}
   {#if marketAccess.message}
     <div class="ui-notice" data-tone="warn" role="status">{marketAccess.message}</div>
@@ -1515,7 +531,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
         background - use the tray icon's Quit to exit.
       </div>
       <div data-shell class="gb-actions">
-        <button data-shell class="gb-dismiss" aria-label="Dismiss" onclick={() => (trayHint = false)}>×</button>
+        <button data-shell class="gb-dismiss" aria-label="Dismiss" onclick={() => (session.trayHint = false)}>×</button>
       </div>
     </div>
   {/if}
@@ -1537,81 +553,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
 {/snippet}
 
 {#snippet pendingBanner()}
-  {#if listing.pendingPlan || listing.resumePhase !== 'idle'}
-    <section data-shell class="card ui-panel pending-banner">
-      {#if listing.resumePhase === 'running'}
-        <div data-shell class="row">
-          <div data-shell class="src">
-            <span data-shell class="dot aging" aria-hidden="true"></span>
-            <strong data-shell>Resuming interrupted batch…</strong>
-            <span data-shell class="muted">Checking current orders before continuing.</span>
-          </div>
-        </div>
-      {:else if listing.resumePhase === 'done'}
-        <div data-shell class="row">
-          <div data-shell class="src">
-            <span data-shell class="dot fresh" aria-hidden="true"></span>
-            <strong data-shell>Resumed.</strong>
-            <span data-shell class="muted">
-              <span data-shell class="ok-text">{resumeOk} created</span>
-              {#if resumeErr > 0}· <span data-shell class="bad">{resumeErr} failed</span>{/if}.
-              New listings are still hidden - toggle from the orders panel.
-            </span>
-          </div>
-          <div data-shell class="row gap-sm">
-            <button data-shell class="ghost" onclick={() => { listing.resumePhase = 'idle'; listing.resumeResults = []; }}>Dismiss</button>
-          </div>
-        </div>
-      {:else if listing.resumePhase === 'error'}
-        <div data-shell class="row">
-          <div data-shell class="src">
-            <span data-shell class="dot stale" aria-hidden="true"></span>
-            <strong data-shell>Resume failed.</strong>
-            <span data-shell class="muted bad">{listing.resumeError}</span>
-          </div>
-          <div data-shell class="row gap-sm">
-            <button data-shell onclick={() => listing.doResume()} disabled={marketAccess.mutationsBlocked}>Retry</button>
-            <button data-shell class="ghost" onclick={() => listing.doDiscard()}>Discard pending</button>
-          </div>
-        </div>
-      {:else if listing.pendingPlan && batch}
-        <div data-shell class="row">
-          <div data-shell class="src">
-            <span data-shell class="dot aging" aria-hidden="true"></span>
-            <strong data-shell>Interrupted batch from {new Date(listing.pendingPlan.started_at).toLocaleString()}</strong>
-            {#if listing.durabilityError}<span data-shell class="bad" role="alert">{listing.durabilityError}</span>{/if}
-            <span data-shell class="muted">{batch.detail}</span>
-            {#if uncertainRemaining > 0}
-              <span data-shell class="muted">
-                A listing whose outcome the market never confirmed may already be live. Check My Orders before listing it again.
-              </span>
-            {/if}
-          </div>
-          <div data-shell class="row gap-sm">
-            {#if batch.resumable}
-              <button data-shell onclick={() => listing.doResume()} disabled={marketAccess.mutationsBlocked}>Resume</button>
-            {:else}
-              <button data-shell onclick={() => filters.setView('orders')}>Review in My Orders</button>
-            {/if}
-            <button data-shell class="ghost" onclick={() => listing.doDiscard()}>Discard</button>
-          </div>
-        </div>
-      {:else if listing.pendingPlan}
-        <div data-shell class="row">
-          <div data-shell class="src">
-            <span data-shell class="dot stale" aria-hidden="true"></span>
-            <strong data-shell>Completed batch still saved.</strong>
-            <span data-shell class="muted">{listing.durabilityError ?? 'The saved batch could not be cleared. Check My Orders, then discard this record.'}</span>
-          </div>
-          <div data-shell class="row gap-sm">
-            <button data-shell onclick={() => listing.doResume()}>Retry saving</button>
-            <button data-shell onclick={() => filters.setView('orders')}>Review in My Orders</button>
-            <button data-shell class="ghost" onclick={() => listing.doDiscard()}>Discard record</button>
-          </div>
-        </div>
-      {/if}
-    </section>
-  {/if}
+  <PendingBatchBanner {listing} {marketAccess} onorders={() => filters.setView('orders')} />
 {/snippet}
 
 <!-- Desktop only (listing needs wfm-core's session). onauthrequired fires on
@@ -1626,9 +568,7 @@ import { TRAY_HINT_EVENT } from '../contracts/update';
   onclose={() => { listing.reviewRowsOverride = null; void protection.refresh(); void listing.refreshPendingPlan(); }}
 />
 
-
   <WfmAuthDialogs bind:this={wfmAuthDialogsRef} onunlocked={(next) => { listing.handleWfmUnlocked(next); void protection.refresh(); }} onautherror={(error) => (wfmAuthFailure = error)} onreport={openFeedback} />
-
 
 <ExportImportDialogs
   bind:this={exportImportRef}

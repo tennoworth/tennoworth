@@ -4,7 +4,7 @@ import type { Market, OwnedRecord } from '../../contracts/data';
 /**
  * What each Sell-view calculation needs before it can run.
  *
- * The shell runs six of these side by side, and their gates are not alike: one
+ * The sell workspace runs six of these side by side, and their gates are not alike: one
  * reads the raw inventory, one the availability-adjusted copy, one needs a
  * calendar, another needs set recipes, a third relic rewards. While those rules
  * lived inline in `$effect` bodies, the only way to learn whether a snapshot
@@ -14,7 +14,7 @@ import type { Market, OwnedRecord } from '../../contracts/data';
  * the same code path as "they were never there", which is what the shell did in
  * both cases.
  *
- * One thing deliberately left with the shell: each effect also reads
+ * One thing deliberately left with the workspace: each effect also reads
  * `calculationEpoch`, the value that makes a user-requested recompute re-fire it.
  * That is Svelte reactivity, not an input to the calculation, so it stays where
  * the effect is.
