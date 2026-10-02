@@ -42,9 +42,15 @@ pub(crate) fn ensure_wfm_complete() -> Result<(), String> {
     wfm_client::governor::process().check(wfm_client::governor::Kind::Read, &wfm_client::governor::context()).map_err(|e| e.to_string())?;
     if WFM_FAILED.load(std::sync::atomic::Ordering::Acquire) { Err("WFM access failed during ingestion; keeping the previous published snapshot.".into()) } else { Ok(()) }
 }
+fn is_wfm_host(url: &str) -> bool {
+    reqwest::Url::parse(url).ok().is_some_and(|url| {
+        matches!(url.host_str(), Some("api.warframe.market" | "warframe.market"))
+    })
+}
+
 impl LiveHttp {
     fn request(&self, url: &str) -> Result<Vec<u8>, String> {
-        let is_wfm = reqwest::Url::parse(url).ok().is_some_and(|url| matches!(url.host_str(), Some("api.warframe.market" | "warframe.market")));
+        let is_wfm = is_wfm_host(url);
         let result = if is_wfm {
             (|| {
                 let response = wfm_client::transport::send(wfm_client::wfm_headers(self.client.get(url), "pc"), wfm_client::governor::Kind::Read).map_err(|e| e.to_string())?;
@@ -61,7 +67,7 @@ impl LiveHttp {
 impl Http for LiveHttp {
     fn get_json(&self, url: &str) -> Result<serde_json::Value, String> {
         serde_json::from_slice(&self.request(url)?).map_err(|e| {
-            if reqwest::Url::parse(url).ok().is_some_and(|url| matches!(url.host_str(), Some("api.warframe.market" | "warframe.market"))) { WFM_FAILED.store(true, std::sync::atomic::Ordering::Release); }
+            if is_wfm_host(url) { WFM_FAILED.store(true, std::sync::atomic::Ordering::Release); }
             format!("{url}: JSON parse: {e}")
         })
     }
@@ -96,5 +102,28 @@ impl Http for FixtureHttp {
             Some(s) => s.to_string(),
             None => v.to_string(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_wfm_host;
+
+    #[test]
+    fn wfm_host_requires_an_exact_parsed_host() {
+        for url in [
+            "https://api.warframe.market/v2/items",
+            "https://warframe.market/auth/signin",
+            "https://API.WARFRAME.MARKET:443/v2/items",
+        ] {
+            assert!(is_wfm_host(url), "{url}");
+        }
+        for url in [
+            "invalid", "", "https://warframe.market.example/v2/items",
+            "https://example.com/warframe.market",
+            "https://warframe.market@example.com/",
+        ] {
+            assert!(!is_wfm_host(url), "{url}");
+        }
     }
 }
