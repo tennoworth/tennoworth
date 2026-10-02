@@ -304,11 +304,14 @@ mod tests {
         ]
         .into_iter()
         .map(|support| {
-            serde_json::to_value(support)
-                .unwrap()
-                .as_str()
-                .unwrap()
-                .to_string()
+            // Serialization alone cannot detect a variant omitted from this list.
+            let expected = match support {
+                UpdateSupport::Supported => "supported",
+                UpdateSupport::AppimageRequired => "appimage_required",
+                UpdateSupport::DisabledTestBuild => "disabled_test_build",
+            };
+            assert_eq!(serde_json::to_value(support).unwrap(), expected);
+            expected.to_string()
         })
         .collect::<Vec<_>>();
         assert_eq!(actual, expected);
