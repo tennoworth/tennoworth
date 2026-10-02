@@ -35,16 +35,19 @@ export function humanWindow(ms: number | null | undefined): string {
   return `${m}m`;
 }
 
-/** Platinum, rounded and thousands-separated.
+/** Platinum, rounded and thousands-separated by default; callers add units.
  *
  *  Exists because the listing review modal rendered the same quantity as
  *  `avg.toFixed(0)` while the table and market browser used
  *  `Math.round(v).toLocaleString()` - so a maxed arcane's average read "2500"
  *  in the modal and "2,500" everywhere else. Plat is always a whole number to
  *  the user; WFM has no fractional prices. */
-export function plat(v: number | null | undefined): string {
+export function plat(
+  v: number | null | undefined,
+  options: { useGrouping?: boolean } = {},
+): string {
   if (v == null || !Number.isFinite(v)) return '-';
-  return Math.round(v).toLocaleString();
+  return Math.round(v).toLocaleString(undefined, options);
 }
 
 /** Split the copies a row holds back into "leveled" (untradeable in-game) and

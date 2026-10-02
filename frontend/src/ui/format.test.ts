@@ -52,6 +52,12 @@ describe('humanWindow', () => {
 });
 
 describe('plat', () => {
+  it('can omit grouping while leaving the currency suffix to the caller', () => {
+    expect(plat(2499.6, { useGrouping: false })).toBe('2500');
+    expect(plat(0, { useGrouping: false })).toBe('0');
+    expect(plat(null, { useGrouping: false })).toBe('-');
+  });
+
   it('rounds and thousands-separates', () => {
     // en-US separators; the suite runs with a fixed locale.
     expect(plat(2500)).toBe((2500).toLocaleString());
