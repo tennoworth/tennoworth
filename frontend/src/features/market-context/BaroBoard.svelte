@@ -14,6 +14,7 @@
   import { useDesktopServices } from '../../ui/desktop-context';
   const { ducatPlan } = useDesktopServices();
   import { glyphFor } from '../../ui/glyphs';
+  import { plat } from '../../ui/format';
   import type { Market, OwnedRecord } from '../../contracts/data';
   import Glyph from '../../ui/Glyph.svelte';
 
@@ -95,10 +96,6 @@
     unpriced: 'Cosmetic or bundle - it has no market listing, so there is no price to show.',
   };
 
-  function plat(n: number | null): string {
-    return n == null ? '-' : `${Math.round(n)}p`;
-  }
-
   function ratio(n: number | null): string {
     return n == null ? '-' : n.toFixed(2);
   }
@@ -161,8 +158,8 @@
             </th>
             <td class="num ducat">{row.ducats?.toLocaleString() ?? '-'}</td>
             <td class="num muted">{row.credits ? `${Math.round(row.credits / 1000)}k` : '-'}</td>
-            <td class="num">{plat(row.price)}</td>
-            <td class="num muted">{plat(row.baseline)}</td>
+            <td class="num">{row.price == null ? '-' : `${plat(row.price, { useGrouping: false })}p`}</td>
+            <td class="num muted">{row.baseline == null ? '-' : `${plat(row.baseline, { useGrouping: false })}p`}</td>
             <td class="num">{ratio(row.platPerDucat)}</td>
             <td>
               <span class="tag {row.verdict}" title={VERDICT_HINT[row.verdict]}>
