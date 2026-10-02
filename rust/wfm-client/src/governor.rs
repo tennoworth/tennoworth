@@ -717,17 +717,39 @@ mod tests {
             "../../../tests/fixtures/wfm-access/outcomes.json"
         ))
         .unwrap();
-        let actual: Vec<_> = [
+        let mut actual: Vec<_> = [
             AccessError::Busy,
             AccessError::Cooldown(1),
             AccessError::Paused(String::new()),
             AccessError::Cancelled,
             AccessError::UncertainMutation,
             AccessError::Transport,
+            AccessError::InvalidPolicy,
+            AccessError::Persistence,
+            AccessError::InvalidRequest,
+            AccessError::Http(500),
         ]
         .iter()
-        .map(AccessError::code)
+        .map(|error| {
+            // code() has a fallback, so new variants must require an explicit
+            // wire-contract decision here rather than escaping fixture coverage.
+            let expected = match error {
+                AccessError::Busy => "busy",
+                AccessError::Cooldown(_) => "cooldown",
+                AccessError::Paused(_) => "paused",
+                AccessError::Cancelled => "cancelled",
+                AccessError::UncertainMutation => "uncertain_mutation",
+                AccessError::Transport
+                | AccessError::InvalidPolicy
+                | AccessError::Persistence
+                | AccessError::InvalidRequest
+                | AccessError::Http(_) => "wfm",
+            };
+            assert_eq!(error.code(), expected);
+            expected
+        })
         .collect();
+        actual.dedup();
         assert_eq!(serde_json::to_value(actual).unwrap(), fixture["codes"]);
     }
 }
