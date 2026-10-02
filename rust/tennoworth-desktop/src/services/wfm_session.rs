@@ -461,17 +461,21 @@ impl WfmSession {
     }
 
     /// Read + decrypt the on-disk JWT with `passphrase` - the offline half of
-    /// `unlock`. Returns `(jwt_plaintext, platform, derived_key)`. Split out so
-    /// the error mapping (missing file → `needs_login`, wrong passphrase →
-    /// `bad_passphrase`) is unit-testable without the network catalog warm.
-    fn decrypt_from_disk(&self, passphrase: &str) -> Result<(String, String, [u8; 32]), CmdError> {
+    /// `unlock`. Returns `(jwt_plaintext, platform, derived_key, kdf_salt)`.
+    /// Split out so the error mapping (missing file → `needs_login`, wrong
+    /// passphrase → `bad_passphrase`) is unit-testable without the network
+    /// catalog warm.
+    fn decrypt_from_disk(
+        &self,
+        passphrase: &str,
+    ) -> Result<(String, String, [u8; 32], String), CmdError> {
         let blob = self.read_blob()?;
         let platform = blob.platform.clone();
         // Any decrypt failure (wrong key or tampered ciphertext) reads as a bad
         // passphrase - the only actionable cause from the user's side.
         let key = derive_jwt_key(&blob, passphrase).map_err(|_| CmdError::bad_passphrase())?;
         let jwt = decrypt_jwt_with_key(&blob, &key).map_err(|_| CmdError::bad_passphrase())?;
-        Ok((jwt, platform, key))
+        Ok((jwt, platform, key, blob.kdf.salt))
     }
 
     /// The pre-publication work every installer shares: warm the WFM catalog with
@@ -493,21 +497,26 @@ impl WfmSession {
     /// network failure should leave no trace.
     pub fn unlock(&self, passphrase: &str, remember: bool) -> Result<(), CmdError> {
         let generation = self.session_generation();
-        let (jwt, platform, key) = self.decrypt_from_disk(passphrase)?;
+        let (jwt, platform, key, salt) = self.decrypt_from_disk(passphrase)?;
         let unlocked = self.warm_session(jwt, platform)?;
         wfm_client::transport::invalidate_reads();
         self.install_unlocked(generation, unlocked)?;
         // A silent re-unlock must not outlive the logout that ended the session
         // it belongs to, so the keyring change is tied to `generation` too.
-        self.apply_keyring(
-            generation,
-            if remember {
-                KeyringIntent::Remember(&key)
-            } else {
-                // Unticking the box is an explicit "stop remembering".
-                KeyringIntent::Forget
-            },
-        );
+        if remember {
+            // A sign-in that finished during the warm wrote a login file with a
+            // new salt and stored its own key. This key opens only the file it
+            // replaced, so storing it would make the next silent unlock fail.
+            // Sign-in leaves the generation alone, so only the file shows it.
+            // The re-read stays outside the session lock, as the keyring call
+            // does.
+            if self.read_blob().is_ok_and(|current| current.kdf.salt == salt) {
+                self.apply_keyring(generation, KeyringIntent::Remember(&key));
+            }
+        } else {
+            // Unticking the box is an explicit "stop remembering".
+            self.apply_keyring(generation, KeyringIntent::Forget);
+        }
         Ok(())
     }
 
@@ -949,6 +958,26 @@ mod tests {
         assert_eq!(keyring_log(), vec![(true, true)]);
     }
 
+    /// A sign-in that completes while an unlock is warming writes a login file
+    /// with a new salt and stores its own key. The unlock's key opens only the
+    /// file it decrypted, so remembering it would overwrite the sign-in's entry
+    /// and the next launch's silent unlock would fail.
+    #[test]
+    fn an_unlock_does_not_remember_a_key_a_sign_in_replaced() {
+        let _serial = KEYRING_TESTS.lock().expect("keyring tests");
+        reset_keyring_log();
+        let mut s = keyring_session("keyring-unlock-vs-sign-in");
+        s.warm_hook = Some(|session, _jwt, _platform| {
+            let signed_in = encrypt_jwt("jwt.newer.sig", PASSPHRASE, "pc").expect("encrypt");
+            session.persist(&signed_in).expect("sign-in writes its login file");
+            Ok(dummy_unlocked())
+        });
+
+        s.unlock(PASSPHRASE, true).expect("unlock publishes");
+
+        assert_eq!(keyring_log(), vec![]);
+    }
+
     /// A forget decided before a logout belongs to the session the logout
     /// discarded, so it is void.
     #[test]
@@ -1076,7 +1105,7 @@ mod tests {
         let blob = encrypt_jwt("jwt.secret.value", "the-correct-passphrase", "ps4").unwrap();
         fs::write(&path, serde_json::to_vec(&blob).unwrap()).unwrap();
         let s = session_with(path.clone());
-        let (jwt, platform, key) = s.decrypt_from_disk("the-correct-passphrase").unwrap();
+        let (jwt, platform, key, _salt) = s.decrypt_from_disk("the-correct-passphrase").unwrap();
         assert_eq!(jwt, "jwt.secret.value");
         assert_eq!(platform, "ps4");
         // The derived key it hands back must actually open the same envelope -
@@ -1259,7 +1288,7 @@ mod tests {
             s.decrypt_from_disk("wrong-pass").unwrap_err().code,
             "bad_passphrase"
         );
-        let (jwt, platform, _key) = s.decrypt_from_disk("probe-pass-123456").unwrap();
+        let (jwt, platform, _key, _salt) = s.decrypt_from_disk("probe-pass-123456").unwrap();
         assert_eq!(jwt, "probe.jwt.value");
         assert_eq!(platform, "pc");
         let _ = fs::remove_file(&path);
