@@ -2,7 +2,6 @@
   import { useDesktopServices } from '../../ui/desktop-context';
   const { desktopRivenComps } = useDesktopServices();
   import RivenOffer from './RivenOffer.svelte';
-  import { DesktopCmdError } from '../../contracts/errors';
 
 import { type RivenAuction } from '../../contracts/desktop';
   import { humanError } from '../../contracts/errors';
@@ -78,7 +77,7 @@ import { type RivenAuction } from '../../contracts/desktop';
         compsError = new Map(compsError).set(slug, 'No open auctions for this weapon right now.');
       }
     } catch (e) {
-      compsError = new Map(compsError).set(slug, e instanceof DesktopCmdError ? e.message : humanError(e));
+      compsError = new Map(compsError).set(slug, humanError(e));
     } finally {
       compsBusy = null;
     }
