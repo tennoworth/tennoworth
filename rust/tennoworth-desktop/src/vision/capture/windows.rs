@@ -1,16 +1,17 @@
 use super::CapturedFrame;
 
-pub(in crate::overlay) fn capture_warframe() -> Result<CapturedFrame, String> {
+pub(crate) fn capture_warframe() -> Result<CapturedFrame, String> {
     let windows =
         xcap::Window::all().map_err(|e| format!("capture_failed: listing windows: {e}"))?;
     let candidates: Vec<(Option<u32>, String)> = windows
         .iter()
         .map(|window| (window.pid().ok(), window.title().unwrap_or_default()))
         .collect();
-    let chosen =
-        super::pick_game_window(&candidates, wfm_core::acquisition::scan::find_wf_pid());
+    let chosen = super::pick_game_window(&candidates, wfm_core::acquisition::scan::find_wf_pid());
     if let Some((index, rule)) = chosen {
-        let title = candidates.get(index).map_or("", |(_, title)| title.as_str());
+        let title = candidates
+            .get(index)
+            .map_or("", |(_, title)| title.as_str());
         eprintln!(
             "tennoworth: capturing window {title:?} (matched by {})",
             rule.describe()

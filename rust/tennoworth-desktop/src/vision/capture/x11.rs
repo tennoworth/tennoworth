@@ -5,7 +5,7 @@ use image::RgbaImage;
     clippy::indexing_slicing,
     reason = "the reply length is checked against expected and chunks_exact guarantees each pixel has the validated 2, 3, or 4-byte width"
 )]
-pub(in crate::overlay) fn capture_warframe() -> Result<CapturedFrame, String> {
+pub(crate) fn capture_warframe() -> Result<CapturedFrame, String> {
     use xcb::{
         x::{
             Atom, Drawable, GetGeometry, GetImage, GetProperty, ImageFormat, ImageOrder,
@@ -15,7 +15,7 @@ pub(in crate::overlay) fn capture_warframe() -> Result<CapturedFrame, String> {
         Connection,
     };
 
-    pub(in crate::overlay) fn atom(connection: &Connection, name: &[u8]) -> Result<Atom, String> {
+    pub(crate) fn atom(connection: &Connection, name: &[u8]) -> Result<Atom, String> {
         let cookie = connection.send_request(&InternAtom {
             only_if_exists: false,
             name,
@@ -26,7 +26,7 @@ pub(in crate::overlay) fn capture_warframe() -> Result<CapturedFrame, String> {
             .map_err(|error| format!("capture_failed: resolving X11 atom: {error}"))
     }
 
-    pub(in crate::overlay) fn property(
+    pub(crate) fn property(
         connection: &Connection,
         window: Window,
         property: Atom,
@@ -81,10 +81,11 @@ pub(in crate::overlay) fn capture_warframe() -> Result<CapturedFrame, String> {
         }
     }
 
-    let chosen =
-        super::pick_game_window(&candidates, wfm_core::acquisition::scan::find_wf_pid());
+    let chosen = super::pick_game_window(&candidates, wfm_core::acquisition::scan::find_wf_pid());
     if let Some((index, rule)) = chosen {
-        let title = candidates.get(index).map_or("", |(_, title)| title.as_str());
+        let title = candidates
+            .get(index)
+            .map_or("", |(_, title)| title.as_str());
         eprintln!(
             "tennoworth: capturing window {title:?} (matched by {})",
             rule.describe()

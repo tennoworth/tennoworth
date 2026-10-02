@@ -8,8 +8,11 @@
 //! - `services/` - capability owners. They may use `persistence/`,
 //!   `game_events` and each other; they must not know about `commands/` (IPC),
 //!   `shell/` (windows, tray, startup) or a feature.
-//! - `overlay/` - an in-game feature. It may use services, persistence and
-//!   `game_events`, but not the adapters; startup wires it to the events.
+//! - `vision/` - capturing the game's window and reading text off it. Like
+//!   `game_events`, it knows none of the features that use it.
+//! - `overlay/` - an in-game feature. It may use services, persistence,
+//!   `game_events` and `vision/`, but not the adapters; startup wires it to the
+//!   events.
 //! - `persistence/` - storage. It must not reach upward at all.
 //! - `commands/` and `shell/` - the two adapters that drive services. They may
 //!   use everything below them. `shell/` must not use `commands/`: that edge is
@@ -203,6 +206,25 @@ fn game_events_know_no_listener() {
         ),
         Vec::<String>::new(),
         "the event bus sits below every publisher and subscriber"
+    );
+}
+
+#[test]
+fn vision_knows_no_feature() {
+    assert_eq!(
+        violations(
+            "vision",
+            &[
+                "overlay",
+                "services",
+                "commands",
+                "shell",
+                "persistence",
+                "game_events"
+            ]
+        ),
+        Vec::<String>::new(),
+        "capture and recognition serve every in-game feature, so they import none"
     );
 }
 

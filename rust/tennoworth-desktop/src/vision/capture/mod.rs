@@ -1,11 +1,13 @@
+//! Frames of the game's own window, for any feature that reads the screen.
+
 use image::RgbaImage;
 
-pub(super) struct CapturedFrame {
-    pub(super) image: RgbaImage,
-    pub(super) x: i32,
-    pub(super) y: i32,
-    pub(super) width: u32,
-    pub(super) height: u32,
+pub(crate) struct CapturedFrame {
+    pub(crate) image: RgbaImage,
+    pub(crate) x: i32,
+    pub(crate) y: i32,
+    pub(crate) width: u32,
+    pub(crate) height: u32,
 }
 
 /// Which rule picked the captured window, named in the capture log.
@@ -54,10 +56,7 @@ fn pick_game_window(
     if let Some(index) = by_pid {
         return Some((index, WindowRule::GamePid));
     }
-    if let Some(index) = candidates
-        .iter()
-        .position(|(_, title)| exact(title))
-    {
+    if let Some(index) = candidates.iter().position(|(_, title)| exact(title)) {
         return Some((index, WindowRule::ExactTitle));
     }
     candidates
@@ -78,11 +77,11 @@ mod tests {
 
     #[test]
     fn the_game_s_own_titled_window_beats_its_other_windows() {
-        let list = windows(&[
-            (Some(42), "Warframe Launcher"),
-            (Some(42), "Warframe"),
-        ]);
-        assert_eq!(pick_game_window(&list, Some(42)), Some((1, WindowRule::GamePid)));
+        let list = windows(&[(Some(42), "Warframe Launcher"), (Some(42), "Warframe")]);
+        assert_eq!(
+            pick_game_window(&list, Some(42)),
+            Some((1, WindowRule::GamePid))
+        );
     }
 
     #[test]
@@ -91,23 +90,32 @@ mod tests {
             (Some(10), "Warframe Market - Chrome"),
             (Some(42), "Warframe"),
         ]);
-        assert_eq!(pick_game_window(&list, Some(42)), Some((1, WindowRule::GamePid)));
+        assert_eq!(
+            pick_game_window(&list, Some(42)),
+            Some((1, WindowRule::GamePid))
+        );
     }
 
     #[test]
     fn the_game_process_beats_an_exact_title_impostor() {
         let list = windows(&[(Some(10), "Warframe"), (Some(42), "Warframe ")]);
-        assert_eq!(pick_game_window(&list, Some(42)), Some((1, WindowRule::GamePid)));
+        assert_eq!(
+            pick_game_window(&list, Some(42)),
+            Some((1, WindowRule::GamePid))
+        );
     }
 
     #[test]
     fn without_a_pid_match_the_exact_title_wins() {
-        let list = windows(&[
-            (Some(10), "Warframe Market - Chrome"),
-            (None, " warframe "),
-        ]);
-        assert_eq!(pick_game_window(&list, None), Some((1, WindowRule::ExactTitle)));
-        assert_eq!(pick_game_window(&list, Some(99)), Some((1, WindowRule::ExactTitle)));
+        let list = windows(&[(Some(10), "Warframe Market - Chrome"), (None, " warframe ")]);
+        assert_eq!(
+            pick_game_window(&list, None),
+            Some((1, WindowRule::ExactTitle))
+        );
+        assert_eq!(
+            pick_game_window(&list, Some(99)),
+            Some((1, WindowRule::ExactTitle))
+        );
     }
 
     #[test]
@@ -130,12 +138,35 @@ mod tests {
 #[cfg(target_os = "windows")]
 mod windows;
 #[cfg(target_os = "windows")]
-pub(super) use windows::capture_warframe;
+pub(crate) use windows::capture_warframe;
 #[cfg(target_os = "linux")]
 mod x11;
 #[cfg(target_os = "linux")]
-pub(super) use x11::capture_warframe;
+pub(crate) use x11::capture_warframe;
 #[cfg(not(any(target_os = "windows", target_os = "linux")))]
 mod unsupported;
 #[cfg(not(any(target_os = "windows", target_os = "linux")))]
-pub(super) use unsupported::capture_warframe;
+pub(crate) use unsupported::capture_warframe;
+
+/// Which capture path this build uses, as the settings UI reports it.
+pub(crate) fn capture_backend_name() -> &'static str {
+    #[cfg(target_os = "windows")]
+    {
+        "windows-window"
+    }
+    #[cfg(target_os = "linux")]
+    {
+        // Capture talks X11 directly - under Wayland that means XWayland, not
+        // the portal. Report the truth so the settings UI cannot claim a
+        // portal/PipeWire backend that does not exist.
+        if std::env::var_os("WAYLAND_DISPLAY").is_some() {
+            "wayland-xwayland"
+        } else {
+            "x11-window"
+        }
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "linux")))]
+    {
+        "unsupported"
+    }
+}

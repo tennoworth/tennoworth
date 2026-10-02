@@ -1,4 +1,5 @@
 use super::recognition::*;
+use crate::vision::ocr::TsvLine;
 use super::*;
 use crate::services::sellables::{OverlayCatalogItem, OverlayMarketFacts};
 use image::{imageops::FilterType, RgbaImage};
@@ -128,24 +129,6 @@ fn wrapped_reward_title_tolerates_one_bad_word() {
         .find(|found| found.item.name == "Grendel Prime Chassis Blueprint")
         .expect("wrapped title should match the chassis reward");
     assert!(grendel.confidence >= 0.82);
-}
-
-#[test]
-fn tsv_words_are_grouped_into_positioned_lines() {
-    let tsv = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop\twidth\theight\tconf\ttext\n\
-5\t1\t51\t1\t1\t1\t1313\t637\t35\t14\t87.7\tCedo\n\
-5\t1\t51\t1\t1\t2\t1354\t638\t41\t13\t95.2\tPrime\n\
-5\t1\t51\t1\t1\t3\t1400\t637\t40\t14\t94.8\tBarrel\n\
-5\t1\t52\t1\t1\t1\t1514\t638\t45\t13\t97.0\tForma\n\
-5\t1\t52\t1\t1\t2\t1564\t637\t64\t18\t96.8\tBlueprint";
-    let lines = parse_tsv_lines(tsv);
-    assert_eq!(lines.len(), 2);
-    assert_eq!(lines[0].text, "Cedo Prime Barrel");
-    assert_eq!(
-        (lines[0].x, lines[0].y, lines[0].width, lines[0].height),
-        (1313, 637, 127, 14)
-    );
-    assert_eq!(lines[1].text, "Forma Blueprint");
 }
 
 #[test]
@@ -384,26 +367,6 @@ fn reward_grid_uses_viewport_height_across_aspect_ratios() {
     );
     let narrow_title_top = narrow.slots[0].title.y * frame_narrow.height as f64;
     assert!((narrow_title_top - 249.0).abs() < 1.0);
-}
-
-#[test]
-fn reward_title_crops_are_normalized_for_ocr() {
-    let image = RgbaImage::from_pixel(512, 100, image::Rgba([240, 120, 60, 80]));
-    let pgm = encode_crop(
-        &image,
-        NormalizedRect {
-            x: 0.0,
-            y: 0.0,
-            width: 1.0,
-            height: 1.0,
-        },
-    )
-    .unwrap();
-    let header = b"P5\n256 50\n255\n";
-    assert!(pgm.starts_with(header));
-    let pixels = &pgm[header.len()..];
-    assert_eq!(pixels.len(), REWARD_TITLE_TARGET_WIDTH as usize * 50);
-    assert!(pixels.iter().all(|pixel| *pixel == 149));
 }
 
 #[test]
