@@ -731,17 +731,17 @@ fn draw_overlay(
         let card_height = (if slot.confidence < crate::overlay::RECOMMENDATION_CONFIDENCE { 78.0 } else { 66.0 }) * result.scale;
         let x = box_x + (box_width - card_width) / 2.0;
         let y = box_y;
-        let best_color = if slot.best_platinum {
-            (0.902, 0.722, 0.361)
+        let border = if slot.best_platinum {
+            REWARD_VALUE
         } else if slot.confidence < crate::overlay::RECOMMENDATION_CONFIDENCE {
-            (0.933, 0.561, 0.439)
+            REWARD_WARNING
         } else {
-            (0.4, 0.502, 0.561)
+            REWARD_BORDER
         };
         rounded_rectangle(&context, x, y, card_width, card_height, 7.0);
-        context.set_source_rgba(0.035, 0.067, 0.09, 0.91);
+        REWARD_SURFACE.set_source(&context);
         context.fill_preserve().map_err(cairo_error)?;
-        context.set_source_rgba(best_color.0, best_color.1, best_color.2, 1.0);
+        border.set_source(&context);
         context.set_line_width(1.0);
         context.stroke().map_err(cairo_error)?;
 
@@ -751,13 +751,13 @@ fn draw_overlay(
             } else {
                 "BEST DUCATS"
             };
-            let flag_color = if slot.best_platinum {
-                (0.902, 0.722, 0.361)
+            let flag = if slot.best_platinum {
+                REWARD_VALUE
             } else {
-                (0.459, 0.796, 0.816)
+                REWARD_GOOD
             };
             rounded_rectangle(&context, x + card_width - 62.0, y - 9.0, 58.0, 17.0, 4.0);
-            context.set_source_rgb(flag_color.0, flag_color.1, flag_color.2);
+            flag.set_source(&context);
             context.fill().map_err(cairo_error)?;
             draw_text(
                 &context,
@@ -767,7 +767,7 @@ fn draw_overlay(
                 9.0,
                 FontWeight::Bold,
                 52.0,
-                (0.03, 0.06, 0.07),
+                REWARD_ON_VALUE.rgb(),
                 true,
             )?;
         }
@@ -781,7 +781,7 @@ fn draw_overlay(
             12.0 * result.scale,
             FontWeight::Bold,
             card_width - 66.0,
-            (0.929, 0.949, 0.957),
+            REWARD_FG.rgb(),
             false,
         )?;
         let price = slot.live_platinum.or(slot.cached_platinum);
@@ -793,7 +793,7 @@ fn draw_overlay(
             22.0 * result.scale,
             FontWeight::Bold,
             56.0,
-            (0.902, 0.722, 0.361),
+            REWARD_VALUE.rgb(),
             true,
         )?;
         let facts = format!(
@@ -816,7 +816,7 @@ fn draw_overlay(
             10.0 * result.scale,
             FontWeight::Normal,
             card_width - 80.0,
-            (0.714, 0.757, 0.784),
+            REWARD_MUTED.rgb(),
             true,
         )?;
         if slot.confidence < crate::overlay::RECOMMENDATION_CONFIDENCE {
@@ -828,7 +828,7 @@ fn draw_overlay(
                 9.0 * result.scale,
                 FontWeight::Normal,
                 card_width - 22.0,
-                (0.933, 0.561, 0.439),
+                REWARD_WARNING.rgb(),
                 true,
             )?;
         }
@@ -836,6 +836,38 @@ fn draw_overlay(
     image.flush();
     Ok(())
 }
+
+/// A colour as the web overlay writes it: 8-bit channels with alpha.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Rgba(u8, u8, u8, u8);
+
+impl Rgba {
+    fn rgb(self) -> (f64, f64, f64) {
+        (
+            f64::from(self.0) / 255.0,
+            f64::from(self.1) / 255.0,
+            f64::from(self.2) / 255.0,
+        )
+    }
+
+    fn set_source(self, context: &Context) {
+        let (red, green, blue) = self.rgb();
+        context.set_source_rgba(red, green, blue, f64::from(self.3) / 255.0);
+    }
+}
+
+// The web overlay's `--reward-*` tokens (`html.relic-overlay-surface` in
+// app.css). This card is drawn by hand where the webview overlay cannot be
+// shown, and it kept an older palette for months after the tokens moved;
+// tests/fixtures/reward-palette.json now pins both sides.
+const REWARD_SURFACE: Rgba = Rgba(0x1e, 0x19, 0x13, 0xf2);
+const REWARD_FG: Rgba = Rgba(0xd3, 0xc7, 0xa6, 0xff);
+const REWARD_MUTED: Rgba = Rgba(0xa3, 0x97, 0x7a, 0xff);
+const REWARD_BORDER: Rgba = Rgba(0x87, 0x77, 0x5b, 0xff);
+const REWARD_VALUE: Rgba = Rgba(0xcb, 0xa0, 0x5a, 0xff);
+const REWARD_GOOD: Rgba = Rgba(0x84, 0xae, 0x85, 0xff);
+const REWARD_WARNING: Rgba = Rgba(0xcf, 0x83, 0x60, 0xff);
+const REWARD_ON_VALUE: Rgba = Rgba(0x1e, 0x19, 0x13, 0xff);
 
 #[allow(
     clippy::too_many_arguments,
@@ -1064,6 +1096,32 @@ delegate_noop!(WaylandState: ignore WpFractionalScaleManagerV1);
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_card_draws_the_web_overlay_palette() {
+        let fixture: std::collections::BTreeMap<String, String> = serde_json::from_str(
+            include_str!("../../../../../tests/fixtures/reward-palette.json"),
+        )
+        .unwrap();
+        let hex = |Rgba(r, g, b, a): Rgba| {
+            if a == 0xff {
+                format!("#{r:02x}{g:02x}{b:02x}")
+            } else {
+                format!("#{r:02x}{g:02x}{b:02x}{a:02x}")
+            }
+        };
+        let drawn = std::collections::BTreeMap::from([
+            ("surface".to_string(), hex(REWARD_SURFACE)),
+            ("fg".to_string(), hex(REWARD_FG)),
+            ("muted".to_string(), hex(REWARD_MUTED)),
+            ("border".to_string(), hex(REWARD_BORDER)),
+            ("value".to_string(), hex(REWARD_VALUE)),
+            ("good".to_string(), hex(REWARD_GOOD)),
+            ("warning".to_string(), hex(REWARD_WARNING)),
+            ("on-value".to_string(), hex(REWARD_ON_VALUE)),
+        ]);
+        assert_eq!(drawn, fixture);
+    }
 
     #[test]
     fn intersection_uses_only_the_overlapping_area() {

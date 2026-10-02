@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, screen, waitFor } from '@testing-library/svelte';
 import { renderDesktop as render } from '../../dev/render-desktop';
 import fixture from '../../../../tests/fixtures/relic-ocr/result.json';
+import rewardPalette from '../../../../tests/fixtures/reward-palette.json';
+import { readFileSync } from 'node:fs';
 import { installTauri, removeTauri } from '../../dev/test-utils.js';
 import RelicOverlay from './RelicOverlay.svelte';
 import { RELIC_OVERLAY_HIDE_EVENT, RELIC_OVERLAY_UPDATE_EVENT } from '../../contracts/events';
@@ -103,4 +105,15 @@ describe('RelicOverlay', () => {
     handlers['relic-overlay:hide']({ payload: null });
     await waitFor(() => expect(screen.queryByText('Paris Prime Blueprint')).toBeNull());
   });
+});
+
+// The Wayland card is drawn natively from the same palette; both sides read
+// the fixture so a token change cannot leave the in-game card behind again.
+it('the overlay surface tokens match the palette the native card draws', () => {
+  const appCss = readFileSync('src/app.css', 'utf8');
+  const block = /html\.relic-overlay-surface\s*\{([^}]*)\}/.exec(appCss)?.[1] ?? '';
+  const tokens = Object.fromEntries(
+    [...block.matchAll(/--reward-([\w-]+):\s*(#[\da-f]+)/gi)].map(([, name, value]) => [name, value.toLowerCase()]),
+  );
+  expect(tokens).toEqual(rewardPalette);
 });

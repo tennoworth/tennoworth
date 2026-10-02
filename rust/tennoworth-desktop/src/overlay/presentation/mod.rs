@@ -29,14 +29,14 @@ pub(super) fn present_overlay(
                     let _ = window.hide();
                 }
                 if let Some(state) = app.try_state::<OverlayState>() {
-                    state.set_presentation_backend(app, "wayland-layer-shell");
+                    state.set_presentation_backend("wayland-layer-shell");
                 }
                 return Ok(());
             }
             Err(error) => {
                 eprintln!("tennoworth: native Wayland overlay unavailable, using window fallback: {error}");
                 if let Some(state) = app.try_state::<OverlayState>() {
-                    state.set_presentation_backend(app, "tauri-window");
+                    state.set_presentation_backend("tauri-window");
                 }
             }
         }
@@ -169,7 +169,7 @@ pub(crate) fn prewarm_overlay_window(app: &AppHandle) {
             return;
         }
         if let Some(state) = app.try_state::<OverlayState>() {
-            state.set_presentation_backend(app, "tauri-window");
+            state.set_presentation_backend("tauri-window");
         }
     }
     if let Err(error) = ensure_overlay_window(app) {
