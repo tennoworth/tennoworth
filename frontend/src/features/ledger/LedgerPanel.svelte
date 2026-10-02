@@ -1,7 +1,7 @@
 <script lang="ts">
   import { useDesktopServices } from '../../ui/desktop-context';
   const { desktopEelogStatus, desktopListTrades, listenForTauriEvent } = useDesktopServices();
-  import { onMount } from 'svelte';
+  import { onMount, onDestroy } from 'svelte';
   import { DesktopCmdError } from '../../contracts/errors';
 
 import { RECORDING_CHANGED_EVENT, TRADE_DETECTED_EVENT } from '../../contracts/events';
@@ -29,6 +29,7 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
   interface ToastMsg { id: number; kind: 'error' | 'success'; text: string }
   let toasts = $state<ToastMsg[]>([]);
   let toastSeq = 0;
+  const toastTimers = new Map<number, number>();
 
   /**
    * Recording health, so a pause is visible to someone who opens this surface
@@ -44,10 +45,26 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
     paused === null ? '' : 'ledger' in paused ? paused.ledger.error : paused.log.error,
   );
   function pushToast(text: string, kind: 'error' | 'success' = 'success'): void {
+    if (disposed) return;
     const id = ++toastSeq;
     toasts = [...toasts, { id, kind, text }];
-    window.setTimeout(() => (toasts = toasts.filter((t) => t.id !== id)), 5000);
+    toastTimers.set(id, window.setTimeout(() => dismissToast(id), 5000));
   }
+
+  function dismissToast(id: number): void {
+    const timer = toastTimers.get(id);
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      toastTimers.delete(id);
+    }
+    toasts = toasts.filter((toast) => toast.id !== id);
+  }
+
+  onDestroy(() => {
+    disposed = true;
+    for (const timer of toastTimers.values()) window.clearTimeout(timer);
+    toastTimers.clear();
+  });
 
   async function load(): Promise<void> {
     const generation = ++loadGeneration;
@@ -198,7 +215,7 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
   {/if}
 
   </section>
-  <Toast {toasts} ondismiss={(id) => (toasts = toasts.filter((x) => x.id !== id))} />
+  <Toast {toasts} ondismiss={dismissToast} />
 </section>
 
 <style>

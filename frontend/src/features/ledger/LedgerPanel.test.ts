@@ -5,9 +5,9 @@ import { screen, fireEvent, waitFor, cleanup } from '@testing-library/svelte';
 import { renderDesktop as render } from '../../dev/render-desktop';
 import LedgerPanel from './LedgerPanel.svelte';
 import { installTauri, removeTauri } from '../../dev/test-utils';
-import { RECORDING_CHANGED_EVENT } from '../../contracts/events';
+import { RECORDING_CHANGED_EVENT, TRADE_DETECTED_EVENT } from '../../contracts/events';
 
-afterEach(() => { cleanup(); removeTauri(); });
+afterEach(() => { cleanup(); removeTauri(); vi.restoreAllMocks(); });
 
 const NOW = Math.floor(Date.now() / 1000);
 const trades = [
@@ -115,4 +115,25 @@ describe('LedgerPanel', () => {
     await fireEvent.click(box);
     await waitFor(() => expect(onsetautoclose).toHaveBeenCalledWith(false));
   });
+});
+
+it.each(['manual', 'destroy'])('cancels a ledger toast timer on %s dismissal', async dismissal => {
+  const handlers: Record<string, (event: { payload: unknown }) => void> = {};
+  installTauri(vi.fn(async (cmd: string) => {
+    if (cmd === 'list_trades') return trades;
+    if (cmd === 'eelog_status') return { path: '/x/EE.log', auto_close: true, recording: 'recording' };
+    throw new Error(`unexpected ${cmd}`);
+  }), vi.fn((name, handler) => { handlers[name] = handler; return Promise.resolve(() => {}); }));
+  const view = render(LedgerPanel, { props: {} });
+  await waitFor(() => expect(handlers[TRADE_DETECTED_EVENT]).toBeDefined());
+  const scheduled = vi.spyOn(window, 'setTimeout');
+  const cancelled = vi.spyOn(window, 'clearTimeout');
+  handlers[TRADE_DETECTED_EVENT]({ payload: { id: 3, trade: trades[0], adjusted: [] } });
+  await screen.findByText(/Sold for 45p:/);
+  const index = scheduled.mock.calls.findIndex(call => call[1] === 5000);
+  expect(index).toBeGreaterThanOrEqual(0);
+  const timer = scheduled.mock.results[index].value;
+  if (dismissal === 'manual') await fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+  else view.unmount();
+  expect(cancelled).toHaveBeenCalledWith(timer);
 });
