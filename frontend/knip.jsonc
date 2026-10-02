@@ -39,7 +39,7 @@
   // is the pass that sees an export only its own test calls - the default pass
   // counts the test as a caller, which is how a dozen such exports survived.
   // The `!` entries are what production mode keeps: index.html loads
-  // theme-boot.js by URL, and the two dev helpers exist only for tests.
+  // theme-boot.js by URL, and the dev helpers exist only for tests.
   "entry": ["public/theme-boot.js!"],
-  "project": ["src/**/*.{ts,svelte}!", "public/**/*.js!", "*.ts", "!src/dev/test-utils.ts!", "!src/dev/render-desktop.ts!"]
+  "project": ["src/**/*.{ts,svelte}!", "public/**/*.js!", "*.ts", "!src/dev/test-utils.ts!", "!src/dev/render-desktop.ts!", "!src/dev/controller-test-root.svelte.ts!"]
 }

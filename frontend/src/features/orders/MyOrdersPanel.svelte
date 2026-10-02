@@ -1,470 +1,17 @@
 <script lang="ts">
-  import { useDesktopServices } from '../../ui/desktop-context';
-  const { desktopLiveTopPrices, listenForTauriEvent } = useDesktopServices();
   import { onDestroy } from 'svelte';
-  import { DesktopCmdError } from '../../contracts/errors';
-
-  import { LiveTopController } from '../selling/live-top.svelte';
-  const liveTop = new LiveTopController({ desktopLiveTopPrices, listenForTauriEvent });
-
-import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop';
-  
-  import { MAX_PLATINUM, MIN_PLATINUM } from '../../domain/limits';
-  import { humanError } from '../../contracts/errors';
-  import { selectDrifted, type DriftRow } from '../../domain/order-drift';
-  import { assessListings, summarize, ownedEvidence, type HealthIssue } from '../../domain/listing-health';
-  import { LIQUID_VOL } from '../../domain/sell-priority';
-  import type { Market } from '../../contracts/data';
-  import { orderUnitPrice, orderLotPrice, cachedUnitMarket } from '../../domain/order-prices';
+  import { useDesktopServices } from '../../ui/desktop-context';
+  import { createOrdersController, type OrdersInput } from './controller.svelte';
   import Toast from '../../ui/Toast.svelte';
+  import { LIQUID_VOL } from '../../domain/sell-priority';
+  import { orderUnitPrice } from '../../domain/order-prices';
+  import { MAX_PLATINUM } from '../../domain/limits';
+  let { transport, market = null, sessionEpoch = 0, onauthrequired, ownedQty = null, onsummary }: OrdersInput = $props();
 
-  import type { OwnOrder } from '../../contracts/generated/desktop';
-
-  interface ToastMsg {
-    id: number;
-    kind: 'error' | 'success';
-    text: string;
-  }
-
-  interface Props {
-    transport: DesktopCapabilities;
-    /** Price reference for the drift check. Null on a snapshot-less load -
-     *  the drift section simply does not render. */
-    market?: Market | null;
-    /** Bumped by the parent when the WFM session unlocks - re-fetches so a
-     *  fetch gated on needs_login/needs_unlock retries automatically. */
-    sessionEpoch?: number;
-    /** Desktop lock-state rejection → parent raises the auth dialog (which
-     *  tries the OS-keyring silent unlock before showing the passphrase). */
-    onauthrequired?: (code: 'needs_login' | 'needs_unlock') => void;
-    /** Tradeable copies owned per the latest scan, keyed by `ownedKey(slug,
-     *  subtype)`. Null when there is no scan - the quantity checks stay off. */
-    ownedQty?: Map<string, number> | null;
-    /** Live-orders summary for the shell strip / Sell summary cells: fired
-     *  once orders are loaded (and whenever the count or the health issues
-     *  change); null while nothing is loaded so those cells stay hidden. */
-    onsummary?: (s: { live: number; issues: number } | null) => void;
-  }
-  let { transport, market = null, sessionEpoch = 0, onauthrequired, ownedQty = null, onsummary }: Props = $props();
-
-  type Phase = 'idle' | 'loading' | 'locked' | 'done' | 'error';
-  let phase = $state<Phase>('idle');
-  let error = $state<string | null>(null);
-  let orders = $state<OwnOrder[]>([]);
-  let busyIds = $state<Set<string>>(new Set());
-  let editingId = $state<string | null>(null);
-  let editValue = $state(0);
-  // Inline delete confirmation - the destructive click is one tap, the row
-  // tints and the button becomes "Confirm"; a second tap (or the ×) resolves.
-  let confirmId = $state<string | null>(null);
-  // The same inline confirmation for the health queue's destructive fix. Kept
-  // apart from `confirmId` on purpose: one order can appear in both the queue
-  // and the table, and arming one must not arm the other.
-  let healthConfirmId = $state<string | null>(null);
-  // Which row's Delete button should take focus back once a cancel replaces the
-  // confirmation. Null everywhere else, so an ordinary render cannot steal it.
-  let restoreFocusTo = $state<string | null>(null);
-  let bulkBusy = $state(false);
-
-  // Toasts are component-local. Each toast owns its auto-dismiss timer id so
-  // a manual dismiss can cancel it, and onDestroy clears everything pending -
-  // this panel is conditionally rendered, so a stray timer would otherwise
-  // fire after unmount.
-  let toasts = $state<ToastMsg[]>([]);
-  let toastSeq = 0;
-  const toastTimers = new Map<number, number>();
-
-  function pushToast(text: string, kind: 'error' | 'success' = 'success'): void {
-    const id = ++toastSeq;
-    toasts = [...toasts, { id, kind, text }];
-    toastTimers.set(id, window.setTimeout(() => dismissToast(id), 4500));
-  }
-
-  function dismissToast(id: number): void {
-    const timer = toastTimers.get(id);
-    if (timer !== undefined) {
-      window.clearTimeout(timer);
-      toastTimers.delete(id);
-    }
-    toasts = toasts.filter((t) => t.id !== id);
-  }
-
-  onDestroy(() => {
-    liveTop.dispose();
-    for (const timer of toastTimers.values()) window.clearTimeout(timer);
-    toastTimers.clear();
-  });
-
-  // Stale-async guard, same shape as App.svelte's verifyGen: only the newest
-  // load may commit. Two GET /orders can be in flight at once (e.g. a manual
-  // Refresh during a slow load), and without this an older response landing
-  // second overwrites the newer one.
-  let loadGen = 0;
-
-  function loadOrders(): void {
-    const gen = ++loadGen;
-    phase = 'loading';
-    error = null;
-    transport.fetchOrders()
-      .then((r) => {
-        if (gen !== loadGen) return;
-        orders = r;
-        phase = 'done';
-      })
-      .catch((e: unknown) => {
-        if (gen !== loadGen) return;
-        // A locked/no-login session is an auth hand-off, not a load error: the
-        // parent opens the dialog (silent keyring unlock first), and the
-        // sessionEpoch bump re-fires this fetch on success. Kept distinct from
-        // 'error' so a cancelled dialog leaves an actionable "unlock required"
-        // state instead of a stale failure.
-        if (e instanceof DesktopCmdError && (e.code === 'needs_login' || e.code === 'needs_unlock')) {
-          phase = 'locked';
-          onauthrequired?.(e.code);
-          return;
-        }
-        error = humanError(e);
-        phase = 'error';
-      });
-  }
-
-  // Load on mount and again when the parent bumps sessionEpoch - a fetch that
-  // was gated on needs_login/needs_unlock retries the moment the session is
-  // unlocked (the transport is a boot-time constant, so nothing else retriggers).
-  $effect(() => {
-    void sessionEpoch;
-    loadOrders();
-  });
-
-  function markBusy(id: string, on: boolean): void {
-    const next = new Set(busyIds);
-    if (on) next.add(id); else next.delete(id);
-    busyIds = next;
-  }
-
-  // The desktop command relays WFM rejections as a per-order
-  // {status:"error", message} body. Treating "no throw" as success applied
-  // the edit locally while WFM kept the old value - silent desync.
-  function assertOrderOk(r: unknown): void {
-    const res = r as { status?: string; message?: string } | null;
-    // Only a literal 'ok' is WFM accepting the change. 'pending' and
-    // 'uncertain_mutation' mean the outcome is unknown; letting those fall through
-    // as success is the same silent desync in a different disguise.
-    if (res?.status === 'ok') return;
-    if (res?.status === 'error') throw new Error(res.message || 'WFM rejected the update');
-    throw new Error(
-      `WFM did not confirm the update${res?.status ? ` (${res.status})` : ''}. Recheck My Orders before trusting this row.`,
-    );
-  }
-
-  async function toggleVisible(o: OwnOrder): Promise<void> {
-    if (o.visible == null) return;
-    markBusy(o.id, true);
-    try {
-      assertOrderOk(await transport.updateOrder(o.id, { visible: !o.visible }));
-      o.visible = !o.visible;
-      orders = [...orders];
-    } catch (e) {
-      pushToast(`Couldn't toggle: ${humanError(e)}`, 'error');
-    } finally {
-      markBusy(o.id, false);
-    }
-  }
-
-  function startEdit(o: OwnOrder): void {
-    editingId = o.id;
-    editValue = o.platinum;
-  }
-
-  async function saveEdit(o: OwnOrder): Promise<void> {
-    const newPrice = Number(editValue);
-    if (!newPrice || newPrice < 1) return;
-    if (newPrice > MAX_PLATINUM) {
-      pushToast(`Price ${newPrice}p is above the ${MAX_PLATINUM}p cap.`, 'error');
-      return;
-    }
-    markBusy(o.id, true);
-    try {
-      assertOrderOk(await transport.updateOrder(o.id, { platinum: newPrice }));
-      o.platinum = newPrice;
-      orders = [...orders];
-      editingId = null;
-    } catch (e) {
-      pushToast(`Couldn't update: ${humanError(e)}`, 'error');
-    } finally {
-      markBusy(o.id, false);
-    }
-  }
-
-  async function removeOne(o: OwnOrder): Promise<void> {
-    if (confirmId !== o.id) {
-      confirmId = o.id;
-      return;
-    }
-    confirmId = null;
-    markBusy(o.id, true);
-    try {
-      await transport.deleteOrder(o.id);
-      orders = orders.filter((x) => x.id !== o.id);
-      pushToast(`Deleted ${itemName(o)}.`);
-    } catch (e) {
-      pushToast(`Couldn't delete: ${humanError(e)}`, 'error');
-    } finally {
-      markBusy(o.id, false);
-    }
-  }
-
-  async function bulkSetVisible(visible: boolean): Promise<void> {
-    if (bulkBusy) return;
-    const ids = orders.filter((o) => o.visible != null && o.visible !== visible).map((o) => o.id);
-    if (ids.length === 0) return;
-    bulkBusy = true;
-    try {
-      const resp = await transport.bulkVisibility(ids, visible);
-      // The server can skip rows (already in that state, gone since fetch), so the
-      // count comes from the per-order results rather than ids.length - and only a
-      // confirmed row may have its local state changed, or a failed row renders as
-      // done while the live listing is untouched.
-      const confirmed = new Set(
-        (resp?.results ?? [])
-          .filter((r) => r.status === 'ok' && r.order_id)
-          .map((r) => r.order_id as string),
-      );
-      for (const o of orders) if (confirmed.has(o.id)) o.visible = visible;
-      orders = [...orders];
-      const ok = confirmed.size;
-      pushToast(
-        visible
-          ? `${ok} listing${ok === 1 ? '' : 's'} made visible.`
-          : `${ok} listing${ok === 1 ? '' : 's'} made hidden.`,
-      );
-    } catch (e) {
-      pushToast(`Couldn't update visibility: ${humanError(e)}`, 'error');
-    } finally {
-      bulkBusy = false;
-    }
-  }
-
-  // The market snapshot keys on slug, so an order that never resolves to one
-  // simply cannot be price-checked. Same defensive shape as itemName.
-  function itemSlug(o: OwnOrder): string {
-    return o.slug ?? '';
-  }
-
-  // Orders whose price has drifted from the market. Recomputed whenever the
-  // orders list or the snapshot changes - repricing one row drops it out.
-  let drifted = $derived.by((): DriftRow[] => {
-    if (!market?.items) return [];
-    return selectDrifted(
-      orders
-        .filter((o) => o.side !== 'buy')
-        .map((o) => {
-          const slug = itemSlug(o);
-          return {
-            id: o.id,
-            slug,
-            name: itemName(o),
-            platinum: orderUnitPrice(o.platinum, o.per_trade) ?? NaN,
-            type: o.side,
-            m: slug && market.items[slug] ? cachedUnitMarket(market.items[slug], (o.per_trade ?? 1) > 1) : null,
-          };
-        })
-        .filter((r) => r.slug !== '' && Number.isFinite(r.platinum)),
-    );
-  });
-
-  // Applies the suggestion as a normal price edit - same transport call, same
-  // success assertion, so a WFM rejection cannot silently desync the row.
-  async function reprice(row: DriftRow): Promise<void> {
-    const o = orders.find((x) => x.id === row.id);
-    if (!o) return;
-    markBusy(row.id, true);
-    try {
-      const total = orderLotPrice(row.suggested, o.per_trade);
-      if (total == null || total > MAX_PLATINUM) throw new Error('Suggested lot total exceeds the listing price limit. Review the lot on WFM.');
-      assertOrderOk(await transport.updateOrder(row.id, { platinum: total }));
-      o.platinum = total;
-      orders = [...orders];
-      pushToast(`${row.name} repriced to ${total}p per lot (${row.suggested}p / unit).`);
-    } catch (e) {
-      pushToast(`Couldn't reprice: ${humanError(e)}`, 'error');
-    } finally {
-      markBusy(row.id, false);
-    }
-  }
-
-  // ---- Listing health (live top-of-book + owned quantities) ----
-  // "Check live" asks WFM for the exact-tier top-of-book of every SELL listing
-  // with the user's own order already excluded (wfm-core does that by
-  // username), then `assessListings` turns it plus the last scan's owned
-  // counts into concrete fixes.
-  let fixAllBusy = $state(false);
-
-  function liveForOrder(o: OwnOrder): LiveTop | null {
-    return liveTop.get({ slug: itemSlug(o), rank: o.rank, subtype: o.subtype }) ?? null;
-  }
-
-  async function checkLive(): Promise<void> {
-    const targets = orders.filter((o) => o.side !== 'buy' && itemSlug(o) !== '');
-    await liveTop.check(targets.map((o) => ({ slug: itemSlug(o), rank: o.rank ?? 0, subtype: o.subtype ?? null })));
-  }
-
-  // Composed items - prime sets are assembled from parts, so a scan of
-  // individual items can never report the set itself. See `ownedEvidence`.
-  let composedSlugs = $derived(market?.set_to_parts ? new Set(Object.keys(market.set_to_parts)) : null);
-
-  let health = $derived.by((): HealthIssue[] => {
-    if (liveTop.quotes.size === 0 && !ownedQty) return [];
-    return assessListings(
-      orders
-        .filter((o) => o.side !== 'buy')
-        .map((o) => {
-          const slug = itemSlug(o);
-          return {
-            id: o.id, slug, name: itemName(o),
-            platinum: orderUnitPrice(o.platinum, o.per_trade) ?? NaN, quantity: o.quantity, type: 'sell' as const,
-            live: slug ? liveForOrder(o) : null,
-            owned: slug ? ownedEvidence(slug, o.subtype ?? null, ownedQty, composedSlugs) : null,
-          };
-        })
-        .filter((r) => r.slug !== '' && Number.isFinite(r.platinum)),
-    );
-  });
-  let healthSummary = $derived(summarize(health));
-  $effect(() => {
-    onsummary?.(phase === 'done' ? { live: orders.length, issues: health.length } : null);
-  });
-
-  async function applyFix(issue: HealthIssue): Promise<void> {
-    const o = orders.find((x) => x.id === issue.id);
-    if (!o) return;
-    markBusy(issue.id, true);
-    try {
-      if (issue.kind === 'overpriced' || issue.kind === 'underbid') {
-        const p = orderLotPrice(Math.max(MIN_PLATINUM, issue.suggested), o.per_trade);
-        if (p == null || p > MAX_PLATINUM) throw new Error('Suggested lot total exceeds the listing price limit. Review the lot on WFM.');
-        assertOrderOk(await transport.updateOrder(issue.id, { platinum: p }));
-        o.platinum = p;
-        pushToast(`${issue.name} repriced to ${p}p per lot.`);
-      } else if (issue.kind === 'excess-qty') {
-        assertOrderOk(await transport.updateOrder(issue.id, { quantity: issue.suggested }));
-        o.quantity = issue.suggested;
-        pushToast(`${issue.name} quantity set to ${issue.suggested}.`);
-      } else if (issue.kind === 'not-owned') {
-        healthConfirmId = null;
-        await transport.deleteOrder(issue.id);
-        orders = orders.filter((x) => x.id !== issue.id);
-        pushToast(`Deleted ${issue.name}.`);
-        return;
-      }
-      orders = [...orders];
-    } catch (e) {
-      pushToast(`Couldn't fix ${issue.name}: ${humanError(e)}`, 'error');
-    } finally {
-      markBusy(issue.id, false);
-    }
-  }
-
-  /** Apply every PRICE fix (match lowest ask / meet the bid). Quantity and
-   *  delete fixes stay one-click-each - those change what's for sale. */
-  async function fixAllPrices(): Promise<void> {
-    if (fixAllBusy) return;
-    fixAllBusy = true;
-    try {
-      for (const issue of health.filter((i) => i.kind === 'overpriced' || i.kind === 'underbid')) {
-        await applyFix(issue);
-      }
-    } finally {
-      fixAllBusy = false;
-    }
-  }
-
-  // A missing catalogue entry still leaves the validated item id visible.
-  function itemName(o: OwnOrder): string {
-    return (
-      o.name ||
-      o.slug ||
-      o.item_id ||
-      'unknown'
-    );
-  }
-
-  // ---- Show / Narrow controls on the orders table's bar ----
-  type Show = 'all' | 'sell' | 'buy' | 'hidden' | 'issues';
-  let show = $state<Show>('all');
-  let nameFilter = $state('');
-  // Orders with something in the fix queue (a live/scan health issue, or the
-  // snapshot-drift fallback), so the "Issues" segment narrows to them.
-  let issueIds = $derived.by(() => {
-    const ids = new Set<string>();
-    for (const h of health) ids.add(h.id);
-    if (liveTop.quotes.size === 0) for (const d of drifted) ids.add(d.id);
-    return ids;
-  });
-  let counts = $derived({
-    all: orders.length,
-    sell: orders.filter((o) => o.side !== 'buy').length,
-    buy: orders.filter((o) => o.side === 'buy').length,
-    hidden: orders.filter((o) => o.visible === false).length,
-    issues: issueIds.size,
-  });
-  let shown = $derived.by(() => {
-    const f = nameFilter.trim().toLowerCase();
-    return orders.filter((o) => {
-      if (show === 'sell' && o.side === 'buy') return false;
-      if (show === 'buy' && o.side !== 'buy') return false;
-      if (show === 'hidden' && o.visible !== false) return false;
-      if (show === 'issues' && !issueIds.has(o.id)) return false;
-      return !f || itemName(o).toLowerCase().includes(f);
-    });
-  });
-  let listedValue = $derived(orders.filter((o) => o.side !== 'buy').reduce((a, o) => a + (orderUnitPrice(o.platinum, o.per_trade) ?? 0) * o.quantity, 0));
-
-  // The fix queue: live/scan health issues first, then (only while no live
-  // check has run) the snapshot-drift fallback for the remaining sell orders.
-  // Once a live check has run, Listing health covers the same orders with
-  // exact figures, so the two never show together.
-  type QueueRow =
-    | { key: string; id: string; name: string; slug: string; kind: 'health'; h: HealthIssue }
-    | { key: string; id: string; name: string; slug: string; kind: 'drift'; d: DriftRow };
-  let queue = $derived.by((): QueueRow[] => {
-    const rows: QueueRow[] = health.map((h) => ({ key: `h:${h.id}:${h.kind}`, id: h.id, name: h.name, slug: h.slug, kind: 'health', h }));
-    if (liveTop.quotes.size === 0) {
-      for (const d of drifted) rows.push({ key: `d:${d.id}`, id: d.id, name: d.name, slug: d.slug, kind: 'drift', d });
-    }
-    return rows;
-  });
-  function orderById(id: string): OwnOrder | undefined {
-    return orders.find((o) => o.id === id);
-  }
-  function healthAction(h: HealthIssue): string {
-    return h.kind === 'not-owned' ? 'Delete' : h.kind === 'excess-qty' ? 'Set qty' : 'Reprice';
-  }
-  // The queue's destructive fix arms first, matching the table's inline delete.
-  // A repricing or quantity fix is reversible, so it stays single-click.
-  function armOrFix(h: HealthIssue): void {
-    if (h.kind === 'not-owned') {
-      restoreFocusTo = null;
-      healthConfirmId = h.id;
-      return;
-    }
-    void applyFix(h);
-  }
-  function cancelDelete(id: string): void {
-    healthConfirmId = null;
-    restoreFocusTo = id;
-  }
-  // Arming replaces the control the user activated, and cancelling replaces it
-  // back. Focus follows the replacement so a keyboard user keeps their place
-  // instead of being dropped on the document body.
+  const controller = createOrdersController({ get transport() { return transport; }, get market() { return market; }, get ownedQty() { return ownedQty; }, get sessionEpoch() { return sessionEpoch; }, get onauthrequired() { return onauthrequired; }, get onsummary() { return onsummary; } }, useDesktopServices());
+  onDestroy(() => controller.dispose());
   function focusIf(node: HTMLElement, should: boolean): void {
     if (should) node.focus();
-  }
-  function driftWhy(d: DriftRow): string {
-    const pct = Math.round(d.delta_pct * 100);
-    return d.kind === 'overpriced'
-      ? `${pct}% above the last snapshot's clearing price - a starting point, not a quote${d.thin ? ' (thin book)' : ''}.`
-      : `${pct}% under the last snapshot's clearing price - you may be leaving plat on the table${d.thin ? ' (thin book)' : ''}.`;
   }
 </script>
 
@@ -474,49 +21,49 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   <div class="rail">
     <h3>Listing health</h3>
     <span class="exp">
-      {#if phase === 'loading' || phase === 'idle'}Fetching orders…
-      {:else if phase === 'locked'}unlock required
-      {:else if phase === 'error'}couldn't load orders
-      {:else if queue.length > 0}{queue.length} of {orders.length} {orders.length === 1 ? 'listing needs' : 'listings need'} attention · fixes apply immediately
-      {:else if liveTop.quotes.size > 0}no issues in {orders.length} {orders.length === 1 ? 'listing' : 'listings'} · checked against the live top-of-book
-      {:else if ownedQty}no issues in {orders.length} {orders.length === 1 ? 'listing' : 'listings'} · quantities checked against your last scan
+      {#if controller.phase === 'loading' || controller.phase === 'idle'}Fetching orders…
+      {:else if controller.phase === 'locked'}unlock required
+      {:else if controller.phase === 'error'}couldn't load orders
+      {:else if controller.queue.length > 0}{controller.queue.length} of {controller.orders.length} {controller.orders.length === 1 ? 'listing needs' : 'listings need'} attention · fixes apply immediately
+      {:else if controller.liveTop.quotes.size > 0}no issues in {controller.orders.length} {controller.orders.length === 1 ? 'listing' : 'listings'} · checked against the live top-of-book
+      {:else if ownedQty}no issues in {controller.orders.length} {controller.orders.length === 1 ? 'listing' : 'listings'} · quantities checked against your last scan
       {:else}nothing flagged yet - check live to compare your asks with the online top-of-book
       {/if}
     </span>
     <span class="grow"></span>
     <button
       class="btn"
-      onclick={checkLive}
-      disabled={liveTop.phase === 'running' || phase !== 'done' || orders.length === 0}
+      onclick={controller.checkLive}
+      disabled={controller.liveTop.phase === 'running' || controller.phase !== 'done' || controller.orders.length === 0}
       title="Ask warframe.market for the best online asks and bids on each of your sell listings' exact rank / refinement - your own order excluded - and flag what's worth fixing."
     >
-      {#if liveTop.phase === 'running'}Checking… {liveTop.progress.done}/{liveTop.progress.total}
-      {:else if liveTop.phase === 'done'}Re-check live
+      {#if controller.liveTop.phase === 'running'}Checking… {controller.liveTop.progress.done}/{controller.liveTop.progress.total}
+      {:else if controller.liveTop.phase === 'done'}Re-check live
       {:else}Check live{/if}
     </button>
   </div>
-  {#if health.length > 0 || healthSummary.overpriced + healthSummary.underbid > 1}
+  {#if controller.health.length > 0 || controller.healthSummary.overpriced + controller.healthSummary.underbid > 1}
   <div class="bar">
-    {#if health.length > 0}
+    {#if controller.health.length > 0}
       <span class="chips">
-        {#if healthSummary.overpriced}<span class="chip warn">{healthSummary.overpriced} above the market</span>{/if}
-        {#if healthSummary.underbid}<span class="chip warn">{healthSummary.underbid} under a live bid</span>{/if}
-        {#if healthSummary.excessQty}<span class="chip">{healthSummary.excessQty} over-quantity</span>{/if}
-        {#if healthSummary.notOwned}<span class="chip bad">{healthSummary.notOwned} not owned</span>{/if}
+        {#if controller.healthSummary.overpriced}<span class="chip warn">{controller.healthSummary.overpriced} above the market</span>{/if}
+        {#if controller.healthSummary.underbid}<span class="chip warn">{controller.healthSummary.underbid} under a live bid</span>{/if}
+        {#if controller.healthSummary.excessQty}<span class="chip">{controller.healthSummary.excessQty} over-quantity</span>{/if}
+        {#if controller.healthSummary.notOwned}<span class="chip bad">{controller.healthSummary.notOwned} not owned</span>{/if}
       </span>
     {/if}
     <span class="grow"></span>
-    {#if healthSummary.overpriced + healthSummary.underbid > 1}
-      <button class="btn primary" onclick={fixAllPrices} disabled={fixAllBusy} title="Reprice every flagged listing: match the lowest other ask, or meet the higher bid. Quantity fixes and deletions stay one click each.">Fix all prices</button>
+    {#if controller.healthSummary.overpriced + controller.healthSummary.underbid > 1}
+      <button class="btn primary" onclick={controller.fixAllPrices} disabled={controller.fixAllBusy} title="Reprice every flagged listing: match the lowest other ask, or meet the higher bid. Quantity fixes and deletions stay one click each.">Fix all prices</button>
     {/if}
   </div>
   {/if}
 
-  {#if liveTop.phase === 'error' && liveTop.error}
-    <div class="line bad">Live check failed: {liveTop.error}</div>
+  {#if controller.liveTop.phase === 'error' && controller.liveTop.error}
+    <div class="line bad">Live check failed: {controller.liveTop.error}</div>
   {/if}
 
-  {#if queue.length > 0}
+  {#if controller.queue.length > 0}
     <div class="scroll">
     <table class="tw fixed queue">
       <colgroup>
@@ -538,11 +85,11 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
         <th></th>
       </tr></thead>
       <tbody>
-        {#each queue as q (q.key)}
-          {@const o = orderById(q.id)}
-          {@const t = o ? liveForOrder(o) : null}
-          {@const busy = busyIds.has(q.id)}
-          <tr class:busy class:confirming={q.kind === 'health' && healthConfirmId === q.id}>
+        {#each controller.queue as q (q.key)}
+          {@const o = controller.orderById(q.id)}
+          {@const t = o ? controller.liveForOrder(o) : null}
+          {@const busy = controller.busyIds.has(q.id)}
+          <tr class:busy class:confirming={q.kind === 'health' && controller.healthConfirmId === q.id}>
             <td class="l" title={q.slug}>{q.name}</td>
             <td>{o?.quantity ?? '?'}</td>
             <td class="fg">{o && orderUnitPrice(o.platinum, o.per_trade) != null ? Number(orderUnitPrice(o.platinum, o.per_trade)!.toFixed(2)) : '?'}<span class="unit">p / unit</span></td>
@@ -562,21 +109,21 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
                 {/if}
               </td>
               <td class="act">
-                {#if q.h.kind === 'not-owned' && healthConfirmId === q.id}
-                  <button class="btn xs bad" use:focusIf={true} onclick={() => applyFix(q.h)} disabled={busy} title="Confirm delete">Confirm</button>
-                  <button class="btn xs x" onclick={() => cancelDelete(q.id)} title="Cancel" aria-label="Cancel delete">×</button>
+                {#if q.h.kind === 'not-owned' && controller.healthConfirmId === q.id}
+                  <button class="btn xs bad" use:focusIf={true} onclick={() => controller.applyFix(q.h)} disabled={busy} title="Confirm delete">Confirm</button>
+                  <button class="btn xs x" onclick={() => controller.cancelDelete(q.id)} title="Cancel" aria-label="Cancel delete">×</button>
                 {:else}
-                  <button class="btn xs" class:bad={q.h.kind === 'not-owned'} use:focusIf={restoreFocusTo === q.id} onclick={() => armOrFix(q.h)} disabled={busy} title={q.h.why}>{healthAction(q.h)}</button>
+                  <button class="btn xs" class:bad={q.h.kind === 'not-owned'} use:focusIf={controller.restoreFocusTo === q.id} onclick={() => controller.armOrFix(q.h)} disabled={busy} title={q.h.why}>{controller.healthAction(q.h)}</button>
                 {/if}
               </td>
             {:else}
-              <td class="reason" class:warn={q.d.kind === 'overpriced'} title={driftWhy(q.d)}>
+              <td class="reason" class:warn={q.d.kind === 'overpriced'} title={controller.driftWhy(q.d)}>
                 <span class="to">{q.d.listed}p → <b>{q.d.suggested}p</b></span>
                 {q.d.kind === 'overpriced' ? 'above market' : 'under market'} ({Math.round(q.d.delta_pct * 100)}%, snapshot)
                 {#if q.d.thin}<span class="tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor - thin books make this a weak signal.">thin</span>{/if}
               </td>
               <td class="act">
-                <button class="btn xs" onclick={() => reprice(q.d)} disabled={busy} title="Update this listing to {q.d.suggested}p per unit on warframe.market">Reprice</button>
+                <button class="btn xs" onclick={() => controller.reprice(q.d)} disabled={busy} title="Update this listing to {q.d.suggested}p per unit on warframe.market">Reprice</button>
               </td>
             {/if}
           </tr>
@@ -584,9 +131,9 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
       </tbody>
     </table>
     </div>
-    {#if liveTop.quotes.size === 0 && drifted.length > 0}
+    {#if controller.liveTop.quotes.size === 0 && controller.drifted.length > 0}
       <div class="line">
-        <span class="exp">Snapshot rows compare against the last market snapshot (up to 2 h old) and can't tell whose order is whose&nbsp;- <button class="linkish" onclick={checkLive} disabled={liveTop.phase === 'running'}>check live</button> for exact figures.</span>
+        <span class="exp">Snapshot rows compare against the last market snapshot (up to 2 h old) and can't tell whose order is whose&nbsp;- <button class="linkish" onclick={controller.checkLive} disabled={controller.liveTop.phase === 'running'}>check live</button> for exact figures.</span>
       </div>
     {/if}
   {/if}
@@ -597,44 +144,44 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
   <div class="bar order-filters">
     <div class="ui-field"><span>Show</span>
     <span class="ui-segmented" role="group" aria-label="Show">
-      <button type="button" aria-pressed={show === 'all'} onclick={() => (show = 'all')}>All <span class="n">{counts.all}</span></button>
-      <button type="button" aria-pressed={show === 'sell'} onclick={() => (show = 'sell')}>Sell <span class="n">{counts.sell}</span></button>
-      <button type="button" aria-pressed={show === 'buy'} onclick={() => (show = 'buy')}>Buy <span class="n">{counts.buy}</span></button>
-      <button type="button" aria-pressed={show === 'hidden'} onclick={() => (show = 'hidden')}>Hidden <span class="n">{counts.hidden}</span></button>
-      <button type="button" class:issues={counts.issues > 0} aria-pressed={show === 'issues'} onclick={() => (show = 'issues')}>Issues <span class="n">{counts.issues}</span></button>
+      <button type="button" aria-pressed={controller.show === 'all'} onclick={() => (controller.show = 'all')}>All <span class="n">{controller.counts.all}</span></button>
+      <button type="button" aria-pressed={controller.show === 'sell'} onclick={() => (controller.show = 'sell')}>Sell <span class="n">{controller.counts.sell}</span></button>
+      <button type="button" aria-pressed={controller.show === 'buy'} onclick={() => (controller.show = 'buy')}>Buy <span class="n">{controller.counts.buy}</span></button>
+      <button type="button" aria-pressed={controller.show === 'hidden'} onclick={() => (controller.show = 'hidden')}>Hidden <span class="n">{controller.counts.hidden}</span></button>
+      <button type="button" class:issues={controller.counts.issues > 0} aria-pressed={controller.show === 'issues'} onclick={() => (controller.show = 'issues')}>Issues <span class="n">{controller.counts.issues}</span></button>
     </span></div>
-    <label class="ui-field order-search"><span>Item</span><input class="input" type="text" placeholder="Filter by name…" bind:value={nameFilter} aria-label="Filter orders by name" /></label>
+    <label class="ui-field order-search"><span>Item</span><input class="input" type="text" placeholder="Filter by name…" bind:value={controller.nameFilter} aria-label="Filter orders by name" /></label>
   </div>
   <div class="bar order-actions">
     <span class="count">
-      {#if phase === 'loading' || phase === 'idle'}Fetching orders…
-      {:else if phase === 'done'}<b>{shown.length === orders.length ? orders.length : `${shown.length} of ${orders.length}`}</b> {orders.length === 1 ? 'order' : 'orders'}{#if listedValue > 0}&nbsp;· <b>{listedValue.toLocaleString()}</b>p listed{/if}
-      {:else if phase === 'locked'}unlock required
+      {#if controller.phase === 'loading' || controller.phase === 'idle'}Fetching orders…
+      {:else if controller.phase === 'done'}<b>{controller.shown.length === controller.orders.length ? controller.orders.length : `${controller.shown.length} of ${controller.orders.length}`}</b> {controller.orders.length === 1 ? 'order' : 'orders'}{#if controller.listedValue > 0}&nbsp;· <b>{controller.listedValue.toLocaleString()}</b>p listed{/if}
+      {:else if controller.phase === 'locked'}unlock required
       {/if}
     </span>
     <span class="grow"></span>
     <button
       class="btn ghost"
-      onclick={() => bulkSetVisible(true)}
-      disabled={bulkBusy || orders.every((o) => o.visible == null || o.visible)}
+      onclick={() => controller.bulkSetVisible(true)}
+      disabled={controller.bulkBusy || controller.orders.every((o) => o.visible == null || o.visible)}
       title="Make every listing visible to buyers"
     >All visible</button>
     <button
       class="btn ghost"
-      onclick={() => bulkSetVisible(false)}
-      disabled={bulkBusy || orders.every((o) => o.visible == null || !o.visible)}
+      onclick={() => controller.bulkSetVisible(false)}
+      disabled={controller.bulkBusy || controller.orders.every((o) => o.visible == null || !o.visible)}
       title="Hide every listing from buyers"
     >All hidden</button>
-    <button class="btn" onclick={loadOrders} disabled={phase === 'loading'}>Refresh</button>
+    <button class="btn" onclick={controller.loadOrders} disabled={controller.phase === 'loading'}>Refresh</button>
   </div>
 
-  {#if phase === 'error'}
-    <div class="line bad">Couldn't load orders: {error}</div>
-  {:else if phase === 'locked'}
+  {#if controller.phase === 'error'}
+    <div class="line bad">Couldn't load orders: {controller.error}</div>
+  {:else if controller.phase === 'locked'}
     <div class="line"><span class="exp">Unlock warframe.market to see your orders.</span></div>
-  {:else if phase === 'done' && orders.length === 0}
+  {:else if controller.phase === 'done' && controller.orders.length === 0}
     <div class="line"><span class="exp">No active listings.</span></div>
-  {:else if orders.length > 0}
+  {:else if controller.orders.length > 0}
     <div class="scroll">
       <table class="tw fixed">
         <colgroup>
@@ -642,7 +189,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
           <col style="width:4rem" />
           <col style="width:3rem" />
           <col style="width:10rem" />
-          {#if liveTop.quotes.size > 0}<col style="width:4.5rem" /><col style="width:4.5rem" />{/if}
+          {#if controller.liveTop.quotes.size > 0}<col style="width:4.5rem" /><col style="width:4.5rem" />{/if}
           <col style="width:7rem" />
           <col style="width:8rem" />
         </colgroup>
@@ -652,7 +199,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
             <th>Type</th>
             <th>Qty</th>
             <th>Lot price</th>
-            {#if liveTop.quotes.size > 0}
+            {#if controller.liveTop.quotes.size > 0}
               <th title="Lowest other online ask for this exact tier">Live ask</th>
               <th title="Highest online bid for this exact tier">Live bid</th>
             {/if}
@@ -661,42 +208,42 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
           </tr>
         </thead>
         <tbody>
-          {#each shown as o (o.id)}
-            {@const busy = busyIds.has(o.id)}
-            {@const t = liveTop.quotes.size > 0 ? liveForOrder(o) : null}
-            <tr class:busy class:confirming={confirmId === o.id}>
-              <td class="l">{itemName(o)}</td>
+          {#each controller.shown as o (o.id)}
+            {@const busy = controller.busyIds.has(o.id)}
+            {@const t = controller.liveTop.quotes.size > 0 ? controller.liveForOrder(o) : null}
+            <tr class:busy class:confirming={controller.confirmId === o.id}>
+              <td class="l">{controller.itemName(o)}</td>
               <td><span class="type" class:buy={o.side === 'buy'}>{o.side ?? '?'}</span></td>
               <td>{o.quantity ?? '?'}</td>
               <td class="price">
-                {#if editingId === o.id}
-                  <input type="number" bind:value={editValue} min="1" max={MAX_PLATINUM} aria-label="New price" />
-                  <button class="btn xs" onclick={() => saveEdit(o)} disabled={busy}>save</button>
-                  <button class="btn xs x" onclick={() => (editingId = null)} title="Cancel">×</button>
+                {#if controller.editingId === o.id}
+                  <input type="number" bind:value={controller.editValue} min="1" max={MAX_PLATINUM} aria-label="New price" />
+                  <button class="btn xs" onclick={() => controller.saveEdit(o)} disabled={busy}>save</button>
+                  <button class="btn xs x" onclick={() => (controller.editingId = null)} title="Cancel">×</button>
                 {:else}
                   <span class="fg">{o.platinum}<span class="unit">p</span></span>
                   {#if (o.per_trade ?? 1) > 1}<span class="unit"> / {o.per_trade} units</span>{/if}
-                  <button class="btn xs ghost edit" onclick={() => startEdit(o)} disabled={busy} title="Edit price">✎</button>
+                  <button class="btn xs ghost edit" onclick={() => controller.startEdit(o)} disabled={busy} title="Edit price">✎</button>
                 {/if}
               </td>
-              {#if liveTop.quotes.size > 0}
+              {#if controller.liveTop.quotes.size > 0}
                 <td>{#if t && !t.error && t.low_sell != null}{Number(t.low_sell.toFixed(2))}<span class="unit">p / unit</span>{:else}<span class="faint">-</span>{/if}</td>
                 <td>{#if t && !t.error && t.top_buy != null}{Number(t.top_buy.toFixed(2))}<span class="unit">p / unit</span>{:else}<span class="faint">-</span>{/if}</td>
               {/if}
               <td>
                 <button
                   class="visbtn {o.visible ? 'on' : 'off'}"
-                  onclick={() => toggleVisible(o)}
+                  onclick={() => controller.toggleVisible(o)}
                   disabled={busy || o.visible == null}
                   title={o.visible == null ? 'Visibility unavailable; refresh orders' : o.visible ? 'Click to make hidden' : 'Click to make visible'}
                 ><span class="vis" class:off={!o.visible}>{o.visible == null ? '?' : o.visible ? 'ON' : 'OFF'}</span></button>
               </td>
               <td class="act">
-                {#if confirmId === o.id}
-                  <button class="btn xs bad" onclick={() => removeOne(o)} disabled={busy} title="Confirm delete">Confirm</button>
-                  <button class="btn xs x" onclick={() => (confirmId = null)} title="Cancel">×</button>
+                {#if controller.confirmId === o.id}
+                  <button class="btn xs bad" onclick={() => controller.removeOne(o)} disabled={busy} title="Confirm delete">Confirm</button>
+                  <button class="btn xs x" onclick={() => (controller.confirmId = null)} title="Cancel">×</button>
                 {:else}
-                  <button class="btn xs x" onclick={() => removeOne(o)} disabled={busy} title="Delete" aria-label="Delete {itemName(o)}">✕</button>
+                  <button class="btn xs x" onclick={() => controller.removeOne(o)} disabled={busy} title="Delete" aria-label="Delete {controller.itemName(o)}">✕</button>
                 {/if}
               </td>
             </tr>
@@ -704,13 +251,13 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
         </tbody>
       </table>
     </div>
-    {#if shown.length === 0}
-      <div class="line"><span class="exp">No orders match.</span> <button class="btn xs ghost" onclick={() => { show = 'all'; nameFilter = ''; }}>Clear</button></div>
+    {#if controller.shown.length === 0}
+      <div class="line"><span class="exp">No orders match.</span> <button class="btn xs ghost" onclick={() => { controller.show = 'all'; controller.nameFilter = ''; }}>Clear</button></div>
     {/if}
   {/if}
 </section>
 
-<Toast {toasts} ondismiss={dismissToast} />
+<Toast toasts={controller.toasts} ondismiss={controller.dismissToast} />
 
 <style>
   /* Both panels stack on the workspace rhythm. */
