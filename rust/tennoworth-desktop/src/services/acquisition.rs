@@ -79,7 +79,7 @@ fn record_game_scan(
     started_at: i64,
 ) -> Option<i64> {
     let after = scan_boundary(app);
-    let observed_at = crate::services::allowance::unix_now();
+    let observed_at = crate::services::unix_now();
     let db = app.state::<Db>();
     let recorded = (|| -> Result<i64, String> {
         let id = record_snapshot(&db, "memory", info.build.as_deref(), bytes)?;
@@ -137,7 +137,7 @@ pub(crate) fn scan_and_record_unless(
 ) -> Result<Option<ScannedInventory>, String> {
     let _guard = wfm_core::trading::plan::PlanGuard::acquire(&SCAN_ACTIVE)
         .ok_or("An inventory scan is already running.")?;
-    let started_at = crate::services::allowance::unix_now();
+    let started_at = crate::services::unix_now();
     let before = scan_boundary(app);
     let (bytes, info) = crate::services::inventory::scanner()
         .scan(None, None)

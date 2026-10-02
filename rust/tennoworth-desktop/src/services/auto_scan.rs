@@ -401,7 +401,7 @@ fn run_loop(app: AppHandle, on_scanned: fn(&AppHandle)) {
                             payload.snapshot_id
                         );
                         state.update_status(|status| {
-                            status.last_scan_at = Some(crate::services::allowance::unix_now());
+                            status.last_scan_at = Some(crate::services::unix_now());
                             status.last_error = None;
                         });
                         crate::services::acquisition::publish_scan(&app, &payload);
@@ -441,7 +441,7 @@ fn run_loop(app: AppHandle, on_scanned: fn(&AppHandle)) {
             status.mirror_settings(current);
             status.game_running = pid.is_some();
             status.next_check_at = due.map(|at| {
-                crate::services::allowance::unix_now()
+                crate::services::unix_now()
                     + at.saturating_duration_since(after).as_secs() as i64
             });
         });

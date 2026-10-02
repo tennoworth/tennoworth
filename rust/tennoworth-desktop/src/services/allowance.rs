@@ -4,15 +4,6 @@ pub use crate::trading_contract::{AllowanceView, Observation};
 
 pub const EVENT_ALLOWANCE_CHANGED: &str = "trade-allowance-changed";
 
-pub fn unix_now() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
-}
-
-
-
 #[cfg(test)]
 mod tests {
     use crate::trading_contract::{Confidence, LogPosition};

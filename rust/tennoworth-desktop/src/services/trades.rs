@@ -11,6 +11,7 @@
 //! refinements are never adjusted automatically. Untiered items are adjusted
 //! only when exactly one matching sell order exists.
 
+use crate::services::unix_now;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Arc;
 
@@ -35,13 +36,6 @@ pub struct TradeDetected {
     pub trade: TradeEvent,
     /// Listings adjusted: (item name, new quantity or 0 = deleted).
     pub adjusted: Vec<(String, i64)>,
-}
-
-fn unix_now() -> i64 {
-    std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0)
 }
 
 /// Display-name → slug over the WFM catalog, lowercase keys. The game prints

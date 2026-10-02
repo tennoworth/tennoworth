@@ -15,7 +15,7 @@ pub fn trade_session_state(
         &app.state::<crate::services::market::MarketCache>(),
     );
     let allowance = db
-        .trade_allowance(crate::services::allowance::unix_now())
+        .trade_allowance(crate::services::unix_now())
         .map_err(|e| CmdError::internal(e.to_string()))?;
     let quantities = market.session_quantities(&db).map_err(CmdError::internal)?;
     let session = app.state::<std::sync::Arc<crate::services::wfm_session::WfmSession>>();
