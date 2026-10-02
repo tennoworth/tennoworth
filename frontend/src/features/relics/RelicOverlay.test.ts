@@ -4,6 +4,7 @@ import { renderDesktop as render } from '../../dev/render-desktop';
 import fixture from '../../../../tests/fixtures/relic-ocr/result.json';
 import { installTauri, removeTauri } from '../../dev/test-utils.js';
 import RelicOverlay from './RelicOverlay.svelte';
+import { RELIC_OVERLAY_HIDE_EVENT, RELIC_OVERLAY_UPDATE_EVENT } from '../../contracts/events';
 
 afterEach(() => {
   cleanup();
@@ -11,6 +12,27 @@ afterEach(() => {
 });
 
 describe('RelicOverlay', () => {
+  it.each(['hide event', 'direct hide', 'update event', 'direct update'])('ignores the startup reply after a newer %s', async action => {
+    let resolve!: (value: typeof fixture) => void;
+    const pending = new Promise<typeof fixture>(yes => { resolve = yes; });
+    const handlers: Record<string, (event: { payload: unknown }) => void> = {};
+    installTauri(vi.fn(() => pending), vi.fn((name, handler) => {
+      handlers[name] = handler;
+      return Promise.resolve(() => {});
+    }));
+    render(RelicOverlay);
+    await waitFor(() => expect(Object.keys(handlers)).toHaveLength(2));
+    const newer = { ...fixture, slots: fixture.slots.map(slot => ({ ...slot, name: 'Current reward', livePlatinum: slot.livePlatinum ?? undefined, owned: slot.owned ?? undefined })) };
+    if (action === 'hide event') handlers[RELIC_OVERLAY_HIDE_EVENT]({ payload: null });
+    else if (action === 'direct hide') window.__TENNOWORTH_RELIC_OVERLAY_HIDE__?.();
+    else if (action === 'update event') handlers[RELIC_OVERLAY_UPDATE_EVENT]({ payload: newer });
+    else window.__TENNOWORTH_RELIC_OVERLAY_UPDATE__?.(newer);
+    resolve(fixture);
+    await new Promise(done => setTimeout(done, 0));
+    expect(screen.queryByText('Paris Prime Blueprint')).toBeNull();
+    expect(screen.queryAllByText('Current reward')).toHaveLength(action.includes('update') ? fixture.slots.length : 0);
+  });
+
   it('unregisters both overlay listeners on unmount', async () => {
     const unlistenUpdate = vi.fn();
     const unlistenHide = vi.fn();

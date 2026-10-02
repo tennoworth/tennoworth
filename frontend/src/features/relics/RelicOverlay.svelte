@@ -10,18 +10,23 @@
   let result = $state<RelicOverlayResult | null>(null);
 
   onMount(() => {
-    window.__TENNOWORTH_RELIC_OVERLAY_UPDATE__ = (next) => { result = next; };
-    window.__TENNOWORTH_RELIC_OVERLAY_HIDE__ = () => { result = null; };
+    let updated = false;
+    let disposed = false;
+    const update = (next: RelicOverlayResult | null) => { updated = true; result = next; };
+    const hide = () => update(null);
+    window.__TENNOWORTH_RELIC_OVERLAY_UPDATE__ = update;
+    window.__TENNOWORTH_RELIC_OVERLAY_HIDE__ = hide;
     currentOverlayResult()
-      .then((current) => { if (current) result = current; })
+      .then((current) => { if (!disposed && !updated && current) result = current; })
       .catch(() => {});
     const unlistenUpdate = listenForTauriEvent<RelicOverlayResult>(RELIC_OVERLAY_UPDATE_EVENT, (payload) => {
-      result = payload;
+      update(payload);
     });
     const unlistenHide = listenForTauriEvent(RELIC_OVERLAY_HIDE_EVENT, () => {
-      result = null;
+      hide();
     });
     return () => {
+      disposed = true;
       unlistenUpdate();
       unlistenHide();
       delete window.__TENNOWORTH_RELIC_OVERLAY_UPDATE__;
