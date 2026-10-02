@@ -34,6 +34,10 @@ export interface EligibilityInputs extends ProtectedView {
   nativeSnapshotId: number | null;
   /** A protection read failed, so its numbers cannot be trusted. */
   protectionError: string | null;
+  /** The account can make listing requests without another unlock. */
+  wfmUnlocked: boolean;
+  /** Protected quantities after checking current WFM listings; zero is known. */
+  availableQuantities: Readonly<Record<string, number | null | undefined>>;
 }
 
 /** Items whose protected quantity could not be established. */
@@ -67,6 +71,12 @@ export function listingBlockReason(inputs: EligibilityInputs): string | null {
   if (inputs.protectionError || unknownSlugs(inputs).size) {
     return 'Protection quantities are unavailable for some items. Recheck before listing.';
   }
+  if (!inputs.wfmUnlocked) {
+    return 'Connect WFM to check current listings before posting.';
+  }
+  if (inputs.supportedSlugs.some(slug => inputs.availableQuantities[slug] == null)) {
+    return 'Current WFM listings could not be checked. Recheck before posting.';
+  }
   return null;
 }
 
@@ -79,4 +89,3 @@ export function listingActionLabel(inputs: EligibilityInputs): string {
     ? 'Recheck protection'
     : 'Check WFM listings';
 }
-

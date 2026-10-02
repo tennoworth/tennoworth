@@ -19,11 +19,37 @@ function ready(over: Partial<EligibilityInputs> = {}): EligibilityInputs {
     protectionError: null,
     supportedSlugs: ['primed_flow'],
     known: ['primed_flow'],
+    wfmUnlocked: true,
+    availableQuantities: { primed_flow: 2 },
     ...over,
   };
 }
 
 describe('listingBlockReason', () => {
+  it.each([
+    { name: 'locked session before unread listings', over: { wfmUnlocked: false, availableQuantities: {} }, reason: 'Connect WFM to check current listings before posting.' },
+    { name: 'missing live quantity', over: { availableQuantities: {} }, reason: 'Current WFM listings could not be checked. Recheck before posting.' },
+    { name: 'null live quantity', over: { availableQuantities: { primed_flow: null } }, reason: 'Current WFM listings could not be checked. Recheck before posting.' },
+    { name: 'undefined live quantity', over: { availableQuantities: { primed_flow: undefined } }, reason: 'Current WFM listings could not be checked. Recheck before posting.' },
+    { name: 'partly checked inventory', over: { supportedSlugs: ['primed_flow', 'arcane'], known: ['primed_flow', 'arcane'] }, reason: 'Current WFM listings could not be checked. Recheck before posting.' },
+    { name: 'known zero quantity', over: { availableQuantities: { primed_flow: 0 } }, reason: null },
+    { name: 'unrelated unread item', over: { availableQuantities: { primed_flow: 2, arcane: null } }, reason: null },
+    { name: 'no supported inventory', over: { supportedSlugs: [], known: [], availableQuantities: {} }, reason: null },
+  ])('checks account and live-listing evidence: $name', ({ over, reason }) => {
+    expect(listingBlockReason(ready(over))).toBe(reason);
+  });
+
+  it.each([
+    { over: { hasSnapshot: false }, reason: /Scan the game/ },
+    { over: { pullingInventory: true }, reason: /scan is in progress/ },
+    { over: { allocationMatches: false }, reason: /protection is unavailable/ },
+    { over: { protectionSnapshotId: 1 }, reason: /latest game scan/ },
+    { over: { protectionError: 'Unavailable' }, reason: /unavailable for some items/ },
+    { over: { known: [] }, reason: /unavailable for some items/ },
+  ])('keeps earlier protection blockers ahead of account and live checks ($over)', ({ over, reason }) => {
+    expect(listingBlockReason(ready({ wfmUnlocked: false, availableQuantities: {}, ...over }))).toMatch(reason);
+  });
+
   it('lets a ready inventory through', () => {
     expect(listingBlockReason(ready())).toBeNull();
   });
