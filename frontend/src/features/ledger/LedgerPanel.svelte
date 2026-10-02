@@ -2,7 +2,6 @@
   import { useDesktopServices } from '../../ui/desktop-context';
   const { desktopEelogStatus, desktopListTrades, listenForTauriEvent } = useDesktopServices();
   import { onMount, onDestroy } from 'svelte';
-  import { DesktopCmdError } from '../../contracts/errors';
 
 import { RECORDING_CHANGED_EVENT, TRADE_DETECTED_EVENT } from '../../contracts/events';
 import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contracts/desktop';
@@ -77,7 +76,7 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
       loadError = null;
     } catch (e) {
       if (disposed || generation !== loadGeneration) return;
-      loadError = e instanceof DesktopCmdError ? e.message : humanError(e);
+      loadError = humanError(e);
     }
   }
 

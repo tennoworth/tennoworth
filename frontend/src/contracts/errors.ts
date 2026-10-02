@@ -13,10 +13,6 @@ export function humanError(e: unknown): string {
   return e instanceof Error ? e.message : String(e);
 }
 
-function errorText(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 /**
  * Reduce an error to one fixed category, never a fragment of its text, which
  * may carry secrets. Scan failures are matched by their own wording first:
@@ -25,7 +21,7 @@ function errorText(error: unknown): string {
  */
 export function diagnosticError(error: unknown): string | null {
   if (!error) return null;
-  const text = errorText(error);
+  const text = humanError(error);
   if (/doesn't appear to be running/i.test(text)) return 'game_not_running';
   if (/no accountId\/nonce pair found/i.test(text)) return 'credentials_not_found';
   if (/scan is already in progress/i.test(text)) return 'scan_busy';
@@ -42,7 +38,7 @@ export function diagnosticError(error: unknown): string | null {
 /** The HTTP status an error names ("HTTP 403", "/v2/me returned 403"), never its reason phrase. */
 export function diagnosticHttpStatus(error: unknown): number | null {
   if (!error) return null;
-  const match = /\b(?:HTTP|returned)\s+([1-5]\d\d)\b/.exec(errorText(error));
+  const match = /\b(?:HTTP|returned)\s+([1-5]\d\d)\b/.exec(humanError(error));
   return match ? Number(match[1]) : null;
 }
 

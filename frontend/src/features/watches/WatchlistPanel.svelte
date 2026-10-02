@@ -2,7 +2,6 @@
   import { useDesktopServices } from '../../ui/desktop-context';
   const { desktopAddWatch, desktopCheckWatchesNow, desktopDeleteWatch, desktopListWatches, listenForTauriEvent } = useDesktopServices();
   import { onMount, onDestroy } from 'svelte';
-  import { DesktopCmdError } from '../../contracts/errors';
 
 import { WATCH_FIRED_EVENT } from '../../contracts/events';
 import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/desktop';
@@ -74,7 +73,7 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
       loadError = null;
     } catch (e) {
       if (disposed || generation !== loadGeneration) return;
-      loadError = e instanceof DesktopCmdError ? e.message : humanError(e);
+      loadError = humanError(e);
     }
   }
 
@@ -119,7 +118,7 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
       pushToast(`Watching ${picked.name}: ${side === 'sell' ? '≤' : '≥'} ${threshold}p.`);
       clearPick();
     } catch (e) {
-      pushToast(e instanceof DesktopCmdError ? e.message : humanError(e), 'error');
+      pushToast(humanError(e), 'error');
     } finally {
       adding = false;
     }
@@ -134,7 +133,7 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
       loadGeneration++;
       watches = next;
     } catch (e) {
-      pushToast(e instanceof DesktopCmdError ? e.message : humanError(e), 'error');
+      pushToast(humanError(e), 'error');
     } finally {
       const next = new Set(busyIds); next.delete(w.id); busyIds = next;
     }
@@ -152,7 +151,7 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
       pushToast(hits ? `${hits} watch${hits === 1 ? '' : 'es'} satisfied right now.` : 'No watch is satisfied right now.');
       await load();
     } catch (e) {
-      pushToast(e instanceof DesktopCmdError ? e.message : humanError(e), 'error');
+      pushToast(humanError(e), 'error');
     } finally {
       checking = false;
     }
