@@ -8,7 +8,7 @@ import { installTauri, removeTauri } from '../../dev/test-utils';
 import type { Market } from '../../contracts/data';
 import { WATCH_FIRED_EVENT } from '../../contracts/events';
 
-afterEach(() => { cleanup(); removeTauri(); });
+afterEach(() => { cleanup(); removeTauri(); vi.restoreAllMocks(); });
 
 const market = {
   updated_at: '2026-08-16T12:00:00Z', platform: 'pc', item_count: 1, catalog_count: 1,
@@ -107,4 +107,21 @@ describe('WatchlistPanel', () => {
     await waitFor(() => expect(invoke.mock.calls.some((c) => c[0] === 'check_watches_now')).toBe(true));
     await screen.findByText('1 watch satisfied right now.');
   });
+});
+
+it.each(['manual', 'destroy'])('cancels a watch toast timer on %s dismissal', async dismissal => {
+  const store = { watches: [] as unknown[] };
+  installTauri(makeInvoke(store), undefined);
+  const view = render(WatchlistPanel, { props: { market } });
+  await screen.findByText('No watches yet. Pick an item above.');
+  const scheduled = vi.spyOn(window, 'setTimeout');
+  const cancelled = vi.spyOn(window, 'clearTimeout');
+  await fireEvent.click(screen.getByRole('button', { name: 'Check now' }));
+  await screen.findByText('No watch is satisfied right now.');
+  const index = scheduled.mock.calls.findIndex(call => call[1] === 4500);
+  expect(index).toBeGreaterThanOrEqual(0);
+  const timer = scheduled.mock.results[index].value;
+  if (dismissal === 'manual') await fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+  else view.unmount();
+  expect(cancelled).toHaveBeenCalledWith(timer);
 });
