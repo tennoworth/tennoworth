@@ -83,3 +83,16 @@ export function humanBuildTime(seconds: number): string {
   if (days > 0) return rem > 0 ? `${days}d ${rem}h` : `${days}d`;
   return `${hours}h`;
 }
+
+// A healthy two-hour scrape is under three hours old; a five-hour-old book
+// during a price spike must not look fresh.
+export function marketFreshness(
+  updatedAt: string | number | null | undefined,
+  now: number,
+): 'unknown' | 'fresh' | 'aging' | 'stale' {
+  if (!updatedAt) return 'unknown';
+  const hours = (now - new Date(updatedAt).getTime()) / 3.6e6;
+  if (hours <= 3) return 'fresh';
+  if (hours <= 24) return 'aging';
+  return 'stale';
+}
