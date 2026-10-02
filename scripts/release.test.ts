@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { Buffer } from "node:buffer";
 import { execFileSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -280,6 +280,7 @@ test("snapshot CLI resolves its checkout from paths containing spaces and URL ch
     mkdirSync(join(root, "scripts"), { recursive: true });
     mkdirSync(publicDir, { recursive: true });
     copyFileSync(fileURLToPath(new URL("./release.ts", import.meta.url)), script);
+    cpSync(fileURLToPath(new URL("./release", import.meta.url)), join(root, "scripts", "release"), { recursive: true });
     writeFileSync(join(publicDir, "market.json"), JSON.stringify({
       ...validMarket(), updated_at: new Date(Date.now() - 1000).toISOString(),
     }));

@@ -124,6 +124,7 @@ jobs:
               - 'frontend/public/wfstat-catalog.json'
               - 'frontend/public/definitions.json'
               - 'scripts/release.ts'
+              - 'scripts/release/**'
               - 'scripts/release.test.ts'
             deploy:
               - 'deploy/**'
@@ -140,6 +141,7 @@ jobs:
               - 'rust/tennoworth-desktop/Cargo.toml'
               - 'CHANGELOG.md'
               - 'scripts/release.ts'
+              - 'scripts/release/**'
               - 'scripts/release.test.ts'
               - '.github/workflows/release-desktop.yml'
             ci:
