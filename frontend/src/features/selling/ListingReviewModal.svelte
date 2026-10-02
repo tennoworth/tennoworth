@@ -1,411 +1,16 @@
 <script lang="ts">
+  import { onMount, onDestroy } from 'svelte';
   import { useDesktopServices } from '../../ui/desktop-context';
-  const { desktopAccessStatus, desktopLiveTopPrices, desktopTradeSessionState, listenForTauriEvent } = useDesktopServices();
-  import { onMount, onDestroy, untrack, tick } from 'svelte';
-  import { WfmAccessController } from './controller.svelte';
-  import { LiveTopController } from './live-top.svelte';
-  const liveTop = new LiveTopController({ desktopLiveTopPrices, listenForTauriEvent });
-  const marketAccess = new WfmAccessController({ desktopAccessStatus, listenForTauriEvent });
-  onMount(() => marketAccess.start());
-  import { DesktopCmdError } from '../../contracts/errors';
-
-import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
-
-import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop';
-  
-  import type { ItemResult, SessionConstraint, ReviewedOrder, MarketItemEntry } from '../../contracts/data';
-  import { validSessionLot } from '../../domain/trade-session';
-  import { clearingPrice } from '../../domain/sell-priority';
-  import { orderUnitPrice } from '../../domain/order-prices';
-  import { MAX_PLATINUM, MIN_PLATINUM, MAX_PLAN_ITEMS, MAX_PER_TRADE } from '../../domain/limits';
-  import { humanError } from '../../contracts/errors';
+  import { createListingReview, type ListingReviewInput } from './listing-review.svelte';
   import { plat, ownedBreakdown, LEVELED_NOTE_TITLE, keptNoteTitle } from '../../ui/format';
+  import { orderUnitPrice } from '../../domain/order-prices';
+  import { MAX_PLATINUM } from '../../domain/limits';
   import DialogHeader from '../../ui/DialogHeader.svelte';
+  let { open = $bindable(false), rows, transport, onauthrequired, onclose, sendThrough = (send) => send(), listingBlockReason = null, onrecheck, listingActionLabel = 'Check WFM listings', currentSnapshotId }: Omit<ListingReviewInput, 'open' | 'sendThrough'> & { open?: boolean; sendThrough?: ListingReviewInput['sendThrough'] } = $props();
 
-  /** Row shape passed in from ResultsTable / App.svelte. */
-  import type { ListingCandidate as InputRow } from '../../contracts/listing';
-
-  interface PlanRow {
-    inventory_snapshot_id?: number;
-    components?: Record<string, number>;
-    component_limits?: Record<string, number>;
-    key: string;
-    slug: string;
-    subtype: string | null;
-    name: string;
-    include: boolean;
-    platinum: number;
-    quantity: number;
-    owned: number;
-    sellable: number;
-    leveled: number;
-    rank: number;
-    reference_low_sell: number;
-    avg: number;
-    per_trade: number;
-    bulk: boolean;
-    session?: SessionConstraint;
-    reviewed_order?: ReviewedOrder;
-    market?: MarketItemEntry;
-  }
-
-  import type { OwnOrder } from '../../contracts/generated/desktop';
-
-  interface Props {
-    open?: boolean;
-    rows: InputRow[];
-    /** The app's boot-selected transport - Tauri IPC into wfm-core. */
-    transport: DesktopCapabilities;
-    /** Desktop only: a listing call came back `needs_login` / `needs_unlock`.
-     *  The app opens the matching auth dialog on top of this modal; the user
-     *  resends after authenticating. */
-    onauthrequired?: (code: 'needs_login' | 'needs_unlock') => void;
-    onclose?: () => void;
-    /** Wraps the send so the caller can track it as in-flight and re-read the
-     *  saved batch once it settles. Passed in rather than known here: this
-     *  component sends, it does not own the batch's lifecycle. */
-    sendThrough?: <T>(send: () => Promise<T>) => Promise<T>;
-    listingBlockReason?: string | null;
-    onrecheck?: () => void;
-    listingActionLabel?: string;
-    currentSnapshotId?: number | null;
-  }
-  let { open = $bindable(false), rows, transport, onauthrequired, onclose, sendThrough = (send) => send(), listingBlockReason = null, onrecheck, listingActionLabel = 'Check WFM listings', currentSnapshotId }: Props = $props();
-
-  let plan = $state<PlanRow[]>([]);
-  let reviewBlockReason = $derived(listingBlockReason ?? (currentSnapshotId !== undefined && plan.some(row => row.inventory_snapshot_id !== currentSnapshotId)
-    ? 'Inventory changed. Close review and prepare a new batch; your current edits remain here until you close.' : null));
-  type Phase = 'review' | 'sending' | 'results' | 'error';
-  let phase = $state<Phase>('review');
-  let validatingSend = $state(false);
-  let cancellationRequested = $state(false);
-  let serverResults = $state<ItemResult[]>([]);
-  let networkError = $state<string | null>(null);
-  let durabilityError = $state<string | null>(null);
-
-  function initialPlanFor(rows: InputRow[]): PlanRow[] {
-    return rows.map((r) => {
-      // Prefill from the clamped clearing price, not raw low_sell - the raw
-      // ask inherits every troll listing (a lone 100p ask on a 10p item, or
-      // a 1p undercut on an undercut day). Falls back for older callers.
-      const target =
-        (r.clearing_price ?? 0) > 0 ? Math.ceil(r.clearing_price as number)
-        : r.low_sell > 0 ? r.low_sell
-        : Math.round(r.avg_price);
-      // Cap using sellable (owned minus the "Keep copies" reserve), not raw
-      // owned - this is the last line of defense against listing a copy the
-      // user asked to hold back. Falls back to owned for callers that
-      // predate the reserve field.
-      const sellable = r.sellable ?? r.owned;
-      return {
-        inventory_snapshot_id: r.inventory_snapshot_id,
-        key: r.key ?? r.slug,
-        components: r.components,
-        component_limits: r.component_limits ? { ...r.component_limits } : undefined,
-        slug: r.slug,
-        subtype: r.subtype ?? null,
-        name: r.name,
-        include: true,
-        platinum: Math.max(5, target),
-        quantity: r.proposed_quantity ?? 1,
-        per_trade: r.per_trade ?? 1,
-        bulk: r.bulk ?? false,
-        session: r.session,
-        market: r.market,
-        owned: r.owned,
-        sellable,
-        leveled: r.leveled ?? 0,
-        // Rank 0 = unranked, the tier dupe stacks actually are. Editable so
-        // a leveled copy can be listed at its real rank; the app only
-        // sends rank for items WFM ranks (mods/arcanes), so a non-zero rank
-        // on a rankless item is ignored server-side, not an error.
-        rank: 0,
-        reference_low_sell: r.low_sell || 0,
-        avg: r.avg_price,
-      };
-    });
-  }
-
-  // Prefill sanity flag: a suggested price far off the 48h average deserves
-  // a second look before it goes out in a 50-item batch.
-  function priceOff(r: PlanRow): boolean {
-    return r.avg > 0 && (r.platinum > r.avg * 1.3 || r.platinum < r.avg * 0.7);
-  }
-
-  // Re-initialize when the modal OPENS - and only then.
-  //
-  // `rows` is read through untrack() deliberately. The caller passes
-  // `reviewRowsOverride ?? listableRows.slice(0, 50)`, and that .slice() mints
-  // a fresh array identity every time the `listableRows` derived recomputes.
-  // Tracking it meant any background recompute while the modal was open
-  // re-ran this init and threw away the user's in-flight price and quantity
-  // edits, mid-review, on a batch of up to 50 listings. The rows to review are
-  // whatever they were when the modal opened; nothing here wants live updates.
-  $effect(() => {
-    if (open) {
-      reviewEpoch++;
-      plan = initialPlanFor(untrack(() => rows) ?? []);
-      phase = 'review';
-      serverResults = [];
-      networkError = null;
-      durabilityError = null;
-      ordersReady = false;
-      sessionRemaining = null;
-      sessionProblem = null;
-      untrack(() => { if (plan.some(r => r.session)) void refreshReviewOrders(false); });
-    }
-  });
-
-  let selectedCount = $derived(plan.filter((r) => r.include).length);
-  let reviewEpoch = 0;
-  let hasSession = $derived(plan.some(r => r.session));
-  let ordersReady = $state(false);
-  let ordersBusy = $state(false);
-  let sessionRemaining = $state<number | null>(null);
-  let sessionProblem = $state<string | null>(null);
-  let estimatedTrades = $derived(plan.filter(r => r.include).every(r => validSessionLot(r.quantity, r.per_trade, r.bulk))
-    ? plan.filter(r => r.include).reduce((sum, r) => sum + r.quantity / r.per_trade, 0) : null);
-
-  async function refreshSession(): Promise<boolean> {
-    if (!hasSession) return true;
-    const epoch = reviewEpoch;
-    try {
-      const state = await desktopTradeSessionState();
-      if (!open || epoch !== reviewEpoch) return false;
-      const context = plan[0]?.session;
-      sessionRemaining = state.allowance.remaining;
-      for (const row of plan) {
-        row.sellable = Math.min(row.sellable, state.quantities[row.slug] ?? 0);
-        if (row.component_limits) for (const slug of Object.keys(row.component_limits)) {
-          row.component_limits[slug] = Math.min(row.component_limits[slug], state.quantities[slug] ?? 0);
-        }
-        if (state.supported_slugs && !state.supported_slugs.includes(row.slug)) row.sellable = 0;
-        row.bulk = state.bulk_slugs.includes(row.slug);
-      }
-      sessionProblem = context && state.allowance.snapshot_id === context.snapshot_id && state.allowance.utc_day === context.utc_day
-        ? null : 'The inventory or allowance day changed. Close review and prepare a new batch.';
-      await tick();
-      return sessionProblem == null;
-    } catch (e) { if (open && epoch === reviewEpoch) sessionProblem = humanError(e); return false; }
-  }
-
-  async function refreshReviewOrders(confirm: boolean): Promise<boolean> {
-    if (!hasSession) return true;
-    const epoch = reviewEpoch;
-    ordersBusy = true;
-    try {
-      if (!await refreshSession()) return false;
-      const orders: OwnOrder[] = await transport.fetchOrders();
-      if (!open || epoch !== reviewEpoch) return false;
-      let changed = false;
-      for (const row of plan) {
-        const matches = orders.filter(o => o.side === 'sell' && o.slug === row.slug && (o.rank ?? 0) === row.rank && (o.subtype ?? null) === row.subtype);
-        if (matches.length > 1) throw new Error(`${row.name} has ambiguous existing orders. Resolve them in My orders first.`);
-        const prior = matches[0];
-        if (prior && (typeof prior.id !== 'string' || typeof prior.visible !== 'boolean' || !Number.isSafeInteger(prior.platinum) || !Number.isSafeInteger(prior.quantity)
-          || (prior.per_trade != null && (!Number.isSafeInteger(prior.per_trade) || prior.per_trade < 1 || prior.per_trade > MAX_PER_TRADE)))) {
-          throw new Error(`Existing order details are incomplete for ${row.name}.`);
-        }
-        const next: ReviewedOrder = prior ? { state: 'existing', id: prior.id, platinum: prior.platinum,
-          quantity: prior.quantity, per_trade: prior.per_trade, visible: prior.visible as boolean } : { state: 'new' };
-        if (JSON.stringify(row.reviewed_order) !== JSON.stringify(next)) changed = true;
-        row.reviewed_order = next;
-      }
-      ordersReady = true;
-      if (confirm && changed) {
-        networkError = 'Existing orders changed. Review the updated before/after details, then confirm again. Your edits were kept.';
-        return false;
-      }
-      return true;
-    } catch (e) {
-      if (!open || epoch !== reviewEpoch) return false;
-      ordersReady = false;
-      if (!handleAuthCode(e)) networkError = humanError(e);
-      return false;
-    } finally { if (epoch === reviewEpoch) ordersBusy = false; }
-  }
-
-  $effect(() => {
-    if (!open || !hasSession) return;
-    return listenForTauriEvent(ALLOWANCE_CHANGED_EVENT, () => {
-      if (phase === 'review') void refreshSession();
-    });
-  });
-
-  // ---- Live prices (desktop only) ----
-  // The prefill comes from the 2-hourly snapshot. One click asks WFM for the
-  // ≤5 best ONLINE asks/bids for each selected row's exact tier (rank /
-  // relic refinement) - the price you'd actually be competing with right
-  // now. A shared request budget makes batch progress useful.
-  onDestroy(() => liveTop.dispose());
-
-  function liveFor(row: PlanRow): LiveTop | undefined {
-    return liveTop.get(row);
-  }
-
-  async function checkLivePrices(): Promise<void> {
-    await liveTop.check(plan.filter((r) => r.include).map((r) => ({ slug: r.slug, rank: r.rank, subtype: r.subtype })));
-  }
-
-  /** Set the row's price to the live lowest online ask (match, don't undercut). */
-  function useLive(i: number): void {
-    const t = liveFor(plan[i]);
-    if (t?.low_sell != null) {
-      const row = plan[i];
-      row.platinum = Math.max(MIN_PLATINUM, Math.ceil(row.session && row.market
-        ? clearingPrice({ ...row.market, low_sell: t.low_sell }) : t.low_sell));
-    }
-  }
-  function useLiveAll(): void {
-    plan.forEach((_, i) => { if (plan[i].include) useLive(i); });
-  }
-  /** How the row's price sits against the live book: over the lowest ask
-   *  (won't sell first), under the top bid (leaving plat on the table), or ok. */
-  function liveVerdict(row: PlanRow): 'above' | 'below-bid' | 'ok' | null {
-    const t = liveFor(row);
-    if (!t || t.error) return null;
-    if (t.low_sell != null && row.platinum > t.low_sell) return 'above';
-    if (t.top_buy != null && row.platinum < t.top_buy) return 'below-bid';
-    return 'ok';
-  }
-  let totalPlat = $derived(
-    plan
-      .filter((r) => r.include)
-      .reduce((s, r) => s + r.platinum * r.quantity, 0)
-  );
-  let allocationProblem = $derived.by(() => {
-    const used = new Map<string, number>();
-    const limits = new Map<string, number>();
-    for (const row of plan.filter(row => row.include && row.component_limits)) {
-      for (const [slug, count] of Object.entries(row.components ?? { [row.slug]: 1 })) {
-        used.set(slug, (used.get(slug) ?? 0) + count * row.quantity);
-        limits.set(slug, Math.min(limits.get(slug) ?? Infinity, row.component_limits?.[slug] ?? 0));
-      }
-    }
-    return [...used].some(([slug, count]) => !Number.isSafeInteger(count) || count > (limits.get(slug) ?? 0))
-      ? 'These edited quantities reuse components or exceed their available copies. Reduce a set or part quantity.' : null;
-  });
-  let canSubmit = $derived(!reviewBlockReason &&
-    !allocationProblem && selectedCount > 0 && selectedCount <= MAX_PLAN_ITEMS && plan.every(
-      (r) => !r.include || (Number.isSafeInteger(r.platinum) && r.platinum >= MIN_PLATINUM && r.platinum <= MAX_PLATINUM && Number.isSafeInteger(r.quantity) && r.quantity >= 1 && r.quantity <= r.sellable
-        && (!r.session || (validSessionLot(r.quantity, r.per_trade, r.bulk) && r.platinum * r.per_trade <= MAX_PLATINUM)))
-    ) && (!hasSession || (ordersReady && !ordersBusy && !sessionProblem && estimatedTrades != null && estimatedTrades <= (sessionRemaining ?? 0) && estimatedTrades <= (plan[0]?.session?.budget ?? 0)))
-  );
-
-  function close(): void {
-    open = false;
-    onclose?.();
-  }
-
-  /** Desktop lock-state rejection → hand off to the auth dialogs and return to
-   *  review so Send is one click away once the session unlocks. */
-  function handleAuthCode(e: unknown): boolean {
-    if (e instanceof DesktopCmdError && (e.code === 'needs_login' || e.code === 'needs_unlock')) {
-      phase = 'review';
-      onauthrequired?.(e.code);
-      return true;
-    }
-    return false;
-  }
-
-  async function send(): Promise<void> {
-    if (phase === 'sending' || validatingSend || marketAccess.mutationsBlocked || reviewBlockReason) return;
-    validatingSend = true;
-    try { if (hasSession && !await refreshReviewOrders(true)) return; } finally { validatingSend = false; }
-    await tick();
-    if (!canSubmit) { networkError = 'Review quantities, units per trade, prices, and the remaining allowance before submitting.'; return; }
-    phase = 'sending';
-    cancellationRequested = false;
-    networkError = null;
-    const items = plan
-      .filter((r) => r.include)
-      .map((r) => ({
-        inventory_snapshot_id: r.inventory_snapshot_id,
-        slug: r.slug,
-        platinum: r.platinum,
-        quantity: r.quantity,
-        per_trade: r.session ? r.per_trade : undefined,
-        session: r.session,
-        reviewed_order: r.session ? r.reviewed_order : undefined,
-        order_type: 'sell' as const,
-        visible: false,
-        rank: r.rank > 0 ? r.rank : undefined,
-        subtype: r.subtype || undefined,
-        reference_low_sell: r.reference_low_sell || undefined,
-      }));
-    try {
-      const resp = await sendThrough(() => transport.submitPlan(items));
-      serverResults = resp.results || [];
-      durabilityError = resp.durability_error ?? null;
-      phase = 'results';
-    } catch (e) {
-      if (handleAuthCode(e)) return;
-      networkError = humanError(e);
-      phase = 'error';
-    }
-  }
-
-  async function stopSending() {
-    if (cancellationRequested) return;
-    cancellationRequested = true;
-    try { await transport.cancelPlan(); } catch (error) { cancellationRequested = false; networkError = humanError(error); }
-  }
-
-  let updatedCount = $derived(
-    serverResults.filter((r) => r.status === 'ok' && r.action === 'updated').length,
-  );
-  let okCount = $derived(
-    serverResults.filter((r) => r.status === 'ok').length - updatedCount,
-  );
-  let pendingCount = $derived(serverResults.filter(r => r.status === 'pending' || r.status === 'uncertain_mutation').length);
-  let errCount = $derived(serverResults.filter(r => r.status !== 'ok' && r.status !== 'pending' && r.status !== 'uncertain_mutation').length);
-
-  // The results table only carries slugs; map back to human names so the
-  // "what did I just list" review isn't a wall of snake_case.
-  let planNameBySlug = $derived(
-    new Map(plan.map((r) => [r.slug, r.name])),
-  );
-
-  let visibilityBusy = $state(false);
-  let visibilityDone = $state(false);
-  let visibilityResults = $state<ItemResult[]>([]);
-
-  function setAll(include: boolean): void {
-    for (let i = 0; i < plan.length; i++) plan[i].include = include;
-  }
-
-  async function makeAllVisible(): Promise<void> {
-    // Only freshly-created orders: updated ones keep the visibility the user
-    // chose on WFM (matches the "N created" count on the button).
-    const ids = serverResults
-      .filter((r) => r.status === 'ok' && r.action !== 'updated' && r.order_id)
-      .map((r) => r.order_id as string);
-    if (ids.length === 0) return;
-    visibilityBusy = true;
-    try {
-      const resp = await transport.bulkVisibility(ids, true);
-      visibilityResults = resp?.results || [];
-      // "Buyers can see them now" is a claim that WFM accepted the toggle, so it
-      // takes at least one confirmed row: the call returning is not the change
-      // landing. The counts beside it already report how many failed.
-      visibilityDone = visibilityResults.some((r) => r.status === 'ok');
-    } catch (e) {
-      // A lock-state rejection here (desktop logout between send and toggle)
-      // must not dump the user to the error phase and lose the results table.
-      if (e instanceof DesktopCmdError && (e.code === 'needs_login' || e.code === 'needs_unlock')) {
-        onauthrequired?.(e.code);
-      } else {
-        networkError = humanError(e);
-        phase = 'error';
-      }
-    } finally {
-      visibilityBusy = false;
-    }
-  }
-
-  let visibleOkCount = $derived(visibilityResults.filter((r) => r.status === 'ok').length);
-  let visibleErrCount = $derived(visibilityResults.filter((r) => r.status !== 'ok').length);
-
+  const controller = createListingReview({ get transport() { return transport; }, get open() { return open; }, set open(value) { open = value; }, get rows() { return rows; }, get listingBlockReason() { return listingBlockReason; }, get currentSnapshotId() { return currentSnapshotId; }, get onauthrequired() { return onauthrequired; }, get onclose() { return onclose; }, get sendThrough() { return sendThrough; } }, useDesktopServices());
+  onMount(() => controller.start());
+  onDestroy(() => controller.dispose());
   function reviewFocus(node: HTMLElement) {
     const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     let mounted = true;
@@ -414,7 +19,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
     queueMicrotask(() => { if (mounted) controls()[0]?.focus(); });
     const onKey = (event: KeyboardEvent) => {
       if (event.defaultPrevented || document.querySelector('dialog[open]')) return;
-      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); close(); }
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); controller.close(); }
       if (event.key !== 'Tab') return;
       const available = controls();
       const first = available[0];
@@ -433,17 +38,18 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
       if (previous?.isConnected && (node.contains(document.activeElement) || document.activeElement === document.body)) previous.focus();
     } };
   }
+
 </script>
 
 {#if open}
   <div class="backdrop" role="dialog" aria-modal="true" aria-labelledby="rm-title" use:reviewFocus>
-    <div class="modal" class:session={hasSession}>
-      <DialogHeader titleId="rm-title" title="List on warframe.market" onclose={close} />
+    <div class="modal" class:session={controller.hasSession}>
+      <DialogHeader titleId="rm-title" title="List on warframe.market" onclose={controller.close} />
 
-      {#if reviewBlockReason && phase === 'review'}<div class="ui-notice" data-tone="warn" role="status">{reviewBlockReason} {#if listingBlockReason && onrecheck}<button class="btn" onclick={onrecheck}>{listingActionLabel}</button>{:else if !listingBlockReason}<button class="btn" onclick={close}>Close review</button>{/if}</div>{/if}
-      {#if phase === 'review'}
+      {#if controller.reviewBlockReason && controller.phase === 'review'}<div class="ui-notice" data-tone="warn" role="status">{controller.reviewBlockReason} {#if listingBlockReason && onrecheck}<button class="btn" onclick={onrecheck}>{listingActionLabel}</button>{:else if !listingBlockReason}<button class="btn" onclick={controller.close}>Close review</button>{/if}</div>{/if}
+      {#if controller.phase === 'review'}
         <p class="lead">
-          {#if hasSession}
+          {#if controller.hasSession}
           New listings start <strong>hidden</strong>. Existing listings keep their visibility.
           Quantities replace current listing totals; rank stays at the verified unranked tier.
           {:else}
@@ -455,45 +61,45 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
           {/if}
         </p>
 
-        {#if hasSession}
-          {#if allocationProblem}<p class="ui-notice" data-tone="warn" role="alert">{allocationProblem}</p>{/if}
-          <p class="ui-notice" data-tone={canSubmit ? 'good' : 'warn'}>
-            {estimatedTrades ?? 'Invalid quantity / lot'} estimated trades / {plan[0]?.session?.budget} budget · {sessionRemaining ?? 'unknown'} remaining.
+        {#if controller.hasSession}
+          {#if controller.allocationProblem}<p class="ui-notice" data-tone="warn" role="alert">{controller.allocationProblem}</p>{/if}
+          <p class="ui-notice" data-tone={controller.canSubmit ? 'good' : 'warn'}>
+            {controller.estimatedTrades ?? 'Invalid quantity / lot'} estimated trades / {controller.plan[0]?.session?.budget} budget · {controller.sessionRemaining ?? 'unknown'} remaining.
             Quantities must divide evenly by units per trade. Posting does not spend the game allowance.
           </p>
-          {#if sessionProblem}<p class="ui-notice" data-tone="warn">{sessionProblem}</p>{/if}
-          {#if plan.some(r => r.include && r.quantity > r.sellable)}
+          {#if controller.sessionProblem}<p class="ui-notice" data-tone="warn">{controller.sessionProblem}</p>{/if}
+          {#if controller.plan.some(r => r.include && r.quantity > r.sellable)}
             <p class="ui-notice" data-tone="warn">A selected quantity exceeds the confirmed sellable count. Your edits are retained; reduce the quantity or scan again.</p>
           {/if}
-          {#if networkError}<p class="ui-notice" data-tone="warn" role="alert">{networkError}</p>{/if}
-          <button class="btn ghost" onclick={() => refreshReviewOrders(false)} disabled={ordersBusy}>
-            {ordersBusy ? 'Checking existing orders…' : 'Refresh existing orders'}
+          {#if controller.networkError}<p class="ui-notice" data-tone="warn" role="alert">{controller.networkError}</p>{/if}
+          <button class="btn ghost" onclick={() => controller.refreshReviewOrders(false)} disabled={controller.ordersBusy}>
+            {controller.ordersBusy ? 'Checking existing orders…' : 'Refresh existing orders'}
           </button>
         {/if}
 
         <div class="bulkrow">
-          <button class="btn ghost" onclick={() => setAll(true)}>Select all</button>
-          <button class="btn ghost" onclick={() => setAll(false)}>Deselect all</button>
+          <button class="btn ghost" onclick={() => controller.setAll(true)}>Select all</button>
+          <button class="btn ghost" onclick={() => controller.setAll(false)}>Deselect all</button>
           <span class="spacer"></span>
           <button
             class="btn ghost live-btn"
-            onclick={checkLivePrices}
-            disabled={liveTop.phase === 'running' || selectedCount === 0}
+            onclick={controller.checkLivePrices}
+            disabled={controller.liveTop.phase === 'running' || controller.selectedCount === 0}
             title="Ask warframe.market for the ≤5 best online asks and bids for each selected row's exact rank / refinement, right now. Shares market access with other activity; large batches can take time."
           >
-            {#if liveTop.phase === 'running'}
-              Checking live prices… {liveTop.progress.done}/{liveTop.progress.total}
-            {:else if liveTop.phase === 'done'}
+            {#if controller.liveTop.phase === 'running'}
+              Checking live prices… {controller.liveTop.progress.done}/{controller.liveTop.progress.total}
+            {:else if controller.liveTop.phase === 'done'}
               Re-check live prices
             {:else}
               Check live prices
             {/if}
           </button>
-          {#if liveTop.phase === 'done' && liveTop.quotes.size > 0}
-            <button class="btn ghost" onclick={useLiveAll} title="Set every selected row's price to its live lowest online ask (match it - no undercutting).">Match lowest asks</button>
+          {#if controller.liveTop.phase === 'done' && controller.liveTop.quotes.size > 0}
+            <button class="btn ghost" onclick={controller.useLiveAll} title="Set every selected row's price to its live lowest online ask (match it - no undercutting).">Match lowest asks</button>
           {/if}
-          {#if liveTop.phase === 'error' && liveTop.error}
-            <span class="live-err">{liveTop.error}</span>
+          {#if controller.liveTop.phase === 'error' && controller.liveTop.error}
+            <span class="live-err">{controller.liveTop.error}</span>
           {/if}
         </div>
 
@@ -504,7 +110,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
                 <th></th>
                 <th>Item</th>
                 <th>Qty</th>
-                {#if hasSession}<th>Units / trade</th><th>Existing → proposed</th>{/if}
+                {#if controller.hasSession}<th>Units / trade</th><th>Existing → proposed</th>{/if}
                 <th>Owned</th>
                 <th>Price (p)</th>
                 <th>Avg</th>
@@ -514,24 +120,24 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
               </tr>
             </thead>
             <tbody>
-              {#each plan as row, i (row.key)}
-                {@const t = liveFor(row)}
-                {@const v = liveVerdict(row)}
+              {#each controller.plan as row, i (row.key)}
+                {@const t = controller.liveFor(row)}
+                {@const v = controller.liveVerdict(row)}
                 <tr class:dim={!row.include}>
-                  <td><input type="checkbox" bind:checked={plan[i].include} /></td>
+                  <td><input type="checkbox" bind:checked={controller.plan[i].include} /></td>
                   <td>{row.name}</td>
                   <td>
                     <input
                       type="number"
                       min="1"
                       max={row.sellable}
-                      bind:value={plan[i].quantity}
+                      bind:value={controller.plan[i].quantity}
                       disabled={!row.include}
                     />
                   </td>
-                  {#if hasSession}
+                  {#if controller.hasSession}
                     <td><input type="number" aria-label={`Units per trade for ${row.name}`} min="1" max={row.bulk ? 6 : 1}
-                      step="1" bind:value={plan[i].per_trade} disabled={!row.include} /></td>
+                      step="1" bind:value={controller.plan[i].per_trade} disabled={!row.include} /></td>
                     <td>
                       {#if row.reviewed_order?.state === 'existing'}
                         {@const prior = row.reviewed_order}
@@ -557,10 +163,10 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
                       type="number"
                       min="5"
                       max={MAX_PLATINUM}
-                      bind:value={plan[i].platinum}
+                      bind:value={controller.plan[i].platinum}
                       disabled={!row.include}
-                      class:off={row.include && priceOff(row)}
-                      title={row.include && priceOff(row) ? `More than 30% off the 48h average (${row.avg.toFixed(0)}p) - double-check before sending` : undefined}
+                      class:off={row.include && controller.priceOff(row)}
+                      title={row.include && controller.priceOff(row) ? `More than 30% off the 48h average (${row.avg.toFixed(0)}p) - double-check before sending` : undefined}
                     />
                   </td>
                   <td class="muted">{plat(row.avg)}</td>
@@ -571,7 +177,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
                       <span class="muted" title={t.error}>n/a</span>
                     {:else}
                       {#if t.low_sell != null}
-                        <button class="linkish" onclick={() => useLive(i)} disabled={!row.include}
+                        <button class="linkish" onclick={() => controller.useLive(i)} disabled={!row.include}
                           title={`Online asks: ${t.sells.join(', ')}p - click to price at ${t.low_sell}p`}>{t.low_sell}p</button>
                       {:else}<span class="muted" title="No online sellers right now">no ask</span>{/if}
                       <span class="muted"> / </span>
@@ -588,7 +194,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
                       min="0"
                       max="10"
                       class="rank"
-                      bind:value={plan[i].rank}
+                      bind:value={controller.plan[i].rank}
                       disabled={!row.include || !!row.session}
                     />
                   </td>
@@ -599,39 +205,39 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
           </table>
         </div>
 
-        {#if marketAccess.message}<p class="ui-notice" data-tone="warn" role="status">{marketAccess.message}</p>{/if}
+        {#if controller.marketAccess.message}<p class="ui-notice" data-tone="warn" role="status">{controller.marketAccess.message}</p>{/if}
         <footer>
           <div class="totals">
-            <span><strong>{selectedCount}</strong> items</span>
-            <span><strong>{plat(totalPlat)}</strong> plat total</span>
-            {#if selectedCount > 50}
+            <span><strong>{controller.selectedCount}</strong> items</span>
+            <span><strong>{plat(controller.totalPlat)}</strong> plat total</span>
+            {#if controller.selectedCount > 50}
               <span class="warn">Batch cap is 50 - deselect some.</span>
             {/if}
           </div>
           <div class="actions">
-            <button class="btn ghost" onclick={close}>Cancel</button>
-            <button class="btn primary" onclick={send} disabled={!canSubmit || validatingSend || marketAccess.mutationsBlocked}>
-              Send {selectedCount} listings
+            <button class="btn ghost" onclick={controller.close}>Cancel</button>
+            <button class="btn primary" onclick={controller.send} disabled={!controller.canSubmit || controller.validatingSend || controller.marketAccess.mutationsBlocked}>
+              Send {controller.selectedCount} listings
             </button>
           </div>
         </footer>
-      {:else if phase === 'sending'}
+      {:else if controller.phase === 'sending'}
         <p class="lead">
           Checking current orders and posting your listings. Other market activity can add waiting time.
         </p>
-<div class="spinner">{cancellationRequested ? 'Finishing the current request; unsent listings will stay saved.' : marketAccess.message ?? 'Sending…'}</div>
-        {#if networkError}<p class="ui-notice" data-tone="bad">{networkError}</p>{/if}
-        <button class="btn" onclick={stopSending} disabled={cancellationRequested}>Stop after current request</button>
-      {:else if phase === 'results'}
-        {#if durabilityError}
-          <p class="ui-notice" data-tone="bad" role="alert">{durabilityError}</p>
+<div class="spinner">{controller.cancellationRequested ? 'Finishing the current request; unsent listings will stay saved.' : controller.marketAccess.message ?? 'Sending…'}</div>
+        {#if controller.networkError}<p class="ui-notice" data-tone="bad">{controller.networkError}</p>{/if}
+        <button class="btn" onclick={controller.stopSending} disabled={controller.cancellationRequested}>Stop after current request</button>
+      {:else if controller.phase === 'results'}
+        {#if controller.durabilityError}
+          <p class="ui-notice" data-tone="bad" role="alert">{controller.durabilityError}</p>
         {/if}
         <p class="lead">
-          {durabilityError ? 'Batch results need attention.' : pendingCount > 0 ? 'Batch interrupted. Close this review and use Resume to revalidate the saved items.' : 'Done.'} <span class="ok">{okCount} created</span>
-          {#if updatedCount > 0}· <span class="ok">{updatedCount} updated</span>{/if}
-          {#if errCount > 0}· <span class="bad">{errCount} failed</span>{/if}
-          {#if pendingCount > 0}· <span class="warn">{pendingCount} saved for resume</span>{/if}.
-          {#if visibilityDone}
+          {controller.durabilityError ? 'Batch results need attention.' : controller.pendingCount > 0 ? 'Batch interrupted. Close this review and use Resume to revalidate the saved items.' : 'Done.'} <span class="ok">{controller.okCount} created</span>
+          {#if controller.updatedCount > 0}· <span class="ok">{controller.updatedCount} updated</span>{/if}
+          {#if controller.errCount > 0}· <span class="bad">{controller.errCount} failed</span>{/if}
+          {#if controller.pendingCount > 0}· <span class="warn">{controller.pendingCount} saved for resume</span>{/if}.
+          {#if controller.visibilityDone}
             Listings are <strong>visible</strong> - buyers can see them now.
           {:else}
             New listings start <strong>hidden</strong> - no buyers can see them
@@ -643,13 +249,13 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
           <table>
             <thead><tr><th></th><th>Item</th><th>Detail</th></tr></thead>
             <tbody>
-              {#each serverResults as r, i (i)}
+              {#each controller.serverResults as r, i (i)}
                 <tr>
                   <td class:ok={r.status === 'ok'} class:bad={r.status === 'error'} class:warn={r.status === 'pending' || r.status === 'uncertain_mutation'}>
                     {r.status === 'ok' ? '✓' : r.status === 'pending' || r.status === 'uncertain_mutation' ? '…' : '✗'}
                   </td>
                   <td>
-                    <span class="item-name">{planNameBySlug.get(r.slug) ?? r.slug}</span>
+                    <span class="item-name">{controller.planNameBySlug.get(r.slug) ?? r.slug}</span>
                     <span class="item-slug">{r.slug}</span>
                   </td>
                   <td class="muted">{r.message ?? r.order_id ?? ''}</td>
@@ -658,31 +264,31 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
             </tbody>
           </table>
         </div>
-        {#if visibilityResults.length > 0}
+        {#if controller.visibilityResults.length > 0}
           <p class="lead">
-            Visibility toggled. <span class="ok">{visibleOkCount} now visible</span>
-            {#if visibleErrCount > 0}· <span class="bad">{visibleErrCount} failed</span>{/if}.
+            Visibility toggled. <span class="ok">{controller.visibleOkCount} now visible</span>
+            {#if controller.visibleErrCount > 0}· <span class="bad">{controller.visibleErrCount} failed</span>{/if}.
           </p>
         {/if}
 
         <footer>
           <div></div>
           <div class="actions">
-            {#if okCount > 0 && !visibilityDone}
-              <button class="btn primary" onclick={makeAllVisible} disabled={visibilityBusy}>
-                {visibilityBusy ? 'Making visible…' : `Make ${okCount} visible`}
+            {#if controller.okCount > 0 && !controller.visibilityDone}
+              <button class="btn primary" onclick={controller.makeAllVisible} disabled={controller.visibilityBusy}>
+                {controller.visibilityBusy ? 'Making visible…' : `Make ${controller.okCount} visible`}
               </button>
             {/if}
-            <button class={visibilityDone ? 'btn primary' : 'btn ghost'} onclick={close}>Done</button>
+            <button class={controller.visibilityDone ? 'btn primary' : 'btn ghost'} onclick={controller.close}>Done</button>
           </div>
         </footer>
-      {:else if phase === 'error'}
-        <p class="lead bad">{networkError}</p>
+      {:else if controller.phase === 'error'}
+        <p class="lead bad">{controller.networkError}</p>
         <footer>
           <div></div>
           <div class="actions">
-            <button class="btn ghost" onclick={close}>Cancel</button>
-            <button class="btn primary" onclick={() => (phase = 'review')}>Back to review</button>
+            <button class="btn ghost" onclick={controller.close}>Cancel</button>
+            <button class="btn primary" onclick={() => (controller.phase = 'review')}>Back to review</button>
           </div>
         </footer>
       {/if}
