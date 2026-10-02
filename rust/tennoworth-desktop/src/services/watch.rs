@@ -66,6 +66,13 @@ pub(crate) fn price_for_watch(side: &str, price: f64) -> Option<i64> {
     }
 }
 
+pub(crate) fn is_rearmed(last_fired_at: Option<i64>, now: i64) -> bool {
+    match last_fired_at {
+        Some(last) => now - last >= REARM_AFTER_SECS,
+        None => true,
+    }
+}
+
 /// Judge one watch against its live top-of-book. `now` (unix seconds) decides
 /// re-arming.
 pub fn evaluate(w: &Watch, top: Option<&LiveTop>, now: i64) -> WatchOutcome {
@@ -82,10 +89,7 @@ pub fn evaluate(w: &Watch, top: Option<&LiveTop>, now: i64) -> WatchOutcome {
         ("buy", Some(p)) => p >= w.threshold,
         _ => false,
     };
-    let armed = match w.last_fired_at {
-        Some(t) => now - t >= REARM_AFTER_SECS,
-        None => true,
-    };
+    let armed = is_rearmed(w.last_fired_at, now);
     WatchOutcome {
         id: w.id,
         slug: w.slug.clone(),
@@ -267,6 +271,16 @@ mod tests {
             buyer_book: None,
         }
     }
+    #[test]
+    fn rearm_includes_the_boundary_and_rejects_recent_or_future_fires() {
+        assert!(is_rearmed(None, NOON));
+        assert!(!is_rearmed(Some(NOON), NOON));
+        assert!(!is_rearmed(Some(NOON + 1), NOON));
+        assert!(!is_rearmed(Some(NOON - REARM_AFTER_SECS + 1), NOON));
+        assert!(is_rearmed(Some(NOON - REARM_AFTER_SECS), NOON));
+        assert!(is_rearmed(Some(NOON - REARM_AFTER_SECS - 1), NOON));
+    }
+
     const NOON: i64 = 1_786_881_600; // 2026-08-16T12:00:00Z
 
     #[test]
