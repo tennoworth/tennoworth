@@ -708,13 +708,21 @@ timer_active="$("$SYSTEMCTL" show wfm-scrape.timer -p ActiveState --value 2>/dev
 next_elapse_raw="$("$SYSTEMCTL" show wfm-scrape.timer -p NextElapseUSecRealtime --value 2>/dev/null || true)"
 [ "$timer_enabled" = enabled ] || error "wfm-scrape.timer is ${timer_enabled:-unknown}, not enabled"
 [ "$timer_active" = active ] || error "wfm-scrape.timer is ${timer_active:-unknown}, not active"
+# While its sweep runs, systemd reports no next elapse for the timer: the next
+# one is scheduled when the run ends. Reading that as a broken timer turned
+# every check that landed mid-sweep - every other hour - into a false alert.
+sweep_state="$("$SYSTEMCTL" show wfm-scrape.service -p ActiveState --value 2>/dev/null || true)"
+sweep_running=false
+case "${sweep_state:-}" in
+  activating|active|deactivating|reloading) sweep_running=true;;
+esac
 next_elapse_epoch=""
 case "${next_elapse_raw:-}" in
-  ''|n/a) error "wfm-scrape.timer has no next elapse";;
+  ''|n/a) [ "$sweep_running" = true ] || error "wfm-scrape.timer has no next elapse";;
   *) next_elapse_epoch="$(iso_to_epoch "$next_elapse_raw")" || true;;
 esac
 if [ -z "${next_elapse_epoch:-}" ]; then
-  error "cannot read wfm-scrape.timer's next elapse"
+  [ "$sweep_running" = true ] || error "cannot read wfm-scrape.timer's next elapse"
 elif [ $((next_elapse_epoch + BOUNDARY_GRACE_SECONDS)) -lt "$NOW_EPOCH" ]; then
   error "wfm-scrape.timer missed its ${next_elapse_raw} boundary by over 15 minutes"
 fi
@@ -757,8 +765,10 @@ fi
 # warning; past it, the box is not ready until the deploy happens. A revision
 # the checkout does not know was deployed from develop ahead of main, which is
 # not lag.
+# rust/Cargo.lock is judged separately below: every desktop release bumps the
+# desktop package's own entry there, which says nothing about the scraper.
 SCRAPER_SOURCES=(
-  rust/wfm-scrape rust/wfm-client rust/market-math rust/Cargo.toml rust/Cargo.lock
+  rust/wfm-scrape rust/wfm-client rust/market-math rust/Cargo.toml
   deploy/run-scrape.sh deploy/wfm-scrape.service deploy/wfm-scrape.timer
   deploy/observations-check.sh deploy/wfm-observations-check.service deploy/wfm-observations-check.timer
 )
@@ -781,6 +791,65 @@ elif ! app_git merge-base --is-ancestor "$revision" HEAD 2>/dev/null; then
   warn "the deployed scraper ${revision:0:7} is not an ancestor of the checkout's $checkout_head"
 else
   pending="$(app_git log --format='%ct' "$revision..HEAD" -- "${SCRAPER_SOURCES[@]}" 2>/dev/null || true)"
+  # Cargo.lock counts only where the scraper's own dependency closure changed.
+  # A desktop version bump, or a dependency only the desktop pulls in, leaves it
+  # alone, and so does every other lock commit in the range: judging per commit
+  # keeps an old desktop bump from starting the grace clock for a newer change.
+  scraper_closure() {
+    # Keyed by name and version: the lock writes a dependency as "name" when it
+    # holds one version of that crate and as "name version" when it holds
+    # several, so following a bare name could pull a version only the desktop
+    # uses into the scraper's closure.
+    awk 'BEGIN { RS = ""; ORS = "\n\n" }
+      {
+        n = ""; v = ""
+        if (match($0, /\nname = "[^"]+"/)) n = substr($0, RSTART + 9, RLENGTH - 10)
+        if (match($0, /\nversion = "[^"]+"/)) v = substr($0, RSTART + 12, RLENGTH - 13)
+        key = n " " v
+        # A package identity, not its text: how the lock spells a dependency
+        # changes when a second version of that crate appears elsewhere.
+        ident = ""
+        nl = split($0, lines, "\n")
+        for (i = 1; i <= nl; i++) if (lines[i] ~ /^(name|version|source|checksum) = /) ident = ident lines[i] "\n"
+        rec[NR] = ident; keyof[NR] = key
+        versions[n]++; only[n] = key
+        in_deps = 0
+        for (i = 1; i <= nl; i++) {
+          line = lines[i]
+          if (line ~ /^dependencies = \[/) { in_deps = 1; continue }
+          if (in_deps && line ~ /^\]/) { in_deps = 0; continue }
+          if (in_deps) {
+            gsub(/^ *"|",? *$/, "", line); k = split(line, parts, " ")
+            deps[key] = deps[key] "\t" (k >= 2 ? parts[1] " " parts[2] : parts[1])
+          }
+        }
+      }
+      function resolve(d) { return (index(d, " ") ? d : (versions[d] == 1 ? only[d] : "")) }
+      END {
+        split("wfm-scrape wfm-client market-math", roots, " ")
+        for (r in roots) { k = resolve(roots[r]); if (k != "" && !(k in want)) { want[k] = 1; queue[++q] = k } }
+        for (h = 1; h <= q; h++) {
+          m = split(deps[queue[h]], ds, "\t")
+          for (j = 1; j <= m; j++) {
+            if (ds[j] == "") continue
+            k = resolve(ds[j])
+            if (k != "" && !(k in want)) { want[k] = 1; queue[++q] = k }
+          }
+        }
+        for (i = 1; i <= NR; i++) if (keyof[i] in want) print rec[i]
+      }'
+  }
+  lock_changes=""
+  while read -r commit committed; do
+    [ -n "$commit" ] || continue
+    if ! cmp -s <(app_git show "$commit^:rust/Cargo.lock" 2>/dev/null | scraper_closure) \
+                <(app_git show "$commit:rust/Cargo.lock" 2>/dev/null | scraper_closure); then
+      lock_changes="$lock_changes$committed"$'\n'
+    fi
+  done < <(app_git log --format='%H %ct' "$revision..HEAD" -- rust/Cargo.lock 2>/dev/null || true)
+  if [ -n "$lock_changes" ]; then
+    pending="$(printf '%s\n%s' "$pending" "$lock_changes" | grep -v '^$' | sort -u || true)"
+  fi
   if [ -z "$pending" ]; then
     deploy_lag="current"
   else

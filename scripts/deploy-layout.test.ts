@@ -1199,11 +1199,11 @@ function corpusFixture() {
     'if [ "$1" = "is-enabled" ]; then printf "%s\\n" "${FIXTURE_RETIRED:-disabled}"; exit 0; fi',
     'unit="$2"; prop="$4"',
     'case "$unit:$prop" in',
-    '  wfm-scrape.service:ActiveState) printf "inactive\\n";;',
+    '  wfm-scrape.service:ActiveState) printf "%s\\n" "${FIXTURE_SERVICE_STATE:-inactive}";;',
     '  wfm-scrape.service:Result) printf "%s\\n" "${FIXTURE_SERVICE_RESULT:-success}";;',
     '  wfm-scrape.timer:UnitFileState) printf "enabled\\n";;',
     '  wfm-scrape.timer:ActiveState) printf "active\\n";;',
-    '  wfm-scrape.timer:NextElapseUSecRealtime) printf "Fri 2026-09-18 06:30:00 UTC\\n";;',
+    '  wfm-scrape.timer:NextElapseUSecRealtime) printf "%s\\n" "${FIXTURE_NEXT_ELAPSE-Fri 2026-09-18 06:30:00 UTC}";;',
     'esac',
     'exit 0',
     '',
@@ -1390,6 +1390,17 @@ describe.skipIf(process.platform === 'win32')('observation corpus readiness', ()
     expect(f.report().errors.join('\n')).toContain('1 scheduled sweep(s) have no log');
   });
 
+  test('a sweep in progress, which leaves the timer no next elapse, is not a broken timer', () => {
+    // systemd schedules the next elapse when the run ends, so a check that lands
+    // mid-sweep sees none; reading that as an error alerted every other hour.
+    const f = corpusFixture();
+    const running = f.run({ FIXTURE_SERVICE_STATE: 'activating', FIXTURE_NEXT_ELAPSE: '' });
+    expect(running.status, running.stderr).toBe(0);
+    const stopped = f.run({ FIXTURE_SERVICE_STATE: 'inactive', FIXTURE_NEXT_ELAPSE: '' });
+    expect(stopped.status).not.toBe(0);
+    expect(f.report().errors.join('\n')).toContain('has no next elapse');
+  });
+
   describe('deployed scraper against the checkout', () => {
     // The box's checkout as pull-app.sh leaves it, with the deployed revision in
     // its history and the given commits on top, each `hoursAgo` before the
@@ -1434,6 +1445,45 @@ describe.skipIf(process.platform === 'win32')('observation corpus readiness', ()
       expect(result.status, result.stderr).toBe(0);
       expect(f.report().deployment.lag).toBe('behind');
       expect(f.report().warnings.join('\n')).toContain('1 scraper commit(s) behind');
+    });
+
+    test('the lock counts only where the scraper\'s own dependencies changed', () => {
+      const f = corpusFixture();
+      const app = join(f.box, 'app');
+      // A desktop that may gain a dependency of its own, and a scraper with one.
+      // desktopOnly adds xcap and a second csv the scraper does not use. With two
+      // csv versions in the lock, Cargo spells the scraper's dependency with its
+      // version, which changes the scraper's record text but not what it uses.
+      const lock = (desktop: string, scraperDep: string, desktopOnly = false) => [
+        `[[package]]\nname = "tennoworth-desktop"\nversion = "${desktop}"\ndependencies = [\n "wfm-client",${desktopOnly ? '\n "xcap",\n "csv 2.0.0",' : ''}\n]\n`,
+        `[[package]]\nname = "wfm-client"\nversion = "0.1.0"\n`,
+        `[[package]]\nname = "wfm-scrape"\nversion = "0.1.0"\ndependencies = [\n "${desktopOnly ? `csv ${scraperDep}` : 'csv'}",\n "wfm-client",\n]\n`,
+        `[[package]]\nname = "csv"\nversion = "${scraperDep}"\n`,
+        ...(desktopOnly ? [`[[package]]\nname = "csv"\nversion = "2.0.0"\n`, `[[package]]\nname = "xcap"\nversion = "0.8.3"\n`] : []),
+      ].join('\n');
+      const commit = (content: string, hoursAgo: number) => {
+        write(join(app, 'rust/Cargo.lock'), content);
+        git(app, 'add', 'rust/Cargo.lock');
+        const date = `@${FIXTURE_NOW - hoursAgo * 3600} +0000`;
+        execFileSync('git', ['commit', '-q', '-m', `lock ${hoursAgo}`], { cwd: app, env: { ...process.env, GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date } });
+      };
+      withCheckout(f, []);
+      commit(lock('0.8.4', '1.3.0'), 150);
+      const record = JSON.parse(readFileSync(join(f.box, 'deployed.json'), 'utf8'));
+      writeFileSync(join(f.box, 'deployed.json'), JSON.stringify({ ...record, revision: git(app, 'rev-parse', 'HEAD') }));
+
+      // A desktop version bump, then dependencies only the desktop uses -
+      // including another version of a crate the scraper also uses.
+      commit(lock('0.8.5', '1.3.0'), 40);
+      commit(lock('0.8.5', '1.3.0', true), 35);
+      expect(f.run().status).toBe(0);
+      expect(f.report().deployment).toMatchObject({ lag: 'current', pending_scraper_commits: 0 });
+
+      // A scraper dependency moves 2 h ago: lag, but still inside the grace -
+      // the older desktop-only commits must not start the clock.
+      commit(lock('0.8.5', '1.3.1', true), 2);
+      expect(f.run().status, f.report().errors.join('\n')).toBe(0);
+      expect(f.report().deployment).toMatchObject({ lag: 'behind', pending_scraper_commits: 1 });
     });
 
     test('a revision deployed ahead of the checkout is not lag', () => {
