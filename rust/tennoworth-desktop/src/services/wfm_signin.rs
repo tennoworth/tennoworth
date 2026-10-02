@@ -17,7 +17,7 @@ use tauri::webview::Cookie;
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 use wfm_core::trading::auth::jwt_is_signed_in;
 
-use super::wfm_session::CmdError;
+use crate::command_error::CmdError;
 
 const LABEL: &str = "wfm-signin";
 const SIGNIN_URL: &str = "https://warframe.market/auth/signin";

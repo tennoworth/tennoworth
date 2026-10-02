@@ -25,7 +25,8 @@ use wfm_core::trading::plan::{
 };
 
 use crate::persistence::Db;
-use crate::services::wfm_session::{CmdError, WfmSession};
+use crate::command_error::CmdError;
+use crate::services::wfm_session::WfmSession;
 
 const PLAN_BUSY_MSG: &str = "A listing plan is already running - wait for it to finish.";
 

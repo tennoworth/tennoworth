@@ -4,7 +4,7 @@ use market_domain::bindings::TypeScript;
 fn desktop_bindings_match_rust() {
     let mut types = TypeScript::default();
     types.add::<wfm_client::governor::AccessStatus>();
-    types.add::<crate::services::wfm_session::CmdError>();
+    types.add::<crate::command_error::CmdError>();
     types.add::<crate::services::watch::WatchOutcome>();
     types.add::<crate::services::auto_scan::AutoScanSettings>();
     types.add::<crate::services::auto_scan::AutoScanStatus>();
@@ -14,7 +14,7 @@ fn desktop_bindings_match_rust() {
         "\nexport const WATCH_FIRED_EVENT = {:?} as const;\n",
         crate::services::watch::EVENT_WATCH_FIRED
     ));
-    expected.push_str(&format!("\nexport const WFM_ACCESS_EVENT = {:?} as const;\n", crate::services::wfm_session::WFM_ACCESS_EVENT));
+    expected.push_str(&format!("\nexport const WFM_ACCESS_EVENT = {:?} as const;\n", crate::commands::auth::WFM_ACCESS_EVENT));
     expected.push_str(&format!(
         "\nexport const INVENTORY_SCANNED_EVENT = {:?} as const;\n",
         crate::services::acquisition::EVENT_INVENTORY_SCANNED
@@ -60,7 +60,7 @@ fn desktop_bindings_match_rust() {
 
 #[test]
 fn auth_error_serialization_keeps_the_frontend_contract() {
-    let error = crate::services::wfm_session::CmdError::needs_login();
+    let error = crate::command_error::CmdError::needs_login();
     let json = serde_json::to_value(error).expect("error json");
     assert_eq!(json["code"], "needs_login");
     assert!(json["message"].is_string());

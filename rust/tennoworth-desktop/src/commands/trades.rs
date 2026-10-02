@@ -4,7 +4,7 @@ use tauri::{AppHandle, Manager, State};
 
 use crate::persistence::{Db, TradeRow};
 use crate::services::eelog_state::EeLogState;
-use crate::services::wfm_session::CmdError;
+use crate::command_error::CmdError;
 
 #[tauri::command]
 pub fn trade_session_state(

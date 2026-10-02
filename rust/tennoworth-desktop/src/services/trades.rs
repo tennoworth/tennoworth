@@ -222,7 +222,7 @@ pub enum LedgerOutcome {
     Failed(String),
 }
 
-fn unavailable_adjustment_follow_up(error: &crate::services::wfm_session::CmdError) -> &'static str {
+fn unavailable_adjustment_follow_up(error: &crate::command_error::CmdError) -> &'static str {
     match error.code {
         "busy" => "Another order change blocked the automatic adjustment for this sale. Review My Orders after it finishes; the sold listing was not adjusted.",
         "needs_login" | "needs_unlock" => "Sign in or unlock your market login to review sell orders.",
@@ -610,12 +610,12 @@ mod tests {
     #[test]
     fn unavailable_adjustment_distinguishes_auth_from_other_failures() {
         for error in [
-            crate::services::wfm_session::CmdError::needs_login(),
-            crate::services::wfm_session::CmdError::needs_unlock(),
+            crate::command_error::CmdError::needs_login(),
+            crate::command_error::CmdError::needs_unlock(),
         ] {
             assert!(unavailable_adjustment_follow_up(&error).contains("Sign in or unlock"));
         }
-        let error = crate::services::wfm_session::CmdError::internal("temporary failure");
+        let error = crate::command_error::CmdError::internal("temporary failure");
         assert!(unavailable_adjustment_follow_up(&error).contains("Review My Orders"));
         assert!(!unavailable_adjustment_follow_up(&error).contains("Sign in"));
     }

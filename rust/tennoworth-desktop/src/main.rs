@@ -1,5 +1,6 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod command_error;
 mod commands;
 mod game_events;
 mod notification_contract;
@@ -11,5 +12,5 @@ mod vision;
 mod shell;
 
 fn main() {
-    shell::run();
+    shell::run(commands::auth::publish_access_changes);
 }

@@ -22,7 +22,8 @@ use std::sync::Arc;
 
 use wfm_core::trading::plan::PlanGuard;
 
-use crate::services::wfm_session::{CmdError, WfmSession};
+use crate::command_error::CmdError;
+use crate::services::wfm_session::WfmSession;
 
 /// The account-mutation coordinator.
 pub struct OrderMutations {
