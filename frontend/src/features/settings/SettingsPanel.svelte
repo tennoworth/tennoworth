@@ -41,6 +41,9 @@ import { type UpdateStatus } from '../../contracts/update';
   let loggingOut = $state(false);
   let logoutError = $state('');
   let savingAutoScan = $state(false);
+  let statusGeneration = 0;
+  let statusPolling = false;
+  let disposed = false;
   // Diagnostics are for when recognition breaks, so they start collapsed -
   // unless they are already on, when their warning must stay in view.
   let troubleshootingOpen = $state(false);
@@ -57,6 +60,7 @@ import { type UpdateStatus } from '../../contracts/update';
   async function showSection(loaded: Promise<unknown>) {
     if (!section) return;
     await loaded;
+    if (disposed) return;
     await tick();
     const target = document.getElementById(`settings-${section}`);
     target?.scrollIntoView({ block: 'start' });
@@ -64,14 +68,25 @@ import { type UpdateStatus } from '../../contracts/update';
     onsectionshown?.();
   }
 
+  async function refreshOverlayStatus(read?: () => Promise<OverlayStatus>): Promise<void> {
+    if (!transport || disposed) return;
+    const generation = ++statusGeneration;
+    const next = await (read ? read() : transport.overlayStatus());
+    if (!disposed && generation === statusGeneration) overlayStatus = next;
+  }
+
   onMount(() => {
     if (!transport) { void showSection(Promise.resolve()); return; }
-    const initial = () => Promise.all([transport.getOverlaySettings(), transport.overlayStatus()])
-      .then(([settings, status]) => { overlay = settings; overlayStatus = status; troubleshootingOpen = settings.diagnostics; })
-      .catch((error) => { overlayError = String(error); });
-    const refreshStatus = () => transport.overlayStatus()
-      .then((status) => { overlayStatus = status; })
-      .catch(() => {});
+    const initial = () => Promise.all([transport.getOverlaySettings(), refreshOverlayStatus()])
+      .then(([settings]) => { if (!disposed) { overlay = settings; troubleshootingOpen = settings.diagnostics; } })
+      .catch((error) => { if (!disposed) overlayError = String(error); });
+    const refreshStatus = async () => {
+      if (!overlay || statusPolling || savingOverlay || disposed) return;
+      statusPolling = true;
+      try { await refreshOverlayStatus(); }
+      catch { /* The next poll retries while the last status remains visible. */ }
+      finally { statusPolling = false; }
+    };
     void showSection(initial());
     const timer = window.setInterval(() => {
       void refreshStatus();
@@ -79,7 +94,7 @@ import { type UpdateStatus } from '../../contracts/update';
       // and why the last one failed.
       void autoScan?.refreshStatus();
     }, 1000);
-    return () => window.clearInterval(timer);
+    return () => { disposed = true; window.clearInterval(timer); };
   });
 
   /** What the background loop is doing right now, in the user's terms. */
@@ -138,11 +153,10 @@ import { type UpdateStatus } from '../../contracts/update';
     const wasEnabled = overlay?.enabled ?? false;
     overlayError = '';
     savingOverlay = true;
+    statusGeneration++;
     try {
       overlay = await transport.updateOverlaySettings(next);
-      overlayStatus = !wasEnabled && overlay.enabled
-        ? await transport.setupOverlayCapture()
-        : await transport.overlayStatus();
+      await refreshOverlayStatus(!wasEnabled && overlay.enabled ? () => transport!.setupOverlayCapture() : undefined);
     } catch (error) {
       overlayError = error instanceof Error ? error.message : String(error);
     } finally {
@@ -155,7 +169,7 @@ import { type UpdateStatus } from '../../contracts/update';
     overlayError = '';
     try {
       await transport.scanOverlayNow();
-      overlayStatus = await transport.overlayStatus();
+      await refreshOverlayStatus();
     } catch (error) {
       overlayError = error instanceof Error ? error.message : String(error);
     }
@@ -166,7 +180,7 @@ import { type UpdateStatus } from '../../contracts/update';
     overlayError = '';
     try {
       await transport.previewRelicOverlay();
-      overlayStatus = await transport.overlayStatus();
+      await refreshOverlayStatus();
     } catch (error) {
       overlayError = error instanceof Error ? error.message : String(error);
     }
@@ -178,7 +192,7 @@ import { type UpdateStatus } from '../../contracts/update';
     try {
       if (action === 'open') await transport.openOverlayDiagnostics();
       else await transport.clearOverlayDiagnostics();
-      overlayStatus = await transport.overlayStatus();
+      await refreshOverlayStatus();
     } catch (error) {
       overlayError = error instanceof Error ? error.message : String(error);
     }
