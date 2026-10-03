@@ -1,5 +1,5 @@
 import { callDomain } from './domain-commands';
-import type { Market, OwnedRecord } from '../contracts/data';
+import type { BaroStock, Market, OwnedRecord } from '../contracts/data';
 import type { BuildPath, BuildPlan, DucatPlan, RecipeEntry, RelicPlanEntry, ScrapCandidate, SetPart, SetReco } from '../contracts/generated/domain';
 
 function records(owned: Map<string, OwnedRecord> | null | undefined) {
@@ -19,4 +19,8 @@ export async function ducatPlan(owned: Map<string, OwnedRecord> | null, market: 
 }
 export function buildPlan(setSlug: string, setName: string, parts: SetPart[], market: Market | null, owned: Map<string, OwnedRecord> | null, recipes: Record<string, RecipeEntry> | null | undefined): Promise<{ plan: BuildPlan; cheapest: BuildPath | null }> {
   return callDomain('build_plan', { setSlug, setName, parts, market, owned: records(owned), recipes: recipes ?? null });
+}
+
+export function baroValue(stock: BaroStock[], market: Market | null, owned: Map<string, OwnedRecord> | null) {
+  return callDomain('baro_value', { stock, market, owned: owned ? records(owned) : null });
 }

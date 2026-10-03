@@ -31,7 +31,19 @@ lastError: string | null,
  */
 nextCheckAt: number | null, };
 
+export type BaroNotification = { location: string, activation: string, expiry: string, stock_count: number | null, value: BaroNotificationValue | null, held: Array<string>, };
+
+export type BaroNotificationValue = { best: Array<BaroPick>, more_tradeable: number, price_at: string, prices_stale: boolean, fodder_ducats: number | null, fodder_items: number | null, cheap_fodder: number | null, };
+
+export type BaroPick = { name: string, platPerDucat: number, };
+
 export type CmdError = { code: string, message: string, };
+
+export type DigestNotification = { opportunities: Array<DigestOpportunity>, inventory_at: string, price_at: string, };
+
+export type DigestOpportunity = { name: string, quantity: number, price: number, };
+
+export type NotificationContent = { "kind": "baro" } & BaroNotification | { "kind": "digest" } & DigestNotification;
 
 export type OrderSide = "sell" | "buy";
 

@@ -8,11 +8,12 @@
   //
   // Sorted by plat-per-ducat, because "what are my ducats worth this rotation"
   // is the question, and his shelf order answers a different one.
-  import { byPlatPerDucat, ducatBasket, priceManifest, stockIsCurrent } from '../../domain/baro-board';
-  import type { BaroVerdict } from '../../domain/baro-board';
+  import { ducatBasket, stockIsCurrent } from '../../domain/baro-board';
+  import type { BaroValue, BaroVerdict } from '../../contracts/generated/domain';
+  import { DomainResult } from '../selling/domain-result.svelte';
   import type { DucatPlan, ScrapCandidate } from '../../contracts/generated/domain';
   import { useDesktopServices } from '../../ui/desktop-context';
-  const { ducatPlan } = useDesktopServices();
+  const { ducatPlan, baroValue } = useDesktopServices();
   import { glyphFor } from '../../ui/glyphs';
   import { plat } from '../../ui/format';
   import type { Market, OwnedRecord } from '../../contracts/data';
@@ -42,7 +43,13 @@
   let showAll = $state(false);
 
   let current = $derived(stockIsCurrent(baro?.inventory_for, baro?.activation));
-  let rows = $derived(byPlatPerDucat(priceManifest(baro?.inventory ?? [], market)));
+  const valueResult = new DomainResult<BaroValue | null>(() => null);
+  $effect(() => {
+    const stock = baro?.inventory ?? [];
+    const snapshot = market;
+    return valueResult.start(() => baroValue(stock, snapshot, null));
+  });
+  let rows = $derived(valueResult.value?.rows ?? []);
   // Everything the user could feed the kiosk, and what that would yield. This
   // is a POTENTIAL, not a balance.
   let candidates = $state<ScrapCandidate[]>([]);
@@ -104,9 +111,12 @@
 <section class="wrap tw board">
   <div class="rail"><h3>What he is selling</h3></div>
   <div class="board-body">
+  {#if valueResult.phase === 'loading'}<p role="status">Pricing Baro's stock…</p>{/if}
+  {#if valueResult.phase === 'error'}<p class="ui-notice" data-tone="bad" role="alert">Stock pricing unavailable. Try reopening the Baro board.</p>{/if}
   {#if unavailableItems}<p class="ui-notice" data-tone="warn">Scrap quantities unavailable for {unavailableItems} {unavailableItems === 1 ? 'item' : 'items'}. {quantitiesUnavailable ? 'Recheck protection to calculate scrap potential.' : 'Scrap totals include only items with known quantities.'}</p>{/if}
   {#if scrapLoading}<p role="status">Calculating scrap plan…</p>{/if}
   {#if scrapError}<p class="ui-notice" data-tone="bad" role="alert">{scrapError}</p>{/if}
+  {#if valueResult.phase === 'done'}
   <header class="board-head">
     <p class="sub">
       {rows.length} {rows.length === 1 ? 'item' : 'items'} · ranked by plat returned per ducat spent.
@@ -115,6 +125,7 @@
       {/if}
     </p>
   </header>
+  {/if}
 
   {#if basket.needed > 0}
     <p class="gap">
@@ -136,6 +147,7 @@
     {/if}
   {/if}
 
+  {#if valueResult.phase === 'done'}
   <div class="scroll">
     <table>
       <thead>
@@ -168,10 +180,11 @@
             </td>
           </tr>
         {/each}
-        {#if shown.length === 0}<tr><td colspan="7" class="empty">No items in the current value filter. Use the button below to include poor-value or untradeable stock.</td></tr>{/if}
+        {#if shown.length === 0 && valueResult.phase === 'done'}<tr><td colspan="7" class="empty">No items in the current value filter. Use the button below to include poor-value or untradeable stock.</td></tr>{/if}
       </tbody>
     </table>
   </div>
+  {/if}
 
   {#if scrapPlan && scrapPlan.picks.length}
     <details class="scrap">

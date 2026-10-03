@@ -1719,5 +1719,76 @@
         "recipesKnown": false
       }
     }
+  },
+{
+  "name": "Baro arrival value",
+  "operation": "baro_value",
+  "input": {
+    "stock": [
+      {
+        "item": "Primed Flow",
+        "slug": "primed_flow",
+        "ducats": 350
+      },
+      {
+        "item": "Cosmetic",
+        "ducats": 200
+      }
+    ],
+    "market": {
+      "items": {
+        "primed_flow": {
+          "low5_avg": 140,
+          "median_90d": 200,
+          "vol": 40
+        },
+        "part": {
+          "ducats": 45,
+          "low_sell": 3
+        }
+      }
+    },
+    "owned": [
+      {
+        "slug": "part",
+        "name": "Part",
+        "count": 4,
+        "subtype": null
+      }
+    ]
+  },
+  "expected": {
+    "rows": [
+      {
+        "item": "Primed Flow",
+        "slug": "primed_flow",
+        "ducats": 350,
+        "price": 140,
+        "baseline": 200,
+        "vol": 40,
+        "platPerDucat": 0.4,
+        "verdict": "hold"
+      },
+      {
+        "item": "Cosmetic",
+        "ducats": 200,
+        "price": null,
+        "baseline": null,
+        "vol": null,
+        "platPerDucat": null,
+        "verdict": "unpriced"
+      }
+    ],
+    "best": [
+      {
+        "name": "Primed Flow",
+        "platPerDucat": 0.4
+      }
+    ],
+    "moreTradeable": 0,
+    "fodderDucats": 180,
+    "fodderItems": 4,
+    "cheapFodder": 4
   }
+}
 ]

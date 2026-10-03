@@ -244,7 +244,21 @@ rendering in both engines when changing the pattern.
 ## Notification history
 
 Desktop history uses `.notification-entry` rows with a raised unread surface,
-explicit Read/Unread text, timestamp, evidence, and navigation to the next step.
+explicit Read/Unread text, evidence, and navigation to the next step. Rows lead
+with the title and category/read state; the exact local time has its own aligned
+column beside the title, with the day and short date below. At narrow widths the
+time moves below the title rather than into the message. History groups by local
+calendar day, including Today and Yesterday, with the absolute date on each
+heading. Day labels update while the view remains open.
+
+Structured Baro notices separate visit context, value picks, and a three-part
+ducat yield strip. Held stock names and the published schedule use disclosures;
+keep-rule guidance and resale uncertainty remain visible. Digest rows align
+item names/quantities with estimated unit prices, retaining inventory and price
+evidence and exact timestamps. Stored prose is shown whole when structured
+details are absent or unreadable. The shared `NotificationRow.svelte` owns this
+presentation for the inbox and living reference; do not parse popup text into
+facts. Toolbars wrap, with the unread filter and history count at the far edge.
 Read entries retain full text contrast. Native delivery failures remain visible
 in the inbox; a transient popup is never the only record. Category controls and
 popup preferences use labeled checkboxes, with disabled states kept readable.

@@ -1,0 +1,74 @@
+{
+  "now": "2026-09-04T13:00:00Z",
+  "market": {
+    "updated_at": "2026-09-04T13:00:00Z",
+    "surface_provenance": {
+      "baro": {
+        "data_fetched_at": "2026-09-04T13:00:00Z"
+      }
+    },
+    "baro": {
+      "activation": "2026-09-04T13:00:00Z",
+      "expiry": "2026-09-06T13:00:00Z",
+      "inventory_for": "2026-09-04T13:00:00Z",
+      "location": "Pluto Relay",
+      "inventory": [
+        {
+          "item": "Primed Flow",
+          "slug": "primed_flow",
+          "ducats": 350
+        }
+      ]
+    },
+    "items": {
+      "primed_flow": {
+        "low5_avg": 100,
+        "median_90d": 200,
+        "vol": 30
+      },
+      "ivara_prime_neuroptics_blueprint": {
+        "ducats": 45,
+        "low_sell": 3
+      }
+    }
+  },
+  "owned": [
+    {
+      "slug": "ivara_prime_neuroptics_blueprint",
+      "name": "Ivara Prime Neuroptics Blueprint",
+      "count": 4,
+      "subtype": null
+    },
+    {
+      "slug": "primed_flow",
+      "name": "Primed Flow",
+      "count": 1,
+      "subtype": null
+    }
+  ],
+  "expected_body": "Pluto Relay \u00b7 Published schedule: 2026-09-04T13:00:00Z to 2026-09-06T13:00:00Z. 1 stock items. Best value at snapshot asking prices: Primed Flow 0.29p/ducat. Prices: 2026-09-04T13:00:00Z. Arrival can depress prices; resale is not guaranteed. Ducat yield from all copies held: 180d across 4 items (4 priced under 4p each at snapshot asks). Check keep rules in the planner before scrapping. You hold: Primed Flow. Open Baro for stock and the ducat planner.",
+  "expected_content": {
+    "kind": "baro",
+    "location": "Pluto Relay",
+    "activation": "2026-09-04T13:00:00Z",
+    "expiry": "2026-09-06T13:00:00Z",
+    "stock_count": 1,
+    "value": {
+      "best": [
+        {
+          "name": "Primed Flow",
+          "platPerDucat": 0.2857142857142857
+        }
+      ],
+      "more_tradeable": 0,
+      "price_at": "2026-09-04T13:00:00Z",
+      "prices_stale": false,
+      "fodder_ducats": 180.0,
+      "fodder_items": 4.0,
+      "cheap_fodder": 4.0
+    },
+    "held": [
+      "Primed Flow"
+    ]
+  }
+}

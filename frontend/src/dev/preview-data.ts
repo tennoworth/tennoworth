@@ -1,3 +1,6 @@
+import baroNotice from '../../../tests/fixtures/notifications/baro.json';
+import digestNotice from '../../../tests/fixtures/notifications/digest.json';
+import type { NotificationEntry } from '../contracts/desktop';
 import type { OwnedRiven } from '../domain/rivens';
 import { serializeSnapshot } from '../domain/snapshot';
 import { sampleAllocation, sampleGuidance } from './protection-preview';
@@ -46,7 +49,17 @@ export function createPreview(scenario: string) {
   // scan holds set parts, never the assembled set.
   const unownedSample = scenario === 'orders-unowned';
   if (sessionSample) settings.set('view', 'session');
-  let notifications = empty ? [] : [{ id: 1, category: 'trades', title: 'Sold Pyrana Prime Set for 90p', body: 'Pyrana Prime Set ×1 · Listing update failed; review My Orders. Your completed trade is saved in the Ledger.', target: 'orders', created_at: Math.floor(Date.now() / 1000), read: false, delivery: 'failed' }];
+  let notifications: NotificationEntry[] = empty ? [] : [{ id: 1, category: 'trades', title: 'Sold Pyrana Prime Set for 90p', body: 'Pyrana Prime Set ×1 · Listing update failed; review My Orders. Your completed trade is saved in the Ledger.', target: 'orders', created_at: Math.floor(Date.now() / 1000), read: false, delivery: 'failed' }];
+  if (scenario === 'notifications') {
+    const yesterday = new Date(now * 1000);
+    yesterday.setDate(yesterday.getDate() - 1);
+    notifications = [
+      { id: 4, category: 'baro', title: "Baro Ki'Teer is here", body: baroNotice.expected_body, target: 'baro', created_at: now, read: false, delivery: 'sent', content: baroNotice.expected_content } as NotificationEntry,
+      { id: 3, category: 'digest', title: "Today's sell opportunities", body: 'Estimated market values, not guaranteed sales.', target: 'sell', created_at: now - 300, read: true, delivery: 'inbox_only', content: digestNotice.expected_content } as NotificationEntry,
+      ...notifications,
+      { id: 2, category: 'calendar', title: 'Saved calendar reminder', body: 'Full saved context from before structured notification details. A deliberately long item identity remains readable in the history.', target: 'routines', created_at: yesterday.getTime() / 1000, read: true, delivery: 'pending' },
+    ];
+  }
   let notificationPreferences = { popups: true, categories: Object.fromEntries(['trades', 'watches', 'baro', 'calendar', 'digest'].map(k => [k, { enabled: true, native: true }])) };
   const responses: Record<string, unknown> = {
     fetch_orders: empty || scenario.startsWith('buyers') ? [] : [

@@ -8,6 +8,49 @@
 //! in the service, storage had to reach upward for the very shapes it persists.
 
 use std::collections::BTreeMap;
+use ts_rs::TS;
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum NotificationContent {
+    Baro(BaroNotification),
+    Digest(DigestNotification),
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, TS)]
+pub struct BaroNotification {
+    pub location: String,
+    pub activation: String,
+    pub expiry: String,
+    pub stock_count: Option<usize>,
+    pub value: Option<BaroNotificationValue>,
+    pub held: Vec<String>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, TS)]
+pub struct BaroNotificationValue {
+    pub best: Vec<market_domain::baro::BaroPick>,
+    pub more_tradeable: usize,
+    pub price_at: String,
+    pub prices_stale: bool,
+    pub fodder_ducats: Option<f64>,
+    pub fodder_items: Option<f64>,
+    pub cheap_fodder: Option<f64>,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, TS)]
+pub struct DigestNotification {
+    pub opportunities: Vec<DigestOpportunity>,
+    pub inventory_at: String,
+    pub price_at: String,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize, TS)]
+pub struct DigestOpportunity {
+    pub name: String,
+    pub quantity: i64,
+    pub price: f64,
+}
 
 pub const CATEGORIES: &[&str] = &["trades", "watches", "baro", "calendar", "digest"];
 
@@ -55,6 +98,7 @@ pub struct Notification {
     pub created_at: i64,
     pub read: bool,
     pub delivery: String,
+    pub content: Option<NotificationContent>,
 }
 #[derive(Clone, Debug)]
 pub struct Candidate {
@@ -66,6 +110,7 @@ pub struct Candidate {
     pub title: String,
     pub body: String,
     pub target: String,
+    pub content: Option<NotificationContent>,
 }
 impl Candidate {
     pub fn once(
@@ -85,6 +130,7 @@ impl Candidate {
             title,
             body,
             target: target.into(),
+            content: None,
         }
     }
 }

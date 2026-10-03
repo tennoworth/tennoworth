@@ -1,0 +1,40 @@
+{
+  "now": "2026-09-04T18:00:00Z",
+  "market": {
+    "updated_at": "2026-09-04T18:00:00Z"
+  },
+  "inventory_at": "2026-09-04T17:00:00Z",
+  "rows": [
+    {
+      "name": "Arcane Energize",
+      "slug": "arcane_energize",
+      "sellable_qty": 12,
+      "price": 48.0,
+      "score": 576.0
+    },
+    {
+      "name": "Pyrana Prime Set",
+      "slug": "pyrana_prime_set",
+      "sellable_qty": 3,
+      "price": 90.0,
+      "score": 270.0
+    }
+  ],
+  "expected_content": {
+    "kind": "digest",
+    "opportunities": [
+      {
+        "name": "Arcane Energize",
+        "quantity": 12,
+        "price": 48.0
+      },
+      {
+        "name": "Pyrana Prime Set",
+        "quantity": 3,
+        "price": 90.0
+      }
+    ],
+    "inventory_at": "2026-09-04T17:00:00Z",
+    "price_at": "2026-09-04T18:00:00Z"
+  }
+}

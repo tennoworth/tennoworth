@@ -34,7 +34,7 @@ if (access?.revision !== 0 || typeof access?.queue_count !== 'number')
   problems.push('WFM access status contract is incomplete');
 if (report.usageExcluded !== true) problems.push('probe usage reporting was not excluded or private settings were exposed');
 if (report.domainRejectedInvalid !== true) problems.push('invalid native domain quantities were not rejected');
-const expectedDomainOperations = ['normalize_inventory', 'score_inventory', 'trade_session', 'advisor', 'history', 'relic_plan', 'set_recos', 'ducat_plan', 'build_plan'];
+const expectedDomainOperations = ['normalize_inventory', 'score_inventory', 'trade_session', 'advisor', 'history', 'relic_plan', 'set_recos', 'ducat_plan', 'build_plan', 'baro_value'];
 if (JSON.stringify(report.domainOperations) !== JSON.stringify(expectedDomainOperations))
   problems.push('native domain operations did not all match their shared fixtures');
 if (report.done !== true) problems.push("done is not true (run did not complete)");

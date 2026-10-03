@@ -81,3 +81,51 @@ test('notification row reference uses both themes and preserves its read toggle'
     await reference.screenshot({ path: testInfo.outputPath(`reference-${mode}.png`) });
   }
 });
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`${theme} organized history separates timestamps and preserves structured facts`, async ({ page }, testInfo) => {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.clock.setFixedTime(new Date('2026-09-04T19:00:00Z'));
+    await page.goto('/?preview-desktop&sample=notifications');
+    await page.locator('.sidebar').getByRole('button', { name: /^Notifications/ }).click();
+    const baro = page.getByRole('article', { name: "Baro Ki'Teer is here", exact: true });
+    const digest = page.getByRole('article', { name: "Today's sell opportunities", exact: true });
+    await expect(page.getByRole('heading', { name: 'Today', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Yesterday', exact: true })).toBeVisible();
+    await expect(baro.locator('.yield-strip')).toContainText('180d');
+    await expect(digest).toContainText('Arcane Energize ×12');
+    await expect(digest).toContainText('~48p each');
+    await expect(page.locator('.notification-entry .body').last()).toContainText('Full saved context from before structured notification details.');
+    await baro.getByText('You hold 1 item from this stock', { exact: true }).click();
+    await expect(baro.locator('.holding-list')).toContainText('Primed Flow');
+    await baro.getByText('Published schedule', { exact: true }).click();
+    await expect(baro.locator('.schedule-details')).toContainText('2026-09-04T13:00:00Z');
+    for (const width of [1440, 768, 561, 560, 320]) {
+      await page.setViewportSize({ width, height: 480 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+      const title = await baro.locator('.entry-title').boundingBox();
+      const time = await baro.locator('.entry-time').boundingBox();
+      expect(title).not.toBeNull(); expect(time).not.toBeNull();
+      if (width > 560) expect(time!.x).toBeGreaterThanOrEqual(title!.x + title!.width);
+      else expect(time!.y).toBeGreaterThanOrEqual(title!.y + title!.height);
+      await expect(baro.locator('.holding-list')).toBeVisible();
+      await baro.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: testInfo.outputPath(`organized-${theme}-${width}.png`), fullPage: true });
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await baro.getByRole('button', { name: 'Mark read', exact: true }).click();
+    await expect(baro.getByText('Read · Baro', { exact: true })).toBeVisible();
+    await expect(baro.locator('.holding-list')).toBeVisible();
+    await expect(baro.locator('.schedule-details')).toHaveAttribute('open', '');
+    await page.getByLabel('Unread only').check();
+    await expect(baro).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Yesterday', exact: true })).toHaveCount(0);
+    await page.getByLabel('Unread only').uncheck();
+    await page.getByRole('button', { name: 'Clear history', exact: true }).click();
+    await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+    await expect(digest).toBeVisible();
+    await page.getByRole('button', { name: 'Clear history', exact: true }).click();
+    await page.getByRole('button', { name: 'Clear notifications', exact: true }).click();
+    await expect(page.getByText('No notifications yet.', { exact: false })).toBeVisible();
+  });
+}
