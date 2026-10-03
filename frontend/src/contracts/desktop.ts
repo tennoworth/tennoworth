@@ -26,7 +26,7 @@ export interface MarketRefreshResult {
  */
 export type { AutoScanSettings, AutoScanStatus } from './generated/desktop';
 export { AUTO_SCAN_CADENCE_CHOICES } from './generated/desktop';
-import type { AutoScanSettings, AutoScanStatus } from './generated/desktop';
+import type { AutoScanSettings, AutoScanStatus, NotificationContent } from './generated/desktop';
 
 export interface MarketCapability {
   loadCachedMarket(): Promise<Market | null>;
@@ -260,6 +260,7 @@ export interface NotificationEntry {
   id: number; category: NotificationCategory; title: string; body: string;
   target: NotificationTarget; created_at: number; read: boolean;
   delivery: 'pending' | 'sent' | 'failed' | 'inbox_only';
+  content?: NotificationContent | null;
 }
 
 export interface NotificationPreferences {

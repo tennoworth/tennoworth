@@ -558,16 +558,19 @@ for (const theme of ['light', 'dark'] as const) {
     await page.route('**/market.json', route => route.fulfill({ json: { ...baseMarket, ...baroFixture.market } }));
     await page.goto('/?preview-desktop&sample');
     await previewShell(page);
-    await page.evaluate(body => {
+    await page.evaluate(notice => {
       const runtime = window as unknown as { __TAURI__: { core: { invoke: (cmd: string, args?: unknown) => Promise<unknown> } }; __TAURI_INTERNALS__: { invoke: (cmd: string, args?: unknown) => Promise<unknown> } };
       const original = runtime.__TAURI__.core.invoke;
-      const invoke = (cmd: string, args?: unknown) => cmd === 'list_notifications' ? Promise.resolve([{ id: 7, category: 'baro', title: "Baro Ki'Teer is here", body, target: 'baro', created_at: Date.now() / 1000, read: false, delivery: 'delivered' }]) : original(cmd, args);
+      const invoke = (cmd: string, args?: unknown) => cmd === 'list_notifications' ? Promise.resolve([{ id: 7, category: 'baro', title: "Baro Ki'Teer is here", body: notice.expected_body, content: notice.expected_content, target: 'baro', created_at: Date.now() / 1000, read: false, delivery: 'sent' }]) : original(cmd, args);
       runtime.__TAURI__.core.invoke = invoke;
       runtime.__TAURI_INTERNALS__.invoke = invoke;
-    }, baroFixture.expected_body);
+    }, baroFixture);
     await page.locator('.sidebar').getByRole('button', { name: /^Notifications/ }).click();
-    const body = page.locator('.notification-entry .body');
-    await expect(body).toHaveText(baroFixture.expected_body);
+    const body = page.locator('.notification-entry .entry-content');
+    await expect(body).toContainText('Primed Flow');
+    await expect(body).toContainText('0.29p/ducat');
+    await expect(body.locator('.yield-strip')).toContainText('180d');
+    await expect(body).toContainText('Arrival can depress prices; resale is not guaranteed.');
     for (const width of [1440, 768, 320]) {
       await page.setViewportSize({ width, height: 480 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

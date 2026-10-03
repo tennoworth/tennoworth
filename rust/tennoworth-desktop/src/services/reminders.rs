@@ -1,6 +1,7 @@
 //! Clock-driven reminders use the same cached snapshot as the desktop, never a
 //! second upstream feed. A visit's carried stock is not evidence of current stock.
 use crate::{
+    notification_contract::{BaroNotification, BaroNotificationValue, DigestNotification, DigestOpportunity, NotificationContent},
     persistence::Db,
     services::market::{self, MarketCache},
     services::notifications::{self, Candidate},
@@ -174,8 +175,17 @@ pub fn scheduled(
                     string(baro, "activation"),
                     string(baro, "expiry")
                 );
+                let mut content = BaroNotification {
+                    location: string(baro, "location").into(),
+                    activation: string(baro, "activation").into(),
+                    expiry: string(baro, "expiry").into(),
+                    stock_count: None,
+                    value: None,
+                    held: vec![],
+                };
                 if current_stock {
                     let stock: Vec<_> = rows(field(baro, "inventory")).collect();
+                    content.stock_count = Some(stock.len());
                     let matches: Vec<_> = stock
                         .iter()
                         .filter(|s| held.contains(string(s, "slug")))
@@ -216,11 +226,21 @@ pub fn scheduled(
                             } else {
                                 body.push_str(" Scan to estimate ducat yield from items you hold.");
                             }
+                            content.value = Some(BaroNotificationValue {
+                                best: value.best,
+                                more_tradeable: value.more_tradeable,
+                                price_at: string(market, "updated_at").into(),
+                                prices_stale: !fresh(string(market, "updated_at"), now),
+                                fodder_ducats: value.fodder_ducats,
+                                fodder_items: value.fodder_items,
+                                cheap_fodder: value.cheap_fodder,
+                            });
                         }
                     }
                     if !matches.is_empty() {
                         body.push_str(&format!(" You hold: {}.", matches.join(", ")));
                     }
+                    content.held = matches.into_iter().map(str::to_string).collect();
                 } else {
                     body.push_str(" Current stock is not yet verified.");
                 }
@@ -235,6 +255,7 @@ pub fn scheduled(
                 );
                 candidate.stage = stage;
                 candidate.expires_at = end + DAY;
+                candidate.content = Some(NotificationContent::Baro(content));
                 out.push(candidate);
             }
         }
@@ -354,8 +375,18 @@ pub fn digest(
         .take(5)
         .map(|r| format!("{} ×{}: ~{:.0}p each", r.name, r.sellable_qty, r.price))
         .collect();
-    Some(Candidate::once(format!("digest:{local_day}"), "digest", "Today's sell opportunities".into(),
-        format!("{}. Estimated market values, not guaranteed sales. Inventory: {inventory_at}. Prices: {}.", opportunities.join(" · "), string(market, "updated_at")), "sell", now))
+    let mut candidate = Candidate::once(format!("digest:{local_day}"), "digest", "Today's sell opportunities".into(),
+        format!("{}. Estimated market values, not guaranteed sales. Inventory: {inventory_at}. Prices: {}.", opportunities.join(" · "), string(market, "updated_at")), "sell", now);
+    candidate.content = Some(NotificationContent::Digest(DigestNotification {
+        opportunities: rows.iter().take(5).map(|r| DigestOpportunity {
+            name: r.name.clone(),
+            quantity: r.sellable_qty,
+            price: r.price,
+        }).collect(),
+        inventory_at: inventory_at.into(),
+        price_at: string(market, "updated_at").into(),
+    }));
+    Some(candidate)
 }
 
 fn evaluate(app: &AppHandle) {
@@ -518,6 +549,19 @@ mod tests {
         let held = owned.iter().map(|r| r.slug.clone()).collect();
         let notice = scheduled(&fixture["market"], &held, Some(&owned), stamp(fixture["now"].as_str().unwrap()).unwrap()).remove(0);
         assert_eq!(notice.body, fixture["expected_body"].as_str().unwrap());
+        assert_eq!(serde_json::to_value(notice.content).unwrap(), fixture["expected_content"]);
+    }
+
+    #[test]
+    fn digest_details_match_the_inbox_fixture() {
+        let fixture: Value = serde_json::from_str(include_str!("../../../../tests/fixtures/notifications/digest.json")).unwrap();
+        let rows: Vec<_> = fixture["rows"].as_array().unwrap().iter().map(|row| sellables::SellableRow {
+            name: row["name"].as_str().unwrap().into(), slug: row["slug"].as_str().unwrap().into(),
+            sellable_qty: row["sellable_qty"].as_i64().unwrap(), price: row["price"].as_f64().unwrap(), score: row["score"].as_f64().unwrap(),
+        }).collect();
+        let notice = digest(&fixture["market"], &rows, fixture["inventory_at"].as_str().unwrap(), stamp(fixture["now"].as_str().unwrap()).unwrap(), "2026-09-04", 18).unwrap();
+        assert_eq!(serde_json::to_value(notice.content).unwrap(), fixture["expected_content"]);
+        assert!(notice.body.contains("Arcane Energize ×12: ~48p each"));
     }
 
     #[test]
