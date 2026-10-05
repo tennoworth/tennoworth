@@ -355,7 +355,6 @@
     font-weight: 600;
   }
   .refresh-pop .rp-primary:hover:not(:disabled)[data-shell] { filter: brightness(1.08); }
-  .refresh-pop .rp-primary:disabled[data-shell] { opacity: 0.6; cursor: default; }
   .refresh-pop .rp-sep[data-shell] { border-top: 1px var(--rule) var(--hairline); margin: var(--s1) 0; }
   .refresh-pop .rp-item[data-shell] {
     font: inherit;
