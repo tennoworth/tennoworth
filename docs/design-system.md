@@ -134,6 +134,9 @@ table patterns. Its expanded listing review scrolls as a whole in short windows
 while keeping a usable table region; before/after order details must not collapse
 the editable rows. The keyboard boundary also handles focus moving to the document
 when a focused refresh button temporarily disables itself.
+Below 900px the sidebar foot (project links, feedback and the build label)
+follows the workspace instead of preceding it, and at phone width the brand
+heading is visually hidden, so a short window reaches its first decision.
 The shell measures its wrapped status header into `--sticky-header-clearance`;
 document scroll padding keeps focused/scrolled content below that header, including
 narrow and enlarged layouts. This is a measured layout value, not a fixed spacer.

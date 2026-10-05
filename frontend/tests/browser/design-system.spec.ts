@@ -254,6 +254,30 @@ test('hosted Meta Drift shows a top ten, expands in place, and keeps Δ share in
   await expect(page.getByTestId('meta-drift').locator('tbody tr')).toHaveCount(10);
 });
 
+// At 320x480 the strip, nav and sidebar foot pushed the first decision to
+// 346px of a 480px window. The foot now follows the workspace on narrow
+// windows and sits under the sidebar on wide ones.
+test('a short phone-width window reaches the view before the project links', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 480 });
+  await page.goto('/?preview-desktop&sample');
+  await previewShell(page);
+  const heading = page.locator('main .view-header h2').first();
+  expect((await heading.boundingBox())!.y, 'the view heading is in the first half of the window').toBeLessThan(240);
+  const foot = page.locator('.sfoot');
+  const main = page.locator('main.workspace');
+  expect((await foot.boundingBox())!.y).toBeGreaterThanOrEqual((await main.boundingBox())!.y + (await main.boundingBox())!.height - 1);
+  await expect(page.getByRole('heading', { level: 1, name: 'TennoWorth' })).toBeAttached();
+  await expect(foot.getByRole('button', { name: 'Send feedback' })).toBeAttached();
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const sidebar = (await page.locator('aside.sidebar').boundingBox())!;
+  const wideFoot = (await foot.boundingBox())!;
+  expect(wideFoot.x).toBe(sidebar.x);
+  expect(wideFoot.width).toBe(sidebar.width);
+  expect(wideFoot.y).toBeGreaterThanOrEqual(sidebar.y + sidebar.height - 1);
+  expect(wideFoot.y + wideFoot.height).toBeLessThanOrEqual(901);
+});
+
 test('theme radio navigation and listing-review focus stay keyboard accessible', async ({ page }) => {
   await page.goto('/?preview-desktop&sample');
   await page.locator('.sidebar').getByRole('button', { name: /^Settings/ }).click();
