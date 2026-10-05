@@ -298,7 +298,7 @@
   <div class="card warn-banner">⚠ {marketLoadError}</div>
 {:else if marketFreshness === 'stale'}
   <p class="ui-notice" data-tone="warn">
-    ⚠ Prices may be outdated - this market snapshot is {marketStaleness} old. Rankings below use stale data.
+    ⚠ Prices may be outdated - this market snapshot was updated {marketStaleness ?? 'at an unknown time'}. Rankings below use stale data.
   </p>
 {/if}
 

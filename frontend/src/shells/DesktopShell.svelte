@@ -441,6 +441,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
         market={inventory.market}
         sessionEpoch={listing.sessionEpoch}
         ownedQty={ownedQtyForOrders}
+        {marketStaleness}
         onauthrequired={(code) => wfmAuthDialogsRef?.open(code)}
         onsummary={(s) => (listing.ordersSummary = s)}
       />
