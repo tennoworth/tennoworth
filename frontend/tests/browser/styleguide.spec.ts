@@ -72,6 +72,20 @@ test('reference stays readable in both themes and narrow, short, wide windows', 
   expect(errors).toEqual([]);
 });
 
+test('the Sell table reference sorts by keyboard and opens its Column guide', async ({ page }) => {
+  await page.goto('/?styleguide');
+  await page.getByRole('combobox', { name: 'Data state' }).selectOption('sell');
+  const ask = page.getByRole('button', { name: 'Low ask', exact: true });
+  await ask.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('columnheader', { name: /^Low ask/ })).toHaveAttribute('aria-sort', 'descending');
+  const opener = page.getByRole('button', { name: 'Column guide' });
+  await opener.click();
+  await expect(page.getByRole('dialog', { name: 'Column guide' })).toContainText('Priority ranking');
+  await page.keyboard.press('Escape');
+  await expect(opener).toBeFocused();
+});
+
 test('states, local filtering, modal editing, and keyboard focus are usable', async ({ page }) => {
   await page.goto('/?styleguide');
   const filter = page.getByRole('textbox', { name: 'Filter sample items' });

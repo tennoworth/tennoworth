@@ -87,6 +87,21 @@ export function humanBuildTime(seconds: number): string {
   return `${hours}h`;
 }
 
+/** Relative age that already reads as a time phrase ("3 d ago", "just now"),
+ *  so callers write "updated {age}", never "{age} old". */
+export function ago(ts: string | number | null | undefined, now: number): string | null {
+  if (!ts) return null;
+  const timestamp = new Date(ts).getTime();
+  if (!Number.isFinite(timestamp)) return null;
+  // Clamp at 0 - a cron runner with skewed clock can produce
+  // `updated_at` in the future, which used to render "-120 min ago".
+  const minutes = Math.max(0, Math.round((now - timestamp) / 60000));
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 60 * 24) return `${Math.round(minutes / 60)} h ago`;
+  return `${Math.round(minutes / 1440)} d ago`;
+}
+
 // A healthy two-hour scrape is under three hours old; a five-hour-old book
 // during a price spike must not look fresh.
 export function marketFreshness(

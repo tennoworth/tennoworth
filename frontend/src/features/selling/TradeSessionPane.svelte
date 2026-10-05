@@ -179,7 +179,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
       <strong>
         {#if loading}Reading trade allowance…
         {:else if allowance?.remaining != null}
-          {allowance.confidence === 'estimated' ? 'About ' : ''}{allowance.remaining} remaining
+          {allowance.confidence === 'estimated' ? 'About ' : ''}{allowance.remaining} trades left today
           {#if allowance.mastery_rank != null} · MR {allowance.mastery_rank}{/if}
         {:else}Trade allowance unknown{/if}
       </strong>
@@ -203,7 +203,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
       <label class="ui-field">Platinum target · optional
         <input class="ui-input" aria-label="Platinum target" type="number" min="1" step="1" bind:value={target} placeholder="No target" disabled={cap === 0 && !!retained} />
       </label>
-      <span class="muted">Up to {cap} estimated trades.</span>
+      <span class="muted">{cap > 0 && cap === allowance?.remaining ? `Can't exceed the ${cap} trades left today.` : `Up to ${cap} estimated trades per batch.`}</span>
       <label><input type="checkbox" bind:checked={includeSets} disabled={cap === 0 && !!retained} /> Include complete owned sets</label>
     </div>
   </section>

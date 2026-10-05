@@ -24,9 +24,9 @@ set-completion plays, relic expected value, Riven context, and listing health.
 
 ### Decide what to sell
 
-- Ranks owned items with a prioritization score based on price, likely
-  sell-through, and a bounded DE usage signal. The displayed platinum total is
-  still the ordinary, unweighted value of the sellable stack.
+- Ranks owned items by priority, based on price, likely sell-through, and a
+  bounded DE usage signal. The displayed stack value is still the ordinary,
+  unweighted value of the sellable copies.
 - Separates low asks, top buys, 48-hour volume, 7- and 90-day movement, vault
   state, ducat value, owned count, and reserved copies instead of collapsing
   them into one unexplained number.

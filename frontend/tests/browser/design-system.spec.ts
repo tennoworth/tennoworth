@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import baroFixture from '../../../tests/fixtures/notifications/baro.json' with { type: 'json' };
 import rewardFixture from '../../../tests/fixtures/relic-ocr/result.json' with { type: 'json' };
@@ -133,6 +133,35 @@ for (const theme of ['light', 'dark'] as const) {
   });
 }
 
+// The look's ink fill on primaries once outranked the disabled rule, so a
+// disabled Add watch, List or Scan game still read as clickable.
+test('disabled primary actions drop the ink fill in both themes', async ({ page }) => {
+  const looksDisabled = (button: Locator) => button.evaluate(element => {
+    element.setAttribute('disabled', '');
+    const probe = document.createElement('span');
+    probe.style.background = 'var(--ink-bar)';
+    document.body.append(probe);
+    const ink = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    const style = getComputedStyle(element);
+    return { filled: style.backgroundColor === ink, dotted: style.borderTopStyle === 'dotted', opacity: style.opacity };
+  });
+  const expected = { filled: false, dotted: true, opacity: '1' };
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.goto('/?preview-desktop&sample');
+    await previewShell(page);
+    expect(await looksDisabled(page.getByRole('button', { name: /^List \d+ on WFM$/ })), `${theme} List CTA`).toEqual(expected);
+    await page.locator('.refresh-trigger').first().click();
+    expect(await looksDisabled(page.getByTestId('desktop-scan')), `${theme} Scan game`).toEqual(expected);
+    await page.keyboard.press('Escape');
+    await page.locator('.sidebar').getByRole('button', { name: /^Price watches/ }).click();
+    const add = page.getByRole('button', { name: 'Add watch' });
+    await expect(add).toBeDisabled();
+    expect(await looksDisabled(add), `${theme} Add watch`).toEqual(expected);
+  }
+});
+
 test('hosted rails keep readable text in both themes', async ({ page }) => {
   for (const theme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: theme });
@@ -150,9 +179,9 @@ test('hosted rails keep readable text in both themes', async ({ page }) => {
 test('Sell columns fit by default and the Columns menu adds, remembers and resets a column', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto('/?preview-desktop&sample');
-  const table = page.locator('.scroll').filter({ has: page.locator('th', { hasText: 'Score' }) }).first();
+  const table = page.locator('.scroll').filter({ has: page.locator('th', { hasText: 'Priority' }) }).first();
   expect(await table.evaluate(node => node.scrollWidth <= node.clientWidth + 1), 'Default columns fit at 1440').toBe(true);
-  const heads = page.locator('main table th .label');
+  const heads = page.locator('main table thead th');
   await expect(heads.filter({ hasText: /^Ducats$/ })).toHaveCount(0);
   await page.getByRole('button', { name: 'Columns ▾' }).click();
   const menu = page.getByRole('group', { name: 'Visible columns' });
@@ -170,6 +199,55 @@ test('Sell columns fit by default and the Columns menu adds, remembers and reset
   await page.getByRole('button', { name: 'Columns ▾' }).click();
   await page.getByRole('button', { name: 'Reset to preset' }).click();
   await expect(heads.filter({ hasText: /^Ducats$/ })).toHaveCount(0);
+});
+
+// Sorting lived on <th onclick> with a 14px "?" floating over the previous
+// column, so neither the sort nor the help was reachable by keyboard.
+test('Sell headers sort by keyboard and the Column guide explains every visible column', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto('/?preview-desktop&sample');
+  const results = page.locator('.wrap.results');
+  const priority = results.getByRole('columnheader', { name: /^Priority/ });
+  await expect(priority).toHaveAttribute('aria-sort', 'descending');
+  const sortByAsk = results.getByRole('button', { name: 'Low ask', exact: true });
+  await sortByAsk.focus();
+  await page.keyboard.press('Enter');
+  const ask = results.getByRole('columnheader', { name: /^Low ask/ });
+  await expect(ask).toHaveAttribute('aria-sort', 'descending');
+  await expect(priority).toHaveAttribute('aria-sort', 'none');
+  await expect(results.locator('.count')).toContainText('Low ask ↓');
+  const asks = await results.locator('tbody td.col-low_sell').allInnerTexts();
+  const values = asks.map(text => Number.parseFloat(text)).filter(Number.isFinite);
+  expect(values, 'rows follow the keyboard sort').toEqual([...values].sort((a, b) => b - a));
+  await page.keyboard.press('Enter');
+  await expect(ask).toHaveAttribute('aria-sort', 'ascending');
+  await expect(results.getByRole('columnheader', { name: 'Trend' })).not.toHaveAttribute('aria-sort', /./);
+  await expect(results.locator('th button button, th .info-btn'), 'no control nested in a header button').toHaveCount(0);
+  const sortButtons = results.locator('thead th button.sort');
+  for (let i = 0; i < await sortButtons.count(); i++) {
+    const button = sortButtons.nth(i);
+    await button.click();
+    const spill = await button.evaluate(element => {
+      const cell = element.closest('th')!, style = getComputedStyle(cell), range = document.createRange();
+      range.selectNodeContents(element);
+      return range.getBoundingClientRect().width - (cell.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight));
+    });
+    expect(spill, `${await button.innerText()} fits its column with the sort arrow`).toBeLessThanOrEqual(0.5);
+  }
+
+  const opener = results.getByRole('button', { name: 'Column guide' });
+  await opener.focus();
+  await page.keyboard.press('Enter');
+  const guide = page.getByRole('dialog', { name: 'Column guide' });
+  await expect(guide).toBeVisible();
+  const headers = (await results.locator('thead th').allInnerTexts()).map(text => text.replace(/[↓↑]/g, '').trim());
+  const terms = await guide.locator('dt').allInnerTexts();
+  expect(terms.map(term => term.toLowerCase()), 'one entry per visible column with help').toEqual(headers.filter(h => h !== 'Played').map(h => h.toLowerCase()));
+  await expect(guide).toContainText('Priority ranking, not expected plat/day');
+  await expect(guide).toContainText('Sellable copies × the 48 h average trade price');
+  await page.keyboard.press('Escape');
+  await expect(guide).toBeHidden();
+  await expect(opener).toBeFocused();
 });
 
 test('first run leads with the scan and keeps utilities in the header', async ({ page }) => {
@@ -204,6 +282,30 @@ test('hosted Meta Drift shows a top ten, expands in place, and keeps Δ share in
   // stale whenever another hosted section is added.
   await page.reload();
   await expect(page.getByTestId('meta-drift').locator('tbody tr')).toHaveCount(10);
+});
+
+// At 320x480 the strip, nav and sidebar foot pushed the first decision to
+// 346px of a 480px window. The foot now follows the workspace on narrow
+// windows and sits under the sidebar on wide ones.
+test('a short phone-width window reaches the view before the project links', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 480 });
+  await page.goto('/?preview-desktop&sample');
+  await previewShell(page);
+  const heading = page.locator('main .view-header h2').first();
+  expect((await heading.boundingBox())!.y, 'the view heading is in the first half of the window').toBeLessThan(240);
+  const foot = page.locator('.sfoot');
+  const main = page.locator('main.workspace');
+  expect((await foot.boundingBox())!.y).toBeGreaterThanOrEqual((await main.boundingBox())!.y + (await main.boundingBox())!.height - 1);
+  await expect(page.getByRole('heading', { level: 1, name: 'TennoWorth' })).toBeAttached();
+  await expect(foot.getByRole('button', { name: 'Send feedback' })).toBeAttached();
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const sidebar = (await page.locator('aside.sidebar').boundingBox())!;
+  const wideFoot = (await foot.boundingBox())!;
+  expect(wideFoot.x).toBe(sidebar.x);
+  expect(wideFoot.width).toBe(sidebar.width);
+  expect(wideFoot.y).toBeGreaterThanOrEqual(sidebar.y + sidebar.height - 1);
+  expect(wideFoot.y + wideFoot.height).toBeLessThanOrEqual(901);
 });
 
 test('theme radio navigation and listing-review focus stay keyboard accessible', async ({ page }) => {
@@ -303,7 +405,7 @@ test('selling tables label pick facts and retain readable item identities', asyn
   await page.goto('/?preview-desktop&sample');
   await page.locator('.sidebar').getByRole('button', { name: /^Sell/ }).click();
   const picks = page.getByRole('region', { name: 'Top picks', exact: true });
-  await expect(picks.getByRole('columnheader')).toHaveText(['Item', 'Low sell', 'Vol 48h', 'Why list now']);
+  await expect(picks.getByRole('columnheader')).toHaveText(['Item', 'Actions', 'Low ask', 'Vol 48h', 'Why list now']);
   for (const selector of ['.picks-table td:first-child', '.results tbody td:first-child']) {
     const widths = await page.locator(selector).evaluateAll(cells => cells.map(cell => cell.getBoundingClientRect().width));
     expect(widths.length).toBeGreaterThan(0);
@@ -315,7 +417,28 @@ test('selling tables label pick facts and retain readable item identities', asyn
   const scroll = page.locator('.results > .scroll');
   await scroll.scrollIntoViewIfNeeded();
   await scroll.evaluate(el => { el.scrollLeft = el.scrollWidth; });
-  await expect(page.getByRole('columnheader', { name: /Potential/ })).toBeInViewport();
+  await expect(page.getByRole('columnheader', { name: /Stack value/ })).toBeInViewport();
+});
+
+// Top Picks was a 1024px table with List in its last column, so any window
+// narrower than ~1100px had to scroll sideways to act on a pick.
+test('a pick can be listed without scrolling sideways at any width', async ({ page }) => {
+  await page.goto('/?preview-desktop&sample');
+  await previewShell(page);
+  const picks = page.getByRole('region', { name: 'Top picks', exact: true });
+  for (const width of [320, 560, 800, 1100, 1440]) {
+    await page.setViewportSize({ width, height: 700 });
+    const list = picks.getByRole('button', { name: /^List .+ on WFM$/ }).first();
+    const hide = picks.getByRole('button', { name: /^Hide .+ for this session$/ }).first();
+    await list.scrollIntoViewIfNeeded();
+    const scroller = picks.locator('.scroll');
+    expect(await scroller.evaluate(element => element.scrollLeft), `${width}px needs no sideways scroll`).toBe(0);
+    const edge = (await scroller.boundingBox())!;
+    for (const control of [list, hide]) {
+      const box = (await control.boundingBox())!;
+      expect(box.x + box.width, `${width}px keeps the pick actions inside the panel`).toBeLessThanOrEqual(edge.x + edge.width + 0.5);
+    }
+  }
 });
 
 test('page background keeps fine repeating tiles on tall WebKit surfaces', async ({ browser }) => {
@@ -332,6 +455,30 @@ test('page background keeps fine repeating tiles on tall WebKit surfaces', async
     // The grid is faint enough that the default colour tolerance hides distortion.
     expect(background).toMatchSnapshot('background-Dark.png', { threshold: 0, maxDiffPixelRatio: 0.002 });
   } finally { await page.close(); }
+});
+
+// Speech input and screen readers reach a control by its visible label, so
+// the accessible name has to contain it; several overrode it ("Threshold
+// (plat)" under "Target price (p)") or announced only a glyph ("✎", "ON").
+test('fields and order actions are named by what they show', async ({ page }) => {
+  await page.goto('/?preview-desktop&sample');
+  await previewShell(page);
+  const sidebar = page.locator('.sidebar');
+  await sidebar.getByRole('button', { name: /^Price watches/ }).click();
+  await expect(page.getByRole('combobox', { name: 'Notify when' })).toBeVisible();
+  await expect(page.getByRole('spinbutton', { name: 'Target price (p)' })).toBeVisible();
+  await sidebar.getByRole('button', { name: /^Meta Drift/ }).click();
+  await expect(page.getByRole('group', { name: 'Movement' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Equipment' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Category' })).toBeVisible();
+  await sidebar.getByRole('button', { name: /^My orders/ }).click();
+  const listings = page.getByRole('region', { name: 'My WFM listings' });
+  await expect(listings.getByRole('textbox', { name: 'Item' })).toBeVisible();
+  await expect(listings.getByRole('button', { name: 'Edit price for Pyrana Prime Set' })).toBeVisible();
+  await expect(listings.getByRole('button', { name: 'ON: Pyrana Prime Set is visible to buyers' })).toBeVisible();
+  await listings.getByRole('button', { name: 'Edit price for Pyrana Prime Set' }).click();
+  await expect(listings.getByRole('spinbutton', { name: 'New price for Pyrana Prime Set' })).toBeVisible();
+  await listings.getByRole('button', { name: 'Cancel price edit' }).click();
 });
 
 test('narrow order filters stay reachable and routines remain an actionable checklist', async ({ page }) => {
@@ -371,6 +518,16 @@ test('narrow order filters stay reachable and routines remain an actionable chec
       await expect(tribute).toBeChecked();
     }
   }
+});
+
+// "32p total" read as a sum you would receive; it is the expected value of
+// cracking every owned copy, and one crack can land anywhere.
+test('relic totals read as expected value across the owned copies', async ({ page }) => {
+  await page.goto('/?preview-desktop&sample');
+  await previewShell(page);
+  await page.locator('.sidebar').getByRole('button', { name: /^Relics/ }).click();
+  await expect(page.locator('.relic-meta').first()).toContainText(/≈\d+p expected across \d+/);
+  await expect(page.locator('.relic-meta').first()).not.toContainText(/\dp total/);
 });
 
 test('monthly goals add, rename and remove individually', async ({ page }) => {

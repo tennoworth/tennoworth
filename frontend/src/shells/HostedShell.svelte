@@ -1,5 +1,5 @@
 <script lang="ts">
-import { marketFreshness as marketFreshnessBucket } from '../ui/format';
+import { ago, marketFreshness as marketFreshnessBucket } from '../ui/format';
 import { onMount } from 'svelte';
 import MarketBrowser from '../features/market-context/MarketBrowser.svelte';
 import DesktopShowcase from '../features/market-context/DesktopShowcase.svelte';
@@ -45,20 +45,8 @@ onMount(() => {
     };
   });
 let baroState = $derived(voidTrader ? baroPhase(voidTrader.activation, voidTrader.expiry, displayNow) : null);
-let marketStaleness = $derived(ago(market?.updated_at));
+let marketStaleness = $derived(ago(market?.updated_at, displayNow));
 let marketFreshness = $derived(marketFreshnessBucket(market?.updated_at, displayNow));
-function ago(ts: string | number | null | undefined) {
-    if (!ts) return null;
-    // Clamp at 0 - a cron runner with skewed clock can produce
-    // `updated_at` in the future, which used to render "-120 min ago".
-    const timestamp = new Date(ts).getTime();
-    if (!Number.isFinite(timestamp)) return null;
-    const minutes = Math.max(0, Math.round((displayNow - timestamp) / 60000));
-    if (minutes < 1) return 'just now';
-    if (minutes < 60) return `${minutes} min ago`;
-    if (minutes < 60 * 24) return `${Math.round(minutes / 60)} h ago`;
-    return `${Math.round(minutes / 1440)} d ago`;
-  }
 </script>
 
 <main data-shell class="landing" >

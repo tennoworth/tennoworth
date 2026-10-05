@@ -1,4 +1,4 @@
-import { marketFreshness as marketFreshnessBucket } from '../ui/format';
+import { ago, marketFreshness as marketFreshnessBucket } from '../ui/format';
 import { staleSurfaceTimestamp } from '../domain/market';
 import { onMount } from 'svelte';
 import type { InventoryController } from '../features/inventory/controller.svelte';
@@ -122,19 +122,8 @@ export function createDesktopSession({ inventory, listing, transport, store, ser
     return new Date(t).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
   });
 
-  function ago(ts: string | number | null | undefined) {
-    if (!ts || !Number.isFinite(new Date(ts).getTime())) return null;
-    // Clamp at 0 - a cron runner with skewed clock can produce
-    // `updated_at` in the future, which used to render "-120 min ago".
-    const minutes = Math.max(0, Math.round((displayNow - new Date(ts).getTime()) / 60000));
-    if (minutes < 1) return 'just now';
-    if (minutes < 60) return `${minutes} min ago`;
-    if (minutes < 60 * 24) return `${Math.round(minutes / 60)} h ago`;
-    return `${Math.round(minutes / 1440)} d ago`;
-  }
-
-  let marketStaleness = $derived(ago(inventory.market?.updated_at));
-  let inventoryStaleness = $derived(ago(inventory.lastUpdated));
+  let marketStaleness = $derived(ago(inventory.market?.updated_at, displayNow));
+  let inventoryStaleness = $derived(ago(inventory.lastUpdated, displayNow));
   let inventoryTimestamp = $derived(inventory.lastUpdated && Number.isFinite(new Date(inventory.lastUpdated).getTime()) ? new Date(inventory.lastUpdated).toISOString() : null);
   // Same buckets as the market dot, on the inventory's own clock: a scan is
   // "fresh" for a day (inventories move slower than the order book).
@@ -151,7 +140,7 @@ export function createDesktopSession({ inventory, listing, transport, store, ser
   // retained payload keeps its original download timestamp.
   function surfaceAge(key: string) {
     const stamp = staleSurfaceTimestamp(inventory.market, key, displayNow);
-    return stamp === 'unknown' ? 'age unknown' : stamp ? ago(stamp) : null;
+    return stamp === 'unknown' ? 'age unknown' : stamp ? ago(stamp, displayNow) : null;
   }
   let baroSurfaceAge = $derived(surfaceAge('baro'));
   let relicSurfaceAge = $derived(surfaceAge('relic_rewards'));

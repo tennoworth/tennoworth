@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 
 import {
   wfmItemUrl, baroLocation, humanWindow, humanBuildTime, plat,
-  ownedBreakdown, keptNoteTitle, marketFreshness, notificationDate,
+  ownedBreakdown, keptNoteTitle, marketFreshness, notificationDate, ago,
 } from './format.js';
 
 describe('wfmItemUrl', () => {
@@ -156,5 +156,19 @@ describe('notificationDate', () => {
   });
   it.each([NaN, Infinity])('does not throw for an unavailable timestamp %s', seconds => {
     expect(notificationDate(seconds, now)).toMatchObject({ label: 'Unknown date', iso: undefined });
+  });
+});
+
+describe('ago', () => {
+  const now = Date.parse('2026-10-05T12:00:00Z');
+  it.each([
+    [0, 'just now'], [59 / 60, '59 min ago'], [3, '3 h ago'], [72, '3 d ago'],
+  ] as const)('reads a stamp %s hours old as "%s"', (hours, expected) => {
+    expect(ago(new Date(now - hours * 3.6e6).toISOString(), now)).toBe(expected);
+  });
+  it('clamps a future stamp and rejects missing or malformed ones', () => {
+    expect(ago(now + 120 * 60000, now)).toBe('just now');
+    expect(ago(null, now)).toBeNull();
+    expect(ago('invalid', now)).toBeNull();
   });
 });

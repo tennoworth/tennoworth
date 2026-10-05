@@ -528,7 +528,7 @@ table.tw td.reason.bad { color: var(--bad); }
   dialog.cryptobox footer { flex-wrap: wrap; }
 }
 /* Ghost "your inventory" columns on the landing: dashed lead rule; the heads
-   name real columns (Own/Score/Potential) so they read at --muted, only the
+   name real columns (Own/Priority/Stack value) so they read at --muted, only the
    placeholder cells are decorative --faint. */
 table.tw th.ghost { color: var(--muted); }
 table.tw td.ghost { color: var(--faint); }
@@ -745,6 +745,10 @@ html[data-look="yorha"] .btn.primary { background: var(--ink-bar); color: var(--
 html[data-look="yorha"] .list-cta:hover:not(:disabled),
 html[data-look="yorha"] .refresh-pop .rp-primary:hover:not(:disabled),
 html[data-look="yorha"] .btn.primary:hover:not(:disabled) { background: var(--fg); color: var(--panel); filter: none; }
+/* The look's ink fill outranks the base .btn:disabled rule, so a disabled
+   primary kept its fill and read as clickable. One rule restores the shared
+   disabled treatment for every primary kind. */
+html[data-look="yorha"] :is(.list-cta, .rp-primary, .btn.primary):disabled { opacity: 1; color: var(--muted); background: var(--panel-2); border-color: var(--border); border-style: dotted; cursor: not-allowed; }
 /* Title rails: every panel, card, FAQ and dialog heading bar takes the
    --rail-* surface. The 2px --rail-edge rule is an inset shadow so the rail
    height does not change between modes. */
@@ -796,7 +800,6 @@ html[data-look="yorha"] .picks-head { border-bottom-style: dotted; }
 /* Freshness dot = 7px outlined square, filled by state. */
 html[data-look="yorha"] .dot { border-radius: 0; }
 html[data-look="yorha"] .lede-dot { border-radius: 0; }
-html[data-look="yorha"] .info-btn { border-radius: 0; }
 /* Status strip: the deadpan NieR status line - tracked caps labels in the
    label face, mono only for the values (ages, counts), dotted cell rules; the
    outer bottom edge stays solid. Names and dates are prose. */

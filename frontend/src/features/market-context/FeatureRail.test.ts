@@ -34,9 +34,9 @@ describe('FeatureRail', () => {
     // Sell leads.
     expect(selected().textContent?.trim()).toBe('Sell');
     expect(screen.getAllByRole('tabpanel')).toHaveLength(1);
-    expect(screen.getByRole('tabpanel').textContent).toContain('prioritization score');
+    expect(screen.getByRole('tabpanel').textContent).toContain('ranked by priority');
     // The Sell miniature's own columns, not another tab's.
-    expect(screen.getByRole('columnheader', { name: 'Score' })).toBeDefined();
+    expect(screen.getByRole('columnheader', { name: 'Priority' })).toBeDefined();
 
     await fireEvent.click(screen.getByRole('tab', { name: 'Ledger' }));
     expect(selected().textContent?.trim()).toBe('Ledger');

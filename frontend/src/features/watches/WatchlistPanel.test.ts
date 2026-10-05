@@ -46,11 +46,11 @@ describe('WatchlistPanel', () => {
     render(WatchlistPanel, { props: { market } });
     await waitFor(() => expect(loads).toBe(1));
     handlers[WATCH_FIRED_EVENT]({ payload: { id: 1, slug: 'primed_flow', name: 'Primed Flow', side: 'sell', threshold: 15, price: 20, satisfied: true, fire: true } });
-    await screen.findByRole('button', { name: 'Remove' });
+    await screen.findByRole('button', { name: /^Remove / });
     if (outcome === 'success') resolve([]);
     else reject(new Error('Stale watch failure'));
     await new Promise(done => setTimeout(done, 0));
-    expect(screen.getByRole('button', { name: 'Remove' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Remove / })).toBeTruthy();
     expect(screen.queryByText(/Stale watch failure/)).toBeNull();
   });
 
@@ -84,15 +84,15 @@ describe('WatchlistPanel', () => {
     await fireEvent.input(screen.getByLabelText('Item to watch'), { target: { value: 'primed' } });
     await fireEvent.click(await screen.findByRole('button', { name: /Primed Flow/ }));
     // default threshold for a 'sell' watch = 80% of avg 20 = 16
-    expect((screen.getByLabelText('Threshold (plat)') as HTMLInputElement).value).toBe('16');
-    await fireEvent.input(screen.getByLabelText('Threshold (plat)'), { target: { value: '15' } });
+    expect((screen.getByLabelText('Target price (p)') as HTMLInputElement).value).toBe('16');
+    await fireEvent.input(screen.getByLabelText('Target price (p)'), { target: { value: '15' } });
     await fireEvent.click(screen.getByRole('button', { name: 'Add watch' }));
     await waitFor(() => expect(invoke).toHaveBeenCalledWith('add_watch', {
       watch: { slug: 'primed_flow', name: 'Primed Flow', side: 'sell', threshold: 15, rank: 0, subtype: null },
     }));
     await screen.findByText('ask ≤ 15p');
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    await fireEvent.click(screen.getByRole('button', { name: /^Remove / }));
     await waitFor(() => expect(invoke).toHaveBeenCalledWith('delete_watch', { id: 1 }));
     await screen.findByText('No watches yet. Pick an item above.');
   });
