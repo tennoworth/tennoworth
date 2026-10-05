@@ -340,16 +340,6 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
       </div>
     </nav>
 
-    <div data-shell class="sfoot">
-      <nav data-shell class="project-links" aria-label="Project links">
-        {@render projectLinkAnchors()}
-      </nav>
-      <button data-shell type="button" class="feedback-trigger" onclick={openFeedback}>
-        <svg data-shell viewBox="0 0 24 24" aria-hidden="true"><path data-shell d="M4 4h16v12H9l-5 4V4Z" /><path data-shell d="M8 8h8M8 12h5" /></svg>
-        Send feedback
-      </button>
-      <div data-shell class="ver" title="build {APP_COMMIT}" data-testid="app-version">{versionLabel}</div>
-    </div>
   </aside>
 
   {/if}
@@ -467,6 +457,21 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
 
     {/if}
   </main>
+  {#if showWorkspace}
+  <!-- After main in source so a narrow window reaches its links at the page
+       foot instead of above the first decision; wide windows place it under
+       the sidebar. -->
+  <div data-shell class="sfoot">
+    <nav data-shell class="project-links" aria-label="Project links">
+      {@render projectLinkAnchors()}
+    </nav>
+    <button data-shell type="button" class="feedback-trigger" onclick={openFeedback}>
+      <svg data-shell viewBox="0 0 24 24" aria-hidden="true"><path data-shell d="M4 4h16v12H9l-5 4V4Z" /><path data-shell d="M8 8h8M8 12h5" /></svg>
+      Send feedback
+    </button>
+    <div data-shell class="ver" title="build {APP_COMMIT}" data-testid="app-version">{versionLabel}</div>
+  </div>
+  {/if}
 </div>
 
 {#snippet keepSection()}
