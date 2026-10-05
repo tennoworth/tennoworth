@@ -33,7 +33,7 @@
       id: 'sell',
       title: 'Sell',
       blurb:
-        'Your inventory ranked by a prioritization score from price, likely sell-through, and bounded DE usage - actual platinum totals stay unweighted.',
+        'Your inventory ranked by priority from price, likely sell-through, and bounded DE usage - actual platinum totals stay unweighted.',
     },
     {
       id: 'sets',
@@ -104,7 +104,7 @@
   }
 
   // ---- sample rows, one shape per surface -------------------------------
-  // Invented prioritization scores for the miniature; the real Sell view
+  // Invented priorities for the miniature; the real Sell view
   // derives them from price, turnover, and bounded DE usage.
   const sell = [
     { item: 'Ash Prime Systems', tag: 'vaulted', own: 2, score: 76, avg: 38 },
@@ -210,7 +210,7 @@
                 <thead><tr>
                   <th class="l">Item</th>
                   <th>Own</th>
-                  <th title="Prioritization score from price, likely sell-through, and bounded DE usage; not expected plat/day">Score</th>
+                  <th title="Priority from price, likely sell-through, and bounded DE usage; not expected plat/day">Priority</th>
                   <th>Avg</th>
                 </tr></thead>
                 <tbody>

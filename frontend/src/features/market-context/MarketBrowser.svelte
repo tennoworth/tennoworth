@@ -25,7 +25,7 @@
   // Flow v2 landing: every list is a table on the workspace's row anatomy
   // (28px head · 32px rows · mono numbers · same column names), so a visitor
   // reads the same columns here that the app ranks their inventory by. The
-  // search results carry three ghost columns (Own · Score · Potential) that
+  // search results carry three ghost columns (Own · Priority · Stack value) that
   // only the desktop scan can fill; `handoff` renders the same rows completed.
   let {
     market,
@@ -291,22 +291,22 @@
             <col style="width:4rem" />
             <col style="width:4rem" />
             <col style="width:3.5rem" />
-            <col style="width:4rem" />
-            <col style="width:5.25rem" />
+            <col style="width:5.5rem" />
+            <col style="width:7rem" />
           </colgroup>
           <thead><tr>
             <th class="l">Item · {results.length} {results.length === 1 ? 'match' : 'matches'}</th>
             <th title="Latest daily median vs the 90-day median">{yearMode ? 'Δ 1y' : 'Δ 90d'}</th>
             <th title="{yearMode ? 'Weekly medians, last year' : 'Daily medians, last 7 days'}">Trend</th>
             <th title="Average of recent WFM sales - list below it to sell faster">Avg</th>
-            <th title="Lowest current online sell listing">Low sell</th>
+            <th title="Lowest current online sell listing">Low ask</th>
             <th title="Highest current online buy offer">Top buy</th>
             <th title="Trades completed in the last 48 hours">Vol 48h</th>
             <th title="Live buyers ÷ live sellers - > 1 means buyers outnumber sellers">Demand</th>
             <th title="Ducat value at Baro Ki’Teer">Ducats</th>
             <th class="ghost g1" title="How many you own - filled by the desktop scan">Own</th>
-            <th class="ghost" title="Prioritization score from price, likely sell-through, and bounded DE usage - filled by the desktop scan">Score</th>
-            <th class="ghost" title="Owned × Avg - filled by the desktop scan">Potential</th>
+            <th class="ghost" title="Priority from price, likely sell-through, and bounded DE usage - filled by the desktop scan">Priority</th>
+            <th class="ghost" title="Sellable copies × the 48 h average trade price - filled by the desktop scan">Stack value</th>
           </tr></thead>
           <tbody>
             {#each results as r (r.slug)}
@@ -330,11 +330,11 @@
         </div>
         <div class="line">
           {#if handoff}
-            <span class="exp">Own · Score · Potential fill in when the <a href="#desktop">desktop app</a> scans your inventory - free, Windows + Linux, no login.</span>
+            <span class="exp">Own · Priority · Stack value fill in when the <a href="#desktop">desktop app</a> scans your inventory - free, Windows + Linux, no login.</span>
             <span class="grow"></span>
             <a href="#desktop">↓ see the completed row</a>
           {:else}
-            <span class="exp">Own · Score · Potential fill in once you scan your inventory (Refresh ▾ → Scan game).</span>
+            <span class="exp">Own · Priority · Stack value fill in once you scan your inventory (Refresh ▾ → Scan game).</span>
           {/if}
         </div>
       {:else}
@@ -483,7 +483,7 @@
   .thin-hist { font-size: var(--text-caption); color: var(--muted); font-family: var(--font-body); }
   /* Below the results table's natural width the panel pans sideways rather
      than squeezing the Item column. */
-  .results { min-width: 56rem; }
+  .results { min-width: 59.25rem; }
   .mini-table { min-width: 27rem; }
   .mini-table.with-ducats { min-width: 31rem; }
   .baro-stock { min-width: 27rem; }
