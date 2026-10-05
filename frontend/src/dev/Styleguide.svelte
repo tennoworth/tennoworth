@@ -5,7 +5,19 @@
   import WfmTokenGuide from '../features/settings/WfmTokenGuide.svelte';
   import notesSample from '../../../tests/fixtures/update-notes/status.json';
   import type { UpdateNotesStatus } from '../contracts/update';
+  import ResultsTable from '../features/selling/ResultsTable.svelte';
+  import type { SellRow } from '../contracts/selling';
   let notesRef = $state<UpdateNotes>();
+  // Fictional rows for the production Sell table: sortable header buttons and
+  // the shared Column guide.
+  const sellRow = (name: string, slug: string, owned: number, low: number, vol: number, score: number): SellRow => ({
+    key: slug, slug, subtype: null, name, owned, sellable: owned, leveled: 0, type: 'Upgrades', kept_lvl: null,
+    ducats: null, plat_per_100d: null, avg_price: low + 1, low_sell: low, low5_avg: low, top_buy: low - 2,
+    volume_48h: vol, ratio: 1, potential_plat: owned * (low + 1), raw_value: owned * low, sell_score: score,
+    patience: false, timing: 'neutral', medians_7d: [low, low + 1, low], median_90d: low, delta_90d_pct: 0, tags: [],
+    is_augment: false, vault_status: 'available',
+  });
+  const sellSample = [sellRow('Primed Flow', 'primed_flow', 6, 23, 107, 138), sellRow('Arcane Energize', 'arcane_energize', 12, 7, 362, 84), sellRow('Sample long item name for wrapping', 'sample_long', 4, 4, 68, 18)];
   const notesServices = { updateNotes: async () => ({ ...notesSample, auto_show: false } as UpdateNotesStatus), acknowledgeUpdateNotes: async () => {}, updateNotesCanPresent: async () => true };
   import { onMount } from 'svelte';
   import { applyTheme, systemMode, type Mode } from '../ui/theme';
@@ -89,7 +101,7 @@
       <p class="muted">Selected: {selected}. These are presentation examples, not the Trade Session planner.</p>
       <div class="fields">
         <label class="ui-field">Filter sample items<input type="text" bind:value={filter} placeholder="Item name" /></label>
-        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option><option value="notifications">Alerts</option><option value="estimates">Estimates</option><option value="usage">Community usage</option><option value="updates">Update notes</option><option value="token">WFM token sign-in</option></select></label>
+        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option><option value="notifications">Alerts</option><option value="estimates">Estimates</option><option value="usage">Community usage</option><option value="updates">Update notes</option><option value="token">WFM token sign-in</option><option value="sell">Sell table</option></select></label>
       </div>
       <p role="status" class="muted">{message || 'Controls are ready. No changes made.'}</p>
     </div>
@@ -147,6 +159,7 @@
   </section>
   {/if}
   {#if dataState === 'usage'}<UsageChart sample={usageSample} />{/if}
+  {#if dataState === 'sell'}<section class="ui-stack"><h2>Sortable analytical table</h2><p>Headers are sort buttons that announce their order; the Column guide explains every visible column.</p><ResultsTable results={sellSample} /></section>{/if}
   {#if dataState === 'updates'}<section class="ui-panel ui-stack"><h2>Changes across installed versions</h2><p>One plain-English summary combines skipped releases, with a version history beneath it.</p><button class="btn" onclick={() => notesRef?.open()}>Preview what’s new</button></section>{/if}
   {#if dataState === 'updates'}<UpdateNotes bind:this={notesRef} services={notesServices} />{/if}
   {#if dataState === 'token'}<section class="ui-panel ui-stack"><h2>Fallback sign-in</h2><p>When the in-app window cannot load warframe.market, the login dialog asks for the browser's session cookie and shows these steps.</p><div><button class="btn" onclick={() => tokenDialog.showModal()}>Preview token sign-in</button></div></section>{/if}

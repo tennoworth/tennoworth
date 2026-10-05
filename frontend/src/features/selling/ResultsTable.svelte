@@ -46,6 +46,9 @@
     // supplies the rail copy and the per-row reason/actions cell.
     picks?: Row[] | null;
     picksHead?: Snippet;
+    // A pick's actions get their own column beside the item, so List stays
+    // reachable when a narrow window scrolls the reason out of view.
+    pickActions?: Snippet<[Row]>;
     pickReason?: Snippet<[Row]>;
     picksEmpty?: Snippet;
     // Rendered in place of the table body when `results` is empty (the parent's
@@ -59,7 +62,7 @@
   let {
     results, allocation = null, quantityStatus = false, estimatedGuidance = false, deltas = new Map(), visibleColumns = null, presetSort = null, onfiltered = undefined, columnsCustomized = false, oncolumnschange = undefined,
     scope = undefined, narrow = undefined, cta = undefined,
-    picks = null, picksHead = undefined, pickReason = undefined, picksEmpty = undefined,
+    picks = null, picksHead = undefined, pickActions = undefined, pickReason = undefined, picksEmpty = undefined,
     empty = undefined, between = undefined,
   }: Props = $props();
 
@@ -216,7 +219,7 @@
     owned:          { text: 'How many copies you own in your inventory. When the "Keep copies" reserve is set above 0, the sellable count (owned minus the reserve) shows alongside it. Leveled copies (any XP) can’t be traded in-game at all, so they’re held back the same way - shown as "leveled" rather than "kept".', unit: 'count' },
     delta:          { text: 'Change in count vs. the previous inventory you loaded.', unit: 'count', dir: 'positive = farmed, negative = sold' },
     avg_price:      { text: 'Volume-weighted average across closed trades in the last 48 h.', unit: 'plat', dir: 'noisy on low-volume items' },
-    low_sell:       { text: 'Lowest current sell listing from in-game / online players.', unit: 'plat', dir: 'what you can realistically clear at right now' },
+    low_sell:       { text: 'Lowest current ask: the cheapest sell listing from in-game / online players.', unit: 'plat', dir: 'what you can realistically clear at right now' },
     top_buy:        { text: 'Highest current buy offer from in-game / online players.', unit: 'plat', dir: 'instant-sell ceiling' },
     volume_48h:     { text: 'Trades closed in the last 48 h.', unit: 'trades / 48 h', dir: 'higher = more liquid; ≥ 5 is healthy' },
     ratio:          { text: 'Live buyers ÷ live sellers - a rough demand signal.', unit: 'ratio', dir: '> 1 = buyers outnumber sellers' },
@@ -245,7 +248,7 @@
     { key: 'delta',          label: 'Δ',        align: 'right', width: 2.75 },
     { key: 'sell_score',     label: 'Priority', align: 'right', width: 6.25 },
     { key: 'avg_price',      label: 'Avg',      align: 'right', width: 4 },
-    { key: 'low_sell',       label: 'Low sell', align: 'right', width: 6.5 },
+    { key: 'low_sell',       label: 'Low ask',  align: 'right', width: 5.75 },
     { key: 'top_buy',        label: 'Top buy',  align: 'right', width: 5.75 },
     { key: 'medians_7d',     label: 'Trend',    align: 'left',  width: 4.5, noSort: true },
     { key: 'delta_90d_pct',  label: 'Δ 90d',    align: 'right', width: 4.5 },
@@ -547,8 +550,8 @@
       {#if picks.length > 0}
         <div class="scroll">
         <table class:comfortable={density === 'comfortable'} class="picks-table">
-          <colgroup><col style="width:20rem" /><col style="width:7rem" /><col style="width:8rem" /><col /></colgroup>
-          <thead><tr><th class="left">Item</th><th class="right">Low sell</th><th class="right">Vol 48h</th><th class="left">Why list now</th></tr></thead>
+          <colgroup><col /><col style="width:6.25rem" /><col style="width:5.75rem" /><col style="width:5.5rem" /><col /></colgroup>
+          <thead><tr><th class="left">Item</th><th class="left"><span class="sr-only">Actions</span></th><th class="right">Low ask</th><th class="right">Vol 48h</th><th class="left">Why list now</th></tr></thead>
           <tbody>
             {#each picks as p, i (p.key ?? p.slug)}
               <tr class="pick">
@@ -556,6 +559,7 @@
                   <span class="pick-rank">{i + 1}</span>
                   {@render cell(p, columns[0], rowDelta(p))}
                 </td>
+                <td class="left pick-act">{@render pickActions?.(p)}</td>
                 <td class="right">{fmt(p.low_sell, 'low_sell')}</td>
                 <td class="right">{fmt(p.volume_48h, 'volume_48h')}</td>
                 <td class="left reason">{@render pickReason?.(p)}</td>
@@ -738,7 +742,11 @@
     border: 1px solid var(--border);
     border-radius: var(--radius-panel);
   }
-  .picks-table { min-width: 64rem; }
+  /* Item and reason share what is left; below 40rem the panel scrolls, with
+     List still in view beside the item. */
+  .picks-table { min-width: 40rem; }
+  .picks-table td.reason { white-space: normal; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .picks-table th, .picks-table td { padding-block: var(--s3); }
   .wrap.picks { margin-bottom: var(--stack); overflow: hidden; }
   /* Horizontal scroll lives on the table's own scroller, not the panel, so

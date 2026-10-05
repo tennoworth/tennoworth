@@ -339,17 +339,20 @@
     {#if p.volume_48h < LIQUID_VOL}
       <span class="tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor - expect to wait for a buyer.">thin</span>
     {/if}
-    <span class="pick-actions">
-      <button class="pick-list" disabled={!calculationReady || !canList} onclick={() => { if (calculationReady && canList) openListingFlow(p); }} aria-label="List {p.name} on WFM">List</button>
-      <button
-        type="button"
-        class="pick-snooze"
-        onclick={() => snoozePick(p.key ?? p.slug)}
-        aria-label="Hide {p.name} for this session"
-        title="Hide for this session"
-      >×</button>
-    </span>
   </div>
+{/snippet}
+
+{#snippet pickActionsCell(p: SellRow)}
+  <span class="pick-actions">
+    <button class="pick-list" disabled={!calculationReady || !canList} onclick={() => { if (calculationReady && canList) openListingFlow(p); }} aria-label="List {p.name} on WFM">List</button>
+    <button
+      type="button"
+      class="pick-snooze"
+      onclick={() => snoozePick(p.key ?? p.slug)}
+      aria-label="Hide {p.name} for this session"
+      title="Hide for this session"
+    >×</button>
+  </span>
 {/snippet}
 
 {#snippet picksEmpty()}
@@ -583,7 +586,7 @@
   onfiltered={(rows, active) => (tableView = { rows, active: active || changesOnly })}
   scope={scopeRow} narrow={narrowChips} cta={listCta}
   picks={calculationReady && results.length > 0 && allPicks.length > 0 ? picks : null}
-  {picksHead} pickReason={pickReasonCell} {picksEmpty}
+  {picksHead} pickActions={pickActionsCell} pickReason={pickReasonCell} {picksEmpty}
   empty={emptyState} between={scoreExplainer} />
 
 <style>
@@ -999,6 +1002,5 @@
     .list-cta { width: 100%; }
     .rs { height: auto; min-height: var(--row); flex-wrap: wrap; padding: var(--s1) 0; }
     .rs .t { flex-basis: calc(100% - 2rem); white-space: normal; overflow: visible; }
-    .pick-actions { margin-left: auto; }
   }
 </style>

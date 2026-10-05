@@ -125,7 +125,7 @@
             <th>Δ 90d</th>
             <th>Trend</th>
             <th>Avg</th>
-            <th>Low sell</th>
+            <th>Low ask</th>
             <th>Vol 48h</th>
             <th class="you y1" title="How many you own - read from your inventory by the scan">Own</th>
             <th class="you" title="Priority from price × likely sell-through × bounded DE usage; not expected plat/day">Priority</th>

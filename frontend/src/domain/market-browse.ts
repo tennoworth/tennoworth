@@ -19,7 +19,7 @@ export interface BrowseRow {
   // The 90-day median itself, drawn as the sparkline's reference line.
   median90: number | null;
   // Top-of-book + demand + ducats, so the landing tables can carry the same
-  // columns as the workspace (Low sell · Top buy · Demand · Ducats).
+  // columns as the workspace (Low ask · Top buy · Demand · Ducats).
   lowSell: number;
   topBuy: number;
   ratio: number;

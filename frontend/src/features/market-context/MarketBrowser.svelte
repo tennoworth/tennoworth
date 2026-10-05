@@ -299,7 +299,7 @@
             <th title="Latest daily median vs the 90-day median">{yearMode ? 'Δ 1y' : 'Δ 90d'}</th>
             <th title="{yearMode ? 'Weekly medians, last year' : 'Daily medians, last 7 days'}">Trend</th>
             <th title="Average of recent WFM sales - list below it to sell faster">Avg</th>
-            <th title="Lowest current online sell listing">Low sell</th>
+            <th title="Lowest current online sell listing">Low ask</th>
             <th title="Highest current online buy offer">Top buy</th>
             <th title="Trades completed in the last 48 hours">Vol 48h</th>
             <th title="Live buyers ÷ live sellers - > 1 means buyers outnumber sellers">Demand</th>

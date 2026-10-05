@@ -179,13 +179,13 @@ test('Sell headers sort by keyboard and the Column guide explains every visible 
   const results = page.locator('.wrap.results');
   const priority = results.getByRole('columnheader', { name: /^Priority/ });
   await expect(priority).toHaveAttribute('aria-sort', 'descending');
-  const sortByAsk = results.getByRole('button', { name: 'Low sell', exact: true });
+  const sortByAsk = results.getByRole('button', { name: 'Low ask', exact: true });
   await sortByAsk.focus();
   await page.keyboard.press('Enter');
-  const ask = results.getByRole('columnheader', { name: /^Low sell/ });
+  const ask = results.getByRole('columnheader', { name: /^Low ask/ });
   await expect(ask).toHaveAttribute('aria-sort', 'descending');
   await expect(priority).toHaveAttribute('aria-sort', 'none');
-  await expect(results.locator('.count')).toContainText('Low sell ↓');
+  await expect(results.locator('.count')).toContainText('Low ask ↓');
   const asks = await results.locator('tbody td.col-low_sell').allInnerTexts();
   const values = asks.map(text => Number.parseFloat(text)).filter(Number.isFinite);
   expect(values, 'rows follow the keyboard sort').toEqual([...values].sort((a, b) => b - a));
@@ -351,7 +351,7 @@ test('selling tables label pick facts and retain readable item identities', asyn
   await page.goto('/?preview-desktop&sample');
   await page.locator('.sidebar').getByRole('button', { name: /^Sell/ }).click();
   const picks = page.getByRole('region', { name: 'Top picks', exact: true });
-  await expect(picks.getByRole('columnheader')).toHaveText(['Item', 'Low sell', 'Vol 48h', 'Why list now']);
+  await expect(picks.getByRole('columnheader')).toHaveText(['Item', 'Actions', 'Low ask', 'Vol 48h', 'Why list now']);
   for (const selector of ['.picks-table td:first-child', '.results tbody td:first-child']) {
     const widths = await page.locator(selector).evaluateAll(cells => cells.map(cell => cell.getBoundingClientRect().width));
     expect(widths.length).toBeGreaterThan(0);
@@ -364,6 +364,27 @@ test('selling tables label pick facts and retain readable item identities', asyn
   await scroll.scrollIntoViewIfNeeded();
   await scroll.evaluate(el => { el.scrollLeft = el.scrollWidth; });
   await expect(page.getByRole('columnheader', { name: /Stack value/ })).toBeInViewport();
+});
+
+// Top Picks was a 1024px table with List in its last column, so any window
+// narrower than ~1100px had to scroll sideways to act on a pick.
+test('a pick can be listed without scrolling sideways at any width', async ({ page }) => {
+  await page.goto('/?preview-desktop&sample');
+  await previewShell(page);
+  const picks = page.getByRole('region', { name: 'Top picks', exact: true });
+  for (const width of [320, 560, 800, 1100, 1440]) {
+    await page.setViewportSize({ width, height: 700 });
+    const list = picks.getByRole('button', { name: /^List .+ on WFM$/ }).first();
+    const hide = picks.getByRole('button', { name: /^Hide .+ for this session$/ }).first();
+    await list.scrollIntoViewIfNeeded();
+    const scroller = picks.locator('.scroll');
+    expect(await scroller.evaluate(element => element.scrollLeft), `${width}px needs no sideways scroll`).toBe(0);
+    const edge = (await scroller.boundingBox())!;
+    for (const control of [list, hide]) {
+      const box = (await control.boundingBox())!;
+      expect(box.x + box.width, `${width}px keeps the pick actions inside the panel`).toBeLessThanOrEqual(edge.x + edge.width + 0.5);
+    }
+  }
 });
 
 test('page background keeps fine repeating tiles on tall WebKit surfaces', async ({ browser }) => {
