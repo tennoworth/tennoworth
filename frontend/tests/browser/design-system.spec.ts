@@ -286,13 +286,18 @@ test('hosted Meta Drift shows a top ten, expands in place, and keeps Δ share in
 
 // At 320x480 the strip, nav and sidebar foot pushed the first decision to
 // 346px of a 480px window. The foot now follows the workspace on narrow
-// windows and sits under the sidebar on wide ones.
+// windows and sits under the sidebar on wide ones. The strip's own height
+// depends on the snapshot (a Baro countdown adds a row), so the check is on
+// what sits between the strip and the view, not on a pixel position.
 test('a short phone-width window reaches the view before the project links', async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 480 });
   await page.goto('/?preview-desktop&sample');
   await previewShell(page);
   const heading = page.locator('main .view-header h2').first();
-  expect((await heading.boundingBox())!.y, 'the view heading is in the first half of the window').toBeLessThan(240);
+  const nav = (await page.locator('aside.sidebar nav').first().boundingBox())!;
+  const aside = (await page.locator('aside.sidebar').boundingBox())!;
+  expect(aside.y + aside.height - (nav.y + nav.height), 'only the nav row sits between the strip and the view').toBeLessThanOrEqual(8);
+  expect((await heading.boundingBox())!.y).toBeGreaterThanOrEqual(aside.y + aside.height);
   const foot = page.locator('.sfoot');
   const main = page.locator('main.workspace');
   expect((await foot.boundingBox())!.y).toBeGreaterThanOrEqual((await main.boundingBox())!.y + (await main.boundingBox())!.height - 1);
