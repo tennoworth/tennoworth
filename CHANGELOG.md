@@ -54,6 +54,46 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.7 - 2026-10-05
+
+# 🔍 TennoWorth Desktop 0.8.7
+
+TennoWorth Desktop 0.8.7 makes the numbers you sell by easier to read and harder to misread.
+
+Baro's arrival notice now tells you what is worth buying and how many ducats your items could earn, and notification history is organized by day. The Sell table explains every column in one guide, its columns say what they measure, and the prices and ages behind repricing advice are stated honestly. Small windows reach the first decision sooner, and more controls work with a keyboard and a screen reader.
+
+## Changelog (11)
+
+### Baro and notifications
+
+- **Baro's arrival notice shows buying value and ducat yield** See worthwhile picks at snapshot prices and how many ducats your held items could yield. <!-- app-note {"id":"baro-arrival-value","kind":"improved"} -->
+- **Notification history is easier to scan** Separate timestamps, day groups and organized Baro and daily digest details make the next action easier to find. <!-- app-note {"id":"notification-history-layout","kind":"improved"} -->
+
+### Selling
+
+- **One guide explains every Sell column** The small "?" beside each column header is replaced by a Column guide next to Columns, and every header can now be sorted from the keyboard. <!-- app-note {"id":"sell-column-guide","kind":"improved"} -->
+- **Sell columns say what they measure** Score is now Priority, Potential is now Stack value, and Low sell is now Low ask. Stack value counts only the copies you can sell. <!-- app-note {"id":"sell-column-names","kind":"improved"} -->
+- **Top picks keep List within reach** List and hide sit beside each pick, so a narrow window no longer has to scroll sideways to act on one. <!-- app-note {"id":"top-picks-actions-in-reach","kind":"improved"} -->
+- **Repricing advice states its real basis** My orders shows how old the market snapshot actually is, and a reprice reads as the cut or raise to your ask. Stale-price warnings read correctly. <!-- app-note {"id":"honest-market-age","kind":"fixed"} -->
+
+### Planning
+
+- **Trade Session and relic numbers say what they count** Trade Session shows the trades you have left today, and a relic shows the expected value of cracking every copy you own. <!-- app-note {"id":"trade-relic-copy","kind":"improved"} -->
+
+### Price watches
+
+- **Watch reconnects use less data** Reconnecting the live price watch reuses the item list it already has instead of downloading the whole catalogue again. <!-- app-note {"id":"watch-reconnect-catalogue","kind":"improved"} -->
+
+### Accessibility and layout
+
+- **Unavailable buttons look unavailable** Buttons such as Add watch and Scan game no longer look clickable while they are disabled. <!-- app-note {"id":"disabled-primary-buttons","kind":"fixed"} -->
+- **Fields and order actions are named for screen readers** Fields announce their visible labels, and order buttons name the action and the item. <!-- app-note {"id":"accessible-field-names","kind":"fixed"} -->
+- **Small windows reach the first decision sooner** In narrow windows, project links and feedback move to the bottom of the page. <!-- app-note {"id":"compact-narrow-shell","kind":"improved"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.8.6 - 2026-10-02
 
 # 🧩 TennoWorth Desktop 0.8.6
