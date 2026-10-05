@@ -1,5 +1,5 @@
 {
-  "version": "0.8.6",
+  "version": "0.8.7",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -734,6 +734,133 @@
           "kind": "fixed",
           "title": "Ledger and price watches show the latest data",
           "body": "A slow reload could replace newer results in the Ledger and Price watches; it no longer does.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.7",
+      "date": "2026-10-05",
+      "changes": [
+        {
+          "id": "baro-arrival-value",
+          "kind": "improved",
+          "title": "Baro's arrival notice shows buying value and ducat yield",
+          "body": "See worthwhile picks at snapshot prices and how many ducats your held items could yield.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "notification-history-layout",
+          "kind": "improved",
+          "title": "Notification history is easier to scan",
+          "body": "Separate timestamps, day groups and organized Baro and daily digest details make the next action easier to find.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "sell-column-guide",
+          "kind": "improved",
+          "title": "One guide explains every Sell column",
+          "body": "The small \"?\" beside each column header is replaced by a Column guide next to Columns, and every header can now be sorted from the keyboard.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "sell-column-names",
+          "kind": "improved",
+          "title": "Sell columns say what they measure",
+          "body": "Score is now Priority, Potential is now Stack value, and Low sell is now Low ask. Stack value counts only the copies you can sell.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "top-picks-actions-in-reach",
+          "kind": "improved",
+          "title": "Top picks keep List within reach",
+          "body": "List and hide sit beside each pick, so a narrow window no longer has to scroll sideways to act on one.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "honest-market-age",
+          "kind": "fixed",
+          "title": "Repricing advice states its real basis",
+          "body": "My orders shows how old the market snapshot actually is, and a reprice reads as the cut or raise to your ask. Stale-price warnings read correctly.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "trade-relic-copy",
+          "kind": "improved",
+          "title": "Trade Session and relic numbers say what they count",
+          "body": "Trade Session shows the trades you have left today, and a relic shows the expected value of cracking every copy you own.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "watch-reconnect-catalogue",
+          "kind": "improved",
+          "title": "Watch reconnects use less data",
+          "body": "Reconnecting the live price watch reuses the item list it already has instead of downloading the whole catalogue again.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "disabled-primary-buttons",
+          "kind": "fixed",
+          "title": "Unavailable buttons look unavailable",
+          "body": "Buttons such as Add watch and Scan game no longer look clickable while they are disabled.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "accessible-field-names",
+          "kind": "fixed",
+          "title": "Fields and order actions are named for screen readers",
+          "body": "Fields announce their visible labels, and order buttons name the action and the item.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "compact-narrow-shell",
+          "kind": "improved",
+          "title": "Small windows reach the first decision sooner",
+          "body": "In narrow windows, project links and feedback move to the bottom of the page.",
           "platforms": [
             "windows",
             "linux"
