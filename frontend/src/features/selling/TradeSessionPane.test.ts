@@ -37,6 +37,21 @@ function deferred<T>() {
 }
 
 describe('native Trade Session planning', () => {
+  // The header's "8 remaining" sat beside "Up to 8 estimated trades": one
+  // number with two meanings. Both now say what the number counts.
+  it('names the daily allowance and the budget cap it sets', async () => {
+    await mountPane();
+    expect(screen.getByText(/^8 trades left today$/)).toBeTruthy();
+    expect(screen.getByText("Can't exceed the 8 trades left today.")).toBeTruthy();
+  });
+
+  it('names the per-batch cap when it is lower than the daily allowance', async () => {
+    services.desktopTradeSessionState.mockResolvedValue({ allowance: { remaining: 80, snapshot_id: 'one' }, quantities: {}, bulk_slugs: [] });
+    services.evaluateTradeSession.mockImplementation(async () => plan('Initial'));
+    render(TradeSessionPane, { props: { owned: new Map(), market: null, reserveCopies: 0, advice: new Map(), scanning: false, onscan: async () => {}, onreview: vi.fn() } });
+    expect(await screen.findByText('Up to 50 estimated trades per batch.')).toBeTruthy();
+  });
+
   it('disables review while pending and ignores a stale successful reply', async () => {
     const { onreview } = await mountPane();
     const older = deferred<Plan>();

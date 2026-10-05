@@ -372,6 +372,16 @@ test('narrow order filters stay reachable and routines remain an actionable chec
   }
 });
 
+// "32p total" read as a sum you would receive; it is the expected value of
+// cracking every owned copy, and one crack can land anywhere.
+test('relic totals read as expected value across the owned copies', async ({ page }) => {
+  await page.goto('/?preview-desktop&sample');
+  await previewShell(page);
+  await page.locator('.sidebar').getByRole('button', { name: /^Relics/ }).click();
+  await expect(page.locator('.relic-meta').first()).toContainText(/≈\d+p expected across \d+/);
+  await expect(page.locator('.relic-meta').first()).not.toContainText(/\dp total/);
+});
+
 test('monthly goals add, rename and remove individually', async ({ page }) => {
   await page.goto('/?preview-desktop&sample');
   await previewShell(page);

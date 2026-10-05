@@ -58,8 +58,8 @@ let relicVisible = $derived(relicShowAll ? relicPlan : relicPlan.slice(0, RELIC_
                     {p.moving_count}/{p.total_rewards} rewards moving
                   </span>
                   <span data-shell class="muted">·</span>
-                  <span data-shell title="If you cracked every one you own.">
-                    {p.epp_owned.toFixed(0)}p total
+                  <span data-shell title="Expected value of cracking every one you own; any single crack varies.">
+                    ≈{p.epp_owned.toFixed(0)}p expected across {p.owned}
                   </span>
                   {#if p.sell_now > 0}
                     <span data-shell class="muted">·</span>
