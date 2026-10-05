@@ -208,7 +208,7 @@
     class="lede-dot"
     role="img"
     aria-label="About this view"
-    title="Items in your inventory worth listing right now, ranked by prioritization score."
+    title="Items in your inventory worth listing right now, ranked by priority."
   >ⓘ</span>
   <!-- Summary strip: totals with since-last-scan deltas; Listed / Needs fixing
        appear once the orders panel has reported; the last cell is the
@@ -225,7 +225,7 @@
       {#if calculationReady && fmtDelta(sellableDelta)}<span class="d" class:up={(sellableDelta ?? 0) > 0} class:down={(sellableDelta ?? 0) < 0}>{fmtDelta(sellableDelta)}</span>{/if}
     </div>
     <div class="cell">
-      <span class="k">{unavailableCount ? 'Known estimated value' : estimatedGuidance ? 'Estimated value' : 'Potential'}</span>
+      <span class="k">{unavailableCount ? 'Known estimated value' : estimatedGuidance ? 'Estimated value' : 'Stack value'}</span>
       <span class="v">{calculationReady ? totalPotential.toLocaleString(undefined, { maximumFractionDigits: 0 }) : 'Unavailable'}{#if calculationReady}<span class="unit">p</span>{/if}</span>
       {#if calculationReady && fmtDelta(potentialDelta)}<span class="d" class:up={(potentialDelta ?? 0) > 0} class:down={(potentialDelta ?? 0) < 0}>{fmtDelta(potentialDelta, 'p')}</span>{/if}
     </div>
@@ -262,7 +262,7 @@
     <div class="so-body">
       <strong>How Sell works</strong>
       <p class="muted">
-        Your inventory is ranked by a prioritization score - what to list right
+        Your inventory is ranked by priority - what to list right
         now from price, turnover, and bounded DE usage. Review the prices, then <strong>List on WFM</strong> posts them
         hidden so no buyer sees them until you flip them visible in
         <strong>My orders</strong>.
@@ -308,7 +308,7 @@
   <div class="card empty">
     <div>
       <strong>No picks clear the bar right now.</strong>
-      <p class="muted">Nothing owned trades often enough and scores high enough to headline - check the table below for the rest.</p>
+      <p class="muted">Nothing owned trades often enough and ranks high enough to headline - check the table below for the rest.</p>
     </div>
   </div>
 {/if}
@@ -326,8 +326,8 @@
   </div>
   <span
     class="muted picks-exp"
-    title="Same prioritization Score as the table below - price × likely sell-through × a bounded DE usage weight. It is not expected plat/day. Picks also need at least 3 trades/48h and {MIN_PICK_SCORE} score points to clear the bar."
-  >Best sells right now, ranked by prioritization score - patience listings excluded.</span>
+    title="Same Priority as the table below - price × likely sell-through × a bounded DE usage weight. It is not expected plat/day. Picks also need at least 3 trades/48h and {MIN_PICK_SCORE} priority points to clear the bar."
+  >Best sells right now, ranked by priority - patience listings excluded.</span>
 {/snippet}
 
 {#snippet pickReasonCell(p: SellRow)}
@@ -475,18 +475,17 @@
     open={!scoreExplainerDismissed}
     ontoggle={(e) => (scoreExplainerDismissed = !e.currentTarget.open)}
   >
-    <summary>About the “Score” column</summary>
+    <summary>About the “Priority” column</summary>
     <div class="score-details">
-      A <strong>prioritization score</strong>, not expected plat/day -
+      A <strong>priority ranking</strong>, not expected plat/day -
       <code>min(sellable owned, max(0.05, vol_48h / 2)) × clearing price × usage weight</code>.
       The DE usage weight is bounded from 0.75× to 1.25×; missing or invalid
       usage is neutral. Clearing
       price is the lowest live ask, clamped up to the 90-day median when the
       ask is a lone troll undercut (so one 1p listing can't crater a row).
       Higher means list sooner. Actual platinum totals remain unweighted. Items below <strong>3 trades / 48 h</strong>
-      keep their computed score and receive a “patience” tag, but are excluded from Top Picks.
-      Click <code>?</code> on any column header for the same kind of
-      explainer.
+      keep their computed priority and receive a “patience” tag, but are excluded from Top Picks.
+      The <strong>Column guide</strong> above the table explains every column.
     </div>
   </details>
   {/if}
@@ -780,7 +779,7 @@
   }
   .filters input, .filters select { text-transform: none; letter-spacing: 0; }
 
-  /* First-session Score explainer, reworked as an inline <details> expander
+  /* First-session Priority explainer, reworked as an inline <details> expander
      (D9) - one quiet summary line, the how-it's-calculated body folded under
      it. Dismissal = collapsed, persisted via the same flag as before. */
   .score-expander {

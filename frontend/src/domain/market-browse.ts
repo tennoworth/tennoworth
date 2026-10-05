@@ -201,9 +201,9 @@ export function dispositionChanges(market: Market | null | undefined, limit = 12
 }
 
 /** A hand-off row: a market row plus the three numbers only the desktop app can
- *  fill (owned · score · potential), with SAMPLE owned counts so the landing
- *  can show what a completed row looks like. Score follows the app's bounded
- *  price × turnover × usage prioritization; potential remains owned × avg. */
+ *  fill (owned · priority · stack value), with SAMPLE owned counts so the
+ *  landing can show what a completed row looks like. Priority follows the app's
+ *  bounded price × turnover × usage weighting; stack value remains owned × avg. */
 export interface HandoffRow extends BrowseRow {
   owned: number;
   score: number;

@@ -1,5 +1,6 @@
 <script lang="ts">
   import DemandCell from './DemandCell.svelte';
+  import ColumnGuide from './ColumnGuide.svelte';
   import { untrack, type Snippet } from 'svelte';
   import Sparkline from '../../ui/Sparkline.svelte';
   import { hasSparkline } from '../../ui/sparkline';
@@ -202,29 +203,13 @@
     return counts;
   });
 
-  let openHelp = $state<string | null>(null);
-  function toggleHelp(key: string, e: MouseEvent): void {
-    e.stopPropagation();
-    openHelp = openHelp === key ? null : key;
-  }
-  $effect(() => {
-    if (!openHelp) return;
-    const handler = (e: MouseEvent): void => {
-      const t = e.target as HTMLElement | null;
-      if (!t?.closest('.help-popover, .info-btn')) openHelp = null;
-    };
-    document.addEventListener('click', handler, true);
-    return () => document.removeEventListener('click', handler, true);
-  });
-
   let hasDeltas = $derived(deltas && deltas.size > 0);
 
-  // Help text shown on hover (native title + dotted underline). Plain
-  // language, no marketing - say what the number actually means.
-  // Each help entry is {text, unit, dir} so the popover can render the
-  // jargon-y bits explicitly (a casual-user persona reported reading the
-  // column name and not knowing what direction was "good"). Falls back
-  // to hover-tooltip for users who never click.
+  // Column help for the header tooltip and the Column guide. Plain language,
+  // no marketing - say what the number actually means. Each entry is
+  // {text, unit, dir} so the guide can state the jargon-y bits explicitly (a
+  // casual-user persona read a column name without knowing which direction
+  // was "good").
   interface HelpEntry { text: string; unit?: string; dir?: string; }
   const HELP: Record<string, HelpEntry> = {
     name:           { text: 'Display name on warframe.market. Click to open the listing.' },
@@ -235,9 +220,9 @@
     top_buy:        { text: 'Highest current buy offer from in-game / online players.', unit: 'plat', dir: 'instant-sell ceiling' },
     volume_48h:     { text: 'Trades closed in the last 48 h.', unit: 'trades / 48 h', dir: 'higher = more liquid; ≥ 5 is healthy' },
     ratio:          { text: 'Live buyers ÷ live sellers - a rough demand signal.', unit: 'ratio', dir: '> 1 = buyers outnumber sellers' },
-    potential_plat: { text: 'Owned × Avg. Optimistic - selling N copies usually clears below the average.', unit: 'plat', dir: 'upper bound, not realistic' },
-    raw_value:      { text: 'Owned × the average of the ~5 cheapest live asks (the highlighted @ price). What the stack is worth at current listings - no liquidity discount; one troll listing barely moves it.', unit: 'plat', dir: 'falls back to Owned × Avg until the next scrape adds ask-depth data' },
-    sell_score:     { text: 'Prioritization score, not expected plat/day. Base = min(sellable owned, max(0.05, vol_48h / 2)) × clearing price; DE usage then applies a bounded 0.75×–1.25× weight. Missing or invalid usage is neutral. Items below 3 trades / 48 h get a "patience" tag.', unit: 'score points', dir: 'higher = list sooner; actual plat totals stay unweighted' },
+    potential_plat: { text: 'Sellable copies × the 48 h average trade price. Optimistic - selling many copies usually clears below the average.', unit: 'plat', dir: 'upper bound, not realistic' },
+    raw_value:      { text: 'Sellable copies × the average of the ~5 cheapest live asks (the highlighted @ price). What the stack is worth at current listings - no liquidity discount; one troll listing barely moves it.', unit: 'plat', dir: 'falls back to Sellable × Avg until the next scrape adds ask-depth data' },
+    sell_score:     { text: 'Priority ranking, not expected plat/day. Base = min(sellable owned, max(0.05, vol_48h / 2)) × clearing price; DE usage then applies a bounded 0.75×–1.25× weight. Missing or invalid usage is neutral. Items below 3 trades / 48 h get a "patience" tag.', unit: 'priority points', dir: 'higher = list sooner; actual plat totals stay unweighted' },
     ducats:         { text: 'Ducat value at Baro Ki’Teer.', unit: 'ducats', dir: 'only prime parts have a non-zero value' },
     plat_per_100d:  { text: 'Plat cost per 100 ducats of value. “Deal” badge fires below 20.', unit: 'plat / 100 ducats', dir: 'lower = better ducat trade than WFM' },
     medians_7d:     { text: 'Sparkline of the last 7 days of daily median price. Hover the line for the raw values.' },
@@ -245,7 +230,10 @@
     advice:         { text: 'Hold-or-sell call from the prime calendar (release decay, Resurgence reprints, post-vault ramps) plus the year of price history. Hover a chip for the exact numbers behind it. Advice only - nothing is automated.', dir: 'sell now = timing favors listing; hold = the ramp is still ahead' },
   };
 
-  // Fixed-layout column widths (rem). Item takes the remainder, down to the
+  // Fixed-layout column widths (rem). A sortable column is at least as wide as
+  // its label plus the sort arrow, measured in the uppercase header face: the
+  // header is a focusable button now, and a narrower cell let a sorted label
+  // spill over its neighbour. Item takes the remainder, down to the
   // ITEM_FLOOR_REM floor that `floorRem` buys it; wider on bigger desks (the
   // root font steps at 1900/2500 widen the numeric block ~6% per step). Below
   // the floor the panel scrolls sideways rather than squeezing Item - and the
@@ -255,20 +243,20 @@
     { key: 'name',           label: 'Item',     align: 'left',  width: 0 },
     { key: 'owned',          label: 'Own',      align: 'right', width: 6 },
     { key: 'delta',          label: 'Δ',        align: 'right', width: 2.75 },
-    { key: 'sell_score',     label: 'Score',    align: 'right', width: 4 },
-    { key: 'avg_price',      label: 'Avg',      align: 'right', width: 3 },
-    { key: 'low_sell',       label: 'Low sell', align: 'right', width: 4.25 },
-    { key: 'top_buy',        label: 'Top buy',  align: 'right', width: 4 },
+    { key: 'sell_score',     label: 'Priority', align: 'right', width: 6.25 },
+    { key: 'avg_price',      label: 'Avg',      align: 'right', width: 4 },
+    { key: 'low_sell',       label: 'Low sell', align: 'right', width: 6.5 },
+    { key: 'top_buy',        label: 'Top buy',  align: 'right', width: 5.75 },
     { key: 'medians_7d',     label: 'Trend',    align: 'left',  width: 4.5, noSort: true },
-    { key: 'delta_90d_pct',  label: 'Δ 90d',    align: 'right', width: 3.25 },
-    { key: 'volume_48h',     label: 'Vol 48h',  align: 'right', width: 3.75 },
-    { key: 'ratio',          label: 'Demand',   align: 'right', width: 3.75 },
+    { key: 'delta_90d_pct',  label: 'Δ 90d',    align: 'right', width: 4.5 },
+    { key: 'volume_48h',     label: 'Vol 48h',  align: 'right', width: 5.5 },
+    { key: 'ratio',          label: 'Demand',   align: 'right', width: 5.75 },
     { key: 'usage',          label: 'Played',   align: 'left',  width: 7.5, noSort: true },
     { key: 'advice',         label: 'Advice',   align: 'left',  width: 5 },
     { key: 'ducats',         label: 'Ducats',   align: 'right', width: 5.5 },
-    { key: 'plat_per_100d',  label: 'p/100d',   align: 'right', width: 3.5 },
-    { key: 'raw_value',      label: 'Raw value', align: 'right', width: 5.5 },
-    { key: 'potential_plat', label: 'Potential', align: 'right', width: 5.25 },
+    { key: 'plat_per_100d',  label: 'p/100d',   align: 'right', width: 5 },
+    { key: 'raw_value',      label: 'Raw value', align: 'right', width: 7 },
+    { key: 'potential_plat', label: 'Stack value', align: 'right', width: 7.75 },
   ];
 
   // Ducat-deal threshold: anything below ~20p per 100 ducats is a row
@@ -292,6 +280,8 @@
     }
     return cols;
   });
+
+  let guideEntries = $derived(columns.filter((c) => HELP[c.key]).map((c) => ({ key: c.key, label: c.label, ...HELP[c.key] })));
 
   // Columns this data can fill; Item is always shown so it is not offered.
   let choosableColumns = $derived(ALL_COLUMNS.filter((c) => c.key !== 'name'
@@ -626,6 +616,7 @@
       {#if sorted.length > pageSize}· {(pageStart + 1).toLocaleString()}–{pageEnd.toLocaleString()}{/if}
     </div>
     <span class="grow"></span>
+    <ColumnGuide entries={guideEntries} />
     {#if oncolumnschange}
       <div class="col-chooser">
         <button type="button" class="btn" aria-expanded={columnsOpen} aria-controls="col-chooser-panel" onclick={() => (columnsOpen = !columnsOpen)}>Columns ▾</button>
@@ -652,37 +643,19 @@
       <tr>
         {#each columns as col (col.key)}
           <th
-            onclick={() => setSort(col.key)}
             class={col.align}
             class:active={sortKey === col.key}
             class:nosort={col.noSort}
             title={HELP[col.key]?.text}
+            aria-sort={col.noSort ? undefined : sortKey === col.key ? (sortDir === -1 ? 'descending' : 'ascending') : 'none'}
           >
-            <span class="hcontent">
-              <span class="label">{col.label}</span>
-              {#if HELP[col.key]}
-                <button
-                  type="button"
-                  class="info-btn"
-                  aria-label="What does {col.label} mean?"
-                  onclick={(e) => toggleHelp(col.key, e)}
-                >?</button>
-                {#if openHelp === col.key}
-                  <span class="help-popover" role="tooltip">
-                    <span class="hp-text">{HELP[col.key].text}</span>
-                    {#if HELP[col.key].unit}
-                      <span class="hp-meta"><span class="hp-key">unit</span> {HELP[col.key].unit}</span>
-                    {/if}
-                    {#if HELP[col.key].dir}
-                      <span class="hp-meta"><span class="hp-key">direction</span> {HELP[col.key].dir}</span>
-                    {/if}
-                  </span>
-                {/if}
-              {/if}
-              {#if sortKey === col.key && !col.noSort}
-                <span class="arrow">{sortDir === -1 ? '↓' : '↑'}</span>
-              {/if}
-            </span>
+            {#if col.noSort}
+              {col.label}
+            {:else}
+              <button type="button" class="sort" onclick={() => setSort(col.key)}>
+                {col.label}{#if sortKey === col.key}<span class="arrow" aria-hidden="true">{sortDir === -1 ? '↓' : '↑'}</span>{/if}
+              </button>
+            {/if}
           </th>
         {/each}
       </tr>
@@ -873,8 +846,10 @@
     border-color: currentColor;
     background: var(--panel-2);
   }
+  /* Counts keep the chip's full colour: dimming them with opacity dropped
+     them to about 2.8:1. */
   .pill-n {
-    opacity: 0.65;
+    font-family: var(--font-mono);
     font-size: var(--text-caption);
   }
 
@@ -922,7 +897,6 @@
     text-transform: uppercase;
     color: var(--muted);
     white-space: nowrap;
-    cursor: pointer;
     user-select: none;
     position: sticky;
     top: 0;
@@ -943,80 +917,27 @@
   }
   tr.pick td.col-name a { font-weight: 600; }
   td.reason { font-family: inherit; overflow: hidden; }
-  th .hcontent {
-    display: inline-flex;
-    align-items: center;
-    gap: 5px;
-    position: relative;
-  }
-  .info-btn {
-    font-size: var(--text-caption);
-    color: var(--muted);
-    background: transparent;
-    border: 1px solid var(--border);
-    border-radius: 50%;
-    width: 14px;
-    height: 14px;
-    padding: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    line-height: 1;
-    cursor: pointer;
-    font-family: inherit;
-    transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
-  }
-  th:hover .info-btn,
-  .info-btn:focus {
-    color: var(--accent);
-    border-color: var(--accent);
-  }
-  /* A viewport anchor escapes table scrollers and stays reachable after resize. */
-  .help-popover {
-    position: fixed;
-    bottom: 1rem;
-    left: 1rem;
-    max-height: calc(100dvh - 2rem);
-    overflow-y: auto;
-    z-index: var(--layer-popover);
-    width: min(280px, calc(100vw - 2rem));
-    background: var(--panel);
-    border: 1px solid var(--accent);
-    border-radius: var(--radius-panel);
-    padding: 10px 12px;
-    box-shadow: var(--shadow-pop);
-    font-size: var(--text-caption);
-    font-weight: 400;
-    color: var(--fg);
-    line-height: 1.55;
-    letter-spacing: 0;
-    text-transform: none;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    white-space: normal;
-    cursor: default;
-  }
-  th.right .help-popover { left: 1rem; right: auto; }
-  .hp-text { color: var(--fg); }
-  .hp-meta { color: var(--muted); font-size: var(--text-caption); display: flex; gap: 6px; }
-  .hp-key {
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--accent);
-    min-width: 60px;
-    font-weight: 600;
-  }
   th:hover { background: var(--hover); }
   th.right, td.right { text-align: right; }
-  /* Column heads keep their width honest: the ? help affordance is drawn only
-     on hover / keyboard focus, floating left of the label. */
-  .info-btn { position: absolute; right: calc(100% + 4px); opacity: 0; pointer-events: none; }
-  th.left .info-btn { right: auto; left: calc(100% + 4px); }
-  th:hover .info-btn, th:focus-within .info-btn { opacity: 1; pointer-events: auto; }
-  th.left .hcontent { padding-right: 0; }
-  th.right .hcontent { justify-content: flex-end; }
   th.active { color: var(--accent); }
+  /* The header's own type, as a real button so sorting is keyboard reachable;
+     the whole cell height is its target. */
+  th button.sort {
+    all: unset;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: var(--s1);
+    width: 100%;
+    min-height: var(--ctl-xs);
+    cursor: pointer;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    color: inherit;
+  }
+  th.right button.sort { justify-content: flex-end; }
+  th button.sort:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
   /* Hairline row dividers only (was additionally zebra-striped on even
      rows) - the hairline + this hover tint carry row separation on their
      own now that the header/panel borders read at proper contrast. */

@@ -137,14 +137,16 @@ test('open editors and disclosures survive resizing in both directions', async (
     await assertWithinViewport(page, filters);
   }
   await page.getByRole('button', { name: 'Close filters' }).click();
-  const help = page.getByRole('button', { name: 'What does Score mean?' });
-  await help.focus();
-  await help.press('Enter');
+  const guideButton = page.getByRole('button', { name: 'Column guide' });
+  await guideButton.focus();
+  await guideButton.press('Enter');
+  const guide = page.getByRole('dialog', { name: 'Column guide' });
   for (const width of [320, 901, 1440]) {
     await page.setViewportSize({ width, height: 480 });
-    await assertWithinViewport(page, page.locator('.help-popover'));
+    await assertWithinViewport(page, guide);
+    await expect(guide.getByRole('button', { name: 'Close' })).toBeInViewport();
   }
-  await page.locator('.view-header h2').click();
+  await guide.getByRole('button', { name: 'Close' }).click();
   await page.locator('.sidebar').getByRole('button', { name: /^Rivens/ }).click();
   await page.getByRole('button', { name: 'Comps', exact: true }).first().click();
   await expect(page.getByText('Sample seller')).toBeVisible();

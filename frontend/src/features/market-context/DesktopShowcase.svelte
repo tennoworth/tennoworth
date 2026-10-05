@@ -8,7 +8,7 @@
   // The hand-off panel on the informational landing (hosted site only -
   // {#if !isDesktop} in App.svelte; a desktop user is already in the app).
   // Flow v2: instead of a prose showcase, the SAME rows the visitor just read
-  // in the search table, now with Own · Score · Potential filled (sample owned
+  // in the search table, now with Own · Priority · Stack value filled (sample owned
   // counts, everything else from the snapshot), beside a site-vs-app table and
   // the two install buttons. The install commands, first-run notes and the
   // verify/signature information live under one disclosure - they carry
@@ -116,8 +116,8 @@
             <col style="width:4.25rem" />
             <col style="width:4rem" />
             <col style="width:3.5rem" />
-            <col style="width:4rem" />
-            <col style="width:5.25rem" />
+            <col style="width:5.5rem" />
+            <col style="width:7rem" />
             <col style="width:4rem" />
           </colgroup>
           <thead><tr>
@@ -128,8 +128,8 @@
             <th>Low sell</th>
             <th>Vol 48h</th>
             <th class="you y1" title="How many you own - read from your inventory by the scan">Own</th>
-            <th class="you" title="Prioritization score: price × likely sell-through × bounded DE usage; not expected plat/day">Score</th>
-            <th class="you" title="Owned × Avg">Potential</th>
+            <th class="you" title="Priority from price × likely sell-through × bounded DE usage; not expected plat/day">Priority</th>
+            <th class="you" title="Sellable copies × the 48 h average trade price">Stack value</th>
             <th class="you"></th>
           </tr></thead>
           <tbody>
@@ -163,7 +163,7 @@
         </div>
       {/if}
       <div class="line">
-        <span class="exp">Score prioritizes what to list from price, likely sell-through, and a bounded DE usage weight - it is not expected plat/day. Potential remains the unweighted stack value. Owned counts here are sample values; the desktop app scans the running game and fills these. Nothing is uploaded; no WFM login until you list.</span>
+        <span class="exp">Priority ranks what to list from price, likely sell-through, and a bounded DE usage weight - it is not expected plat/day. Stack value remains the unweighted value of the copies you can sell. Owned counts here are sample values; the desktop app scans the running game and fills these. Nothing is uploaded; no WFM login until you list.</span>
       </div>
       <div class="cta">
         <a class="btn lg primary" href={RELEASES} target="_blank" rel="noopener noreferrer">Windows · .exe</a>
@@ -290,7 +290,7 @@
   .hbody { display: grid; grid-template-columns: minmax(0, 1fr) 24rem; }
   .rows { border-right: 1px var(--rule) var(--hairline); min-width: 0; display: flex; flex-direction: column; }
   .rows .scroll { overflow-x: auto; }
-  .rows table { min-width: 44rem; }
+  .rows table { min-width: 47.25rem; }
   .rows .line {
     display: flex; align-items: center; gap: var(--s2);
     min-height: var(--rail); padding: var(--s2) var(--inset);
