@@ -1,12 +1,17 @@
 //! Clock-driven reminders use the same cached snapshot as the desktop, never a
 //! second upstream feed. A visit's carried stock is not evidence of current stock.
 use crate::{
+    notification_contract::{BaroNotification, BaroNotificationValue, DigestNotification, DigestOpportunity, NotificationContent},
     persistence::Db,
     services::market::{self, MarketCache},
     services::notifications::{self, Candidate},
     services::sellables::{self, MarketData},
 };
 use chrono::{DateTime, Local, Timelike};
+use market_domain::{
+    baro::{baro_value, BaroRequest},
+    planners::PlannerOwned,
+};
 use serde_json::Value;
 use std::collections::BTreeSet;
 use std::time::{Duration, Instant};
@@ -148,7 +153,12 @@ pub(crate) fn vault_affects(
         .collect()
 }
 
-pub fn scheduled(market: &Value, held: &BTreeSet<String>, now: i64) -> Vec<Candidate> {
+pub fn scheduled(
+    market: &Value,
+    held: &BTreeSet<String>,
+    owned: Option<&[PlannerOwned]>,
+    now: i64,
+) -> Vec<Candidate> {
     let mut out = vec![];
     if let Some(baro) = market.get("baro") {
         if let (Some(start), Some(end)) = (
@@ -165,17 +175,72 @@ pub fn scheduled(market: &Value, held: &BTreeSet<String>, now: i64) -> Vec<Candi
                     string(baro, "activation"),
                     string(baro, "expiry")
                 );
+                let mut content = BaroNotification {
+                    location: string(baro, "location").into(),
+                    activation: string(baro, "activation").into(),
+                    expiry: string(baro, "expiry").into(),
+                    stock_count: None,
+                    value: None,
+                    held: vec![],
+                };
                 if current_stock {
                     let stock: Vec<_> = rows(field(baro, "inventory")).collect();
+                    content.stock_count = Some(stock.len());
                     let matches: Vec<_> = stock
                         .iter()
                         .filter(|s| held.contains(string(s, "slug")))
                         .map(|s| string(s, "item"))
                         .collect();
                     body.push_str(&format!(" {} stock items.", stock.len()));
+                    if let Ok(stock) = serde_json::from_value(field(baro, "inventory").clone()) {
+                        if let Ok(value) = baro_value(&BaroRequest {
+                            stock,
+                            market: market.clone(),
+                            owned: owned.map(<[PlannerOwned]>::to_vec),
+                        }) {
+                            if !value.best.is_empty() {
+                                let picks: Vec<_> = value
+                                    .best
+                                    .iter()
+                                    .map(|p| format!("{} {:.2}p/ducat", p.name, p.plat_per_ducat))
+                                    .collect();
+                                let age = if fresh(string(market, "updated_at"), now) {
+                                    "at snapshot asking prices"
+                                } else {
+                                    "at last snapshot asking prices"
+                                };
+                                body.push_str(&format!(" Best value {age}: {}", picks.join(", ")));
+                                if value.more_tradeable > 0 {
+                                    body.push_str(&format!(
+                                        " ({} more tradeable)",
+                                        value.more_tradeable
+                                    ));
+                                }
+                                let price_stamp = match string(market, "updated_at") { "" => "unknown", stamp => stamp };
+                                body.push_str(&format!(". Prices: {price_stamp}. Arrival can depress prices; resale is not guaranteed."));
+                            }
+                            if let (Some(ducats), Some(items), Some(cheap)) =
+                                (value.fodder_ducats, value.fodder_items, value.cheap_fodder)
+                            {
+                                body.push_str(&format!(" Ducat yield from all copies held: {ducats:.0}d across {items:.0} items ({cheap:.0} priced under 4p each at snapshot asks). Check keep rules in the planner before scrapping."));
+                            } else {
+                                body.push_str(" Scan to estimate ducat yield from items you hold.");
+                            }
+                            content.value = Some(BaroNotificationValue {
+                                best: value.best,
+                                more_tradeable: value.more_tradeable,
+                                price_at: string(market, "updated_at").into(),
+                                prices_stale: !fresh(string(market, "updated_at"), now),
+                                fodder_ducats: value.fodder_ducats,
+                                fodder_items: value.fodder_items,
+                                cheap_fodder: value.cheap_fodder,
+                            });
+                        }
+                    }
                     if !matches.is_empty() {
                         body.push_str(&format!(" You hold: {}.", matches.join(", ")));
                     }
+                    content.held = matches.into_iter().map(str::to_string).collect();
                 } else {
                     body.push_str(" Current stock is not yet verified.");
                 }
@@ -190,6 +255,7 @@ pub fn scheduled(market: &Value, held: &BTreeSet<String>, now: i64) -> Vec<Candi
                 );
                 candidate.stage = stage;
                 candidate.expires_at = end + DAY;
+                candidate.content = Some(NotificationContent::Baro(content));
                 out.push(candidate);
             }
         }
@@ -309,8 +375,18 @@ pub fn digest(
         .take(5)
         .map(|r| format!("{} ×{}: ~{:.0}p each", r.name, r.sellable_qty, r.price))
         .collect();
-    Some(Candidate::once(format!("digest:{local_day}"), "digest", "Today's sell opportunities".into(),
-        format!("{}. Estimated market values, not guaranteed sales. Inventory: {inventory_at}. Prices: {}.", opportunities.join(" · "), string(market, "updated_at")), "sell", now))
+    let mut candidate = Candidate::once(format!("digest:{local_day}"), "digest", "Today's sell opportunities".into(),
+        format!("{}. Estimated market values, not guaranteed sales. Inventory: {inventory_at}. Prices: {}.", opportunities.join(" · "), string(market, "updated_at")), "sell", now);
+    candidate.content = Some(NotificationContent::Digest(DigestNotification {
+        opportunities: rows.iter().take(5).map(|r| DigestOpportunity {
+            name: r.name.clone(),
+            quantity: r.sellable_qty,
+            price: r.price,
+        }).collect(),
+        inventory_at: inventory_at.into(),
+        price_at: string(market, "updated_at").into(),
+    }));
+    Some(candidate)
 }
 
 fn evaluate(app: &AppHandle) {
@@ -331,18 +407,29 @@ fn evaluate(app: &AppHandle) {
     let now = notifications::now();
     let snapshots = db.list_snapshots(1).unwrap_or_default();
     let inventory_at = snapshots.first().map(|s| s.taken_at.as_str()).unwrap_or("");
-    let held = if fresh(inventory_at, now) {
-        market
-            .overlay_owned(&db)
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|(_, count)| *count > 0)
-            .map(|(slug, _)| slug)
-            .collect()
+    let owned = if fresh(inventory_at, now) {
+        market.overlay_owned(&db).map(|counts| {
+            counts
+                .into_iter()
+                .map(|(slug, count)| PlannerOwned {
+                    name: slug.clone(),
+                    slug,
+                    count: f64::from(count),
+                    subtype: None,
+                })
+                .collect::<Vec<_>>()
+        })
     } else {
-        BTreeSet::new()
+        None
     };
-    for candidate in scheduled(&raw, &held, now) {
+    let held = owned
+        .as_ref()
+        .into_iter()
+        .flatten()
+        .filter(|rec| rec.count > 0.0)
+        .map(|rec| rec.slug.clone())
+        .collect();
+    for candidate in scheduled(&raw, &held, owned.as_deref(), now) {
         notifications::send(app, candidate);
     }
     let local = Local::now();
@@ -440,21 +527,81 @@ mod tests {
         let now = stamp(START).unwrap();
         let held = BTreeSet::from(["primed_flow".into()]);
         let mut m = market();
-        assert!(scheduled(&m, &held, now)[0]
+        assert!(scheduled(&m, &held, None, now)[0]
             .body
             .contains("You hold: Primed Flow"));
         m["baro"]["inventory_for"] = json!("2026-08-21T13:00:00Z");
-        assert!(!scheduled(&m, &held, now)[0].body.contains("You hold"));
-        assert!(scheduled(&m, &held, now)[0]
+        assert!(!scheduled(&m, &held, None, now)[0].body.contains("You hold"));
+        assert!(scheduled(&m, &held, None, now)[0]
             .body
             .contains("not yet verified"));
         m["baro"]["inventory_for"] = json!(START);
-        assert!(!scheduled(&m, &held, now + DAY + 1)[0]
+        assert!(!scheduled(&m, &held, None, now + DAY + 1)[0]
             .body
             .contains("You hold"));
         m["baro"]["activation"] = json!("invalid");
-        assert!(scheduled(&m, &held, now).is_empty());
+        assert!(scheduled(&m, &held, None, now).is_empty());
     }
+    #[test]
+    fn baro_inbox_fixture_matches_the_native_notice() {
+        let fixture: Value = serde_json::from_str(include_str!("../../../../tests/fixtures/notifications/baro.json")).unwrap();
+        let owned: Vec<PlannerOwned> = serde_json::from_value(fixture["owned"].clone()).unwrap();
+        let held = owned.iter().map(|r| r.slug.clone()).collect();
+        let notice = scheduled(&fixture["market"], &held, Some(&owned), stamp(fixture["now"].as_str().unwrap()).unwrap()).remove(0);
+        assert_eq!(notice.body, fixture["expected_body"].as_str().unwrap());
+        assert_eq!(serde_json::to_value(notice.content).unwrap(), fixture["expected_content"]);
+    }
+
+    #[test]
+    fn digest_details_match_the_inbox_fixture() {
+        let fixture: Value = serde_json::from_str(include_str!("../../../../tests/fixtures/notifications/digest.json")).unwrap();
+        let rows: Vec<_> = fixture["rows"].as_array().unwrap().iter().map(|row| sellables::SellableRow {
+            name: row["name"].as_str().unwrap().into(), slug: row["slug"].as_str().unwrap().into(),
+            sellable_qty: row["sellable_qty"].as_i64().unwrap(), price: row["price"].as_f64().unwrap(), score: row["score"].as_f64().unwrap(),
+        }).collect();
+        let notice = digest(&fixture["market"], &rows, fixture["inventory_at"].as_str().unwrap(), stamp(fixture["now"].as_str().unwrap()).unwrap(), "2026-09-04", 18).unwrap();
+        assert_eq!(serde_json::to_value(notice.content).unwrap(), fixture["expected_content"]);
+        assert!(notice.body.contains("Arcane Energize ×12: ~48p each"));
+    }
+
+    #[test]
+    fn baro_value_lines_use_current_stock_and_keep_delivery_identity() {
+        let now = stamp(START).unwrap();
+        let mut m = market();
+        m["updated_at"] = json!(START);
+        m["items"] = json!({"primed_flow":{"low5_avg":100,"median_90d":200,"vol":30},"part":{"ducats":45,"low_sell":3}});
+        m["baro"]["inventory"][0]["ducats"] = json!(350);
+        let owned = vec![PlannerOwned {
+            slug: "part".into(),
+            name: "Part".into(),
+            count: 4.0,
+            subtype: None,
+        }];
+        let held = BTreeSet::from(["part".into()]);
+        let c = scheduled(&m, &held, Some(&owned), now).remove(0);
+        assert_eq!(c.key, format!("baro:{now}"));
+        assert_eq!(c.category, "baro");
+        assert_eq!(c.stage, 2);
+        assert_eq!(c.expires_at, stamp(END).unwrap() + DAY);
+        assert!(c
+            .body
+            .contains("Best value at snapshot asking prices: Primed Flow 0.29p/ducat"));
+        assert!(c.body.contains("Arrival can depress prices"));
+        assert!(c.body.contains("180d across 4 items (4 priced under 4p"));
+        m["updated_at"] = json!("2026-09-01T13:00:00Z");
+        assert!(scheduled(&m, &held, Some(&owned), now)[0]
+            .body
+            .contains("at last snapshot asking prices"));
+        assert!(scheduled(&m, &held, None, now)[0]
+            .body
+            .contains("Scan to estimate"));
+        m["baro"]["inventory_for"] = json!("2026-08-21T13:00:00Z");
+        let stale = &scheduled(&m, &held, Some(&owned), now)[0].body;
+        assert!(stale.contains("Current stock is not yet verified"));
+        assert!(!stale.contains("Best value"));
+        assert!(!stale.contains("Ducat yield"));
+    }
+
     /// A surface can carry a stamp from *this attempt* without the attempt
     /// having observed anything. `empty_invalid` means the read was attempted
     /// and produced nothing usable, and `reconcile` records both timestamps as
@@ -529,13 +676,13 @@ mod tests {
         let now = stamp(START).unwrap();
         let mut m = json!({"surface_provenance":{"world.goals":{"data_fetched_at": START}},"event_rewards":{"goals":{"g":{"id":"g","title":"Event","starts_at":START,"ends_at":END,"completeness":"partial","groups":[{"rewards":[{"slug":"primed_flow"}]}]}}}});
         let held = BTreeSet::from(["primed_flow".into()]);
-        let out = scheduled(&m, &held, now);
+        let out = scheduled(&m, &held, None, now);
         assert_eq!(out.len(), 1);
         assert!(out[0].body.contains("partial"));
-        assert!(scheduled(&m, &BTreeSet::new(), now).is_empty());
-        assert!(scheduled(&m, &held, now + DAY + 1).is_empty());
+        assert!(scheduled(&m, &BTreeSet::new(), None, now).is_empty());
+        assert!(scheduled(&m, &held, None, now + DAY + 1).is_empty());
         m["event_rewards"]["goals"]["g"]["completeness"] = json!("unknown");
-        assert!(scheduled(&m, &held, now).is_empty());
+        assert!(scheduled(&m, &held, None, now).is_empty());
     }
     #[test]
     fn digest_requires_fresh_inventory_prices_and_local_evening() {
@@ -572,6 +719,7 @@ mod tests {
         let actual: Vec<_> = scheduled(
             &fixture["market"],
             &held,
+            None,
             stamp(fixture["now"].as_str().unwrap()).unwrap(),
         )
         .into_iter()

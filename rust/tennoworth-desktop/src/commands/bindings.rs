@@ -9,6 +9,7 @@ fn desktop_bindings_match_rust() {
     types.add::<crate::services::auto_scan::AutoScanSettings>();
     types.add::<crate::services::auto_scan::AutoScanStatus>();
     types.add::<super::listing::OwnOrder>();
+    types.add::<crate::notification_contract::NotificationContent>();
     let mut expected = types.finish().expect("unique wire types");
     expected.push_str(&format!(
         "\nexport const WATCH_FIRED_EVENT = {:?} as const;\n",

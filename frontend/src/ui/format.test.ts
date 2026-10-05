@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 
 import {
   wfmItemUrl, baroLocation, humanWindow, humanBuildTime, plat,
-  ownedBreakdown, keptNoteTitle, marketFreshness, ago,
+  ownedBreakdown, keptNoteTitle, marketFreshness, notificationDate, ago,
 } from './format.js';
 
 describe('wfmItemUrl', () => {
@@ -131,6 +131,31 @@ describe('marketFreshness', () => {
     expect(marketFreshness(undefined, now)).toBe('unknown');
     expect(marketFreshness('', now)).toBe('unknown');
     expect(marketFreshness('invalid', now)).toBe('stale');
+  });
+});
+
+describe('notificationDate', () => {
+  const now = new Date(2027, 0, 1, 0, 5).getTime();
+  it('groups by local calendar day across the year boundary', () => {
+    expect(notificationDate(new Date(2027, 0, 1, 0, 1).getTime() / 1000, now).label).toBe('Today');
+    const yesterday = notificationDate(new Date(2026, 11, 31, 23, 59).getTime() / 1000, now);
+    expect(yesterday.label).toBe('Yesterday');
+    expect(yesterday.key).toBe('2026-12-31');
+    expect(yesterday.iso).toBe(new Date(2026, 11, 31, 23, 59).toISOString());
+  });
+  it('uses calendar days rather than elapsed 24-hour windows', () => {
+    const current = new Date(2026, 9, 26, 0, 5);
+    const previous = new Date(2026, 9, 25, 0, 1);
+    expect(notificationDate(previous.getTime() / 1000, current.getTime()).label).toBe('Yesterday');
+  });
+  it('keeps older dates absolute and distinguishes years', () => {
+    const older = notificationDate(new Date(2025, 11, 31, 23).getTime() / 1000, now);
+    expect(older.key).toBe('2025-12-31');
+    expect(older.date).toContain('2025');
+    expect(older.label).not.toBe('Yesterday');
+  });
+  it.each([NaN, Infinity])('does not throw for an unavailable timestamp %s', seconds => {
+    expect(notificationDate(seconds, now)).toMatchObject({ label: 'Unknown date', iso: undefined });
   });
 });
 

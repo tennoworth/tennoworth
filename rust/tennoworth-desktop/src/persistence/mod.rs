@@ -445,7 +445,7 @@ mod tests {
     fn upgrade_drops_listing_log_and_keeps_the_rest() {
         // The version before the drop, built the way a user's database has it:
         // every earlier migration applied in turn, with history recorded.
-        let previous = MIGRATIONS.len() - 1;
+        let previous = 7;
         let path = temp_db_path();
         {
             let conn = Connection::open(&path).unwrap();
@@ -893,6 +893,55 @@ mod notification_tests {
             "baro",
             1000,
         )
+    }
+    #[test]
+    fn structured_notification_survives_restart_and_bad_details_keep_the_body() {
+        let fixture: serde_json::Value = serde_json::from_str(include_str!("../../../../tests/fixtures/notifications/baro.json")).unwrap();
+        let path = tests::temp_db_path();
+        let id;
+        {
+            let db = Db::open(&path).unwrap();
+            let mut notice = candidate();
+            notice.content = Some(serde_json::from_value(fixture["expected_content"].clone()).unwrap());
+            id = db.insert_notification(&notice, 1000, false, true).unwrap().unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        let rows = db.list_notifications().unwrap();
+        assert_eq!(serde_json::to_value(&rows[0].content).unwrap(), fixture["expected_content"]);
+        for bad in ["{", r#"{"kind":"unknown"}"#] {
+            guard(&db.conn).execute("UPDATE notification SET content=?1 WHERE id=?2", rusqlite::params![bad, id]).unwrap();
+            let rows = db.list_notifications().unwrap();
+            assert_eq!(rows.len(), 1);
+            assert_eq!(rows[0].body, "Relay");
+            assert!(rows[0].content.is_none());
+        }
+        drop(db);
+        std::fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn structured_content_upgrade_preserves_history_checkpoints_and_preferences() {
+        let path = tests::temp_db_path();
+        let previous = 8;
+        {
+            let conn = Connection::open(&path).unwrap();
+            for sql in MIGRATIONS.iter().take(previous) { conn.execute_batch(sql).unwrap(); }
+            conn.pragma_update(None, "user_version", previous as i64).unwrap();
+            conn.execute("INSERT INTO notification(category,title,body,target,created_at,read,delivery) VALUES ('baro','Saved arrival','Full saved text','baro',1000,1,'failed')", []).unwrap();
+            conn.execute("INSERT INTO notification_checkpoint(key,stage,at,expires_at) VALUES ('baro:visit',2,1000,5000)", []).unwrap();
+            conn.execute("INSERT INTO setting(key,value) VALUES ('notifications-v1','{\"popups\":false,\"categories\":{\"baro\":{\"enabled\":false,\"native\":false}}}')", []).unwrap();
+        }
+        let db = Db::open(&path).unwrap();
+        let rows = db.list_notifications().unwrap();
+        assert_eq!(rows[0].body, "Full saved text");
+        assert!(rows[0].content.is_none());
+        assert!(rows[0].read);
+        assert_eq!(rows[0].delivery, "failed");
+        assert!(!db.notification_preferences().unwrap().categories["baro"].enabled);
+        assert!(!db.notification_preferences().unwrap().popups);
+        assert!(db.insert_notification(&candidate(), 1001, true, true).unwrap().is_none());
+        drop(db);
+        std::fs::remove_file(path).unwrap();
     }
     #[test]
     fn inbox_survives_restart_and_clear_keeps_checkpoints() {

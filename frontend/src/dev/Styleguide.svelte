@@ -1,4 +1,7 @@
 <script lang="ts">
+  import NotificationRow from '../features/settings/NotificationRow.svelte';
+  import baroNotice from '../../../tests/fixtures/notifications/baro.json';
+  import type { NotificationEntry } from '../contracts/desktop';
   import UsageChart from '../features/community/UsageChart.svelte';
   import usageSample from '../../../tests/fixtures/usage/daily.json';
   import UpdateNotes from '../ui/UpdateNotes.svelte';
@@ -149,13 +152,9 @@
   {#if dataState === 'notifications'}
   <section class="ui-panel ui-stack" aria-label="Notification row reference">
     <h2>Notification history</h2>
-    <article class="notification-entry" class:unread={!notificationRead}>
-      <span>{notificationRead ? 'Read' : 'Unread'} · Completed trade</span>
-      <strong>Sold Pyrana Prime Set for 90p</strong>
-      <p>Your completed trade is saved in the Ledger. Review My Orders if the listing still needs adjustment.</p>
-      <div class="ui-notice" data-tone="warn">Desktop delivery failed. The inbox keeps the result and next action.</div>
-      <div><button class="btn" onclick={() => notificationRead = !notificationRead}>{notificationRead ? 'Mark unread' : 'Mark read'}</button></div>
-    </article>
+    <NotificationRow entry={{ id: 1, category: 'trades', title: 'Sold Pyrana Prime Set for 90p', body: 'Your completed trade is saved in the Ledger. Review My Orders if the listing still needs adjustment.', target: 'orders', created_at: Date.now() / 1000, read: notificationRead, delivery: 'failed' }} now={Date.now()} onread={() => notificationRead = true} onopen={() => notificationRead = true} />
+    {#if notificationRead}<div><button class="btn" onclick={() => notificationRead = false}>Mark unread</button></div>{/if}
+    <NotificationRow entry={{ id: 2, category: 'baro', title: "Baro Ki'Teer is here", body: baroNotice.expected_body, target: 'baro', created_at: Date.parse(baroNotice.now) / 1000, read: true, delivery: 'inbox_only', content: baroNotice.expected_content } as NotificationEntry} now={Date.now()} onread={() => {}} onopen={() => {}} />
   </section>
   {/if}
   {#if dataState === 'usage'}<UsageChart sample={usageSample} />{/if}

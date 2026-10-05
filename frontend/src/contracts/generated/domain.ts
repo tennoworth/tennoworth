@@ -4,6 +4,22 @@ export type Advice = "sell_now" | "hold" | "neutral";
 
 export type AdvisorRequest = { slugs: Array<string>, market: unknown, history: unknown, now_ms: number, };
 
+export type BaroPick = { name: string, platPerDucat: number, };
+
+export type BaroRequest = { stock: Array<BaroStock>, market: unknown,
+/**
+ * None means inventory evidence is unavailable, rather than an empty scan.
+ */
+owned: Array<PlannerOwned> | null, };
+
+export type BaroRow = { price: number | null, baseline: number | null, vol: number | null, platPerDucat: number | null, verdict: BaroVerdict, item: string, slug?: string, unique?: string, ducats?: number, credits?: number, };
+
+export type BaroStock = { item: string, slug?: string, unique?: string, ducats?: number, credits?: number, };
+
+export type BaroValue = { rows: Array<BaroRow>, best: Array<BaroPick>, moreTradeable: number, fodderDucats: number | null, fodderItems: number | null, cheapFodder: number | null, };
+
+export type BaroVerdict = "flip" | "hold" | "thin" | "skip" | "unpriced";
+
 export type BuildPath = { kind: BuildPathKind, plat: number, credits: number, seconds: number, unverified: Array<RecipeIngredient>, savingVsSet: number, platKnown: boolean, recipesKnown: boolean, };
 
 export type BuildPathKind = "buy-set" | "buy-parts-build" | "buy-parts-rush" | "sell-spares";
@@ -18,9 +34,9 @@ export type CatalogItem = { name: string, category: string | null, };
 
 export type DemandRead = { usage: UsageEntry | null, inherited: boolean, liquidity: Liquidity, band: MasteryBand | null, };
 
-export type DomainRequest = { "operation": "normalize_inventory", "input": InventoryRequest } | { "operation": "score_inventory", "input": ScoreInventoryRequest } | { "operation": "trade_session", "input": SessionRequest } | { "operation": "advisor", "input": AdvisorRequest } | { "operation": "history", "input": HistoryRequest } | { "operation": "relic_plan", "input": PlannerRequest } | { "operation": "set_recos", "input": PlannerRequest } | { "operation": "ducat_plan", "input": DucatRequest } | { "operation": "build_plan", "input": BuildRequest };
+export type DomainRequest = { "operation": "normalize_inventory", "input": InventoryRequest } | { "operation": "score_inventory", "input": ScoreInventoryRequest } | { "operation": "trade_session", "input": SessionRequest } | { "operation": "advisor", "input": AdvisorRequest } | { "operation": "history", "input": HistoryRequest } | { "operation": "relic_plan", "input": PlannerRequest } | { "operation": "set_recos", "input": PlannerRequest } | { "operation": "ducat_plan", "input": DucatRequest } | { "operation": "baro_value", "input": BaroRequest } | { "operation": "build_plan", "input": BuildRequest };
 
-export type DomainResponse = { "operation": "normalize_inventory", "result": NormalizedInventory } | { "operation": "score_inventory", "result": Array<ScoredInventoryFact> } | { "operation": "trade_session", "result": SessionPlan } | { "operation": "advisor", "result": { [key in string]: Verdict } } | { "operation": "history", "result": HistoryAnalysis } | { "operation": "relic_plan", "result": Array<RelicPlanEntry> } | { "operation": "set_recos", "result": Array<SetReco> } | { "operation": "ducat_plan", "result": DucatResult } | { "operation": "build_plan", "result": BuildResult };
+export type DomainResponse = { "operation": "normalize_inventory", "result": NormalizedInventory } | { "operation": "score_inventory", "result": Array<ScoredInventoryFact> } | { "operation": "trade_session", "result": SessionPlan } | { "operation": "advisor", "result": { [key in string]: Verdict } } | { "operation": "history", "result": HistoryAnalysis } | { "operation": "relic_plan", "result": Array<RelicPlanEntry> } | { "operation": "set_recos", "result": Array<SetReco> } | { "operation": "ducat_plan", "result": DucatResult } | { "operation": "baro_value", "result": BaroValue } | { "operation": "build_plan", "result": BuildResult };
 
 export type DucatPlan = { picks: Array<ScrapCandidate>, ducats: number, platGivenUp: number, short: number, heldBack: Array<ScrapCandidate>, };
 

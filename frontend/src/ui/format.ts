@@ -114,3 +114,23 @@ export function marketFreshness(
   if (hours <= 24) return 'aging';
   return 'stale';
 }
+
+export function notificationDate(seconds: number, now: number) {
+  const date = new Date(seconds * 1000);
+  if (!Number.isFinite(date.getTime())) {
+    return { key: 'unknown', label: 'Unknown date', date: '', shortDate: '', time: 'Unknown time', iso: undefined };
+  }
+  const key = (d: Date) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  const today = new Date(now);
+  const yesterday = new Date(now);
+  // Calendar arithmetic keeps yesterday correct across DST and year boundaries.
+  yesterday.setDate(yesterday.getDate() - 1);
+  return {
+    key: key(date),
+    label: key(date) === key(today) ? 'Today' : key(date) === key(yesterday) ? 'Yesterday' : date.toLocaleDateString(undefined, { weekday: 'long' }),
+    date: date.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }),
+    shortDate: date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+    time: date.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', second: '2-digit' }),
+    iso: date.toISOString(),
+  };
+}

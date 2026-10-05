@@ -126,4 +126,7 @@ CREATE UNIQUE INDEX listing_log_plan_item ON listing_log(plan_id, plan_index);
     r#"
 DROP TABLE IF EXISTS listing_log;
 "#,
+    r#"
+ALTER TABLE notification ADD COLUMN content TEXT;
+"#,
 ];

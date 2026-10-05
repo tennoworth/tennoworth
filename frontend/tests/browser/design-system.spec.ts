@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
+import baroFixture from '../../../tests/fixtures/notifications/baro.json' with { type: 'json' };
 import rewardFixture from '../../../tests/fixtures/relic-ocr/result.json' with { type: 'json' };
 
 // The committed snapshot is refreshed at every desktop release, so its own age
@@ -705,4 +706,75 @@ test('routine progress survives reload and failed persistence stays retryable', 
   await reloadPreview(page);
   await page.locator('.sidebar').getByRole('button', { name: /^Routines/ }).click();
   await expect(tribute).not.toBeChecked();
+});
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`${theme} Baro arrival notice opens the shared native value board`, async ({ page }, testInfo) => {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.clock.setFixedTime(new Date(baroFixture.now));
+    await page.route('**/market.json', route => route.fulfill({ json: { ...baseMarket, ...baroFixture.market } }));
+    await page.goto('/?preview-desktop&sample');
+    await previewShell(page);
+    await page.evaluate(notice => {
+      const runtime = window as unknown as { __TAURI__: { core: { invoke: (cmd: string, args?: unknown) => Promise<unknown> } }; __TAURI_INTERNALS__: { invoke: (cmd: string, args?: unknown) => Promise<unknown> } };
+      const original = runtime.__TAURI__.core.invoke;
+      const invoke = (cmd: string, args?: unknown) => cmd === 'list_notifications' ? Promise.resolve([{ id: 7, category: 'baro', title: "Baro Ki'Teer is here", body: notice.expected_body, content: notice.expected_content, target: 'baro', created_at: Date.now() / 1000, read: false, delivery: 'sent' }]) : original(cmd, args);
+      runtime.__TAURI__.core.invoke = invoke;
+      runtime.__TAURI_INTERNALS__.invoke = invoke;
+    }, baroFixture);
+    await page.locator('.sidebar').getByRole('button', { name: /^Notifications/ }).click();
+    const body = page.locator('.notification-entry .entry-content');
+    await expect(body).toContainText('Primed Flow');
+    await expect(body).toContainText('0.29p/ducat');
+    await expect(body.locator('.yield-strip')).toContainText('180d');
+    await expect(body).toContainText('Arrival can depress prices; resale is not guaranteed.');
+    for (const width of [1440, 768, 320]) {
+      await page.setViewportSize({ width, height: 480 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await body.scrollIntoViewIfNeeded();
+      await page.screenshot({ path: testInfo.outputPath(`baro-notice-${theme}-${width}.png`) });
+    }
+    await page.getByRole('button', { name: 'Open Baro and ducat planner' }).click();
+    const board = page.locator('.board');
+    const priced = board.getByRole('row', { name: /Primed Flow/ });
+    await expect(priced).toContainText('100p');
+    await expect(priced).toContainText('0.29');
+    await expect(priced).toContainText('buy · hold');
+    await expect(page.locator('.baro-detail')).toContainText('180d');
+    await expect(page.locator('.baro-detail')).toContainText('4');
+    for (const width of [320, 768, 1440]) {
+      await page.setViewportSize({ width, height: 480 });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await board.locator('.scroll').scrollIntoViewIfNeeded();
+      await board.locator('.scroll').evaluate(element => { element.scrollLeft = element.scrollWidth; });
+      await page.screenshot({ path: testInfo.outputPath(`baro-board-${theme}-${width}.png`) });
+    }
+  });
+}
+
+test('Baro inventory valuation retries when its view is reopened', async ({ page }) => {
+  await page.clock.setFixedTime(new Date(baroFixture.now));
+  await page.route('**/market.json', route => route.fulfill({ json: { ...baseMarket, ...baroFixture.market } }));
+  await page.goto('/?preview-desktop&sample');
+  await previewShell(page);
+  await page.evaluate(() => {
+    const runtime = window as unknown as { __TAURI__: { core: { invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> } }; __TAURI_INTERNALS__: { invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> } };
+    const original = runtime.__TAURI__.core.invoke;
+    let refuse = true;
+    const invoke = (cmd: string, args?: Record<string, unknown>) => {
+      const request = args?.request as { operation?: string; input?: { owned?: unknown } } | undefined;
+      if (refuse && cmd === 'evaluate_domain' && request?.operation === 'baro_value' && request.input?.owned) {
+        refuse = false;
+        return Promise.reject('Inventory valuation unavailable');
+      }
+      return original(cmd, args);
+    };
+    runtime.__TAURI__.core.invoke = invoke;
+    runtime.__TAURI_INTERNALS__.invoke = invoke;
+  });
+  await page.locator('.sidebar').getByRole('button', { name: /^Baro/ }).click();
+  await expect(page.locator('.baro-detail')).toContainText('Reopen Baro to retry');
+  await page.locator('.sidebar').getByRole('button', { name: /^Sell/ }).click();
+  await page.locator('.sidebar').getByRole('button', { name: /^Baro/ }).click();
+  await expect(page.locator('.baro-detail')).toContainText('180d');
 });

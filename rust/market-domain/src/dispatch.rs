@@ -1,5 +1,5 @@
 //! A single registry couples native operations with their input and output types.
-use crate::{advisor::*, inventory::*, planners::*, scoring::*, trade_session::*};
+use crate::{baro::*, advisor::*, inventory::*, planners::*, scoring::*, trade_session::*};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use ts_rs::TS;
@@ -32,6 +32,7 @@ operations! {
     RelicPlan: PlannerRequest => Vec<RelicPlanEntry> = |input| Ok::<_, String>(relic_plan(&input)),
     SetRecos: PlannerRequest => Vec<SetReco> = |input| Ok::<_, String>(set_recos(&input)),
     DucatPlan: DucatRequest => DucatResult = |input| Ok::<_, String>(ducat_plan(&input)),
+    BaroValue: BaroRequest => BaroValue = |input| baro_value(&input),
     BuildPlan: BuildRequest => BuildResult = |input| Ok::<_, String>(build_plan(&input)),
 }
 
