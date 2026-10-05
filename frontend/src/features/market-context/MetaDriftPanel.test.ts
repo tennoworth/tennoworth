@@ -36,12 +36,12 @@ describe('MetaDriftPanel', () => {
     await fireEvent.click(screen.getByRole('button', { name: 'Losses' }));
     expect(screen.getByText('Loss Gear')).toBeTruthy();
     expect(screen.getByText('-3.00 pp')).toBeTruthy();
-    await fireEvent.change(screen.getByLabelText('Filter meta drift category'), { target: { value: 'Primary' } });
+    await fireEvent.change(screen.getByLabelText('Category'), { target: { value: 'Primary' } });
     expect(screen.queryByText('Loss Gear')).toBeNull();
     await fireEvent.click(screen.getByRole('button', { name: 'Only in year data' }));
     expect(screen.getByText('Only in 2025 data')).toBeTruthy();
     expect(screen.getByText('Only in 2023 data')).toBeTruthy();
-    await fireEvent.input(screen.getByLabelText('Search meta drift'), { target: { value: 'new' } });
+    await fireEvent.input(screen.getByLabelText('Equipment'), { target: { value: 'new' } });
     expect(screen.getByText('New Gear')).toBeTruthy();
     expect(screen.getByText('New Missing Market')).toBeTruthy();
     expect(screen.queryByText('Old Gear')).toBeNull();

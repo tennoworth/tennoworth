@@ -185,7 +185,6 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
         placeholder="Item to watch - try “primed flow”, “ash prime set”…"
         bind:value={query}
         oninput={() => { if (picked && query !== picked.name) picked = null; }}
-        aria-label="Item to watch"
       />
       {#if picked}
         <button class="btn xs ghost" onclick={clearPick} aria-label="Clear item">×</button>
@@ -204,14 +203,14 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
     </div>
     <label class="ui-field">
       <span>Notify when</span>
-      <select class="ui-input" bind:value={side} onchange={onSideChange} aria-label="Watch side">
+      <select class="ui-input" bind:value={side} onchange={onSideChange}>
         <option value="sell">Lowest ask is ≤</option>
         <option value="buy">Highest bid is ≥</option>
       </select>
     </label>
     <label class="ui-field threshold">
       <span>Target price (p)</span>
-      <input class="ui-input" type="number" min="1" bind:value={threshold} aria-label="Threshold (plat)"  disabled={!picked} />
+      <input class="ui-input" type="number" min="1" bind:value={threshold} disabled={!picked} />
     </label>
     <button class="btn primary" onclick={add} disabled={!picked || threshold < 1 || adding}>Add watch</button>
   </div>
@@ -241,7 +240,7 @@ import { type NewWatch, type Watch, type WatchOutcome } from '../../contracts/de
                 <span class="muted"> · {ago(w.last_checked_at)}</span>
               </td>
               <td class={st.cls}>{st.label}</td>
-              <td><button class="btn xs ghost" onclick={() => remove(w)} disabled={busyIds.has(w.id)}>Remove</button></td>
+              <td><button class="btn xs ghost" onclick={() => remove(w)} disabled={busyIds.has(w.id)} aria-label="Remove {w.name}{w.subtype ? ` · ${w.subtype}` : ''}">Remove</button></td>
             </tr>
           {/each}
         </tbody>
