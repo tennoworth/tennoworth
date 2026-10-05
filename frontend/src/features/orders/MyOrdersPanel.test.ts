@@ -131,6 +131,22 @@ describe('MyOrdersPanel listing health', () => {
     await waitFor(() => expect(transport.updateOrder).toHaveBeenCalledWith('o1', { platinum: 15 }));
   });
 
+  it('states a snapshot drift as a change to your ask, with the snapshot\'s real age', async () => {
+    const book = { vol: 20, low_sell: 50, avg: 50, median_now: 50, median_90d: 50 };
+    const market = { updated_at: '2026-10-02T12:00:00Z', items: { primed_flow: book, ash_prime_blueprint: { ...book, low_sell: 30, avg: 30, median_now: 30, median_90d: 30 } } } as unknown as Market;
+    const transport = makeTransport({ fetchOrders: vi.fn().mockResolvedValue([
+      { ...ORDERS[0], platinum: 90 },
+      { ...ORDERS[1], platinum: 50, quantity: 6, per_trade: 6 },
+    ]) });
+    render(MyOrdersPanel, { props: { transport, market, marketStaleness: '3 d ago' } });
+    const cut = await screen.findByText(/44% cut, snapshot/);
+    expect(cut.getAttribute('title')).toBe("Matching the last snapshot's clearing price (50p) cuts your ask by 44% - a starting point, not a quote.");
+    // A 50p lot of 6 is 8.33p a unit, not 8.333333333333334p.
+    expect(screen.getByText('8.33p →', { exact: false })).toBeTruthy();
+    expect(screen.getByText(/last market snapshot \(updated 3 d ago\)/)).toBeTruthy();
+    expect(screen.queryByText(/up to 2 h old/)).toBeNull();
+  });
+
   it('reprices a bulk order with a lot total while comparing fractional unit prices', async () => {
     installTauri(vi.fn().mockResolvedValue([{
       slug: 'arcane_energize', rank: 0, subtype: null, sells: [7.2], buys: [],

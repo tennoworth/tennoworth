@@ -75,6 +75,11 @@ describe('SellPane', () => {
     );
   });
 
+  it('words a stale snapshot age as a time, not "3 d ago old"', () => {
+    renderPane({ marketFreshness: 'stale', marketStaleness: '3 d ago' });
+    expect(screen.getByText(/market snapshot was updated 3 d ago\. Rankings/)).toBeTruthy();
+  });
+
   it('relaxFilters drops min price to 1 from the empty state', async () => {
     renderPane({ results: [], emptyReason: { kind: 'price', excluded: 3, candidates: 3 } });
     await fireEvent.click(screen.getByRole('button', { name: 'Drop min price to 1p' }));

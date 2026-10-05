@@ -30,6 +30,9 @@ import type { DesktopServices } from '../../contracts/services';
     /** Tradeable copies owned per the latest scan, keyed by `ownedKey(slug,
      *  subtype)`. Null when there is no scan - the quantity checks stay off. */
     ownedQty?: Map<string, number> | null;
+    /** Age of `market`, e.g. "3 d ago"; null when unknown. The snapshot can lag
+     *  far behind its usual two-hour cadence, so its age is shown, not assumed. */
+    marketStaleness?: string | null;
     /** Live-orders summary for the shell strip / Sell summary cells: fired
      *  once orders are loaded (and whenever the count or the health issues
      *  change); null while nothing is loaded so those cells stay hidden. */
@@ -431,10 +434,12 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
   // instead of being dropped on the document body.
 
   function driftWhy(d: DriftRow): string {
+    // delta_pct is a fraction of your ask, not of the snapshot price, so the
+    // sentence has to name the ask as its basis.
     const pct = Math.round(d.delta_pct * 100);
     return d.kind === 'overpriced'
-      ? `${pct}% above the last snapshot's clearing price - a starting point, not a quote${d.thin ? ' (thin book)' : ''}.`
-      : `${pct}% under the last snapshot's clearing price - you may be leaving plat on the table${d.thin ? ' (thin book)' : ''}.`;
+      ? `Matching the last snapshot's clearing price (${d.suggested}p) cuts your ask by ${pct}% - a starting point, not a quote${d.thin ? ' (thin book)' : ''}.`
+      : `The last snapshot's clearing price (${d.suggested}p) is ${pct}% above your ask - you may be leaving plat on the table${d.thin ? ' (thin book)' : ''}.`;
   }
   return {
     dismissToast,

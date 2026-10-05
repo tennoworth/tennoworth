@@ -6,7 +6,7 @@
   import { LIQUID_VOL } from '../../domain/sell-priority';
   import { orderUnitPrice } from '../../domain/order-prices';
   import { MAX_PLATINUM } from '../../domain/limits';
-  let { transport, market = null, sessionEpoch = 0, onauthrequired, ownedQty = null, onsummary }: OrdersInput = $props();
+  let { transport, market = null, sessionEpoch = 0, onauthrequired, ownedQty = null, marketStaleness = null, onsummary }: OrdersInput = $props();
 
   const controller = createOrdersController({ get transport() { return transport; }, get market() { return market; }, get ownedQty() { return ownedQty; }, get sessionEpoch() { return sessionEpoch; }, get onauthrequired() { return onauthrequired; }, get onsummary() { return onsummary; } }, useDesktopServices());
   onDestroy(() => controller.dispose());
@@ -69,7 +69,7 @@
       <colgroup>
         <col style="width:16rem" />
         <col style="width:3rem" />
-        <col style="width:4rem" />
+        <col style="width:7rem" />
         <col style="width:4.5rem" />
         <col style="width:4.5rem" />
         <col />
@@ -118,8 +118,8 @@
               </td>
             {:else}
               <td class="reason" class:warn={q.d.kind === 'overpriced'} title={controller.driftWhy(q.d)}>
-                <span class="to">{q.d.listed}p → <b>{q.d.suggested}p</b></span>
-                {q.d.kind === 'overpriced' ? 'above market' : 'under market'} ({Math.round(q.d.delta_pct * 100)}%, snapshot)
+                <span class="to">{Number(q.d.listed.toFixed(2))}p → <b>{q.d.suggested}p</b></span>
+                {q.d.kind === 'overpriced' ? 'above market' : 'under market'} ({Math.round(q.d.delta_pct * 100)}% {q.d.kind === 'overpriced' ? 'cut' : 'raise'}, snapshot)
                 {#if q.d.thin}<span class="tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor - thin books make this a weak signal.">thin</span>{/if}
               </td>
               <td class="act">
@@ -133,7 +133,7 @@
     </div>
     {#if controller.liveTop.quotes.size === 0 && controller.drifted.length > 0}
       <div class="line">
-        <span class="exp">Snapshot rows compare against the last market snapshot (up to 2 h old) and can't tell whose order is whose&nbsp;- <button class="linkish" onclick={controller.checkLive} disabled={controller.liveTop.phase === 'running'}>check live</button> for exact figures.</span>
+        <span class="exp">Snapshot rows compare against the last market snapshot (updated {marketStaleness ?? 'at an unknown time'}) and can't tell whose order is whose&nbsp;- <button class="linkish" onclick={controller.checkLive} disabled={controller.liveTop.phase === 'running'}>check live</button> for exact figures.</span>
       </div>
     {/if}
   {/if}

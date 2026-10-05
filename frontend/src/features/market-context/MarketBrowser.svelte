@@ -274,7 +274,7 @@
       {/if}
     </div>
     {#if freshness === 'stale'}
-      <div class="line stale-note" data-tone="warn">⚠ This snapshot is {staleness} old - prices below may lag the live book.</div>
+      <div class="line stale-note" data-tone="warn">⚠ This snapshot was updated {staleness ?? 'at an unknown time'} - prices below may lag the live book.</div>
     {/if}
     {#if query.trim()}
       {#if results.length}
