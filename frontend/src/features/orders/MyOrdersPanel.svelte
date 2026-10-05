@@ -150,7 +150,7 @@
       <button type="button" aria-pressed={controller.show === 'hidden'} onclick={() => (controller.show = 'hidden')}>Hidden <span class="n">{controller.counts.hidden}</span></button>
       <button type="button" class:issues={controller.counts.issues > 0} aria-pressed={controller.show === 'issues'} onclick={() => (controller.show = 'issues')}>Issues <span class="n">{controller.counts.issues}</span></button>
     </span></div>
-    <label class="ui-field order-search"><span>Item</span><input class="input" type="text" placeholder="Filter by name…" bind:value={controller.nameFilter} aria-label="Filter orders by name" /></label>
+    <label class="ui-field order-search"><span>Item</span><input class="input" type="text" placeholder="Filter by name…" bind:value={controller.nameFilter} /></label>
   </div>
   <div class="bar order-actions">
     <span class="count">
@@ -217,13 +217,13 @@
               <td>{o.quantity ?? '?'}</td>
               <td class="price">
                 {#if controller.editingId === o.id}
-                  <input type="number" bind:value={controller.editValue} min="1" max={MAX_PLATINUM} aria-label="New price" />
+                  <input type="number" bind:value={controller.editValue} min="1" max={MAX_PLATINUM} aria-label="New price for {controller.itemName(o)}" />
                   <button class="btn xs" onclick={() => controller.saveEdit(o)} disabled={busy}>save</button>
-                  <button class="btn xs x" onclick={() => (controller.editingId = null)} title="Cancel">×</button>
+                  <button class="btn xs x" onclick={() => (controller.editingId = null)} title="Cancel" aria-label="Cancel price edit">×</button>
                 {:else}
                   <span class="fg">{o.platinum}<span class="unit">p</span></span>
                   {#if (o.per_trade ?? 1) > 1}<span class="unit"> / {o.per_trade} units</span>{/if}
-                  <button class="btn xs ghost edit" onclick={() => controller.startEdit(o)} disabled={busy} title="Edit price">✎</button>
+                  <button class="btn xs ghost edit" onclick={() => controller.startEdit(o)} disabled={busy} title="Edit price" aria-label="Edit price for {controller.itemName(o)}">✎</button>
                 {/if}
               </td>
               {#if controller.liveTop.quotes.size > 0}
@@ -236,12 +236,13 @@
                   onclick={() => controller.toggleVisible(o)}
                   disabled={busy || o.visible == null}
                   title={o.visible == null ? 'Visibility unavailable; refresh orders' : o.visible ? 'Click to make hidden' : 'Click to make visible'}
+                  aria-label={o.visible == null ? `?: visibility of ${controller.itemName(o)} unavailable` : o.visible ? `ON: ${controller.itemName(o)} is visible to buyers` : `OFF: ${controller.itemName(o)} is hidden from buyers`}
                 ><span class="vis" class:off={!o.visible}>{o.visible == null ? '?' : o.visible ? 'ON' : 'OFF'}</span></button>
               </td>
               <td class="act">
                 {#if controller.confirmId === o.id}
                   <button class="btn xs bad" onclick={() => controller.removeOne(o)} disabled={busy} title="Confirm delete">Confirm</button>
-                  <button class="btn xs x" onclick={() => (controller.confirmId = null)} title="Cancel">×</button>
+                  <button class="btn xs x" onclick={() => (controller.confirmId = null)} title="Cancel" aria-label="Cancel delete">×</button>
                 {:else}
                   <button class="btn xs x" onclick={() => controller.removeOne(o)} disabled={busy} title="Delete" aria-label="Delete {controller.itemName(o)}">✕</button>
                 {/if}

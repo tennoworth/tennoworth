@@ -403,6 +403,30 @@ test('page background keeps fine repeating tiles on tall WebKit surfaces', async
   } finally { await page.close(); }
 });
 
+// Speech input and screen readers reach a control by its visible label, so
+// the accessible name has to contain it; several overrode it ("Threshold
+// (plat)" under "Target price (p)") or announced only a glyph ("✎", "ON").
+test('fields and order actions are named by what they show', async ({ page }) => {
+  await page.goto('/?preview-desktop&sample');
+  await previewShell(page);
+  const sidebar = page.locator('.sidebar');
+  await sidebar.getByRole('button', { name: /^Price watches/ }).click();
+  await expect(page.getByRole('combobox', { name: 'Notify when' })).toBeVisible();
+  await expect(page.getByRole('spinbutton', { name: 'Target price (p)' })).toBeVisible();
+  await sidebar.getByRole('button', { name: /^Meta Drift/ }).click();
+  await expect(page.getByRole('group', { name: 'Movement' })).toBeVisible();
+  await expect(page.getByRole('textbox', { name: 'Equipment' })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Category' })).toBeVisible();
+  await sidebar.getByRole('button', { name: /^My orders/ }).click();
+  const listings = page.getByRole('region', { name: 'My WFM listings' });
+  await expect(listings.getByRole('textbox', { name: 'Item' })).toBeVisible();
+  await expect(listings.getByRole('button', { name: 'Edit price for Pyrana Prime Set' })).toBeVisible();
+  await expect(listings.getByRole('button', { name: 'ON: Pyrana Prime Set is visible to buyers' })).toBeVisible();
+  await listings.getByRole('button', { name: 'Edit price for Pyrana Prime Set' }).click();
+  await expect(listings.getByRole('spinbutton', { name: 'New price for Pyrana Prime Set' })).toBeVisible();
+  await listings.getByRole('button', { name: 'Cancel price edit' }).click();
+});
+
 test('narrow order filters stay reachable and routines remain an actionable checklist', async ({ page }) => {
   await page.goto('/?preview-desktop&sample');
   for (const theme of ['light', 'dark'] as const) {
