@@ -938,7 +938,6 @@
     white-space: nowrap;
   }
   .list-cta:hover:not(:disabled) { filter: brightness(1.1); }
-  .list-cta:disabled { opacity: 0.4; cursor: not-allowed; }
 
 
   .picks-exp { font-size: var(--text-caption); }

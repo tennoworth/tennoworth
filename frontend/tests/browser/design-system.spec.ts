@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import rewardFixture from '../../../tests/fixtures/relic-ocr/result.json' with { type: 'json' };
 
@@ -131,6 +131,35 @@ for (const theme of ['light', 'dark'] as const) {
     }
   });
 }
+
+// The look's ink fill on primaries once outranked the disabled rule, so a
+// disabled Add watch, List or Scan game still read as clickable.
+test('disabled primary actions drop the ink fill in both themes', async ({ page }) => {
+  const looksDisabled = (button: Locator) => button.evaluate(element => {
+    element.setAttribute('disabled', '');
+    const probe = document.createElement('span');
+    probe.style.background = 'var(--ink-bar)';
+    document.body.append(probe);
+    const ink = getComputedStyle(probe).backgroundColor;
+    probe.remove();
+    const style = getComputedStyle(element);
+    return { filled: style.backgroundColor === ink, dotted: style.borderTopStyle === 'dotted', opacity: style.opacity };
+  });
+  const expected = { filled: false, dotted: true, opacity: '1' };
+  for (const theme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.goto('/?preview-desktop&sample');
+    await previewShell(page);
+    expect(await looksDisabled(page.getByRole('button', { name: /^List \d+ on WFM$/ })), `${theme} List CTA`).toEqual(expected);
+    await page.locator('.refresh-trigger').first().click();
+    expect(await looksDisabled(page.getByTestId('desktop-scan')), `${theme} Scan game`).toEqual(expected);
+    await page.keyboard.press('Escape');
+    await page.locator('.sidebar').getByRole('button', { name: /^Price watches/ }).click();
+    const add = page.getByRole('button', { name: 'Add watch' });
+    await expect(add).toBeDisabled();
+    expect(await looksDisabled(add), `${theme} Add watch`).toEqual(expected);
+  }
+});
 
 test('hosted rails keep readable text in both themes', async ({ page }) => {
   for (const theme of ['light', 'dark'] as const) {
