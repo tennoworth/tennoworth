@@ -270,7 +270,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
     <nav data-shell>
       <div data-shell class="nav-group">
         <div data-shell class="nav-label">Trade</div>
-        <button data-shell type="button" class="nav-item" class:active={effectiveView === 'sell'} onclick={() => filters.setView('sell')}>
+        <button data-shell type="button" class="nav-item" data-testid="nav-sell" class:active={effectiveView === 'sell'} onclick={() => filters.setView('sell')}>
           <span data-shell>{hasInventory ? estimatedGuidance ? 'Opportunities' : 'Sell' : 'Inventory'}</span>
           <!-- Pinned to the unfiltered sellable count: with a narrow preset
                active (Vaulted on a no-vaulted inventory), a filter-driven

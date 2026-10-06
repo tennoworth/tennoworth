@@ -388,6 +388,13 @@ changed-order reconfirmation, decreased safe quantities, and unavailable/zero
 allowance states. Open its fictional dataset through the living reference's
 Open sample app link, which starts on Trade Session.
 
+Playwright's WebKit is a newer build than the system WebKitGTK the Linux app
+ships on, so a layout that passes there can still collapse in the app: the
+Column guide once rendered as its bare title rail in WebKitGTK 2.52 only. The
+desktop probe (`ui-smoke`) therefore records layout evidence for dialogs from
+the real webview, and `check-probe-report.ts` gates on it. Add a dialog to that
+evidence when it depends on flex or grid sizing that engines resolve differently.
+
 Run the applicable repository gates for each implementation batch. Complete
 cross-platform verification in actual desktop windows before claiming Windows
 and Linux resize/scaling support. Documentation-only changes require link,
