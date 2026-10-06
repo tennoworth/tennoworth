@@ -138,7 +138,7 @@ test.skipIf(process.platform === 'win32')('packaged probe runs the supplied AppI
     mkdirSync(bin);
     for (const [name, body] of [
       ['xvfb-run', 'if [ "${1:-}" = "-a" ]; then shift; fi\nexec "$@"'],
-      ['dbus-run-session', 'if [ "${1:-}" = "--" ]; then shift; fi\nexec "$@"'],
+      ['dbus-run-session', 'while [ "${1:-}" != "--" ]; do shift; done\nshift\nexec "$@"'],
     ]) {
       const path = join(bin, name);
       writeFileSync(path, `#!/bin/sh\n${body}\n`);

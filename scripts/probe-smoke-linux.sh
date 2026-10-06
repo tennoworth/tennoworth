@@ -51,12 +51,31 @@ LOG="$EVIDENCE/probe-stdout.log"
 # A restored real inventory would bypass onboarding and invalidate the probe.
 SCRATCH="$(mktemp -d -t probe-xdg-XXXXXX)"
 trap 'rm -rf "$SCRATCH"' EXIT
+# A bus without service directories, so nothing is activated on demand. With
+# the stock session config a desktop host (KDE: the portal and ksecretd) starts
+# services that outlive the session and keep writing into $SCRATCH; CI runners
+# have none installed, so this also makes a local run match CI.
+BUS_CONFIG="$SCRATCH/session-bus.conf"
+cat >"$BUS_CONFIG" <<'CONF'
+<!DOCTYPE busconfig PUBLIC "-//freedesktop//DTD D-Bus Bus Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/dbus/1.0/busconfig.dtd">
+<busconfig>
+  <type>session</type>
+  <listen>unix:tmpdir=/tmp</listen>
+  <auth>EXTERNAL</auth>
+  <policy context="default">
+    <allow send_destination="*" eavesdrop="true"/>
+    <allow eavesdrop="true"/>
+    <allow own="*"/>
+  </policy>
+</busconfig>
+CONF
 rm -f "$REPORT"
 
 set +e
 XDG_DATA_HOME="$SCRATCH" TENNOWORTH_PROBE=1 TENNOWORTH_PROBE_OUT="$REPORT" \
   TENNOWORTH_JWT_PATH="$SCRATCH/wfm-jwt.enc" TENNOWORTH_PENDING_PATH="$SCRATCH/pending-plan.json" \
-  timeout 180 dbus-run-session -- xvfb-run -a "$BIN" >"$LOG" 2>&1
+  timeout 180 dbus-run-session --config-file="$BUS_CONFIG" -- xvfb-run -a "$BIN" >"$LOG" 2>&1
 RC=$?
 set -e
 if [[ "$RC" -ne 0 ]]; then
