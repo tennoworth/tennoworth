@@ -105,6 +105,7 @@ const passingReport = {
   updateNotesVerified: true,
   wfm: {
     cancelIdle: { ok: true },
+    loginDialogOpen: true,
     access: {
       ok: true,
       value: {
@@ -123,6 +124,7 @@ const passingReport = {
   appMounted: true,
   desktopBadge: true,
   scanButtonFound: true,
+  estimateListing: { listOffered: false, action: 'Scan game' },
   columnGuide: { found: true, open: true, entries: 8, dialogHeight: 448, listHeight: 372, firstEntryVisible: true },
   debugNotify: { count: 3, total_plat: 2175 },
 };
@@ -177,6 +179,24 @@ test('the gate rejects a Column guide that opened without visible entries', () =
       stderr = String((error as { stderr?: string }).stderr);
     }
     expect(stderr).toContain('Column guide did not show its entries');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('the gate rejects an unverified estimate that offers listing', () => {
+  const root = mkdtempSync(join(tmpdir(), 'tennoworth-probe-gate-'));
+  const path = join(root, 'probe-report.json');
+  const listable = { ...passingReport, estimateListing: { listOffered: true, action: null } };
+  try {
+    writeFileSync(path, JSON.stringify(listable));
+    let stderr = '';
+    try {
+      execFileSync(process.execPath, ['scripts/check-probe-report.ts', path], { cwd: new URL('..', import.meta.url), encoding: 'utf8', stdio: 'pipe' });
+    } catch (error) {
+      stderr = String((error as { stderr?: string }).stderr);
+    }
+    expect(stderr).toContain('an unverified estimate did not require a game scan');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

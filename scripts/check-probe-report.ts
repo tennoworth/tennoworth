@@ -2,10 +2,12 @@
 // Gate for the TENNOWORTH_PROBE UI smoke run (ui-smoke.yml): the probe drives
 // the real Tauri webview against a synthetic fixture and writes its evidence
 // as JSON. This asserts the app booted into Tauri IPC mode, the sell view
-// rendered its scan CTA, the Column guide laid out its entries in the system
-// webview, and the run logged no console/CSP violations - the failure class a
-// static gate or Playwright's newer bundled WebKit cannot see (a default-vs-named import that
-// binds undefined compiles fine and no-ops the feature).
+// rendered its scan CTA, the header WFM link opened sign-in, an unverified
+// estimate asked for a game scan instead of offering to list, the Column guide
+// laid out its entries in the system webview, and the run logged no console/CSP
+// violations - the failure class a static gate or Playwright's newer bundled
+// WebKit cannot see (a default-vs-named import that binds undefined compiles
+// fine and no-ops the feature).
 //
 // Usage: bun scripts/check-probe-report.ts <report.json>
 import { readFileSync } from "node:fs";
@@ -47,6 +49,10 @@ if (!Array.isArray(report.cspViolations) || report.cspViolations.length > 0)
 if (report.appMounted !== true) problems.push("appMounted is not true (SPA did not mount)");
 if (report.desktopBadge !== true) problems.push("desktopBadge is not true (SPA is not in Tauri IPC mode)");
 if (report.scanButtonFound !== true) problems.push("scanButtonFound is not true (sell-view scan CTA did not render)");
+if (report.wfm?.loginDialogOpen !== true) problems.push('the WFM header link did not open the login dialog while logged out');
+const estimate = report.estimateListing;
+if (estimate?.listOffered !== false || estimate?.action !== 'Scan game')
+  problems.push('an unverified estimate did not require a game scan before listing: ' + JSON.stringify(estimate));
 const guide = report.columnGuide;
 if (guide?.open !== true || !(guide.entries > 0) || guide.firstEntryVisible !== true)
   problems.push('Column guide did not show its entries in the system webview: ' + JSON.stringify(guide));
