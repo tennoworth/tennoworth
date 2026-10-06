@@ -50,10 +50,11 @@ function renderPane(props: Partial<ComponentProps<typeof SellPane>> = {}) {
 afterEach(cleanup);
 
 describe('SellPane', () => {
-  it('renders the staged listing label from listableRows', () => {
+  it('labels the bulk listing action without a batch size and states the staged count in its title', () => {
     renderPane();
     expect(screen.getByRole('heading', { name: 'Sell' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'List 3 on WFM' })).toBeTruthy();
+    const stage = screen.getByRole('button', { name: 'List on WFM' });
+    expect(stage.getAttribute('title')).toContain('Stage the top 3 rows');
   });
 
   it('toggles a tag chip through the bindable activeTags', async () => {
@@ -90,7 +91,7 @@ describe('SellPane', () => {
 it('keeps filter edits while native values load and disables stale listing actions', async () => {
   const openListingFlow = vi.fn();
   const view = renderPane({ calculationPending: true, openListingFlow });
-  const stage = screen.getByRole('button', { name: 'List 3 on WFM' }) as HTMLButtonElement;
+  const stage = screen.getByRole('button', { name: 'List on WFM' }) as HTMLButtonElement;
   expect(stage.disabled).toBe(true);
   expect(screen.getByRole('status').textContent).toContain('Calculating sale values');
   expect(screen.getByRole('group', { name: 'Sell summary' }).textContent).not.toContain('100p');

@@ -116,7 +116,7 @@ test.describe('hosted responsive layout', () => {
 test('open editors and disclosures survive resizing in both directions', async ({ page }) => {
   await page.goto('/?preview-desktop&sample');
   await page.locator('.shell').waitFor();
-  await page.getByRole('button', { name: /^List \d+ on WFM$/ }).click();
+  await page.getByRole('button', { name: 'List on WFM', exact: true }).click();
   const review = page.locator('.modal');
   const quantity = review.locator('tbody input[type="number"]').first();
   await quantity.fill('2');
@@ -145,6 +145,11 @@ test('open editors and disclosures survive resizing in both directions', async (
     await page.setViewportSize({ width, height: 480 });
     await assertWithinViewport(page, guide);
     await expect(guide.getByRole('button', { name: 'Close' })).toBeInViewport();
+    // A collapsed guide still passes the viewport checks above, so require an
+    // entry on screen. Not a gate for the WebKitGTK 2.52 `flex: 1` collapse:
+    // Playwright's newer WebKit build lays that CSS out correctly.
+    expect(await guide.locator('dl').evaluate((dl) => dl.clientHeight), 'guide list has usable height').toBeGreaterThan(48);
+    await expect(guide.locator('dt').first()).toBeInViewport();
   }
   await guide.getByRole('button', { name: 'Close' }).click();
   await page.locator('.sidebar').getByRole('button', { name: /^Rivens/ }).click();
@@ -304,7 +309,7 @@ test.describe('desktop responsive layout', () => {
       runtime.__TAURI_INTERNALS__.invoke = unlocked;
     });
     await page.getByRole('button', { name: 'Check WFM listings', exact: true }).click();
-    await page.getByRole('button', { name: /^List \d+ on WFM$/ }).click();
+    await page.getByRole('button', { name: 'List on WFM', exact: true }).click();
     const review = page.locator('.modal');
     await expect(review).toBeVisible();
     await assertWithinViewport(page, review);

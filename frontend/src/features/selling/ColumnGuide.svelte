@@ -63,7 +63,10 @@
   dialog.column-guide[open] { display: flex; flex-direction: column; }
   /* Anchored on the dialog's class so these outrank the shared cryptobox rules,
      which stack a form header's title over its description. */
-  .column-guide form { min-height: 0; flex: 1; }
+  /* Content-sized, shrinking only at the dialog's max-height. `flex: 1` (a 0%
+     basis) collapsed the form to its padding in WebKitGTK, whose auto-height
+     dialog then showed nothing but the title rail. */
+  .column-guide form { min-height: 0; flex: 0 1 auto; }
   .column-guide header { flex-direction: row; align-items: center; justify-content: space-between; gap: var(--s3); text-align: left; }
   .column-guide h3 { flex: 1; }
   /* The header is a title rail, so its button takes the rail's pair. */

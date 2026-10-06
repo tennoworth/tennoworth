@@ -151,7 +151,7 @@ test('disabled primary actions drop the ink fill in both themes', async ({ page 
     await page.emulateMedia({ colorScheme: theme });
     await page.goto('/?preview-desktop&sample');
     await previewShell(page);
-    expect(await looksDisabled(page.getByRole('button', { name: /^List \d+ on WFM$/ })), `${theme} List CTA`).toEqual(expected);
+    expect(await looksDisabled(page.getByRole('button', { name: 'List on WFM', exact: true })), `${theme} List CTA`).toEqual(expected);
     await page.locator('.refresh-trigger').first().click();
     expect(await looksDisabled(page.getByTestId('desktop-scan')), `${theme} Scan game`).toEqual(expected);
     await page.keyboard.press('Escape');
@@ -324,7 +324,7 @@ test('theme radio navigation and listing-review focus stay keyboard accessible',
   await page.keyboard.press('Home');
   await expect(modes.getByRole('radio', { name: 'Light', exact: true })).toHaveAttribute('aria-checked', 'true');
   await page.locator('.sidebar').getByRole('button', { name: /^Sell/ }).click();
-  const trigger = page.getByRole('button', { name: /^List \d+ on WFM$/ });
+  const trigger = page.getByRole('button', { name: 'List on WFM', exact: true });
   await trigger.click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toBeVisible();

@@ -95,9 +95,10 @@
 
   // Bulk "List on WFM" staging copy. listableRows is already the filtered (or
   // unfiltered) set minus relics (subtyped rows) and no-spare rows; the batch
-  // is capped at the first 50 either way.
+  // is capped at the first 50 either way. The label stays count-free: the
+  // table has no row selection, so a number there read as a fixed batch size
+  // (always "50" on a large inventory); the title carries the staged count.
   let stagedCount = $derived(Math.min(listableRows.length, 50));
-  let listLabel = $derived(`List ${stagedCount} on WFM`);
   let listTitle = $derived(
     tableView.active
       ? `Stage the ${stagedCount} rows in your current view (up to the first 50) - the in-table name filter and badge chips are applied; relics and rows with no spare copy are excluded. Review each row in the modal before sending.`
@@ -465,7 +466,7 @@
       onclick={() => { if (calculationReady) openListingFlow(); }}
       disabled={!calculationReady || listableRows.length === 0}
       title={listTitle}
-    >{listLabel}</button>
+    >List on WFM</button>
   {/if}
 {/snippet}
 
