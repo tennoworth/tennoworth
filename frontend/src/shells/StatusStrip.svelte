@@ -201,7 +201,7 @@ import { humanWindow } from '../ui/format';
       <div data-shell class="cell end">
         <span data-shell>WFM</span>
         {#if listing.wfmStatus && !listing.wfmStatus.unlocked}
-          <button data-shell type="button" class="link" onclick={() => onauth(listing.wfmStatus?.logged_in ? 'needs_unlock' : 'needs_login')}>{wfmLabel}</button>
+          <button data-shell type="button" class="link" data-testid="wfm-auth-link" onclick={() => onauth(listing.wfmStatus?.logged_in ? 'needs_unlock' : 'needs_login')}>{wfmLabel}</button>
         {:else}
           <b data-shell>{wfmLabel}</b>
         {/if}

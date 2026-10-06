@@ -458,7 +458,7 @@
 
 {#snippet listCta()}
   {#if !canList}
-    <button class="list-cta" onclick={oncheckListings}>{listingActionLabel}</button>
+    <button class="list-cta" data-testid="desktop-list-check" onclick={oncheckListings}>{listingActionLabel}</button>
   {:else}
     <button
       class="list-cta"

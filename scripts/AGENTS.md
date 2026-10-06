@@ -13,8 +13,10 @@ for required checks and ../docs/releasing.md for release preparation.
   ../frontend/AGENTS.md; read that before changing anything here.
 - `check-probe-report.ts` - the gate for the TENNOWORTH_PROBE UI smoke run
   (ui-smoke.yml): asserts the probe's evidence JSON shows the app booted
-  into Tauri IPC mode, the sell view rendered its scan CTA, the Column guide
-  showed its entries in the system webview, and no console/CSP violations were
+  into Tauri IPC mode, the sell view rendered its scan CTA, the header WFM link
+  opened sign-in, an unverified estimate asked for a game scan instead of
+  offering to list, the Column guide showed its entries in the system webview,
+  and no console/CSP violations were
   logged - the failure class static gates and Playwright's bundled WebKit
   cannot see.
 - `check-agent-instructions.ts` - verifies that the agent instruction files'

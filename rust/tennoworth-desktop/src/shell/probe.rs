@@ -284,6 +284,29 @@ const PROBE_JS: &str = r#"(function(){
     // (c) Seed an import snapshot → source='import' snapshot with item_count == 4.
     .then(function(){ return dropFixture().then(function(v){ R.dropResult = v; return delay(1500); }); })
     .then(function(){ return invk('list_snapshots', { limit: 50 }).then(function(v){ R.snapshotsAfterDrop = v; }); })
+    // import_snapshot records history only, so on its own the UI would have no
+    // inventory, Sell table or header WFM link. Deliver the fixture the way a
+    // background scan does; the app adopts it, or offers it in a banner when it
+    // must not swap automatically, and the probe loads that offer. A null
+    // snapshot id keeps it an unattributed estimate rather than a game scan
+    // that could authorize listing.
+    .then(function(){
+      return invk('plugin:event|emit', { event: 'inventory-scanned', payload: { inventory: typeof FIXTURE === 'string' ? FIXTURE : JSON.stringify(FIXTURE), snapshot_id: null } })
+        .then(function(v){ R.scanOfferEmit = v === undefined || v === null ? 'OK' : v; return delay(500); });
+    })
+    .then(function(){
+      var load = Array.from(document.querySelectorAll('button')).find(function(b){ return b.textContent.trim() === 'Load new scan'; });
+      R.scanOfferShown = !!load;
+      if (load) load.click();
+      return delay(1000);
+    })
+    // Before any inventory the first-run page has no sidebar; navigate once the
+    // adopted inventory has brought it in.
+    .then(function(){
+      openSell();
+      if (!R.sellNavFound) throw new Error('Sell navigation is missing after the scan was adopted');
+      return delay(500);
+    })
     .then(function(){ return invkE('save_protection_plan', { plan: { reserves: { accelerated_blast: 2 }, goal: null } }).then(function(saved){
       if (!saved.ok) throw new Error('Protected plan did not save through native IPC');
       return invk('protection_state', { inventory: { snapshot_id: null, items: { accelerated_blast: { count: 3, leveled: 0 } } } }).then(function(state){
@@ -349,11 +372,13 @@ const PROBE_JS: &str = r#"(function(){
     // No login file → typed needs_login (the desktop analogue of serve's 401).
     .then(function(){ return invkE('submit_plan', { items: [] }).then(function(v){ R.wfm.planNoLogin = v; }); })
     .then(function(){ return invkE('fetch_orders').then(function(v){ R.wfm.ordersNoLogin = v; if (v.ok || v.code !== 'needs_login') throw new Error('fetch_orders did not require login'); }); })
-    // Real Sell CTA with no login → the login dialog opens (proactive check).
+    // The header's WFM link while logged out → the login dialog opens. (The
+    // Sell CTA only reaches sign-in once a verified game scan exists, which
+    // this probe deliberately never records.)
     .then(function(){
-      var btn = document.querySelector('[data-testid="desktop-list"]');
-      R.wfm.listBtnFound = !!btn;
-      if (btn) btn.click();
+      var link = document.querySelector('[data-testid="wfm-auth-link"]');
+      R.wfm.authLinkFound = !!link;
+      if (link) link.click();
       return delay(700);
     })
     .then(function(){
@@ -367,68 +392,9 @@ const PROBE_JS: &str = r#"(function(){
     .then(function(){ return invkE('wfm_auth_status').then(function(v){ R.wfm.status1 = v; }); })
     .then(function(){ return invkE('submit_plan', { items: [] }).then(function(v){ R.wfm.planLocked = v; }); })
     .then(function(){ return invkE('fetch_orders').then(function(v){ R.wfm.ordersLocked = v; if (v.ok || v.code !== 'needs_unlock') throw new Error('fetch_orders did not require unlock'); }); })
-    // Real CTA again → unlock dialog; drive the REAL form with a wrong
-    // passphrase → bad_passphrase surfaces in the dialog, which stays open.
-    .then(function(){
-      var btn = document.querySelector('[data-testid="desktop-list"]');
-      if (btn) btn.click();
-      return delay(700);
-    })
-    .then(function(){
-      var d = document.querySelector('[data-testid="wfm-unlock-dialog"]');
-      R.wfm.unlockDialogOpen = !!(d && d.open);
-      if (!(d && d.open)) return;
-      var inp = d.querySelector('[data-testid="wfm-unlock-pass"]');
-      var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
-      setter.call(inp, 'wrong-passphrase');
-      inp.dispatchEvent(new Event('input', { bubbles: true }));
-      d.querySelector('form').requestSubmit();
-      return delay(2500).then(function(){
-        var err = d.querySelector('[data-testid="wfm-auth-error"]');
-        R.wfm.unlockWrongPassError = err ? (err.innerText || '').slice(0, 120) : null;
-        R.wfm.unlockDialogStillOpen = d.open;
-        d.close();
-      });
-    })
-    // Seed an unlocked session (probe-only, synthetic bundle - no network),
-    // then the CTA opens the review modal with the staged fixture rows.
+    // Seed an unlocked session (probe-only, synthetic bundle - no network).
     .then(function(){ return invkE('debug_seed_unlocked').then(function(v){ R.wfm.seeded = v; if (!v.ok) throw new Error('Native contention probe failed: ' + v.message); }); })
     .then(function(){ return invkE('wfm_auth_status').then(function(v){ R.wfm.status2 = v; }); })
-    .then(function(){
-      var btn = document.querySelector('[data-testid="desktop-list"]');
-      if (btn) btn.click();
-      return delay(700);
-    })
-    .then(function(){
-      var modal = document.querySelector('.modal');
-      R.wfm.reviewModalOpen = !!modal;
-      R.wfm.reviewModalRows = document.querySelectorAll('.modal tbody tr').length;
-      var x = document.querySelector('.modal header .x');
-      if (x) x.click();
-      return delay(300);
-    })
-    // import_snapshot records history only, so until here the Sell view has no
-    // inventory and no table. Deliver the fixture the way a background scan
-    // does; the app adopts it, or offers it in a banner when it must not swap
-    // automatically, and the probe loads that offer. A null snapshot id keeps it an
-    // unattributed estimate rather than a game scan that could authorize listing.
-    .then(function(){
-      return invk('plugin:event|emit', { event: 'inventory-scanned', payload: { inventory: typeof FIXTURE === 'string' ? FIXTURE : JSON.stringify(FIXTURE), snapshot_id: null } })
-        .then(function(v){ R.scanOfferEmit = v === undefined || v === null ? 'OK' : v; return delay(500); });
-    })
-    .then(function(){
-      var load = Array.from(document.querySelectorAll('button')).find(function(b){ return b.textContent.trim() === 'Load new scan'; });
-      R.scanOfferShown = !!load;
-      if (load) load.click();
-      return delay(1000);
-    })
-    // Before any inventory the first-run page has no sidebar; navigate once the
-    // adopted inventory has brought it in.
-    .then(function(){
-      openSell();
-      if (!R.sellNavFound) throw new Error('Sell navigation is missing after the scan was adopted');
-      return delay(500);
-    })
     // Layout in the system webview. Playwright's bundled WebKit is a newer
     // build than the WebKitGTK the app ships on: the Column guide collapsed to
     // its title rail only here, so only this run can see that class of bug.
@@ -450,6 +416,15 @@ const PROBE_JS: &str = r#"(function(){
       // The list clips its entries, so an entry is on screen only inside it.
       R.columnGuide.firstEntryVisible = !!(l && f && f.height > 0 && f.top >= l.top && f.bottom <= l.bottom && l.bottom <= window.innerHeight);
       d.close();
+    })
+    // The adopted inventory is an unattributed estimate, so the Sell view must
+    // ask for a game scan instead of offering to list, even with WFM unlocked.
+    .then(function(){
+      var check = document.querySelector('[data-testid="desktop-list-check"]');
+      R.estimateListing = {
+        listOffered: !!document.querySelector('[data-testid="desktop-list"]'),
+        action: check ? check.textContent.trim() : null,
+      };
     })
     // Offline plan execution: no verified game scan is present, so the
     // snapshot guard rejects this batch before HTTP. Exercise the native
