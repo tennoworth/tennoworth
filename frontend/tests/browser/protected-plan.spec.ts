@@ -56,7 +56,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(summary).toContainText('Estimated value');
     await expect(summary.locator('.cell').filter({ hasText: 'Opportunities' })).not.toContainText('0');
     await expect(page.getByRole('status', { name: 'Estimated guidance' })).toBeVisible();
-    await expect(page.getByRole('button', { name: /^List \d+ on WFM$/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'List on WFM', exact: true })).toHaveCount(0);
     const listButtons = page.getByRole('button', { name: 'List', exact: true });
     for (const button of await listButtons.all()) await expect(button).toBeDisabled();
     for (const [width, height] of [[1440, 900], [1200, 480], [768, 600], [320, 480]]) {
@@ -112,7 +112,7 @@ test('protection failures hide estimates and successful listing checks enable re
     await refresh.click();
     await expect(page.getByRole('group', { name: 'Sell summary' })).toContainText('Unavailable');
     await expect(page.getByRole('status', { name: 'Estimated guidance' })).toHaveCount(0);
-    await expect(page.getByRole('button', { name: /^List \d+ on WFM$/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'List on WFM', exact: true })).toHaveCount(0);
   }
   await page.evaluate(() => { (window as any).allocationMode = 'offline'; });
   await refresh.click();
@@ -124,7 +124,7 @@ test('protection failures hide estimates and successful listing checks enable re
   await page.getByRole('button', { name: 'Check WFM listings', exact: true }).click();
   await expect(page.getByRole('status', { name: 'Estimated guidance' })).toHaveCount(0);
   await expect(page.getByRole('group', { name: 'Sell summary' })).toContainText('Sellable');
-  await expect(page.getByRole('button', { name: /^List \d+ on WFM$/ })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'List on WFM', exact: true })).toBeEnabled();
 });
 
 for (const theme of ['light', 'dark'] as const) {
@@ -151,7 +151,7 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(summary.locator('.cell').filter({ hasText: 'Opportunities' })).toContainText('0');
     await expect(summary.locator('.cell').filter({ hasText: 'Estimated value' })).toContainText('0');
     await expect(page.getByRole('region', { name: 'Inventory allocation' }).locator('tbody tr').filter({ hasText: 'Primed Flow' }).locator('td')).toHaveText(['Primed Flow', '1', '5', 'Unknown', '0 estimated']);
-    await expect(page.getByRole('button', { name: /^List \d+ on WFM$/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'List on WFM', exact: true })).toHaveCount(0);
     const stored = await page.evaluate(async () => JSON.parse(await (window as any).__TAURI__.core.invoke('get_setting', { key: 'last-owned-v2' })));
     expect(stored.nativeSnapshotId).toBeNull();
     await expect(page.getByRole('button', { name: 'Scan game', exact: true })).toBeVisible();
@@ -199,7 +199,7 @@ test('missing allocation keeps known estimates while unavailable sets and scrap 
 test('a changed native scan blocks an open review and retains its edits after rescanning', async ({ page }) => {
   await page.clock.install();
   await page.goto('/?preview-desktop&sample');
-  await page.getByRole('button', { name: /^List \d+ on WFM$/ }).click();
+  await page.getByRole('button', { name: 'List on WFM', exact: true }).click();
   const dialog = page.getByRole('dialog');
   const price = dialog.locator('tbody tr').first().locator('input[type=number]').nth(1);
   await price.fill('99');
