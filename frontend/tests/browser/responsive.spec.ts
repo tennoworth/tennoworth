@@ -147,7 +147,8 @@ test('open editors and disclosures survive resizing in both directions', async (
     await expect(guide.getByRole('button', { name: 'Close' })).toBeInViewport();
     // A collapsed guide still passes the viewport checks above, so require an
     // entry on screen. Not a gate for the WebKitGTK 2.52 `flex: 1` collapse:
-    // Playwright's newer WebKit build lays that CSS out correctly.
+    // Playwright's newer WebKit lays that CSS out correctly, so the desktop
+    // probe checks the guide in the system webview instead.
     expect(await guide.locator('dl').evaluate((dl) => dl.clientHeight), 'guide list has usable height').toBeGreaterThan(48);
     await expect(guide.locator('dt').first()).toBeInViewport();
   }

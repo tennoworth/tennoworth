@@ -140,6 +140,14 @@ const PROBE_JS: &str = r#"(function(){
       return r.text().then(function(b){ return { ok:r.ok, status:r.status, type:r.type, len:b.length, head:b.slice(0,48) }; });
     }).catch(function(e){ return { error: String(e && e.message || e), name: e && e.name }; });
   }
+  // The nav label follows inventory state (Inventory, Opportunities, Sell), so
+  // match the item, not its text: a text match once left the probe on another
+  // view and every Sell-view step after it found nothing.
+  function openSell(){
+    var sell = document.querySelector('[data-testid="nav-sell"]');
+    R.sellNavFound = !!sell;
+    if (sell) sell.click();
+  }
   function delay(ms){ return new Promise(function(res){ setTimeout(res, ms); }); }
   function curWin(){
     try { if (window.__TAURI__ && window.__TAURI__.window && window.__TAURI__.window.getCurrentWindow) return window.__TAURI__.window.getCurrentWindow(); } catch(e){}
@@ -323,8 +331,7 @@ const PROBE_JS: &str = r#"(function(){
       return delay(500).then(function(){
         if (!document.querySelector('[aria-label="Notification history"]')) throw new Error('notification inbox did not render');
         R.notificationUi = true;
-        var sell = Array.from(document.querySelectorAll('.sidebar button')).find(function(b){return b.textContent.trim().indexOf('Sell') === 0;});
-        if (sell) sell.click();
+        openSell();
         return delay(200);
       });
     })
@@ -399,6 +406,50 @@ const PROBE_JS: &str = r#"(function(){
       var x = document.querySelector('.modal header .x');
       if (x) x.click();
       return delay(300);
+    })
+    // import_snapshot records history only, so until here the Sell view has no
+    // inventory and no table. Deliver the fixture the way a background scan
+    // does; the app adopts it, or offers it in a banner when it must not swap
+    // automatically, and the probe loads that offer. A null snapshot id keeps it an
+    // unattributed estimate rather than a game scan that could authorize listing.
+    .then(function(){
+      return invk('plugin:event|emit', { event: 'inventory-scanned', payload: { inventory: typeof FIXTURE === 'string' ? FIXTURE : JSON.stringify(FIXTURE), snapshot_id: null } })
+        .then(function(v){ R.scanOfferEmit = v === undefined || v === null ? 'OK' : v; return delay(500); });
+    })
+    .then(function(){
+      var load = Array.from(document.querySelectorAll('button')).find(function(b){ return b.textContent.trim() === 'Load new scan'; });
+      R.scanOfferShown = !!load;
+      if (load) load.click();
+      return delay(1000);
+    })
+    // Before any inventory the first-run page has no sidebar; navigate once the
+    // adopted inventory has brought it in.
+    .then(function(){
+      openSell();
+      if (!R.sellNavFound) throw new Error('Sell navigation is missing after the scan was adopted');
+      return delay(500);
+    })
+    // Layout in the system webview. Playwright's bundled WebKit is a newer
+    // build than the WebKitGTK the app ships on: the Column guide collapsed to
+    // its title rail only here, so only this run can see that class of bug.
+    .then(function(){
+      var btn = Array.from(document.querySelectorAll('button')).find(function(b){ return b.textContent.trim() === 'Column guide'; });
+      R.columnGuide = { found: !!btn };
+      if (btn) btn.click();
+      return delay(300);
+    })
+    .then(function(){
+      var d = document.querySelector('dialog.column-guide');
+      if (!d) return;
+      var list = d.querySelector('dl'), first = d.querySelector('dt');
+      var l = list ? list.getBoundingClientRect() : null, f = first ? first.getBoundingClientRect() : null;
+      R.columnGuide.open = d.open;
+      R.columnGuide.entries = d.querySelectorAll('dt').length;
+      R.columnGuide.dialogHeight = Math.round(d.getBoundingClientRect().height);
+      R.columnGuide.listHeight = l ? Math.round(l.height) : 0;
+      // The list clips its entries, so an entry is on screen only inside it.
+      R.columnGuide.firstEntryVisible = !!(l && f && f.height > 0 && f.top >= l.top && f.bottom <= l.bottom && l.bottom <= window.innerHeight);
+      d.close();
     })
     // Offline plan execution: no verified game scan is present, so the
     // snapshot guard rejects this batch before HTTP. Exercise the native

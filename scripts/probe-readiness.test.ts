@@ -100,36 +100,38 @@ describe('native probe startup readiness', () => {
   });
 });
 
+const passingReport = {
+  updateNotesUiVerified: true,
+  updateNotesVerified: true,
+  wfm: {
+    cancelIdle: { ok: true },
+    access: {
+      ok: true,
+      value: {
+        restrictions: JSON.parse(readFileSync(new URL('../tests/fixtures/pacing.json', import.meta.url), 'utf8')),
+        revision: 0,
+        queue_count: 0,
+      },
+    },
+  },
+  usageExcluded: true,
+  domainRejectedInvalid: true,
+  domainOperations: ['normalize_inventory', 'score_inventory', 'trade_session', 'advisor', 'history', 'relic_plan', 'set_recos', 'ducat_plan', 'build_plan', 'baro_value'],
+  done: true,
+  consoleErrors: [],
+  cspViolations: [],
+  appMounted: true,
+  desktopBadge: true,
+  scanButtonFound: true,
+  columnGuide: { found: true, open: true, entries: 8, dialogHeight: 448, listHeight: 372, firstEntryVisible: true },
+  debugNotify: { count: 3, total_plat: 2175 },
+};
+
 test.skipIf(process.platform === 'win32')('packaged probe runs the supplied AppImage without rebuilding it', () => {
   const root = mkdtempSync(join(tmpdir(), 'tennoworth-package-probe-'));
   const bin = join(root, 'bin');
   const evidence = join(root, 'evidence');
   const artifact = join(root, 'TennoWorth.AppImage');
-  const report = {
-    updateNotesUiVerified: true,
-    updateNotesVerified: true,
-    wfm: {
-      cancelIdle: { ok: true },
-      access: {
-        ok: true,
-        value: {
-          restrictions: JSON.parse(readFileSync(new URL('../tests/fixtures/pacing.json', import.meta.url), 'utf8')),
-          revision: 0,
-          queue_count: 0,
-        },
-      },
-    },
-    usageExcluded: true,
-    domainRejectedInvalid: true,
-    domainOperations: ['normalize_inventory', 'score_inventory', 'trade_session', 'advisor', 'history', 'relic_plan', 'set_recos', 'ducat_plan', 'build_plan', 'baro_value'],
-    done: true,
-    consoleErrors: [],
-    cspViolations: [],
-    appMounted: true,
-    desktopBadge: true,
-    scanButtonFound: true,
-    debugNotify: { count: 3, total_plat: 2175 },
-  };
   try {
     mkdirSync(bin);
     for (const [name, body] of [
@@ -143,7 +145,7 @@ test.skipIf(process.platform === 'win32')('packaged probe runs the supplied AppI
     symlinkSync(process.execPath, join(bin, 'bun'));
     writeFileSync(artifact, `#!/bin/sh
 test "${'${APPIMAGE_EXTRACT_AND_RUN:-}'}" = 1
-printf '%s' '${JSON.stringify(report)}' > "${'${TENNOWORTH_PROBE_OUT}'}"
+printf '%s' '${JSON.stringify(passingReport)}' > "${'${TENNOWORTH_PROBE_OUT}'}"
 `);
     chmodSync(artifact, 0o755);
 
@@ -153,6 +155,28 @@ printf '%s' '${JSON.stringify(report)}' > "${'${TENNOWORTH_PROBE_OUT}'}"
       encoding: 'utf8',
     });
     expect(output).toContain('probe-smoke: OK');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('the gate rejects a Column guide that opened without visible entries', () => {
+  const root = mkdtempSync(join(tmpdir(), 'tennoworth-probe-gate-'));
+  const path = join(root, 'probe-report.json');
+  // WebKitGTK 2.52 collapsed the guide's form to its padding: open, populated,
+  // and inside the viewport, with a zero-height list.
+  const collapsed = { ...passingReport, columnGuide: { found: true, open: true, entries: 8, dialogHeight: 38, listHeight: 0, firstEntryVisible: false } };
+  try {
+    writeFileSync(path, JSON.stringify(passingReport));
+    expect(execFileSync(process.execPath, ['scripts/check-probe-report.ts', path], { cwd: new URL('..', import.meta.url), encoding: 'utf8' })).toContain('Probe smoke gate ok');
+    writeFileSync(path, JSON.stringify(collapsed));
+    let stderr = '';
+    try {
+      execFileSync(process.execPath, ['scripts/check-probe-report.ts', path], { cwd: new URL('..', import.meta.url), encoding: 'utf8', stdio: 'pipe' });
+    } catch (error) {
+      stderr = String((error as { stderr?: string }).stderr);
+    }
+    expect(stderr).toContain('Column guide did not show its entries');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
