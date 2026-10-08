@@ -63,25 +63,31 @@ pub fn save_protection_plan(
     Ok(())
 }
 
-#[tauri::command]
-pub fn get_setting(db: State<'_, Db>, key: String) -> Result<Option<String>, String> {
+/// Rows with a typed owner are neither readable nor writable through the
+/// generic commands: a write would bypass that owner's consent or validation,
+/// and the price-report key would link an install's weekly pseudonyms.
+fn reserved_for_typed_commands(key: &str) -> Result<(), String> {
     if key.starts_with("usage.") {
         return Err("Usage state is private to its typed commands.".into());
+    }
+    if key.starts_with("reports.") {
+        return Err("Price report state is private to its typed commands.".into());
     }
     if key.starts_with("update-notes.") {
         return Err("Update history is managed by its own commands.".into());
     }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_setting(db: State<'_, Db>, key: String) -> Result<Option<String>, String> {
+    reserved_for_typed_commands(&key)?;
     db.get_setting(&key).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 pub fn set_setting(db: State<'_, Db>, key: String, value: String) -> Result<(), String> {
-    if key.starts_with("usage.") {
-        return Err("Usage state is private to its typed commands.".into());
-    }
-    if key.starts_with("update-notes.") {
-        return Err("Update history is managed by its own commands.".into());
-    }
+    reserved_for_typed_commands(&key)?;
     db.set_setting(&key, &value).map_err(|e| e.to_string())
 }
 
@@ -90,3 +96,24 @@ pub fn list_snapshots(db: State<'_, Db>, limit: i64) -> Result<Vec<SnapshotSumma
     db.list_snapshots(limit).map_err(|e| e.to_string())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::reserved_for_typed_commands;
+
+    #[test]
+    fn typed_settings_are_unreachable_through_the_generic_commands() {
+        for key in [
+            "usage.enabled",
+            "reports.key-v1",
+            "reports.sales-consent-v1",
+            "reports.sales-mark-v1",
+            "reports.sent-v1",
+            "update-notes.history-v1",
+        ] {
+            assert!(reserved_for_typed_commands(key).is_err(), "{key}");
+        }
+        for key in ["theme.mode", "prompts", "auto-close-sold", "reportsx"] {
+            assert!(reserved_for_typed_commands(key).is_ok(), "{key}");
+        }
+    }
+}
