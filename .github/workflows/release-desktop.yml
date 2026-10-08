@@ -13,7 +13,7 @@ name: release-desktop
 #     bun scripts/release.ts snapshot
 #     bun scripts/release.ts prepare <major|minor|patch|X.Y.Z>
 #   Fill the changelog entry, merge the release-prep PR, promote to `main`, then:
-#     Actions → release-desktop → Run workflow, from `main`, version = X.Y.Z,
+#     Actions → release-desktop → Run workflow, from `main`, version = X.Y.ZZZ,
 #     expected_sha = the full approved promotion commit
 #   Policy and release decision: docs/releasing.md
 #
@@ -57,7 +57,7 @@ on:
         required: true
         type: string
       version:
-        description: 'Version to release, X.Y.Z (no leading v, no prerelease suffix)'
+        description: 'Version to release, X.Y.ZZZ with a three-digit patch, e.g. 0.8.100 (no leading v, no prerelease suffix)'
         required: true
         type: string
 
@@ -171,8 +171,9 @@ jobs:
 
           # Re-asserted here because everything below builds a ref name out of
           # it. release.ts has already rejected anything that is not strict
-          # X.Y.Z; this is the guard that keeps THIS script's string handling
-          # honest.
+          # X.Y.Z or lacks the three-digit patch new releases require; this is
+          # the guard that keeps THIS script's string handling honest, so it
+          # checks only the shape and leaves the numbering rule to release.ts.
           if ! printf '%s' "$VERSION" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
             echo "::error title=Not a version::'$VERSION' is not a strict X.Y.Z semver."
             exit 1

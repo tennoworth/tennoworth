@@ -9,7 +9,9 @@ import { fileURLToPath } from "node:url";
 
 import {
   appNotesCatalog,
+  nextVersion,
   releaseNotesBody,
+  releaseVersionProblem,
   releaseNotesTemplate,
   splitSnapshotFrame,
   validateReleaseNotes,
@@ -294,6 +296,84 @@ test("snapshot CLI resolves its checkout from paths containing spaces and URL ch
   }
 });
 
+
+describe("three-digit release patch", () => {
+  for (const [current, bump, next] of [
+    ["0.8.7", "patch", "0.8.100"],
+    ["0.8.100", "patch", "0.8.101"],
+    ["0.8.998", "patch", "0.8.999"],
+    ["0.8.7", "minor", "0.9.100"],
+    ["0.8.250", "minor", "0.9.100"],
+    ["0.8.7", "major", "1.0.100"],
+    ["0.8.7", "0.8.100", "0.8.100"],
+    ["0.8.100", "0.8.250", "0.8.250"],
+  ] as const) {
+    test(`${current} ${bump} -> ${next}`, () => {
+      expect(nextVersion(current, bump)).toBe(next);
+    });
+  }
+
+  test("refuses to prepare past the last patch, outside the range, or backwards", () => {
+    expect(() => nextVersion("0.8.999", "patch")).toThrow("prepare minor instead");
+    for (const bump of ["0.8.8", "0.8.99", "0.8.1000", "0.9.0", "1.0.0"]) {
+      expect(() => nextVersion("0.8.7", bump)).toThrow("three-digit patch");
+    }
+    expect(() => nextVersion("0.8.200", "0.8.150")).toThrow("not greater");
+    for (const bump of ["0.8.0100", "beta"]) {
+      expect(() => nextVersion("0.8.7", bump)).toThrow("not major, minor, patch, or an X.Y.Z");
+    }
+  });
+
+  test("names the range for new releases and accepts only three digits", () => {
+    for (const ok of ["0.8.100", "0.8.999", "1.0.100", "12.34.567"]) {
+      expect(releaseVersionProblem(ok)).toBeNull();
+    }
+    for (const bad of ["0.8.7", "0.8.99", "0.8.1000", "0.8.100-beta.1", "0.8"]) {
+      expect(releaseVersionProblem(bad)).not.toBeNull();
+    }
+  });
+
+  // The rule must bind a version being released, but not the repo sitting at
+  // a pre-scheme published release between releases.
+  for (const [pinned, release, rejected] of [
+    ["0.8.7", null, false],
+    ["0.8.8", null, true],
+    ["0.8.100", null, false],
+    ["0.8.8", "0.8.8", true],
+    ["0.8.100", "0.8.100", false],
+  ] as const) {
+    test(`check ${release ? `--release ${release}` : ""} with ${pinned} pinned after desktop-v0.8.7`, () => {
+      const root = mkdtempSync(join(tmpdir(), "tennoworth-check-"));
+      try {
+        mkdirSync(join(root, "scripts"), { recursive: true });
+        mkdirSync(join(root, "rust", "tennoworth-desktop"), { recursive: true });
+        copyFileSync(fileURLToPath(new URL("./release.ts", import.meta.url)), join(root, "scripts", "release.ts"));
+        cpSync(fileURLToPath(new URL("./release", import.meta.url)), join(root, "scripts", "release"), { recursive: true });
+        writeFileSync(join(root, "rust", "tennoworth-desktop", "Cargo.toml"), `[package]\nname = "tennoworth-desktop"\nversion = "${pinned}"\n`);
+        writeFileSync(join(root, "rust", "Cargo.lock"), `[[package]]\nname = "tennoworth-desktop"\nversion = "${pinned}"\n`);
+        const git = (...args: string[]) => execFileSync("git", ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false", ...args], { cwd: root, stdio: "ignore" });
+        git("init", "-q");
+        git("commit", "-q", "--allow-empty", "-m", "seed");
+        git("tag", "desktop-v0.8.7");
+        const args = [join(root, "scripts", "release.ts"), "check", ...(release ? ["--release", release] : [])];
+        const result = Bun.spawnSync([process.execPath, ...args], { cwd: root });
+        expect(result.stderr.toString().includes("three-digit patch")).toBe(rejected);
+      } finally {
+        rmSync(root, { recursive: true, force: true });
+      }
+    });
+  }
+
+  test("release preflight applies the rule before the shell builds a tag", () => {
+    const steps = (Bun.YAML.parse(readFileSync(
+      new URL("../.github/workflows/release-desktop.yml", import.meta.url), "utf8",
+    )) as any).jobs.preflight.steps as { name?: string; run?: string }[];
+    const check = steps.findIndex((s) => s.run === 'bun scripts/release.ts check --release "$VERSION"');
+    const tag = steps.findIndex((s) => s.name === "Validate the tag and the release history");
+    expect(check).toBeGreaterThanOrEqual(0);
+    expect(check).toBeLessThan(tag);
+  });
+});
 
 test("cached update offers keep immutable downloads across releases", () => {
   const workflow = readFileSync(new URL("../.github/workflows/release-desktop.yml", import.meta.url), "utf8");
