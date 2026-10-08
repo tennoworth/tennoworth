@@ -415,3 +415,11 @@ async fn a_saturated_quota_does_not_take_health_down() {
     assert_eq!(health.status(), 204);
     task.abort();
 }
+
+#[test]
+fn iso_weeks_match_the_shared_vectors() {
+    for v in fixture()["iso_weeks"].as_array().unwrap() {
+        let day: NaiveDate = v["day"].as_str().unwrap().parse().unwrap();
+        assert_eq!(contract::iso_week(day), v["week"].as_str().unwrap());
+    }
+}

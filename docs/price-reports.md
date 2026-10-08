@@ -5,9 +5,25 @@ publishes them as weekly aggregates. It also collects riven fingerprint
 *shapes*: the names of keys the app cannot read yet, so a change in DE's
 riven format reaches the parser without anyone pasting raw data.
 
-The service is `rust/tennoworth-reports`. The desktop app does not send reports
-yet; when it does, both kinds are off until enabled in Settings, each with its
-own switch. There are no TennoWorth accounts.
+The service is `rust/tennoworth-reports`. The desktop app sends sale reports
+once enabled in Settings → This app → Price sharing; it does not send riven
+shapes yet, and they will have a switch of their own. There are no TennoWorth
+accounts.
+
+## How the app sends sales
+
+The trade ledger is the queue. Enabling price sharing records the newest
+trade already in it, and only trades recorded after that are ever read, so
+history from before consent is never sent. Each minute the app reads the
+trades it has not handled yet, skips any that are not plat for one kind of
+item or are older than seven days, and sends the rest in batches. A batch the
+service accepts or refuses for good is settled; a network or server failure
+keeps the trades for the next pass, with the pause doubling up to 30 minutes.
+Turning sharing off stops the next request and cancels one in flight.
+
+"Delete recent reports" in Settings sends the erase secrets for this week and
+the previous one. Debug builds, tests, OCR test builds and probes never send,
+and neither does a release launched with `TENNOWORTH_DISABLE_USAGE=1`.
 
 ## What a report contains
 

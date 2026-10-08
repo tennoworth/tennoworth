@@ -27,6 +27,24 @@ impl MarketData {
         }
     }
 
+    /// The slug a price report may name for a traded item, and whether the
+    /// item has ranks or subtypes. None for names the catalog does not know,
+    /// items without a market row, and rivens, whose price depends on stats
+    /// the trade line does not carry.
+    pub fn report_item(&self, name: &str) -> Option<(String, bool)> {
+        // The snapshot does not carry WFM's max rank or subtypes, so these tags
+        // stand in for them. Erring toward tiered only labels a price "rank
+        // unknown"; erring the other way would mix ranks into one price.
+        const TIERED: [&str; 5] = ["mod", "arcane_enhancement", "relic", "fish", "ayatan_sculpture"];
+        const UNREPORTED: [&str; 2] = ["riven_mod", "veiled_riven"];
+        let slug = self.catalog.get(&name.trim().to_lowercase())?;
+        let tags = &self.items.get(slug)?.tags;
+        if tags.iter().any(|t| UNREPORTED.contains(&t.as_str())) {
+            return None;
+        }
+        Some((slug.clone(), tags.iter().any(|t| TIERED.contains(&t.as_str()))))
+    }
+
     /// Whether `candidate` is strictly older than the compiled-in bundle.
     ///
     /// Unknown stamps answer false on both sides: a snapshot we cannot place in

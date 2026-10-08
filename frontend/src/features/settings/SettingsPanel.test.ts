@@ -58,6 +58,7 @@ describe('SettingsPanel', () => {
       updateOverlaySettings: async (next: OverlaySettings) => next,
       setupOverlayCapture: async () => ({ ...status, state: 'watching' }),
       getUsagePreferences: async () => ({ enabled: false, available: false }),
+      getPriceReportPreferences: async () => ({ enabled: false, available: false, sent_this_week: 0 }),
     } as unknown as DesktopCapabilities;
     return { transport, overlayStatus, resolve, reject, status };
   }
@@ -129,6 +130,7 @@ describe('SettingsPanel', () => {
     const updateOverlaySettings = vi.fn(async (next: OverlaySettings) => next);
     const transport = {
       getUsagePreferences: vi.fn(async () => ({ enabled: false, available: true })),
+      getPriceReportPreferences: vi.fn(async () => ({ enabled: false, available: true, sent_this_week: 0 })),
       setUsagePreferences: vi.fn(async (enabled: boolean) => ({ enabled, available: true })),
       getOverlaySettings: vi.fn(async () => settings),
       updateOverlaySettings,

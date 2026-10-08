@@ -5528,10 +5528,12 @@ name = "tennoworth-desktop"
 version = "0.8.7"
 dependencies = [
  "anyhow",
+ "axum",
  "base64 0.22.1",
  "cairo-rs",
  "chrono",
  "gtk",
+ "hmac",
  "image",
  "keyring",
  "leptess",
@@ -5544,6 +5546,7 @@ dependencies = [
  "rustix 1.1.4",
  "serde",
  "serde_json",
+ "sha2",
  "strsim",
  "syn 2.0.117",
  "tauri",
@@ -5554,6 +5557,7 @@ dependencies = [
  "tauri-plugin-single-instance",
  "tauri-plugin-updater",
  "tempfile",
+ "tennoworth-reports",
  "tokio",
  "ts-rs",
  "wayland-client",

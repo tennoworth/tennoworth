@@ -203,7 +203,9 @@
         never the passphrase itself; details in SECURITY.md.
       </p>
       <p data-shell>
-        No website analytics. Optional desktop usage sharing is disabled until you enable it.
+        No website analytics. Optional desktop usage sharing is disabled until you enable it,
+        and so is price sharing, which sends the item and price of trades you make for
+        platinum and never who you traded with.
       </p>
     </details>
 

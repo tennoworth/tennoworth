@@ -25,6 +25,10 @@ tauri-build = { version = "2", features = [] }
 tokio = { workspace = true }
 # Fallible OS randomness keeps counting failures off the app startup path.
 rand = "0.8"
+# Weekly price-report ids are derived from a local key, so the service never
+# sees anything that links one week to the next.
+hmac = { workspace = true }
+sha2 = { workspace = true }
 
 market-domain = { path = "../market-domain" }
 ts-rs = { workspace = true }
@@ -123,6 +127,9 @@ wayland-protocols-wlr = { version = "0.3", features = ["client"] }
 syn = { version = "2", features = ["full", "visit"] }
 # Isolated on-disk state for consent failure and restart regressions.
 tempfile = "3.27"
+# The service's own validator judges the payloads this app builds.
+tennoworth-reports = { path = "../tennoworth-reports" }
+axum = { workspace = true }
 
 [lints]
 workspace = true

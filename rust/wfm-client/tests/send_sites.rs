@@ -132,6 +132,8 @@ fn raw_http_send_sites_are_classified() {
         "tennoworth-desktop/src/services/market.rs",
         // First-party, consent-gated counter: must not inherit WFM identity headers.
         "tennoworth-desktop/src/services/usage.rs",
+        // First-party, consent-gated price reports: same client as the counter.
+        "tennoworth-desktop/src/services/reports.rs",
         "tennoworth-desktop/src/services/definitions.rs",
         "wfm-scrape/src/ingest/catalog.rs",
         "wfm-scrape/src/ingest/transport.rs",

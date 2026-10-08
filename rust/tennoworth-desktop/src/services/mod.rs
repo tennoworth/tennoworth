@@ -19,6 +19,7 @@ pub(crate) mod wfm_session;
 pub(crate) mod wfm_signin;
 pub(crate) mod ws_watch;
 
+pub(crate) mod reports;
 pub(crate) mod usage;
 
 pub(crate) fn unix_now() -> i64 {
