@@ -37,6 +37,7 @@ build host, or maintainer configuration is not required.
 | `/?preview-desktop&sample=loading` | Delayed responses |
 | `/?preview-desktop&sample=logged-out` | Authentication-required states |
 | `/?preview-desktop&sample=price-sharing` | Price sharing invitation (`price-sharing-error` refuses the save) |
+| `/?preview-desktop&sample=support-prompt` | Support invitation, as shown after weeks of use |
 | `/?styleguide` | Living design reference, both themes, controls, and editable dialog |
 
 The `?preview-desktop` URLs compute with the native planners compiled to

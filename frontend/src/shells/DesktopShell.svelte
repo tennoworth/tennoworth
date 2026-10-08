@@ -42,6 +42,9 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   import UpdateNotes from '../ui/UpdateNotes.svelte';
   import SettingsPanel from '../features/settings/SettingsPanel.svelte';
   import PriceSharingPrompt from '../features/settings/PriceSharingPrompt.svelte';
+  import SupportPrompt from '../features/community/SupportPrompt.svelte';
+  import { PromptSession } from '../ui/prompt-session.svelte';
+  import { PROMPT_ORDER } from '../features/prompt-policies';
   import RoutinesPanel from '../features/routines/RoutinesPanel.svelte';
   import { RoutineController } from '../features/routines/controller.svelte';
   import { resolveRivens } from '../domain/rivens';
@@ -77,6 +80,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   // control in Settings → Appearance (and its footer twin) drives.
   let { store, theme }: { store: StateStore; theme: ThemeController } = $props();
   const filters = untrack(() => new FilterController(store));
+  const prompts = untrack(() => new PromptSession(store, PROMPT_ORDER));
   const routines = untrack(() => new RoutineController(store));
   const inventory = untrack(() => new InventoryController(store, transport, { loadMarket, loadCatalogs, normalizeInventory: normalizeInventoryNative }));
   const protection = new ProtectionController({ desktopProtectionState, desktopSaveProtectionPlan });
@@ -257,6 +261,10 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   }
 
   let hasInventory = $derived(inventory.resolved.owned.size > 0);
+  // Prompts measure use from the first launch with an inventory, and stay out
+  // of trading, where they would compete with the task.
+  let promptsActive = $derived(hasInventory && !listing.listingOpen && effectiveView !== 'session');
+  $effect(() => { if (hasInventory) untrack(() => prompts.launch()); });
   let showWorkspace = $derived(hasInventory || inventory.phase === 'done' || effectiveView !== 'sell');
   let updateBanner: DesktopUpdateBanner;
 </script>
@@ -555,7 +563,8 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
     </div>
   {/if}
   <!-- Kept out of first run and of trading, where it would compete with the task. -->
-  <PriceSharingPrompt {transport} {store} active={hasInventory && !listing.listingOpen && effectiveView !== 'session' && effectiveView !== 'settings'} onsettings={() => { settingsSection = 'price-sharing'; filters.setView('settings'); }} />
+  <PriceSharingPrompt {transport} session={prompts} active={promptsActive && effectiveView !== 'settings'} onsettings={() => { settingsSection = 'price-sharing'; filters.setView('settings'); }} />
+  <SupportPrompt session={prompts} active={promptsActive} />
     <DesktopUpdateBanner bind:this={updateBanner} />
   
 {/snippet}

@@ -1,13 +1,12 @@
 <script lang="ts">
   import type { DesktopCapabilities } from '../../contracts/desktop';
   import type { PriceReportPreferences } from '../../contracts/price-reports';
-  import type { SettingsStore } from '../../contracts/state-store';
   import PromptBanner from '../../ui/PromptBanner.svelte';
-  import { dismissPrompt } from '../../ui/prompts';
-  const PROMPT_ID = 'price-sharing-v1';
-  let { transport, store, active, onsettings }: {
+  import type { PromptSession } from '../../ui/prompt-session.svelte';
+  import { PRICE_SHARING_PROMPT } from '../prompt-policies';
+  let { transport, session, active, onsettings }: {
     transport: DesktopCapabilities;
-    store: SettingsStore;
+    session: PromptSession;
     /** False while the shell shows something that should not be crowded, and
      *  on Settings, where the full control is already in view. */
     active: boolean;
@@ -20,7 +19,10 @@
   // Re-read on each return from Settings, which may have changed the consent.
   $effect(() => {
     if (!active) return;
-    void transport.getPriceReportPreferences().then(value => { preference = value; }).catch(() => { preference = null; });
+    void transport.getPriceReportPreferences().then(value => {
+      preference = value;
+      if (!value.available || value.enabled) session.pass(PRICE_SHARING_PROMPT.id);
+    }).catch(() => { preference = null; session.pass(PRICE_SHARING_PROMPT.id); });
   });
   async function enable() {
     saving = true; error = '';
@@ -28,7 +30,7 @@
       preference = await transport.setPriceReportPreferences(true);
       if (preference.enabled) {
         enabledHere = true;
-        void dismissPrompt(store, PROMPT_ID).catch(() => {});
+        session.finish(PRICE_SHARING_PROMPT.id);
       } else {
         error = 'Price sharing could not be turned on. Nothing was changed.';
       }
@@ -39,7 +41,7 @@
 </script>
 
 {#if active && preference?.available && (!preference.enabled || enabledHere)}
-  <PromptBanner id={PROMPT_ID} {store} title={enabledHere ? 'Price sharing is on' : 'Help show what items really sell for'} dismissLabel={enabledHere ? 'Close' : 'Not now'}>
+  <PromptBanner {session} id={PRICE_SHARING_PROMPT.id} title={enabledHere ? 'Price sharing is on' : 'Help show what items really sell for'} dismissLabel={enabledHere ? 'Close' : 'Not now'}>
     {#if enabledHere}
       <p role="status">Thank you. Trades you complete from now on are shared. You can turn this off or delete recent reports in Settings at any time.</p>
     {:else}

@@ -7,7 +7,7 @@ import type { SettingsStore, StateStore, SettingKey } from '../contracts/state-s
 // It covers EXACTLY the state the SPA persists today, no more:
 //   - the scalar settings (reserve-copies, filters-open, view,
 //     score-explainer-dismissed, keep-copies-nudge-dismissed,
-//     tray-toast-seen, sell-onboarding-dismissed, dismissed-prompts, auto-close-sold,
+//     tray-toast-seen, sell-onboarding-dismissed, prompts, auto-close-sold,
 //     routine-checklist, sell-columns,
 //     theme.mode), each a short string;
 //   - on desktop, the last-owned inventory snapshot (the reload-restore copy).
@@ -42,7 +42,7 @@ export const LOCAL_SETTING_KEYS: Record<SettingKey, string> = {
   'keep-copies-nudge-dismissed': 'wfminv:keep-copies-nudge-dismissed-v1',
   'tray-toast-seen': 'wfminv:tray-toast-seen-v1',
   'sell-onboarding-dismissed': 'wfminv:sell-onboarding-dismissed-v1',
-  'dismissed-prompts': 'wfminv:dismissed-prompts-v1',
+  prompts: 'wfminv:prompts-v1',
   'sell-columns': 'wfminv:sell-columns-v1',
   'auto-close-sold': 'wfminv:auto-close-sold-v1',
   'routine-checklist': 'wfminv:routine-checklist-v2',

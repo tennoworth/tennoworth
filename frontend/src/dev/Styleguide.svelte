@@ -12,10 +12,15 @@
   import type { SellRow } from '../contracts/selling';
   import PromptBanner from '../ui/PromptBanner.svelte';
   import type { SettingsStore } from '../contracts/state-store';
+  import { PromptSession } from '../ui/prompt-session.svelte';
   let notesRef = $state<UpdateNotes>();
-  // Dismissal lives for this page only: reference edits never persist.
-  const promptValues = new Map<string, string>();
-  const promptStore: SettingsStore = { mode: 'local', hydrate: async () => {}, getSetting: key => promptValues.get(key) ?? null, setSetting: async (key, value) => { promptValues.set(key, value); } };
+  // A fresh, always-due session each time the state is chosen; nothing persists.
+  const promptStore: SettingsStore = { mode: 'local', hydrate: async () => {}, getSetting: () => null, setSetting: async () => {} };
+  const samplePromptSession = () => untrack(() => {
+    const session = new PromptSession(promptStore, [{ id: 'styleguide-prompt', delayDays: 0, minLaunches: 1, gapDays: 0, maxAsks: 1 }]);
+    session.launch();
+    return session;
+  });
   // Fictional rows for the production Sell table: sortable header buttons and
   // the shared Column guide.
   const sellRow = (name: string, slug: string, owned: number, low: number, vol: number, score: number): SellRow => ({
@@ -27,7 +32,7 @@
   });
   const sellSample = [sellRow('Primed Flow', 'primed_flow', 6, 23, 107, 138), sellRow('Arcane Energize', 'arcane_energize', 12, 7, 362, 84), sellRow('Sample long item name for wrapping', 'sample_long', 4, 4, 68, 18)];
   const notesServices = { updateNotes: async () => ({ ...notesSample, auto_show: false } as UpdateNotesStatus), acknowledgeUpdateNotes: async () => {}, updateNotesCanPresent: async () => true };
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { applyTheme, systemMode, type Mode } from '../ui/theme';
 
   let mode = $state<Mode>('dark');
@@ -162,7 +167,7 @@
     <NotificationRow entry={{ id: 2, category: 'baro', title: "Baro Ki'Teer is here", body: baroNotice.expected_body, target: 'baro', created_at: Date.parse(baroNotice.now) / 1000, read: true, delivery: 'inbox_only', content: baroNotice.expected_content } as NotificationEntry} now={Date.now()} onread={() => {}} onopen={() => {}} />
   </section>
   {/if}
-  {#if dataState === 'prompt'}<PromptBanner id="styleguide-prompt" store={promptStore} title="Help show what items really sell for"><p>Optional invitations use the neutral panel, never a toned edge, and say that ignoring them changes nothing. A long explanation wraps beside the actions and stacks above them in narrow windows.</p>{#snippet actions()}<button type="button" class="btn primary" onclick={() => (message = 'Sample prompt accepted.')}>Share sale prices</button><button type="button" class="btn">What is sent</button>{/snippet}</PromptBanner>{/if}
+  {#if dataState === 'prompt'}<PromptBanner id="styleguide-prompt" session={samplePromptSession()} title="Help show what items really sell for"><p>Optional invitations use the neutral panel, never a toned edge, and say that ignoring them changes nothing. A long explanation wraps beside the actions and stacks above them in narrow windows.</p>{#snippet actions()}<button type="button" class="btn primary" onclick={() => (message = 'Sample prompt accepted.')}>Share sale prices</button><button type="button" class="btn">What is sent</button>{/snippet}</PromptBanner>{/if}
   {#if dataState === 'usage'}<UsageChart sample={usageSample} />{/if}
   {#if dataState === 'sell'}<section class="ui-stack"><h2>Sortable analytical table</h2><p>Headers are sort buttons that announce their order; the Column guide explains every visible column.</p><ResultsTable results={sellSample} /></section>{/if}
   {#if dataState === 'updates'}<section class="ui-panel ui-stack"><h2>Changes across installed versions</h2><p>One plain-English summary combines skipped releases, with a version history beneath it.</p><button class="btn" onclick={() => notesRef?.open()}>Preview what’s new</button></section>{/if}
