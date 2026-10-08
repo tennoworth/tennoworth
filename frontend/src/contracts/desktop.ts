@@ -79,7 +79,14 @@ interface UsageCapability {
   setUsagePreferences(enabled: boolean): Promise<import('./usage').UsagePreferences>;
 }
 
-export interface DesktopCapabilities extends UsageCapability, MarketCapability, InventoryCapability, OrderCapability, OverlayCapability, AutoScanCapability { }
+interface PriceReportCapability {
+  getPriceReportPreferences(): Promise<import('./price-reports').PriceReportPreferences>;
+  setPriceReportPreferences(enabled: boolean): Promise<import('./price-reports').PriceReportPreferences>;
+  /** Deletes this install's reports from the weeks the service still holds raw. */
+  erasePriceReports(): Promise<void>;
+}
+
+export interface DesktopCapabilities extends UsageCapability, PriceReportCapability, MarketCapability, InventoryCapability, OrderCapability, OverlayCapability, AutoScanCapability { }
 
 // `withGlobalTauri: true` injects `window.__TAURI__` (the public API surface,
 // with `.core.invoke`); `__TAURI_INTERNALS__` is the lower-level object the
@@ -153,9 +160,16 @@ export interface RivenAuctionAttribute {
   positive: boolean;
 }
 
+/** Narrows a comps search to auctions carrying every listed stat with that
+ *  sign. At most three positive and one negative, as on WFM's own form. */
+export interface RivenStatFilter {
+  positive: string[];
+  negative: string[];
+}
+
 export interface RivenAuction {
   id: string;
-  /** Effective ask: buyout for direct sells, else the starting bid. */
+  /** The buyout. Bid-only auctions name no price and are not returned. */
   price: number;
   buyout_price: number | null;
   starting_price: number;

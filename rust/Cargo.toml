@@ -58,6 +58,7 @@ regex-syntax = "0.8"
 axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 sha2 = "0.10"
+hmac = "0.12"
 
 # A panic in a Tauri command crashes the process and poisons its mutexes, so
 # production code denies the crash family workspace-wide. Tests re-allow the

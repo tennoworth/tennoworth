@@ -208,7 +208,7 @@ Settings is ordered by how often people return to it. A status strip leads,
 linking the automatic-scan, overlay and account state to their sections,
 followed by section links. Then come the everyday panels (Automatic scan,
 Relic reward overlay, Notifications) and the set-once panels (warframe.market
-account, then This app: appearance, updates and usage sharing). Status comes
+account, then This app: appearance, updates, usage sharing and price sharing). Status comes
 before the controls that change it. Troubleshooting detail and full privacy
 terms sit in disclosures, and diagnostics open with their warning in view when
 enabled. The inbox's settings link opens the page at Notifications. Category

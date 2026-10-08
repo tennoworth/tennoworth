@@ -44,7 +44,7 @@ const MAX_ATTEMPTS_PER_DAY: u32 = 10;
 /// users, so tests/fixtures/usage/check-in.json pins them on each side.
 const RETRY_INTERVAL_SECS: u64 = 60;
 
-fn allowed() -> bool {
+pub(crate) fn allowed() -> bool {
     !cfg!(any(debug_assertions, test))
         && option_env!("TENNOWORTH_OCR_TEST_BUILD") != Some("1")
         && std::env::var_os("TENNOWORTH_PROBE").is_none()
@@ -143,7 +143,7 @@ fn confirm(db: &Db, day: &str, token: &str) {
         let _ = db.set_setting(DAILY, &json);
     }
 }
-fn client() -> Result<reqwest::Client, reqwest::Error> {
+pub(crate) fn client() -> Result<reqwest::Client, reqwest::Error> {
     reqwest::Client::builder()
         .timeout(Duration::from_secs(5))
         .retry(reqwest::retry::never())

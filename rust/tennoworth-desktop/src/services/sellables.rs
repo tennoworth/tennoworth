@@ -85,6 +85,8 @@ struct MarketEntry {
     low5_avg: f64,
     #[serde(default)]
     ducats: Option<i64>,
+    #[serde(default)]
+    tags: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]

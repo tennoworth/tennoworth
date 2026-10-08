@@ -23,10 +23,17 @@
 import type { RivenAuction } from '../contracts/desktop';
 import type { RivenStatTier } from '../contracts/data';
 
-/** Below this many observed trades the distribution is not a distribution.
- *  DE's weekly file happily reports pop: 1, and a median of one sale is a
- *  single anecdote wearing a statistic's clothes. */
-export const MIN_POPULATION = 12;
+/**
+ * DE's `pop` is a relative popularity score on a 0-100 scale, not a count of
+ * trades: each week exactly one row is 100, and rows like AX-52 rolled
+ * (pop 5, max 3,800p, average 182p) could not exist if it counted sales. It
+ * says a band is thin, not how thin. The old gate read it as a count and hid
+ * any band under 12, which on the 2026-10-08 PC feed was 98% of them. At or
+ * under this score (the floor, held by over half the rows) the band is shown
+ * with a warning instead, because no count exists to gate on. The threshold is
+ * a product judgement.
+ */
+export const LOW_POPULARITY = 1;
 
 /**
  * Kuva per reroll. Climbs with the reroll count and caps.
@@ -36,9 +43,14 @@ export const MIN_POPULATION = 12;
  */
 export const REROLL_KUVA = [900, 1000, 1200, 1400, 1700, 2000, 2350, 2750, 3150, 3500] as const;
 
-export function rerollCost(rerolls: number): number {
+/** Update 44.0: cycling with a manually locked trait costs double. A
+ *  spliced trait is also fixed in place but does not double the cost. */
+export const LOCKED_REROLL_FACTOR = 2;
+
+export function rerollCost(rerolls: number, locked = false): number {
   const i = Math.max(0, Math.floor(rerolls));
-  return REROLL_KUVA[Math.min(i, REROLL_KUVA.length - 1)];
+  const base = REROLL_KUVA[Math.min(i, REROLL_KUVA.length - 1)];
+  return locked ? base * LOCKED_REROLL_FACTOR : base;
 }
 
 export interface Distribution {
@@ -47,15 +59,16 @@ export interface Distribution {
   min: number;
   max: number;
   stddev: number;
+  /** DE's 0-100 relative popularity - see `LOW_POPULARITY`. */
   pop: number;
 }
 
-/** A usable distribution, or null when the sample is too thin to reason with. */
+/** A usable distribution, or null when DE published no price for the tier. */
 export function distributionOf(tier: RivenStatTier | null | undefined): Distribution | null {
   if (!tier) return null;
   const pop = Number(tier.pop) || 0;
   const median = Number(tier.median) || 0;
-  if (pop < MIN_POPULATION || median <= 0) return null;
+  if (median <= 0) return null;
   return {
     median,
     avg: Number(tier.avg) || 0,
@@ -157,9 +170,9 @@ export interface RerollRead {
   aboveMedian: boolean;
 }
 
-export function rerollRead(price: number, dist: Distribution, rerolls: number): RerollRead {
+export function rerollRead(price: number, dist: Distribution, rerolls: number, locked = false): RerollRead {
   return {
-    kuva: rerollCost(rerolls),
+    kuva: rerollCost(rerolls, locked),
     median: dist.median,
     aboveMedian: price > dist.median,
   };
@@ -171,7 +184,7 @@ export function rerollRead(price: number, dist: Distribution, rerolls: number): 
  * Straight out of DE's feed, which splits `rerolled` - and nothing in the
  * ecosystem surfaces it. Buyers pay for reroll headroom, so an unrolled riven
  * of the same apparent quality is usually worth more. Medians, not means,
- * because these markets are skewed. Null when either side is too thin.
+ * because these markets are skewed. Null when either side has no price.
  */
 export function rerolledDiscount(
   unrolled: RivenStatTier | null | undefined,
@@ -185,8 +198,8 @@ export function rerolledDiscount(
 
 export interface Appraisal {
   dist: Distribution | null;
-  /** Why there is no distribution, when there isn't one. */
-  unavailable?: 'no-data' | 'thin-sample';
+  /** Set when DE published no usable price for this tier. */
+  unavailable?: 'no-data';
   placement: Placement | null;
   verdict: PriceVerdict | null;
   reroll: RerollRead | null;
@@ -206,22 +219,19 @@ export function appraise(
   price: number | null,
   tier: RivenStatTier | null | undefined,
   rerolls: number,
+  locked = false,
 ): Appraisal {
   const dist = distributionOf(tier);
 
   if (!dist) {
-    const pop = Number(tier?.pop) || 0;
     return {
       dist: null,
-      unavailable: pop > 0 ? 'thin-sample' : 'no-data',
+      unavailable: 'no-data',
       placement: null,
       verdict: null,
       reroll: null,
       skewed: false,
-      caveats:
-        pop > 0
-          ? [`Only ${pop} trade${pop === 1 ? '' : 's'} observed - too few to place a price against.`]
-          : ['DE published no trades for this weapon and reroll state this week.'],
+      caveats: ['DE published no price for this weapon and reroll state this week.'],
     };
   }
 
@@ -229,9 +239,13 @@ export function appraise(
   const skewed = skew != null && skew >= SKEWED;
 
   const caveats = [
-    `Based on ${dist.pop} trades DE observed this week - the weapon's market, not this riven's stats.`,
+    `DE's weekly band for the weapon's market, not this riven's stats. Popularity ${dist.pop}/100 is a relative score, not a count of trades.`,
     'Stat desirability is not modelled; a god roll and a junk roll sit in the same band.',
+    "Since Update 44.1 DE's band mixes spliced and classic rivens.",
   ];
+  if (dist.pop <= LOW_POPULARITY) {
+    caveats.push('Rarely traded this week: the band may rest on a handful of sales.');
+  }
   if (skewed) {
     caveats.push(
       `A few large sales pull the average (${dist.avg.toFixed(0)}p) well above the median (${dist.median.toFixed(0)}p) - read the median.`,
@@ -246,7 +260,7 @@ export function appraise(
     dist,
     placement: placementOf(price, dist),
     verdict: judgeOffer(price, dist),
-    reroll: rerollRead(price, dist, rerolls),
+    reroll: rerollRead(price, dist, rerolls, locked),
     skewed,
     caveats,
   };

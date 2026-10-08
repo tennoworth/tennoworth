@@ -124,6 +124,14 @@ characteristics:
   zero provider retention. Deployment must review the actual Cloudflare and
   tunnel logging settings before enabling collection.
 
+- **Desktop price sharing is opt-in and off by default.** Once enabled, Rust
+  sends the item, quantity, price, side and UTC day of trades for platinum
+  recorded after that moment, under an id that changes every ISO week. Never
+  the trading partner, time of day, inventory, game or warframe.market account,
+  app version or platform. The service deletes raw reports when their week
+  closes and publishes an item only once five ids reported it that week. See
+  [price reports](docs/price-reports.md).
+
 See [daily installation counts](docs/usage-counting.md) for the data flow,
 recovery behaviour, testing exclusions, and known counting limitations.
 

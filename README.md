@@ -45,7 +45,8 @@ set-completion plays, relic expected value, Riven context, and listing health.
 - **Relic planner:** ranks owned relics by expected platinum per solo crack,
   compares intact sale value, and shows the value added by each refinement.
 - **Rivens:** shows scanned stats, rank, rerolls, current disposition and its
-  movement, DE's weekly price band, live auction comparables, and offer math.
+  movement, DE's weekly price band, the splices each riven qualifies for, live
+  buyout comparables for rolls with the same positive stats, and offer math.
 - **Market timing:** combines Prime release/vault/Resurgence history, annual
   usage changes, current events, Baro's schedule and inventory, and trader
   rotations. Advice remains advice; TennoWorth does not trade automatically.

@@ -2,6 +2,7 @@
   import { useDesktopServices } from '../../ui/desktop-context';
   const { checkUpdate } = useDesktopServices();
   import UsageSettings from './UsageSettings.svelte';
+  import PriceReportSettings from './PriceReportSettings.svelte';
   import NotificationSettings from './NotificationSettings.svelte';
   import ThemeSwitcher from '../../ui/ThemeSwitcher.svelte';
   import { onMount, tick } from 'svelte';
@@ -360,7 +361,7 @@ import { type UpdateStatus } from '../../contracts/update';
       </div>
       {#if updateError}<p class="error inset" role="alert">{updateError}</p>{/if}
     </div>
-    {#if transport}<UsageSettings {transport} />{/if}
+    {#if transport}<UsageSettings {transport} /><PriceReportSettings {transport} />{/if}
   </section>
 </div>
 

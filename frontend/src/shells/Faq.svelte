@@ -102,9 +102,11 @@
       <p data-shell>
         Arcanes and frame mods (in <code data-shell>RawUpgrades</code>) are
         resolved and priced like anything else. Rivens are
-        per-instance items with rolled stats - they don't have a single
-        market price, they need a separate model (riven grader). Not
-        supported here yet; semlar's tools do this better.
+        per-instance items with rolled stats, so they have no single market
+        price and the app does not invent one. The desktop app's Rivens view
+        shows DE's weekly price band for the weapon, the disposition trend,
+        the splices each riven qualifies for, and the cheapest live buyouts
+        for rolls with the same positive stats.
       </p>
     </details>
 
@@ -201,7 +203,9 @@
         never the passphrase itself; details in SECURITY.md.
       </p>
       <p data-shell>
-        No website analytics. Optional desktop usage sharing is disabled until you enable it.
+        No website analytics. Optional desktop usage sharing is disabled until you enable it,
+        and so is price sharing, which sends the item and price of trades you make for
+        platinum and never who you traded with.
       </p>
     </details>
 
