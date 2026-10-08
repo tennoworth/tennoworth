@@ -1,5 +1,6 @@
 // Rivens view: renders owned rivens with their resolved weapons, DE weekly
-// bands, disposition moves, and the per-weapon comps drawer (riven_comps IPC).
+// bands, disposition moves, splice options, and the per-riven comps drawer
+// (riven_comps IPC).
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { screen, fireEvent, waitFor, cleanup } from '@testing-library/svelte';
 import { renderDesktop as render } from '../../dev/render-desktop';
@@ -16,13 +17,16 @@ const market = {
   rivens: {
     weapons: {
       acceltra: {
-        name: 'Acceltra', disposition: 0.95,
+        name: 'Acceltra', disposition: 0.95, riven_type: 'rifle',
         game_ref: '/Lotus/Weapons/Grineer/LongGuns/GrnAcceltra/GrnAcceltra',
       },
     },
     attributes: [
       { game_ref: 'WeaponCritDamageMod', slug: 'critical_damage', name: 'Critical Damage', unit: 'percent' },
       { game_ref: 'WeaponProcTimeMod', slug: 'status_duration', name: 'Status Duration', unit: 'percent' },
+      { game_ref: 'WeaponFireDamageMod', slug: 'heat_damage', name: 'Heat', unit: 'percent' },
+      { game_ref: 'WeaponFreezeDamageMod', slug: 'cold_damage', name: 'Cold', unit: 'percent' },
+      { game_ref: 'WeaponViralDamageMod', slug: 'viral', name: 'Viral', unit: 'percent' },
     ],
     changes: [
       { slug: 'acceltra', name: 'Acceltra', from: 0.9, to: 0.95, seen_at: '2026-08-01T00:00:00Z' },
@@ -32,7 +36,7 @@ const market = {
     acceltra: {
       name: 'Acceltra',
       unrolled: { avg: 41.75, median: 35, min: 5, max: 400, stddev: 45.23, pop: 10 },
-      rolled: { avg: 266.72, median: 100, min: 5, max: 4600, stddev: 580.64, pop: 12 },
+      rolled: { avg: 266.72, median: 100, min: 5, max: 4600, stddev: 580.64, pop: 3 },
     },
   },
   surface_fetched_at: { riven_stats: '2026-08-17T00:00:00Z' },
@@ -46,6 +50,15 @@ const RAW_RIVENS: OwnedRiven[] = [
     rerolls: 2, lvl: 0, pol: 'AP_ATTACK',
     buffs: [{ tag: 'WeaponCritDamageMod', value: 952698242 }],
     curses: [{ tag: 'WeaponProcTimeMod', value: 472179622 }],
+    veiled: false,
+  },
+  {
+    path: '/Lotus/Upgrades/Mods/Randomized/LotusRifleRandomModRare',
+    compat: '/Lotus/Weapons/Grineer/LongGuns/GrnAcceltra/GrnAcceltra',
+    slug: null, weaponName: null,
+    rerolls: 0, lvl: 0, pol: 'AP_ATTACK',
+    buffs: [{ tag: 'WeaponFireDamageMod', value: 1 }, { tag: 'WeaponFreezeDamageMod', value: 1 }],
+    curses: [],
     veiled: false,
   },
   {
@@ -69,10 +82,11 @@ const AUCTIONS = [
     ],
   },
   {
-    id: 'a2', price: 60, buyout_price: null, starting_price: 60, top_bid: 45,
+    id: 'a2', price: 60, buyout_price: 60, starting_price: 20, top_bid: 45,
     is_direct_sell: false, owner: 'Someone', owner_status: 'online',
     mod_rank: 0, mastery_level: 15, re_rolls: 5, polarity: 'vazarin',
-    name: null, platform: 'pc', created: null, updated: null, attributes: [],
+    name: null, platform: 'pc', created: null, updated: null,
+    attributes: [{ url_name: 'viral', value: 90, positive: true }],
   },
 ];
 
@@ -91,19 +105,40 @@ describe('RivensPanel', () => {
     render(RivensPanel, { props: { market, rivens } });
 
     // resolved weapon name + polarity glyph
-    await screen.findByText('Acceltra');
-    expect(screen.getByText('V')).toBeTruthy(); // AP_ATTACK = Madurai
+    expect(await screen.findAllByText('Acceltra')).toHaveLength(2);
+    expect(screen.getAllByText('V')).toHaveLength(2); // AP_ATTACK = Madurai
     // The fingerprint proves stat identity, not the final in-game value.
     expect(screen.getByText('+Critical Damage')).toBeTruthy();
     expect(screen.getByText('-Status Duration')).toBeTruthy();
-    // DE weekly band: rerolled → rolled tier median 100p, n=12
+    // DE weekly band: rerolled → rolled tier median 100p. pop is DE's 0-100
+    // popularity, never a count of sales.
     expect(screen.getByText('100p')).toBeTruthy();
-    expect(screen.getByText(/rolled · DE sold n=12/)).toBeTruthy();
-    // disposition move from the change log
-    expect(screen.getByText('▲ 5%')).toBeTruthy();
+    expect(screen.getByText(/rolled · popularity 3\/100/)).toBeTruthy();
+    expect(screen.queryByText(/sold n=/)).toBeNull();
+    // disposition move from the change log, once per Acceltra riven
+    expect(screen.getAllByText('▲ 5%')).toHaveLength(2);
     // veiled riven renders without a weapon
     expect(screen.getByText('Veiled')).toBeTruthy();
     expect(screen.getByText('challenge to reveal')).toBeTruthy();
+  });
+
+  it('lists the splices a riven qualifies for, and none for one that has no pair', async () => {
+    installTauri(makeInvoke(), undefined);
+    render(RivensPanel, { props: { market, rivens: resolveRivens(RAW_RIVENS, market) } });
+    const options = await screen.findAllByTestId('splice-options');
+    expect(options).toHaveLength(1);
+    expect(options[0].textContent).toContain('Blast from +Heat and +Cold');
+  });
+
+  it('shows a disposition decrease as a decrease', async () => {
+    installTauri(makeInvoke(), undefined);
+    const lowered = {
+      ...market,
+      rivens: { ...market.rivens, changes: [{ slug: 'acceltra', name: 'Acceltra', from: 1.0, to: 0.95, seen_at: '2026-08-01T00:00:00Z' }] },
+    } as unknown as Market;
+    render(RivensPanel, { props: { market: lowered, rivens: resolveRivens(RAW_RIVENS, lowered) } });
+    expect(await screen.findAllByText('▼ 5%')).toHaveLength(2);
+    expect(screen.queryByText(/▲/)).toBeNull();
   });
 
   it('shows an empty state when nothing is owned', async () => {
@@ -120,14 +155,35 @@ describe('RivensPanel', () => {
 
     const compsButton = (await screen.findAllByRole('button', { name: 'Comps' }))[0];
     await fireEvent.click(compsButton);
-    await waitFor(() => expect(invoke).toHaveBeenCalledWith('riven_comps', { weapon: 'acceltra', stats: null }));
+    // Opens on rolls sharing the riven's positive stats.
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('riven_comps', {
+      weapon: 'acceltra', stats: { positive: ['critical_damage'], negative: [] },
+    }));
     // auction rows: price + converted attribute lines
-    await screen.findByText('35p');
-    expect(screen.getByText('+88.0% Critical Damage')).toBeTruthy();
+    await screen.findByText('+88.0% Critical Damage');
+    expect(screen.getByText('60p')).toBeTruthy();
+    expect(screen.getByText(/top bid 45p/)).toBeTruthy();
+    expect(screen.getByText('spliced')).toBeTruthy();
     expect(screen.getByText('-40.0% Status Duration')).toBeTruthy();
     expect(screen.getByText('100% stat match')).toBeTruthy();
     expect(screen.getByText('5 rerolls')).toBeTruthy();
     expect(screen.getByText(/Eleven041110/)).toBeTruthy();
+
+    await fireEvent.click(screen.getByRole('button', { name: 'All on weapon' }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('riven_comps', { weapon: 'acceltra', stats: null }));
+  });
+
+  it('opens comps under the riven that asked, not every riven on the weapon', async () => {
+    installTauri(makeInvoke(), undefined);
+    render(RivensPanel, { props: { market, rivens: resolveRivens(RAW_RIVENS, market) } });
+    // Two Acceltra rivens plus the veiled one, whose button is disabled.
+    const buttons = await screen.findAllByRole('button', { name: 'Comps' });
+    expect(buttons).toHaveLength(3);
+    await fireEvent.click(buttons[0]);
+    await screen.findByText('+88.0% Critical Damage');
+    expect(screen.getAllByRole('group', { name: 'Compare with' })).toHaveLength(1);
+    expect(screen.getAllByTestId('comps-sample')).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Hide comps' })).toHaveLength(1);
   });
 
   it('describes the comps sample as a sample, and can ask for a fresh one', async () => {
@@ -138,7 +194,8 @@ describe('RivensPanel', () => {
 
     await fireEvent.click((await screen.findAllByRole('button', { name: 'Comps' }))[0]);
     const sample = await screen.findByTestId('comps-sample');
-    expect(sample.textContent).toContain('2 cheapest live asks');
+    expect(sample.textContent).toContain('2 cheapest buyouts');
+    expect(sample.textContent).toContain('1 with a spliced trait');
     expect(sample.textContent).toContain('1 dated');
     expect(sample.textContent).toContain('1 online');
     expect(sample.textContent).toContain('1 offline');
