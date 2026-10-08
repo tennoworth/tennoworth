@@ -120,7 +120,7 @@ describe('RivensPanel', () => {
 
     const compsButton = (await screen.findAllByRole('button', { name: 'Comps' }))[0];
     await fireEvent.click(compsButton);
-    await waitFor(() => expect(invoke).toHaveBeenCalledWith('riven_comps', { weapon: 'acceltra' }));
+    await waitFor(() => expect(invoke).toHaveBeenCalledWith('riven_comps', { weapon: 'acceltra', stats: null }));
     // auction rows: price + converted attribute lines
     await screen.findByText('35p');
     expect(screen.getByText('+88.0% Critical Damage')).toBeTruthy();

@@ -1,4 +1,4 @@
-import type { DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences } from './desktop';
+import type { DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, RivenStatFilter, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences } from './desktop';
 import type { UpdateNotesServices, UpdateStatus } from './update';
 import type { EncryptedBlob } from './encrypted-snapshot';
 import type { BaroStock, Inventory, Market, OwnedRecord } from './data';
@@ -51,7 +51,7 @@ export interface DesktopServices extends UpdateNotesServices {
   desktopClearNotifications(): Promise<void>;
   desktopLiveTopPrices(queries: LiveTopQuery[]): Promise<LiveTop[]>;
   isDesktopRuntime(): boolean;
-  desktopRivenComps(weapon: string): Promise<RivenAuction[]>;
+  desktopRivenComps(weapon: string, stats?: RivenStatFilter | null): Promise<RivenAuction[]>;
   desktopTradeSessionState(): Promise<import('./data').TradeSessionState>;
   encryptPayload(payload: unknown, passphrase: string): Promise<EncryptedBlob>;
   decryptPayload(blob: EncryptedBlob, passphrase: string): Promise<unknown>;
