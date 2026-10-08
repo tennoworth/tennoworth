@@ -41,6 +41,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   import ThemeSwitcher from '../ui/ThemeSwitcher.svelte';
   import UpdateNotes from '../ui/UpdateNotes.svelte';
   import SettingsPanel from '../features/settings/SettingsPanel.svelte';
+  import PriceSharingPrompt from '../features/settings/PriceSharingPrompt.svelte';
   import RoutinesPanel from '../features/routines/RoutinesPanel.svelte';
   import { RoutineController } from '../features/routines/controller.svelte';
   import { resolveRivens } from '../domain/rivens';
@@ -61,7 +62,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   // the desktop app, driven by the wfm_session commands.
   let updateNotesRef: UpdateNotes;
   // Set only by the inbox's settings link; every other way in opens the top.
-  let settingsSection = $state<'notifications' | null>(null);
+  let settingsSection = $state<'notifications' | 'price-sharing' | null>(null);
 
   const notesServices = useDesktopServices();
   const transport = new TauriTransport();
@@ -553,7 +554,8 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
       </div>
     </div>
   {/if}
-  
+  <!-- Kept out of first run and of trading, where it would compete with the task. -->
+  <PriceSharingPrompt {transport} {store} active={hasInventory && !listing.listingOpen && effectiveView !== 'session' && effectiveView !== 'settings'} onsettings={() => { settingsSection = 'price-sharing'; filters.setView('settings'); }} />
     <DesktopUpdateBanner bind:this={updateBanner} />
   
 {/snippet}

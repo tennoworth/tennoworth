@@ -12,6 +12,9 @@ export type SettingKey =
   | 'keep-copies-nudge-dismissed'
   | 'tray-toast-seen'
   | 'sell-onboarding-dismissed'
+  /** Ids of optional prompt banners the user turned down (JSON string array).
+   *  An id is never reused, so a new prompt reaches people who dismissed an old one. */
+  | 'dismissed-prompts'
   /** Sell table columns the user picked, per preset (JSON: preset name, or
    *  'custom' when none is active, to an ordered column-key list). */
   | 'sell-columns'

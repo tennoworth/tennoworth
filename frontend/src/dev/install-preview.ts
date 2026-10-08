@@ -46,7 +46,6 @@ export async function installPreview() {
     try_silent_unlock: false,
     wfm_remember_available: true,
     get_usage_preferences: { enabled: false, available: false },
-    get_price_report_preferences: { enabled: false, available: false, sent_this_week: 0 },
     get_overlay_settings: { enabled: false, autoDetect: true, shortcut: 'Ctrl+Shift+O', scale: 1, livePrices: true, showOwned: true, diagnostics: false },
     overlay_status: { state: 'disabled', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true },
     setup_overlay_capture: { state: 'watching', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true },
@@ -59,6 +58,8 @@ export async function installPreview() {
   // via get_setting/set_setting; back those onto localStorage so a seeded
   // browser snapshot round-trips exactly like the real thing.
   let protectionPlan: ProtectionPlan = { reserves: {}, goal: null };
+  // `price-sharing` offers the opt-in prompt; `price-sharing-error` refuses the save.
+  let priceReports = { enabled: false, available: scenario?.startsWith('price-sharing') ?? false, sent_this_week: 0 };
   const invoke = (cmd: string, args?: Record<string, unknown>) => {
     if (cmd === 'update_notes') return Promise.resolve(structuredClone(notes));
     if (cmd === 'update_notes_can_present') return Promise.resolve(true);
@@ -76,6 +77,12 @@ export async function installPreview() {
         items: Object.fromEntries(snapshot.owned.filter(([, row]) => !row.subtype && !row.slug.endsWith('_set') && !row.slug.endsWith('_relic')).map(([, row]) => [row.slug, sampleAllocation(row.count, row.leveled ?? 0,
           Number(localStorage.getItem('reserve-copies') ?? 0), protectionPlan.reserves[row.slug] ?? 0, protectionPlan.goal ? null : 0)])),
         issues: protectionPlan.goal ? ['Open the protected-plan sample to preview a pinned goal.'] : [] }, args?.inventory as ProtectionInventory, Number(localStorage.getItem('reserve-copies') ?? 0), {}));
+    }
+    if (cmd === 'get_price_report_preferences') return Promise.resolve({ ...priceReports });
+    if (cmd === 'set_price_report_preferences') {
+      if (scenario === 'price-sharing-error') return Promise.reject(new Error('Sample price sharing save failed.'));
+      priceReports = { ...priceReports, enabled: Boolean(args?.enabled) };
+      return Promise.resolve({ ...priceReports });
     }
     if (cmd === 'get_setting') return Promise.resolve(localStorage.getItem(String(args?.key)));
     if (cmd === 'set_setting') { localStorage.setItem(String(args?.key), String(args?.value)); return Promise.resolve(null); }
