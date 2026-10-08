@@ -43,6 +43,11 @@ export function createPreview(scenario: string) {
     slug: null, weaponName: null, rerolls: 0, lvl: 8, pol: 'AP_TACTIC',
     buffs: [{ tag: 'WeaponFireDamageMod', value: 812345678 }, { tag: 'WeaponFreezeDamageMod', value: 701234567 }, { tag: 'WeaponDamageAmountMod', value: 902345678 }],
     curses: [{ tag: 'WeaponZoomFovMod', value: 401234567 }], veiled: false,
+    raw: JSON.stringify({
+      compat: '/Lotus/Weapons/Tenno/LongGuns/SapientPrimary/SapientPrimaryWeapon', lvlReq: 11, pol: 'AP_TACTIC', rerolls: 0, lvl: 8,
+      buffs: [{ Tag: 'WeaponFireDamageMod', Value: 812345678 }, { Tag: 'WeaponFreezeDamageMod', Value: 701234567 }, { Tag: 'WeaponDamageAmountMod', Value: 902345678 }],
+      curses: [{ Tag: 'WeaponZoomFovMod', Value: 401234567 }],
+    }),
   }];
   const settings = new Map<string, string>([
     ['last-owned-v2', serializeSnapshot({ invName: 'Sample inventory with a deliberately long name', owned, rivens, nativeSnapshotId: 1 }, Date.now())],

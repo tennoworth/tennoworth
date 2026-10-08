@@ -2,6 +2,7 @@
   import { useDesktopServices } from '../../ui/desktop-context';
   const { desktopRivenComps } = useDesktopServices();
   import RivenOffer from './RivenOffer.svelte';
+  import CopyBtn from '../../ui/CopyBtn.svelte';
 
   import type { RivenAuction, RivenStatFilter } from '../../contracts/desktop';
   import { humanError } from '../../contracts/errors';
@@ -14,8 +15,10 @@
     isSplicedStat,
     polaritySymbol,
     resolveRivenStats,
+    rivenReport,
     rivenSimilarity,
     spliceOptions,
+    unreadFingerprintKeys,
     type OwnedRiven,
     type ResolvedRivenStat,
     type SpliceOption,
@@ -66,6 +69,8 @@
     stats: ResolvedRivenStat[];
     splices: SpliceOption[];
     filter: ReturnType<typeof compsFilterFor>;
+    report: string | null;
+    unread: string[];
   }
 
   let rows = $derived<Row[]>(
@@ -78,6 +83,8 @@
         stats,
         splices: riven.veiled ? [] : spliceOptions(stats, rivenType),
         filter: compsFilterFor(stats),
+        report: rivenReport(riven),
+        unread: unreadFingerprintKeys(riven),
       };
     }),
   );
@@ -247,6 +254,11 @@
                     {/each}
                   {/if}
                 </div>
+                {#if row.unread.length > 0}
+                  <p class="unread" data-testid="unread-fingerprint">
+                    This riven carries data the app does not read yet ({row.unread.join(', ')}), so a trait may be missing above. Copy data and report it.
+                  </p>
+                {/if}
                 {#if row.splices.length > 0}
                   <p class="splices" data-testid="splice-options">
                     <span class="splices-label">Can splice:</span>
@@ -296,6 +308,14 @@
                 >
                   {query != null && compsBusy === query.key ? 'Fetching…' : openRow === row.key ? 'Hide comps' : 'Comps'}
                 </button>
+                {#if row.report}
+                  <!-- DE's raw riven data, for reporting a trait or state the
+                       app does not read yet. No account details: the path
+                       and fingerprint only. -->
+                  <span class="copy-data" title="Copy DE's raw data for this riven, to paste into a bug report. It holds no account details.">
+                    <CopyBtn text={row.report} label="Copy data" name={`Copy raw riven data for ${r.weaponName ?? 'this riven'}`} />
+                  </span>
+                {/if}
               </td>
             </tr>
             {#if openRow === row.key && query}
@@ -379,6 +399,8 @@
      app.css; only riven-specific content styles live here. */
   table { min-width: 65rem; }
   td:last-child .btn { white-space: nowrap; }
+  .copy-data { display: block; margin-top: var(--s1); }
+  .copy-data :global(.copybtn) { min-height: var(--ctl-xs); }
   .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .weapon { display: flex; align-items: center; gap: var(--s1); }
   .pol { color: var(--muted); font-size: var(--text-caption); }
@@ -393,6 +415,7 @@
   .spliced { margin-left: var(--s1); color: var(--muted); font: var(--text-caption) var(--font-ui); }
   .splices { margin: 0 0 var(--s1); max-width: 420px; color: var(--muted); font: var(--text-caption)/var(--leading-body) var(--font-body); }
   .splices-label { font-family: var(--font-ui); color: var(--fg); }
+  .unread { margin: 0 0 var(--s1); max-width: 420px; color: var(--warn); font: var(--text-caption)/var(--leading-body) var(--font-body); }
   .comps-bar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s1) var(--s2); padding-top: var(--s1); }
   .band { white-space: nowrap; }
   /* The tier and popularity note wraps under the price rather than being
