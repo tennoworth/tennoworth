@@ -29,10 +29,11 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { ROOT, CARGO_TOML, CHANGELOG, SEMVER, read, write, fail } from "./release/files";
 import { cmdSnapshot, cmdSnapshotCheck, validateSnapshotDirectory, printSnapshotSummary } from "./release/snapshot";
-import { allPins, cargoTomlVersion, publishedVersions, compareVersions, nextVersion } from "./release/versions";
+import { allPins, cargoTomlVersion, publishedVersions, compareVersions, nextVersion, releaseVersionProblem } from "./release/versions";
 import { APP_NOTES_SINCE, appNotesCatalog, syncAppNotes, releaseNotesBody, releaseNotesTemplate, validateReleaseNotes, type ReleaseNotesSummary } from "./release/notes";
 
 export { splitSnapshotFrame, validateSnapshotValues, type SnapshotSummary } from "./release/snapshot";
+export { nextVersion, releaseVersionProblem } from "./release/versions";
 export { appNotesCatalog, releaseNotesBody, releaseNotesTemplate, validateReleaseNotes, type ReleaseNotesSummary } from "./release/notes";
 
 function checkedReleaseNotes(version: string): { body: string; summary: ReleaseNotesSummary } {
@@ -121,7 +122,16 @@ function cmdCheck(argv: string[]) {
       bad = true;
     } else {
       console.log(`newest published release: ${newest}`);
-      if (cmp > 0) notesNeedValidation = true;
+      if (cmp > 0) {
+        notesNeedValidation = true;
+        // Only an advancing version is held to the scheme: between releases
+        // the repo sits at the newest published one, which may predate it.
+        const problem = releaseVersionProblem(version);
+        if (problem) {
+          console.error(problem);
+          bad = true;
+        }
+      }
     }
   }
 
@@ -166,10 +176,11 @@ function cmdPrepare(argv: string[]) {
     fail((error as Error).message);
   }
   const current = cargoTomlVersion();
-  const next = nextVersion(current, bump);
-  if (!SEMVER.test(next)) fail(`"${next}" is not a strict X.Y.Z semver`);
-  if (compareVersions(next, current) <= 0) {
-    fail(`${next} is not greater than the current ${current}`);
+  let next: string;
+  try {
+    next = nextVersion(current, bump);
+  } catch (error) {
+    fail((error as Error).message);
   }
 
   // Cargo.toml - the [package] version only. The replacement is anchored the

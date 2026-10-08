@@ -56,6 +56,14 @@ the desktop release contains the complete, tested `main` commit.
    bun scripts/release.ts prepare <major|minor|patch|X.Y.Z>
    ```
 
+   Every new release is `X.Y.ZZZ`: a three-digit patch from 100 to 999, so
+   0.8.7 is followed by 0.8.100. `patch` steps by one within that range (a
+   shorter, earlier patch moves to `.100`), `minor` and `major` start at
+   `.100`, and after `.999` the next release must be a `minor`. Earlier
+   versions remain valid history and compare numerically. `prepare`, the audit
+   PR gate when the version advances, and release preflight all refuse a new
+   version outside the range.
+
    Complete the generated release-note scaffold before committing it. Notes
    use the same compact, user-first structure on every desktop release:
 
