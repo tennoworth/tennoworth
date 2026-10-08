@@ -17,6 +17,7 @@ removed on 2026-08-02 - the desktop app replaced it.
 | `wfm-scrape` | Host-only pipeline binary: `scrape` runs the WFM scrape to CSV, `build` renders `market.json` + `wfstat-catalog.json`. The only pipeline - Python was retired 2026-08. |
 | `wfm-client` | Shared WFM transport primitives: UA, request headers, request budgets and signed policy, envelope unwrap, retry backoff. |
 | `tennoworth-usage` | Opt-in installation-count service that runs on the host. |
+| `tennoworth-reports` | Opt-in anonymous price-report service that runs on the host. See [price reports](../docs/price-reports.md). |
 
 See [CONTRIBUTING.md](../CONTRIBUTING.md#native-desktop-development) for
 Windows and Linux prerequisites and build commands. Build the desktop frontend

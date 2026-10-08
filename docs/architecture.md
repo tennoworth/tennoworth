@@ -46,6 +46,7 @@ rust/
   market-math/               pure shared heuristics
   wfm-client/                shared request policy and transport primitives
   tennoworth-usage/          opt-in installation-count service
+  tennoworth-reports/        opt-in anonymous price-report service
 scripts/                     release, CSP, probe and deployment checks
 tests/fixtures/             shared parity and pipeline inputs/expectations
 deploy/                      live-data refresh and deployment operations

@@ -71,7 +71,7 @@ market-math = { path = "../market-math" }
 # `bundled` compiles SQLite from source - no system libsqlite3 dependency, so the
 # canonical desktop store works on a clean Windows/Linux box with nothing
 # pre-installed (matches the "download → works" goal).
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { workspace = true }
 # C4 market refresh: the one remote GET (tennoworth.app/market.json). Egress
 # stays in Rust, off the webview. Inherits the
 # workspace's full reqwest feature set (see root Cargo.toml) rather than

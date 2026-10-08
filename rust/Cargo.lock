@@ -5567,6 +5567,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "tennoworth-reports"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "reqwest 0.12.28",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+]
+
+[[package]]
 name = "tennoworth-usage"
 version = "0.1.0"
 dependencies = [
