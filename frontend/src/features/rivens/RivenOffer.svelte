@@ -4,8 +4,8 @@
   // The panel around this one already refuses to print "this riven is worth N",
   // and that stays true here: the price comes from the USER. What we add is the
   // arithmetic against DE's weekly distribution for the weapon - where the
-  // offer sits, what a reroll would cost, and the odds it improves on what
-  // they hold. Every number carries the population it came from.
+  // offer sits and what a reroll would cost. Every number carries the
+  // limits of the band it came from.
   import { appraise, rerolledDiscount, type PriceVerdict } from '../../domain/riven-appraise';
   import { bandForRiven } from '../../domain/rivens';
   import type { OwnedRiven } from '../../domain/rivens';
@@ -27,8 +27,13 @@
     return offerText.trim() !== '' && Number.isFinite(n) && n > 0 ? n : null;
   });
 
+  // DE's inventory data has not yet been seen carrying a lock, so the owner
+  // says whether one is set. A spliced trait does not count: it stays in place
+  // without doubling the cost.
+  let locked = $state(false);
+
   let band = $derived(bandForRiven(riven, market?.riven_stats));
-  let result = $derived(appraise(offer, band, riven.rerolls));
+  let result = $derived(appraise(offer, band, riven.rerolls, locked));
 
   let entry = $derived(riven.slug ? market?.riven_stats?.[riven.slug] : undefined);
   let discount = $derived(rerolledDiscount(entry?.unrolled, entry?.rolled));
@@ -77,6 +82,10 @@
       bind:value={offerText}
     />
   </label>
+  <label class="lock">
+    <input type="checkbox" bind:checked={locked} />
+    <span>A trait is locked (rerolls cost double)</span>
+  </label>
 
   {#if result.unavailable}
     <p class="note">{result.caveats[0]}</p>
@@ -108,7 +117,7 @@
            percentage, not even a "likely" - can say what a new roll will do.
            The reader draws the inference. -->
       <p class="read">
-        Rerolling costs <strong>{result.reroll.kuva.toLocaleString()}</strong> kuva. This weapon's
+        Rerolling costs <strong>{result.reroll.kuva.toLocaleString()}</strong> kuva{locked ? ' with the lock' : ''}. This weapon's
         median trade is <strong>{result.reroll.median.toFixed(0)}p</strong>; your offer is
         {result.reroll.aboveMedian ? 'above' : 'at or below'} it.
       </p>
@@ -136,11 +145,17 @@
 </div>
 
 <style>
+  /* The cell around this is a numeric column; sentences here read in the
+     body face, and numbers keep the mono face where they are marked. */
   .offer {
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
     font-size: 0.85rem;
+    font-family: var(--font-body);
+  }
+  .axis {
+    font-family: var(--font-mono);
   }
   label {
     display: flex;
@@ -148,7 +163,7 @@
     gap: 0.4rem;
     color: var(--muted);
   }
-  input {
+  input[type='number'] {
     width: 6rem;
   }
   .dist {
@@ -180,7 +195,7 @@
     display: flex;
     justify-content: space-between;
     font-size: 0.72rem;
-    color: var(--faint);
+    color: var(--muted);
     font-variant-numeric: tabular-nums;
   }
   .read,
@@ -197,7 +212,7 @@
   .caveats {
     margin: 0;
     padding-left: 1rem;
-    color: var(--faint);
+    color: var(--muted);
     font-size: 0.75rem;
     display: flex;
     flex-direction: column;

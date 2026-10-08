@@ -26,8 +26,8 @@ pub struct RivenAuctionAttribute {
     pub positive: bool,
 }
 
-/// One auction, reduced to what a comps panel shows. `price` is the effective
-/// ask: the buyout for direct sells, else the starting bid.
+/// One auction, reduced to what a comps panel shows. `price` is the buyout:
+/// a bid-only auction names no price a buyer can pay, so it is not a comp.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct RivenAuction {
     pub id: String,
@@ -52,8 +52,56 @@ pub struct RivenAuction {
     pub attributes: Vec<RivenAuctionAttribute>,
 }
 
-fn auctions_url(weapon_slug: &str) -> String {
-    format!("{AUCTIONS_SEARCH_URL}?type=riven&weapon_url_name={weapon_slug}&sort_by=price_asc")
+/// WFM's search form takes at most three positive stats and one negative.
+pub const MAX_POSITIVE_STATS: usize = 3;
+pub const MAX_NEGATIVE_STATS: usize = 1;
+
+/// Optional stat filter for a comps search. WFM returns only auctions that
+/// carry every listed stat with the listed sign (checked against live
+/// results), so a filled filter narrows the sample to comparable rolls rather
+/// than the whole weapon.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct RivenStatFilter {
+    #[serde(default)]
+    pub positive: Vec<String>,
+    #[serde(default)]
+    pub negative: Vec<String>,
+}
+
+/// Attribute slugs are lowercase words joined by `_`, and one carries a `/`
+/// (`base_damage_/_melee_damage`). Anything else is not a WFM attribute.
+fn is_stat_slug(s: &str) -> bool {
+    !s.is_empty()
+        && s.len() <= 64
+        && s.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_' || b == b'/')
+}
+
+fn stat_list(stats: &[String]) -> String {
+    stats.iter().map(|s| s.replace('/', "%2F")).collect::<Vec<_>>().join(",")
+}
+
+/// `buyout_policy=with` keeps only auctions that name a buyout. Without it the
+/// cheapest rows on any popular weapon are bid auctions opened at 1p, which say
+/// nothing about what a riven sells for.
+fn auctions_url(weapon_slug: &str, filter: &RivenStatFilter) -> Result<String> {
+    if filter.positive.len() > MAX_POSITIVE_STATS || filter.negative.len() > MAX_NEGATIVE_STATS {
+        bail!("too many stats in a comps filter");
+    }
+    if !filter.positive.iter().chain(&filter.negative).all(|s| is_stat_slug(s)) {
+        bail!("invalid stat in a comps filter");
+    }
+    let mut url = format!(
+        "{AUCTIONS_SEARCH_URL}?type=riven&weapon_url_name={weapon_slug}&buyout_policy=with&sort_by=price_asc"
+    );
+    if !filter.positive.is_empty() {
+        url.push_str("&positive_stats=");
+        url.push_str(&stat_list(&filter.positive));
+    }
+    if !filter.negative.is_empty() {
+        url.push_str("&negative_stats=");
+        url.push_str(&stat_list(&filter.negative));
+    }
+    Ok(url)
 }
 
 /// Parse the v1 response (`payload.auctions[]`). Closed / private / withdrawn
@@ -84,7 +132,7 @@ pub fn parse_auctions(body: &serde_json::Value) -> Result<Vec<RivenAuction>> {
             .get("starting_price")
             .and_then(|v| v.as_u64())
             .map(|p| p.min(u32::MAX as u64) as u32);
-        let Some(price) = buyout.or(starting) else {
+        let Some(price) = buyout else {
             continue;
         };
         let item = a.get("item");
@@ -158,11 +206,16 @@ pub fn parse_auctions(body: &serde_json::Value) -> Result<Vec<RivenAuction>> {
     Ok(out)
 }
 
-/// The ≤[`COMPS_LIMIT`] cheapest matching auctions for one weapon, straight
-/// from WFM's v1 auctions search, through the shared governor and read cache.
-pub fn fetch_riven_comps(platform: &str, weapon_slug: &str) -> Result<Vec<RivenAuction>> {
+/// The ≤[`COMPS_LIMIT`] cheapest buyouts for one weapon, optionally narrowed
+/// to rolls sharing `filter`'s stats, straight from WFM's v1 auctions search,
+/// through the shared governor and read cache.
+pub fn fetch_riven_comps(
+    platform: &str,
+    weapon_slug: &str,
+    filter: &RivenStatFilter,
+) -> Result<Vec<RivenAuction>> {
+    let url = auctions_url(weapon_slug, filter)?;
     let client = browser_client(20)?;
-    let url = auctions_url(weapon_slug);
     let body = wfm_client::transport::read_json(
         wfm_client::wfm_headers(client.get(&url), platform), Kind::Contract,
         wfm_client::transport::ReadKey { url, platform: platform.into(), account: None },
@@ -177,11 +230,43 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn url_carries_type_and_weapon() {
+    fn url_carries_type_weapon_and_buyout_policy() {
         assert_eq!(
-            auctions_url("acceltra"),
-            "https://api.warframe.market/v1/auctions/search?type=riven&weapon_url_name=acceltra&sort_by=price_asc"
+            auctions_url("acceltra", &RivenStatFilter::default()).unwrap(),
+            "https://api.warframe.market/v1/auctions/search?type=riven&weapon_url_name=acceltra&buyout_policy=with&sort_by=price_asc"
         );
+    }
+
+    #[test]
+    fn url_carries_the_stat_filter_with_slashes_encoded() {
+        let filter = RivenStatFilter {
+            positive: vec!["critical_damage".into(), "base_damage_/_melee_damage".into()],
+            negative: vec!["zoom".into()],
+        };
+        assert_eq!(
+            auctions_url("rubico", &filter).unwrap(),
+            "https://api.warframe.market/v1/auctions/search?type=riven&weapon_url_name=rubico&buyout_policy=with&sort_by=price_asc\
+             &positive_stats=critical_damage,base_damage_%2F_melee_damage&negative_stats=zoom"
+        );
+    }
+
+    #[test]
+    fn a_filter_wfm_cannot_express_is_refused_before_any_request() {
+        let four = RivenStatFilter {
+            positive: vec!["a".into(), "b".into(), "c".into(), "d".into()],
+            negative: vec![],
+        };
+        assert!(auctions_url("rubico", &four).is_err());
+        let two_negative = RivenStatFilter {
+            positive: vec![],
+            negative: vec!["zoom".into(), "recoil".into()],
+        };
+        assert!(auctions_url("rubico", &two_negative).is_err());
+        let injected = RivenStatFilter {
+            positive: vec!["zoom&sort_by=price_desc".into()],
+            negative: vec![],
+        };
+        assert!(auctions_url("rubico", &injected).is_err());
     }
 
     fn auction(id: &str, price: u32, closed: bool) -> serde_json::Value {
@@ -230,9 +315,14 @@ mod tests {
     }
 
     #[test]
-    fn a_row_without_any_price_is_dropped() {
+    fn a_row_without_a_buyout_is_dropped() {
+        let mut bid_only = auction("bid-only", 1, false);
+        bid_only["buyout_price"] = json!(null);
+        bid_only["is_direct_sell"] = json!(false);
+        bid_only["top_bid"] = json!(500);
         let body = json!({"payload": {"auctions": [
             auction("priced", 5, false),
+            bid_only,
             {"id": "noprice", "closed": false, "private": false, "visible": true,
              "item": {"attributes": []}}
         ]}});

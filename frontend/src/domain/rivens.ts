@@ -3,6 +3,7 @@
 // with the weapon + stats inside the UpgradeFingerprint JSON string (the same
 // shape extractKeptLvls reads for its lvl, just parsed fully here).
 
+import type { RivenStatFilter } from '../contracts/desktop';
 import type {
   Inventory,
   Market,
@@ -38,6 +39,11 @@ export interface OwnedRiven {
   curses: RivenFingerprintStat[];
   /** A challenge instead of stats - the riven is veiled. */
   veiled: boolean;
+  /** DE's fingerprint string exactly as scanned. Kept because DE adds riven
+   *  state (locks, splices) before anyone knows its keys, and the parsed
+   *  fields above drop what they do not name. Absent on snapshots saved
+   *  before it was kept. */
+  raw?: string;
 }
 
 interface RivenFingerprint {
@@ -75,6 +81,46 @@ function statOf(s: unknown): RivenFingerprintStat | null {
   return { tag, value };
 }
 
+/** Fingerprint keys this module reads, or knows carry nothing to show. */
+const KNOWN_FINGERPRINT_KEYS: ReadonlySet<string> = new Set([
+  'compat', 'lim', 'lvl', 'lvlReq', 'rerolls', 'pol', 'buffs', 'curses', 'challenge', 'IsSentinel',
+]);
+
+/**
+ * Fingerprint keys the app does not read. A spliced trait may not sit in
+ * `buffs`: a server reimplementation's reroll code carries a TODO for an
+ * `advancedTrait` alongside them. Until a real spliced fingerprint has been
+ * seen, an unknown key is reported rather than guessed at, so a riven never
+ * silently looks like it has fewer traits than it does.
+ */
+export function unreadFingerprintKeys(riven: Pick<OwnedRiven, 'raw'>): string[] {
+  if (riven.raw == null) return [];
+  try {
+    const parsed: unknown = JSON.parse(riven.raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
+    return Object.keys(parsed).filter((k) => !KNOWN_FINGERPRINT_KEYS.has(k));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The riven as DE describes it, for a user to paste into a bug report: the
+ * mod path and the fingerprint, nothing else from the inventory entry (no
+ * item id). The fingerprint is re-indented when it parses and passed through
+ * verbatim when it does not, so a malformed one is still reportable.
+ */
+export function rivenReport(riven: Pick<OwnedRiven, 'path' | 'raw'>): string | null {
+  if (riven.raw == null) return null;
+  let fingerprint: unknown = riven.raw;
+  try {
+    fingerprint = JSON.parse(riven.raw);
+  } catch {
+    // keep the string
+  }
+  return JSON.stringify({ ItemType: riven.path, UpgradeFingerprint: fingerprint }, null, 2);
+}
+
 /** Extract owned rivens from the raw DE inventory. Only `Upgrades[]` entries
  *  under the Randomized path count; everything else (railjack avionics,
  *  regular mods) is not a riven. */
@@ -100,6 +146,7 @@ export function extractRivens(inv: Inventory | null | undefined): OwnedRiven[] {
       buffs,
       curses,
       veiled: compat === null && buffs.length === 0,
+      ...(typeof e?.UpgradeFingerprint === 'string' ? { raw: e.UpgradeFingerprint } : {}),
     });
   }
   return out;
@@ -177,7 +224,9 @@ export function attributeForTag(
 
 /** Human stat name from the fingerprint. Exact values cannot be recovered
  * from the roll fraction alone: DE's formula also needs the Riven class,
- * weapon disposition, rank, stat-count weights, and per-stat base values. */
+ * weapon disposition, rank, stat-count weights, and per-stat base values.
+ * A tag the manifest does not know keeps the raw tag, marked, so a new DE
+ * trait is visible as unknown instead of passing for a real stat name. */
 export function formatRivenStat(
   tag: string,
   positive: boolean,
@@ -185,7 +234,157 @@ export function formatRivenStat(
 ): string {
   const attr = attributeForTag(tag, attrs);
   const sign = positive ? '+' : '-';
-  return sign + (attr?.name ?? tag);
+  return attr ? sign + attr.name : `${sign}${tag} (unrecognised)`;
+}
+
+/** One fingerprint stat joined to the manifest. `slug` is null when WFM's
+ *  manifest has no entry for the tag. */
+export interface ResolvedRivenStat {
+  tag: string;
+  slug: string | null;
+  positive: boolean;
+  label: string;
+  spliced: boolean;
+}
+
+export function resolveRivenStats(
+  riven: Pick<OwnedRiven, 'buffs' | 'curses'>,
+  attrs: RivenAttribute[] | undefined,
+): ResolvedRivenStat[] {
+  const one = (stat: RivenFingerprintStat, positive: boolean): ResolvedRivenStat => {
+    const slug = attributeForTag(stat.tag, attrs)?.slug ?? null;
+    return {
+      tag: stat.tag,
+      slug,
+      positive,
+      label: formatRivenStat(stat.tag, positive, attrs),
+      spliced: slug != null && isSplicedStat(slug),
+    };
+  };
+  return [...riven.buffs.map((s) => one(s, true)), ...riven.curses.map((s) => one(s, false))];
+}
+
+// ---- Riven splicing (Update 44.1) ----
+//
+// A Riven Splicer consumes two specific traits and writes one spliced trait
+// plus a random trait in their place. Recipes are DE's published table (PC
+// patch notes 44.1.0), keyed here by WFM attribute slug. Spliced traits exist
+// only through splicing, so a listing or fingerprint carrying one of these
+// slugs is a spliced riven; WFM marks nothing else.
+
+/** Which riven classes a recipe applies to. Archgun rivens report `rifle`,
+ *  companion weapons report the class of riven they take. */
+export type SpliceScope = 'ranged' | 'melee' | 'all';
+
+export interface SpliceRecipe {
+  result: string;
+  /** DE's name for the spliced trait, for when the snapshot's manifest
+   *  predates it. */
+  name: string;
+  ingredients: readonly [string, string];
+  scope: SpliceScope;
+}
+
+const DAMAGE = 'base_damage_/_melee_damage';
+const ATTACK_SPEED = 'fire_rate_/_attack_speed';
+
+export const SPLICE_RECIPES: readonly SpliceRecipe[] = [
+  { result: 'weak_point_damage', name: 'Weak Point Damage', ingredients: [DAMAGE, 'zoom'], scope: 'ranged' },
+  { result: 'weak_point_damage', name: 'Weak Point Damage', ingredients: [DAMAGE, 'multishot'], scope: 'ranged' },
+  { result: 'weak_point_critical_chance', name: 'Weak Point Critical Chance', ingredients: ['critical_chance', 'zoom'], scope: 'ranged' },
+  { result: 'weak_point_critical_chance', name: 'Weak Point Critical Chance', ingredients: ['critical_chance', 'multishot'], scope: 'ranged' },
+  { result: 'ammo_efficiency', name: 'Ammo Efficiency', ingredients: ['magazine_capacity', 'reload_speed'], scope: 'ranged' },
+  { result: 'ammo_efficiency', name: 'Ammo Efficiency', ingredients: ['recoil', 'ammo_maximum'], scope: 'ranged' },
+  { result: 'magazine_reloaded_s_when_holstered', name: 'Magazine Reload While Holstered', ingredients: ['ammo_maximum', 'reload_speed'], scope: 'ranged' },
+  { result: 'magazine_reloaded_s_when_holstered', name: 'Magazine Reload While Holstered', ingredients: ['ammo_maximum', 'magazine_capacity'], scope: 'ranged' },
+  // Ranged "Damage" and melee "Melee Damage" are the same WFM attribute.
+  { result: 'status_damage', name: 'Status Damage', ingredients: [DAMAGE, 'status_chance'], scope: 'all' },
+  { result: 'melee_damage_on_heavy_attack', name: 'Heavy Attack Damage', ingredients: ['channeling_efficiency', 'chance_to_gain_extra_combo_count'], scope: 'melee' },
+  { result: 'heavy_attack_wind_up_speed', name: 'Heavy Attack Wind Up Speed', ingredients: ['channeling_efficiency', 'combo_duration'], scope: 'melee' },
+  { result: 'parry_angle', name: 'Parry Angle', ingredients: [ATTACK_SPEED, 'range'], scope: 'melee' },
+  { result: 'slam_attack_damage', name: 'Slam Damage', ingredients: [DAMAGE, ATTACK_SPEED], scope: 'melee' },
+  { result: 'gas', name: 'Gas', ingredients: ['toxin_damage', 'heat_damage'], scope: 'all' },
+  { result: 'corrosive', name: 'Corrosive', ingredients: ['toxin_damage', 'electric_damage'], scope: 'all' },
+  { result: 'viral', name: 'Viral', ingredients: ['toxin_damage', 'cold_damage'], scope: 'all' },
+  { result: 'radiation', name: 'Radiation', ingredients: ['heat_damage', 'electric_damage'], scope: 'all' },
+  { result: 'blast', name: 'Blast', ingredients: ['heat_damage', 'cold_damage'], scope: 'all' },
+  { result: 'magnetic', name: 'Magnetic', ingredients: ['electric_damage', 'cold_damage'], scope: 'all' },
+  { result: 'damage_to_orokin', name: 'Damage to Orokin', ingredients: ['damage_vs_corpus', 'damage_vs_grineer'], scope: 'all' },
+  { result: 'damage_to_techrot', name: 'Damage to Techrot', ingredients: ['damage_vs_corpus', 'damage_vs_infested'], scope: 'all' },
+  { result: 'damage_to_scaldra', name: 'Damage to Scaldra', ingredients: ['damage_vs_infested', 'damage_vs_grineer'], scope: 'all' },
+];
+
+const SPLICED_SLUGS: ReadonlySet<string> = new Set(SPLICE_RECIPES.map((r) => r.result));
+
+export function isSplicedStat(slug: string): boolean {
+  return SPLICED_SLUGS.has(slug);
+}
+
+/** The recipe class for a weapon's `riven_type`; null when WFM gave none or
+ *  one we do not recognise, which limits a riven to the all-class recipes. */
+export function spliceScopeOf(rivenType: string | undefined): 'ranged' | 'melee' | null {
+  if (rivenType === 'rifle' || rivenType === 'shotgun' || rivenType === 'pistol' || rivenType === 'kitgun') return 'ranged';
+  if (rivenType === 'melee' || rivenType === 'zaw') return 'melee';
+  return null;
+}
+
+export interface SpliceOption {
+  recipe: SpliceRecipe;
+  /** The ingredients as they sit on the riven, in recipe order. */
+  consumed: readonly [ResolvedRivenStat, ResolvedRivenStat];
+  /** DE: "if one of the consumed traits was a negative bonus, the random
+   *  trait will also be a negative". */
+  randomIsNegative: boolean;
+}
+
+/**
+ * The splices this riven could take right now.
+ *
+ * One spliced trait per riven, so a riven that already carries one has none.
+ * Each recipe needs both ingredients present. DE documents a negative
+ * ingredient beside a positive one (the spliced trait takes the positive
+ * one's grade); two negative ingredients are undocumented, so they are not
+ * offered.
+ */
+export function spliceOptions(
+  stats: readonly ResolvedRivenStat[],
+  rivenType: string | undefined,
+): SpliceOption[] {
+  if (stats.some((s) => s.spliced)) return [];
+  const scope = spliceScopeOf(rivenType);
+  const out: SpliceOption[] = [];
+  for (const recipe of SPLICE_RECIPES) {
+    if (recipe.scope !== 'all' && recipe.scope !== scope) continue;
+    const a = stats.find((s) => s.slug === recipe.ingredients[0]);
+    const b = stats.find((s) => s.slug === recipe.ingredients[1]);
+    if (!a || !b || (!a.positive && !b.positive)) continue;
+    out.push({ recipe, consumed: [a, b], randomIsNegative: !a.positive || !b.positive });
+  }
+  return out;
+}
+
+/** WFM's search form takes at most three positive stats and one negative;
+ *  the native side refuses anything larger. */
+export const MAX_FILTER_POSITIVE = 3;
+
+export interface RivenStatFilterPlan {
+  filter: RivenStatFilter;
+  /** False when a positive stat could not be resolved to a WFM slug, so the
+   *  filter is broader than the riven. */
+  complete: boolean;
+}
+
+/** A comps filter on the riven's positive stats, or null when none resolve.
+ *  Negatives are left out: matching them too leaves most weapons with no
+ *  listings, and the stat match on each row already shows them. */
+export function compsFilterFor(stats: readonly ResolvedRivenStat[]): RivenStatFilterPlan | null {
+  const positives = stats.filter((s) => s.positive);
+  const slugs = positives.flatMap((s) => (s.slug ? [s.slug] : []));
+  if (slugs.length === 0) return null;
+  return {
+    filter: { positive: slugs.slice(0, MAX_FILTER_POSITIVE), negative: [] },
+    complete: slugs.length === positives.length && slugs.length <= MAX_FILTER_POSITIVE,
+  };
 }
 
 /** DE's internal polarity codes → the glyph riven tools use. The full table:
@@ -215,14 +414,17 @@ export function formatAuctionStat(
   attrs: RivenAttribute[] | undefined,
 ): string {
   const attr = attrs?.find((a) => a.slug === urlName);
+  const name = attr?.name ?? urlName;
+  // Faction damage is a multiplier: WFM sends 1.43 for x1.43 and 0.7 for the
+  // x0.70 curse, so a +/- sign on it would misstate the effect.
+  if (attr?.unit === 'multiply') return '×' + value.toFixed(2) + ' ' + name;
   // Same single-sign rule as formatRivenStat: WFM quotes negative stats with
   // the sign already on the value.
   const mag = Math.abs(value);
   const sign = positive ? '+' : '-';
-  if (attr?.unit === 'percent') {
-    return sign + mag.toFixed(1) + '% ' + attr.name;
-  }
-  return sign + mag.toFixed(2) + ' ' + (attr?.name ?? urlName);
+  if (attr?.unit === 'percent') return sign + mag.toFixed(1) + '% ' + name;
+  if (attr?.unit === 'seconds') return sign + mag.toFixed(1) + ' s ' + name;
+  return sign + mag.toFixed(2) + ' ' + name;
 }
 
 interface AuctionStatLike {
@@ -233,7 +435,9 @@ interface AuctionStatLike {
 
 /** Signed-stat Jaccard similarity, from 0–100. This compares which effects the
  * two Rivens have, not roll strength-the inventory fingerprint alone cannot
- * supply a final display value honestly. */
+ * supply a final display value honestly. A stat the manifest cannot name still
+ * counts as one of the riven's effects, matching nothing: dropping it would
+ * shrink the riven and overstate the match. */
 export function rivenSimilarity(
   riven: Pick<OwnedRiven, 'buffs' | 'curses'>,
   auction: AuctionStatLike[],
@@ -242,8 +446,7 @@ export function rivenSimilarity(
   const owned = new Set<string>();
   const addOwned = (stat: RivenFingerprintStat, positive: boolean): void => {
     const attr = attributeForTag(stat.tag, attrs);
-    if (!attr) return;
-    owned.add(`${positive ? '+' : '-'}:${attr.slug}`);
+    owned.add(`${positive ? '+' : '-'}:${attr ? attr.slug : `?${stat.tag}`}`);
   };
   riven.buffs.forEach((stat) => addOwned(stat, true));
   riven.curses.forEach((stat) => addOwned(stat, false));
