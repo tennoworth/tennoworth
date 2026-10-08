@@ -91,11 +91,34 @@
 		}
 	}
 
+	# Price reports: the same stripped, unlogged proxying as the usage counter,
+	# to its own loopback service (docs/price-reports.md).
+	@reports path /api/reports/*
+	skip_log @reports
+	handle @reports {
+		reverse_proxy 127.0.0.1:8083 {
+			header_up -Forwarded
+			header_up -X-Forwarded-For
+			header_up -X-Real-IP
+			header_up -CF-*
+			header_up -Cookie
+			header_up -Authorization
+			header_up -User-Agent
+			header_up -Referer
+			transport http {
+				dial_timeout 2s
+				response_header_timeout 5s
+			}
+		}
+	}
+
 	# Handled proxy outages stay out of runtime error logs, which otherwise include client metadata.
 	# Keep debug logging disabled in production.
 	handle_errors {
 		@usageError path /api/usage/check-in /api/usage/daily
 		respond @usageError "Usage counts are currently unavailable." 503
+		@reportsError path /api/reports/*
+		respond @reportsError "Price reports are currently unavailable." 503
 		respond "{http.error.status_text}" {http.error.status_code}
 	}
 

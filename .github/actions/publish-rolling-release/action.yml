@@ -1,7 +1,7 @@
 name: Publish rolling release
 description: >
   softprops/action-gh-release with the shared policy for TennoWorth's rolling
-  "-latest" releases (web-latest, usage-latest, wfm-policy-latest): draft off,
+  "-latest" releases (web-latest, usage-latest, reports-latest, wfm-policy-latest): draft off,
   prerelease on and make_latest off (each keeps a rolling build out of the
   repo's "Latest release" badge - that's reserved for the versioned desktop-v*
   tags). Per-release tag/name/files/body stay caller-supplied so the releases
