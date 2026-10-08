@@ -37,6 +37,12 @@ export function createPreview(scenario: string) {
     slug: null, weaponName: null, rerolls: 2, lvl: 0, pol: 'AP_ATTACK',
     buffs: [{ tag: 'WeaponCritDamageMod', value: 952698242 }],
     curses: [{ tag: 'WeaponProcTimeMod', value: 472179622 }], veiled: false,
+  }, {
+    path: '/Lotus/Upgrades/Mods/Randomized/LotusRifleRandomModRare',
+    compat: '/Lotus/Weapons/Tenno/LongGuns/SapientPrimary/SapientPrimaryWeapon',
+    slug: null, weaponName: null, rerolls: 0, lvl: 8, pol: 'AP_TACTIC',
+    buffs: [{ tag: 'WeaponFireDamageMod', value: 812345678 }, { tag: 'WeaponFreezeDamageMod', value: 701234567 }, { tag: 'WeaponDamageAmountMod', value: 902345678 }],
+    curses: [{ tag: 'WeaponZoomFovMod', value: 401234567 }], veiled: false,
   }];
   const settings = new Map<string, string>([
     ['last-owned-v2', serializeSnapshot({ invName: 'Sample inventory with a deliberately long name', owned, rivens, nativeSnapshotId: 1 }, Date.now())],
@@ -120,6 +126,16 @@ export function createPreview(scenario: string) {
       mastery_level: 12, re_rolls: 2, polarity: 'madurai', name: 'Sample riven', platform: 'pc',
       created: '2026-07-01T12:00:00.000+00:00', updated: '2026-09-01T12:00:00.000+00:00',
       attributes: [{ url_name: 'critical_damage', value: 88, positive: true }],
+    }, {
+      id: 'sample-comp-spliced', price: 450, buyout_price: 450, starting_price: 200, top_bid: 260,
+      is_direct_sell: false, owner: 'Spliced listing owner', owner_status: 'ingame', mod_rank: 8,
+      mastery_level: 14, re_rolls: 31, polarity: 'naramon', name: 'Sample spliced riven', platform: 'pc',
+      created: '2026-10-08T01:00:00.000+00:00', updated: '2026-10-08T02:00:00.000+00:00',
+      attributes: [
+        { url_name: 'critical_damage', value: 141.2, positive: true },
+        { url_name: 'viral', value: 118.4, positive: true },
+        { url_name: 'damage_vs_infested', value: 0.72, positive: false },
+      ],
     }],
     wfm_auth_status: { logged_in: scenario !== 'logged-out', unlocked: scenario !== 'logged-out' },
   };
