@@ -36,7 +36,7 @@ jobs:
       # One publisher failing must not stop the other from being dispatched.
       fail-fast: false
       matrix:
-        workflow: [build-web.yml, build-usage.yml]
+        workflow: [build-web.yml, build-usage.yml, build-reports.yml]
     steps:
       # Dispatch `${{ matrix.workflow }}` on `main` and then require it to have
       # actually done something. `gh workflow run` exits 0 as soon as the run is

@@ -111,6 +111,13 @@ delivery infrastructure can see.
 
 ## Running it
 
+`build-reports` publishes the binary to the `reports-latest` rolling release
+from `main`. On the host, `deploy/pull-reports.sh` installs a checksum-verified
+build and rolls back when `/health` does not answer after a restart, and
+`deploy/monitor-reports.sh` alerts when the published aggregates stop
+updating. Caddy proxies `/api/reports/*` to the service with client headers
+stripped and access logging off for those routes.
+
 `TENNOWORTH_REPORTS_DB` sets the database path (default
 `/var/lib/tennoworth-reports/reports.db`) and `TENNOWORTH_REPORTS_PORT` the
 loopback port (default 8083). `/health` is outside the quota and answers 204

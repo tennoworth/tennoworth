@@ -1,0 +1,134 @@
+name: build-reports
+
+# Publish the isolated opt-in price-report service from production.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # The input list used to sit on `on.push`, which is the wrong place for a
+  # publisher. GitHub evaluates only the first 300 files of a diff: a promotion
+  # large enough to push this crate past that window would leave this workflow
+  # not running at all, and the service would silently stay on the previous
+  # binary. A workflow that never starts also leaves no trace to notice. Moving
+  # the decision into a job keeps the whole diff and makes a skip a visible
+  # skipped job.
+  changes:
+    # A manual publish is the recovery path for a binary that did not update on
+    # its own, so it must not run classification at all: checkout, the diff and
+    # the parse below are each things that can fail, and the recovery path cannot
+    # depend on the machinery it exists to recover from.
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      build: ${{ steps.decide.outputs.value }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          # Without an explicit `base` the action falls back to the repository
+          # default branch, which is `develop` here. A push to `main` would then
+          # compare main against develop through their merge base; since main is
+          # normally an ancestor of develop that diff is empty, so every push
+          # published and a revert on main could still be missed. Compare the
+          # pushed range itself.
+          base: ${{ github.event.before }}
+          ref: ${{ github.sha }}
+          # The default `some` quantifier ORs the patterns independently, so the
+          # exclusion below would match every other path instead of excluding it.
+          predicate-quantifier: 'some-with-excludes'
+          filters: |
+            build:
+              - 'rust/tennoworth-reports/**'
+              - 'rust/Cargo.toml'
+              - 'rust/Cargo.lock'
+              - '!**/AGENTS.md'
+              - '.github/workflows/build-reports.yml'
+              - '.github/actions/setup-rust/**'
+              - '.github/actions/publish-rolling-release/**'
+
+      # `build` covers the paths the binary is built from, not a fail-closed net:
+      # an unrelated change - a frontend-only promotion - must not republish the
+      # price-report service. tennoworth-reports has no path dependency on another
+      # workspace crate, so this crate plus the manifests is the whole list.
+      - name: Publish only when the service's inputs changed
+        id: decide
+        env:
+          RESULTS: ${{ toJson(steps.filter.outputs) }}
+          BEFORE: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          build=$(echo "$RESULTS" | jq -r '.build')
+          # An absent or all-zero `before` means there is no previous tree to
+          # compare against, so publish rather than trust the action's fallback.
+          if [ "$build" = "true" ] || [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ]; then
+            echo "value=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=false" >> "$GITHUB_OUTPUT"
+            echo "No input to tennoworth-reports changed; leaving reports-latest as it is."
+          fi
+
+  build:
+    needs: changes
+    # Serialize publishers of this rolling release, and only them. The box pulls
+    # whichever asset is newest by timestamp, so two concurrent builds of this
+    # binary could let the older tree win. This sits on the job rather than the
+    # workflow so a run that classifies as "nothing to publish" never holds or
+    # evicts a slot - a skipped job never enters the queue, and a queued one is
+    # replaced by the next arrival. `cancel-in-progress` stays false so an
+    # in-flight publication is not interrupted; a later run may not repeat it.
+    concurrency:
+      group: build-reports
+      cancel-in-progress: false
+    # `!cancelled()` is load-bearing, not decoration: a job whose `needs`
+    # dependency was skipped is itself skipped unless its condition includes a
+    # status function, so a manual publish - which skips classification by
+    # design - would otherwise never run. The push branch still requires the
+    # classifier to have succeeded, so a failed classification blocks publication
+    # instead of publishing blind. The `branches` filter on `push` does not
+    # restrict `workflow_dispatch`, hence the main-ref guard.
+    if: >-
+      !cancelled() &&
+      github.ref == 'refs/heads/main' &&
+      (
+        github.event_name == 'workflow_dispatch' ||
+        (needs.changes.result == 'success' && needs.changes.outputs.build == 'true')
+      )
+    # ubuntu-22.04 for its glibc 2.35 - same rationale as release-desktop.yml's
+    # linux-binary job (backward- but no forward-compat).
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        working-directory: rust
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: ./.github/actions/setup-rust
+
+      - name: Build
+        run: cargo build --release -p tennoworth-reports
+
+      - name: Package + checksum
+        run: |
+          mkdir -p ../dist
+          cp target/release/tennoworth-reports ../dist/tennoworth-reports
+          cd ../dist
+          sha256sum tennoworth-reports > tennoworth-reports.sha256
+          cat tennoworth-reports.sha256
+
+      - name: Publish rolling release
+        uses: ./.github/actions/publish-rolling-release
+        with:
+          tag_name: reports-latest
+          release_name: reports-latest (auto-built)
+          files: |
+            dist/tennoworth-reports
+            dist/tennoworth-reports.sha256
+          body: Rolling build of the opt-in price-report collector from main.

@@ -5,7 +5,7 @@
 # this the checkout only moves when a human moves it - which is how the box sat
 # on a phase-3 commit while main was many commits ahead.
 #
-# It also re-installs the deployed copies of the web, policy and usage pieces.
+# It also re-installs the deployed copies of the web, policy, usage and reports pieces.
 # The scrape pipeline is not one of them: scripts/deploy-scrape-host.sh is the
 # only installer of run-scrape.sh, the binary and the units.
 #
@@ -205,7 +205,7 @@ echo "pulled: $before -> $target"
 # at a byte offset that is now different code (the same hazard the scrape guard
 # above exists for). Stage beside the target and rename over it: rename swaps
 # the inode, so the running shell keeps reading the copy it started with.
-for f in alert.sh pull-app.sh pull-web.sh pull-policy.sh pull-usage.sh monitor-usage.sh; do
+for f in alert.sh pull-app.sh pull-web.sh pull-policy.sh pull-usage.sh monitor-usage.sh pull-reports.sh monitor-reports.sh; do
   src="deploy/$f"
   [ -f "$src" ] || continue
   if ! cmp -s "$src" "$DEPLOY_ROOT/$f" 2>/dev/null; then
@@ -228,7 +228,7 @@ fi
 
 # Units need root plus a daemon-reload, so report rather than act - a puller
 # that silently restarts systemd units is a different and larger promise.
-for u in wfm-app-pull wfm-web-pull wfm-policy-pull tennoworth-usage tennoworth-usage-pull tennoworth-usage-monitor; do
+for u in wfm-app-pull wfm-web-pull wfm-policy-pull tennoworth-usage tennoworth-usage-pull tennoworth-usage-monitor tennoworth-reports tennoworth-reports-pull tennoworth-reports-monitor; do
   for ext in service timer; do
     src="deploy/$u.$ext"; dst="/etc/systemd/system/$u.$ext"
     [ -f "$src" ] && [ -f "$dst" ] || continue

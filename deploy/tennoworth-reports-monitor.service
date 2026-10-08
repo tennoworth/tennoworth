@@ -1,0 +1,8 @@
+[Unit]
+Description=Check price-report collector health and freshness
+OnFailure=wfm-alert@%n.service
+[Service]
+Type=oneshot
+User=tennoworth-reports
+ExecStart=/srv/wfm/monitor-reports.sh
+NoNewPrivileges=true

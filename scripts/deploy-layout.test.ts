@@ -134,19 +134,25 @@ describe.skipIf(process.platform === 'win32')('signed policy bootstrap', () => {
   });
 });
 
-describe('usage collector rollback', () => {
-  // `busy` is one 503 while the store lock is held by a check-in or the
+// The usage counter and the price-report service share one puller shape.
+const collectors = [
+  { name: 'usage', binary: 'tennoworth-usage', puller: 'pull-usage.sh', failed: 'Usage collector health check failed', monitor: 'monitor-usage.sh', route: '/api/usage/daily' },
+  { name: 'reports', binary: 'tennoworth-reports', puller: 'pull-reports.sh', failed: 'Reports collector health check failed', monitor: 'monitor-reports.sh', route: '/api/reports/prices' },
+] as const;
+
+describe.each(collectors)('$name collector rollback', ({ binary, puller, failed }) => {
+  // `busy` is one 503 while the store lock is held by a request or the
   // maintenance tick: a healthy upgrade, which must not be rolled back.
   for (const failure of ['restart', 'health', 'busy'] as const) {
     test(failure === 'busy' ? 'keeps the new binary when the first health probe finds the store busy' : `restores the preceding binary after ${failure} failure`, () => {
-      const root = mkdtempSync(join(tmpdir(), 'usage-pull-'));
+      const root = mkdtempSync(join(tmpdir(), 'collector-pull-'));
       directories.push(root);
       const deploy = join(root, 'deploy');
       const mocks = join(root, 'mocks');
       mkdirSync(join(deploy, 'bin'), { recursive: true });
       mkdirSync(mocks);
-      writeFileSync(join(deploy, 'bin/tennoworth-usage'), 'old-binary');
-      const source = readFileSync(new URL('../deploy/pull-usage.sh', import.meta.url), 'utf8');
+      writeFileSync(join(deploy, `bin/${binary}`), 'old-binary');
+      const source = readFileSync(new URL(`../deploy/${puller}`, import.meta.url), 'utf8');
       writeFileSync(join(root, 'pull.sh'), source.replaceAll('/srv/wfm', deploy));
       writeFileSync(join(mocks, 'curl'), `#!/bin/sh
 case "$*" in
@@ -171,12 +177,12 @@ exit 0
       const result = spawnSync('sh', [join(root, 'pull.sh')], { env: { ...process.env, PATH: `${mocks}:${process.env.PATH}` }, encoding: 'utf8' });
       if (failure === 'busy') {
         expect(result.status, result.stderr).toBe(0);
-        expect(readFileSync(join(deploy, 'bin/tennoworth-usage'), 'utf8')).toBe('new-binary');
+        expect(readFileSync(join(deploy, `bin/${binary}`), 'utf8')).toBe('new-binary');
         return;
       }
       expect(result.status).toBe(1);
-      expect(result.stderr).toContain('Usage collector health check failed');
-      expect(readFileSync(join(deploy, 'bin/tennoworth-usage'), 'utf8')).toBe('old-binary');
+      expect(result.stderr).toContain(failed);
+      expect(readFileSync(join(deploy, `bin/${binary}`), 'utf8')).toBe('old-binary');
     });
   }
 });
@@ -783,16 +789,16 @@ describe.skipIf(process.platform === 'win32')('external-backup deployment readin
 // The monitor runs on the box, which has no jq. It used to need one, and failed on
 // every tick from the day it was installed; running it with jq absent from PATH
 // is what keeps that from coming back.
-describe.skipIf(process.platform === 'win32')('usage monitor', () => {
+describe.skipIf(process.platform === 'win32').each(collectors)('$name monitor', ({ monitor, route }) => {
   function monitorFixture(updatedAt: string) {
-    const root = mkdtempSync(join(tmpdir(), 'usage-monitor-')); directories.push(root);
+    const root = mkdtempSync(join(tmpdir(), 'collector-monitor-')); directories.push(root);
     const bin = join(root, 'bin'); mkdirSync(bin);
     write(join(bin, 'curl'), [
       '#!/bin/sh',
       'for a in "$@"; do last="$a"; done',
       'case "$last" in',
       '  */health) printf "ok\\n";;',
-      `  */api/usage/daily) printf '{"updated_at":"${updatedAt}","days":[{"day":"2026-09-25","installs":3}]}\\n';;`,
+      `  *${route}) printf '{"updated_at":"${updatedAt}","days":[{"day":"2026-09-25","installs":3}]}\\n';;`,
       'esac',
       '',
     ].join('\n'));
@@ -804,7 +810,7 @@ describe.skipIf(process.platform === 'win32')('usage monitor', () => {
       write(join(bin, tool), `#!/bin/sh\nexec ${real} "$@"\n`);
       chmodSync(join(bin, tool), 0o755);
     }
-    return () => spawnSync('/bin/sh', [fileURLToPath(new URL('../deploy/monitor-usage.sh', import.meta.url))], {
+    return () => spawnSync('/bin/sh', [fileURLToPath(new URL(`../deploy/${monitor}`, import.meta.url))], {
       encoding: 'utf8', env: { PATH: bin },
     });
   }
