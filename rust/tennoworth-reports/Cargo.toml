@@ -1,9 +1,9 @@
 [package]
-name = "tennoworth-usage"
+name = "tennoworth-reports"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "Opt-in daily installation count collector"
+description = "Opt-in anonymous price and riven-shape report collector"
 
 [dependencies]
 axum = { workspace = true }

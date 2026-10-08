@@ -1,0 +1,1053 @@
+{
+  "_comment": "Contract v1 of the price-report service. today is the server's UTC day the cases are judged on. erase = hex SHA-256 of the secret's hex text.",
+  "today": "2026-10-08",
+  "erase_vectors": [
+    {
+      "secret": "abababababababababababababababababababababababababababababababab",
+      "erase": "271a413bd339c5709fdceaec41f14f11e9fbfb5042d72d331c65f32b284cd09a"
+    }
+  ],
+  "canonical_shape": {
+    "body": {
+      "v": 1,
+      "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+      "keys": [
+        {
+          "name": "lock",
+          "type": "boolean"
+        },
+        {
+          "name": "advancedTrait",
+          "type": "object",
+          "fields": [
+            "Value",
+            "Tag",
+            "Tag"
+          ]
+        },
+        {
+          "name": "lock",
+          "type": "boolean"
+        }
+      ],
+      "tags": [
+        "/Lotus/B",
+        "/Lotus/A",
+        "/Lotus/B"
+      ]
+    },
+    "shape": "{\"keys\":[{\"name\":\"advancedTrait\",\"type\":\"object\",\"fields\":[\"Tag\",\"Value\"]},{\"name\":\"lock\",\"type\":\"boolean\"}],\"tags\":[\"/Lotus/A\",\"/Lotus/B\"]}"
+  },
+  "sales": [
+    {
+      "case": "one sale today",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "case": "a purchase seven days old",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-01",
+            "side": "purchase",
+            "slug": "primed_flow",
+            "tiered": false,
+            "qty": 1,
+            "plat": 40
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "case": "a client clock one day ahead",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-09",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "case": "several sales in one week",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "2222222222222222222222222222222222222222222222222222222222222222",
+            "day": "2026-10-05",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "3333333333333333333333333333333333333333333333333333333333333333",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "ash_prime_set",
+            "tiered": true,
+            "qty": 2,
+            "plat": 150
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "case": "eight days old",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-09-30",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "two days ahead",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-10",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "one batch spanning two ISO weeks",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-04",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "2222222222222222222222222222222222222222222222222222222222222222",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "a partner name",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40,
+            "partner": "SomeTenno"
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "a free-text item name instead of a slug",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "Primed Flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "a mixed trade",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-08",
+            "side": "trade",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "zero quantity",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 0,
+            "plat": 40
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "zero plat",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 0
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "plat above the cap",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 100001
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "a short ref",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "abc",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "an uppercase contributor",
+      "body": {
+        "v": 1,
+        "contributor": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "an unknown contract version",
+      "body": {
+        "v": 2,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "an empty batch",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": []
+      },
+      "valid": false
+    },
+    {
+      "case": "more than fifty sales",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000000",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000001",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000002",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000003",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000004",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000005",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000006",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000007",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000008",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000009",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000000a",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000000b",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000000c",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000000d",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000000e",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000000f",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000010",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000011",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000012",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000013",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000014",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000015",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000016",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000017",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000018",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000019",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000001a",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000001b",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000001c",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000001d",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000001e",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000001f",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000020",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000021",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000022",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000023",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000024",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000025",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000026",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000027",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000028",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000029",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000002a",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000002b",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000002c",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000002d",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000002e",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "000000000000000000000000000000000000000000000000000000000000002f",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000030",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000031",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          },
+          {
+            "ref": "0000000000000000000000000000000000000000000000000000000000000032",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "an app version field",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "sales": [
+          {
+            "ref": "1111111111111111111111111111111111111111111111111111111111111111",
+            "day": "2026-10-08",
+            "side": "sale",
+            "slug": "primed_flow",
+            "tiered": true,
+            "qty": 1,
+            "plat": 40
+          }
+        ],
+        "version": "0.8.8"
+      },
+      "valid": false
+    }
+  ],
+  "shapes": [
+    {
+      "case": "an unread key with nested field names",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "keys": [
+          {
+            "name": "advancedTrait",
+            "type": "object",
+            "fields": [
+              "Value",
+              "Tag"
+            ]
+          }
+        ],
+        "tags": []
+      },
+      "valid": true
+    },
+    {
+      "case": "only unrecognised tags",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "keys": [],
+        "tags": [
+          "/Lotus/Upgrades/Mods/Randomized/SplicedStatViral"
+        ]
+      },
+      "valid": true
+    },
+    {
+      "case": "nothing to report",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "keys": [],
+        "tags": []
+      },
+      "valid": false
+    },
+    {
+      "case": "a value smuggled into a key",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "keys": [
+          {
+            "name": "advancedTrait",
+            "type": "object",
+            "value": {
+              "Tag": "x"
+            }
+          }
+        ],
+        "tags": []
+      },
+      "valid": false
+    },
+    {
+      "case": "a key name that is not an identifier",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "keys": [
+          {
+            "name": "lock trait",
+            "type": "boolean"
+          }
+        ],
+        "tags": []
+      },
+      "valid": false
+    },
+    {
+      "case": "a tag that is not a game path",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "keys": [],
+        "tags": [
+          "SomeTenno's riven"
+        ]
+      },
+      "valid": false
+    },
+    {
+      "case": "an unknown value type",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "keys": [
+          {
+            "name": "lock",
+            "type": "date"
+          }
+        ],
+        "tags": []
+      },
+      "valid": false
+    },
+    {
+      "case": "an ItemId field",
+      "body": {
+        "v": 1,
+        "contributor": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "erase": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "keys": [
+          {
+            "name": "advancedTrait",
+            "type": "object",
+            "fields": [
+              "Value",
+              "Tag"
+            ]
+          }
+        ],
+        "tags": [],
+        "ItemId": "5f0000000000000000000000"
+      },
+      "valid": false
+    }
+  ],
+  "erase": [
+    {
+      "case": "current week",
+      "body": {
+        "v": 1,
+        "week": "2026-W41",
+        "secret": "abababababababababababababababababababababababababababababababab"
+      },
+      "valid": true
+    },
+    {
+      "case": "a week without the W",
+      "body": {
+        "v": 1,
+        "week": "2026-41",
+        "secret": "abababababababababababababababababababababababababababababababab"
+      },
+      "valid": false
+    },
+    {
+      "case": "week 54",
+      "body": {
+        "v": 1,
+        "week": "2026-W54",
+        "secret": "abababababababababababababababababababababababababababababababab"
+      },
+      "valid": false
+    },
+    {
+      "case": "a short secret",
+      "body": {
+        "v": 1,
+        "week": "2026-W41",
+        "secret": "ab"
+      },
+      "valid": false
+    }
+  ]
+}

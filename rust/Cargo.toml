@@ -22,8 +22,9 @@
 #                         standalone CLI companion was removed (2026-08): the
 #                         product is the desktop app or the informational site.
 #   tennoworth-usage    - the opt-in installation-count service on the host.
+#   tennoworth-reports  - the opt-in anonymous price-report service on the host.
 [workspace]
-members = ["wfm-core", "market-math", "market-domain", "market-domain-wasm", "wfm-scrape", "wfm-client", "tennoworth-desktop", "tennoworth-usage"]
+members = ["wfm-core", "market-math", "market-domain", "market-domain-wasm", "wfm-scrape", "wfm-client", "tennoworth-desktop", "tennoworth-usage", "tennoworth-reports"]
 resolver = "2"
 
 # Single version authority for deps shared by 2+ members - a member bumping
@@ -52,6 +53,11 @@ tungstenite = { version = "0.24", default-features = false, features = ["rustls-
 # transitive crate rather than introducing one; keep the version in step with
 # `regex` so the parse and the compile agree on syntax.
 regex-syntax = "0.8"
+# Minimal HTTP server for the host collectors: no request tracing, no
+# cookie/session middleware.
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
+sha2 = "0.10"
 
 # A panic in a Tauri command crashes the process and poisons its mutexes, so
 # production code denies the crash family workspace-wide. Tests re-allow the
