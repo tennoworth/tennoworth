@@ -25,8 +25,9 @@ import { type UpdateStatus } from '../../contracts/update';
     autoScan?: AutoScanController;
     wfmStatus?: DesktopWfmStatus | null;
     onwfmlogout?: () => Promise<void>;
-    /** Opens the page at this section (the inbox's "Notification settings"). */
-    section?: 'notifications' | null;
+    /** Opens the page at this section (the inbox's "Notification settings",
+     *  the price sharing prompt's "What is sent"). */
+    section?: 'notifications' | 'price-sharing' | null;
     onsectionshown?: () => void;
   }
   let { theme, onwhatsnew, transport, autoScan, wfmStatus = null, onwfmlogout, section = null, onsectionshown }: Props = $props();

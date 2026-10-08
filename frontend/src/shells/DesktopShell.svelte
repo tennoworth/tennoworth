@@ -41,6 +41,10 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   import ThemeSwitcher from '../ui/ThemeSwitcher.svelte';
   import UpdateNotes from '../ui/UpdateNotes.svelte';
   import SettingsPanel from '../features/settings/SettingsPanel.svelte';
+  import PriceSharingPrompt from '../features/settings/PriceSharingPrompt.svelte';
+  import SupportPrompt from '../features/community/SupportPrompt.svelte';
+  import { PromptSession } from '../ui/prompt-session.svelte';
+  import { PROMPT_ORDER } from '../features/prompt-policies';
   import RoutinesPanel from '../features/routines/RoutinesPanel.svelte';
   import { RoutineController } from '../features/routines/controller.svelte';
   import { resolveRivens } from '../domain/rivens';
@@ -61,7 +65,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   // the desktop app, driven by the wfm_session commands.
   let updateNotesRef: UpdateNotes;
   // Set only by the inbox's settings link; every other way in opens the top.
-  let settingsSection = $state<'notifications' | null>(null);
+  let settingsSection = $state<'notifications' | 'price-sharing' | null>(null);
 
   const notesServices = useDesktopServices();
   const transport = new TauriTransport();
@@ -76,6 +80,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   // control in Settings → Appearance (and its footer twin) drives.
   let { store, theme }: { store: StateStore; theme: ThemeController } = $props();
   const filters = untrack(() => new FilterController(store));
+  const prompts = untrack(() => new PromptSession(store, PROMPT_ORDER));
   const routines = untrack(() => new RoutineController(store));
   const inventory = untrack(() => new InventoryController(store, transport, { loadMarket, loadCatalogs, normalizeInventory: normalizeInventoryNative }));
   const protection = new ProtectionController({ desktopProtectionState, desktopSaveProtectionPlan });
@@ -256,6 +261,10 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   }
 
   let hasInventory = $derived(inventory.resolved.owned.size > 0);
+  // Prompts measure use from the first launch with an inventory, and stay out
+  // of trading, where they would compete with the task.
+  let promptsActive = $derived(hasInventory && !listing.listingOpen && effectiveView !== 'session');
+  $effect(() => { if (hasInventory) untrack(() => prompts.launch()); });
   let showWorkspace = $derived(hasInventory || inventory.phase === 'done' || effectiveView !== 'sell');
   let updateBanner: DesktopUpdateBanner;
 </script>
@@ -553,7 +562,9 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
       </div>
     </div>
   {/if}
-  
+  <!-- Kept out of first run and of trading, where it would compete with the task. -->
+  <PriceSharingPrompt {transport} session={prompts} active={promptsActive && effectiveView !== 'settings'} onsettings={() => { settingsSection = 'price-sharing'; filters.setView('settings'); }} />
+  <SupportPrompt session={prompts} active={promptsActive} />
     <DesktopUpdateBanner bind:this={updateBanner} />
   
 {/snippet}
@@ -584,4 +595,4 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   onimport={(result) => inventory.handleImported(result)}
 />
 
-<UpdateNotes bind:this={updateNotesRef} services={notesServices} ready={notesReady} blocked={outstanding > 0 || listing.resumePhase !== 'idle'} />
+<UpdateNotes bind:this={updateNotesRef} services={notesServices} ready={notesReady} blocked={outstanding > 0 || listing.resumePhase !== 'idle'} onautomatic={(state) => prompts.notes(state)} />

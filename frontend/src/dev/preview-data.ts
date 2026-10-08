@@ -54,6 +54,8 @@ export function createPreview(scenario: string) {
     ['sell-onboarding-dismissed', '1'], ['keep-copies-nudge-dismissed', '1'],
     ['score-explainer-dismissed', '1'],
   ]);
+  // An earlier install, so this launch counts as use rather than a first run.
+  if (scenario === 'support-prompt') settings.set('prompts', JSON.stringify({ first_seen: Date.now() - 21 * 86_400_000, launches: 6, prompts: {} }));
   const empty = scenario === 'empty';
   // One listing the sample inventory does not own (so the health check has a
   // real issue to report) beside one composed set it cannot report at all: a

@@ -32,7 +32,7 @@
 </script>
 <!-- Beside usage sharing in Settings' "This app" panel: a set-once consent
      whose full terms sit in a disclosure. -->
-<div class="ui-section-group">
+<div class="ui-section-group" id="settings-price-sharing" tabindex="-1" aria-labelledby="price-settings-title">
   <h4 id="price-settings-title">Price sharing</h4>
   <div class="ui-setting-row">
     <div class="ui-setting-copy">
@@ -61,6 +61,7 @@
   {#if error}<p class="note bad" role="alert">{error}</p>{/if}
 </div>
 <style>
+  #settings-price-sharing:focus { outline: none; }
   .terms { padding: var(--s2) var(--inset) 0; }
   .terms > summary { min-height: var(--ctl); cursor: pointer; color: var(--muted); font-size: var(--text-control); }
   .terms > p { margin: var(--s2) 0 0; max-width: 65ch; font-size: var(--text-control); line-height: var(--leading-body); color: var(--muted); }

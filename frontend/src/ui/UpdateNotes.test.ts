@@ -25,6 +25,22 @@ describe('installed update notes', () => {
     expect(api.acknowledgeUpdateNotes).toHaveBeenCalledWith('0.7.103');
     expect(document.querySelector('dialog')?.open).toBe(false);
   });
+  it('tells the prompts when automatic notes are waiting, absent or dismissed', async () => {
+    const onautomatic = vi.fn();
+    render(UpdateNotes, { services: services(), ready: true, onautomatic });
+    await waitFor(() => expect(document.querySelector('dialog')?.open).toBe(true));
+    expect(onautomatic.mock.calls).toEqual([['pending']]);
+    await fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
+    expect(onautomatic.mock.calls).toEqual([['pending'], ['dismissed']]);
+    cleanup();
+    const quiet = vi.fn();
+    render(UpdateNotes, { services: services({ updateNotes: vi.fn(async () => ({ ...structuredClone(fixture), auto_show: false }) as UpdateNotesStatus) }), ready: true, onautomatic: quiet });
+    await waitFor(() => expect(quiet).toHaveBeenCalledWith('none'));
+    cleanup();
+    const failed = vi.fn();
+    render(UpdateNotes, { services: services({ updateNotes: vi.fn(async () => { throw new Error(); }) }), ready: true, onautomatic: failed });
+    await waitFor(() => expect(failed).toHaveBeenCalledWith('none'));
+  });
   it('defers when the app is not ready, has recovery work, or its native window is unfocused', async () => {
     const api=services({ updateNotesCanPresent: vi.fn(async () => false) });
     const { rerender }=render(UpdateNotes, { services: api, ready: false });
