@@ -76,6 +76,9 @@ fn reserved_for_typed_commands(key: &str) -> Result<(), String> {
     if key.starts_with("update-notes.") {
         return Err("Update history is managed by its own commands.".into());
     }
+    if key.starts_with(crate::shell::app_icon::RESERVED_PREFIX) {
+        return Err("The app icon is set through its own command.".into());
+    }
     Ok(())
 }
 
@@ -109,10 +112,11 @@ mod tests {
             "reports.sales-mark-v1",
             "reports.sent-v1",
             "update-notes.history-v1",
+            crate::shell::app_icon::SETTING_APPLIED,
         ] {
             assert!(reserved_for_typed_commands(key).is_err(), "{key}");
         }
-        for key in ["theme.mode", "prompts", "auto-close-sold", "reportsx"] {
+        for key in ["theme.mode", "prompts", "app-icon", "auto-close-sold", "reportsx"] {
             assert!(reserved_for_typed_commands(key).is_ok(), "{key}");
         }
     }

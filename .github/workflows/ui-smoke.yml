@@ -87,6 +87,7 @@ jobs:
               - 'scripts/check-probe-report.ts'
               - 'scripts/probe-readiness.test.ts'
               - 'scripts/sync-csp.ts'
+              - 'scripts/build-icons.ts'
               - '.github/actions/setup-rust/**'
               - '.github/actions/setup-windows-ocr/**'
               - '.github/actions/stage-tessdata/**'

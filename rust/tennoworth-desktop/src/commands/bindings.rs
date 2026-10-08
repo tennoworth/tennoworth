@@ -10,6 +10,7 @@ fn desktop_bindings_match_rust() {
     types.add::<crate::services::auto_scan::AutoScanStatus>();
     types.add::<super::listing::OwnOrder>();
     types.add::<crate::notification_contract::NotificationContent>();
+    types.add::<crate::shell::app_icon::AppIconOutcome>();
     let mut expected = types.finish().expect("unique wire types");
     expected.push_str(&format!(
         "\nexport const WATCH_FIRED_EVENT = {:?} as const;\n",
@@ -45,6 +46,11 @@ fn desktop_bindings_match_rust() {
     expected.push_str(&format!(
         "\nexport const AUTO_SCAN_CADENCE_CHOICES = {:?} as const;\n",
         crate::services::auto_scan::CADENCE_CHOICES
+    ));
+    // The colours set_app_icon accepts; the setting resolves its choice to one.
+    expected.push_str(&format!(
+        "\nexport const APP_ICON_COLOURS = {:?} as const;\n",
+        crate::shell::app_icon::COLOURS
     ));
     let file = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../frontend/src/contracts/generated/desktop.ts");

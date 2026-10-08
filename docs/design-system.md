@@ -401,6 +401,27 @@ cross-platform verification in actual desktop windows before claiming Windows
 and Linux resize/scaling support. Documentation-only changes require link,
 consistency, and whitespace checks, not a new visual certification.
 
+## App icon
+
+The mark is the hex lattice on a transparent ground. Classic blue is its own
+colour and the default everywhere: the favicon, the installed icons, the
+installer, shortcuts and the Linux launcher. Below 48px a compact drawing
+replaces the detailed one, with heavier strokes and a solid centre.
+
+The desktop App icon setting (This app → Appearance, under Colour mode) can
+draw the window and tray icons in ink or rag, the light and dark `--fg`
+tokens, or match the resolved colour mode. Its options are radio cards in a
+two-column grid that stacks below 760px. Each card holds the shared square
+radio, a preview of its mark on the light and the dark `--bg`, and a name with
+a hint. The selected card is the ink inversion, like other mode cards; its
+radio, hint and focus ring take the `--on-ink` pair so the check stays visible,
+and the previews keep their own grounds.
+On a GTK Wayland session the window and taskbar keep the launcher icon, and the
+setting says so; the tray still follows it. `scripts/build-icons.ts` generates
+every icon and preview from one drawing and the tokens; change the mark there,
+never in an output file. Select App icon in the living styleguide's Data state
+control for the production row.
+
 ## Community usage chart
 
 The hosted community section uses a daily bar chart with an expandable exact-value

@@ -24,6 +24,7 @@ import SetPicksView from '../features/selling/SetPicksView.svelte';
   import { ListingController, WfmAccessController } from '../features/selling/controller.svelte';
   import { InventoryController } from '../features/inventory/controller.svelte';
   import { AutoScanController } from '../features/inventory/auto-scan.svelte';
+  import { AppIconController } from '../features/settings/app-icon.svelte';
   import ListingReviewModal from '../features/selling/ListingReviewModal.svelte';
   import MyOrdersPanel from '../features/orders/MyOrdersPanel.svelte';
   import WatchlistPanel from '../features/watches/WatchlistPanel.svelte';
@@ -132,6 +133,9 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
     adopt: (data, snapshotId) => inventory.adoptScan(data, snapshotId),
     isInteractive: () => listing.listingOpen || effectiveView === 'session',
   });
+  // The window and tray icon colour; follows the resolved colour mode for 'match'.
+  const appIcon = untrack(() => new AppIconController({ store, theme, native: transport }));
+  onMount(() => appIcon.start());
   onMount(() => {
     const timer = setInterval(() => { if (!protection.loading && !protection.saving) void protection.refresh(); }, 30_000);
     const stop = listenForTauriEvent(ALLOWANCE_CHANGED_EVENT, () => void protection.refresh());
@@ -462,7 +466,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
       <Faq desktop />
 
     {:else if effectiveView === 'settings'}
-      <SettingsPanel onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} {autoScan} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} section={settingsSection} onsectionshown={() => (settingsSection = null)} />
+      <SettingsPanel onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} {autoScan} {appIcon} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} section={settingsSection} onsectionshown={() => (settingsSection = null)} />
     {/if}
 
     {/if}

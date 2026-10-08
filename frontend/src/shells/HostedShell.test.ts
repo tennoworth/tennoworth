@@ -13,7 +13,7 @@ it('omits a relative age when the hosted snapshot timestamp is malformed', async
   vi.stubGlobal('__APP_COMMIT__', 'fixture');
   vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
   vi.mocked(loadMarket).mockResolvedValue({ ...bundledMarket, updated_at: 'not-a-date' } as unknown as Market);
-  const { container } = render(HostedShell, { theme: { modePref: 'dark', setModePref: vi.fn(), destroy: vi.fn() } });
+  const { container } = render(HostedShell, { theme: { modePref: 'dark', mode: 'dark', subscribe: () => () => {}, setModePref: vi.fn(), destroy: vi.fn() } });
   await screen.findByText(/^Snapshot/);
   expect(container.querySelector('.statusbar')?.textContent).not.toContain('NaN');
   expect(container.textContent).not.toContain('NaN d ago');

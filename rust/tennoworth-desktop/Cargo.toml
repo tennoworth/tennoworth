@@ -106,6 +106,10 @@ strsim = "0.11"
 # uses X11/XWayland directly below, avoiding xcap's unused PipeWire recorder
 # dependency and its distro-header compatibility constraints.
 xcap = "0.8"
+# The taskbar and Alt+Tab use the window's big icon, which Tauri never sets
+# (its set_icon is the small title-bar icon). Same version and features as
+# tauri's own dependency, so this adds no crate.
+windows = { version = "0.61", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 # Keep the passive overlay from accepting focus when GTK maps it.

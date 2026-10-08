@@ -25,8 +25,12 @@ export interface MarketRefreshResult {
  * desktop loop stores and reports.
  */
 export type { AutoScanSettings, AutoScanStatus } from './generated/desktop';
-export { AUTO_SCAN_CADENCE_CHOICES } from './generated/desktop';
-import type { AutoScanSettings, AutoScanStatus, NotificationContent } from './generated/desktop';
+export { AUTO_SCAN_CADENCE_CHOICES, APP_ICON_COLOURS } from './generated/desktop';
+import type { AutoScanSettings, AutoScanStatus, NotificationContent, AppIconOutcome } from './generated/desktop';
+import type { APP_ICON_COLOURS } from './generated/desktop';
+export type { AppIconOutcome } from './generated/desktop';
+/** A colour the native side can draw the window and tray icons in. */
+export type AppIconColour = (typeof APP_ICON_COLOURS)[number];
 
 export interface MarketCapability {
   loadCachedMarket(): Promise<Market | null>;
@@ -74,6 +78,11 @@ export interface AutoScanCapability {
   setAutoScanHold(hold: boolean): Promise<void>;
 }
 
+export interface AppIconCapability {
+  /** Sets the window and tray icons now and on every later launch. */
+  setAppIcon(colour: AppIconColour): Promise<AppIconOutcome>;
+}
+
 interface UsageCapability {
   getUsagePreferences(): Promise<import('./usage').UsagePreferences>;
   setUsagePreferences(enabled: boolean): Promise<import('./usage').UsagePreferences>;
@@ -86,7 +95,7 @@ interface PriceReportCapability {
   erasePriceReports(): Promise<void>;
 }
 
-export interface DesktopCapabilities extends UsageCapability, PriceReportCapability, MarketCapability, InventoryCapability, OrderCapability, OverlayCapability, AutoScanCapability { }
+export interface DesktopCapabilities extends UsageCapability, PriceReportCapability, MarketCapability, InventoryCapability, OrderCapability, OverlayCapability, AutoScanCapability, AppIconCapability { }
 
 // `withGlobalTauri: true` injects `window.__TAURI__` (the public API surface,
 // with `.core.invoke`); `__TAURI_INTERNALS__` is the lower-level object the

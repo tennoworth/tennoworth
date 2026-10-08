@@ -5,6 +5,8 @@
   import PriceReportSettings from './PriceReportSettings.svelte';
   import NotificationSettings from './NotificationSettings.svelte';
   import ThemeSwitcher from '../../ui/ThemeSwitcher.svelte';
+  import AppIconSetting from './AppIconSetting.svelte';
+  import type { AppIconController } from './app-icon.svelte';
   import { onMount, tick } from 'svelte';
   import type { ThemeController } from '../../ui/theme';
   import type { DesktopWfmStatus, DesktopCapabilities } from '../../contracts/desktop';
@@ -23,6 +25,8 @@ import { type UpdateStatus } from '../../contracts/update';
     /** Desktop only. The shell owns the instance, so the panel and the shell
      *  read one source of truth for these preferences and this status. */
     autoScan?: AutoScanController;
+    /** Desktop only: the window and tray icon colour. */
+    appIcon?: AppIconController;
     wfmStatus?: DesktopWfmStatus | null;
     onwfmlogout?: () => Promise<void>;
     /** Opens the page at this section (the inbox's "Notification settings",
@@ -30,7 +34,7 @@ import { type UpdateStatus } from '../../contracts/update';
     section?: 'notifications' | 'price-sharing' | null;
     onsectionshown?: () => void;
   }
-  let { theme, onwhatsnew, transport, autoScan, wfmStatus = null, onwfmlogout, section = null, onsectionshown }: Props = $props();
+  let { theme, onwhatsnew, transport, autoScan, appIcon, wfmStatus = null, onwfmlogout, section = null, onsectionshown }: Props = $props();
 
   let overlay = $state<OverlaySettings | null>(null);
   let overlayStatus = $state<OverlayStatus | null>(null);
@@ -346,6 +350,7 @@ import { type UpdateStatus } from '../../contracts/update';
         <div class="ui-setting-copy"><strong>Colour mode</strong><p>System follows your operating system's light/dark setting and changes with it; Light and Dark pin the app regardless.</p></div>
         <div class="ui-setting-control"><ThemeSwitcher {theme} label="Colour mode" /></div>
       </div>
+      {#if appIcon}<AppIconSetting {appIcon} />{/if}
     </div>
     <div class="ui-section-group">
       <h4>Updates</h4>

@@ -11,6 +11,13 @@ for required checks and ../docs/releasing.md for release preparation.
 - `sync-csp.ts` - generates the Content-Security-Policy. The shipped copies,
   the allowed directives and the desktop build variant are documented once, in
   ../frontend/AGENTS.md; read that before changing anything here.
+- `build-icons.ts` - generates the favicon, the desktop icon SVGs and the App
+  icon setting's colour variants and previews from one drawing of the mark (ink
+  and rag come from the `app.css` tokens); `--check` runs in the frontend
+  prebuild. `--raster` (or `bun run icons` from `frontend/`) also rewrites the
+  desktop PNG/ICO/ICNS set and the embedded colour variants, and needs
+  `rsvg-convert` and ImageMagick 7; CI cannot rasterise, so commit those files
+  with their SVGs.
 - `check-probe-report.ts` - the gate for the TENNOWORTH_PROBE UI smoke run
   (ui-smoke.yml): asserts the probe's evidence JSON shows the app booted
   into Tauri IPC mode, the sell view rendered its scan CTA, the header WFM link

@@ -2,6 +2,14 @@
 
 export type AccessStatus = { revision: number, reason: string, cooldown_until_ms: number, queue_count: number, outstanding: number, restrictions: Restrictions, requests: number, throttles: number, cache_hits: number, cache_misses: number, queue_rejections: number, };
 
+export type AppIconOutcome = {
+/**
+ * False on a GTK Wayland session: Wayland compositors take the window and
+ * taskbar icon from the installed launcher entry, and GTK 3 has no way to
+ * set one per window there. The tray still changes.
+ */
+windowIcon: boolean, };
+
 export type AutoScanSettings = { enabled: boolean,
 /**
  * Minutes between attempts while the game is running.
@@ -96,3 +104,5 @@ export const RELIC_OVERLAY_HIDE_EVENT = "relic-overlay:hide" as const;
 export const RELIC_RECOMMENDATION_CONFIDENCE = 0.9 as const;
 
 export const AUTO_SCAN_CADENCE_CHOICES = [15, 30, 60] as const;
+
+export const APP_ICON_COLOURS = ["blue", "ink", "rag"] as const;

@@ -13,6 +13,8 @@
   import PromptBanner from '../ui/PromptBanner.svelte';
   import type { SettingsStore } from '../contracts/state-store';
   import { PromptSession } from '../ui/prompt-session.svelte';
+  import AppIconSetting from '../features/settings/AppIconSetting.svelte';
+  import { AppIconController } from '../features/settings/app-icon.svelte';
   let notesRef = $state<UpdateNotes>();
   // A fresh, always-due session each time the state is chosen; nothing persists.
   const promptStore: SettingsStore = { mode: 'local', hydrate: async () => {}, getSetting: () => null, setSetting: async () => {} };
@@ -37,6 +39,12 @@
   import { applyTheme, systemMode, type Mode } from '../ui/theme';
 
   let mode = $state<Mode>('dark');
+  // The production App icon row over a store and native side that keep nothing.
+  const sampleAppIcon = new AppIconController({
+    store: { mode: 'local', hydrate: async () => {}, getSetting: () => null, setSetting: async () => {} },
+    theme: { get mode() { return mode; }, subscribe: () => () => {} },
+    native: { setAppIcon: async () => ({ windowIcon: true }) },
+  });
   let filter = $state('');
   let notificationRead = $state(false);
   let exampleEnabled = $state(true);
@@ -115,7 +123,7 @@
       <p class="muted">Selected: {selected}. These are presentation examples, not the Trade Session planner.</p>
       <div class="fields">
         <label class="ui-field">Filter sample items<input type="text" bind:value={filter} placeholder="Item name" /></label>
-        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option><option value="notifications">Alerts</option><option value="estimates">Estimates</option><option value="usage">Community usage</option><option value="updates">Update notes</option><option value="token">WFM token sign-in</option><option value="sell">Sell table</option><option value="prompt">Prompt banner</option></select></label>
+        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option><option value="notifications">Alerts</option><option value="estimates">Estimates</option><option value="usage">Community usage</option><option value="updates">Update notes</option><option value="token">WFM token sign-in</option><option value="sell">Sell table</option><option value="prompt">Prompt banner</option><option value="app-icon">App icon</option></select></label>
       </div>
       <p role="status" class="muted">{message || 'Controls are ready. No changes made.'}</p>
     </div>
@@ -170,6 +178,7 @@
   {/if}
   {#if dataState === 'prompt'}<PromptBanner id="styleguide-prompt" session={samplePromptSession()} title="Help show what items really sell for"><p>Optional invitations use the neutral panel, never a toned edge, and say that ignoring them changes nothing. A long explanation wraps beside the actions and stacks above them in narrow windows.</p>{#snippet actions()}<button type="button" class="btn primary" onclick={() => (message = 'Sample prompt accepted.')}>Share sale prices</button><button type="button" class="btn">What is sent</button>{/snippet}</PromptBanner>{/if}
   {#if dataState === 'usage'}<UsageChart sample={usageSample} />{/if}
+  {#if dataState === 'app-icon'}<section class="wrap tw ui-reading" aria-labelledby="app-icon-title"><div class="rail"><h3 id="app-icon-title">App icon setting</h3></div><AppIconSetting appIcon={sampleAppIcon} /></section>{/if}
   {#if dataState === 'sell'}<section class="ui-stack"><h2>Sortable analytical table</h2><p>Headers are sort buttons that announce their order; the Column guide explains every visible column.</p><ResultsTable results={sellSample} /></section>{/if}
   {#if dataState === 'updates'}<section class="ui-panel ui-stack"><h2>Changes across installed versions</h2><p>One plain-English summary combines skipped releases, with a version history beneath it.</p><button class="btn" onclick={() => notesRef?.open()}>Preview what’s new</button></section>{/if}
   {#if dataState === 'updates'}<UpdateNotes bind:this={notesRef} services={notesServices} />{/if}

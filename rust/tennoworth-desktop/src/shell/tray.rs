@@ -169,12 +169,9 @@ pub fn init_tray(app: &AppHandle) -> tauri::Result<()> {
     let labels = sellable_labels(&top);
     *guard(&app.state::<TrayState>().labels) = labels.clone();
     let menu = build_tray_menu(app, &top, &labels)?;
-    let icon = app
-        .default_window_icon()
-        .cloned()
-        .ok_or(tauri::Error::FailedToReceiveMessage)?;
+    let colour = crate::shell::app_icon::stored(&app.state::<Db>());
     TrayIconBuilder::with_id("main")
-        .icon(icon)
+        .icon(colour.tray_image())
         .tooltip("TennoWorth - what to sell right now")
         .menu(&menu)
         .show_menu_on_left_click(false)

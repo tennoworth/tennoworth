@@ -91,6 +91,11 @@ jobs:
               - 'rust/Cargo.lock'
               - 'scripts/build-domain-wasm.ts'
               - 'scripts/sync-csp.ts'
+              # The prebuild --check compares these with what build-icons.ts generates.
+              - 'scripts/build-icons.ts'
+              - 'frontend/public/favicon.svg'
+              - 'frontend/public/app-icon/**'
+              - 'rust/tennoworth-desktop/icons/**/*.svg'
               - 'tests/fixtures/**'
             frontend_deps:
               - 'frontend/package.json'
