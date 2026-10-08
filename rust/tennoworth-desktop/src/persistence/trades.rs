@@ -172,11 +172,32 @@ impl Db {
 
     /// Newest first.
     pub fn list_trades(&self, limit: i64) -> rusqlite::Result<Vec<TradeRow>> {
-        let conn = guard(&self.conn);
-        let mut stmt = conn.prepare(
+        self.query_trades(
             "SELECT id, at, partner, kind, plat, items, log_stamp, wfm_closed FROM trade ORDER BY at DESC, id DESC LIMIT ?1",
-        )?;
-        let rows = stmt.query_map([limit], |r| {
+            [limit],
+        )
+    }
+
+    /// Oldest first, by id: the order trades were recorded in.
+    pub fn trades_after(&self, id: i64, limit: i64) -> rusqlite::Result<Vec<TradeRow>> {
+        self.query_trades(
+            "SELECT id, at, partner, kind, plat, items, log_stamp, wfm_closed FROM trade WHERE id > ?1 ORDER BY id LIMIT ?2",
+            [id, limit],
+        )
+    }
+
+    pub fn last_trade_id(&self) -> rusqlite::Result<i64> {
+        guard(&self.conn).query_row("SELECT COALESCE(MAX(id), 0) FROM trade", [], |r| r.get(0))
+    }
+
+    fn query_trades(
+        &self,
+        sql: &str,
+        params: impl rusqlite::Params,
+    ) -> rusqlite::Result<Vec<TradeRow>> {
+        let conn = guard(&self.conn);
+        let mut stmt = conn.prepare(sql)?;
+        let rows = stmt.query_map(params, |r| {
             let items_json: String = r.get(5)?;
             Ok(TradeRow {
                 id: r.get(0)?,

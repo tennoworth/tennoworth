@@ -1049,5 +1049,45 @@
       },
       "valid": false
     }
+  ],
+  "pseudonyms": {
+    "_comment": "key is the install's local 32-byte key. contributor = HMAC-SHA256(key, 'id|'+week), erase_secret = HMAC-SHA256(key, 'del|'+week), erase = SHA-256 of erase_secret's hex text, ref = HMAC-SHA256(key, 'sale|'+trade id). All lowercase hex.",
+    "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "vectors": [
+      {
+        "week": "2026-W41",
+        "trade_id": 42,
+        "contributor": "783d986935ccd86cc9c8a9b87ff2800e9a40ce935b8b50e471ddd0a67a78f95d",
+        "erase_secret": "bfa7a97934180e2b417cdf862eb007f67dbe5bc32a52df13bbba17f5496051e2",
+        "erase": "8f07aae068593959180783af94d83afdc2b70598844ee07554722de8ea46a445",
+        "ref": "c17039b0892315bfa93fe36ebedd9a28f91b1eabb5009f5c6416d29900589223"
+      },
+      {
+        "week": "2026-W40",
+        "trade_id": 7,
+        "contributor": "03e5a50a61ad5cbd83f649b970db36e8f75214e444ea73d080a616516576a146",
+        "erase_secret": "5d7554b8469d8673fb075046006b47387b53896f9d1f62e21910acb9838c0f61",
+        "erase": "0318506d21a976ccbaf8d3d15c755baffc9b11fc59b0d3acfd6fd6f11b07b9f1",
+        "ref": "cb067358ba3a2a63c5144ec928d5c170794de04b5639b20b5d96036f24564caa"
+      }
+    ]
+  },
+  "iso_weeks": [
+    {
+      "day": "2026-10-04",
+      "week": "2026-W40"
+    },
+    {
+      "day": "2026-10-05",
+      "week": "2026-W41"
+    },
+    {
+      "day": "2027-01-01",
+      "week": "2026-W53"
+    },
+    {
+      "day": "2024-12-30",
+      "week": "2025-W01"
+    }
   ]
 }

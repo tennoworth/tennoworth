@@ -35,6 +35,9 @@ export async function desktopSaveProtectionPlan(plan: import('../contracts/prote
 export class TauriTransport implements DesktopCapabilities {
   async getUsagePreferences(): Promise<import('../contracts/usage').UsagePreferences> { return resolveInvoke()('get_usage_preferences'); }
   async setUsagePreferences(enabled: boolean): Promise<import('../contracts/usage').UsagePreferences> { return resolveInvoke()('set_usage_preferences', { enabled }); }
+  async getPriceReportPreferences(): Promise<import('../contracts/price-reports').PriceReportPreferences> { return resolveInvoke()('get_price_report_preferences'); }
+  async setPriceReportPreferences(enabled: boolean): Promise<import('../contracts/price-reports').PriceReportPreferences> { return resolveInvoke()('set_price_report_preferences', { enabled }); }
+  async erasePriceReports(): Promise<void> { await resolveInvoke()('erase_price_reports'); }
   private activePlanRequest: string | null = null;
   async getOverlaySettings(): Promise<OverlaySettings> {
     return await resolveInvoke()<OverlaySettings>('get_overlay_settings');

@@ -96,6 +96,9 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
             health,
             crate::services::usage::get_usage_preferences,
             crate::services::usage::set_usage_preferences,
+            crate::services::reports::get_price_report_preferences,
+            crate::services::reports::set_price_report_preferences,
+            crate::services::reports::erase_price_reports,
             crate::commands::auth::wfm_access_status,
             crate::commands::domain::evaluate_domain,
             crate::commands::inventory::scan_inventory,
@@ -191,6 +194,7 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
             app.manage(crate::services::auto_scan::AutoScanState::from_db(&store));
             app.manage(store);
             crate::services::usage::start(app.handle().clone());
+            crate::services::reports::start(app.handle().clone());
             crate::shell::update_notes::initialize(app.handle(), profile_existed);
             publish_access_changes(app.handle().clone());
 

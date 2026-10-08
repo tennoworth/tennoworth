@@ -46,6 +46,7 @@ export async function installPreview() {
     try_silent_unlock: false,
     wfm_remember_available: true,
     get_usage_preferences: { enabled: false, available: false },
+    get_price_report_preferences: { enabled: false, available: false, sent_this_week: 0 },
     get_overlay_settings: { enabled: false, autoDetect: true, shortcut: 'Ctrl+Shift+O', scale: 1, livePrices: true, showOwned: true, diagnostics: false },
     overlay_status: { state: 'disabled', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true },
     setup_overlay_capture: { state: 'watching', backend: 'x11-window', presentationBackend: 'tauri-window', placement: 'anchored', ocrReady: true },
