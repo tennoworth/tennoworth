@@ -93,8 +93,29 @@ export function compareVersions(a: string, b: string): number {
 // ---------------------------------------------------------------------------
 // Release notes
 
+// New releases number their patch X.Y.100 through X.Y.999, so a minor line has
+// room for hundreds of small releases before the deliberately expensive minor
+// bump. Published history from before the scheme (0.7.9, 0.8.7) stays valid
+// strict X.Y.Z: only a version being prepared or released is held to the
+// range. 0.8.7 -> 0.8.100 relies on every ordering being numeric, never
+// lexical - here, in the desktop crate's update notes and in Tauri's updater.
+const FIRST_PATCH = 100;
+const LAST_PATCH = 999;
+
+/** Why `version` cannot be prepared or released, or null when it can. */
+export function releaseVersionProblem(version: string): string | null {
+  if (!SEMVER.test(version)) return `"${version}" is not a strict X.Y.Z version`;
+  const patch = Number(version.split(".")[2]);
+  if (patch < FIRST_PATCH || patch > LAST_PATCH) {
+    return (
+      `${version} does not have a three-digit patch: new releases are ` +
+      `X.Y.${FIRST_PATCH} to X.Y.${LAST_PATCH}, and X.Y.${LAST_PATCH} is followed by a minor bump`
+    );
+  }
+  return null;
+}
+
 export function nextVersion(current: string, bump: string): string {
-  if (SEMVER.test(bump)) return bump;
   const [major, minor, patch] = current.split(".").map(Number);
   // Pre-1.0 policy (stated in full in CHANGELOG.md's header). The minor digit
   // is deliberately expensive: 1.0 has to mean something, so it is not a
@@ -107,15 +128,27 @@ export function nextVersion(current: string, bump: string): string {
   //   major  1.0 only.
   // Also: a change confined to frontend/ ships to tennoworth.app via
   // continuous deployment and needs no desktop release at all.
-  switch (bump) {
-    case "major":
-      return `${major + 1}.0.0`;
-    case "minor":
-      return `${major}.${minor + 1}.0`;
-    case "patch":
-      return `${major}.${minor}.${patch + 1}`;
-    default:
-      return fail(`"${bump}" is not major, minor, patch, or an X.Y.Z version`);
+  let next: string;
+  if (SEMVER.test(bump)) {
+    next = bump;
+  } else if (bump === "major") {
+    next = `${major + 1}.0.${FIRST_PATCH}`;
+  } else if (bump === "minor") {
+    next = `${major}.${minor + 1}.${FIRST_PATCH}`;
+  } else if (bump === "patch") {
+    if (patch >= LAST_PATCH) {
+      throw new Error(`${current} is the last patch of ${major}.${minor}; prepare minor instead`);
+    }
+    // A pre-scheme patch moves to the first three-digit one, not to X.Y.8.
+    next = `${major}.${minor}.${Math.max(patch + 1, FIRST_PATCH)}`;
+  } else {
+    throw new Error(`"${bump}" is not major, minor, patch, or an X.Y.Z version`);
   }
+  const problem = releaseVersionProblem(next);
+  if (problem) throw new Error(problem);
+  if (compareVersions(next, current) <= 0) {
+    throw new Error(`${next} is not greater than the current ${current}`);
+  }
+  return next;
 }
 
