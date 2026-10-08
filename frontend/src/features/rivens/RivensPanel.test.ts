@@ -146,6 +146,16 @@ describe('RivensPanel', () => {
     await screen.findByText('Copied ✓');
   });
 
+  it('warns when a riven carries fingerprint data the app does not read', async () => {
+    installTauri(makeInvoke(), undefined);
+    const raw = JSON.stringify({ compat: RAW_RIVENS[0].compat, buffs: [], curses: [], advancedTrait: { Tag: 'X', Value: 1 } });
+    const rivens = resolveRivens([{ ...RAW_RIVENS[0], raw }, RAW_RIVENS[1]], market);
+    render(RivensPanel, { props: { market, rivens } });
+    const notes = await screen.findAllByTestId('unread-fingerprint');
+    expect(notes).toHaveLength(1);
+    expect(notes[0].textContent).toContain('advancedTrait');
+  });
+
   it('shows a disposition decrease as a decrease', async () => {
     installTauri(makeInvoke(), undefined);
     const lowered = {

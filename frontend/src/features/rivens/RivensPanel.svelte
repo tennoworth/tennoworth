@@ -18,6 +18,7 @@
     rivenReport,
     rivenSimilarity,
     spliceOptions,
+    unreadFingerprintKeys,
     type OwnedRiven,
     type ResolvedRivenStat,
     type SpliceOption,
@@ -69,6 +70,7 @@
     splices: SpliceOption[];
     filter: ReturnType<typeof compsFilterFor>;
     report: string | null;
+    unread: string[];
   }
 
   let rows = $derived<Row[]>(
@@ -82,6 +84,7 @@
         splices: riven.veiled ? [] : spliceOptions(stats, rivenType),
         filter: compsFilterFor(stats),
         report: rivenReport(riven),
+        unread: unreadFingerprintKeys(riven),
       };
     }),
   );
@@ -251,6 +254,11 @@
                     {/each}
                   {/if}
                 </div>
+                {#if row.unread.length > 0}
+                  <p class="unread" data-testid="unread-fingerprint">
+                    This riven carries data the app does not read yet ({row.unread.join(', ')}), so a trait may be missing above. Copy data and report it.
+                  </p>
+                {/if}
                 {#if row.splices.length > 0}
                   <p class="splices" data-testid="splice-options">
                     <span class="splices-label">Can splice:</span>
@@ -407,6 +415,7 @@
   .spliced { margin-left: var(--s1); color: var(--muted); font: var(--text-caption) var(--font-ui); }
   .splices { margin: 0 0 var(--s1); max-width: 420px; color: var(--muted); font: var(--text-caption)/var(--leading-body) var(--font-body); }
   .splices-label { font-family: var(--font-ui); color: var(--fg); }
+  .unread { margin: 0 0 var(--s1); max-width: 420px; color: var(--warn); font: var(--text-caption)/var(--leading-body) var(--font-body); }
   .comps-bar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s1) var(--s2); padding-top: var(--s1); }
   .band { white-space: nowrap; }
   /* The tier and popularity note wraps under the price rather than being

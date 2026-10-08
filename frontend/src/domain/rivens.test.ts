@@ -15,6 +15,7 @@ import {
   resolveRivens,
   rivenReport,
   SPLICE_RECIPES,
+  unreadFingerprintKeys,
   spliceOptions,
 } from './rivens.js';
 
@@ -86,6 +87,15 @@ describe('extractRivens', () => {
       UpgradeFingerprint: JSON.parse(withLock),
     });
     expect(rivenReport(r)).not.toContain('abc');
+  });
+
+  it('names fingerprint keys the app does not read, and none for a known shape', () => {
+    expect(unreadFingerprintKeys({ raw: REVEALED_FP })).toEqual([]);
+    expect(unreadFingerprintKeys({ raw: VEILED_FP })).toEqual([]);
+    const spliced = JSON.stringify({ ...JSON.parse(REVEALED_FP), advancedTrait: { Tag: 'X', Value: 1 } });
+    expect(unreadFingerprintKeys({ raw: spliced })).toEqual(['advancedTrait']);
+    expect(unreadFingerprintKeys({ raw: '{broken' })).toEqual([]);
+    expect(unreadFingerprintKeys({})).toEqual([]);
   });
 
   it('reports a malformed fingerprint verbatim, and nothing for a riven saved without one', () => {

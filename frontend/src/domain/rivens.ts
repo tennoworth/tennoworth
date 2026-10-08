@@ -81,6 +81,29 @@ function statOf(s: unknown): RivenFingerprintStat | null {
   return { tag, value };
 }
 
+/** Fingerprint keys this module reads, or knows carry nothing to show. */
+const KNOWN_FINGERPRINT_KEYS: ReadonlySet<string> = new Set([
+  'compat', 'lim', 'lvl', 'lvlReq', 'rerolls', 'pol', 'buffs', 'curses', 'challenge', 'IsSentinel',
+]);
+
+/**
+ * Fingerprint keys the app does not read. A spliced trait may not sit in
+ * `buffs`: a server reimplementation's reroll code carries a TODO for an
+ * `advancedTrait` alongside them. Until a real spliced fingerprint has been
+ * seen, an unknown key is reported rather than guessed at, so a riven never
+ * silently looks like it has fewer traits than it does.
+ */
+export function unreadFingerprintKeys(riven: Pick<OwnedRiven, 'raw'>): string[] {
+  if (riven.raw == null) return [];
+  try {
+    const parsed: unknown = JSON.parse(riven.raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return [];
+    return Object.keys(parsed).filter((k) => !KNOWN_FINGERPRINT_KEYS.has(k));
+  } catch {
+    return [];
+  }
+}
+
 /**
  * The riven as DE describes it, for a user to paste into a bug report: the
  * mod path and the fingerprint, nothing else from the inventory entry (no
