@@ -19,6 +19,7 @@
   const samplePromptSession = () => untrack(() => {
     const session = new PromptSession(promptStore, [{ id: 'styleguide-prompt', delayDays: 0, minLaunches: 1, gapDays: 0, maxAsks: 1 }]);
     session.launch();
+    session.notes('none');
     return session;
   });
   // Fictional rows for the production Sell table: sortable header buttons and

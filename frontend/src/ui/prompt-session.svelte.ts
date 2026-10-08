@@ -10,6 +10,8 @@ export class PromptSession {
   #state: PromptState;
   #launched = false;
   #claimed = new Set<string>();
+  #notes: 'unknown' | 'pending' | 'settled' = 'unknown';
+  #updated = false;
   #passed = new Set<string>();
 
   /** `order` is highest priority first. */
@@ -33,16 +35,25 @@ export class PromptSession {
   /** A prompt that does not apply this launch, so lower ones need not wait. */
   pass(id: string): void { this.#passed.add(id); this.#resolve(); }
 
+  /** Release notes go first: nothing is asked until this launch's automatic
+   *  notes are known, and a launch whose notes were dismissed is an update. */
+  notes(state: 'pending' | 'none' | 'dismissed'): void {
+    if (state === 'pending' && this.#notes === 'settled') return;
+    this.#notes = state === 'pending' ? 'pending' : 'settled';
+    if (state === 'dismissed') this.#updated = true;
+    this.#resolve();
+  }
+
   decline(): void { this.hidden = true; }
 
   /** Accepted: never asked again, whatever the policy allows. */
   finish(id: string): void { this.#save(withDone(this.#state, id)); }
 
   #resolve(): void {
-    if (this.current !== null || !this.#launched) return;
+    if (this.current !== null || !this.#launched || this.#notes !== 'settled') return;
     const now = this.now();
     for (const policy of this.order) {
-      if (this.#passed.has(policy.id) || !promptDue(this.#state, policy, now)) continue;
+      if (this.#passed.has(policy.id) || !promptDue(this.#state, policy, now, this.#updated)) continue;
       if (!this.#claimed.has(policy.id)) return;
       this.current = policy.id;
       this.#save(withAsk(this.#state, policy.id, now));

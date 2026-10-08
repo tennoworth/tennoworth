@@ -16,7 +16,8 @@ export async function installPreview() {
     ? (await import('./preview-data')).createPreview(scenario || 'populated')
     : null;
   let notes: import('../contracts/update').UpdateNotesStatus = structuredClone(notesSample) as import('../contracts/update').UpdateNotesStatus;
-  notes.auto_show = scenario?.startsWith('update-notes') ?? false;
+  // `support-prompt` is a launch that installed an update: notes first, then the prompt.
+  notes.auto_show = (scenario?.startsWith('update-notes') || scenario === 'support-prompt') ?? false;
   if (scenario === 'update-notes-single' || scenario === 'update-notes-unknown') {
     notes.releases = notes.releases.slice(0, 1); notes.changes = notes.releases[0].changes;
     notes.previous_version = scenario === 'update-notes-single' ? '0.7.102' : null;

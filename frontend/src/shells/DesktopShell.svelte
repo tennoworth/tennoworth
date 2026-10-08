@@ -595,4 +595,4 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   onimport={(result) => inventory.handleImported(result)}
 />
 
-<UpdateNotes bind:this={updateNotesRef} services={notesServices} ready={notesReady} blocked={outstanding > 0 || listing.resumePhase !== 'idle'} />
+<UpdateNotes bind:this={updateNotesRef} services={notesServices} ready={notesReady} blocked={outstanding > 0 || listing.resumePhase !== 'idle'} onautomatic={(state) => prompts.notes(state)} />

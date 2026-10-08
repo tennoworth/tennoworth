@@ -1,7 +1,11 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
   import type { UpdateNotesServices, UpdateNotesStatus } from '../contracts/update';
-  let { services, ready = false, blocked = false }: { services: UpdateNotesServices; ready?: boolean; blocked?: boolean } = $props();
+  let { services, ready = false, blocked = false, onautomatic }: {
+    services: UpdateNotesServices; ready?: boolean; blocked?: boolean;
+    /** Whether this launch's automatic notes are waiting, absent, or dismissed. */
+    onautomatic?: (state: 'pending' | 'none' | 'dismissed') => void;
+  } = $props();
   let data = $state<UpdateNotesStatus | null>(null);
   let dialog: HTMLDialogElement;
   let title = $state<HTMLHeadingElement>();
@@ -73,16 +77,23 @@
   }
   function dismiss() {
     if (!data) return;
+    const automatic = data.auto_show;
     loadEpoch++;
     data = { ...data, auto_show: false };
     requested = false;
     dialog.close();
     if (returnFocus?.isConnected && returnFocus !== document.body) returnFocus.focus();
     void saveAcknowledgement();
+    if (automatic) onautomatic?.('dismissed');
   }
   onMount(() => {
     const epoch = ++loadEpoch;
-    void services.updateNotes().then(value => { if (epoch === loadEpoch && !disposed) { data = value; void present(); } }).catch(() => {});
+    void services.updateNotes().then(value => {
+      if (epoch !== loadEpoch || disposed) return;
+      data = value;
+      onautomatic?.(value.auto_show ? 'pending' : 'none');
+      void present();
+    }).catch(() => { onautomatic?.('none'); });
     const timer = window.setInterval(() => { void present(); }, 750);
     window.addEventListener('focus', present);
     document.addEventListener('visibilitychange', present);

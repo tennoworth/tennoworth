@@ -14,6 +14,9 @@ export interface PromptPolicy {
   gapDays: number;
   /** After this many asks an unanswered prompt retires. */
   maxAsks: number;
+  /** The first ask waits for a launch that installed an update, once its
+   *  release notes are out of the way. */
+  firstOnUpdate?: boolean;
 }
 
 interface PromptRecord { asks: number; last_ask?: number; done?: boolean }
@@ -48,9 +51,10 @@ export function readPromptState(store: SettingsStore): PromptState {
   return state;
 }
 
-export function promptDue(state: PromptState, policy: PromptPolicy, now: number): boolean {
+export function promptDue(state: PromptState, policy: PromptPolicy, now: number, updated = false): boolean {
   const record = state.prompts[policy.id] ?? { asks: 0 };
   if (record.done || record.asks >= policy.maxAsks) return false;
+  if (policy.firstOnUpdate && record.asks === 0 && !updated) return false;
   if (state.first_seen === undefined || now - state.first_seen < policy.delayDays * DAY) return false;
   if (state.launches < policy.minLaunches) return false;
   if (state.last_ask !== undefined && now - state.last_ask < GLOBAL_GAP_DAYS * DAY) return false;

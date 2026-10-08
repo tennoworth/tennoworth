@@ -14,11 +14,12 @@ const off: PriceReportPreferences = { enabled: false, available: true, sent_this
 function transport(overrides: Partial<DesktopCapabilities> = {}): DesktopCapabilities {
   return { getPriceReportPreferences: async () => off, setPriceReportPreferences: async (enabled: boolean) => ({ ...off, enabled }), ...overrides } as unknown as DesktopCapabilities;
 }
-function session(saved: object | null = null, now = T0) {
+function session(saved: object | null = null, now = T0, updated = false) {
   const values = new Map<string, string>(saved ? [['prompts', JSON.stringify(saved)]] : []);
   const store: SettingsStore = { mode: 'local', hydrate: async () => {}, getSetting: key => values.get(key) ?? null, setSetting: async (key, value) => { values.set(key, value); } };
   const s = new PromptSession(store, PROMPT_ORDER, () => now);
   s.launch();
+  s.notes(updated ? 'dismissed' : 'none');
   return { session: s, saved: () => JSON.parse(values.get('prompts') ?? '{}') };
 }
 const invitation = () => screen.queryByRole('region', { name: 'Help show what items really sell for' });
