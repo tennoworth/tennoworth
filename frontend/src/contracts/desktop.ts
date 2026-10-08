@@ -160,9 +160,16 @@ export interface RivenAuctionAttribute {
   positive: boolean;
 }
 
+/** Narrows a comps search to auctions carrying every listed stat with that
+ *  sign. At most three positive and one negative, as on WFM's own form. */
+export interface RivenStatFilter {
+  positive: string[];
+  negative: string[];
+}
+
 export interface RivenAuction {
   id: string;
-  /** Effective ask: buyout for direct sells, else the starting bid. */
+  /** The buyout. Bid-only auctions name no price and are not returned. */
   price: number;
   buyout_price: number | null;
   starting_price: number;

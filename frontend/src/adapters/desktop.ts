@@ -1,7 +1,7 @@
 import { DesktopCmdError } from '../contracts/errors';
 import type { PingResponse, PlanItemInput, OrderPatch, PendingPlan, PlanResponse, ItemResult, Market, OverlaySettings, OverlayStatus } from '../contracts/data';
 import { isHistory, type History } from '../domain/history';
-import type { MarketRefreshResult, DesktopCapabilities, DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences, AutoScanSettings, AutoScanStatus } from '../contracts/desktop';
+import type { MarketRefreshResult, DesktopCapabilities, DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, RivenStatFilter, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences, AutoScanSettings, AutoScanStatus } from '../contracts/desktop';
 import { resolveInvoke, rethrowInvoke } from './runtime';
 
 /**
@@ -310,13 +310,14 @@ export async function desktopLiveTopPrices(queries: LiveTopQuery[]): Promise<Liv
 }
 
 /**
- * The ≤20 cheapest matching auctions for one weapon's rivens, from WFM's v1
- * auctions search. The desktop paces calls through its shared 10/min auction
- * gate, so rapid "Show comps" clicks queue politely instead of tripping WFM.
+ * The ≤20 cheapest buyouts for one weapon's rivens, optionally only rolls
+ * sharing `stats`, from WFM's v1 auctions search. The desktop paces calls
+ * through its shared 10/min auction gate, so rapid "Show comps" clicks queue
+ * politely instead of tripping WFM.
  */
-export async function desktopRivenComps(weapon: string): Promise<RivenAuction[]> {
+export async function desktopRivenComps(weapon: string, stats: RivenStatFilter | null = null): Promise<RivenAuction[]> {
   try {
-    return await resolveInvoke()<RivenAuction[]>('riven_comps', { weapon });
+    return await resolveInvoke()<RivenAuction[]>('riven_comps', { weapon, stats });
   } catch (e) {
     rethrowInvoke(e);
   }

@@ -5,7 +5,8 @@ import {
   describeComps,
   distributionOf,
   judgeOffer,
-  MIN_POPULATION,
+  LOCKED_REROLL_FACTOR,
+  LOW_POPULARITY,
   placementOf,
   rerollCost,
   rerolledDiscount,
@@ -22,7 +23,7 @@ function tier(over: Partial<RivenStatTier>): RivenStatTier {
     min: 7,
     max: 980,
     stddev: 120,
-    pop: 1204,
+    pop: 37,
     ...over,
   } as RivenStatTier;
 }
@@ -36,12 +37,19 @@ function tier(over: Partial<RivenStatTier>): RivenStatTier {
 const SKEWED_MARKET = tier({ avg: 109, median: 10, min: 10, max: 1000, stddev: 297, pop: 100 });
 
 describe('distributionOf', () => {
-  it('rejects a sample too thin to be a distribution', () => {
-    expect(distributionOf(tier({ pop: MIN_POPULATION - 1 }))).toBeNull();
+  // DE's pop is a 0-100 popularity score, and over half of each week's rows
+  // sit at 1. Reading it as a trade count hid nearly every band.
+  it('keeps a band whatever its popularity, because pop is not a count', () => {
+    expect(distributionOf(tier({ pop: 1 }))?.median).toBe(195);
+    expect(distributionOf(tier({ pop: 0 }))?.median).toBe(195);
+  });
+
+  it('rejects a tier with no published price', () => {
+    expect(distributionOf(tier({ median: 0 }))).toBeNull();
   });
 
   it('accepts a real sample', () => {
-    expect(distributionOf(tier({}))?.pop).toBe(1204);
+    expect(distributionOf(tier({}))?.pop).toBe(37);
   });
 
   it('no longer requires a standard deviation, which nothing reads now', () => {
@@ -132,6 +140,13 @@ describe('rerollCost', () => {
   it('treats a nonsense count as a fresh riven rather than throwing', () => {
     expect(rerollCost(-3)).toBe(900);
   });
+
+  it('doubles while a trait is locked, up to 7,000 at the cap', () => {
+    expect(LOCKED_REROLL_FACTOR).toBe(2);
+    expect(rerollCost(0, true)).toBe(1800);
+    expect(rerollCost(50, true)).toBe(7000);
+    expect(rerollCost(4, false)).toBe(1700);
+  });
 });
 
 describe('rerollRead', () => {
@@ -164,22 +179,36 @@ describe('rerolledDiscount', () => {
     expect(d).toBeCloseTo(0.12, 4);
   });
 
-  it('refuses to compare when either side is too thin', () => {
-    expect(rerolledDiscount(tier({ median: 200 }), tier({ pop: 3 }))).toBeNull();
+  it('refuses to compare when either side has no price', () => {
+    expect(rerolledDiscount(tier({ median: 200 }), tier({ median: 0 }))).toBeNull();
     expect(rerolledDiscount(null, tier({}))).toBeNull();
   });
 });
 
 describe('appraise', () => {
-  it('explains a thin sample instead of pricing against it', () => {
-    const a = appraise(200, tier({ pop: 4 }), 0);
-    expect(a.unavailable).toBe('thin-sample');
-    expect(a.placement).toBeNull();
-    expect(a.caveats[0]).toContain('4 trades');
+  it('places an offer on a low-popularity band and warns instead of refusing', () => {
+    const a = appraise(200, tier({ pop: LOW_POPULARITY }), 0);
+    expect(a.unavailable).toBeUndefined();
+    expect(a.placement).not.toBeNull();
+    expect(a.caveats.some((c) => c.includes('Rarely traded'))).toBe(true);
+    expect(appraise(200, tier({ pop: LOW_POPULARITY + 1 }), 0).caveats.some((c) => c.includes('Rarely traded'))).toBe(false);
   });
 
-  it('distinguishes no data from a thin sample', () => {
-    expect(appraise(200, tier({ pop: 0 }), 0).unavailable).toBe('no-data');
+  it('reports no data when DE published no price', () => {
+    const a = appraise(200, tier({ median: 0 }), 0);
+    expect(a.unavailable).toBe('no-data');
+    expect(a.placement).toBeNull();
+  });
+
+  it('never calls popularity a number of trades', () => {
+    const text = appraise(200, tier({}), 0).caveats.join(' ');
+    expect(text).toContain('Popularity 37/100');
+    expect(text).not.toMatch(/\b37 trades\b/);
+  });
+
+  it('prices a reroll with the lock when one is set', () => {
+    expect(appraise(400, tier({}), 3, true).reroll?.kuva).toBe(2800);
+    expect(appraise(400, tier({}), 3).reroll?.kuva).toBe(1400);
   });
 
   it('returns the distribution with no verdict when no price is supplied', () => {
@@ -192,7 +221,7 @@ describe('appraise', () => {
   it('always carries the caveat that stat quality is not modelled', () => {
     const a = appraise(250, tier({}), 2);
     expect(a.caveats.some((c) => c.includes('Stat desirability is not modelled'))).toBe(true);
-    expect(a.caveats.some((c) => c.includes('1204 trades'))).toBe(true);
+    expect(a.caveats.some((c) => c.includes('spliced and classic'))).toBe(true);
   });
 
   it('warns when the average is not a typical price', () => {

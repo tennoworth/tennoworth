@@ -2,18 +2,26 @@
   import { useDesktopServices } from '../../ui/desktop-context';
   const { desktopRivenComps } = useDesktopServices();
   import RivenOffer from './RivenOffer.svelte';
+  import CopyBtn from '../../ui/CopyBtn.svelte';
 
-import { type RivenAuction } from '../../contracts/desktop';
+  import type { RivenAuction, RivenStatFilter } from '../../contracts/desktop';
   import { humanError } from '../../contracts/errors';
   import { humanWindow } from '../../ui/format';
   import {
     bandForRiven,
+    compsFilterFor,
     dispoChangeFor,
     formatAuctionStat,
-    formatRivenStat,
+    isSplicedStat,
     polaritySymbol,
+    resolveRivenStats,
+    rivenReport,
     rivenSimilarity,
+    spliceOptions,
+    unreadFingerprintKeys,
     type OwnedRiven,
+    type ResolvedRivenStat,
+    type SpliceOption,
   } from '../../domain/rivens';
   import { describeComps } from '../../domain/riven-appraise';
   import type { Market, RivenAttribute } from '../../contracts/data';
@@ -35,8 +43,14 @@ import { type RivenAuction } from '../../contracts/desktop';
       : null,
   );
 
-  // One comps drawer open at a time, keyed by weapon slug.
-  let openSlug = $state<string | null>(null);
+  type CompsScope = 'matched' | 'weapon';
+
+  // One comps drawer open at a time, keyed by ROW: two rivens for the same
+  // weapon are different rolls and must not share a drawer.
+  let openRow = $state<string | null>(null);
+  let scopeByRow = $state<Map<string, CompsScope>>(new Map());
+  // Samples are cached per query, so two rows asking the same question share
+  // one request against WFM's 10/min auction budget.
   let compsBusy = $state<string | null>(null);
   let compsCache = $state<Map<string, RivenAuction[]>>(new Map());
   let compsError = $state<Map<string, string>>(new Map());
@@ -49,48 +63,92 @@ import { type RivenAuction } from '../../contracts/desktop';
     }),
   );
 
+  interface Row {
+    key: string;
+    riven: OwnedRiven;
+    stats: ResolvedRivenStat[];
+    splices: SpliceOption[];
+    filter: ReturnType<typeof compsFilterFor>;
+    report: string | null;
+    unread: string[];
+  }
+
+  let rows = $derived<Row[]>(
+    sorted.map((riven, i) => {
+      const stats = resolveRivenStats(riven, attrs);
+      const rivenType = riven.slug ? market?.rivens?.weapons?.[riven.slug]?.riven_type : undefined;
+      return {
+        key: `${i}:${riven.path}:${riven.compat ?? ''}:${riven.rerolls}:${stats.map((s) => (s.positive ? '+' : '-') + s.tag).join(',')}`,
+        riven,
+        stats,
+        splices: riven.veiled ? [] : spliceOptions(stats, rivenType),
+        filter: compsFilterFor(stats),
+        report: rivenReport(riven),
+        unread: unreadFingerprintKeys(riven),
+      };
+    }),
+  );
+
   // The DE weekly band for a riven, plus a note about which tier it is.
   // Falls back to the other tier when DE only published one.
   function bandText(r: OwnedRiven): { price: string; range: string; note: string } | null {
     const band = bandForRiven(r, market?.riven_stats);
-    if (!band || band.pop === 0) return null;
+    if (!band || !(band.median > 0)) return null;
     const rerolled = r.rerolls > 0;
     const entry = market?.riven_stats?.[r.slug ?? ''];
     const wanted = rerolled ? entry?.rolled : entry?.unrolled;
     const usedOther = !!entry && !wanted;
     return {
-      price: band.median > 0 ? band.median.toFixed(0) + 'p' : '-',
+      price: band.median.toFixed(0) + 'p',
       range: band.min > 0 || band.max > 0 ? band.min.toFixed(0) + '–' + band.max.toFixed(0) + 'p' : '',
-      note: (usedOther ? 'closest band · ' : '') + (rerolled ? 'rolled' : 'unrolled') + ' · DE sold n=' + band.pop,
+      note: (usedOther ? 'closest band · ' : '') + (rerolled ? 'rolled' : 'unrolled') + ' · popularity ' + band.pop + '/100',
     };
   }
 
-  async function loadComps(slug: string, force: boolean): Promise<void> {
-    if (compsBusy === slug) return;
-    if (!force && compsCache.has(slug)) return;
-    compsBusy = slug;
-    compsError = new Map(compsError).set(slug, '');
+  function scopeOf(row: Row): CompsScope {
+    return scopeByRow.get(row.key) ?? (row.filter ? 'matched' : 'weapon');
+  }
+
+  function queryOf(row: Row): { key: string; stats: RivenStatFilter | null } | null {
+    const slug = row.riven.slug;
+    if (!slug) return null;
+    if (scopeOf(row) === 'matched' && row.filter) {
+      return { key: `${slug}|+${row.filter.filter.positive.join(',')}`, stats: row.filter.filter };
+    }
+    return { key: `${slug}|*`, stats: null };
+  }
+
+  async function loadComps(row: Row, force: boolean): Promise<void> {
+    const q = queryOf(row);
+    if (!q || !row.riven.slug) return;
+    if (compsBusy === q.key) return;
+    if (!force && compsCache.has(q.key)) return;
+    compsBusy = q.key;
+    compsError = new Map(compsError).set(q.key, '');
     try {
-      const auctions = await desktopRivenComps(slug);
-      compsCache = new Map(compsCache).set(slug, auctions);
-      if (auctions.length === 0) {
-        compsError = new Map(compsError).set(slug, 'No open auctions for this weapon right now.');
-      }
+      const auctions = await desktopRivenComps(row.riven.slug, q.stats);
+      compsCache = new Map(compsCache).set(q.key, auctions);
     } catch (e) {
-      compsError = new Map(compsError).set(slug, humanError(e));
+      compsError = new Map(compsError).set(q.key, humanError(e));
     } finally {
       compsBusy = null;
     }
   }
 
-  async function showComps(r: OwnedRiven): Promise<void> {
-    if (!r.slug) return;
-    if (openSlug === r.slug) {
-      openSlug = null;
+  async function showComps(row: Row): Promise<void> {
+    if (!row.riven.slug) return;
+    if (openRow === row.key) {
+      openRow = null;
       return;
     }
-    openSlug = r.slug;
-    await loadComps(r.slug, false);
+    openRow = row.key;
+    await loadComps(row, false);
+  }
+
+  async function setScope(row: Row, scope: CompsScope): Promise<void> {
+    if (scopeOf(row) === scope) return;
+    scopeByRow = new Map(scopeByRow).set(row.key, scope);
+    await loadComps(row, false);
   }
 
   /** Whole days since a listing instant; null when it is missing, malformed or
@@ -104,9 +162,11 @@ import { type RivenAuction } from '../../contracts/desktop';
 
   /** What this sample is, stated as facts. Listing age is not time-to-sale, so
    *  the line describes the sample and stops there. */
-  function sampleLine(slug: string): string {
-    const read = describeComps(compsCache.get(slug) ?? [], Date.now());
-    const parts = [`${read.size} cheapest live ask${read.size === 1 ? '' : 's'} in this sample`];
+  function sampleLine(comps: RivenAuction[]): string {
+    const read = describeComps(comps, Date.now());
+    const parts = [`${read.size} cheapest buyout${read.size === 1 ? '' : 's'} in this sample`];
+    const spliced = comps.filter((a) => a.attributes.some((s) => isSplicedStat(s.url_name))).length;
+    if (spliced > 0) parts.push(`${spliced} with a spliced trait`);
     parts.push(read.dated === 0
       ? 'no listing dates in this response'
       : `${read.dated} dated · oldest ${read.oldestAskDays} d, newest ${read.newestAskDays} d`);
@@ -122,14 +182,24 @@ import { type RivenAuction } from '../../contracts/desktop';
     return parts.join(' · ');
   }
 
-  function statLines(r: OwnedRiven): string[] {
-    const lines = r.buffs.map((s) => formatRivenStat(s.tag, true, attrs));
-    lines.push(...r.curses.map((s) => formatRivenStat(s.tag, false, attrs)));
-    return lines;
+  function attrName(slug: string): string {
+    return attrs?.find((a) => a.slug === slug)?.name ?? slug;
+  }
+
+  function spliceText(o: SpliceOption): string {
+    const name = attrs?.find((a) => a.slug === o.recipe.result)?.name ?? o.recipe.name;
+    const from = `${o.consumed[0].label} and ${o.consumed[1].label}`;
+    return `${name} from ${from}${o.randomIsNegative ? ' (the new random trait is negative)' : ''}`;
+  }
+
+  function filterText(row: Row): string {
+    if (!row.filter) return '';
+    const names = row.filter.filter.positive.map((s) => '+' + attrName(s)).join(', ');
+    return row.filter.complete ? names : `${names} (unrecognised stats left out)`;
   }
 </script>
 
-<section class="view-header"><h2>Rivens</h2><p class="lede">DE’s weekly band, the disposition trend, and live comparables — no single “worth N” number.</p></section>
+<section class="view-header"><h2>Rivens</h2><p class="lede">DE’s weekly band, the disposition trend, splice options, and live comparables — no single “worth N” number.</p></section>
 <section class="wrap tw rivens" data-testid="rivens-view">
   <div class="rail">
     <h3>Owned rivens</h3>
@@ -137,7 +207,7 @@ import { type RivenAuction } from '../../contracts/desktop';
     <span class="count"><b>{rivens.length}</b> owned{#if rivenStatsAge}&nbsp;· band data {rivenStatsAge}{/if}</span>
   </div>
 
-  {#if sorted.length === 0}
+  {#if rows.length === 0}
     <div class="line"><span class="exp">No rivens in your scanned inventory. Crack some relics or buy veiled ones.</span></div>
   {:else}
     <div class="scroll">
@@ -158,9 +228,11 @@ import { type RivenAuction } from '../../contracts/desktop';
           </tr>
         </thead>
         <tbody>
-          {#each sorted as r, i (r.path + i)}
+          {#each rows as row (row.key)}
+            {@const r = row.riven}
             {@const change = dispoChangeFor(r.slug, market?.rivens)}
             {@const band = bandText(r)}
+            {@const query = queryOf(row)}
             <tr>
               <td class="l">
                 <div class="weapon">
@@ -177,20 +249,32 @@ import { type RivenAuction } from '../../contracts/desktop';
                   {#if r.veiled}
                     <span class="muted">challenge to reveal</span>
                   {:else}
-                    {#each statLines(r) as line (line)}
-                      <span class="stat">{line}</span>
+                    {#each row.stats as stat, si (si)}
+                      <span class="stat" class:unknown={stat.slug == null}>{stat.label}{#if stat.spliced}<span class="spliced">spliced</span>{/if}</span>
                     {/each}
                   {/if}
                 </div>
+                {#if row.unread.length > 0}
+                  <p class="unread" data-testid="unread-fingerprint">
+                    This riven carries data the app does not read yet ({row.unread.join(', ')}), so a trait may be missing above. Copy data and report it.
+                  </p>
+                {/if}
+                {#if row.splices.length > 0}
+                  <p class="splices" data-testid="splice-options">
+                    <span class="splices-label">Can splice:</span>
+                    {row.splices.map(spliceText).join('; ')}
+                  </p>
+                {/if}
               </td>
               <td>{r.veiled ? '-' : r.rerolls}</td>
               <td>{r.veiled ? '-' : r.lvl}</td>
               <td class="l">
                 {#if r.slug && market?.rivens?.weapons?.[r.slug]}
                   <span class="mono">{market.rivens.weapons[r.slug].disposition.toFixed(2)}</span>
-                  {#if change}
-                    <span class="dispo-move up" title={`Disposition ${change.from.toFixed(2)} → ${change.to.toFixed(2)} (${change.seen_at.slice(0, 10)})`}>
-                      ▲ {((change.to - change.from) * 100).toFixed(0)}%
+                  {#if change && change.to !== change.from}
+                    {@const up = change.to > change.from}
+                    <span class="dispo-move" class:up class:down={!up} title={`Disposition ${change.from.toFixed(2)} → ${change.to.toFixed(2)} (${change.seen_at.slice(0, 10)})`}>
+                      {up ? '▲' : '▼'} {Math.abs((change.to - change.from) * 100).toFixed(0)}%
                     </span>
                   {/if}
                 {:else}
@@ -202,11 +286,11 @@ import { type RivenAuction } from '../../contracts/desktop';
                   <div class="band" title={band.note}>
                     <span class="mono">{band.price}</span>
                     {#if band.range}<span class="muted small"> {band.range}</span>{/if}
-                    <span class="muted small note"> · {band.note}</span>
+                    <span class="muted small note">{band.note}</span>
                   </div>
                   <!-- Still no "this riven is worth N": the offer comes from
                        the user, and we supply the arithmetic against DE's
-                       distribution - percentile, reroll odds and cost. -->
+                       distribution - placement and reroll cost. -->
                   <details class="offer-check">
                     <summary>check an offer</summary>
                     <RivenOffer riven={r} market={market} />
@@ -218,42 +302,63 @@ import { type RivenAuction } from '../../contracts/desktop';
               <td>
                 <button
                   class="btn ghost"
-                  onclick={() => showComps(r)}
+                  onclick={() => showComps(row)}
                   disabled={!r.slug || compsBusy !== null}
-                  title={r.slug ? 'Fetch the cheapest live auctions for this weapon (WFM caps at 10/min).' : 'Unknown weapon - no comps.'}
+                  title={r.slug ? 'Fetch the cheapest live buyouts for this riven (WFM caps at 10/min).' : 'Unknown weapon - no comps.'}
                 >
-                  {r.slug != null && compsBusy === r.slug ? 'Fetching…' : r.slug != null && openSlug === r.slug ? 'Hide comps' : 'Comps'}
+                  {query != null && compsBusy === query.key ? 'Fetching…' : openRow === row.key ? 'Hide comps' : 'Comps'}
                 </button>
+                {#if row.report}
+                  <!-- DE's raw riven data, for reporting a trait or state the
+                       app does not read yet. No account details: the path
+                       and fingerprint only. -->
+                  <span class="copy-data" title="Copy DE's raw data for this riven, to paste into a bug report. It holds no account details.">
+                    <CopyBtn text={row.report} label="Copy data" name={`Copy raw riven data for ${r.weaponName ?? 'this riven'}`} />
+                  </span>
+                {/if}
               </td>
             </tr>
-            {#if openSlug === r.slug && r.slug}
+            {#if openRow === row.key && query}
+              {@const comps = compsCache.get(query.key)}
               <tr class="comps-row">
                 <td colspan="7">
-                  {#if compsError.get(r.slug)}
-                    <div class="muted bad">Couldn't load comps: {compsError.get(r.slug)}</div>
-                  {:else if compsBusy === r.slug}
-                    <div class="muted">Fetching the cheapest auctions for {r.weaponName}…</div>
-                  {:else if (compsCache.get(r.slug) ?? []).length === 0}
-                    <div class="muted">No comps to show.</div>
-                  {:else}
+                  <div class="comps-bar">
+                    <span class="ui-segmented xs" role="group" aria-label="Compare with">
+                      <button type="button" aria-pressed={scopeOf(row) === 'matched'} disabled={!row.filter || compsBusy !== null} onclick={() => setScope(row, 'matched')}>Same positive stats</button>
+                      <button type="button" aria-pressed={scopeOf(row) === 'weapon'} disabled={compsBusy !== null} onclick={() => setScope(row, 'weapon')}>All on weapon</button>
+                    </span>
+                    {#if scopeOf(row) === 'matched' && row.filter}
+                      <span class="muted small">{filterText(row)}</span>
+                    {/if}
+                  </div>
+                  {#if compsError.get(query.key)}
+                    <div class="muted bad">Couldn't load comps: {compsError.get(query.key)}</div>
+                  {:else if compsBusy === query.key}
+                    <div class="muted">Fetching the cheapest buyouts for {r.weaponName}…</div>
+                  {:else if comps && comps.length === 0}
+                    <div class="muted">
+                      {scopeOf(row) === 'matched'
+                        ? 'No buyouts for this weapon share these positive stats right now. Try All on weapon.'
+                        : 'No buyout auctions for this weapon right now.'}
+                    </div>
+                  {:else if comps}
                     <div class="comps">
                       <div class="comps-sample">
-                        <span class="muted small" data-testid="comps-sample">{sampleLine(r.slug)}</span>
+                        <span class="muted small" data-testid="comps-sample">{sampleLine(comps)}</span>
                         <button
                           class="btn ghost xs"
-                          onclick={() => openSlug && loadComps(openSlug, true)}
+                          onclick={() => loadComps(row, true)}
                           disabled={compsBusy !== null}
-                          title="Ask warframe.market again for the cheapest auctions on this weapon."
+                          title="Ask warframe.market again for the cheapest buyouts."
                         >Refresh sample</button>
                       </div>
-                      {#each compsCache.get(r.slug) ?? [] as a (a.id)}
+                      {#each comps as a (a.id)}
                         {@const similarity = rivenSimilarity(r, a.attributes, attrs)}
                         <div class="comp">
                           <div class="comp-head">
                             <span class="mono price">{a.price}p</span>
                             <span class="muted small">
-                              {#if a.is_direct_sell}buyout{:else}bid{/if}
-                              {#if a.buyout_price && !a.is_direct_sell} · buyout {a.buyout_price}p{/if}
+                              {a.is_direct_sell ? 'buyout' : 'auction buyout'}
                               {#if a.top_bid != null} · top bid {a.top_bid}p{/if}
                             </span>
                             <span class="comp-owner" title="WFM status">{a.owner ?? 'unknown'}{#if a.owner_status} · {a.owner_status}{/if}</span>
@@ -270,8 +375,8 @@ import { type RivenAuction } from '../../contracts/desktop';
                             {#if a.polarity}<span>{a.polarity}</span>{/if}
                           </div>
                           <div class="comp-stats small">
-                            {#each a.attributes as s (s.url_name)}
-                              <span class="stat">{formatAuctionStat(s.url_name, s.value, s.positive, attrs)}</span>
+                            {#each a.attributes as s, ai (ai)}
+                              <span class="stat">{formatAuctionStat(s.url_name, s.value, s.positive, attrs)}{#if isSplicedStat(s.url_name)}<span class="spliced">spliced</span>{/if}</span>
                             {/each}
                           </div>
                         </div>
@@ -294,6 +399,8 @@ import { type RivenAuction } from '../../contracts/desktop';
      app.css; only riven-specific content styles live here. */
   table { min-width: 65rem; }
   td:last-child .btn { white-space: nowrap; }
+  .copy-data { display: block; margin-top: var(--s1); }
+  .copy-data :global(.copybtn) { min-height: var(--ctl-xs); }
   .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .weapon { display: flex; align-items: center; gap: var(--s1); }
   .pol { color: var(--muted); font-size: var(--text-caption); }
@@ -301,8 +408,19 @@ import { type RivenAuction } from '../../contracts/desktop';
   /* Stats wrap to several lines; td height acts as a minimum in tables. */
   .stats { display: flex; flex-wrap: wrap; gap: 2px var(--s3); max-width: 420px; padding: var(--s1) 0; font-family: var(--font-body); color: var(--fg); }
   .stat { white-space: nowrap; }
-  .dispo-move { font-family: var(--font-mono); font-size: var(--text-caption); color: var(--good); margin-left: var(--s1); }
+  .dispo-move { font-family: var(--font-mono); font-size: var(--text-caption); margin-left: var(--s1); }
+  .dispo-move.up { color: var(--good); }
+  .dispo-move.down { color: var(--warn); }
+  .stat.unknown { color: var(--muted); }
+  .spliced { margin-left: var(--s1); color: var(--muted); font: var(--text-caption) var(--font-ui); }
+  .splices { margin: 0 0 var(--s1); max-width: 420px; color: var(--muted); font: var(--text-caption)/var(--leading-body) var(--font-body); }
+  .splices-label { font-family: var(--font-ui); color: var(--fg); }
+  .unread { margin: 0 0 var(--s1); max-width: 420px; color: var(--warn); font: var(--text-caption)/var(--leading-body) var(--font-body); }
+  .comps-bar { display: flex; align-items: center; flex-wrap: wrap; gap: var(--s1) var(--s2); padding-top: var(--s1); }
   .band { white-space: nowrap; }
+  /* The tier and popularity note wraps under the price rather than being
+     clipped by the fixed column. */
+  .band .note { display: block; white-space: normal; }
   .offer-check { margin-top: 4px; white-space: normal; text-align: left; }
   .offer-check > summary { color: var(--muted); font: var(--text-caption)/var(--leading-body) var(--font-body); }
   .band .note { font-family: var(--font-body); }
@@ -311,7 +429,7 @@ import { type RivenAuction } from '../../contracts/desktop';
   .bad { color: var(--bad); }
   .similarity { color: var(--accent); border: 1px solid var(--accent); border-radius: var(--radius-ctl); padding: 1px 5px; font: 600 var(--text-caption) var(--font-mono); white-space: nowrap; }
   /* Comps expand as an inset drawer under the row, on the panel-2 ground. */
-  .comps-row td { background: var(--panel-2); height: auto; text-align: left; }
+  .comps-row td { background: var(--panel-2); height: auto; text-align: left; font-family: var(--font-body); white-space: normal; }
   .comps { display: flex; flex-direction: column; gap: var(--s1); max-height: 320px; overflow: auto; padding: var(--s1) 0; }
   .comps-sample { display: flex; align-items: baseline; gap: var(--s2); flex-wrap: wrap; }
   .comp { border: 1px solid var(--border); border-radius: var(--radius-ctl); padding: var(--s2); display: flex; flex-direction: column; gap: 4px; background: var(--panel); }
