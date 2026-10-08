@@ -51,6 +51,7 @@ const RAW_RIVENS: OwnedRiven[] = [
     buffs: [{ tag: 'WeaponCritDamageMod', value: 952698242 }],
     curses: [{ tag: 'WeaponProcTimeMod', value: 472179622 }],
     veiled: false,
+    raw: '{"compat":"/Lotus/Weapons/Grineer/LongGuns/GrnAcceltra/GrnAcceltra","buffs":[{"Tag":"WeaponCritDamageMod","Value":952698242}],"curses":[{"Tag":"WeaponProcTimeMod","Value":472179622}],"rerolls":2}',
   },
   {
     path: '/Lotus/Upgrades/Mods/Randomized/LotusRifleRandomModRare',
@@ -128,6 +129,21 @@ describe('RivensPanel', () => {
     const options = await screen.findAllByTestId('splice-options');
     expect(options).toHaveLength(1);
     expect(options[0].textContent).toContain('Blast from +Heat and +Cold');
+  });
+
+  it('copies the raw riven data for a report, only where it was scanned', async () => {
+    installTauri(makeInvoke(), undefined);
+    const writeText = vi.fn(async (_text: string) => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    render(RivensPanel, { props: { market, rivens: resolveRivens(RAW_RIVENS, market) } });
+    const buttons = await screen.findAllByRole('button', { name: /Copy raw riven data/ });
+    expect(buttons).toHaveLength(1);
+    await fireEvent.click(buttons[0]);
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(1));
+    const copied = JSON.parse(writeText.mock.calls[0][0]);
+    expect(copied.ItemType).toBe('/Lotus/Upgrades/Mods/Randomized/LotusRifleRandomModRare');
+    expect(copied.UpgradeFingerprint.rerolls).toBe(2);
+    await screen.findByText('Copied ✓');
   });
 
   it('shows a disposition decrease as a decrease', async () => {

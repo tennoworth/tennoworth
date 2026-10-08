@@ -13,6 +13,7 @@ import {
   resolveRivenStats,
   rivenSimilarity,
   resolveRivens,
+  rivenReport,
   SPLICE_RECIPES,
   spliceOptions,
 } from './rivens.js';
@@ -69,6 +70,27 @@ describe('extractRivens', () => {
     expect(r.veiled).toBe(false);
     expect(r.slug).toBeNull();
     expect(r.weaponName).toBeNull();
+  });
+
+  // DE adds riven state (locks, splices) before its keys are known; the raw
+  // string is what lets a user report it.
+  it('keeps the fingerprint exactly as scanned, unknown keys included', () => {
+    const withLock = JSON.stringify({ ...JSON.parse(REVEALED_FP), someFutureLockKey: 1 });
+    const [r] = extractRivens(inventory([
+      { ItemType: '/Lotus/Upgrades/Mods/Randomized/LotusShotgunRandomModRare', UpgradeFingerprint: withLock, ItemId: { $oid: 'abc' } },
+    ]));
+    expect(r.raw).toBe(withLock);
+    const report = JSON.parse(rivenReport(r));
+    expect(report).toEqual({
+      ItemType: '/Lotus/Upgrades/Mods/Randomized/LotusShotgunRandomModRare',
+      UpgradeFingerprint: JSON.parse(withLock),
+    });
+    expect(rivenReport(r)).not.toContain('abc');
+  });
+
+  it('reports a malformed fingerprint verbatim, and nothing for a riven saved without one', () => {
+    expect(JSON.parse(rivenReport({ path: '/p', raw: '{broken' })).UpgradeFingerprint).toBe('{broken');
+    expect(rivenReport({ path: '/p' })).toBeNull();
   });
 
   it('marks a challenge-only fingerprint as veiled', () => {

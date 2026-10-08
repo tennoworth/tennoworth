@@ -1,5 +1,5 @@
 <script lang="ts">
-  let { text, label = 'Copy' }: { text: string; label?: string } = $props();
+  let { text, label = 'Copy', name = `Copy command: ${text}` }: { text: string; label?: string; name?: string } = $props();
 
   let copied = $state(false);
   let timer: ReturnType<typeof setTimeout> | undefined;
@@ -24,7 +24,7 @@
   }
 </script>
 
-<button class="copybtn" class:copied onclick={copy} aria-label={`Copy command: ${text}`}>
+<button class="copybtn" class:copied onclick={copy} aria-label={name}>
   {copied ? 'Copied ✓' : label}
 </button>
 

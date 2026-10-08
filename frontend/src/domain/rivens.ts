@@ -39,6 +39,11 @@ export interface OwnedRiven {
   curses: RivenFingerprintStat[];
   /** A challenge instead of stats - the riven is veiled. */
   veiled: boolean;
+  /** DE's fingerprint string exactly as scanned. Kept because DE adds riven
+   *  state (locks, splices) before anyone knows its keys, and the parsed
+   *  fields above drop what they do not name. Absent on snapshots saved
+   *  before it was kept. */
+  raw?: string;
 }
 
 interface RivenFingerprint {
@@ -76,6 +81,23 @@ function statOf(s: unknown): RivenFingerprintStat | null {
   return { tag, value };
 }
 
+/**
+ * The riven as DE describes it, for a user to paste into a bug report: the
+ * mod path and the fingerprint, nothing else from the inventory entry (no
+ * item id). The fingerprint is re-indented when it parses and passed through
+ * verbatim when it does not, so a malformed one is still reportable.
+ */
+export function rivenReport(riven: Pick<OwnedRiven, 'path' | 'raw'>): string | null {
+  if (riven.raw == null) return null;
+  let fingerprint: unknown = riven.raw;
+  try {
+    fingerprint = JSON.parse(riven.raw);
+  } catch {
+    // keep the string
+  }
+  return JSON.stringify({ ItemType: riven.path, UpgradeFingerprint: fingerprint }, null, 2);
+}
+
 /** Extract owned rivens from the raw DE inventory. Only `Upgrades[]` entries
  *  under the Randomized path count; everything else (railjack avionics,
  *  regular mods) is not a riven. */
@@ -101,6 +123,7 @@ export function extractRivens(inv: Inventory | null | undefined): OwnedRiven[] {
       buffs,
       curses,
       veiled: compat === null && buffs.length === 0,
+      ...(typeof e?.UpgradeFingerprint === 'string' ? { raw: e.UpgradeFingerprint } : {}),
     });
   }
   return out;

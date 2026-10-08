@@ -2,6 +2,7 @@
   import { useDesktopServices } from '../../ui/desktop-context';
   const { desktopRivenComps } = useDesktopServices();
   import RivenOffer from './RivenOffer.svelte';
+  import CopyBtn from '../../ui/CopyBtn.svelte';
 
   import type { RivenAuction, RivenStatFilter } from '../../contracts/desktop';
   import { humanError } from '../../contracts/errors';
@@ -14,6 +15,7 @@
     isSplicedStat,
     polaritySymbol,
     resolveRivenStats,
+    rivenReport,
     rivenSimilarity,
     spliceOptions,
     type OwnedRiven,
@@ -66,6 +68,7 @@
     stats: ResolvedRivenStat[];
     splices: SpliceOption[];
     filter: ReturnType<typeof compsFilterFor>;
+    report: string | null;
   }
 
   let rows = $derived<Row[]>(
@@ -78,6 +81,7 @@
         stats,
         splices: riven.veiled ? [] : spliceOptions(stats, rivenType),
         filter: compsFilterFor(stats),
+        report: rivenReport(riven),
       };
     }),
   );
@@ -296,6 +300,14 @@
                 >
                   {query != null && compsBusy === query.key ? 'Fetching…' : openRow === row.key ? 'Hide comps' : 'Comps'}
                 </button>
+                {#if row.report}
+                  <!-- DE's raw riven data, for reporting a trait or state the
+                       app does not read yet. No account details: the path
+                       and fingerprint only. -->
+                  <span class="copy-data" title="Copy DE's raw data for this riven, to paste into a bug report. It holds no account details.">
+                    <CopyBtn text={row.report} label="Copy data" name={`Copy raw riven data for ${r.weaponName ?? 'this riven'}`} />
+                  </span>
+                {/if}
               </td>
             </tr>
             {#if openRow === row.key && query}
@@ -379,6 +391,8 @@
      app.css; only riven-specific content styles live here. */
   table { min-width: 65rem; }
   td:last-child .btn { white-space: nowrap; }
+  .copy-data { display: block; margin-top: var(--s1); }
+  .copy-data :global(.copybtn) { min-height: var(--ctl-xs); }
   .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .weapon { display: flex; align-items: center; gap: var(--s1); }
   .pol { color: var(--muted); font-size: var(--text-caption); }
