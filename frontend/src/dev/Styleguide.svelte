@@ -14,6 +14,7 @@
   import type { SettingsStore } from '../contracts/state-store';
   import { PromptSession } from '../ui/prompt-session.svelte';
   import AppIconSetting from '../features/settings/AppIconSetting.svelte';
+  import { shimmer } from '../ui/shimmer';
   import { AppIconController } from '../features/settings/app-icon.svelte';
   let notesRef = $state<UpdateNotes>();
   // A fresh, always-due session each time the state is chosen; nothing persists.
@@ -50,6 +51,7 @@
   let exampleEnabled = $state(true);
   let exampleShortcut = $state('Ctrl+Shift+O');
   let dataState = $state('populated');
+  let shimmerPulse = $state(0);
   let selected = $state('Fast Cash');
   let quantity = $state<number | undefined>(2);
   let message = $state('');
@@ -123,7 +125,7 @@
       <p class="muted">Selected: {selected}. These are presentation examples, not the Trade Session planner.</p>
       <div class="fields">
         <label class="ui-field">Filter sample items<input type="text" bind:value={filter} placeholder="Item name" /></label>
-        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option><option value="notifications">Alerts</option><option value="estimates">Estimates</option><option value="usage">Community usage</option><option value="updates">Update notes</option><option value="token">WFM token sign-in</option><option value="sell">Sell table</option><option value="prompt">Prompt banner</option><option value="app-icon">App icon</option></select></label>
+        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option><option value="notifications">Alerts</option><option value="estimates">Estimates</option><option value="usage">Community usage</option><option value="updates">Update notes</option><option value="token">WFM token sign-in</option><option value="sell">Sell table</option><option value="prompt">Prompt banner</option><option value="app-icon">App icon</option><option value="shimmer">Field shimmer</option></select></label>
       </div>
       <p role="status" class="muted">{message || 'Controls are ready. No changes made.'}</p>
     </div>
@@ -178,6 +180,7 @@
   {/if}
   {#if dataState === 'prompt'}<PromptBanner id="styleguide-prompt" session={samplePromptSession()} title="Help show what items really sell for"><p>Optional invitations use the neutral panel, never a toned edge, and say that ignoring them changes nothing. A long explanation wraps beside the actions and stacks above them in narrow windows.</p>{#snippet actions()}<button type="button" class="btn primary" onclick={() => (message = 'Sample prompt accepted.')}>Share sale prices</button><button type="button" class="btn">What is sent</button>{/snippet}</PromptBanner>{/if}
   {#if dataState === 'usage'}<UsageChart sample={usageSample} />{/if}
+  {#if dataState === 'shimmer'}<section class="wrap tw ui-reading" aria-labelledby="shimmer-title"><div class="rail"><h3 id="shimmer-title">Field shimmer</h3></div><div class="bar"><span class="lbl">Idle</span><span class="shimmer-field grow" use:shimmer={{ mode: 'idle' }}><input class="input" type="text" aria-label="Idle shimmer sample" placeholder="At rest" /></span></div><div class="bar"><span class="lbl">Live</span><span class="shimmer-field grow" use:shimmer={{ mode: 'live', sparks: true }}><input class="input" type="text" aria-label="Live shimmer sample" placeholder="Waiting for a query" /></span></div><div class="bar"><span class="lbl">Pass</span><span class="shimmer-field grow" use:shimmer={{ mode: 'settled', pulse: shimmerPulse }}><input class="input" type="text" aria-label="Settled shimmer sample" placeholder="Focused from a shortcut" /></span><button class="btn xs" onclick={() => shimmerPulse++}>Run one pass</button></div><div class="body"><p>Idle is the quiet sweep a field shows at rest. Live is the full effect while a focused field waits for input, with sparks in the dark theme only. Pass runs once when a shortcut moves focus. Reduced motion shows the lit edges alone.</p></div></section>{/if}
   {#if dataState === 'app-icon'}<section class="wrap tw ui-reading" aria-labelledby="app-icon-title"><div class="rail"><h3 id="app-icon-title">App icon setting</h3></div><AppIconSetting appIcon={sampleAppIcon} /></section>{/if}
   {#if dataState === 'sell'}<section class="ui-stack"><h2>Sortable analytical table</h2><p>Headers are sort buttons that announce their order; the Column guide explains every visible column.</p><ResultsTable results={sellSample} /></section>{/if}
   {#if dataState === 'updates'}<section class="ui-panel ui-stack"><h2>Changes across installed versions</h2><p>One plain-English summary combines skipped releases, with a version history beneath it.</p><button class="btn" onclick={() => notesRef?.open()}>Preview what’s new</button></section>{/if}

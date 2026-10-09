@@ -431,6 +431,11 @@ dialog.cryptobox footer {
   min-width: 0;
 }
 .wrap.tw .input.grow { flex: 1 1 0; }
+/* Field shimmer (ui/shimmer.ts) draws on a canvas over this box. The wrapper
+   takes the input's place in the toolbar; the input keeps its own frame and focus. */
+.shimmer-field { position: relative; display: inline-flex; min-width: 0; }
+.shimmer-field > input { flex: 1 1 auto; min-width: 0; }
+.shimmer-field > canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 .wrap.tw .scroll { overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
 .wrap.tw .body { padding: var(--s3) var(--inset); font-size: var(--text-caption); color: var(--muted); }
 .wrap.tw .body p { margin: 0; line-height: 1rem; }

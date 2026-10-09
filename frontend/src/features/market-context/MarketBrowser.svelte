@@ -16,6 +16,7 @@
   import { hasSparkline } from '../../ui/sparkline';
   import { weekly, yearStats, type History } from '../../domain/history';
   import MetaDriftPanel from './MetaDriftPanel.svelte';
+  import { shimmer, type ShimmerMode } from '../../ui/shimmer';
 
   // Powered by the already-loaded market.json - the only fetch this component
   // can trigger is the optional year-long history, and only when the user
@@ -44,6 +45,10 @@
 
   let query = $state('');
   let searchInput: HTMLInputElement | undefined = $state();
+  let searchFocused = $state(false);
+  // Quietly shimmers at rest; in full while focused and waiting for a query, and
+  // quiet again once results show so the eye moves to the table.
+  let searchShimmer = $derived<ShimmerMode>(searchFocused && !query.trim() ? 'live' : 'idle');
 
   // '/' focuses the search from anywhere on the landing (unless already typing).
   $effect(() => {
@@ -255,14 +260,18 @@
        alone; typing renders the results table under it. -->
   <section class="wrap tw lookup" aria-label="Item lookup">
     <div class="bar">
-      <input
-        class="input grow"
-        type="text"
-        placeholder="Search any item - try “primed”, “mag”, “ash prime set”…"
-        bind:value={query}
-        bind:this={searchInput}
-        aria-label="Search items"
-      />
+      <span class="shimmer-field grow" use:shimmer={{ mode: searchShimmer, sparks: true }}>
+        <input
+          class="input"
+          type="text"
+          placeholder="Search any item - try “primed”, “mag”, “ash prime set”…"
+          bind:value={query}
+          bind:this={searchInput}
+          aria-label="Search items"
+          onfocus={() => (searchFocused = true)}
+          onblur={() => (searchFocused = false)}
+        />
+      </span>
       <span class="exp">any tradeable item · price, 48h volume, 7-day trend · <kbd>/</kbd> to focus</span>
       {#if loadHistory}
         <button class="btn xs ghost year-toggle" class:on={showYear} onclick={toggleYear} aria-pressed={showYear}
@@ -490,7 +499,7 @@
   .dispo-table { min-width: 34rem; }
 
   @media (max-width: 35rem) {
-    .lookup .bar .input { width: 100%; }
+    .lookup .bar .shimmer-field { flex-basis: 100%; }
     .lookup .bar .year-toggle { margin-left: auto; }
   }
 

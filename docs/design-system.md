@@ -103,7 +103,7 @@ scoping: a class defined inside one component is not a shared primitive.
 Current shared selectors in `app.css`: `.btn` with `primary`, `ghost`, `bad`,
 `xs`, and `lg` variants; `.wrap.tw` and `table.tw`; `dialog.cryptobox`;
 `.ui-panel`, `.view-header`, `.general-banner`, `.ui-stack`, `.ui-toolbar`,
-`.ui-field`, `.ui-input`, `.ui-notice`, `.ui-segmented`, and `.tag`. Notices use
+`.ui-field`, `.ui-input`, `.ui-notice`, `.ui-segmented`, `.shimmer-field`, and `.tag`. Notices use
 `data-tone="good|warn|bad"` for their semantic edge, with explicit readable text
 for meaning. Keep feature-specific sizing local. These selectors are opt-in;
 do not globally restyle similarly named legacy component classes by accident.
@@ -342,6 +342,31 @@ these tokens does not certify that renderer or live capture/game placement.
 Keep native window behavior and Windows/Linux constraints explicit. If native
 and frontend implementations must share a value or calculation, use the
 repository's shared parity-fixture approach rather than copying constants.
+
+### Field shimmer
+
+`use:shimmer` in [shimmer.ts](../frontend/src/ui/shimmer.ts) draws a moving
+light, 4px scanlines and lit edge rules in `--ink-bar` over a `.shimmer-field`
+wrapper, adapted from the YoRHa terminal input shader. It is an exception to
+the rule against glows and decorative gradients, scoped to the two fields that
+start a task, and it shows their state:
+
+- **Market lookup** (hosted site and desktop): a quiet idle sweep at rest marks
+  where to start. While focused and empty it runs in full, with sparks in `--fg`
+  in the dark theme only; once a query shows results it returns to the quiet
+  sweep so the eye moves to the table.
+- **Sell name filter**: the quiet sweep at rest, one light pass when
+  <kbd>/</kbd> moves focus there so the jump is visible on a long table, and the
+  full sweep while focused. A click gives no pass, and the filter never shows
+  sparks.
+
+The idle sweep runs at about half strength with dimmer edges, so the field
+reads as calm beside data. Never add it to a second field on the same screen,
+or to secrets, prices, quantities or writing fields. Reduced motion shows only
+the lit edges. The canvas ignores the pointer, is hidden from assistive
+technology and never replaces the focus outline; the animation stops when the
+window is hidden or the field is off screen. Select Field shimmer in the living
+styleguide's Data state control.
 
 For any additional exception, document the surface, the rule being varied, why
 the shared pattern is unsuitable, and the verification performed. Broad visual
