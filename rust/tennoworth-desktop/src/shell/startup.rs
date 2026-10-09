@@ -382,9 +382,7 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
                 );
                 // The user's warframe.market status (see presence.rs). Not in
                 // probe runs - the probe must not change an account's status.
-                crate::services::presence::start(app.handle().clone(), |app| {
-                    crate::shell::tray::rebuild_tray(app);
-                });
+                crate::services::presence::start(app.handle().clone(), crate::shell::tray::refresh_presence);
             }
 
             // C5: launch update check, off the main thread so it can never

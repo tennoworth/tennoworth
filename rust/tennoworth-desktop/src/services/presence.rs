@@ -496,8 +496,8 @@ impl PresenceState {
 }
 
 /// Start the loop. Never takes the app down; every failure logs and backs off.
-/// `on_change` runs after each visible change: the shell passes its tray
-/// rebuild, which this layer cannot import.
+/// `on_change` runs after each change the tray shows: the shell passes its
+/// Status refresh, which this layer cannot import.
 pub fn start(app: AppHandle, on_change: fn(&AppHandle)) {
     let (tx, rx) = mpsc::channel();
     if let Some(state) = app.try_state::<PresenceState>() {
@@ -545,7 +545,7 @@ impl Loop {
             let _ = self.app.emit(EVENT_PRESENCE_CHANGED, &status);
         }
         // A renewal moves `status_until` every few minutes; the tray shows
-        // none of that and its rebuild re-ranks the sell list.
+        // none of that, so it is not touched.
         if tray_changed {
             (self.on_change)(&self.app);
         }
