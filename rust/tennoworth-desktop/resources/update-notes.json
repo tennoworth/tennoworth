@@ -1,5 +1,5 @@
 {
-  "version": "0.8.100",
+  "version": "0.8.101",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -989,6 +989,67 @@
           "title": "The Column guide shows its entries again",
           "body": "In the Linux app the guide opened as a bare title bar; its explanations now appear.",
           "platforms": [
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.101",
+      "date": "2026-10-09",
+      "changes": [
+        {
+          "id": "wfm-status-set",
+          "kind": "improved",
+          "title": "Set your warframe.market status from the app",
+          "body": "Choose Online, Online in game or Invisible from the status strip, Settings or the tray, and keep it while TennoWorth runs or for 30 minutes to 4 hours.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "wfm-status-follow-game",
+          "kind": "improved",
+          "title": "Let your status follow the game",
+          "body": "Off by default. When enabled, you show as online in game while Warframe runs and switch to Invisible (or Online, if you prefer) when it closes. A status changed on the website takes precedence until your next game session.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "wfm-status-invisible-on-quit",
+          "kind": "improved",
+          "title": "Go invisible when you quit",
+          "body": "A status the app is keeping up is set to Invisible when you quit TennoWorth or sign out, so you are not left showing online.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "settings-install-update",
+          "kind": "improved",
+          "title": "Install updates from Settings",
+          "body": "After Check for updates finds a new version, the same button installs it and then offers Restart now. The banner and Settings share one install, so it cannot run twice.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "field-shimmer",
+          "kind": "improved",
+          "title": "Find the fields that start a task",
+          "body": "The market lookup and the Sell name filter carry a quiet light sweep, and pressing / to jump to the filter briefly highlights it. Reduced-motion settings turn the motion off.",
+          "platforms": [
+            "windows",
             "linux"
           ],
           "supersedes": []
