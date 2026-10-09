@@ -6,5 +6,6 @@ pub mod orders;
 pub mod outcome;
 pub mod pending;
 pub mod plan;
+pub mod presence;
 pub mod rivens;
 pub mod ws;

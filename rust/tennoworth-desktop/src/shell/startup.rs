@@ -108,6 +108,10 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
             crate::commands::auto_scan::update_auto_scan_settings,
             crate::commands::auto_scan::auto_scan_status,
             crate::commands::auto_scan::set_auto_scan_hold,
+            crate::commands::presence::presence_status,
+            crate::commands::presence::set_presence,
+            crate::commands::presence::update_presence_settings,
+            crate::commands::presence::follow_game_now,
             crate::commands::settings::get_setting,
             crate::commands::settings::set_setting,
             crate::commands::settings::protection_state,
@@ -193,6 +197,7 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
             let store = Db::open(&db_path)
                 .map_err(|e| format!("opening state DB {}: {e}", db_path.display()))?;
             app.manage(crate::services::auto_scan::AutoScanState::from_db(&store));
+            app.manage(crate::services::presence::PresenceState::from_db(&store));
             app.manage(store);
             crate::services::usage::start(app.handle().clone());
             crate::services::reports::start(app.handle().clone());
@@ -208,6 +213,15 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
             game_events.subscribe(move |event| match event {
                 GameEvent::LogLine(line) => overlay::handle_log_line(&overlay_app, line),
                 GameEvent::RecentLog(text) => overlay::handle_log_snapshot(&overlay_app, text),
+            });
+            // Trade presence follows the game from its login and shutdown lines.
+            let presence_app = app.handle().clone();
+            game_events.subscribe(move |event| {
+                if let GameEvent::LogLine(line) = event {
+                    if let Some(presence) = presence_app.try_state::<crate::services::presence::PresenceState>() {
+                        presence.game_line(line);
+                    }
+                }
             });
 
             if ocr_boot_probe {
@@ -366,6 +380,11 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
                     app.handle().clone(),
                     crate::shell::tray::post_scan_surfaces,
                 );
+                // The user's warframe.market status (see presence.rs). Not in
+                // probe runs - the probe must not change an account's status.
+                crate::services::presence::start(app.handle().clone(), |app| {
+                    crate::shell::tray::rebuild_tray(app);
+                });
             }
 
             // C5: launch update check, off the main thread so it can never
@@ -397,6 +416,12 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(move |app, event| {
+            // What TennoWorth kept up must not outlive it: say Invisible first.
+            if matches!(event, tauri::RunEvent::Exit) {
+                if let Some(presence) = app.try_state::<crate::services::presence::PresenceState>() {
+                    presence.shutdown();
+                }
+            }
             if ocr_boot_probe && matches!(event, tauri::RunEvent::Ready) {
                 app.cleanup_before_exit();
                 #[allow(clippy::exit, reason = "the headless OCR probe has no windows; Windows SSH can stall after asynchronous ExitRequested")]

@@ -8,6 +8,10 @@ fn desktop_bindings_match_rust() {
     types.add::<crate::services::watch::WatchOutcome>();
     types.add::<crate::services::auto_scan::AutoScanSettings>();
     types.add::<crate::services::auto_scan::AutoScanStatus>();
+    types.add::<crate::services::presence::PresenceChoice>();
+    types.add::<crate::services::presence::PresenceSettings>();
+    types.add::<crate::services::presence::PresenceProblem>();
+    types.add::<crate::services::presence::PresenceStatus>();
     types.add::<super::listing::OwnOrder>();
     types.add::<crate::notification_contract::NotificationContent>();
     types.add::<crate::shell::app_icon::AppIconOutcome>();
@@ -34,6 +38,7 @@ fn desktop_bindings_match_rust() {
         ("UPDATE_AVAILABLE_EVENT", crate::shell::update::EVENT_UPDATE_AVAILABLE),
         ("RELIC_OVERLAY_UPDATE_EVENT", crate::overlay::EVENT_UPDATE),
         ("RELIC_OVERLAY_HIDE_EVENT", crate::overlay::EVENT_HIDE),
+        ("PRESENCE_CHANGED_EVENT", crate::services::presence::EVENT_PRESENCE_CHANGED),
     ] {
         expected.push_str(&format!("\nexport const {name} = {value:?} as const;\n"));
     }
@@ -46,6 +51,11 @@ fn desktop_bindings_match_rust() {
     expected.push_str(&format!(
         "\nexport const AUTO_SCAN_CADENCE_CHOICES = {:?} as const;\n",
         crate::services::auto_scan::CADENCE_CHOICES
+    ));
+    // warframe.market's "keep status for" choices, in minutes.
+    expected.push_str(&format!(
+        "\nexport const PRESENCE_KEEP_FOR_CHOICES = {:?} as const;\n",
+        crate::services::presence::KEEP_FOR_CHOICES
     ));
     // The colours set_app_icon accepts; the setting resolves its choice to one.
     expected.push_str(&format!(
