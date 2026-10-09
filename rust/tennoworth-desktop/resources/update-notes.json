@@ -1,5 +1,5 @@
 {
-  "version": "0.8.7",
+  "version": "0.8.100",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -863,6 +863,132 @@
           "body": "In narrow windows, project links and feedback move to the bottom of the page.",
           "platforms": [
             "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.100",
+      "date": "2026-10-09",
+      "changes": [
+        {
+          "id": "price-sharing-opt-in",
+          "kind": "improved",
+          "title": "Choose to share what your trades sold for",
+          "body": "Off unless you enable it in Settings or from a one-time invitation. Only the item, quantity, price and day of platinum trades are sent, never who you traded with, your inventory or your accounts, and an item's price is published once five installs report it in a week.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "price-sharing-erase",
+          "kind": "improved",
+          "title": "Delete what you shared",
+          "body": "Delete recent reports in Settings removes this install's reports from this week and last week; older weeks are already merged into totals that link to no install.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "riven-splice-options",
+          "kind": "improved",
+          "title": "See which spliced traits a riven can make",
+          "body": "Splice options follow DE's recipe table, and spliced traits are marked on your rivens and in listings.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "riven-comps-buyout",
+          "kind": "fixed",
+          "title": "Comparable rivens use real buyout prices",
+          "body": "Auctions with only a starting bid no longer show as 1p asks, and comparisons open on rolls that share your riven's positive stats.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "riven-trait-lock",
+          "kind": "improved",
+          "title": "Account for a locked trait",
+          "body": "The offer check has a trait is locked switch that doubles the reroll cost, as cycling with a lock does since Update 44.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "riven-popularity-score",
+          "kind": "fixed",
+          "title": "Riven popularity reads correctly",
+          "body": "DE's weekly figure is a 0-100 popularity score, not a sale count, and the offer check no longer hides most of it.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "riven-copy-data",
+          "kind": "improved",
+          "title": "Report rivens the app cannot fully read yet",
+          "body": "Each riven has Copy data, and a riven with data TennoWorth does not understand yet says so and asks for a report.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "list-on-wfm-label",
+          "kind": "fixed",
+          "title": "List on WFM says what it does",
+          "body": "The button no longer shows a batch count of 50 that was only ever the table's cap.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "app-icon-colour",
+          "kind": "improved",
+          "title": "Pick the app icon's colour",
+          "body": "Classic blue, ink, rag, or match your colour mode, for the window, taskbar and tray. Your desktop shortcut and the installer keep the classic icon.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "support-note",
+          "kind": "improved",
+          "title": "An occasional note about supporting TennoWorth",
+          "body": "After an update, and then at most once a year, a note you can dismiss links to Ko-fi. Every feature stays free.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "column-guide-webkitgtk",
+          "kind": "fixed",
+          "title": "The Column guide shows its entries again",
+          "body": "In the Linux app the guide opened as a bare title bar; its explanations now appear.",
+          "platforms": [
             "linux"
           ],
           "supersedes": []
