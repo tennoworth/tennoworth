@@ -5,6 +5,7 @@
   import Sparkline from '../../ui/Sparkline.svelte';
   import { hasSparkline } from '../../ui/sparkline';
   import { wfmItemUrl, ownedBreakdown, LEVELED_NOTE_TITLE, keptNoteTitle } from '../../ui/format';
+  import { shimmer } from '../../ui/shimmer';
 
   import type { ProtectionState } from '../../contracts/protection';
   import type { SellRow as Row } from '../../contracts/selling';
@@ -103,6 +104,9 @@
   // '/' focuses the name filter from anywhere (unless already typing) -
   // the filter box is the fastest path through a 400-row table.
   let filterInput: HTMLInputElement | undefined = $state();
+  let filterFocused = $state(false);
+  // One light pass marks where '/' moved the cursor; a click needs no pointer.
+  let filterPulse = $state(0);
   $effect(() => {
     const handler = (e: KeyboardEvent): void => {
       if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -110,6 +114,7 @@
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
       e.preventDefault();
       filterInput?.focus();
+      filterPulse += 1;
     };
     document.addEventListener('keydown', handler);
     return () => document.removeEventListener('keydown', handler);
@@ -586,15 +591,19 @@
   {/if}
   <div class="bar narrow-row">
     <label class="lbl" for="inventory-name-filter">Item</label>
-    <input
-      id="inventory-name-filter"
-      type="text"
-      class="name-filter"
-      placeholder="Filter by name… ( / )"
-      bind:value={filter}
-      bind:this={filterInput}
-      oninput={() => (page = 0)}
-    />
+    <span class="shimmer-field" use:shimmer={{ mode: filterFocused ? 'settled' : 'off', pulse: filterPulse }}>
+      <input
+        id="inventory-name-filter"
+        type="text"
+        class="name-filter"
+        placeholder="Filter by name… ( / )"
+        bind:value={filter}
+        bind:this={filterInput}
+        oninput={() => (page = 0)}
+        onfocus={() => (filterFocused = true)}
+        onblur={() => (filterFocused = false)}
+      />
+    </span>
     {@render narrow?.()}
     <div class="pill-filters">
       {#each PILL_DEFS as p (p.key)}
