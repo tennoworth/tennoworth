@@ -54,6 +54,46 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.100 - 2026-10-09
+
+# 🤝 TennoWorth Desktop 0.8.100
+
+TennoWorth Desktop 0.8.100 lets you help show what items really sell for, and reads Warframe's new riven system properly.
+
+You can now choose to share the prices of your platinum trades, so TennoWorth can publish what items actually sell for rather than what people ask. It is off unless you turn it on, sends no names or inventory, and can be undone. The Rivens view understands trait locking and splicing from Update 44, prices comparable rivens by their real buyouts, and shows DE's popularity data for what it is. You can also pick the colour of the app's icon.
+
+## Changelog (11)
+
+### Price sharing
+
+- **Choose to share what your trades sold for** Off unless you enable it in Settings or from a one-time invitation. Only the item, quantity, price and day of platinum trades are sent, never who you traded with, your inventory or your accounts, and an item's price is published once five installs report it in a week. <!-- app-note {"id":"price-sharing-opt-in","kind":"improved"} -->
+- **Delete what you shared** Delete recent reports in Settings removes this install's reports from this week and last week; older weeks are already merged into totals that link to no install. <!-- app-note {"id":"price-sharing-erase","kind":"improved"} -->
+
+### Rivens
+
+- **See which spliced traits a riven can make** Splice options follow DE's recipe table, and spliced traits are marked on your rivens and in listings. <!-- app-note {"id":"riven-splice-options","kind":"improved"} -->
+- **Comparable rivens use real buyout prices** Auctions with only a starting bid no longer show as 1p asks, and comparisons open on rolls that share your riven's positive stats. <!-- app-note {"id":"riven-comps-buyout","kind":"fixed"} -->
+- **Account for a locked trait** The offer check has a trait is locked switch that doubles the reroll cost, as cycling with a lock does since Update 44. <!-- app-note {"id":"riven-trait-lock","kind":"improved"} -->
+- **Riven popularity reads correctly** DE's weekly figure is a 0-100 popularity score, not a sale count, and the offer check no longer hides most of it. <!-- app-note {"id":"riven-popularity-score","kind":"fixed"} -->
+- **Report rivens the app cannot fully read yet** Each riven has Copy data, and a riven with data TennoWorth does not understand yet says so and asks for a report. <!-- app-note {"id":"riven-copy-data","kind":"improved"} -->
+
+### Selling
+
+- **List on WFM says what it does** The button no longer shows a batch count of 50 that was only ever the table's cap. <!-- app-note {"id":"list-on-wfm-label","kind":"fixed"} -->
+
+### This app
+
+- **Pick the app icon's colour** Classic blue, ink, rag, or match your colour mode, for the window, taskbar and tray. Your desktop shortcut and the installer keep the classic icon. <!-- app-note {"id":"app-icon-colour","kind":"improved"} -->
+- **An occasional note about supporting TennoWorth** After an update, and then at most once a year, a note you can dismiss links to Ko-fi. Every feature stays free. <!-- app-note {"id":"support-note","kind":"improved"} -->
+
+### Linux
+
+- **The Column guide shows its entries again** In the Linux app the guide opened as a bare title bar; its explanations now appear. <!-- app-note {"id":"column-guide-webkitgtk","kind":"fixed","platforms":["linux"]} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.8.7 - 2026-10-05
 
 # 🔍 TennoWorth Desktop 0.8.7
