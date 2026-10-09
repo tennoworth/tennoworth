@@ -54,6 +54,31 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.101 - 2026-10-09
+
+# 🟢 TennoWorth Desktop 0.8.101
+
+TennoWorth Desktop 0.8.101 is ready.
+
+Buyers on warframe.market look for sellers who are online or in game, so your status decides whether your listings are seen. You can now set it from TennoWorth, keep it for a while, or let the app follow the game: online in game while Warframe runs, and invisible when it closes. Updates can also be installed straight from Settings.
+
+## Changelog (5)
+
+### Trading
+
+- **Set your warframe.market status from the app** Choose Online, Online in game or Invisible from the status strip, Settings or the tray, and keep it while TennoWorth runs or for 30 minutes to 4 hours. <!-- app-note {"id":"wfm-status-set","kind":"improved"} -->
+- **Let your status follow the game** Off by default. When enabled, you show as online in game while Warframe runs and switch to Invisible (or Online, if you prefer) when it closes. A status changed on the website takes precedence until your next game session. <!-- app-note {"id":"wfm-status-follow-game","kind":"improved"} -->
+- **Go invisible when you quit** A status the app is keeping up is set to Invisible when you quit TennoWorth or sign out, so you are not left showing online. <!-- app-note {"id":"wfm-status-invisible-on-quit","kind":"improved"} -->
+
+### This app
+
+- **Install updates from Settings** After Check for updates finds a new version, the same button installs it and then offers Restart now. The banner and Settings share one install, so it cannot run twice. <!-- app-note {"id":"settings-install-update","kind":"improved"} -->
+- **Find the fields that start a task** The market lookup and the Sell name filter carry a quiet light sweep, and pressing / to jump to the filter briefly highlights it. Reduced-motion settings turn the motion off. <!-- app-note {"id":"field-shimmer","kind":"improved"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.8.100 - 2026-10-09
 
 # 🤝 TennoWorth Desktop 0.8.100
