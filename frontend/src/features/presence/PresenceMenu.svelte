@@ -16,6 +16,10 @@
   /** Horizontal nudge that keeps the menu inside the window wherever the strip wrapped the trigger. */
   let shift = $state(0);
   const keepChoices: (number | null)[] = [null, ...PRESENCE_KEEP_FOR_CHOICES];
+  // Every word the trigger can show, so its width never depends on which one
+  // is showing. A changing width rewrapped the status strip and moved the
+  // whole window by a row on every status change.
+  const sizers = [...PRESENCE_CHOICES.map((choice) => PRESENCE_LABEL[choice]), 'Refused', 'Unknown', 'Connecting…'];
 
   let status = $derived(presence.status);
   let usable = $derived(presenceUsable(status));
@@ -67,8 +71,8 @@
 
 {#if status}
   <div class="presence">
-    <button type="button" class="trigger" bind:this={trigger} aria-expanded={open} aria-controls="presence-menu" onclick={() => (open = !open)}>
-      <PresenceMark kind={presenceMark(status)} />{presenceWord(status)}{#if presence.pending}…{/if} ▾
+    <button type="button" class="trigger" bind:this={trigger} aria-busy={presence.pending !== null} aria-expanded={open} aria-controls="presence-menu" onclick={() => (open = !open)}>
+      <PresenceMark kind={presenceMark(status)} /><span class="word"><span class="current">{presenceWord(status)}</span>{#each sizers as sizer (sizer)}<span class="sizer" aria-hidden="true">{sizer}</span>{/each}</span> <span class="caret" aria-hidden="true">{presence.pending ? '…' : '▾'}</span>
     </button>
     {#if open}
       <div id="presence-menu" class="pop" role="dialog" aria-label="Your warframe.market status" bind:this={pop} style:translate="{shift}px 0">
@@ -114,11 +118,16 @@
 <style>
   .presence { position: relative; display: inline-flex; }
   .trigger {
-    display: inline-flex; align-items: center; gap: var(--s2); min-height: var(--ctl-xs); padding: 0 var(--s1);
+    display: inline-flex; align-items: center; gap: var(--s1); min-height: var(--ctl-xs); padding: 0;
     font: inherit; font-size: var(--text-caption); text-transform: uppercase; letter-spacing: 0.12em;
     color: var(--fg); background: transparent; border: 0; cursor: pointer; white-space: nowrap;
   }
   .trigger:hover { text-decoration: underline dotted; }
+  .word { display: inline-grid; justify-items: start; }
+  .word > * { grid-area: 1 / 1; }
+  .sizer { visibility: hidden; }
+  /* A pick waiting for warframe.market swaps the caret, so the width holds. */
+  .caret { display: inline-block; width: 1ch; text-align: center; }
   .pop {
     position: absolute; top: calc(100% + var(--s2) + 1px); right: 0; z-index: var(--layer-menu);
     display: flex; flex-direction: column; width: min(19rem, calc(100vw - 2rem)); padding: var(--s2) 0;

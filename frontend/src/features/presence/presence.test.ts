@@ -95,7 +95,7 @@ describe('presence text', () => {
 
   it('never shows a status it does not have', () => {
     expect(presenceWord({ ...BASE, status: null, connected: false })).toBe('Connecting…');
-    expect(presenceWord({ ...BASE, problem: 'not_verified' })).toBe('Status refused');
+    expect(presenceWord({ ...BASE, problem: 'not_verified' })).toBe('Refused');
     expect(presenceUsable({ ...BASE, problem: 'not_verified' })).toBe(false);
     expect(presenceUsable({ ...BASE, connected: false })).toBe(false);
     expect(presenceUsable(BASE)).toBe(true);

@@ -16,7 +16,8 @@ for (const theme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: theme });
     await page.goto('/?preview-desktop&sample');
     const trigger = page.locator('.statusbar .presence .trigger');
-    await expect(trigger).toHaveText(/Online in game/i);
+    const word = trigger.locator('.current');
+    await expect(word).toHaveText(/Online in game/i);
 
     await trigger.click();
     const menu = page.locator('#presence-menu');
@@ -26,12 +27,12 @@ for (const theme of ['light', 'dark'] as const) {
     await expect(menu.getByRole('button', { name: '1h' })).toBeDisabled();
 
     await menu.getByRole('radio', { name: /^Online Shown as online/ }).check();
-    await expect(trigger).toHaveText(/^Online ▾$/i);
+    await expect(word).toHaveText(/^Online$/i);
     await expect(menu).toContainText('following waits for your next game session');
     await expect(menu.getByRole('button', { name: '1h' })).toBeEnabled();
 
     await menu.getByRole('button', { name: 'Follow the game now' }).click();
-    await expect(trigger).toHaveText(/Online in game/i);
+    await expect(word).toHaveText(/Online in game/i);
 
     for (const width of [1440, 760, 320]) {
       await page.setViewportSize({ width, height: 600 });
@@ -45,10 +46,27 @@ for (const theme of ['light', 'dark'] as const) {
   });
 }
 
+// The window opens at 1200 px. A status word of a different length rewrapped
+// the strip there, and the whole window moved by a row on every change.
+test('changing status never changes the status strip’s height', async ({ page }) => {
+  await page.setViewportSize({ width: 1200, height: 800 });
+  await page.goto('/?preview-desktop&sample');
+  const strip = page.locator('.statusbar');
+  const trigger = strip.locator('.presence .trigger');
+  await trigger.click();
+  const heights = new Set<number>();
+  for (const choice of ['online', 'invisible', 'ingame']) {
+    await page.locator(`#presence-menu input[value="${choice}"]`).check();
+    await expect(trigger).toHaveAttribute('aria-busy', 'false');
+    heights.add(Math.round((await strip.boundingBox())!.height));
+  }
+  expect([...heights]).toHaveLength(1);
+});
+
 test('presence settings open at the account panel and keep a refused account readable', async ({ page }) => {
   await page.goto('/?preview-desktop&sample&presence=unverified');
   const trigger = page.locator('.statusbar .presence .trigger');
-  await expect(trigger).toHaveText(/Status refused/i);
+  await expect(trigger.locator('.current')).toHaveText(/Refused/i);
   await trigger.click();
   const menu = page.locator('#presence-menu');
   // A refused account cannot pick a status, and the menu says why.
@@ -60,7 +78,7 @@ test('presence settings open at the account panel and keep a refused account rea
   await expect(group).toBeVisible();
   await expect(group.locator('.ui-notice[data-tone="bad"]')).toContainText('not verified');
   await expect(group.getByRole('button', { name: 'Online', exact: true })).toBeDisabled();
-  await expect(page.locator('.glance')).toContainText('Status refused');
+  await expect(page.locator('.glance')).toContainText('Refused');
 });
 
 test('a locked session keeps the strip’s sign-in link instead of a status', async ({ page }) => {

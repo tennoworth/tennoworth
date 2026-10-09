@@ -30,9 +30,9 @@ const clock: Clock = (iso) => new Date(iso).toLocaleTimeString([], { hour: '2-di
 
 /** The status word, or what stands in for it before the server has answered. */
 export function presenceWord(status: PresenceStatus): string {
-  if (status.problem === 'not_verified') return 'Status refused';
+  if (status.problem === 'not_verified') return 'Refused';
   if (status.status) return PRESENCE_LABEL[status.status];
-  return status.connected ? 'Status unknown' : 'Connecting…';
+  return status.connected ? 'Unknown' : 'Connecting…';
 }
 
 /** One line on how the status is held, for the menu and Settings. */
