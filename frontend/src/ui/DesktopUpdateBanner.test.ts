@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import DesktopUpdateBanner from './DesktopUpdateBanner.svelte';
-import { DESKTOP_CONTEXT } from '../contracts/services';
+import { UpdateController } from './update-controller.svelte';
 import type { UpdateStatus } from '../contracts/update';
 
 const available: UpdateStatus = {
@@ -21,11 +21,15 @@ function mount(installUpdate: () => Promise<void>) {
     restartApp: vi.fn(async () => {}),
     onUpdateAvailable: vi.fn(() => () => {}),
   };
-  render(DesktopUpdateBanner, { context: new Map([[DESKTOP_CONTEXT, services]]) });
+  const updates = new UpdateController(services);
+  const stop = updates.start();
+  render(DesktopUpdateBanner, { props: { updates } });
+  stops.push(stop);
   return services;
 }
 
-afterEach(() => { cleanup(); vi.restoreAllMocks(); });
+const stops: Array<() => void> = [];
+afterEach(() => { stops.splice(0).forEach((stop) => stop()); cleanup(); vi.restoreAllMocks(); });
 
 describe('desktop update banner install failures', () => {
   it('turns a rejected signature into a one-time manual download, not a raw error', async () => {

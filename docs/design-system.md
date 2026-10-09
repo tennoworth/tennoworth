@@ -214,7 +214,10 @@ before the controls that change it. Troubleshooting detail and full privacy
 terms sit in disclosures, and diagnostics open with their warning in view when
 enabled. The inbox's settings link opens the page at Notifications. Category
 preferences are a table with Inbox and Popup columns, and each category's
-timing sits under its name.
+timing sits under its name. Settings → Updates and the update banner read one
+shared update state: a check from Settings offers Install update and then
+Restart now in that row, with install failures beside it, so nobody has to
+scroll back to the banner.
 `.ui-setting-row`, `.ui-setting-copy`, `.ui-setting-control`, and
 `.ui-setting-check` align labels, help text, and controls; they stack below
 760px without remounting the controls. `.ui-section-group` separates related

@@ -34,6 +34,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   import LedgerPanel from '../features/ledger/LedgerPanel.svelte';
   import MarketBrowser from '../features/market-context/MarketBrowser.svelte';
   import DesktopUpdateBanner from '../ui/DesktopUpdateBanner.svelte';
+  import { UpdateController } from '../ui/update-controller.svelte';
   import WfmAuthDialogs from '../features/settings/WfmAuthDialogs.svelte';
   import ExportImportDialogs from '../features/inventory/ExportImportDialogs.svelte';
   import SellPane from '../features/selling/SellPane.svelte';
@@ -72,6 +73,8 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   const transport = new TauriTransport();
   const marketAccess = new WfmAccessController({ desktopAccessStatus, listenForTauriEvent });
   onMount(() => marketAccess.start());
+  const updates = new UpdateController(notesServices);
+  onMount(() => updates.start());
 
   // Persistence seam: localStorage in the browser, SQLite-over-IPC in desktop.
   // Selected + primed (scalar settings loaded into cache) in main.ts and passed
@@ -270,14 +273,13 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   let promptsActive = $derived(hasInventory && !listing.listingOpen && effectiveView !== 'session');
   $effect(() => { if (hasInventory) untrack(() => prompts.launch()); });
   let showWorkspace = $derived(hasInventory || inventory.phase === 'done' || effectiveView !== 'sell');
-  let updateBanner: DesktopUpdateBanner;
 </script>
 
 <FeedbackDialog bind:this={feedbackRef} captureState={captureFeedbackState} services={notesServices} onclosed={() => { if (feedbackFromMore) statusStripRef?.focusMore(); feedbackFromMore = false; }} />
 
 <!-- Keep the banner region mounted while navigation or a scan changes the content. -->
 <div data-shell class={showWorkspace ? 'shell' : 'desktop-landing'}>
-  <StatusStrip bind:this={statusStripRef} inShell={showWorkspace} {inventory} {listing} {filters} {unresolvedCount} {unresolvedSummary} {inventoryFreshness} {inventoryStaleness} {inventoryTimestamp} {marketFreshness} {marketStaleness} {ordersToFix} {baroState} {unreadNotifications} {wfmLabel} {projectLinkAnchors} onexport={() => exportImportRef?.openExport()} onimport={() => exportImportRef?.pickImport()} onclear={() => workspace.clear()} onupdates={() => updateBanner.checkForUpdates()} onfeedback={() => { feedbackFromMore = true; openFeedback(); }} onauth={(code) => wfmAuthDialogsRef?.open(code)} />
+  <StatusStrip bind:this={statusStripRef} inShell={showWorkspace} {inventory} {listing} {filters} {unresolvedCount} {unresolvedSummary} {inventoryFreshness} {inventoryStaleness} {inventoryTimestamp} {marketFreshness} {marketStaleness} {ordersToFix} {baroState} {unreadNotifications} {wfmLabel} {projectLinkAnchors} onexport={() => exportImportRef?.openExport()} onimport={() => exportImportRef?.pickImport()} onclear={() => workspace.clear()} onupdates={() => updates.check({ announce: true })} onfeedback={() => { feedbackFromMore = true; openFeedback(); }} onauth={(code) => wfmAuthDialogsRef?.open(code)} />
   {#if showWorkspace}
   <aside data-shell class="sidebar">
     <nav data-shell>
@@ -466,7 +468,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
       <Faq desktop />
 
     {:else if effectiveView === 'settings'}
-      <SettingsPanel onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} {autoScan} {appIcon} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} section={settingsSection} onsectionshown={() => (settingsSection = null)} />
+      <SettingsPanel {updates} onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} {autoScan} {appIcon} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} section={settingsSection} onsectionshown={() => (settingsSection = null)} />
     {/if}
 
     {/if}
@@ -536,7 +538,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
       </details>
       <div data-shell class="ui-toolbar">
         <button data-shell class="btn primary" onclick={() => inventory.pullInventory()} disabled={inventory.pullingInventory}>{inventory.pullingInventory ? 'Scanning game…' : 'Retry scan'}</button>
-        <button data-shell class="btn" onclick={() => updateBanner.checkForUpdates()}>Check for updates</button>
+        <button data-shell class="btn" onclick={() => updates.check({ announce: true })}>Check for updates</button>
         <button data-shell class="btn" onclick={() => filters.setView('settings')}>Settings</button>
         <button data-shell class="btn" onclick={openFeedback}>Report a bug</button>
         <button data-shell class="btn ghost" onclick={() => { inventory.error = null; inventory.pullError = null; }}>Dismiss scan error</button>
@@ -569,7 +571,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   <!-- Kept out of first run and of trading, where it would compete with the task. -->
   <PriceSharingPrompt {transport} session={prompts} active={promptsActive && effectiveView !== 'settings'} onsettings={() => { settingsSection = 'price-sharing'; filters.setView('settings'); }} />
   <SupportPrompt session={prompts} active={promptsActive} />
-    <DesktopUpdateBanner bind:this={updateBanner} />
+    <DesktopUpdateBanner {updates} />
   
 {/snippet}
 
