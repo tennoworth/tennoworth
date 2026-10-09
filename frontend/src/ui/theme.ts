@@ -60,7 +60,15 @@ export function initTheme(store: SettingsStore) {
   let pref = readThemePref(store);
   const mq = typeof matchMedia === 'function' ? matchMedia(DARK_MQ) : null;
 
-  const paint = () => applyTheme(resolveMode(pref));
+  let mode = resolveMode(pref);
+  const listeners = new Set<(mode: Mode) => void>();
+  const paint = () => {
+    const next = resolveMode(pref);
+    applyTheme(next);
+    if (next === mode) return;
+    mode = next;
+    listeners.forEach((fn) => fn(next));
+  };
   const onSystemChange = () => {
     if (pref === 'system') paint();
   };
@@ -71,12 +79,22 @@ export function initTheme(store: SettingsStore) {
     get modePref() {
       return pref;
     },
+    /** The resolved mode: what 'system' currently means, or the pinned one. */
+    get mode() {
+      return mode;
+    },
+    /** Called with the resolved mode whenever it changes. Returns the unsubscribe. */
+    subscribe(fn: (mode: Mode) => void): () => void {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
     setModePref(next: ModePref) {
       pref = next;
       paint();
       void store.setSetting('theme.mode', next);
     },
     destroy() {
+      listeners.clear();
       mq?.removeEventListener('change', onSystemChange);
     },
   };

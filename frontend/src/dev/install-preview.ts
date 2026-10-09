@@ -6,6 +6,7 @@ import type { UpdateStatus } from '../contracts/update';
 import { sampleAllocation, sampleGuidance } from './protection-preview';
 import type { ProtectionInventory, ProtectionPlan } from '../contracts/protection';
 import type { OwnedRecord } from '../contracts/data';
+import { APP_ICON_COLOURS } from '../contracts/desktop';
 export async function installPreview() {
   const scenario = new URLSearchParams(location.search).get('sample');
   // Loaded once; a missing build rejects each calculation with how to build
@@ -98,6 +99,11 @@ export async function installPreview() {
     });
     if (cmd === 'install_update' && scenario === 'update-signature') {
       return Promise.reject('Signature verification failed: the update was not signed by a trusted key.');
+    }
+    if (cmd === 'set_app_icon') {
+      return APP_ICON_COLOURS.includes(args?.colour as never)
+        ? Promise.resolve({ windowIcon: true })
+        : Promise.reject({ code: 'invalid', message: `Unknown app icon colour: ${String(args?.colour)}` });
     }
     if (cmd === 'test_notification') return Promise.resolve('Test sent (preview).');
     if (cmd === 'update_overlay_settings') return Promise.resolve(args?.settings ?? null);

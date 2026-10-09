@@ -1,7 +1,7 @@
 import { DesktopCmdError } from '../contracts/errors';
 import type { PingResponse, PlanItemInput, OrderPatch, PendingPlan, PlanResponse, ItemResult, Market, OverlaySettings, OverlayStatus } from '../contracts/data';
 import { isHistory, type History } from '../domain/history';
-import type { MarketRefreshResult, DesktopCapabilities, DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, RivenStatFilter, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences, AutoScanSettings, AutoScanStatus } from '../contracts/desktop';
+import type { MarketRefreshResult, DesktopCapabilities, DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, RivenStatFilter, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences, AutoScanSettings, AutoScanStatus, AppIconColour, AppIconOutcome } from '../contracts/desktop';
 import { resolveInvoke, rethrowInvoke } from './runtime';
 
 /**
@@ -65,6 +65,10 @@ export class TauriTransport implements DesktopCapabilities {
 
   async setAutoScanHold(hold: boolean): Promise<void> {
     await resolveInvoke()<void>('set_auto_scan_hold', { hold });
+  }
+
+  async setAppIcon(colour: AppIconColour): Promise<AppIconOutcome> {
+    return await resolveInvoke()<AppIconOutcome>('set_app_icon', { colour });
   }
 
   async setupOverlayCapture(): Promise<OverlayStatus> {

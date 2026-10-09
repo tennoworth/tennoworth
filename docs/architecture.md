@@ -293,7 +293,8 @@ TENNOWORTH_UPDATE_BINDINGS=1 cargo test -p tennoworth-desktop desktop_bindings_m
 ```
 
 The desktop binding pilot covers command errors, WFM access status, watch
-notification payloads, automatic-scan settings, account orders and event names. Existing commands outside that pilot keep
+notification payloads, automatic-scan settings, account orders, the app icon
+colours and outcome, and event names. Existing commands outside that pilot keep
 their current adapters; all newly migrated calculations use the generated
 request/response registry. Generation preserves serialized optionality and field
 names; it does not replace input validation. IPC uses JSON numbers, so large

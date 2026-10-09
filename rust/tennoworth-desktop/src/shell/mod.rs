@@ -1,3 +1,4 @@
+pub(crate) mod app_icon;
 pub(crate) mod probe;
 mod startup;
 pub(crate) mod tray;

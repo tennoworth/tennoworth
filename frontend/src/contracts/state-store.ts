@@ -28,7 +28,10 @@ export type SettingKey =
    *  sanctioned raw read) - keep the key name below in step with it.
    *  (`theme.look` retired 2026-08 with the four-look picker: yorha is the
    *  only look. Old `wfminv:theme-look-v1` values are simply never read.) */
-  | 'theme.mode';
+  | 'theme.mode'
+  /** Desktop: the App icon choice, 'blue' | 'match' | 'ink' | 'rag'. Native
+   *  keeps the resolved colour it applied in its own `app-icon.applied` row. */
+  | 'app-icon';
 
 
 /** The scalar settings every build persists. */

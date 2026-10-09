@@ -12,6 +12,8 @@ import { AUTO_SCAN_CADENCE_CHOICES, type AutoScanSettings, type AutoScanStatus }
 import { AutoScanController } from '../inventory/auto-scan.svelte';
 import type { OverlaySettings } from '../../contracts/data';
 import { installTauri, removeTauri } from '../../dev/test-utils';
+import { AppIconController } from './app-icon.svelte';
+import { LocalStorageStateStore, LOCAL_SETTING_KEYS } from '../../adapters/state-store';
 
 vi.mock('../../adapters/desktop', async (importOriginal) => ({
   ...await importOriginal<typeof import('../../adapters/desktop')>(),
@@ -360,5 +362,53 @@ describe('SettingsPanel automatic scanning', () => {
     expect(scan.textContent).toContain('Waiting for Warframe');
     expect(strip.getByRole('link', { name: /warframe.market/ }).textContent).toContain('Signed in · session locked');
     expect(document.getElementById('settings-scan')).toBe(screen.getByRole('region', { name: 'Automatic scan' }));
+  });
+});
+
+describe('App icon setting', () => {
+  function appIconFor(mode: 'light' | 'dark', windowIcon = true) {
+    localStorage.clear();
+    const setAppIcon = vi.fn(async (_colour: string) => ({ windowIcon }));
+    const appIcon = new AppIconController({
+      store: new LocalStorageStateStore(),
+      theme: { mode, subscribe: () => () => {} },
+      native: { setAppIcon },
+    });
+    return { appIcon, setAppIcon };
+  }
+  const group = () => within(screen.getByRole('radiogroup', { name: 'App icon' }));
+
+  it('offers the four colours under Colour mode, classic blue chosen by default', () => {
+    const { appIcon } = appIconFor('light');
+    render(SettingsPanel, { props: { theme: fakeTheme().theme, appIcon } });
+    const names = group().getAllByRole('radio').map((radio) => radio.closest('label')?.querySelector('.name')?.textContent);
+    expect(names).toEqual(['Classic blue', 'Match colour mode', 'Ink', 'Rag']);
+    expect((group().getByRole('radio', { name: /^Classic blue/ }) as HTMLInputElement).checked).toBe(true);
+    expect(group().getByRole('radio', { name: /^Rag/ }).closest('label')?.textContent).toContain('Hard to see on light taskbars.');
+    expect(screen.getByText(/Your desktop shortcut and the installer keep the classic icon/)).toBeTruthy();
+  });
+
+  it('applies the resolved colour when a card is chosen', async () => {
+    const { appIcon, setAppIcon } = appIconFor('dark');
+    render(SettingsPanel, { props: { theme: fakeTheme().theme, appIcon } });
+    await fireEvent.click(group().getByRole('radio', { name: /^Match colour mode/ }));
+    await waitFor(() => expect(setAppIcon).toHaveBeenLastCalledWith('rag'));
+    expect((group().getByRole('radio', { name: /^Match colour mode/ }) as HTMLInputElement).checked).toBe(true);
+    expect(localStorage.getItem(LOCAL_SETTING_KEYS['app-icon'])).toBe('match');
+  });
+
+  it('says when this session cannot show a window icon, and reports failures', async () => {
+    const { appIcon, setAppIcon } = appIconFor('light', false);
+    render(SettingsPanel, { props: { theme: fakeTheme().theme, appIcon } });
+    await fireEvent.click(group().getByRole('radio', { name: /^Ink/ }));
+    await waitFor(() => expect(screen.getByText(/only the tray follows this setting/)).toBeTruthy());
+    setAppIcon.mockRejectedValueOnce(new Error('no tray'));
+    await fireEvent.click(group().getByRole('radio', { name: /^Rag/ }));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain('no tray'));
+  });
+
+  it('is absent where no controller is given (not a desktop build)', () => {
+    render(SettingsPanel, { props: { theme: fakeTheme().theme } });
+    expect(screen.queryByRole('radiogroup', { name: 'App icon' })).toBeNull();
   });
 });

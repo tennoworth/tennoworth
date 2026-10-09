@@ -84,6 +84,23 @@ describe('initTheme', () => {
     t.destroy();
   });
 
+  it('tells subscribers when the resolved mode changes, and only then', () => {
+    const mq = stubMatchMedia(false);
+    const t = initTheme(new LocalStorageStateStore());
+    const seen: string[] = [];
+    const stop = t.subscribe((mode) => seen.push(mode));
+    expect(t.mode).toBe('light');
+    mq.flip(true);
+    t.setModePref('dark');
+    t.setModePref('light');
+    mq.flip(false);
+    stop();
+    t.setModePref('dark');
+    expect(seen).toEqual(['dark', 'light']);
+    expect(t.mode).toBe('dark');
+    t.destroy();
+  });
+
   it('the boot script stamps the same look and reads the same key', () => {
     expect(bootScript).toContain(`'${LOOK}'`);
     expect(bootScript).toContain(LOCAL_SETTING_KEYS['theme.mode']);

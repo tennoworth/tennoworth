@@ -90,6 +90,7 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
         .manage(crate::shell::update::UpdateState::default())
         .manage(Arc::new(WfmSession::new()))
         .invoke_handler(tauri::generate_handler![
+            crate::shell::app_icon::set_app_icon,
             crate::shell::update_notes::update_notes,
             crate::shell::update_notes::acknowledge_update_notes,
             crate::shell::update_notes::update_notes_can_present,
@@ -276,10 +277,11 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
                 .title("TennoWorth")
                 .inner_size(1200.0, 800.0);
             // Without an explicit icon the window (and its taskbar/switcher
-            // entry) falls back to a generic WM avatar - tray.rs already
-            // pulls the same compiled-in icon via default_window_icon().
-            if let Some(icon) = app.default_window_icon() {
-                b = b.icon(icon.clone())?;
+            // entry) falls back to a generic WM avatar. The App icon setting's
+            // last applied colour, so the window opens in it.
+            let icon_colour = crate::shell::app_icon::stored(&app.state::<Db>());
+            if let Some(icon) = icon_colour.window_image(app.handle()) {
+                b = b.icon(icon)?;
             }
             if probe {
                 b = b.initialization_script(crate::shell::probe::build_probe_script(&runtag));
@@ -291,6 +293,9 @@ pub(crate) fn run(publish_access_changes: fn(tauri::AppHandle)) {
                 b = b.additional_browser_args("--disable-gpu --no-first-run --disable-extensions");
             }
             let w = b.build()?;
+            // The builder's icon is the small one; Windows' taskbar needs the big one too.
+            #[cfg(windows)]
+            crate::shell::app_icon::apply_to_window(&w, icon_colour, app.handle());
             overlay::prewarm_overlay_window(&app.handle().clone());
 
             // Desktop window lifecycle: closing the window HIDES it to the tray
