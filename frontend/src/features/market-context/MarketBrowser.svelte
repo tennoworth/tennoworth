@@ -46,8 +46,9 @@
   let query = $state('');
   let searchInput: HTMLInputElement | undefined = $state();
   let searchFocused = $state(false);
-  // Shimmers while it waits for a query; once results show, only its edges stay lit.
-  let searchShimmer = $derived<ShimmerMode>(!searchFocused ? 'off' : query.trim() ? 'settled' : 'live');
+  // Quietly shimmers at rest; in full while focused and waiting for a query, and
+  // quiet again once results show so the eye moves to the table.
+  let searchShimmer = $derived<ShimmerMode>(searchFocused && !query.trim() ? 'live' : 'idle');
 
   // '/' focuses the search from anywhere on the landing (unless already typing).
   $effect(() => {

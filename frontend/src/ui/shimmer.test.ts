@@ -6,7 +6,13 @@ describe('resolveFrame', () => {
     expect(resolveFrame('off', 3, 100, false)).toEqual({ kind: 'off' });
   });
 
+  it('keeps a quiet sweep at rest', () => {
+    expect(resolveFrame('idle', 3, null, false)).toEqual({ kind: 'idle', center: sweepCenter(3) });
+    expect(resolveFrame('idle', 3, PULSE_MS / 2, false).kind).toBe('pulse');
+  });
+
   it('reduces every moving state to lit edges under reduced motion', () => {
+    expect(resolveFrame('idle', 3, null, true)).toEqual({ kind: 'settled' });
     expect(resolveFrame('live', 3, null, true)).toEqual({ kind: 'settled' });
     expect(resolveFrame('settled', 3, 100, true)).toEqual({ kind: 'settled' });
   });

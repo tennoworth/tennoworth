@@ -1,6 +1,6 @@
-// Field shimmer: a moving light and lit edge rules drawn over a text field to
-// show that it is waiting for input or has just received focus from a
-// shortcut. It is a state signal, never ambient decoration; see
+// Field shimmer: a moving light and lit edge rules drawn over a text field.
+// A quiet idle sweep marks the field as the place to start; focus brings the
+// full effect, and a shortcut that moves focus runs one pass. See
 // docs/design-system.md, "Field shimmer".
 //
 // The geometry and timing follow the YoRHa input shader: a wide light that
@@ -8,7 +8,8 @@
 // that also brightens the edge rules, 4px scanlines, and sparse twinkling
 // sparks on a drifting 96x28px tile grid.
 
-export type ShimmerMode = 'off' | 'live' | 'settled';
+/** idle: a quiet sweep at rest. live: the full effect. settled: lit edges only. */
+export type ShimmerMode = 'off' | 'idle' | 'live' | 'settled';
 
 export interface ShimmerParams {
   mode: ShimmerMode;
@@ -21,6 +22,7 @@ export interface ShimmerParams {
 export type ShimmerFrame =
   | { kind: 'off' }
   | { kind: 'settled' }
+  | { kind: 'idle'; center: number }
   | { kind: 'live'; center: number }
   | { kind: 'pulse'; center: number };
 
@@ -48,7 +50,8 @@ export function resolveFrame(
   if (pulseAgeMs !== null && pulseAgeMs >= 0 && pulseAgeMs < PULSE_MS) {
     return { kind: 'pulse', center: pulseCenter(pulseAgeMs) };
   }
-  return mode === 'live' ? { kind: 'live', center: sweepCenter(seconds) } : { kind: 'settled' };
+  if (mode === 'settled') return { kind: 'settled' };
+  return { kind: mode, center: sweepCenter(seconds) };
 }
 
 export const wave = (x: number, center: number): number => Math.exp(-(((x - center) / 0.25) ** 2));
@@ -146,9 +149,12 @@ function draw(inst: Instance, now: number): ShimmerFrame {
   const glint = toRgb(ctx, style.getPropertyValue('--ink-bar'));
   const center = frame.kind === 'settled' ? null : frame.center;
 
+  // Idle keeps the same motion at roughly half strength, so a field at rest stays quiet.
+  const quiet = frame.kind === 'idle' ? 0.5 : 1;
+
   if (center !== null) {
-    let waveAmt = dark ? 0.16 : 0.07;
-    let sheenAmt = dark ? 0.12 : 0.06;
+    let waveAmt = (dark ? 0.16 : 0.07) * quiet;
+    let sheenAmt = (dark ? 0.12 : 0.06) * quiet;
     if (frame.kind === 'pulse') { waveAmt *= 0.6; sheenAmt *= 1.6; }
     const g = ctx.createLinearGradient(0, 0, w, 0);
     for (let i = 0; i <= 32; i++) {
@@ -157,7 +163,7 @@ function draw(inst: Instance, now: number): ShimmerFrame {
     }
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = rgba(glint, 0.025);
+    ctx.fillStyle = rgba(glint, 0.025 * quiet);
     for (let y = 1; y < h; y += 4) ctx.fillRect(0, y, w, 1);
   }
 
@@ -185,8 +191,8 @@ function draw(inst: Instance, now: number): ShimmerFrame {
   }
 
   // Edge rules stay lit in every visible state and brighten under the sheen.
-  const base = dark ? 0.45 : 0.35;
-  const boost = dark ? 0.55 : 0.4;
+  const base = (dark ? 0.45 : 0.35) * (frame.kind === 'idle' ? 0.6 : 1);
+  const boost = (dark ? 0.55 : 0.4) * quiet;
   const e = ctx.createLinearGradient(0, 0, w, 0);
   for (let i = 0; i <= 32; i++) {
     const x = i / 32;
@@ -205,7 +211,7 @@ function loop(now: number): void {
   for (const inst of instances) {
     if (!inst.visible) continue;
     const k = draw(inst, now).kind;
-    if (k === 'live' || k === 'pulse') animating = true;
+    if (k === 'idle' || k === 'live' || k === 'pulse') animating = true;
   }
   if (animating) raf = requestAnimationFrame(loop);
 }

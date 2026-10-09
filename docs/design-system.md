@@ -348,22 +348,25 @@ repository's shared parity-fixture approach rather than copying constants.
 `use:shimmer` in [shimmer.ts](../frontend/src/ui/shimmer.ts) draws a moving
 light, 4px scanlines and lit edge rules in `--ink-bar` over a `.shimmer-field`
 wrapper, adapted from the YoRHa terminal input shader. It is an exception to
-the rule against glows and decorative gradients, allowed because it shows
-state, not to decorate:
+the rule against glows and decorative gradients, scoped to the two fields that
+start a task, and it shows their state:
 
-- **Market lookup** (hosted site and desktop): live while focused and empty,
-  with sparks in `--fg` in the dark theme only; once a query shows results only
-  the edge rules stay lit.
-- **Sell name filter**: one light pass when <kbd>/</kbd> moves focus there, so
-  the jump is visible on a long table; lit edges while focused. A click gives no
-  pass, and the filter never shows sparks.
+- **Market lookup** (hosted site and desktop): a quiet idle sweep at rest marks
+  where to start. While focused and empty it runs in full, with sparks in `--fg`
+  in the dark theme only; once a query shows results it returns to the quiet
+  sweep so the eye moves to the table.
+- **Sell name filter**: the quiet sweep at rest, one light pass when
+  <kbd>/</kbd> moves focus there so the jump is visible on a long table, and the
+  full sweep while focused. A click gives no pass, and the filter never shows
+  sparks.
 
-It is never ambient, never on more than one field per screen, and never on
-secrets, prices, quantities or writing fields. Reduced motion shows only the
-lit edges. The canvas ignores the pointer, is hidden from assistive technology
-and never replaces the focus outline; the animation stops when no field is
-moving, the window is hidden or the field is off screen. Select Field shimmer
-in the living styleguide's Data state control.
+The idle sweep runs at about half strength with dimmer edges, so the field
+reads as calm beside data. Never add it to a second field on the same screen,
+or to secrets, prices, quantities or writing fields. Reduced motion shows only
+the lit edges. The canvas ignores the pointer, is hidden from assistive
+technology and never replaces the focus outline; the animation stops when the
+window is hidden or the field is off screen. Select Field shimmer in the living
+styleguide's Data state control.
 
 For any additional exception, document the surface, the rule being varied, why
 the shared pattern is unsuitable, and the verification performed. Broad visual

@@ -591,7 +591,7 @@
   {/if}
   <div class="bar narrow-row">
     <label class="lbl" for="inventory-name-filter">Item</label>
-    <span class="shimmer-field" use:shimmer={{ mode: filterFocused ? 'settled' : 'off', pulse: filterPulse }}>
+    <span class="shimmer-field" use:shimmer={{ mode: filterFocused ? 'live' : 'idle', pulse: filterPulse }}>
       <input
         id="inventory-name-filter"
         type="text"
