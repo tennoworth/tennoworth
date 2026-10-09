@@ -50,7 +50,7 @@
         Our production box scrapes <a data-shell href="https://warframe.market">warframe.market</a>
         every 2 hours and serves the resulting <code data-shell>market.json</code>
         directly. The dot next to “Market data” is green if the snapshot is
-        under 6 h old, amber under 24 h, red after.
+        under 3 h old, amber under 24 h, red after.
       </p>
     </details>
 
@@ -59,10 +59,12 @@
       <p data-shell>
         Listing is a <strong data-shell>desktop app</strong> feature. Install the desktop
         app (Windows + Linux), scan your account, and use <strong data-shell>List on
-        WFM</strong> from the Sell view. The first time, the app asks you to
-        log in to warframe.market once - the sign-in token is encrypted behind
-        a passphrase you choose, and it never leaves your machine. After that,
-        listing and your orders work for the rest of the session.
+        WFM</strong> from the Sell view. The first time, you sign in on
+        warframe.market's own page in a separate window, so TennoWorth never
+        sees your password. The resulting sign-in token is encrypted behind a
+        passphrase you choose and never leaves your machine; the app can
+        remember the unlock in your OS keyring so later launches don't ask
+        again.
       </p>
       <p data-shell>
         This informational site can't list: it has no account, no token, and no
@@ -77,14 +79,18 @@
         <strong data-shell>hidden</strong> so you can review first - flip them visible
         in My orders or on WFM). When a buyer wants it, they message
         you <strong data-shell>in-game</strong>: <code data-shell>/w YourName Hi! I want to buy your
-        Serration…</code>. Invite them to your squad, go to any dojo or relay,
-        open a trade, and put in the item while they put in the platinum.
+        Serration…</code>. Invite them to your squad, meet at your clan dojo's
+        Trading Post or Maroo's Bazaar, open a trade, and put in the item while
+        they put in the platinum.
       </p>
       <p data-shell>
-        Two gotchas: you must be <strong data-shell>in-game</strong> to trade (WFM marks
-        you online automatically while the site is open), and trading requires
-        a clan dojo or Maroo's Bazaar. Mark the listing sold on WFM afterwards
-        - or just delete it from the <strong data-shell>My orders</strong> tab here.
+        Buyers look for sellers shown as <strong data-shell>Online in game</strong>.
+        Set your warframe.market status from the status strip, the tray or
+        Settings, or let it follow the game: online in game while Warframe
+        runs, invisible when it closes. After a sale, the
+        <strong data-shell>Ledger</strong> can lower or remove the matching
+        listing for you if you turn that on; otherwise remove it from
+        <strong data-shell>My orders</strong> or mark it sold on WFM.
       </p>
     </details>
 
@@ -179,12 +185,14 @@
         Every request identifies itself as TennoWorth (name, version, and a
         contact link in the <code data-shell>User-Agent</code> - warframe.market's API
         rules require it, and we follow them). Traffic is polite by
-        construction: live price checks run at most ~3 requests per second in
-        short bursts of up to 100 items, price watches re-check every 10
-        minutes, and riven comps are capped at warframe.market's 10 searches
-        per minute. <strong data-shell>Order writes only ever happen when you click</strong>
+        construction: at most two requests start per second with no more than
+        two in flight, price watches re-check every 10 minutes, and riven
+        comps stay under warframe.market's 10 searches per minute.
+        <strong data-shell>Prices and new listings only ever change when you click</strong>
         - the app never auto-bids, never auto-undercuts, and never reprices
-        without you. The bots that instantly match every bid on
+        without you. The two automatic actions are both off until you enable
+        them: lowering a listing's quantity after a sale the Ledger confirmed,
+        and keeping your warframe.market status in step with the game. The bots that instantly match every bid on
         warframe.market are exactly what this app refuses to be.
       </p>
     </details>
@@ -192,8 +200,9 @@
     <details data-shell>
       <summary data-shell>What never leaves your machine</summary>
       <p data-shell>
-        The web app has no backend and no accounts - every item, price join, and
-        ranking is computed in your browser tab. If you log in to
+        There are no TennoWorth accounts and no inventory upload: the site only
+        downloads the public market snapshot, and the desktop app computes every
+        item, price join, and ranking on your machine. If you log in to
         warframe.market to post listings, that login token is
         <strong data-shell>encrypted on disk</strong> (AES-256-GCM) at
         <code data-shell>~/.config/wfminv/</code> (or the Windows equivalent), and the
@@ -213,11 +222,11 @@
       <summary data-shell>How you can verify all this yourself</summary>
       <p data-shell>
         Everything is open source - read the desktop app's memory-scan code and
-        the web app's join logic. The desktop releases are
-        <strong data-shell>reproducibly built in public CI</strong>: you can audit the
+        the code that ranks your items. The desktop releases are
+        <strong data-shell>built in public CI</strong>: you can audit the
         workflow file, the source at the tagged commit, and the build logs, and
-        every release ships checksums so you can confirm
-        your download matches. The site
+        every release ships checksums so you can confirm your download matches.
+        That makes the builds auditable, not bit-for-bit reproducible. The site
         loads <strong data-shell>zero third-party scripts</strong> - inspect the page's
         Content-Security-Policy. Full detail lives in
         <a data-shell href="https://github.com/tennoworth/tennoworth/blob/main/SECURITY.md" target="_blank" rel="noopener noreferrer">SECURITY.md</a>.

@@ -46,7 +46,8 @@ set-completion plays, relic expected value, Riven context, and listing health.
   compares intact sale value, and shows the value added by each refinement.
 - **Rivens:** shows scanned stats, rank, rerolls, current disposition and its
   movement, DE's weekly price band, the splices each riven qualifies for, live
-  buyout comparables for rolls with the same positive stats, and offer math.
+  buyout comparables for rolls with the same positive stats, and offer math
+  that accounts for a locked trait.
 - **Market timing:** combines Prime release/vault/Resurgence history, annual
   usage changes, current events, Baro's schedule and inventory, and trader
   rotations. Advice remains advice; TennoWorth does not trade automatically.
@@ -66,8 +67,11 @@ set-completion plays, relic expected value, Riven context, and listing health.
   the current top of book; supports repricing, visibility changes, and removal.
 - Watches target prices in the background and sends desktop notifications. A
   live order stream supplies the fast path, with a periodic check as fallback.
-- Reads confirmed trades from `EE.log` into a local platinum ledger and can
-  shrink or close the matching listing after a sale.
+- Reads confirmed trades from `EE.log` into a local platinum ledger and, when
+  enabled, shrinks or closes the matching listing after a sale.
+- Sets your warframe.market status (Online, Online in game, or Invisible) from
+  the status strip, Settings, or the tray, and can keep it for a while or let
+  it follow the game. The app goes invisible when you quit or sign out.
 - Keeps a persistent notification inbox for completed trades, price watches,
   Baro reminders, relevant events, and daily sell opportunities, with category
   controls and optional desktop popups.
@@ -100,6 +104,10 @@ sha256sum -c TennoWorth-x86_64.AppImage.sha256
 chmod +x TennoWorth-x86_64.AppImage
 ./TennoWorth-x86_64.AppImage
 ```
+
+Both builds update themselves. The app checks at launch and every 30 minutes
+while it is open, and **Settings → Check for updates** installs a new version
+on demand.
 
 Linux kernels commonly restrict reading another process even when both belong
 to the same user. If the app reports a ptrace permission error, it will include
@@ -167,8 +175,11 @@ DE public data  ── drop tables + world state ►      └── optional WFM
                          └──► static market snapshot ──► tennoworth.app
 ```
 
-- TennoWorth has no user-account backend, telemetry collector, or inventory
-  upload service. The hosted site is static and never receives inventory.
+- TennoWorth has no user-account backend or inventory upload service. The
+  hosted site is static and never receives inventory. The only collectors are
+  two desktop opt-ins, both off by default: a daily
+  [installation count](docs/usage-counting.md) and anonymous
+  [price reports](docs/price-reports.md) of your platinum trades.
 - The desktop scan extracts the session values needed to request inventory
   from Digital Extremes. The resulting inventory, snapshots, settings, watches,
   ledger, protected selling plan, notification history, and pending listing
@@ -208,10 +219,11 @@ The Rust workspace contains these crates:
 | `wfm-core` | Inventory scan/fetch, encrypted WFM session, listings, orders, and recoverable batch plans. |
 | `market-math` | Dependency-free market arithmetic. |
 | `market-domain` | Native inventory normalization, sell facts, trade/advisor decisions and planners, with generated IPC contracts. |
+| `market-domain-wasm` | `market-domain` compiled to WebAssembly so the browser desktop preview runs the native planners. |
 | `wfm-client` | Shared warframe.market transport primitives and request policy. |
 | `wfm-scrape` | Host pipeline that scrapes market data and builds `market.json` plus `wfstat-catalog.json`. |
 | `tennoworth-usage` | Opt-in installation-count service that runs on the host. |
-| `tennoworth-reports` | Opt-in anonymous price-report service that runs on the host ([price reports](docs/price-reports.md)). |
+| `tennoworth-reports` | Opt-in anonymous price-report service that runs on the host. |
 
 ## Contributing
 
@@ -227,8 +239,8 @@ and its development-only `?styleguide` reference.
 
 `develop` is the integration branch. `main` is production and deploys the web
 app; production promotion is fast-forward only. Desktop releases are built
-from `main` and tagged `desktop-v<version>`. The site, usage collector and
-signed policy use rolling release tags and are not desktop versions; the
+from `main` and tagged `desktop-v<version>`. The site, usage collector, price-report
+service and signed policy use rolling release tags and are not desktop versions; the
 host-only scrape pipeline is deployed directly from a reviewed revision.
 
 See [`CHANGELOG.md`](CHANGELOG.md) for desktop release history and

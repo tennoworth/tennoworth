@@ -13,7 +13,8 @@ frontend/
     main.ts                  runtime selection and dynamic entry loading
     shells/                  desktop and hosted composition; shared shell CSS
     features/                inventory, selling, orders, relics, rivens,
-                             market-context, watches, ledger, settings
+                             market-context, watches, ledger, presence,
+                             routines, community, settings
     domain/                  deterministic calculations and resolution
     contracts/               wire shapes, capabilities, errors, state interfaces
     adapters/                Tauri IPC, same-origin loading, persistence
@@ -25,7 +26,8 @@ rust/
   tennoworth-desktop/src/
     shell/                   startup, tray, updates, probes
     commands/                IPC entry points and input validation
-    services/                inventory state, automatic scan, watches, trades, notifications
+    services/                inventory state, automatic scan, watches, trades,
+                             notifications, WFM status, usage and price reports
     persistence/             schema, record types, table operations, key storage
     game_events.rs           EE.log lines published to whoever subscribes
     vision/
