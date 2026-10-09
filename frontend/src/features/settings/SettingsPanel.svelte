@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { useDesktopServices } from '../../ui/desktop-context';
-  const { checkUpdate } = useDesktopServices();
   import UsageSettings from './UsageSettings.svelte';
   import PriceReportSettings from './PriceReportSettings.svelte';
   import NotificationSettings from './NotificationSettings.svelte';
@@ -13,13 +11,14 @@
   import { AUTO_SCAN_CADENCE_CHOICES, type AutoScanSettings, type AutoScanStatus } from '../../contracts/desktop';
   import type { AutoScanController } from '../inventory/auto-scan.svelte';
   import type { OverlaySettings, OverlayStatus } from '../../contracts/data';
-  
-import { type UpdateStatus } from '../../contracts/update';
+  import { LATEST_RELEASE_URL, type UpdateController } from '../../ui/update-controller.svelte';
   import { humanError } from '../../contracts/errors';
 
   interface Props {
     /** The boot-time controller from src/lib/theme.ts. */
     theme: ThemeController;
+    /** Desktop only. Shared with the update banner, so either can install. */
+    updates?: UpdateController;
     onwhatsnew?: () => void;
     transport?: DesktopCapabilities;
     /** Desktop only. The shell owns the instance, so the panel and the shell
@@ -34,15 +33,12 @@ import { type UpdateStatus } from '../../contracts/update';
     section?: 'notifications' | 'price-sharing' | null;
     onsectionshown?: () => void;
   }
-  let { theme, onwhatsnew, transport, autoScan, appIcon, wfmStatus = null, onwfmlogout, section = null, onsectionshown }: Props = $props();
+  let { theme, updates, onwhatsnew, transport, autoScan, appIcon, wfmStatus = null, onwfmlogout, section = null, onsectionshown }: Props = $props();
 
   let overlay = $state<OverlaySettings | null>(null);
   let overlayStatus = $state<OverlayStatus | null>(null);
   let overlayError = $state('');
   let savingOverlay = $state(false);
-  let checkingUpdate = $state(false);
-  let checkedUpdate = $state<UpdateStatus | null>(null);
-  let updateError = $state('');
   let confirmingLogout = $state(false);
   let loggingOut = $state(false);
   let logoutError = $state('');
@@ -204,18 +200,6 @@ import { type UpdateStatus } from '../../contracts/update';
     }
   }
 
-  async function checkForUpdates() {
-    updateError = '';
-    checkingUpdate = true;
-    try {
-      checkedUpdate = await checkUpdate();
-    } catch (error) {
-      updateError = humanError(error);
-    } finally {
-      checkingUpdate = false;
-    }
-  }
-
   async function logOutWfm() {
     if (!onwfmlogout || loggingOut) return;
     if (!confirmingLogout) {
@@ -358,14 +342,30 @@ import { type UpdateStatus } from '../../contracts/update';
         <div class="ui-setting-copy"><strong>Application updates</strong><p>On Windows and Linux AppImage, TennoWorth also checks every 30 minutes while it is running. Updates are downloaded and installed only after you confirm.</p></div>
         <div class="ui-setting-control">
           {#if onwhatsnew}<button class="btn" onclick={onwhatsnew}>What’s new</button>{/if}
-          <button class="btn" onclick={checkForUpdates} disabled={checkingUpdate}>{checkingUpdate ? 'Checking…' : 'Check for updates'}</button>
-          {#if checkedUpdate?.available}<span class="status">Version {checkedUpdate.version} is available.</span>
-          {:else if checkedUpdate?.checked && checkedUpdate.support === 'supported'}<span class="status">You’re up to date · v{checkedUpdate.current_version}</span>
-          {:else if checkedUpdate?.checked && checkedUpdate.support === 'appimage_required'}<span class="status">This install can’t update itself. Download and run the TennoWorth AppImage to receive updates.</span>
-          {:else if checkedUpdate?.checked && checkedUpdate.support === 'disabled_test_build'}<span class="status">Updates are disabled in this test build.</span>{/if}
+          {#if updates}
+            {@const info = updates.info}
+            {#if updates.installed}
+              <button class="btn primary" onclick={() => updates.restart()}>Restart now</button>
+            {:else if info?.available}
+              <button class="btn primary" onclick={() => updates.install()} disabled={updates.installing || updates.checking}>{updates.installing ? 'Installing…' : 'Install update'}</button>
+            {:else}
+              <button class="btn" onclick={() => updates.check()} disabled={updates.checking}>{updates.checking ? 'Checking…' : 'Check for updates'}</button>
+            {/if}
+            <span class="status" role="status">
+              {#if updates.installed}Version {info?.version} is installed and takes over the next time TennoWorth starts.
+              {:else if updates.installing}Installing version {info?.version}… Keep TennoWorth open until it finishes.
+              {:else if info?.available}Version {info.version} is available (you have v{info.current_version}). Nothing downloads until you install.
+              {:else if info?.checked && info.support === 'supported'}You’re up to date · v{info.current_version}
+              {:else if info?.checked && info.support === 'appimage_required'}This install can’t update itself. Download and run the TennoWorth AppImage to receive updates.
+              {:else if info?.checked && info.support === 'disabled_test_build'}Updates are disabled in this test build.{/if}
+            </span>
+          {/if}
         </div>
       </div>
-      {#if updateError}<p class="error inset" role="alert">{updateError}</p>{/if}
+      {#if updates?.needsManualInstall}
+        <p class="warning manual" data-testid="settings-update-manual-install">This update can’t be installed from inside the app. Download it once from the <a href={LATEST_RELEASE_URL} target="_blank" rel="noopener noreferrer">latest release</a> and run it - your settings and data are kept, and updates install normally again after that.</p>
+      {/if}
+      {#if updates?.error}<p class="error inset" role="alert">{updates.error}</p>{/if}
     </div>
     {#if transport}<UsageSettings {transport} /><PriceReportSettings {transport} />{/if}
   </section>
@@ -386,6 +386,7 @@ import { type UpdateStatus } from '../../contracts/update';
   .diagnostics { padding: 0 var(--inset) var(--s4); display: flex; flex-direction: column; gap: var(--s3); }
   .warning { margin: 0; padding-left: var(--s3); border-left: 2px solid var(--warn); color: var(--warn); font-size: var(--text-control); line-height: var(--leading-body); }
   .error { margin: 0; color: var(--bad); font-size: var(--text-control); }
+  .warning.manual { margin: var(--s3) var(--inset) 0; }
 
   /* The strip holds one to three cells, depending on what this build offers. */
   .glance { grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr)); }

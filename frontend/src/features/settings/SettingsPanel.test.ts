@@ -14,6 +14,8 @@ import type { OverlaySettings } from '../../contracts/data';
 import { installTauri, removeTauri } from '../../dev/test-utils';
 import { AppIconController } from './app-icon.svelte';
 import { LocalStorageStateStore, LOCAL_SETTING_KEYS } from '../../adapters/state-store';
+import { UpdateController } from '../../ui/update-controller.svelte';
+import { createDesktopServices } from '../../adapters/services';
 
 vi.mock('../../adapters/desktop', async (importOriginal) => ({
   ...await importOriginal<typeof import('../../adapters/desktop')>(),
@@ -166,7 +168,7 @@ describe('SettingsPanel', () => {
       throw new Error(`unexpected command: ${command}`);
     });
     installTauri(invoke, undefined);
-    render(SettingsPanel, { props: { theme } });
+    render(SettingsPanel, { props: { theme, updates: new UpdateController(createDesktopServices()) } });
 
     await fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
     expect(invoke).toHaveBeenCalledWith('check_update');
@@ -183,7 +185,7 @@ describe('SettingsPanel', () => {
       version: null,
       notes: null,
     }), undefined);
-    render(SettingsPanel, { props: { theme } });
+    render(SettingsPanel, { props: { theme, updates: new UpdateController(createDesktopServices()) } });
 
     await fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
     expect(await screen.findByText(/This install can’t update itself/)).toBeTruthy();
@@ -200,11 +202,48 @@ describe('SettingsPanel', () => {
       version: null,
       notes: null,
     }), undefined);
-    render(SettingsPanel, { props: { theme } });
+    render(SettingsPanel, { props: { theme, updates: new UpdateController(createDesktopServices()) } });
 
     await fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
     expect(await screen.findByText('Updates are disabled in this test build.')).toBeTruthy();
     expect(screen.queryByText(/You’re up to date/)).toBeNull();
+  });
+
+  it('installs a found update in place and offers the restart there', async () => {
+    const { theme } = fakeTheme();
+    const invoke = vi.fn(async (command: string) => {
+      if (command === 'check_update') {
+        return { checked: true, available: true, support: 'supported', current_version: '0.8.99', version: '0.8.100', notes: null };
+      }
+      if (command === 'install_update') return null;
+      throw new Error(`unexpected command: ${command}`);
+    });
+    installTauri(invoke, undefined);
+    render(SettingsPanel, { props: { theme, updates: new UpdateController(createDesktopServices()) } });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    expect(await screen.findByText(/Version 0\.8\.100 is available/)).toBeTruthy();
+    expect(invoke).not.toHaveBeenCalledWith('install_update');
+    await fireEvent.click(screen.getByRole('button', { name: 'Install update' }));
+    expect(invoke).toHaveBeenCalledWith('install_update');
+    expect(await screen.findByRole('button', { name: 'Restart now' })).toBeTruthy();
+    expect(screen.getByText(/Version 0\.8\.100 is installed/)).toBeTruthy();
+  });
+
+  it('shows a failed in-place install beside the update controls', async () => {
+    const { theme } = fakeTheme();
+    installTauri(vi.fn(async (command: string) => {
+      if (command === 'check_update') {
+        return { checked: true, available: true, support: 'supported', current_version: '0.8.99', version: '0.8.100', notes: null };
+      }
+      throw new Error('download failed: connection reset');
+    }), undefined);
+    render(SettingsPanel, { props: { theme, updates: new UpdateController(createDesktopServices()) } });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
+    await fireEvent.click(await screen.findByRole('button', { name: 'Install update' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('download failed: connection reset');
+    expect(screen.getByRole('button', { name: 'Install update' })).toBeTruthy();
   });
 
   it('requires confirmation before logging out of warframe.market', async () => {
