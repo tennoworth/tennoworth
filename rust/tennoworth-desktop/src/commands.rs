@@ -8,6 +8,7 @@ pub mod auto_scan;
 pub mod inventory;
 pub mod listing;
 pub mod market;
+pub mod presence;
 pub mod report;
 pub mod settings;
 pub mod trades;

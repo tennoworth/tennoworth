@@ -5,7 +5,7 @@
 //! what's ranked.
 
 use std::sync::Mutex;
-use tauri::menu::{Menu, MenuBuilder, MenuItem};
+use tauri::menu::{CheckMenuItem, Menu, MenuBuilder, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, Wry};
 
@@ -14,6 +14,7 @@ use wfm_core::poison::guard;
 use crate::services::acquisition::{publish_scan, scan_and_record};
 use crate::persistence::Db;
 use crate::services::market::MarketCache;
+use crate::services::presence::{self, PresenceChoice, PresenceState};
 use crate::services::sellables::{self, MarketData, ScanNotification, SellableRow};
 
 /// How many sellables the tray menu shows.
@@ -35,6 +36,20 @@ pub struct TrayState {
     /// The sellable labels ("Name - Np") the last rebuild put in the menu.
     pub labels: Mutex<Vec<String>>,
     pub last_notification: Mutex<Option<ScanNotification>>,
+    /// The Status items the last rebuild created, so a status change can update
+    /// them in place instead of re-ranking the sell list and replacing the menu.
+    presence: Mutex<Option<PresenceItems>>,
+}
+
+/// The tray's Status entry: a disabled line while signed out, a submenu once
+/// a status can be changed.
+enum PresenceItems {
+    Line(MenuItem<Wry>),
+    Menu {
+        submenu: Submenu<Wry>,
+        choices: [(PresenceChoice, CheckMenuItem<Wry>); 3],
+        follow: CheckMenuItem<Wry>,
+    },
 }
 
 /// Rank the full latest-snapshot × market sell list (reads the Db + MarketCache
@@ -76,10 +91,99 @@ fn build_tray_menu(
     for item in &sellable_items {
         mb = mb.item(item);
     }
+    mb = mb.separator();
+    if let Some(state) = app.try_state::<PresenceState>() {
+        let status = state.status();
+        let label = status.tray_label();
+        if status.signed_in {
+            let usable = status.connected && status.problem != Some(presence::PresenceProblem::NotVerified);
+            let choice = |id: &str, choice: PresenceChoice| {
+                CheckMenuItem::with_id(app, id, choice.label(), usable, status.status == Some(choice), None::<&str>)
+            };
+            let online = choice("presence:online", PresenceChoice::Online)?;
+            let ingame = choice("presence:ingame", PresenceChoice::Ingame)?;
+            let invisible = choice("presence:invisible", PresenceChoice::Invisible)?;
+            let separator = PredefinedMenuItem::separator(app)?;
+            let follow = CheckMenuItem::with_id(app, "presence:follow", "Follow the game", true, status.following, None::<&str>)?;
+            let submenu = Submenu::with_id_and_items(
+                app,
+                "presence",
+                label,
+                true,
+                &[&online, &ingame, &invisible, &separator, &follow],
+            )?;
+            mb = mb.item(&submenu).separator();
+            *guard(&app.state::<TrayState>().presence) = Some(PresenceItems::Menu {
+                submenu,
+                choices: [(PresenceChoice::Online, online), (PresenceChoice::Ingame, ingame), (PresenceChoice::Invisible, invisible)],
+                follow,
+            });
+        } else {
+            let line = MenuItem::with_id(app, "presence", label, false, None::<&str>)?;
+            mb = mb.item(&line).separator();
+            *guard(&app.state::<TrayState>().presence) = Some(PresenceItems::Line(line));
+        }
+    }
     let open = MenuItem::with_id(app, "open", "Open TennoWorth", true, None::<&str>)?;
     let rescan = MenuItem::with_id(app, "rescan", "Rescan", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-    mb.separator().item(&open).item(&rescan).item(&quit).build()
+    mb.item(&open).item(&rescan).item(&quit).build()
+}
+
+/// Bring the tray's Status entry up to date. A status change only rewrites the
+/// existing items' label, ticks and enabled state: rebuilding re-ranks the sell
+/// list and replaces the whole native menu on the UI thread, which showed as the
+/// window redrawing on every change. Signing in or out changes the entry's
+/// shape, so only that rebuilds.
+pub fn refresh_presence(app: &AppHandle) {
+    let Some(state) = app.try_state::<PresenceState>() else { return };
+    let status = state.status();
+    let tray = app.state::<TrayState>();
+    let updated = match guard(&tray.presence).as_ref() {
+        Some(PresenceItems::Menu { submenu, choices, follow }) if status.signed_in => {
+            let usable = status.connected && status.problem != Some(presence::PresenceProblem::NotVerified);
+            let mut ok = submenu.set_text(status.tray_label()).is_ok();
+            for (choice, item) in choices {
+                ok &= item.set_checked(status.status == Some(*choice)).is_ok();
+                ok &= item.set_enabled(usable).is_ok();
+            }
+            ok && follow.set_checked(status.following).is_ok()
+        }
+        Some(PresenceItems::Line(line)) if !status.signed_in => line.set_text(status.tray_label()).is_ok(),
+        _ => false,
+    };
+    if !updated {
+        rebuild_tray(app);
+    }
+}
+
+/// A status picked in the tray. It waits for warframe.market, so it runs off
+/// the menu thread; the entry is refreshed afterwards either way, because a
+/// native check item ticks itself on click even when the change is refused.
+fn tray_presence(app: &AppHandle, choice: PresenceChoice) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        if let Err(e) = app.state::<PresenceState>().set(choice) {
+            eprintln!("tennoworth: tray status change failed: {}", e.message);
+        }
+        refresh_presence(&app);
+    });
+}
+
+/// "Follow the game": off when following, resumed when paused, on when off.
+fn tray_follow(app: &AppHandle) {
+    let state = app.state::<PresenceState>();
+    let status = state.status();
+    if status.settings.follow_game && !status.following {
+        state.follow_now();
+    } else {
+        let settings = presence::PresenceSettings { follow_game: !status.settings.follow_game, ..status.settings };
+        match presence::save_settings(&app.state::<Db>(), settings) {
+            Ok(saved) => state.settings_changed(saved),
+            Err(e) => eprintln!("tennoworth: tray follow setting failed: {e}"),
+        }
+    }
+    refresh_presence(app);
 }
 
 /// The human labels a menu built from `top` shows (for evidence / the probe).
@@ -179,6 +283,10 @@ pub fn init_tray(app: &AppHandle) -> tauri::Result<()> {
             "open" => show_main_window(app),
             "rescan" => tray_rescan(app),
             "quit" => app.exit(0),
+            "presence:online" => tray_presence(app, PresenceChoice::Online),
+            "presence:ingame" => tray_presence(app, PresenceChoice::Ingame),
+            "presence:invisible" => tray_presence(app, PresenceChoice::Invisible),
+            "presence:follow" => tray_follow(app),
             // Clicking a specific sellable opens the full table to act on it.
             id if id.starts_with("sell:") => show_main_window(app),
             _ => {}

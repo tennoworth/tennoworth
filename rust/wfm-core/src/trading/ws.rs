@@ -159,27 +159,7 @@ pub fn run_new_orders_stream(
     on_order: &mut dyn FnMut(NewOrder),
     stop: &dyn Fn() -> bool,
 ) -> Result<()> {
-    wfm_client::governor::process().check(wfm_client::governor::Kind::WebSocket, &wfm_client::governor::context())?;
-    let mut req = WS_URL.into_client_request().context("ws request")?;
-    req.headers_mut().insert(
-        "Sec-WebSocket-Protocol",
-        tungstenite::http::HeaderValue::from_static("wfm"),
-    );
-    req.headers_mut().insert(
-        "User-Agent",
-        wfm_client::user_agent("wfm-core-ws", env!("CARGO_PKG_VERSION"))
-            .parse()
-            .context("ua header")?,
-    );
-    let (mut socket, _resp) = tungstenite::connect(req).context("ws connect")?;
-
-    // Read with a short timeout so the stop flag is honoured on a quiet
-    // socket; the TLS wrapper exposes the raw TcpStream for that.
-    match socket.get_ref() {
-        MaybeTlsStream::Plain(s) => set_read_timeout(s)?,
-        MaybeTlsStream::Rustls(s) => set_read_timeout(s.get_ref())?,
-        _ => {}
-    }
+    let mut socket = open_socket(READ_TICK)?;
 
     let sub = serde_json::json!({
         "route": "@wfm|cmd/subscribe/newOrders",
@@ -224,8 +204,36 @@ pub fn run_new_orders_stream(
     }
 }
 
-fn set_read_timeout(s: &TcpStream) -> Result<()> {
-    s.set_read_timeout(Some(READ_TICK)).context("read timeout")
+pub(crate) type Socket = tungstenite::WebSocket<MaybeTlsStream<TcpStream>>;
+
+/// Connect to the socket with the `wfm` subprotocol and the descriptive user
+/// agent, after the governor allows WebSocket access. Reads time out after
+/// `tick` so callers can check their own stop conditions on a quiet socket.
+pub(crate) fn open_socket(tick: Duration) -> Result<Socket> {
+    wfm_client::governor::process().check(wfm_client::governor::Kind::WebSocket, &wfm_client::governor::context())?;
+    let mut req = WS_URL.into_client_request().context("ws request")?;
+    req.headers_mut().insert(
+        "Sec-WebSocket-Protocol",
+        tungstenite::http::HeaderValue::from_static("wfm"),
+    );
+    req.headers_mut().insert(
+        "User-Agent",
+        wfm_client::user_agent("wfm-core-ws", env!("CARGO_PKG_VERSION"))
+            .parse()
+            .context("ua header")?,
+    );
+    let (socket, _resp) = tungstenite::connect(req).context("ws connect")?;
+    // The TLS wrapper exposes the raw TcpStream for the timeout.
+    match socket.get_ref() {
+        MaybeTlsStream::Plain(s) => set_read_timeout(s, tick)?,
+        MaybeTlsStream::Rustls(s) => set_read_timeout(s.get_ref(), tick)?,
+        _ => {}
+    }
+    Ok(socket)
+}
+
+fn set_read_timeout(s: &TcpStream, tick: Duration) -> Result<()> {
+    s.set_read_timeout(Some(tick)).context("read timeout")
 }
 
 #[cfg(test)]

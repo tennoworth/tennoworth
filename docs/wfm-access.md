@@ -75,6 +75,23 @@ sweep chooses between is not uniform: one item's full order book was 96 KB,
 while `/v2/orders/item/{slug}/top` answered the same item in 3.8 KB and the
 `/v2/orders/recent` delta window in 216 KB.
 
+## Signed-in status channel
+
+warframe.market exposes the user's own status (Online, Online in game,
+Invisible) only on its WebSocket: a client signs in on the socket with the
+session's token and sends `@wfm|cmd/status/set`. The desktop keeps one such
+socket open while a session is unlocked, beside the anonymous order stream. It
+sends a message only when the status has to change and otherwise reads the
+server's pushes, so its cost is the connection itself.
+
+The server owns the status. Closing the socket does not clear one: a status set
+with a duration stays public until the duration ends. Whatever the desktop keeps
+up on its own - following the game, or a status kept while it runs - therefore
+goes out with a 10-minute duration renewed every 5 minutes, and the app sends
+Invisible when it quits or the session signs out. A change from another client
+wins: the desktop stops renewing and pauses following until the next game
+session. A sign-in the server refuses is not retried until the session changes.
+
 ## Policy signing key
 
 Policies are signed with a dedicated Minisign key that the maintainer holds
@@ -112,7 +129,8 @@ Publish a higher revision with the desired restrictions and a concise explanatio
 Clients fetch at startup and every 15 minutes plus up to one minute of jitter, with
 conditional requests, a five-second timeout and a 64 KiB response limit. Queued
 requests recheck restrictions before dispatch. Requests already transmitted finish.
-WFM WebSocket pauses close the existing stream and suppress reconnection.
+WFM WebSocket pauses close the existing stream and suppress reconnection. That
+includes the signed-in status channel described below.
 
 To restore access, publish another higher revision with restrictions removed, no
 more permissive than compiled defaults. Never roll the revision backwards. Listing

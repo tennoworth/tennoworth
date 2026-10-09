@@ -246,7 +246,8 @@ are in the root instruction file. These are frontend-specific:
   `Toast.svelte` corner stack and inline row-confirms. Browser-native
   dialogs read as "the app broke".
 - **Listing-visibility copy says "hidden", never "invisible"**. The WFM field/API name stays `visible`; only user-facing copy
-  uses "hidden".
+  uses "hidden". The rule is about listings: the user's own warframe.market
+  status keeps the website's word, Invisible, beside Online and Online in game.
 - **The unlock dialog always offers "Forgot it? Log in again"** - a
   forgotten passphrase is unrecoverable by design; re-login is the only
   reset, so the escape hatch must never be removed.

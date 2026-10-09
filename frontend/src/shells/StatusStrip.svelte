@@ -5,7 +5,9 @@ import type { ListingController } from '../features/selling/controller.svelte';
 import type { FilterController } from '../features/selling/filters.svelte';
 import { baroPhase } from '../domain/baro-board';
 import { humanWindow } from '../ui/format';
-  let { inShell, inventory, listing, filters, unresolvedCount, unresolvedSummary, inventoryFreshness, inventoryStaleness, inventoryTimestamp, marketFreshness, marketStaleness, ordersToFix, baroState, unreadNotifications, wfmLabel, projectLinkAnchors, onexport, onimport, onclear, onupdates, onfeedback, onauth }: {
+import PresenceMenu from '../features/presence/PresenceMenu.svelte';
+import type { PresenceController } from '../features/presence/presence.svelte';
+  let { inShell, inventory, listing, filters, unresolvedCount, unresolvedSummary, inventoryFreshness, inventoryStaleness, inventoryTimestamp, marketFreshness, marketStaleness, ordersToFix, baroState, unreadNotifications, wfmLabel, projectLinkAnchors, onexport, onimport, onclear, onupdates, onfeedback, onauth, presence, onpresencesettings }: {
     inShell: boolean;
     inventory: InventoryController;
     listing: ListingController;
@@ -28,6 +30,9 @@ import { humanWindow } from '../ui/format';
     onupdates: () => void;
     onfeedback: () => void;
     onauth: (code: 'needs_unlock' | 'needs_login') => void;
+    /** Desktop only: the user's warframe.market status, shown once unlocked. */
+    presence?: PresenceController;
+    onpresencesettings?: () => void;
   } = $props();
   function headerClearance(node: HTMLElement, inShell: boolean) {
     const root = document.documentElement;
@@ -202,6 +207,8 @@ import { humanWindow } from '../ui/format';
         <span data-shell>WFM</span>
         {#if listing.wfmStatus && !listing.wfmStatus.unlocked}
           <button data-shell type="button" class="link" data-testid="wfm-auth-link" onclick={() => onauth(listing.wfmStatus?.logged_in ? 'needs_unlock' : 'needs_login')}>{wfmLabel}</button>
+        {:else if presence?.status?.signedIn}
+          <PresenceMenu {presence} onsettings={onpresencesettings} />
         {:else}
           <b data-shell>{wfmLabel}</b>
         {/if}

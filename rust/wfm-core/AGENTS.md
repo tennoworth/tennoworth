@@ -86,6 +86,7 @@ every v1/v2 endpoint.
 | Update listing | `PATCH /v2/order/<id>` | any subset of `{platinum, quantity, visible, rank}` |
 | Delete listing | `DELETE /v2/order/<id>` | - |
 | List my orders | `GET /v2/orders/user/<username>` | response carries `itemId` only - we enrich with `item.name` via the catalog |
+| Own status | WS `@wfm\|cmd/auth/signIn`, then `@wfm\|cmd/status/set` | socket only, no HTTP route; the JWT cookie value is the sign-in `token`; see `trading/presence.rs` |
 
 If `/v2/orders/user/<username>` starts returning `item` metadata on
 its own, `catalog::attach_item_meta()` already no-clobbers - but check for

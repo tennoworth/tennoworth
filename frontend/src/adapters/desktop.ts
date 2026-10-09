@@ -1,7 +1,7 @@
 import { DesktopCmdError } from '../contracts/errors';
 import type { PingResponse, PlanItemInput, OrderPatch, PendingPlan, PlanResponse, ItemResult, Market, OverlaySettings, OverlayStatus } from '../contracts/data';
 import { isHistory, type History } from '../domain/history';
-import type { MarketRefreshResult, DesktopCapabilities, DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, RivenStatFilter, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences, AutoScanSettings, AutoScanStatus, AppIconColour, AppIconOutcome } from '../contracts/desktop';
+import type { MarketRefreshResult, DesktopCapabilities, DesktopWfmStatus, LiveTopQuery, LiveTop, RivenAuction, RivenStatFilter, Watch, NewWatch, WatchOutcome, TradeRow, EeLogStatus, NotificationEntry, NotificationPreferences, AutoScanSettings, AutoScanStatus, AppIconColour, AppIconOutcome, PresenceChoice, PresenceSettings, PresenceStatus } from '../contracts/desktop';
 import { resolveInvoke, rethrowInvoke } from './runtime';
 
 /**
@@ -65,6 +65,22 @@ export class TauriTransport implements DesktopCapabilities {
 
   async setAutoScanHold(hold: boolean): Promise<void> {
     await resolveInvoke()<void>('set_auto_scan_hold', { hold });
+  }
+
+  async presenceStatus(): Promise<PresenceStatus> {
+    return await resolveInvoke()<PresenceStatus>('presence_status');
+  }
+
+  async setPresence(status: PresenceChoice): Promise<PresenceStatus> {
+    try { return await resolveInvoke()<PresenceStatus>('set_presence', { status }); } catch (error) { return rethrowInvoke(error); }
+  }
+
+  async updatePresenceSettings(settings: PresenceSettings): Promise<PresenceSettings> {
+    try { return await resolveInvoke()<PresenceSettings>('update_presence_settings', { settings }); } catch (error) { return rethrowInvoke(error); }
+  }
+
+  async followGameNow(): Promise<void> {
+    await resolveInvoke()<void>('follow_game_now');
   }
 
   async setAppIcon(colour: AppIconColour): Promise<AppIconOutcome> {

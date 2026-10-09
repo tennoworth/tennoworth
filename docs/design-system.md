@@ -460,6 +460,37 @@ value. Loading, unavailable, empty, and stale states never invent observations.
 Select Community usage in the living reference’s Data state control for the
 production chart with fictional daily counts.
 
+## Trade presence
+
+The user's warframe.market status uses the website's own names and choices:
+Online, Online in game and Invisible, and "keep status for" While running, 30m,
+1h, 2h or 4h. Nothing is offered that the website cannot show, so there is no
+activity or mission text. Following the game is the app's addition and is off
+until the user turns it on.
+
+Once the session is unlocked, the status strip's WFM cell shows the status word
+and a 7px mark, opening a menu with the same shape as More ▾. The mark's shape
+carries the state as well as its hue: filled `--good` for Online in game, a
+`--good` outline for Online, a faint `--muted` outline for Invisible, and filled
+`--warn` when the user has something to fix. `PresenceMark.svelte` is its only
+definition, and the word always sits beside it. A locked or signed-out session
+keeps the strip's existing link to the sign-in dialogs.
+
+Settings shows the status first on the warframe.market summary card, with the
+session on its second line. The account panel's Trade presence group holds the
+status as a `.ui-segmented` choice, Follow the game with the status chosen for
+when Warframe closes, and keep status for. Keep status for is disabled, with its
+reason, while following manages the status. A status picked by hand pauses
+following until the next game session: a warn-toned notice says so and offers
+Follow the game now. A refusal from warframe.market, such as an unverified
+account, is a bad-toned notice. Connection detail sits in a closed
+troubleshooting disclosure. The tray mirrors the strip in a Status submenu.
+
+Select Trade presence in the living styleguide's Data state control for the
+production Settings group. The desktop preview takes
+`&presence=website|closed|unverified|unreachable` for the other strip and
+Settings states.
+
 ## Fallback WFM sign-in
 
 When the in-app sign-in window cannot load warframe.market, the login dialog

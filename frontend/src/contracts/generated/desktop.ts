@@ -57,6 +57,64 @@ export type OrderSide = "sell" | "buy";
 
 export type OwnOrder = { id: string, item_id: string, slug: string | null, name: string | null, side: OrderSide, platinum: number, quantity: number, per_trade: number | null, visible: boolean | null, rank: number | null, subtype: string | null, };
 
+export type PresenceChoice = "online" | "ingame" | "invisible";
+
+export type PresenceProblem = "not_verified" | "refused" | "paused" | "unreachable";
+
+export type PresenceSettings = {
+/**
+ * Online in game from login to quit.
+ */
+followGame: boolean,
+/**
+ * The status following sets when Warframe closes: Online or Invisible.
+ */
+whenClosed: PresenceChoice,
+/**
+ * How long a status picked by hand is kept, in minutes; `null` keeps it
+ * while TennoWorth runs.
+ */
+keepForMinutes: number | null, };
+
+export type PresenceStatus = {
+/**
+ * A warframe.market session is unlocked, so a status can be read and set.
+ */
+signedIn: boolean,
+/**
+ * The status channel is connected and signed in.
+ */
+connected: boolean,
+/**
+ * The status warframe.market last reported; `null` until it has.
+ */
+status: PresenceChoice | null,
+/**
+ * When a timed status ends (RFC 3339), if it has a duration.
+ */
+statusUntil: string | null,
+/**
+ * When the status was set (RFC 3339).
+ */
+statusSetAt: string | null,
+/**
+ * TennoWorth keeps this status up and renews it.
+ */
+managed: boolean,
+/**
+ * Following the game is on and not paused.
+ */
+following: boolean,
+/**
+ * Following is on but paused by a status picked by hand, here or on
+ * warframe.market, until the next game session.
+ */
+followPaused: boolean, gameRunning: boolean, problem: PresenceProblem | null,
+/**
+ * The server's code behind `problem`, for troubleshooting.
+ */
+detail: string | null, settings: PresenceSettings, };
+
 export type Restrictions = { spacing_ms: number, concurrency: number, contract_spacing_ms: number, watch_interval_ms: number, pause_all: boolean, pause_background: boolean, pause_contracts: boolean, pause_mutations: boolean, pause_websockets: boolean, };
 
 export type WatchOutcome = { id: number, slug: string, name: string, side: string, threshold: number,
@@ -101,8 +159,12 @@ export const RELIC_OVERLAY_UPDATE_EVENT = "relic-overlay:update" as const;
 
 export const RELIC_OVERLAY_HIDE_EVENT = "relic-overlay:hide" as const;
 
+export const PRESENCE_CHANGED_EVENT = "presence-changed" as const;
+
 export const RELIC_RECOMMENDATION_CONFIDENCE = 0.9 as const;
 
 export const AUTO_SCAN_CADENCE_CHOICES = [15, 30, 60] as const;
+
+export const PRESENCE_KEEP_FOR_CHOICES = [30, 60, 120, 240] as const;
 
 export const APP_ICON_COLOURS = ["blue", "ink", "rag"] as const;
