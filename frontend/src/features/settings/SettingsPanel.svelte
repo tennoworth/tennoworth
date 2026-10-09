@@ -4,6 +4,10 @@
   import NotificationSettings from './NotificationSettings.svelte';
   import ThemeSwitcher from '../../ui/ThemeSwitcher.svelte';
   import AppIconSetting from './AppIconSetting.svelte';
+  import PresenceSettings from '../presence/PresenceSettings.svelte';
+  import PresenceMark from '../presence/PresenceMark.svelte';
+  import type { PresenceController } from '../presence/presence.svelte';
+  import { presenceLine, presenceMark, presenceWord } from '../presence/presence';
   import type { AppIconController } from './app-icon.svelte';
   import { onMount, tick } from 'svelte';
   import type { ThemeController } from '../../ui/theme';
@@ -26,14 +30,16 @@
     autoScan?: AutoScanController;
     /** Desktop only: the window and tray icon colour. */
     appIcon?: AppIconController;
+    /** Desktop only: the user's warframe.market status. */
+    presence?: PresenceController;
     wfmStatus?: DesktopWfmStatus | null;
     onwfmlogout?: () => Promise<void>;
     /** Opens the page at this section (the inbox's "Notification settings",
      *  the price sharing prompt's "What is sent"). */
-    section?: 'notifications' | 'price-sharing' | null;
+    section?: 'notifications' | 'price-sharing' | 'account' | null;
     onsectionshown?: () => void;
   }
-  let { theme, updates, onwhatsnew, transport, autoScan, appIcon, wfmStatus = null, onwfmlogout, section = null, onsectionshown }: Props = $props();
+  let { theme, updates, onwhatsnew, transport, autoScan, appIcon, presence, wfmStatus = null, onwfmlogout, section = null, onsectionshown }: Props = $props();
 
   let overlay = $state<OverlaySettings | null>(null);
   let overlayStatus = $state<OverlayStatus | null>(null);
@@ -230,7 +236,12 @@
   <div class="ui-summary-strip glance" aria-label="Current state">
     {#if autoScan}<a href="#settings-scan"><span class="k">Automatic scan</span><strong>{autoScanSummary()}</strong><span>{autoScanStatusText(autoScan.status)}</span></a>{/if}
     {#if transport}<a href="#settings-overlay"><span class="k">Relic overlay</span><strong>{overlaySummary()}</strong><span>{overlay?.enabled ? lastRunText() : 'Reward screens are not read.'}</span></a>{/if}
-    <a href="#settings-account"><span class="k">warframe.market</span><strong class:ok={wfmStatus?.unlocked}>{sessionText()}</strong><span>Encrypted login on this device</span></a>
+    {#if presence?.status?.signedIn}
+      <!-- What buyers see is the everyday question; the session is its second line. -->
+      <a href="#settings-account"><span class="k">warframe.market</span><strong class="with-mark"><PresenceMark kind={presenceMark(presence.status)} />{presenceWord(presence.status)}</strong><span>{presenceLine(presence.status)} · session unlocked</span></a>
+    {:else}
+      <a href="#settings-account"><span class="k">warframe.market</span><strong class:ok={wfmStatus?.unlocked}>{sessionText()}</strong><span>Encrypted login on this device</span></a>
+    {/if}
   </div>
   <nav class="jump" aria-label="Settings sections">
     <span class="k">Everyday</span>
@@ -324,6 +335,7 @@
       </div>
     </div>
     {#if logoutError}<p class="error inset" role="alert">Couldn’t log out: {logoutError}</p>{/if}
+    {#if presence}<PresenceSettings {presence} />{/if}
   </section>
   <!-- Each of these is one row, set once. As three panels they used to lead the page. -->
   <section class="wrap tw" id="settings-app" tabindex="-1" aria-labelledby="set-app">
@@ -394,6 +406,7 @@
   .glance > a + a { border-left: 1px var(--rule) var(--border); }
   .glance > a:hover { background: var(--panel-2); }
   .glance strong { font: 500 var(--text-body)/var(--leading-control) var(--font-body); overflow-wrap: anywhere; }
+  .glance strong.with-mark { display: flex; align-items: center; gap: var(--s2); }
   .glance > a > span:last-child { font-size: var(--text-caption); line-height: var(--leading-body); color: var(--muted); overflow-wrap: anywhere; }
   .jump { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s4); font-size: var(--text-control); }
   .jump .k, .tier { font: 600 var(--text-caption)/var(--leading-control) var(--font-ui); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }

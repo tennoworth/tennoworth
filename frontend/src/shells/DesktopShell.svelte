@@ -25,6 +25,7 @@ import SetPicksView from '../features/selling/SetPicksView.svelte';
   import { InventoryController } from '../features/inventory/controller.svelte';
   import { AutoScanController } from '../features/inventory/auto-scan.svelte';
   import { AppIconController } from '../features/settings/app-icon.svelte';
+  import { PresenceController } from '../features/presence/presence.svelte';
   import ListingReviewModal from '../features/selling/ListingReviewModal.svelte';
   import MyOrdersPanel from '../features/orders/MyOrdersPanel.svelte';
   import WatchlistPanel from '../features/watches/WatchlistPanel.svelte';
@@ -67,7 +68,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   // the desktop app, driven by the wfm_session commands.
   let updateNotesRef: UpdateNotes;
   // Set only by the inbox's settings link; every other way in opens the top.
-  let settingsSection = $state<'notifications' | 'price-sharing' | null>(null);
+  let settingsSection = $state<'notifications' | 'price-sharing' | 'account' | null>(null);
 
   const notesServices = useDesktopServices();
   const transport = new TauriTransport();
@@ -136,6 +137,9 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
     adopt: (data, snapshotId) => inventory.adoptScan(data, snapshotId),
     isInteractive: () => listing.listingOpen || effectiveView === 'session',
   });
+  // The user's warframe.market status; the native loop pushes every change.
+  const presence = new PresenceController({ native: transport, listen: listenForTauriEvent });
+  onMount(() => presence.start());
   // The window and tray icon colour; follows the resolved colour mode for 'match'.
   const appIcon = untrack(() => new AppIconController({ store, theme, native: transport }));
   onMount(() => appIcon.start());
@@ -279,7 +283,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
 
 <!-- Keep the banner region mounted while navigation or a scan changes the content. -->
 <div data-shell class={showWorkspace ? 'shell' : 'desktop-landing'}>
-  <StatusStrip bind:this={statusStripRef} inShell={showWorkspace} {inventory} {listing} {filters} {unresolvedCount} {unresolvedSummary} {inventoryFreshness} {inventoryStaleness} {inventoryTimestamp} {marketFreshness} {marketStaleness} {ordersToFix} {baroState} {unreadNotifications} {wfmLabel} {projectLinkAnchors} onexport={() => exportImportRef?.openExport()} onimport={() => exportImportRef?.pickImport()} onclear={() => workspace.clear()} onupdates={() => updates.check({ announce: true })} onfeedback={() => { feedbackFromMore = true; openFeedback(); }} onauth={(code) => wfmAuthDialogsRef?.open(code)} />
+  <StatusStrip bind:this={statusStripRef} inShell={showWorkspace} {inventory} {listing} {filters} {unresolvedCount} {unresolvedSummary} {inventoryFreshness} {inventoryStaleness} {inventoryTimestamp} {marketFreshness} {marketStaleness} {ordersToFix} {baroState} {unreadNotifications} {wfmLabel} {projectLinkAnchors} onexport={() => exportImportRef?.openExport()} onimport={() => exportImportRef?.pickImport()} onclear={() => workspace.clear()} onupdates={() => updates.check({ announce: true })} onfeedback={() => { feedbackFromMore = true; openFeedback(); }} onauth={(code) => wfmAuthDialogsRef?.open(code)} {presence} onpresencesettings={() => { settingsSection = 'account'; filters.setView('settings'); }} />
   {#if showWorkspace}
   <aside data-shell class="sidebar">
     <nav data-shell>
@@ -468,7 +472,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
       <Faq desktop />
 
     {:else if effectiveView === 'settings'}
-      <SettingsPanel {updates} onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} {autoScan} {appIcon} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} section={settingsSection} onsectionshown={() => (settingsSection = null)} />
+      <SettingsPanel {updates} onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} {autoScan} {appIcon} {presence} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} section={settingsSection} onsectionshown={() => (settingsSection = null)} />
     {/if}
 
     {/if}

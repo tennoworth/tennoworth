@@ -6,7 +6,8 @@ import type { UpdateStatus } from '../contracts/update';
 import { sampleAllocation, sampleGuidance } from './protection-preview';
 import type { ProtectionInventory, ProtectionPlan } from '../contracts/protection';
 import type { OwnedRecord } from '../contracts/data';
-import { APP_ICON_COLOURS } from '../contracts/desktop';
+import { APP_ICON_COLOURS, type PresenceStatus, type PresenceSettings } from '../contracts/desktop';
+import { PRESENCE_CHANGED_EVENT } from '../contracts/events';
 export async function installPreview() {
   const scenario = new URLSearchParams(location.search).get('sample');
   // Loaded once; a missing build rejects each calculation with how to build
@@ -62,7 +63,56 @@ export async function installPreview() {
   let protectionPlan: ProtectionPlan = { reserves: {}, goal: null };
   // `price-sharing` offers the opt-in prompt; `price-sharing-error` refuses the save.
   let priceReports = { enabled: false, available: scenario?.startsWith('price-sharing') ?? false, sent_this_week: 0 };
+  // Trade presence. `&presence=website|closed|unverified|unreachable` opens the
+  // other states the status strip and Settings show; the default follows a
+  // running game.
+  const presenceCase = new URLSearchParams(location.search).get('presence');
+  const presenceAt = (minutes: number) => new Date(Date.now() + minutes * 60_000).toISOString();
+  let presence: PresenceStatus = {
+    signedIn: preview !== null && scenario !== 'logged-out', connected: presenceCase !== 'unreachable',
+    status: 'ingame', statusUntil: presenceAt(10), statusSetAt: presenceAt(-12),
+    managed: true, following: true, followPaused: false, gameRunning: true, problem: null, detail: null,
+    settings: { followGame: true, whenClosed: 'invisible', keepForMinutes: null },
+  };
+  if (presenceCase === 'website') presence = { ...presence, status: 'online', statusUntil: presenceAt(58), managed: false, following: false, followPaused: true };
+  if (presenceCase === 'closed') presence = { ...presence, status: 'invisible', statusUntil: null, managed: false, gameRunning: false };
+  if (presenceCase === 'unverified') presence = { ...presence, status: 'invisible', statusUntil: null, managed: false, gameRunning: false, problem: 'not_verified', detail: 'app.errors.userNotVerified' };
+  if (presenceCase === 'unreachable') presence = { ...presence, status: null, statusUntil: null, statusSetAt: null, managed: false, problem: 'unreachable' };
+  const pushPresence = () => {
+    const emit = (globalThis as Record<string, unknown>).__TENNOWORTH_PREVIEW_EMIT__ as ((name: string, payload: unknown) => void) | undefined;
+    emit?.(PRESENCE_CHANGED_EVENT, structuredClone(presence));
+    return structuredClone(presence);
+  };
   const invoke = (cmd: string, args?: Record<string, unknown>) => {
+    if (cmd === 'presence_status') return Promise.resolve(structuredClone(presence));
+    if (cmd === 'set_presence') {
+      if (presence.problem === 'not_verified') {
+        return Promise.reject({ code: 'presence_not_verified', message: 'warframe.market refused the change: this account is not verified. Verify it on warframe.market, then try again.' });
+      }
+      const status = args?.status as PresenceStatus['status'];
+      const minutes = presence.settings.keepForMinutes;
+      presence = {
+        ...presence, status, statusSetAt: presenceAt(0),
+        statusUntil: status === 'invisible' ? null : presenceAt(minutes ?? 10),
+        managed: minutes == null && status !== 'invisible',
+        following: false, followPaused: presence.settings.followGame,
+      };
+      return new Promise(resolve => setTimeout(() => resolve(pushPresence()), 400));
+    }
+    if (cmd === 'update_presence_settings') {
+      const settings = args?.settings as PresenceSettings;
+      const resumes = settings.followGame && !presence.settings.followGame && presence.gameRunning;
+      presence = { ...presence, settings, following: settings.followGame && !presence.followPaused, followPaused: settings.followGame && presence.followPaused };
+      if (resumes) presence = { ...presence, status: 'ingame', managed: true, following: true, followPaused: false };
+      pushPresence();
+      return Promise.resolve(settings);
+    }
+    if (cmd === 'follow_game_now') {
+      presence = { ...presence, followPaused: false, following: presence.settings.followGame };
+      if (presence.settings.followGame && presence.gameRunning) presence = { ...presence, status: 'ingame', managed: true, statusUntil: presenceAt(10) };
+      pushPresence();
+      return Promise.resolve(null);
+    }
     if (cmd === 'update_notes') return Promise.resolve(structuredClone(notes));
     if (cmd === 'update_notes_can_present') return Promise.resolve(true);
     if (cmd === 'acknowledge_update_notes') { notes.auto_show = false; return Promise.resolve(null); }

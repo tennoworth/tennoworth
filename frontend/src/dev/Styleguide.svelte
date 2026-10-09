@@ -15,6 +15,10 @@
   import { PromptSession } from '../ui/prompt-session.svelte';
   import AppIconSetting from '../features/settings/AppIconSetting.svelte';
   import { AppIconController } from '../features/settings/app-icon.svelte';
+  import PresenceSettings from '../features/presence/PresenceSettings.svelte';
+  import PresenceMark from '../features/presence/PresenceMark.svelte';
+  import { PresenceController } from '../features/presence/presence.svelte';
+  import type { PresenceStatus } from '../contracts/desktop';
   let notesRef = $state<UpdateNotes>();
   // A fresh, always-due session each time the state is chosen; nothing persists.
   const promptStore: SettingsStore = { mode: 'local', hydrate: async () => {}, getSetting: () => null, setSetting: async () => {} };
@@ -45,6 +49,23 @@
     theme: { get mode() { return mode; }, subscribe: () => () => {} },
     native: { setAppIcon: async () => ({ windowIcon: true }) },
   });
+  // The production Trade presence group over a native side that keeps the pick
+  // in memory; picking a status pauses following, as it does in the app.
+  let samplePresenceStatus: PresenceStatus = {
+    signedIn: true, connected: true, status: 'ingame', statusUntil: null, statusSetAt: '2026-10-09T12:02:00Z',
+    managed: true, following: true, followPaused: false, gameRunning: true, problem: null, detail: null,
+    settings: { followGame: true, whenClosed: 'invisible', keepForMinutes: null },
+  };
+  const samplePresence = new PresenceController({
+    native: {
+      presenceStatus: async () => samplePresenceStatus,
+      setPresence: async (status) => (samplePresenceStatus = { ...samplePresenceStatus, status, managed: false, following: false, followPaused: true }),
+      updatePresenceSettings: async (settings) => settings,
+      followGameNow: async () => { samplePresenceStatus = { ...samplePresenceStatus, status: 'ingame', following: true, followPaused: false }; void samplePresence.refresh(); },
+    },
+    listen: () => () => {},
+  });
+  void samplePresence.refresh();
   let filter = $state('');
   let notificationRead = $state(false);
   let exampleEnabled = $state(true);
@@ -123,7 +144,7 @@
       <p class="muted">Selected: {selected}. These are presentation examples, not the Trade Session planner.</p>
       <div class="fields">
         <label class="ui-field">Filter sample items<input type="text" bind:value={filter} placeholder="Item name" /></label>
-        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option><option value="notifications">Alerts</option><option value="estimates">Estimates</option><option value="usage">Community usage</option><option value="updates">Update notes</option><option value="token">WFM token sign-in</option><option value="sell">Sell table</option><option value="prompt">Prompt banner</option><option value="app-icon">App icon</option></select></label>
+        <label class="ui-field">Data state<select bind:value={dataState}><option value="populated">Populated</option><option value="empty">Empty</option><option value="loading">Loading</option><option value="error">Error</option><option value="notifications">Alerts</option><option value="estimates">Estimates</option><option value="usage">Community usage</option><option value="updates">Update notes</option><option value="token">WFM token sign-in</option><option value="sell">Sell table</option><option value="prompt">Prompt banner</option><option value="app-icon">App icon</option><option value="presence">Trade presence</option></select></label>
       </div>
       <p role="status" class="muted">{message || 'Controls are ready. No changes made.'}</p>
     </div>
@@ -179,6 +200,7 @@
   {#if dataState === 'prompt'}<PromptBanner id="styleguide-prompt" session={samplePromptSession()} title="Help show what items really sell for"><p>Optional invitations use the neutral panel, never a toned edge, and say that ignoring them changes nothing. A long explanation wraps beside the actions and stacks above them in narrow windows.</p>{#snippet actions()}<button type="button" class="btn primary" onclick={() => (message = 'Sample prompt accepted.')}>Share sale prices</button><button type="button" class="btn">What is sent</button>{/snippet}</PromptBanner>{/if}
   {#if dataState === 'usage'}<UsageChart sample={usageSample} />{/if}
   {#if dataState === 'app-icon'}<section class="wrap tw ui-reading" aria-labelledby="app-icon-title"><div class="rail"><h3 id="app-icon-title">App icon setting</h3></div><AppIconSetting appIcon={sampleAppIcon} /></section>{/if}
+  {#if dataState === 'presence'}<section class="wrap tw ui-reading" aria-labelledby="presence-title"><div class="rail"><h3 id="presence-title">Trade presence</h3></div><p class="presence-marks"><span><PresenceMark kind="ingame" />Online in game</span><span><PresenceMark kind="online" />Online</span><span><PresenceMark kind="invisible" />Invisible</span><span><PresenceMark kind="warn" />Needs action</span></p><PresenceSettings presence={samplePresence} /></section>{/if}
   {#if dataState === 'sell'}<section class="ui-stack"><h2>Sortable analytical table</h2><p>Headers are sort buttons that announce their order; the Column guide explains every visible column.</p><ResultsTable results={sellSample} /></section>{/if}
   {#if dataState === 'updates'}<section class="ui-panel ui-stack"><h2>Changes across installed versions</h2><p>One plain-English summary combines skipped releases, with a version history beneath it.</p><button class="btn" onclick={() => notesRef?.open()}>Preview what’s new</button></section>{/if}
   {#if dataState === 'updates'}<UpdateNotes bind:this={notesRef} services={notesServices} />{/if}
@@ -224,4 +246,6 @@
   .reference-table th:first-child { width: 42%; }
   .reference-table th:last-child { width: 30%; }
   .reference-table td.identity, .reference-table td.context { white-space: normal; overflow-wrap: anywhere; padding-block: var(--s2); }
+  .presence-marks { display: flex; flex-wrap: wrap; gap: var(--s2) var(--s4); margin: 0; padding: var(--s3) var(--inset) 0; font-size: var(--text-caption); color: var(--muted); }
+  .presence-marks span { display: inline-flex; align-items: center; gap: var(--s2); }
 </style>
