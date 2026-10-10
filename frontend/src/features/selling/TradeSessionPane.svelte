@@ -1,7 +1,7 @@
 <script lang="ts">
   import { useDesktopServices } from '../../ui/desktop-context';
   const { desktopTradeSessionState, desktopLiveTopPrices, listenForTauriEvent, evaluateTradeSession } = useDesktopServices();
-  import { onMount, onDestroy, type Snippet } from 'svelte';
+  import { onMount, onDestroy, untrack, type Snippet } from 'svelte';
   import BuyerAlternatives from './BuyerAlternatives.svelte';
   import { LiveTopController } from './live-top.svelte';
   const liveTop = new LiveTopController({ desktopLiveTopPrices, listenForTauriEvent });
@@ -18,8 +18,10 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
   import type { ScoredInventoryFact } from '../../contracts/generated/domain';
   import type { Verdict } from '../../contracts/generated/domain';
 
-  let { owned, market, reserveCopies, advice, scanning, onscan, onreview, nativeFacts = new Map(), availability, listingBlockReason = null, onrecheck, listingActionLabel = 'Check WFM listings', keep }: {
+  let { owned, market, reserveCopies, advice, scanning, onscan, onreview, nativeFacts = new Map(), availability, listingBlockReason = null, onrecheck, listingActionLabel = 'Check WFM listings', keep, active = true }: {
     keep?: Snippet;
+    /** Whether the view is on screen; it stays mounted while hidden. */
+    active?: boolean;
     owned: Map<string, OwnedRecord>; market: Market | null; reserveCopies: number;
     nativeFacts?: Map<string, ScoredInventoryFact>;
     advice: Map<string, Verdict>; scanning: boolean; onscan: () => Promise<void>;
@@ -149,10 +151,17 @@ import { ALLOWANCE_CHANGED_EVENT } from '../../contracts/events';
     priceNote = failed ? `${failed} price checks failed; those items retain their previous prices.` : 'Online competitors checked; your own orders are excluded.';
   }
 
+  // Back on screen after being hidden: refresh at once rather than at the next poll.
+  let wasActive = untrack(() => active);
+  $effect(() => {
+    const onScreen = active;
+    untrack(() => { if (onScreen && !wasActive) void refresh(); wasActive = onScreen; });
+  });
+
   onMount(() => {
     void refresh();
     const stop = listenForTauriEvent(ALLOWANCE_CHANGED_EVENT, () => void refresh());
-    const timer = setInterval(() => void refresh(), 10_000);
+    const timer = setInterval(() => { if (active) void refresh(); }, 10_000);
     return () => { disposed = true; clearInterval(timer); stop(); };
   });
 </script>

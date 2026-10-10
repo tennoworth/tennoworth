@@ -79,6 +79,10 @@
     },
   ];
 
+  // Embedded in the desktop hand-off panel on the hosted landing: no panel
+  // chrome of its own, and the Sell tab shows the visitor's own rows (the
+  // hand-off table) instead of a sample, so the two pitches are one.
+  let { ownRows, embedded = false }: { ownRows?: import('svelte').Snippet; embedded?: boolean } = $props();
   let active = $state<TabId>('sell');
 
   function focusTab(id: TabId): void {
@@ -176,12 +180,7 @@
   ];
 </script>
 
-<section class="wrap tw rail-panel" aria-labelledby="feature-rail-h">
-  <div class="rail">
-    <h3 id="feature-rail-h">The rest of the app, in miniature</h3>
-    <span class="exp">Eight surfaces behind the scan · every number below is a sample</span>
-  </div>
-
+{#snippet railBody()}
   <div class="rbody">
     <div class="tabs" role="tablist" aria-orientation="vertical" aria-label="Desktop app surfaces">
       {#each TABS as t (t.id)}
@@ -202,6 +201,10 @@
     {#each TABS as t (t.id)}
       {#if active === t.id}
         <div class="panel" role="tabpanel" id="frp-{t.id}" aria-labelledby="frt-{t.id}" tabindex="0">
+          {#if t.id === 'sell' && ownRows}
+            <p class="desc">{t.blurb}</p>
+            {@render ownRows()}
+          {:else}
           <p class="desc">{t.blurb}</p>
 
           <div class="mini scroll">
@@ -389,10 +392,24 @@
               clears 22p each - under the crack, so run it.
             </p>
           {/if}
+          {/if}
         </div>
       {/if}
     {/each}
   </div>
+
+{/snippet}
+
+{#if embedded}
+  {@render railBody()}
+{:else}
+<section class="wrap tw rail-panel" aria-labelledby="feature-rail-h">
+  <div class="rail">
+    <h3 id="feature-rail-h">The rest of the app, in miniature</h3>
+    <span class="exp">Eight surfaces behind the scan · every number below is a sample</span>
+  </div>
+
+  {@render railBody()}
 
   <div class="line">
     <span class="exp">All of it runs on your machine against the inventory the scan read. Nothing is uploaded; no warframe.market login until you list.</span>
@@ -400,6 +417,7 @@
     <a href="#desktop">↑ get the app</a>
   </div>
 </section>
+{/if}
 
 <style>
   /* Tab list left, panel right; the list collapses to a wrapping strip above
@@ -465,7 +483,7 @@
   .mini tr.sum td.score { color: var(--good); }
   /* Relic drop rarity, as the planner shows it: a single C / U / R initial in
      front of the name (its own column would get stretched by auto layout). */
-  .mini .rar { display: inline-block; width: 1.25rem; font-family: var(--font-mono); font-weight: 600; color: var(--faint); }
+  .mini .rar { display: inline-block; width: 1.25rem; font-family: var(--font-mono); font-weight: 600; color: var(--muted); }
   .mini .rar.U { color: var(--muted); }
   .mini .rar.R { color: var(--warn); }
   .mini .good { color: var(--good); }

@@ -7,6 +7,9 @@ import PendingBatchBanner from '../features/selling/PendingBatchBanner.svelte';
 import BaroView from '../features/market-context/BaroView.svelte';
 import RelicPlannerView from '../features/relics/RelicPlannerView.svelte';
 import SetPicksView from '../features/selling/SetPicksView.svelte';
+import { ActivityLog } from '../ui/activity.svelte';
+import { ListingReceipts } from '../features/selling/receipts.svelte';
+import type { PlanResponse } from '../contracts/data';
 
   import { loadMarket } from '../adapters/market';
   import { loadCatalogs } from '../adapters/catalogs';
@@ -16,9 +19,10 @@ import SetPicksView from '../features/selling/SetPicksView.svelte';
   import { ProtectionController } from '../features/selling/protection.svelte';
   import ProtectedPlan from '../features/selling/ProtectedPlan.svelte';
   import { type WfmSession } from '../features/settings/feedback';
-  import { humanError } from '../contracts/errors';
+  import { humanError, DesktopCmdError } from '../contracts/errors';
+  import { humanWindow } from '../ui/format';
   
-  import { onMount, untrack } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import Faq from './Faq.svelte';
   import { FilterController, type View } from '../features/selling/filters.svelte';
   import { ListingController, WfmAccessController } from '../features/selling/controller.svelte';
@@ -90,6 +94,8 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   const inventory = untrack(() => new InventoryController(store, transport, { loadMarket, loadCatalogs, normalizeInventory: normalizeInventoryNative }));
   const protection = new ProtectionController({ desktopProtectionState, desktopSaveProtectionPlan });
   const listing = new ListingController({ getPendingPlan: () => transport.getPendingPlan(), resumePendingPlan: () => transport.resumePendingPlan(), discardPendingPlan: () => transport.discardPendingPlan(), status: desktopWfmStatus, logout: desktopWfmLogout }, (code, next) => wfmAuthDialogsRef?.open(code, next));
+  const activity = new ActivityLog();
+  const receipts = new ListingReceipts();
   const workspace = createSellWorkspace({ inventory, filters, protection, listing, transport, services: notesServices, getView: () => effectiveView, getNow: () => session.displayNow });
   let allocationMatches = $derived(workspace.allocationMatches);
   let unknownSlugs = $derived(workspace.unknownSlugs);
@@ -183,6 +189,13 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
     return filters.view;
   });
 
+  // Views visited this session; each stays mounted (hidden) once opened.
+  let visited = $state(new Set<View>());
+  $effect(() => {
+    const view = effectiveView;
+    untrack(() => { if (!visited.has(view)) visited = new Set([...visited, view]); });
+  });
+
   const session = createDesktopSession({ inventory, listing, transport, store: untrack(() => store), services: notesServices });
 
   let relicShowAll = $state(false);
@@ -234,6 +247,62 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   let outstanding = $derived(pendingRemaining + uncertainRemaining);
   let ordersToFix = $derived((listing.ordersSummary?.issues ?? 0) + (listing.pendingPlan ? outstanding : 0));
 
+  // Scans report in the strip's activity cell: a user scan from the moment it
+  // starts, an automatic one when it lands. Both settle on what changed.
+  let scanActivity: number | null = null;
+  let lastApplied: number | null = null;
+  function scanSummary(): string {
+    if (!inventory.previousOwned) return 'Scan applied';
+    let added = 0, changed = 0;
+    for (const [key, d] of inventory.deltas) {
+      if (!inventory.previousOwned.has(key)) added += 1;
+      else if (d !== 0) changed += 1;
+    }
+    return added + changed === 0 ? 'Scan applied · no changes' : `Scan applied · ${changed} changed · ${added} new`;
+  }
+  $effect(() => {
+    const pulling = inventory.pullingInventory;
+    untrack(() => {
+      if (pulling && scanActivity == null) scanActivity = activity.begin('Scanning game…');
+      else if (!pulling && scanActivity != null) {
+        const id = scanActivity;
+        scanActivity = null;
+        if (inventory.pullError) activity.finish(id, inventory.noTradeables ? 'Scan found nothing tradeable' : 'Scan failed', 'bad');
+        else if (inventory.lastUpdated !== lastApplied) { lastApplied = inventory.lastUpdated; activity.finish(id, scanSummary()); }
+        else activity.finish(id, 'Scan stopped');
+      }
+    });
+  });
+  $effect(() => {
+    // A scan landing outside a user request: the automatic scanner adopting one.
+    const updated = inventory.lastUpdated;
+    const fromScan = inventory.source === 'scan';
+    untrack(() => {
+      if (!fromScan || updated == null || updated === lastApplied || inventory.pullingInventory) return;
+      lastApplied = updated;
+      activity.finish(activity.begin(''), scanSummary());
+    });
+  });
+  // Make visible from the row that was listed, without reopening the review.
+  async function makeReceiptVisible(receipt: { orderId: string | null; slug: string }): Promise<void> {
+    if (!receipt.orderId) return;
+    try {
+      const { results } = await activity.track('Making visible…', () => transport.bulkVisibility([receipt.orderId!], true), (r) => r.results.some((x) => x.status === 'ok') ? 'Now visible to buyers' : 'Visibility not changed', () => 'Visibility not changed');
+      receipts.markVisible(results);
+    } catch (error) {
+      if (error instanceof DesktopCmdError && (error.code === 'needs_login' || error.code === 'needs_unlock')) void wfmAuthDialogsRef?.open(error.code);
+    }
+  }
+  function sendSummary(response: PlanResponse): string {
+    const ok = response.results.filter((r) => r.status === 'ok');
+    const created = ok.filter((r) => r.action !== 'updated').length;
+    const updated = ok.length - created;
+    const open = response.results.filter((r) => r.status === 'pending' || r.status === 'uncertain_mutation').length;
+    if (open > 0) return `Batch interrupted · ${open} to resume`;
+    const parts = [created ? `Listed ${created} · hidden` : '', updated ? `Updated ${updated}` : ''].filter(Boolean);
+    return parts.join(' · ') || 'Nothing was listed';
+  }
+
   let wfmAuthDialogsRef = $state<{ open(code: string, next?: string | null): Promise<void> }>();
   // The last sign-in or unlock failure, kept for a bug report after the dialog closes.
   let wfmAuthFailure = $state<unknown>(null);
@@ -276,14 +345,46 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   // of trading, where they would compete with the task.
   let promptsActive = $derived(hasInventory && !listing.listingOpen && effectiveView !== 'session');
   $effect(() => { if (hasInventory) untrack(() => prompts.launch()); });
-  let showWorkspace = $derived(hasInventory || inventory.phase === 'done' || effectiveView !== 'sell');
+  // Until startup has looked for a saved scan, "no inventory" is unknown, not
+  // empty: show the workspace with placeholders, never the first-run page.
+  let showWorkspace = $derived(hasInventory || inventory.phase === 'done' || effectiveView !== 'sell' || !inventory.restored);
+  // Retaining a pane preserves its table scroll, but all panes share the page
+  // scroller. Capture it before hiding the old pane and restore after layout.
+  let workspaceElement = $state<HTMLElement>();
+  const viewScroll = new Map<View, { top: number; left: number }>();
+  let scrollingView: View | null = null;
+  let scrollGeneration = 0;
+  $effect.pre(() => {
+    const view = effectiveView;
+    const element = workspaceElement;
+    const visible = showWorkspace;
+    untrack(() => {
+      if (!element || !visible) { scrollingView = null; ++scrollGeneration; return; }
+      if (scrollingView === view) return;
+      const inside = getComputedStyle(element).overflowY === 'auto';
+      if (scrollingView) viewScroll.set(scrollingView, {
+        top: inside ? element.scrollTop : window.scrollY,
+        left: inside ? element.scrollLeft : window.scrollX,
+      });
+      scrollingView = view;
+      const saved = viewScroll.get(view) ?? { top: 0, left: 0 };
+      const generation = ++scrollGeneration;
+      void tick().then(() => {
+        if (generation !== scrollGeneration || !showWorkspace || effectiveView !== view) return;
+        const scroller = getComputedStyle(element).overflowY === 'auto' ? element : window;
+        scroller.scrollTo({ ...saved, behavior: 'instant' });
+      });
+    });
+  });
+
+  let restoring = $derived(!inventory.restored && !hasInventory);
 </script>
 
 <FeedbackDialog bind:this={feedbackRef} captureState={captureFeedbackState} services={notesServices} onclosed={() => { if (feedbackFromMore) statusStripRef?.focusMore(); feedbackFromMore = false; }} />
 
 <!-- Keep the banner region mounted while navigation or a scan changes the content. -->
-<div data-shell class={showWorkspace ? 'shell' : 'desktop-landing'}>
-  <StatusStrip bind:this={statusStripRef} inShell={showWorkspace} {inventory} {listing} {filters} {unresolvedCount} {unresolvedSummary} {inventoryFreshness} {inventoryStaleness} {inventoryTimestamp} {marketFreshness} {marketStaleness} {ordersToFix} {baroState} {unreadNotifications} {wfmLabel} {projectLinkAnchors} onexport={() => exportImportRef?.openExport()} onimport={() => exportImportRef?.pickImport()} onclear={() => workspace.clear()} onupdates={() => updates.check({ announce: true })} onfeedback={() => { feedbackFromMore = true; openFeedback(); }} onauth={(code) => wfmAuthDialogsRef?.open(code)} {presence} onpresencesettings={() => { settingsSection = 'account'; filters.setView('settings'); }} />
+<div data-shell data-testid="desktop-mode" class={showWorkspace ? 'shell' : 'desktop-landing'}>
+  <StatusStrip bind:this={statusStripRef} inShell={showWorkspace} {inventory} {listing} {filters} {unresolvedCount} {unresolvedSummary} {inventoryFreshness} {inventoryStaleness} {inventoryTimestamp} {marketFreshness} {marketStaleness} {baroState} {unreadNotifications} {wfmLabel} {projectLinkAnchors} onexport={() => exportImportRef?.openExport()} onimport={() => exportImportRef?.pickImport()} onclear={() => workspace.clear()} onupdates={() => updates.check({ announce: true })} onfeedback={() => { feedbackFromMore = true; openFeedback(); }} onauth={(code) => wfmAuthDialogsRef?.open(code)} {presence} {activity} onpresencesettings={() => { settingsSection = 'account'; filters.setView('settings'); }} />
   {#if showWorkspace}
   <aside data-shell class="sidebar">
     <nav data-shell>
@@ -303,28 +404,33 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
             <span data-shell>Set picks</span>
             <span data-shell class="badge">{setResult.phase === 'done' ? setRecos.length : '—'}</span>
           </button>
-        {#if relicPlan.length > 0 || relicResult.phase === 'loading' || relicResult.error}
+        <!-- Hidden only once the plan is known to be empty, so the nav does not
+             shift when relic values arrive after the inventory. -->
+        {#if relicPlan.length > 0 || relicResult.phase !== 'done' || relicResult.error}
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'relics'} onclick={() => filters.setView('relics')}>
             <span data-shell>Relics</span>
             <span data-shell class="badge">{relicResult.phase === 'done' ? relicPlan.length : '—'}</span>
           </button>
         {/if}
-        {#if resolvedRivens.length > 0}
+        <!-- Shown from the scan itself, not once prices arrive, so the nav does
+             not shift when the market snapshot lands after the inventory. -->
+        {#if resolvedRivens.length > 0 || (inventory.ownedRivens.length > 0 && !inventory.market)}
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'rivens'} onclick={() => filters.setView('rivens')}>
             <span data-shell>Rivens</span>
             <span data-shell class="badge">{resolvedRivens.length}</span>
           </button>
         {/if}
-        {#if showBaroCard}
+        {#if showBaroCard || (hasInventory && !inventory.market && !inventory.marketLoadError)}
           <button data-shell type="button" class="nav-item baro-nav" class:active={effectiveView === 'baro'} onclick={() => filters.setView('baro')}>
             <span data-shell>Baro</span>
-            {#if baroState?.phase === 'here'}<span data-shell class="badge here">here</span>{/if}
+            {#if baroState?.phase === 'here'}<span data-shell class="badge here">here</span>
+            {:else if baroState && baroState.phase !== 'unknown'}<span data-shell class="badge when" title="Baro arrives in {humanWindow(baroState.windowMs)}">{humanWindow(baroState.windowMs).split(' ')[0]}</span>{/if}
           </button>
         {/if}
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'routines'} onclick={() => filters.setView('routines')}>
           <span data-shell>Routines</span>
         </button>
-        {#if buildMetaDrift(inventory.market)}
+        {#if buildMetaDrift(inventory.market) || (hasInventory && !inventory.market && !inventory.marketLoadError)}
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'meta'} onclick={() => filters.setView('meta')}>
             <span data-shell>Meta Drift</span>
           </button>
@@ -335,7 +441,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
         <div data-shell class="nav-label">Manage</div>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'orders'} onclick={() => filters.setView('orders')}>
           <span data-shell>My orders</span>
-          {#if listing.pendingPlan && outstanding > 0}<span data-shell class="badge warn">{outstanding}</span>{/if}
+          {#if ordersToFix > 0}<span data-shell class="badge warn" title="{ordersToFix} {ordersToFix === 1 ? 'order' : 'orders'} to fix">{ordersToFix}</span>{/if}
         </button>
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'watches'} onclick={() => filters.setView('watches')}>
           <span data-shell>Price watches</span>
@@ -362,7 +468,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   </aside>
 
   {/if}
-  <main data-shell class={showWorkspace ? 'workspace' : 'landing'} class:reading-view={['sets', 'relics', 'routines', 'install', 'settings'].includes(effectiveView)} data-testid={!showWorkspace ? 'desktop-mode' : undefined}>
+  <main bind:this={workspaceElement} data-shell class={showWorkspace ? 'workspace' : 'landing'} class:reading-view={['install', 'settings'].includes(effectiveView)} data-testid={!showWorkspace ? 'desktop-first-run' : undefined}>
     {@render generalBanners()}
     {#if !showWorkspace}
   {#if !inventory.error && !inventory.pullError}
@@ -382,7 +488,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
     <p data-shell class="lookup-label">Or look anything up</p>
     <MarketBrowser market={inventory.market} staleness={marketStaleness} freshness={marketFreshness} loadHistory={() => transport.loadHistory()} />
   {/if}
-  <Faq desktop />
+  <Faq />
 
   <footer data-shell class="sitefoot">
     <span data-shell class="grow">TennoWorth is a fan project, not affiliated with Digital Extremes or warframe.market. Open source · MIT · data from warframe.market and warframestat.us.</span>
@@ -396,8 +502,25 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
       <div class="ui-notice" data-tone="warn" role="status">Hold/sell advice unavailable: {advisorResult.error} <button class="btn" onclick={() => workspace.calculationEpoch += 1}>Retry calculations</button></div>
     {/if}
 
-    {#if effectiveView === 'sell'}
-      <SellPane keep={keepSection}
+    <!-- Each view stays mounted once visited and is hidden while another is
+         on screen, so a search, a page, a scroll position or a half-written
+         draft is still there on return. -->
+    {#if effectiveView === 'sell' && restoring}
+      <!-- Startup is still looking for the saved scan: hold the Sell layout
+           with placeholder rows so the real ones fill in where they will stay. -->
+      <section data-shell class="view-header">
+        <h2 data-shell>Sell</h2>
+        <p data-shell class="lede" role="status">Loading your saved scan…</p>
+      </section>
+      <div data-shell class="restoring" aria-hidden="true">
+        {#each { length: 3 } as _, i (i)}<div data-shell class="ph-row pick"><span data-shell></span><span data-shell></span><span data-shell></span></div>{/each}
+        <div data-shell class="ph-gap"></div>
+        {#each { length: 8 } as _, i (i)}<div data-shell class="ph-row"><span data-shell></span><span data-shell></span><span data-shell></span></div>{/each}
+      </div>
+    {/if}
+    {#if visited.has('sell') && !restoring}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'sell' && !restoring)}>
+      <SellPane keep={keepSection} {receipts} onmakevisible={makeReceiptVisible} onopenorders={() => filters.setView('orders')}
         bind:minPrice={filters.minPrice} bind:minOwned={filters.minOwned} bind:typeFilter={filters.typeFilter} bind:hideAtLvl={filters.hideAtLvl} bind:activeTags={filters.activeTags}
         bind:tableView={workspace.tableView}
         resolved={inventory.resolved} allocation={allocationMatches ? protection.state : null} {results} deltas={inventory.deltas} {totalPotential}
@@ -406,46 +529,67 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
         {listableRows} {availableTags} {availableTypes}
         {visibleColumns} {presetSort} {emptyReason}
         columnsCustomized={filters.columnKey in filters.columnChoice} oncolumnschange={(columns) => filters.setColumns(columns)}
-        activePreset={filters.activePreset} reserveCopies={filters.reserveCopies} filtersOpen={filters.filtersOpen} scoreExplainerDismissed={filters.scoreExplainerDismissed}
+        activePreset={filters.activePreset} reserveCopies={filters.reserveCopies} filtersOpen={filters.filtersOpen}
         sellOnboardingDismissed={filters.sellOnboardingDismissed} keepCopiesNudgeDismissed={filters.keepCopiesNudgeDismissed}
         applyPreset={(name) => filters.applyPreset(name)} setReserveCopies={(value) => filters.setReserveCopies(value)} toggleFiltersOpen={(event) => filters.toggleFiltersOpen(event)}
         dismissSellOnboarding={() => filters.dismissSellOnboarding()} dismissKeepCopiesNudge={() => filters.dismissKeepCopiesNudge()}
         openListingFlow={(rows) => { if (calculationsReady && !estimatedGuidance) listing.openListingFlow((Array.isArray(rows) ? rows : rows ? [rows] : listableRows).map(row => ({ ...row, inventory_snapshot_id: inventory.nativeSnapshotId ?? undefined }))); }}
         {estimatedGuidance} oncheckListings={checkListingRequirements} canList={listingQuantitiesKnown} {listingActionLabel} unavailableCount={unknownSlugs.size}
         {pendingBanner}
-        {calculationPending} {calculationError} calculationErrorShown={guidanceUnavailable} onretryCalculation={() => workspace.calculationEpoch += 1}
+        calculationPending={calculationPending || (hasInventory && !inventory.market && !inventory.marketLoadError)} {calculationError} calculationErrorShown={guidanceUnavailable} onretryCalculation={() => workspace.calculationEpoch += 1}
       />
-    {:else if effectiveView === 'session'}
+    </div>
+    {/if}
+    {#if visited.has('session')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'session')}>
       {#if defaultFacts.phase === 'loading'}
         <div class="ui-notice" role="status">Calculating safe quantities and sale values…</div>
       {:else if defaultFacts.error}
         <div class="ui-notice" data-tone="bad" role="alert">Sale calculations unavailable: {defaultFacts.error} <button class="btn" onclick={() => workspace.calculationEpoch += 1}>Retry calculations</button></div>
       {/if}
-      <TradeSessionPane keep={keepSection} {listingBlockReason} onrecheck={checkListingRequirements} {listingActionLabel} owned={inventory.resolved.owned} market={inventory.market} reserveCopies={filters.reserveCopies} advice={adviceMap} nativeFacts={defaultFacts.value} {availability}
+      <TradeSessionPane active={effectiveView === 'session'} keep={keepSection} {listingBlockReason} onrecheck={checkListingRequirements} {listingActionLabel} owned={inventory.resolved.owned} market={inventory.market} reserveCopies={filters.reserveCopies} advice={adviceMap} nativeFacts={defaultFacts.value} {availability}
         scanning={inventory.pullingInventory} onscan={async () => { await inventory.pullInventory(); await protection.refresh(); }} onreview={(rows, budget, state) => { if (!listingQuantitiesKnown) return; listing.openListingFlow(rows.map(r => ({
           ...r, inventory_snapshot_id: inventory.nativeSnapshotId ?? undefined, proposed_quantity: r.quantity, clearing_price: r.platinum, low_sell: r.platinum,
           avg_price: r.market.avg, session: { snapshot_id: state.allowance.snapshot_id!, utc_day: state.allowance.utc_day, budget },
         }))); }} />
-    {:else if effectiveView === 'sets'}
+    </div>
+    {/if}
+    {#if visited.has('sets')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'sets')}>
       <SetPicksView {inventory} {setSurfaceAge} {keepSection} {guidanceUnavailable} {setResult} {setRecos} {adviceMap} onretry={() => workspace.calculationEpoch += 1} />
-    {:else if effectiveView === 'relics'}
+    </div>
+    {/if}
+    {#if visited.has('relics')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'relics')}>
       <RelicPlannerView bind:relicShowAll {relicResult} {relicSurfaceAge} {relicPlan} onretry={() => workspace.calculationEpoch += 1} />
-    {:else if effectiveView === 'rivens'}
+    </div>
+    {/if}
+    {#if visited.has('rivens')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'rivens')}>
       <RivensPanel market={inventory.market} rivens={resolvedRivens} />
-    {:else if effectiveView === 'baro'}
+    </div>
+    {/if}
+    {#if visited.has('baro')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'baro')}>
       <BaroView {inventory} {baroSurfaceAge} {keepSection} {guidanceUnavailable} {voidTrader} {ducatStats} {baroState} {guidanceOwned} {guidanceAvailability} {unknownSlugs} onducats={() => { filters.setView('sell'); filters.applyPreset('ducats'); }} />
-    {:else if effectiveView === 'routines'}
+    </div>
+    {/if}
+    {#if visited.has('routines')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'routines')}>
       <RoutinesPanel routine={routines} market={inventory.market} owned={inventory.resolved.owned} now={displayNow} />
-
-    {:else if effectiveView === 'meta'}
+    </div>
+    {/if}
+    {#if visited.has('meta')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'meta')}>
       <MetaDriftPanel market={inventory.market} />
-    {:else if effectiveView === 'orders'}
-      <section data-shell class="view-header">
-        <h2 data-shell>My orders</h2>
-        <p data-shell class="lede">Your active warframe.market listings, fetched live from the desktop app.</p>
-      </section>
-      {@render pendingBanner()}
+    </div>
+    {/if}
+    {#if visited.has('orders')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'orders')}>
       <MyOrdersPanel
+        banner={pendingBanner}
+        active={effectiveView === 'orders'}
+        {activity}
         {transport}
         market={inventory.market}
         sessionEpoch={listing.sessionEpoch}
@@ -454,25 +598,36 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
         onauthrequired={(code) => wfmAuthDialogsRef?.open(code)}
         onsummary={(s) => (listing.ordersSummary = s)}
       />
-
-    {:else if effectiveView === 'watches'}
+    </div>
+    {/if}
+    {#if visited.has('watches')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'watches')}>
       <WatchlistPanel market={inventory.market} />
-
-    {:else if effectiveView === 'notifications'}
+    </div>
+    {/if}
+    {#if visited.has('notifications')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'notifications')}>
       <NotificationInbox onopen={(target) => filters.setView(target)} onsettings={() => { settingsSection = 'notifications'; filters.setView('settings'); }} />
-
-    {:else if effectiveView === 'ledger'}
+    </div>
+    {/if}
+    {#if visited.has('ledger')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'ledger')}>
       <LedgerPanel onsetautoclose={(on) => store.setSetting('auto-close-sold', on ? 'on' : 'off')} />
-
-    {:else if effectiveView === 'install'}
+    </div>
+    {/if}
+    {#if visited.has('install')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'install')}>
       <section data-shell class="view-header">
         <h2 data-shell>FAQ</h2>
         <p data-shell class="lede">Answers to common questions.</p>
       </section>
-      <Faq desktop />
-
-    {:else if effectiveView === 'settings'}
-      <SettingsPanel {updates} onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} {autoScan} {appIcon} {presence} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} section={settingsSection} onsectionshown={() => (settingsSection = null)} />
+      <Faq />
+    </div>
+    {/if}
+    {#if visited.has('settings')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'settings')}>
+      <SettingsPanel active={effectiveView === 'settings'} {updates} onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} {autoScan} {appIcon} {presence} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} section={settingsSection} onsectionshown={() => (settingsSection = null)} />
+    </div>
     {/if}
 
     {/if}
@@ -591,7 +746,9 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   rows={listing.reviewRowsOverride ?? listableRows.slice(0, 50).map(row => ({ ...row, inventory_snapshot_id: inventory.nativeSnapshotId ?? undefined }))}
   {transport}
   onauthrequired={(code) => wfmAuthDialogsRef?.open(code, 'list')}
-  sendThrough={(send) => listing.trackSend(send)}
+  sendThrough={(send) => activity.track('Sending listings…', () => listing.trackSend(send), (response) => sendSummary(response as PlanResponse), () => 'Listing failed')}
+  onsent={(sent, results) => receipts.record(sent, results)}
+  onvisible={(results) => { receipts.markVisible(results); const shown = results.filter((r) => r.status === 'ok').length; if (shown) activity.finish(activity.begin(''), `${shown} now visible`); }}
   onclose={() => { listing.reviewRowsOverride = null; void protection.refresh(); void listing.refreshPendingPlan(); }}
 />
 

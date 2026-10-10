@@ -13,6 +13,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
 
   import type { OwnOrder } from '../../contracts/generated/desktop';
 
+import { untrack } from 'svelte';
 import { createToastQueue } from '../../ui/toast-queue.svelte';
 
 import type { DesktopServices } from '../../contracts/services';
@@ -37,6 +38,9 @@ import type { DesktopServices } from '../../contracts/services';
      *  once orders are loaded (and whenever the count or the health issues
      *  change); null while nothing is loaded so those cells stay hidden. */
     onsummary?: (s: { live: number; issues: number } | null) => void;
+    /** Whether the orders view is on screen. The view stays mounted while
+     *  hidden, so each return refreshes, with the last rows kept in view. */
+    active?: boolean;
   }
 
 export function createOrdersController(input: OrdersInput, services: Pick<DesktopServices, 'desktopLiveTopPrices' | 'listenForTauriEvent'>) {
@@ -94,7 +98,9 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
         // state instead of a stale failure.
         if (e instanceof DesktopCmdError && (e.code === 'needs_login' || e.code === 'needs_unlock')) {
           phase = 'locked';
-          input.onauthrequired?.(e.code);
+          // A hidden view never asks for sign-in: the user may have just
+          // logged out elsewhere. Returning to it loads again and asks then.
+          if (input.active ?? true) input.onauthrequired?.(e.code);
           return;
         }
         error = humanError(e);
@@ -107,7 +113,25 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
   // unlocked (the transport is a boot-time constant, so nothing else retriggers).
   $effect(() => {
     void input.sessionEpoch;
-    loadOrders();
+    // Only the epoch triggers a load: the transport is read untracked, so a
+    // parent re-passing its props cannot refetch. A session change while the
+    // view is hidden (a logout from Settings) drops the old rows instead of
+    // fetching, and the next return loads for the new session.
+    untrack(() => {
+      if (input.active ?? true) { loadOrders(); return; }
+      ++loadGen;
+      orders = [];
+      error = null;
+      phase = 'idle';
+    });
+  });
+  let wasActive = input.active ?? true;
+  $effect(() => {
+    const active = input.active ?? true;
+    untrack(() => {
+      if (active && !wasActive && phase !== 'loading') loadOrders();
+      wasActive = active;
+    });
   });
 
   function markBusy(id: string, on: boolean): void {

@@ -21,6 +21,25 @@ const snapshot: Snapshot = { nativeSnapshotId: 1, ts: 100, invName: 'saved', riv
 ]) };
 
 describe('inventory lifecycle', () => {
+  it('is not "restored" until startup has looked for a saved scan, whatever it found', async () => {
+    for (const saved of [snapshot, null]) {
+      const c = new InventoryController(store(saved), {
+        loadCachedMarket: async () => null, refreshMarket: async () => ({ updated: false, updatedAt: null, etag: null }),
+        fetchInventory: vi.fn(),
+      }, sources);
+      // Until then "no inventory" is unknown, not empty: the shell shows the
+      // workspace with placeholders rather than the first-run page.
+      expect(c.restored).toBe(false);
+      const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const restoring = c.restore();
+        expect(c.restored).toBe(false);
+        await restoring;
+      } finally { log.mockRestore(); }
+      expect(c.restored).toBe(true);
+    }
+  });
+
   it('keeps restored quantities and ranked copies visible when prices cannot load', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {

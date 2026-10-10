@@ -115,22 +115,22 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
 </script>
 
 <section class="ui-stack ledger" data-testid="ledger">
-  <header class="view-header row">
-    <div><h2>Ledger</h2><p class="lede">Every trade the game confirmed, read from its own log — realised plat, not estimates.</p></div>
-    <div class="row gap-sm">
-      <span class="muted">{trades.length} trade{trades.length === 1 ? '' : 's'}</span>
+  <!-- Totals sit in the header strip like every other view's; the sold and
+       bought counts behind them are on the history rail. -->
+  <header class="view-header">
+    <h2>Ledger</h2>
+    <p class="lede">Every trade the game confirmed, read from its own log — realised plat, not estimates.</p>
+    <div class="vh-end">
+      {#if !loadError && trades.length}
+        <div class="ui-totals" role="group" aria-label="Ledger summary">
+          <div class="cell" title="{all.sales} sold · {all.purchases} bought"><span class="k">Net, all time</span><span class="v" class:good={all.net > 0} class:bad={all.net < 0}>{all.net > 0 ? '+' : ''}{all.net}p</span></div>
+          <div class="cell" title="{week.sales} sold · {week.purchases} bought"><span class="k">Last 7 days</span><span class="v" class:good={week.net > 0} class:bad={week.net < 0}>{week.net > 0 ? '+' : ''}{week.net}p</span></div>
+          <div class="cell" title="Sales / purchases"><span class="k">Plat in / out</span><span class="v">{all.platIn}p / {all.platOut}p</span></div>
+        </div>
+      {/if}
       <button class="btn ghost" onclick={load}>Refresh</button>
     </div>
   </header>
-
-  {#if !loadError && trades.length}
-    <div class="ui-summary-strip">
-      <div><span class="k">Net, all time</span><strong class:good={all.net > 0} class:bad={all.net < 0}>{all.net > 0 ? '+' : ''}{all.net}p</strong><span class="muted">{all.sales} sold · {all.purchases} bought</span></div>
-      <div><span class="k">Last 7 days</span><strong class:good={week.net > 0} class:bad={week.net < 0}>{week.net > 0 ? '+' : ''}{week.net}p</strong><span class="muted">{week.sales} sold · {week.purchases} bought</span></div>
-      <div><span class="k">Plat in / out</span><strong>{all.platIn}p / {all.platOut}p</strong><span class="muted">sales / purchases</span></div>
-    </div>
-
-  {/if}
   {#if status}
     {#if !status.path}
       <p class="ui-notice" data-tone="warn">
@@ -146,19 +146,16 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
         {/if}
       </p>
     {/if}
-    <section class="wrap tw" aria-labelledby="ledger-automation-title">
-      <div class="rail"><h3 id="ledger-automation-title">Listing automation</h3></div>
-      <div class="ui-setting-row"><div class="ui-setting-copy"><label for="ledger-auto-close">After a sale, reduce or remove the matching warframe.market listing automatically</label><p>Only ever lowers a quantity by what you sold; never touches price or visibility.</p></div>
-      <label class="ui-setting-check">
-      <input id="ledger-auto-close" type="checkbox" checked={autoClose} onchange={toggleAutoClose} disabled={savingAutoClose || !status.path} />
-        <span>Enabled</span>
-      </label></div>
-    </section>
+    <!-- One setting, so one line rather than a titled panel. -->
+    <div class="setting-line" role="group" aria-label="Listing automation">
+      <label class="check" for="ledger-auto-close"><input id="ledger-auto-close" type="checkbox" checked={autoClose} onchange={toggleAutoClose} disabled={savingAutoClose || !status.path} /> After a sale, reduce or remove the matching warframe.market listing</label>
+      <span class="muted">Only ever lowers a quantity by what you sold; never touches price or visibility.</span>
+    </div>
   {/if}
 
 
   <section class="wrap tw" aria-labelledby="ledger-history-title">
-    <div class="rail"><h3 id="ledger-history-title">Trade history</h3><span class="exp">{trades.length} confirmed trade{trades.length === 1 ? '' : 's'}</span></div>
+    <div class="rail"><h3 id="ledger-history-title">Trade history</h3><span class="exp">{trades.length} confirmed trade{trades.length === 1 ? '' : 's'}{#if trades.length} · {all.sales} sold · {all.purchases} bought{/if}</span></div>
   {#if loadError}
     <div class="ui-notice" data-tone="bad" role="alert">Couldn't load the ledger: {loadError}</div>
   {:else if trades.length === 0}
@@ -200,9 +197,9 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
 </section>
 
 <style>
-  .row { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); flex-wrap: wrap; }
-  .gap-sm { gap: var(--s2); }
-  .lede { margin: var(--s2) 0 0; color: var(--muted); }
+  .setting-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s3); padding: var(--s1) 0; border-block: 1px var(--rule) var(--hairline); font-size: var(--text-control); }
+  .setting-line .check { display: inline-flex; align-items: flex-start; gap: var(--s2); color: var(--fg); font-weight: 500; }
+  .setting-line .muted { color: var(--muted); }
   .ledger { gap: var(--s4); }
   .ui-notice { margin: var(--s4) var(--inset); }
   .byitem { padding: var(--s3) var(--inset); }
@@ -216,8 +213,8 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
   .kind { font-size: var(--text-caption); padding: 1px 7px; border-radius: var(--radius-pill); border: 1px solid var(--border); color: var(--muted); }
   .kind.sale { color: var(--good); border-color: var(--good); }
   .kind.purchase { color: var(--warn); border-color: var(--warn); }
-  .good { color: var(--good); }
-  .bad { color: var(--bad); }
+  .good, .v.good { color: var(--good); }
+  .bad, .v.bad { color: var(--bad); }
   .muted { color: var(--muted); font-family: var(--font-body); }
   .empty { padding: 10px 0; }
   .scroll { overflow: auto; }

@@ -98,8 +98,8 @@
     color: var(--fg);
   }
   .statusbar .brand .sub[data-shell] {
-    color: var(--faint);
-    font-size: 0.6875rem;
+    color: var(--muted);
+    font-size: var(--text-caption);
     overflow: hidden;
     text-overflow: ellipsis;
   }
@@ -117,9 +117,15 @@
   .statusbar .cell.inv[data-shell] { flex: 1 1 23rem; }
   .statusbar .cell.inv .file[data-shell] { flex: 1 1 6rem; }
   .statusbar .refresh-wrap[data-shell] { flex: none; margin-left: auto; }
-  /* The timestamp starts the second line, beside Refresh, so a long file name
-     keeps the first line to itself. */
   .statusbar .cell.inv time[data-shell] { flex: 1 1 55%; }
+  /* Wide windows keep the strip to one line: the scan cell takes the slack,
+     a long scan name wraps inside its own box, and the time and Refresh stay
+     beside it. Narrow windows still wrap the cell. */
+  @media (min-width: 901px) {
+    .statusbar.shell-strip .cell.inv[data-shell] { flex-wrap: nowrap; }
+    .statusbar.shell-strip .cell.inv .file[data-shell] { flex: 0 1 auto; min-width: 6rem; }
+    .statusbar.shell-strip .cell.inv time[data-shell] { flex: none; }
+  }
   .statusbar.shell-strip .brand + .cell[data-shell] { border-left: none; }
   .statusbar .cell.end[data-shell] { padding-right: var(--inset); }
   .statusbar .cell b[data-shell] {
@@ -128,7 +134,15 @@
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
   }
-  .statusbar .cell.attn b[data-shell] { color: var(--warn); }
+  /* The activity cell: one place for scans, sends and live checks. Busy is
+     the caution hue, a finished result good, a failure bad; the words carry
+     the meaning, the square only repeats it. */
+  .statusbar .cell.act[data-shell] { background: var(--panel-2); border-left: 1px solid var(--border); white-space: nowrap; text-transform: none; letter-spacing: 0; color: var(--fg); }
+  .statusbar .cell.act .dot[data-shell] { background: var(--fg); }
+  .statusbar .cell.act.busy .dot[data-shell] { background: var(--warn); }
+  .statusbar .cell.act.done .dot[data-shell] { background: var(--good); }
+  .statusbar .cell.act.bad[data-shell] { color: var(--bad); }
+  .statusbar .cell.act.bad .dot[data-shell] { background: var(--bad); }
   /* A long inventory filename must not push the WFM cell off the right rail. */
   .statusbar .cell .file[data-shell] { max-width: 16rem; white-space: normal; overflow-wrap: anywhere; }
   .statusbar .cell .ducat[data-shell] { color: var(--ducat); }
@@ -196,7 +210,7 @@
     font-size: var(--text-caption);
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--faint);
+    color: var(--muted);
     font-weight: 600;
     padding: var(--s2) var(--inset) var(--s1);
   }
@@ -236,6 +250,7 @@
     padding: 0 var(--s1);
   }
   .nav-item .badge.unread[data-shell] { color: var(--on-ink); background: var(--ink-bar); font-weight: 600; }
+  .nav-item .badge.when[data-shell] { color: var(--muted); border-color: transparent; background: transparent; font-weight: 400; }
   .nav-item .badge.warn[data-shell] { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 40%, var(--border)); }
   .nav-item .badge.here[data-shell] {
     color: var(--ducat);
@@ -298,7 +313,7 @@
   /* Refresh ▾ in the strip: a 24px control inside the 40px bar. */
   .refresh-trigger[data-shell] {
     font: inherit;
-    font-size: 0.6875rem;
+    font-size: var(--text-caption);
     height: var(--ctl-xs);
     padding: 0 var(--s2);
     color: var(--muted);
@@ -378,16 +393,7 @@
   .refresh-pop .rp-item.danger:hover[data-shell] { color: var(--bad); }
   .refresh-pop .rp-note[data-shell] { margin: var(--s1) 0 0; font-size: var(--text-caption); line-height: 1.45; color: var(--muted); }
 
-  /* Workspace view header - h2 + a hover/focus info dot carrying the
-     one-sentence lede, folded onto a single row (was h2 + a full lede
-     paragraph on its own line) to reclaim vertical space above the fold. */
-  .view-header[data-shell] {
-    display: flex;
-    align-items: baseline;
-    gap: 8px;
-    min-height: 28px;
-    flex-wrap: wrap;
-  }
+  .view-header[data-shell] { min-height: var(--rail); }
   .view-header h2[data-shell] {
     font-size: var(--text-heading);
     font-weight: 600;
@@ -516,14 +522,18 @@
   }
   /* Landing header: title block left, theme switcher top-right; the switcher
      drops under the title on narrow viewports. */
-  .landing-head[data-shell] { display: flex; align-items: center; justify-content: space-between; gap: var(--s2) var(--s5); flex-wrap: wrap; min-height: var(--rail); }
-  .landing-head .lede[data-shell] { flex: 1 1 20rem; min-width: 0; margin: 0; font-size: var(--text-body); line-height: 1.375rem; color: var(--muted); }
+  .landing-head[data-shell] { display: flex; flex-direction: column; gap: var(--s1); padding-top: var(--s2); }
+  /* The statement: the page's first read, in the body face at the statement
+     step; bold only on the claim itself. Not a hero - no image, no numerals. */
+  .landing-head .statement[data-shell] { margin: 0; max-width: 46rem; font: 400 var(--text-statement)/1.3 var(--font-body); color: var(--fg); text-wrap: balance; }
+  .landing-head .statement strong[data-shell] { font-weight: 600; }
+  .landing-head .lede[data-shell] { min-width: 0; margin: 0; font-size: var(--text-control); line-height: 1.375rem; color: var(--muted); }
   .landing-head .lede em[data-shell] { color: var(--fg); font-style: normal; font-weight: 600; }
   h2[data-shell] { margin: 0 0 4px 0; font-size: var(--text-body); font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
   h3[data-shell] { margin: 0 0 4px 0; font-size: var(--text-body); font-weight: 600; }
   .sub[data-shell] { color: var(--muted); margin: 6px 0 0 0; max-width: 64ch; font-size: var(--text-control); }
   .ver[data-shell] {
-    color: var(--faint);
+    color: var(--muted);
     font-size: var(--text-caption);
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.02em;
@@ -629,14 +639,6 @@
 
   /* Action-verb prefix on rec cards. Casual users said the cards were
      too noun-heavy - leading with a verb gives them the instruction. */
-  .reco-verb[data-shell] {
-    font-size: var(--text-caption);
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--accent);
-    margin-right: 6px;
-  }
 
   button.ghost[data-shell] {
     background: transparent;
@@ -646,24 +648,25 @@
     padding: 4px 10px;
   }
   button.ghost:hover[data-shell] { background: var(--panel-2); color: var(--fg); }
-  code[data-shell] { background: var(--panel-2); padding: 1px 6px; border-radius: var(--radius-input); font-family: var(--font-mono); font-size: 0.93em; }
+  code[data-shell] { background: var(--panel-2); padding: 1px 6px; border-radius: var(--radius-input); font-family: var(--font-mono); font-size: 1em; }
 
   /* Set-completion card - recommendation rows. Three reco kinds
      distinguished by a small uppercase pill so the user can scan and
      pick a strategy without reading every detail line. Net plat is the
      right-aligned headline number per row. */
   .set-recos[data-shell] { padding: 0; }
-  .reco[data-shell] {
-    border-top: 1px var(--rule) var(--hairline);
-    padding: var(--s4) var(--inset);
-    align-items: center;
-  }
-  .reco:first-of-type[data-shell] { border-top: none; }
-  .reco-body[data-shell] { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
-  .reco-title[data-shell] { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
-  .reco-title a[data-shell] { order: -1; flex: 1 1 16rem; }
-  .reco-title a[data-shell] { color: var(--fg); text-decoration: none; font-weight: 600; font-size: var(--text-control); }
-  .reco-title a:hover[data-shell] { color: var(--accent); text-decoration: underline; }
+  /* Set picks as a ranked table: the sentence column takes the slack, the
+     numbers sit in aligned columns, the verb never wraps. */
+  .set-table[data-shell] { min-width: 46rem; }
+  table.tw.set-table th.l[data-shell] { width: auto; min-width: 0; }
+  .set-table .rank[data-shell] { display: inline-block; min-width: 1.25rem; color: var(--muted); font-family: var(--font-mono); }
+  table.tw.set-table .set-name[data-shell] { width: 30%; min-width: 13rem; }
+  .set-table td.set-name a[data-shell] { font-weight: 600; margin-right: var(--s2); }
+  .set-table td.set-name .kind[data-shell], .set-table td.set-name .tag[data-shell] { margin-right: var(--s1); }
+  .set-table td.verb[data-shell] { font-weight: 600; white-space: nowrap; }
+  table.tw.set-table th.verb[data-shell] { width: 7rem; }
+  table.tw.set-table .reco-detail[data-shell] { width: 50%; min-width: 20rem; }
+  .set-table td.reco-detail[data-shell] { color: var(--muted); }
   .kind[data-shell] {
     font-size: var(--text-caption);
     letter-spacing: 0.05em;
@@ -691,13 +694,6 @@
   .reco-detail strong[data-shell] { color: var(--fg); font-weight: 600; }
   .good-text[data-shell] { color: var(--good); }
   .bad-text[data-shell] { color: var(--bad); }
-  .reco-net-inline[data-shell] {
-    font-family: var(--font-mono);
-    font-size: var(--text-body);
-    font-weight: 600;
-    color: var(--good);
-    margin-left: 4px;
-  }
 
   .tag.advice[data-shell] { cursor: help; }
 
@@ -723,45 +719,27 @@
   .baro-detail .unit[data-shell] { color: var(--muted); font-size: var(--text-caption); margin-left: 1px; }
 
   .relic-planner[data-shell] { padding: 0; gap: 0; }
+  .relic-table[data-shell] { min-width: 58rem; }
+  table.tw.relic-table th.l[data-shell] { width: auto; min-width: 0; }
+  table.tw.relic-table .relic-name[data-shell] { width: 16%; min-width: 9rem; }
+  table.tw.relic-table .why[data-shell] { width: 34%; min-width: 16rem; }
+  .relic-table td.l.relic-name a[data-shell] { font-weight: 600; }
+  .relic-table td.why[data-shell] { color: var(--muted); }
+  /* One rung per cell: the EV over a bar on the row's scale; the chosen rung
+     is the ink inversion, like any other selected state. */
+  .relic-table td.lad[data-shell] { width: 6.5rem; }
+  .relic-table td.lad .lv[data-shell] { display: block; }
+  .relic-table td.lad .lbar[data-shell] { display: block; height: 0.25rem; margin-top: var(--s1); background: var(--hairline); }
+  .relic-table td.lad .lbar i[data-shell] { display: block; height: 100%; background: var(--muted); }
+  .relic-table td.lad.pick[data-shell], table.tw.relic-table tbody tr:hover td.lad.pick[data-shell] { background: var(--ink-bar); color: var(--on-ink); font-weight: 600; }
+  .relic-table td.lad.pick .lbar[data-shell] { background: color-mix(in srgb, var(--on-ink) 30%, transparent); }
+  .relic-table td.lad.pick .lbar i[data-shell] { background: var(--on-ink); }
   .build-vs-buy[data-shell] { margin-top: 8px; }
   .build-vs-buy > summary[data-shell] { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
   .build-vs-buy[open] > summary[data-shell] { margin-bottom: 8px; }
-  .relic-grid[data-shell] {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr));
-    gap: 12px;
-  }
   @media (max-width: 760px) { .relic-grid[data-shell] { grid-template-columns: 1fr; } }
   .relic-more[data-shell] { margin-top: 12px; text-align: center; }
-  .relic-card[data-shell] {
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-panel);
-    padding: 12px 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .relic-title[data-shell] { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-  .relic-title a[data-shell] { color: var(--fg); text-decoration: none; font-weight: 600; font-size: var(--text-control); }
-  .relic-title a:hover[data-shell] { color: var(--accent); text-decoration: underline; }
   .small[data-shell] { font-size: var(--text-caption); }
-  .relic-epp[data-shell] {
-    font-family: var(--font-mono);
-    font-size: var(--text-metric-lg);
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    line-height: 1.1;
-  }
-  .relic-epp .unit[data-shell] { font-size: var(--text-caption); color: var(--muted); margin-left: 4px; }
-  .relic-meta[data-shell] {
-    font-size: var(--text-caption);
-    color: var(--muted);
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    flex-wrap: wrap;
-  }
   .relic-rewards[data-shell] { font-size: var(--text-caption); }
   .relic-rewards summary[data-shell] {
     cursor: pointer;
@@ -824,8 +802,11 @@
      the tallest open answer in that row - acceptable for a FAQ. */
   main.landing .faq[data-shell] { display: grid; grid-template-columns: 1fr 1fr; gap: 0 var(--s5); margin-top: calc(var(--s5) - var(--stack)); }
   main.landing .faq > h2[data-shell], main.landing .faq > .trust-lede[data-shell] { grid-column: 1 / -1; }
-  main.landing .faq details:nth-of-type(2)[data-shell] { border-top: 1px var(--rule) var(--hairline); }
   @media (max-width: 720px) { main.landing .faq[data-shell] { grid-template-columns: 1fr; } }
+  /* Questions: Trust & safety and Using TennoWorth as two labelled columns. */
+  .faq .qcol[data-shell] { min-width: 0; scroll-margin-top: var(--sticky-header-clearance, 0px); }
+  .faq .qcol > h3[data-shell] { margin: var(--s3) 0 var(--s1); font: 600 var(--text-caption)/1.4 var(--font-ui); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  main.workspace .faq .qcol > h3[data-shell] { margin-inline: var(--inset); }
   .faq details[data-shell] {
     border-top: 1px var(--rule) var(--hairline);
     padding: 12px 0;
@@ -888,11 +869,6 @@
      directly in this template. */
   main.reading-view[data-shell] > * { width: 100%; max-width: 64rem; }
   main.workspace[data-shell] { gap: var(--s4); padding: var(--s5); }
-  .relic-grid[data-shell] { grid-template-columns: minmax(0, 1fr); gap: 0; }
-  .relic-card[data-shell] { border: 0; border-top: 1px var(--rule) var(--border); background: var(--panel); padding: var(--s4) var(--inset); }
-  .relic-card:first-child[data-shell] { border-top: 0; }
-  .relic-title[data-shell] { justify-content: flex-start; gap: var(--s3); }
-  .relic-title a[data-shell] { order: -1; flex: 1; }
   .relic-rewards summary[data-shell] { min-height: var(--ctl); }
   main.workspace .faq[data-shell] { margin: 0; padding: 0; }
   main.workspace .faq > h2[data-shell] { margin: 0; padding: var(--s2) var(--inset); min-height: var(--rail); }
@@ -910,3 +886,15 @@
 .feedback-problems > span[data-shell] { color: var(--muted); }
 html[data-look="yorha"] dialog.feedback-dialog header[data-shell] { margin: 0; padding: var(--s3); }
 dialog.feedback-dialog .feedback-check[data-shell] { flex-direction: row; font-family: var(--font-body); font-size: var(--text-control); letter-spacing: normal; text-transform: none; }
+
+/* Startup placeholders: the Sell layout's rows, drawn as hairline bars at their
+   final height. Static on purpose - no shimmer; the strip says what is loading. */
+.restoring[data-shell] { display: flex; flex-direction: column; border: 1px solid var(--border); background: var(--panel); }
+.restoring .ph-row[data-shell] { display: grid; grid-template-columns: minmax(0, 3fr) 1fr 1fr; gap: var(--s4); align-items: center; min-height: var(--row); padding: 0 var(--inset); border-bottom: 1px var(--rule) var(--hairline); }
+.restoring .ph-row span[data-shell] { display: block; height: 0.45rem; background: var(--hairline); }
+.restoring .ph-row span + span[data-shell] { width: 50%; justify-self: end; }
+.restoring .ph-gap[data-shell] { height: var(--s5); background: var(--bg); border-block: 1px solid var(--border); }
+/* A visited view stays mounted while another is on screen (it keeps its
+   search, scroll and drafts); the pane carries the workspace rhythm. */
+.view-pane[data-shell] { display: flex; flex-direction: column; gap: var(--s4); min-width: 0; }
+.view-pane[data-shell][hidden] { display: none; }

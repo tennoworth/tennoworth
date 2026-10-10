@@ -38,7 +38,6 @@ describe('LocalStorageStateStore - key/shape parity with the pre-store code', ()
     ['reserve-copies', 'wfminv:reserve-copies-v1', '3'],
     ['filters-open', 'wfminv:filters-open-v1', '1'],
     ['view', 'wfminv:view-v1', 'relics'],
-    ['score-explainer-dismissed', 'wfminv:score-explainer-dismissed-v1', '1'],
     ['keep-copies-nudge-dismissed', 'wfminv:keep-copies-nudge-dismissed-v1', '1'],
     ['tray-toast-seen', 'wfminv:tray-toast-seen-v1', '1'],
     ['sell-onboarding-dismissed', 'wfminv:sell-onboarding-dismissed-v1', '1'],
@@ -108,7 +107,6 @@ describe('TauriStateStore - command mapping', () => {
     expect(invoke).toHaveBeenCalledWith('get_setting', { key: 'reserve-copies' });
     expect(invoke).toHaveBeenCalledWith('get_setting', { key: 'filters-open' });
     expect(invoke).toHaveBeenCalledWith('get_setting', { key: 'view' });
-    expect(invoke).toHaveBeenCalledWith('get_setting', { key: 'score-explainer-dismissed' });
     expect(invoke).toHaveBeenCalledWith('get_setting', { key: 'keep-copies-nudge-dismissed' });
     expect(invoke).toHaveBeenCalledWith('get_setting', { key: 'tray-toast-seen' });
     expect(invoke).toHaveBeenCalledWith('get_setting', { key: 'sell-onboarding-dismissed' });

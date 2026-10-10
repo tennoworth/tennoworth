@@ -36,6 +36,8 @@
   --text-section: 1rem;
   --text-metric: 1.125rem;
   --text-metric-lg: 1.375rem;
+  /* The hosted landing's one-sentence statement, in the reading face. */
+  --text-statement: 1.375rem;
   --leading-body: 1.5;
   --leading-control: 1.25;
   --layer-chrome: 20;
@@ -94,6 +96,11 @@
 /* Root type scale: 16 → 17 (≥1900) → 18 (≥2500). Everything rem-based grows
    ~6% per step, so a 1920 desk gets a wider Item column, not more columns. */
 html { font-size: 16px; scroll-padding-top: var(--sticky-header-clearance, 0px); }
+/* Plex Mono ships 400/500/600 only: a 700 request must use 600 rather than a
+   smeared synthetic bold. Code is set in the mono face at the size of the
+   words around it - Plex Mono and Sans share x-height and cap height. */
+html { font-synthesis-weight: none; }
+code, kbd, samp, pre { font-family: var(--font-mono); font-size: 1em; }
 @media (min-width: 1900px) { html { font-size: 17px; } }
 @media (min-width: 2500px) { html { font-size: 18px; } }
 
@@ -484,7 +491,7 @@ table.tw td.l a:hover { color: var(--accent); text-decoration: underline; }
 table.tw td.score, table.tw td.strong { font-weight: 600; color: var(--fg); }
 /* The price is the number people came for: ink, 600, with a quiet unit. */
 table.tw td.price { font-weight: 600; color: var(--fg); }
-table.tw td.price .unit { font-weight: 400; font-size: 0.8em; }
+table.tw td.price .unit { font-weight: 400; font-size: var(--text-caption); }
 table.tw td.fg { color: var(--fg); }
 table.tw th.sorted { color: var(--accent); }
 table.tw tr.dim td, table.tw tr.dim td.l, table.tw tr.dim td.l a { color: var(--muted); font-weight: 400; }
@@ -536,16 +543,16 @@ table.tw td.reason.bad { color: var(--bad); }
    name real columns (Own/Priority/Stack value) so they read at --muted, only the
    placeholder cells are decorative --faint. */
 table.tw th.ghost { color: var(--muted); }
-table.tw td.ghost { color: var(--faint); }
+table.tw td.ghost { color: var(--muted); }
 table.tw .g1 { border-left: 1px dashed var(--border); }
 /* Hand-off: the same columns, completed - accent wash + a solid lead rule. */
 table.tw th.you, table.tw td.you { background: color-mix(in srgb, var(--accent) 7%, transparent); color: var(--fg); }
-table.tw td.you.score { font-weight: 700; }
+table.tw td.you.score { font-weight: 600; }
 table.tw th.you.y1, table.tw td.you.y1 { border-left: 1px solid var(--accent); }
 table.tw .up, table.tw .good { color: var(--good); }
 table.tw .down, table.tw .bad { color: var(--bad); }
 table.tw .flat, table.tw .muted { color: var(--muted); font-size: inherit; }
-table.tw .faint { color: var(--faint); }
+table.tw .faint { color: var(--muted); }
 table.tw .ducat { color: var(--ducat); }
 table.tw .unit { color: var(--muted); font-size: var(--text-caption); margin-left: 1px; }
 table.tw .kept { color: var(--muted); font-size: var(--text-caption); margin-left: var(--s1); }
@@ -560,7 +567,7 @@ table.tw .vis.off { color: var(--muted); }
 /* Pending destructive row - the two-tap delete's armed state. */
 table.tw tr.confirming td { background: color-mix(in srgb, var(--bad) 6%, transparent); }
 table.tw tr.confirming td:first-child { box-shadow: inset 3px 0 0 var(--bad); }
-table.tw tr.busy td { color: var(--faint); }
+table.tw tr.busy td { color: var(--muted); }
 
 /* Inline status tags: an outline in the tag's own colour, never a fill. The
    border style carries the kind as well as the hue: solid = advice (what to
@@ -616,8 +623,25 @@ table.tw tr.busy td { color: var(--faint); }
 .ui-panel.warn-banner { border-left: 3px solid var(--warn); }
 .ui-panel > header { display: flex; align-items: center; justify-content: space-between; gap: var(--s2); flex-wrap: wrap; }
 .ui-panel > header h2 { margin: 0; font-size: var(--text-heading); line-height: var(--leading-control); }
+/* One header grammar for every view: TITLE · one-line lede · totals or the
+   view's primary action at the far edge. The lede wraps before the end slot
+   does, so a long description never pushes the totals off the row. */
 .view-header { display: flex; align-items: center; gap: var(--s2) var(--s4); min-height: var(--rail); flex-wrap: wrap; margin-bottom: var(--s2); }
-.view-header > .lede { flex: 0 0 100%; width: 100%; max-width: none; margin: 0; color: var(--muted); }
+.view-header > .lede { flex: 1 1 18rem; min-width: 0; max-width: none; margin: 0; color: var(--muted); }
+.view-header > .vh-end { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2) var(--s3); min-width: 0; }
+/* Comparable totals beside a view title: one outlined strip, dotted dividers. */
+.ui-totals { display: flex; flex-wrap: wrap; align-items: stretch; min-height: var(--rail); min-width: 0; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-ctl); font-size: var(--text-caption); }
+.ui-totals > .cell { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); padding: 0 var(--s3); min-height: var(--rail); border-left: 1px var(--rule) var(--hairline); }
+.ui-totals > .cell:first-child { border-left: none; }
+.ui-totals .k { font: 600 var(--text-caption)/1 var(--font-ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+.ui-totals .v { font: 600 var(--text-control)/1rem var(--font-mono); font-variant-numeric: tabular-nums; color: var(--fg); }
+.ui-totals .v .unit { font-size: var(--text-caption); color: var(--muted); margin-left: 1px; }
+.ui-totals .v.up { color: var(--good); }
+.ui-totals .d { font: var(--text-caption)/1rem var(--font-mono); font-variant-numeric: tabular-nums; }
+.ui-totals .d.up { color: var(--good); }
+.ui-totals .d.down { color: var(--bad); }
+.ui-totals > .cell.attn .k, .ui-totals > .cell.attn .v { color: var(--warn); }
+@media (max-width: 35rem) { .view-header > .vh-end, .view-header > .vh-end > .ui-totals { flex: 1 1 100%; margin-left: 0; } .ui-totals > .cell { flex: 1 1 auto; } }
 .view-header h2 { margin: 0; color: var(--fg); font-size: var(--text-heading); font-weight: 600; line-height: var(--leading-control); letter-spacing: -.01em; text-transform: none; }
 /* Reading surfaces share one edge; analytical tables retain the workspace. */
 .ui-reading { width: 100%; max-width: 64rem; }

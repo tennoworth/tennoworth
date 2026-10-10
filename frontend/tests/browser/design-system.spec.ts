@@ -106,8 +106,9 @@ for (const theme of ['light', 'dark'] as const) {
         expect(collapsed, `${view} column headings at ${width}`).toEqual([]);
         if (width === 1200 && ['Sell', 'Trade Session', 'Set picks', 'Baro'].includes(view)) {
           // Each view opens with its own title; healthy keep rules are one quiet strip below it.
-          const title = await page.locator('main .view-header').first().boundingBox();
-          const keeping = await page.getByRole('region', { name: 'What I’m keeping', exact: true }).boundingBox();
+          // Views stay mounted once visited; only the pane on screen counts.
+          const title = await page.locator('main .view-header:visible').first().boundingBox();
+          const keeping = await page.getByRole('region', { name: 'What I’m keeping', exact: true }).filter({ visible: true }).boundingBox();
           expect(keeping!.y, `${view} title precedes the keep strip`).toBeGreaterThan(title!.y);
           expect(keeping!.height, `${view} healthy keep strip stays compact`).toBeLessThanOrEqual(80);
         }
@@ -151,7 +152,9 @@ test('disabled primary actions drop the ink fill in both themes', async ({ page 
     await page.emulateMedia({ colorScheme: theme });
     await page.goto('/?preview-desktop&sample');
     await previewShell(page);
-    expect(await looksDisabled(page.getByRole('button', { name: 'List on WFM', exact: true })), `${theme} List CTA`).toEqual(expected);
+    const list = page.getByRole('button', { name: 'List on WFM', exact: true });
+    await expect(list).toBeEnabled();
+    expect(await looksDisabled(list), `${theme} List CTA`).toEqual(expected);
     await page.locator('.refresh-trigger').first().click();
     expect(await looksDisabled(page.getByTestId('desktop-scan')), `${theme} Scan game`).toEqual(expected);
     await page.keyboard.press('Escape');
@@ -478,7 +481,7 @@ test('fields and order actions are named by what they show', async ({ page }) =>
   await expect(page.getByRole('combobox', { name: 'Category' })).toBeVisible();
   await sidebar.getByRole('button', { name: /^My orders/ }).click();
   const listings = page.getByRole('region', { name: 'My WFM listings' });
-  await expect(listings.getByRole('textbox', { name: 'Item' })).toBeVisible();
+  await expect(listings.getByRole('textbox', { name: 'Filter orders by name' })).toBeVisible();
   await expect(listings.getByRole('button', { name: 'Edit price for Pyrana Prime Set' })).toBeVisible();
   await expect(listings.getByRole('button', { name: 'ON: Pyrana Prime Set is visible to buyers' })).toBeVisible();
   await listings.getByRole('button', { name: 'Edit price for Pyrana Prime Set' }).click();
@@ -531,8 +534,10 @@ test('relic totals read as expected value across the owned copies', async ({ pag
   await page.goto('/?preview-desktop&sample');
   await previewShell(page);
   await page.locator('.sidebar').getByRole('button', { name: /^Relics/ }).click();
-  await expect(page.locator('.relic-meta').first()).toContainText(/≈\d+p expected across \d+/);
-  await expect(page.locator('.relic-meta').first()).not.toContainText(/\dp total/);
+  const expected = page.locator('.relic-table tbody tr').first().locator('td.price');
+  await expect(expected).toContainText(/≈\d+p/);
+  await expect(expected).toHaveAttribute('title', /Expected value of cracking every one you own/);
+  await expect(page.locator('.relic-table')).not.toContainText(/\dp total/);
 });
 
 test('monthly goals add, rename and remove individually', async ({ page }) => {
@@ -783,3 +788,98 @@ test('Baro inventory valuation retries when its view is reopened', async ({ page
   await page.locator('.sidebar').getByRole('button', { name: /^Baro/ }).click();
   await expect(page.locator('.baro-detail')).toContainText('180d');
 });
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`${theme} market context tabs support keyboard selection and labeled panels`, async ({ page }, testInfo) => {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.goto('/');
+    const tabs = page.getByRole('tablist', { name: 'Market context' });
+    const meta = tabs.getByRole('tab', { name: 'Meta drift' });
+    const dispositions = tabs.getByRole('tab', { name: /^Riven dispositions/ });
+    await expect(meta).toHaveAttribute('aria-selected', 'true');
+    await meta.focus();
+    for (const key of ['ArrowRight', 'End', 'ArrowLeft', 'Home']) {
+      await page.keyboard.press(key);
+      const selected = key === 'ArrowRight' || key === 'End' ? dispositions : meta;
+      const other = selected === meta ? dispositions : meta;
+      await expect(selected).toBeFocused();
+      await expect(selected).toHaveAttribute('tabindex', '0');
+      await expect(other).toHaveAttribute('tabindex', '-1');
+      await expect(page.getByRole('tabpanel', { name: key === 'ArrowRight' || key === 'End' ? /^Riven dispositions/ : 'Meta drift' })).toBeVisible();
+    }
+    for (const [width, height] of [[320, 480], [1200, 480], [1920, 900]]) {
+      await page.setViewportSize({ width, height });
+      await tabs.scrollIntoViewIfNeeded();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`context-${theme}-${width}.png`) });
+    }
+  });
+
+  test(`${theme} account deep link focuses Settings after a prior visit`, async ({ page }, testInfo) => {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.goto('/?preview-desktop&sample');
+    const sidebar = page.locator('.sidebar');
+    await sidebar.getByRole('button', { name: /^Settings/ }).click();
+    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+    await sidebar.getByRole('button', { name: /^Sell/ }).click();
+    await page.locator('.statusbar .presence .trigger').click();
+    await page.locator('#presence-menu').getByRole('button', { name: 'Presence settings →' }).click();
+    const account = page.locator('#settings-account');
+    await expect(account).toBeFocused();
+    for (const [width, height] of [[320, 480], [1200, 480], [1920, 900]]) {
+      await page.setViewportSize({ width, height });
+      await account.scrollIntoViewIfNeeded();
+      await expect(account).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`account-${theme}-${width}.png`) });
+    }
+  });
+}
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`${theme} returning to a view restores its workspace scroll`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: theme });
+    for (const width of [1200, 320, 1920]) {
+      await page.setViewportSize({ width, height: 480 });
+      await page.goto('/?preview-desktop&sample');
+      const sidebar = page.locator('.sidebar');
+      await sidebar.getByRole('button', { name: /^Settings/ }).click();
+      const main = page.locator('main.workspace');
+      await expect(page.locator('#settings-account')).toBeAttached();
+      const setScroll = (top: number) => main.evaluate((element, top) => {
+        (getComputedStyle(element).overflowY === 'auto' ? element : window).scrollTo({ top, behavior: 'instant' });
+      }, top);
+      const position = () => main.evaluate(element => getComputedStyle(element).overflowY === 'auto' ? element.scrollTop : window.scrollY);
+      await setScroll(300);
+      await expect.poll(position).toBe(300);
+      // On narrow layouts the sidebar is above the page. Invoke navigation
+      // without Playwright scrolling to it and changing the position under test.
+      const changeView = async (name: string) => {
+        const button = sidebar.getByRole('button', { name: new RegExp('^' + name) });
+        if (width <= 900) await button.evaluate(element => (element as HTMLButtonElement).click());
+        else await button.click();
+      };
+      await changeView('Sell');
+      await expect(page.getByRole('button', { name: 'List on WFM', exact: true })).toBeEnabled();
+      await setScroll(40);
+      await expect.poll(position).toBe(40);
+      await changeView('Settings');
+      await expect.poll(position).toBe(300);
+    }
+  });
+}
+
+for (const sample of ['sample', 'first-run', 'sample=loading']) {
+  test(`desktop mode marker survives workspace and first-run states: ${sample}`, async ({ page }) => {
+    await page.goto(sample === 'first-run' ? '/?preview-desktop' : `/?preview-desktop&${sample}`);
+    await expect(page.getByTestId('desktop-mode')).toBeVisible();
+    if (sample === 'sample') {
+      await expect(page.locator('main.workspace')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'List on WFM', exact: true })).toBeEnabled();
+      await expect(page.getByTestId('desktop-mode')).toBeVisible();
+    } else if (sample === 'first-run') {
+      await expect(page.locator('main.landing')).toBeVisible();
+      await expect(page.getByTestId('desktop-mode')).toBeVisible();
+    }
+  });
+}

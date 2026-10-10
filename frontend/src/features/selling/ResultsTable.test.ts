@@ -123,3 +123,46 @@ describe('the table floor', () => {
     }
   });
 });
+
+describe('a scan that lands while the table is on screen', () => {
+  const row = (slug: string, score: number): SellRow => ({ ...ROW, slug, name: slug.toUpperCase(), sell_score: score });
+  const names = (container: HTMLElement) => [...container.querySelectorAll('div.wrap.results tbody tr td.col-name')].map((td) => td.textContent?.trim().slice(0, 1));
+
+  it('keeps the row order until the user re-sorts, then applies it', async () => {
+    const { container, rerender, getByRole, queryByRole } = render(ResultsTable, {
+      results: [row('a', 30), row('b', 20), row('c', 10)],
+      deltas: new Map(),
+      visibleColumns: ['name', 'sell_score'],
+    });
+    expect(names(container)).toEqual(['A', 'B', 'C']);
+    // New scan: C now ranks first. The rows must not move under the pointer.
+    await rerender({ results: [row('a', 30), row('b', 20), row('c', 99)], deltas: new Map([['c', 2]]) });
+    expect(names(container)).toEqual(['A', 'B', 'C']);
+    const resort = getByRole('button', { name: 'Re-sort' });
+    await resort.click();
+    await Promise.resolve();
+    expect(names(container)).toEqual(['C', 'A', 'B']);
+    expect(queryByRole('button', { name: 'Re-sort' })).toBeNull();
+  });
+
+  it('offers no Re-sort when the scan did not change the order', async () => {
+    const { container, rerender, queryByRole } = render(ResultsTable, {
+      results: [row('a', 30), row('b', 20)], deltas: new Map(), visibleColumns: ['name', 'sell_score'],
+    });
+    await rerender({ results: [row('a', 31), row('b', 20)], deltas: new Map([['a', 1]]) });
+    expect(names(container)).toEqual(['A', 'B']);
+    expect(queryByRole('button', { name: 'Re-sort' })).toBeNull();
+  });
+});
+
+it('releases a held scan order when the preset changes the sort', async () => {
+  const row = (slug: string, price: number, score: number): SellRow => ({ ...ROW, slug, name: slug.toUpperCase(), low_sell: price, sell_score: score });
+  const names = (container: HTMLElement) => [...container.querySelectorAll('div.wrap.results tbody tr td.col-name')].map((td) => td.textContent?.trim().slice(0, 1));
+  const { container, rerender } = render(ResultsTable, {
+    results: [row('a', 2, 30), row('b', 10, 20)], deltas: new Map(), visibleColumns: ['name', 'low_sell', 'sell_score'], presetSort: { key: 'sell_score', dir: -1 },
+  });
+  await rerender({ results: [row('a', 2, 10), row('b', 10, 40)], deltas: new Map([['a', 1]]) });
+  expect(names(container)).toEqual(['A', 'B']);
+  await rerender({ presetSort: { key: 'low_sell', dir: -1 } });
+  expect(names(container)).toEqual(['B', 'A']);
+});

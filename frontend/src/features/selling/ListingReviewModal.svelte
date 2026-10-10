@@ -6,9 +6,9 @@
   import { orderUnitPrice } from '../../domain/order-prices';
   import { MAX_PLATINUM } from '../../domain/limits';
   import DialogHeader from '../../ui/DialogHeader.svelte';
-  let { open = $bindable(false), rows, transport, onauthrequired, onclose, sendThrough = (send) => send(), listingBlockReason = null, onrecheck, listingActionLabel = 'Check WFM listings', currentSnapshotId }: Omit<ListingReviewInput, 'open' | 'sendThrough'> & { open?: boolean; sendThrough?: ListingReviewInput['sendThrough'] } = $props();
+  let { open = $bindable(false), rows, transport, onauthrequired, onclose, onsent, onvisible, sendThrough = (send) => send(), listingBlockReason = null, onrecheck, listingActionLabel = 'Check WFM listings', currentSnapshotId }: Omit<ListingReviewInput, 'open' | 'sendThrough'> & { open?: boolean; sendThrough?: ListingReviewInput['sendThrough'] } = $props();
 
-  const controller = createListingReview({ get transport() { return transport; }, get open() { return open; }, set open(value) { open = value; }, get rows() { return rows; }, get listingBlockReason() { return listingBlockReason; }, get currentSnapshotId() { return currentSnapshotId; }, get onauthrequired() { return onauthrequired; }, get onclose() { return onclose; }, get sendThrough() { return sendThrough; } }, useDesktopServices());
+  const controller = createListingReview({ get transport() { return transport; }, get open() { return open; }, set open(value) { open = value; }, get rows() { return rows; }, get listingBlockReason() { return listingBlockReason; }, get currentSnapshotId() { return currentSnapshotId; }, get onauthrequired() { return onauthrequired; }, get onclose() { return onclose; }, get onsent() { return onsent; }, get onvisible() { return onvisible; }, get sendThrough() { return sendThrough; } }, useDesktopServices());
   onMount(() => controller.start());
   onDestroy(() => controller.dispose());
   function reviewFocus(node: HTMLElement) {

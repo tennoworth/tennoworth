@@ -24,7 +24,7 @@ for (const theme of ['light', 'dark'] as const) {
       await expect(page.locator('.shell')).toBeVisible();
       await page.locator('.sidebar').getByRole('button', { name: /^My orders/ }).click();
 
-      const health = page.getByRole('region', { name: 'Listing health' });
+      const health = page.getByRole('region', { name: 'My WFM listings' });
       await expect(health).toBeVisible();
 
       // Exactly one ownership verdict - the mod the scan really cannot find.
@@ -73,7 +73,7 @@ test('a set listing is not called unowned while the market is still loading', as
   await expect(page.locator('.shell')).toBeVisible();
   await page.locator('.sidebar').getByRole('button', { name: /^My orders/ }).click();
 
-  const health = page.getByRole('region', { name: 'Listing health' });
+  const health = page.getByRole('region', { name: 'My WFM listings' });
   const setRow = health.locator('tr', { hasText: 'Akbolto Prime Set' });
   await expect(health.getByText('not in your inventory')).toHaveCount(0);
   await expect(setRow.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
@@ -92,7 +92,7 @@ test('keyboard: arming carries focus to the confirmation, and cancelling hands i
   await expect(page.locator('.shell')).toBeVisible();
   await page.locator('.sidebar').getByRole('button', { name: /^My orders/ }).click();
 
-  const queue = page.getByRole('region', { name: 'Listing health' }).locator('table');
+  const queue = page.getByRole('region', { name: 'My WFM listings' }).locator('table');
   const remove = queue.getByRole('button', { name: 'Delete', exact: true });
   await remove.focus();
   await page.keyboard.press('Enter');

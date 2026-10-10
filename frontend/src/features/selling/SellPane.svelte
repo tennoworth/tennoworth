@@ -1,7 +1,6 @@
 <script lang="ts">
   import ResultsTable from './ResultsTable.svelte';
   import { PRESETS } from '../../domain/presets';
-  import { plat } from '../../ui/format';
   import { selectPicks, MIN_PICK_SCORE, LIQUID_VOL } from '../../domain/sell-priority';
 
 
@@ -11,6 +10,8 @@
   import type { ListingCandidate } from '../../contracts/listing';
   import type { EmptyReason } from '../../domain/filter-engine';
   import type { SellRow } from '../../contracts/selling';
+  import type { ListingReceipt, ListingReceipts } from './receipts.svelte';
+  import { untrack } from 'svelte';
   interface Props {
     minPrice: number; minOwned: number; typeFilter: string; hideAtLvl: number;
     activeTags: Set<string>; tableView: { rows: SellRow[]; active: boolean };
@@ -26,8 +27,12 @@
     visibleColumns: string[] | null; presetSort: { key: string; dir: number } | null;
     columnsCustomized?: boolean; oncolumnschange?: (columns: string[] | null) => void;
     emptyReason: EmptyReason | null; activePreset: string | null; reserveCopies: number;
-    filtersOpen: boolean; scoreExplainerDismissed: boolean; sellOnboardingDismissed: boolean;
+    filtersOpen: boolean; sellOnboardingDismissed: boolean;
     keepCopiesNudgeDismissed: boolean;
+    /** What this session listed, so a listed pick says so in its own row. */
+    receipts?: ListingReceipts;
+    onmakevisible?: (receipt: ListingReceipt) => void;
+    onopenorders?: () => void;
     applyPreset(name: string): void; setReserveCopies(value: number | Event): void;
     toggleFiltersOpen(event: Event): void;
     dismissSellOnboarding(): void; dismissKeepCopiesNudge(): void;
@@ -59,12 +64,12 @@
     marketFreshness, marketStaleness, marketLoadError,
     listableRows, availableTags, availableTypes,
     visibleColumns, presetSort, emptyReason, columnsCustomized = false, oncolumnschange,
-    activePreset, reserveCopies, filtersOpen, scoreExplainerDismissed,
+    activePreset, reserveCopies, filtersOpen,
     sellOnboardingDismissed, keepCopiesNudgeDismissed,
 
     applyPreset, setReserveCopies, toggleFiltersOpen, 
     dismissSellOnboarding, dismissKeepCopiesNudge,
-    openListingFlow,
+    openListingFlow, receipts, onmakevisible, onopenorders,
     pendingBanner, keep, estimatedGuidance = false, canList = true, unavailableCount = 0, listingActionLabel = 'Check WFM listings', oncheckListings, calculationPending = false, calculationError = null, onretryCalculation, calculationErrorShown = false,
   }: Props = $props();
 
@@ -145,12 +150,33 @@
   // dismissed pick reappearing on reload is the honest, cheap behaviour; it
   // isn't worth a storage-key version bump for a "hide until refresh" nicety.
   let snoozedPicks = $state(new Set<string>());
-  let picks = $derived(allPicks.filter((p) => !snoozedPicks.has(p.key ?? p.slug)));
+  // A pick hidden here keeps its slot as an Undo receipt until the pick set
+  // itself changes (a new scan or scope), so the next List never moves under
+  // the pointer. Keyed on the picks' identities, not the array: background
+  // recalculation rebuilds the array without changing what is picked.
+  let receiptKeys = $state(new Set<string>());
+  let pickSignature = $derived(allPicks.map((p) => p.key ?? p.slug).join('|'));
+  let shownSignature = '';
+  $effect(() => {
+    const signature = pickSignature;
+    untrack(() => { if (signature !== shownSignature) { shownSignature = signature; if (receiptKeys.size) receiptKeys = new Set(); } });
+  });
+  let picks = $derived(allPicks.filter((p) => !snoozedPicks.has(p.key ?? p.slug) || receiptKeys.has(p.key ?? p.slug)));
   function snoozePick(key: string) {
-    const next = new Set(snoozedPicks);
-    next.add(key);
-    snoozedPicks = next;
+    snoozedPicks = new Set([...snoozedPicks, key]);
+    receiptKeys = new Set([...receiptKeys, key]);
   }
+  function undoSnooze(key: string) {
+    const next = new Set(snoozedPicks);
+    next.delete(key);
+    snoozedPicks = next;
+    const shown = new Set(receiptKeys);
+    shown.delete(key);
+    receiptKeys = shown;
+  }
+  const isSnoozed = (p: SellRow) => snoozedPicks.has(p.key ?? p.slug);
+  const listedReceipt = (p: SellRow) => receipts?.forRow(p.slug, p.subtype);
+  const clock = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
   // Plain-language reason line for a pick, built only from fields the row
   // already carries (timing / delta_90d_pct / clearing_price / volume_48h) -
@@ -158,24 +184,21 @@
   // each signal is: a corroborated peak is the strongest "act now" case,
   // hold is the strongest "don't" case, then whatever 90d trend exists,
   // then the plain fallback for a flat/illiquid-trend row.
+  // The reason says only what the columns beside it cannot: where the price
+  // sits against its 90-day baseline. Low ask and Vol 48h are already on the
+  // row; the clearing price is named only when the troll-undercut clamp made it
+  // differ from the low ask the row shows.
   function pickReason(p: SellRow) {
     const price = Math.round(p.clearing_price ?? p.low_sell);
-    if (p.timing === 'hold') {
-      return 'Near its 90-day low - selling now leaves plat on the table.';
-    }
-    if (p.timing === 'peak') {
-      return p.delta_90d_pct != null && p.delta_90d_pct > 0
-        ? `Near its 90-day high, up ${Math.round(p.delta_90d_pct)}% - a good moment to list around ${price}p.`
-        : `Near its 90-day high - a good moment to list around ${price}p.`;
-    }
-    if (p.delta_90d_pct != null && p.delta_90d_pct >= 1) {
-      return `Up ${Math.round(p.delta_90d_pct)}% vs its 90-day baseline - clears around ${price}p at current demand.`;
-    }
-    if (p.delta_90d_pct != null && p.delta_90d_pct <= -1) {
-      return `Down ${Math.abs(Math.round(p.delta_90d_pct))}% vs its 90-day baseline - clears around ${price}p at current demand.`;
-    }
-    return `Clears around ${price}p at current demand.`;
+    const clamp = price !== Math.round(p.low_sell) ? ` · clears around ${price}p` : '';
+    if (p.timing === 'hold') return 'Near its 90-day low - selling now leaves plat on the table.';
+    const d = p.delta_90d_pct;
+    if (p.timing === 'peak') return (d != null && d > 0 ? `Near its 90-day high, up ${Math.round(d)}%` : 'Near its 90-day high') + ' - a good moment to list' + clamp;
+    if (d != null && d >= 1) return `Up ${Math.round(d)}% vs its 90-day baseline` + clamp;
+    if (d != null && d <= -1) return `Down ${Math.abs(Math.round(d))}% vs its 90-day baseline` + clamp;
+    return 'At its 90-day baseline' + clamp;
   }
+
 
   // Row B "active filter" chips - the Filters popover's state surfaced as
   // removable chips so a narrowed table never reads as a mysteriously short
@@ -205,16 +228,12 @@
 
 <section class="view-header">
   <h2>{estimatedGuidance ? 'Estimated opportunities' : 'Sell'}</h2>
-  <span
-    class="lede-dot"
-    role="img"
-    aria-label="About this view"
-    title="Items in your inventory worth listing right now, ranked by priority."
-  >ⓘ</span>
-  <!-- Summary strip: totals with since-last-scan deltas; Listed / Needs fixing
-       appear once the orders panel has reported; the last cell is the
-       since-scan state with the session-only "Changes only" toggle. -->
-  <div class="summary" role="group" aria-label="Sell summary">
+  <p class="lede">{estimatedGuidance ? 'Items worth listing, estimated before your current listings are checked.' : 'Items worth listing right now, ranked by priority.'}</p>
+  <!-- Totals with since-last-scan deltas; Listed / Needs fixing appear once
+       the orders panel has reported; the last cell is the since-scan state
+       with the session-only "Changes only" toggle. -->
+  <div class="vh-end">
+  <div class="ui-totals" role="group" aria-label="Sell summary">
     <div class="cell">
       <span class="k">Owned</span>
       <span class="v">{resolved.owned.size.toLocaleString()}</span>
@@ -256,6 +275,7 @@
       </div>
     {/if}
   </div>
+  </div>
 </section>
 
 {#if !sellOnboardingDismissed}
@@ -286,9 +306,7 @@
   </div>
 {/if}
 
-{#if calculationPending}
-  <div class="ui-notice" role="status">Calculating sale values… Your filters remain available.</div>
-{:else if calculationError && !calculationErrorShown}
+{#if calculationError && !calculationErrorShown && !calculationPending}
   <div class="ui-notice" data-tone="bad" role="alert">
     Sale calculations unavailable: {calculationError}
     {#if onretryCalculation}<button class="btn" onclick={onretryCalculation}>Retry calculations</button>{/if}
@@ -332,18 +350,36 @@
 {/snippet}
 
 {#snippet pickReasonCell(p: SellRow)}
+  {@const listed = listedReceipt(p)}
+  {#if isSnoozed(p)}
+    <div class="rs receipt">Hidden for this session.</div>
+  {:else if listed}
+    <div class="rs receipt">
+      {listed.action === 'updated' ? 'Updated to' : 'Listed'} {listed.quantity} at <b>{listed.platinum}p</b> · {clock(listed.at)}
+      {#if onopenorders}· <button type="button" class="link" onclick={onopenorders}>My orders →</button>{/if}
+    </div>
+  {:else}
   <div class="rs" class:hold={p.timing === 'hold'} class:peak={p.timing === 'peak'}>
     <span class="t">
       {pickReason(p)}
-      <span class="pick-vol">· <b>{plat(p.volume_48h)}</b> trades/48h</span>
     </span>
     {#if p.volume_48h < LIQUID_VOL}
       <span class="tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor - expect to wait for a buyer.">thin</span>
     {/if}
   </div>
+  {/if}
 {/snippet}
 
 {#snippet pickActionsCell(p: SellRow)}
+  {@const listed = listedReceipt(p)}
+  {#if isSnoozed(p)}
+    <span class="pick-actions"><button type="button" class="pick-list" onclick={() => undoSnooze(p.key ?? p.slug)} aria-label="Undo hiding {p.name}">Undo</button></span>
+  {:else if listed}
+    <span class="pick-actions">
+      <span class="tag" class:hold={listed.visible === false} title={listed.visible === false ? 'New listings start hidden: buyers cannot see this one yet.' : listed.visible ? 'Buyers can see this listing.' : 'This updated an existing order, which keeps its visibility.'}>listed · {listed.visible === false ? 'hidden' : listed.visible ? 'visible' : 'updated'}</span>
+      {#if listed.visible === false && listed.orderId && onmakevisible}<button type="button" class="pick-list" onclick={() => onmakevisible(listed)} aria-label="Make {p.name} visible to buyers">Make visible</button>{/if}
+    </span>
+  {:else}
   <span class="pick-actions">
     <button class="pick-list" disabled={!calculationReady || !canList} onclick={() => { if (calculationReady && canList) openListingFlow(p); }} aria-label="List {p.name} on WFM">List</button>
     <button
@@ -354,13 +390,15 @@
       title="Hide for this session"
     >×</button>
   </span>
+  {/if}
 {/snippet}
 
 {#snippet picksEmpty()}
   <p class="muted picks-all-snoozed">All picks snoozed for this session.</p>
 {/snippet}
 
-<!-- Row A · SCOPE: presets · type chips · Filters popover. -->
+<!-- Bar 1 · scope: presets and their hint; the table adds the name filter
+     and this Filters popover at the bar's end. -->
 {#snippet scopeRow()}
   <div class="ui-segmented presets-row" role="group" aria-label="Scope preset">
     {#each Object.entries(PRESETS) as [name, preset]}
@@ -375,7 +413,9 @@
   <span class="muted preset-hint">
     {activePreset ? PRESETS[activePreset].hint : 'custom - saved preset cleared'}
   </span>
-  <span class="grow"></span>
+{/snippet}
+
+{#snippet filtersControl()}
   <details class="filter-disclosure" open={filtersOpen} ontoggle={toggleFiltersOpen}>
     <summary>
       <span class="dis-label">Filters</span>
@@ -414,6 +454,11 @@
       </div>
     </div>
   </details>
+{/snippet}
+
+<!-- Bar 2 · categories as quiet text toggles, so the outlined active-filter
+     chips beside them are the only outlined things on the line. -->
+{#snippet categoriesRow()}
   {#if availableTags.length > 0}
     <div class="toolbar-group tagchips">
       {#each availableTags as [tag, count]}
@@ -472,28 +517,6 @@
 
 {@render pendingBanner()}
 
-{#snippet scoreExplainer()}
-  {#if results.length > 0}
-  <details
-    class="score-expander"
-    open={!scoreExplainerDismissed}
-    ontoggle={(e) => (scoreExplainerDismissed = !e.currentTarget.open)}
-  >
-    <summary>About the “Priority” column</summary>
-    <div class="score-details">
-      A <strong>priority ranking</strong>, not expected plat/day -
-      <code>min(sellable owned, max(0.05, vol_48h / 2)) × clearing price × usage weight</code>.
-      The DE usage weight is bounded from 0.75× to 1.25×; missing or invalid
-      usage is neutral. Clearing
-      price is the lowest live ask, clamped up to the 90-day median when the
-      ask is a lone troll undercut (so one 1p listing can't crater a row).
-      Higher means list sooner. Actual platinum totals remain unweighted. Items below <strong>3 trades / 48 h</strong>
-      keep their computed priority and receive a “patience” tag, but are excluded from Top Picks.
-      The <strong>Column guide</strong> above the table explains every column.
-    </div>
-  </details>
-  {/if}
-{/snippet}
 
 
 {#snippet emptyState()}
@@ -585,10 +608,13 @@
      and the presets stay reachable in row A. -->
 <ResultsTable {allocation} quantityStatus {estimatedGuidance} results={tableRows} {deltas} {visibleColumns} {presetSort} {columnsCustomized} {oncolumnschange}
   onfiltered={(rows, active) => (tableView = { rows, active: active || changesOnly })}
-  scope={scopeRow} narrow={narrowChips} cta={listCta}
+  scope={scopeRow} filters={filtersControl} categories={categoriesRow} narrow={narrowChips} cta={listCta}
   picks={calculationReady && results.length > 0 && allPicks.length > 0 ? picks : null}
+  picksPending={calculationPending}
+  pickReceipt={(p) => isSnoozed(p) || !!listedReceipt(p)}
+  listedFor={(r) => receipts?.listedFor(r.slug, r.subtype) || null}
   {picksHead} pickActions={pickActionsCell} pickReason={pickReasonCell} {picksEmpty}
-  empty={emptyState} between={scoreExplainer} />
+  empty={emptyState} />
 
 <style>
   .picks-title { display: inline-flex; align-items: center; flex-wrap: wrap; gap: var(--s2); }
@@ -597,60 +623,8 @@
 
 
 
-  /* Summary strip - one outlined container, hairline dividers between cells;
-     the since-scan cell rides the right rail. */
-  .summary {
-    flex: 1 1 auto;
-    display: flex;
-    align-items: stretch;
-    min-height: var(--rail);
-    flex-wrap: wrap;
-    margin-left: var(--s2);
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-ctl);
-    overflow: visible;
-    font-size: 0.75rem;
-    white-space: normal;
-    min-width: 0;
-  }
-  .summary .cell {
-    display: flex;
-    align-items: center;
-    gap: var(--s2);
-    padding: 0 var(--s3);
-    border-left: 1px var(--rule) var(--hairline);
-    min-height: var(--rail);
-    flex-wrap: wrap;
-  }
-  .summary .cell:first-child { border-left: none; }
-  .summary .cell .k {
-    font-size: var(--text-caption);
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--muted);
-    font-weight: 600;
-  }
-  .summary .cell .v {
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-    font-size: var(--text-control);
-    font-weight: 600;
-    line-height: 1rem;
-    color: var(--fg);
-  }
-  .summary .cell .v .unit { font-size: var(--text-caption); color: var(--muted); margin-left: 1px; }
-  .summary .cell .d {
-    font-family: var(--font-mono);
-    font-variant-numeric: tabular-nums;
-    font-size: var(--text-caption);
-    line-height: 1rem;
-  }
-  .summary .cell .d.up { color: var(--good); }
-  .summary .cell .d.down { color: var(--bad); }
-  .summary .cell.attn .v { color: var(--warn); }
-  .summary .cell.since { margin-left: auto; color: var(--muted); flex-wrap: wrap; }
-  .summary .cell.since b { color: var(--fg); font-weight: 600; font-family: var(--font-mono); }
+  .cell.since { color: var(--muted); }
+  .cell.since b { color: var(--fg); font-weight: 600; font-family: var(--font-mono); }
   .changes-toggle {
     font: inherit;
     font-size: var(--text-caption);
@@ -691,7 +665,7 @@
     border-radius: var(--radius-input);
     padding: 5px 8px;
   }
-  code { background: var(--panel-2); padding: 1px 6px; border-radius: var(--radius-input); font-family: var(--font-mono); font-size: 0.93em; }
+  code { background: var(--panel-2); padding: 1px 6px; border-radius: var(--radius-input); font-family: var(--font-mono); font-size: 1em; }
 
   /* Below this point: sell-view-exclusive, moved (not duplicated) from
      App.svelte - nothing else in the app used these selectors. */
@@ -701,7 +675,6 @@
      NARROW snippets). Groups wrap; heights are 28 (presets, chips). */
   .toolbar-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .toolbar-divider { width: 1px; height: 1rem; background: var(--hairline); flex: 0 0 auto; margin: 0 var(--s1); }
-  .grow { flex: 1 1 0; min-width: 0; }
   .link { font: inherit; color: var(--accent); background: transparent; border: none; padding: 0 var(--s1); cursor: pointer; }
   .link:hover { text-decoration: underline; background: transparent; }
 
@@ -783,45 +756,6 @@
   }
   .filters input, .filters select { text-transform: none; letter-spacing: 0; }
 
-  /* First-session Priority explainer, reworked as an inline <details> expander
-     (D9) - one quiet summary line, the how-it's-calculated body folded under
-     it. Dismissal = collapsed, persisted via the same flag as before. */
-  .score-expander {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-panel);
-    padding: 0 14px;
-    position: relative;
-  }
-  .score-expander > summary {
-    cursor: pointer;
-    list-style: none;
-    font-size: var(--text-control);
-    font-weight: 600;
-    color: var(--fg);
-    line-height: 1.5;
-    padding: 10px 0;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    user-select: none;
-  }
-  .score-expander > summary:hover { color: var(--accent); }
-  .score-details {
-    font-size: var(--text-control);
-    color: var(--muted);
-    line-height: 1.5;
-    padding: 0 0 10px;
-  }
-  .score-details strong { color: var(--fg); font-weight: 600; }
-  .score-details code {
-    background: var(--panel-2);
-    padding: 1px 6px;
-    border-radius: var(--radius-input);
-    font-family: var(--font-mono);
-    font-size: 0.93em;
-    color: var(--fg);
-  }
 
   /* First-session sell onboarding - above the stats strip, dismissed once. */
   .sell-onboarding {
@@ -858,7 +792,7 @@
   .keep-nudge .kn-body { min-width: 0; }
   .keep-nudge strong { color: var(--fg); font-weight: 600; font-size: var(--text-control); }
   .keep-nudge .muted { font-size: var(--text-control); line-height: 1.5; }
-  .keep-nudge code { font-family: var(--font-mono); font-size: 0.93em; }
+  .keep-nudge code { font-family: var(--font-mono); font-size: 1em; }
   .keep-nudge .dismiss {
     background: transparent;
     border: none;
@@ -879,43 +813,30 @@
      internal vertical scroll. */
   /* Type chips take their own line under the presets - real inventories carry
      10–20 tags, which cannot share a 40px line with six presets. */
-  .tagchips { gap: 6px; flex: 1 1 100%; }
+  .tagchips { gap: 0 var(--s2); }
   .chip {
-    background: transparent;
-    color: var(--muted);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-input);
-    padding: 0 10px 0 12px;
-    font-size: var(--text-caption);
-    letter-spacing: 0.02em;
-    cursor: pointer;
-    display: inline-flex;
-    gap: 6px;
-    align-items: center;
     font: inherit;
-    line-height: 1.2;
-    /* Tap-target - old 21px height failed iOS HIG / WCAG ≥ 24px. 28px is
-       the ladder's control height. */
-    height: var(--ctl);
-    transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--s1);
+    /* Keeps a 24px target while drawing as text. */
+    min-height: var(--ctl-xs);
+    padding: 0 var(--s1);
+    font-size: var(--text-control);
+    color: var(--fg);
+    background: transparent;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    cursor: pointer;
   }
-  .chip:hover { color: var(--fg); border-color: var(--accent); }
-  .chip.active {
-    color: var(--accent);
-    border-color: var(--accent);
-    background: var(--panel-2);
-  }
-  .chip.zero {
-    text-decoration: line-through;
-    opacity: 0.45;
-    cursor: default;
-  }
-  .chip-count {
-    font-family: var(--font-mono);
-    font-size: var(--text-caption);
-    color: var(--muted);
-  }
-  .chip.active .chip-count { color: var(--accent); }
+  .chip:hover { border-bottom-color: var(--border); }
+  .chip.active { border-bottom-color: var(--fg); font-weight: 600; }
+  .chip.zero { color: var(--muted); text-decoration: line-through; cursor: default; }
+  /* Active filters are state you can remove, so they keep an outline. */
+  .chip.fchip { border: 1px solid var(--border); padding: 0 var(--s2); font-size: var(--text-caption); }
+  .chip.fchip:hover { border-color: var(--fg); }
+  .chip-count { font: var(--text-caption) var(--font-mono); color: var(--muted); }
   .chip-clear {
     background: transparent;
     border: none;
@@ -952,8 +873,6 @@
   .rs.hold .t { color: var(--warn); }
   .rs.peak .t { color: var(--good); }
   /* Only the number is data; the unit reads as prose. */
-  .pick-vol { font-size: var(--text-caption); color: var(--muted); margin-left: 2px; }
-  .pick-vol b { font-family: var(--font-mono); font-weight: 400; }
   .rs > .tag { flex-shrink: 0; margin-inline-start: 0; }
   .pick-actions { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
   .pick-list { font-size: var(--text-caption); height: var(--ctl-xs); padding: 0 10px; }
@@ -972,20 +891,7 @@
   .card.empty.flush { border: none; padding: var(--s2) 0; background: transparent; }
 
   @media (max-width: 35rem) {
-    .summary {
-      flex: 1 1 100%;
-      height: auto;
-      margin-left: 0;
-      flex-wrap: wrap;
-      overflow: visible;
-    }
-    .summary .cell {
-      flex: 1 1 auto;
-      min-height: var(--rail);
-      border-top: 1px var(--rule) var(--hairline);
-    }
-    .summary .cell:nth-child(-n + 3) { border-top: none; }
-    .summary .cell.since { flex-basis: 100%; margin-left: 0; flex-wrap: wrap; }
+    .cell.since { flex-basis: 100%; }
     .card.empty { align-items: flex-start; flex-direction: column; }
     .card.empty button { align-self: stretch; }
     .filters-panel {

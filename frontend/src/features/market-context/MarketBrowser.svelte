@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { buildMetaDrift } from '../../domain/meta-drift';
   import { baroLocation, humanWindow, plat, wfmItemUrl } from '../../ui/format';
   import { onMount, onDestroy, type Snippet } from 'svelte';
   import type { Market } from '../../contracts/data';
@@ -91,6 +92,27 @@
   let movers = $derived(topMovers(market, index, { minVol: 20, minPrice: 10, limit: 8 }));
   let vaulted = $derived(vaultedTop(market, index, 8));
   let dispoChanges = $derived(dispositionChanges(market, 12));
+  const CONTEXT_PREVIEW = 10;
+  const BARO_PREVIEW = 5;
+  let dispoAll = $state(false);
+  let baroStockAll = $state(false);
+  let hasMeta = $derived(!!buildMetaDrift(market));
+  let contextTab = $state<'meta' | 'dispo'>('meta');
+  let contextTabs = $derived([
+    ...(hasMeta ? [{ id: 'meta' as const, label: 'Meta drift', count: null }] : []),
+    ...(dispoChanges.length ? [{ id: 'dispo' as const, label: 'Riven dispositions', count: dispoChanges.length }] : []),
+  ]);
+  let shownTab = $derived(contextTabs.some((t) => t.id === contextTab) ? contextTab : contextTabs[0]?.id);
+  // Arrow keys, Home and End move between the tabs, as in the feature rail.
+  function onContextKey(event: KeyboardEvent): void {
+    const ids = contextTabs.map((t) => t.id);
+    const at = ids.indexOf(shownTab ?? ids[0]);
+    const next = event.key === 'ArrowRight' ? (at + 1) % ids.length : event.key === 'ArrowLeft' ? (at - 1 + ids.length) % ids.length : event.key === 'Home' ? 0 : event.key === 'End' ? ids.length - 1 : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    contextTab = ids[next];
+    document.getElementById(`ctx-tab-${ids[next]}`)?.focus();
+  }
   let sample = $derived(handoff ? handoffSample(market, index) : []);
   function dispoDelta(from: number, to: number): string {
     const d = to - from;
@@ -355,19 +377,17 @@
   <!-- 2. MOVERS - two mini-tables, same column heads as the workspace -->
   <section class="two">
     <div class="wrap tw movers">
+      <!-- Twin rails: each list is titled, so neither depends on the other's heading. -->
       <div class="rail">
-        <h3 title="Compares the latest price to the 90-day median. Only items with 20+ sales in 48 h qualify, so one fluke sale can't move the list.">Top movers</h3>
+        <h3 title="Compares the latest price to the 90-day median. Only items with 20+ sales in 48 h qualify, so one fluke sale can't move the list.">▲ Rising</h3>
         <span class="exp">vs 90-day median · vol ≥ 20</span>
-        <span class="grow"></span>
-        <span class="lbl good">▲ Rising</span>
       </div>
       {@render miniTable(movers.risers, 'delta', false, 'No risers.')}
     </div>
     <div class="wrap tw movers">
       <div class="rail">
-        <h3 class="sr-only">Top movers, falling</h3>
-        <span class="grow"></span>
-        <span class="lbl bad">▼ Falling</span>
+        <h3 title="Compares the latest price to the 90-day median. Only items with 20+ sales in 48 h qualify, so one fluke sale can't move the list.">▼ Falling</h3>
+        <span class="exp">vs 90-day median · vol ≥ 20</span>
       </div>
       {@render miniTable(movers.fallers, 'delta', false, 'No fallers.')}
     </div>
@@ -378,9 +398,10 @@
     <div class="wrap tw vaulted">
       <div class="rail">
         <h3>Vaulted &amp; valuable</h3>
-        <span class="exp">no longer drop, so supply is capped - high-value ones tend to hold or climb</span>
+        <span class="exp">no longer drop, so supply is capped</span>
       </div>
       {@render miniTable(vaulted, 'avg', true, 'No vault data in this snapshot.')}
+      <div class="line"><span class="exp">High-value vaulted items tend to hold or climb.</span></div>
     </div>
     {#if baro && baroState}
       <div class="wrap tw baro">
@@ -412,7 +433,7 @@
               <th title="Average of recent WFM sales">Avg now</th>
             </tr></thead>
             <tbody>
-              {#each baroStock as s (s.name)}
+              {#each baroStockAll ? baroStock : baroStock.slice(0, BARO_PREVIEW) as s (s.name)}
                 <tr>
                   <td class="l">{#if s.slug}<a href={wfmItemUrl(s.slug)} target="_blank" rel="noopener noreferrer">{s.name}</a>{:else}{s.name}{/if}</td>
                   <td>{#if s.ducats != null}<span class="ducat">{s.ducats}</span>{:else}<span class="faint">-</span>{/if}</td>
@@ -423,20 +444,38 @@
           </table>
           </div>
         {/if}
-        {#if handoff}
-          <div class="line"><a href="#desktop">Ducat math for what you own →</a></div>
-        {/if}
+        <div class="line">
+          {#if baroStock.length > BARO_PREVIEW}<button type="button" class="btn xs" aria-expanded={baroStockAll} onclick={() => (baroStockAll = !baroStockAll)}>{baroStockAll ? `Show top ${BARO_PREVIEW}` : `All ${baroStock.length} items`}</button>{/if}
+          {#if handoff}<a href="#desktop">Ducat math for what you own →</a>{/if}
+        </div>
       </div>
     {/if}
   </section>
 
-  <!-- 4. RIVEN DISPOSITIONS - only when the snapshot carries changes -->
-  {#if dispoChanges.length}
-    <section class="wrap tw dispo" data-testid="dispo-changes">
-      <div class="rail">
-        <h3>Riven disposition changes</h3>
-        <span class="exp">last 90 days · DE only raises dispositions now, so each change is a one-way price event for that weapon's rivens - WFM reprices within a day</span>
+  <!-- 4. HAND-OFF: the same rows, completed by the desktop app (hosted only),
+       straight after the lists a visitor came for -->
+  {#if handoff}
+    {@render handoff(sample)}
+  {/if}
+
+  <!-- 5. MARKET CONTEXT: the slower signals behind prices, as two tabs of one
+       panel rather than two long stacked tables. Each shows its top ten. -->
+  {#if hasMeta || dispoChanges.length}
+    <section class="context" aria-label="Market context">
+      <div class="ui-segmented context-tabs" role="tablist" aria-label="Market context" tabindex="-1" onkeydown={onContextKey}>
+        {#each contextTabs as t (t.id)}
+          <button type="button" role="tab" id="ctx-tab-{t.id}" aria-controls="ctx-panel-{t.id}" aria-selected={shownTab === t.id} tabindex={shownTab === t.id ? 0 : -1} onclick={() => (contextTab = t.id)}>{t.label}{#if t.count != null} <span class="n">{t.count}</span>{/if}</button>
+        {/each}
       </div>
+      {#if shownTab === 'meta'}
+        <div role="tabpanel" id="ctx-panel-meta" aria-labelledby="ctx-tab-meta"><MetaDriftPanel {market} limit={CONTEXT_PREVIEW} embedded /></div>
+      {:else if dispoChanges.length}
+        <div role="tabpanel" id="ctx-panel-dispo" aria-labelledby="ctx-tab-dispo">
+        <section class="wrap tw dispo" data-testid="dispo-changes">
+          <div class="rail">
+            <h3>Riven disposition changes</h3>
+            <span class="exp">last 90 days · DE only raises dispositions now, so each change is a one-way price event for that weapon's rivens - WFM reprices within a day</span>
+          </div>
       <div class="scroll">
       <table class="tw fixed dispo-table">
         <colgroup><col /><col style="width:8rem" /><col style="width:4rem" /><col style="width:5rem" /></colgroup>
@@ -447,7 +486,7 @@
           <th title="When our scrape first saw the new value">Seen</th>
         </tr></thead>
         <tbody>
-          {#each dispoChanges as c (c.slug + c.seen_at)}
+          {#each dispoAll ? dispoChanges : dispoChanges.slice(0, CONTEXT_PREVIEW) as c (c.slug + c.seen_at)}
             <tr>
               <td class="l">{c.name}</td>
               <td class:up={c.to > c.from} class:down={c.to < c.from} title={`Disposition ${c.from.toFixed(2)} → ${c.to.toFixed(2)}`}>{c.from.toFixed(2)} → <strong>{c.to.toFixed(2)}</strong></td>
@@ -458,14 +497,13 @@
         </tbody>
       </table>
       </div>
+          {#if dispoChanges.length > CONTEXT_PREVIEW}
+            <div class="line"><span class="exp">{dispoAll ? `All ${dispoChanges.length}` : `Top ${CONTEXT_PREVIEW} of ${dispoChanges.length}`}</span><span class="grow"></span><button type="button" class="btn xs" aria-expanded={dispoAll} onclick={() => (dispoAll = !dispoAll)}>{dispoAll ? `Show top ${CONTEXT_PREVIEW}` : `Show all ${dispoChanges.length}`}</button></div>
+          {/if}
+        </section>
+        </div>
+      {/if}
     </section>
-  {/if}
-
-  <MetaDriftPanel {market} limit={10} />
-
-  <!-- 5. HAND-OFF: the same rows, completed by the desktop app (hosted only) -->
-  {#if handoff}
-    {@render handoff(sample)}
   {/if}
 </section>
 
@@ -476,7 +514,6 @@
   @media (max-width: 900px) {
     .two, .two-one { grid-template-columns: 1fr; }
   }
-  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
   .lookup .bar .exp kbd {
     font-family: var(--font-mono);
@@ -497,6 +534,13 @@
   .mini-table.with-ducats { min-width: 31rem; }
   .baro-stock { min-width: 27rem; }
   .dispo-table { min-width: 34rem; }
+  .dispo-table strong { font-weight: 600; }
+  .context { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
+  .context-tabs { align-self: flex-start; }
+  .context-tabs .n { font-family: var(--font-mono); font-size: var(--text-caption); }
+  .wrap.vaulted { display: flex; flex-direction: column; }
+  .wrap.vaulted > .line { margin-top: auto; }
+  .baro .line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); }
 
   @media (max-width: 35rem) {
     .lookup .bar .shimmer-field { flex-basis: 100%; }

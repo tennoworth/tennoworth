@@ -58,6 +58,10 @@ import type { DesktopServices } from '../../contracts/services';
      *  saved batch once it settles. Passed in rather than known here: this
      *  component sends, it does not own the batch's lifecycle. */
     sendThrough: <T>(send: () => Promise<T>) => Promise<T>;
+    /** Confirmed send results, so the row that was listed can show it. */
+    onsent?: (sent: { slug: string; subtype?: string; rank?: number; platinum: number; quantity: number }[], results: ItemResult[]) => void;
+    /** Confirmed visibility changes from "Make N visible". */
+    onvisible?: (results: ItemResult[]) => void;
     listingBlockReason?: string | null;
     onrecheck?: () => void;
     listingActionLabel?: string;
@@ -335,6 +339,7 @@ export function createListingReview(input: ListingReviewInput, services: Pick<De
       serverResults = resp.results || [];
       durabilityError = resp.durability_error ?? null;
       phase = 'results';
+      input.onsent?.(items.map(({ slug, subtype, rank, platinum, quantity }) => ({ slug, subtype, rank, platinum, quantity })), serverResults);
     } catch (e) {
       if (handleAuthCode(e)) return;
       networkError = humanError(e);
@@ -382,6 +387,7 @@ export function createListingReview(input: ListingReviewInput, services: Pick<De
     try {
       const resp = await input.transport.bulkVisibility(ids, true);
       visibilityResults = resp?.results || [];
+      input.onvisible?.(visibilityResults);
       // "Buyers can see them now" is a claim that WFM accepted the toggle, so it
       // takes at least one confirmed row: the call returning is not the change
       // landing. The counts beside it already report how many failed.
