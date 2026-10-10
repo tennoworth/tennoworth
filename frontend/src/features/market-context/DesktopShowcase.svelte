@@ -294,7 +294,7 @@
   .cmp td { height: 1.5rem; font-family: var(--font-body); color: var(--muted); }
   .cmp td.l { color: var(--fg); }
   .cmp .ok { color: var(--good); }
-  .cmp .no { color: var(--faint); }
+  .cmp .no { color: var(--muted); }
   @media (max-width: 900px) {
     .hbody { grid-template-columns: 1fr; }
     .rows { border-right: none; border-bottom: 1px var(--rule) var(--hairline); }

@@ -516,6 +516,7 @@
   .mini-table.with-ducats { min-width: 31rem; }
   .baro-stock { min-width: 27rem; }
   .dispo-table { min-width: 34rem; }
+  .dispo-table strong { font-weight: 600; }
   .context { display: flex; flex-direction: column; gap: var(--s2); min-width: 0; }
   .context-tabs { align-self: flex-start; }
   .context-tabs .n { font-family: var(--font-mono); font-size: var(--text-caption); }

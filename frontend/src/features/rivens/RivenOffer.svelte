@@ -194,7 +194,7 @@
   .axis {
     display: flex;
     justify-content: space-between;
-    font-size: 0.72rem;
+    font-size: var(--text-caption);
     color: var(--muted);
     font-variant-numeric: tabular-nums;
   }

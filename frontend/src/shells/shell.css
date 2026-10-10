@@ -98,8 +98,8 @@
     color: var(--fg);
   }
   .statusbar .brand .sub[data-shell] {
-    color: var(--faint);
-    font-size: 0.6875rem;
+    color: var(--muted);
+    font-size: var(--text-caption);
     overflow: hidden;
     text-overflow: ellipsis;
   }
@@ -210,7 +210,7 @@
     font-size: var(--text-caption);
     letter-spacing: 0.12em;
     text-transform: uppercase;
-    color: var(--faint);
+    color: var(--muted);
     font-weight: 600;
     padding: var(--s2) var(--inset) var(--s1);
   }
@@ -313,7 +313,7 @@
   /* Refresh ▾ in the strip: a 24px control inside the 40px bar. */
   .refresh-trigger[data-shell] {
     font: inherit;
-    font-size: 0.6875rem;
+    font-size: var(--text-caption);
     height: var(--ctl-xs);
     padding: 0 var(--s2);
     color: var(--muted);
@@ -533,7 +533,7 @@
   h3[data-shell] { margin: 0 0 4px 0; font-size: var(--text-body); font-weight: 600; }
   .sub[data-shell] { color: var(--muted); margin: 6px 0 0 0; max-width: 64ch; font-size: var(--text-control); }
   .ver[data-shell] {
-    color: var(--faint);
+    color: var(--muted);
     font-size: var(--text-caption);
     font-variant-numeric: tabular-nums;
     letter-spacing: 0.02em;
@@ -648,7 +648,7 @@
     padding: 4px 10px;
   }
   button.ghost:hover[data-shell] { background: var(--panel-2); color: var(--fg); }
-  code[data-shell] { background: var(--panel-2); padding: 1px 6px; border-radius: var(--radius-input); font-family: var(--font-mono); font-size: 0.93em; }
+  code[data-shell] { background: var(--panel-2); padding: 1px 6px; border-radius: var(--radius-input); font-family: var(--font-mono); font-size: 1em; }
 
   /* Set-completion card - recommendation rows. Three reco kinds
      distinguished by a small uppercase pill so the user can scan and

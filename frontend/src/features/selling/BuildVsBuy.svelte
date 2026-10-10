@@ -231,7 +231,7 @@
     color: var(--bad);
   }
   .unknown {
-    color: var(--faint);
+    color: var(--muted);
     cursor: help;
   }
 </style>

@@ -70,14 +70,14 @@
   /* The arrow is the only marker that this number belongs to the parent, so it
      gets a label rather than being purely decorative. */
   .inh {
-    color: var(--faint);
+    color: var(--muted);
     font-size: 0.75em;
   }
   .muted {
     color: var(--muted);
   }
   .liq {
-    font-size: 0.72rem;
+    font-size: var(--text-caption);
     letter-spacing: 0.04em;
     text-transform: uppercase;
   }
@@ -90,6 +90,6 @@
   }
   .liq-thin,
   .liq-unknown {
-    color: var(--faint);
+    color: var(--muted);
   }
 </style>

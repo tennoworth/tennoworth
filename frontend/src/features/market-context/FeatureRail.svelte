@@ -483,7 +483,7 @@
   .mini tr.sum td.score { color: var(--good); }
   /* Relic drop rarity, as the planner shows it: a single C / U / R initial in
      front of the name (its own column would get stretched by auto layout). */
-  .mini .rar { display: inline-block; width: 1.25rem; font-family: var(--font-mono); font-weight: 600; color: var(--faint); }
+  .mini .rar { display: inline-block; width: 1.25rem; font-family: var(--font-mono); font-weight: 600; color: var(--muted); }
   .mini .rar.U { color: var(--muted); }
   .mini .rar.R { color: var(--warn); }
   .mini .good { color: var(--good); }

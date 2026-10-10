@@ -665,7 +665,7 @@
     border-radius: var(--radius-input);
     padding: 5px 8px;
   }
-  code { background: var(--panel-2); padding: 1px 6px; border-radius: var(--radius-input); font-family: var(--font-mono); font-size: 0.93em; }
+  code { background: var(--panel-2); padding: 1px 6px; border-radius: var(--radius-input); font-family: var(--font-mono); font-size: 1em; }
 
   /* Below this point: sell-view-exclusive, moved (not duplicated) from
      App.svelte - nothing else in the app used these selectors. */
@@ -792,7 +792,7 @@
   .keep-nudge .kn-body { min-width: 0; }
   .keep-nudge strong { color: var(--fg); font-weight: 600; font-size: var(--text-control); }
   .keep-nudge .muted { font-size: var(--text-control); line-height: 1.5; }
-  .keep-nudge code { font-family: var(--font-mono); font-size: 0.93em; }
+  .keep-nudge code { font-family: var(--font-mono); font-size: 1em; }
   .keep-nudge .dismiss {
     background: transparent;
     border: none;

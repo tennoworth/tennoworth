@@ -350,7 +350,7 @@
     font-variant-numeric: tabular-nums;
   }
   .pick-p {
-    color: var(--faint);
+    color: var(--muted);
     font-variant-numeric: tabular-nums;
   }
   .board-body { padding: var(--s4) var(--inset); display: flex; flex-direction: column; gap: var(--s3); }

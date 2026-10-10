@@ -131,7 +131,7 @@
   }
   .detail,
   .hits {
-    color: var(--faint);
+    color: var(--muted);
     font-size: 0.85em;
   }
   li.hot .hits {
