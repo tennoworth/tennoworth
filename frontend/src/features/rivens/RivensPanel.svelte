@@ -199,12 +199,20 @@
   }
 </script>
 
-<section class="view-header"><h2>Rivens</h2><p class="lede">DE’s weekly band, the disposition trend, splice options, and live comparables — no single “worth N” number.</p></section>
+<section class="view-header">
+  <h2>Rivens</h2>
+  <p class="lede">DE’s weekly band, the disposition trend, splice options, and live comparables — no single “worth N” number.</p>
+  <div class="vh-end">
+    <div class="ui-totals" role="group" aria-label="Rivens summary">
+      <div class="cell"><span class="k">Owned</span><span class="v">{rivens.length}</span></div>
+      {#if rivenStatsAge}<div class="cell"><span class="k">Band data</span><span class="v">{rivenStatsAge}</span></div>{/if}
+    </div>
+  </div>
+</section>
 <section class="wrap tw rivens" data-testid="rivens-view">
   <div class="rail">
     <h3>Owned rivens</h3>
-    <span class="grow"></span>
-    <span class="count"><b>{rivens.length}</b> owned{#if rivenStatsAge}&nbsp;· band data {rivenStatsAge}{/if}</span>
+    <span class="exp">{rivens.length} owned</span>
   </div>
 
   {#if rows.length === 0}
@@ -213,18 +221,18 @@
     <div class="scroll">
       <table class="tw fixed">
         <colgroup>
-          <col style="width:13rem" />
+          <col style="width:9rem" />
+          <col style="width:12rem" />
           <col />
           <col style="width:3.5rem" />
           <col style="width:3.5rem" />
           <col style="width:7rem" />
           <col style="width:13rem" />
-          <col style="width:8rem" />
         </colgroup>
         <thead>
           <tr>
-            <th class="l">Weapon</th><th class="l">Stats</th><th>Rolls</th><th>Rank</th>
-            <th class="l">Dispo</th><th>DE weekly</th><th>Actions</th>
+            <th class="l">Weapon</th><th class="l"><span class="sr-only">Actions</span></th><th class="l">Stats</th><th>Rolls</th><th>Rank</th>
+            <th class="l">Dispo</th><th>DE weekly</th>
           </tr>
         </thead>
         <tbody>
@@ -243,6 +251,24 @@
                     {#if r.pol}<span class="pol" title="Polarity">{polaritySymbol(r.pol)}</span>{/if}
                   {/if}
                 </div>
+              </td>
+              <td class="l acts">
+                <button
+                  class="btn ghost"
+                  onclick={() => showComps(row)}
+                  disabled={!r.slug || compsBusy !== null}
+                  title={r.slug ? 'Fetch the cheapest live buyouts for this riven (WFM caps at 10/min).' : 'Unknown weapon - no comps.'}
+                >
+                  {query != null && compsBusy === query.key ? 'Fetching…' : openRow === row.key ? 'Hide comps' : 'Comps'}
+                </button>
+                {#if row.report}
+                  <!-- DE's raw riven data, for reporting a trait or state the
+                       app does not read yet. No account details: the path
+                       and fingerprint only. -->
+                  <span class="copy-data" title="Copy DE's raw data for this riven, to paste into a bug report. It holds no account details.">
+                    <CopyBtn text={row.report} label="Copy data" name={`Copy raw riven data for ${r.weaponName ?? 'this riven'}`} />
+                  </span>
+                {/if}
               </td>
               <td class="l">
                 <div class="stats" title={r.veiled ? 'Veiled - stats hidden until revealed.' : 'Stat names from the inventory fingerprint. Exact values require DE’s full Riven formula and are not guessed.'}>
@@ -297,24 +323,6 @@
                   </details>
                 {:else}
                   <span class="muted">-</span>
-                {/if}
-              </td>
-              <td>
-                <button
-                  class="btn ghost"
-                  onclick={() => showComps(row)}
-                  disabled={!r.slug || compsBusy !== null}
-                  title={r.slug ? 'Fetch the cheapest live buyouts for this riven (WFM caps at 10/min).' : 'Unknown weapon - no comps.'}
-                >
-                  {query != null && compsBusy === query.key ? 'Fetching…' : openRow === row.key ? 'Hide comps' : 'Comps'}
-                </button>
-                {#if row.report}
-                  <!-- DE's raw riven data, for reporting a trait or state the
-                       app does not read yet. No account details: the path
-                       and fingerprint only. -->
-                  <span class="copy-data" title="Copy DE's raw data for this riven, to paste into a bug report. It holds no account details.">
-                    <CopyBtn text={row.report} label="Copy data" name={`Copy raw riven data for ${r.weaponName ?? 'this riven'}`} />
-                  </span>
                 {/if}
               </td>
             </tr>
@@ -399,7 +407,10 @@
      app.css; only riven-specific content styles live here. */
   table { min-width: 65rem; }
   td:last-child .btn { white-space: nowrap; }
-  .copy-data { display: block; margin-top: var(--s1); }
+  /* Actions sit beside the weapon, so they stay in view while stats and the band scroll. */
+  .acts { white-space: nowrap; }
+  .copy-data { display: inline-block; margin-left: var(--s1); }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
   .copy-data :global(.copybtn) { min-height: var(--ctl-xs); }
   .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
   .weapon { display: flex; align-items: center; gap: var(--s1); }

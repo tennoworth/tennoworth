@@ -508,12 +508,8 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
     {:else if effectiveView === 'meta'}
       <MetaDriftPanel market={inventory.market} />
     {:else if effectiveView === 'orders'}
-      <section data-shell class="view-header">
-        <h2 data-shell>My orders</h2>
-        <p data-shell class="lede">Your active warframe.market listings, fetched live from the desktop app.</p>
-      </section>
-      {@render pendingBanner()}
       <MyOrdersPanel
+        banner={pendingBanner}
         {transport}
         market={inventory.market}
         sessionEpoch={listing.sessionEpoch}

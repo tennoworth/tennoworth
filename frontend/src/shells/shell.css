@@ -635,14 +635,6 @@
 
   /* Action-verb prefix on rec cards. Casual users said the cards were
      too noun-heavy - leading with a verb gives them the instruction. */
-  .reco-verb[data-shell] {
-    font-size: var(--text-caption);
-    font-weight: 700;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    color: var(--accent);
-    margin-right: 6px;
-  }
 
   button.ghost[data-shell] {
     background: transparent;
@@ -659,17 +651,18 @@
      pick a strategy without reading every detail line. Net plat is the
      right-aligned headline number per row. */
   .set-recos[data-shell] { padding: 0; }
-  .reco[data-shell] {
-    border-top: 1px var(--rule) var(--hairline);
-    padding: var(--s4) var(--inset);
-    align-items: center;
-  }
-  .reco:first-of-type[data-shell] { border-top: none; }
-  .reco-body[data-shell] { display: flex; flex-direction: column; gap: 4px; min-width: 0; flex: 1; }
-  .reco-title[data-shell] { display: flex; align-items: center; gap: var(--s3); flex-wrap: wrap; }
-  .reco-title a[data-shell] { order: -1; flex: 1 1 16rem; }
-  .reco-title a[data-shell] { color: var(--fg); text-decoration: none; font-weight: 600; font-size: var(--text-control); }
-  .reco-title a:hover[data-shell] { color: var(--accent); text-decoration: underline; }
+  /* Set picks as a ranked table: the sentence column takes the slack, the
+     numbers sit in aligned columns, the verb never wraps. */
+  .set-table[data-shell] { min-width: 46rem; }
+  table.tw.set-table th.l[data-shell] { width: auto; min-width: 0; }
+  table.tw.set-table .rank[data-shell] { width: 2rem; color: var(--muted); font-family: var(--font-mono); }
+  table.tw.set-table .set-name[data-shell] { width: 30%; min-width: 13rem; }
+  .set-table td.set-name a[data-shell] { font-weight: 600; margin-right: var(--s2); }
+  .set-table td.set-name .kind[data-shell], .set-table td.set-name .tag[data-shell] { margin-right: var(--s1); }
+  .set-table td.verb[data-shell] { font-weight: 600; white-space: nowrap; }
+  table.tw.set-table th.verb[data-shell] { width: 7rem; }
+  table.tw.set-table .reco-detail[data-shell] { width: 50%; min-width: 20rem; }
+  .set-table td.reco-detail[data-shell] { color: var(--muted); }
   .kind[data-shell] {
     font-size: var(--text-caption);
     letter-spacing: 0.05em;
@@ -697,13 +690,6 @@
   .reco-detail strong[data-shell] { color: var(--fg); font-weight: 600; }
   .good-text[data-shell] { color: var(--good); }
   .bad-text[data-shell] { color: var(--bad); }
-  .reco-net-inline[data-shell] {
-    font-family: var(--font-mono);
-    font-size: var(--text-body);
-    font-weight: 600;
-    color: var(--good);
-    margin-left: 4px;
-  }
 
   .tag.advice[data-shell] { cursor: help; }
 
@@ -729,45 +715,27 @@
   .baro-detail .unit[data-shell] { color: var(--muted); font-size: var(--text-caption); margin-left: 1px; }
 
   .relic-planner[data-shell] { padding: 0; gap: 0; }
+  .relic-table[data-shell] { min-width: 58rem; }
+  table.tw.relic-table th.l[data-shell] { width: auto; min-width: 0; }
+  table.tw.relic-table .relic-name[data-shell] { width: 16%; min-width: 9rem; }
+  table.tw.relic-table .why[data-shell] { width: 34%; min-width: 16rem; }
+  .relic-table td.l.relic-name a[data-shell] { font-weight: 600; }
+  .relic-table td.why[data-shell] { color: var(--muted); }
+  /* One rung per cell: the EV over a bar on the row's scale; the chosen rung
+     is the ink inversion, like any other selected state. */
+  .relic-table td.lad[data-shell] { width: 6.5rem; }
+  .relic-table td.lad .lv[data-shell] { display: block; }
+  .relic-table td.lad .lbar[data-shell] { display: block; height: 0.25rem; margin-top: var(--s1); background: var(--hairline); }
+  .relic-table td.lad .lbar i[data-shell] { display: block; height: 100%; background: var(--muted); }
+  .relic-table td.lad.pick[data-shell], table.tw.relic-table tbody tr:hover td.lad.pick[data-shell] { background: var(--ink-bar); color: var(--on-ink); font-weight: 600; }
+  .relic-table td.lad.pick .lbar[data-shell] { background: color-mix(in srgb, var(--on-ink) 30%, transparent); }
+  .relic-table td.lad.pick .lbar i[data-shell] { background: var(--on-ink); }
   .build-vs-buy[data-shell] { margin-top: 8px; }
   .build-vs-buy > summary[data-shell] { cursor: pointer; color: var(--muted); font-size: 0.85rem; }
   .build-vs-buy[open] > summary[data-shell] { margin-bottom: 8px; }
-  .relic-grid[data-shell] {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(17rem, 100%), 1fr));
-    gap: 12px;
-  }
   @media (max-width: 760px) { .relic-grid[data-shell] { grid-template-columns: 1fr; } }
   .relic-more[data-shell] { margin-top: 12px; text-align: center; }
-  .relic-card[data-shell] {
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-panel);
-    padding: 12px 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-  .relic-title[data-shell] { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
-  .relic-title a[data-shell] { color: var(--fg); text-decoration: none; font-weight: 600; font-size: var(--text-control); }
-  .relic-title a:hover[data-shell] { color: var(--accent); text-decoration: underline; }
   .small[data-shell] { font-size: var(--text-caption); }
-  .relic-epp[data-shell] {
-    font-family: var(--font-mono);
-    font-size: var(--text-metric-lg);
-    font-weight: 600;
-    letter-spacing: -0.01em;
-    line-height: 1.1;
-  }
-  .relic-epp .unit[data-shell] { font-size: var(--text-caption); color: var(--muted); margin-left: 4px; }
-  .relic-meta[data-shell] {
-    font-size: var(--text-caption);
-    color: var(--muted);
-    display: flex;
-    gap: 8px;
-    align-items: center;
-    flex-wrap: wrap;
-  }
   .relic-rewards[data-shell] { font-size: var(--text-caption); }
   .relic-rewards summary[data-shell] {
     cursor: pointer;
@@ -894,11 +862,6 @@
      directly in this template. */
   main.reading-view[data-shell] > * { width: 100%; max-width: 64rem; }
   main.workspace[data-shell] { gap: var(--s4); padding: var(--s5); }
-  .relic-grid[data-shell] { grid-template-columns: minmax(0, 1fr); gap: 0; }
-  .relic-card[data-shell] { border: 0; border-top: 1px var(--rule) var(--border); background: var(--panel); padding: var(--s4) var(--inset); }
-  .relic-card:first-child[data-shell] { border-top: 0; }
-  .relic-title[data-shell] { justify-content: flex-start; gap: var(--s3); }
-  .relic-title a[data-shell] { order: -1; flex: 1; }
   .relic-rewards summary[data-shell] { min-height: var(--ctl); }
   main.workspace .faq[data-shell] { margin: 0; padding: 0; }
   main.workspace .faq > h2[data-shell] { margin: 0; padding: var(--s2) var(--inset); min-height: var(--rail); }
