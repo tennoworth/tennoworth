@@ -1,5 +1,5 @@
 {
-  "version": "0.8.101",
+  "version": "0.8.102",
   "coverage_since": "0.7.1",
   "releases": [
     {
@@ -1048,6 +1048,89 @@
           "kind": "improved",
           "title": "Find the fields that start a task",
           "body": "The market lookup and the Sell name filter carry a quiet light sweep, and pressing / to jump to the filter briefly highlights it. Reduced-motion settings turn the motion off.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        }
+      ]
+    },
+    {
+      "version": "0.8.102",
+      "date": "2026-10-10",
+      "changes": [
+        {
+          "id": "shared-app-frame",
+          "kind": "improved",
+          "title": "Find the same layout across the app",
+          "body": "Sell, Set picks, Relics, Rivens, My orders and Ledger share clearer headings, tables and readable text, with a compact status strip that shows ongoing work.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "sell-decision-above-fold",
+          "kind": "improved",
+          "title": "Reach the selling decision sooner",
+          "body": "Sell puts the filters that shape your picks and Top Picks earlier on the page, keeping the first useful actions within reach on smaller windows.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "retained-view-state",
+          "kind": "improved",
+          "title": "Return to the view where you left it",
+          "body": "Switching views preserves searches, unfinished edits and each view's scroll position. Settings section links still take you to the requested section.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "steady-startup-workspace",
+          "kind": "fixed",
+          "title": "Keep the workspace steady during startup",
+          "body": "Restoring your saved scan shows a workspace placeholder instead of briefly showing the first-run page.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "orders-refresh-continuity",
+          "kind": "fixed",
+          "title": "Keep order information through a failed refresh",
+          "body": "My orders refreshes when you return while retaining readable rows and price drafts if the request fails.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "sell-listing-receipts",
+          "kind": "improved",
+          "title": "See a trace of your listing actions",
+          "body": "Sell keeps a receipt after listing, including the item's variant, so you can follow what changed after the review closes.",
+          "platforms": [
+            "windows",
+            "linux"
+          ],
+          "supersedes": []
+        },
+        {
+          "id": "stable-sell-row-order",
+          "kind": "improved",
+          "title": "Keep the next row under your cursor",
+          "body": "A new scan keeps the current row order and offers an explicit re-sort instead of moving the next action while you work.",
           "platforms": [
             "windows",
             "linux"
