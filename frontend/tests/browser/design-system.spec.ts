@@ -868,3 +868,18 @@ for (const theme of ['light', 'dark'] as const) {
     }
   });
 }
+
+for (const sample of ['sample', 'first-run', 'sample=loading']) {
+  test(`desktop mode marker survives workspace and first-run states: ${sample}`, async ({ page }) => {
+    await page.goto(sample === 'first-run' ? '/?preview-desktop' : `/?preview-desktop&${sample}`);
+    await expect(page.getByTestId('desktop-mode')).toBeVisible();
+    if (sample === 'sample') {
+      await expect(page.locator('main.workspace')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'List on WFM', exact: true })).toBeEnabled();
+      await expect(page.getByTestId('desktop-mode')).toBeVisible();
+    } else if (sample === 'first-run') {
+      await expect(page.locator('main.landing')).toBeVisible();
+      await expect(page.getByTestId('desktop-mode')).toBeVisible();
+    }
+  });
+}

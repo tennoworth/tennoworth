@@ -79,7 +79,8 @@ async function openDesktop(page: Page): Promise<void> {
     localStorage.setItem('keep-copies-nudge-dismissed', '1');
   }, INVENTORY);
   await page.goto('/?preview-desktop');
-  await expect(page.getByTestId('desktop-mode')).toHaveCount(0);
+  await expect(page.getByTestId('desktop-first-run')).toHaveCount(0);
+  await expect(page.getByTestId('desktop-mode')).toBeVisible();
   await expect(page.locator('.shell')).toBeVisible();
 }
 

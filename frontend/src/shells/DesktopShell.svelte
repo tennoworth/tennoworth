@@ -383,7 +383,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
 <FeedbackDialog bind:this={feedbackRef} captureState={captureFeedbackState} services={notesServices} onclosed={() => { if (feedbackFromMore) statusStripRef?.focusMore(); feedbackFromMore = false; }} />
 
 <!-- Keep the banner region mounted while navigation or a scan changes the content. -->
-<div data-shell class={showWorkspace ? 'shell' : 'desktop-landing'}>
+<div data-shell data-testid="desktop-mode" class={showWorkspace ? 'shell' : 'desktop-landing'}>
   <StatusStrip bind:this={statusStripRef} inShell={showWorkspace} {inventory} {listing} {filters} {unresolvedCount} {unresolvedSummary} {inventoryFreshness} {inventoryStaleness} {inventoryTimestamp} {marketFreshness} {marketStaleness} {baroState} {unreadNotifications} {wfmLabel} {projectLinkAnchors} onexport={() => exportImportRef?.openExport()} onimport={() => exportImportRef?.pickImport()} onclear={() => workspace.clear()} onupdates={() => updates.check({ announce: true })} onfeedback={() => { feedbackFromMore = true; openFeedback(); }} onauth={(code) => wfmAuthDialogsRef?.open(code)} {presence} {activity} onpresencesettings={() => { settingsSection = 'account'; filters.setView('settings'); }} />
   {#if showWorkspace}
   <aside data-shell class="sidebar">
@@ -468,7 +468,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   </aside>
 
   {/if}
-  <main bind:this={workspaceElement} data-shell class={showWorkspace ? 'workspace' : 'landing'} class:reading-view={['install', 'settings'].includes(effectiveView)} data-testid={!showWorkspace ? 'desktop-mode' : undefined}>
+  <main bind:this={workspaceElement} data-shell class={showWorkspace ? 'workspace' : 'landing'} class:reading-view={['install', 'settings'].includes(effectiveView)} data-testid={!showWorkspace ? 'desktop-first-run' : undefined}>
     {@render generalBanners()}
     {#if !showWorkspace}
   {#if !inventory.error && !inventory.pullError}
