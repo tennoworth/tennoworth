@@ -175,7 +175,7 @@
     receiptKeys = shown;
   }
   const isSnoozed = (p: SellRow) => snoozedPicks.has(p.key ?? p.slug);
-  const listedReceipt = (p: SellRow) => receipts?.get(p.slug);
+  const listedReceipt = (p: SellRow) => receipts?.forRow(p.slug, p.subtype);
   const clock = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
   // Plain-language reason line for a pick, built only from fields the row
@@ -612,7 +612,7 @@
   picks={calculationReady && results.length > 0 && allPicks.length > 0 ? picks : null}
   picksPending={calculationPending}
   pickReceipt={(p) => isSnoozed(p) || !!listedReceipt(p)}
-  listedFor={(slug) => receipts?.get(slug)?.quantity ?? null}
+  listedFor={(r) => receipts?.listedFor(r.slug, r.subtype) || null}
   {picksHead} pickActions={pickActionsCell} pickReason={pickReasonCell} {picksEmpty}
   empty={emptyState} />
 

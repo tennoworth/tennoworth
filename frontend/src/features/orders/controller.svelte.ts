@@ -98,7 +98,9 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
         // state instead of a stale failure.
         if (e instanceof DesktopCmdError && (e.code === 'needs_login' || e.code === 'needs_unlock')) {
           phase = 'locked';
-          input.onauthrequired?.(e.code);
+          // A hidden view never asks for sign-in: the user may have just
+          // logged out elsewhere. Returning to it loads again and asks then.
+          if (input.active ?? true) input.onauthrequired?.(e.code);
           return;
         }
         error = humanError(e);
@@ -112,8 +114,16 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
   $effect(() => {
     void input.sessionEpoch;
     // Only the epoch triggers a load: the transport is read untracked, so a
-    // parent re-passing its props cannot refetch.
-    untrack(loadOrders);
+    // parent re-passing its props cannot refetch. A session change while the
+    // view is hidden (a logout from Settings) drops the old rows instead of
+    // fetching, and the next return loads for the new session.
+    untrack(() => {
+      if (input.active ?? true) { loadOrders(); return; }
+      ++loadGen;
+      orders = [];
+      error = null;
+      phase = 'idle';
+    });
   });
   let wasActive = input.active ?? true;
   $effect(() => {

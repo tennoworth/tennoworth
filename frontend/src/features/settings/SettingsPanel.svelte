@@ -9,7 +9,7 @@
   import type { PresenceController } from '../presence/presence.svelte';
   import { presenceLine, presenceMark, presenceWord } from '../presence/presence';
   import type { AppIconController } from './app-icon.svelte';
-  import { onMount, tick } from 'svelte';
+  import { untrack, onMount, tick } from 'svelte';
   import type { ThemeController } from '../../ui/theme';
   import type { DesktopWfmStatus, DesktopCapabilities } from '../../contracts/desktop';
   import { AUTO_SCAN_CADENCE_CHOICES, type AutoScanSettings, type AutoScanStatus } from '../../contracts/desktop';
@@ -37,9 +37,11 @@
     /** Opens the page at this section (the inbox's "Notification settings",
      *  the price sharing prompt's "What is sent"). */
     section?: 'notifications' | 'price-sharing' | 'account' | null;
+    /** Whether Settings is on screen; it stays mounted while hidden. */
+    active?: boolean;
     onsectionshown?: () => void;
   }
-  let { theme, updates, onwhatsnew, transport, autoScan, appIcon, presence, wfmStatus = null, onwfmlogout, section = null, onsectionshown }: Props = $props();
+  let { theme, updates, onwhatsnew, transport, autoScan, appIcon, presence, wfmStatus = null, onwfmlogout, section = null, onsectionshown, active = true }: Props = $props();
 
   let overlay = $state<OverlaySettings | null>(null);
   let overlayStatus = $state<OverlayStatus | null>(null);
@@ -65,12 +67,12 @@
 
   // Waits for the overlay settings: they load after mount and would push a
   // section scrolled to earlier down out of view.
-  async function showSection(loaded: Promise<unknown>) {
-    if (!section) return;
+  let sectionGeneration = 0;
+  async function showSection(loaded: Promise<unknown>, wanted: NonNullable<Props['section']>, generation: number) {
     await loaded;
-    if (disposed) return;
     await tick();
-    const target = document.getElementById(`settings-${section}`);
+    if (disposed || !active || section !== wanted || generation !== sectionGeneration) return;
+    const target = document.getElementById(`settings-${wanted}`);
     target?.scrollIntoView({ block: 'start' });
     target?.focus({ preventScroll: true });
     onsectionshown?.();
@@ -83,8 +85,23 @@
     if (!disposed && generation === statusGeneration) overlayStatus = next;
   }
 
+  // Settings stays mounted after the first visit, so a later deep link (the
+  // inbox's settings link, the account shortcut) arrives as a prop change and
+  // is shown once the pane is on screen.
+  let loaded: Promise<unknown> = Promise.resolve();
+  let mounted = $state(false);
+  $effect(() => {
+    const wanted = section;
+    const onScreen = active;
+    const ready = mounted;
+    untrack(() => {
+      const generation = ++sectionGeneration;
+      if (ready && wanted && onScreen) void showSection(loaded, wanted, generation);
+    });
+  });
+
   onMount(() => {
-    if (!transport) { void showSection(Promise.resolve()); return; }
+    if (!transport) { mounted = true; return; }
     const initial = () => Promise.all([transport.getOverlaySettings(), refreshOverlayStatus()])
       .then(([settings]) => { if (!disposed) { overlay = settings; troubleshootingOpen = settings.diagnostics; } })
       .catch((error) => { if (!disposed) overlayError = String(error); });
@@ -95,8 +112,11 @@
       catch { /* The next poll retries while the last status remains visible. */ }
       finally { statusPolling = false; }
     };
-    void showSection(initial());
+    loaded = initial();
+    mounted = true;
     const timer = window.setInterval(() => {
+      // Native status reads only while the page is on screen.
+      if (!active) return;
       void refreshStatus();
       // The loop's own view: whether the game is up, when the next scan is due,
       // and why the last one failed.

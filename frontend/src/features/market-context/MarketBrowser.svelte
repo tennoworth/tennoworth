@@ -98,6 +98,21 @@
   let baroStockAll = $state(false);
   let hasMeta = $derived(!!buildMetaDrift(market));
   let contextTab = $state<'meta' | 'dispo'>('meta');
+  let contextTabs = $derived([
+    ...(hasMeta ? [{ id: 'meta' as const, label: 'Meta drift', count: null }] : []),
+    ...(dispoChanges.length ? [{ id: 'dispo' as const, label: 'Riven dispositions', count: dispoChanges.length }] : []),
+  ]);
+  let shownTab = $derived(contextTabs.some((t) => t.id === contextTab) ? contextTab : contextTabs[0]?.id);
+  // Arrow keys, Home and End move between the tabs, as in the feature rail.
+  function onContextKey(event: KeyboardEvent): void {
+    const ids = contextTabs.map((t) => t.id);
+    const at = ids.indexOf(shownTab ?? ids[0]);
+    const next = event.key === 'ArrowRight' ? (at + 1) % ids.length : event.key === 'ArrowLeft' ? (at - 1 + ids.length) % ids.length : event.key === 'Home' ? 0 : event.key === 'End' ? ids.length - 1 : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    contextTab = ids[next];
+    document.getElementById(`ctx-tab-${ids[next]}`)?.focus();
+  }
   let sample = $derived(handoff ? handoffSample(market, index) : []);
   function dispoDelta(from: number, to: number): string {
     const d = to - from;
@@ -447,14 +462,16 @@
        panel rather than two long stacked tables. Each shows its top ten. -->
   {#if hasMeta || dispoChanges.length}
     <section class="context" aria-label="Market context">
-      <div class="ui-segmented context-tabs" role="tablist" aria-label="Market context">
-        {#if hasMeta}<button type="button" role="tab" aria-selected={contextTab === 'meta'} onclick={() => (contextTab = 'meta')}>Meta drift</button>{/if}
-        {#if dispoChanges.length}<button type="button" role="tab" aria-selected={contextTab === 'dispo' || !hasMeta} onclick={() => (contextTab = 'dispo')}>Riven dispositions <span class="n">{dispoChanges.length}</span></button>{/if}
+      <div class="ui-segmented context-tabs" role="tablist" aria-label="Market context" tabindex="-1" onkeydown={onContextKey}>
+        {#each contextTabs as t (t.id)}
+          <button type="button" role="tab" id="ctx-tab-{t.id}" aria-controls="ctx-panel-{t.id}" aria-selected={shownTab === t.id} tabindex={shownTab === t.id ? 0 : -1} onclick={() => (contextTab = t.id)}>{t.label}{#if t.count != null} <span class="n">{t.count}</span>{/if}</button>
+        {/each}
       </div>
-      {#if hasMeta && contextTab === 'meta'}
-        <div role="tabpanel"><MetaDriftPanel {market} limit={CONTEXT_PREVIEW} embedded /></div>
+      {#if shownTab === 'meta'}
+        <div role="tabpanel" id="ctx-panel-meta" aria-labelledby="ctx-tab-meta"><MetaDriftPanel {market} limit={CONTEXT_PREVIEW} embedded /></div>
       {:else if dispoChanges.length}
-        <section class="wrap tw dispo" role="tabpanel" data-testid="dispo-changes">
+        <div role="tabpanel" id="ctx-panel-dispo" aria-labelledby="ctx-tab-dispo">
+        <section class="wrap tw dispo" data-testid="dispo-changes">
           <div class="rail">
             <h3>Riven disposition changes</h3>
             <span class="exp">last 90 days · DE only raises dispositions now, so each change is a one-way price event for that weapon's rivens - WFM reprices within a day</span>
@@ -484,6 +501,7 @@
             <div class="line"><span class="exp">{dispoAll ? `All ${dispoChanges.length}` : `Top ${CONTEXT_PREVIEW} of ${dispoChanges.length}`}</span><span class="grow"></span><button type="button" class="btn xs" aria-expanded={dispoAll} onclick={() => (dispoAll = !dispoAll)}>{dispoAll ? `Show top ${CONTEXT_PREVIEW}` : `Show all ${dispoChanges.length}`}</button></div>
           {/if}
         </section>
+        </div>
       {/if}
     </section>
   {/if}

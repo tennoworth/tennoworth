@@ -24,6 +24,18 @@ describe('ActivityLog', () => {
     expect(log.current).toMatchObject({ label: 'Listed 1', tone: 'done' });
   });
 
+  it('keeps a long scan in view when a shorter send started after it finishes first', () => {
+    const log = new ActivityLog();
+    const scan = log.begin('Scanning game…');
+    const send = log.begin('Sending listings…');
+    log.finish(send, 'Listed 1');
+    expect(log.current).toMatchObject({ id: scan, label: 'Scanning game…', tone: 'busy' });
+    log.progress(scan, 'Scanning game… 80%');
+    expect(log.current?.label).toBe('Scanning game… 80%');
+    log.finish(scan, 'Scan applied');
+    expect(log.current).toMatchObject({ label: 'Scan applied', tone: 'done' });
+  });
+
   it('updates progress only for the activity still shown', () => {
     const log = new ActivityLog();
     const first = log.begin('Checking 0/3');

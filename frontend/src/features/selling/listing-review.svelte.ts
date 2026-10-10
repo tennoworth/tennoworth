@@ -59,7 +59,7 @@ import type { DesktopServices } from '../../contracts/services';
      *  component sends, it does not own the batch's lifecycle. */
     sendThrough: <T>(send: () => Promise<T>) => Promise<T>;
     /** Confirmed send results, so the row that was listed can show it. */
-    onsent?: (sent: { slug: string; platinum: number; quantity: number }[], results: ItemResult[]) => void;
+    onsent?: (sent: { slug: string; subtype?: string; rank?: number; platinum: number; quantity: number }[], results: ItemResult[]) => void;
     /** Confirmed visibility changes from "Make N visible". */
     onvisible?: (results: ItemResult[]) => void;
     listingBlockReason?: string | null;
@@ -339,7 +339,7 @@ export function createListingReview(input: ListingReviewInput, services: Pick<De
       serverResults = resp.results || [];
       durabilityError = resp.durability_error ?? null;
       phase = 'results';
-      input.onsent?.(items.map(({ slug, platinum, quantity }) => ({ slug, platinum, quantity })), serverResults);
+      input.onsent?.(items.map(({ slug, subtype, rank, platinum, quantity }) => ({ slug, subtype, rank, platinum, quantity })), serverResults);
     } catch (e) {
       if (handleAuthCode(e)) return;
       networkError = humanError(e);

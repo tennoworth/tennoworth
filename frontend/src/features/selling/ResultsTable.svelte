@@ -61,7 +61,7 @@
     /** A pick row that is a receipt (hidden with Undo, or just listed). */
     pickReceipt?: (r: Row) => boolean;
     /** Quantity listed this session for a slug, shown beside Own. */
-    listedFor?: (slug: string) => number | null;
+    listedFor?: (r: Row) => number | null;
     // Rendered in place of the table body when `results` is empty (the parent's
     // empty-state card), so the SCOPE/NARROW rows stay put and the presets stay
     // reachable while the cascade yields nothing.
@@ -321,14 +321,21 @@
   );
 
   // A preset can carry a default sort (the Ducats preset ranks by plat-per-100-
-  // ducats ascending - best ducat trades first). presetSort changes identity
-  // each time the active preset changes; apply it then. Writes go inside
+  // ducats ascending - best ducat trades first). Re-passing an equivalent
+  // sort must not release a scan hold. Writes go inside
   // untrack() so they don't re-trigger this effect, and a later user header
   // click (changes sortKey, not presetSort) is preserved until the next switch.
+  let appliedPresetSort: string | null = null;
   $effect(() => {
-    const ps = presetSort;
-    if (!ps) return;
-    untrack(() => { sortKey = ps.key; sortDir = ps.dir; });
+    const key = presetSort?.key;
+    const dir = presetSort?.dir;
+    if (key == null || dir == null) return;
+    untrack(() => {
+      const signature = `${key}|${dir}`;
+      if (signature === appliedPresetSort) return;
+      appliedPresetSort = signature;
+      sortKey = key; sortDir = dir; heldOrder = null;
+    });
   });
 
   // If the current sort column gets hidden by a preset switch, fall back to the
@@ -340,7 +347,7 @@
     untrack(() => {
       if (!cols.find((c) => c.key === sortKey)) {
         const fallback = cols.find((c) => c.align === 'right' && !c.noSort);
-        if (fallback) sortKey = fallback.key;
+        if (fallback) { sortKey = fallback.key; heldOrder = null; }
       }
     });
   });
@@ -516,7 +523,7 @@
       {@const bd = ownedBreakdown(r.owned, r.sellable, r.leveled)}
       <span class="kept-note">({#if bd.leveledPart > 0}<span class="leveled-note" title={LEVELED_NOTE_TITLE}>{bd.leveledPart} leveled</span>{/if}{#if bd.leveledPart > 0 && bd.keptPart > 0} · {/if}{#if bd.keptPart > 0}<span title={keptNoteTitle(bd.keptPart)}>{bd.keptPart} kept</span>{/if})</span>
     {/if}
-    {#if listedFor?.(r.slug)}<span class="quantity-note listed"> · listed {listedFor(r.slug)}</span>{/if}
+    {#if listedFor?.(r)}<span class="quantity-note listed"> · listed {listedFor(r)}</span>{/if}
   {:else if col.key === 'delta'}
     {#if d > 0}
       <span class="delta up">▲+{d}</span>

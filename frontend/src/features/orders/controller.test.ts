@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { flushSync } from 'svelte';
 import { controllerTestRoot, reactiveBox } from '../../dev/controller-test-root.svelte';
 import { createOrdersController } from './controller.svelte';
+import { DesktopCmdError } from '../../contracts/errors';
 import type { DesktopCapabilities } from '../../contracts/desktop';
 import type { OwnOrder } from '../../contracts/generated/desktop';
 
@@ -93,4 +94,34 @@ it('refreshes when the orders view comes back on screen, and only then', async (
   expect(fetchOrders).toHaveBeenCalledTimes(2);
   // The rows already on screen stay while the refresh runs.
   expect(controller.orders.map((row) => row.id)).toEqual(['one']);
+});
+
+it('does not ask for sign-in from the hidden orders view after a logout elsewhere', async () => {
+  const active = reactiveBox(true);
+  const epoch = reactiveBox(0);
+  const auth = vi.fn();
+  const fetchOrders = vi.fn().mockResolvedValueOnce([order]).mockRejectedValue(new DesktopCmdError('needs_login', 'Login required'));
+  let controller!: ReturnType<typeof createOrdersController>;
+  const stop = controllerTestRoot(() => {
+    controller = createOrdersController({ transport: { fetchOrders } as unknown as DesktopCapabilities, onauthrequired: auth, get active() { return active.value; }, get sessionEpoch() { return epoch.value; } }, {
+      desktopLiveTopPrices: vi.fn(), listenForTauriEvent: vi.fn(() => () => {}),
+    });
+  });
+  cleanups.push(() => { controller.dispose(); stop(); });
+  flushSync();
+  await settle();
+  active.value = false;
+  flushSync();
+  // Logging out from Settings bumps the session epoch.
+  epoch.value += 1;
+  flushSync();
+  await settle();
+  expect(auth).not.toHaveBeenCalled();
+  expect(fetchOrders).toHaveBeenCalledTimes(1);
+  // The old session's rows are gone, and returning asks then.
+  expect(controller.orders).toEqual([]);
+  active.value = true;
+  flushSync();
+  await settle();
+  expect(auth).toHaveBeenCalledWith('needs_login');
 });

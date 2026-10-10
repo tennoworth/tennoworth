@@ -81,6 +81,21 @@ describe('SettingsPanel', () => {
     } finally { cleanup(); vi.useRealTimers(); }
   });
 
+  it('pauses status polling while hidden and resumes on return', async () => {
+    vi.useFakeTimers();
+    try {
+      const { transport, overlayStatus } = pollingTransport();
+      const panel = render(SettingsPanel, { props: { theme: fakeTheme().theme, transport } });
+      await act(async () => {});
+      await panel.rerender({ active: false });
+      await act(() => vi.advanceTimersByTimeAsync(5000));
+      expect(overlayStatus).toHaveBeenCalledTimes(1);
+      await panel.rerender({ active: true });
+      await act(() => vi.advanceTimersByTimeAsync(1000));
+      expect(overlayStatus).toHaveBeenCalledTimes(2);
+    } finally { cleanup(); vi.useRealTimers(); }
+  });
+
   it('does not overwrite the enabled overlay status with an earlier poll', async () => {
     vi.useFakeTimers();
     try {
@@ -450,4 +465,30 @@ describe('App icon setting', () => {
     render(SettingsPanel, { props: { theme: fakeTheme().theme } });
     expect(screen.queryByRole('radiogroup', { name: 'App icon' })).toBeNull();
   });
+});
+
+describe('Settings deep links after the first visit', () => {
+  it('shows and acknowledges a section requested while the page is already mounted', async () => {
+    const shown = vi.fn();
+    const scroll = vi.fn();
+    HTMLElement.prototype.scrollIntoView = scroll;
+    const theme = { modePref: 'system', setModePref() {} } as unknown as ThemeController;
+    const panel = render(SettingsPanel, { props: { theme, section: null, onsectionshown: shown } });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+    expect(shown).not.toHaveBeenCalled();
+    // Settings stays mounted when the user leaves it, so the inbox's settings
+    // link or the account shortcut arrives as a prop change.
+    await panel.rerender({ section: 'account' });
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 10)); });
+    expect(shown).toHaveBeenCalledTimes(1);
+    expect(scroll).toHaveBeenCalled();
+  });
+});
+
+it('acknowledges an initial Settings section once', async () => {
+  const shown = vi.fn();
+  render(SettingsPanel, { props: { theme: fakeTheme().theme, section: 'account', onsectionshown: shown } });
+  await waitFor(() => expect(shown).toHaveBeenCalledTimes(1));
+  await act(async () => {});
+  expect(shown).toHaveBeenCalledTimes(1);
 });

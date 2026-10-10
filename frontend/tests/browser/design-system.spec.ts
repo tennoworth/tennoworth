@@ -152,7 +152,9 @@ test('disabled primary actions drop the ink fill in both themes', async ({ page 
     await page.emulateMedia({ colorScheme: theme });
     await page.goto('/?preview-desktop&sample');
     await previewShell(page);
-    expect(await looksDisabled(page.getByRole('button', { name: 'List on WFM', exact: true })), `${theme} List CTA`).toEqual(expected);
+    const list = page.getByRole('button', { name: 'List on WFM', exact: true });
+    await expect(list).toBeEnabled();
+    expect(await looksDisabled(list), `${theme} List CTA`).toEqual(expected);
     await page.locator('.refresh-trigger').first().click();
     expect(await looksDisabled(page.getByTestId('desktop-scan')), `${theme} Scan game`).toEqual(expected);
     await page.keyboard.press('Escape');
@@ -786,3 +788,50 @@ test('Baro inventory valuation retries when its view is reopened', async ({ page
   await page.locator('.sidebar').getByRole('button', { name: /^Baro/ }).click();
   await expect(page.locator('.baro-detail')).toContainText('180d');
 });
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`${theme} market context tabs support keyboard selection and labeled panels`, async ({ page }, testInfo) => {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.goto('/');
+    const tabs = page.getByRole('tablist', { name: 'Market context' });
+    const meta = tabs.getByRole('tab', { name: 'Meta drift' });
+    const dispositions = tabs.getByRole('tab', { name: /^Riven dispositions/ });
+    await expect(meta).toHaveAttribute('aria-selected', 'true');
+    await meta.focus();
+    for (const key of ['ArrowRight', 'End', 'ArrowLeft', 'Home']) {
+      await page.keyboard.press(key);
+      const selected = key === 'ArrowRight' || key === 'End' ? dispositions : meta;
+      const other = selected === meta ? dispositions : meta;
+      await expect(selected).toBeFocused();
+      await expect(selected).toHaveAttribute('tabindex', '0');
+      await expect(other).toHaveAttribute('tabindex', '-1');
+      await expect(page.getByRole('tabpanel', { name: key === 'ArrowRight' || key === 'End' ? /^Riven dispositions/ : 'Meta drift' })).toBeVisible();
+    }
+    for (const [width, height] of [[320, 480], [1200, 480], [1920, 900]]) {
+      await page.setViewportSize({ width, height });
+      await tabs.scrollIntoViewIfNeeded();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`context-${theme}-${width}.png`) });
+    }
+  });
+
+  test(`${theme} account deep link focuses Settings after a prior visit`, async ({ page }, testInfo) => {
+    await page.emulateMedia({ colorScheme: theme });
+    await page.goto('/?preview-desktop&sample');
+    const sidebar = page.locator('.sidebar');
+    await sidebar.getByRole('button', { name: /^Settings/ }).click();
+    await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
+    await sidebar.getByRole('button', { name: /^Sell/ }).click();
+    await page.locator('.statusbar .presence .trigger').click();
+    await page.locator('#presence-menu').getByRole('button', { name: 'Presence settings →' }).click();
+    const account = page.locator('#settings-account');
+    await expect(account).toBeFocused();
+    for (const [width, height] of [[320, 480], [1200, 480], [1920, 900]]) {
+      await page.setViewportSize({ width, height });
+      await account.scrollIntoViewIfNeeded();
+      await expect(account).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath(`account-${theme}-${width}.png`) });
+    }
+  });
+}

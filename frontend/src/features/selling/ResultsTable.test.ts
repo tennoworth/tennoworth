@@ -154,3 +154,15 @@ describe('a scan that lands while the table is on screen', () => {
     expect(queryByRole('button', { name: 'Re-sort' })).toBeNull();
   });
 });
+
+it('releases a held scan order when the preset changes the sort', async () => {
+  const row = (slug: string, price: number, score: number): SellRow => ({ ...ROW, slug, name: slug.toUpperCase(), low_sell: price, sell_score: score });
+  const names = (container: HTMLElement) => [...container.querySelectorAll('div.wrap.results tbody tr td.col-name')].map((td) => td.textContent?.trim().slice(0, 1));
+  const { container, rerender } = render(ResultsTable, {
+    results: [row('a', 2, 30), row('b', 10, 20)], deltas: new Map(), visibleColumns: ['name', 'low_sell', 'sell_score'], presetSort: { key: 'sell_score', dir: -1 },
+  });
+  await rerender({ results: [row('a', 2, 10), row('b', 10, 40)], deltas: new Map([['a', 1]]) });
+  expect(names(container)).toEqual(['A', 'B']);
+  await rerender({ presetSort: { key: 'low_sell', dir: -1 } });
+  expect(names(container)).toEqual(['B', 'A']);
+});
