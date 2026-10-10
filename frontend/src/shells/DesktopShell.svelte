@@ -459,7 +459,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
     <p data-shell class="lookup-label">Or look anything up</p>
     <MarketBrowser market={inventory.market} staleness={marketStaleness} freshness={marketFreshness} loadHistory={() => transport.loadHistory()} />
   {/if}
-  <Faq desktop />
+  <Faq />
 
   <footer data-shell class="sitefoot">
     <span data-shell class="grow">TennoWorth is a fan project, not affiliated with Digital Extremes or warframe.market. Open source · MIT · data from warframe.market and warframestat.us.</span>
@@ -592,7 +592,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
         <h2 data-shell>FAQ</h2>
         <p data-shell class="lede">Answers to common questions.</p>
       </section>
-      <Faq desktop />
+      <Faq />
     </div>
     {/if}
     {#if visited.has('settings')}

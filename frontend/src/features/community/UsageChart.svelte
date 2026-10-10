@@ -18,13 +18,19 @@
     return () => { clearTimeout(timeout); controller.abort(); };
   });
 </script>
+<!-- While counts are unavailable this is one line, not an empty panel; the
+     chart and its explanation return when data does. -->
+{#if error}
+<section id="community-usage" class="wrap tw" aria-labelledby="community-title">
+  <div class="rail"><h2 id="community-title">Community usage</h2><span class="exp" role="status">{error}</span></div>
+</section>
+{:else}
 <section id="community-usage" class="wrap tw" aria-labelledby="community-title">
   <div class="rail"><h2 id="community-title">Community usage</h2></div>
   <div class="ui-stack usage-content">
     <h3>Daily active installations sharing usage counts</h3>
     <p>Reported counts from people who explicitly opt in. Two computers count twice. Running in the tray counts; downloads and website visits do not. Offline installations and people who decline are absent. These figures do not estimate total people and submissions are not independently verified.</p>
-    {#if error}<p role="status">{error}</p>
-    {:else if !data}<p role="status">Loading daily counts…</p>
+    {#if !data}<p role="status">Loading daily counts…</p>
     {:else if data.days.length === 0}<p>No completed days have been recorded yet.</p>
     {:else}
       <p>Latest {data.days.length} completed UTC days. Updated {data.updated_at}. {#if stale}<strong>Updates are delayed; these counts may be stale.</strong>{/if}</p>
@@ -41,6 +47,7 @@
     {/if}
   </div>
 </section>
+{/if}
 <style>
   .usage-content { padding: var(--inset); }
   .bars { height: 12rem; display: flex; align-items: stretch; gap: 1px; border-bottom: 1px solid var(--border); }

@@ -4,7 +4,7 @@
 
   // `limit` trims each list where Meta Drift is one section of a longer page
   // (hosted, first run); the desktop Meta Drift view passes none.
-  let { market, limit = null }: { market: Market | null | undefined; limit?: number | null } = $props();
+  let { market, limit = null, embedded = false }: { market: Market | null | undefined; limit?: number | null; embedded?: boolean } = $props();
   let model = $derived(buildMetaDrift(market));
   let tab = $state<'gains' | 'losses' | 'only'>('gains');
   let category = $state('all');
@@ -28,10 +28,11 @@
 </script>
 
 {#if model}
-<section class="view-header"><h2>Meta Drift</h2><p class="lede">{model.label}</p></section>
+{#if !embedded}<section class="view-header"><h2>Meta Drift</h2><p class="lede">{model.label}</p></section>{/if}
 <section class="wrap tw meta-drift" data-testid="meta-drift">
   <div class="rail">
     <h3>Equip-share changes</h3>
+    {#if embedded}<span class="exp">{model.label}</span>{/if}
   </div>
   <div class="intro">
     Annual DE equip-share snapshots, published in arrears. Deltas compare the same item within the same category; they are percentage points, not causes or forecasts.

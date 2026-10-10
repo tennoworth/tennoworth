@@ -36,6 +36,8 @@
   --text-section: 1rem;
   --text-metric: 1.125rem;
   --text-metric-lg: 1.375rem;
+  /* The hosted landing's one-sentence statement, in the reading face. */
+  --text-statement: 1.375rem;
   --leading-body: 1.5;
   --leading-control: 1.25;
   --layer-chrome: 20;

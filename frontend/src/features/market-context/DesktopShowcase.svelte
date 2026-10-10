@@ -1,4 +1,5 @@
 <script lang="ts">
+  import FeatureRail from './FeatureRail.svelte';
   import CopyBtn from '../../ui/CopyBtn.svelte';
   import { plat, wfmItemUrl } from '../../ui/format';
   import Sparkline from '../../ui/Sparkline.svelte';
@@ -97,23 +98,15 @@
   {:else}{v}{/if}
 {/snippet}
 
-<section id="desktop" class="wrap tw handoff" aria-label="TennoWorth Desktop">
-  <div class="rail">
-    <h3>Own any of this? The desktop app fills in the rest.</h3>
-    <span class="exp">Same rows - plus what you own, what it's worth to <em>you</em>, and one-click listing on warframe.market.</span>
-  </div>
-
-  <div class="hbody">
-    <div class="rows">
+{#snippet handoffRows()}
       {#if rows.length}
         <div class="scroll">
-        <table class="tw fixed">
+        <table class="tw fixed handoff-table">
           <colgroup>
             <col />
             <col style="width:3.75rem" />
             <col style="width:4.75rem" />
             <col style="width:3.5rem" />
-            <col style="width:4.25rem" />
             <col style="width:4rem" />
             <col style="width:3.5rem" />
             <col style="width:5.5rem" />
@@ -125,7 +118,6 @@
             <th>Δ 90d</th>
             <th>Trend</th>
             <th>Avg</th>
-            <th>Low ask</th>
             <th>Vol 48h</th>
             <th class="you y1" title="How many you own - read from your inventory by the scan">Own</th>
             <th class="you" title="Priority from price × likely sell-through × bounded DE usage; not expected plat/day">Priority</th>
@@ -150,7 +142,6 @@
                   {:else}<span class="faint">-</span>{/if}
                 </td>
                 <td class="price">{plat(r.avg)}{#if plat(r.avg) !== '-'}<span class="unit">p</span>{/if}</td>
-                <td>{plat(r.lowSell)}</td>
                 <td>{r.vol.toLocaleString()}</td>
                 <td class="you y1">{r.owned}</td>
                 <td class="you score">{r.score.toLocaleString()}</td>
@@ -165,49 +156,41 @@
       <div class="line">
         <span class="exp">Priority ranks what to list from price, likely sell-through, and a bounded DE usage weight - it is not expected plat/day. Stack value remains the unweighted value of the copies you can sell. Owned counts here are sample values; the desktop app scans the running game and fills these. Nothing is uploaded; no WFM login until you list.</span>
       </div>
+{/snippet}
+
+<!-- One desktop pitch: the app's surfaces as tabs, whose Sell tab is the
+     visitor's own rows completed by the app, with the comparison and the
+     downloads beside them. The separate "in miniature" panel repeated the
+     same Own / Priority table. -->
+<section id="desktop" class="wrap tw handoff" aria-label="TennoWorth Desktop">
+  <div class="rail">
+    <h3>Desktop app</h3>
+    <span class="exp">Own any of this? Same rows, plus what you own, what it's worth to <em>you</em>, and one-click listing on warframe.market. Every number in the tabs is a sample.</span>
+  </div>
+
+  <div class="hbody">
+    <div class="rows">
+      <FeatureRail embedded ownRows={rows.length ? handoffRows : undefined} />
+    </div>
+    <div class="side">
+      <table class="tw fixed cmp" aria-label="This site versus the desktop app">
+        <colgroup><col /><col style="width:4.25rem" /><col style="width:6.25rem" /></colgroup>
+        <thead><tr><th class="l">&nbsp;</th><th>This site</th><th>Desktop app</th></tr></thead>
+        <tbody>
+          {#each compare as c (c.what)}
+            <tr><td class="l">{c.what}</td><td>{@render mark(c.site)}</td><td>{@render mark(c.app)}</td></tr>
+          {/each}
+        </tbody>
+      </table>
       <div class="cta">
         <a class="btn lg primary" href={RELEASES} target="_blank" rel="noopener noreferrer">Windows · .exe</a>
         <button type="button" class="btn lg" onclick={() => openInstall(activeOs === 'windows' ? 'linux' : activeOs)} aria-expanded={installOpen} aria-controls="desktop-install">Linux · AppImage</button>
         <span class="fine">free · open source · reads memory only<br />unsigned Windows build - see Install &amp; verify</span>
       </div>
     </div>
-
-    <table class="tw fixed cmp" aria-label="This site versus the desktop app">
-      <colgroup><col /><col style="width:4.25rem" /><col style="width:6.25rem" /></colgroup>
-      <thead><tr><th class="l">&nbsp;</th><th>This site</th><th>Desktop app</th></tr></thead>
-      <tbody>
-        {#each compare as c (c.what)}
-          <tr><td class="l">{c.what}</td><td>{@render mark(c.site)}</td><td>{@render mark(c.app)}</td></tr>
-        {/each}
-      </tbody>
-    </table>
   </div>
 
-  <!-- The single biggest objection, answered where the decision is made.
-       The FAQ entry below stays canonical and longer; this is the short,
-       collapsed version so it can't be missed by someone who reads the CTA
-       and leaves. Keep the two consistent - and with SECURITY.md's
-       "What we cannot promise". -->
-  <details class="disc safety">
-    <summary>
-      <span class="lbl">Is this safe?</span>
-      <span class="exp">Can I get banned? - the honest answer</span>
-    </summary>
-    <div class="disc-body">
-      <p class="note">
-        The app only ever <strong>reads</strong> the running game's memory: the
-        <code>accountId</code> and <code>nonce</code> your client already obtained at login, used
-        for the same inventory call the game client makes. It never writes to the game, never
-        injects code, and never touches anti-cheat.
-      </p>
-      <p class="note">
-        We still <strong>can't promise it's ban-safe</strong> - no third-party tool honestly can.
-        Equivalent tools have run for years with no documented bans, but Digital Extremes has
-        never formally blessed the category. Use it at your own risk.
-        <a href="#faq">Full answer in the FAQ ↓</a>
-      </p>
-    </div>
-  </details>
+  <div class="line"><span class="exp">Is this safe? Can I get banned? The honest answer, and what the app reads, are in <a href="#trust">Trust &amp; safety ↓</a></span></div>
 
   <details class="disc install" id="desktop-install" bind:open={installOpen}>
     <summary>
@@ -287,10 +270,11 @@
 <style>
   .handoff { scroll-margin-top: var(--s3); }
   /* Rows + CTA on the left, the comparison table in a 24rem right column. */
-  .hbody { display: grid; grid-template-columns: minmax(0, 1fr) 24rem; }
+  .hbody { display: grid; grid-template-columns: minmax(0, 1fr) 20rem; }
+  .side { display: flex; flex-direction: column; min-width: 0; }
   .rows { border-right: 1px var(--rule) var(--hairline); min-width: 0; display: flex; flex-direction: column; }
   .rows .scroll { overflow-x: auto; }
-  .rows table { min-width: 47.25rem; }
+  .rows :global(.handoff-table) { min-width: 42rem; }
   .rows .line {
     display: flex; align-items: center; gap: var(--s2);
     min-height: var(--rail); padding: var(--s2) var(--inset);
@@ -304,7 +288,8 @@
     border-top: 1px var(--rule) var(--hairline);
     margin-top: auto;
   }
-  .cta .fine { color: var(--muted); /* informational - --faint is decorative-only */ font-size: var(--text-caption); line-height: 1rem; margin-left: auto; text-align: right; }
+  .cta { flex-wrap: wrap; }
+  .cta .fine { color: var(--muted); /* informational - --faint is decorative-only */ font-size: var(--text-caption); line-height: 1rem; flex-basis: 100%; }
   .cmp { font-size: var(--text-caption); }
   .cmp td { height: 1.5rem; font-family: var(--font-body); color: var(--muted); }
   .cmp td.l { color: var(--fg); }
@@ -330,7 +315,6 @@
   .disc-body { padding: var(--s3) var(--inset) var(--s4); border-top: 1px var(--rule) var(--hairline); display: flex; flex-direction: column; gap: var(--s3); }
   .disc-body .ui-segmented { align-self: flex-start; }
   .disc-body h4 { margin: var(--s2) 0 0; font-size: var(--text-caption); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
-  .safety .note code { font-size: var(--text-caption); }
   /* The summary's one-line exp must be allowed to ellipsize on narrow
      viewports rather than push the +/- marker off the rail. */
   .disc > summary .exp { white-space: nowrap; }

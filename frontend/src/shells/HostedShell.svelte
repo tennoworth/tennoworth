@@ -3,7 +3,6 @@ import { ago, marketFreshness as marketFreshnessBucket } from '../ui/format';
 import { onMount } from 'svelte';
 import MarketBrowser from '../features/market-context/MarketBrowser.svelte';
 import DesktopShowcase from '../features/market-context/DesktopShowcase.svelte';
-import FeatureRail from '../features/market-context/FeatureRail.svelte';
 import ThemeSwitcher from '../ui/ThemeSwitcher.svelte';
 import Faq from './Faq.svelte';
 import UsageChart from '../features/community/UsageChart.svelte';
@@ -19,7 +18,17 @@ const APP_COMMIT = __APP_COMMIT__;
 const transport = new HostedTransport();
 const reportUrl = bugReportUrl({ surface: 'Website', version: `build ${APP_COMMIT}` });
 let market = $state<Market | null>(null);
-onMount(() => { let active = true; void loadMarket().then(value => { if(active) market = value; }).catch(console.error); return () => { active = false; }; });
+// A failed load must say so: it used to drop silently to the install pitch,
+// which swapped the page's task without telling the visitor why.
+let marketError = $state(false);
+let marketAttempt = $state(0);
+$effect(() => {
+  void marketAttempt;
+  let active = true;
+  marketError = false;
+  loadMarket().then(value => { if (active) market = value; }).catch((error) => { console.error(error); if (active) marketError = true; });
+  return () => { active = false; };
+});
 let snapshotStamp = $derived.by(() => {
     const t = Date.parse(market?.updated_at ?? '');
     if (!Number.isFinite(t)) return '';
@@ -57,11 +66,10 @@ let marketFreshness = $derived(marketFreshnessBucket(market?.updated_at, display
        lives in Settings → Appearance, with a quiet copy in the site footer for
        visitors who never search their way into the shell. -->
   <header data-shell class="landing-head">
-    <p data-shell class="lede">
-      
-        What's worth selling in Warframe right now - search any item, spot the movers, see what's vaulted. No install. No login.
-      
-    </p>
+    <!-- The page's statement: the first thing read, in the reading face, with
+         no hero, image or display numerals. -->
+    <p data-shell class="statement"><strong data-shell>What's worth selling in Warframe right now.</strong> Search any item, spot the movers, see what's vaulted.</p>
+    <p data-shell class="lede">Live warframe.market prices · no install, no login on this site</p>
   </header>
 
   
@@ -69,15 +77,21 @@ let marketFreshness = $derived(marketFreshnessBucket(market?.updated_at, display
   
     
 
-    {#if market}
+    {#if marketError && !market}
+      <div class="ui-notice" data-tone="warn" role="alert">
+        Couldn't load the market snapshot, so search and the price lists are unavailable right now.
+        <button class="btn" onclick={() => (marketAttempt += 1)}>Retry</button>
+      </div>
+      <DesktopShowcase />
+    {:else if !market}
+      <p class="ui-notice" role="status">Loading market prices…</p>
+    {:else}
       
         <!-- Hosted: the browser hands the visitor off to the desktop app with
              the same rows completed (DesktopShowcase renders inside the
              browser's flow so it can use the browser's sample rows). -->
         <MarketBrowser market={market} staleness={marketStaleness} freshness={marketFreshness} loadHistory={() => transport.loadHistory()} handoff={handoffPanel} />
       
-    {:else}
-      <DesktopShowcase />
     {/if}
   
 
@@ -91,7 +105,7 @@ let marketFreshness = $derived(marketFreshnessBucket(market?.updated_at, display
        theme and can never go stale. Hosted only: a desktop visitor has the
        real thing in the sidebar. -->
   
-    <FeatureRail />
+
   
 
   <UsageChart />
