@@ -148,8 +148,7 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
     {/if}
     <!-- One setting, so one line rather than a titled panel. -->
     <div class="setting-line" role="group" aria-label="Listing automation">
-      <input id="ledger-auto-close" type="checkbox" checked={autoClose} onchange={toggleAutoClose} disabled={savingAutoClose || !status.path} />
-      <label for="ledger-auto-close">After a sale, reduce or remove the matching warframe.market listing</label>
+      <label class="check" for="ledger-auto-close"><input id="ledger-auto-close" type="checkbox" checked={autoClose} onchange={toggleAutoClose} disabled={savingAutoClose || !status.path} /> After a sale, reduce or remove the matching warframe.market listing</label>
       <span class="muted">Only ever lowers a quantity by what you sold; never touches price or visibility.</span>
     </div>
   {/if}
@@ -199,7 +198,7 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
 
 <style>
   .setting-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s3); padding: var(--s1) 0; border-block: 1px var(--rule) var(--hairline); font-size: var(--text-control); }
-  .setting-line label { color: var(--fg); font-weight: 500; }
+  .setting-line .check { display: inline-flex; align-items: flex-start; gap: var(--s2); color: var(--fg); font-weight: 500; }
   .setting-line .muted { color: var(--muted); }
   .ledger { gap: var(--s4); }
   .ui-notice { margin: var(--s4) var(--inset); }
