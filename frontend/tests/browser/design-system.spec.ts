@@ -106,8 +106,9 @@ for (const theme of ['light', 'dark'] as const) {
         expect(collapsed, `${view} column headings at ${width}`).toEqual([]);
         if (width === 1200 && ['Sell', 'Trade Session', 'Set picks', 'Baro'].includes(view)) {
           // Each view opens with its own title; healthy keep rules are one quiet strip below it.
-          const title = await page.locator('main .view-header').first().boundingBox();
-          const keeping = await page.getByRole('region', { name: 'What I’m keeping', exact: true }).boundingBox();
+          // Views stay mounted once visited; only the pane on screen counts.
+          const title = await page.locator('main .view-header:visible').first().boundingBox();
+          const keeping = await page.getByRole('region', { name: 'What I’m keeping', exact: true }).filter({ visible: true }).boundingBox();
           expect(keeping!.y, `${view} title precedes the keep strip`).toBeGreaterThan(title!.y);
           expect(keeping!.height, `${view} healthy keep strip stays compact`).toBeLessThanOrEqual(80);
         }
@@ -478,7 +479,7 @@ test('fields and order actions are named by what they show', async ({ page }) =>
   await expect(page.getByRole('combobox', { name: 'Category' })).toBeVisible();
   await sidebar.getByRole('button', { name: /^My orders/ }).click();
   const listings = page.getByRole('region', { name: 'My WFM listings' });
-  await expect(listings.getByRole('textbox', { name: 'Item' })).toBeVisible();
+  await expect(listings.getByRole('textbox', { name: 'Filter orders by name' })).toBeVisible();
   await expect(listings.getByRole('button', { name: 'Edit price for Pyrana Prime Set' })).toBeVisible();
   await expect(listings.getByRole('button', { name: 'ON: Pyrana Prime Set is visible to buyers' })).toBeVisible();
   await listings.getByRole('button', { name: 'Edit price for Pyrana Prime Set' }).click();
@@ -531,8 +532,10 @@ test('relic totals read as expected value across the owned copies', async ({ pag
   await page.goto('/?preview-desktop&sample');
   await previewShell(page);
   await page.locator('.sidebar').getByRole('button', { name: /^Relics/ }).click();
-  await expect(page.locator('.relic-meta').first()).toContainText(/≈\d+p expected across \d+/);
-  await expect(page.locator('.relic-meta').first()).not.toContainText(/\dp total/);
+  const expected = page.locator('.relic-table tbody tr').first().locator('td.price');
+  await expect(expected).toContainText(/≈\d+p/);
+  await expect(expected).toHaveAttribute('title', /Expected value of cracking every one you own/);
+  await expect(page.locator('.relic-table')).not.toContainText(/\dp total/);
 });
 
 test('monthly goals add, rename and remove individually', async ({ page }) => {

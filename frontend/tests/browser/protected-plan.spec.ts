@@ -7,7 +7,7 @@ for (const theme of ['light', 'dark'] as const) {
     page.on('pageerror', error => errors.push(error.message));
     await page.emulateMedia({ colorScheme: theme });
     await page.goto('/?preview-desktop&sample=protection');
-    await page.getByText('View quantity details', { exact: true }).click();
+    await page.getByText('Quantity details', { exact: true }).click();
     await page.getByRole('button', { name: 'Change what I keep', exact: true }).click();
     await page.getByLabel('Keep parts for a set', { exact: true }).selectOption('akbolto_prime_set');
     await page.getByLabel('Item to keep', { exact: true }).selectOption('akbolto_prime_barrel');
@@ -32,7 +32,7 @@ for (const theme of ['light', 'dark'] as const) {
 
 test('a failed save retains the protection draft', async ({ page }) => {
   await page.goto('/?preview-desktop&sample=protection-save-error');
-  await page.getByText('View quantity details', { exact: true }).click();
+  await page.getByText('Quantity details', { exact: true }).click();
   await page.getByRole('button', { name: 'Change what I keep', exact: true }).click();
   await page.getByLabel('Keep parts for a set', { exact: true }).selectOption('akbolto_prime_set');
   await page.getByRole('button', { name: 'Save keep rules', exact: true }).click();
@@ -42,7 +42,7 @@ test('a failed save retains the protection draft', async ({ page }) => {
 
 test('unavailable current orders never imply zero listed copies', async ({ page }) => {
   await page.goto('/?preview-desktop&sample=protection-error');
-  await page.getByText('View quantity details', { exact: true }).click();
+  await page.getByText('Quantity details', { exact: true }).click();
   await expect(page.getByRole('region', { name: 'Inventory allocation' })).toContainText('Unknown');
   await expect(page.getByRole('button', { name: 'Review batch', exact: true })).toBeDisabled();
 });
@@ -64,7 +64,7 @@ for (const theme of ['light', 'dark'] as const) {
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
       await page.screenshot({ path: info.outputPath(`scan-estimates-${theme}-${width}.png`) });
     }
-    await page.getByText('View quantity details', { exact: true }).click();
+    await page.getByText('Quantity details', { exact: true }).click();
     await expect(page.getByRole('region', { name: 'Inventory allocation' })).toContainText('Unknown');
     await page.getByRole('button', { name: 'Check WFM listings', exact: true }).click();
     await expect(page.getByRole('dialog')).toBeVisible();
@@ -84,7 +84,7 @@ for (const theme of ['light', 'dark'] as const) {
 test('protection failures hide estimates and successful listing checks enable review', async ({ page }) => {
   await page.goto('/?preview-desktop&sample=logged-out');
   await page.getByRole('button', { name: /^Opportunities\s/ }).click();
-  await page.getByText('View quantity details', { exact: true }).click();
+  await page.getByText('Quantity details', { exact: true }).click();
   await page.evaluate(() => {
     const w = window as any;
     const original = w.__TAURI__.core.invoke;
@@ -131,7 +131,7 @@ for (const theme of ['light', 'dark'] as const) {
   test(`${theme} imported estimates use the restored count and cannot inherit scan authorization`, async ({ page }, info) => {
     await page.emulateMedia({ colorScheme: theme });
     await page.goto('/?preview-desktop&sample=logged-out');
-    await page.getByText('View quantity details', { exact: true }).click();
+    await page.getByText('Quantity details', { exact: true }).click();
     await page.getByRole('button', { name: 'Change what I keep', exact: true }).click();
     await page.getByLabel('Item to keep', { exact: true }).selectOption('primed_flow');
     await page.getByLabel('Extra copies', { exact: true }).fill('5');
@@ -166,7 +166,7 @@ for (const theme of ['light', 'dark'] as const) {
 
 test('missing allocation keeps known estimates while unavailable sets and scrap stay explicit', async ({ page }) => {
   await page.goto('/?preview-desktop&sample=logged-out');
-  await page.getByText('View quantity details', { exact: true }).click();
+  await page.getByText('Quantity details', { exact: true }).click();
   await page.evaluate(() => {
     const w = window as any;
     const original = w.__TAURI__.core.invoke;
@@ -259,7 +259,7 @@ for (const theme of ['light', 'dark'] as const) {
     await page.goto('/?preview-desktop&sample=logged-out');
     await page.getByRole('button', { name: /^Opportunities\s/ }).click();
     const keeping = page.getByRole('region', { name: 'What I’m keeping', exact: true });
-    await expect(keeping).toContainText('✓ Keep rules applied');
+    await expect(keeping).toContainText('✓ Applied');
     await page.evaluate(() => {
       const w = window as any;
       const original = w.__TAURI__.core.invoke;
@@ -267,14 +267,14 @@ for (const theme of ['light', 'dark'] as const) {
         ? Promise.reject(new Error('Inventory quantities are invalid. Scan again or restore a valid backup.'))
         : original(command, args);
     });
-    await keeping.getByText('View quantity details', { exact: true }).click();
+    await keeping.getByText('Quantity details', { exact: true }).click();
     await keeping.getByRole('button', { name: 'Recheck quantities', exact: true }).click();
     await expect(page.getByRole('alert')).toHaveCount(1);
     await expect(page.getByRole('alert')).toContainText('We can’t calculate what you can sell yet');
     await expect(page.getByRole('alert').getByRole('button', { name: 'Scan game again' })).toBeVisible();
     await expect(page.getByText('No picks clear the bar right now.')).toHaveCount(0);
-    await expect(keeping).not.toContainText('✓ Keep rules applied');
-    await keeping.getByText('View quantity details', { exact: true }).click();
+    await expect(keeping).not.toContainText('✓ Applied');
+    await keeping.getByText('Quantity details', { exact: true }).click();
     for (const [width, height] of [[1440, 900], [900, 480], [320, 480]]) {
       await page.setViewportSize({ width, height });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

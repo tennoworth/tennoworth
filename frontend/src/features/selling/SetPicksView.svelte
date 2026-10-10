@@ -49,13 +49,13 @@ import BuildVsBuy from './BuildVsBuy.svelte';
                uppercase LIST read as a button and was only a label. -->
           <div data-shell class="scroll">
           <table data-shell class="tw set-table">
-            <thead data-shell><tr data-shell><th data-shell class="l rank">#</th><th data-shell class="l set-name">Set</th><th data-shell class="l verb">Do</th><th data-shell>Net</th><th data-shell>Set vol 48h</th><th data-shell class="l reco-detail">What it takes</th></tr></thead>
+            <thead data-shell><tr data-shell><th data-shell class="l set-name">Set</th><th data-shell class="l verb">Do</th><th data-shell>Net</th><th data-shell>Set vol 48h</th><th data-shell class="l reco-detail">What it takes</th></tr></thead>
             <tbody data-shell>
           {#each setRecos as r, i (r.set_slug)}
             {@const av = adviceMap.get(r.set_slug)}
             <tr data-shell>
-              <td data-shell class="l rank">{i + 1}</td>
               <td data-shell class="l set-name">
+                <span data-shell class="rank">{i + 1}</span>
                 <a data-shell href={wfmItemUrl(r.set_slug)} target="_blank" rel="noopener noreferrer">{r.set_name}</a>
                 <span data-shell class="kind kind-{r.kind}">
                   {#if r.kind === 'near-complete'}

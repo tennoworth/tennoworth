@@ -173,7 +173,7 @@ test('populated workspaces keep their content through width and height changes',
   await page.goto('/?preview-desktop&sample');
   await expect(page.locator('.shell')).toBeVisible();
   const surfaces = [
-    ['Sell', '.col-name'], ['Set picks', '.reco'], ['Relics', '.relic-card'],
+    ['Sell', '.col-name'], ['Set picks', '.set-table tbody tr'], ['Relics', '.relic-table tbody tr'],
     ['Rivens', '.weapon'], ['Baro', '.baro-card'], ['Routines', '.routine'],
     ['Meta Drift', '.meta-drift tbody tr'], ['My orders', '.orders tbody tr'],
     ['Price watches', '.watchlist tbody tr'], ['Ledger', '.ledger tbody tr'],
@@ -227,7 +227,8 @@ for (const scenario of ['empty', 'error', 'loading']) {
         scenario === 'loading' ? /Fetching|No watches|No trades/i : /No active listings|No watches|No trades/i,
       );
       await assertDocumentFits(page);
-      if (scenario === 'loading') await expect(page.locator('main.workspace tbody tr').first()).toBeVisible();
+      // Views stay mounted once visited, so only the pane on screen counts.
+      if (scenario === 'loading') await expect(page.locator('main.workspace tbody tr:visible').first()).toBeVisible();
     }
   });
 }

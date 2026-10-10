@@ -268,7 +268,8 @@
   .chip.warn { color: var(--warn); border-color: var(--warn); }
   .chip.bad { color: var(--bad); border-color: var(--bad); }
   .line.bad { color: var(--bad); }
-  .orders table { min-width: 60rem; }
+  /* Fixed columns total 58rem; the floor leaves Item at least 14rem before the panel scrolls. */
+  .orders table { min-width: 72rem; }
   /* A row with something to fix carries the caution edge; the words in the
      Health cell say what, the edge only repeats it. */
   tr.attn td:first-child { box-shadow: inset 3px 0 0 var(--warn); }

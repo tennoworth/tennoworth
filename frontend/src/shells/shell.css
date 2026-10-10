@@ -659,7 +659,7 @@
      numbers sit in aligned columns, the verb never wraps. */
   .set-table[data-shell] { min-width: 46rem; }
   table.tw.set-table th.l[data-shell] { width: auto; min-width: 0; }
-  table.tw.set-table .rank[data-shell] { width: 2rem; color: var(--muted); font-family: var(--font-mono); }
+  .set-table .rank[data-shell] { display: inline-block; min-width: 1.25rem; color: var(--muted); font-family: var(--font-mono); }
   table.tw.set-table .set-name[data-shell] { width: 30%; min-width: 13rem; }
   .set-table td.set-name a[data-shell] { font-weight: 600; margin-right: var(--s2); }
   .set-table td.set-name .kind[data-shell], .set-table td.set-name .tag[data-shell] { margin-right: var(--s1); }
