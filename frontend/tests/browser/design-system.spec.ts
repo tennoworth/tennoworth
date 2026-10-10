@@ -835,3 +835,36 @@ for (const theme of ['light', 'dark'] as const) {
     }
   });
 }
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`${theme} returning to a view restores its workspace scroll`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: theme });
+    for (const width of [1200, 320, 1920]) {
+      await page.setViewportSize({ width, height: 480 });
+      await page.goto('/?preview-desktop&sample');
+      const sidebar = page.locator('.sidebar');
+      await sidebar.getByRole('button', { name: /^Settings/ }).click();
+      const main = page.locator('main.workspace');
+      await expect(page.locator('#settings-account')).toBeAttached();
+      const setScroll = (top: number) => main.evaluate((element, top) => {
+        (getComputedStyle(element).overflowY === 'auto' ? element : window).scrollTo({ top, behavior: 'instant' });
+      }, top);
+      const position = () => main.evaluate(element => getComputedStyle(element).overflowY === 'auto' ? element.scrollTop : window.scrollY);
+      await setScroll(300);
+      await expect.poll(position).toBe(300);
+      // On narrow layouts the sidebar is above the page. Invoke navigation
+      // without Playwright scrolling to it and changing the position under test.
+      const changeView = async (name: string) => {
+        const button = sidebar.getByRole('button', { name: new RegExp('^' + name) });
+        if (width <= 900) await button.evaluate(element => (element as HTMLButtonElement).click());
+        else await button.click();
+      };
+      await changeView('Sell');
+      await expect(page.getByRole('button', { name: 'List on WFM', exact: true })).toBeEnabled();
+      await setScroll(40);
+      await expect.poll(position).toBe(40);
+      await changeView('Settings');
+      await expect.poll(position).toBe(300);
+    }
+  });
+}

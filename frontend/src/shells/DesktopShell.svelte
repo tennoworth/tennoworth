@@ -22,7 +22,7 @@ import type { PlanResponse } from '../contracts/data';
   import { humanError, DesktopCmdError } from '../contracts/errors';
   import { humanWindow } from '../ui/format';
   
-  import { onMount, untrack } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import Faq from './Faq.svelte';
   import { FilterController, type View } from '../features/selling/filters.svelte';
   import { ListingController, WfmAccessController } from '../features/selling/controller.svelte';
@@ -348,6 +348,35 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   // Until startup has looked for a saved scan, "no inventory" is unknown, not
   // empty: show the workspace with placeholders, never the first-run page.
   let showWorkspace = $derived(hasInventory || inventory.phase === 'done' || effectiveView !== 'sell' || !inventory.restored);
+  // Retaining a pane preserves its table scroll, but all panes share the page
+  // scroller. Capture it before hiding the old pane and restore after layout.
+  let workspaceElement = $state<HTMLElement>();
+  const viewScroll = new Map<View, { top: number; left: number }>();
+  let scrollingView: View | null = null;
+  let scrollGeneration = 0;
+  $effect.pre(() => {
+    const view = effectiveView;
+    const element = workspaceElement;
+    const visible = showWorkspace;
+    untrack(() => {
+      if (!element || !visible) { scrollingView = null; ++scrollGeneration; return; }
+      if (scrollingView === view) return;
+      const inside = getComputedStyle(element).overflowY === 'auto';
+      if (scrollingView) viewScroll.set(scrollingView, {
+        top: inside ? element.scrollTop : window.scrollY,
+        left: inside ? element.scrollLeft : window.scrollX,
+      });
+      scrollingView = view;
+      const saved = viewScroll.get(view) ?? { top: 0, left: 0 };
+      const generation = ++scrollGeneration;
+      void tick().then(() => {
+        if (generation !== scrollGeneration || !showWorkspace || effectiveView !== view) return;
+        const scroller = getComputedStyle(element).overflowY === 'auto' ? element : window;
+        scroller.scrollTo({ ...saved, behavior: 'instant' });
+      });
+    });
+  });
+
   let restoring = $derived(!inventory.restored && !hasInventory);
 </script>
 
@@ -439,7 +468,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
   </aside>
 
   {/if}
-  <main data-shell class={showWorkspace ? 'workspace' : 'landing'} class:reading-view={['install', 'settings'].includes(effectiveView)} data-testid={!showWorkspace ? 'desktop-mode' : undefined}>
+  <main bind:this={workspaceElement} data-shell class={showWorkspace ? 'workspace' : 'landing'} class:reading-view={['install', 'settings'].includes(effectiveView)} data-testid={!showWorkspace ? 'desktop-mode' : undefined}>
     {@render generalBanners()}
     {#if !showWorkspace}
   {#if !inventory.error && !inventory.pullError}
