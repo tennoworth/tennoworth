@@ -27,6 +27,11 @@ export class ActivityLog {
     return id;
   }
 
+  /** Updates the label of activity `id` while it is still the one shown. */
+  progress(id: number, label: string): void {
+    if (this.current?.id === id && this.current.tone === 'busy') this.current = { ...this.current, label };
+  }
+
   /** Settles the activity `id`. A newer activity that started meanwhile keeps
    *  the cell: an older result must not overwrite work still in progress. */
   finish(id: number, label: string, tone: Exclude<ActivityTone, 'busy'> = 'done'): void {

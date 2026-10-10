@@ -10,6 +10,8 @@
   import type { ListingCandidate } from '../../contracts/listing';
   import type { EmptyReason } from '../../domain/filter-engine';
   import type { SellRow } from '../../contracts/selling';
+  import type { ListingReceipt, ListingReceipts } from './receipts.svelte';
+  import { untrack } from 'svelte';
   interface Props {
     minPrice: number; minOwned: number; typeFilter: string; hideAtLvl: number;
     activeTags: Set<string>; tableView: { rows: SellRow[]; active: boolean };
@@ -27,6 +29,10 @@
     emptyReason: EmptyReason | null; activePreset: string | null; reserveCopies: number;
     filtersOpen: boolean; sellOnboardingDismissed: boolean;
     keepCopiesNudgeDismissed: boolean;
+    /** What this session listed, so a listed pick says so in its own row. */
+    receipts?: ListingReceipts;
+    onmakevisible?: (receipt: ListingReceipt) => void;
+    onopenorders?: () => void;
     applyPreset(name: string): void; setReserveCopies(value: number | Event): void;
     toggleFiltersOpen(event: Event): void;
     dismissSellOnboarding(): void; dismissKeepCopiesNudge(): void;
@@ -63,7 +69,7 @@
 
     applyPreset, setReserveCopies, toggleFiltersOpen, 
     dismissSellOnboarding, dismissKeepCopiesNudge,
-    openListingFlow,
+    openListingFlow, receipts, onmakevisible, onopenorders,
     pendingBanner, keep, estimatedGuidance = false, canList = true, unavailableCount = 0, listingActionLabel = 'Check WFM listings', oncheckListings, calculationPending = false, calculationError = null, onretryCalculation, calculationErrorShown = false,
   }: Props = $props();
 
@@ -144,12 +150,33 @@
   // dismissed pick reappearing on reload is the honest, cheap behaviour; it
   // isn't worth a storage-key version bump for a "hide until refresh" nicety.
   let snoozedPicks = $state(new Set<string>());
-  let picks = $derived(allPicks.filter((p) => !snoozedPicks.has(p.key ?? p.slug)));
+  // A pick hidden here keeps its slot as an Undo receipt until the pick set
+  // itself changes (a new scan or scope), so the next List never moves under
+  // the pointer. Keyed on the picks' identities, not the array: background
+  // recalculation rebuilds the array without changing what is picked.
+  let receiptKeys = $state(new Set<string>());
+  let pickSignature = $derived(allPicks.map((p) => p.key ?? p.slug).join('|'));
+  let shownSignature = '';
+  $effect(() => {
+    const signature = pickSignature;
+    untrack(() => { if (signature !== shownSignature) { shownSignature = signature; if (receiptKeys.size) receiptKeys = new Set(); } });
+  });
+  let picks = $derived(allPicks.filter((p) => !snoozedPicks.has(p.key ?? p.slug) || receiptKeys.has(p.key ?? p.slug)));
   function snoozePick(key: string) {
-    const next = new Set(snoozedPicks);
-    next.add(key);
-    snoozedPicks = next;
+    snoozedPicks = new Set([...snoozedPicks, key]);
+    receiptKeys = new Set([...receiptKeys, key]);
   }
+  function undoSnooze(key: string) {
+    const next = new Set(snoozedPicks);
+    next.delete(key);
+    snoozedPicks = next;
+    const shown = new Set(receiptKeys);
+    shown.delete(key);
+    receiptKeys = shown;
+  }
+  const isSnoozed = (p: SellRow) => snoozedPicks.has(p.key ?? p.slug);
+  const listedReceipt = (p: SellRow) => receipts?.get(p.slug);
+  const clock = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
   // Plain-language reason line for a pick, built only from fields the row
   // already carries (timing / delta_90d_pct / clearing_price / volume_48h) -
@@ -279,9 +306,7 @@
   </div>
 {/if}
 
-{#if calculationPending}
-  <div class="ui-notice" role="status">Calculating sale values… Your filters remain available.</div>
-{:else if calculationError && !calculationErrorShown}
+{#if calculationError && !calculationErrorShown && !calculationPending}
   <div class="ui-notice" data-tone="bad" role="alert">
     Sale calculations unavailable: {calculationError}
     {#if onretryCalculation}<button class="btn" onclick={onretryCalculation}>Retry calculations</button>{/if}
@@ -325,6 +350,15 @@
 {/snippet}
 
 {#snippet pickReasonCell(p: SellRow)}
+  {@const listed = listedReceipt(p)}
+  {#if isSnoozed(p)}
+    <div class="rs receipt">Hidden for this session.</div>
+  {:else if listed}
+    <div class="rs receipt">
+      {listed.action === 'updated' ? 'Updated to' : 'Listed'} {listed.quantity} at <b>{listed.platinum}p</b> · {clock(listed.at)}
+      {#if onopenorders}· <button type="button" class="link" onclick={onopenorders}>My orders →</button>{/if}
+    </div>
+  {:else}
   <div class="rs" class:hold={p.timing === 'hold'} class:peak={p.timing === 'peak'}>
     <span class="t">
       {pickReason(p)}
@@ -333,9 +367,19 @@
       <span class="tag thin" title="Below the {LIQUID_VOL}-trade/48h liquidity floor - expect to wait for a buyer.">thin</span>
     {/if}
   </div>
+  {/if}
 {/snippet}
 
 {#snippet pickActionsCell(p: SellRow)}
+  {@const listed = listedReceipt(p)}
+  {#if isSnoozed(p)}
+    <span class="pick-actions"><button type="button" class="pick-list" onclick={() => undoSnooze(p.key ?? p.slug)} aria-label="Undo hiding {p.name}">Undo</button></span>
+  {:else if listed}
+    <span class="pick-actions">
+      <span class="tag" class:hold={listed.visible === false} title={listed.visible === false ? 'New listings start hidden: buyers cannot see this one yet.' : listed.visible ? 'Buyers can see this listing.' : 'This updated an existing order, which keeps its visibility.'}>listed · {listed.visible === false ? 'hidden' : listed.visible ? 'visible' : 'updated'}</span>
+      {#if listed.visible === false && listed.orderId && onmakevisible}<button type="button" class="pick-list" onclick={() => onmakevisible(listed)} aria-label="Make {p.name} visible to buyers">Make visible</button>{/if}
+    </span>
+  {:else}
   <span class="pick-actions">
     <button class="pick-list" disabled={!calculationReady || !canList} onclick={() => { if (calculationReady && canList) openListingFlow(p); }} aria-label="List {p.name} on WFM">List</button>
     <button
@@ -346,6 +390,7 @@
       title="Hide for this session"
     >×</button>
   </span>
+  {/if}
 {/snippet}
 
 {#snippet picksEmpty()}
@@ -565,6 +610,9 @@
   onfiltered={(rows, active) => (tableView = { rows, active: active || changesOnly })}
   scope={scopeRow} filters={filtersControl} categories={categoriesRow} narrow={narrowChips} cta={listCta}
   picks={calculationReady && results.length > 0 && allPicks.length > 0 ? picks : null}
+  picksPending={calculationPending}
+  pickReceipt={(p) => isSnoozed(p) || !!listedReceipt(p)}
+  listedFor={(slug) => receipts?.get(slug)?.quantity ?? null}
   {picksHead} pickActions={pickActionsCell} pickReason={pickReasonCell} {picksEmpty}
   empty={emptyState} />
 

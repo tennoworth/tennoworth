@@ -19,7 +19,7 @@ import type { PlanResponse } from '../contracts/data';
   import { ProtectionController } from '../features/selling/protection.svelte';
   import ProtectedPlan from '../features/selling/ProtectedPlan.svelte';
   import { type WfmSession } from '../features/settings/feedback';
-  import { humanError } from '../contracts/errors';
+  import { humanError, DesktopCmdError } from '../contracts/errors';
   import { humanWindow } from '../ui/format';
   
   import { onMount, untrack } from 'svelte';
@@ -189,6 +189,13 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
     return filters.view;
   });
 
+  // Views visited this session; each stays mounted (hidden) once opened.
+  let visited = $state(new Set<View>());
+  $effect(() => {
+    const view = effectiveView;
+    untrack(() => { if (!visited.has(view)) visited = new Set([...visited, view]); });
+  });
+
   const session = createDesktopSession({ inventory, listing, transport, store: untrack(() => store), services: notesServices });
 
   let relicShowAll = $state(false);
@@ -276,6 +283,16 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
       activity.finish(activity.begin(''), scanSummary());
     });
   });
+  // Make visible from the row that was listed, without reopening the review.
+  async function makeReceiptVisible(receipt: { orderId: string | null; slug: string }): Promise<void> {
+    if (!receipt.orderId) return;
+    try {
+      const { results } = await activity.track('Making visible…', () => transport.bulkVisibility([receipt.orderId!], true), (r) => r.results.some((x) => x.status === 'ok') ? 'Now visible to buyers' : 'Visibility not changed', () => 'Visibility not changed');
+      receipts.markVisible(results);
+    } catch (error) {
+      if (error instanceof DesktopCmdError && (error.code === 'needs_login' || error.code === 'needs_unlock')) void wfmAuthDialogsRef?.open(error.code);
+    }
+  }
   function sendSummary(response: PlanResponse): string {
     const ok = response.results.filter((r) => r.status === 'ok');
     const created = ok.filter((r) => r.action !== 'updated').length;
@@ -358,19 +375,23 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
             <span data-shell>Set picks</span>
             <span data-shell class="badge">{setResult.phase === 'done' ? setRecos.length : '—'}</span>
           </button>
-        {#if relicPlan.length > 0 || relicResult.phase === 'loading' || relicResult.error}
+        <!-- Hidden only once the plan is known to be empty, so the nav does not
+             shift when relic values arrive after the inventory. -->
+        {#if relicPlan.length > 0 || relicResult.phase !== 'done' || relicResult.error}
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'relics'} onclick={() => filters.setView('relics')}>
             <span data-shell>Relics</span>
             <span data-shell class="badge">{relicResult.phase === 'done' ? relicPlan.length : '—'}</span>
           </button>
         {/if}
-        {#if resolvedRivens.length > 0}
+        <!-- Shown from the scan itself, not once prices arrive, so the nav does
+             not shift when the market snapshot lands after the inventory. -->
+        {#if resolvedRivens.length > 0 || (inventory.ownedRivens.length > 0 && !inventory.market)}
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'rivens'} onclick={() => filters.setView('rivens')}>
             <span data-shell>Rivens</span>
             <span data-shell class="badge">{resolvedRivens.length}</span>
           </button>
         {/if}
-        {#if showBaroCard}
+        {#if showBaroCard || (hasInventory && !inventory.market && !inventory.marketLoadError)}
           <button data-shell type="button" class="nav-item baro-nav" class:active={effectiveView === 'baro'} onclick={() => filters.setView('baro')}>
             <span data-shell>Baro</span>
             {#if baroState?.phase === 'here'}<span data-shell class="badge here">here</span>
@@ -380,7 +401,7 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
         <button data-shell type="button" class="nav-item" class:active={effectiveView === 'routines'} onclick={() => filters.setView('routines')}>
           <span data-shell>Routines</span>
         </button>
-        {#if buildMetaDrift(inventory.market)}
+        {#if buildMetaDrift(inventory.market) || (hasInventory && !inventory.market && !inventory.marketLoadError)}
           <button data-shell type="button" class="nav-item" class:active={effectiveView === 'meta'} onclick={() => filters.setView('meta')}>
             <span data-shell>Meta Drift</span>
           </button>
@@ -452,6 +473,9 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
       <div class="ui-notice" data-tone="warn" role="status">Hold/sell advice unavailable: {advisorResult.error} <button class="btn" onclick={() => workspace.calculationEpoch += 1}>Retry calculations</button></div>
     {/if}
 
+    <!-- Each view stays mounted once visited and is hidden while another is
+         on screen, so a search, a page, a scroll position or a half-written
+         draft is still there on return. -->
     {#if effectiveView === 'sell' && restoring}
       <!-- Startup is still looking for the saved scan: hold the Sell layout
            with placeholder rows so the real ones fill in where they will stay. -->
@@ -464,8 +488,10 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
         <div data-shell class="ph-gap"></div>
         {#each { length: 8 } as _, i (i)}<div data-shell class="ph-row"><span data-shell></span><span data-shell></span><span data-shell></span></div>{/each}
       </div>
-    {:else if effectiveView === 'sell'}
-      <SellPane keep={keepSection}
+    {/if}
+    {#if visited.has('sell') && !restoring}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'sell' && !restoring)}>
+      <SellPane keep={keepSection} {receipts} onmakevisible={makeReceiptVisible} onopenorders={() => filters.setView('orders')}
         bind:minPrice={filters.minPrice} bind:minOwned={filters.minOwned} bind:typeFilter={filters.typeFilter} bind:hideAtLvl={filters.hideAtLvl} bind:activeTags={filters.activeTags}
         bind:tableView={workspace.tableView}
         resolved={inventory.resolved} allocation={allocationMatches ? protection.state : null} {results} deltas={inventory.deltas} {totalPotential}
@@ -481,9 +507,12 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
         openListingFlow={(rows) => { if (calculationsReady && !estimatedGuidance) listing.openListingFlow((Array.isArray(rows) ? rows : rows ? [rows] : listableRows).map(row => ({ ...row, inventory_snapshot_id: inventory.nativeSnapshotId ?? undefined }))); }}
         {estimatedGuidance} oncheckListings={checkListingRequirements} canList={listingQuantitiesKnown} {listingActionLabel} unavailableCount={unknownSlugs.size}
         {pendingBanner}
-        {calculationPending} {calculationError} calculationErrorShown={guidanceUnavailable} onretryCalculation={() => workspace.calculationEpoch += 1}
+        calculationPending={calculationPending || (hasInventory && !inventory.market && !inventory.marketLoadError)} {calculationError} calculationErrorShown={guidanceUnavailable} onretryCalculation={() => workspace.calculationEpoch += 1}
       />
-    {:else if effectiveView === 'session'}
+    </div>
+    {/if}
+    {#if visited.has('session')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'session')}>
       {#if defaultFacts.phase === 'loading'}
         <div class="ui-notice" role="status">Calculating safe quantities and sale values…</div>
       {:else if defaultFacts.error}
@@ -494,22 +523,44 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
           ...r, inventory_snapshot_id: inventory.nativeSnapshotId ?? undefined, proposed_quantity: r.quantity, clearing_price: r.platinum, low_sell: r.platinum,
           avg_price: r.market.avg, session: { snapshot_id: state.allowance.snapshot_id!, utc_day: state.allowance.utc_day, budget },
         }))); }} />
-    {:else if effectiveView === 'sets'}
+    </div>
+    {/if}
+    {#if visited.has('sets')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'sets')}>
       <SetPicksView {inventory} {setSurfaceAge} {keepSection} {guidanceUnavailable} {setResult} {setRecos} {adviceMap} onretry={() => workspace.calculationEpoch += 1} />
-    {:else if effectiveView === 'relics'}
+    </div>
+    {/if}
+    {#if visited.has('relics')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'relics')}>
       <RelicPlannerView bind:relicShowAll {relicResult} {relicSurfaceAge} {relicPlan} onretry={() => workspace.calculationEpoch += 1} />
-    {:else if effectiveView === 'rivens'}
+    </div>
+    {/if}
+    {#if visited.has('rivens')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'rivens')}>
       <RivensPanel market={inventory.market} rivens={resolvedRivens} />
-    {:else if effectiveView === 'baro'}
+    </div>
+    {/if}
+    {#if visited.has('baro')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'baro')}>
       <BaroView {inventory} {baroSurfaceAge} {keepSection} {guidanceUnavailable} {voidTrader} {ducatStats} {baroState} {guidanceOwned} {guidanceAvailability} {unknownSlugs} onducats={() => { filters.setView('sell'); filters.applyPreset('ducats'); }} />
-    {:else if effectiveView === 'routines'}
+    </div>
+    {/if}
+    {#if visited.has('routines')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'routines')}>
       <RoutinesPanel routine={routines} market={inventory.market} owned={inventory.resolved.owned} now={displayNow} />
-
-    {:else if effectiveView === 'meta'}
+    </div>
+    {/if}
+    {#if visited.has('meta')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'meta')}>
       <MetaDriftPanel market={inventory.market} />
-    {:else if effectiveView === 'orders'}
+    </div>
+    {/if}
+    {#if visited.has('orders')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'orders')}>
       <MyOrdersPanel
         banner={pendingBanner}
+        active={effectiveView === 'orders'}
+        {activity}
         {transport}
         market={inventory.market}
         sessionEpoch={listing.sessionEpoch}
@@ -518,25 +569,36 @@ import { ALLOWANCE_CHANGED_EVENT } from '../contracts/events';
         onauthrequired={(code) => wfmAuthDialogsRef?.open(code)}
         onsummary={(s) => (listing.ordersSummary = s)}
       />
-
-    {:else if effectiveView === 'watches'}
+    </div>
+    {/if}
+    {#if visited.has('watches')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'watches')}>
       <WatchlistPanel market={inventory.market} />
-
-    {:else if effectiveView === 'notifications'}
+    </div>
+    {/if}
+    {#if visited.has('notifications')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'notifications')}>
       <NotificationInbox onopen={(target) => filters.setView(target)} onsettings={() => { settingsSection = 'notifications'; filters.setView('settings'); }} />
-
-    {:else if effectiveView === 'ledger'}
+    </div>
+    {/if}
+    {#if visited.has('ledger')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'ledger')}>
       <LedgerPanel onsetautoclose={(on) => store.setSetting('auto-close-sold', on ? 'on' : 'off')} />
-
-    {:else if effectiveView === 'install'}
+    </div>
+    {/if}
+    {#if visited.has('install')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'install')}>
       <section data-shell class="view-header">
         <h2 data-shell>FAQ</h2>
         <p data-shell class="lede">Answers to common questions.</p>
       </section>
       <Faq desktop />
-
-    {:else if effectiveView === 'settings'}
+    </div>
+    {/if}
+    {#if visited.has('settings')}
+    <div data-shell class="view-pane" hidden={!(effectiveView === 'settings')}>
       <SettingsPanel {updates} onwhatsnew={() => updateNotesRef?.open()} {theme} {transport} {autoScan} {appIcon} {presence} wfmStatus={listing.wfmStatus} onwfmlogout={() => listing.handleWfmLogout()} section={settingsSection} onsectionshown={() => (settingsSection = null)} />
+    </div>
     {/if}
 
     {/if}

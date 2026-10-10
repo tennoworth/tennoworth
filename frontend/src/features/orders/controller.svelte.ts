@@ -13,6 +13,7 @@ import { type LiveTop, type DesktopCapabilities } from '../../contracts/desktop'
 
   import type { OwnOrder } from '../../contracts/generated/desktop';
 
+import { untrack } from 'svelte';
 import { createToastQueue } from '../../ui/toast-queue.svelte';
 
 import type { DesktopServices } from '../../contracts/services';
@@ -37,6 +38,9 @@ import type { DesktopServices } from '../../contracts/services';
      *  once orders are loaded (and whenever the count or the health issues
      *  change); null while nothing is loaded so those cells stay hidden. */
     onsummary?: (s: { live: number; issues: number } | null) => void;
+    /** Whether the orders view is on screen. The view stays mounted while
+     *  hidden, so each return refreshes, with the last rows kept in view. */
+    active?: boolean;
   }
 
 export function createOrdersController(input: OrdersInput, services: Pick<DesktopServices, 'desktopLiveTopPrices' | 'listenForTauriEvent'>) {
@@ -108,6 +112,14 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
   $effect(() => {
     void input.sessionEpoch;
     loadOrders();
+  });
+  let wasActive = input.active ?? true;
+  $effect(() => {
+    const active = input.active ?? true;
+    untrack(() => {
+      if (active && !wasActive && phase !== 'loading') loadOrders();
+      wasActive = active;
+    });
   });
 
   function markBusy(id: string, on: boolean): void {

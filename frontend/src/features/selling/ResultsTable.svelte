@@ -55,6 +55,13 @@
     pickActions?: Snippet<[Row]>;
     pickReason?: Snippet<[Row]>;
     picksEmpty?: Snippet;
+    /** Calculations are still running: hold the picks panel's place with
+     *  placeholder rows, so the table does not drop when they arrive. */
+    picksPending?: boolean;
+    /** A pick row that is a receipt (hidden with Undo, or just listed). */
+    pickReceipt?: (r: Row) => boolean;
+    /** Quantity listed this session for a slug, shown beside Own. */
+    listedFor?: (slug: string) => number | null;
     // Rendered in place of the table body when `results` is empty (the parent's
     // empty-state card), so the SCOPE/NARROW rows stay put and the presets stay
     // reachable while the cascade yields nothing.
@@ -63,7 +70,7 @@
   let {
     results, allocation = null, quantityStatus = false, estimatedGuidance = false, deltas = new Map(), visibleColumns = null, presetSort = null, onfiltered = undefined, columnsCustomized = false, oncolumnschange = undefined,
     scope = undefined, filters = undefined, categories = undefined, narrow = undefined, cta = undefined,
-    picks = null, picksHead = undefined, pickActions = undefined, pickReason = undefined, picksEmpty = undefined,
+    picks = null, picksHead = undefined, pickActions = undefined, pickReason = undefined, picksEmpty = undefined, pickReceipt = undefined, listedFor = undefined, picksPending = false,
     empty = undefined,
   }: Props = $props();
 
@@ -112,8 +119,10 @@
       if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      // Views stay mounted while hidden; only the table on screen takes '/'.
+      if (!filterInput || filterInput.offsetParent === null) return;
       e.preventDefault();
-      filterInput?.focus();
+      filterInput.focus();
       filterPulse += 1;
     };
     document.addEventListener('keydown', handler);
@@ -132,6 +141,7 @@
   }
 
   function togglePill(key: PillKey): void {
+    heldOrder = null;
     const next = new Set(activePills);
     if (next.has(key)) next.delete(key); else next.add(key);
     activePills = next;
@@ -336,6 +346,7 @@
   });
 
   function setSort(key: string): void {
+    heldOrder = null;
     const col = ALL_COLUMNS.find((c) => c.key === key);
     if (col?.noSort) return;
     if (sortKey === key) sortDir = -sortDir;
@@ -379,7 +390,7 @@
     return (r as Record<string, unknown>)[sortKey];
   }
 
-  let sorted = $derived.by(() => {
+  let trueSorted = $derived.by(() => {
     return [...filtered].sort((a, b) => {
       const av = sortValue(a);
       const bv = sortValue(b);
@@ -392,6 +403,31 @@
       return ((av as number) - (bv as number)) * sortDir;
     });
   });
+
+  // A scan that lands while the table is on screen updates values in place
+  // rather than reshuffling rows under the pointer: the order shown before it
+  // holds until the user re-sorts, sorts a column or filters. Rows new to the
+  // table join at the end in their sorted order.
+  const keyOf = (r: Row): string => r.key ?? r.slug;
+  let heldOrder = $state<string[] | null>(null);
+  let shownKeys: string[] = [];
+  let seenDeltas = untrack(() => deltas);
+  $effect.pre(() => {
+    const next = deltas;
+    untrack(() => {
+      if (next === seenDeltas) return;
+      seenDeltas = next;
+      if (shownKeys.length) heldOrder = shownKeys;
+    });
+  });
+  let sorted = $derived.by(() => {
+    if (!heldOrder) return trueSorted;
+    const rank = new Map(heldOrder.map((k, i) => [k, i]));
+    return [...trueSorted].sort((a, b) => (rank.get(keyOf(a)) ?? Infinity) - (rank.get(keyOf(b)) ?? Infinity));
+  });
+  let orderHeld = $derived(heldOrder != null && sorted.some((r, i) => keyOf(r) !== keyOf(trueSorted[i])));
+  $effect(() => { shownKeys = sorted.map(keyOf); });
+  function resort(): void { heldOrder = null; }
 
   // Push the displayed (filtered+sorted) rows up so the parent's List CTA can
   // act on them. filterActive distinguishes "user narrowed the table" from the
@@ -480,6 +516,7 @@
       {@const bd = ownedBreakdown(r.owned, r.sellable, r.leveled)}
       <span class="kept-note">({#if bd.leveledPart > 0}<span class="leveled-note" title={LEVELED_NOTE_TITLE}>{bd.leveledPart} leveled</span>{/if}{#if bd.leveledPart > 0 && bd.keptPart > 0} · {/if}{#if bd.keptPart > 0}<span title={keptNoteTitle(bd.keptPart)}>{bd.keptPart} kept</span>{/if})</span>
     {/if}
+    {#if listedFor?.(r.slug)}<span class="quantity-note listed"> · listed {listedFor(r.slug)}</span>{/if}
   {:else if col.key === 'delta'}
     {#if d > 0}
       <span class="delta up">▲+{d}</span>
@@ -552,14 +589,31 @@
       aria-label="Filter by name"
       bind:value={filter}
       bind:this={filterInput}
-      oninput={() => (page = 0)}
+      oninput={() => { page = 0; heldOrder = null; }}
       onfocus={() => (filterFocused = true)}
       onblur={() => (filterFocused = false)}
     />
   </span>
 {/snippet}
 
-{#if picks}
+{#if picksPending && !picks}
+  <!-- The real picks table with placeholder cells, so its height matches the
+       rows that replace it to the pixel. -->
+  <section class="wrap picks" aria-label="Top picks">
+    <div class="rail picks-head"><h3 class="pending-title">Top picks</h3><span class="exp" role="status">Calculating sale values… Your filters remain available.</span></div>
+    <div class="scroll" aria-hidden="true">
+    <table class:comfortable={density === 'comfortable'} class="picks-table pending">
+      <colgroup><col style="width:28%" /><col style="width:6.25rem" /><col style="width:5.75rem" /><col style="width:5.5rem" /><col /></colgroup>
+      <thead><tr><th class="left">Item</th><th class="left"></th><th class="right">Low ask</th><th class="right">Vol 48h</th><th class="left">Why list now</th></tr></thead>
+      <tbody>
+        {#each { length: 3 } as _, i (i)}
+          <tr class="pick"><td class="left col-name"><span class="ph"></span></td><td class="left pick-act"><span class="ph btn-ph"></span></td><td class="right"><span class="ph short"></span></td><td class="right"><span class="ph short"></span></td><td class="left reason"><span class="ph-line"><span class="ph"></span></span></td></tr>
+        {/each}
+      </tbody>
+    </table>
+    </div>
+  </section>
+{:else if picks}
   <section class="wrap picks" aria-label="Top picks">
     <div class="rail picks-head">
       {@render picksHead?.()}
@@ -579,7 +633,7 @@
           <thead><tr><th class="left">Item</th><th class="left"><span class="sr-only">Actions</span></th><th class="right">Low ask</th><th class="right">Vol 48h</th><th class="left">Why list now</th></tr></thead>
           <tbody>
             {#each picks as p, i (p.key ?? p.slug)}
-              <tr class="pick">
+              <tr class="pick" class:receipt={pickReceipt?.(p)}>
                 <td class="left col-name">
                   <span class="pick-rank">{i + 1}</span>
                   {@render cell(p, columns[0], rowDelta(p))}
@@ -636,6 +690,9 @@
       {sortDir === -1 ? '↓' : '↑'}
       {#if sorted.length > pageSize}· {(pageStart + 1).toLocaleString()}–{pageEnd.toLocaleString()}{/if}
     </div>
+    {#if orderHeld}
+      <span class="held" role="status">· order changed since the scan <button type="button" class="btn xs" onclick={resort}>Re-sort</button></span>
+    {/if}
     {#if columns.some((c) => c.key === 'sell_score')}
       <span class="formula">Priority = price × sell-through × usage weight, not plat/day</span>
     {/if}
@@ -836,6 +893,17 @@
   /* Beside the count on the same line, so rows keep one height; missing quantities are unavailable, not errors. */
   .quantity-note { font: var(--text-caption)/var(--leading-control) var(--font-body); color: var(--muted); white-space: normal; }
   .formula { color: var(--muted); font-size: var(--text-caption); white-space: normal; }
+  .quantity-note.listed { color: var(--fg); }
+  .pending-title { margin: 0; }
+  /* Placeholder cells: static hairline bars at the real row height, no shimmer. */
+  .picks-table.pending .ph { display: inline-block; vertical-align: middle; width: 60%; height: 0.45rem; background: var(--hairline); }
+  .picks-table.pending .ph.short { width: 2rem; }
+  /* Mirrors the reason cell's own minimum height (SellPane's .rs). */
+  .picks-table.pending .ph-line { display: flex; align-items: center; min-height: var(--row); }
+  .picks-table.pending .ph.btn-ph { width: 2.75rem; height: var(--ctl-xs); background: transparent; border: 1px dotted var(--hairline); }
+  .held { color: var(--warn); font-size: var(--text-caption); white-space: nowrap; }
+  .held .btn { margin-left: var(--s1); }
+  tr.pick.receipt td { background: var(--panel-2); }
   .count { color: var(--muted); font-size: var(--text-caption); white-space: nowrap; }
   .count b { color: var(--fg); font-weight: 600; }
   /* Pill-filter chips reuse the badge palette (.tag.peak etc.) so the chip

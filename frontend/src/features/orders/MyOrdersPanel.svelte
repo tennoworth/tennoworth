@@ -1,13 +1,36 @@
 <script lang="ts">
-  import { onDestroy, type Snippet } from 'svelte';
+  import { onDestroy, untrack, type Snippet } from 'svelte';
+  import type { ActivityLog } from '../../ui/activity.svelte';
   import { useDesktopServices } from '../../ui/desktop-context';
   import { createOrdersController, type OrdersInput } from './controller.svelte';
   import Toast from '../../ui/Toast.svelte';
   import { LIQUID_VOL } from '../../domain/sell-priority';
   import { MAX_PLATINUM } from '../../domain/limits';
-  let { transport, market = null, sessionEpoch = 0, onauthrequired, ownedQty = null, marketStaleness = null, onsummary, banner }: OrdersInput & { banner?: Snippet } = $props();
+  let { transport, market = null, sessionEpoch = 0, onauthrequired, ownedQty = null, marketStaleness = null, onsummary, banner, active = true, activity }: OrdersInput & { banner?: Snippet; activity?: ActivityLog } = $props();
 
-  const controller = createOrdersController({ get transport() { return transport; }, get market() { return market; }, get ownedQty() { return ownedQty; }, get sessionEpoch() { return sessionEpoch; }, get onauthrequired() { return onauthrequired; }, get onsummary() { return onsummary; } }, useDesktopServices());
+  const controller = createOrdersController({ get transport() { return transport; }, get market() { return market; }, get ownedQty() { return ownedQty; }, get sessionEpoch() { return sessionEpoch; }, get onauthrequired() { return onauthrequired; }, get onsummary() { return onsummary; }, get active() { return active; } }, useDesktopServices());
+  // Rows on screen but not freshly confirmed (refreshing, or the refresh
+  // failed): they stay readable, and changes wait for a confirmed list.
+  let unconfirmed = $derived(controller.phase !== 'done');
+  // Live checks report in the status strip's activity cell too, so a check
+  // started here is still visible from another view.
+  let liveActivity: number | null = null;
+  $effect(() => {
+    const phase = controller.liveTop.phase;
+    const { done, total } = controller.liveTop.progress;
+    untrack(() => {
+      if (!activity) return;
+      if (phase === 'running') {
+        if (liveActivity == null) liveActivity = activity.begin(`Checking live prices ${done}/${total}`);
+        else activity.progress(liveActivity, `Checking live prices ${done}/${total}`);
+      } else if (liveActivity != null) {
+        const id = liveActivity;
+        liveActivity = null;
+        if (phase === 'error') activity.finish(id, 'Live check failed', 'bad');
+        else activity.finish(id, controller.health.length ? `Live check · ${controller.health.length} to fix` : 'Live check · no issues');
+      }
+    });
+  });
   onDestroy(() => controller.dispose());
   function focusIf(node: HTMLElement, should: boolean): void {
     if (should) node.focus();
@@ -57,7 +80,7 @@
     </span>
     <span class="grow"></span>
     {#if controller.healthSummary.overpriced + controller.healthSummary.underbid > 1}
-      <button class="btn" onclick={controller.fixAllPrices} disabled={controller.fixAllBusy} title="Reprice every flagged listing: match the lowest other ask, or meet the higher bid. Quantity fixes and deletions stay one click each.">Fix all prices</button>
+      <button class="btn" onclick={controller.fixAllPrices} disabled={controller.fixAllBusy || unconfirmed} title="Reprice every flagged listing: match the lowest other ask, or meet the higher bid. Quantity fixes and deletions stay one click each.">Fix all prices</button>
     {/if}
   </div>
   {#if controller.health.length > 0}
@@ -86,20 +109,20 @@
     <button
       class="btn ghost"
       onclick={() => controller.bulkSetVisible(true)}
-      disabled={controller.bulkBusy || controller.orders.every((o) => o.visible == null || o.visible)}
+      disabled={controller.bulkBusy || unconfirmed || controller.orders.every((o) => o.visible == null || o.visible)}
       title="Make every listing visible to buyers"
     >All visible</button>
     <button
       class="btn ghost"
       onclick={() => controller.bulkSetVisible(false)}
-      disabled={controller.bulkBusy || controller.orders.every((o) => o.visible == null || !o.visible)}
+      disabled={controller.bulkBusy || unconfirmed || controller.orders.every((o) => o.visible == null || !o.visible)}
       title="Hide every listing from buyers"
     >All hidden</button>
     <button class="btn" onclick={controller.loadOrders} disabled={controller.phase === 'loading'}>Refresh</button>
   </div>
 
   {#if controller.phase === 'error'}
-    <div class="line bad">Couldn't load orders: {controller.error}</div>
+    <div class="line bad" role="alert">{controller.orders.length > 0 ? `Couldn't refresh orders: ${controller.error}. These are the last confirmed listings; changes are off until a refresh succeeds.` : `Couldn't load orders: ${controller.error}`}</div>
   {/if}
   {#if controller.phase === 'locked'}
     <div class="line"><span class="exp">Unlock warframe.market to see your orders.</span></div>
@@ -145,13 +168,13 @@
                 {#each issues as q (q.key)}
                   {#if q.kind === 'health'}
                     {#if q.h.kind === 'not-owned' && controller.healthConfirmId === q.id}
-                      <button class="btn xs bad" use:focusIf={true} onclick={() => controller.applyFix(q.h)} disabled={busy} title="Confirm delete">Confirm</button>
+                      <button class="btn xs bad" use:focusIf={true} onclick={() => controller.applyFix(q.h)} disabled={busy || unconfirmed} title="Confirm delete">Confirm</button>
                       <button class="btn xs x" onclick={() => controller.cancelDelete(q.id)} title="Cancel" aria-label="Cancel delete">×</button>
                     {:else}
-                      <button class="btn xs" class:bad={q.h.kind === 'not-owned'} use:focusIf={controller.restoreFocusTo === q.id} onclick={() => controller.armOrFix(q.h)} disabled={busy} title={q.h.why}>{controller.healthAction(q.h)}</button>
+                      <button class="btn xs" class:bad={q.h.kind === 'not-owned'} use:focusIf={controller.restoreFocusTo === q.id} onclick={() => controller.armOrFix(q.h)} disabled={busy || unconfirmed} title={q.h.why}>{controller.healthAction(q.h)}</button>
                     {/if}
                   {:else}
-                    <button class="btn xs" onclick={() => controller.reprice(q.d)} disabled={busy} title="Update this listing to {q.d.suggested}p per unit on warframe.market">Reprice</button>
+                    <button class="btn xs" onclick={() => controller.reprice(q.d)} disabled={busy || unconfirmed} title="Update this listing to {q.d.suggested}p per unit on warframe.market">Reprice</button>
                   {/if}
                 {/each}
               </td>
@@ -160,12 +183,12 @@
               <td class="price">
                 {#if controller.editingId === o.id}
                   <input type="number" bind:value={controller.editValue} min="1" max={MAX_PLATINUM} aria-label="New price for {controller.itemName(o)}" />
-                  <button class="btn xs" onclick={() => controller.saveEdit(o)} disabled={busy}>save</button>
+                  <button class="btn xs" onclick={() => controller.saveEdit(o)} disabled={busy || unconfirmed}>save</button>
                   <button class="btn xs x" onclick={() => (controller.editingId = null)} title="Cancel" aria-label="Cancel price edit">×</button>
                 {:else}
                   <span class="fg">{o.platinum}<span class="unit">p</span></span>
                   {#if (o.per_trade ?? 1) > 1}<span class="unit"> / {o.per_trade} units</span>{/if}
-                  <button class="btn xs ghost edit" onclick={() => controller.startEdit(o)} disabled={busy} title="Edit price" aria-label="Edit price for {controller.itemName(o)}">✎</button>
+                  <button class="btn xs ghost edit" onclick={() => controller.startEdit(o)} disabled={busy || unconfirmed} title="Edit price" aria-label="Edit price for {controller.itemName(o)}">✎</button>
                 {/if}
               </td>
               <td>{#if t && !t.error && t.low_sell != null}{Number(t.low_sell.toFixed(2))}<span class="unit">p</span>{:else}<span class="muted">-</span>{/if}</td>
@@ -198,17 +221,17 @@
                 <button
                   class="visbtn {o.visible ? 'on' : 'off'}"
                   onclick={() => controller.toggleVisible(o)}
-                  disabled={busy || o.visible == null}
+                  disabled={busy || unconfirmed || o.visible == null}
                   title={o.visible == null ? 'Visibility unavailable; refresh orders' : o.visible ? 'Click to make hidden' : 'Click to make visible'}
                   aria-label={o.visible == null ? `?: visibility of ${controller.itemName(o)} unavailable` : o.visible ? `ON: ${controller.itemName(o)} is visible to buyers` : `OFF: ${controller.itemName(o)} is hidden from buyers`}
                 ><span class="vis" class:off={!o.visible}>{o.visible == null ? '?' : o.visible ? 'ON' : 'OFF'}</span></button>
               </td>
               <td class="act">
                 {#if controller.confirmId === o.id}
-                  <button class="btn xs bad" onclick={() => controller.removeOne(o)} disabled={busy} title="Confirm delete">Confirm</button>
+                  <button class="btn xs bad" onclick={() => controller.removeOne(o)} disabled={busy || unconfirmed} title="Confirm delete">Confirm</button>
                   <button class="btn xs x" onclick={() => (controller.confirmId = null)} title="Cancel" aria-label="Cancel delete">×</button>
                 {:else}
-                  <button class="btn xs x" onclick={() => controller.removeOne(o)} disabled={busy} title="Delete" aria-label="Delete {controller.itemName(o)}">✕</button>
+                  <button class="btn xs x" onclick={() => controller.removeOne(o)} disabled={busy || unconfirmed} title="Delete" aria-label="Delete {controller.itemName(o)}">✕</button>
                 {/if}
               </td>
             </tr>
