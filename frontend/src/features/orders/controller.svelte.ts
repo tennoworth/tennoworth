@@ -111,7 +111,9 @@ export function createOrdersController(input: OrdersInput, services: Pick<Deskto
   // unlocked (the transport is a boot-time constant, so nothing else retriggers).
   $effect(() => {
     void input.sessionEpoch;
-    loadOrders();
+    // Only the epoch triggers a load: the transport is read untracked, so a
+    // parent re-passing its props cannot refetch.
+    untrack(loadOrders);
   });
   let wasActive = input.active ?? true;
   $effect(() => {

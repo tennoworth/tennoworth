@@ -226,3 +226,15 @@ describe('MyOrdersPanel listing health', () => {
     await screen.findByText('1 not owned');
   });
 });
+
+describe('MyOrdersPanel after a failed refresh', () => {
+  it('keeps the last confirmed rows readable and pauses changes', async () => {
+    const fetchOrders = vi.fn().mockResolvedValueOnce(ORDERS).mockRejectedValueOnce(new Error('network down'));
+    render(MyOrdersPanel, { props: { transport: makeTransport({ fetchOrders }) } });
+    await waitFor(() => expect(screen.getByText('Primed Flow')).toBeTruthy());
+    await fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toContain("Couldn't refresh orders"));
+    expect(screen.getByText('Primed Flow')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Delete Primed Flow' }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});

@@ -123,8 +123,8 @@ import { type EeLogStatus, type TradeDetected, type TradeRow } from '../../contr
     <div class="vh-end">
       {#if !loadError && trades.length}
         <div class="ui-totals" role="group" aria-label="Ledger summary">
-          <div class="cell" title="{all.sales} sold · {all.purchases} bought"><span class="k">Net, all time</span><span class="v" class:good={all.net > 0} class:bad={all.net < 0}>{all.net > 0 ? '+' : ''}{all.net}<span class="unit">p</span></span></div>
-          <div class="cell" title="{week.sales} sold · {week.purchases} bought"><span class="k">Last 7 days</span><span class="v" class:good={week.net > 0} class:bad={week.net < 0}>{week.net > 0 ? '+' : ''}{week.net}<span class="unit">p</span></span></div>
+          <div class="cell" title="{all.sales} sold · {all.purchases} bought"><span class="k">Net, all time</span><span class="v" class:good={all.net > 0} class:bad={all.net < 0}>{all.net > 0 ? '+' : ''}{all.net}p</span></div>
+          <div class="cell" title="{week.sales} sold · {week.purchases} bought"><span class="k">Last 7 days</span><span class="v" class:good={week.net > 0} class:bad={week.net < 0}>{week.net > 0 ? '+' : ''}{week.net}p</span></div>
           <div class="cell" title="Sales / purchases"><span class="k">Plat in / out</span><span class="v">{all.platIn}p / {all.platOut}p</span></div>
         </div>
       {/if}

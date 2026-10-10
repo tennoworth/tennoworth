@@ -67,13 +67,16 @@ describe('SellPane', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /clear/ })).toBeTruthy());
   });
 
-  it('snoozes a pick for the session', async () => {
+  it('hides a pick behind an Undo receipt that keeps its slot', async () => {
     renderPane();
     expect(screen.getByRole('button', { name: 'List Accelerated Blast on WFM' })).toBeTruthy();
     await fireEvent.click(screen.getByRole('button', { name: 'Hide Accelerated Blast for this session' }));
-    await waitFor(() =>
-      expect(screen.getByText('All picks snoozed for this session.')).toBeTruthy(),
-    );
+    // The row stays where it was, as a receipt, so nothing moves under the pointer.
+    await waitFor(() => expect(screen.getByText('Hidden for this session.')).toBeTruthy());
+    expect(screen.queryByRole('button', { name: 'List Accelerated Blast on WFM' })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Undo hiding Accelerated Blast' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'List Accelerated Blast on WFM' })).toBeTruthy());
+    expect(screen.queryByText('Hidden for this session.')).toBeNull();
   });
 
   it('words a stale snapshot age as a time, not "3 d ago old"', () => {
