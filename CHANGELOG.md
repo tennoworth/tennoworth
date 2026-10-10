@@ -54,6 +54,33 @@ After editing, run `bun scripts/release.ts app-notes`. Release checks and fronte
 builds reject a stale bundle. Historical releases through 0.7.1 keep their original
 format; the app explicitly identifies incomplete coverage for older upgrades.
 
+## 0.8.102 - 2026-10-10
+
+# 🎨 TennoWorth Desktop 0.8.102
+
+TennoWorth Desktop 0.8.102 is ready.
+
+The app is easier to scan and stays where you left it. Sell puts its decision controls and top picks earlier on the page, the main views share a clearer layout, and switching views keeps your searches, drafts and scroll position. Loading, refreshing and listing leave more context in place so the next action is easier to follow.
+
+## Changelog (7)
+
+### Layout
+
+- **Find the same layout across the app** Sell, Set picks, Relics, Rivens, My orders and Ledger share clearer headings, tables and readable text, with a compact status strip that shows ongoing work. <!-- app-note {"id":"shared-app-frame","kind":"improved"} -->
+- **Reach the selling decision sooner** Sell puts the filters that shape your picks and Top Picks earlier on the page, keeping the first useful actions within reach on smaller windows. <!-- app-note {"id":"sell-decision-above-fold","kind":"improved"} -->
+
+### Continuity
+
+- **Return to the view where you left it** Switching views preserves searches, unfinished edits and each view's scroll position. Settings section links still take you to the requested section. <!-- app-note {"id":"retained-view-state","kind":"improved"} -->
+- **Keep the workspace steady during startup** Restoring your saved scan shows a workspace placeholder instead of briefly showing the first-run page. <!-- app-note {"id":"steady-startup-workspace","kind":"fixed"} -->
+- **Keep order information through a failed refresh** My orders refreshes when you return while retaining readable rows and price drafts if the request fails. <!-- app-note {"id":"orders-refresh-continuity","kind":"fixed"} -->
+- **See a trace of your listing actions** Sell keeps a receipt after listing, including the item's variant, so you can follow what changed after the review closes. <!-- app-note {"id":"sell-listing-receipts","kind":"improved"} -->
+- **Keep the next row under your cursor** A new scan keeps the current row order and offers an explicit re-sort instead of moving the next action while you work. <!-- app-note {"id":"stable-sell-row-order","kind":"improved"} -->
+
+## Updating
+
+TennoWorth checks for updates automatically at launch and every 30 minutes while it is open. Downloads for Windows and Linux are available in the assets below.
+
 ## 0.8.101 - 2026-10-09
 
 # 🟢 TennoWorth Desktop 0.8.101
