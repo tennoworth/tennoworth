@@ -55,13 +55,13 @@ The active look is `yorha`; the resolved modes are `light` and `dark`.
 |---|---|---|
 | Surfaces | `--bg`, `--panel`, `--panel-2` | Page, panel, and secondary surface |
 | Text | `--fg`, `--muted` | Primary and supporting readable content |
-| Decoration | `--faint`, `--hairline`, `--grid`, `--hatch` | Nonessential ornament; not essential text |
+| Decoration | `--faint`, `--hairline`, `--grid`, `--hatch` | Nonessential ornament only; `--faint` never colours readable text, missing-data dashes included |
 | Boundaries | `--border`, `--rule` | Solid outer outlines, dotted inner dividers |
 | Emphasis | `--accent`, `--on-accent`, `--ink-bar`, `--on-ink`, `--on-ink-muted` | Use matching foreground/background pairs |
 | Title rails | `--rail-bg`, `--rail-fg`, `--rail-muted`, `--rail-edge` | Panel, card, FAQ and dialog title rails. Light: the ink bar. Dark: a raised `--panel-2` band under a 2px rag rule, because the ink fill is reserved for selected state |
 | Meaning | `--good`, `--warn`, `--bad`, `--ducat`, `--vault` | Success, caution, error, ducat data, and vaulted status; not decoration |
 | Type | `--font-ui`, `--font-body`, `--font-mono` | Headings/labels, reading, numeric/technical data |
-| Type scale | `--text-caption`, `--text-control`, `--text-body`, `--text-section`, `--text-heading`, `--text-dialog-title`, `--text-metric`, `--text-metric-lg`, `--leading-body`, `--leading-control` | Shared text roles and line heights; extend centrally rather than per panel |
+| Type scale | `--text-caption`, `--text-control`, `--text-body`, `--text-section`, `--text-heading`, `--text-dialog-title`, `--text-metric`, `--text-metric-lg`, `--text-statement`, `--leading-body`, `--leading-control` | Shared text roles and line heights; extend centrally rather than per panel |
 | Rhythm | `--s1` through `--s6`, `--inset`, `--gutter`, `--stack`, `--cell` | Shared spacing and contextual insets |
 | Density | `--ctl-xs`, `--ctl`, `--ctl-lg`, `--row`, `--row-cf`, `--head`, `--rail`, `--bar`, `--strip` | Baseline sizes, not clipping constraints |
 | Shape and layering | `--radius-*`, `--shadow-pop`, `--scrim` | Square active-theme shapes and restrained overlay separation |
@@ -75,7 +75,10 @@ The active look is `yorha`; the resolved modes are `light` and `dark`.
   `--font-ui` and sentences use `--font-body`, even inside a mono table cell.
   Align comparable numeric columns consistently and keep units clear.
 - Use relative text sizes and readable line heights. Never shrink text as a
-  responsive escape hatch. Exact semantic type-size consolidation belongs in
+  responsive escape hatch. `--text-caption` is the floor for anything read,
+  units after a number included. Plex Mono ships 400–600 only and synthetic
+  bold is off, so request 600 rather than 700; code, kbd and samp use the mono
+  face at the size of the surrounding words. Exact semantic type-size consolidation belongs in
   the shared stylesheet, not a new per-panel scale.
 - Controls inherit the intended typography. Reserve sufficient height and
   padding for their labels; content may grow beyond the baseline density.
@@ -102,7 +105,7 @@ scoping: a class defined inside one component is not a shared primitive.
 
 Current shared selectors in `app.css`: `.btn` with `primary`, `ghost`, `bad`,
 `xs`, and `lg` variants; `.wrap.tw` and `table.tw`; `dialog.cryptobox`;
-`.ui-panel`, `.view-header`, `.general-banner`, `.ui-stack`, `.ui-toolbar`,
+`.ui-panel`, `.view-header` with `.vh-end`, `.ui-totals`, `.general-banner`, `.ui-stack`, `.ui-toolbar`,
 `.ui-field`, `.ui-input`, `.ui-notice`, `.ui-segmented`, `.shimmer-field`, and `.tag`. Notices use
 `data-tone="good|warn|bad"` for their semantic edge, with explicit readable text
 for meaning. Keep feature-specific sizing local. These selectors are opt-in;
@@ -123,7 +126,20 @@ isolation after extracting the shells and shared FAQ. Feature components do not
 add this attribute. The reward surface does not consume those selectors.
 
 Shared panel and banner rules replace formerly component-scoped copies in the
-shell, Watches, Ledger, and update notices. Task pages share view headers, with descriptions below the heading and actions grouped beside it.
+shell, Watches, Ledger, and update notices. Every task view shares one header
+grammar: the title, a one-line lede beside it, and at the far edge (`.vh-end`)
+either its comparable totals in a `.ui-totals` strip or its primary action
+(Check live on My orders). The lede wraps before the end slot does. A view
+does not hide its description in a hover-only info mark.
+
+In the workspace the status strip holds to one line on wide windows: the scan
+cell takes the slack and a long scan name wraps inside its own box. Orders to
+fix and Baro's countdown are sidebar badges beside the views they open; the
+strip keeps them only on the first-run landing, which has no sidebar. The
+strip's activity cell is the one place scans, listing sends, visibility
+changes and live checks report: a caution square while busy, then the result,
+which stays until something replaces it. An older result never replaces work
+still in progress.
 Existing analytical table variants retain their feature-specific column layouts.
 Listing review uses the shared button patterns, readable deselected rows, and
 keyboard focus containment/restoration; native authentication dialogs retain
@@ -157,7 +173,31 @@ narrow and enlarged layouts. This is a measured layout value, not a fixed spacer
 | Review surfaces | Make consequential changes explicit, preserve edits, and distinguish existing state from proposed state |
 
 Loading, empty, error, disabled, selected, hover, and keyboard-focus states are
-part of each applicable pattern, not finishing touches. Empty inventory is not
+part of each applicable pattern, not finishing touches.
+
+## Continuity and waiting
+
+The app never shows the wrong screen while it waits. Until startup has looked
+for the saved scan, "no inventory" is unknown, not empty: the workspace shows
+the Sell layout with placeholder rows and the strip says the scan is loading;
+the first-run page appears only once the saved scan is known to be absent.
+Placeholders are static hairline bars at the final row height (no shimmer),
+and Top Picks holds its place while sale values calculate, so the table below
+does not drop when they arrive. Nav entries that depend on prices stay in
+place while the market snapshot loads.
+
+A visited view stays mounted while another is on screen, so its search, page,
+scroll and drafts survive the trip; global shortcuts act only on the view on
+screen. A view that fetches on arrival (My orders) refreshes when it returns
+with the last rows in view, and a failed refresh keeps them readable with
+changes paused until a refresh succeeds.
+
+What a click did shows where it was made. A listed pick becomes a receipt in
+its own row (listed, hidden or visible, Make visible, My orders), and Own
+shows what this session listed. Hiding a pick leaves an Undo receipt in its
+slot until the pick set changes. A scan that lands while the table is on
+screen updates values in place and keeps the row order; the count bar offers
+Re-sort, and sorting or filtering applies the new order. Nothing animates in. Empty inventory is not
 a failed request. Missing data is not zero. Estimates must be labeled as such,
 and background refresh must not silently replace user edits.
 
@@ -202,9 +242,27 @@ the page body. Sections that are one part of a longer page (Meta Drift on the
 hosted and first-run pages) show their top ten with an in-place Show all; a
 search lifts the limit, and the dedicated desktop view shows everything.
 
-Settings, Set picks, Relics, Routines, and FAQ use a bounded 64rem reading
-width. Analytical tables retain the workspace width and scroll locally when
-needed. Settings includes notification preferences within the same column.
+The hosted landing opens on one statement in the reading face
+(`--text-statement`; no hero, image or display numerals), then search, the
+Rising and Falling movers as twin titled panels, and Vaulted beside Baro's top
+five. One desktop panel follows: the app's surfaces as tabs whose Sell tab is
+the visitor's own rows completed by the app, with the comparison and downloads
+beside them. Meta Drift and Riven dispositions are tabs of one Market context
+panel. FAQ and Trust & safety are one Questions panel with Trust answers in
+their own column; `#faq` and `#trust` both land there. Community usage is one
+line while counts are unavailable. A failed market load says so with Retry
+rather than substituting the install pitch.
+
+Settings and FAQ use a bounded 64rem reading width. Every other view, Set
+picks, Relics and Routines included, uses the workspace width, so the right
+edge does not move between views; prose inside a panel caps its own line
+length. Ranked lists are tables: Set picks (a plain Do column, net plat and
+set volume aligned) and Relics (one row per relic, the refinement ladder as
+four cells on one scale with the chosen rung inverted, picked only for a crack
+or refine verdict). My orders is one listings table: listing health is a
+column and a row state with each fix beside the item, and Live ask and bid are
+always reserved so a live check fills cells rather than moving controls.
+Analytical tables scroll locally when needed. Settings includes notification preferences within the same column.
 Settings is ordered by how often people return to it. A status strip leads,
 linking the automatic-scan, overlay and account state to their sections,
 followed by section links. Then come the everyday panels (Automatic scan,
